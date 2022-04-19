@@ -29,6 +29,7 @@ import scala.Tuple2;
 import java.io.Serializable;
 import java.util.Comparator;
 import java.util.Objects;
+import java.util.function.Function;
 
 /**
  * A built-in partitioner that does local sorting for each RDD partition
@@ -46,7 +47,9 @@ public class RDDPartitionSortPartitioner<T extends HoodieRecordPayload>
     // TODO handle non-partitioned tables
     // TODO explain
     return records.mapToPair(record -> new Tuple2<>(Pair.of(record.getPartitionPath(), record.getRecordKey()), record))
-        .repartitionAndSortWithinPartitions(new HashingRDDPartitioner(outputSparkPartitions), Comparator.comparing(Pair::getValue))
+        .repartitionAndSortWithinPartitions(
+            new HashingRDDPartitioner(outputSparkPartitions),
+            Comparator.comparing((Function<Pair<String, String>, String> & Serializable) Pair::getValue))
         .values();
   }
 
