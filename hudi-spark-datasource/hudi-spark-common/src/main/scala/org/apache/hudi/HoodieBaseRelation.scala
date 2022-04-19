@@ -324,16 +324,8 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
   }
 
   protected final def appendMandatoryColumns(requestedColumns: Array[String]): Array[String] = {
-    if (dropPartitionColumnsWhenWrite) {
-      if (requestedColumns.isEmpty) {
-        mandatoryColumns.toArray
-      } else {
-        requestedColumns
-      }
-    } else {
-      val missing = mandatoryColumns.filter(col => !requestedColumns.contains(col))
-      requestedColumns ++ missing
-    }
+    val missing = mandatoryColumns.filter(col => !requestedColumns.contains(col))
+    requestedColumns ++ missing
   }
 
   protected def getTableState: HoodieTableState = {
