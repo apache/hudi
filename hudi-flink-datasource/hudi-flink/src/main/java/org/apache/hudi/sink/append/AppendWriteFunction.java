@@ -123,9 +123,9 @@ public class AppendWriteFunction<I> extends AbstractStreamWriteFunction<I> {
       writeStatus = this.writerHelper.getWriteStatuses(this.taskID);
       instant = this.writerHelper.getInstantTime();
     } else {
-      LOG.info("No data to write in subtask [{}] for instant [{}]", taskID, currentInstant);
       writeStatus = Collections.emptyList();
       instant = instantToWrite(false);
+      LOG.info("No data to write in subtask [{}] for instant [{}]", taskID, instant);
     }
     final WriteMetadataEvent event = WriteMetadataEvent.builder()
         .taskID(taskID)
