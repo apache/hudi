@@ -899,7 +899,6 @@ class TestCOWDataSource extends HoodieClientTestBase {
   }
 
   @ParameterizedTest
-  @ParameterizedTest
   @ValueSource(booleans = Array(true, false))
   def testHoodieBaseFileOnlyViewRelation(useGlobbing: Boolean): Unit = {
     val _spark = spark
