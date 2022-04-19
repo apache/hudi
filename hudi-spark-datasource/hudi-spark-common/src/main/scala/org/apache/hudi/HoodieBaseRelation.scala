@@ -23,7 +23,7 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hadoop.hbase.io.hfile.CacheConfig
 import org.apache.hadoop.mapred.JobConf
-import org.apache.hudi.HoodieBaseRelation.getPartitionPath
+import org.apache.hudi.HoodieBaseRelation.{createHFileReader, getPartitionPath}
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.common.config.{HoodieMetadataConfig, SerializableConfiguration}
 import org.apache.hudi.common.fs.FSUtils
@@ -390,24 +390,18 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
       f.name.toLowerCase(Locale.ROOT)
     }
   }
-}
-
-object HoodieBaseRelation {
-
-  def getPartitionPath(fileStatus: FileStatus): Path =
-    fileStatus.getPath.getParent
 
   /**
    * Returns file-reader routine accepting [[PartitionedFile]] and returning an [[Iterator]]
    * over [[InternalRow]]
    */
-  def createBaseFileReader(spark: SparkSession,
-                           partitionSchema: StructType,
-                           tableSchema: HoodieTableSchema,
-                           requiredSchema: HoodieTableSchema,
-                           filters: Seq[Filter],
-                           options: Map[String, String],
-                           hadoopConf: Configuration): PartitionedFile => Iterator[InternalRow] = {
+  protected def createBaseFileReader(spark: SparkSession,
+                                     partitionSchema: StructType,
+                                     tableSchema: HoodieTableSchema,
+                                     requiredSchema: HoodieTableSchema,
+                                     filters: Seq[Filter],
+                                     options: Map[String, String],
+                                     hadoopConf: Configuration): PartitionedFile => Iterator[InternalRow] = {
     val hfileReader = createHFileReader(
       spark = spark,
       tableSchema = tableSchema,
@@ -416,6 +410,10 @@ object HoodieBaseRelation {
       options = options,
       hadoopConf = hadoopConf
     )
+
+    // We're delegating to Spark to append partition values to every row only in cases
+    // when these corresponding partition-values are not persisted w/in the data file itself
+    val shouldAppendPartitionColumns = omitPartitionColumnsInFile
     val parquetReader = HoodieDataSourceHelper.buildHoodieParquetReader(
       sparkSession = spark,
       dataSchema = tableSchema.structTypeSchema,
@@ -423,7 +421,8 @@ object HoodieBaseRelation {
       requiredSchema = requiredSchema.structTypeSchema,
       filters = filters,
       options = options,
-      hadoopConf = hadoopConf
+      hadoopConf = hadoopConf,
+      appendPartitionValues = shouldAppendPartitionColumns
     )
 
     partitionedFile => {
@@ -437,6 +436,12 @@ object HoodieBaseRelation {
       }
     }
   }
+}
+
+object HoodieBaseRelation {
+
+  def getPartitionPath(fileStatus: FileStatus): Path =
+    fileStatus.getPath.getParent
 
   private def createHFileReader(spark: SparkSession,
                                 tableSchema: HoodieTableSchema,
