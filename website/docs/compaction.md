@@ -10,7 +10,7 @@ Compaction is executed asynchronously with Hudi by default. Async Compaction is 
 
 1. ***Compaction Scheduling***: This is done by the ingestion job. In this step, Hudi scans the partitions and selects **file
    slices** to be compacted. A compaction plan is finally written to Hudi timeline.
-1. ***Compaction Execution***: A separate process reads the compaction plan and performs compaction of file slices.
+1. ***Compaction Execution***: In this step the compaction plan is read and file slices are compacted.
 
 There are few ways by which we can execute compactions asynchronously.
 
