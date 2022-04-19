@@ -52,7 +52,7 @@ import org.apache.spark.unsafe.types.UTF8String
 import java.net.URI
 import java.util.Locale
 import scala.collection.JavaConverters._
-import scala.util.Try
+import scala.util.{Failure, Success, Try}
 import scala.util.control.NonFatal
 
 trait HoodieFileSplit {}
@@ -124,14 +124,17 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
 
   protected lazy val (tableAvroSchema: Schema, internalSchema: InternalSchema) = {
     val schemaUtil = new TableSchemaResolver(metaClient)
-    val avroSchema = Try(schemaUtil.getTableAvroSchema).getOrElse(
-      // If there is no commit in the table, we can't get the schema
-      // t/h [[TableSchemaResolver]], fallback to the provided [[userSchema]] instead.
-      userSchema match {
-        case Some(s) => sparkAdapter.getAvroSchemaConverters.toAvroType(s, nullable = false, "record")
-        case _ => throw new IllegalArgumentException("User-provided schema is required in case the table is empty")
-      }
-    )
+    val avroSchema = Try(schemaUtil.getTableAvroSchema) match {
+      case Success(schema) => schema
+      case Failure(e) =>
+        logWarning("Failed to fetch schema from the table", e)
+        // If there is no commit in the table, we can't get the schema
+        // t/h [[TableSchemaResolver]], fallback to the provided [[userSchema]] instead.
+        userSchema match {
+          case Some(s) => sparkAdapter.getAvroSchemaConverters.toAvroType(s, nullable = false, "record")
+          case _ => throw new IllegalArgumentException("User-provided schema is required in case the table is empty")
+        }
+    }
     // try to find internalSchema
     val internalSchemaFromMeta = try {
       schemaUtil.getTableInternalSchemaFromCommitMetadata.orElse(InternalSchema.getEmptyInternalSchema)
