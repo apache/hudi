@@ -40,7 +40,7 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.codegen.GenerateUnsafeProjection
 import org.apache.spark.sql.catalyst.expressions.{Cast, JoinedRow}
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
-import org.apache.spark.sql.execution.datasources.parquet.Spark31HoodieParquetFileFormat.{createParquetFilters, rebuildFilterFromParquet}
+import org.apache.spark.sql.execution.datasources.parquet.Spark31HoodieParquetFileFormat.{createParquetFilters, pruneInternalSchema, rebuildFilterFromParquet}
 import org.apache.spark.sql.execution.datasources.{DataSourceUtils, PartitionedFile, RecordReaderIterator}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources._
@@ -100,14 +100,11 @@ class Spark31HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
         SQLConf.PARQUET_INT96_AS_TIMESTAMP.key,
         sparkSession.sessionState.conf.isParquetINT96AsTimestamp)
 
-      // for dataSource v1, we have no method to do project for spark physical plan.
-      // it's safe to do cols project here.
-      val internalSchemaString = hadoopConf.get(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA)
-      val querySchemaOption = SerDeHelper.fromJson(internalSchemaString)
-      if (querySchemaOption.isPresent && !requiredSchema.isEmpty) {
-        val prunedSchema = SparkInternalSchemaConverter.convertAndPruneStructTypeToInternalSchema(requiredSchema, querySchemaOption.get())
-        hadoopConf.set(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA, SerDeHelper.toJson(prunedSchema))
-      }
+      // For Spark DataSource v1, there's no Physical Plan projection/schema pruning w/in Spark itself,
+      // therefore it's safe to do schema projection here
+      val prunedInternalSchemaStr =
+        pruneInternalSchema(hadoopConf.get(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA), requiredSchema)
+      hadoopConf.set(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA, prunedInternalSchemaStr)
 
       val broadcastedHadoopConf =
         sparkSession.sparkContext.broadcast(new SerializableConfiguration(hadoopConf))
@@ -149,18 +146,19 @@ class Spark31HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
 
         val sharedConf = broadcastedHadoopConf.value.value
 
-        // do deal with internalSchema
+        // Fetch internal schema
         val internalSchemaString = sharedConf.get(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA)
-        // querySchema must be a pruned schema.
+        // Internal schema has to be pruned at this point
         val querySchemaOption = SerDeHelper.fromJson(internalSchemaString)
-        val internalSchemaChangeEnabled = if (internalSchemaString.isEmpty || !querySchemaOption.isPresent) false else true
+
+        val shouldUseInternalSchema = internalSchemaString.nonEmpty && querySchemaOption.isPresent
+
         val tablePath = sharedConf.get(SparkInternalSchemaConverter.HOODIE_TABLE_PATH)
         val commitInstantTime = FSUtils.getCommitTime(filePath.getName).toLong;
-        val fileSchema = if (internalSchemaChangeEnabled) {
+        val fileSchema = if (shouldUseInternalSchema) {
           val validCommits = sharedConf.get(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST)
           InternalSchemaCache.getInternalSchemaByVersionId(commitInstantTime, tablePath, sharedConf, if (validCommits == null) "" else validCommits)
         } else {
-          // this should not happened, searchSchemaAndCache will deal with correctly.
           null
         }
 
@@ -227,7 +225,7 @@ class Spark31HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
         val hadoopAttemptConf = new Configuration(broadcastedHadoopConf.value.value)
         // reset request schema
         var typeChangeInfos: java.util.Map[Integer, Pair[DataType, DataType]] = new java.util.HashMap()
-        if (internalSchemaChangeEnabled) {
+        if (shouldUseInternalSchema) {
           val mergedInternalSchema = new InternalSchemaMerger(fileSchema, querySchemaOption.get(), true, true).mergeSchema()
           val mergedSchema = SparkInternalSchemaConverter.constructSparkSchemaFromInternalSchema(mergedInternalSchema)
           typeChangeInfos = SparkInternalSchemaConverter.collectTypeChangedCols(querySchemaOption.get(), mergedInternalSchema)
@@ -315,6 +313,16 @@ class Spark31HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
 object Spark31HoodieParquetFileFormat {
 
   val PARQUET_FILTERS_CLASS_NAME = "org.apache.spark.sql.execution.datasources.parquet.ParquetFilters"
+
+  def pruneInternalSchema(internalSchemaStr: String, requiredSchema: StructType): String = {
+    val querySchemaOption = SerDeHelper.fromJson(internalSchemaStr)
+    if (querySchemaOption.isPresent && requiredSchema.nonEmpty) {
+      val prunedSchema = SparkInternalSchemaConverter.convertAndPruneStructTypeToInternalSchema(requiredSchema, querySchemaOption.get())
+      SerDeHelper.toJson(prunedSchema)
+    } else {
+      internalSchemaStr
+    }
+  }
 
   private def createParquetFilters(arg: Any*): ParquetFilters = {
     val clazz = Class.forName(PARQUET_FILTERS_CLASS_NAME, true, Thread.currentThread().getContextClassLoader)
