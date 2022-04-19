@@ -747,7 +747,8 @@ class TestCOWDataSource extends HoodieClientTestBase {
     assertEquals(resultSchema, schema1)
   }
 
-  @ParameterizedTest @ValueSource(booleans = Array(true, false))
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
   def testCopyOnWriteWithDropPartitionColumns(enableDropPartitionColumns: Boolean) {
     val records1 = recordsToStrings(dataGen.generateInsertsContainsAllPartitions("000", 100)).toList
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
@@ -897,7 +898,6 @@ class TestCOWDataSource extends HoodieClientTestBase {
       readResult.sort("_row_key").select("shortDecimal").collect().map(_.getDecimal(0).toPlainString).mkString(","))
   }
 
-  @Disabled("HUDI-3204")
   @Test
   def testHoodieBaseFileOnlyViewRelation(): Unit = {
     val _spark = spark
@@ -931,12 +931,12 @@ class TestCOWDataSource extends HoodieClientTestBase {
 
     // data_date is the partition field. Persist to the parquet file using the origin values, and read it.
     assertEquals(
-      res.select("data_date").map(_.get(0).toString).collect().sorted,
-      Array("2018-09-23", "2018-09-24")
+      res.select("data_date").map(_.get(0).toString).collect().sorted.toSeq,
+      Seq("2018-09-23", "2018-09-24")
     )
     assertEquals(
-      res.select("_hoodie_partition_path").map(_.get(0).toString).collect().sorted,
-      Array("2018/09/23", "2018/09/24")
+      res.select("_hoodie_partition_path").map(_.get(0).toString).collect().sorted.toSeq,
+      Seq("2018/09/23", "2018/09/24")
     )
   }
 }
