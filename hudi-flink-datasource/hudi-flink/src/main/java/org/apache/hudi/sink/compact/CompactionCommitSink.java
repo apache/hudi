@@ -104,6 +104,8 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
     if (event.isFailed()) {
       // handle failure case
       CompactionUtil.rollbackCompaction(table, event.getInstant());
+      // remove commitBuffer avoid commit with preview fileId
+      this.commitBuffer.remove(event.getInstant());
       return;
     }
     commitBuffer.computeIfAbsent(instant, k -> new HashMap<>())
