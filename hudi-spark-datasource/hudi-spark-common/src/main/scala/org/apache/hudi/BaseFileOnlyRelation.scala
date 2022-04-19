@@ -128,16 +128,6 @@ class BaseFileOnlyRelation(sqlContext: SQLContext,
         fileFormat = tableFileFormat,
         optParams)(sparkSession)
     } else {
-      // Since we're reading the table as just collection of files we have to make sure
-      // we only read the latest version of every Hudi's file-group, which might be compacted, clustered, etc.
-      // while keeping previous versions of the files around as well.
-      //
-      // We rely on [[HoodieROTablePathFilter]], to do proper filtering to assure that
-      sqlContext.sparkContext.hadoopConfiguration.setClass(
-        "mapreduce.input.pathFilter.class",
-        classOf[HoodieROTablePathFilter],
-        classOf[org.apache.hadoop.fs.PathFilter])
-
       val readPathsStr = optParams.get(DataSourceReadOptions.READ_PATHS.key)
       val extraReadPaths = readPathsStr.map(p => p.split(",").toSeq).getOrElse(Seq())
 
@@ -146,7 +136,14 @@ class BaseFileOnlyRelation(sqlContext: SQLContext,
         paths = extraReadPaths,
         userSpecifiedSchema = userSchema,
         className = formatClassName,
-        options = optParams,
+        // Since we're reading the table as just collection of files we have to make sure
+        // we only read the latest version of every Hudi's file-group, which might be compacted, clustered, etc.
+        // while keeping previous versions of the files around as well.
+        //
+        // We rely on [[HoodieROTablePathFilter]], to do proper filtering to assure that
+        options = optParams ++ Map(
+          "mapreduce.input.pathFilter.class" -> classOf[HoodieROTablePathFilter].getName
+        ),
         partitionColumns = partitionColumns
       )
         .resolveRelation()
