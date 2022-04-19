@@ -37,7 +37,7 @@ import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions.{expr, lit}
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
-import org.apache.spark.sql.hudi.command.SqlKeyGenerator
+import org.apache.spark.sql.hudi.command.{NanoidKeyGenerator, SqlKeyGenerator, UuidKeyGenerator}
 import org.apache.spark.{SparkConf, SparkContext}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue, fail}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
@@ -1014,6 +1014,48 @@ class TestHoodieSparkSqlWriter {
         .mode(SaveMode.Append).save(tablePath1)
     } catch {
       case _ => fail("Switching from  explicit SimpleKeyGenerator to default keygen should not fail");
+    }
+  }
+
+  @Test
+  def testUuidKeyGen(): Unit = {
+    try {
+      val _spark = spark
+      import _spark.implicits._
+      val df = Seq((1, "a1", 10, 1000, "2021-10-16")).toDF("id", "name", "value", "ts", "dt")
+      val options = Map(
+        DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "ts",
+        DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "dt")
+      val (tableName1, tablePath1) = ("hoodie_test_params_1", s"$tempBasePath" + "_1")
+
+      df.write.format("hudi")
+        .options(options)
+        .option(HoodieWriteConfig.TBL_NAME.key, tableName1)
+        .option(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key, classOf[UuidKeyGenerator].getName)
+        .mode(SaveMode.Overwrite).save(tablePath1)
+    } catch {
+      case _ => fail("Failing when using UUIDKeyGenerator.");
+    }
+  }
+
+  @Test
+  def testNanoIdKeyGen(): Unit = {
+    try {
+      val _spark = spark
+      import _spark.implicits._
+      val df = Seq((1, "a1", 10, 1000, "2021-10-16")).toDF("id", "name", "value", "ts", "dt")
+      val options = Map(
+        DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "ts",
+        DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "dt")
+      val (tableName1, tablePath1) = ("hoodie_test_params_1", s"$tempBasePath" + "_1")
+
+      df.write.format("hudi")
+        .options(options)
+        .option(HoodieWriteConfig.TBL_NAME.key, tableName1)
+        .option(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key, classOf[NanoidKeyGenerator].getName)
+        .mode(SaveMode.Overwrite).save(tablePath1)
+    } catch {
+      case _ => fail("Failing when using UUIDKeyGenerator.");
     }
   }
 
