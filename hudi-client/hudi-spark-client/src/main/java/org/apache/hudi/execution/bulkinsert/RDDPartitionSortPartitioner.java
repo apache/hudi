@@ -43,29 +43,35 @@ public class RDDPartitionSortPartitioner<T extends HoodieRecordPayload>
   @Override
   public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records,
                                                      int outputSparkPartitions) {
-    class HashingRDDPartitioner extends Partitioner implements Serializable {
-      @Override
-      public int numPartitions() {
-        return outputSparkPartitions;
-      }
-
-      @SuppressWarnings("unchecked")
-      @Override
-      public int getPartition(Object key) {
-        Pair<String, String> partitionPathRecordKeyPair = (Pair<String, String>) key;
-        return Objects.hash(partitionPathRecordKeyPair.getKey()) % outputSparkPartitions;
-      }
-    }
-
     // TODO handle non-partitioned tables
     // TODO explain
     return records.mapToPair(record -> new Tuple2<>(Pair.of(record.getPartitionPath(), record.getRecordKey()), record))
-        .repartitionAndSortWithinPartitions(new HashingRDDPartitioner(), Comparator.comparing(Pair::getValue))
+        .repartitionAndSortWithinPartitions(new HashingRDDPartitioner(outputSparkPartitions), Comparator.comparing(Pair::getValue))
         .values();
   }
 
   @Override
   public boolean arePartitionRecordsSorted() {
     return true;
+  }
+
+  private static class HashingRDDPartitioner extends Partitioner implements Serializable {
+    private final int numPartitions;
+
+    private HashingRDDPartitioner(int numPartitions) {
+      this.numPartitions = numPartitions;
+    }
+
+    @Override
+    public int numPartitions() {
+      return numPartitions;
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public int getPartition(Object key) {
+      Pair<String, String> partitionPathRecordKeyPair = (Pair<String, String>) key;
+      return Math.abs(Objects.hash(partitionPathRecordKeyPair.getKey())) % numPartitions;
+    }
   }
 }

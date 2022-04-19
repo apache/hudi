@@ -40,28 +40,34 @@ public class NonSortPartitioner<T extends HoodieRecordPayload>
 
   @Override
   public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records,
-                                                     int outputSparkPartitions) {
-    class HashingRDDPartitioner extends Partitioner implements Serializable {
-      @Override
-      public int numPartitions() {
-        return outputSparkPartitions;
-      }
-
-      @Override
-      public int getPartition(Object key) {
-        return Objects.hash(key) % outputSparkPartitions;
-      }
-    }
-
+                                                     int outputSparkPartitionsCount) {
     // TODO handle non-partitioned tables
     // TODO explain
     return records.mapToPair(record -> new Tuple2<>(record.getPartitionPath(), record))
-        .partitionBy(new HashingRDDPartitioner())
+        .partitionBy(new HashingRDDPartitioner(outputSparkPartitionsCount))
         .values();
   }
 
   @Override
   public boolean arePartitionRecordsSorted() {
     return false;
+  }
+
+  private static class HashingRDDPartitioner extends Partitioner implements Serializable {
+    private final int numPartitions;
+
+    HashingRDDPartitioner(int numPartitions) {
+      this.numPartitions = numPartitions;
+    }
+
+    @Override
+    public int numPartitions() {
+      return numPartitions;
+    }
+
+    @Override
+    public int getPartition(Object key) {
+      return Math.abs(Objects.hash(key)) % numPartitions;
+    }
   }
 }
