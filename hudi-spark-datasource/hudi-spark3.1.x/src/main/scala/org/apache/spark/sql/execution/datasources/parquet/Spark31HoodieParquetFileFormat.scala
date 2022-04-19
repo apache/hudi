@@ -24,7 +24,8 @@ import org.apache.hadoop.mapreduce.{JobID, TaskAttemptID, TaskID, TaskType}
 import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.util.InternalSchemaCache
+import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
+import org.apache.hudi.common.util.{InternalSchemaCache, StringUtils}
 import org.apache.hudi.common.util.collection.Pair
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.action.InternalSchemaMerger
@@ -96,11 +97,14 @@ class Spark31HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
       SQLConf.PARQUET_INT96_AS_TIMESTAMP.key,
       sparkSession.sessionState.conf.isParquetINT96AsTimestamp)
 
+    val internalSchemaStr = hadoopConf.get(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA)
     // For Spark DataSource v1, there's no Physical Plan projection/schema pruning w/in Spark itself,
     // therefore it's safe to do schema projection here
-    val prunedInternalSchemaStr =
-    pruneInternalSchema(hadoopConf.get(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA), requiredSchema)
-    hadoopConf.set(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA, prunedInternalSchemaStr)
+    if (!isNullOrEmpty(internalSchemaStr)) {
+      val prunedInternalSchemaStr =
+        pruneInternalSchema(internalSchemaStr, requiredSchema)
+      hadoopConf.set(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA, prunedInternalSchemaStr)
+    }
 
     val broadcastedHadoopConf =
       sparkSession.sparkContext.broadcast(new SerializableConfiguration(hadoopConf))
@@ -143,11 +147,11 @@ class Spark31HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
       val sharedConf = broadcastedHadoopConf.value.value
 
       // Fetch internal schema
-      val internalSchemaString = sharedConf.get(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA)
+      val internalSchemaStr = sharedConf.get(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA)
       // Internal schema has to be pruned at this point
-      val querySchemaOption = SerDeHelper.fromJson(internalSchemaString)
+      val querySchemaOption = SerDeHelper.fromJson(internalSchemaStr)
 
-      val shouldUseInternalSchema = internalSchemaString.nonEmpty && querySchemaOption.isPresent
+      val shouldUseInternalSchema = !isNullOrEmpty(internalSchemaStr) && querySchemaOption.isPresent
 
       val tablePath = sharedConf.get(SparkInternalSchemaConverter.HOODIE_TABLE_PATH)
       val commitInstantTime = FSUtils.getCommitTime(filePath.getName).toLong;
@@ -186,7 +190,7 @@ class Spark31HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
             pushDownInFilterThreshold,
             isCaseSensitive)
         }
-        filters.map(rebuildFilterFromParquet(_, fileSchema, querySchemaOption.get()))
+        filters.map(rebuildFilterFromParquet(_, fileSchema, querySchemaOption.orElse(null)))
           // Collects all converted Parquet filter predicates. Notice that not all predicates can be
           // converted (`ParquetFilters.createFilter` returns an `Option`). That's why a `flatMap`
           // is used here.
