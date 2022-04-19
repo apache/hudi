@@ -30,7 +30,7 @@ import org.apache.hudi.index.HoodieIndex.IndexType
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions.Config
 import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieClientTestBase}
-import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers, HoodieSparkUtils}
+import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers, HoodieSparkUtils, SparkDatasetMixin}
 import org.apache.log4j.LogManager
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql._
@@ -48,7 +48,7 @@ import scala.collection.JavaConverters._
 /**
  * Tests on Spark DataSource for MOR table.
  */
-class TestMORDataSource extends HoodieClientTestBase {
+class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
 
   var spark: SparkSession = null
   private val log = LogManager.getLogger(classOf[TestMORDataSource])
@@ -356,7 +356,7 @@ class TestMORDataSource extends HoodieClientTestBase {
 
     val hoodieRecords1 = dataGen.generateInserts("001", 100)
 
-    val inputDF1 = toDataset(hoodieRecords1)
+    val inputDF1 = toDataset(spark, hoodieRecords1)
     inputDF1.write.format("org.apache.hudi")
       .options(opts)
       .option("hoodie.compact.inline", "false") // else fails due to compaction & deltacommit instant times being same
@@ -382,7 +382,7 @@ class TestMORDataSource extends HoodieClientTestBase {
     // Upsert 50 update records
     // Snopshot view should read 100 records
     val records2 = dataGen.generateUniqueUpdates("002", 50)
-    val inputDF2 = toDataset(records2)
+    val inputDF2 = toDataset(spark, records2)
     inputDF2.write.format("org.apache.hudi")
       .options(opts)
       .mode(SaveMode.Append)
@@ -429,7 +429,7 @@ class TestMORDataSource extends HoodieClientTestBase {
     verifyShow(hudiIncDF1Skipmerge)
 
     val record3 = dataGen.generateUpdatesWithTS("003", hoodieRecords1, -1)
-    val inputDF3 = toDataset(record3)
+    val inputDF3 = toDataset(spark, record3)
     inputDF3.write.format("org.apache.hudi").options(opts)
       .mode(SaveMode.Append).save(basePath)
 
@@ -441,16 +441,6 @@ class TestMORDataSource extends HoodieClientTestBase {
 
     assertEquals(100, hudiSnapshotDF3.count())
     assertEquals(0, hudiSnapshotDF3.filter("rider = 'rider-003'").count())
-  }
-
-  private def toDataset(records: util.List[HoodieRecord[_]]) = {
-    val avroRecords = records.map(_.getData
-      .asInstanceOf[HoodieRecordPayload[_]]
-      .getInsertValue(HoodieTestDataGenerator.AVRO_SCHEMA)
-      .get
-      .asInstanceOf[GenericRecord])
-    val rdd: RDD[GenericRecord] = spark.sparkContext.parallelize(avroRecords, 2)
-    AvroConversionUtils.createDataFrame(rdd, HoodieTestDataGenerator.AVRO_SCHEMA.toString, spark)
   }
 
   @Test
