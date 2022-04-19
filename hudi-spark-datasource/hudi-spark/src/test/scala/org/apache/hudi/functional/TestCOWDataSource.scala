@@ -898,8 +898,10 @@ class TestCOWDataSource extends HoodieClientTestBase {
       readResult.sort("_row_key").select("shortDecimal").collect().map(_.getDecimal(0).toPlainString).mkString(","))
   }
 
-  @Test
-  def testHoodieBaseFileOnlyViewRelation(): Unit = {
+  @ParameterizedTest
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testHoodieBaseFileOnlyViewRelation(useGlobbing: Boolean): Unit = {
     val _spark = spark
     import _spark.implicits._
 
@@ -925,7 +927,16 @@ class TestCOWDataSource extends HoodieClientTestBase {
       .mode(org.apache.spark.sql.SaveMode.Append)
       .save(basePath)
 
-    val res = spark.read.format("hudi").load(basePath)
+    // NOTE: We're testing here that both paths are appropriately handling
+    //       partition values, regardless of whether we're reading the table
+    //       t/h a globbed path or not
+    val path = if (useGlobbing) {
+      s"$basePath/*/*/*/*"
+    } else {
+      basePath
+    }
+
+    val res = spark.read.format("hudi").load(path)
 
     assert(res.count() == 2)
 

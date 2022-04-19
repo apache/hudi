@@ -57,7 +57,6 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
   val verificationCol: String = "driver"
   val updatedVerificationVal: String = "driver_update"
 
-  @Disabled("HUDI-3896")
   @ParameterizedTest
   @CsvSource(Array(
     "true,org.apache.hudi.keygen.SimpleKeyGenerator",
@@ -96,7 +95,7 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
     // Snapshot query
     val snapshotDF1 = spark.read.format("org.apache.hudi")
       .option(HoodieMetadataConfig.ENABLE.key, isMetadataEnabled)
-      .load(basePath)
+      .load(s"$basePath")
     assertEquals(100, snapshotDF1.count())
 
     val records1 = recordsToStrings(dataGen.generateUpdates("001", 100)).toList
