@@ -20,13 +20,15 @@ package org.apache.hudi
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
-
 import org.apache.hudi.HoodieBaseRelation.createBaseFileReader
+import org.apache.hudi.common.model.HoodieFileFormat
 import org.apache.hudi.common.table.HoodieTableMetaClient
-
+import org.apache.hudi.hadoop.HoodieROTablePathFilter
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.execution.datasources._
+import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
+import org.apache.spark.sql.hive.orc.OrcFileFormat
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
 import org.apache.spark.sql.types.StructType
 
@@ -103,5 +105,49 @@ class BaseFileOnlyRelation(sqlContext: SQLContext,
 
     sparkAdapter.getFilePartitions(sparkSession, fileSplits, maxSplitBytes)
       .map(HoodieBaseFileSplit.apply)
+  }
+
+  /**
+   * NOTE: We have to fallback to [[HadoopFsRelation]] to make sure that all of the Spark optimizations could be
+   *       equally applied to Hudi tables, since some of those are predicated on the usage of [[HadoopFsRelation]],
+   *       and won't be applicable in case of us using our own custom relations (one of such optimizations is [[SchemaPruning]]
+   *       rule; you can find more details in HUDI-3896)
+   */
+  def toHadoopFsRelation: HadoopFsRelation = {
+    val (tableFileFormat, formatClassName) = metaClient.getTableConfig.getBaseFileFormat match {
+      case HoodieFileFormat.PARQUET => (new ParquetFileFormat, "parquet")
+      case HoodieFileFormat.ORC => (new OrcFileFormat, "orc")
+    }
+
+    if (globPaths.isEmpty) {
+      HadoopFsRelation(
+        location = fileIndex,
+        partitionSchema = fileIndex.partitionSchema,
+        dataSchema = fileIndex.dataSchema,
+        bucketSpec = None,
+        fileFormat = tableFileFormat,
+        optParams)(sparkSession)
+    } else {
+      val readPathsStr = optParams.get(DataSourceReadOptions.READ_PATHS.key)
+      val extraReadPaths = readPathsStr.map(p => p.split(",").toSeq).getOrElse(Seq())
+
+      DataSource.apply(
+        sparkSession = sparkSession,
+        paths = extraReadPaths,
+        userSpecifiedSchema = userSchema,
+        className = formatClassName,
+        // Since we're reading the table as just collection of files we have to make sure
+        // we only read the latest version of every Hudi's file-group, which might be compacted, clustered, etc.
+        // while keeping previous versions of the files around as well.
+        //
+        // We rely on [[HoodieROTablePathFilter]], to do proper filtering to assure that
+        options = optParams ++ Map(
+          "mapreduce.input.pathFilter.class" -> classOf[HoodieROTablePathFilter].getName
+        ),
+        partitionColumns = partitionColumns
+      )
+        .resolveRelation()
+        .asInstanceOf[HadoopFsRelation]
+    }
   }
 }
