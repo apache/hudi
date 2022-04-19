@@ -148,7 +148,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
   /**
    * if true, need to deal with schema for creating file reader.
    */
-  protected val dropPartitionColumnsWhenWrite: Boolean =
+  protected val omitPartitionColumnsInFile: Boolean =
     metaClient.getTableConfig.isDropPartitionColumns && partitionColumns.nonEmpty
 
   /**
@@ -222,7 +222,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
 
     val fileSplits = collectFileSplits(partitionFilters, dataFilters)
 
-    val partitionSchema = if (dropPartitionColumnsWhenWrite) {
+    val partitionSchema = if (omitPartitionColumnsInFile) {
       // when hoodie.datasource.write.drop.partition.columns is true, partition columns can't be persisted in
       // data files.
       StructType(partitionColumns.map(StructField(_, StringType)))
@@ -231,7 +231,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     }
 
     val tableSchema = HoodieTableSchema(tableStructSchema, if (internalSchema.isEmptySchema) tableAvroSchema.toString else AvroInternalSchemaConverter.convert(internalSchema, tableAvroSchema.getName).toString, internalSchema)
-    val dataSchema = if (dropPartitionColumnsWhenWrite) {
+    val dataSchema = if (omitPartitionColumnsInFile) {
       val dataStructType = StructType(tableStructSchema.filterNot(f => partitionColumns.contains(f.name)))
       HoodieTableSchema(
         dataStructType,
@@ -240,7 +240,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     } else {
       tableSchema
     }
-    val requiredSchema = if (dropPartitionColumnsWhenWrite) {
+    val requiredSchema = if (omitPartitionColumnsInFile) {
       val requiredStructType = StructType(requiredStructSchema.filterNot(f => partitionColumns.contains(f.name)))
       HoodieTableSchema(
         requiredStructType,
@@ -363,7 +363,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
   protected def getPartitionColumnsAsInternalRow(file: FileStatus): InternalRow = {
     try {
       val tableConfig = metaClient.getTableConfig
-      if (dropPartitionColumnsWhenWrite) {
+      if (omitPartitionColumnsInFile) {
         val relativePath = new URI(metaClient.getBasePath).relativize(new URI(file.getPath.getParent.toString)).toString
         val hiveStylePartitioningEnabled = tableConfig.getHiveStylePartitioningEnable.toBoolean
         if (hiveStylePartitioningEnabled) {
