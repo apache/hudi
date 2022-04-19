@@ -23,11 +23,9 @@ import org.apache.avro.Schema;
 import org.apache.avro.Schema.Field;
 import org.apache.avro.SchemaCompatibility;
 import org.apache.avro.generic.IndexedRecord;
-
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.io.hfile.CacheConfig;
-
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -47,15 +45,13 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIncompatibleSchemaException;
 import org.apache.hudi.exception.InvalidTableException;
-import org.apache.hudi.io.storage.HoodieHFileReader;
-import org.apache.hudi.io.storage.HoodieOrcReader;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.io.FileBasedInternalSchemaStorageManager;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
-
+import org.apache.hudi.io.storage.HoodieHFileReader;
+import org.apache.hudi.io.storage.HoodieOrcReader;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.format.converter.ParquetMetadataConverter;
 import org.apache.parquet.hadoop.ParquetFileReader;
@@ -66,6 +62,8 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+
+import static org.apache.hudi.avro.AvroSchemaUtils.createNullableSchema;
 
 /**
  * Helper class to read schema from data files and log files and to convert it between different formats.
@@ -222,7 +220,7 @@ public class TableSchemaResolver {
         List<Field> newFields = new ArrayList<>();
         for (String partitionField: partitionFields) {
           newFields.add(new Schema.Field(
-              partitionField, Schema.create(Schema.Type.STRING), "", JsonProperties.NULL_VALUE));
+              partitionField, createNullableSchema(Schema.Type.STRING), "", JsonProperties.NULL_VALUE));
         }
         schema = HoodieAvroUtils.createNewSchemaWithExtraFields(schema, newFields);
       }
