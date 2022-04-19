@@ -17,8 +17,6 @@
 
 package org.apache.spark.sql.execution.datasources.parquet
 
-import java.net.URI
-
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hadoop.mapred.FileSplit
@@ -34,22 +32,34 @@ import org.apache.hudi.internal.schema.utils.{InternalSchemaUtils, SerDeHelper}
 import org.apache.parquet.filter2.compat.FilterCompat
 import org.apache.parquet.filter2.predicate.FilterApi
 import org.apache.parquet.format.converter.ParquetMetadataConverter.SKIP_ROW_GROUPS
-import org.apache.parquet.hadoop.{ParquetFileReader, ParquetInputFormat, ParquetRecordReader}
+import org.apache.parquet.hadoop.{ParquetInputFormat, ParquetRecordReader}
 import org.apache.spark.TaskContext
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{Cast, JoinedRow}
 import org.apache.spark.sql.catalyst.expressions.codegen.GenerateUnsafeProjection
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
+import org.apache.spark.sql.execution.datasources.parquet.Spark32HoodieParquetFileFormat.rebuildFilterFromParquet
 import org.apache.spark.sql.execution.datasources.{DataSourceUtils, PartitionedFile, RecordReaderIterator}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types.{AtomicType, DataType, StructField, StructType}
 import org.apache.spark.util.SerializableConfiguration
 
+import java.net.URI
+
+/**
+ * This class is an extension of [[ParquetFileFormat]] overriding Spark-specific behavior
+ * that's not possible to customize in any other way
+ *
+ * NOTE: This is a version of [[AvroDeserializer]] impl from Spark 3.2.1 w/ w/ the following changes applied to it:
+ * <ol>
+ *   <li>Avoiding appending partition values to the rows read from the data file</li>
+ *   <li>Schema on-read</li>
+ * </ol>
+ */
 class Spark32HoodieParquetFileFormat extends ParquetFileFormat {
 
-  // reference ParquetFileFormat from spark project
   override def buildReaderWithPartitionValues(
                                                sparkSession: SparkSession,
                                                dataSchema: StructType,
@@ -88,6 +98,7 @@ class Spark32HoodieParquetFileFormat extends ParquetFileFormat {
       hadoopConf.setBoolean(
         SQLConf.PARQUET_INT96_AS_TIMESTAMP.key,
         sparkSession.sessionState.conf.isParquetINT96AsTimestamp)
+
       // for dataSource v1, we have no method to do project for spark physical plan.
       // it's safe to do cols project here.
       val internalSchemaString = hadoopConf.get(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA)
@@ -96,6 +107,7 @@ class Spark32HoodieParquetFileFormat extends ParquetFileFormat {
         val prunedSchema = SparkInternalSchemaConverter.convertAndPruneStructTypeToInternalSchema(requiredSchema, querySchemaOption.get())
         hadoopConf.set(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA, SerDeHelper.toJson(prunedSchema))
       }
+
       val broadcastedHadoopConf =
         sparkSession.sparkContext.broadcast(new SerializableConfiguration(hadoopConf))
 
@@ -122,13 +134,16 @@ class Spark32HoodieParquetFileFormat extends ParquetFileFormat {
       val isCaseSensitive = sqlConf.caseSensitiveAnalysis
       val parquetOptions = new ParquetOptions(options, sparkSession.sessionState.conf)
       val datetimeRebaseModeInRead = parquetOptions.datetimeRebaseModeInRead
-      val int96RebaseModeInread = parquetOptions.int96RebaseModeInRead
+      val int96RebaseModeInRead = parquetOptions.int96RebaseModeInRead
 
       (file: PartitionedFile) => {
         assert(file.partitionValues.numFields == partitionSchema.size)
+
         val filePath = new Path(new URI(file.filePath))
         val split = new FileSplit(filePath, file.start, file.length, Array.empty[String])
+
         val sharedConf = broadcastedHadoopConf.value.value
+
         // do deal with internalSchema
         val internalSchemaString = sharedConf.get(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA)
         // querySchema must be a pruned schema.
@@ -147,7 +162,8 @@ class Spark32HoodieParquetFileFormat extends ParquetFileFormat {
         lazy val footerFileMetaData =
           ParquetFooterReader.readFooter(sharedConf, filePath, SKIP_ROW_GROUPS).getFileMetaData
         val datetimeRebaseSpec = DataSourceUtils.datetimeRebaseSpec(
-          footerFileMetaData.getKeyValueMetaData.get, datetimeRebaseModeInRead)
+          footerFileMetaData.getKeyValueMetaData.get,
+          datetimeRebaseModeInRead)
         // Try to push down filters when filter push-down is enabled.
         val pushed = if (enableParquetFilterPushDown) {
           val parquetSchema = footerFileMetaData.getSchema
@@ -160,11 +176,11 @@ class Spark32HoodieParquetFileFormat extends ParquetFileFormat {
             pushDownInFilterThreshold,
             isCaseSensitive,
             datetimeRebaseSpec)
-          filters.map(Spark32HoodieParquetFileFormat.rebuildFilterFromParquet(_, fileSchema, querySchemaOption.get()))
+          filters.map(rebuildFilterFromParquet(_, fileSchema, querySchemaOption.get()))
             // Collects all converted Parquet filter predicates. Notice that not all predicates can be
             // converted (`ParquetFilters.createFilter` returns an `Option`). That's why a `flatMap`
             // is used here.
-            .flatMap(parquetFilters.createFilter(_))
+            .flatMap(parquetFilters.createFilter)
             .reduceOption(FilterApi.and)
         } else {
           None
@@ -184,12 +200,15 @@ class Spark32HoodieParquetFileFormat extends ParquetFileFormat {
           } else {
             None
           }
+
         val int96RebaseSpec = DataSourceUtils.int96RebaseSpec(
-          footerFileMetaData.getKeyValueMetaData.get, int96RebaseModeInread)
+          footerFileMetaData.getKeyValueMetaData.get,
+          int96RebaseModeInRead)
 
         val attemptId = new TaskAttemptID(new TaskID(new JobID(), TaskType.MAP, 0), 0)
+
         // use new conf
-        val hadoopAttempConf = new Configuration(broadcastedHadoopConf.value.value)
+        val hadoopAttemptConf = new Configuration(broadcastedHadoopConf.value.value)
         //
         // reset request schema
         var typeChangeInfos: java.util.Map[Integer, Pair[DataType, DataType]] = new java.util.HashMap()
@@ -197,10 +216,11 @@ class Spark32HoodieParquetFileFormat extends ParquetFileFormat {
           val mergedInternalSchema = new InternalSchemaMerger(fileSchema, querySchemaOption.get(), true, true).mergeSchema()
           val mergedSchema = SparkInternalSchemaConverter.constructSparkSchemaFromInternalSchema(mergedInternalSchema)
           typeChangeInfos = SparkInternalSchemaConverter.collectTypeChangedCols(querySchemaOption.get(), mergedInternalSchema)
-          hadoopAttempConf.set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA, mergedSchema.json)
+          hadoopAttemptConf.set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA, mergedSchema.json)
         }
+
         val hadoopAttemptContext =
-          new TaskAttemptContextImpl(hadoopAttempConf, attemptId)
+          new TaskAttemptContextImpl(hadoopAttemptConf, attemptId)
 
         // Try to push down filters when filter push-down is enabled.
         // Notice: This push-down is RowGroups level, not individual records.
@@ -216,10 +236,16 @@ class Spark32HoodieParquetFileFormat extends ParquetFileFormat {
             int96RebaseSpec.mode.toString,
             int96RebaseSpec.timeZone,
             enableOffHeapColumnVector && taskContext.isDefined,
-            capacity, typeChangeInfos)
+            capacity,
+            typeChangeInfos)
+          // SPARK-37089: We cannot register a task completion listener to close this iterator here
+          // because downstream exec nodes have already registered their listeners. Since listeners
+          // are executed in reverse order of registration, a listener registered here would close the
+          // iterator while downstream exec nodes are still running. When off-heap column vectors are
+          // enabled, this can cause a use-after-free bug leading to a segfault.
+          //
+          // Instead, we use FileScanRDD's task completion listener to close this iterator.
           val iter = new RecordReaderIterator(vectorizedReader)
-          // SPARK-23457 Register a task completion listener before `initialization`.
-          //          taskContext.foreach(_.addTaskCompletionListener[Unit](_ => iter.close()))
           try {
             vectorizedReader.initialize(split, hadoopAttemptContext)
             logDebug(s"Appending $partitionSchema ${file.partitionValues}")
@@ -252,34 +278,40 @@ class Spark32HoodieParquetFileFormat extends ParquetFileFormat {
             new ParquetRecordReader[InternalRow](readSupport)
           }
           val iter = new RecordReaderIterator[InternalRow](reader)
-          // SPARK-23457 Register a task completion listener before `initialization`.
-          taskContext.foreach(_.addTaskCompletionListener[Unit](_ => iter.close()))
-          reader.initialize(split, hadoopAttemptContext)
+          try {
+            reader.initialize(split, hadoopAttemptContext)
 
-          val fullSchema = requiredSchema.toAttributes ++ partitionSchema.toAttributes
-          val unsafeProjection = if (typeChangeInfos.isEmpty) {
-            GenerateUnsafeProjection.generate(fullSchema, fullSchema)
-          } else {
-            // find type changed.
-            val newFullSchema = new StructType(requiredSchema.fields.zipWithIndex.map { case (f, i) =>
-              if (typeChangeInfos.containsKey(i)) {
-                StructField(f.name, typeChangeInfos.get(i).getRight, f.nullable, f.metadata)
-              } else f
-            }).toAttributes ++ partitionSchema.toAttributes
-            val castSchema = newFullSchema.zipWithIndex.map { case (attr, i) =>
-              if (typeChangeInfos.containsKey(i)) {
-                Cast(attr, typeChangeInfos.get(i).getLeft)
-              } else attr
+            val fullSchema = requiredSchema.toAttributes ++ partitionSchema.toAttributes
+            val unsafeProjection = if (typeChangeInfos.isEmpty) {
+              GenerateUnsafeProjection.generate(fullSchema, fullSchema)
+            } else {
+              // find type changed.
+              val newFullSchema = new StructType(requiredSchema.fields.zipWithIndex.map { case (f, i) =>
+                if (typeChangeInfos.containsKey(i)) {
+                  StructField(f.name, typeChangeInfos.get(i).getRight, f.nullable, f.metadata)
+                } else f
+              }).toAttributes ++ partitionSchema.toAttributes
+              val castSchema = newFullSchema.zipWithIndex.map { case (attr, i) =>
+                if (typeChangeInfos.containsKey(i)) {
+                  Cast(attr, typeChangeInfos.get(i).getLeft)
+                } else attr
+              }
+              GenerateUnsafeProjection.generate(castSchema, newFullSchema)
             }
-            GenerateUnsafeProjection.generate(castSchema, newFullSchema)
-          }
 
-          if (partitionSchema.length == 0) {
-            // There is no partition columns
-            iter.map(unsafeProjection)
-          } else {
-            val joinedRow = new JoinedRow()
-            iter.map(d => unsafeProjection(joinedRow(d, file.partitionValues)))
+            if (partitionSchema.length == 0) {
+              // There is no partition columns
+              iter.map(unsafeProjection)
+            } else {
+              val joinedRow = new JoinedRow()
+              iter.map(d => unsafeProjection(joinedRow(d, file.partitionValues)))
+            }
+          } catch {
+            case e: Throwable =>
+              // SPARK-23457: In case there is an exception in initialization, close the iterator to
+              // avoid leaking resources.
+              iter.close()
+              throw e
           }
         }
       }
