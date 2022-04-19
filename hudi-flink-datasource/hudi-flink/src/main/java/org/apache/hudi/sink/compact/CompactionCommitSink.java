@@ -128,6 +128,7 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
     if (!isReady) {
       return;
     }
+
     if(events.stream().anyMatch(CompactionCommitEvent::isFailed)) {
       // handle failure case
       CompactionUtil.rollbackCompaction(table, instant);
@@ -135,6 +136,7 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
       this.commitBuffer.remove(instant);
       return;
     }
+
     try {
       doCommit(instant, events);
     } catch (Throwable throwable) {
