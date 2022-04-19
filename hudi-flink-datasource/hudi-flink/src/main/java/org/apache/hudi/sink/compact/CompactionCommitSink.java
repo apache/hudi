@@ -83,8 +83,6 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
    */
   private transient HoodieFlinkTable<?> table;
 
-  private volatile boolean hasFailedEvent;
-
   public CompactionCommitSink(Configuration conf) {
     super(conf);
     this.conf = conf;
@@ -99,23 +97,11 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
     this.commitBuffer = new HashMap<>();
     this.compactionPlanCache = new HashMap<>();
     this.table = this.writeClient.getHoodieTable();
-    this.hasFailedEvent = false;
   }
 
   @Override
   public void invoke(CompactionCommitEvent event, Context context) throws Exception {
     final String instant = event.getInstant();
-    if(hasFailedEvent) {
-      return;
-    }
-    if (event.isFailed()) {
-      this.hasFailedEvent = true;
-      // handle failure case
-      CompactionUtil.rollbackCompaction(table, instant);
-      // remove commitBuffer avoid commit with preview fileId
-      this.commitBuffer.remove(instant);
-      return;
-    }
     commitBuffer.computeIfAbsent(instant, k -> new HashMap<>())
         .put(event.getFileId(), event);
     commitIfNecessary(instant, commitBuffer.get(instant).values());
@@ -140,6 +126,13 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
 
     boolean isReady = compactionPlan.getOperations().size() == events.size();
     if (!isReady) {
+      return;
+    }
+    if(events.stream().anyMatch(CompactionCommitEvent::isFailed)) {
+      // handle failure case
+      CompactionUtil.rollbackCompaction(table, instant);
+      // remove commitBuffer avoid commit with preview fileId
+      this.commitBuffer.remove(instant);
       return;
     }
     try {
