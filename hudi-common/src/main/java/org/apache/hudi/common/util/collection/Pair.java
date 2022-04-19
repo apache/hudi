@@ -148,10 +148,11 @@ public abstract class Pair<L, R> implements Map.Entry<L, R>, Comparable<Pair<L, 
     Comparable otherLeft = (Comparable) other.getLeft();
     Comparable otherRight = (Comparable) other.getRight();
 
-    if (thisLeft.compareTo(otherLeft) == 0) {
-      return thisRight.compareTo(otherRight);
+    int leftCompareRes = thisLeft.compareTo(otherLeft);
+    if (leftCompareRes != 0) {
+      return leftCompareRes;
     } else {
-      return thisLeft.compareTo(otherLeft);
+      return thisRight.compareTo(otherRight);
     }
   }
 

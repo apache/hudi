@@ -20,6 +20,7 @@ package org.apache.hudi.execution.bulkinsert;
 
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
 import org.apache.spark.api.java.JavaRDD;
@@ -39,14 +40,10 @@ public class GlobalSortPartitioner<T extends HoodieRecordPayload>
                                                      int outputSparkPartitions) {
     // Now, sort the records and line them up nicely for loading.
     return records.sortBy(record -> {
-      // Let's use "partitionPath + key" as the sort key. Spark, will ensure
+      // Let's use (partitionPath, key) as the sort key. Spark, will ensure
       // the records split evenly across RDD partitions, such that small partitions fit
       // into 1 RDD partition, while big ones spread evenly across multiple RDD partitions
-      return new StringBuilder()
-          .append(record.getPartitionPath())
-          .append("+")
-          .append(record.getRecordKey())
-          .toString();
+      return Pair.of(record.getPartitionPath(), record.getRecordKey());
     }, true, outputSparkPartitions);
   }
 
