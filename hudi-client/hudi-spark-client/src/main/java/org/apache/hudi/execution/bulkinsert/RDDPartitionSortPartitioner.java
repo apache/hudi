@@ -49,7 +49,7 @@ public class RDDPartitionSortPartitioner<T extends HoodieRecordPayload>
     return records.mapToPair(record -> new Tuple2<>(Pair.of(record.getPartitionPath(), record.getRecordKey()), record))
         .repartitionAndSortWithinPartitions(
             new HashingRDDPartitioner(outputSparkPartitions),
-            Comparator.comparing((Function<Pair<String, String>, String> & Serializable) Pair::getValue))
+            Comparator.comparing((Function<Pair<String, String>, Pair<String, String>> & Serializable) keyPair -> keyPair))
         .values();
   }
 
