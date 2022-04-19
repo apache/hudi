@@ -63,6 +63,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
+import static org.apache.hudi.avro.AvroSchemaUtils.appendFieldsToSchema;
 import static org.apache.hudi.avro.AvroSchemaUtils.createNullableSchema;
 
 /**
@@ -222,7 +223,7 @@ public class TableSchemaResolver {
           newFields.add(new Schema.Field(
               partitionField, createNullableSchema(Schema.Type.STRING), "", JsonProperties.NULL_VALUE));
         }
-        schema = HoodieAvroUtils.createNewSchemaWithExtraFields(schema, newFields);
+        schema = appendFieldsToSchema(schema, newFields);
       }
     }
     return schema;

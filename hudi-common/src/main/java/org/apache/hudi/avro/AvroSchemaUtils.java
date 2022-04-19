@@ -23,12 +23,30 @@ import org.apache.avro.Schema;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
 public class AvroSchemaUtils {
 
   private AvroSchemaUtils() {}
+
+  /**
+   * Appends provided new fields at the end of the given schema
+   *
+   * NOTE: No deduplication is made, this method simply appends fields at the end of the list
+   *       of the source schema as is
+   */
+  public static Schema appendFieldsToSchema(Schema schema, List<Schema.Field> newFields) {
+    List<Schema.Field> fields = schema.getFields().stream()
+        .map(field -> new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultVal()))
+        .collect(Collectors.toList());
+    fields.addAll(newFields);
+
+    Schema newSchema = Schema.createRecord(schema.getName(), schema.getDoc(), schema.getNamespace(), schema.isError());
+    newSchema.setFields(fields);
+    return newSchema;
+  }
 
   /**
    * Passed in {@code Union} schema and will try to resolve the field with the {@code fieldSchemaFullName}
