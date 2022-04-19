@@ -23,12 +23,14 @@ import org.apache.hudi.SparkAdapterSupport
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.datasources.PartitionedFile
+import org.apache.spark.sql.execution.datasources.parquet.HoodieParquetFileFormat.FILE_FORMAT_ID
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
 
 
-class SparkHoodieParquetFileFormat extends ParquetFileFormat with SparkAdapterSupport {
-  override def shortName(): String = "hoodie-parquet"
+class HoodieParquetFileFormat extends ParquetFileFormat with SparkAdapterSupport {
+
+  override def shortName(): String = FILE_FORMAT_ID
 
   override def toString: String = "Hoodie-Parquet"
 
@@ -45,3 +47,8 @@ class SparkHoodieParquetFileFormat extends ParquetFileFormat with SparkAdapterSu
   }
 }
 
+object HoodieParquetFileFormat {
+
+  val FILE_FORMAT_ID = "hoodie-parquet"
+
+}

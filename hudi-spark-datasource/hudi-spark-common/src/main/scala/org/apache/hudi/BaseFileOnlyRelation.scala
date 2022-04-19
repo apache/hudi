@@ -27,7 +27,7 @@ import org.apache.hudi.hadoop.HoodieROTablePathFilter
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.execution.datasources._
-import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
+import org.apache.spark.sql.execution.datasources.parquet.{HoodieParquetFileFormat, ParquetFileFormat}
 import org.apache.spark.sql.hive.orc.OrcFileFormat
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
 import org.apache.spark.sql.types.StructType
@@ -119,7 +119,8 @@ class BaseFileOnlyRelation(sqlContext: SQLContext,
     val shouldAppendPartitionColumns = omitPartitionColumnsInFile
 
     val (tableFileFormat, formatClassName) = metaClient.getTableConfig.getBaseFileFormat match {
-      case HoodieFileFormat.PARQUET => (sparkAdapter.createHoodieParquetFileFormat(shouldAppendPartitionColumns).get, "hoodie-parquet")
+      case HoodieFileFormat.PARQUET =>
+        (sparkAdapter.createHoodieParquetFileFormat(shouldAppendPartitionColumns).get, HoodieParquetFileFormat.FILE_FORMAT_ID)
       case HoodieFileFormat.ORC => (new OrcFileFormat, "orc")
     }
 
