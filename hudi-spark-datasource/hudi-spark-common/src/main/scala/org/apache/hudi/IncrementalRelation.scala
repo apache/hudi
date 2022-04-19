@@ -183,7 +183,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
       sqlContext.sparkContext.hadoopConfiguration.set(SparkInternalSchemaConverter.HOODIE_TABLE_PATH, metaClient.getBasePath)
       sqlContext.sparkContext.hadoopConfiguration.set(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST, validCommits)
       val formatClassName = metaClient.getTableConfig.getBaseFileFormat match {
-        case HoodieFileFormat.PARQUET => if (!internalSchema.isEmptySchema) "HoodieParquet" else "parquet"
+        case HoodieFileFormat.PARQUET => "hoodie-parquet"
         case HoodieFileFormat.ORC => "orc"
       }
       sqlContext.sparkContext.hadoopConfiguration.unset("mapreduce.input.pathFilter.class")

@@ -119,7 +119,7 @@ class BaseFileOnlyRelation(sqlContext: SQLContext,
     val shouldAppendPartitionColumns = omitPartitionColumnsInFile
 
     val (tableFileFormat, formatClassName) = metaClient.getTableConfig.getBaseFileFormat match {
-      case HoodieFileFormat.PARQUET => (sparkAdapter.createHoodieParquetFileFormat(shouldAppendPartitionColumns).get, "parquet")
+      case HoodieFileFormat.PARQUET => (sparkAdapter.createHoodieParquetFileFormat(shouldAppendPartitionColumns).get, "hoodie-parquet")
       case HoodieFileFormat.ORC => (new OrcFileFormat, "orc")
     }
 

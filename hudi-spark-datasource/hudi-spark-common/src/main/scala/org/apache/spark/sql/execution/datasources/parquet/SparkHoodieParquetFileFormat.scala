@@ -28,9 +28,9 @@ import org.apache.spark.sql.types.StructType
 
 
 class SparkHoodieParquetFileFormat extends ParquetFileFormat with SparkAdapterSupport {
-  override def shortName(): String = "HoodieParquet"
+  override def shortName(): String = "hoodie-parquet"
 
-  override def toString: String = "HoodieParquet"
+  override def toString: String = "Hoodie-Parquet"
 
   override def buildReaderWithPartitionValues(sparkSession: SparkSession,
                                               dataSchema: StructType,
