@@ -95,7 +95,7 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
     // Snapshot query
     val snapshotDF1 = spark.read.format("org.apache.hudi")
       .option(HoodieMetadataConfig.ENABLE.key, isMetadataEnabled)
-      .load(s"$basePath")
+      .load(basePath)
     assertEquals(100, snapshotDF1.count())
 
     val records1 = recordsToStrings(dataGen.generateUpdates("001", 100)).toList
