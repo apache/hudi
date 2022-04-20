@@ -245,17 +245,26 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     //       the partition path, and omitted from the data file, back into fetched rows;
     //       Note that, by default, partition columns are not omitted therefore specifying
     //       partition schema for reader is not required
-    val (partitionSchema, dataSchema, prunedRequiredSchema, unsafeProjectionOpt) =
+    val (partitionSchema, dataSchema, prunedRequiredSchema) =
       tryPrunePartitionColumns(tableSchema, requiredSchema)
 
     if (fileSplits.isEmpty) {
       sparkSession.sparkContext.emptyRDD
     } else {
       val rdd = composeRDD(fileSplits, partitionSchema, dataSchema, prunedRequiredSchema, filters)
-      val projectedRDD = unsafeProjectionOpt match {
-        case Some(projection) => rdd.map(projection)
-        case _ => rdd
+
+      // NOTE: In case when partition columns have been pruned from the required schema, we have to project
+      //       the rows from the pruned schema back into the one expected by the caller
+      val projectedRDD = if (prunedRequiredSchema.structTypeSchema != requiredSchema.structTypeSchema) {
+        rdd.mapPartitions { it =>
+          val fullPrunedSchema = StructType(prunedRequiredSchema.structTypeSchema.fields ++ partitionSchema.fields)
+          val unsafeProjection = generateUnsafeProjection(fullPrunedSchema, requiredSchema.structTypeSchema)
+          it.map(unsafeProjection)
+        }
+      } else {
+        rdd
       }
+
       // Here we rely on a type erasure, to workaround inherited API restriction and pass [[RDD[InternalRow]]] back as [[RDD[Row]]]
       // Please check [[needConversion]] scala-doc for more details
       projectedRDD.asInstanceOf[RDD[Row]]
@@ -438,28 +447,17 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
   }
 
   private def tryPrunePartitionColumns(tableSchema: HoodieTableSchema,
-                                       requiredSchema: HoodieTableSchema): (StructType, HoodieTableSchema, HoodieTableSchema, Option[UnsafeProjection]) = {
+                                       requiredSchema: HoodieTableSchema): (StructType, HoodieTableSchema, HoodieTableSchema) = {
     if (shouldOmitPartitionColumns) {
       val partitionSchema = StructType(partitionColumns.map(StructField(_, StringType)))
       val prunedDataStructSchema = prunePartitionColumns(tableSchema.structTypeSchema)
       val prunedRequiredSchema = prunePartitionColumns(requiredSchema.structTypeSchema)
 
-      val fullPrunedSchema = StructType(prunedRequiredSchema.fields ++ partitionSchema.fields)
-
-      // NOTE: In case when partition columns have been pruned from the required schema, we have to project
-      //       the rows from the pruned schema back into the one expected by the caller
-      val unsafeProjection = if (prunedRequiredSchema != requiredSchema.structTypeSchema) {
-        Some(generateUnsafeProjection(fullPrunedSchema, requiredSchema.structTypeSchema))
-      } else {
-        None
-      }
-
       (partitionSchema,
         HoodieTableSchema(prunedDataStructSchema, convertToAvroSchema(prunedDataStructSchema).toString),
-        HoodieTableSchema(prunedRequiredSchema, convertToAvroSchema(prunedRequiredSchema).toString),
-        unsafeProjection)
+        HoodieTableSchema(prunedRequiredSchema, convertToAvroSchema(prunedRequiredSchema).toString))
     } else {
-      (StructType(Nil), tableSchema, requiredSchema, None)
+      (StructType(Nil), tableSchema, requiredSchema)
     }
   }
 
