@@ -18,11 +18,24 @@
 package org.apache.spark.sql
 
 import org.apache.spark.sql.catalyst.analysis.{UnresolvedAttribute, UnresolvedFunction}
-import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, SubqueryExpression}
+import org.apache.spark.sql.catalyst.expressions.codegen.GenerateUnsafeProjection
+import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, SubqueryExpression, UnsafeProjection}
 import org.apache.spark.sql.catalyst.plans.logical.{Filter, LocalRelation, LogicalPlan}
 import org.apache.spark.sql.types.StructType
 
 trait HoodieCatalystExpressionUtils {
+
+  /**
+   * Generates instance of [[UnsafeProjection]] projecting from one [[StructType]] into another
+   *
+   * NOTE: No safety checks are executed to validate that this projection is actually feasible,
+   *       it's up to the caller to make sure that such projection is possible.
+   *
+   * NOTE: Projection of the row from [[StructType]] A to [[StructType]] B is only possible, if
+   *       B is a subset of A
+   */
+  def generateUnsafeProjection(fromStructType: StructType, toStructType: StructType): UnsafeProjection =
+    GenerateUnsafeProjection.generate(fromStructType.toAttributes, toStructType.toAttributes)
 
   /**
    * Parses and resolves expression against the attributes of the given table schema.

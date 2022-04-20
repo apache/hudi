@@ -23,7 +23,7 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hadoop.hbase.io.hfile.CacheConfig
 import org.apache.hadoop.mapred.JobConf
-import org.apache.hudi.HoodieBaseRelation.{convertToAvroSchema, createHFileReader, getPartitionPath}
+import org.apache.hudi.HoodieBaseRelation.{convertToAvroSchema, createHFileReader, generateUnsafeProjection, getPartitionPath}
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.common.config.{HoodieMetadataConfig, SerializableConfiguration}
 import org.apache.hudi.common.fs.FSUtils
@@ -41,7 +41,8 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.avro.HoodieAvroSchemaConverters
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.expressions.{Expression, SubqueryExpression}
+import org.apache.spark.sql.catalyst.expressions.codegen.GenerateUnsafeProjection
+import org.apache.spark.sql.catalyst.expressions.{Expression, SubqueryExpression, UnsafeProjection}
 import org.apache.spark.sql.execution.FileRelation
 import org.apache.spark.sql.execution.datasources.{FileStatusCache, PartitionedFile, PartitioningUtils}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
@@ -248,15 +249,20 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     // Since schema requested by the caller might contain partition columns, we might need to
     // prune it, removing all partition columns from it in case these columns are not persisted
     // in the data files
-    val (dataSchema, prunedRequiredSchema) = tryPrunePartitionColumns(tableSchema, requiredSchema)
+    val (dataSchema, prunedRequiredSchema, unsafeProjectionOpt) = tryPrunePartitionColumns(tableSchema, requiredSchema)
 
-    // Here we rely on a type erasure, to workaround inherited API restriction and pass [[RDD[InternalRow]]] back as [[RDD[Row]]]
-    // Please check [[needConversion]] scala-doc for more details
-    if (fileSplits.nonEmpty)
-      composeRDD(fileSplits, partitionSchema, dataSchema, prunedRequiredSchema, filters)
-        .asInstanceOf[RDD[Row]]
-    else
+    if (fileSplits.isEmpty) {
       sparkSession.sparkContext.emptyRDD
+    } else {
+      val rdd = composeRDD(fileSplits, partitionSchema, dataSchema, prunedRequiredSchema, filters)
+      val projectedRDD = unsafeProjectionOpt match {
+        case Some(projection) => rdd.map(projection)
+        case _ => rdd
+      }
+      // Here we rely on a type erasure, to workaround inherited API restriction and pass [[RDD[InternalRow]]] back as [[RDD[Row]]]
+      // Please check [[needConversion]] scala-doc for more details
+      projectedRDD.asInstanceOf[RDD[Row]]
+    }
   }
 
   /**
@@ -434,15 +440,23 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     }
   }
 
-  private def tryPrunePartitionColumns(tableSchema: HoodieTableSchema, requiredSchema: HoodieTableSchema) = {
+  private def tryPrunePartitionColumns(tableSchema: HoodieTableSchema,
+                                       requiredSchema: HoodieTableSchema): (HoodieTableSchema, HoodieTableSchema, Option[UnsafeProjection]) = {
     if (shouldOmitPartitionColumns) {
       val prunedDataStructSchema = prunePartitionColumns(tableSchema.structTypeSchema)
       val prunedRequiredSchema = prunePartitionColumns(requiredSchema.structTypeSchema)
+      val unsafeProjection = if (prunedRequiredSchema != requiredSchema.structTypeSchema) {
+        // NOTE: In case when partition columns have been pruned from the required schema, we have to project
+        //       the rows from the pruned schema back into the one expected by the caller
+        Some(generateUnsafeProjection(prunedRequiredSchema, requiredSchema.structTypeSchema))
+      } else {
+        None
+      }
 
       (HoodieTableSchema(prunedDataStructSchema, convertToAvroSchema(prunedDataStructSchema).toString),
-        HoodieTableSchema(prunedRequiredSchema, convertToAvroSchema(prunedRequiredSchema).toString))
+        HoodieTableSchema(prunedRequiredSchema, convertToAvroSchema(prunedRequiredSchema).toString), unsafeProjection)
     } else {
-      (tableSchema, requiredSchema)
+      (tableSchema, requiredSchema, None)
     }
   }
 
@@ -451,6 +465,9 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
 }
 
 object HoodieBaseRelation extends SparkAdapterSupport {
+
+  private def generateUnsafeProjection(from: StructType, to: StructType) =
+    sparkAdapter.createCatalystExpressionUtils().generateUnsafeProjection(from, to)
 
   def convertToAvroSchema(structSchema: StructType): Schema =
     sparkAdapter.getAvroSchemaConverters.toAvroType(structSchema, nullable = false, "Record")
