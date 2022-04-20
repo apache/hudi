@@ -57,7 +57,6 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
   val verificationCol: String = "driver"
   val updatedVerificationVal: String = "driver_update"
 
-  @Disabled("HUDI-3896")
   @ParameterizedTest
   @CsvSource(Array(
     "true,org.apache.hudi.keygen.SimpleKeyGenerator",

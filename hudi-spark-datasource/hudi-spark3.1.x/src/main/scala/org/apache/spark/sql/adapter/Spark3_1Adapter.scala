@@ -19,14 +19,13 @@
 package org.apache.spark.sql.adapter
 
 import org.apache.avro.Schema
-import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSchemaConverters, HoodieAvroSerializer, HoodieSpark3_1AvroDeserializer, HoodieSpark3_1AvroSerializer, HoodieSparkAvroSchemaConverters}
+import org.apache.spark.SPARK_VERSION
+import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSerializer, HoodieSpark3_1AvroDeserializer, HoodieSpark3_1AvroSerializer}
+import org.apache.spark.sql.catalyst.plans.logical._
+import org.apache.spark.sql.catalyst.rules.Rule
+import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark312HoodieParquetFileFormat}
 import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.types.DataType
-import org.apache.spark.sql.{HoodieCatalystExpressionUtils, HoodieSpark3_1CatalystExpressionUtils}
-import org.apache.spark.SPARK_VERSION
-import org.apache.spark.sql.catalyst.rules.Rule
-import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
-import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.{HoodieCatalystExpressionUtils, HoodieSpark3_1CatalystExpressionUtils, SparkSession}
 
 /**
@@ -55,14 +54,7 @@ class Spark3_1Adapter extends BaseSpark3Adapter {
     }
   }
 
-  override def createHoodieParquetFileFormat(): Option[ParquetFileFormat] = {
-    if (SPARK_VERSION.startsWith("3.1")) {
-      val loadClassName = "org.apache.spark.sql.execution.datasources.parquet.Spark312HoodieParquetFileFormat"
-      val clazz = Class.forName(loadClassName, true, Thread.currentThread().getContextClassLoader)
-      val ctor = clazz.getConstructors.head
-      Some(ctor.newInstance().asInstanceOf[ParquetFileFormat])
-    } else {
-      None
-    }
+  override def createHoodieParquetFileFormat(appendPartitionValues: Boolean): Option[ParquetFileFormat] = {
+    Some(new Spark312HoodieParquetFileFormat(appendPartitionValues))
   }
 }

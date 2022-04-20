@@ -177,7 +177,7 @@ trait SparkAdapter extends Serializable {
   def createResolveHudiAlterTableCommand(sparkSession: SparkSession): Rule[LogicalPlan]
 
   /**
-    * Create hoodie parquet file format.
+    * Create instance of [[ParquetFileFormat]]
     */
-  def createHoodieParquetFileFormat(): Option[ParquetFileFormat]
+  def createHoodieParquetFileFormat(appendPartitionValues: Boolean): Option[ParquetFileFormat]
 }

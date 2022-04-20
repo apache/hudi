@@ -19,7 +19,6 @@
 package org.apache.hudi.avro;
 
 import org.apache.avro.AvroRuntimeException;
-import org.apache.avro.SchemaCompatibility;
 import org.apache.avro.Conversions;
 import org.apache.avro.Conversions.DecimalConversion;
 import org.apache.avro.JsonProperties;
@@ -27,6 +26,7 @@ import org.apache.avro.LogicalTypes;
 import org.apache.avro.LogicalTypes.Decimal;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Field;
+import org.apache.avro.SchemaCompatibility;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericData.Record;
 import org.apache.avro.generic.GenericDatumReader;
@@ -64,19 +64,19 @@ import java.sql.Date;
 import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
-import java.util.HashMap;
 import java.util.TimeZone;
-import java.util.Iterator;
-
 import java.util.stream.Collectors;
 
 import static org.apache.avro.Schema.Type.UNION;
+import static org.apache.hudi.avro.AvroSchemaUtils.createNullableSchema;
+import static org.apache.hudi.avro.AvroSchemaUtils.resolveNullableSchema;
+import static org.apache.hudi.avro.AvroSchemaUtils.resolveUnionSchema;
 
 /**
  * Helper class to do common stuff across Avro.
@@ -97,8 +97,7 @@ public class HoodieAvroUtils {
   private static final String MASK_FOR_INVALID_CHARS_IN_NAMES = "__";
 
   // All metadata fields are optional strings.
-  public static final Schema METADATA_FIELD_SCHEMA =
-      Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.STRING)));
+  public static final Schema METADATA_FIELD_SCHEMA = createNullableSchema(Schema.Type.STRING);
 
   public static final Schema RECORD_KEY_SCHEMA = initRecordKeySchema();
 
@@ -325,31 +324,6 @@ public class HoodieAvroUtils {
   public static GenericRecord addOperationToRecord(GenericRecord record, HoodieOperation operation) {
     record.put(HoodieRecord.OPERATION_METADATA_FIELD, operation.getName());
     return record;
-  }
-
-  /**
-   * Add null fields to passed in schema. Caller is responsible for ensuring there is no duplicates. As different query
-   * engines have varying constraints regarding treating the case-sensitivity of fields, its best to let caller
-   * determine that.
-   *
-   * @param schema        Passed in schema
-   * @param newFieldNames Null Field names to be added
-   */
-  public static Schema appendNullSchemaFields(Schema schema, List<String> newFieldNames) {
-    List<Field> newFields = new ArrayList<>();
-    for (String newField : newFieldNames) {
-      newFields.add(new Schema.Field(newField, METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE));
-    }
-    return createNewSchemaWithExtraFields(schema, newFields);
-  }
-
-  public static Schema createNewSchemaWithExtraFields(Schema schema, List<Field> newFields) {
-    List<Field> fields = schema.getFields().stream()
-        .map(field -> new Field(field.name(), field.schema(), field.doc(), field.defaultVal())).collect(Collectors.toList());
-    fields.addAll(newFields);
-    Schema newSchema = Schema.createRecord(schema.getName(), schema.getDoc(), schema.getNamespace(), schema.isError());
-    newSchema.setFields(fields);
-    return newSchema;
   }
 
   /**
@@ -734,46 +708,6 @@ public class HoodieAvroUtils {
                                              String[] columns,
                                              SerializableSchema schema, boolean consistentLogicalTimestampEnabled) {
     return getRecordColumnValues(record, columns, schema.get(), consistentLogicalTimestampEnabled);
-  }
-
-  private static Schema resolveUnionSchema(Schema schema, String fieldSchemaFullName) {
-    if (schema.getType() != Schema.Type.UNION) {
-      return schema;
-    }
-
-    List<Schema> innerTypes = schema.getTypes();
-    Schema nonNullType =
-        innerTypes.stream()
-            .filter(it -> it.getType() != Schema.Type.NULL && Objects.equals(it.getFullName(), fieldSchemaFullName))
-            .findFirst()
-            .orElse(null);
-
-    if (nonNullType == null) {
-      throw new AvroRuntimeException(
-          String.format("Unsupported Avro UNION type %s: Only UNION of a null type and a non-null type is supported", schema));
-    }
-
-    return nonNullType;
-  }
-
-  public static Schema resolveNullableSchema(Schema schema) {
-    if (schema.getType() != Schema.Type.UNION) {
-      return schema;
-    }
-
-    List<Schema> innerTypes = schema.getTypes();
-    Schema nonNullType =
-        innerTypes.stream()
-          .filter(it -> it.getType() != Schema.Type.NULL)
-          .findFirst()
-          .orElse(null);
-
-    if (innerTypes.size() != 2 || nonNullType == null) {
-      throw new AvroRuntimeException(
-          String.format("Unsupported Avro UNION type %s: Only UNION of a null type and a non-null type is supported", schema));
-    }
-
-    return nonNullType;
   }
 
   /**

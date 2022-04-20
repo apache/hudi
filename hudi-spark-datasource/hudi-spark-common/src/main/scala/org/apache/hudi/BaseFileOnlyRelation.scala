@@ -20,14 +20,13 @@ package org.apache.hudi
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
-import org.apache.hudi.HoodieBaseRelation.createBaseFileReader
 import org.apache.hudi.common.model.HoodieFileFormat
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.hadoop.HoodieROTablePathFilter
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.execution.datasources._
-import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
+import org.apache.spark.sql.execution.datasources.parquet.{HoodieParquetFileFormat, ParquetFileFormat}
 import org.apache.spark.sql.hive.orc.OrcFileFormat
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
 import org.apache.spark.sql.types.StructType
@@ -56,6 +55,7 @@ class BaseFileOnlyRelation(sqlContext: SQLContext,
   override type FileSplit = HoodieBaseFileSplit
 
   override lazy val mandatoryColumns: Seq[String] =
+    // TODO reconcile, record's key shouldn't be mandatory for base-file only relation
     Seq(recordKeyField)
 
   override def imbueConfigs(sqlContext: SQLContext): Unit = {
@@ -65,14 +65,14 @@ class BaseFileOnlyRelation(sqlContext: SQLContext,
 
   protected override def composeRDD(fileSplits: Seq[HoodieBaseFileSplit],
                                     partitionSchema: StructType,
-                                    tableSchema: HoodieTableSchema,
+                                    dataSchema: HoodieTableSchema,
                                     requiredSchema: HoodieTableSchema,
                                     filters: Array[Filter]): HoodieUnsafeRDD = {
 
     val baseFileReader = createBaseFileReader(
       spark = sparkSession,
       partitionSchema = partitionSchema,
-      tableSchema = tableSchema,
+      dataSchema = dataSchema,
       requiredSchema = requiredSchema,
       filters = filters,
       options = optParams,
@@ -114,16 +114,38 @@ class BaseFileOnlyRelation(sqlContext: SQLContext,
    *       rule; you can find more details in HUDI-3896)
    */
   def toHadoopFsRelation: HadoopFsRelation = {
+    // We're delegating to Spark to append partition values to every row only in cases
+    // when these corresponding partition-values are not persisted w/in the data file itself
+    val shouldAppendPartitionColumns = shouldOmitPartitionColumns
+
     val (tableFileFormat, formatClassName) = metaClient.getTableConfig.getBaseFileFormat match {
-      case HoodieFileFormat.PARQUET => (new ParquetFileFormat, "parquet")
+      case HoodieFileFormat.PARQUET =>
+        (sparkAdapter.createHoodieParquetFileFormat(shouldAppendPartitionColumns).get, HoodieParquetFileFormat.FILE_FORMAT_ID)
       case HoodieFileFormat.ORC => (new OrcFileFormat, "orc")
     }
 
     if (globPaths.isEmpty) {
+      // NOTE: There are currently 2 ways partition values could be fetched:
+      //          - Source columns (producing the values used for physical partitioning) will be read
+      //          from the data file
+      //          - Values parsed from the actual partition pat would be appended to the final dataset
+      //
+      //        In the former case, we don't need to provide the partition-schema to the relation,
+      //        therefore we simply stub it w/ empty schema and use full table-schema as the one being
+      //        read from the data file.
+      //
+      //        In the latter, we have to specify proper partition schema as well as "data"-schema, essentially
+      //        being a table-schema with all partition columns stripped out
+      val (partitionSchema, dataSchema) = if (shouldAppendPartitionColumns) {
+        (fileIndex.partitionSchema, fileIndex.dataSchema)
+      } else {
+        (StructType(Nil), tableStructSchema)
+      }
+
       HadoopFsRelation(
         location = fileIndex,
-        partitionSchema = fileIndex.partitionSchema,
-        dataSchema = fileIndex.dataSchema,
+        partitionSchema = partitionSchema,
+        dataSchema = dataSchema,
         bucketSpec = None,
         fileFormat = tableFileFormat,
         optParams)(sparkSession)

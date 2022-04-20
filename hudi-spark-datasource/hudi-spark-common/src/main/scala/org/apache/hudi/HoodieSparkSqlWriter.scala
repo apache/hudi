@@ -88,7 +88,7 @@ object HoodieSparkSqlWriter {
 
     val (parameters, hoodieConfig) = mergeParamsAndGetHoodieConfig(optParams, tableConfig)
     val originKeyGeneratorClassName = HoodieWriterUtils.getOriginKeyGenerator(parameters)
-    val timestampKeyGeneratorConfigs = extractConfigsRelatedToTimestmapBasedKeyGenerator(
+    val timestampKeyGeneratorConfigs = extractConfigsRelatedToTimestampBasedKeyGenerator(
       originKeyGeneratorClassName, parameters)
     //validate datasource and tableconfig keygen are the same
     validateKeyGeneratorConfig(originKeyGeneratorClassName, tableConfig);
@@ -758,7 +758,7 @@ object HoodieSparkSqlWriter {
     (params, HoodieWriterUtils.convertMapToHoodieConfig(params))
   }
 
-  private def extractConfigsRelatedToTimestmapBasedKeyGenerator(keyGenerator: String,
+  private def extractConfigsRelatedToTimestampBasedKeyGenerator(keyGenerator: String,
       params: Map[String, String]): Map[String, String] = {
     if (keyGenerator.equals(classOf[TimestampBasedKeyGenerator].getCanonicalName) ||
         keyGenerator.equals(classOf[TimestampBasedAvroKeyGenerator].getCanonicalName)) {

@@ -23,26 +23,32 @@ import org.apache.hudi.SparkAdapterSupport
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.datasources.PartitionedFile
+import org.apache.spark.sql.execution.datasources.parquet.HoodieParquetFileFormat.FILE_FORMAT_ID
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
 
 
-class SparkHoodieParquetFileFormat extends ParquetFileFormat with SparkAdapterSupport {
-  override def shortName(): String = "HoodieParquet"
+class HoodieParquetFileFormat extends ParquetFileFormat with SparkAdapterSupport {
 
-  override def toString: String = "HoodieParquet"
+  override def shortName(): String = FILE_FORMAT_ID
 
-  override def buildReaderWithPartitionValues(
-                                               sparkSession: SparkSession,
-                                               dataSchema: StructType,
-                                               partitionSchema: StructType,
-                                               requiredSchema: StructType,
-                                               filters: Seq[Filter],
-                                               options: Map[String, String],
-                                               hadoopConf: Configuration): PartitionedFile => Iterator[InternalRow] = {
+  override def toString: String = "Hoodie-Parquet"
+
+  override def buildReaderWithPartitionValues(sparkSession: SparkSession,
+                                              dataSchema: StructType,
+                                              partitionSchema: StructType,
+                                              requiredSchema: StructType,
+                                              filters: Seq[Filter],
+                                              options: Map[String, String],
+                                              hadoopConf: Configuration): PartitionedFile => Iterator[InternalRow] = {
     sparkAdapter
-      .createHoodieParquetFileFormat().get
+      .createHoodieParquetFileFormat(appendPartitionValues = false).get
       .buildReaderWithPartitionValues(sparkSession, dataSchema, partitionSchema, requiredSchema, filters, options, hadoopConf)
   }
 }
 
+object HoodieParquetFileFormat {
+
+  val FILE_FORMAT_ID = "hoodie-parquet"
+
+}
