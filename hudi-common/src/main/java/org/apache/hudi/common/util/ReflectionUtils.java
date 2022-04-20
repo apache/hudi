@@ -124,7 +124,9 @@ public class ReflectionUtils {
    * @return new instance of the class
    */
   public static <T> T newInstanceUnchecked(Class<T> klass, Object... ctorArgs) {
-    Class<?>[] ctorArgTypes = Arrays.stream(ctorArgs).map(Object::getClass).toArray(Class<?>[]::new);
+    Class<?>[] ctorArgTypes = Arrays.stream(ctorArgs)
+        .map(arg -> Objects.requireNonNull(arg).getClass())
+        .toArray(Class<?>[]::new);
     return newInstanceUnchecked(klass, ctorArgTypes, ctorArgs);
   }
 
