@@ -85,3 +85,4 @@ The list of all RFCs can be found here.
 | 47 | [Add Call Produce Command for Spark SQL](./rfc-47/rfc-47.md) | `UNDER REVIEW` | 
 | 48 | [LogCompaction for MOR tables](./rfc-48/rfc-48.md) | `UNDER REVIEW` | 
 | 49 | [Support sync with DataHub](./rfc-49/rfc-49.md)    | `ONGOING` |
+| 50 | [Improve Timeline Server](./rfc-50/rfc-50.md) | `UNDER REVIEW` | 
