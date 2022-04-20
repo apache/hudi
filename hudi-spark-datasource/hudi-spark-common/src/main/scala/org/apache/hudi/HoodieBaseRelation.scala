@@ -52,8 +52,8 @@ import org.apache.spark.unsafe.types.UTF8String
 import java.net.URI
 import java.util.Locale
 import scala.collection.JavaConverters._
-import scala.util.{Failure, Success, Try}
 import scala.util.control.NonFatal
+import scala.util.{Failure, Success, Try}
 
 trait HoodieFileSplit {}
 
@@ -148,11 +148,8 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
 
   protected val partitionColumns: Array[String] = tableConfig.getPartitionFields.orElse(Array.empty)
 
-  /**
-   * if true, need to deal with schema for creating file reader.
-   */
-  protected val omitPartitionColumnsInFile: Boolean =
-    metaClient.getTableConfig.isDropPartitionColumns && partitionColumns.nonEmpty
+  protected val shouldOmitPartitionColumns: Boolean =
+    metaClient.getTableConfig.shouldDropPartitionColumns && partitionColumns.nonEmpty
 
   /**
    * NOTE: PLEASE READ THIS CAREFULLY
@@ -225,7 +222,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
 
     val fileSplits = collectFileSplits(partitionFilters, dataFilters)
 
-    val partitionSchema = if (omitPartitionColumnsInFile) {
+    val partitionSchema = if (shouldOmitPartitionColumns) {
       // when hoodie.datasource.write.drop.partition.columns is true, partition columns can't be persisted in
       // data files.
       StructType(partitionColumns.map(StructField(_, StringType)))
@@ -234,7 +231,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     }
 
     val tableSchema = HoodieTableSchema(tableStructSchema, if (internalSchema.isEmptySchema) tableAvroSchema.toString else AvroInternalSchemaConverter.convert(internalSchema, tableAvroSchema.getName).toString, internalSchema)
-    val dataSchema = if (omitPartitionColumnsInFile) {
+    val dataSchema = if (shouldOmitPartitionColumns) {
       val dataStructType = StructType(tableStructSchema.filterNot(f => partitionColumns.contains(f.name)))
       HoodieTableSchema(
         dataStructType,
@@ -243,7 +240,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     } else {
       tableSchema
     }
-    val requiredSchema = if (omitPartitionColumnsInFile) {
+    val requiredSchema = if (shouldOmitPartitionColumns) {
       val requiredStructType = StructType(requiredStructSchema.filterNot(f => partitionColumns.contains(f.name)))
       HoodieTableSchema(
         requiredStructType,
@@ -358,7 +355,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
   protected def getPartitionColumnsAsInternalRow(file: FileStatus): InternalRow = {
     try {
       val tableConfig = metaClient.getTableConfig
-      if (omitPartitionColumnsInFile) {
+      if (shouldOmitPartitionColumns) {
         val relativePath = new URI(metaClient.getBasePath).relativize(new URI(file.getPath.getParent.toString)).toString
         val hiveStylePartitioningEnabled = tableConfig.getHiveStylePartitioningEnable.toBoolean
         if (hiveStylePartitioningEnabled) {
@@ -413,7 +410,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
 
     // We're delegating to Spark to append partition values to every row only in cases
     // when these corresponding partition-values are not persisted w/in the data file itself
-    val shouldAppendPartitionColumns = omitPartitionColumnsInFile
+    val shouldAppendPartitionColumns = shouldOmitPartitionColumns
     val parquetReader = HoodieDataSourceHelper.buildHoodieParquetReader(
       sparkSession = spark,
       dataSchema = tableSchema.structTypeSchema,

@@ -115,7 +115,7 @@ class BaseFileOnlyRelation(sqlContext: SQLContext,
   def toHadoopFsRelation: HadoopFsRelation = {
     // We're delegating to Spark to append partition values to every row only in cases
     // when these corresponding partition-values are not persisted w/in the data file itself
-    val shouldAppendPartitionColumns = omitPartitionColumnsInFile
+    val shouldAppendPartitionColumns = shouldOmitPartitionColumns
 
     val (tableFileFormat, formatClassName) = metaClient.getTableConfig.getBaseFileFormat match {
       case HoodieFileFormat.PARQUET =>

@@ -188,7 +188,7 @@ public class TableSchemaResolver {
     }
 
     Option<String[]> partitionFieldsOpt = metaClient.getTableConfig().getPartitionFields();
-    if (metaClient.getTableConfig().isDropPartitionColumns()) {
+    if (metaClient.getTableConfig().shouldDropPartitionColumns()) {
       schema = recreateSchemaWhenDropPartitionColumns(partitionFieldsOpt, schema);
     }
     return schema;
