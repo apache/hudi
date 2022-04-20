@@ -26,7 +26,7 @@ import org.apache.spark.sql.types.StructType
 trait HoodieCatalystExpressionUtils {
 
   /**
-   * Generates instance of [[UnsafeProjection]] projecting from one [[StructType]] into another
+   * Generates instance of [[UnsafeProjection]] projecting row of one [[StructType]] into another [[StructType]]
    *
    * NOTE: No safety checks are executed to validate that this projection is actually feasible,
    *       it's up to the caller to make sure that such projection is possible.
@@ -34,8 +34,13 @@ trait HoodieCatalystExpressionUtils {
    * NOTE: Projection of the row from [[StructType]] A to [[StructType]] B is only possible, if
    *       B is a subset of A
    */
-  def generateUnsafeProjection(fromStructType: StructType, toStructType: StructType): UnsafeProjection =
-    GenerateUnsafeProjection.generate(fromStructType.toAttributes, toStructType.toAttributes)
+  def generateUnsafeProjection(from: StructType, to: StructType): UnsafeProjection = {
+    val attrs = from.toAttributes
+    val attrsMap = attrs.map(attr => (attr.name, attr)).toMap
+    val targetExprs = to.fields.map(f => attrsMap(f.name))
+
+    GenerateUnsafeProjection.generate(targetExprs, attrs)
+  }
 
   /**
    * Parses and resolves expression against the attributes of the given table schema.

@@ -228,16 +228,6 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
 
     val fileSplits = collectFileSplits(partitionFilters, dataFilters)
 
-    // NOTE: This partition schema is only relevant to file reader to be able to embed
-    //       values of partition columns (hereafter referred to as partition values) encoded into
-    //       the partition path, and omitted from the data file, back into fetched rows;
-    //       Note that, by default, partition columns are not omitted therefore specifying
-    //       partition schema for reader is not required
-    val partitionSchema = if (shouldOmitPartitionColumns) {
-      StructType(partitionColumns.map(StructField(_, StringType)))
-    } else {
-      StructType(Nil)
-    }
 
     val tableAvroSchemaStr =
       if (internalSchema.isEmptySchema) tableAvroSchema.toString
@@ -249,7 +239,14 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     // Since schema requested by the caller might contain partition columns, we might need to
     // prune it, removing all partition columns from it in case these columns are not persisted
     // in the data files
-    val (dataSchema, prunedRequiredSchema, unsafeProjectionOpt) = tryPrunePartitionColumns(tableSchema, requiredSchema)
+    //
+    // NOTE: This partition schema is only relevant to file reader to be able to embed
+    //       values of partition columns (hereafter referred to as partition values) encoded into
+    //       the partition path, and omitted from the data file, back into fetched rows;
+    //       Note that, by default, partition columns are not omitted therefore specifying
+    //       partition schema for reader is not required
+    val (partitionSchema, dataSchema, prunedRequiredSchema, unsafeProjectionOpt) =
+      tryPrunePartitionColumns(tableSchema, requiredSchema)
 
     if (fileSplits.isEmpty) {
       sparkSession.sparkContext.emptyRDD
@@ -441,22 +438,28 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
   }
 
   private def tryPrunePartitionColumns(tableSchema: HoodieTableSchema,
-                                       requiredSchema: HoodieTableSchema): (HoodieTableSchema, HoodieTableSchema, Option[UnsafeProjection]) = {
+                                       requiredSchema: HoodieTableSchema): (StructType, HoodieTableSchema, HoodieTableSchema, Option[UnsafeProjection]) = {
     if (shouldOmitPartitionColumns) {
+      val partitionSchema = StructType(partitionColumns.map(StructField(_, StringType)))
       val prunedDataStructSchema = prunePartitionColumns(tableSchema.structTypeSchema)
       val prunedRequiredSchema = prunePartitionColumns(requiredSchema.structTypeSchema)
+
+      val fullPrunedSchema = StructType(prunedRequiredSchema.fields ++ partitionSchema.fields)
+
+      // NOTE: In case when partition columns have been pruned from the required schema, we have to project
+      //       the rows from the pruned schema back into the one expected by the caller
       val unsafeProjection = if (prunedRequiredSchema != requiredSchema.structTypeSchema) {
-        // NOTE: In case when partition columns have been pruned from the required schema, we have to project
-        //       the rows from the pruned schema back into the one expected by the caller
-        Some(generateUnsafeProjection(prunedRequiredSchema, requiredSchema.structTypeSchema))
+        Some(generateUnsafeProjection(fullPrunedSchema, requiredSchema.structTypeSchema))
       } else {
         None
       }
 
-      (HoodieTableSchema(prunedDataStructSchema, convertToAvroSchema(prunedDataStructSchema).toString),
-        HoodieTableSchema(prunedRequiredSchema, convertToAvroSchema(prunedRequiredSchema).toString), unsafeProjection)
+      (partitionSchema,
+        HoodieTableSchema(prunedDataStructSchema, convertToAvroSchema(prunedDataStructSchema).toString),
+        HoodieTableSchema(prunedRequiredSchema, convertToAvroSchema(prunedRequiredSchema).toString),
+        unsafeProjection)
     } else {
-      (tableSchema, requiredSchema, None)
+      (StructType(Nil), tableSchema, requiredSchema, None)
     }
   }
 
