@@ -181,7 +181,7 @@ class Spark32HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
         } else {
           // Spark 3.2.0
           val datetimeRebaseMode =
-            Spark32HoodieParquetFileFormat.datetimeRebaseMode(footerFileMetaData.getKeyValueMetaData.get, datetimeRebaseModeInRead)
+            Spark32DataSourceUtils.datetimeRebaseMode(footerFileMetaData.getKeyValueMetaData.get, datetimeRebaseModeInRead)
           createParquetFilters(
             parquetSchema,
             pushDownDate,
@@ -272,9 +272,9 @@ class Spark32HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
           } else {
             // Spark 3.2.0
             val datetimeRebaseMode =
-              Spark32HoodieParquetFileFormat.datetimeRebaseMode(footerFileMetaData.getKeyValueMetaData.get, datetimeRebaseModeInRead)
+              Spark32DataSourceUtils.datetimeRebaseMode(footerFileMetaData.getKeyValueMetaData.get, datetimeRebaseModeInRead)
             val int96RebaseMode =
-              Spark32HoodieParquetFileFormat.int96RebaseMode(footerFileMetaData.getKeyValueMetaData.get, int96RebaseModeInRead)
+              Spark32DataSourceUtils.int96RebaseMode(footerFileMetaData.getKeyValueMetaData.get, int96RebaseModeInRead)
             createVectorizedParquetRecordReader(
               convertTz.orNull,
               datetimeRebaseMode.toString,
@@ -334,9 +334,9 @@ class Spark32HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
             int96RebaseSpec)
         } else {
           val datetimeRebaseMode =
-            Spark32HoodieParquetFileFormat.datetimeRebaseMode(footerFileMetaData.getKeyValueMetaData.get, datetimeRebaseModeInRead)
+            Spark32DataSourceUtils.datetimeRebaseMode(footerFileMetaData.getKeyValueMetaData.get, datetimeRebaseModeInRead)
           val int96RebaseMode =
-            Spark32HoodieParquetFileFormat.int96RebaseMode(footerFileMetaData.getKeyValueMetaData.get, int96RebaseModeInRead)
+            Spark32DataSourceUtils.int96RebaseMode(footerFileMetaData.getKeyValueMetaData.get, int96RebaseModeInRead)
           createParquetReadSupport(
             convertTz,
             /* enableVectorizedReader = */ false,
@@ -416,52 +416,6 @@ object Spark32HoodieParquetFileFormat {
       ReflectionUtils.loadClass(PARQUET_READ_SUPPORT_CLASS_NAME, args.map(_.asInstanceOf[AnyRef]): _*)
     parquetReadSupport.asInstanceOf[ParquetReadSupport]
   }
-
-  // TODO scala-doc
-  // Spark 3.2.0
-  // scalastyle:off
-  def int96RebaseMode(lookupFileMeta: String => String,
-                      modeByConfig: String): LegacyBehaviorPolicy.Value = {
-    if (Utils.isTesting && SQLConf.get.getConfString("spark.test.forceNoRebase", "") == "true") {
-      return LegacyBehaviorPolicy.CORRECTED
-    }
-    // If there is no version, we return the mode specified by the config.
-    Option(lookupFileMeta(SPARK_VERSION_METADATA_KEY)).map { version =>
-      // Files written by Spark 3.0 and earlier follow the legacy hybrid calendar and we need to
-      // rebase the INT96 timestamp values.
-      // Files written by Spark 3.1 and latter may also need the rebase if they were written with
-      // the "LEGACY" rebase mode.
-      if (version < "3.1.0" || lookupFileMeta("org.apache.spark.legacyINT96") != null) {
-        LegacyBehaviorPolicy.LEGACY
-      } else {
-        LegacyBehaviorPolicy.CORRECTED
-      }
-    }.getOrElse(LegacyBehaviorPolicy.withName(modeByConfig))
-  }
-  // scalastyle:on
-
-  // TODO scala-doc
-  // Spark 3.2.0
-  // scalastyle:off
-  def datetimeRebaseMode(lookupFileMeta: String => String,
-                         modeByConfig: String): LegacyBehaviorPolicy.Value = {
-    if (Utils.isTesting && SQLConf.get.getConfString("spark.test.forceNoRebase", "") == "true") {
-      return LegacyBehaviorPolicy.CORRECTED
-    }
-    // If there is no version, we return the mode specified by the config.
-    Option(lookupFileMeta(SPARK_VERSION_METADATA_KEY)).map { version =>
-      // Files written by Spark 2.4 and earlier follow the legacy hybrid calendar and we need to
-      // rebase the datetime values.
-      // Files written by Spark 3.0 and latter may also need the rebase if they were written with
-      // the "LEGACY" rebase mode.
-      if (version < "3.0.0" || lookupFileMeta("org.apache.spark.legacyDateTime") != null) {
-        LegacyBehaviorPolicy.LEGACY
-      } else {
-        LegacyBehaviorPolicy.CORRECTED
-      }
-    }.getOrElse(LegacyBehaviorPolicy.withName(modeByConfig))
-  }
-  // scalastyle:on
 
   def pruneInternalSchema(internalSchemaStr: String, requiredSchema: StructType): String = {
     val querySchemaOption = SerDeHelper.fromJson(internalSchemaStr)
