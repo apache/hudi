@@ -102,7 +102,7 @@ public class Pipelines {
       InternalTypeInfo<RowData> typeInfo = InternalTypeInfo.of(rowTypeWithFileId);
 
       Map<String, String> bucketIdToFileId = new HashMap<>();
-      if(OptionsResolver.isPartitionedTable(conf)) {
+      if (OptionsResolver.isPartitionedTable(conf)) {
         dataStream = dataStream.keyBy(keyGen::getPartitionPath)
                 .map(record -> BucketBulkInsertWriterHelper.rowWithFileId(bucketIdToFileId, keyGen, record, indexKeys, numBuckets), typeInfo)
                 .setParallelism(conf.getInteger(FlinkOptions.WRITE_TASKS)); // same parallelism as write task to avoid shuffle
