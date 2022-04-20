@@ -128,7 +128,7 @@ class BaseFileOnlyRelation(sqlContext: SQLContext,
       // NOTE: There are currently 2 ways partition values could be fetched:
       //          - Source columns (producing the values used for physical partitioning) will be read
       //          from the data file
-      //          - Values parsed from the actual partition pat would be appended to the final dataset
+      //          - Values parsed from the actual partition path would be appended to the final dataset
       //
       //        In the former case, we don't need to provide the partition-schema to the relation,
       //        therefore we simply stub it w/ empty schema and use full table-schema as the one being

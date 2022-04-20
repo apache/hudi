@@ -166,7 +166,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
    *       partition columns: for ex, if originally as partition column was used column [[ts]] bearing epoch
    *       timestamp, which was used by [[TimestampBasedKeyGenerator]] to generate partition path of the format
    *       [["yyyy/mm/dd"]], appended partition value would bear the format verbatim as it was used in the
-   *       partition path, meaining that string value of "2022/01/01" will be appended, and not its original
+   *       partition path, meaning that string value of "2022/01/01" will be appended, and not its original
    *       representation
    */
   protected val shouldExtractPartitionValuesFromPartitionPath: Boolean = {
