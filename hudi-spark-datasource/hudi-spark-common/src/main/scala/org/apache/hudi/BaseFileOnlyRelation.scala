@@ -114,15 +114,15 @@ class BaseFileOnlyRelation(sqlContext: SQLContext,
    *       rule; you can find more details in HUDI-3896)
    */
   def toHadoopFsRelation: HadoopFsRelation = {
-    // We're delegating to Spark to append partition values to every row only in cases
-    // when these corresponding partition-values are not persisted w/in the data file itself
-    val shouldAppendPartitionColumns = shouldOmitPartitionColumns
-
-    val (tableFileFormat, formatClassName) = metaClient.getTableConfig.getBaseFileFormat match {
-      case HoodieFileFormat.PARQUET =>
-        (sparkAdapter.createHoodieParquetFileFormat(shouldAppendPartitionColumns).get, HoodieParquetFileFormat.FILE_FORMAT_ID)
-      case HoodieFileFormat.ORC => (new OrcFileFormat, "orc")
-    }
+      val (tableFileFormat, formatClassName) =
+        metaClient.getTableConfig.getBaseFileFormat match {
+          case HoodieFileFormat.ORC => (new OrcFileFormat, "orc")
+          case HoodieFileFormat.PARQUET =>
+            // We're delegating to Spark to append partition values to every row only in cases
+            // when these corresponding partition-values are not persisted w/in the data file itself
+            val parquetFileFormat = sparkAdapter.createHoodieParquetFileFormat(shouldExtractPartitionValuesFromPartitionPath).get
+            (parquetFileFormat, HoodieParquetFileFormat.FILE_FORMAT_ID)
+        }
 
     if (globPaths.isEmpty) {
       // NOTE: There are currently 2 ways partition values could be fetched:
@@ -136,7 +136,7 @@ class BaseFileOnlyRelation(sqlContext: SQLContext,
       //
       //        In the latter, we have to specify proper partition schema as well as "data"-schema, essentially
       //        being a table-schema with all partition columns stripped out
-      val (partitionSchema, dataSchema) = if (shouldAppendPartitionColumns) {
+      val (partitionSchema, dataSchema) = if (shouldExtractPartitionValuesFromPartitionPath) {
         (fileIndex.partitionSchema, fileIndex.dataSchema)
       } else {
         (StructType(Nil), tableStructSchema)
