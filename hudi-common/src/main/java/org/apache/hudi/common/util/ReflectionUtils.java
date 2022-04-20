@@ -38,6 +38,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.TypeUtils.unsafeCast;
+
 /**
  * A utility class for reflection.
  */
@@ -85,11 +87,14 @@ public class ReflectionUtils {
    * Creates an instance of the given class. Use this version when dealing with interface types as constructor args.
    */
   public static Object loadClass(String clazz, Class<?>[] constructorArgTypes, Object... constructorArgs) {
-    try {
-      return getClass(clazz).getConstructor(constructorArgTypes).newInstance(constructorArgs);
-    } catch (InstantiationException | IllegalAccessException | InvocationTargetException | NoSuchMethodException e) {
-      throw new HoodieException("Unable to instantiate class " + clazz, e);
-    }
+    return newInstanceUnchecked(getClass(clazz), constructorArgTypes, constructorArgs);
+  }
+
+  /**
+   * Creates an instance of the given class. Constructor arg types are inferred.
+   */
+  public static Object loadClass(String clazz, Object... constructorArgs) {
+    return newInstanceUnchecked(getClass(clazz), constructorArgs);
   }
 
   /**
@@ -111,11 +116,32 @@ public class ReflectionUtils {
   }
 
   /**
-   * Creates an instance of the given class. Constructor arg types are inferred.
+   * Creates a new instance of provided {@link Class} by invoking ctor identified by the
+   * provided specific arguments
+   *
+   * @param klass target class to instantiate
+   * @param ctorArgs specific constructor arguments
+   * @return new instance of the class
    */
-  public static Object loadClass(String clazz, Object... constructorArgs) {
-    Class<?>[] constructorArgTypes = Arrays.stream(constructorArgs).map(Object::getClass).toArray(Class<?>[]::new);
-    return loadClass(clazz, constructorArgTypes, constructorArgs);
+  public static <T> T newInstanceUnchecked(Class<T> klass, Object ...ctorArgs) {
+    Class<?>[] ctorArgTypes = Arrays.stream(ctorArgs).map(Object::getClass).toArray(Class<?>[]::new);
+    return newInstanceUnchecked(klass, ctorArgTypes, ctorArgs);
+  }
+
+  /**
+   * Creates a new instance of provided {@link Class} by invoking ctor identified by the
+   * provided specific arguments
+   *
+   * @param klass target class to instantiate
+   * @param ctorArgs specific constructor arguments
+   * @return new instance of the class
+   */
+  public static <T> T newInstanceUnchecked(Class<T> klass, Class<?>[] ctorArgTypes, Object ...ctorArgs) {
+    try {
+      return unsafeCast(klass.getConstructor(ctorArgTypes).newInstance(ctorArgs));
+    } catch (InstantiationException | IllegalAccessException | InvocationTargetException | NoSuchMethodException e) {
+      throw new HoodieException(String.format("Unable to instantiate class %s", klass.getSimpleName()), e);
+    }
   }
 
   /**
