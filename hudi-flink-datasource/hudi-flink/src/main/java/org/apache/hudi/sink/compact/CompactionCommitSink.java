@@ -25,7 +25,6 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.exception.HoodieCompactException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.CleanFunction;
 import org.apache.hudi.table.HoodieFlinkTable;
@@ -129,7 +128,7 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
       return;
     }
 
-    if(events.stream().anyMatch(CompactionCommitEvent::isFailed)) {
+    if (events.stream().anyMatch(CompactionCommitEvent::isFailed)) {
       // handle failure case
       CompactionUtil.rollbackCompaction(table, instant);
       // remove commitBuffer avoid commit with preview fileId
