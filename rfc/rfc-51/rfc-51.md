@@ -1,0 +1,175 @@
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+# RFC-51: Support Lucene Based Record Level Index
+
+
+
+## Proposers
+
+- @hujincalrin
+- @YuweiXiao
+- @stream2000
+- @XuQianJin-Stars
+- @huberylee
+
+## Approvers
+ - @vinothchandar
+ - @xushiyan
+ - @leesf
+
+## Status
+
+JIRA: [HUDI-3907](https://issues.apache.org/jira/browse/HUDI-3907)
+
+## Abstract
+
+At present, record level index in hudi
+([RFC-08](https://cwiki.apache.org/confluence/display/HUDI/RFC-08++Record+level+indexing+mechanisms+for+Hudi+datasets), ongoing) 
+is mainly implemented for ``tagLocation``, and normal queries do not benefit from it. Besides, 
+in the current implementation, record level index uses ``HashMap`` structure to map ``RecordKey``
+to ``Location`` in memory, and persistent as a MOR hoodie table with HFILE base file format.
+When tagging location, we need to load index records into cache firstly, then using record key 
+to get location from cache one by one. Although shards are used to speed up query and update 
+index, this may lead to poor performance. To address those problems, we propose apache lucene 
+based record level index to gain the following abilities:
+- For normal queries, we can get file level row number from record level index, combining with 
+parquet column index brought by Spark 3.2 to achieve accurate reading;
+- For ``tagLocation``, we can construct point query to get record location;
+- For checking whether records exist, we can directly get row id info from record level index
+  instead of reading all base files to construct record location info.
+
+More details about current implementation of record level index please refer to
+[pull-3508](https://github.com/apache/hudi/pull/3508).
+
+## Background
+Many works have been carried out to optimize reading parquet file in Spark.
+
+![](parquet-file-meta.jpg)
+
+Before Spark 3.2, for each spark read task, the process of reading data can be described as
+follows(<a id = 'process_a'>Process A</a>):
+1. Comparing the inclusion relation of row group data's middle position and task split info 
+to decided which row groups should be handled by current task. If the row group data's middle
+position is contained by task split, the row group should be handled by this task;
+2. Using pushed down predicates and row group level column statistics info to pick out hit
+row groups;
+3. Reading data from hit row groups;
+
+From the above process we can know that only row group level rough grade filtration can be 
+performed. In some extreme cases, large amounts of invalid data are returned, which introduces 
+some unnecessary overhead, IO, CPU and so on.
+
+Since Spark 3.2.0, with the power of parquet column index, page level statics info can be used
+to filter data, and the process of reading data can be described as follows:
+- Step 1-2 are the same as in [Process A](#process_a); 
+- Step 3: Filtering page by page level statistics for each column predicates, then get hit row 
+ids for every column independently; 
+- Step 4: Getting final hit row id ranges by combining all column hit rows, then get final hit
+pages for every column; 
+- Step 5: Loading and uncompressing hit pages for every requested columns; 
+- Step 6: Reading data by hit row id ranges;
+
+![](query-by-page-statistics.jpg)
+
+Although page level statistics can greatly reduce unnecessary data readings, there is some 
+irrelevant data still being read out.
+
+## Implementation
+
+Lucene based record level index is base file level index, which means we will build index for
+each base file independently. When using lucene index to query data, we firstly get file level
+row id, then acquire details by row id without unnecessary data being read. In some specific
+scenarios, row id is enough to do the right thing, such as judging whether specific record 
+exists. Next, we will discuss the detailed implementation of lucene based record level index 
+from three parts *Index Generation & Update*, *Index Storage* and *Index Usage*.
+
+### Index Generation & Update
+In lucene based record level index, we mainly use inverted index to speed up record lookup, 
+inverted index stores a mapping from doc id set to specific value. Now, we simply explain the 
+whole concept with an example. Let's assume we have a ``test`` table in our hoodie dataset,
+here is what the table will look like:
+
+| msg               | sender |
+|-------------------|--------|
+| Summer is coming  | UserA  |
+| Buying a new car  | UserA  |
+| Buying a new home | UserB  |
+
+After indexing ``test`` table with lucene, we will get inverted index for every field in this
+table. Inverted index for field ``msg``:
+
+| term   | doc id |
+|--------|--------|
+| Summer | 1      |
+| is     | 1      |
+| coming | 1      |
+| Buying | 2,3    |
+| a      | 2,3    |
+| new    | 2,3    |
+| car    | 2      |
+| home   | 3      |
+
+Inverted index for field ``sender``:
+
+| term  | doc id |
+|-------|--------|
+| UserA | 1,2    |
+| UserB | 3      |
+
+When querying ``test`` table with predicates ``msg like 'Buying%' and sender = 'UserA'``, we
+can quickly get hit row ``2,3 & 1,2 => 2``, then read details with rowId = 2.
+
+There are two ways to implement lucene index generation and update in hoodie, the first one 
+is to listen table commit event, every commit event will trigger indexing files which have 
+been modified. Another approach is to trigger index builds through clustering.
+
+### Index Storage & Clean
+Lucene index files are saved in ``.hoodie/.index/lucene/${instant}/${fileId}/`` dir, we can
+directly obtain the index file path based on the file name in the process of querying. The 
+retention time of the index is the same as that of hoodie instant, when cleaning instants, 
+the index files under corresponding index dir will be cleaned together.
+
+### Index Usage
+Lucene index can be used in ``tagLocation``, existential judgment and normal queries. When using
+lucene index to query data, candidate files should be found out as what they do now firstly,
+then index files are loaded to lookup hit rows according to the base file names.
+
+For query scenarios like existential judgment and ``tagLocation``, point query predicates are 
+constructed to get row id set, if no records hit, empty row id set will be returned. Different 
+from the above scenario, normal queries use pushed down predicates to query lucene index to 
+get row id set, then combining with parquet page level statistics to load specific pages. Once 
+hit rows and pages are ready, we can iterate by row id and get exactly rows from corresponding 
+page. The mainly steps can be described as follows:
+
+- Step 1-2 are the same as in [Process A](#process_a);
+- Step 3: Querying lucene index to get hit row id set for each column predicates;
+- Step 4: Getting final hit row id set by combining all column hit row id set;
+- Step 5: Loading and uncompressing hit pages for every requested columns;
+- Step 6: Aligning hit row id between different columns' pages, then reading data by row id;
+
+![](query-by-lucene-index.jpg)
+
+By using lucene based record level index, we can exactly read what we want from parquet file.
+
+## Rollout/Adoption Plan
+
+ - No effects on existing users, but if existing users want to use lucene index, they can 
+manually add lucene index for columns
+
+## Test Plan
+
+Describe in few sentences how the RFC will be tested. How will we know that the implementation works as expected? How will we know nothing broke?.
