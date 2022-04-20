@@ -411,8 +411,11 @@ object Spark32HoodieParquetFileFormat {
       .asInstanceOf[ParquetReadSupport]
   }
 
-  private def createVectorizedParquetRecordReader(args: Any*): VectorizedParquetRecordReader =
-    ReflectionUtils.newInstanceUnchecked(classOf[VectorizedParquetRecordReader], args.map(_.asInstanceOf[AnyRef]): _*)
+  private def createVectorizedParquetRecordReader(args: Any*): VectorizedParquetRecordReader = {
+    val ctor = classOf[VectorizedParquetRecordReader].getConstructors.head
+    ctor.newInstance(args.map(_.asInstanceOf[AnyRef]): _*)
+      .asInstanceOf[VectorizedParquetRecordReader]
+  }
 
   def pruneInternalSchema(internalSchemaStr: String, requiredSchema: StructType): String = {
     val querySchemaOption = SerDeHelper.fromJson(internalSchemaStr)
