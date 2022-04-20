@@ -17,4 +17,4 @@
 
 
 org.apache.hudi.DefaultSource
-org.apache.spark.sql.execution.datasources.parquet.SparkHoodieParquetFileFormat
+org.apache.spark.sql.execution.datasources.parquet.HoodieParquetFileFormat
