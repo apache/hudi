@@ -20,6 +20,7 @@ package org.apache.hudi.common.table;
 
 import org.apache.avro.Schema;
 
+import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 
@@ -57,7 +58,7 @@ public class TestTableSchemaResolver {
     assertNotEquals(originSchema, s4);
     assertTrue(s4.getFields().stream().anyMatch(f -> f.name().equals("user_partition")));
     Schema.Field f = s4.getField("user_partition");
-    assertEquals(f.schema().getType().getName(), "string");
+    assertEquals(f.schema(), AvroSchemaUtils.createNullableSchema(Schema.Type.STRING));
 
     // case5: user_partition is in originSchema, but partition_path is in originSchema
     String[] pts4 = {"user_partition", "partition_path"};
