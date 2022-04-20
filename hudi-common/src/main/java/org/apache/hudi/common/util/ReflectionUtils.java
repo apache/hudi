@@ -123,7 +123,7 @@ public class ReflectionUtils {
    * @param ctorArgs specific constructor arguments
    * @return new instance of the class
    */
-  public static <T> T newInstanceUnchecked(Class<T> klass, Object ...ctorArgs) {
+  public static <T> T newInstanceUnchecked(Class<T> klass, Object... ctorArgs) {
     Class<?>[] ctorArgTypes = Arrays.stream(ctorArgs).map(Object::getClass).toArray(Class<?>[]::new);
     return newInstanceUnchecked(klass, ctorArgTypes, ctorArgs);
   }
@@ -136,7 +136,7 @@ public class ReflectionUtils {
    * @param ctorArgs specific constructor arguments
    * @return new instance of the class
    */
-  public static <T> T newInstanceUnchecked(Class<T> klass, Class<?>[] ctorArgTypes, Object ...ctorArgs) {
+  public static <T> T newInstanceUnchecked(Class<T> klass, Class<?>[] ctorArgTypes, Object... ctorArgs) {
     try {
       return unsafeCast(klass.getConstructor(ctorArgTypes).newInstance(ctorArgs));
     } catch (InstantiationException | IllegalAccessException | InvocationTargetException | NoSuchMethodException e) {

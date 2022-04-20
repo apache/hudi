@@ -331,8 +331,6 @@ class Spark312HoodieParquetFileFormat(private val shouldAppendPartitionValues: B
 
 object Spark312HoodieParquetFileFormat {
 
-  val PARQUET_FILTERS_CLASS_NAME = "org.apache.spark.sql.execution.datasources.parquet.ParquetFilters"
-
   def pruneInternalSchema(internalSchemaStr: String, requiredSchema: StructType): String = {
     val querySchemaOption = SerDeHelper.fromJson(internalSchemaStr)
     if (querySchemaOption.isPresent && requiredSchema.nonEmpty) {
@@ -344,8 +342,10 @@ object Spark312HoodieParquetFileFormat {
   }
 
   private def createParquetFilters(args: Any*): ParquetFilters = {
-    val instance = ReflectionUtils.loadClass(PARQUET_FILTERS_CLASS_NAME, args.map(_.asInstanceOf[AnyRef]): _*)
-    instance.asInstanceOf[ParquetFilters]
+    // ParquetFilters bears a single ctor (in Spark 3.1)
+    val ctor = classOf[ParquetFilters].getConstructors.head
+    ctor.newInstance(args.map(_.asInstanceOf[AnyRef]): _*)
+      .asInstanceOf[ParquetFilters]
   }
 
   private def rebuildFilterFromParquet(oldFilter: Filter, fileSchema: InternalSchema, querySchema: InternalSchema): Filter = {
