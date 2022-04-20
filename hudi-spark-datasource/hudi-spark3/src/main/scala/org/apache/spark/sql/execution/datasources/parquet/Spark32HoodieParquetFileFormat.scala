@@ -223,15 +223,27 @@ class Spark32HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
       }
       val taskContext = Option(TaskContext.get())
       if (enableVectorizedReader) {
-        val vectorizedReader = new Spark32HoodieVectorizedParquetRecordReader(
-          convertTz.orNull,
-          datetimeRebaseSpec.mode.toString,
-          datetimeRebaseSpec.timeZone,
-          int96RebaseSpec.mode.toString,
-          int96RebaseSpec.timeZone,
-          enableOffHeapColumnVector && taskContext.isDefined,
-          capacity,
-          typeChangeInfos)
+        val vectorizedReader =
+          if (shouldUseInternalSchema) {
+            new Spark32HoodieVectorizedParquetRecordReader(
+              convertTz.orNull,
+              datetimeRebaseSpec.mode.toString,
+              datetimeRebaseSpec.timeZone,
+              int96RebaseSpec.mode.toString,
+              int96RebaseSpec.timeZone,
+              enableOffHeapColumnVector && taskContext.isDefined,
+              capacity,
+              typeChangeInfos)
+          } else {
+            new VectorizedParquetRecordReader(
+              convertTz.orNull,
+              datetimeRebaseSpec.mode.toString,
+              datetimeRebaseSpec.timeZone,
+              int96RebaseSpec.mode.toString,
+              int96RebaseSpec.timeZone,
+              enableOffHeapColumnVector && taskContext.isDefined,
+              capacity)
+          }
         // SPARK-37089: We cannot register a task completion listener to close this iterator here
         // because downstream exec nodes have already registered their listeners. Since listeners
         // are executed in reverse order of registration, a listener registered here would close the

@@ -240,13 +240,24 @@ class Spark312HoodieParquetFileFormat(private val shouldAppendPartitionValues: B
       }
       val taskContext = Option(TaskContext.get())
       if (enableVectorizedReader) {
-        val vectorizedReader = new Spark312HoodieVectorizedParquetRecordReader(
-          convertTz.orNull,
-          datetimeRebaseMode.toString,
-          int96RebaseMode.toString,
-          enableOffHeapColumnVector && taskContext.isDefined,
-          capacity,
-          typeChangeInfos)
+        val vectorizedReader =
+          if (shouldUseInternalSchema) {
+            new Spark312HoodieVectorizedParquetRecordReader(
+              convertTz.orNull,
+              datetimeRebaseMode.toString,
+              int96RebaseMode.toString,
+              enableOffHeapColumnVector && taskContext.isDefined,
+              capacity,
+              typeChangeInfos)
+          } else {
+            new VectorizedParquetRecordReader(
+              convertTz.orNull,
+              datetimeRebaseMode.toString,
+              int96RebaseMode.toString,
+              enableOffHeapColumnVector && taskContext.isDefined,
+              capacity)
+          }
+
         val iter = new RecordReaderIterator(vectorizedReader)
         // SPARK-23457 Register a task completion listener before `initialization`.
         taskContext.foreach(_.addTaskCompletionListener[Unit](_ => iter.close()))

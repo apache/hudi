@@ -21,6 +21,7 @@ package org.apache.hudi
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.FileStatus
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
+import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.utils.SerDeHelper
 import org.apache.spark.sql.SparkSession
@@ -93,9 +94,12 @@ object HoodieDataSourceHelper extends PredicateHelper with SparkAdapterSupport {
     * @param validCommits valid commits, using give validCommits to validate all legal histroy Schema files, and return the latest one.
     */
   def getConfigurationWithInternalSchema(conf: Configuration, internalSchema: InternalSchema, tablePath: String, validCommits: String): Configuration = {
-    conf.set(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA, SerDeHelper.toJson(internalSchema))
-    conf.set(SparkInternalSchemaConverter.HOODIE_TABLE_PATH, tablePath)
-    conf.set(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST, validCommits)
+    val querySchemaString = SerDeHelper.toJson(internalSchema)
+    if (!isNullOrEmpty(querySchemaString)) {
+      conf.set(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA, SerDeHelper.toJson(internalSchema))
+      conf.set(SparkInternalSchemaConverter.HOODIE_TABLE_PATH, tablePath)
+      conf.set(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST, validCommits)
+    }
     conf
   }
 }
