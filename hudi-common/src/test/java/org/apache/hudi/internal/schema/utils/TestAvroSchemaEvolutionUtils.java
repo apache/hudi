@@ -284,7 +284,7 @@ public class TestAvroSchemaEvolutionUtils {
         .updateColumnType("col6", Types.StringType.get());
     InternalSchema newSchema = SchemaChangeUtils.applyTableChanges2Schema(internalSchema, updateChange);
     Schema newAvroSchema = AvroInternalSchemaConverter.convert(newSchema, avroSchema.getName());
-    GenericRecord newRecord = HoodieAvroUtils.rewriteRecordWithNewSchema(avroRecord, newAvroSchema);
+    GenericRecord newRecord = HoodieAvroUtils.rewriteRecordWithNewSchema(avroRecord, newAvroSchema, new HashMap<>());
 
     Assertions.assertEquals(GenericData.get().validate(newAvroSchema, newRecord), true);
   }
@@ -349,7 +349,7 @@ public class TestAvroSchemaEvolutionUtils {
     );
 
     Schema newAvroSchema = AvroInternalSchemaConverter.convert(newRecord, schema.getName());
-    GenericRecord newAvroRecord = HoodieAvroUtils.rewriteRecordWithNewSchema(avroRecord, newAvroSchema);
+    GenericRecord newAvroRecord = HoodieAvroUtils.rewriteRecordWithNewSchema(avroRecord, newAvroSchema, new HashMap<>());
     // test the correctly of rewrite
     Assertions.assertEquals(GenericData.get().validate(newAvroSchema, newAvroRecord), true);
   }

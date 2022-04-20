@@ -64,6 +64,7 @@ import java.sql.Date;
 import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -405,6 +406,18 @@ public class HoodieAvroUtils {
     return newRecord;
   }
 
+  // TODO Unify the logical of rewriteRecordWithMetadata and rewriteEvolutionRecordWithMetadata, and delete this function.
+  public static GenericRecord rewriteEvolutionRecordWithMetadata(GenericRecord genericRecord, Schema newSchema, String fileName) {
+    GenericRecord newRecord = HoodieAvroUtils.rewriteRecordWithNewSchema(genericRecord, newSchema, new HashMap<>());
+    // do not preserve FILENAME_METADATA_FIELD
+    newRecord.put(HoodieRecord.FILENAME_METADATA_FIELD_POS, fileName);
+    if (!GenericData.get().validate(newSchema, newRecord)) {
+      throw new SchemaCompatibilityException(
+          "Unable to validate the rewritten record " + genericRecord + " against schema " + newSchema);
+    }
+    return newRecord;
+  }
+
   /**
    * Converts list of {@link GenericRecord} provided into the {@link GenericRecord} adhering to the
    * provided {@code newSchema}.
@@ -719,14 +732,15 @@ public class HoodieAvroUtils {
    *
    * @param oldRecord oldRecord to be rewritten
    * @param newSchema newSchema used to rewrite oldRecord
+   * @param renameCols a map store all rename cols, (k, v)-> (colNameFromNewSchema, colNameFromOldSchema)
    * @return newRecord for new Schema
    */
-  public static GenericRecord rewriteRecordWithNewSchema(IndexedRecord oldRecord, Schema newSchema) {
-    Object newRecord = rewriteRecordWithNewSchema(oldRecord, oldRecord.getSchema(), newSchema);
+  public static GenericRecord rewriteRecordWithNewSchema(IndexedRecord oldRecord, Schema newSchema, Map<String, String> renameCols) {
+    Object newRecord = rewriteRecordWithNewSchema(oldRecord, oldRecord.getSchema(), newSchema, renameCols);
     return (GenericData.Record) newRecord;
   }
 
-  private static Object rewriteRecordWithNewSchema(Object oldRecord, Schema oldSchema, Schema newSchema) {
+  private static Object rewriteRecordWithNewSchema(Object oldRecord, Schema oldSchema, Schema newSchema, Map<String, String> renameCols) {
     if (oldRecord == null) {
       return null;
     }
@@ -743,7 +757,20 @@ public class HoodieAvroUtils {
           Schema.Field field = fields.get(i);
           if (oldSchema.getField(field.name()) != null) {
             Schema.Field oldField = oldSchema.getField(field.name());
-            helper.put(i, rewriteRecordWithNewSchema(indexedRecord.get(oldField.pos()), oldField.schema(), fields.get(i).schema()));
+            helper.put(i, rewriteRecordWithNewSchema(indexedRecord.get(oldField.pos()), oldField.schema(), fields.get(i).schema(), renameCols));
+          }
+          // deal with rename
+          if (!renameCols.isEmpty() && oldSchema.getField(field.name()) == null) {
+            String fieldName = field.name();
+            for (Map.Entry<String, String> entry : renameCols.entrySet()) {
+              List<String> nameParts = Arrays.asList(entry.getKey().split("\\."));
+              List<String> namePartsOld = Arrays.asList(entry.getValue().split("\\."));
+              if (nameParts.get(nameParts.size() - 1).equals(fieldName) && oldSchema.getField(namePartsOld.get(namePartsOld.size() - 1)) != null) {
+                // find rename
+                Schema.Field oldField = oldSchema.getField(namePartsOld.get(namePartsOld.size() - 1));
+                helper.put(i, rewriteRecordWithNewSchema(indexedRecord.get(oldField.pos()), oldField.schema(), fields.get(i).schema(), renameCols));
+              }
+            }
           }
         }
         GenericData.Record newRecord = new GenericData.Record(newSchema);
@@ -766,7 +793,7 @@ public class HoodieAvroUtils {
         Collection array = (Collection)oldRecord;
         List<Object> newArray = new ArrayList();
         for (Object element : array) {
-          newArray.add(rewriteRecordWithNewSchema(element, oldSchema.getElementType(), newSchema.getElementType()));
+          newArray.add(rewriteRecordWithNewSchema(element, oldSchema.getElementType(), newSchema.getElementType(), renameCols));
         }
         return newArray;
       case MAP:
@@ -776,11 +803,11 @@ public class HoodieAvroUtils {
         Map<Object, Object> map = (Map<Object, Object>) oldRecord;
         Map<Object, Object> newMap = new HashMap<>();
         for (Map.Entry<Object, Object> entry : map.entrySet()) {
-          newMap.put(entry.getKey(), rewriteRecordWithNewSchema(entry.getValue(), oldSchema.getValueType(), newSchema.getValueType()));
+          newMap.put(entry.getKey(), rewriteRecordWithNewSchema(entry.getValue(), oldSchema.getValueType(), newSchema.getValueType(), renameCols));
         }
         return newMap;
       case UNION:
-        return rewriteRecordWithNewSchema(oldRecord, getActualSchemaFromUnion(oldSchema, oldRecord), getActualSchemaFromUnion(newSchema, oldRecord));
+        return rewriteRecordWithNewSchema(oldRecord, getActualSchemaFromUnion(oldSchema, oldRecord), getActualSchemaFromUnion(newSchema, oldRecord), renameCols);
       default:
         return rewritePrimaryType(oldRecord, oldSchema, newSchema);
     }
@@ -958,9 +985,10 @@ public class HoodieAvroUtils {
    *
    * @param oldRecords oldRecords to be rewrite
    * @param newSchema newSchema used to rewrite oldRecord
+   * @param renameCols a map store all rename cols, (k, v)-> (colNameFromNewSchema, colNameFromOldSchema)
    * @return a iterator of rewrote GeneriRcords
    */
-  public static Iterator<GenericRecord> rewriteRecordWithNewSchema(Iterator<GenericRecord> oldRecords, Schema newSchema) {
+  public static Iterator<GenericRecord> rewriteRecordWithNewSchema(Iterator<GenericRecord> oldRecords, Schema newSchema, Map<String, String> renameCols) {
     if (oldRecords == null || newSchema == null) {
       return Collections.emptyIterator();
     }
@@ -972,7 +1000,7 @@ public class HoodieAvroUtils {
 
       @Override
       public GenericRecord next() {
-        return rewriteRecordWithNewSchema(oldRecords.next(), newSchema);
+        return rewriteRecordWithNewSchema(oldRecords.next(), newSchema, renameCols);
       }
     };
   }
