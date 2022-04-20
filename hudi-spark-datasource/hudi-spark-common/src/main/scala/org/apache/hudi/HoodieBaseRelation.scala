@@ -150,15 +150,6 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
   protected val partitionColumns: Array[String] = tableConfig.getPartitionFields.orElse(Array.empty)
 
   /**
-   * Controls whether partition columns (which are the source for the partition path values) should
-   * be omitted from persistence in the data files.
-   * On the read path it affects how partition values (ie values for corresponding partition columns)
-   * will be handled
-   */
-  protected val shouldOmitPartitionColumns: Boolean =
-    metaClient.getTableConfig.shouldDropPartitionColumns && partitionColumns.nonEmpty
-
-  /**
    * Controls whether partition values (ie values of partition columns) should be
    * <ol>
    *    <li>Extracted from partition path and appended to individual rows read from the data file (we
@@ -178,7 +169,13 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
    *       partition path, meaining that string value of "2022/01/01" will be appended, and not its original
    *       representation
    */
-  protected val shouldExtractPartitionValuesFromPartitionPath: Boolean = shouldOmitPartitionColumns
+  protected val shouldExtractPartitionValuesFromPartitionPath: Boolean = {
+    // Controls whether partition columns (which are the source for the partition path values) should
+    // be omitted from persistence in the data files. On the read path it affects whether partition values (values
+    // of partition columns) will be read from the data file ot extracted from partition path
+    val shouldOmitPartitionColumns = metaClient.getTableConfig.shouldDropPartitionColumns && partitionColumns.nonEmpty
+    shouldOmitPartitionColumns
+  }
 
   /**
    * NOTE: PLEASE READ THIS CAREFULLY
@@ -394,7 +391,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
   protected def getPartitionColumnsAsInternalRow(file: FileStatus): InternalRow = {
     try {
       val tableConfig = metaClient.getTableConfig
-      if (shouldOmitPartitionColumns) {
+      if (shouldExtractPartitionValuesFromPartitionPath) {
         val relativePath = new URI(metaClient.getBasePath).relativize(new URI(file.getPath.getParent.toString)).toString
         val hiveStylePartitioningEnabled = tableConfig.getHiveStylePartitioningEnable.toBoolean
         if (hiveStylePartitioningEnabled) {
@@ -474,7 +471,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
 
   private def tryPrunePartitionColumns(tableSchema: HoodieTableSchema,
                                        requiredSchema: HoodieTableSchema): (StructType, HoodieTableSchema, HoodieTableSchema) = {
-    if (shouldOmitPartitionColumns) {
+    if (shouldExtractPartitionValuesFromPartitionPath) {
       val partitionSchema = StructType(partitionColumns.map(StructField(_, StringType)))
       val prunedDataStructSchema = prunePartitionColumns(tableSchema.structTypeSchema)
       val prunedRequiredSchema = prunePartitionColumns(requiredSchema.structTypeSchema)
