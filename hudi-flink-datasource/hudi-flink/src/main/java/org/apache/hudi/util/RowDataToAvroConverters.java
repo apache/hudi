@@ -33,6 +33,7 @@ import org.apache.flink.table.types.logical.ArrayType;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.table.types.logical.TimestampType;
+import org.apache.hudi.exception.HoodieException;
 
 import java.io.Serializable;
 import java.math.BigDecimal;
@@ -266,10 +267,17 @@ public class RowDataToAvroConverters {
         final GenericRecord record = new GenericData.Record(schema);
         for (int i = 0; i < length; ++i) {
           final Schema.Field schemaField = fields.get(i);
-          Object avroObject =
-              fieldConverters[i].convert(
-                  schemaField.schema(), fieldGetters[i].getFieldOrNull(row));
-          record.put(i, avroObject);
+          try {
+              Object avroObject =
+                      fieldConverters[i].convert(
+                              schemaField.schema(), fieldGetters[i].getFieldOrNull(row));
+              record.put(i, avroObject);
+          } catch (Exception exception) {
+              throw new HoodieException(
+                      String.format("convert meet error field %s value %s",
+                              schemaField.name(),
+                              fieldGetters[i].getFieldOrNull(row)), exception);
+          }
         }
         return record;
       }
