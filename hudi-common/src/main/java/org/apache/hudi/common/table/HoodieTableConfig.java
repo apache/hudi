@@ -193,7 +193,7 @@ public class HoodieTableConfig extends HoodieConfig {
   public static final ConfigProperty<Boolean> PARTITION_METAFILE_USE_BASE_FORMAT = ConfigProperty
       .key("hoodie.partition.metafile.use.base.format")
       .defaultValue(false)
-      .withDocumentation("If true, partition metafiles are saved in the same format as basefiles for this dataset (e.g. Parquet / ORC). "
+      .withDocumentation("If true, partition metafiles are saved in the same format as base-files for this dataset (e.g. Parquet / ORC). "
           + "If false (default) partition metafiles are saved as properties files.");
 
   public static final ConfigProperty<Boolean> DROP_PARTITION_COLUMNS = ConfigProperty
@@ -207,7 +207,8 @@ public class HoodieTableConfig extends HoodieConfig {
       .sinceVersion("0.11.0")
       .withDocumentation("When set to true, values for partition columns (partition values) will be extracted"
           + " from physical partition path (default Spark behavior). When set to false partition values will be"
-          + " read from the data file (in Hudi partition columns are persisted by default)");
+          + " read from the data file (in Hudi partition columns are persisted by default)."
+          + " This config is a fallback allowing to preserve existing behavior, and should not be used otherwise.");
 
   public static final ConfigProperty<String> URL_ENCODE_PARTITIONING = KeyGeneratorOptions.URL_ENCODE_PARTITIONING;
   public static final ConfigProperty<String> HIVE_STYLE_PARTITIONING_ENABLE = KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE;
@@ -617,6 +618,10 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public Boolean shouldDropPartitionColumns() {
     return getBooleanOrDefault(DROP_PARTITION_COLUMNS);
+  }
+
+  public Boolean shouldExtractPartitionValuesFromPartitionPath() {
+    return getBooleanOrDefault(EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH);
   }
 
   /**

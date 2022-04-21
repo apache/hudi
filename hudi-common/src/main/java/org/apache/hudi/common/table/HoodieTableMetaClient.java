@@ -698,7 +698,8 @@ public class HoodieTableMetaClient implements Serializable {
     private Boolean urlEncodePartitioning;
     private HoodieTimelineTimeZone commitTimeZone;
     private Boolean partitionMetafileUseBaseFormat;
-    private Boolean dropPartitionColumnsWhenWrite;
+    private Boolean shouldDropPartitionColumns;
+    private Boolean shouldExtractPartitionValuesFromPath;
     private String metadataPartitions;
     private String inflightMetadataPartitions;
 
@@ -820,8 +821,13 @@ public class HoodieTableMetaClient implements Serializable {
       return this;
     }
 
-    public PropertyBuilder setShouldDropPartitionColumns(Boolean dropPartitionColumnsWhenWrite) {
-      this.dropPartitionColumnsWhenWrite = dropPartitionColumnsWhenWrite;
+    public PropertyBuilder setShouldDropPartitionColumns(Boolean shouldDropPartitionColumns) {
+      this.shouldDropPartitionColumns = shouldDropPartitionColumns;
+      return this;
+    }
+
+    public PropertyBuilder setShouldExtractPartitionValuesFromPath(Boolean shouldExtractPartitionValuesFromPath) {
+      this.shouldExtractPartitionValuesFromPath = shouldExtractPartitionValuesFromPath;
       return this;
     }
 
@@ -933,15 +939,15 @@ public class HoodieTableMetaClient implements Serializable {
       if (hoodieConfig.contains(HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT)) {
         setPartitionMetafileUseBaseFormat(hoodieConfig.getBoolean(HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT));
       }
-
       if (hoodieConfig.contains(HoodieTableConfig.DROP_PARTITION_COLUMNS)) {
         setShouldDropPartitionColumns(hoodieConfig.getBoolean(HoodieTableConfig.DROP_PARTITION_COLUMNS));
       }
-
+      if (hoodieConfig.contains(HoodieTableConfig.EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH)) {
+        setShouldExtractPartitionValuesFromPath(hoodieConfig.getBoolean(HoodieTableConfig.EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH));
+      }
       if (hoodieConfig.contains(HoodieTableConfig.TABLE_METADATA_PARTITIONS)) {
         setMetadataPartitions(hoodieConfig.getString(HoodieTableConfig.TABLE_METADATA_PARTITIONS));
       }
-
       if (hoodieConfig.contains(HoodieTableConfig.TABLE_METADATA_PARTITIONS_INFLIGHT)) {
         setInflightMetadataPartitions(hoodieConfig.getString(HoodieTableConfig.TABLE_METADATA_PARTITIONS_INFLIGHT));
       }
@@ -1026,15 +1032,15 @@ public class HoodieTableMetaClient implements Serializable {
       if (null != partitionMetafileUseBaseFormat) {
         tableConfig.setValue(HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT, partitionMetafileUseBaseFormat.toString());
       }
-
-      if (null != dropPartitionColumnsWhenWrite) {
-        tableConfig.setValue(HoodieTableConfig.DROP_PARTITION_COLUMNS, Boolean.toString(dropPartitionColumnsWhenWrite));
+      if (null != shouldDropPartitionColumns) {
+        tableConfig.setValue(HoodieTableConfig.DROP_PARTITION_COLUMNS, Boolean.toString(shouldDropPartitionColumns));
       }
-
+      if (shouldExtractPartitionValuesFromPath != null) {
+        tableConfig.setValue(HoodieTableConfig.EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH, Boolean.toString(shouldExtractPartitionValuesFromPath));
+      }
       if (null != metadataPartitions) {
         tableConfig.setValue(HoodieTableConfig.TABLE_METADATA_PARTITIONS, metadataPartitions);
       }
-
       if (null != inflightMetadataPartitions) {
         tableConfig.setValue(HoodieTableConfig.TABLE_METADATA_PARTITIONS_INFLIGHT, inflightMetadataPartitions);
       }
