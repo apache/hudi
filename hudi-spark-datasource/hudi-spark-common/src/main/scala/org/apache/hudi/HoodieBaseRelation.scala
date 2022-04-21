@@ -198,7 +198,10 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
    *
    * @VisibleInTests
    */
-  val mandatoryColumns: Seq[String]
+  val mandatoryFields: Seq[String]
+
+  protected def mandatoryRootFields: Seq[String] =
+    mandatoryFields.map(col => HoodieAvroUtils.getRootLevelFieldName(col))
 
   protected def timeline: HoodieTimeline =
   // NOTE: We're including compaction here since it's not considering a "commit" operation
@@ -245,7 +248,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     //
     // (!!!) IT'S CRITICAL TO AVOID REORDERING OF THE REQUESTED COLUMNS AS THIS WILL BREAK THE UPSTREAM
     //       PROJECTION
-    val fetchedColumns: Array[String] = appendMandatoryColumns(requiredColumns)
+    val fetchedColumns: Array[String] = appendMandatoryRootFields(requiredColumns)
 
     val (requiredAvroSchema, requiredStructSchema, requiredInternalSchema) =
       HoodieSparkUtils.getRequiredSchema(tableAvroSchema, fetchedColumns, internalSchema)
@@ -361,12 +364,11 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
       !SubqueryExpression.hasSubquery(condition)
   }
 
-  protected final def appendMandatoryColumns(requestedColumns: Array[String]): Array[String] = {
+  protected final def appendMandatoryRootFields(requestedColumns: Array[String]): Array[String] = {
     // For a nested field in mandatory columns, we should first get the root-level field, and then
     // check for any missing column, as the requestedColumns should only contain root-level fields
     // We should only append root-level field as well
-    val missing = mandatoryColumns.map(col => HoodieAvroUtils.getRootLevelFieldName(col))
-      .filter(rootField => !requestedColumns.contains(rootField))
+    val missing = mandatoryRootFields.filter(rootField => !requestedColumns.contains(rootField))
     requestedColumns ++ missing
   }
 
