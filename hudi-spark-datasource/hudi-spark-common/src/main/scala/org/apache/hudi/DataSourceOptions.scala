@@ -18,14 +18,16 @@
 package org.apache.hudi
 
 import org.apache.hudi.DataSourceReadOptions.{QUERY_TYPE, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, QUERY_TYPE_SNAPSHOT_OPT_VAL}
+import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.common.config.{ConfigProperty, HoodieConfig}
 import org.apache.hudi.common.fs.ConsistencyGuardConfig
 import org.apache.hudi.common.model.{HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.util.Option
+import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieWriteConfig}
 import org.apache.hudi.hive.util.ConfigUtils
-import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncTool, MultiPartKeysValueExtractor, NonPartitionedExtractor, SlashEncodedDayPartitionValueExtractor}
+import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncTool}
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.{ComplexKeyGenerator, CustomKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.sync.common.HoodieSyncConfig
@@ -45,6 +47,7 @@ import scala.language.implicitConversions
   * Options supported for reading hoodie tables.
   */
 object DataSourceReadOptions {
+  import DataSourceOptionsHelper._
 
   val QUERY_TYPE_SNAPSHOT_OPT_VAL = "snapshot"
   val QUERY_TYPE_READ_OPTIMIZED_OPT_VAL = "read_optimized"
@@ -124,6 +127,9 @@ object DataSourceReadOptions {
     .withDocumentation("Enables data-skipping allowing queries to leverage indexes to reduce the search space by " +
       "skipping over files")
 
+  val EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH: ConfigProperty[Boolean] =
+    HoodieTableConfig.EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH
+
   val INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.incr.fallback.fulltablescan.enable")
     .defaultValue("false")
@@ -184,6 +190,8 @@ object DataSourceReadOptions {
   * Options supported for writing hoodie tables.
   */
 object DataSourceWriteOptions {
+
+  import DataSourceOptionsHelper._
 
   val BULK_INSERT_OPERATION_OPT_VAL = WriteOperationType.BULK_INSERT.value
   val INSERT_OPERATION_OPT_VAL = WriteOperationType.INSERT.value
@@ -471,10 +479,7 @@ object DataSourceWriteOptions {
     .sinceVersion("0.9.0")
     .withDocumentation("This class is used by kafka client to deserialize the records")
 
-  val DROP_PARTITION_COLUMNS: ConfigProperty[Boolean] = ConfigProperty
-    .key(HoodieTableConfig.DROP_PARTITION_COLUMNS.key())
-    .defaultValue(HoodieTableConfig.DROP_PARTITION_COLUMNS.defaultValue().booleanValue())
-    .withDocumentation(HoodieTableConfig.DROP_PARTITION_COLUMNS.doc())
+  val DROP_PARTITION_COLUMNS: ConfigProperty[Boolean] = HoodieTableConfig.DROP_PARTITION_COLUMNS
 
   /** @deprecated Use {@link HIVE_ASSUME_DATE_PARTITION} and its methods instead */
   @Deprecated
@@ -773,5 +778,22 @@ object DataSourceOptionsHelper {
     new JavaFunction[From, To] {
       override def apply (input: From): To = function (input)
     }
+  }
+
+  implicit def convert[T, U](prop: ConfigProperty[T])(implicit converter: T => U): ConfigProperty[U] = {
+    checkState(prop.hasDefaultValue)
+    var newProp: ConfigProperty[U] = ConfigProperty.key(prop.key())
+      .defaultValue(converter(prop.defaultValue()))
+      .withDocumentation(prop.doc())
+      .withAlternatives(prop.getAlternatives.asScala: _*)
+
+    newProp = toScalaOption(prop.getSinceVersion) match {
+      case Some(version) => newProp.sinceVersion(version)
+    }
+    newProp = toScalaOption(prop.getDeprecatedVersion) match {
+      case Some(version) => newProp.deprecatedAfter(version)
+    }
+
+    newProp
   }
 }

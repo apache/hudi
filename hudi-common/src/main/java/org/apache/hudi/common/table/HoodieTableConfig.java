@@ -201,6 +201,14 @@ public class HoodieTableConfig extends HoodieConfig {
       .defaultValue(false)
       .withDocumentation("When set to true, will not write the partition columns into hudi. By default, false.");
 
+  public static final ConfigProperty<Boolean> EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH = ConfigProperty
+      .key("hoodie.datasource.read.extract.partition.values.from.path")
+      .defaultValue(false)
+      .sinceVersion("0.11.0")
+      .withDocumentation("When set to true, values for partition columns (partition values) will be extracted"
+          + " from physical partition path (default Spark behavior). When set to false partition values will be"
+          + " read from the data file (in Hudi partition columns are persisted by default)");
+
   public static final ConfigProperty<String> URL_ENCODE_PARTITIONING = KeyGeneratorOptions.URL_ENCODE_PARTITIONING;
   public static final ConfigProperty<String> HIVE_STYLE_PARTITIONING_ENABLE = KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE;
 
