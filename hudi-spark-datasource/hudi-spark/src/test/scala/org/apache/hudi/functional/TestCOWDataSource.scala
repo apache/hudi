@@ -951,20 +951,25 @@ class TestCOWDataSource extends HoodieClientTestBase {
     )
 
     // Case #2: Partition columns are extracted from the partition path
-    val secondDF = spark.read.format("hudi")
-      .option(DataSourceReadOptions.EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH.key, "true")
-      .load(path)
+    //
+    // NOTE: This case is only relevant when globbing is NOT used, since when globbing is used Spark
+    //       won't be able to infer partitioning properly
+    if (!useGlobbing) {
+      val secondDF = spark.read.format("hudi")
+        .option(DataSourceReadOptions.EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH.key, "true")
+        .load(path)
 
-    assert(secondDF.count() == 2)
+      assert(secondDF.count() == 2)
 
-    // data_date is the partition field. Persist to the parquet file using the origin values, and read it.
-    assertEquals(
-      Seq("2018/09/23", "2018/09/24"),
-      secondDF.select("data_date").map(_.get(0).toString).collect().sorted.toSeq
-    )
-    assertEquals(
-      Seq("2018/09/23", "2018/09/24"),
-      secondDF.select("_hoodie_partition_path").map(_.get(0).toString).collect().sorted.toSeq
-    )
+      // data_date is the partition field. Persist to the parquet file using the origin values, and read it.
+      assertEquals(
+        Seq("2018/09/23", "2018/09/24"),
+        secondDF.select("data_date").map(_.get(0).toString).collect().sorted.toSeq
+      )
+      assertEquals(
+        Seq("2018/09/23", "2018/09/24"),
+        secondDF.select("_hoodie_partition_path").map(_.get(0).toString).collect().sorted.toSeq
+      )
+    }
   }
 }
