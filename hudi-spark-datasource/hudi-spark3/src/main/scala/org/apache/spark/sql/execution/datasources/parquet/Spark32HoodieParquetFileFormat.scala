@@ -416,7 +416,7 @@ object Spark32HoodieParquetFileFormat {
     //       up by arg types, and have to instead rely on relative order of ctors
     // NOTE: VectorizedParquetRecordReader has 2 ctors and the one we need is 2nd on the array
     //       This is a hacky workaround for the fixed version of Class.
-    val ctor = classOf[VectorizedParquetRecordReader].getConstructors.tail
+    val ctor = classOf[VectorizedParquetRecordReader].getConstructors.last
     ctor.newInstance(args.map(_.asInstanceOf[AnyRef]): _*)
       .asInstanceOf[VectorizedParquetRecordReader]
   }
