@@ -21,7 +21,6 @@ package org.apache.hudi
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.fs.{FileSystem, Path}
-import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.avro.HoodieAvroUtils.rewriteRecord
 import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.hudi.common.config.TypedProperties
@@ -323,9 +322,7 @@ object HoodieSparkUtils extends SparkAdapterSupport {
       val name2Fields = tableAvroSchema.getFields.asScala.map(f => f.name() -> f).toMap
       // Here have to create a new Schema.Field object
       // to prevent throwing exceptions like "org.apache.avro.AvroRuntimeException: Field already used".
-      // For a nested field, we include the root-level field
-      val requiredFields = requiredColumns.map(c => HoodieAvroUtils.getRootLevelFieldName(c))
-        .distinct.map(c => name2Fields(c))
+      val requiredFields = requiredColumns.map(c => name2Fields(c))
         .map(f => new Schema.Field(f.name(), f.schema(), f.doc(), f.defaultVal(), f.order())).toList
       val requiredAvroSchema = Schema.createRecord(tableAvroSchema.getName, tableAvroSchema.getDoc,
         tableAvroSchema.getNamespace, tableAvroSchema.isError, requiredFields.asJava)
