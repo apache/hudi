@@ -176,8 +176,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     val shouldOmitPartitionColumns = metaClient.getTableConfig.shouldDropPartitionColumns && partitionColumns.nonEmpty
     val shouldExtractPartitionValueFromPath =
       optParams.getOrElse(DataSourceReadOptions.EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH.key,
-        DataSourceReadOptions.EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH.defaultValue)
-        .asInstanceOf[Boolean]
+        DataSourceReadOptions.EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH.defaultValue.toString).toBoolean
     shouldOmitPartitionColumns || shouldExtractPartitionValueFromPath
   }
 
