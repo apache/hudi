@@ -820,7 +820,7 @@ public class HoodieTableMetaClient implements Serializable {
       return this;
     }
 
-    public PropertyBuilder setDropPartitionColumnsWhenWrite(Boolean dropPartitionColumnsWhenWrite) {
+    public PropertyBuilder setShouldDropPartitionColumns(Boolean dropPartitionColumnsWhenWrite) {
       this.dropPartitionColumnsWhenWrite = dropPartitionColumnsWhenWrite;
       return this;
     }
@@ -935,7 +935,7 @@ public class HoodieTableMetaClient implements Serializable {
       }
 
       if (hoodieConfig.contains(HoodieTableConfig.DROP_PARTITION_COLUMNS)) {
-        setDropPartitionColumnsWhenWrite(hoodieConfig.getBoolean(HoodieTableConfig.DROP_PARTITION_COLUMNS));
+        setShouldDropPartitionColumns(hoodieConfig.getBoolean(HoodieTableConfig.DROP_PARTITION_COLUMNS));
       }
 
       if (hoodieConfig.contains(HoodieTableConfig.TABLE_METADATA_PARTITIONS)) {
