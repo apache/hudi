@@ -128,7 +128,13 @@ object DataSourceReadOptions {
       "skipping over files")
 
   val EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH: ConfigProperty[Boolean] =
-    HoodieTableConfig.EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH
+    ConfigProperty.key("hoodie.datasource.read.extract.partition.values.from.path")
+      .defaultValue(false)
+      .sinceVersion("0.11.0")
+      .withDocumentation("When set to true, values for partition columns (partition values) will be extracted" +
+        " from physical partition path (default Spark behavior). When set to false partition values will be" +
+        " read from the data file (in Hudi partition columns are persisted by default)." +
+        " This config is a fallback allowing to preserve existing behavior, and should not be used otherwise.")
 
   val INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.incr.fallback.fulltablescan.enable")
@@ -789,9 +795,11 @@ object DataSourceOptionsHelper {
 
     newProp = toScalaOption(prop.getSinceVersion) match {
       case Some(version) => newProp.sinceVersion(version)
+      case None => newProp
     }
     newProp = toScalaOption(prop.getDeprecatedVersion) match {
       case Some(version) => newProp.deprecatedAfter(version)
+      case None => newProp
     }
 
     newProp

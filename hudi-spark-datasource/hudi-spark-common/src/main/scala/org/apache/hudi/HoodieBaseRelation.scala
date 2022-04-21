@@ -174,7 +174,10 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     // be omitted from persistence in the data files. On the read path it affects whether partition values (values
     // of partition columns) will be read from the data file ot extracted from partition path
     val shouldOmitPartitionColumns = metaClient.getTableConfig.shouldDropPartitionColumns && partitionColumns.nonEmpty
-    val shouldExtractPartitionValueFromPath = metaClient.getTableConfig.shouldExtractPartitionValuesFromPartitionPath()
+    val shouldExtractPartitionValueFromPath =
+      optParams.getOrElse(DataSourceReadOptions.EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH.key,
+        DataSourceReadOptions.EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH.defaultValue)
+        .asInstanceOf[Boolean]
     shouldOmitPartitionColumns || shouldExtractPartitionValueFromPath
   }
 
