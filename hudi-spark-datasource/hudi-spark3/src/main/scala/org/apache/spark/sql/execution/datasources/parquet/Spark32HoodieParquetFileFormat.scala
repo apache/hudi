@@ -412,7 +412,11 @@ object Spark32HoodieParquetFileFormat {
   }
 
   private def createVectorizedParquetRecordReader(args: Any*): VectorizedParquetRecordReader = {
-    val ctor = classOf[VectorizedParquetRecordReader].getConstructors.head
+    // NOTE: ParquetReadSupport ctor args contain Scala enum, therefore we can't look it
+    //       up by arg types, and have to instead rely on relative order of ctors
+    // NOTE: VectorizedParquetRecordReader has 2 ctors and the one we need is 2nd on the array
+    //       This is a hacky workaround for the fixed version of Class.
+    val ctor = classOf[VectorizedParquetRecordReader].getConstructors.tail
     ctor.newInstance(args.map(_.asInstanceOf[AnyRef]): _*)
       .asInstanceOf[VectorizedParquetRecordReader]
   }
