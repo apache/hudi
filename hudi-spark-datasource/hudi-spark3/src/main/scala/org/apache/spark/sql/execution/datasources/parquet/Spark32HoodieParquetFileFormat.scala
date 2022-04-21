@@ -397,26 +397,27 @@ object Spark32HoodieParquetFileFormat {
 
   private def createParquetFilters(args: Any*): ParquetFilters = {
     // NOTE: ParquetFilters ctor args contain Scala enum, therefore we can't look it
-    //       up by arg types, and have to instead rely on relative order of ctors
-    val ctor = classOf[ParquetFilters].getConstructors.head
+    //       up by arg types, and have to instead rely on the number of args based on individual class;
+    //       the ctor order is not guaranteed
+    val ctor = classOf[ParquetFilters].getConstructors.maxBy(_.getParameterCount)
     ctor.newInstance(args.map(_.asInstanceOf[AnyRef]): _*)
       .asInstanceOf[ParquetFilters]
   }
 
   private def createParquetReadSupport(args: Any*): ParquetReadSupport = {
     // NOTE: ParquetReadSupport ctor args contain Scala enum, therefore we can't look it
-    //       up by arg types, and have to instead rely on relative order of ctors
-    val ctor = classOf[ParquetReadSupport].getConstructors.head
+    //       up by arg types, and have to instead rely on the number of args based on individual class;
+    //       the ctor order is not guaranteed
+    val ctor = classOf[ParquetReadSupport].getConstructors.maxBy(_.getParameterCount)
     ctor.newInstance(args.map(_.asInstanceOf[AnyRef]): _*)
       .asInstanceOf[ParquetReadSupport]
   }
 
   private def createVectorizedParquetRecordReader(args: Any*): VectorizedParquetRecordReader = {
     // NOTE: ParquetReadSupport ctor args contain Scala enum, therefore we can't look it
-    //       up by arg types, and have to instead rely on relative order of ctors
-    // NOTE: VectorizedParquetRecordReader has 2 ctors and the one we need is 2nd on the array
-    //       This is a hacky workaround for the fixed version of Class.
-    val ctor = classOf[VectorizedParquetRecordReader].getConstructors.last
+    //       up by arg types, and have to instead rely on the number of args based on individual class;
+    //       the ctor order is not guaranteed
+    val ctor = classOf[VectorizedParquetRecordReader].getConstructors.maxBy(_.getParameterCount)
     ctor.newInstance(args.map(_.asInstanceOf[AnyRef]): _*)
       .asInstanceOf[VectorizedParquetRecordReader]
   }
