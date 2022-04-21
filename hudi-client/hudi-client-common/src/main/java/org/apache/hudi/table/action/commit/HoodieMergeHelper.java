@@ -117,7 +117,7 @@ public class HoodieMergeHelper<T extends HoodieRecordPayload> extends
           .convert(new InternalSchemaMerger(writeInternalSchema, querySchema, true, false, false).mergeSchema(), readSchema.getName());
       Schema writeSchemaFromFile = AvroInternalSchemaConverter.convert(writeInternalSchema, readSchema.getName());
       needToReWriteRecord = sameCols.size() != colNamesFromWriteSchema.size()
-              || SchemaCompatibility.checkReaderWriterCompatibility(writeSchemaFromFile, readSchema).getType() == org.apache.avro.SchemaCompatibility.SchemaCompatibilityType.COMPATIBLE;
+              || SchemaCompatibility.checkReaderWriterCompatibility(readSchema, writeSchemaFromFile).getType() == org.apache.avro.SchemaCompatibility.SchemaCompatibilityType.COMPATIBLE;
       if (needToReWriteRecord) {
         renameCols = InternalSchemaUtils.collectRenameCols(writeInternalSchema, querySchema);
       }
