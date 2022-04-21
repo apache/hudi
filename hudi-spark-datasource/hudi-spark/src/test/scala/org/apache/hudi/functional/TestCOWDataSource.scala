@@ -942,12 +942,12 @@ class TestCOWDataSource extends HoodieClientTestBase {
 
     // data_date is the partition field. Persist to the parquet file using the origin values, and read it.
     assertEquals(
-      firstDF.select("data_date").map(_.get(0).toString).collect().sorted.toSeq,
-      Seq("2018-09-23", "2018-09-24")
+      Seq("2018-09-23", "2018-09-24"),
+      firstDF.select("data_date").map(_.get(0).toString).collect().sorted.toSeq
     )
     assertEquals(
-      firstDF.select("_hoodie_partition_path").map(_.get(0).toString).collect().sorted.toSeq,
-      Seq("2018/09/23", "2018/09/24")
+      Seq("2018/09/23", "2018/09/24"),
+      firstDF.select("_hoodie_partition_path").map(_.get(0).toString).collect().sorted.toSeq
     )
 
     // Case #2: Partition columns are extracted from the partition path
@@ -959,12 +959,12 @@ class TestCOWDataSource extends HoodieClientTestBase {
 
     // data_date is the partition field. Persist to the parquet file using the origin values, and read it.
     assertEquals(
-      secondDF.select("data_date").map(_.get(0).toString).collect().sorted.toSeq,
-      Seq("2018/09/23", "2018/09/24")
+      Seq("2018/09/23", "2018/09/24"),
+      secondDF.select("data_date").map(_.get(0).toString).collect().sorted.toSeq
     )
     assertEquals(
-      secondDF.select("_hoodie_partition_path").map(_.get(0).toString).collect().sorted.toSeq,
-      Seq("2018/09/23", "2018/09/24")
+      Seq("2018/09/23", "2018/09/24"),
+      secondDF.select("_hoodie_partition_path").map(_.get(0).toString).collect().sorted.toSeq
     )
   }
 }
