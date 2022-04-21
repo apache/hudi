@@ -30,7 +30,6 @@ import org.apache.hudi.common.fs.NoOpConsistencyGuard;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieTimelineTimeZone;
-import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -377,16 +376,15 @@ public class HoodieTableMetaClient implements Serializable {
   /**
    * Validate table properties.
    * @param properties Properties from writeConfig.
-   * @param operationType operation type to be executed.
    */
-  public void validateTableProperties(Properties properties, WriteOperationType operationType) {
-    // once meta fields are disabled, it cant be re-enabled for a given table.
+  public void validateTableProperties(Properties properties) {
+    // Once meta fields are disabled, it cant be re-enabled for a given table.
     if (!getTableConfig().populateMetaFields()
         && Boolean.parseBoolean((String) properties.getOrDefault(HoodieTableConfig.POPULATE_META_FIELDS.key(), HoodieTableConfig.POPULATE_META_FIELDS.defaultValue()))) {
       throw new HoodieException(HoodieTableConfig.POPULATE_META_FIELDS.key() + " already disabled for the table. Can't be re-enabled back");
     }
 
-    // meta fields can be disabled only with SimpleKeyGenerator
+    // Meta fields can be disabled only when {@code SimpleKeyGenerator} is used
     if (!getTableConfig().populateMetaFields()
         && !properties.getProperty(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key(), "org.apache.hudi.keygen.SimpleKeyGenerator")
         .equals("org.apache.hudi.keygen.SimpleKeyGenerator")) {
