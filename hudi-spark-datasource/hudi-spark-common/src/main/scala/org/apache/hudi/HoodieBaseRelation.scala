@@ -149,8 +149,36 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
 
   protected val partitionColumns: Array[String] = tableConfig.getPartitionFields.orElse(Array.empty)
 
-  protected val shouldOmitPartitionColumns: Boolean =
-    metaClient.getTableConfig.shouldDropPartitionColumns && partitionColumns.nonEmpty
+  /**
+   * Controls whether partition values (ie values of partition columns) should be
+   * <ol>
+   *    <li>Extracted from partition path and appended to individual rows read from the data file (we
+   *    delegate this to Spark's [[ParquetFileFormat]])</li>
+   *    <li>Read from the data-file as is (by default Hudi persists all columns including partition ones)</li>
+   * </ol>
+   *
+   * This flag is only be relevant in conjunction with the usage of [["hoodie.datasource.write.drop.partition.columns"]]
+   * config, when Hudi will NOT be persisting partition columns in the data file, and therefore values for
+   * such partition columns (ie "partition values") will have to be parsed from the partition path, and appended
+   * to every row only in the fetched dataset.
+   *
+   * NOTE: Partition values extracted from partition path might be deviating from the values of the original
+   *       partition columns: for ex, if originally as partition column was used column [[ts]] bearing epoch
+   *       timestamp, which was used by [[TimestampBasedKeyGenerator]] to generate partition path of the format
+   *       [["yyyy/mm/dd"]], appended partition value would bear the format verbatim as it was used in the
+   *       partition path, meaning that string value of "2022/01/01" will be appended, and not its original
+   *       representation
+   */
+  protected val shouldExtractPartitionValuesFromPartitionPath: Boolean = {
+    // Controls whether partition columns (which are the source for the partition path values) should
+    // be omitted from persistence in the data files. On the read path it affects whether partition values (values
+    // of partition columns) will be read from the data file ot extracted from partition path
+    val shouldOmitPartitionColumns = metaClient.getTableConfig.shouldDropPartitionColumns && partitionColumns.nonEmpty
+    val shouldExtractPartitionValueFromPath =
+      optParams.getOrElse(DataSourceReadOptions.EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH.key,
+        DataSourceReadOptions.EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH.defaultValue.toString).toBoolean
+    shouldOmitPartitionColumns || shouldExtractPartitionValueFromPath
+  }
 
   /**
    * NOTE: PLEASE READ THIS CAREFULLY
@@ -227,7 +255,6 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     val (partitionFilters, dataFilters) = filterExpressions.partition(isPartitionPredicate)
 
     val fileSplits = collectFileSplits(partitionFilters, dataFilters)
-
 
     val tableAvroSchemaStr =
       if (internalSchema.isEmptySchema) tableAvroSchema.toString
@@ -367,7 +394,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
   protected def getPartitionColumnsAsInternalRow(file: FileStatus): InternalRow = {
     try {
       val tableConfig = metaClient.getTableConfig
-      if (shouldOmitPartitionColumns) {
+      if (shouldExtractPartitionValuesFromPartitionPath) {
         val relativePath = new URI(metaClient.getBasePath).relativize(new URI(file.getPath.getParent.toString)).toString
         val hiveStylePartitioningEnabled = tableConfig.getHiveStylePartitioningEnable.toBoolean
         if (hiveStylePartitioningEnabled) {
@@ -420,9 +447,6 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
       hadoopConf = hadoopConf
     )
 
-    // We're delegating to Spark to append partition values to every row only in cases
-    // when these corresponding partition-values are not persisted w/in the data file itself
-    val shouldAppendPartitionColumns = shouldOmitPartitionColumns
     val parquetReader = HoodieDataSourceHelper.buildHoodieParquetReader(
       sparkSession = spark,
       dataSchema = dataSchema.structTypeSchema,
@@ -431,7 +455,9 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
       filters = filters,
       options = options,
       hadoopConf = hadoopConf,
-      appendPartitionValues = shouldAppendPartitionColumns
+      // We're delegating to Spark to append partition values to every row only in cases
+      // when these corresponding partition-values are not persisted w/in the data file itself
+      appendPartitionValues = shouldExtractPartitionValuesFromPartitionPath
     )
 
     partitionedFile => {
@@ -448,7 +474,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
 
   private def tryPrunePartitionColumns(tableSchema: HoodieTableSchema,
                                        requiredSchema: HoodieTableSchema): (StructType, HoodieTableSchema, HoodieTableSchema) = {
-    if (shouldOmitPartitionColumns) {
+    if (shouldExtractPartitionValuesFromPartitionPath) {
       val partitionSchema = StructType(partitionColumns.map(StructField(_, StringType)))
       val prunedDataStructSchema = prunePartitionColumns(tableSchema.structTypeSchema)
       val prunedRequiredSchema = prunePartitionColumns(requiredSchema.structTypeSchema)
