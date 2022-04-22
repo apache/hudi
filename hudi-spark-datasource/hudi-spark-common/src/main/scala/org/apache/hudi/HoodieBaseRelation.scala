@@ -36,6 +36,7 @@ import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, T
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
+import org.apache.hudi.internal.schema.utils.InternalSchemaUtils
 import org.apache.hudi.internal.schema.{HoodieSchemaException, InternalSchema}
 import org.apache.hudi.io.storage.HoodieHFileReader
 import org.apache.spark.SerializableWritable
@@ -559,6 +560,31 @@ object HoodieBaseRelation extends SparkAdapterSupport {
 
   def getPartitionPath(fileStatus: FileStatus): Path =
     fileStatus.getPath.getParent
+
+  def pruneSchema(tableAvroSchema: Schema,
+                  requiredColumns: Array[String],
+                  internalSchema: InternalSchema = InternalSchema.getEmptyInternalSchema): (Schema, StructType, InternalSchema) = {
+    if (internalSchema.isEmptySchema) {
+      val fieldMap = tableAvroSchema.getFields.asScala.map(f => f.name() -> f).toMap
+      val requiredFields = requiredColumns.map { col =>
+        val f = fieldMap(col)
+        // We have to create a new [[Schema.Field]] since Avro schemas can't share field
+        // instances (and will throw "org.apache.avro.AvroRuntimeException: Field already used")
+        new Schema.Field(f.name(), f.schema(), f.doc(), f.defaultVal(), f.order())
+      }.toList
+      val requiredAvroSchema = Schema.createRecord(tableAvroSchema.getName, tableAvroSchema.getDoc,
+        tableAvroSchema.getNamespace, tableAvroSchema.isError, requiredFields.asJava)
+      val requiredStructSchema = AvroConversionUtils.convertAvroSchemaToStructType(requiredAvroSchema)
+
+      (requiredAvroSchema, requiredStructSchema, internalSchema)
+    } else {
+      val prunedInternalSchema = InternalSchemaUtils.pruneInternalSchema(internalSchema, requiredColumns.toList.asJava)
+      val requiredAvroSchema = AvroInternalSchemaConverter.convert(prunedInternalSchema, tableAvroSchema.getName)
+      val requiredStructSchema = AvroConversionUtils.convertAvroSchemaToStructType(requiredAvroSchema)
+
+      (requiredAvroSchema, requiredStructSchema, prunedInternalSchema)
+    }
+  }
 
   private def createHFileReader(spark: SparkSession,
                                 dataSchema: HoodieTableSchema,

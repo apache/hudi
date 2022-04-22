@@ -318,38 +318,4 @@ object HoodieSparkUtils extends SparkAdapterSupport {
       s"${tableSchema.fieldNames.mkString(",")}")
     AttributeReference(columnName, field.get.dataType, field.get.nullable)()
   }
-
-  def getRequiredSchema(tableAvroSchema: Schema, requiredColumns: Array[String], internalSchema: InternalSchema = InternalSchema.getEmptyInternalSchema): (Schema, StructType, InternalSchema) = {
-    if (internalSchema.isEmptySchema || requiredColumns.isEmpty) {
-      // First get the required avro-schema, then convert the avro-schema to spark schema.
-      val name2Fields = tableAvroSchema.getFields.asScala.map(f => f.name() -> f).toMap
-      // Here have to create a new Schema.Field object
-      // to prevent throwing exceptions like "org.apache.avro.AvroRuntimeException: Field already used".
-      val requiredFields = requiredColumns.map(c => name2Fields(c))
-        .map(f => new Schema.Field(f.name(), f.schema(), f.doc(), f.defaultVal(), f.order())).toList
-      val requiredAvroSchema = Schema.createRecord(tableAvroSchema.getName, tableAvroSchema.getDoc,
-        tableAvroSchema.getNamespace, tableAvroSchema.isError, requiredFields.asJava)
-      val requiredStructSchema = AvroConversionUtils.convertAvroSchemaToStructType(requiredAvroSchema)
-      (requiredAvroSchema, requiredStructSchema, internalSchema)
-    } else {
-      // now we support nested project
-      val prunedInternalSchema = InternalSchemaUtils.pruneInternalSchema(internalSchema, requiredColumns.toList.asJava)
-      val requiredAvroSchema = AvroInternalSchemaConverter.convert(prunedInternalSchema, tableAvroSchema.getName)
-      val requiredStructSchema = AvroConversionUtils.convertAvroSchemaToStructType(requiredAvroSchema)
-      (requiredAvroSchema, requiredStructSchema, prunedInternalSchema)
-    }
-  }
-
-  def toAttribute(tableSchema: StructType): Seq[AttributeReference] = {
-    tableSchema.map { field =>
-      AttributeReference(field.name, field.dataType, field.nullable, field.metadata)()
-    }
-  }
-
-  def collectFieldIndexes(projectedSchema: StructType, originalSchema: StructType): Seq[Int] = {
-    val nameToIndex = originalSchema.fields.zipWithIndex.map{ case (field, index) =>
-      field.name -> index
-    }.toMap
-    projectedSchema.map(field => nameToIndex(field.name))
-  }
 }
