@@ -63,7 +63,7 @@ pages for every column;
 - Step 5: Loading and uncompressing hit pages for every requested columns; 
 - Step 6: Reading data by hit row id ranges;
 
-![](query-by-page-statistics.jpg)
+![](filter-by-page-statistics.jpg)
 
 
 ## Insufficiency
@@ -82,7 +82,7 @@ The main structure of secondary index contains 4 layers
    such as HBase based, Lucene based, B+ tree based, etc
 5. Index Implementation layer:  provides the ability to read, write and manage the underlying index
 
-![](attach_main_architecture image)
+![](architecture.jpg)
 
 
 ## Differences between Secondary Index and HUDI Record Level Index
@@ -98,6 +98,9 @@ used to filter useless FileID, but can not get the exact set of rows we need, an
 of secondary index.
 
 # Implementation
+
+![](secondary-index-implementation.jpg)
+
 ### SQL layer
 xxx
 
@@ -216,7 +219,7 @@ page. The mainly steps can be described as follows:
 - Step 5: Loading and uncompressing hit pages for every requested columns;
 - Step 6: Aligning hit row id between different columns' pages, then reading data by row id;
 
-![](query-by-lucene-index.jpg)
+![](filter-by-lucene-index.jpg)
 
 By using lucene based record level index, we can exactly read what we want from parquet file.
 
