@@ -26,7 +26,6 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.queue.BoundedInMemoryExecutor;
 import org.apache.hudi.common.util.queue.BoundedInMemoryQueueConsumer;
 import org.apache.hudi.common.util.queue.DisruptorExecutor;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -39,12 +38,15 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicReference;
 
 import scala.Tuple2;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -115,6 +117,7 @@ public class TestDisruptorExecutionInSpark extends HoodieClientTestHarness {
   @Test
   public void testInterruptExecutor() {
     final List<HoodieRecord> hoodieRecords = dataGen.generateInserts(instantTime, 100);
+    ExecutorService pool = Executors.newSingleThreadExecutor();
 
     HoodieWriteConfig hoodieWriteConfig = mock(HoodieWriteConfig.class);
     when(hoodieWriteConfig.getWriteBufferLimitBytes()).thenReturn(1024);
@@ -143,15 +146,26 @@ public class TestDisruptorExecutionInSpark extends HoodieClientTestHarness {
         };
 
     DisruptorExecutor<HoodieRecord, Tuple2<HoodieRecord, Option<IndexedRecord>>, Integer> executor = null;
+    AtomicReference<Exception> actualException = new AtomicReference<>();
     try {
       executor = new DisruptorExecutor(hoodieWriteConfig.getWriteBufferLimitBytes(), hoodieRecords.iterator(), consumer,
           getTransformFunction(HoodieTestDataGenerator.AVRO_SCHEMA), getPreExecuteRunnable());
       DisruptorExecutor<HoodieRecord, Tuple2<HoodieRecord, Option<IndexedRecord>>, Integer> finalExecutor = executor;
 
-      Thread.currentThread().interrupt();
+      Future<?> future = pool.submit(() -> {
+        try {
+          finalExecutor.execute();
+        } catch (Exception e) {
+          actualException.set(e);
+        }
 
-      assertThrows(HoodieException.class, () -> finalExecutor.execute());
-      assertTrue(Thread.interrupted());
+      });
+      Thread.sleep(2 * 1000);
+      future.cancel(true);
+      future.get();
+      assertTrue(actualException.get() instanceof HoodieException);
+    } catch (Exception e) {
+      // ignore here
     } finally {
       if (executor != null) {
         executor.shutdownNow();

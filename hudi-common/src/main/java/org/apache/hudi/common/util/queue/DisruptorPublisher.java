@@ -18,8 +18,6 @@
 
 package org.apache.hudi.common.util.queue;
 
-import com.lmax.disruptor.RingBuffer;
-
 public class DisruptorPublisher<I, O> {
 
   DisruptorBasedProducer<I> producer;

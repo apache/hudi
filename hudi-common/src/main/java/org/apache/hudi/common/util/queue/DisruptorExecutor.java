@@ -25,6 +25,7 @@ import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SizeEstimator;
 import org.apache.hudi.exception.HoodieException;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -177,7 +178,7 @@ public class DisruptorExecutor<I, O, E> extends HoodieExecutor<I, O, E> {
   public void shutdownNow() {
     producerExecutorService.shutdownNow();
     consumerExecutorService.shutdownNow();
-    queue.close();
+    queue.shutdownNow();
   }
 
   @Override

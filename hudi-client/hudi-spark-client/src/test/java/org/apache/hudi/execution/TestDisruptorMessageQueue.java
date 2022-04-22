@@ -7,14 +7,9 @@ import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
-import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.queue.BoundedInMemoryQueue;
 import org.apache.hudi.common.util.queue.BoundedInMemoryQueueConsumer;
 import org.apache.hudi.common.util.queue.DisruptorExecutor;
-import org.apache.hudi.common.util.queue.DisruptorMessageQueue;
-import org.apache.hudi.common.util.queue.IteratorBasedDisruptorProducer;
-import org.apache.hudi.common.util.queue.IteratorBasedQueueProducer;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.testutils.HoodieClientTestHarness;
 import org.apache.spark.TaskContext;
@@ -26,15 +21,12 @@ import org.junit.jupiter.api.Timeout;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
-import java.util.concurrent.Future;
 
 import scala.Tuple2;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -62,7 +54,7 @@ public class TestDisruptorMessageQueue extends HoodieClientTestHarness {
   // without any exceptions.
   @SuppressWarnings("unchecked")
   @Test
-//  @Timeout(value = 60)
+  @Timeout(value = 60)
   public void testRecordReading() throws Exception {
 
     final List<HoodieRecord> hoodieRecords = dataGen.generateInserts(instantTime, 100);
@@ -126,7 +118,6 @@ public class TestDisruptorMessageQueue extends HoodieClientTestHarness {
 
       assertEquals(beforeRecord, afterRecord);
       assertEquals(beforeIndexedRecord, afterIndexedRecord);
-      System.out.println();
 
     } finally {
       if (exec != null) {

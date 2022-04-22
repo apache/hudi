@@ -39,6 +39,7 @@ public class DisruptorMessageHandler<O, E> implements EventHandler<HoodieDisrupt
       finished = true;
     } else {
       consumer.consumeOneRecord(event.get());
+      event.clear();
     }
   }
 

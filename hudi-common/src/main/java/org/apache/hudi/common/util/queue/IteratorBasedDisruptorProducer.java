@@ -33,6 +33,7 @@ public class IteratorBasedDisruptorProducer<I> extends DisruptorBasedProducer<I>
   public IteratorBasedDisruptorProducer(Iterator<I> inputIterator) {
     this.inputIterator = inputIterator;
   }
+
   @Override
   public void produce(DisruptorMessageQueue<I, ?> queue) throws Exception {
     LOG.info("starting to buffer records");

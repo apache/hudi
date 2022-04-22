@@ -29,4 +29,8 @@ public class HoodieDisruptorEvent<O> {
   public O get() {
     return this.value;
   }
+
+  public void clear() {
+    value = null;
+  }
 }
