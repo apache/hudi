@@ -28,7 +28,7 @@ import java.util.function.Function;
  *
  * @param <I> Type of entry produced for queue
  */
-public class FunctionBasedQueueProducer<I> implements BoundedInMemoryQueueProducer<I> {
+public class FunctionBasedQueueProducer<I> extends BoundedInMemoryQueueProducer<I> {
 
   private static final Logger LOG = LogManager.getLogger(FunctionBasedQueueProducer.class);
 

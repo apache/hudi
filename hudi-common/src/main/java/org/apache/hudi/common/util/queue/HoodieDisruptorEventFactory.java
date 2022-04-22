@@ -18,17 +18,12 @@
 
 package org.apache.hudi.common.util.queue;
 
-/**
- * Producer for {@link BoundedInMemoryQueue}. Memory Bounded Buffer supports multiple producers single consumer pattern.
- *
- * @param <I> Input type for buffer items produced
- */
-public abstract class BoundedInMemoryQueueProducer<I> implements HoodieProducer<I> {
+import com.lmax.disruptor.EventFactory;
 
-  /**
-   * API to enqueue entries to memory bounded queue.
-   *
-   * @param queue In Memory bounded queue
-   */
-  public abstract void produce(BoundedInMemoryQueue<I, ?> queue) throws Exception;
+public class HoodieDisruptorEventFactory implements EventFactory<HoodieDisruptorEvent> {
+
+  @Override
+  public HoodieDisruptorEvent newInstance() {
+    return new HoodieDisruptorEvent();
+  }
 }

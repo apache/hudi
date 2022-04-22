@@ -23,28 +23,24 @@ import org.apache.log4j.Logger;
 
 import java.util.Iterator;
 
-/**
- * Iterator based producer which pulls entry from iterator and produces items for the queue.
- *
- * @param <I> Item type produced for the buffer.
- */
-public class IteratorBasedQueueProducer<I> extends BoundedInMemoryQueueProducer<I> {
+public class IteratorBasedDisruptorProducer<I> extends DisruptorBasedProducer<I> {
 
-  private static final Logger LOG = LogManager.getLogger(IteratorBasedQueueProducer.class);
+  private static final Logger LOG = LogManager.getLogger(IteratorBasedDisruptorProducer.class);
 
   // input iterator for producing items in the buffer.
   private final Iterator<I> inputIterator;
 
-  public IteratorBasedQueueProducer(Iterator<I> inputIterator) {
+  public IteratorBasedDisruptorProducer(Iterator<I> inputIterator) {
     this.inputIterator = inputIterator;
   }
-
   @Override
-  public void produce(BoundedInMemoryQueue<I, ?> queue) throws Exception {
+  public void produce(DisruptorMessageQueue<I, ?> queue) throws Exception {
     LOG.info("starting to buffer records");
     while (inputIterator.hasNext()) {
       queue.insertRecord(inputIterator.next());
     }
+    // poison after buffer finished.
+    queue.insertRecord(null);
     LOG.info("finished buffering records");
   }
 }

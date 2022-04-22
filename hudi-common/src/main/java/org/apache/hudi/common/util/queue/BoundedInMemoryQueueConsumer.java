@@ -23,7 +23,7 @@ import java.util.Iterator;
 /**
  * Consume entries from queue and execute callback function.
  */
-public abstract class BoundedInMemoryQueueConsumer<I, O> {
+public abstract class BoundedInMemoryQueueConsumer<I, O> extends HoodieConsumer<I, O> {
 
   /**
    * API to de-queue entries to memory bounded queue.

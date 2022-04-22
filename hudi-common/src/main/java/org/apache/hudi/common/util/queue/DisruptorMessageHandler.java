@@ -18,33 +18,31 @@
 
 package org.apache.hudi.common.util.queue;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import com.lmax.disruptor.EventHandler;
 
-import java.util.Iterator;
+public class DisruptorMessageHandler<O, E> implements EventHandler<HoodieDisruptorEvent<O>> {
 
-/**
- * Iterator based producer which pulls entry from iterator and produces items for the queue.
- *
- * @param <I> Item type produced for the buffer.
- */
-public class IteratorBasedQueueProducer<I> extends BoundedInMemoryQueueProducer<I> {
+  private BoundedInMemoryQueueConsumer<O, E> consumer;
+  private boolean finished = false;
+  private Runnable preExecuteRunnable;
 
-  private static final Logger LOG = LogManager.getLogger(IteratorBasedQueueProducer.class);
-
-  // input iterator for producing items in the buffer.
-  private final Iterator<I> inputIterator;
-
-  public IteratorBasedQueueProducer(Iterator<I> inputIterator) {
-    this.inputIterator = inputIterator;
+  public DisruptorMessageHandler(BoundedInMemoryQueueConsumer<O, E> consumer, Runnable preExecuteRunnable) {
+    this.consumer = consumer;
+    this.preExecuteRunnable = preExecuteRunnable;
   }
 
   @Override
-  public void produce(BoundedInMemoryQueue<I, ?> queue) throws Exception {
-    LOG.info("starting to buffer records");
-    while (inputIterator.hasNext()) {
-      queue.insertRecord(inputIterator.next());
+  public void onEvent(HoodieDisruptorEvent<O> event, long sequence, boolean endOfBatch) {
+    preExecuteRunnable.run();
+    if (event == null || event.get() == null) {
+      // end of ingestion
+      finished = true;
+    } else {
+      consumer.consumeOneRecord(event.get());
     }
-    LOG.info("finished buffering records");
+  }
+
+  public boolean isFinished() {
+    return finished;
   }
 }

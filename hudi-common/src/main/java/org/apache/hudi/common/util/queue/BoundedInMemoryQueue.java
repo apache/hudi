@@ -49,7 +49,7 @@ import java.util.function.Function;
  * @param <I> input payload data type
  * @param <O> output payload data type
  */
-public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
+public class BoundedInMemoryQueue<I, O> extends HoodieMessageQueue<I, O> implements Iterable<O> {
 
   /** Interval used for polling records in the queue. **/
   public static final int RECORD_POLL_INTERVAL_SEC = 1;
@@ -135,7 +135,7 @@ public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
     this.iterator = new QueueIterator();
   }
 
-  public int size() {
+  public long size() {
     return this.queue.size();
   }
 

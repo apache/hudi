@@ -21,30 +21,24 @@ package org.apache.hudi.common.util.queue;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
-import java.util.Iterator;
+import java.util.function.Function;
 
-/**
- * Iterator based producer which pulls entry from iterator and produces items for the queue.
- *
- * @param <I> Item type produced for the buffer.
- */
-public class IteratorBasedQueueProducer<I> extends BoundedInMemoryQueueProducer<I> {
+public class FunctionBasedDisruptorProducer<I> extends DisruptorBasedProducer<I> {
 
-  private static final Logger LOG = LogManager.getLogger(IteratorBasedQueueProducer.class);
+  private static final Logger LOG = LogManager.getLogger(FunctionBasedDisruptorProducer.class);
 
-  // input iterator for producing items in the buffer.
-  private final Iterator<I> inputIterator;
+  private final Function<DisruptorMessageQueue<I, ?>, Boolean> producerFunction;
 
-  public IteratorBasedQueueProducer(Iterator<I> inputIterator) {
-    this.inputIterator = inputIterator;
+  public FunctionBasedDisruptorProducer(Function<DisruptorMessageQueue<I, ?>, Boolean> producerFunction) {
+    this.producerFunction = producerFunction;
   }
 
   @Override
-  public void produce(BoundedInMemoryQueue<I, ?> queue) throws Exception {
-    LOG.info("starting to buffer records");
-    while (inputIterator.hasNext()) {
-      queue.insertRecord(inputIterator.next());
-    }
-    LOG.info("finished buffering records");
+  public void produce(DisruptorMessageQueue<I, ?> queue) throws Exception {
+    LOG.info("starting function which will enqueue records");
+    producerFunction.apply(queue);
+    LOG.info("finished function which will enqueue records");
+    // poison after buffer finished.
+    queue.insertRecord(null);
   }
 }
