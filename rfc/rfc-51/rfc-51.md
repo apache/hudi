@@ -14,17 +14,15 @@
   See the License for the specific language governing permissions and
   limitations under the License.
 -->
-# RFC-51: Support Lucene Based Record Level Index
-
-
+# RFC-51: Introduce Secondary Index to Improve HUDI Query Performance
 
 ## Proposers
 
+- @huberylee
 - @hujincalrin
+- @XuQianJin-Stars
 - @YuweiXiao
 - @stream2000
-- @XuQianJin-Stars
-- @huberylee
 
 ## Approvers
  - @vinothchandar
@@ -35,49 +33,31 @@
 
 JIRA: [HUDI-3907](https://issues.apache.org/jira/browse/HUDI-3907)
 
-## Abstract
-
-At present, record level index in hudi
-([RFC-08](https://cwiki.apache.org/confluence/display/HUDI/RFC-08++Record+level+indexing+mechanisms+for+Hudi+datasets), ongoing) 
-is mainly implemented for ``tagLocation``, and normal queries do not benefit from it. Besides, 
-in the current implementation, record level index uses ``HashMap`` structure to map ``RecordKey``
-to ``Location`` in memory, and persistent as a MOR hoodie table with HFILE base file format.
-When tagging location, we need to load index records into cache firstly, then using record key 
-to get location from cache one by one. Although shards are used to speed up query and update 
-index, this may lead to poor performance. To address those problems, we propose apache lucene 
-based record level index to gain the following abilities:
-- For normal queries, we can get file level row number from record level index, combining with 
-parquet column index brought by Spark 3.2 to achieve accurate reading;
-- For ``tagLocation``, we can construct point query to get record location;
-- For checking whether records exist, we can directly get row id info from record level index
-  instead of reading all base files to construct record location info.
-
-More details about current implementation of record level index please refer to
+More details about current implementation of secondary index please refer to
 [pull-3508](https://github.com/apache/hudi/pull/3508).
 
+## Abstract
+
+In query processing, we need to scan many blocks in HUDI table. However, most of them may not
+match the query even after using column statistic info in metadata table, row group level or
+page level statistics in parquet file, etc.
+
+Total size of reading blocks determines the query speed, how to save IO has become
+the key point to improving query performance.
+
 ## Background
-Many works have been carried out to optimize reading parquet file in Spark.
+Many works have been carried out to optimize reading HUDI table parquet file.
 
-![](parquet-file-meta.jpg)
-
-Before Spark 3.2, for each spark read task, the process of reading data can be described as
-follows(<a id = 'process_a'>Process A</a>):
-1. Comparing the inclusion relation of row group data's middle position and task split info 
-to decided which row groups should be handled by current task. If the row group data's middle
-position is contained by task split, the row group should be handled by this task;
-2. Using pushed down predicates and row group level column statistics info to pick out hit
-row groups;
-3. Reading data from hit row groups;
-
-From the above process we can know that only row group level rough grade filtration can be 
-performed. In some extreme cases, large amounts of invalid data are returned, which introduces 
-some unnecessary overhead, IO, CPU and so on.
-
-Since Spark 3.2.0, with the power of parquet column index, page level statics info can be used
+Since Spark 3.2.0, with the power of parquet column index, page level statistics info can be used
 to filter data, and the process of reading data can be described as follows:
-- Step 1-2 are the same as in [Process A](#process_a); 
-- Step 3: Filtering page by page level statistics for each column predicates, then get hit row 
-ids for every column independently; 
+ 
+- Step1: Comparing the inclusion relation of row group data's middle position and task split info
+   to decided which row groups should be handled by current task. If the row group data's middle
+   position is contained by task split, the row group should be handled by this task;
+- Step2: Using pushed down predicates and row group level column statistics info to pick out hit
+   row groups;
+- Step 3: Filtering page by page level statistics for each column predicates, then get hit row id set
+for every column independently; 
 - Step 4: Getting final hit row id ranges by combining all column hit rows, then get final hit
 pages for every column; 
 - Step 5: Loading and uncompressing hit pages for every requested columns; 
@@ -85,19 +65,94 @@ pages for every column;
 
 ![](query-by-page-statistics.jpg)
 
-Although page level statistics can greatly reduce unnecessary data readings, there is some 
-irrelevant data still being read out.
 
-## Implementation
+## Insufficiency
+Although page level statistics can greatly save IO cost, there is still some  irrelevant data be read out.
 
-Lucene based record level index is base file level index, which means we will build index for
-each base file independently. When using lucene index to query data, we firstly get file level
-row id, then acquire details by row id without unnecessary data being read. In some specific
-scenarios, row id is enough to do the right thing, such as judging whether specific record 
+We may need a way to get exactly row data we need to minimize the amount of reading blocks.
+Thus, we propose a Secondary Index structure to only read the rows we care about to
+speed up query performance.
+
+## Architecture
+The main structure of secondary index contains 4 layers
+1. SQL Parser layer: SQL command for user to create/drop/alter/show/..., for managing Record Level Index
+2. Optimizer layer: Pick up the best physical/logical plan for a query using RBO/CBO/HBO etc
+3. Standard API interface layer: provides standard interfaces for upper-layer to invoke, such as createIndex, getRowIdSet and so on
+4. IndexManager Factory layer: many kinds of Record Level Index implementations for users to choice, 
+   such as HBase based, Lucene based, B+ tree based, etc
+5. Index Implementation layer:  provides the ability to read, write and manage the underlying index
+
+![](attach_main_architecture image)
+
+
+## Differences between Secondary Index and HUDI Record Level Index
+Before discussing secondary index, let's take a look at Record Level Index. Both of the index
+can filter useless data blocks, there are still many differences between them.
+
+At present, record level index in hudi ([RFC-08](https://cwiki.apache.org/confluence/display/HUDI/RFC-08++Record+level+indexing+mechanisms+for+Hudi+datasets), ongoing)
+is mainly implemented for ``tagLocation`` in write path.
+Secondary index structure will be used for query acceleration in read path, but not in write path.
+
+If Record Level Index is applied in read path for query with RecordKey predicate, it can only be
+used to filter useless FileID, but can not get the exact set of rows we need, and this is the advantage
+of secondary index.
+
+# Implementation
+### SQL layer
+xxx
+
+### Optimizer layer
+For the convenience of implementation, we can implement the first phase based on RBO(rule-based optimizer), 
+and then gradually expand and improve CBO and HBO based on the collected statistical information.
+
+### Standard API layer
+The standard API may contain followings:
+
+```
+// get row id set for the specified table with predicates
+Set<RowId> getRowIdSet(HoodieTable table, Map<column, List<PredicateList>> columnToPredicates ..)
+
+// create index
+boolean createIndex(HoodieTable table, List<Column> columns, List<IndexType> indexTypes)
+
+// build index for the specified table
+boolean buildIndex(HoodieTable table, InstantTime instant)
+
+// drop index
+boolean dropIndex(HoodieTable table, List<Column> columns)
+
+...
+```
+
+### Index implementation layer
+
+
+## read index
+
+## build index
+
+## index retention
+
+## Lucene Secondary Index Implementation
+Record level index is a base file level index, which means each base file has its own index. 
+When running a query(with one predicate), we do steps:
+1.get the row id set using Lucene index;
+2.read details by row id without unnecessary data being read;
+
+If query has multi predicates, we only need to add one step between step1 and step2, to union or intersect all row id sets.
+
+It can be used in the following scenarios:
+2. query with , such as select col1, col2 from testTable where col3 = 'xxx';
+3. query with multiple predicate
+In some specific scenarios, row id is enough to do the right thing, such as judging whether specific record 
 exists. Next, we will discuss the detailed implementation of lucene based record level index 
 from three parts *Index Generation & Update*, *Index Storage* and *Index Usage*.
 
-### Index Generation & Update
+
+
+
+
+### Index Management(Generation & Update)
 In lucene based record level index, we mainly use inverted index to speed up record lookup, 
 inverted index stores a mapping from doc id set to specific value. Now, we simply explain the 
 whole concept with an example. Let's assume we have a ``test`` table in our hoodie dataset,
