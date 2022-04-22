@@ -38,6 +38,7 @@ import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -284,7 +285,7 @@ public class TestAvroSchemaEvolutionUtils {
         .updateColumnType("col6", Types.StringType.get());
     InternalSchema newSchema = SchemaChangeUtils.applyTableChanges2Schema(internalSchema, updateChange);
     Schema newAvroSchema = AvroInternalSchemaConverter.convert(newSchema, avroSchema.getName());
-    GenericRecord newRecord = HoodieAvroUtils.rewriteRecordWithNewSchema(avroRecord, newAvroSchema, new HashMap<>());
+    GenericRecord newRecord = HoodieAvroUtils.rewriteRecordWithNewSchema(avroRecord, newAvroSchema, Collections.emptyMap());
 
     Assertions.assertEquals(GenericData.get().validate(newAvroSchema, newRecord), true);
   }
@@ -349,9 +350,26 @@ public class TestAvroSchemaEvolutionUtils {
     );
 
     Schema newAvroSchema = AvroInternalSchemaConverter.convert(newRecord, schema.getName());
-    GenericRecord newAvroRecord = HoodieAvroUtils.rewriteRecordWithNewSchema(avroRecord, newAvroSchema, new HashMap<>());
+    GenericRecord newAvroRecord = HoodieAvroUtils.rewriteRecordWithNewSchema(avroRecord, newAvroSchema, Collections.emptyMap());
     // test the correctly of rewrite
     Assertions.assertEquals(GenericData.get().validate(newAvroSchema, newAvroRecord), true);
+
+    // test rewrite with rename
+    InternalSchema internalSchema = AvroInternalSchemaConverter.convert(schema);
+    // do change rename operation
+    TableChanges.ColumnUpdateChange updateChange = TableChanges.ColumnUpdateChange.get(internalSchema);
+    updateChange
+        .renameColumn("id", "idx")
+        .renameColumn("data", "datax")
+        .renameColumn("preferences.feature1", "f1")
+        .renameColumn("preferences.feature2", "f2")
+        .renameColumn("locations.value.lat", "lt");
+    InternalSchema internalSchemaRename = SchemaChangeUtils.applyTableChanges2Schema(internalSchema, updateChange);
+    Schema avroSchemaRename = AvroInternalSchemaConverter.convert(internalSchemaRename, schema.getName());
+    Map<String, String> renameCols = InternalSchemaUtils.collectRenameCols(internalSchema, internalSchemaRename);
+    GenericRecord avroRecordRename = HoodieAvroUtils.rewriteRecordWithNewSchema(avroRecord, avroSchemaRename, renameCols);
+    // test the correctly of rewrite
+    Assertions.assertEquals(GenericData.get().validate(avroSchemaRename, avroRecordRename), true);
   }
 
   @Test

@@ -72,7 +72,10 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Deque;
-import java.util.LinkedList;
+import java.util.ArrayDeque;
+import java.util.Spliterator;
+import java.util.Spliterators;
+import java.util.stream.StreamSupport;
 import java.util.TimeZone;
 import java.util.stream.Collectors;
 
@@ -93,6 +96,10 @@ public class HoodieAvroUtils {
 
   //Export for test
   public static final Conversions.DecimalConversion DECIMAL_CONVERSION = new Conversions.DecimalConversion();
+
+  // Name of ArrayType/MapType for avro Schema
+  private static final String ARRAY_TYPE_ELEMENT_NAME = "element";
+  private static final String MAP_TYPE_VALUE_NAME = "value";
 
   // As per https://avro.apache.org/docs/current/spec.html#names
   private static final String INVALID_AVRO_CHARS_IN_NAMES = "[^A-Za-z0-9_]";
@@ -410,7 +417,7 @@ public class HoodieAvroUtils {
 
   // TODO Unify the logical of rewriteRecordWithMetadata and rewriteEvolutionRecordWithMetadata, and delete this function.
   public static GenericRecord rewriteEvolutionRecordWithMetadata(GenericRecord genericRecord, Schema newSchema, String fileName) {
-    GenericRecord newRecord = HoodieAvroUtils.rewriteRecordWithNewSchema(genericRecord, newSchema, new HashMap<>());
+    GenericRecord newRecord = HoodieAvroUtils.rewriteRecordWithNewSchema(genericRecord, newSchema, Collections.emptyMap());
     // do not preserve FILENAME_METADATA_FIELD
     newRecord.put(HoodieRecord.FILENAME_METADATA_FIELD_POS, fileName);
     return newRecord;
@@ -745,7 +752,7 @@ public class HoodieAvroUtils {
    * @return newRecord for new Schema
    */
   public static GenericRecord rewriteRecordWithNewSchema(IndexedRecord oldRecord, Schema newSchema, Map<String, String> renameCols) {
-    Object newRecord = rewriteRecordWithNewSchema(oldRecord, oldRecord.getSchema(), newSchema, renameCols, new LinkedList<>());
+    Object newRecord = rewriteRecordWithNewSchema(oldRecord, oldRecord.getSchema(), newSchema, renameCols, new ArrayDeque<>());
     return (GenericData.Record) newRecord;
   }
 
@@ -773,39 +780,32 @@ public class HoodieAvroUtils {
         }
         IndexedRecord indexedRecord = (IndexedRecord) oldRecord;
         List<Schema.Field> fields = newSchema.getFields();
-        Map<Integer, Object> helper = new HashMap<>();
-
+        GenericData.Record newRecord = new GenericData.Record(newSchema);
         for (int i = 0; i < fields.size(); i++) {
           Schema.Field field = fields.get(i);
           String fieldName = field.name();
           fieldNames.push(fieldName);
           if (oldSchema.getField(field.name()) != null) {
             Schema.Field oldField = oldSchema.getField(field.name());
-            helper.put(i, rewriteRecordWithNewSchema(indexedRecord.get(oldField.pos()), oldField.schema(), fields.get(i).schema(), renameCols, fieldNames));
+            newRecord.put(i, rewriteRecordWithNewSchema(indexedRecord.get(oldField.pos()), oldField.schema(), fields.get(i).schema(), renameCols, fieldNames));
           } else {
             String fieldFullName = createFullName(fieldNames);
-            String[] colNamePartsFromOldSchema = renameCols.getOrDefault(fieldFullName, "").split("\\.");
-            String lastColNameFromOldSchema = colNamePartsFromOldSchema[colNamePartsFromOldSchema.length - 1];
+            String fieldNameFromOldSchema = renameCols.getOrDefault(fieldFullName, "");
             // deal with rename
-            if (oldSchema.getField(field.name()) == null && oldSchema.getField(lastColNameFromOldSchema) != null) {
+            if (oldSchema.getField(field.name()) == null && oldSchema.getField(fieldNameFromOldSchema) != null) {
               // find rename
-              Schema.Field oldField = oldSchema.getField(lastColNameFromOldSchema);
-              helper.put(i, rewriteRecordWithNewSchema(indexedRecord.get(oldField.pos()), oldField.schema(), fields.get(i).schema(), renameCols, fieldNames));
+              Schema.Field oldField = oldSchema.getField(fieldNameFromOldSchema);
+              newRecord.put(i, rewriteRecordWithNewSchema(indexedRecord.get(oldField.pos()), oldField.schema(), fields.get(i).schema(), renameCols, fieldNames));
+            } else {
+              // deal with default value
+              if (fields.get(i).defaultVal() instanceof JsonProperties.Null) {
+                newRecord.put(i, null);
+              } else {
+                newRecord.put(i, fields.get(i).defaultVal());
+              }
             }
           }
           fieldNames.pop();
-        }
-        GenericData.Record newRecord = new GenericData.Record(newSchema);
-        for (int i = 0; i < fields.size(); i++) {
-          if (helper.containsKey(i)) {
-            newRecord.put(i, helper.get(i));
-          } else {
-            if (fields.get(i).defaultVal() instanceof JsonProperties.Null) {
-              newRecord.put(i, null);
-            } else {
-              newRecord.put(i, fields.get(i).defaultVal());
-            }
-          }
         }
         return newRecord;
       case ARRAY:
@@ -814,7 +814,7 @@ public class HoodieAvroUtils {
         }
         Collection array = (Collection)oldRecord;
         List<Object> newArray = new ArrayList();
-        fieldNames.push("element");
+        fieldNames.push(ARRAY_TYPE_ELEMENT_NAME);
         for (Object element : array) {
           newArray.add(rewriteRecordWithNewSchema(element, oldSchema.getElementType(), newSchema.getElementType(), renameCols, fieldNames));
         }
@@ -826,7 +826,7 @@ public class HoodieAvroUtils {
         }
         Map<Object, Object> map = (Map<Object, Object>) oldRecord;
         Map<Object, Object> newMap = new HashMap<>();
-        fieldNames.push("value");
+        fieldNames.push(MAP_TYPE_VALUE_NAME);
         for (Map.Entry<Object, Object> entry : map.entrySet()) {
           newMap.put(entry.getKey(), rewriteRecordWithNewSchema(entry.getValue(), oldSchema.getValueType(), newSchema.getValueType(), renameCols, fieldNames));
         }
@@ -840,13 +840,9 @@ public class HoodieAvroUtils {
   }
 
   private static String createFullName(Deque<String> fieldNames) {
-    String result = "";
-    if (!fieldNames.isEmpty()) {
-      List<String> parentNames = new ArrayList<>();
-      fieldNames.descendingIterator().forEachRemaining(parentNames::add);
-      result = parentNames.stream().collect(Collectors.joining("."));
-    }
-    return result;
+    return StreamSupport
+        .stream(Spliterators.spliteratorUnknownSize(fieldNames.descendingIterator(), Spliterator.ORDERED), false)
+        .collect(Collectors.joining("."));
   }
 
   private static Object rewritePrimaryType(Object oldValue, Schema oldSchema, Schema newSchema) {

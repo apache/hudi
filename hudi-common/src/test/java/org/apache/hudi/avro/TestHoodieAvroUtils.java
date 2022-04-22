@@ -27,6 +27,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Assertions;
 
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -35,6 +36,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
 
 import static org.apache.hudi.avro.HoodieAvroUtils.getNestedFieldSchemaFromWriteSchema;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -97,6 +99,12 @@ public class TestHoodieAvroUtils {
       + "{\"name\":\"lastname\",\"type\":\"string\"},"
       + "{\"name\":\"student\",\"type\":{\"name\":\"student\",\"type\":\"record\",\"fields\":["
       + "{\"name\":\"firstname\",\"type\":[\"null\" ,\"string\"],\"default\": null},{\"name\":\"lastname\",\"type\":[\"null\" ,\"string\"],\"default\": null}]}}]}";
+
+  private static String SCHEMA_WITH_NESTED_FIELD_RENAMED = "{\"name\":\"MyClass\",\"type\":\"record\",\"namespace\":\"com.acme.avro\",\"fields\":["
+      + "{\"name\":\"fn\",\"type\":\"string\"},"
+      + "{\"name\":\"ln\",\"type\":\"string\"},"
+      + "{\"name\":\"ss\",\"type\":{\"name\":\"ss\",\"type\":\"record\",\"fields\":["
+      + "{\"name\":\"fn\",\"type\":[\"null\" ,\"string\"],\"default\": null},{\"name\":\"ln\",\"type\":[\"null\" ,\"string\"],\"default\": null}]}}]}";
 
   @Test
   public void testPropsPresent() {
@@ -341,5 +349,27 @@ public class TestHoodieAvroUtils {
 
     assertEquals(Schema.create(Schema.Type.STRING), getNestedFieldSchemaFromWriteSchema(rec3.getSchema(), "student.firstname"));
     assertEquals(Schema.create(Schema.Type.STRING), getNestedFieldSchemaFromWriteSchema(nestedSchema, "student.firstname"));
+  }
+
+  @Test
+  public void testReWriteAvroRecordWithNewSchema() {
+    Schema nestedSchema = new Schema.Parser().parse(SCHEMA_WITH_NESTED_FIELD);
+    GenericRecord rec3 = new GenericData.Record(nestedSchema);
+    rec3.put("firstname", "person1");
+    rec3.put("lastname", "person2");
+    GenericRecord studentRecord = new GenericData.Record(rec3.getSchema().getField("student").schema());
+    studentRecord.put("firstname", "person1");
+    studentRecord.put("lastname", "person2");
+    rec3.put("student", studentRecord);
+
+    Schema nestedSchemaRename = new Schema.Parser().parse(SCHEMA_WITH_NESTED_FIELD_RENAMED);
+    Map<String, String> colRenames = new HashMap<>();
+    colRenames.put("fn", "firstname");
+    colRenames.put("ln", "lastname");
+    colRenames.put("ss", "student");
+    colRenames.put("ss.fn", "firstname");
+    colRenames.put("ss.ln", "lastname");
+    GenericRecord studentRecordRename = HoodieAvroUtils.rewriteRecordWithNewSchema(rec3, nestedSchemaRename, colRenames);
+    Assertions.assertEquals(GenericData.get().validate(nestedSchemaRename, studentRecordRename), true);
   }
 }
