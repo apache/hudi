@@ -19,7 +19,7 @@ package org.apache.hudi.functional
 
 import org.apache.avro.Schema
 import org.apache.hudi.common.config.HoodieMetadataConfig
-import org.apache.hudi.common.model.{HoodieRecord, OverwriteNonDefaultsWithLatestAvroPayload, OverwriteWithLatestAvroPayload}
+import org.apache.hudi.common.model.{HoodieRecord, OverwriteNonDefaultsWithLatestAvroPayload}
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.testutils.{HadoopMapRedUtils, HoodieTestDataGenerator}
 import org.apache.hudi.config.{HoodieStorageConfig, HoodieWriteConfig}
@@ -332,7 +332,7 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
         logWarning(s"Not matching bytes read ($bytesRead)")
       }
 
-      val readColumns = targetColumns ++ relation.mandatoryColumns
+      val readColumns = targetColumns ++ relation.mandatoryFields
       val (_, projectedStructType, _) = HoodieSparkUtils.getRequiredSchema(tableState.schema, readColumns)
 
       val row: InternalRow = rows.take(1).head
