@@ -124,16 +124,6 @@ class BaseFileOnlyRelation(sqlContext: SQLContext,
    *       rule; you can find more details in HUDI-3896)
    */
   def toHadoopFsRelation: HadoopFsRelation = {
-      val (tableFileFormat, formatClassName) =
-        metaClient.getTableConfig.getBaseFileFormat match {
-          case HoodieFileFormat.ORC => (new OrcFileFormat, "orc")
-          case HoodieFileFormat.PARQUET =>
-            // We're delegating to Spark to append partition values to every row only in cases
-            // when these corresponding partition-values are not persisted w/in the data file itself
-            val parquetFileFormat = sparkAdapter.createHoodieParquetFileFormat(shouldExtractPartitionValuesFromPartitionPath).get
-            (parquetFileFormat, HoodieParquetFileFormat.FILE_FORMAT_ID)
-        }
-
     if (globPaths.isEmpty) {
       // NOTE: There are currently 2 ways partition values could be fetched:
       //          - Source columns (producing the values used for physical partitioning) will be read
@@ -157,7 +147,7 @@ class BaseFileOnlyRelation(sqlContext: SQLContext,
         partitionSchema = partitionSchema,
         dataSchema = dataSchema,
         bucketSpec = None,
-        fileFormat = tableFileFormat,
+        fileFormat = fileFormat,
         optParams)(sparkSession)
     } else {
       val readPathsStr = optParams.get(DataSourceReadOptions.READ_PATHS.key)
@@ -169,7 +159,7 @@ class BaseFileOnlyRelation(sqlContext: SQLContext,
         // Here we should specify the schema to the latest commit schema since
         // the table schema evolution.
         userSpecifiedSchema = userSchema.orElse(Some(tableStructSchema)),
-        className = formatClassName,
+        className = fileFormatClassName,
         // Since we're reading the table as just collection of files we have to make sure
         // we only read the latest version of every Hudi's file-group, which might be compacted, clustered, etc.
         // while keeping previous versions of the files around as well.
