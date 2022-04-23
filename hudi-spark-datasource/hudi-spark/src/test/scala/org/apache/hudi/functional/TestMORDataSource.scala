@@ -31,6 +31,7 @@ import org.apache.hudi.index.HoodieIndex.IndexType
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions.Config
 import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieClientTestBase}
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers, SparkDatasetMixin}
 import org.apache.hudi.util.JFunction
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers, SparkDatasetMixin}
 import org.apache.log4j.LogManager
@@ -80,11 +81,8 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
     cleanupFileSystem()
   }
 
-  override def getSparkSessionExtensionsInjector: util.Option[Consumer[SparkSessionExtensions]] =
-    toJavaOption(
-      Some(
-        JFunction.toJava((receiver: SparkSessionExtensions) => new HoodieSparkSessionExtension().apply(receiver)))
-    )
+  override def getSparkSessionExtensionsInjector(): Consumer[SparkSessionExtensions] =
+    (receiver: SparkSessionExtensions) => new HoodieSparkSessionExtension().apply(receiver)
 
   @Test def testCount() {
     // First Operation:
