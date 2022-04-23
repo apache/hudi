@@ -74,6 +74,7 @@
                   <include>com.esotericsoftware:kryo-shaded</include>
                   <include>org.objenesis:objenesis</include>
                   <include>com.esotericsoftware:minlog</include>
+                  <include>org.apache.commons:commons-lang3</include>
                   <include>org.apache.hbase:hbase-common</include>
                   <include>org.apache.hbase:hbase-client</include>
                   <include>org.apache.hbase:hbase-hadoop-compat</include>
@@ -148,6 +149,10 @@
                 <relocation>
                   <pattern>org.apache.commons.lang.</pattern>
                   <shadedPattern>${presto.bundle.bootstrap.shade.prefix}org.apache.commons.lang.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.commons.lang3.</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.commons.lang3.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>com.google.protobuf.</pattern>
