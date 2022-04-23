@@ -28,7 +28,7 @@ import org.apache.spark.sql.catalyst.plans.Inner
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.execution.command._
-import org.apache.spark.sql.execution.datasources.{CreateTable, DataSource, LogicalRelation}
+import org.apache.spark.sql.execution.datasources.{CreateTable, DataSource, LogicalRelation, NestedSchemaPruning}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{getTableIdentifier, removeMetaFields}
 import org.apache.spark.sql.hudi.HoodieSqlUtils._
 import org.apache.spark.sql.hudi.command._
@@ -43,6 +43,11 @@ import scala.collection.mutable.ListBuffer
 
 object HoodieAnalysis {
   type RuleBuilder = SparkSession => Rule[LogicalPlan]
+
+  def customOptimizerRules: Seq[RuleBuilder] =
+    Seq(
+      _ => NestedSchemaPruning
+    )
 
   def customResolutionRules: Seq[RuleBuilder] = {
     val rules: ListBuffer[RuleBuilder] = ListBuffer(
