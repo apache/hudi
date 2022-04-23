@@ -35,7 +35,7 @@ object BoundInMemoryExecutorBenchmark extends HoodieBenchmarkBase {
   protected val spark: SparkSession = getSparkSession
 
   def getSparkSession: SparkSession = SparkSession.builder()
-    .master("local[4]")
+    .master("local[*]")
     .appName(this.getClass.getCanonicalName)
     .withExtensions(new HoodieSparkSessionExtension)
     .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
