@@ -312,7 +312,9 @@ public class FileCreateUtils {
     if (Files.notExists(baseFilePath)) {
       Files.createFile(baseFilePath);
     }
-    new RandomAccessFile(baseFilePath.toFile(), "rw").setLength(length);
+    RandomAccessFile raf = new RandomAccessFile(baseFilePath.toFile(), "rw");
+    raf.setLength(length);
+    raf.close();
     Files.setLastModifiedTime(baseFilePath, FileTime.fromMillis(lastModificationTimeMilli));
   }
 
@@ -334,7 +336,9 @@ public class FileCreateUtils {
     if (Files.notExists(logFilePath)) {
       Files.createFile(logFilePath);
     }
-    new RandomAccessFile(logFilePath.toFile(), "rw").setLength(length);
+    RandomAccessFile raf = new RandomAccessFile(logFilePath.toFile(), "rw");
+    raf.setLength(length);
+    raf.close();
   }
 
   public static String createMarkerFile(String basePath, String partitionPath, String instantTime, String fileId, IOType ioType)

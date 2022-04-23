@@ -192,9 +192,21 @@ public class TestCleanPlanExecutor extends TestCleaner {
 
     List<HoodieCleanStat> hoodieCleanStatsThree =
         runCleaner(config, simulateFailureRetry, simulateMetadataFailure, 6, true);
-    assertEquals(0, hoodieCleanStatsThree.size(),
-        "Must not clean any file. We have to keep 1 version before the latest commit time to keep");
-    assertTrue(testTable.baseFileExists(p0, "00000000000001", file1P0C0));
+    assertEquals(2, hoodieCleanStatsThree.size(),
+            "We don't need to keep 1 version before the latest commit time to keep");
+    assertFalse(testTable.baseFileExists(p0, "00000000000001", file1P0C0));
+    assertFalse(testTable.baseFileExists(p1, "00000000000001", file1P0C0));
+
+    // enableBootstrapSourceClean would delete the bootstrap base file as the same time
+    HoodieCleanStat partitionCleanStat = getCleanStat(hoodieCleanStatsThree, p0);
+
+    assertEquals(enableBootstrapSourceClean ? 2 : 1, partitionCleanStat.getSuccessDeleteFiles().size()
+            + (partitionCleanStat.getSuccessDeleteBootstrapBaseFiles() == null ? 0
+            : partitionCleanStat.getSuccessDeleteBootstrapBaseFiles().size()), "Must clean at least one old file");
+    if (enableBootstrapSourceClean) {
+      assertFalse(Files.exists(Paths.get(bootstrapMapping.get(
+              p0).get(0).getBootstrapFileStatus().getPath().getUri())));
+    }
 
     // make next commit, with 2 updates to existing files, and 1 insert
     String file4P0C3 = testTable.addInflightCommit("00000000000007")
@@ -210,12 +222,8 @@ public class TestCleanPlanExecutor extends TestCleaner {
 
     List<HoodieCleanStat> hoodieCleanStatsFour =
         runCleaner(config, simulateFailureRetry, simulateMetadataFailure, 8, true);
-    // enableBootstrapSourceClean would delete the bootstrap base file as the same time
-    HoodieCleanStat partitionCleanStat = getCleanStat(hoodieCleanStatsFour, p0);
-
-    assertEquals(enableBootstrapSourceClean ? 2 : 1, partitionCleanStat.getSuccessDeleteFiles().size()
-        + (partitionCleanStat.getSuccessDeleteBootstrapBaseFiles() == null ? 0
-        : partitionCleanStat.getSuccessDeleteBootstrapBaseFiles().size()), "Must clean at least one old file");
+    assertEquals(0, hoodieCleanStatsFour.size(), "Must not clean any files since at least 2 commits are needed from last clean operation before "
+            + "clean can be scheduled again");
     assertFalse(testTable.baseFileExists(p0, "00000000000001", file1P0C0));
     assertTrue(testTable.baseFileExists(p0, "00000000000003", file1P0C0));
     assertTrue(testTable.baseFileExists(p0, "00000000000005", file1P0C0));
@@ -463,13 +471,13 @@ public class TestCleanPlanExecutor extends TestCleaner {
                 .withLogFile(p0, file1P0, 4);
 
     List<HoodieCleanStat> hoodieCleanStats = runCleaner(config);
-    assertEquals(3,
+    assertEquals(5,
                 getCleanStat(hoodieCleanStats, p0).getSuccessDeleteFiles()
-                        .size(), "Must clean three files, one base and 2 log files");
+                        .size(), "Must clean 5 files, 2 base and 3 log files");
     assertFalse(testTable.baseFileExists(p0, "000", file1P0));
     assertFalse(testTable.logFilesExist(p0, "000", file1P0, 1, 2));
-    assertTrue(testTable.baseFileExists(p0, "001", file1P0));
-    assertTrue(testTable.logFileExists(p0, "001", file1P0, 3));
+    assertFalse(testTable.baseFileExists(p0, "001", file1P0));
+    assertFalse(testTable.logFileExists(p0, "001", file1P0, 3));
     assertTrue(testTable.baseFileExists(p0, "002", file1P0));
     assertTrue(testTable.logFileExists(p0, "002", file1P0, 4));
   }

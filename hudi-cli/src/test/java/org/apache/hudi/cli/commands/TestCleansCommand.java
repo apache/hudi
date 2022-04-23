@@ -138,7 +138,7 @@ public class TestCleansCommand extends CLIFunctionalTestHarness {
 
     // EarliestCommandRetained should be 102, since hoodie.cleaner.commits.retained=2
     // Total Time Taken need read from metadata
-    rows.add(new Comparable[] {clean.getTimestamp(), "102", "2", getLatestCleanTimeTakenInMillis().toString()});
+    rows.add(new Comparable[] {clean.getTimestamp(), "102", "4", getLatestCleanTimeTakenInMillis().toString()});
 
     String expected = HoodiePrintHelper.print(header, new HashMap<>(), "", false, -1, false, rows);
     expected = removeNonWordAndStripSpace(expected);
@@ -172,11 +172,11 @@ public class TestCleansCommand extends CLIFunctionalTestHarness {
     // There should be two partition path
     List<Comparable[]> rows = new ArrayList<>();
     rows.add(new Comparable[] {HoodieTestCommitMetadataGenerator.DEFAULT_SECOND_PARTITION_PATH,
-        HoodieCleaningPolicy.KEEP_LATEST_COMMITS, "1", "0"});
+        HoodieCleaningPolicy.KEEP_LATEST_COMMITS, "2", "0"});
     rows.add(new Comparable[] {HoodieTestCommitMetadataGenerator.DEFAULT_THIRD_PARTITION_PATH,
         HoodieCleaningPolicy.KEEP_LATEST_COMMITS, "0", "0"});
     rows.add(new Comparable[] {HoodieTestCommitMetadataGenerator.DEFAULT_FIRST_PARTITION_PATH,
-        HoodieCleaningPolicy.KEEP_LATEST_COMMITS, "1", "0"});
+        HoodieCleaningPolicy.KEEP_LATEST_COMMITS, "2", "0"});
 
     String expected = HoodiePrintHelper.print(header, new HashMap<>(), "", false, -1, false, rows);
     expected = removeNonWordAndStripSpace(expected);

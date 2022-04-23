@@ -316,8 +316,6 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
         }
 
         String lastVersion = fileSliceList.get(0).getBaseInstantTime();
-        String lastVersionBeforeEarliestCommitToRetain =
-            getLatestVersionBeforeCommit(fileSliceList, earliestCommitToRetain);
 
         // Ensure there are more than 1 version of the file (we only clean old files from updates)
         // i.e always spare the last commit.
@@ -329,23 +327,12 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
             continue;
           }
 
-          if (policy == HoodieCleaningPolicy.KEEP_LATEST_COMMITS) {
-            // Dont delete the latest commit and also the last commit before the earliest commit we
-            // are retaining
-            // The window of commit retain == max query run time. So a query could be running which
-            // still
-            // uses this file.
-            if (fileCommitTime.equals(lastVersion) || (fileCommitTime.equals(lastVersionBeforeEarliestCommitToRetain))) {
-              // move on to the next file
-              continue;
-            }
-          } else if (policy == HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS) {
-            // This block corresponds to KEEP_LATEST_BY_HOURS policy
-            // Do not delete the latest commit.
-            if (fileCommitTime.equals(lastVersion)) {
-              // move on to the next file
-              continue;
-            }
+          // Don't delete the latest commit.
+          // The window of commit retain == max query run time. So a query could be running which
+          // still uses this file.
+          if (fileCommitTime.equals(lastVersion)) {
+            // move on to the next file
+            continue;
           }
 
           // Always keep the last commit
@@ -398,22 +385,6 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
         .filter(slice -> !slice.getBaseFile().isPresent() || !savepointedFiles.contains(slice.getBaseFile().get().getFileName()))
         .flatMap(slice -> getCleanFileInfoForSlice(slice).stream())
         .collect(Collectors.toList());
-  }
-
-  /**
-   * Gets the latest version < instantTime. This version file could still be used by queries.
-   */
-  private String getLatestVersionBeforeCommit(List<FileSlice> fileSliceList, HoodieInstant instantTime) {
-    for (FileSlice file : fileSliceList) {
-      String fileCommitTime = file.getBaseInstantTime();
-      if (HoodieTimeline.compareTimestamps(instantTime.getTimestamp(), HoodieTimeline.GREATER_THAN, fileCommitTime)) {
-        // fileList is sorted on the reverse, so the first commit we find <= instantTime is the
-        // one we want
-        return fileCommitTime;
-      }
-    }
-    // There is no version of this file which is <= instantTime
-    return null;
   }
 
   private List<CleanFileInfo> getCleanFileInfoForSlice(FileSlice nextSlice) {
