@@ -20,10 +20,8 @@ package org.apache.hudi.common.util.queue;
 
 import com.lmax.disruptor.dsl.Disruptor;
 import org.apache.hudi.common.util.CustomizedThreadFactory;
-import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.SizeEstimator;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.log4j.LogManager;
@@ -83,9 +81,8 @@ public class DisruptorExecutor<I, O, E> extends HoodieExecutor<I, O, E> {
     this.producerExecutorService = Executors.newFixedThreadPool(producers.size(), new CustomizedThreadFactory("producer"));
     // Ensure single thread for consumer
     this.consumerExecutorService = Executors.newSingleThreadExecutor(new CustomizedThreadFactory("consumer"));
-    this.queue = new DisruptorMessageQueue<>(bufferSize, transformFunction, waitStrategy, producers.size());
+    this.queue = new DisruptorMessageQueue<>(bufferSize, transformFunction, waitStrategy, producers.size(), preExecuteRunnable);
   }
-
 
   /**
    * Start all Producers.
@@ -117,6 +114,7 @@ public class DisruptorExecutor<I, O, E> extends HoodieExecutor<I, O, E> {
       Future<E> future = startConsumer(queue.getInnerQueue());
       startProducers();
       // Wait for consumer to be done
+      // TODO need to improve
       return future.get();
     } catch (InterruptedException ie) {
       shutdownNow();
@@ -137,13 +135,14 @@ public class DisruptorExecutor<I, O, E> extends HoodieExecutor<I, O, E> {
         LOG.info("starting consumer thread");
         preExecuteRunnable.run();
         try {
-          DisruptorMessageHandler<O, E> handler = new DisruptorMessageHandler<>(consumer, preExecuteRunnable);
+          DisruptorMessageHandler<O, E> handler = new DisruptorMessageHandler<>(consumer);
           disruptor.handleEventsWith(handler);
 
           // start disruptor
           queue.getInnerQueue().start();
           isRegister.set(true);
           while (!handler.isFinished()) {
+            // TODO need to improve
             Thread.sleep(1 * 1000);
           }
 

@@ -161,7 +161,6 @@ public class TestDisruptorExecutionInSpark extends HoodieClientTestHarness {
         }
 
       });
-      Thread.sleep(2 * 1000);
       future.cancel(true);
       future.get();
       assertTrue(actualException.get() instanceof HoodieException);

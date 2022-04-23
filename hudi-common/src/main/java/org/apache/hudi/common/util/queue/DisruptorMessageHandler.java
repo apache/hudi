@@ -24,16 +24,13 @@ public class DisruptorMessageHandler<O, E> implements EventHandler<HoodieDisrupt
 
   private BoundedInMemoryQueueConsumer<O, E> consumer;
   private boolean finished = false;
-  private Runnable preExecuteRunnable;
 
-  public DisruptorMessageHandler(BoundedInMemoryQueueConsumer<O, E> consumer, Runnable preExecuteRunnable) {
+  public DisruptorMessageHandler(BoundedInMemoryQueueConsumer<O, E> consumer) {
     this.consumer = consumer;
-    this.preExecuteRunnable = preExecuteRunnable;
   }
 
   @Override
   public void onEvent(HoodieDisruptorEvent<O> event, long sequence, boolean endOfBatch) {
-    preExecuteRunnable.run();
     if (event == null || event.get() == null) {
       // end of ingestion
       finished = true;

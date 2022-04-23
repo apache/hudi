@@ -21,14 +21,23 @@ package org.apache.hudi.common.util.queue;
 import org.jetbrains.annotations.NotNull;
 import java.util.concurrent.ThreadFactory;
 
-public enum HoodieDaemonThreadFactory implements ThreadFactory {
+public class HoodieDaemonThreadFactory implements ThreadFactory {
 
-  INSTANCE;
+  private Runnable preExecuteRunnable;
 
+  public HoodieDaemonThreadFactory(Runnable preExecuteRunnable) {
+    this.preExecuteRunnable = preExecuteRunnable;
+  }
   @Override
   public Thread newThread(@NotNull final Runnable r) {
-    System.out.println("Creating a new Thread");
-    Thread t = new Thread(r);
+    Thread t = new Thread(new Runnable() {
+
+      @Override
+      public void run() {
+        preExecuteRunnable.run();
+        r.run();
+      }
+    });
     t.setDaemon(true);
     return t;
   }
