@@ -95,6 +95,7 @@
                   <include>org.apache.hudi:hudi-hadoop-mr</include>
                   <include>org.apache.hudi:hudi-sync-common</include>
                   <include>org.apache.hudi:hudi-gcp</include>
+                  <include>org.apache.parquet:parquet-avro</include>
 
                   <include>com.google.cloud:google-cloud-bigquery</include>
                   <include>com.beust:jcommander</include>
