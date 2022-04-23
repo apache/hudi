@@ -33,13 +33,14 @@ import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDat
 import org.apache.log4j.LogManager
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions._
+import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.types.BooleanType
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
 
-import scala.collection.JavaConversions._
+import java.util.function.Consumer
 import scala.collection.JavaConverters._
 
 /**
@@ -76,11 +77,14 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
     cleanupFileSystem()
   }
 
+  override def getSparkSessionExtensionsInjector(): Consumer[SparkSessionExtensions] =
+    (receiver: SparkSessionExtensions) => new HoodieSparkSessionExtension().apply(receiver)
+
   @Test def testCount() {
     // First Operation:
     // Producing parquet files to three default partitions.
     // SNAPSHOT view on MOR table with parquet files only.
-    val records1 = recordsToStrings(dataGen.generateInserts("001", 100)).toList
+    val records1 = recordsToStrings(dataGen.generateInserts("001", 100)).asScala
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
     inputDF1.write.format("org.apache.hudi")
       .options(commonOpts)
@@ -98,7 +102,7 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
     // Second Operation:
     // Upsert the update to the default partitions with duplicate records. Produced a log file for each parquet.
     // SNAPSHOT view should read the log files only with the latest commit time.
-    val records2 = recordsToStrings(dataGen.generateUniqueUpdates("002", 100)).toList
+    val records2 = recordsToStrings(dataGen.generateUniqueUpdates("002", 100)).asScala
     val inputDF2: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records2, 2))
     inputDF2.write.format("org.apache.hudi")
       .options(commonOpts)
@@ -173,7 +177,7 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
     // Third Operation:
     // Upsert another update to the default partitions with 50 duplicate records. Produced the second log file for each parquet.
     // SNAPSHOT view should read the latest log files.
-    val records3 = recordsToStrings(dataGen.generateUniqueUpdates("003", 50)).toList
+    val records3 = recordsToStrings(dataGen.generateUniqueUpdates("003", 50)).asScala
     val inputDF3: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records3, 2))
     inputDF3.write.format("org.apache.hudi")
       .options(commonOpts)
@@ -213,7 +217,7 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
     val partitionPaths = new Array[String](1)
     partitionPaths.update(0, "2020/01/10")
     val newDataGen = new HoodieTestDataGenerator(partitionPaths)
-    val records4 = recordsToStrings(newDataGen.generateInserts("004", 100)).toList
+    val records4 = recordsToStrings(newDataGen.generateInserts("004", 100)).asScala
     val inputDF4: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records4, 2))
     inputDF4.write.format("org.apache.hudi")
       .options(commonOpts)
@@ -238,7 +242,7 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
     // Upsert records to the new partition. Produced a newer version of parquet file.
     // SNAPSHOT view should read the latest log files from the default partition
     // and the latest parquet from the new partition.
-    val records5 = recordsToStrings(newDataGen.generateUniqueUpdates("005", 50)).toList
+    val records5 = recordsToStrings(newDataGen.generateUniqueUpdates("005", 50)).asScala
     val inputDF5: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records5, 2))
     inputDF5.write.format("org.apache.hudi")
       .options(commonOpts)
@@ -252,7 +256,7 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
 
     // Sixth Operation:
     // Insert 2 records and trigger compaction.
-    val records6 = recordsToStrings(newDataGen.generateInserts("006", 2)).toList
+    val records6 = recordsToStrings(newDataGen.generateInserts("006", 2)).asScala
     val inputDF6: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records6, 2))
     inputDF6.write.format("org.apache.hudi")
       .options(commonOpts)
@@ -279,7 +283,7 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
     // First Operation:
     // Producing parquet files to three default partitions.
     // SNAPSHOT view on MOR table with parquet files only.
-    val records1 = recordsToStrings(dataGen.generateInserts("001", 100)).toList
+    val records1 = recordsToStrings(dataGen.generateInserts("001", 100)).asScala
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
     inputDF1.write.format("org.apache.hudi")
       .options(commonOpts)
@@ -297,7 +301,7 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
     // Second Operation:
     // Upsert 50 delete records
     // Snopshot view should only read 50 records
-    val records2 = recordsToStrings(dataGen.generateUniqueDeleteRecords("002", 50)).toList
+    val records2 = recordsToStrings(dataGen.generateUniqueDeleteRecords("002", 50)).asScala
     val inputDF2: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records2, 2))
     inputDF2.write.format("org.apache.hudi")
       .options(commonOpts)
@@ -330,7 +334,7 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
     // Third Operation:
     // Upsert 50 delete records to delete the reset
     // Snopshot view should read 0 record
-    val records3 = recordsToStrings(dataGen.generateUniqueDeleteRecords("003", 50)).toList
+    val records3 = recordsToStrings(dataGen.generateUniqueDeleteRecords("003", 50)).asScala
     val inputDF3: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records3, 2))
     inputDF3.write.format("org.apache.hudi")
       .options(commonOpts)
@@ -447,7 +451,7 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
     // Vectorized Reader will only be triggered with AtomicType schema,
     // which is not null, UDTs, arrays, structs, and maps.
     val schema = HoodieTestDataGenerator.SHORT_TRIP_SCHEMA
-    val records1 = recordsToStrings(dataGen.generateInsertsAsPerSchema("001", 100, schema)).toList
+    val records1 = recordsToStrings(dataGen.generateInsertsAsPerSchema("001", 100, schema)).asScala
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
     inputDF1.write.format("org.apache.hudi")
       .options(commonOpts)
@@ -462,7 +466,7 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
     assertEquals(100, hudiSnapshotDF1.count())
 
     val records2 = recordsToStrings(dataGen.generateUniqueUpdatesAsPerSchema("002", 50, schema))
-      .toList
+      .asScala
     val inputDF2: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records2, 2))
     inputDF2.write.format("org.apache.hudi")
       .options(commonOpts)
@@ -594,7 +598,7 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
     val N = 20
     // Test query with partition prune if URL_ENCODE_PARTITIONING has enable
     val records1 = dataGen.generateInsertsContainsAllPartitions("000", N)
-    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(recordsToStrings(records1), 2))
+    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(recordsToStrings(records1).asScala, 2))
     inputDF1.write.format("hudi")
       .options(commonOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
@@ -624,7 +628,7 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
 
     // Second write with Append mode
     val records2 = dataGen.generateInsertsContainsAllPartitions("000", N + 1)
-    val inputDF2 = spark.read.json(spark.sparkContext.parallelize(recordsToStrings(records2), 2))
+    val inputDF2 = spark.read.json(spark.sparkContext.parallelize(recordsToStrings(records2).asScala, 2))
     inputDF2.write.format("hudi")
       .options(commonOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
@@ -646,8 +650,8 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
   def testMORPartitionPrune(partitionEncode: Boolean, hiveStylePartition: Boolean): Unit = {
     val partitions = Array("2021/03/01", "2021/03/02", "2021/03/03", "2021/03/04", "2021/03/05")
     val newDataGen =  new HoodieTestDataGenerator(partitions)
-    val records1 = newDataGen.generateInsertsContainsAllPartitions("000", 100)
-    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(recordsToStrings(records1), 2))
+    val records1 = newDataGen.generateInsertsContainsAllPartitions("000", 100).asScala
+    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(recordsToStrings(records1.asJava).asScala, 2))
 
     val partitionCounts = partitions.map(p => p -> records1.count(r => r.getPartitionPath == p)).toMap
 
@@ -676,7 +680,7 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
       .load(basePath)
       .filter("partition != '2021/03/01'")
       .count()
-    assertEquals(records1.size() - partitionCounts("2021/03/01"), count3)
+    assertEquals(records1.size - partitionCounts("2021/03/01"), count3)
 
     val count4 = spark.read.format("hudi")
       .load(basePath)
@@ -688,7 +692,7 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
       .load(basePath)
       .filter("partition like '%2021/03/%'")
       .count()
-    assertEquals(records1.size(), count5)
+    assertEquals(records1.size, count5)
 
     val count6 = spark.read.format("hudi")
       .load(basePath)
@@ -798,7 +802,7 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
   def testReadLogOnlyMergeOnReadTable(): Unit = {
     initMetaClient(HoodieTableType.MERGE_ON_READ)
     val records1 = dataGen.generateInsertsContainsAllPartitions("000", 20)
-    val inputDF = spark.read.json(spark.sparkContext.parallelize(recordsToStrings(records1), 2))
+    val inputDF = spark.read.json(spark.sparkContext.parallelize(recordsToStrings(records1).asScala, 2))
     inputDF.write.format("hudi")
       .options(commonOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
@@ -817,7 +821,7 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
 
   @Test
   def testTempFilesCleanForClustering(): Unit = {
-    val records1 = recordsToStrings(dataGen.generateInserts("001", 1000)).toList
+    val records1 = recordsToStrings(dataGen.generateInserts("001", 1000)).asScala
     val inputDF1: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records1, 2))
     inputDF1.write.format("org.apache.hudi")
       .options(commonOpts)
@@ -835,7 +839,7 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
 
   @Test
   def testClusteringOnNullableColumn(): Unit = {
-    val records1 = recordsToStrings(dataGen.generateInserts("001", 1000)).toList
+    val records1 = recordsToStrings(dataGen.generateInserts("001", 1000)).asScala
     val inputDF1: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records1, 2))
       .withColumn("cluster_id", when(expr("end_lon < 0.2 "), lit(null).cast("string"))
           .otherwise(col("_row_key")))
@@ -860,7 +864,7 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
     val numRecords = 100
     val numRecordsToDelete = 2
     val schema = HoodieTestDataGenerator.SHORT_TRIP_SCHEMA
-    val records0 = recordsToStrings(dataGen.generateInsertsAsPerSchema("000", numRecords, schema)).toList
+    val records0 = recordsToStrings(dataGen.generateInsertsAsPerSchema("000", numRecords, schema)).asScala
     val inputDF0 = spark.read.json(spark.sparkContext.parallelize(records0, 2))
     inputDF0.write.format("org.apache.hudi")
       .options(commonOpts)
@@ -911,7 +915,7 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
     )
 
     val dataGen1 = new HoodieTestDataGenerator(Array("2022-01-01"))
-    val records1 = recordsToStrings(dataGen1.generateInserts("001", 50)).toList
+    val records1 = recordsToStrings(dataGen1.generateInserts("001", 50)).asScala
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
     inputDF1.write.format("org.apache.hudi")
       .options(options)
@@ -924,7 +928,7 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
     val commit1Time = metaClient.getActiveTimeline.lastInstant().get().getTimestamp
 
     val dataGen2 = new HoodieTestDataGenerator(Array("2022-01-02"))
-    val records2 = recordsToStrings(dataGen2.generateInserts("002", 60)).toList
+    val records2 = recordsToStrings(dataGen2.generateInserts("002", 60)).asScala
     val inputDF2 = spark.read.json(spark.sparkContext.parallelize(records2, 2))
     inputDF2.write.format("org.apache.hudi")
       .options(options)
@@ -932,7 +936,7 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
       .save(basePath)
     val commit2Time = metaClient.reloadActiveTimeline.lastInstant().get().getTimestamp
 
-    val records3 = recordsToStrings(dataGen2.generateUniqueUpdates("003", 20)).toList
+    val records3 = recordsToStrings(dataGen2.generateUniqueUpdates("003", 20)).asScala
     val inputDF3 = spark.read.json(spark.sparkContext.parallelize(records3, 2))
     inputDF3.write.format("org.apache.hudi")
       .options(options)
