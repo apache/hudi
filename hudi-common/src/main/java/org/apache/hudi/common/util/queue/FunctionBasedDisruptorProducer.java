@@ -38,7 +38,5 @@ public class FunctionBasedDisruptorProducer<I> extends DisruptorBasedProducer<I>
     LOG.info("starting function which will enqueue records");
     producerFunction.apply(queue);
     LOG.info("finished function which will enqueue records");
-    // poison after buffer finished.
-    queue.insertRecord(null);
   }
 }

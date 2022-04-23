@@ -1,6 +1,7 @@
 package org.apache.hudi.common.util.queue;
 
 import com.lmax.disruptor.EventTranslator;
+import com.lmax.disruptor.RingBuffer;
 import com.lmax.disruptor.WaitStrategy;
 import com.lmax.disruptor.dsl.Disruptor;
 import com.lmax.disruptor.dsl.ProducerType;
@@ -9,11 +10,14 @@ import java.util.function.Function;
 
 public class DisruptorMessageQueue<I, O> extends HoodieMessageQueue<I, O> {
 
+  /** Interval used for waiting. **/
+  public static final int WAIT_INTERVAL_SEC = 1;
+
   private final Disruptor<HoodieDisruptorEvent<O>> queue;
   private final Function<I, O> transformFunction;
+  private RingBuffer<HoodieDisruptorEvent<O>> ringBuffer;
 
   public DisruptorMessageQueue(int bufferSize, Function<I, O> transformFunction, String waitStrategyName, int producerNumber, Runnable preExecuteRunnable) {
-
     WaitStrategy waitStrategy = WaitStrategyFactory.build(waitStrategyName);
     HoodieDaemonThreadFactory threadFactory = new HoodieDaemonThreadFactory(preExecuteRunnable);
 
@@ -23,6 +27,7 @@ public class DisruptorMessageQueue<I, O> extends HoodieMessageQueue<I, O> {
       this.queue = new Disruptor<>(HoodieDisruptorEvent::new, bufferSize, threadFactory, ProducerType.SINGLE, waitStrategy);
     }
 
+    this.ringBuffer = queue.getRingBuffer();
     this.transformFunction = transformFunction;
   }
 
@@ -57,5 +62,9 @@ public class DisruptorMessageQueue<I, O> extends HoodieMessageQueue<I, O> {
 
   public Disruptor<HoodieDisruptorEvent<O>> getInnerQueue() {
     return this.queue;
+  }
+
+  public boolean isEmpty() {
+    return ringBuffer.getBufferSize() == ringBuffer.remainingCapacity();
   }
 }

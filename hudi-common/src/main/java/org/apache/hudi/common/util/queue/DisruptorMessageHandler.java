@@ -23,7 +23,6 @@ import com.lmax.disruptor.EventHandler;
 public class DisruptorMessageHandler<O, E> implements EventHandler<HoodieDisruptorEvent<O>> {
 
   private BoundedInMemoryQueueConsumer<O, E> consumer;
-  private boolean finished = false;
 
   public DisruptorMessageHandler(BoundedInMemoryQueueConsumer<O, E> consumer) {
     this.consumer = consumer;
@@ -31,16 +30,7 @@ public class DisruptorMessageHandler<O, E> implements EventHandler<HoodieDisrupt
 
   @Override
   public void onEvent(HoodieDisruptorEvent<O> event, long sequence, boolean endOfBatch) {
-    if (event == null || event.get() == null) {
-      // end of ingestion
-      finished = true;
-    } else {
-      consumer.consumeOneRecord(event.get());
-      event.clear();
-    }
-  }
-
-  public boolean isFinished() {
-    return finished;
+    consumer.consumeOneRecord(event.get());
+    event.clear();
   }
 }

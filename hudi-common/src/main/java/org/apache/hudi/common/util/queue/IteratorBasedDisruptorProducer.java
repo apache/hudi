@@ -40,8 +40,6 @@ public class IteratorBasedDisruptorProducer<I> extends DisruptorBasedProducer<I>
     while (inputIterator.hasNext()) {
       queue.insertRecord(inputIterator.next());
     }
-    // poison after buffer finished.
-    queue.insertRecord(null);
     LOG.info("finished buffering records");
   }
 }

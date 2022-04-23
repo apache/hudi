@@ -30,12 +30,10 @@ import org.apache.log4j.Logger;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorCompletionService;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -111,11 +109,15 @@ public class DisruptorExecutor<I, O, E> extends HoodieExecutor<I, O, E> {
   @Override
   public E execute() {
     try {
-      Future<E> future = startConsumer(queue.getInnerQueue());
-      startProducers();
-      // Wait for consumer to be done
-      // TODO need to improve
-      return future.get();
+      assert consumer.isPresent();
+      setupConsumer();
+      ExecutorCompletionService<Boolean> pool = startProducers();
+
+      waitForProducersFinished(pool);
+      queue.getInnerQueue().shutdown();
+      consumer.get().finish();
+
+      return consumer.get().getResult();
     } catch (InterruptedException ie) {
       shutdownNow();
       Thread.currentThread().interrupt();
@@ -125,52 +127,26 @@ public class DisruptorExecutor<I, O, E> extends HoodieExecutor<I, O, E> {
     }
   }
 
+  private void waitForProducersFinished(ExecutorCompletionService<Boolean> pool) throws InterruptedException, ExecutionException {
+    for (int i = 0; i < producers.size(); i++ ) {
+      pool.take().get();
+    }
+  }
+
   /**
    * Start only consumer.
    */
-  private Future<E> startConsumer(Disruptor<HoodieDisruptorEvent<O>> disruptor) {
-    AtomicBoolean isRegister = new AtomicBoolean(false);
-    Future<E> future = consumer.map(consumer -> {
-      return consumerExecutorService.submit(() -> {
-        LOG.info("starting consumer thread");
-        preExecuteRunnable.run();
-        try {
-          DisruptorMessageHandler<O, E> handler = new DisruptorMessageHandler<>(consumer);
-          disruptor.handleEventsWith(handler);
+  private void setupConsumer() {
+    DisruptorMessageHandler<O, E> handler = new DisruptorMessageHandler<>(consumer.get());
 
-          // start disruptor
-          queue.getInnerQueue().start();
-          isRegister.set(true);
-          while (!handler.isFinished()) {
-            // TODO need to improve
-            Thread.sleep(1 * 1000);
-          }
-
-          LOG.info("Queue Consumption is done; notifying producer threads");
-          consumer.finish();
-          return consumer.getResult();
-        } catch (Exception e) {
-          LOG.error("error consuming records", e);
-          throw e;
-        }
-      });
-    }).orElse(CompletableFuture.completedFuture(null));
-
-    // waiting until consumer registered.
-    while (!isRegister.get()) {
-      try {
-        Thread.sleep(1 * 1000);
-      } catch (InterruptedException e) {
-        // ignore here
-      }
-    }
-
-    return future;
+    Disruptor<HoodieDisruptorEvent<O>> innerQueue = queue.getInnerQueue();
+    innerQueue.handleEventsWith(handler);
+    innerQueue.start();
   }
 
   @Override
   public boolean isRemaining() {
-    return false;
+    return !queue.isEmpty();
   }
 
   @Override
