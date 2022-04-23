@@ -18,12 +18,18 @@
 
 package org.apache.hudi.common.util.queue;
 
-import com.lmax.disruptor.EventFactory;
+import org.jetbrains.annotations.NotNull;
+import java.util.concurrent.ThreadFactory;
 
-public class HoodieDisruptorEventFactory<O> implements EventFactory<HoodieDisruptorEvent<O>> {
+public enum HoodieDaemonThreadFactory implements ThreadFactory {
+
+  INSTANCE;
 
   @Override
-  public HoodieDisruptorEvent<O> newInstance() {
-    return new HoodieDisruptorEvent<>();
+  public Thread newThread(@NotNull final Runnable r) {
+    System.out.println("Creating a new Thread");
+    Thread t = new Thread(r);
+    t.setDaemon(true);
+    return t;
   }
 }

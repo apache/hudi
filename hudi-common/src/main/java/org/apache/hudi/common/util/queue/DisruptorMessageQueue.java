@@ -1,30 +1,25 @@
 package org.apache.hudi.common.util.queue;
 
-import com.lmax.disruptor.BusySpinWaitStrategy;
 import com.lmax.disruptor.EventTranslator;
+import com.lmax.disruptor.WaitStrategy;
 import com.lmax.disruptor.dsl.Disruptor;
 import com.lmax.disruptor.dsl.ProducerType;
-import org.apache.hudi.common.util.SizeEstimator;
 
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.function.Function;
 
 public class DisruptorMessageQueue<I, O> extends HoodieMessageQueue<I, O> {
 
   private final Disruptor<HoodieDisruptorEvent<O>> queue;
   private final Function<I, O> transformFunction;
-  private ExecutorService executorService;
 
-  private final int bufferSize = 128 * 1024;
+  public DisruptorMessageQueue(int bufferSize, Function<I, O> transformFunction, String waitStrategyName, int producerNumber) {
 
-  public DisruptorMessageQueue(long bufferLimitInBytes, Function<I, O> transformFunction, SizeEstimator<O> sizeEstimator, int producerNumber) {
-    this.executorService = Executors.newCachedThreadPool();
+    WaitStrategy waitStrategy = WaitStrategyFactory.build(waitStrategyName);
 
     if (producerNumber > 1) {
-      this.queue = new Disruptor<>(HoodieDisruptorEvent::new, bufferSize, executorService, ProducerType.MULTI, new BusySpinWaitStrategy());
+      this.queue = new Disruptor<>(HoodieDisruptorEvent::new, bufferSize, HoodieDaemonThreadFactory.INSTANCE, ProducerType.MULTI, waitStrategy);
     } else {
-      this.queue = new Disruptor<>(HoodieDisruptorEvent::new, bufferSize, executorService, ProducerType.SINGLE, new BusySpinWaitStrategy());
+      this.queue = new Disruptor<>(HoodieDisruptorEvent::new, bufferSize, HoodieDaemonThreadFactory.INSTANCE, ProducerType.SINGLE, waitStrategy);
     }
 
     this.transformFunction = transformFunction;
@@ -57,10 +52,6 @@ public class DisruptorMessageQueue<I, O> extends HoodieMessageQueue<I, O> {
   @Override
   public void close() {
     queue.shutdown();
-  }
-
-  public void shutdownNow() {
-    executorService.shutdownNow();
   }
 
   public Disruptor<HoodieDisruptorEvent<O>> getInnerQueue() {

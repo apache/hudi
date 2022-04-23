@@ -58,24 +58,24 @@ public class DisruptorExecutor<I, O, E> extends HoodieExecutor<I, O, E> {
   // pre-execute function to implement environment specific behavior before executors (producers/consumer) run
   private final Runnable preExecuteRunnable;
 
-  public DisruptorExecutor(final long bufferLimitInBytes, final Iterator<I> inputItr,
-                           BoundedInMemoryQueueConsumer<O, E> consumer, Function<I, O> transformFunction, Runnable preExecuteRunnable) {
-    this(bufferLimitInBytes, new IteratorBasedDisruptorProducer<>(inputItr), Option.of(consumer), transformFunction, preExecuteRunnable);
+  public DisruptorExecutor(final int bufferSize, final Iterator<I> inputItr,
+                           BoundedInMemoryQueueConsumer<O, E> consumer, Function<I, O> transformFunction, String waitStrategy, Runnable preExecuteRunnable) {
+    this(bufferSize, new IteratorBasedDisruptorProducer<>(inputItr), Option.of(consumer), transformFunction, waitStrategy, preExecuteRunnable);
   }
 
-  public DisruptorExecutor(final long bufferLimitInBytes, DisruptorBasedProducer<I> producer,
+  public DisruptorExecutor(final int bufferSize, DisruptorBasedProducer<I> producer,
                            Option<BoundedInMemoryQueueConsumer<O, E>> consumer, final Function<I, O> transformFunction) {
-    this(bufferLimitInBytes, producer, consumer, transformFunction, Functions.noop());
+    this(bufferSize, producer, consumer, transformFunction, WaitStrategyFactory.DEFAULT_STRATEGY, Functions.noop());
   }
 
-  public DisruptorExecutor(final long bufferLimitInBytes, DisruptorBasedProducer<I> producer,
-                           Option<BoundedInMemoryQueueConsumer<O, E>> consumer, final Function<I, O> transformFunction, Runnable preExecuteRunnable) {
-    this(bufferLimitInBytes, Collections.singletonList(producer), consumer, transformFunction, new DefaultSizeEstimator<>(), preExecuteRunnable);
+  public DisruptorExecutor(final int bufferSize, DisruptorBasedProducer<I> producer,
+                           Option<BoundedInMemoryQueueConsumer<O, E>> consumer, final Function<I, O> transformFunction, String waitStrategy, Runnable preExecuteRunnable) {
+    this(bufferSize, Collections.singletonList(producer), consumer, transformFunction, waitStrategy, preExecuteRunnable);
   }
 
-  public DisruptorExecutor(final long bufferLimitInBytes, List<DisruptorBasedProducer<I>> producers,
+  public DisruptorExecutor(final int bufferSize, List<DisruptorBasedProducer<I>> producers,
                            Option<BoundedInMemoryQueueConsumer<O, E>> consumer, final Function<I, O> transformFunction,
-                           final SizeEstimator<O> sizeEstimator, Runnable preExecuteRunnable) {
+                           final String waitStrategy, Runnable preExecuteRunnable) {
     this.producers = producers;
     this.consumer = consumer;
     this.preExecuteRunnable = preExecuteRunnable;
@@ -83,7 +83,7 @@ public class DisruptorExecutor<I, O, E> extends HoodieExecutor<I, O, E> {
     this.producerExecutorService = Executors.newFixedThreadPool(producers.size(), new CustomizedThreadFactory("producer"));
     // Ensure single thread for consumer
     this.consumerExecutorService = Executors.newSingleThreadExecutor(new CustomizedThreadFactory("consumer"));
-    this.queue = new DisruptorMessageQueue<>(bufferLimitInBytes, transformFunction, sizeEstimator, producers.size());
+    this.queue = new DisruptorMessageQueue<>(bufferSize, transformFunction, waitStrategy, producers.size());
   }
 
 
@@ -178,7 +178,7 @@ public class DisruptorExecutor<I, O, E> extends HoodieExecutor<I, O, E> {
   public void shutdownNow() {
     producerExecutorService.shutdownNow();
     consumerExecutorService.shutdownNow();
-    queue.shutdownNow();
+    queue.close();
   }
 
   @Override

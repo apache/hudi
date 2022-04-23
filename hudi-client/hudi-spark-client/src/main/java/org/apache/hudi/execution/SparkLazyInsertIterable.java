@@ -25,6 +25,8 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.queue.BoundedInMemoryExecutor;
 import org.apache.hudi.common.util.queue.DisruptorExecutor;
+import org.apache.hudi.common.util.queue.ExecutorType;
+import org.apache.hudi.common.util.queue.HoodieExecutor;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.WriteHandleFactory;
@@ -34,6 +36,7 @@ import org.apache.avro.Schema;
 
 import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
 
 public class SparkLazyInsertIterable<T extends HoodieRecordPayload> extends HoodieLazyInsertIterable<T> {
 
@@ -78,28 +81,43 @@ public class SparkLazyInsertIterable<T extends HoodieRecordPayload> extends Hood
   @Override
   protected List<WriteStatus> computeNext() {
     // Executor service used for launching writer thread.
-    DisruptorExecutor<HoodieRecord<T>, HoodieInsertValueGenResult<HoodieRecord>, List<WriteStatus>> bufferedIteratorExecutor =
-        null;
+    HoodieExecutor<?, ?, List<WriteStatus>> executor = null;
     try {
       Schema schema = new Schema.Parser().parse(hoodieConfig.getSchema());
       if (useWriterSchema) {
         schema = HoodieAvroUtils.addMetadataFields(schema);
       }
-//      bufferedIteratorExecutor =
-//          new BoundedInMemoryExecutor<>(hoodieConfig.getWriteBufferLimitBytes(), inputItr, getInsertHandler(),
-//              getTransformFunction(schema, hoodieConfig), hoodieTable.getPreExecuteRunnable());
 
-      bufferedIteratorExecutor =
-          new DisruptorExecutor<>(hoodieConfig.getWriteBufferLimitBytes(), inputItr, getInsertHandler(),
+      String executorType = hoodieConfig.getExecutorType();
+      ExecutorType executorTypeEnum;
+
+      try {
+        executorTypeEnum = ExecutorType.valueOf(executorType.toUpperCase(Locale.ROOT));
+      } catch (IllegalArgumentException e) {
+        throw new HoodieException("Unsupported Executor Type " + executorType);
+      }
+
+      switch (executorTypeEnum) {
+        case BOUNDED_IN_MEMORY_EXECUTOR:
+          executor = new BoundedInMemoryExecutor<>(hoodieConfig.getWriteBufferLimitBytes(), inputItr, getInsertHandler(),
               getTransformFunction(schema, hoodieConfig), hoodieTable.getPreExecuteRunnable());
-      final List<WriteStatus> result = bufferedIteratorExecutor.execute();
-      assert result != null && !result.isEmpty() && !bufferedIteratorExecutor.isRemaining();
+          break;
+        case DISRUPTOR_EXECUTOR:
+          executor = new DisruptorExecutor<>(hoodieConfig.getWriteBufferSize(), inputItr, getInsertHandler(),
+              getTransformFunction(schema, hoodieConfig), hoodieConfig.getWriteWaitStrategy(), hoodieTable.getPreExecuteRunnable());
+          break;
+        default:
+          throw new HoodieException("Unsupported Executor Type " + executorType);
+      }
+
+      final List<WriteStatus> result = executor.execute();
+      assert result != null && !result.isEmpty() && !executor.isRemaining();
       return result;
     } catch (Exception e) {
       throw new HoodieException(e);
     } finally {
-      if (null != bufferedIteratorExecutor) {
-        bufferedIteratorExecutor.shutdownNow();
+      if (null != executor) {
+        executor.shutdownNow();
       }
     }
   }

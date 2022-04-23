@@ -127,6 +127,14 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("Key generator class, that implements `org.apache.hudi.keygen.KeyGenerator` "
           + "extract a key out of incoming records.");
 
+  public static final ConfigProperty<String> EXECUTOR_TYPE = ConfigProperty
+      .key("hoodie.write.executor.type")
+      .defaultValue("BOUNDED_IN_MEMORY_EXECUTOR")
+      .withDocumentation("Set executor which orchestrates concurrent producers and consumers communicating through a message queue."
+          + "default value is BOUNDED_IN_MEMORY_EXECUTOR which use a bounded in-memory queue using LinkedBlockingQueue."
+          + "Also users could use DISRUPTOR_EXECUTOR, which use disruptor as a lock free message queue "
+          + "to gain better writing performance. Although DISRUPTOR_EXECUTOR is still an experimental feature.");
+
   public static final ConfigProperty<String> KEYGENERATOR_TYPE = ConfigProperty
       .key("hoodie.datasource.write.keygenerator.type")
       .defaultValue(KeyGeneratorType.SIMPLE.name())
@@ -232,6 +240,16 @@ public class HoodieWriteConfig extends HoodieConfig {
       .key("hoodie.write.buffer.limit.bytes")
       .defaultValue(String.valueOf(4 * 1024 * 1024))
       .withDocumentation("Size of in-memory buffer used for parallelizing network reads and lake storage writes.");
+
+  public static final ConfigProperty<Integer> WRITE_BUFFER_SIZE = ConfigProperty
+      .key("hoodie.write.buffer.size")
+      .defaultValue(128 * 1024)
+      .withDocumentation("The size of the Disruptor Executor ring buffer, must be power of 2");
+
+  public static final ConfigProperty<String> WRITE_WAIT_STRATEGY = ConfigProperty
+      .key("hoodie.write.wait.strategy")
+      .defaultValue("BlockingWaitStrategy")
+      .withDocumentation("Strategy employed for making DisruptorExecutor wait on a cursor.");
 
   public static final ConfigProperty<String> COMBINE_BEFORE_INSERT = ConfigProperty
       .key("hoodie.combine.before.insert")
@@ -971,6 +989,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getString(KEYGENERATOR_CLASS_NAME);
   }
 
+  public String getExecutorType() {
+    return getString(EXECUTOR_TYPE);
+  }
+
   public boolean isConsistentLogicalTimestampEnabled() {
     return getBooleanOrDefault(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED);
   }
@@ -1029,6 +1051,14 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public int getWriteBufferLimitBytes() {
     return Integer.parseInt(getStringOrDefault(WRITE_BUFFER_LIMIT_BYTES_VALUE));
+  }
+
+  public String getWriteWaitStrategy() {
+    return getString(WRITE_WAIT_STRATEGY);
+  }
+
+  public int getWriteBufferSize() {
+    return getInt(WRITE_BUFFER_SIZE);
   }
 
   public boolean shouldCombineBeforeInsert() {
@@ -2170,6 +2200,11 @@ public class HoodieWriteConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withExecutorName(String executorClass) {
+      writeConfig.setValue(EXECUTOR_TYPE, executorClass);
+      return this;
+    }
+
     public Builder withTimelineLayoutVersion(int version) {
       writeConfig.setValue(TIMELINE_LAYOUT_VERSION_NUM, String.valueOf(version));
       return this;
@@ -2213,6 +2248,16 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withWriteBufferLimitBytes(int writeBufferLimit) {
       writeConfig.setValue(WRITE_BUFFER_LIMIT_BYTES_VALUE, String.valueOf(writeBufferLimit));
+      return this;
+    }
+
+    public Builder withWriteWaitStrategy(String waitStrategy) {
+      writeConfig.setValue(WRITE_WAIT_STRATEGY, String.valueOf(waitStrategy));
+      return this;
+    }
+
+    public Builder withWriteBufferSize(int size) {
+      writeConfig.setValue(WRITE_BUFFER_SIZE, String.valueOf(size));
       return this;
     }
 
