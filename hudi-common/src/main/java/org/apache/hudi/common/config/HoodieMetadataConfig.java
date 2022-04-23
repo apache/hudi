@@ -50,7 +50,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .sinceVersion("0.7.0")
       .withDocumentation("Enable the internal metadata table which serves table metadata like level file listings");
 
-  public static final boolean DEFAULT_METADATA_ENABLE_FOR_READERS = false;
+  public static final boolean DEFAULT_METADATA_ENABLE_FOR_READERS = true;
 
   // Enable metrics for internal Metadata Table
   public static final ConfigProperty<Boolean> METRICS_ENABLE = ConfigProperty
@@ -133,7 +133,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public static final ConfigProperty<Boolean> ENABLE_FULL_SCAN_LOG_FILES = ConfigProperty
       .key(METADATA_PREFIX + ".enable.full.scan.log.files")
-      .defaultValue(true)
+      .defaultValue(false)
       .sinceVersion("0.10.0")
       .withDocumentation("Enable full scanning of log files while reading log records. If disabled, Hudi does look up of only interested entries.");
 
