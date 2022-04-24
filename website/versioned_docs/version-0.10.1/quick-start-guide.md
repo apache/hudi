@@ -1058,6 +1058,7 @@ ALTER TABLE tableIdentifier CHANGE COLUMN colName colName colType
 
 -- Alter table properties
 ALTER TABLE tableIdentifier SET TBLPROPERTIES (key = 'value')
+ALTER TABLE tableIdentifier UNSET TBLPROPERTIES [ IF EXISTS ] ( key1, key2, ... )
 ```
 **Examples**
 ```sql
@@ -1072,6 +1073,9 @@ ALTER TABLE hudi_cow_nonpcf_tbl2 change column uuid uuid bigint;
 
 --set properties;
 alter table hudi_cow_nonpcf_tbl2 set tblproperties (hoodie.keep.max.commits = '10');
+  
+--unset properties;
+alter table hudi_cow_nonpcf_tbl2 unset tblproperties (hoodie.keep.max.commits)
 ```
 ### Partition SQL Command
 **Syntax**
