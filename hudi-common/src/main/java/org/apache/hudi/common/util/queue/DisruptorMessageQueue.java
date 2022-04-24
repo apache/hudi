@@ -10,9 +10,6 @@ import java.util.function.Function;
 
 public class DisruptorMessageQueue<I, O> extends HoodieMessageQueue<I, O> {
 
-  /** Interval used for waiting. **/
-  public static final int WAIT_INTERVAL_SEC = 1;
-
   private final Disruptor<HoodieDisruptorEvent<O>> queue;
   private final Function<I, O> transformFunction;
   private RingBuffer<HoodieDisruptorEvent<O>> ringBuffer;
@@ -38,12 +35,7 @@ public class DisruptorMessageQueue<I, O> extends HoodieMessageQueue<I, O> {
 
   @Override
   public void insertRecord(I value) throws Exception {
-    O applied;
-    if (value == null) {
-      applied = null;
-    } else {
-      applied = transformFunction.apply(value);
-    }
+    O applied = transformFunction.apply(value);
 
     EventTranslator<HoodieDisruptorEvent<O>> translator = new EventTranslator<HoodieDisruptorEvent<O>>() {
       @Override
