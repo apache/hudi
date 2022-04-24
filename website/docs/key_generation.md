@@ -205,5 +205,5 @@ Partition path generated from key generator: "2020040118"
 |```hoodie.deltastreamer.keygen.timebased.output.dateformat```| "MM/dd/yyyy" |
 |```hoodie.deltastreamer.keygen.timebased.output.timezone```| "UTC" |
 
-Input field value: "220200401" <br/>
+Input field value: "20200401" <br/>
 Partition path generated from key generator: "04/01/2020"
