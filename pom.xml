@@ -147,7 +147,7 @@
     <spark3.scala.binary.version>2.12</spark3.scala.binary.version>
     <scala.binary.version>${spark3.scala.binary.version}</scala.binary.version>
     <scala.version>${scala12.version}</scala.version>
-    <apache-rat-plugin.version>0.12</apache-rat-plugin.version>
+    <apache-rat-plugin.version>0.13</apache-rat-plugin.version>
     <scala-maven-plugin.version>3.3.1</scala-maven-plugin.version>
     <scalatest.version>${scalatest.spark3.version}</scalatest.version>
     <scalatest.spark2.version>3.0.1</scalatest.spark2.version>
@@ -1621,6 +1621,11 @@
         <skip.hudi-spark3.unit.tests>true</skip.hudi-spark3.unit.tests>
         <skipITs>true</skipITs>
       </properties>
+      <activation>
+        <property>
+          <name>scala-2.11</name>
+        </property>
+      </activation>
     </profile>
     <profile>
       <id>scala-2.12</id>
@@ -1669,8 +1674,8 @@
         <sparkbundle.version>${spark2.bundle.version}</sparkbundle.version>
         <scala.version>${scala11.version}</scala.version>
         <scala.binary.version>${spark2.scala.binary.version}</scala.binary.version>
-        <hudi.spark.module>hudi-spark2_${scala.binary.version}</hudi.spark.module>
-        <hudi.spark.common.module>hudi-spark2-common_${scala.binary.version}</hudi.spark.common.module>
+        <hudi.spark.module>hudi-spark2</hudi.spark.module>
+        <hudi.spark.common.module>hudi-spark2-common</hudi.spark.common.module>
         <scalatest.version>3.0.1</scalatest.version>
         <kafka.version>2.0.0</kafka.version>
         <parquet.version>1.10.1</parquet.version>
@@ -1702,8 +1707,22 @@
         <module>hudi-spark-datasource/hudi-spark2-common</module>
       </modules>
       <properties>
-        <sparkbundle.version>2.4</sparkbundle.version>
+        <spark.version>${spark2.version}</spark.version>
+        <sparkbundle.version>${spark2.bundle.version}</sparkbundle.version>
+        <hudi.spark.module>hudi-spark2</hudi.spark.module>
+        <hudi.spark.common.module>hudi-spark2-common</hudi.spark.common.module>
+        <scalatest.version>3.0.1</scalatest.version>
+        <kafka.version>2.0.0</kafka.version>
+        <parquet.version>1.10.1</parquet.version>
+        <orc.version>1.6.0</orc.version>
+        <avro.version>1.8.2</avro.version>
+        <fasterxml.version>2.6.7</fasterxml.version>
+        <fasterxml.jackson.databind.version>2.6.7.3</fasterxml.jackson.databind.version>
+        <fasterxml.jackson.module.scala.version>2.6.7.1</fasterxml.jackson.module.scala.version>
+        <fasterxml.jackson.dataformat.yaml.version>2.7.4</fasterxml.jackson.dataformat.yaml.version>
+        <skip.hudi-spark2.unit.tests>false</skip.hudi-spark2.unit.tests>
         <skip.hudi-spark3.unit.tests>true</skip.hudi-spark3.unit.tests>
+        <skipITs>true</skipITs>
       </properties>
       <activation>
         <property>
@@ -1802,6 +1821,7 @@
         <fasterxml.jackson.dataformat.yaml.version>${fasterxml.spark3.version}
         </fasterxml.jackson.dataformat.yaml.version>
         <skip.hudi-spark2.unit.tests>true</skip.hudi-spark2.unit.tests>
+        <skipITs>true</skipITs>
       </properties>
       <modules>
         <module>hudi-spark-datasource/hudi-spark3</module>

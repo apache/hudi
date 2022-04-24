@@ -204,7 +204,19 @@
 
     <dependency>
       <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-spark3-common_${spark3.scala.binary.version}</artifactId>
+      <artifactId>${hudi.spark.common.module}</artifactId>
+      <version>${project.version}</version>
+      <exclusions>
+        <exclusion>
+          <groupId>org.apache.spark</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-spark3-common</artifactId>
       <version>${project.version}</version>
       <exclusions>
         <exclusion>
