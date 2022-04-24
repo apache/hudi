@@ -36,6 +36,14 @@ JIRA: [HUDI-3907](https://issues.apache.org/jira/browse/HUDI-3907)
 More details about current implementation of secondary index please refer to
 [pull-3508](https://github.com/apache/hudi/pull/3508).
 
+Documentation Navigation
+- xx
+- xx
+- xx
+   - xx
+   - xx
+- xx
+
 ## Abstract
 
 In query processing, we need to scan many blocks in HUDI table. However, most of them may not
@@ -75,10 +83,10 @@ speed up query performance.
 
 ## Architecture
 The main structure of secondary index contains 4 layers
-1. SQL Parser layer: SQL command for user to create/drop/alter/show/..., for managing Record Level Index
+1. SQL Parser layer: SQL command for user to create/drop/alter/show/..., for managing secondary index
 2. Optimizer layer: Pick up the best physical/logical plan for a query using RBO/CBO/HBO etc
 3. Standard API interface layer: provides standard interfaces for upper-layer to invoke, such as createIndex, getRowIdSet and so on
-4. IndexManager Factory layer: many kinds of Record Level Index implementations for users to choice, 
+4. IndexManager Factory layer: many kinds of secondary Index implementations for users to choice, 
    such as HBase based, Lucene based, B+ tree based, etc
 5. Index Implementation layer:  provides the ability to read, write and manage the underlying index
 
@@ -99,17 +107,18 @@ of secondary index.
 
 # Implementation
 
-![](secondary-index-implementation.jpg)
-
 ### SQL layer
-xxx
+Parsing all kinds of index related SQL, including create/drop/alter index, optimize table xxx, etc.
 
 ### Optimizer layer
-For the convenience of implementation, we can implement the first phase based on RBO(rule-based optimizer), 
+For the convenience of implementation, we can implement the first phase based on RBO(rule-based optimizer),  
 and then gradually expand and improve CBO and HBO based on the collected statistical information.
 
+We can define RBO in several ways, 
+for example, SQL with more than 10 predicates does not push down to use secondary index, but uses the existing scanning logic.
+
 ### Standard API layer
-The standard API may contain followings:
+The standard APIs are as follows, and subsequent index types(Hbase/Lucene/B+ tree ...) need to implement these APIs.
 
 ```
 // get row id set for the specified table with predicates
@@ -128,16 +137,56 @@ boolean dropIndex(HoodieTable table, List<Column> columns)
 ```
 
 ### Index implementation layer
+The role of the secondary index is to provide a mapping of a column or column combination value to 
+specified rows, so that it is convenient to find the result row that meets the requirements according to 
+this index during query, so as to obtain the final data rows.
 
+#### kv mapping ( use row id not RecordKey/primary key)
+In mapping 'column value->row', we can use rowId or primary key(RecordKey) to identify one unique row.
+Considering the memory saving and the efficiency of row set merging, we choose rowId.
 
-## read index
+#### build index
+- trigger time
 
-## build index
+When one column's secondary index enabled, we need to build index for it automatically. Index building needs to
+consume a lot of CPU and IO resources. So, build index while compaction/clustering executing is a good solution, 
+after table service is serviced, writing and index construction can be better decouple to avoid impact on 
+write performance.
 
-## index retention
+Because the time of index building decided by records num, the index may not available immediately after 
+user creating it util the next compaction/clustering triggered and completed.
+
+Also, we need to support a manual way to trig and monitor it after creating, CMD procedure needs to be developed,
+such as 'optimize table t1', 'show indexing t1', etc.
+
+- index file
+    - A: build index only for base file
+    - B: build index only for log file
+    - C: build index for both base file and log file
+
+We prefer plan A right now, the main purpose of this proposal is to save base file IO cost based on the assuming that
+base file has lots of records, not log file.
+
+Each base file will be generated one index file, which contains one or more columns of index data.
+The index structure of each column is the mapping of column values to specific rows.
+
+- index strategy(What data to build index) 
+    - FromNowOn: only build index for the new incoming records
+    - ALL: build index for all records, including history records in partition/non-partition, COW/MOR table 
+Other strategies may be introduced to HUDI at future.
+
+#### read index
+xxx
+
+## index management
+- where to store: index files are saved in .hoodie/.index/${indexType}/${instant}/${fileId}/ dir, we can directly obtain the index file path based on the file name in the process of querying.
+- life cycle: the retention time of the index is the same as that of hoodie instant, when cleaning instants, the corresponding index dir will be cleaned together.
+
+The overall implementation diagram is as follows.
+![](secondary-index-implementation.jpg)
 
 ## Lucene Secondary Index Implementation
-Record level index is a base file level index, which means each base file has its own index. 
+Secondary index is a base file level index, which means each base file has its own index. 
 When running a query(with one predicate), we do steps:
 1.get the row id set using Lucene index;
 2.read details by row id without unnecessary data being read;
@@ -148,7 +197,7 @@ It can be used in the following scenarios:
 2. query with , such as select col1, col2 from testTable where col3 = 'xxx';
 3. query with multiple predicate
 In some specific scenarios, row id is enough to do the right thing, such as judging whether specific record 
-exists. Next, we will discuss the detailed implementation of lucene based record level index 
+exists. Next, we will discuss the detailed implementation of lucene based secondary index 
 from three parts *Index Generation & Update*, *Index Storage* and *Index Usage*.
 
 
@@ -156,9 +205,9 @@ from three parts *Index Generation & Update*, *Index Storage* and *Index Usage*.
 
 
 ### Index Management(Generation & Update)
-In lucene based record level index, we mainly use inverted index to speed up record lookup, 
+In lucene based secondary index, we mainly use inverted index to speed up record lookup, 
 inverted index stores a mapping from doc id set to specific value. Now, we simply explain the 
-whole concept with an example. Let's assume we have a ``test`` table in our hoodie dataset,
+whole concept with an example. Let's assume we have a ``test`` table with column 'msg' and 'sender' in our hoodie dataset,
 here is what the table will look like:
 
 | msg               | sender |
@@ -166,11 +215,12 @@ here is what the table will look like:
 | Summer is coming  | UserA  |
 | Buying a new car  | UserA  |
 | Buying a new home | UserB  |
+...
 
 After indexing ``test`` table with lucene, we will get inverted index for every field in this
 table. Inverted index for field ``msg``:
 
-| term   | doc id |
+| term   | row id |
 |--------|--------|
 | Summer | 1      |
 | is     | 1      |
@@ -183,23 +233,25 @@ table. Inverted index for field ``msg``:
 
 Inverted index for field ``sender``:
 
-| term  | doc id |
+| term  | row id |
 |-------|--------|
 | UserA | 1,2    |
 | UserB | 3      |
 
-When querying ``test`` table with predicates ``msg like 'Buying%' and sender = 'UserA'``, we
-can quickly get hit row ``2,3 & 1,2 => 2``, then read details with rowId = 2.
+```
+select * from test where msg like 'Buying%' and sender = 'UserA'
+```
 
+When querying ``test`` table with predicates ``msg like 'Buying%' and sender = 'UserA'``, we
+can quickly get matched rows ``2,3 & 1,2 => 2``, then read details with rowId = 2.
+
+......
+
+
+### trigger time of index building
 There are two ways to implement lucene index generation and update in hoodie, the first one 
 is to listen table commit event, every commit event will trigger indexing files which have 
 been modified. Another approach is to trigger index builds through clustering.
-
-### Index Storage & Clean
-Lucene index files are saved in ``.hoodie/.index/lucene/${instant}/${fileId}/`` dir, we can
-directly obtain the index file path based on the file name in the process of querying. The 
-retention time of the index is the same as that of hoodie instant, when cleaning instants, 
-the index files under corresponding index dir will be cleaned together.
 
 ### Index Usage
 Lucene index can be used in ``tagLocation``, existential judgment and normal queries. When using
@@ -221,7 +273,7 @@ page. The mainly steps can be described as follows:
 
 ![](filter-by-lucene-index.jpg)
 
-By using lucene based record level index, we can exactly read what we want from parquet file.
+By using lucene based secondary index, we can exactly read what we want from parquet file.
 
 ## Rollout/Adoption Plan
 
