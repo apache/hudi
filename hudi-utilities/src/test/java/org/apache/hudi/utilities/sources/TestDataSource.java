@@ -60,7 +60,7 @@ public class TestDataSource extends AbstractBaseTestSource {
       LOG.warn("Return no new data from Test Data source " + counter + ", source limit " + sourceLimit);
       return new InputBatch<>(Option.empty(), lastCheckpointStr.orElse(null));
     } else {
-      LOG.warn("REturning valid data from Test Data source " + counter + ", source limit " + sourceLimit);
+      LOG.warn("Returning valid data from Test Data source " + counter + ", source limit " + sourceLimit);
     }
     counter++;
 

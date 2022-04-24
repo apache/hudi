@@ -403,13 +403,11 @@ public class HoodieDeltaStreamer implements Serializable {
         + "https://spark.apache.org/docs/latest/job-scheduling.html")
     public Integer clusterSchedulingMinShare = 0;
 
-    @Parameter(names = {"--enable-shutdown-with-continuous-mode"}, description = "Enable graceful shutdown with continuous mode on certain conditions")
-    public Boolean enableShutdownOnContinousMode = false;
+    @Parameter(names = {"--enable-post-write-termination-strategy"}, description = "Enable graceful shutdown with continuous mode on certain conditions")
+    public Boolean enablePostWriteTerminationStrategy = false;
 
-    @Parameter(names = {"--num-times-no-new-data-before-shutdown-with-continuous-mode"}, description = "When --enable-shutdown-with-continuous-mode is enabled, "
-        + "this config will determine when to shutdown deltastreamer if no new data is found in the source. If (numTimesNoNewDataBeforeShutdownWithContinuousMode) times,"
-        + " no new data is encountered, deltastreamer will shutdown gracefully")
-    public Integer numTimesNoNewDataBeforeShutdownWithContinuousMode = 3;
+    @Parameter(names = {"--post-write-termination-strategy-class"}, description = "Post writer termination strategy class to gracefully shutdown deltastreamer in continuous mode")
+    public String postWriteTerminationStrategyClass = "";
 
     public boolean isAsyncCompactionEnabled() {
       return continuousMode && !forceDisableCompaction
@@ -611,7 +609,7 @@ public class HoodieDeltaStreamer implements Serializable {
      */
     private transient DeltaSync deltaSync;
 
-    private long numTimesNoNewData = 0;
+    private final Option<PostWriteTerminationStrategy> postWriteTerminationStrategy;
 
     public DeltaSyncService(Config cfg, JavaSparkContext jssc, FileSystem fs, Configuration conf,
                             Option<TypedProperties> properties) throws IOException {
@@ -620,6 +618,8 @@ public class HoodieDeltaStreamer implements Serializable {
       this.sparkSession = SparkSession.builder().config(jssc.getConf()).getOrCreate();
       this.asyncCompactService = Option.empty();
       this.asyncClusteringService = Option.empty();
+      this.postWriteTerminationStrategy = cfg.enablePostWriteTerminationStrategy ? TerminationStrategyUtils.createPostWriteTerminationStrategy(properties.get(), cfg.postWriteTerminationStrategyClass) :
+      Option.empty();
 
       if (fs.exists(new Path(cfg.targetBasePath))) {
         HoodieTableMetaClient meta =
@@ -705,12 +705,11 @@ public class HoodieDeltaStreamer implements Serializable {
                   }
                 }
               }
-              if (cfg.enableShutdownOnContinousMode) {
-                // check if deltastreamer need to be shutdown
-                numTimesNoNewData = scheduledCompactionInstantAndRDD.isPresent() ? 0 : numTimesNoNewData + 1;
-                if (numTimesNoNewData >= cfg.numTimesNoNewDataBeforeShutdownWithContinuousMode) {
+              // check if deltastreamer need to be shutdown
+              if (postWriteTerminationStrategy.isPresent()) {
+                if (postWriteTerminationStrategy.get().shouldShutdown(scheduledCompactionInstantAndRDD)) {
                   error = true;
-                  throw new HoodieException("Shutting down on continuous mode condition met. Shutting down delta sync.");
+                  shutdown(false);
                 }
               }
               long toSleepMs = cfg.minSyncIntervalSeconds * 1000 - (System.currentTimeMillis() - start);
