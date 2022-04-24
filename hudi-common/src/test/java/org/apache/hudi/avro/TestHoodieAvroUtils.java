@@ -258,6 +258,13 @@ public class TestHoodieAvroUtils {
   }
 
   @Test
+  public void testGetRootLevelFieldName() {
+    assertEquals("a", HoodieAvroUtils.getRootLevelFieldName("a.b.c"));
+    assertEquals("a", HoodieAvroUtils.getRootLevelFieldName("a"));
+    assertEquals("", HoodieAvroUtils.getRootLevelFieldName(""));
+  }
+
+  @Test
   public void testGetNestedFieldVal() {
     GenericRecord rec = new GenericData.Record(new Schema.Parser().parse(EXAMPLE_SCHEMA));
     rec.put("_row_key", "key1");

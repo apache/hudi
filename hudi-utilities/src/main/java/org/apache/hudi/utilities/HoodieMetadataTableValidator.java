@@ -490,7 +490,8 @@ public class HoodieMetadataTableValidator implements Serializable {
 
     // ignore partitions created by uncommitted ingestion.
     allPartitionPathsFromFS = allPartitionPathsFromFS.stream().parallel().filter(part -> {
-      HoodiePartitionMetadata hoodiePartitionMetadata = new HoodiePartitionMetadata(metaClient.getFs(), new Path(basePath, part));
+      HoodiePartitionMetadata hoodiePartitionMetadata =
+          new HoodiePartitionMetadata(metaClient.getFs(), FSUtils.getPartitionPath(basePath, part));
 
       Option<String> instantOption = hoodiePartitionMetadata.readPartitionCreatedCommitTime();
       if (instantOption.isPresent()) {
@@ -983,7 +984,7 @@ public class HoodieMetadataTableValidator implements Serializable {
         return baseFileNameList.stream().flatMap(filename ->
                 new ParquetUtils().readRangeFromParquetMetadata(
                     metaClient.getHadoopConf(),
-                    new Path(new Path(metaClient.getBasePath(), partitionPath), filename),
+                    new Path(FSUtils.getPartitionPath(metaClient.getBasePath(), partitionPath), filename),
                     allColumnNameList).stream())
             .sorted(new HoodieColumnRangeMetadataComparator())
             .collect(Collectors.toList());
@@ -1024,7 +1025,7 @@ public class HoodieMetadataTableValidator implements Serializable {
     }
 
     private Option<BloomFilterData> readBloomFilterFromFile(String partitionPath, String filename) {
-      Path path = new Path(new Path(metaClient.getBasePath(), partitionPath), filename);
+      Path path = new Path(FSUtils.getPartitionPath(metaClient.getBasePath(), partitionPath), filename);
       HoodieFileReader<IndexedRecord> fileReader;
       try {
         fileReader = HoodieFileReaderFactory.getFileReader(metaClient.getHadoopConf(), path);

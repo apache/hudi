@@ -120,6 +120,9 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
     StructType(schema.fields.filterNot(f => partitionColumns.contains(f.name)))
   }
 
+  /**
+   * @VisibleForTesting
+   */
   def partitionSchema: StructType = {
     if (queryAsNonePartitionedTable) {
       // If we read it as Non-Partitioned table, we should not

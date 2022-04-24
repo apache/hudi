@@ -37,7 +37,7 @@ import org.joda.time.DateTime
 import org.joda.time.format.DateTimeFormat
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue, fail}
 import org.junit.jupiter.api.function.Executable
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
 
@@ -747,8 +747,9 @@ class TestCOWDataSource extends HoodieClientTestBase {
     assertEquals(resultSchema, schema1)
   }
 
-  @ParameterizedTest @ValueSource(booleans = Array(true, false))
-  def testCopyOnWriteWithDropPartitionColumns(enableDropPartitionColumns: Boolean) {
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testCopyOnWriteWithDroppedPartitionColumns(enableDropPartitionColumns: Boolean) {
     val records1 = recordsToStrings(dataGen.generateInsertsContainsAllPartitions("000", 100)).toList
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
     inputDF1.write.format("org.apache.hudi")
@@ -897,8 +898,9 @@ class TestCOWDataSource extends HoodieClientTestBase {
       readResult.sort("_row_key").select("shortDecimal").collect().map(_.getDecimal(0).toPlainString).mkString(","))
   }
 
-  @Test
-  def testHoodieBaseFileOnlyViewRelation(): Unit = {
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testPartitionColumnsProperHandling(useGlobbing: Boolean): Unit = {
     val _spark = spark
     import _spark.implicits._
 
@@ -918,26 +920,56 @@ class TestCOWDataSource extends HoodieClientTestBase {
       .option(DataSourceWriteOptions.PRECOMBINE_FIELD.key, "ts")
       .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key, "org.apache.hudi.keygen.TimestampBasedKeyGenerator")
       .option(Config.TIMESTAMP_TYPE_FIELD_PROP, "DATE_STRING")
+      .option(Config.TIMESTAMP_INPUT_DATE_FORMAT_PROP, "yyyy-MM-dd")
       .option(Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP, "yyyy/MM/dd")
       .option(Config.TIMESTAMP_TIMEZONE_FORMAT_PROP, "GMT+8:00")
-      .option(Config.TIMESTAMP_INPUT_DATE_FORMAT_PROP, "yyyy-MM-dd")
       .mode(org.apache.spark.sql.SaveMode.Append)
       .save(basePath)
 
-    val res = spark.read.format("hudi").load(basePath)
+    // NOTE: We're testing here that both paths are appropriately handling
+    //       partition values, regardless of whether we're reading the table
+    //       t/h a globbed path or not
+    val path = if (useGlobbing) {
+      s"$basePath/*/*/*/*"
+    } else {
+      basePath
+    }
 
-    assert(res.count() == 2)
+    // Case #1: Partition columns are read from the data file
+    val firstDF = spark.read.format("hudi").load(path)
+
+    assert(firstDF.count() == 2)
 
     // data_date is the partition field. Persist to the parquet file using the origin values, and read it.
-    assertTrue(
-      res.select("data_date").map(_.get(0).toString).collect().sorted.sameElements(
-        Array("2018-09-23", "2018-09-24")
-      )
+    assertEquals(
+      Seq("2018-09-23", "2018-09-24"),
+      firstDF.select("data_date").map(_.get(0).toString).collect().sorted.toSeq
     )
-    assertTrue(
-      res.select("_hoodie_partition_path").map(_.get(0).toString).collect().sorted.sameElements(
-        Array("2018/09/23", "2018/09/24")
-      )
+    assertEquals(
+      Seq("2018/09/23", "2018/09/24"),
+      firstDF.select("_hoodie_partition_path").map(_.get(0).toString).collect().sorted.toSeq
     )
+
+    // Case #2: Partition columns are extracted from the partition path
+    //
+    // NOTE: This case is only relevant when globbing is NOT used, since when globbing is used Spark
+    //       won't be able to infer partitioning properly
+    if (!useGlobbing) {
+      val secondDF = spark.read.format("hudi")
+        .option(DataSourceReadOptions.EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH.key, "true")
+        .load(path)
+
+      assert(secondDF.count() == 2)
+
+      // data_date is the partition field. Persist to the parquet file using the origin values, and read it.
+      assertEquals(
+        Seq("2018/09/23", "2018/09/24"),
+        secondDF.select("data_date").map(_.get(0).toString).collect().sorted.toSeq
+      )
+      assertEquals(
+        Seq("2018/09/23", "2018/09/24"),
+        secondDF.select("_hoodie_partition_path").map(_.get(0).toString).collect().sorted.toSeq
+      )
+    }
   }
 }

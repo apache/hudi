@@ -83,7 +83,6 @@
                   <include>org.apache.hbase:hbase-metrics-api</include>
                   <include>org.apache.hbase:hbase-protocol-shaded</include>
                   <include>org.apache.hbase:hbase-server</include>
-                  <include>org.apache.hbase:hbase-annotations</include>
                   <include>org.apache.hbase.thirdparty:hbase-shaded-protobuf</include>
                   <include>org.apache.hbase.thirdparty:hbase-shaded-netty</include>
                   <include>org.apache.hbase.thirdparty:hbase-shaded-miscellaneous</include>

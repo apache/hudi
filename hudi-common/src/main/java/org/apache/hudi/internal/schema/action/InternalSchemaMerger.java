@@ -48,6 +48,25 @@ public class InternalSchemaMerger {
   // we can pass decimalType to reWriteRecordWithNewSchema directly, everything is ok.
   private boolean useColumnTypeFromFileSchema = true;
 
+  // deal with rename
+  // Whether to use column name from file schema to read files when we find some column name has changed.
+  // spark parquetReader need the original column name to read data, otherwise the parquetReader will read nothing.
+  // eg: current column name is colOldName, now we rename it to colNewName,
+  // we should not pass colNewName to parquetReader, we must pass colOldName to it; when we read out the data.
+  // for log reader
+  // since our reWriteRecordWithNewSchema function support rewrite directly, so we no need this parameter
+  // eg: current column name is colOldName, now we rename it to colNewName,
+  // we can pass colNewName to reWriteRecordWithNewSchema directly, everything is ok.
+  private boolean useColNameFromFileSchema = true;
+
+  public InternalSchemaMerger(InternalSchema fileSchema, InternalSchema querySchema, boolean ignoreRequiredAttribute, boolean useColumnTypeFromFileSchema, boolean useColNameFromFileSchema) {
+    this.fileSchema = fileSchema;
+    this.querySchema = querySchema;
+    this.ignoreRequiredAttribute = ignoreRequiredAttribute;
+    this.useColumnTypeFromFileSchema = useColumnTypeFromFileSchema;
+    this.useColNameFromFileSchema = useColNameFromFileSchema;
+  }
+
   public InternalSchemaMerger(InternalSchema fileSchema, InternalSchema querySchema, boolean ignoreRequiredAttribute, boolean useColumnTypeFromFileSchema) {
     this.fileSchema = fileSchema;
     this.querySchema = querySchema;
@@ -131,12 +150,15 @@ public class InternalSchemaMerger {
   private Types.Field dealWithRename(int fieldId, Type newType, Types.Field oldField) {
     Types.Field fieldFromFileSchema = fileSchema.findField(fieldId);
     String nameFromFileSchema = fieldFromFileSchema.name();
+    String nameFromQuerySchema = querySchema.findField(fieldId).name();
     Type typeFromFileSchema = fieldFromFileSchema.type();
     // Current design mechanism guarantees nestedType change is not allowed, so no need to consider.
     if (newType.isNestedType()) {
-      return Types.Field.get(oldField.fieldId(), oldField.isOptional(), nameFromFileSchema, newType, oldField.doc());
+      return Types.Field.get(oldField.fieldId(), oldField.isOptional(),
+          useColNameFromFileSchema ? nameFromFileSchema : nameFromQuerySchema, newType, oldField.doc());
     } else {
-      return Types.Field.get(oldField.fieldId(), oldField.isOptional(), nameFromFileSchema, useColumnTypeFromFileSchema ? typeFromFileSchema : newType, oldField.doc());
+      return Types.Field.get(oldField.fieldId(), oldField.isOptional(),
+          useColNameFromFileSchema ? nameFromFileSchema : nameFromQuerySchema, useColumnTypeFromFileSchema ? typeFromFileSchema : newType, oldField.doc());
     }
   }
 
