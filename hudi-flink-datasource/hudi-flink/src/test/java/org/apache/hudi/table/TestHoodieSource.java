@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table;
 
+import org.apache.hudi.api.HoodieSource;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.table.format.mor.MergeOnReadInputFormat;
 import org.apache.hudi.utils.TestConfigurations;
@@ -53,8 +54,8 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 /**
  * Test cases for HoodieTableSource.
  */
-public class TestHoodieTableSource {
-  private static final Logger LOG = LoggerFactory.getLogger(TestHoodieTableSource.class);
+public class TestHoodieSource {
+  private static final Logger LOG = LoggerFactory.getLogger(TestHoodieSource.class);
 
   private Configuration conf;
 
@@ -70,12 +71,14 @@ public class TestHoodieTableSource {
   @Test
   void testGetReadPaths() throws Exception {
     beforeEach();
-    HoodieTableSource tableSource = new HoodieTableSource(
-        TestConfigurations.TABLE_SCHEMA,
-        new Path(tempFile.getPath()),
-        Arrays.asList(conf.getString(FlinkOptions.PARTITION_PATH_FIELD).split(",")),
-        "default-par",
-        conf);
+    HoodieSource hoodieSource = HoodieSource.builder()
+            .config(conf)
+            .path(new Path(tempFile.getAbsolutePath()))
+            .schema(TestConfigurations.TABLE_SCHEMA)
+            .defaultPartName("default-par")
+            .partitionKeys(Arrays.asList(conf.getString(FlinkOptions.PARTITION_PATH_FIELD).split(",")))
+            .build();
+    HoodieTableSource tableSource = new HoodieTableSource(hoodieSource);
     Path[] paths = tableSource.getReadPaths();
     assertNotNull(paths);
     String[] names = Arrays.stream(paths).map(Path::getName)
@@ -100,12 +103,14 @@ public class TestHoodieTableSource {
     // write some data to let the TableSchemaResolver get the right instant
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
 
-    HoodieTableSource tableSource = new HoodieTableSource(
-        TestConfigurations.TABLE_SCHEMA,
-        new Path(tempFile.getPath()),
-        Arrays.asList(conf.getString(FlinkOptions.PARTITION_PATH_FIELD).split(",")),
-        "default-par",
-        conf);
+    HoodieSource hoodieSource = HoodieSource.builder()
+            .config(conf)
+            .path(new Path(tempFile.getAbsolutePath()))
+            .schema(TestConfigurations.TABLE_SCHEMA)
+            .defaultPartName("default-par")
+            .partitionKeys(Arrays.asList(conf.getString(FlinkOptions.PARTITION_PATH_FIELD).split(",")))
+            .build();
+    HoodieTableSource tableSource = new HoodieTableSource(hoodieSource);
     InputFormat<RowData, ?> inputFormat = tableSource.getInputFormat();
     assertThat(inputFormat, is(instanceOf(FileInputFormat.class)));
     conf.setString(FlinkOptions.TABLE_TYPE, FlinkOptions.TABLE_TYPE_MERGE_ON_READ);
@@ -123,12 +128,14 @@ public class TestHoodieTableSource {
     conf = TestConfigurations.getDefaultConf(path);
     conf.setBoolean(FlinkOptions.READ_AS_STREAMING, true);
 
-    HoodieTableSource tableSource = new HoodieTableSource(
-        TestConfigurations.TABLE_SCHEMA,
-        new Path(tempFile.getPath()),
-        Arrays.asList(conf.getString(FlinkOptions.PARTITION_PATH_FIELD).split(",")),
-        "default-par",
-        conf);
+    HoodieSource hoodieSource = HoodieSource.builder()
+            .config(conf)
+            .path(new Path(tempFile.getAbsolutePath()))
+            .schema(TestConfigurations.TABLE_SCHEMA)
+            .defaultPartName("default-par")
+            .partitionKeys(Arrays.asList(conf.getString(FlinkOptions.PARTITION_PATH_FIELD).split(",")))
+            .build();
+    HoodieTableSource tableSource = new HoodieTableSource(hoodieSource);
     assertNull(tableSource.getMetaClient(), "Streaming source with empty table path is allowed");
     final String schemaFields = tableSource.getTableAvroSchema().getFields().stream()
         .map(Schema.Field::name)

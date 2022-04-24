@@ -18,6 +18,7 @@
 
 package org.apache.hudi.sink.bulk;
 
+import org.apache.hudi.api.util.HoodieSourceSinkUtil;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.hudi.table.HoodieTableFactory;
@@ -100,7 +101,7 @@ public class TestRowDataKeyGen {
   void testTimestampBasedKeyGenerator() {
     Configuration conf = TestConfigurations.getDefaultConf("path1");
     conf.setString(FlinkOptions.PARTITION_PATH_FIELD, "ts");
-    HoodieTableFactory.setupTimestampKeygenOptions(conf, DataTypes.TIMESTAMP(3));
+    HoodieSourceSinkUtil.setupTimestampKeygenOptions(conf, DataTypes.TIMESTAMP(3));
     final RowData rowData1 = insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
         TimestampData.fromEpochMillis(7200000), StringData.fromString("par1"));
     final RowDataKeyGen keyGen1 = RowDataKeyGen.instance(conf, TestConfigurations.ROW_TYPE);

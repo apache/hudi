@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.format;
 
+import org.apache.hudi.api.HoodieSource;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -494,12 +495,15 @@ public class TestInputFormat {
   // -------------------------------------------------------------------------
 
   private HoodieTableSource getTableSource(Configuration conf) {
-    return new HoodieTableSource(
-        TestConfigurations.TABLE_SCHEMA,
-        new Path(tempFile.getAbsolutePath()),
-        Collections.singletonList("partition"),
-        "default",
-        conf);
+
+    HoodieSource hoodieSource = HoodieSource.builder()
+            .config(conf)
+            .path(new Path(tempFile.getAbsolutePath()))
+            .schema(TestConfigurations.TABLE_SCHEMA)
+            .defaultPartName("default")
+            .partitionKeys(Collections.singletonList("partition"))
+            .build();
+    return new HoodieTableSource(hoodieSource);
   }
 
   @SuppressWarnings("unchecked, rawtypes")
