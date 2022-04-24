@@ -57,7 +57,6 @@ public interface BulkInsertPartitioner<I> extends Serializable {
 
   /**
    * Return write handle factory for the given partition.
-   * By default, return CreateHandleFactory which will always write to a new file group
    * @param partitionId data partition
    * @return
    */

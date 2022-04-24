@@ -77,12 +77,11 @@ public class JavaBulkInsertHelper<T extends HoodieRecordPayload, R> extends Base
           config.shouldAllowMultiWriteOnSameInstant());
     }
 
-    BulkInsertPartitioner partitioner = userDefinedBulkInsertPartitioner.isPresent()
-            ? userDefinedBulkInsertPartitioner.get()
-            : JavaBulkInsertInternalPartitionerFactory.get(config.getBulkInsertSortMode());
+    BulkInsertPartitioner partitioner = userDefinedBulkInsertPartitioner.orElse(JavaBulkInsertInternalPartitionerFactory.get(config.getBulkInsertSortMode()));
 
     // write new files
-    List<WriteStatus> writeStatuses = bulkInsert(inputRecords, instantTime, table, config, performDedupe, partitioner, false, config.getBulkInsertShuffleParallelism(), new CreateHandleFactory(false));
+    List<WriteStatus> writeStatuses = bulkInsert(inputRecords, instantTime, table, config, performDedupe, partitioner, false,
+        config.getBulkInsertShuffleParallelism(), new CreateHandleFactory(false));
     //update index
     ((BaseJavaCommitActionExecutor) executor).updateIndexAndCommitIfNeeded(writeStatuses, result);
     return result;
@@ -118,6 +117,7 @@ public class JavaBulkInsertHelper<T extends HoodieRecordPayload, R> extends Base
     new JavaLazyInsertIterable<>(repartitionedRecords.iterator(), true,
         config, instantTime, table,
         fileIdPrefixProvider.createFilePrefix(""), table.getTaskContextSupplier(),
+        // Always get the first WriteHandleFactory, as there is only a single data partition for hudi java engine.
         (WriteHandleFactory) partitioner.getWriteHandleFactory(0).orElse(writeHandleFactory)).forEachRemaining(writeStatuses::addAll);
 
     return writeStatuses;
