@@ -55,7 +55,7 @@ object HoodieExecutorBenchmark extends HoodieBenchmarkBase {
          * Return result of consuming records so far.
          */
         override def getResult: Integer = {
-          return count;
+           count
         }
       }
       val instantTime = HoodieActiveTimeline.createNewInstantTime
