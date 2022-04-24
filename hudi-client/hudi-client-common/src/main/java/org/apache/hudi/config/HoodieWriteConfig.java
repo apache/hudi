@@ -243,7 +243,7 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final ConfigProperty<Integer> WRITE_BUFFER_SIZE = ConfigProperty
       .key("hoodie.write.buffer.size")
-      .defaultValue(128 * 1024)
+      .defaultValue(1024)
       .withDocumentation("The size of the Disruptor Executor ring buffer, must be power of 2");
 
   public static final ConfigProperty<String> WRITE_WAIT_STRATEGY = ConfigProperty

@@ -83,10 +83,10 @@ object BoundInMemoryExecutorBenchmark extends HoodieBenchmarkBase {
 
   private def cowTableDisruptorExecutorBenchmark(tableName: String = "executorBenchmark"): Unit = {
     withTempDir {f =>
-      val benchmark = new HoodieBenchmark("COW Ingestion", 10000000)
+      val benchmark = new HoodieBenchmark("COW Ingestion", 5000000)
       benchmark.addCase("BoundInMemory Executor") { _ =>
         val finalTableName = tableName + Random.nextInt(10000)
-        val df = createDataFrame(10000000)
+        val df = createDataFrame(5000000)
         df.write.format("hudi")
           .mode(SaveMode.Overwrite)
           .option("hoodie.datasource.write.recordkey.field", "c1")
@@ -102,7 +102,7 @@ object BoundInMemoryExecutorBenchmark extends HoodieBenchmarkBase {
 
       benchmark.addCase("Disruptor Executor") { _ =>
         val finalTableName = tableName + Random.nextInt(10000)
-        val df = createDataFrame(10000000)
+        val df = createDataFrame(5000000)
         df.write.format("hudi")
           .mode(SaveMode.Overwrite)
           .option("hoodie.datasource.write.recordkey.field", "c1")
