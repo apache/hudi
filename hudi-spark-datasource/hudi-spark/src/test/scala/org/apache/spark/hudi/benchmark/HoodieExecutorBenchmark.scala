@@ -30,9 +30,10 @@ object HoodieExecutorBenchmark extends HoodieBenchmarkBase {
   val dataGen = new HoodieTestDataGenerator
 
   val utils = new HoodieExecutorTestUtils
+  val recordsNumber = 10000000
 
   private def cowTableDisruptorExecutorBenchmark(tableName: String = "executorBenchmark"): Unit = {
-    val benchmark = new HoodieBenchmark("COW Ingestion", 100000)
+    val benchmark = new HoodieBenchmark("COW Ingestion", recordsNumber)
     benchmark.addCase("Disruptor Executor") { _ =>
       val con: BoundedInMemoryQueueConsumer[HoodieLazyInsertIterable.HoodieInsertValueGenResult[HoodieRecord[_]], Integer] = new BoundedInMemoryQueueConsumer[HoodieLazyInsertIterable.HoodieInsertValueGenResult[HoodieRecord[_]], Integer]() {
 
@@ -58,7 +59,7 @@ object HoodieExecutorBenchmark extends HoodieBenchmarkBase {
         }
       }
       val instantTime = HoodieActiveTimeline.createNewInstantTime
-      val hoodieRecords = dataGen.generateInserts(instantTime, 100000)
+      val hoodieRecords = dataGen.generateInserts(instantTime, recordsNumber)
       val disruptorExecutor = utils.getDisruptorExecutor(hoodieRecords, con)
       disruptorExecutor.execute()
       disruptorExecutor.shutdownNow()
@@ -89,7 +90,7 @@ object HoodieExecutorBenchmark extends HoodieBenchmarkBase {
         }
       }
       val instantTime = HoodieActiveTimeline.createNewInstantTime
-      val hoodieRecords = dataGen.generateInserts(instantTime, 100000)
+      val hoodieRecords = dataGen.generateInserts(instantTime, recordsNumber)
       val boundInMemoryExecutor = utils.getBoundedInMemoryExecutor(hoodieRecords, con)
       boundInMemoryExecutor.execute()
       boundInMemoryExecutor.shutdownNow()
