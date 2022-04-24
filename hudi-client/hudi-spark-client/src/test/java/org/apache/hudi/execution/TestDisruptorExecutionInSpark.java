@@ -16,7 +16,6 @@
  * limitations under the License.
  */
 
-
 package org.apache.hudi.execution;
 
 import static org.apache.hudi.execution.HoodieLazyInsertIterable.getTransformFunction;
