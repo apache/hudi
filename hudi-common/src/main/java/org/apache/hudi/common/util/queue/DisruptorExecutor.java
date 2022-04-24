@@ -128,7 +128,7 @@ public class DisruptorExecutor<I, O, E> extends HoodieExecutor<I, O, E> {
   }
 
   private void waitForProducersFinished(ExecutorCompletionService<Boolean> pool) throws InterruptedException, ExecutionException {
-    for (int i = 0; i < producers.size(); i++ ) {
+    for (int i = 0; i < producers.size(); i++) {
       pool.take().get();
     }
   }
