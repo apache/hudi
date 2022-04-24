@@ -30,7 +30,7 @@ object HoodieExecutorBenchmark extends HoodieBenchmarkBase {
   val dataGen = new HoodieTestDataGenerator
 
   val utils = new HoodieExecutorTestUtils
-  val recordsNumber = 10000000
+  val recordsNumber = 1000000
 
   private def cowTableDisruptorExecutorBenchmark(tableName: String = "executorBenchmark"): Unit = {
     val benchmark = new HoodieBenchmark("COW Ingestion", recordsNumber)

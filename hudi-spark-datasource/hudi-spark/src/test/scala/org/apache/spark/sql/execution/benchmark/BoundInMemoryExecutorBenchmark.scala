@@ -18,8 +18,6 @@
 
 package org.apache.spark.sql.execution.benchmark
 
-import java.sql.{Date, Timestamp}
-
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.HoodieSparkUtils
 import org.apache.spark.SparkConf
@@ -33,6 +31,9 @@ import scala.util.Random
 object BoundInMemoryExecutorBenchmark extends HoodieBenchmarkBase {
 
   protected val spark: SparkSession = getSparkSession
+
+  // 5000 good local
+  val recordNumber = 1000000
 
   def getSparkSession: SparkSession = SparkSession.builder()
     .master("local[*]")
@@ -55,41 +56,26 @@ object BoundInMemoryExecutorBenchmark extends HoodieBenchmarkBase {
   private def createDataFrame(number: Int): DataFrame = {
     val schema = new StructType()
       .add("c1", IntegerType)
-      .add("c11", IntegerType)
-      .add("c12", IntegerType)
       .add("c2", StringType)
-      .add("c3", DecimalType(38, 10))
-      .add("c4", TimestampType)
-      .add("c5", ShortType)
-      .add("c6", DateType)
-      .add("c7", BinaryType)
-      .add("c9", ByteType)
 
     val rdd = spark.sparkContext.parallelize(0 to number, 2).map { item =>
       val c1 = Integer.valueOf(item)
-      val c11 = Integer.valueOf(Random.nextInt(10000))
-      val c12 = Integer.valueOf(Random.nextInt(10000))
-      val c2 = s" ${item}abc"
-      val c3 = new java.math.BigDecimal(s"${Random.nextInt(1000)}.${Random.nextInt(100)}")
-      val c4 = new Timestamp(System.currentTimeMillis())
-      val c5 = java.lang.Short.valueOf(s"${16}")
-      val c6 = Date.valueOf(s"${2020}-${item % 11 + 1}-${item % 28 + 1}")
-      val c7 = Array(item).map(_.toByte)
-      val c8 = java.lang.Byte.valueOf("9")
-      RowFactory.create(c1, c11, c12, c2, c3, c4, c5, c6, c7, c8)
+      val c2 = s"abc"
+      RowFactory.create(c1, c2)
     }
     spark.createDataFrame(rdd, schema)
   }
 
   private def cowTableDisruptorExecutorBenchmark(tableName: String = "executorBenchmark"): Unit = {
     withTempDir {f =>
-      val benchmark = new HoodieBenchmark("COW Ingestion", 5000000)
+      val benchmark = new HoodieBenchmark("COW Ingestion", recordNumber)
       benchmark.addCase("BoundInMemory Executor") { _ =>
         val finalTableName = tableName + Random.nextInt(10000)
-        val df = createDataFrame(5000000)
+        val df = createDataFrame(recordNumber)
         df.write.format("hudi")
           .mode(SaveMode.Overwrite)
           .option("hoodie.datasource.write.recordkey.field", "c1")
+          .option("hoodie.datasource.write.partitionpath.field", "c2")
           .option("hoodie.table.name", finalTableName)
           .option("hoodie.metadata.enable", "false")
           .option("hoodie.clean.automatic", "false")
@@ -97,18 +83,22 @@ object BoundInMemoryExecutorBenchmark extends HoodieBenchmarkBase {
           .option("hoodie.insert.shuffle.parallelism", "2")
           .option("hoodie.datasource.write.operation", "bulk_insert")
           .option("hoodie.datasource.write.row.writer.enable", "false")
-          .option("hoodie.bulkinsert.shuffle.parallelism", "10")
+          .option("hoodie.bulkinsert.shuffle.parallelism", "1")
           .option("hoodie.upsert.shuffle.parallelism", "2")
           .option("hoodie.delete.shuffle.parallelism", "2")
+          .option("hoodie.populate.meta.fields", "false")
+          .option("hoodie.table.keygenerator.class", "org.apache.hudi.keygen.SimpleKeyGenerator")
+
           .save(new Path(f.getCanonicalPath, finalTableName).toUri.toString)
       }
 
       benchmark.addCase("Disruptor Executor") { _ =>
         val finalTableName = tableName + Random.nextInt(10000)
-        val df = createDataFrame(5000000)
+        val df = createDataFrame(recordNumber)
         df.write.format("hudi")
           .mode(SaveMode.Overwrite)
           .option("hoodie.datasource.write.recordkey.field", "c1")
+          .option("hoodie.datasource.write.partitionpath.field", "c2")
           .option("hoodie.table.name", finalTableName)
           .option("hoodie.metadata.enable", "false")
           .option("hoodie.clean.automatic", "false")
@@ -116,10 +106,13 @@ object BoundInMemoryExecutorBenchmark extends HoodieBenchmarkBase {
           .option("hoodie.insert.shuffle.parallelism", "2")
           .option("hoodie.datasource.write.operation", "bulk_insert")
           .option("hoodie.datasource.write.row.writer.enable", "false")
-          .option("hoodie.bulkinsert.shuffle.parallelism", "10")
+          .option("hoodie.bulkinsert.shuffle.parallelism", "1")
           .option("hoodie.upsert.shuffle.parallelism", "2")
           .option("hoodie.delete.shuffle.parallelism", "2")
           .option("hoodie.write.executor.type", "DISRUPTOR_EXECUTOR")
+          .option("hoodie.populate.meta.fields", "false")
+          .option("hoodie.table.keygenerator.class", "org.apache.hudi.keygen.SimpleKeyGenerator")
+
           .save(new Path(f.getCanonicalPath, finalTableName).toUri.toString)
       }
       benchmark.run()
