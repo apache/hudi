@@ -316,7 +316,7 @@ public class HoodieCompactionConfig extends HoodieConfig {
 
   public static final ConfigProperty<Boolean> ARCHIVE_PROCEED_BEYOND_SAVEPOINTS = ConfigProperty
       .key("hoodie.archive.proceed.beyond.savepoints")
-      .defaultValue(false)
+      .defaultValue(true)
       .withDocumentation("When enable, hoodie will let archival proceed beyond savepoints, skipping savepointed commit. If disabled, archival will stop at first savepoint found");
 
   /** @deprecated Use {@link #CLEANER_POLICY} and its methods instead */

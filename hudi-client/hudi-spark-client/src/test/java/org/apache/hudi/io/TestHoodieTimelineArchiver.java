@@ -64,7 +64,9 @@ import org.apache.log4j.Logger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
@@ -632,13 +634,22 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
     assertEquals(originalCommits, commitsAfterArchival);
   }
 
+  private static Stream<Arguments> archiveCommitSavepointNoHoleParams() {
+    return Arrays.stream(new Boolean[][] {
+        {true, true},
+        {false, true},
+        {true, false},
+        {false, false}
+    }).map(Arguments::of);
+  }
+
   @ParameterizedTest
-  @ValueSource(booleans = {true, false})
-  public void testArchiveCommitSavepointNoHole(boolean enableMetadataTable) throws Exception {
+  @MethodSource("archiveCommitSavepointNoHoleParams")
+  public void testArchiveCommitSavepointNoHole(boolean enableMetadataTable, boolean archiveBeyondSavepoints) throws Exception {
     init();
     HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(basePath)
         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2).forTable("test-trip-table")
-        .withCompactionConfig(HoodieCompactionConfig.newBuilder().retainCommits(1).archiveCommitsWith(2, 5).build())
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder().retainCommits(1).archiveCommitsWith(2, 5).withArhiveProceedBeyondArchival(archiveBeyondSavepoints).build())
         .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
             .withRemoteServerPort(timelineServicePort).build())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(enableMetadataTable).build())
@@ -664,14 +675,30 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
     assertEquals(6, timeline.countInstants(), "Loaded 6 commits and the count should match");
     assertTrue(archiver.archiveIfRequired(context));
     timeline = metaClient.getActiveTimeline().reload().getCommitsTimeline().filterCompletedInstants();
-    assertEquals(5, timeline.countInstants(),
-        "Since we have a savepoint at 101, we should never archive any commit after 101 (we only archive 100)");
-    assertTrue(timeline.containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "101")),
-        "Archived commits should always be safe");
-    assertTrue(timeline.containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "102")),
-        "Archived commits should always be safe");
-    assertTrue(timeline.containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "103")),
-        "Archived commits should always be safe");
+    if (archiveBeyondSavepoints) {
+      // commits in active timeline = 101 and 105.
+      assertEquals(2, timeline.countInstants(),
+          "Since archiveBeyondSavepoint config is enabled, we will archive commits 102, 103 ");
+      assertTrue(timeline.containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "101")),
+          "Savepointed commits should always be safe");
+      assertFalse(timeline.containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "102")),
+          "102 expected to be archived");
+      assertFalse(timeline.containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "103")),
+          "103 expected to be archived");
+      assertTrue(timeline.containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "105")),
+          "104 expected to be archived");
+      assertTrue(timeline.containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "105")),
+          "105 expected to be in active timeline");
+    } else {
+      assertEquals(5, timeline.countInstants(),
+          "Since we have a savepoint at 101, we should never archive any commit after 101 (we only archive 100)");
+      assertTrue(timeline.containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "101")),
+          "Archived commits should always be safe");
+      assertTrue(timeline.containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "102")),
+          "Archived commits should always be safe");
+      assertTrue(timeline.containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "103")),
+          "Archived commits should always be safe");
+    }
   }
 
   @ParameterizedTest

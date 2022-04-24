@@ -363,7 +363,14 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   @Override
   public boolean isBeforeTimelineStarts(String instant) {
     Option<HoodieInstant> firstCommit = firstInstant();
-    return firstCommit.isPresent()
+    List<String> savepointedCommits = instants.stream().filter(entry -> entry.getAction().equals(HoodieTimeline.SAVEPOINT_ACTION)).map(HoodieInstant::getTimestamp).collect(Collectors.toList());
+    Option<HoodieInstant> firstNonSavepointedCommit = firstCommit;
+    if (!savepointedCommits.isEmpty()) {
+      // there are chances that there could be holes in the timeline due to archival and savepoint interplay. So, first non savepointed commit is considered as
+      // beginning of active timeline.
+      firstNonSavepointedCommit = Option.fromJavaOptional(instants.stream().filter(entry -> !savepointedCommits.contains(entry.getTimestamp())).findFirst());
+    }
+    return firstNonSavepointedCommit.isPresent()
         && HoodieTimeline.compareTimestamps(instant, LESSER_THAN, firstCommit.get().getTimestamp());
   }
 
