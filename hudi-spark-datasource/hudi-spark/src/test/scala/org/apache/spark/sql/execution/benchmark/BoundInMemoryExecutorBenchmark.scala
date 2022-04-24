@@ -32,7 +32,6 @@ object BoundInMemoryExecutorBenchmark extends HoodieBenchmarkBase {
 
   protected val spark: SparkSession = getSparkSession
 
-  // 5000 good local
   val recordNumber = 1000000
 
   def getSparkSession: SparkSession = SparkSession.builder()
@@ -66,12 +65,19 @@ object BoundInMemoryExecutorBenchmark extends HoodieBenchmarkBase {
     spark.createDataFrame(rdd, schema)
   }
 
+  /**
+   * Intel(R) Xeon(R) Platinum 8259CL CPU @ 2.50GHz
+   * COW Ingestion:                            Best Time(ms)   Avg Time(ms)   Stdev(ms)    Rate(M/s)   Per Row(ns)   Relative
+   * ------------------------------------------------------------------------------------------------------------------------
+   * BoundInMemory Executor                             5557           5607          70          0.2        5556.9       1.0X
+   * Disruptor Executor                                 2758           2778          28          0.4        2757.7       2.0X
+   */
   private def cowTableDisruptorExecutorBenchmark(tableName: String = "executorBenchmark"): Unit = {
+    val df = createDataFrame(recordNumber)
     withTempDir {f =>
       val benchmark = new HoodieBenchmark("COW Ingestion", recordNumber)
       benchmark.addCase("BoundInMemory Executor") { _ =>
         val finalTableName = tableName + Random.nextInt(10000)
-        val df = createDataFrame(recordNumber)
         df.write.format("hudi")
           .mode(SaveMode.Overwrite)
           .option("hoodie.datasource.write.recordkey.field", "c1")
@@ -88,13 +94,11 @@ object BoundInMemoryExecutorBenchmark extends HoodieBenchmarkBase {
           .option("hoodie.delete.shuffle.parallelism", "2")
           .option("hoodie.populate.meta.fields", "false")
           .option("hoodie.table.keygenerator.class", "org.apache.hudi.keygen.SimpleKeyGenerator")
-
           .save(new Path(f.getCanonicalPath, finalTableName).toUri.toString)
       }
 
       benchmark.addCase("Disruptor Executor") { _ =>
         val finalTableName = tableName + Random.nextInt(10000)
-        val df = createDataFrame(recordNumber)
         df.write.format("hudi")
           .mode(SaveMode.Overwrite)
           .option("hoodie.datasource.write.recordkey.field", "c1")
