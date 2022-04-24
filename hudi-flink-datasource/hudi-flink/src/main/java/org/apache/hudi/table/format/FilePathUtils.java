@@ -420,9 +420,9 @@ public class FilePathUtils {
    * @return array of the partition fields
    */
   public static String[] extractPartitionKeys(org.apache.flink.configuration.Configuration conf) {
-    if (FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.PARTITION_PATH_FIELD)) {
+    if (FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.HIVE_SYNC_PARTITION_FIELDS)) {
       return new String[0];
     }
-    return conf.getString(FlinkOptions.PARTITION_PATH_FIELD).split(",");
+    return conf.getString(FlinkOptions.HIVE_SYNC_PARTITION_FIELDS).split(",");
   }
 }
