@@ -28,6 +28,7 @@ public class HoodieDaemonThreadFactory implements ThreadFactory {
   public HoodieDaemonThreadFactory(Runnable preExecuteRunnable) {
     this.preExecuteRunnable = preExecuteRunnable;
   }
+
   @Override
   public Thread newThread(@NotNull final Runnable r) {
     Thread t = new Thread(new Runnable() {
