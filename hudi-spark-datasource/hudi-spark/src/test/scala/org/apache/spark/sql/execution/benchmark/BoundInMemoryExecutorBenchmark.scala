@@ -26,7 +26,7 @@ import org.apache.spark.SparkConf
 import org.apache.spark.hudi.benchmark.{HoodieBenchmark, HoodieBenchmarkBase}
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.{DataFrame, RowFactory, SparkSession}
+import org.apache.spark.sql.{DataFrame, RowFactory, SaveMode, SparkSession}
 
 import scala.util.Random
 
@@ -39,12 +39,6 @@ object BoundInMemoryExecutorBenchmark extends HoodieBenchmarkBase {
     .appName(this.getClass.getCanonicalName)
     .withExtensions(new HoodieSparkSessionExtension)
     .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
-    .config("hoodie.insert.shuffle.parallelism", "2")
-    .config("hoodie.datasource.write.operation", "bulk_insert")
-    .config("hoodie.datasource.write.row.writer.enable", "false")
-    .config("hoodie.bulkinsert.shuffle.parallelism", "10")
-    .config("hoodie.upsert.shuffle.parallelism", "2")
-    .config("hoodie.delete.shuffle.parallelism", "2")
     .config("spark.sql.session.timeZone", "CTT")
     .config(sparkConf())
     .getOrCreate()
@@ -56,18 +50,6 @@ object BoundInMemoryExecutorBenchmark extends HoodieBenchmarkBase {
         "org.apache.spark.sql.hudi.catalog.HoodieCatalog")
     }
     sparkConf
-  }
-
-  def createHoodieCowTable(tableName: String, tablePath: String) = {
-    createDataFrame(10000000).registerTempTable("ds")
-    spark.sql(
-      s"""
-         |create table $tableName using hudi
-         |tblproperties(primaryKey = 'c1')
-         |location '${tablePath}'
-         |As
-         |select * from ds
-       """.stripMargin)
   }
 
   private def createDataFrame(number: Int): DataFrame = {
@@ -99,19 +81,42 @@ object BoundInMemoryExecutorBenchmark extends HoodieBenchmarkBase {
     spark.createDataFrame(rdd, schema)
   }
 
-  def withTempTable(tableNames: String*)(f: => Unit): Unit = {
-    try f finally tableNames.foreach(spark.catalog.dropTempView)
-  }
-
   private def cowTableDisruptorExecutorBenchmark(tableName: String = "executorBenchmark"): Unit = {
     withTempDir {f =>
-      withTempTable(tableName) {
-        val benchmark = new HoodieBenchmark("COW Ingestion", 10000000)
-        benchmark.addCase("BoundInMemory Executor") { _ =>
-          createHoodieCowTable(tableName, new Path(f.getCanonicalPath, tableName).toUri.toString)
-        }
-        benchmark.run()
+      val benchmark = new HoodieBenchmark("COW Ingestion", 10000000)
+      benchmark.addCase("BoundInMemory Executor") { _ =>
+        val finalTableName = tableName + Random.nextInt(10000)
+        val df = createDataFrame(10000000)
+        df.write.format("hudi")
+          .mode(SaveMode.Overwrite)
+          .option("hoodie.datasource.write.recordkey.field", "c1")
+          .option("hoodie.table.name", finalTableName)
+          .option("hoodie.insert.shuffle.parallelism", "2")
+          .option("hoodie.datasource.write.operation", "bulk_insert")
+          .option("hoodie.datasource.write.row.writer.enable", "false")
+          .option("hoodie.bulkinsert.shuffle.parallelism", "10")
+          .option("hoodie.upsert.shuffle.parallelism", "2")
+          .option("hoodie.delete.shuffle.parallelism", "2")
+          .save(new Path(f.getCanonicalPath, finalTableName).toUri.toString)
       }
+
+      benchmark.addCase("Disruptor Executor") { _ =>
+        val finalTableName = tableName + Random.nextInt(10000)
+        val df = createDataFrame(10000000)
+        df.write.format("hudi")
+          .mode(SaveMode.Overwrite)
+          .option("hoodie.datasource.write.recordkey.field", "c1")
+          .option("hoodie.table.name", finalTableName)
+          .option("hoodie.insert.shuffle.parallelism", "2")
+          .option("hoodie.datasource.write.operation", "bulk_insert")
+          .option("hoodie.datasource.write.row.writer.enable", "false")
+          .option("hoodie.bulkinsert.shuffle.parallelism", "10")
+          .option("hoodie.upsert.shuffle.parallelism", "2")
+          .option("hoodie.delete.shuffle.parallelism", "2")
+          .option("hoodie.write.executor.type", "DISRUPTOR_EXECUTOR")
+          .save(new Path(f.getCanonicalPath, finalTableName).toUri.toString)
+      }
+      benchmark.run()
     }
   }
 
