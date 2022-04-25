@@ -38,7 +38,11 @@ import org.slf4j.LoggerFactory;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.util.*;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+import java.util.Arrays;
 import java.util.function.Predicate;
 
 /**
@@ -71,6 +75,10 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
    */
   private Map<String, Map<Integer, String>> bucketIndex;
 
+  /**
+   * BucketID to file group mapping in each partition loaded from fileSystem.
+   * Map(partition -> Map(bucketId, fileID)).
+   */
   private Map<String, Map<Integer, String>> fsBucketIndex;
 
   /**
@@ -144,7 +152,7 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
     } else {
       Map<Integer, String> fsBucketToFileId = fsBucketIndex.computeIfAbsent(partition, p -> new HashMap<>());
       String newFileId = BucketIdentifier.newBucketFileIdPrefix(bucketNum);
-      if(fsBucketToFileId.containsKey(bucketNum)){
+      if (fsBucketToFileId.containsKey(bucketNum)) {
         newFileId = fsBucketToFileId.get(bucketNum);
       }
       location = new HoodieRecordLocation("I", newFileId);
@@ -202,9 +210,9 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
     });
     bucketIndex.put(partition, bucketToFileIDMap);
 
-    // no need to load
+    // no need to load from file System
     boolean noNeedLoadFiles = bucketToFileIDMap.size() == bucketToLoad.size();
-    if(noNeedLoadFiles || isCowTable) {
+    if (noNeedLoadFiles || isCowTable) {
       return;
     }
     // reuse unCommitted log file id
@@ -218,13 +226,13 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
               .map(HoodieLogFile::new)
               .forEach(s -> {
                 int bucketNumber = BucketIdentifier.bucketIdFromFileId(s.getFileId());
-                if(bucketToLoad.contains(bucketNumber)){
+                if (bucketToLoad.contains(bucketNumber)) {
                   partitionFsBucketToFileIDMap.put(bucketNumber, s.getFileId());
                 }
               });
       fsBucketIndex.put(partition, partitionFsBucketToFileIDMap);
-    } catch (FileNotFoundException fileNotFoundException){
-      LOG.warn("may be table not inited");
+    } catch (FileNotFoundException fileNotFoundException) {
+      LOG.warn("May be table was not initialed");
     }
   }
 }
