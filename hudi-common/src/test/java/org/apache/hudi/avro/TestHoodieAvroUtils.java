@@ -18,6 +18,7 @@
 
 package org.apache.hudi.avro;
 
+import org.apache.avro.AvroRuntimeException;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.exception.SchemaCompatibilityException;
@@ -244,7 +245,8 @@ public class TestHoodieAvroUtils {
     assertEquals("key1", rec1.get("_row_key"));
     assertEquals("val1", rec1.get("non_pii_col"));
     assertEquals(3.5, rec1.get("timestamp"));
-    assertNull(rec1.get("pii_col"));
+    GenericRecord finalRec = rec1;
+    assertThrows(AvroRuntimeException.class, () -> finalRec.get("pii_col"));
     assertEquals(expectedSchema, rec1.getSchema());
 
     // non-partitioned table test with empty list of fields.
