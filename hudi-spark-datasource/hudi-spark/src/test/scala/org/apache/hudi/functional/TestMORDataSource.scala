@@ -19,11 +19,13 @@ package org.apache.hudi.functional
 
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceWriteOptions._
+import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieTableType}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
+import org.apache.hudi.common.util
 import org.apache.hudi.config.{HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.index.HoodieIndex.IndexType
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator
@@ -77,8 +79,8 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
     cleanupFileSystem()
   }
 
-  override def getSparkSessionExtensionsInjector(): Consumer[SparkSessionExtensions] =
-    (receiver: SparkSessionExtensions) => new HoodieSparkSessionExtension().apply(receiver)
+  override def getSparkSessionExtensionsInjector: util.Option[Consumer[SparkSessionExtensions]] =
+    toJavaOption(Some((receiver: SparkSessionExtensions) => new HoodieSparkSessionExtension().apply(receiver)))
 
   @Test def testCount() {
     // First Operation:
