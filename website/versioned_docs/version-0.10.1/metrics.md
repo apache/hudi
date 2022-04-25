@@ -133,6 +133,13 @@ In the absence of static AWS credentials being configured, `DefaultAWSCredential
 credentials by checking environment properties. Additional Amazon CloudWatch reporter specific properties that can be 
 tuned are in the `HoodieMetricsCloudWatchConfig` class.
 
+| Properity                                       | Description                                                       | Default value |
+|-------------------------------------------------|-------------------------------------------------------------------|---------------|
+| hoodie.metrics.cloudwatch.report.period.seconds | Frequency at which metrics are reported to CloudWatch, in seconds | 60            |
+| hoodie.metrics.cloudwatch.metric.prefix         | Prefix added to metric name                                       | empty         |
+| hoodie.metrics.cloudwatch.namespace             | Namespace for published metrics                                   | Hudi          |
+| hoodie.metrics.cloudwatch.maxDatumsPerRequest   | Maximum number of datums per one request to CloudWatch            | 20            |
+
 ### UserDefinedMetricsReporter
 
 Allows users to define a custom metrics reporter.
