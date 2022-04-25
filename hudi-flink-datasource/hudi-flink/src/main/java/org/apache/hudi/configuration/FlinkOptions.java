@@ -34,7 +34,6 @@ import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.ConfigOptions;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.table.factories.FactoryUtil;
 
 import java.lang.reflect.Field;
 import java.util.ArrayList;
@@ -233,8 +232,6 @@ public class FlinkOptions extends HoodieConfig {
   // ------------------------------------------------------------------------
   //  Write Options
   // ------------------------------------------------------------------------
-  public static final ConfigOption<Integer> SINK_PARALLELISM = FactoryUtil.SINK_PARALLELISM;
-
   public static final ConfigOption<String> TABLE_NAME = ConfigOptions
       .key(HoodieWriteConfig.TBL_NAME.key())
       .stringType()
