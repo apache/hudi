@@ -499,6 +499,28 @@ class TestMORDataSource extends HoodieClientTestBase {
     hudiSnapshotDF2.show(1)
   }
 
+  @Test def testNoPrecombine() {
+    // Insert Operation
+    val records = recordsToStrings(dataGen.generateInserts("000", 100)).toList
+    val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
+
+    val commonOptsNoPreCombine = Map(
+      "hoodie.insert.shuffle.parallelism" -> "4",
+      "hoodie.upsert.shuffle.parallelism" -> "4",
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
+      HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
+    )
+    inputDF.write.format("hudi")
+      .options(commonOptsNoPreCombine)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.TABLE_TYPE.key(), "MERGE_ON_READ")
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    spark.read.format("org.apache.hudi").load(basePath).count()
+  }
+
   @Test
   def testPreCombineFiledForReadMOR(): Unit = {
     writeData((1, "a0", 10, 100, false))
