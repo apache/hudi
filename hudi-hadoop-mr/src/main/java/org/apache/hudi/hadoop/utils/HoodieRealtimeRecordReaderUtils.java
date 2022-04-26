@@ -50,7 +50,6 @@ import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
-import javax.annotation.Nullable;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -310,13 +309,4 @@ public class HoodieRealtimeRecordReaderUtils {
     return appendFieldsToSchema(schema, newFields);
   }
 
-  @Nullable
-  private static Object getFieldVal(GenericRecord record, String fieldName) {
-    Schema.Field recordField = record.getSchema().getField(fieldName);
-    if (recordField == null) {
-      return null;
-    }
-
-    return record.get(recordField.pos());
-  }
 }
