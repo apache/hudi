@@ -86,4 +86,4 @@ The list of all RFCs can be found here.
 | 48 | [LogCompaction for MOR tables](./rfc-48/rfc-48.md) | `UNDER REVIEW` | 
 | 49 | [Support sync with DataHub](./rfc-49/rfc-49.md)    | `ONGOING` |
 | 50 | [Improve Timeline Server](./rfc-50/rfc-50.md) | `UNDER REVIEW` | 
-| 50 | [Improve Hoodie Writing Data Efficiency Using Lock-Free Message Queue](./rfc-51/rfc-51.md) | `UNDER REVIEW` | 
+| 51 | [Improve Hoodie Writing Data Efficiency Using Lock-Free Message Queue](./rfc-51/rfc-51.md) | `UNDER REVIEW` | 
