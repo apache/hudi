@@ -50,7 +50,7 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
   override type FileSplit = HoodieMergeOnReadFileSplit
 
   /**
-   * NOTE: These are the fields that are required to properly fulfil Hudi's Merge-on-Read
+   * NOTE: These are the fields that are required to properly fulfil Merge-on-Read (MOR)
    *       semantic:
    *
    *       <ol>
@@ -65,8 +65,10 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
    *       of primary-key or pre-combine-key are required to be fetched from storage (unless requested
    *       by the query), therefore saving on throughput
    */
-  override lazy val mandatoryFields: Seq[String] =
+  protected lazy val mandatoryFieldsForMerging: Seq[String] =
     Seq(recordKeyField) ++ preCombineFieldOpt.map(Seq(_)).getOrElse(Seq())
+
+  override lazy val mandatoryFields: Seq[String] = mandatoryFieldsForMerging
 
   protected val mergeType: String = optParams.getOrElse(DataSourceReadOptions.REALTIME_MERGE.key,
     DataSourceReadOptions.REALTIME_MERGE.defaultValue)
@@ -166,7 +168,7 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
   }
 
   protected def pruneSchemaForMergeSkipping(requiredSchema: HoodieTableSchema): HoodieTableSchema = {
-    val mandatoryFieldNames = mandatoryFields.map(fieldName => HoodieAvroUtils.getRootLevelFieldName(fieldName))
+    val mandatoryFieldNames = mandatoryFieldsForMerging.map(fieldName => HoodieAvroUtils.getRootLevelFieldName(fieldName))
     val prunedStructSchema = StructType(
       requiredSchema.structTypeSchema.fields.filterNot(f => mandatoryFieldNames.contains(f.name))
     )
