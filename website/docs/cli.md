@@ -391,3 +391,32 @@ hudi:stock_ticks_mor->compaction repair --instant 20181005222611
 Compaction successfully repaired
 .....
 ```
+
+## Savepoint and Restore 
+As the name suggest, "savepoint" saves the table as of the commit time, so that it lets you restore the table to this 
+savepoint at a later point in time if need be. You can read more about savepoints and restore [here](/next/disaster_recovery)
+
+To trigger savepoint for a hudi table
+```java
+connect --path /tmp/hudi_trips_cow/
+commits show
+set --conf SPARK_HOME=<SPARK_HOME>
+savepoint create --commit 20220128160245447 --sparkMaster local[2]
+```
+
+To restore the table to one of the savepointed commit:
+
+```java
+connect --path /tmp/hudi_trips_cow/
+commits show
+set --conf SPARK_HOME=<SPARK_HOME>
+savepoints show
+╔═══════════════════╗
+║ SavepointTime     ║
+╠═══════════════════╣
+║ 20220128160245447 ║
+╚═══════════════════╝
+savepoint rollback --savepoint 20220128160245447 --sparkMaster local[2]
+```
+
+

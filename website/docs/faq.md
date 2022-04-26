@@ -491,6 +491,12 @@ But manually changing it will result in checksum errors. So, we have to go via h
    1. connect --path hudi_table_path
    2. repair overwrite-hoodie-props --new-props-file new_hoodie.properties
 
+### Can I get notified when new commits happen in my Hudi table?
+
+Yes. Hudi provides the ability to post a callback notification about a write commit. You can use a http hook or choose to 
+be notified via a Kafka/pulsar topic or plug in your own implementation to get notified. Please refer [here](https://hudi.apache.org/docs/next/writing_data/#commit-notifications)
+for details
+
 ## Contributing to FAQ
 
 A good and usable FAQ should be community-driven and crowd source questions/thoughts across everyone.
