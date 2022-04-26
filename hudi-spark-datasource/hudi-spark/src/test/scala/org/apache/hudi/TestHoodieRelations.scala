@@ -46,7 +46,7 @@ class TestHoodieRelations {
     assertEquals(Seq(tableAvroSchema.getField("ts")), requiredAvroSchema.getFields)
     assertEquals(
       Seq(tableStructSchema.fields.apply(tableStructSchema.fieldIndex("ts"))),
-      requiredStructSchema.fields
+      requiredStructSchema.fields.toSeq
     )
   }
 

@@ -498,7 +498,7 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
 
   @Test def testNoPrecombine() {
     // Insert Operation
-    val records = recordsToStrings(dataGen.generateInserts("000", 100)).toList
+    val records = recordsToStrings(dataGen.generateInserts("000", 100)).asScala
     val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
 
     val commonOptsNoPreCombine = Map(
