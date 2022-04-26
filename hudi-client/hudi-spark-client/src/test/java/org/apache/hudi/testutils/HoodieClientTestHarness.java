@@ -86,7 +86,9 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestInfo;
+import scala.Function1;
 import scala.Tuple2;
+import scala.runtime.BoxedUnit;
 
 import java.io.IOException;
 import java.io.Serializable;
