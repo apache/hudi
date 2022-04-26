@@ -204,16 +204,19 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     shouldOmitPartitionColumns || shouldExtractPartitionValueFromPath
   }
 
-  // TODO cleanup
-//  lazy val (fileFormat: FileFormat, fileFormatClassName: String) =
-//    metaClient.getTableConfig.getBaseFileFormat match {
-//      case HoodieFileFormat.ORC => (new OrcFileFormat, "orc")
-//      case HoodieFileFormat.PARQUET =>
-//        // We're delegating to Spark to append partition values to every row only in cases
-//        // when these corresponding partition-values are not persisted w/in the data file itself
-//        val parquetFileFormat = sparkAdapter.createHoodieParquetFileFormat(shouldExtractPartitionValuesFromPartitionPath).get
-//        (parquetFileFormat, HoodieParquetFileFormat.FILE_FORMAT_ID)
-//    }
+  /**
+   * NOTE: This fields are accessed by [[NestedSchemaPruning]] component which is only enabled for
+   *       Spark >= 3.1
+   */
+  lazy val (fileFormat: FileFormat, fileFormatClassName: String) =
+    metaClient.getTableConfig.getBaseFileFormat match {
+      case HoodieFileFormat.ORC => (new OrcFileFormat, "orc")
+      case HoodieFileFormat.PARQUET =>
+        // We're delegating to Spark to append partition values to every row only in cases
+        // when these corresponding partition-values are not persisted w/in the data file itself
+        val parquetFileFormat = sparkAdapter.createHoodieParquetFileFormat(shouldExtractPartitionValuesFromPartitionPath).get
+        (parquetFileFormat, HoodieParquetFileFormat.FILE_FORMAT_ID)
+    }
 
   /**
    * NOTE: PLEASE READ THIS CAREFULLY
