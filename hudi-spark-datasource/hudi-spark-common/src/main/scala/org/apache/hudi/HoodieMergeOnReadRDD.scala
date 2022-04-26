@@ -58,7 +58,8 @@ case class HoodieMergeOnReadPartition(index: Int, split: HoodieMergeOnReadFileSp
 class HoodieMergeOnReadRDD(@transient sc: SparkContext,
                            @transient config: Configuration,
                            fullSchemaFileReader: PartitionedFile => Iterator[InternalRow],
-                           requiredSchemaFileReader: PartitionedFile => Iterator[InternalRow],
+                           requiredSchemaFileReaderMerging: PartitionedFile => Iterator[InternalRow],
+                           requiredSchemaFileReaderNoMerging: PartitionedFile => Iterator[InternalRow],
                            dataSchema: HoodieTableSchema,
                            requiredSchema: HoodieTableSchema,
                            tableState: HoodieTableState,
@@ -86,13 +87,13 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
     val mergeOnReadPartition = split.asInstanceOf[HoodieMergeOnReadPartition]
     val iter = mergeOnReadPartition.split match {
       case dataFileOnlySplit if dataFileOnlySplit.logFiles.isEmpty =>
-        requiredSchemaFileReader.apply(dataFileOnlySplit.dataFile.get)
+        requiredSchemaFileReaderNoMerging.apply(dataFileOnlySplit.dataFile.get)
 
       case logFileOnlySplit if logFileOnlySplit.dataFile.isEmpty =>
         new LogFileIterator(logFileOnlySplit, getConfig)
 
       case split if mergeType.equals(DataSourceReadOptions.REALTIME_SKIP_MERGE_OPT_VAL) =>
-        val baseFileIterator = requiredSchemaFileReader.apply(split.dataFile.get)
+        val baseFileIterator = requiredSchemaFileReaderNoMerging.apply(split.dataFile.get)
         new SkipMergeIterator(split, baseFileIterator, getConfig)
 
       case split if mergeType.equals(DataSourceReadOptions.REALTIME_PAYLOAD_COMBINE_OPT_VAL) =>
@@ -128,7 +129,7 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
     if (!whitelistedPayloadClasses.contains(tableState.recordPayloadClassName))
       (fullSchemaFileReader(split.dataFile.get), dataSchema)
     else
-      (requiredSchemaFileReader(split.dataFile.get), requiredSchema)
+      (requiredSchemaFileReaderMerging(split.dataFile.get), requiredSchema)
   }
 
   override protected def getPartitions: Array[Partition] =
