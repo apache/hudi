@@ -1,5 +1,5 @@
 ---
-title: Syncing to Metastore
+title: Sync to Hive Metastore
 keywords: [hudi, hive, sync]
 ---
 

@@ -49,7 +49,15 @@ module.exports = {
                 'hoodie_deltastreamer',
                 'querying_data',
                 'flink_configuration',
-                'syncing_metastore',
+                {
+                    type: 'category',
+                    label: 'Sync to Metastore',
+                    items: [
+                        'syncing_aws_glue_data_catalog',
+                        'syncing_datahub',
+                        'syncing_metastore'
+                    ],
+                }
             ],
         },
         {
