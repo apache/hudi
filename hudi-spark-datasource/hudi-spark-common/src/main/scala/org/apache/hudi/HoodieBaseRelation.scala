@@ -648,7 +648,7 @@ object HoodieBaseRelation extends SparkAdapterSupport {
   type BaseFileReader = PartitionedFile => Iterator[InternalRow]
 
   private def generateUnsafeProjection(from: StructType, to: StructType) =
-    sparkAdapter.getCatalystExpressionUtils().generateUnsafeProjection(from, to)
+    sparkAdapter.getCatalystExpressionUtils.generateUnsafeProjection(from, to)
 
   def convertToAvroSchema(structSchema: StructType): Schema =
     sparkAdapter.getAvroSchemaConverters.toAvroType(structSchema, nullable = false, "Record")
