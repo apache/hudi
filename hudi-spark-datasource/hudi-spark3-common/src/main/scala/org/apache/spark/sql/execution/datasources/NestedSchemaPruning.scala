@@ -37,7 +37,7 @@ import org.apache.spark.sql.util.SchemaUtils.restoreOriginalOutputNames
  * NOTE: This class is borrowed from Spark 3.2.1, with modifications adapting it to handle [[HoodieBaseRelation]],
  *       instead of [[HadoopFsRelation]]
  */
-object NestedSchemaPruning extends Rule[LogicalPlan] {
+class NestedSchemaPruning extends Rule[LogicalPlan] {
   import org.apache.spark.sql.catalyst.expressions.SchemaPruning._
 
   override def apply(plan: LogicalPlan): LogicalPlan =
