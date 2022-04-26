@@ -30,6 +30,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.spark.execution.datasources.HoodieInMemoryFileIndex
 import org.apache.spark.sql.SQLContext
+import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.sources.Filter
@@ -82,8 +83,9 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
                                     partitionSchema: StructType,
                                     dataSchema: HoodieTableSchema,
                                     requiredSchema: HoodieTableSchema,
+                                    requestedColumns: Array[String],
                                     filters: Array[Filter]): HoodieMergeOnReadRDD = {
-    val fullSchemaParquetReader = createBaseFileReader(
+    val fullSchemaBaseFileReader = createBaseFileReader(
       spark = sqlContext.sparkSession,
       partitionSchema = partitionSchema,
       dataSchema = dataSchema,
@@ -99,39 +101,17 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
       hadoopConf = embedInternalSchema(new Configuration(conf), internalSchemaOpt)
     )
 
-    // TODO elaborate bifurcation
-    val requiredSchemaParquetReaderMerging = createBaseFileReader(
-      spark = sqlContext.sparkSession,
-      partitionSchema = partitionSchema,
-      dataSchema = dataSchema,
-      requiredSchema = requiredSchema,
-      filters = filters,
-      options = optParams,
-      // NOTE: We have to fork the Hadoop Config here as Spark will be modifying it
-      //       to configure Parquet reader appropriately
-      hadoopConf = embedInternalSchema(new Configuration(conf), requiredSchema.internalSchema)
-    )
-
-    val requiredSchemaParquetReaderNoMerging = createBaseFileReader(
-      spark = sqlContext.sparkSession,
-      partitionSchema = partitionSchema,
-      dataSchema = dataSchema,
-      requiredSchema = pruneSchemaForMergeSkipping(requiredSchema),
-      filters = filters,
-      options = optParams,
-      // NOTE: We have to fork the Hadoop Config here as Spark will be modifying it
-      //       to configure Parquet reader appropriately
-      hadoopConf = HoodieDataSourceHelper.getConfigurationWithInternalSchema(new Configuration(conf), requiredSchema.internalSchema, metaClient.getBasePath, validCommits)
-    )
+    val (requiredSchemaBaseFileReaderMerging, requiredSchemaBaseFileReaderNoMerging) =
+      createBaseFileReaders(partitionSchema, dataSchema, requiredSchema, requestedColumns, filters)
 
     val tableState = getTableState
     new HoodieMergeOnReadRDD(
       sqlContext.sparkContext,
       config = jobConf,
-      fileReaders = MergeOnReadFileReaders(
-        fullSchemaFileReader = fullSchemaParquetReader,
-        requiredSchemaForMergingFileReader = requiredSchemaParquetReaderMerging,
-        requiredSchemaForNoMergingFileReader = requiredSchemaParquetReaderNoMerging
+      fileReaders = MergeOnReadBaseFileReaders(
+        fullSchemaFileReader = fullSchemaBaseFileReader,
+        requiredSchemaFileReaderForMerging = requiredSchemaBaseFileReaderMerging,
+        requiredSchemaFileReaderForNoMerging = requiredSchemaBaseFileReaderNoMerging
       ),
       dataSchema = dataSchema,
       requiredSchema = requiredSchema,
@@ -165,6 +145,51 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
 
       HoodieMergeOnReadFileSplit(partitionedBaseFile, logFiles)
     }.toList
+  }
+
+  protected def createBaseFileReaders(partitionSchema: StructType,
+                                      dataSchema: HoodieTableSchema,
+                                      requiredDataSchema: HoodieTableSchema,
+                                      requestedColumns: Array[String],
+                                      filters: Array[Filter]): (PartitionedFile => Iterator[InternalRow], PartitionedFile => Iterator[InternalRow]) = {
+    val requiredSchemaFileReaderMerging = createBaseFileReader(
+      spark = sqlContext.sparkSession,
+      partitionSchema = partitionSchema,
+      dataSchema = dataSchema,
+      requiredSchema = requiredDataSchema,
+      filters = filters,
+      options = optParams,
+      // NOTE: We have to fork the Hadoop Config here as Spark will be modifying it
+      //       to configure Parquet reader appropriately
+      hadoopConf = HoodieDataSourceHelper.getConfigurationWithInternalSchema(new Configuration(conf), requiredDataSchema.internalSchema, metaClient.getBasePath, validCommits)
+    )
+
+    // Check whether fields required for merging were also requested to be fetched
+    // by the query:
+    //    - In case they were, there's no optimization we could apply here (we will have
+    //    to fetch such fields)
+    //    - In case they were not, we will provide 2 separate file-readers
+    //        a) One which would be applied to file-groups w/ delta-logs (merging)
+    //        b) One which would be applied to file-groups w/ no delta-logs or
+    //           in case query-mode is skipping merging
+    val mandatoryColumnsForMerging = mandatoryFieldsForMerging.map(HoodieAvroUtils.getRootLevelFieldName)
+    if (mandatoryColumnsForMerging.forall(requestedColumns.contains(_))) {
+      (requiredSchemaFileReaderMerging, requiredSchemaFileReaderMerging)
+    } else {
+      val requiredSchemaFileReaderNoMerging = createBaseFileReader(
+        spark = sqlContext.sparkSession,
+        partitionSchema = partitionSchema,
+        dataSchema = dataSchema,
+        requiredSchema = pruneSchemaForMergeSkipping(requiredDataSchema),
+        filters = filters,
+        options = optParams,
+        // NOTE: We have to fork the Hadoop Config here as Spark will be modifying it
+        //       to configure Parquet reader appropriately
+        hadoopConf = HoodieDataSourceHelper.getConfigurationWithInternalSchema(new Configuration(conf), requiredDataSchema.internalSchema, metaClient.getBasePath, validCommits)
+      )
+
+      (requiredSchemaFileReaderMerging, requiredSchemaFileReaderNoMerging)
+    }
   }
 
   protected def pruneSchemaForMergeSkipping(requiredSchema: HoodieTableSchema): HoodieTableSchema = {

@@ -346,7 +346,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     if (fileSplits.isEmpty) {
       sparkSession.sparkContext.emptyRDD
     } else {
-      val rdd = composeRDD(fileSplits, partitionSchema, dataSchema, requiredDataSchema, filters)
+      val rdd = composeRDD(fileSplits, partitionSchema, dataSchema, requiredDataSchema, requiredColumns, filters)
 
       // NOTE: In case when partition columns have been pruned from the required schema, we have to project
       //       the rows from the pruned schema back into the one expected by the caller
@@ -369,17 +369,19 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
   /**
    * Composes RDD provided file splits to read from, table and partition schemas, data filters to be applied
    *
-   * @param fileSplits      file splits to be handled by the RDD
-   * @param partitionSchema target table's partition schema
-   * @param dataSchema      target table's data files' schema
-   * @param requiredSchema  projected schema required by the reader
-   * @param filters         data filters to be applied
+   * @param fileSplits       file splits to be handled by the RDD
+   * @param partitionSchema  target table's partition schema
+   * @param dataSchema       target table's data files' schema
+   * @param requiredSchema   projected schema required by the reader
+   * @param requestedColumns columns requested by the query
+   * @param filters          data filters to be applied
    * @return instance of RDD (implementing [[HoodieUnsafeRDD]])
    */
   protected def composeRDD(fileSplits: Seq[FileSplit],
                            partitionSchema: StructType,
                            dataSchema: HoodieTableSchema,
                            requiredSchema: HoodieTableSchema,
+                           requestedColumns: Array[String],
                            filters: Array[Filter]): HoodieUnsafeRDD
 
   /**

@@ -61,6 +61,7 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
                                     partitionSchema: StructType,
                                     dataSchema: HoodieTableSchema,
                                     requiredSchema: HoodieTableSchema,
+                                    requestedColumns: Array[String],
                                     filters: Array[Filter]): HoodieMergeOnReadRDD = {
     val fullSchemaParquetReader = createBaseFileReader(
       spark = sqlContext.sparkSession,
@@ -81,30 +82,8 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
       hadoopConf = embedInternalSchema(new Configuration(conf), internalSchemaOpt)
     )
 
-    // TODO elaborate bifurcation
-    val requiredSchemaForMergingBaseFileReader = createBaseFileReader(
-      spark = sqlContext.sparkSession,
-      partitionSchema = partitionSchema,
-      dataSchema = dataSchema,
-      requiredSchema = requiredSchema,
-      filters = filters ++ incrementalSpanRecordFilters,
-      options = optParams,
-      // NOTE: We have to fork the Hadoop Config here as Spark will be modifying it
-      //       to configure Parquet reader appropriately
-      hadoopConf = embedInternalSchema(new Configuration(conf), requiredSchema.internalSchema)
-    )
-
-    val requiredSchemaForNoMergingBaseFileReader = createBaseFileReader(
-      spark = sqlContext.sparkSession,
-      partitionSchema = partitionSchema,
-      dataSchema = dataSchema,
-      requiredSchema = pruneSchemaForMergeSkipping(requiredSchema),
-      filters = filters ++ incrementalSpanRecordFilters,
-      options = optParams,
-      // NOTE: We have to fork the Hadoop Config here as Spark will be modifying it
-      //       to configure Parquet reader appropriately
-      hadoopConf = HoodieDataSourceHelper.getConfigurationWithInternalSchema(new Configuration(conf), requiredSchema.internalSchema, metaClient.getBasePath, validCommits)
-    )
+    val (requiredSchemaBaseFileReaderMerging, requiredSchemaBaseFileReaderNoMerging) =
+      createBaseFileReaders(partitionSchema, dataSchema, requiredSchema, requestedColumns, filters ++ incrementalSpanRecordFilters)
 
     val hoodieTableState = getTableState
     // TODO(HUDI-3639) implement incremental span record filtering w/in RDD to make sure returned iterator is appropriately
@@ -112,10 +91,10 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
     new HoodieMergeOnReadRDD(
       sqlContext.sparkContext,
       config = jobConf,
-      fileReaders = MergeOnReadFileReaders(
+      fileReaders = MergeOnReadBaseFileReaders(
         fullSchemaFileReader = fullSchemaParquetReader,
-        requiredSchemaForMergingFileReader = requiredSchemaForMergingBaseFileReader,
-        requiredSchemaForNoMergingFileReader = requiredSchemaForNoMergingBaseFileReader
+        requiredSchemaFileReaderForMerging = requiredSchemaBaseFileReaderMerging,
+        requiredSchemaFileReaderForNoMerging = requiredSchemaBaseFileReaderNoMerging
       ),
       dataSchema = dataSchema,
       requiredSchema = requiredSchema,

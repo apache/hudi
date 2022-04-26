@@ -71,6 +71,7 @@ class BaseFileOnlyRelation(sqlContext: SQLContext,
                                     partitionSchema: StructType,
                                     dataSchema: HoodieTableSchema,
                                     requiredSchema: HoodieTableSchema,
+                                    requestedColumns: Array[String],
                                     filters: Array[Filter]): HoodieUnsafeRDD = {
 
     val baseFileReader = createBaseFileReader(
