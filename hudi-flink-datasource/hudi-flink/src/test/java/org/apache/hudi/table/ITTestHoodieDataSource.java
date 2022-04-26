@@ -1029,6 +1029,37 @@ public class ITTestHoodieDataSource extends AbstractTestBase {
   }
 
   @ParameterizedTest
+  @ValueSource(strings = {FlinkOptions.PARTITION_FORMAT_DAY, FlinkOptions.PARTITION_FORMAT_DASHED_DAY})
+  void testWriteAndReadWithDatePartitioning(String partitionFormat) {
+    TableEnvironment tableEnv = batchTableEnv;
+    String hoodieTableDDL = sql("t1")
+        .field("uuid varchar(20)")
+        .field("name varchar(10)")
+        .field("age int")
+        .field("ts date")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.PARTITION_FORMAT, partitionFormat)
+        .partitionField("ts") // use date as partition path field
+        .end();
+    tableEnv.executeSql(hoodieTableDDL);
+
+    execInsertSql(tableEnv, TestSQL.INSERT_DATE_PARTITION_T1);
+
+    List<Row> result = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1").execute().collect());
+    String expected = "["
+        + "+I[id1, Danny, 23, 1970-01-01], "
+        + "+I[id2, Stephen, 33, 1970-01-01], "
+        + "+I[id3, Julian, 53, 1970-01-01], "
+        + "+I[id4, Fabian, 31, 1970-01-01], "
+        + "+I[id5, Sophia, 18, 1970-01-01], "
+        + "+I[id6, Emma, 20, 1970-01-01], "
+        + "+I[id7, Bob, 44, 1970-01-01], "
+        + "+I[id8, Han, 56, 1970-01-01]]";
+    assertRowsEquals(result, expected);
+  }
+
+  @ParameterizedTest
   @ValueSource(strings = {"bulk_insert", "upsert"})
   void testWriteReadDecimals(String operation) {
     TableEnvironment tableEnv = batchTableEnv;
