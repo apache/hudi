@@ -282,19 +282,8 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
             // Record has been deleted, skipping
             this.hasNextInternal
           } else {
-            // NOTE: In occurrence of a merge we can't know the schema of the record being returned, b/c
-            //       record from the Delta Log will bear (full) Table schema, while record from the Base file
-            //       might already be read in projected one (as an optimization).
-            //       As such we can't use more performant [[projectAvroUnsafe]], and instead have to fallback
-            //       to [[projectAvro]]
-            //
-            // NOTE: We're projecting as [[Avro]] here primarily due to the fact that output of the merging
-            //       seq is an Avro record. Otherwise we'd have to deserialize first (in full schema), then
-            //       invoke [[UnsafeProjection]], however this would require us to deserialize the whole object
-            //       into Spark's Catalyst representation first
-            val mergedAvroRecord = mergedAvroRecordOpt.get
-            val projection = SafeAvroProjection.create(mergedAvroRecord.getSchema, requiredAvroSchema, reusableRecordBuilder)
-            val projectedAvroRecord = projection.apply(mergedAvroRecord.asInstanceOf[GenericRecord])
+            val projectedAvroRecord = projectAvroUnsafe(mergedAvroRecordOpt.get.asInstanceOf[GenericRecord],
+              requiredAvroSchema, reusableRecordBuilder)
             recordToLoad = deserialize(projectedAvroRecord)
             true
           }
@@ -382,6 +371,27 @@ private object HoodieMergeOnReadRDD {
     }
   }
 
+  private def projectAvroUnsafe(record: GenericRecord, projectedSchema: Schema, reusableRecordBuilder: GenericRecordBuilder): GenericRecord = {
+    val fields = projectedSchema.getFields.asScala
+    fields.foreach(field => reusableRecordBuilder.set(field, record.get(field.name())))
+    reusableRecordBuilder.build()
+  }
+
+  private def getPartitionPath(split: HoodieMergeOnReadFileSplit): Path = {
+    // Determine partition path as an immediate parent folder of either
+    //    - The base file
+    //    - Some log file
+    split.dataFile.map(baseFile => new Path(baseFile.filePath))
+      .getOrElse(split.logFiles.head.getPath)
+      .getParent
+  }
+
+  private def resolveAvroSchemaNullability(schema: Schema) = {
+    AvroConversionUtils.resolveAvroTypeNullability(schema) match {
+      case (nullable, _) => nullable
+    }
+  }
+
   // TODO extract to HoodieAvroSchemaUtils
   abstract class AvroProjection extends (GenericRecord => GenericRecord)
 
@@ -424,21 +434,6 @@ private object HoodieMergeOnReadRDD {
      */
     private def collectFieldOrdinals(projected: Schema, source: Schema): List[Int] = {
       projected.getFields.asScala.map(f => source.getField(f.name()).pos()).toList
-    }
-  }
-
-  private def getPartitionPath(split: HoodieMergeOnReadFileSplit): Path = {
-    // Determine partition path as an immediate parent folder of either
-    //    - The base file
-    //    - Some log file
-    split.dataFile.map(baseFile => new Path(baseFile.filePath))
-      .getOrElse(split.logFiles.head.getPath)
-      .getParent
-  }
-
-  private def resolveAvroSchemaNullability(schema: Schema) = {
-    AvroConversionUtils.resolveAvroTypeNullability(schema) match {
-      case (nullable, _) => nullable
     }
   }
 
