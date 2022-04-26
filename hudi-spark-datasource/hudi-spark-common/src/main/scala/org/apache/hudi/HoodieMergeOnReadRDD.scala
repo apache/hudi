@@ -55,11 +55,13 @@ import scala.util.Try
 
 case class HoodieMergeOnReadPartition(index: Int, split: HoodieMergeOnReadFileSplit) extends Partition
 
+case class MergeOnReadFileReaders(fullSchemaFileReader: PartitionedFile => Iterator[InternalRow],
+                                  requiredSchemaForMergingFileReader: PartitionedFile => Iterator[InternalRow],
+                                  requiredSchemaForNoMergingFileReader: PartitionedFile => Iterator[InternalRow])
+
 class HoodieMergeOnReadRDD(@transient sc: SparkContext,
                            @transient config: Configuration,
-                           fullSchemaFileReader: PartitionedFile => Iterator[InternalRow],
-                           requiredSchemaFileReaderMerging: PartitionedFile => Iterator[InternalRow],
-                           requiredSchemaFileReaderNoMerging: PartitionedFile => Iterator[InternalRow],
+                           fileReaders: MergeOnReadFileReaders,
                            dataSchema: HoodieTableSchema,
                            requiredSchema: HoodieTableSchema,
                            tableState: HoodieTableState,
@@ -87,13 +89,13 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
     val mergeOnReadPartition = split.asInstanceOf[HoodieMergeOnReadPartition]
     val iter = mergeOnReadPartition.split match {
       case dataFileOnlySplit if dataFileOnlySplit.logFiles.isEmpty =>
-        requiredSchemaFileReaderNoMerging.apply(dataFileOnlySplit.dataFile.get)
+        fileReaders.requiredSchemaForNoMergingFileReader.apply(dataFileOnlySplit.dataFile.get)
 
       case logFileOnlySplit if logFileOnlySplit.dataFile.isEmpty =>
         new LogFileIterator(logFileOnlySplit, getConfig)
 
       case split if mergeType.equals(DataSourceReadOptions.REALTIME_SKIP_MERGE_OPT_VAL) =>
-        val baseFileIterator = requiredSchemaFileReaderNoMerging.apply(split.dataFile.get)
+        val baseFileIterator = fileReaders.requiredSchemaForNoMergingFileReader.apply(split.dataFile.get)
         new SkipMergeIterator(split, baseFileIterator, getConfig)
 
       case split if mergeType.equals(DataSourceReadOptions.REALTIME_PAYLOAD_COMBINE_OPT_VAL) =>
@@ -127,9 +129,9 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
     //       then we can avoid reading and parsing the records w/ _full_ schema, and instead only
     //       rely on projected one, nevertheless being able to perform merging correctly
     if (!whitelistedPayloadClasses.contains(tableState.recordPayloadClassName))
-      (fullSchemaFileReader(split.dataFile.get), dataSchema)
+      (fileReaders.fullSchemaFileReader(split.dataFile.get), dataSchema)
     else
-      (requiredSchemaFileReaderMerging(split.dataFile.get), requiredSchema)
+      (fileReaders.requiredSchemaForMergingFileReader(split.dataFile.get), requiredSchema)
   }
 
   override protected def getPartitions: Array[Partition] =

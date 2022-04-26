@@ -126,9 +126,11 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
     new HoodieMergeOnReadRDD(
       sqlContext.sparkContext,
       config = jobConf,
-      fullSchemaFileReader = fullSchemaParquetReader,
-      requiredSchemaFileReaderMerging = requiredSchemaParquetReaderMerging,
-      requiredSchemaFileReaderNoMerging = requiredSchemaParquetReaderNoMerging,
+      fileReaders = MergeOnReadFileReaders(
+        fullSchemaFileReader = fullSchemaParquetReader,
+        requiredSchemaForMergingFileReader = requiredSchemaParquetReaderMerging,
+        requiredSchemaForNoMergingFileReader = requiredSchemaParquetReaderNoMerging,
+      ),
       dataSchema = dataSchema,
       requiredSchema = requiredSchema,
       tableState = tableState,
@@ -163,7 +165,7 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
     }.toList
   }
 
-  private def pruneSchemaForMergeSkipping(requiredSchema: HoodieTableSchema): HoodieTableSchema = {
+  protected def pruneSchemaForMergeSkipping(requiredSchema: HoodieTableSchema): HoodieTableSchema = {
     val mandatoryFieldNames = mandatoryFields.map(fieldName => HoodieAvroUtils.getRootLevelFieldName(fieldName))
     val prunedStructSchema = StructType(
       requiredSchema.structTypeSchema.fields.filterNot(f => mandatoryFieldNames.contains(f.name))
