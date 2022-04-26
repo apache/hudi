@@ -60,9 +60,7 @@ class BaseFileOnlyRelation(sqlContext: SQLContext,
   override protected val shouldExtractPartitionValuesFromPartitionPath: Boolean =
     internalSchemaOpt.isEmpty
 
-  override lazy val mandatoryFields: Seq[String] =
-  // TODO reconcile, record's key shouldn't be mandatory for base-file only relation
-    Seq(recordKeyField)
+  override lazy val mandatoryFields: Seq[String] = Seq.empty
 
   override def imbueConfigs(sqlContext: SQLContext): Unit = {
     super.imbueConfigs(sqlContext)
