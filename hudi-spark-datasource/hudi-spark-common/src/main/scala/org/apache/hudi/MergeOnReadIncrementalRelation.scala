@@ -83,7 +83,7 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
     )
 
     val (requiredSchemaBaseFileReaderMerging, requiredSchemaBaseFileReaderNoMerging) =
-      createBaseFileReaders(partitionSchema, dataSchema, requiredSchema, requestedColumns, filters ++ incrementalSpanRecordFilters)
+      createMergeOnReadBaseFileReaders(partitionSchema, dataSchema, requiredSchema, requestedColumns, filters ++ incrementalSpanRecordFilters)
 
     val hoodieTableState = getTableState
     // TODO(HUDI-3639) implement incremental span record filtering w/in RDD to make sure returned iterator is appropriately

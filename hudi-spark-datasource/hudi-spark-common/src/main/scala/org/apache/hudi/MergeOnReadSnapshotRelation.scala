@@ -102,7 +102,7 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
     )
 
     val (requiredSchemaBaseFileReaderMerging, requiredSchemaBaseFileReaderNoMerging) =
-      createBaseFileReaders(partitionSchema, dataSchema, requiredSchema, requestedColumns, filters)
+      createMergeOnReadBaseFileReaders(partitionSchema, dataSchema, requiredSchema, requestedColumns, filters)
 
     val tableState = getTableState
     new HoodieMergeOnReadRDD(
@@ -147,11 +147,11 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
     }.toList
   }
 
-  protected def createBaseFileReaders(partitionSchema: StructType,
-                                      dataSchema: HoodieTableSchema,
-                                      requiredDataSchema: HoodieTableSchema,
-                                      requestedColumns: Array[String],
-                                      filters: Array[Filter]): (BaseFileReader, BaseFileReader) = {
+  protected def createMergeOnReadBaseFileReaders(partitionSchema: StructType,
+                                                 dataSchema: HoodieTableSchema,
+                                                 requiredDataSchema: HoodieTableSchema,
+                                                 requestedColumns: Array[String],
+                                                 filters: Array[Filter]): (BaseFileReader, BaseFileReader) = {
     val requiredSchemaFileReaderMerging = createBaseFileReader(
       spark = sqlContext.sparkSession,
       partitionSchema = partitionSchema,
@@ -172,15 +172,24 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
     //        a) One which would be applied to file-groups w/ delta-logs (merging)
     //        b) One which would be applied to file-groups w/ no delta-logs or
     //           in case query-mode is skipping merging
-    val mandatoryColumnsForMerging = mandatoryFieldsForMerging.map(HoodieAvroUtils.getRootLevelFieldName)
-    if (mandatoryColumnsForMerging.forall(requestedColumns.contains(_))) {
+    val requiredColumns = mandatoryFieldsForMerging.map(HoodieAvroUtils.getRootLevelFieldName)
+    if (requiredColumns.forall(requestedColumns.contains)) {
       (requiredSchemaFileReaderMerging, requiredSchemaFileReaderMerging)
     } else {
+      val prunedRequiredSchema = {
+        val superfluousColumnNames = requiredColumns.filterNot(requestedColumns.contains)
+        val prunedStructSchema =
+          StructType(requiredDataSchema.structTypeSchema.fields
+            .filterNot(f => superfluousColumnNames.contains(f.name)))
+
+        HoodieTableSchema(prunedStructSchema, convertToAvroSchema(prunedStructSchema).toString)
+      }
+
       val requiredSchemaFileReaderNoMerging = createBaseFileReader(
         spark = sqlContext.sparkSession,
         partitionSchema = partitionSchema,
         dataSchema = dataSchema,
-        requiredSchema = pruneSchemaForMergeSkipping(requiredDataSchema),
+        requiredSchema = prunedRequiredSchema,
         filters = filters,
         options = optParams,
         // NOTE: We have to fork the Hadoop Config here as Spark will be modifying it
@@ -192,14 +201,6 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
     }
   }
 
-  protected def pruneSchemaForMergeSkipping(requiredSchema: HoodieTableSchema): HoodieTableSchema = {
-    val mandatoryFieldNames = mandatoryFieldsForMerging.map(fieldName => HoodieAvroUtils.getRootLevelFieldName(fieldName))
-    val prunedStructSchema = StructType(
-      requiredSchema.structTypeSchema.fields.filterNot(f => mandatoryFieldNames.contains(f.name))
-    )
-
-    HoodieTableSchema(prunedStructSchema, convertToAvroSchema(prunedStructSchema).toString)
-  }
 }
 
 object MergeOnReadSnapshotRelation {
