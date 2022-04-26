@@ -552,36 +552,47 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
                                      filters: Seq[Filter],
                                      options: Map[String, String],
                                      hadoopConf: Configuration): PartitionedFile => Iterator[InternalRow] = {
-    val hfileReader = createHFileReader(
-      spark = spark,
-      dataSchema = dataSchema,
-      requiredSchema = requiredSchema,
-      filters = filters,
-      options = options,
-      hadoopConf = hadoopConf
-    )
+    val tableBaseFileFormat = tableConfig.getBaseFileFormat
 
-    val parquetReader = HoodieDataSourceHelper.buildHoodieParquetReader(
-      sparkSession = spark,
-      dataSchema = dataSchema.structTypeSchema,
-      partitionSchema = partitionSchema,
-      requiredSchema = requiredSchema.structTypeSchema,
-      filters = filters,
-      options = options,
-      hadoopConf = hadoopConf,
-      // We're delegating to Spark to append partition values to every row only in cases
-      // when these corresponding partition-values are not persisted w/in the data file itself
-      appendPartitionValues = shouldExtractPartitionValuesFromPartitionPath
-    )
+    // NOTE: PLEASE READ CAREFULLY
+    //       Lambda returned from this method is going to be invoked on the executor, and therefore
+    //       we have to eagerly initialize all of the readers even though only one specific to the type
+    //       of the file being read will be used. This is required to avoid serialization of the whole
+    //       relation (containing file-index for ex) and passing it to the executor
+    val reader = tableBaseFileFormat match {
+      case HoodieFileFormat.PARQUET =>
+        HoodieDataSourceHelper.buildHoodieParquetReader(
+          sparkSession = spark,
+          dataSchema = dataSchema.structTypeSchema,
+          partitionSchema = partitionSchema,
+          requiredSchema = requiredSchema.structTypeSchema,
+          filters = filters,
+          options = options,
+          hadoopConf = hadoopConf,
+          // We're delegating to Spark to append partition values to every row only in cases
+          // when these corresponding partition-values are not persisted w/in the data file itself
+          appendPartitionValues = shouldExtractPartitionValuesFromPartitionPath
+        )
+
+      case HoodieFileFormat.HFILE =>
+        createHFileReader(
+          spark = spark,
+          dataSchema = dataSchema,
+          requiredSchema = requiredSchema,
+          filters = filters,
+          options = options,
+          hadoopConf = hadoopConf
+        )
+
+      case _ => throw new UnsupportedOperationException(s"Base file format is not currently supported ($tableBaseFileFormat)")
+    }
 
     partitionedFile => {
       val extension = FSUtils.getFileExtension(partitionedFile.filePath)
-      if (HoodieFileFormat.PARQUET.getFileExtension.equals(extension)) {
-        parquetReader.apply(partitionedFile)
-      } else if (HoodieFileFormat.HFILE.getFileExtension.equals(extension)) {
-        hfileReader.apply(partitionedFile)
+      if (tableBaseFileFormat.getFileExtension.equals(extension)) {
+        reader.apply(partitionedFile)
       } else {
-        throw new UnsupportedOperationException(s"Base file format not supported by Spark DataSource ($partitionedFile)")
+        throw new UnsupportedOperationException(s"Invalid base-file format ($extension), expected ($tableBaseFileFormat)")
       }
     }
   }
