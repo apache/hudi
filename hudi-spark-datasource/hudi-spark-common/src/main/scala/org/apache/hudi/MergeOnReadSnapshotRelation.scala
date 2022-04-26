@@ -131,7 +131,7 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
       fileReaders = MergeOnReadFileReaders(
         fullSchemaFileReader = fullSchemaParquetReader,
         requiredSchemaForMergingFileReader = requiredSchemaParquetReaderMerging,
-        requiredSchemaForNoMergingFileReader = requiredSchemaParquetReaderNoMerging,
+        requiredSchemaForNoMergingFileReader = requiredSchemaParquetReaderNoMerging
       ),
       dataSchema = dataSchema,
       requiredSchema = requiredSchema,

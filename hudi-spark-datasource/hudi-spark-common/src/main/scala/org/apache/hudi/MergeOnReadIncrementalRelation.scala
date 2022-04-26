@@ -115,7 +115,7 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
       fileReaders = MergeOnReadFileReaders(
         fullSchemaFileReader = fullSchemaParquetReader,
         requiredSchemaForMergingFileReader = requiredSchemaForMergingBaseFileReader,
-        requiredSchemaForNoMergingFileReader = requiredSchemaForNoMergingBaseFileReader,
+        requiredSchemaForNoMergingFileReader = requiredSchemaForNoMergingBaseFileReader
       ),
       dataSchema = dataSchema,
       requiredSchema = requiredSchema,
