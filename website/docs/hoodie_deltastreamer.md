@@ -265,6 +265,18 @@ You can use a .avsc file to define your schema. You can then point to this file 
 |hoodie.deltastreamer.schemaprovider.source.schema.file|The schema of the source you are reading from|[example schema file](https://github.com/apache/hudi/blob/a8fb69656f522648233f0310ca3756188d954281/docker/demo/config/test-suite/source.avsc)|
 |hoodie.deltastreamer.schemaprovider.target.schema.file|The schema of the target you are writing to|[example schema file](https://github.com/apache/hudi/blob/a8fb69656f522648233f0310ca3756188d954281/docker/demo/config/test-suite/target.avsc)|
 
+
+### Hive Schema Provider
+You can use hive tables to fetch source and target schema. 
+
+|Config| Description                                           |
+|---|-------------------------------------------------------|
+|hoodie.deltastreamer.schemaprovider.source.schema.hive.database| Hive database from where source schema can be fetched |
+|hoodie.deltastreamer.schemaprovider.source.schema.hive.table| Hive table from where source schema can be fetched    |
+|hoodie.deltastreamer.schemaprovider.target.schema.hive.database| Hive database from where source schema can be fetched |
+|hoodie.deltastreamer.schemaprovider.target.schema.hive.table| Hive table from where source schema can be fetched    |
+
+
 ### Schema Provider with Post Processor
 The SchemaProviderWithPostProcessor, will extract the schema from one of the previously mentioned Schema Providers and 
 then will apply a post processor to change the schema before it is used. You can write your own post processor by extending 
