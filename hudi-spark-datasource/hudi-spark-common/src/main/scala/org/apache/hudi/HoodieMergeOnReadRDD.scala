@@ -161,9 +161,6 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
     protected val recordBuilder: GenericRecordBuilder = new GenericRecordBuilder(requiredAvroSchema)
     protected var recordToLoad: InternalRow = _
 
-    // TODO validate whether we need to do UnsafeProjection
-    protected val unsafeProjection: UnsafeProjection = UnsafeProjection.create(requiredStructTypeSchema)
-
     // NOTE: This maps _required_ schema fields onto the _full_ table schema, collecting their "ordinals"
     //       w/in the record payload. This is required, to project records read from the Delta Log file
     //       which always reads records in full schema (never projected, due to the fact that DL file might
@@ -178,16 +175,13 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
 
     private val logRecords = logScanner.getRecords.asScala
 
-    // NOTE: This iterator iterates over already projected (in required schema) records
     // NOTE: This have to stay lazy to make sure it's initialized only at the point where it's
     //       going to be used, since we modify `logRecords` before that and therefore can't do it any earlier
     protected lazy val logRecordsIterator: Iterator[Option[GenericRecord]] =
       logRecords.iterator.map {
         case (_, record) =>
-          val avroRecordOpt = toScalaOption(record.getData.getInsertValue(logFileReaderAvroSchema, payloadProps))
-          avroRecordOpt.map {
-            avroRecord => projectAvroUnsafe(avroRecord, requiredAvroSchema, requiredSchemaFieldOrdinals, recordBuilder)
-          }
+          toScalaOption(record.getData.getInsertValue(logFileReaderAvroSchema, payloadProps))
+            .map(_.asInstanceOf[GenericRecord])
       }
 
     protected def removeLogRecord(key: String): Option[HoodieRecord[_ <: HoodieRecordPayload[_]]] =
@@ -205,7 +199,8 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
           // Record has been deleted, skipping
           this.hasNextInternal
         } else {
-          recordToLoad = unsafeProjection(deserialize(avroRecordOpt.get))
+          val projectedAvroRecord = projectAvroUnsafe(avroRecordOpt.get, requiredAvroSchema, requiredSchemaFieldOrdinals, recordBuilder)
+          recordToLoad = deserialize(projectedAvroRecord)
           true
         }
       }
@@ -235,8 +230,7 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
 
     override def hasNext: Boolean = {
       if (baseFileIterator.hasNext) {
-        val curRow = baseFileIterator.next()
-        recordToLoad = curRow
+        recordToLoad = baseFileIterator.next()
         true
       } else {
         super[LogFileIterator].hasNext
@@ -275,15 +269,15 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
     //       handling records
     @tailrec private def hasNextInternal: Boolean = {
       if (baseFileIterator.hasNext) {
-        val curRowRecord = baseFileIterator.next()
-        val curKey = curRowRecord.getString(recordKeyOrdinal)
+        val curRow = baseFileIterator.next()
+        val curKey = curRow.getString(recordKeyOrdinal)
         val updatedRecordOpt = removeLogRecord(curKey)
         if (updatedRecordOpt.isEmpty) {
           // No merge needed, load current row with required projected schema
-          recordToLoad = unsafeProjection(projectRowUnsafe(curRowRecord, requiredSchema.structTypeSchema, requiredSchemaFieldOrdinals))
+          recordToLoad = projectRowUnsafe(curRow, requiredSchema.structTypeSchema, requiredSchemaFieldOrdinals)
           true
         } else {
-          val mergedAvroRecordOpt = merge(serialize(curRowRecord), updatedRecordOpt.get)
+          val mergedAvroRecordOpt = merge(serialize(curRow), updatedRecordOpt.get)
           if (mergedAvroRecordOpt.isEmpty) {
             // Record has been deleted, skipping
             this.hasNextInternal
@@ -293,8 +287,13 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
             //       might already be read in projected one (as an optimization).
             //       As such we can't use more performant [[projectAvroUnsafe]], and instead have to fallback
             //       to [[projectAvro]]
+            //
+            // NOTE: We're projecting as [[Avro]] here primarily due to the fact that output of the merging
+            //       seq is an Avro record. Otherwise we'd have to deserialize first (in full schema), then
+            //       invoke [[UnsafeProjection]], however this would require us to deserialize the whole object
+            //       into Spark's Catalyst representation first
             val projectedAvroRecord = projectAvro(mergedAvroRecordOpt.get, requiredAvroSchema, recordBuilder)
-            recordToLoad = unsafeProjection(deserialize(projectedAvroRecord))
+            recordToLoad = deserialize(projectedAvroRecord)
             true
           }
         }
