@@ -23,10 +23,10 @@ import org.apache.avro.generic.{GenericRecord, GenericRecordBuilder, IndexedReco
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hadoop.mapred.JobConf
-import org.apache.hudi.HoodieBaseRelation.BaseFileReader
-import org.apache.hudi.HoodieBaseRelation.generateUnsafeProjection
+import org.apache.hudi.HoodieBaseRelation.{BaseFileReader, generateUnsafeProjection}
 import org.apache.hudi.HoodieConversionUtils.{toJavaOption, toScalaOption}
-import org.apache.hudi.HoodieMergeOnReadRDD.{AvroDeserializerSupport, collectFieldOrdinals, getPartitionPath, projectAvro, projectAvroUnsafe, projectRowUnsafe, resolveAvroSchemaNullability}
+import org.apache.hudi.HoodieMergeOnReadRDD.SafeAvroProjection.collectFieldOrdinals
+import org.apache.hudi.HoodieMergeOnReadRDD._
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig}
 import org.apache.hudi.common.engine.HoodieLocalEngineContext
 import org.apache.hudi.common.fs.FSUtils
@@ -44,8 +44,6 @@ import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadata}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.avro.HoodieAvroDeserializer
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.expressions.{SpecificInternalRow, UnsafeProjection}
-import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.{Partition, SerializableWritable, SparkContext, TaskContext}
 
@@ -159,14 +157,9 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
 
     protected val logFileReaderAvroSchema: Schema = new Schema.Parser().parse(dataSchema.avroSchemaStr)
 
-    protected val recordBuilder: GenericRecordBuilder = new GenericRecordBuilder(requiredAvroSchema)
     protected var recordToLoad: InternalRow = _
 
-    // NOTE: This maps _required_ schema fields onto the _full_ table schema, collecting their "ordinals"
-    //       w/in the record payload. This is required, to project records read from the Delta Log file
-    //       which always reads records in full schema (never projected, due to the fact that DL file might
-    //       be stored in non-columnar formats like Avro, HFile, etc)
-    private val requiredSchemaFieldOrdinals: List[Int] = collectFieldOrdinals(requiredAvroSchema, logFileReaderAvroSchema)
+    private val requiredSchemaSafeAvroProjection = SafeAvroProjection.create(logFileReaderAvroSchema, requiredAvroSchema)
 
     private var logScanner = {
       val internalSchema = dataSchema.internalSchema.getOrElse(InternalSchema.getEmptyInternalSchema)
@@ -200,7 +193,7 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
           // Record has been deleted, skipping
           this.hasNextInternal
         } else {
-          val projectedAvroRecord = projectAvroUnsafe(avroRecordOpt.get, requiredAvroSchema, requiredSchemaFieldOrdinals, recordBuilder)
+          val projectedAvroRecord = requiredSchemaSafeAvroProjection(avroRecordOpt.get)
           recordToLoad = deserialize(projectedAvroRecord)
           true
         }
@@ -262,6 +255,8 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
     private val serializer = sparkAdapter.createAvroSerializer(baseFileReaderSchema.structTypeSchema,
       baseFileReaderAvroSchema, resolveAvroSchemaNullability(baseFileReaderAvroSchema))
 
+    private val reusableRecordBuilder: GenericRecordBuilder = new GenericRecordBuilder(requiredAvroSchema)
+
     private val recordKeyOrdinal = baseFileReaderSchema.structTypeSchema.fieldIndex(tableState.recordKeyField)
 
     private val requiredSchemaUnsafeProjection =
@@ -297,7 +292,9 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
             //       seq is an Avro record. Otherwise we'd have to deserialize first (in full schema), then
             //       invoke [[UnsafeProjection]], however this would require us to deserialize the whole object
             //       into Spark's Catalyst representation first
-            val projectedAvroRecord = projectAvro(mergedAvroRecordOpt.get, requiredAvroSchema, recordBuilder)
+            val mergedAvroRecord = mergedAvroRecordOpt.get
+            val projection = SafeAvroProjection.create(mergedAvroRecord.getSchema, requiredAvroSchema, reusableRecordBuilder)
+            val projectedAvroRecord = projection.apply(mergedAvroRecord.asInstanceOf[GenericRecord])
             recordToLoad = deserialize(projectedAvroRecord)
             true
           }
@@ -385,45 +382,49 @@ private object HoodieMergeOnReadRDD {
     }
   }
 
-  /**
-   * Projects provided instance of [[IndexedRecord]] into provided schema, assuming that the
-   * the schema of the original row is strictly a superset of the given one
-   */
-  def projectAvroUnsafe(record: IndexedRecord,
-                        projectedSchema: Schema,
-                        ordinals: List[Int],
-                        recordBuilder: GenericRecordBuilder): GenericRecord = {
-    val fields = projectedSchema.getFields.asScala
-    checkState(fields.length == ordinals.length)
-    fields.zip(ordinals).foreach {
-      case (field, pos) => recordBuilder.set(field, record.get(pos))
+  // TODO extract to HoodieAvroSchemaUtils
+  abstract class AvroProjection extends (GenericRecord => GenericRecord)
+
+  class SafeAvroProjection(sourceSchema: Schema,
+                           projectedSchema: Schema,
+                           reusableRecordBuilder: GenericRecordBuilder = null) extends AvroProjection {
+
+    private val ordinals: List[Int] = collectFieldOrdinals(projectedSchema, sourceSchema)
+    private val recordBuilder: GenericRecordBuilder =
+      if (reusableRecordBuilder != null) {
+        reusableRecordBuilder
+      } else {
+        new GenericRecordBuilder(projectedSchema)
+      }
+
+    override def apply(record: GenericRecord): GenericRecord = {
+      val fields = projectedSchema.getFields.asScala
+      checkState(fields.length == ordinals.length)
+      fields.zip(ordinals).foreach {
+        case (field, pos) => recordBuilder.set(field, record.get(pos))
+      }
+      recordBuilder.build()
     }
-    recordBuilder.build()
   }
 
-  /**
-   * Projects provided instance of [[IndexedRecord]] into provided schema, assuming that the
-   * the schema of the original row is strictly a superset of the given one
-   *
-   * This is a "safe" counterpart of [[projectAvroUnsafe]]: it does build mapping of the record's
-   * schema into projected one itself (instead of expecting such mapping from the caller)
-   */
-  def projectAvro(record: IndexedRecord,
-                  projectedSchema: Schema,
-                  recordBuilder: GenericRecordBuilder): GenericRecord = {
-    projectAvroUnsafe(record, projectedSchema, collectFieldOrdinals(projectedSchema, record.getSchema), recordBuilder)
-  }
+  object SafeAvroProjection {
+    def create(sourceSchema: Schema, projectedSchema: Schema, reusableRecordBuilder: GenericRecordBuilder = null): SafeAvroProjection =
+      new SafeAvroProjection(
+        sourceSchema = sourceSchema,
+        projectedSchema = projectedSchema,
+        reusableRecordBuilder = reusableRecordBuilder)
 
-  /**
-   * Maps [[projected]] [[Schema]] onto [[source]] one, collecting corresponding field ordinals w/in it, which
-   * will be subsequently used by either [[projectRowUnsafe]] or [[projectAvroUnsafe()]] method
-   *
-   * @param projected target projected schema (which is a proper subset of [[source]] [[Schema]])
-   * @param source source schema of the record being projected
-   * @return list of ordinals of corresponding fields of [[projected]] schema w/in [[source]] one
-   */
-  private def collectFieldOrdinals(projected: Schema, source: Schema): List[Int] = {
-    projected.getFields.asScala.map(f => source.getField(f.name()).pos()).toList
+    /**
+     * Maps [[projected]] [[Schema]] onto [[source]] one, collecting corresponding field ordinals w/in it, which
+     * will be subsequently used by either [[projectRowUnsafe]] or [[projectAvroUnsafe()]] method
+     *
+     * @param projected target projected schema (which is a proper subset of [[source]] [[Schema]])
+     * @param source source schema of the record being projected
+     * @return list of ordinals of corresponding fields of [[projected]] schema w/in [[source]] one
+     */
+    private def collectFieldOrdinals(projected: Schema, source: Schema): List[Int] = {
+      projected.getFields.asScala.map(f => source.getField(f.name()).pos()).toList
+    }
   }
 
   private def getPartitionPath(split: HoodieMergeOnReadFileSplit): Path = {
