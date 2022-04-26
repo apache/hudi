@@ -248,10 +248,10 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     //
     // (!!!) IT'S CRITICAL TO AVOID REORDERING OF THE REQUESTED COLUMNS AS THIS WILL BREAK THE UPSTREAM
     //       PROJECTION
-    val fetchedColumns: Array[String] = appendMandatoryRootFields(requiredColumns)
+    val queryAndHudiRequiredFields: (Array[String], Array[String]) = appendMandatoryRootFields(requiredColumns)
 
     val (requiredAvroSchema, requiredStructSchema, requiredInternalSchema) =
-      HoodieSparkUtils.getRequiredSchema(tableAvroSchema, fetchedColumns, internalSchema)
+      HoodieSparkUtils.getRequiredSchema(tableAvroSchema, queryAndHudiRequiredFields, internalSchema)
 
     val filterExpressions = convertToExpressions(filters)
     val (partitionFilters, dataFilters) = filterExpressions.partition(isPartitionPredicate)
@@ -364,12 +364,12 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
       !SubqueryExpression.hasSubquery(condition)
   }
 
-  protected final def appendMandatoryRootFields(requestedColumns: Array[String]): Array[String] = {
+  protected final def appendMandatoryRootFields(queryRequestedColumns: Array[String]): (Array[String], Array[String]) = {
     // For a nested field in mandatory columns, we should first get the root-level field, and then
     // check for any missing column, as the requestedColumns should only contain root-level fields
     // We should only append root-level field as well
-    val missing = mandatoryRootFields.filter(rootField => !requestedColumns.contains(rootField))
-    requestedColumns ++ missing
+    (queryRequestedColumns,
+      mandatoryRootFields.filter(rootField => !queryRequestedColumns.contains(rootField)).toArray)
   }
 
   protected def getTableState: HoodieTableState = {

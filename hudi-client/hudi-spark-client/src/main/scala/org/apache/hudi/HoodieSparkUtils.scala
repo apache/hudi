@@ -32,6 +32,7 @@ import org.apache.hudi.internal.schema.utils.InternalSchemaUtils
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.keygen.{BaseKeyGenerator, CustomAvroKeyGenerator, CustomKeyGenerator, KeyGenerator}
+import org.apache.log4j.LogManager
 import org.apache.spark.SPARK_VERSION
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.DataFrame
@@ -44,6 +45,7 @@ import java.util.Properties
 import scala.collection.JavaConverters._
 
 object HoodieSparkUtils extends SparkAdapterSupport {
+  private val LOG = LogManager.getLogger(HoodieSparkUtils.getClass)
 
   def isSpark2: Boolean = SPARK_VERSION.startsWith("2.")
 
@@ -318,13 +320,23 @@ object HoodieSparkUtils extends SparkAdapterSupport {
     AttributeReference(columnName, field.get.dataType, field.get.nullable)()
   }
 
-  def getRequiredSchema(tableAvroSchema: Schema, requiredColumns: Array[String], internalSchema: InternalSchema = InternalSchema.getEmptyInternalSchema): (Schema, StructType, InternalSchema) = {
-    if (internalSchema.isEmptySchema || requiredColumns.isEmpty) {
+  def getRequiredSchema(tableAvroSchema: Schema, queryAndHudiRequiredFields: (Array[String], Array[String]),
+                        internalSchema: InternalSchema = InternalSchema.getEmptyInternalSchema): (Schema, StructType, InternalSchema) = {
+    val queryRequiredFields = queryAndHudiRequiredFields._1
+    val hudiRequiredFields = queryAndHudiRequiredFields._2
+    if (internalSchema.isEmptySchema || (queryRequiredFields.isEmpty && hudiRequiredFields.isEmpty)) {
       // First get the required avro-schema, then convert the avro-schema to spark schema.
       val name2Fields = tableAvroSchema.getFields.asScala.map(f => f.name() -> f).toMap
       // Here have to create a new Schema.Field object
       // to prevent throwing exceptions like "org.apache.avro.AvroRuntimeException: Field already used".
-      val requiredFields = requiredColumns.map(c => name2Fields(c))
+      val requiredFields = (queryRequiredFields ++ hudiRequiredFields.filter(c => {
+        val containsColumn = name2Fields.contains(c)
+        if (!containsColumn) {
+          LOG.warn(String.format("Cannot find Hudi required field: field %s does not exist in Hudi table", c))
+        }
+        containsColumn
+      }))
+        .map(c => name2Fields(c))
         .map(f => new Schema.Field(f.name(), f.schema(), f.doc(), f.defaultVal(), f.order())).toList
       val requiredAvroSchema = Schema.createRecord(tableAvroSchema.getName, tableAvroSchema.getDoc,
         tableAvroSchema.getNamespace, tableAvroSchema.isError, requiredFields.asJava)
@@ -332,7 +344,8 @@ object HoodieSparkUtils extends SparkAdapterSupport {
       (requiredAvroSchema, requiredStructSchema, internalSchema)
     } else {
       // now we support nested project
-      val prunedInternalSchema = InternalSchemaUtils.pruneInternalSchema(internalSchema, requiredColumns.toList.asJava)
+      val prunedInternalSchema = InternalSchemaUtils.pruneInternalSchema(
+        internalSchema, queryRequiredFields.toList.asJava, hudiRequiredFields.toList.asJava)
       val requiredAvroSchema = AvroInternalSchemaConverter.convert(prunedInternalSchema, tableAvroSchema.getName)
       val requiredStructSchema = AvroConversionUtils.convertAvroSchemaToStructType(requiredAvroSchema)
       (requiredAvroSchema, requiredStructSchema, prunedInternalSchema)

@@ -25,14 +25,17 @@ import org.apache.hudi.internal.schema.Type;
 import org.apache.hudi.internal.schema.Types;
 import org.apache.hudi.internal.schema.Types.Field;
 
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
+
 import java.util.ArrayList;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.TreeMap;
-import java.util.SortedMap;
 import java.util.Set;
+import java.util.SortedMap;
+import java.util.TreeMap;
 import java.util.stream.Collectors;
 
 /**
@@ -40,6 +43,7 @@ import java.util.stream.Collectors;
  * eg: column prune, filter rebuild for query engine...
  */
 public class InternalSchemaUtils {
+  private static final Logger LOG = LogManager.getLogger(InternalSchemaUtils.class);
 
   private InternalSchemaUtils() {
   }
@@ -54,13 +58,16 @@ public class InternalSchemaUtils {
    */
   public static InternalSchema pruneInternalSchema(InternalSchema schema, List<String> names) {
     // do check
-    List<Integer> prunedIds = names.stream().map(name -> {
-      int id = schema.findIdByName(name);
-      if (id == -1) {
-        throw new IllegalArgumentException(String.format("cannot prune col: %s which not exisit in hudi table", name));
-      }
-      return id;
-    }).collect(Collectors.toList());
+    List<Integer> prunedIds = names.stream()
+        .filter(name -> {
+          int id = schema.findIdByName(name);
+          if (id < 0) {
+            LOG.warn(String.format("cannot prune col: %s does not exist in hudi table", name));
+            return false;
+          }
+          return true;
+        })
+        .map(schema::findIdByName).collect(Collectors.toList());
     // find top parent field ID. eg: a.b.c, f.g.h, only collect id of a and f ignore all child field.
     List<Integer> topParentFieldIds = new ArrayList<>();
     names.stream().forEach(f -> {
@@ -73,10 +80,53 @@ public class InternalSchemaUtils {
   }
 
   /**
+   * Create project internalSchema, based on the project names which produced by query engine and Hudi fields.
+   * support nested project.
+   *
+   * @param schema      a internal schema.
+   * @param queryFields project names produced by query engine.
+   * @param hudiFields  project names required by Hudi merging.
+   * @return a project internalSchema.
+   */
+  public static InternalSchema pruneInternalSchema(InternalSchema schema, List<String> queryFields, List<String> hudiFields) {
+    // do check
+    List<Integer> allPrunedIds = queryFields.stream().map(name -> {
+      int id = schema.findIdByName(name);
+      if (id == -1) {
+        throw new IllegalArgumentException(String.format("Cannot prune col from query: %s does not exist in hudi table", name));
+      }
+      return id;
+    }).collect(Collectors.toList());
+    List<String> allFields = new ArrayList<>(queryFields);
+    // Filter non-existent Hudi fields
+    List<String> filteredHudiFields = hudiFields.stream()
+        .filter(name -> {
+          int id = schema.findIdByName(name);
+          if (id < 0) {
+            LOG.warn(String.format("Cannot prune col from Hudi: %s does not exist in hudi table", name));
+            return false;
+          }
+          return true;
+        }).collect(Collectors.toList());
+    allFields.addAll(filteredHudiFields);
+    allPrunedIds.addAll(filteredHudiFields.stream()
+        .map(schema::findIdByName).collect(Collectors.toList()));
+    // find top parent field ID. eg: a.b.c, f.g.h, only collect id of a and f ignore all child field.
+    List<Integer> topParentFieldIds = new ArrayList<>();
+    allFields.forEach(f -> {
+      int id = schema.findIdByName(f.split("\\.")[0]);
+      if (!topParentFieldIds.contains(id)) {
+        topParentFieldIds.add(id);
+      }
+    });
+    return pruneInternalSchemaByID(schema, allPrunedIds, topParentFieldIds);
+  }
+
+  /**
    * Create project internalSchema.
    * support nested project.
    *
-   * @param schema a internal schema.
+   * @param schema   a internal schema.
    * @param fieldIds project col field_ids.
    * @return a project internalSchema.
    */
