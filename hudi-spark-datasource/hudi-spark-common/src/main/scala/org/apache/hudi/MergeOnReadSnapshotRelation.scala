@@ -20,8 +20,10 @@ package org.apache.hudi
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
+import org.apache.hudi.HoodieBaseRelation.convertToAvroSchema
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.MergeOnReadSnapshotRelation.getFilePath
+import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath
 import org.apache.hudi.common.model.{FileSlice, HoodieLogFile}
 import org.apache.hudi.common.table.HoodieTableMetaClient
@@ -47,6 +49,22 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
 
   override type FileSplit = HoodieMergeOnReadFileSplit
 
+  /**
+   * NOTE: These are the fields that are required to properly fulfil Hudi's Merge-on-Read
+   *       semantic:
+   *
+   *       <ol>
+   *         <li>Primary key is required to make sure we're able to correlate records from the base
+   *         file with the updated records from the delta-log file</li>
+   *         <li>Pre-combine key is required to properly perform the combining (or merging) of the
+   *         existing and updated records</li>
+   *       </ol>
+   *
+   *       However, in cases when merging is NOT performed (for ex, if file-group only contains base
+   *       files but no delta-log files, or if the query-type is equal to [["skip_merge"]]) neither
+   *       of primary-key or pre-combine-key are required to be fetched from storage (unless requested
+   *       by the query), therefore saving on throughput
+   */
   override lazy val mandatoryFields: Seq[String] =
     Seq(recordKeyField) ++ preCombineFieldOpt.map(Seq(_)).getOrElse(Seq())
 
@@ -79,7 +97,8 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
       hadoopConf = embedInternalSchema(new Configuration(conf), internalSchemaOpt)
     )
 
-    val requiredSchemaParquetReader = createBaseFileReader(
+    // TODO elaborate bifurcation
+    val requiredSchemaParquetReaderMerging = createBaseFileReader(
       spark = sqlContext.sparkSession,
       partitionSchema = partitionSchema,
       dataSchema = dataSchema,
@@ -91,9 +110,30 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
       hadoopConf = embedInternalSchema(new Configuration(conf), requiredSchema.internalSchema)
     )
 
+    val requiredSchemaParquetReaderNoMerging = createBaseFileReader(
+      spark = sqlContext.sparkSession,
+      partitionSchema = partitionSchema,
+      dataSchema = dataSchema,
+      requiredSchema = pruneSchemaForMergeSkipping(requiredSchema),
+      filters = filters,
+      options = optParams,
+      // NOTE: We have to fork the Hadoop Config here as Spark will be modifying it
+      //       to configure Parquet reader appropriately
+      hadoopConf = HoodieDataSourceHelper.getConfigurationWithInternalSchema(new Configuration(conf), requiredSchema.internalSchema, metaClient.getBasePath, validCommits)
+    )
+
     val tableState = getTableState
-    new HoodieMergeOnReadRDD(sqlContext.sparkContext, jobConf, fullSchemaParquetReader, requiredSchemaParquetReader,
-      dataSchema, requiredSchema, tableState, mergeType, fileSplits)
+    new HoodieMergeOnReadRDD(
+      sqlContext.sparkContext,
+      config = jobConf,
+      fullSchemaFileReader = fullSchemaParquetReader,
+      requiredSchemaFileReaderMerging = requiredSchemaParquetReaderMerging,
+      requiredSchemaFileReaderNoMerging = requiredSchemaParquetReaderNoMerging,
+      dataSchema = dataSchema,
+      requiredSchema = requiredSchema,
+      tableState = tableState,
+      mergeType = mergeType,
+      fileSplits = fileSplits)
   }
 
   protected override def collectFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): List[HoodieMergeOnReadFileSplit] = {
@@ -121,6 +161,15 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
 
       HoodieMergeOnReadFileSplit(partitionedBaseFile, logFiles)
     }.toList
+  }
+
+  private def pruneSchemaForMergeSkipping(requiredSchema: HoodieTableSchema): HoodieTableSchema = {
+    val mandatoryFieldNames = mandatoryFields.map(fieldName => HoodieAvroUtils.getRootLevelFieldName(fieldName))
+    val prunedStructSchema = StructType(
+      requiredSchema.structTypeSchema.fields.filterNot(f => mandatoryFieldNames.contains(f.name))
+    )
+
+    HoodieTableSchema(prunedStructSchema, convertToAvroSchema(prunedStructSchema).toString)
   }
 }
 
