@@ -176,11 +176,12 @@ public class StreamerUtil {
                     .withMaxDeltaSecondsBeforeCompaction(conf.getInteger(FlinkOptions.COMPACTION_DELTA_SECONDS))
                     .withAsyncClean(conf.getBoolean(FlinkOptions.CLEAN_ASYNC_ENABLED))
                     .retainCommits(conf.getInteger(FlinkOptions.CLEAN_RETAIN_COMMITS))
+                    .retainFileVersions(conf.getInteger(FlinkOptions.CLEAN_RETAIN_FILE_VERSIONS))
                     // override and hardcode to 20,
                     // actually Flink cleaning is always with parallelism 1 now
                     .withCleanerParallelism(20)
                     .archiveCommitsWith(conf.getInteger(FlinkOptions.ARCHIVE_MIN_COMMITS), conf.getInteger(FlinkOptions.ARCHIVE_MAX_COMMITS))
-                    .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS)
+                    .withCleanerPolicy(HoodieCleaningPolicy.valueOf(conf.getString(FlinkOptions.CLEAN_POLICY)))
                     .build())
             .withMemoryConfig(
                 HoodieMemoryConfig.newBuilder()
