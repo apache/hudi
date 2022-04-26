@@ -23,6 +23,7 @@ import org.apache.avro.generic.{GenericRecord, GenericRecordBuilder, IndexedReco
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hadoop.mapred.JobConf
+import org.apache.hudi.HoodieBaseRelation.BaseFileReader
 import org.apache.hudi.HoodieConversionUtils.{toJavaOption, toScalaOption}
 import org.apache.hudi.HoodieMergeOnReadRDD.{AvroDeserializerSupport, collectFieldOrdinals, getPartitionPath, projectAvro, projectAvroUnsafe, projectRowUnsafe, resolveAvroSchemaNullability}
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig}
@@ -55,13 +56,13 @@ import scala.util.Try
 
 case class HoodieMergeOnReadPartition(index: Int, split: HoodieMergeOnReadFileSplit) extends Partition
 
-case class MergeOnReadBaseFileReaders(fullSchemaFileReader: PartitionedFile => Iterator[InternalRow],
-                                      requiredSchemaFileReaderForMerging: PartitionedFile => Iterator[InternalRow],
-                                      requiredSchemaFileReaderForNoMerging: PartitionedFile => Iterator[InternalRow])
+case class HoodieMergeOnReadBaseFileReaders(fullSchemaFileReader: BaseFileReader,
+                                            requiredSchemaFileReaderForMerging: BaseFileReader,
+                                            requiredSchemaFileReaderForNoMerging: BaseFileReader)
 
 class HoodieMergeOnReadRDD(@transient sc: SparkContext,
                            @transient config: Configuration,
-                           fileReaders: MergeOnReadBaseFileReaders,
+                           fileReaders: HoodieMergeOnReadBaseFileReaders,
                            dataSchema: HoodieTableSchema,
                            requiredSchema: HoodieTableSchema,
                            tableState: HoodieTableState,

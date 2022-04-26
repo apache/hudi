@@ -23,7 +23,7 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hadoop.hbase.io.hfile.CacheConfig
 import org.apache.hadoop.mapred.JobConf
-import org.apache.hudi.HoodieBaseRelation.{convertToAvroSchema, createHFileReader, generateUnsafeProjection, getPartitionPath, projectSchema}
+import org.apache.hudi.HoodieBaseRelation.{BaseFileReader, convertToAvroSchema, createHFileReader, generateUnsafeProjection, getPartitionPath, projectSchema}
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
@@ -553,7 +553,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
                                      requiredSchema: HoodieTableSchema,
                                      filters: Seq[Filter],
                                      options: Map[String, String],
-                                     hadoopConf: Configuration): PartitionedFile => Iterator[InternalRow] = {
+                                     hadoopConf: Configuration): BaseFileReader = {
     val tableBaseFileFormat = tableConfig.getBaseFileFormat
 
     // NOTE: PLEASE READ CAREFULLY
@@ -642,6 +642,8 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
 
 object HoodieBaseRelation extends SparkAdapterSupport {
 
+  type BaseFileReader = PartitionedFile => Iterator[InternalRow]
+
   private def generateUnsafeProjection(from: StructType, to: StructType) =
     sparkAdapter.getCatalystExpressionUtils().generateUnsafeProjection(from, to)
 
@@ -689,7 +691,7 @@ object HoodieBaseRelation extends SparkAdapterSupport {
                                 requiredSchema: HoodieTableSchema,
                                 filters: Seq[Filter],
                                 options: Map[String, String],
-                                hadoopConf: Configuration): PartitionedFile => Iterator[InternalRow] = {
+                                hadoopConf: Configuration): BaseFileReader = {
     val hadoopConfBroadcast =
       spark.sparkContext.broadcast(new SerializableConfiguration(hadoopConf))
 

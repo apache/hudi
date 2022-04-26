@@ -20,7 +20,7 @@ package org.apache.hudi
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
-import org.apache.hudi.HoodieBaseRelation.convertToAvroSchema
+import org.apache.hudi.HoodieBaseRelation.{BaseFileReader, convertToAvroSchema}
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.MergeOnReadSnapshotRelation.getFilePath
 import org.apache.hudi.avro.HoodieAvroUtils
@@ -108,7 +108,7 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
     new HoodieMergeOnReadRDD(
       sqlContext.sparkContext,
       config = jobConf,
-      fileReaders = MergeOnReadBaseFileReaders(
+      fileReaders = HoodieMergeOnReadBaseFileReaders(
         fullSchemaFileReader = fullSchemaBaseFileReader,
         requiredSchemaFileReaderForMerging = requiredSchemaBaseFileReaderMerging,
         requiredSchemaFileReaderForNoMerging = requiredSchemaBaseFileReaderNoMerging
@@ -151,7 +151,7 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
                                       dataSchema: HoodieTableSchema,
                                       requiredDataSchema: HoodieTableSchema,
                                       requestedColumns: Array[String],
-                                      filters: Array[Filter]): (PartitionedFile => Iterator[InternalRow], PartitionedFile => Iterator[InternalRow]) = {
+                                      filters: Array[Filter]): (BaseFileReader, BaseFileReader) = {
     val requiredSchemaFileReaderMerging = createBaseFileReader(
       spark = sqlContext.sparkSession,
       partitionSchema = partitionSchema,

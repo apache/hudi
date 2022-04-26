@@ -91,7 +91,7 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
     new HoodieMergeOnReadRDD(
       sqlContext.sparkContext,
       config = jobConf,
-      fileReaders = MergeOnReadBaseFileReaders(
+      fileReaders = HoodieMergeOnReadBaseFileReaders(
         fullSchemaFileReader = fullSchemaParquetReader,
         requiredSchemaFileReaderForMerging = requiredSchemaBaseFileReaderMerging,
         requiredSchemaFileReaderForNoMerging = requiredSchemaBaseFileReaderNoMerging
