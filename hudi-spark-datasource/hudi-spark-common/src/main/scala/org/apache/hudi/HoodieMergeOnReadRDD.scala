@@ -24,6 +24,7 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hadoop.mapred.JobConf
 import org.apache.hudi.HoodieBaseRelation.BaseFileReader
+import org.apache.hudi.HoodieBaseRelation.generateUnsafeProjection
 import org.apache.hudi.HoodieConversionUtils.{toJavaOption, toScalaOption}
 import org.apache.hudi.HoodieMergeOnReadRDD.{AvroDeserializerSupport, collectFieldOrdinals, getPartitionPath, projectAvro, projectAvroUnsafe, projectRowUnsafe, resolveAvroSchemaNullability}
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig}
@@ -230,6 +231,8 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
 
     override def hasNext: Boolean = {
       if (baseFileIterator.hasNext) {
+        // NOTE: For 'skip-merge' querying mode base-file reader is already expected to read in the
+        //       projected schema
         recordToLoad = baseFileIterator.next()
         true
       } else {
@@ -255,12 +258,14 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
     //       As such, no particular schema could be assumed, and therefore we rely on the caller
     //       to correspondingly set the scheme of the expected output of base-file reader
     private val baseFileReaderAvroSchema = new Schema.Parser().parse(baseFileReaderSchema.avroSchemaStr)
-    private val requiredSchemaFieldOrdinals: List[Int] = collectFieldOrdinals(requiredAvroSchema, baseFileReaderAvroSchema)
 
     private val serializer = sparkAdapter.createAvroSerializer(baseFileReaderSchema.structTypeSchema,
       baseFileReaderAvroSchema, resolveAvroSchemaNullability(baseFileReaderAvroSchema))
 
     private val recordKeyOrdinal = baseFileReaderSchema.structTypeSchema.fieldIndex(tableState.recordKeyField)
+
+    private val requiredSchemaUnsafeProjection =
+      generateUnsafeProjection(baseFileReaderSchema.structTypeSchema, requiredStructTypeSchema)
 
     override def hasNext: Boolean = hasNextInternal
 
@@ -273,8 +278,8 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
         val curKey = curRow.getString(recordKeyOrdinal)
         val updatedRecordOpt = removeLogRecord(curKey)
         if (updatedRecordOpt.isEmpty) {
-          // No merge needed, load current row with required projected schema
-          recordToLoad = projectRowUnsafe(curRow, requiredSchema.structTypeSchema, requiredSchemaFieldOrdinals)
+          // No merge is required, simply load current row and project into required schema
+          recordToLoad = requiredSchemaUnsafeProjection(curRow)
           true
         } else {
           val mergedAvroRecordOpt = merge(serialize(curRow), updatedRecordOpt.get)
@@ -378,27 +383,6 @@ private object HoodieMergeOnReadRDD {
 
       logRecordScannerBuilder.build()
     }
-  }
-
-  /**
-   * Projects provided instance of [[InternalRow]] into provided schema, assuming that the
-   * the schema of the original row is strictly a superset of the given one
-   */
-  private def projectRowUnsafe(row: InternalRow,
-                         projectedSchema: StructType,
-                         ordinals: Seq[Int]): InternalRow = {
-    val projectedRow = new SpecificInternalRow(projectedSchema)
-    var curIndex = 0
-    projectedSchema.zip(ordinals).foreach { case (field, pos) =>
-      val curField = if (row.isNullAt(pos)) {
-        null
-      } else {
-        row.get(pos, field.dataType)
-      }
-      projectedRow.update(curIndex, curField)
-      curIndex += 1
-    }
-    projectedRow
   }
 
   /**

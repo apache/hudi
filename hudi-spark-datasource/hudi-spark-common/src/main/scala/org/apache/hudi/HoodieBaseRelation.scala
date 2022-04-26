@@ -45,7 +45,7 @@ import org.apache.spark.execution.datasources.HoodieInMemoryFileIndex
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.expressions.{Expression, SubqueryExpression}
+import org.apache.spark.sql.catalyst.expressions.{Expression, SubqueryExpression, UnsafeProjection}
 import org.apache.spark.sql.execution.FileRelation
 import org.apache.spark.sql.execution.datasources.orc.OrcFileFormat
 import org.apache.spark.sql.execution.datasources.parquet.{HoodieParquetFileFormat, ParquetFileFormat}
@@ -647,7 +647,7 @@ object HoodieBaseRelation extends SparkAdapterSupport {
 
   type BaseFileReader = PartitionedFile => Iterator[InternalRow]
 
-  private def generateUnsafeProjection(from: StructType, to: StructType) =
+  private def generateUnsafeProjection(from: StructType, to: StructType): UnsafeProjection =
     sparkAdapter.getCatalystExpressionUtils.generateUnsafeProjection(from, to)
 
   def convertToAvroSchema(structSchema: StructType): Schema =
