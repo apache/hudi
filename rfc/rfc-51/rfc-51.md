@@ -55,11 +55,11 @@ Documentation Navigation
 
 
 ## <a id='abstract'>Abstract</a>
-In query processing, we need to scan many blocks in HUDI table. However, most of them may not
-match the query even after using column statistic info in metadata table, row group level or
-page level statistics in parquet file, etc.
+In query processing, we need to scan many data blocks in HUDI table. However, most of them may not
+match the query predicate even after using column statistic info in the metadata table, row group level or
+page level statistics in parquet files, etc.
 
-Total size of reading blocks determines the query speed, how to save IO has become
+The total data size of touched blocks determines the query speed, and how to save IO has become
 the key point to improving query performance.
 
 ## <a id='background'>Background</a>
@@ -86,7 +86,7 @@ pages for every column;
 Although page level statistics can greatly save IO cost, there is still some irrelevant data be read out.
 
 We may need a way to get exactly row data we need to minimize the amount of reading blocks.
-Thus, we propose a Secondary Index structure to only read the rows we care about to
+Thus, we propose a **Secondary Index** structure to only read the rows we care about to
 speed up query performance.
 
 ## <a id='architecture'>Architecture</a>
@@ -103,7 +103,7 @@ The main structure of secondary index contains 4 layers
 
 
 ## <a id='difference'>Differences between Secondary Index and HUDI Record Level Index</a>
-Before discussing secondary index, let's take a look at Record Level Index. Both of the index
+Before discussing secondary index, let's take a look at Record Level Index. Both indexes
 can filter useless data blocks, there are still many differences between them.
 
 At present, record level index in hudi 
@@ -111,46 +111,54 @@ At present, record level index in hudi
 is mainly implemented for ``tagLocation`` in write path.
 Secondary index structure will be used for query acceleration in read path, but not in write path.
 
-If Record Level Index is applied in read path for query with RecordKey predicate, it can only be
-used to filter useless FileID, but can not get the exact set of rows we need, and this is the advantage
-of secondary index.
+If Record Level Index is applied in read path for query with RecordKey predicate, it can only filter at file group level, while secondary index could provide the exact matched set of rows.
 
-More details about current implementation of record level index please refer to
+For more details about current implementation of record level index, please refer to
 [pull-3508](https://github.com/apache/hudi/pull/3508).
 
 ## <a id='implementation'>Implementation</a>
 
 ### <a id='impl-sql-layer'>SQL Layer</a>
+
+[qianzhen: 这里主要指 Spark SQL? 其他引擎 SQL layer 应该需要他们自己适配? 对 optimizer layer 应该也同理？]
+
 Parsing all kinds of index related SQL, including create/drop/alter index, optimize table xxx, etc.
 
 ### <a id='impl-optimizer-layer'>Optimizer Layer</a>
 For the convenience of implementation, we can implement the first phase based on RBO(rule-based optimizer),  
 and then gradually expand and improve CBO and HBO based on the collected statistical information.
 
+[qianzhen: 为啥 predicate 太多不下推？predicate 多，一般情况下 Hit row set 感觉会越少？]
+
 We can define RBO in several ways, 
 for example, SQL with more than 10 predicates does not push down to use secondary index, but uses the existing scanning logic.
 
 ### <a id='impl-api-layer'>Standard API Layer</a>
-The standard APIs are as follows, and subsequent index types(Hbase/Lucene/B+ tree ...) need to implement these APIs.
+The standard APIs are as follows, and subsequent index types(e.g., Hbase/Lucene/B+ tree ...) need to implement these APIs.
 
 ```
-// get row id set for the specified table with predicates
+// Get row id set for the specified table with predicates
 Set<RowId> getRowIdSet(HoodieTable table, Map<column, List<PredicateList>> columnToPredicates ..)
 
-// create index
+// Create index
 boolean createIndex(HoodieTable table, List<Column> columns, List<IndexType> indexTypes)
 
-// build index for the specified table
+[qianzhen: build 需要增加 column 嘛？能更细粒度调度 build。另外，需要区分 build / update 嘛？前者全量构建，后者增量更新 Index ]
+
+// Build index for the specified table
 boolean buildIndex(HoodieTable table, InstantTime instant)
 
-// drop index
+// Drop index
 boolean dropIndex(HoodieTable table, List<Column> columns)
 
 ...
 ```
 
 ### <a id='imple-index-layer'>Index Implementation Layer</a>
-The role of the secondary index is to provide a mapping of a column or column combination value to 
+
+[qianzhen: 这里需要说明下通过 rowId 就能获取到完整一行数据，对 parquet 是可行的嘛？也就是各个 column 的 row id 是对齐的。另：这段话感觉可以直接放在下面 KV mapping 里。]
+
+The role of the secondary index is to provide a mapping from a column or column combination value to 
 specified rows, so that it is convenient to find the result row that meets the requirements according to 
 this index during query, so as to obtain the final data rows.
 
@@ -161,15 +169,16 @@ Considering the memory saving and the efficiency of row set merging, we choose r
 #### <a id='impl-index-layer-build-index'>Build Index</a>
 - trigger time
 
-When one column's secondary index enabled, we need to build index for it automatically. Index building needs to
+~~When one column's secondary index enabled, we need to build index for it automatically.~~ Index building may
 consume a lot of CPU and IO resources. So, build index while compaction/clustering executing is a good solution, 
 after table service is serviced, writing and index construction can be better decouple to avoid impact on 
 write performance.
 
-Because the time of index building decided by records num, the index may not available immediately after 
-user creating it util the next compaction/clustering triggered and completed.
+Because we decouple the index definition and the index builing process, users may not be able to benifit from it immediately when they create the index util the next compaction/clustering is triggered and completed.
 
-Also, we need to support a manual way to trigger and monitor it after creating, CMD procedure needs to be developed,
+[qianzhen: CMD procedure 是指 command line tool? 看例子更像是特殊的 SQL 语法]
+
+Also, we need to support a manual way to trigger and monitor index building, CMD procedure needs to be developed,
 such as 'optimize table t1', 'show indexing t1', etc.
 
 - index file
@@ -177,11 +186,14 @@ such as 'optimize table t1', 'show indexing t1', etc.
     - B: build index only for log file
     - C: build index for both base file and log file
 
-We prefer plan A right now, the main purpose of this proposal is to save base file IO cost based on the assuming that
-base file has lots of records, not log file.
+We prefer plan A right now, the main purpose of this proposal is to save base file IO cost based on the assumption that base file has lots of records.
 
-Each base file will be generated one index file, which contains one or more columns of index data.
+[qianzhen: 为啥不是每一个 column 一个 index 文件呢？这样做 build 调度上，以及扫描时打开索引文件都会更细粒度一些]
+
+One index file will be generated for each base file, containing one or more columns of index data.
 The index structure of each column is the mapping of column values to specific rows.
+
+[qianzhe: FromNowOn -> Incremental 会更好些嘛？]
 
 - index strategy(What data to build index) 
     - FromNowOn: only build index for the new incoming records
@@ -192,6 +204,9 @@ Other strategies may be introduced to HUDI at future.
 xxx
 
 #### <a id='index-management'>Index Management</a>
+
+[qianzhen: instant 对应的是索引生成时间戳，还是 fg 的生成时间戳呢？会不会存在一次查询，需要扫描多个 instant 目录下的索引文件？比如 fg1 的索引在 ts1 生成后就没变了，那之后的查询都要从这个时间戳目录下拿 fg1 的索引文件]
+
 - where to store: index files are saved in .hoodie/.index/${indexType}/${instant}/${fileId}/ dir, we can directly 
 obtain the index file path based on the file name in the process of querying.
 - life cycle: the retention time of the index is the same as that of hoodie instant, when cleaning instants, the 
@@ -203,9 +218,12 @@ The overall implementation diagram is as follows.
 ## <a id='lucene-secondary-index-impl'>Lucene Secondary Index Implementation</a>
 
 ### <a id='lucene-inverted-index'>Inverted Index</a>
-In lucene based secondary index, we mainly use inverted index to speed up record lookup, inverted index stores a 
-mapping from row id set to specific value. Now, we simply explain the whole concept with an example. Let's assume 
-we have a ``test`` table with column 'msg' and 'sender' in our hoodie dataset, here is what the table will look like:
+
+[qianzhen: row id set to specific value，是不是反了]
+
+In lucene based secondary index, we mainly use inverted index to speed up record lookup.
+Inverted index stores a mapping from row id set to specific value. Now, we will demonstrate the concepts through an example. Let's assume 
+we have a ``test`` table with column 'msg' and 'sender' in our hoodie dataset, here is what the table looks like:
 
 | msg               | sender |
 |-------------------|--------|
@@ -213,8 +231,7 @@ we have a ``test`` table with column 'msg' and 'sender' in our hoodie dataset, h
 | Buying a new car  | UserA  |
 | Buying a new home | UserB  |
 
-After indexing ``test`` table with lucene, we will get inverted index for every field in this table. Inverted index
-for field ``msg``:
+After indexing ``test`` table with lucene, we will get inverted index for every column in this table. Inverted index for column ``msg``:
 
 | term   | row id |
 |--------|--------|
@@ -227,7 +244,7 @@ for field ``msg``:
 | car    | 2      |
 | home   | 3      |
 
-Inverted index for field ``sender``:
+Inverted index for column ``sender``:
 
 | term  | row id |
 |-------|--------|
@@ -237,18 +254,16 @@ Inverted index for field ``sender``:
 ```
 select * from test where msg like 'Buying%' and sender = 'UserA'
 ```
-When querying ``test`` table with predicates ``msg like 'Buying%' and sender = 'UserA'``, we can quickly get matched 
-rows ``2,3 & 1,2 => 2``, then read details with rowId = 2.
+When querying ``test`` table with predicates ``msg like 'Buying%' and sender = 'UserA'``, we can quickly get matched rows ``2,3 & 1,2 => 2``, and then read details with rowId = 2.
 
 ### <a id='lucene-index-generation'>Index Generation</a>
-In hoodie table, secondary index based on lucene is based on base files, which means every base file has it's own 
-index file independently. In our initial implementation, we will adopt clustering to build index for files, this 
-process is completed as each record is written to a new base file, and the whole process is transparent to the user.
+In hoodie table, secondary index based on lucene works at file group level, which means every base file has it's own 
+index file independently. In our initial implementation, we will adopt clustering to build index for files.
+~~This process is completed as each record is written to a new base file, and the whole process is transparent to the user.~~
 
 ### <a id='query-by-lucene-index'>Query by Lucene Index</a>
 Lucene index can be used in ``tagLocation``, existential judgment and normal queries. When using lucene index to 
-query data, candidate files should be found out as what they do now firstly, then index files are loaded to lookup hit
-rows according to the base file names.
+query data, candidate files should be found out as what they do now firstly, then correspoding index files are loaded to lookup hit rows.
 
 Reading process of detailed data includes:
 1. Using pushed down predicates to query lucene secondary index to get row id set;
@@ -267,11 +282,10 @@ corresponding page. The mainly steps can be described as follows:
 
 ![](filter-by-lucene-index.jpg)
 
-By using lucene based secondary index, we can exactly read what we want from parquet file.
+By using lucene based secondary index, we can exactly read what we want from the parquet file.
 
 ## Rollout/Adoption Plan
- - No effects on existing users, but if existing users want to use lucene index, they can manually add lucene index
-for columns
+ - No effects on existing users, but if existing users want to use lucene index, they can manually add lucene index for columns
 
 ## Test Plan
 Describe in few sentences how the RFC will be tested. How will we know that the implementation 
