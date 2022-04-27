@@ -61,4 +61,14 @@ public class TestSQL {
       + "(1, array['abc1', 'def1'], array[1, 1], map['abc1', 1, 'def1', 3], row(array['abc1', 'def1'], row(1, 'abc1'))),\n"
       + "(2, array['abc2', 'def2'], array[2, 2], map['abc2', 1, 'def2', 3], row(array['abc2', 'def2'], row(2, 'abc2'))),\n"
       + "(3, array['abc3', 'def3'], array[3, 3], map['abc3', 1, 'def3', 3], row(array['abc3', 'def3'], row(3, 'abc3')))";
+
+  public static final String INSERT_DATE_PARTITION_T1 = "insert into t1 values\n"
+      + "('id1','Danny',23,DATE '1970-01-01'),\n"
+      + "('id2','Stephen',33,DATE '1970-01-01'),\n"
+      + "('id3','Julian',53,DATE '1970-01-01'),\n"
+      + "('id4','Fabian',31,DATE '1970-01-01'),\n"
+      + "('id5','Sophia',18,DATE '1970-01-01'),\n"
+      + "('id6','Emma',20,DATE '1970-01-01'),\n"
+      + "('id7','Bob',44,DATE '1970-01-01'),\n"
+      + "('id8','Han',56,DATE '1970-01-01')";
 }
