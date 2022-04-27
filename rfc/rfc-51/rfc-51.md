@@ -60,9 +60,9 @@ Here the illustration ignores all the metadata columns like `_hoodie_commit_time
 ## Goals
 
 1. Support row-level CDC records generation and persistence;
-1. Support both MOR and COW tables;
-1. Support all the write operations;
-1. Support Spark DataFrame/SQL/Streaming Query;
+2. Support both MOR and COW tables;
+3. Support all the write operations;
+4. Support Spark DataFrame/SQL/Streaming Query;
 
 ## Implementation
 ### CDC Architecture
@@ -153,7 +153,7 @@ Notice:
 
 This part just discuss how to make Spark (including Spark DataFram, SQL, Streaming) to read the Hudi CDC data.
 
-Implement `CDCReader` that do these steps to respone the CDC request:
+Implement `CDCReader` that do these steps to response the CDC request:
 
 - judge whether this is a table that has enabled `hoodie.table.cdf.enabled`, and the query range is valid.
 - extract and filter the commits needed from `ActiveTimeline`.
@@ -182,6 +182,15 @@ Notice:
 
 - Only instants that are active can be queried in a CDC scenario.
 - `CDCReader` manages all the things on CDC, and all the spark entrances(DataFrame, SQL, Streaming) call the funcations in `CDCReader`. 
+
+#### COW table
+
+Just follow the above steps without further consideration.
+
+#### MOR table
+
+For the inc data stored in log files, we need to merge them and the base file, to figure out how each record changed.
+But if users don't need to the exact changing, we can use a config to skip the merge process, and return directly.
 
 ####Syntax
 
