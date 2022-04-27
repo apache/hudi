@@ -96,7 +96,7 @@ To unlock the power of Data Skipping you will need to
 To enable Metadata Table along with Column Stats Index on the write path, make sure 
 following properties are set to true:
   - `hoodie.metadata.enable` (to enable Metadata Table on the write path, enabled by default)
-  - `HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key` (to enable Column Stats Index being populated on the write path, disabled by default)
+  - `hoodie.metadata.index.column.stats.enable` (to enable Column Stats Index being populated on the write path, disabled by default)
 
 TODO(alexey) add ref to async indexer docs
 > NOTE: If you're planning on enabling Column Stats Index for already existing table, please check out Async Indexer documentation
@@ -106,4 +106,4 @@ TODO(alexey) add ref to async indexer docs
 To enable Data Skipping in your queries make sure to set following properties to "true" (on the read path): 
   - `hoodie.enable.data.skipping` (to enable Data Skipping)
   - `hoodie.metadata.enable` (to enable Metadata Table use on the read path)
-  - `HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key` (to enable Column Stats Index use on the read path)
+  - `hoodie.metadata.index.column.stats.enable` (to enable Column Stats Index use on the read path)
