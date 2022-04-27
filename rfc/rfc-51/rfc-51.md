@@ -69,15 +69,15 @@ Since Spark 3.2.0, with the power of parquet column index, page level statistics
 to filter data, and the process of reading data can be described as follows(<a id='process-a'>Process A</a>):
 - Step1: Comparing the inclusion relation of row group data's middle position and task split info
    to decided which row groups should be handled by current task. If the row group data's middle
-   position is contained by task split, the row group should be handled by this task;
-- Step2: Using pushed down predicates and row group level column statistics info to pick out hit
-   row groups;
-- Step 3: Filtering page by page level statistics for each column predicates, then get hit row id set
-for every column independently; 
-- Step 4: Getting final hit row id ranges by combining all column hit rows, then get final hit
-pages for every column; 
-- Step 5: Loading and uncompressing hit pages for every requested columns; 
-- Step 6: Reading data by hit row id ranges;
+   position is contained by task split, the row group should be handled by this task
+- Step2: Using pushed down predicates and row group level column statistics info to pick out matched
+   row groups
+- Step 3: Filtering page by page level statistics for each column predicates, then get matched row id set
+for every column independently
+- Step 4: Getting final matched row id ranges by combining all column matched rows, then get final matched
+pages for every column
+- Step 5: Loading and uncompressing matched pages for every requested columns
+- Step 6: Reading data by matched row id ranges
 
 ![](filter-by-page-statistics.jpg)
 
@@ -111,7 +111,8 @@ At present, record level index in hudi
 is mainly implemented for ``tagLocation`` in write path.
 Secondary index structure will be used for query acceleration in read path, but not in write path.
 
-If Record Level Index is applied in read path for query with RecordKey predicate, it can only filter at file group level, while secondary index could provide the exact matched set of rows.
+If Record Level Index is applied in read path for query with RecordKey predicate, it can only filter at file group level,
+while secondary index could provide the exact matched set of rows.
 
 For more details about current implementation of record level index, please refer to
 [pull-3508](https://github.com/apache/hudi/pull/3508).
@@ -119,19 +120,15 @@ For more details about current implementation of record level index, please refe
 ## <a id='implementation'>Implementation</a>
 
 ### <a id='impl-sql-layer'>SQL Layer</a>
-
-[qianzhen: 这里主要指 Spark SQL? 其他引擎 SQL layer 应该需要他们自己适配? 对 optimizer layer 应该也同理？]
-
-Parsing all kinds of index related SQL, including create/drop/alter index, optimize table xxx, etc.
+Parsing all kinds of index related SQL(Spark/Flink, etc.), including create/drop/alter index, optimize table, etc.
 
 ### <a id='impl-optimizer-layer'>Optimizer Layer</a>
 For the convenience of implementation, we can implement the first phase based on RBO(rule-based optimizer),  
 and then gradually expand and improve CBO and HBO based on the collected statistical information.
 
-[qianzhen: 为啥 predicate 太多不下推？predicate 多，一般情况下 Hit row set 感觉会越少？]
-
-We can define RBO in several ways, 
-for example, SQL with more than 10 predicates does not push down to use secondary index, but uses the existing scanning logic.
+We can define RBO in several ways, for example, SQL with more than 10 predicates does not push down 
+to use secondary index, but uses the existing scanning logic. It may be a cost way to use too many
+predicates indexes to get row id set.
 
 ### <a id='impl-api-layer'>Standard API Layer</a>
 The standard APIs are as follows, and subsequent index types(e.g., Hbase/Lucene/B+ tree ...) need to implement these APIs.
@@ -143,8 +140,6 @@ Set<RowId> getRowIdSet(HoodieTable table, Map<column, List<PredicateList>> colum
 // Create index
 boolean createIndex(HoodieTable table, List<Column> columns, List<IndexType> indexTypes)
 
-[qianzhen: build 需要增加 column 嘛？能更细粒度调度 build。另外，需要区分 build / update 嘛？前者全量构建，后者增量更新 Index ]
-
 // Build index for the specified table
 boolean buildIndex(HoodieTable table, InstantTime instant)
 
@@ -155,58 +150,56 @@ boolean dropIndex(HoodieTable table, List<Column> columns)
 ```
 
 ### <a id='imple-index-layer'>Index Implementation Layer</a>
-
-[qianzhen: 这里需要说明下通过 rowId 就能获取到完整一行数据，对 parquet 是可行的嘛？也就是各个 column 的 row id 是对齐的。另：这段话感觉可以直接放在下面 KV mapping 里。]
-
 The role of the secondary index is to provide a mapping from a column or column combination value to 
 specified rows, so that it is convenient to find the result row that meets the requirements according to 
 this index during query, so as to obtain the final data rows.
 
 #### <a id='impl-index-layer-kv-mapping'>KV Mapping</a>
 In mapping 'column value->row', we can use rowId or primary key(RecordKey) to identify one unique row.
-Considering the memory saving and the efficiency of row set merging, we choose rowId.
+Considering the memory saving and the efficiency of row set merging, we choose rowId. 
+Cause row id of all columns is aligned in row group, we can get row data by row id directly. 
 
 #### <a id='impl-index-layer-build-index'>Build Index</a>
-- trigger time
+**trigger time**
 
-~~When one column's secondary index enabled, we need to build index for it automatically.~~ Index building may
+When one column's secondary index enabled, we need to build index for it automatically. Index building may
 consume a lot of CPU and IO resources. So, build index while compaction/clustering executing is a good solution, 
 after table service is serviced, writing and index construction can be better decouple to avoid impact on 
 write performance.
 
-Because we decouple the index definition and the index builing process, users may not be able to benifit from it immediately when they create the index util the next compaction/clustering is triggered and completed.
+Because we decouple the index definition and the index building process, users may not be able to benefit from it
+immediately when they create the index util the next compaction/clustering is triggered and completed.
 
-[qianzhen: CMD procedure 是指 command line tool? 看例子更像是特殊的 SQL 语法]
-
-Also, we need to support a manual way to trigger and monitor index building, CMD procedure needs to be developed,
+Also, we need to support a manual way to trigger and monitor index building, SQL CMD needs to be developed,
 such as 'optimize table t1', 'show indexing t1', etc.
 
-- index file
-    - A: build index only for base file
-    - B: build index only for log file
-    - C: build index for both base file and log file
+**index file**
+- A: build index only for base file
+- B: build index only for log file
+- C: build index for both base file and log file
 
-We prefer plan A right now, the main purpose of this proposal is to save base file IO cost based on the assumption that base file has lots of records.
-
-[qianzhen: 为啥不是每一个 column 一个 index 文件呢？这样做 build 调度上，以及扫描时打开索引文件都会更细粒度一些]
+We prefer plan A right now, the main purpose of this proposal is to save base file IO cost based on the 
+assumption that base file has lots of records.
 
 One index file will be generated for each base file, containing one or more columns of index data.
 The index structure of each column is the mapping of column values to specific rows.
 
-[qianzhe: FromNowOn -> Incremental 会更好些嘛？]
+Considering that there are too many index files, we prefer to store multi-column index data in one file instead of 
+one index file per column
 
-- index strategy(What data to build index) 
-    - FromNowOn: only build index for the new incoming records
-    - ALL: build index for all records, including history records in partition/non-partition, COW/MOR table 
+**index strategy**
+- Incremental: only build index for the new incoming records
+- ALL: build index for all records, including history records in partition/non-partition, COW/MOR table 
 Other strategies may be introduced to HUDI at future.
 
 #### <a id='impl-index-layer-read-index'>Read Index</a>
-xxx
+Reading index can be described as follows: 
+1. convert query conditions to executable predicates
+2. find the index file according to candidate file slices
+3. get row id set for each predicate from index file
+4. merge row id set of all predicates
 
 #### <a id='index-management'>Index Management</a>
-
-[qianzhen: instant 对应的是索引生成时间戳，还是 fg 的生成时间戳呢？会不会存在一次查询，需要扫描多个 instant 目录下的索引文件？比如 fg1 的索引在 ts1 生成后就没变了，那之后的查询都要从这个时间戳目录下拿 fg1 的索引文件]
-
 - where to store: index files are saved in .hoodie/.index/${indexType}/${instant}/${fileId}/ dir, we can directly 
 obtain the index file path based on the file name in the process of querying.
 - life cycle: the retention time of the index is the same as that of hoodie instant, when cleaning instants, the 
@@ -218,11 +211,8 @@ The overall implementation diagram is as follows.
 ## <a id='lucene-secondary-index-impl'>Lucene Secondary Index Implementation</a>
 
 ### <a id='lucene-inverted-index'>Inverted Index</a>
-
-[qianzhen: row id set to specific value，是不是反了]
-
 In lucene based secondary index, we mainly use inverted index to speed up record lookup.
-Inverted index stores a mapping from row id set to specific value. Now, we will demonstrate the concepts through an example. Let's assume 
+Inverted index stores a mapping from column value to row id set. Now, we will demonstrate the concepts through an example. Let's assume 
 we have a ``test`` table with column 'msg' and 'sender' in our hoodie dataset, here is what the table looks like:
 
 | msg               | sender |
@@ -254,31 +244,33 @@ Inverted index for column ``sender``:
 ```
 select * from test where msg like 'Buying%' and sender = 'UserA'
 ```
-When querying ``test`` table with predicates ``msg like 'Buying%' and sender = 'UserA'``, we can quickly get matched rows ``2,3 & 1,2 => 2``, and then read details with rowId = 2.
+When querying ``test`` table with predicates ``msg like 'Buying%' and sender = 'UserA'``, we can quickly get
+matched rows ``2,3 & 1,2 => 2``, and then read details with rowId = 2.
 
 ### <a id='lucene-index-generation'>Index Generation</a>
-In hoodie table, secondary index based on lucene works at file group level, which means every base file has it's own 
+In hoodie table, secondary index based on lucene works at file group level, which means each base file has its own 
 index file independently. In our initial implementation, we will adopt clustering to build index for files.
-~~This process is completed as each record is written to a new base file, and the whole process is transparent to the user.~~
+This process is completed as each record is written to a new base file, and the whole process is transparent to the user.~~
 
 ### <a id='query-by-lucene-index'>Query by Lucene Index</a>
 Lucene index can be used in ``tagLocation``, existential judgment and normal queries. When using lucene index to 
-query data, candidate files should be found out as what they do now firstly, then correspoding index files are loaded to lookup hit rows.
+query data, candidate files should be found out as what they do now firstly, then corresponding index files are loaded
+to lookup matched rows.
 
 Reading process of detailed data includes:
-1. Using pushed down predicates to query lucene secondary index to get row id set;
-2. Using row id set to get detailed data.
+1. Using pushed down predicates to query lucene secondary index to get row id set
+2. Using row id set to get detailed data
 
 For query scenarios like existential judgment and ``tagLocation``, point query predicates are constructed to get row 
-id set, if no records hit, empty row id set will be returned. Different from the above scenario, normal queries use 
+id set, if no records matched, empty row id set will be returned. Different from the above scenario, normal queries use 
 pushed down predicates to query lucene index to get row id set, then combining with parquet page level statistics to 
-load specific pages. Once hit rows and pages are ready, we can iterate by row id and get exactly rows from 
+load specific pages. Once matched rows and pages are ready, we can iterate by row id and get exactly rows from 
 corresponding page. The mainly steps can be described as follows:
-- Step 1-2 are the same as in [Process A](#process-a);
-- Step 3: Querying lucene index to get hit row id set for each column predicates;
-- Step 4: Getting final hit row id set by combining all column hit row id set;
-- Step 5: Loading and uncompressing hit pages for every requested columns;
-- Step 6: Aligning hit row id between different columns' pages, then reading data by row id;
+- Step 1-2 are the same as in [Process A](#process-a)
+- Step 3: Querying lucene index to get matched row id set for each column predicates
+- Step 4: Getting final matched row id set by combining all column matched row id set
+- Step 5: Loading and uncompressing matched pages for every requested columns
+- Step 6: Aligning matched row id between different columns' pages, then reading data by row id
 
 ![](filter-by-lucene-index.jpg)
 
