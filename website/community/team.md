@@ -38,4 +38,3 @@ last_modified_at: 2020-09-01T15:59:57-04:00
 | <img src={"https://avatars.githubusercontent.com/pengzhiwei2018"} className="profile-pic" alt="pengzhiwei2018" align="middle" /> | [Zhiwei Peng](https://github.com/pengzhiwei2018)                      | Committer       | zhiwei        |
 | <img src={"https://avatars.githubusercontent.com/xiarixiaoyao"} className="profile-pic" alt="xiarixiaoyao" align="middle" /> | [Tao Meng](https://github.com/xiarixiaoyao)                      | Committer       | mengtao        |
 | <img src={"https://avatars.githubusercontent.com/yuzhaojing"} className="profile-pic" alt="yuzhaojing" align="middle" /> | [Zhaojing Yu](https://github.com/yuzhaojing)                      | Committer       | yuzhaojing        |
-
