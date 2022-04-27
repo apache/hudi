@@ -17,18 +17,21 @@
 
 package org.apache.spark.sql.hudi.catalog
 
+import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, HoodieCatalogTable}
+import org.apache.spark.sql.catalyst.expressions.UnsafeProjection
 import org.apache.spark.sql.connector.catalog.TableCapability._
 import org.apache.spark.sql.connector.catalog.{SupportsWrite, Table, TableCapability, V2TableWithV1Fallback}
 import org.apache.spark.sql.connector.expressions.{FieldReference, IdentityTransform, Transform}
 import org.apache.spark.sql.connector.write._
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
+import org.apache.spark.sql.hudi.catalog.HoodieInternalV2Table.{alignSchema, generateUnsafeProjection}
 import org.apache.spark.sql.sources.{Filter, InsertableRelation}
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
-import org.apache.spark.sql.{DataFrame, SaveMode, SparkSession}
+import org.apache.spark.sql.{DataFrame, HoodieUnsafeCatalystUtils, SaveMode, SparkSession}
 
 import java.util
 import scala.collection.JavaConverters.{mapAsJavaMapConverter, setAsJavaSetConverter}
@@ -110,7 +113,8 @@ private class HoodieV1WriteBuilder(writeOptions: CaseInsensitiveStringMap,
             // for insert into or insert overwrite partition we use append mode.
             SaveMode.Append
           }
-          alignOutputColumns(data).write.format("org.apache.hudi")
+          alignSchema(data, hoodieCatalogTable.tableSchema).write
+            .format("org.apache.hudi")
             .mode(mode)
             .options(buildHoodieConfig(hoodieCatalogTable) ++
               buildHoodieInsertConfig(hoodieCatalogTable, spark, forceOverwrite, Map.empty, Map.empty))
@@ -119,9 +123,23 @@ private class HoodieV1WriteBuilder(writeOptions: CaseInsensitiveStringMap,
       }
     }
   }
+}
 
-  private def alignOutputColumns(data: DataFrame): DataFrame = {
-    val schema = hoodieCatalogTable.tableSchema
-    spark.createDataFrame(data.toJavaRDD, schema)
+object HoodieInternalV2Table extends SparkAdapterSupport {
+
+  def generateUnsafeProjection(from: StructType, to: StructType): UnsafeProjection =
+    sparkAdapter.createCatalystExpressionUtils().generateUnsafeProjection(from, to)
+
+  private[catalog] def alignSchema(df: DataFrame, targetSchema: StructType): DataFrame = {
+    // NOTE: This method makes sure that we write out the dataset in the schema that is persisted
+    //       w/in the catalog.
+    //       We're relying on Spark internal APIs to avoid de-/serialization
+    //       penalty of converting [[InternalRow]] to [[Row]] and back
+    // TODO validate schemas are compatible
+    val unsafeProjection = generateUnsafeProjection(df.schema, targetSchema)
+    val projectedRdd = HoodieUnsafeCatalystUtils.mapInternal(df.queryExecution.toRdd)(unsafeProjection)
+
+    HoodieUnsafeCatalystUtils.createDataFrame(df.sparkSession, projectedRdd, targetSchema)
   }
+
 }
