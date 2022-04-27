@@ -18,7 +18,18 @@
 
 package org.apache.hudi.table.format.cow;
 
+import org.apache.avro.Schema;
+import org.apache.flink.table.data.ColumnarRowData;
+import org.apache.flink.table.types.logical.LogicalType;
+import org.apache.flink.table.types.logical.RowType;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.util.InternalSchemaCache;
+import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.internal.schema.Types;
+import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
+import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
+import org.apache.hudi.table.format.CastMap;
+import org.apache.hudi.table.format.SchemaEvoContext;
 import org.apache.hudi.table.format.cow.vector.reader.ParquetColumnarRowSplitReader;
 
 import org.apache.flink.api.common.io.FileInputFormat;
@@ -35,6 +46,8 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.BlockLocation;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.hudi.util.AvroSchemaConverter;
+import org.apache.hudi.util.RowDataProjection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -46,9 +59,11 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.IntStream;
 
 import static org.apache.flink.table.data.vector.VectorizedColumnBatch.DEFAULT_SIZE;
 import static org.apache.flink.table.filesystem.RowPartitionComputer.restorePartValueFromType;
+import static org.apache.hudi.common.model.HoodieRecord.HOODIE_META_COLUMNS;
 
 /**
  * An implementation of {@link FileInputFormat} to read {@link RowData} records
@@ -75,6 +90,8 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
   private final boolean utcTimestamp;
   private final SerializableConfiguration conf;
   private final long limit;
+  private final SchemaEvoContext schemaEvoContext;
+  private RowDataProjection projection;
 
   private transient ParquetColumnarRowSplitReader reader;
   private transient long currentReadCount;
@@ -92,7 +109,8 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
       String partDefaultName,
       long limit,
       Configuration conf,
-      boolean utcTimestamp) {
+      boolean utcTimestamp,
+      SchemaEvoContext schemaEvoContext) {
     super.setFilePaths(paths);
     this.limit = limit;
     this.partDefaultName = partDefaultName;
@@ -101,10 +119,15 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
     this.selectedFields = selectedFields;
     this.conf = new SerializableConfiguration(conf);
     this.utcTimestamp = utcTimestamp;
+    this.schemaEvoContext = schemaEvoContext;
   }
 
   @Override
   public void open(FileInputSplit fileSplit) throws IOException {
+    ActualFields actualFields = prepareSchemaEvo(fileSplit);
+    String[] actualFieldNames = actualFields.names();
+    DataType[] actualFieldTypes = actualFields.types();
+
     // generate partition specs.
     List<String> fieldNameList = Arrays.asList(fullFieldNames);
     LinkedHashMap<String, String> partSpec = PartitionPathUtils.extractPartitionSpecFromPath(
@@ -118,8 +141,8 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
         utcTimestamp,
         true,
         conf.conf(),
-        fullFieldNames,
-        fullFieldTypes,
+        actualFieldNames,
+        actualFieldTypes,
         partObjects,
         selectedFields,
         DEFAULT_SIZE,
@@ -278,7 +301,11 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
   @Override
   public RowData nextRecord(RowData reuse) {
     currentReadCount++;
-    return reader.nextRecord();
+    ColumnarRowData rowData = reader.nextRecord();
+    if (projection == null) {
+      return rowData;
+    }
+    return projection.project(rowData);
   }
 
   @Override
@@ -388,6 +415,72 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
       return getInflaterInputStreamFactory(fileExtension);
     } else {
       return null;
+    }
+  }
+
+  private ActualFields prepareSchemaEvo(FileInputSplit fileSplit) {
+    if (!schemaEvoContext.isEnabled()) {
+      projection = null;
+      return new ActualFields(fullFieldNames, fullFieldTypes);
+    }
+    InternalSchema mergedSchema = getMergedSchema(fileSplit);
+    ActualFields actualFields = getActualFields(mergedSchema);
+    projection = getProjection(mergedSchema, actualFields);
+    return actualFields;
+  }
+
+  private InternalSchema getMergedSchema(FileInputSplit fileSplit) {
+    long commitTime = Long.parseLong(FSUtils.getCommitTime(fileSplit.getPath().getPath()));
+    InternalSchema fileSchema = InternalSchemaCache.searchSchemaAndCache(commitTime, schemaEvoContext.metaClient(), false);
+    InternalSchema querySchema = schemaEvoContext.querySchema();
+    return new InternalSchemaMerger(fileSchema, querySchema, true, true).mergeSchema();
+  }
+
+  private ActualFields getActualFields(InternalSchema mergedSchema) {
+    int skipFields = HOODIE_META_COLUMNS.size();
+    String[] actualFieldNames = mergedSchema.columns()
+        .stream()
+        .skip(skipFields)
+        .map(Types.Field::name)
+        .toArray(String[]::new);
+    Schema actualSchema = AvroInternalSchemaConverter.convert(mergedSchema, schemaEvoContext.tableName());
+    DataType[] actualFieldTypes = AvroSchemaConverter.convertToDataType(actualSchema).getChildren()
+        .stream()
+        .skip(skipFields)
+        .toArray(DataType[]::new);
+    return new ActualFields(actualFieldNames, actualFieldTypes);
+  }
+
+  private RowDataProjection getProjection(InternalSchema mergedSchema, ActualFields actualFields) {
+    CastMap castMap = CastMap.of(schemaEvoContext.tableName(), schemaEvoContext.querySchema(), mergedSchema);
+    if (castMap.containsAnyPos(selectedFields)) {
+      LogicalType[] types = Arrays.stream(actualFields.types()).map(DataType::getLogicalType).toArray(LogicalType[]::new);
+      LogicalType[] readType = new LogicalType[selectedFields.length];
+      for (int i = 0; i < selectedFields.length; i++) {
+        readType[i] = types[selectedFields[i]];
+      }
+      int[] pos = IntStream.range(0, selectedFields.length).toArray();
+      return RowDataProjection.instance(RowType.of(readType), pos, castMap.rearrange(selectedFields, pos));
+    } else {
+      return null;
+    }
+  }
+
+  private static final class ActualFields {
+    private final String[] names;
+    private final DataType[] types;
+
+    ActualFields(String[] names, DataType[] types) {
+      this.names = names;
+      this.types = types;
+    }
+
+    String[] names() {
+      return names;
+    }
+
+    DataType[] types() {
+      return types;
     }
   }
 }

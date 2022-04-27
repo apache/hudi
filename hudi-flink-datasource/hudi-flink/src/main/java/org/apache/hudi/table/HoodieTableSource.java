@@ -25,16 +25,20 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
+import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.HoodieROTablePathFilter;
+import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
 import org.apache.hudi.source.FileIndex;
 import org.apache.hudi.source.IncrementalInputSplits;
 import org.apache.hudi.source.StreamReadMonitoringFunction;
 import org.apache.hudi.source.StreamReadOperator;
 import org.apache.hudi.table.format.FilePathUtils;
+import org.apache.hudi.table.format.SchemaEvoContext;
 import org.apache.hudi.table.format.cow.CopyOnWriteInputFormat;
 import org.apache.hudi.table.format.mor.MergeOnReadInputFormat;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
@@ -88,6 +92,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -436,7 +441,8 @@ public class HoodieTableSource implements
         this.conf.getString(FlinkOptions.PARTITION_DEFAULT_NAME),
         this.limit == NO_LIMIT_CONSTANT ? Long.MAX_VALUE : this.limit, // ParquetInputFormat always uses the limit value
         getParquetConf(this.conf, this.hadoopConf),
-        this.conf.getBoolean(FlinkOptions.UTC_TIMEZONE)
+        this.conf.getBoolean(FlinkOptions.UTC_TIMEZONE),
+        getSchemaEvoContext()
     );
     format.setFilesFilter(new LatestFileFilter(this.hadoopConf));
     return format;
@@ -445,6 +451,17 @@ public class HoodieTableSource implements
   private Schema inferSchemaFromDdl() {
     Schema schema = AvroSchemaConverter.convertToSchema(this.schema.toPhysicalRowDataType().getLogicalType());
     return HoodieAvroUtils.addMetadataFields(schema, conf.getBoolean(FlinkOptions.CHANGELOG_ENABLED));
+  }
+
+  private SchemaEvoContext getSchemaEvoContext() {
+    if (!conf.getBoolean(FlinkOptions.SCHEMA_EVOLUTION_ENABLED)) {
+      return new SchemaEvoContext(false, null, null);
+    }
+    TreeMap<Long, InternalSchema> schemas = InternalSchemaCache.getHistoricalSchemas(metaClient);
+    InternalSchema querySchema = schemas.isEmpty()
+        ? AvroInternalSchemaConverter.convert(getTableAvroSchema())
+        : schemas.lastEntry().getValue();
+    return new SchemaEvoContext(true, querySchema, metaClient);
   }
 
   @VisibleForTesting

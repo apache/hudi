@@ -100,7 +100,7 @@ public class InternalSchemaCache {
     }
   }
 
-  private static TreeMap<Long, InternalSchema> getHistoricalSchemas(HoodieTableMetaClient metaClient) {
+  public static TreeMap<Long, InternalSchema> getHistoricalSchemas(HoodieTableMetaClient metaClient) {
     TreeMap<Long, InternalSchema> result = new TreeMap<>();
     FileBasedInternalSchemaStorageManager schemasManager = new FileBasedInternalSchemaStorageManager(metaClient);
     String historySchemaStr = schemasManager.getHistorySchemaStr();

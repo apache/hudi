@@ -89,6 +89,12 @@ public class FlinkOptions extends HoodieConfig {
           + "The semantics is best effort because the compaction job would finally merge all changes of a record into one.\n"
           + " default false to have UPSERT semantics");
 
+  public static final ConfigOption<Boolean> SCHEMA_EVOLUTION_ENABLED = ConfigOptions
+          .key(HoodieWriteConfig.SCHEMA_EVOLUTION_ENABLE.key())
+          .booleanType()
+          .defaultValue(HoodieWriteConfig.SCHEMA_EVOLUTION_ENABLE.defaultValue())
+          .withDescription(HoodieWriteConfig.SCHEMA_EVOLUTION_ENABLE.doc());
+
   // ------------------------------------------------------------------------
   //  Metadata table Options
   // ------------------------------------------------------------------------
