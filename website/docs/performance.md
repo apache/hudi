@@ -90,7 +90,7 @@ If you're interested on learning more details around how Data Skipping is workin
 
 To unlock the power of Data Skipping you will need to
 
-1. Enable Metadata Table along with Column Stats Index on the _write path_ (TODO add ref to async indexer)
+1. Enable Metadata Table along with Column Stats Index on the _write path_ (TODO(alexey) add ref to async indexer)
 2. Enable Data Skipping in your queries
 
 To enable Metadata Table along with Column Stats Index on the write path, make sure 
