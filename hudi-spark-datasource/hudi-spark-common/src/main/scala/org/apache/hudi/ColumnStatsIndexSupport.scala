@@ -36,7 +36,7 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.{DataFrame, HoodieUnsafeRDDUtils, Row, SparkSession}
+import org.apache.spark.sql.{DataFrame, HoodieUnsafeCatalystUtils, Row, SparkSession}
 
 import scala.collection.JavaConverters._
 import scala.collection.immutable.TreeSet
@@ -250,7 +250,7 @@ trait ColumnStatsIndexSupport extends SparkAdapterSupport {
         }
       }
 
-      HoodieUnsafeRDDUtils.createDataFrame(spark, catalystRowsRDD, metadataRecordStructType)
+      HoodieUnsafeCatalystUtils.createDataFrame(spark, catalystRowsRDD, metadataRecordStructType)
     }
     metadataTableDF
   }

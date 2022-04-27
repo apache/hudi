@@ -29,7 +29,7 @@ import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, DefaultSo
 import org.apache.parquet.hadoop.util.counters.BenchmarkCounter
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.{Dataset, HoodieUnsafeRDDUtils, Row, SaveMode}
+import org.apache.spark.sql.{Dataset, HoodieUnsafeCatalystUtils, Row, SaveMode}
 import org.junit.jupiter.api.Assertions.{assertEquals, fail}
 import org.junit.jupiter.api.{Disabled, Tag, Test}
 
@@ -315,7 +315,7 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
 
       val (rows, bytesRead) = measureBytesRead { () =>
         val rdd = relation.buildScan(targetColumns, Array.empty).asInstanceOf[HoodieUnsafeRDD]
-        HoodieUnsafeRDDUtils.collect(rdd)
+        HoodieUnsafeCatalystUtils.collect(rdd)
       }
 
       val targetRecordCount = tableState.targetRecordCount;

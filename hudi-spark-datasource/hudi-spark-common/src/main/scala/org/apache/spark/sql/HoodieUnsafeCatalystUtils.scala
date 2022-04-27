@@ -27,9 +27,20 @@ import org.apache.spark.util.MutablePair
 /**
  * Suite of utilities helping in handling instances of [[HoodieUnsafeRDD]]
  */
-object HoodieUnsafeRDDUtils {
+object HoodieUnsafeCatalystUtils {
 
-  // TODO scala-doc
+  /**
+   * Creates [[DataFrame]] from the [[RDD]] of [[InternalRow]] avoiding de-/serialization penalty of
+   * deserializing [[InternalRow]] to [[Row]] and back when using [[SparkSession.createDataFrame(RDD[Row], StructType)]]
+   *
+   * NOTE: No schema validation is performed, and it's up to the user of this API to make sure that
+   *       [[InternalRow]] adheres to provided schema.
+   *
+   * @param spark target Spark session
+   * @param rdd RDD bearing [[InternalRow]]s to create [[DataFrame]] from
+   * @param structType schema of the target [[DataFrame]]
+   * @return [[DataFrame]]
+   */
   def createDataFrame(spark: SparkSession, rdd: RDD[InternalRow], structType: StructType): DataFrame =
     spark.internalCreateDataFrame(rdd, structType)
 
