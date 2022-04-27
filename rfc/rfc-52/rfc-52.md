@@ -14,7 +14,7 @@
   See the License for the specific language governing permissions and
   limitations under the License.
 -->
-# RFC-51: Introduce Secondary Index to Improve HUDI Query Performance
+# RFC-52: Introduce Secondary Index to Improve HUDI Query Performance
 
 ## Proposers
 
