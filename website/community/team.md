@@ -14,6 +14,7 @@ last_modified_at: 2020-09-01T15:59:57-04:00
 | <img src={"https://avatars.githubusercontent.com/bvaradar"} className="profile-pic" alt="bvaradar" align="middle" /> | [Balaji Varadarajan](https://github.com/bvaradar)            | PMC, Committer | vbalaji      |
 | <img src={"https://avatars.githubusercontent.com/danny0405"} className="profile-pic" alt="danny0405" align="middle" /> | [Danny Chan](https://github.com/danny0405)                      | Committer       | danny0405        |
 | <img src={"https://avatars.githubusercontent.com/yihua"} className="profile-pic" alt="yihua" align="middle" /> | [Ethan Guo](https://github.com/yihua)                      | Committer       | yihua        |
+| <img src={"https://avatars.githubusercontent.com/XuQianJin-Stars"} className="profile-pic" alt="XuQianJin-Stars" align="middle" /> | [Forward Xu](https://github.com/XuQianJin-Stars)                      | Committer       | forwardxu        |
 | <img src={"https://avatars.githubusercontent.com/garyli1019"} className="profile-pic" alt="garyli1019" align="middle" /> | [Gary Li](https://github.com/garyli1019)                      | PMC, Committer       | garyli        |
 | <img src={"https://avatars.githubusercontent.com/lresende"} className="profile-pic" alt="lresende" align="middle" /> | [Luciano Resende](https://github.com/lresende)               | PMC, Committer | lresende     |
 | <img src={"https://avatars.githubusercontent.com/lamberken"} className="profile-pic" alt="lamberken" className="profile-pic" align="middle" /> | [lamberken](https://github.com/lamberken)               | Committer | lamberken     |
@@ -37,4 +38,4 @@ last_modified_at: 2020-09-01T15:59:57-04:00
 | <img src={"https://avatars.githubusercontent.com/pengzhiwei2018"} className="profile-pic" alt="pengzhiwei2018" align="middle" /> | [Zhiwei Peng](https://github.com/pengzhiwei2018)                      | Committer       | zhiwei        |
 | <img src={"https://avatars.githubusercontent.com/xiarixiaoyao"} className="profile-pic" alt="xiarixiaoyao" align="middle" /> | [Tao Meng](https://github.com/xiarixiaoyao)                      | Committer       | mengtao        |
 | <img src={"https://avatars.githubusercontent.com/yuzhaojing"} className="profile-pic" alt="yuzhaojing" align="middle" /> | [Zhaojing Yu](https://github.com/yuzhaojing)                      | Committer       | yuzhaojing        |
-| <img src={"https://avatars.githubusercontent.com/XuQianJin-Stars"} className="profile-pic" alt="XuQianJin-Stars" align="middle" /> | [ForwardXu](https://github.com/XuQianJin-Stars)                      | Committer       | ForwardXu        |
+
