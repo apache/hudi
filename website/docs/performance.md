@@ -60,25 +60,3 @@ For e.g , with 100M timestamp prefixed keys (5% updates, 95% inserts) on a event
 **~7X (2880 secs vs 440 secs) speed up** over vanilla spark join. Even for a challenging workload like an '100% update' database ingestion workload spanning 
 3.25B UUID keys/30 partitions/6180 files using 300 cores, Hudi indexing offers a **80-100% speedup**.
 
-### Snapshot Queries
-
-The major design goal for snapshot queries is to achieve the latency reduction & efficiency gains in previous section,
-with no impact on queries. Following charts compare the Hudi vs non-Hudi tables across Hive/Presto/Spark queries and demonstrate this.
-
-**Hive**
-
-<figure>
-    <img className="docimage" src={require("/assets/images/hudi_query_perf_hive.png").default} alt="hudi_query_perf_hive.png"  />
-</figure>
-
-**Spark**
-
-<figure>
-    <img className="docimage" src={require("/assets/images/hudi_query_perf_spark.png").default} alt="hudi_query_perf_spark.png"  />
-</figure>
-
-**Presto**
-
-<figure>
-    <img className="docimage" src={require("/assets/images/hudi_query_perf_presto.png").default} alt="hudi_query_perf_presto.png"  />
-</figure>
