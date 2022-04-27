@@ -48,6 +48,7 @@ module.exports = {
                 'writing_data',
                 'hoodie_deltastreamer',
                 'querying_data',
+                'gcp_bigquery',
                 'flink_configuration',
                 {
                     type: 'category',
