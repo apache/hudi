@@ -262,12 +262,11 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
    *
    * Check scala-doc for [[shouldExtractPartitionValuesFromPartitionPath]] for more details
    */
-  def dataSchema: StructType =
-    if (shouldExtractPartitionValuesFromPartitionPath) {
-      prunePartitionColumns(tableStructSchema)
-    } else {
-      tableStructSchema
-    }
+  def dataSchema: StructType = if (shouldExtractPartitionValuesFromPartitionPath) {
+    prunePartitionColumns(tableStructSchema)
+  } else {
+    tableStructSchema
+  }
 
   /**
    * Determines whether relation's schema could be pruned by Spark's Optimizer
