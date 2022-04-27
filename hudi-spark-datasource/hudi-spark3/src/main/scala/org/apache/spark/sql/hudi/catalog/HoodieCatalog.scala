@@ -139,7 +139,7 @@ class HoodieCatalog extends DelegatingCatalogExtension
   override def renameTable(oldIdent: Identifier, newIdent: Identifier): Unit = {
     loadTable(oldIdent) match {
       case _: HoodieInternalV2Table =>
-        new AlterHoodieTableRenameCommand(oldIdent.asTableIdentifier, newIdent.asTableIdentifier, false).run(spark)
+        AlterHoodieTableRenameCommand(oldIdent.asTableIdentifier, newIdent.asTableIdentifier, false).run(spark)
       case _ => super.renameTable(oldIdent, newIdent)
     }
   }
