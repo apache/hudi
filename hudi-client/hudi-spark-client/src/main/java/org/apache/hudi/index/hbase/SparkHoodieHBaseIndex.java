@@ -42,7 +42,6 @@ import org.apache.hudi.exception.HoodieDependentSystemUnavailableException;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
-
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.HBaseConfiguration;
 import org.apache.hadoop.hbase.HRegionLocation;
@@ -60,10 +59,12 @@ import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.client.ResultScanner;
 import org.apache.hadoop.hbase.client.Scan;
 import org.apache.hadoop.hbase.util.Bytes;
+import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.Partitioner;
 import org.apache.spark.SparkConf;
+import org.apache.spark.SparkFiles;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -72,6 +73,7 @@ import org.joda.time.DateTime;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
@@ -150,9 +152,28 @@ public class SparkHoodieHBaseIndex extends HoodieIndex<Object, Object> {
     }
     String port = String.valueOf(config.getHbaseZkPort());
     hbaseConfig.set("hbase.zookeeper.property.clientPort", port);
-    try {
-      return ConnectionFactory.createConnection(hbaseConfig);
-    } catch (IOException e) {
+
+   try {
+      String authentication = config.getHBaseIndexSecurityAuthentication();
+      if (authentication.equals("kerberos")) {
+        hbaseConfig.set("hbase.security.authentication", "kerberos");
+        hbaseConfig.set("hadoop.security.authentication", "kerberos");
+        hbaseConfig.set("hbase.security.authorization", "true");
+        hbaseConfig.set("hbase.regionserver.kerberos.principal", config.getHBaseIndexRegionserverPrincipal());
+        hbaseConfig.set("hbase.master.kerberos.principal", config.getHBaseIndexMasterPrincipal());
+
+        String principal = config.getHBaseIndexKerberosUserPrincipal();
+        String keytab = SparkFiles.get(config.getHBaseIndexKerberosUserKeytab());
+
+        UserGroupInformation.setConfiguration(hbaseConfig);
+        UserGroupInformation ugi = UserGroupInformation.loginUserFromKeytabAndReturnUGI(principal, keytab);
+        return ugi.doAs((PrivilegedExceptionAction<Connection>) () ->
+          (Connection) ConnectionFactory.createConnection(hbaseConfig)
+        );
+      } else {
+        return ConnectionFactory.createConnection(hbaseConfig);
+      }
+    } catch (IOException | InterruptedException e ) {
       throw new HoodieDependentSystemUnavailableException(HoodieDependentSystemUnavailableException.HBASE,
           quorum + ":" + port, e);
     }

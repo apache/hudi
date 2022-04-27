@@ -1488,6 +1488,26 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(HoodieHBaseIndexConfig.COMPUTE_QPS_DYNAMICALLY);
   }
 
+  public String getHBaseIndexSecurityAuthentication() {
+    return getString(HoodieHBaseIndexConfig.SECURITY_AUTHENTICATION);
+  }
+
+  public String getHBaseIndexKerberosUserKeytab() {
+    return getString(HoodieHBaseIndexConfig.KERBEROS_USER_KEYTAB);
+  }
+
+  public String getHBaseIndexKerberosUserPrincipal() {
+    return getString(HoodieHBaseIndexConfig.KERBEROS_USER_PRINCIPAL);
+  }
+
+  public String getHBaseIndexRegionserverPrincipal() {
+    return getString(HoodieHBaseIndexConfig.REGIONSERVER_PRINCIPAL);
+  }
+
+  public String getHBaseIndexMasterPrincipal() {
+    return getString(HoodieHBaseIndexConfig.MASTER_PRINCIPAL);
+  }
+
   public int getHBaseIndexDesiredPutsTime() {
     return getInt(HoodieHBaseIndexConfig.DESIRED_PUTS_TIME_IN_SECONDS);
   }
@@ -2465,6 +2485,8 @@ public class HoodieWriteConfig extends HoodieConfig {
       writeConfig.setDefaultValue(MARKERS_TYPE, getDefaultMarkersType(engineType));
       // Check for mandatory properties
       writeConfig.setDefaults(HoodieWriteConfig.class.getName());
+
+      writeConfig.setDefaults(HoodieHBaseIndexConfig.class.getName());
       // Make sure the props is propagated
       writeConfig.setDefaultOnCondition(
           !isIndexConfigSet, HoodieIndexConfig.newBuilder().withEngineType(engineType).fromProperties(
