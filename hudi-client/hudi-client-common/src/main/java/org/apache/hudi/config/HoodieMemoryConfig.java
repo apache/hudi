@@ -65,17 +65,17 @@ public class HoodieMemoryConfig extends HoodieConfig {
   public static final ConfigProperty<Long> MAX_MEMORY_FOR_MERGE = ConfigProperty
       .key("hoodie.memory.merge.max.size")
       .defaultValue(DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES)
-      .withDocumentation("Maximum amount of memory used for merge operations, before spilling to local storage.");
+      .withDocumentation("Maximum amount of memory used  in bytes for merge operations, before spilling to local storage.");
 
   public static final ConfigProperty<String> MAX_MEMORY_FOR_COMPACTION = ConfigProperty
       .key("hoodie.memory.compaction.max.size")
       .noDefaultValue()
-      .withDocumentation("Maximum amount of memory used for compaction operations, before spilling to local storage.");
+      .withDocumentation("Maximum amount of memory used  in bytes for compaction operations in bytes , before spilling to local storage.");
 
   public static final ConfigProperty<Integer> MAX_DFS_STREAM_BUFFER_SIZE = ConfigProperty
       .key("hoodie.memory.dfs.buffer.max.size")
       .defaultValue(16 * 1024 * 1024)
-      .withDocumentation("Property to control the max memory for dfs input stream buffer size");
+      .withDocumentation("Property to control the max memory in bytes for dfs input stream buffer size");
 
   public static final ConfigProperty<String> SPILLABLE_MAP_BASE_PATH = ConfigProperty
       .key("hoodie.memory.spillable.map.path")
