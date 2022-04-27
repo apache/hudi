@@ -30,6 +30,16 @@ import org.apache.spark.util.MutablePair
 object HoodieUnsafeCatalystUtils {
 
   /**
+   * Unsafe version of [[RDD.map]] that avoids deserialization of [[InternalRow]] into [[Row]]
+   *
+   * @param rdd RDD to apply mapper to
+   * @param f mapper
+   * @return RDD holding mapped [[InternalRow]]s
+   */
+  def mapInternal(rdd: RDD[InternalRow])(f: InternalRow => InternalRow): RDD[InternalRow] =
+    rdd.mapPartitionsInternal(_.map(f))
+
+  /**
    * Creates [[DataFrame]] from the [[RDD]] of [[InternalRow]] avoiding de-/serialization penalty of
    * deserializing [[InternalRow]] to [[Row]] and back when using [[SparkSession.createDataFrame(RDD[Row], StructType)]]
    *
