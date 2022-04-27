@@ -18,11 +18,14 @@ Hudi works with Spark-2.4.3+ & Spark 3.x versions. You can follow instructions [
 
 **Spark 3 Support Matrix**
 
-| Hudi            | Supported Spark 3 version    |
-|-----------------|------------------------------|
-| 0.10.0          | 3.1.x (default build), 3.0.x |
-| 0.7.0 - 0.9.0   | 3.0.x                        |
-| 0.6.0 and prior | not supported                |
+| Hudi            | Supported Spark 3 version     |
+|:----------------|:------------------------------|
+| 0.11.0          | 3.2.x (default build), 3.1.x  |
+| 0.10.0          | 3.1.x (default build), 3.0.x  |
+| 0.7.0 - 0.9.0   | 3.0.x                         |
+| 0.6.0 and prior | not supported                 |
+
+*The "default build" Spark version indicates that it is used to build the `hudi-spark3-bundle`.*
 
 As of 0.9.0 release, Spark SQL DML support has been added and is experimental.
 
@@ -523,10 +526,53 @@ tripsSnapshotDF.createOrReplaceTempView("hudi_trips_snapshot")
 spark.sql("select fare, begin_lon, begin_lat, ts from  hudi_trips_snapshot where fare > 20.0").show()
 spark.sql("select _hoodie_commit_time, _hoodie_record_key, _hoodie_partition_path, rider, driver, fare from  hudi_trips_snapshot").show()
 ```
+</TabItem>
+<TabItem value="python">
+
+```python
+# pyspark
+tripsSnapshotDF = spark. \
+  read. \
+  format("hudi"). \
+  load(basePath)
+# load(basePath) use "/partitionKey=partitionValue" folder structure for Spark auto partition discovery
+
+tripsSnapshotDF.createOrReplaceTempView("hudi_trips_snapshot")
+
+spark.sql("select fare, begin_lon, begin_lat, ts from  hudi_trips_snapshot where fare > 20.0").show()
+spark.sql("select _hoodie_commit_time, _hoodie_record_key, _hoodie_partition_path, rider, driver, fare from  hudi_trips_snapshot").show()
+```
+</TabItem>
+<TabItem value="sparksql">
+
+```sql
+ select fare, begin_lon, begin_lat, ts from  hudi_trips_snapshot where fare > 20.0
+```
+</TabItem>
+</Tabs>
+
+:::info
+Since 0.9.0 hudi has support a hudi built-in FileIndex: **HoodieFileIndex** to query hudi table,
+which supports partition pruning and metatable for query. This will help improve query performance.
+It also supports non-global query path which means users can query the table by the base path without
+specifing the "*" in the query path. This feature has enabled by default for the non-global query path.
+For the global query path, hudi uses the old query path.
+Refer to [Table types and queries](/docs/concepts#table-types--queries) for more info on all table types and query types supported.
+:::
 
 ### Time Travel Query
 
-Hudi support time travel query since 0.9.0. Currently three query time formats are supported as given below.
+Hudi supports time travel query since 0.9.0. Currently three query time formats are supported as given below.
+
+<Tabs
+defaultValue="scala"
+values={[
+{ label: 'Scala', value: 'scala', },
+{ label: 'Python', value: 'python', },
+{ label: 'SparkSQL', value: 'sparksql', },
+]}>
+<TabItem value="scala">
+
 ```scala
 spark.read.
   format("hudi").
@@ -546,41 +592,9 @@ spark.read.
 
 ```
 
-:::info
-Since 0.9.0 hudi has support a hudi built-in FileIndex: **HoodieFileIndex** to query hudi table,
-which supports partition pruning and metatable for query. This will help improve query performance.
-It also supports non-global query path which means users can query the table by the base path without
-specifing the "*" in the query path. This feature has enabled by default for the non-global query path.
-For the global query path, hudi uses the old query path.
-Refer to [Table types and queries](/docs/concepts#table-types--queries) for more info on all table types and query types supported.
-:::
 </TabItem>
-<TabItem value="sparksql">
-
-```sql
- select fare, begin_lon, begin_lat, ts from  hudi_trips_snapshot where fare > 20.0
-```
-</TabItem>
-
 <TabItem value="python">
 
-```python
-# pyspark
-tripsSnapshotDF = spark. \
-  read. \
-  format("hudi"). \
-  load(basePath)
-# load(basePath) use "/partitionKey=partitionValue" folder structure for Spark auto partition discovery
-
-tripsSnapshotDF.createOrReplaceTempView("hudi_trips_snapshot")
-
-spark.sql("select fare, begin_lon, begin_lat, ts from  hudi_trips_snapshot where fare > 20.0").show()
-spark.sql("select _hoodie_commit_time, _hoodie_record_key, _hoodie_partition_path, rider, driver, fare from  hudi_trips_snapshot").show()
-```
-
-**Time Travel Query**
-
-Hudi support time travel query since 0.9.0. Currently three query time formats are supported as given below.
 ```python
 #pyspark
 spark.read. \
@@ -600,17 +614,45 @@ spark.read. \
   load(basePath)
 ```
 
-:::info
-Since 0.9.0 hudi has support a hudi built-in FileIndex: **HoodieFileIndex** to query hudi table,
-which supports partition pruning and metatable for query. This will help improve query performance.
-It also supports non-global query path which means users can query the table by the base path without
-specifing the "*" in the query path. This feature has enabled by default for the non-global query path.
-For the global query path, hudi uses the old query path.
-Refer to [Table types and queries](/docs/concepts#table-types--queries) for more info on all table types and query types supported.
+</TabItem>
+<TabItem value="sparksql">
+
+:::note
+Requires Spark 3.2+
 :::
+
+```sql
+create table hudi_cow_pt_tbl (
+  id bigint,
+  name string,
+  ts bigint,
+  dt string,
+  hh string
+) using hudi
+tblproperties (
+  type = 'cow',
+  primaryKey = 'id',
+  preCombineField = 'ts'
+ )
+partitioned by (dt, hh)
+location '/tmp/hudi/hudi_cow_pt_tbl';
+
+insert into hudi_cow_pt_tbl select 1, 'a0', 1000, '2021-12-09', '10';
+select * from hudi_cow_pt_tbl;
+
+-- record id=1 changes `name`
+insert into hudi_cow_pt_tbl select 1, 'a1', 1001, '2021-12-09', '10';
+select * from hudi_cow_pt_tbl;
+
+-- time travel based on first commit time, assume `20220307091628793`
+select * from hudi_cow_pt_tbl timestamp as of '20220307091628793' where id = 1;
+-- time travel based on different timestamp formats
+select * from hudi_cow_pt_tbl timestamp as of '2022-03-07 09:16:28.100' where id = 1;
+select * from hudi_cow_pt_tbl timestamp as of '2022-03-08' where id = 1;
+```
+
 </TabItem>
 </Tabs>
-
 
 ## Update data
 
@@ -650,6 +692,7 @@ denoted by the timestamp. Look for changes in `_hoodie_commit_time`, `rider`, `d
 Spark SQL supports two kinds of DML to update hudi table: Merge-Into and Update.
 
 ### Update
+
 **Syntax**
 ```sql
 UPDATE tableIdentifier SET column = EXPRESSION(,column = EXPRESSION) [ WHERE boolExpression]
@@ -659,6 +702,9 @@ UPDATE tableIdentifier SET column = EXPRESSION(,column = EXPRESSION) [ WHERE boo
 update hudi_mor_tbl set price = price * 2, ts = 1111 where id = 1;
 
 update hudi_cow_pt_tbl set name = 'a1_1', ts = 1001 where id = 1;
+
+-- update using non-PK field
+update hudi_cow_pt_tbl set ts = 1001 where name = 'a1';
 ```
 :::note
 `Update` operation requires `preCombineField` specified.
@@ -924,6 +970,9 @@ DELETE FROM tableIdentifier [ WHERE BOOL_EXPRESSION]
 delete from hudi_cow_nonpcf_tbl where uuid = 1;
 
 delete from hudi_mor_tbl where id % 2 = 0;
+
+-- delete using non-PK field
+delete from hudi_cow_pt_tbl where name = 'a1';
 ```
 
 </TabItem>
@@ -1081,6 +1130,7 @@ alter table hudi_cow_nonpcf_tbl2 set tblproperties (hoodie.keep.max.commits = '1
 ```
 
 ### Partition SQL Command
+
 **Syntax**
 
 ```sql
@@ -1104,6 +1154,7 @@ Currently,  the result of `show partitions` is based on the filesystem table pat
 :::
 
 ### Procedures
+
 **Syntax**
 ```sql
 --Call procedure by positional arguments
@@ -1119,7 +1170,7 @@ call show_commits(table => 'test_hudi_table', limit => 10);
 ```
 
 Call command has already support some commit procedures and table optimization procedures, 
-more details please refer to [procedures](/docs/next/procedures).
+more details please refer to [procedures](procedures).
 
 ## Where to go from here?
 
