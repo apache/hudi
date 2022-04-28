@@ -98,9 +98,6 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public String getPartitionPath(InternalRow internalRow, StructType structType) {
     try {
-      /*buildFieldDataTypesMapIfNeeded(structType);
-      return RowKeyGeneratorHelper.getPartitionPathFromInternalRow(internalRow, getPartitionPathFields(),
-          hiveStylePartitioning, partitionPathPositions, partitionPathDataTypes);*/
       initDeserializer(structType);
       Row row = sparkRowSerDe.deserializeRow(internalRow);
       return getPartitionPath(row);
@@ -168,21 +165,6 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
 
   void buildFieldDataTypesMapIfNeeded(StructType structType) {
     buildFieldPositionMapIfNeeded(structType);
-    if (this.recordKeyDataTypes == null) {
-      this.recordKeyDataTypes = new HashMap<>();
-      if (getRecordKeyFields() != null) {
-        // populating simple fields are good enough
-        getRecordKeyFields().stream().filter(f -> !f.isEmpty()).filter(f -> !(f.contains(".")))
-            .forEach(f -> {
-              if (recordKeyPositions.containsKey(f)) {
-                recordKeyDataTypes.put(f, Collections.singletonList(structType.fields()[recordKeyPositions.get(f).get(0)].dataType()));
-              } else {
-                recordKeyDataTypes.put(f, Collections.singletonList(null));
-              }
-            });
-      }
-    }
-
     if (this.partitionPathDataTypes == null) {
       this.partitionPathDataTypes = new HashMap<>();
       if (getPartitionPathFields() != null) {
