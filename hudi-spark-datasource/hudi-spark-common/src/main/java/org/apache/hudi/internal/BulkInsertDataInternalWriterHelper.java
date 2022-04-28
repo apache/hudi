@@ -39,6 +39,7 @@ import org.apache.log4j.Logger;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.types.DataType;
 import org.apache.spark.sql.types.StructType;
+import org.apache.spark.unsafe.types.UTF8String;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -64,16 +65,20 @@ public class BulkInsertDataInternalWriterHelper {
   private final StructType structType;
   private final Boolean arePartitionRecordsSorted;
   private final List<HoodieInternalWriteStatus> writeStatusList = new ArrayList<>();
-  private HoodieRowCreateHandle handle;
-  private String lastKnownPartitionPath = null;
-  private String fileIdPrefix;
-  private int numFilesWritten = 0;
-  private Map<String, HoodieRowCreateHandle> handles = new HashMap<>();
+  private final String fileIdPrefix;
+  private final Map<String, HoodieRowCreateHandle> handles = new HashMap<>();
   private final boolean populateMetaFields;
-  private Option<BuiltinKeyGenerator> keyGeneratorOpt = null;
-  private boolean simpleKeyGen = false;
-  private int simplePartitionFieldIndex = -1;
-  private DataType simplePartitionFieldDataType;
+  private final Option<BuiltinKeyGenerator> keyGeneratorOpt;
+  private final boolean simpleKeyGen;
+  private final int simplePartitionFieldIndex;
+  private final DataType simplePartitionFieldDataType;
+  /**
+   * NOTE: This is stored as Catalyst's internal {@link UTF8String} to avoid
+   *       conversion (deserialization) b/w {@link UTF8String} and {@link String}
+   */
+  private UTF8String lastKnownPartitionPath = null;
+  private HoodieRowCreateHandle handle;
+  private int numFilesWritten = 0;
 
   public BulkInsertDataInternalWriterHelper(HoodieTable hoodieTable, HoodieWriteConfig writeConfig,
                                             String instantTime, int taskPartitionId, long taskId, long taskEpochId, StructType structType,
@@ -88,13 +93,21 @@ public class BulkInsertDataInternalWriterHelper {
     this.populateMetaFields = populateMetaFields;
     this.arePartitionRecordsSorted = arePartitionRecordsSorted;
     this.fileIdPrefix = UUID.randomUUID().toString();
+
     if (!populateMetaFields) {
       this.keyGeneratorOpt = getKeyGenerator(writeConfig.getProps());
-      if (keyGeneratorOpt.isPresent() && keyGeneratorOpt.get() instanceof SimpleKeyGenerator) {
-        simpleKeyGen = true;
-        simplePartitionFieldIndex = (Integer) structType.getFieldIndex((keyGeneratorOpt.get()).getPartitionPathFields().get(0)).get();
-        simplePartitionFieldDataType = structType.fields()[simplePartitionFieldIndex].dataType();
-      }
+    } else {
+      this.keyGeneratorOpt = Option.empty();
+    }
+
+    if (keyGeneratorOpt.isPresent() && keyGeneratorOpt.get() instanceof SimpleKeyGenerator) {
+      simpleKeyGen = true;
+      simplePartitionFieldIndex = (Integer) structType.getFieldIndex((keyGeneratorOpt.get()).getPartitionPathFields().get(0)).get();
+      simplePartitionFieldDataType = structType.fields()[simplePartitionFieldIndex].dataType();
+    } else {
+      simpleKeyGen = false;
+      simplePartitionFieldIndex = -1;
+      simplePartitionFieldDataType = null;
     }
   }
 
