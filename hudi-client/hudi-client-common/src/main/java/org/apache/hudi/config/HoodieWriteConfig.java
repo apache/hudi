@@ -150,7 +150,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       .key("hoodie.table.base.file.format")
       .defaultValue(HoodieFileFormat.PARQUET)
       .withAlternatives("hoodie.table.ro.file.format")
-      .withDocumentation("");
+      .withDocumentation("Base file format to store all the base file data.");
 
   public static final ConfigProperty<String> BASE_PATH = ConfigProperty
       .key("hoodie.base.path")

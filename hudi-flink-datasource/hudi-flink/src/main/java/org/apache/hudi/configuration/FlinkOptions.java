@@ -137,7 +137,7 @@ public class FlinkOptions extends HoodieConfig {
       .key("index.partition.regex")
       .stringType()
       .defaultValue(".*")
-      .withDescription("Whether to load partitions in state if partition path matching， default *");
+      .withDescription("Whether to load partitions in state if partition path matching， default `*`");
 
   // ------------------------------------------------------------------------
   //  Read Options
@@ -542,7 +542,7 @@ public class FlinkOptions extends HoodieConfig {
       .key("compaction.target_io")
       .longType()
       .defaultValue(500 * 1024L) // default 500 GB
-      .withDescription("Target IO per compaction (both read and write), default 500 GB");
+      .withDescription("Target IO in MB for per compaction (both read and write), default 500 GB");
 
   public static final ConfigOption<Boolean> CLEAN_ASYNC_ENABLED = ConfigOptions
       .key("clean.async.enabled")
