@@ -24,6 +24,9 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.execution.bulkinsert.NonSortPartitionerWithRows;
+import org.apache.hudi.keygen.ComplexKeyGenerator;
+import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
+import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.testutils.DataSourceTestUtils;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
@@ -94,20 +97,36 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
   public void testBulkInsertHelperConcurrently() {
     IntStream.range(0, 2).parallel().forEach(i -> {
       if (i % 2 == 0) {
-        testBulkInsertHelperFor("_row_key");
+        testBulkInsertHelperFor(SimpleKeyGenerator.class.getName(), "_row_key");
       } else {
-        testBulkInsertHelperFor("ts");
+        testBulkInsertHelperFor(SimpleKeyGenerator.class.getName(), "ts");
       }
     });
   }
 
-  @Test
-  public void testBulkInsertHelper() {
-    testBulkInsertHelperFor("_row_key");
+  private static Stream<Arguments> provideKeyGenArgs() {
+    return Stream.of(
+        Arguments.of(SimpleKeyGenerator.class.getName()),
+        Arguments.of(ComplexKeyGenerator.class.getName()),
+        Arguments.of(NonpartitionedKeyGenerator.class.getName()));
   }
 
-  private void testBulkInsertHelperFor(String recordKey) {
-    HoodieWriteConfig config = getConfigBuilder(schemaStr).withProps(getPropsAllSet(recordKey)).combineInput(false, false).build();
+  @ParameterizedTest
+  @MethodSource("provideKeyGenArgs")
+  public void testBulkInsertHelper(String keyGenClass) {
+    testBulkInsertHelperFor(keyGenClass, "_row_key");
+  }
+
+  private void testBulkInsertHelperFor(String keyGenClass, String recordKey) {
+    Map<String, String> props = null;
+    if (keyGenClass.equals(SimpleKeyGenerator.class.getName())) {
+      props = getPropsAllSet(recordKey);
+    } else if (keyGenClass.equals(ComplexKeyGenerator.class.getName())) {
+      props = getPropsForComplexKeyGen(recordKey);
+    } else { // NonPartitioned key gen
+      props = getPropsForNonPartitionedKeyGen(recordKey);
+    }
+    HoodieWriteConfig config = getConfigBuilder(schemaStr).withProps(props).combineInput(false, false).build();
     List<Row> rows = DataSourceTestUtils.generateRandomRows(10);
     Dataset<Row> dataset = sqlContext.createDataFrame(rows, structType);
     Dataset<Row> result = HoodieDatasetBulkInsertHelper.prepareHoodieDatasetForBulkInsert(sqlContext, config, dataset, "testStructName",
@@ -121,9 +140,10 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
       assertTrue(resultSchema.fieldIndex(entry.getKey()) == entry.getValue());
     }
 
+    boolean isNonPartitioned = keyGenClass.equals(NonpartitionedKeyGenerator.class.getName());
     result.toJavaRDD().foreach(entry -> {
       assertTrue(entry.get(resultSchema.fieldIndex(HoodieRecord.RECORD_KEY_METADATA_FIELD)).equals(entry.getAs(recordKey).toString()));
-      assertTrue(entry.get(resultSchema.fieldIndex(HoodieRecord.PARTITION_PATH_METADATA_FIELD)).equals(entry.getAs("partition")));
+      assertTrue(entry.get(resultSchema.fieldIndex(HoodieRecord.PARTITION_PATH_METADATA_FIELD)).equals(isNonPartitioned ? "" : entry.getAs("partition")));
       assertTrue(entry.get(resultSchema.fieldIndex(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD)).equals(""));
       assertTrue(entry.get(resultSchema.fieldIndex(HoodieRecord.COMMIT_TIME_METADATA_FIELD)).equals(""));
       assertTrue(entry.get(resultSchema.fieldIndex(HoodieRecord.FILENAME_METADATA_FIELD)).equals(""));
@@ -250,6 +270,23 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
         props.put(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), "partition");
       }
     }
+    return props;
+  }
+
+  private Map<String, String> getPropsForComplexKeyGen(String recordKey) {
+    Map<String, String> props = new HashMap<>();
+    props.put(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME().key(), ComplexKeyGenerator.class.getName());
+    props.put(DataSourceWriteOptions.RECORDKEY_FIELD().key(), recordKey);
+    props.put(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), "simple:partition");
+    props.put(HoodieWriteConfig.TBL_NAME.key(), recordKey + "_table");
+    return props;
+  }
+
+  private Map<String, String> getPropsForNonPartitionedKeyGen(String recordKey) {
+    Map<String, String> props = new HashMap<>();
+    props.put(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME().key(), NonpartitionedKeyGenerator.class.getName());
+    props.put(DataSourceWriteOptions.RECORDKEY_FIELD().key(), recordKey);
+    props.put(HoodieWriteConfig.TBL_NAME.key(), recordKey + "_table");
     return props;
   }
 

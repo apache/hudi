@@ -130,7 +130,7 @@ public class RowKeyGeneratorHelper {
     }).collect(Collectors.joining(DEFAULT_PARTITION_PATH_SEPARATOR));
   }
 
-  public static String getPartitionPathFromInternalRow(InternalRow row, List<String> partitionPathFields, boolean hiveStylePartitioning,
+  public static String getPartitionPathFromInternalRow(InternalRow internalRow, List<String> partitionPathFields, boolean hiveStylePartitioning,
                                                        Map<String, List<Integer>> partitionPathPositions,
                                                        Map<String, List<DataType>> partitionPathDataTypes) {
     return IntStream.range(0, partitionPathFields.size()).mapToObj(idx -> {
@@ -140,10 +140,10 @@ public class RowKeyGeneratorHelper {
       if (fieldPositions.size() == 1) { // simple
         Integer fieldPos = fieldPositions.get(0);
         // for partition path, if field is not found, index will be set to -1
-        if (fieldPos == -1 || row.isNullAt(fieldPos)) {
+        if (fieldPos == -1 || internalRow.isNullAt(fieldPos)) {
           val = HUDI_DEFAULT_PARTITION_PATH;
         } else {
-          Object value = row.get(fieldPos, partitionPathDataTypes.get(field).get(0));
+          Object value = internalRow.get(fieldPos, partitionPathDataTypes.get(field).get(0));
           if (value == null || value.toString().isEmpty()) {
             val = HUDI_DEFAULT_PARTITION_PATH;
           } else {

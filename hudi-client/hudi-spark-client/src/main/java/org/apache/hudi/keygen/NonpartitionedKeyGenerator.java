@@ -62,6 +62,12 @@ public class NonpartitionedKeyGenerator extends BuiltinKeyGenerator {
   }
 
   @Override
+  public String getRecordKey(Row row) {
+    buildFieldPositionMapIfNeeded(row.schema());
+    return RowKeyGeneratorHelper.getRecordKeyFromRow(row, getRecordKeyFields(), recordKeyPositions, false);
+  }
+
+  @Override
   public String getPartitionPath(Row row) {
     return nonpartitionedAvroKeyGenerator.getEmptyPartition();
   }

@@ -21,12 +21,11 @@ package org.apache.hudi.internal;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.client.HoodieInternalWriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.io.storage.row.HoodieRowCreateHandleWithoutMetaFields;
 import org.apache.hudi.io.storage.row.HoodieRowCreateHandle;
+import org.apache.hudi.io.storage.row.HoodieRowCreateHandleWithoutMetaFields;
 import org.apache.hudi.keygen.BuiltinKeyGenerator;
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
@@ -123,8 +122,7 @@ public class BulkInsertDataInternalWriterHelper {
     try {
       String partitionPath = null;
       if (populateMetaFields) { // usual path where meta fields are pre populated in prep step.
-        partitionPath = record.getUTF8String(
-            HoodieRecord.HOODIE_META_COLUMNS_NAME_TO_POS.get(HoodieRecord.PARTITION_PATH_METADATA_FIELD)).toString();
+        partitionPath = record.getUTF8String(3).toString();
       } else { // if meta columns are disabled.
         if (!keyGeneratorOpt.isPresent()) { // NoPartitionerKeyGen
           partitionPath = "";
