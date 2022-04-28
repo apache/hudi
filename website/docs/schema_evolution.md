@@ -113,15 +113,15 @@ ALTER TABLE table1 ALTER COLUMN a.b.c DROP NOT NULL
 
 **column type change**
 
-| old_type         | new_type                         |
-|:-----------------|:---------------------------------|
-| int              | long/float/double/string/decimal |
-| long             | double/string/decimal            |
-| float            | double/String/decimal            |
-| double           | string/decimal                   |
-| decimal          | decimal/string                   |
-| string           | decimal/date                     |
-| date             | string                           |
+| Source\Target      | long  | float | double | string | decimal | date | int |
+|--------------------|-------|-------|--------|--------|---------|------|-----|
+| int                |   Y   |   Y   |    Y   |    Y   |    Y    |   N  |  Y  |
+| long               |   Y   |   N   |    Y   |    Y   |    Y    |   N  |  N  |
+| float              |   N   |   Y   |    Y   |    Y   |    Y    |   N  |  N  |
+| double             |   N   |   N   |    Y   |    Y   |    Y    |   N  |  N  |
+| decimal            |   N   |   N   |    N   |    Y   |    Y    |   N  |  N  |
+| string             |   N   |   N   |    N   |    Y   |    Y    |   Y  |  N  |
+| date               |   N   |   N   |    N   |    Y   |    N    |   Y  |  N  |
 
 ### Deleting Columns
 **Syntax**
