@@ -20,7 +20,7 @@ Hudi works with Spark-2.4.3+ & Spark 3.x versions. You can follow instructions [
 
 | Hudi            | Supported Spark 3 version     |
 |:----------------|:------------------------------|
-| 0.11.0          | 3.2.x (default build), 3.1.x  |
+| 0.11.0          | 3.2.x (default build, Spark bundle only), 3.1.x  |
 | 0.10.0          | 3.1.x (default build), 3.0.x  |
 | 0.7.0 - 0.9.0   | 3.0.x                         |
 | 0.6.0 and prior | not supported                 |
@@ -28,6 +28,16 @@ Hudi works with Spark-2.4.3+ & Spark 3.x versions. You can follow instructions [
 *The "default build" Spark version indicates that it is used to build the `hudi-spark3-bundle`.*
 
 As of 0.9.0 release, Spark SQL DML support has been added and is experimental.
+
+In 0.11.0 release, we add support for Spark 3.2.x and continue the support for Spark 3.1.x and Spark 2.4.x.  We officially
+do not provide the support for Spark 3.0.x any more.  To make it easier for the users to pick the right Hudi Spark bundle
+in their deployment, we make the following adjustment to the naming of the bundles:
+
+- For each supported Spark minor version, there is a corresponding Hudi Spark bundle with the major and minor version 
+in the naming, i.e., `hudi-spark3.2-bundle`, `hudi-spark3.1-bundle`, and `hudi-spark2.4-bundle`.
+- We encourage users to migrate to using the new bundles above.  We keep the bundles with the legacy naming in this
+release, i.e., `hudi-spark3-bundle` targeting at Spark 3.2.x, the latest Spark 3 version, and `hudi-spark-bundle` for
+Spark 2.4.x.
 
 <Tabs
 defaultValue="scala"
@@ -41,24 +51,24 @@ values={[
 From the extracted directory run spark-shell with Hudi as:
 
 ```scala
-// spark-shell for spark 3.1
-spark-shell \
-  --packages org.apache.hudi:hudi-spark3.1.2-bundle_2.12:0.10.1,org.apache.spark:spark-avro_2.12:3.1.2 \
-  --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
-
 // spark-shell for spark 3.2
 spark-shell \
-  --packages org.apache.hudi:hudi-spark3.0.3-bundle_2.12:0.10.1,org.apache.spark:spark-avro_2.12:3.0.3 \
+  --packages org.apache.hudi:hudi-spark3.2-bundle_2.12:0.11.0 \
+  --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
+
+// spark-shell for spark 3.1
+spark-shell \
+  --packages org.apache.hudi:hudi-spark3.1-bundle_2.12:0.11.0 \
   --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
   
-// spark-shell for spark 2 with scala 2.12
+// spark-shell for spark 2.4 with scala 2.12
 spark-shell \
-  --packages org.apache.hudi:hudi-spark-bundle_2.12:0.10.1,org.apache.spark:spark-avro_2.12:2.4.4 \
+  --packages org.apache.hudi:hudi-spark2.4-bundle_2.12:0.11.0 \
   --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
   
-// spark-shell for spark 2 with scala 2.11
+// spark-shell for spark 2.4 with scala 2.11
 spark-shell \
-  --packages org.apache.hudi:hudi-spark-bundle_2.11:0.10.1,org.apache.spark:spark-avro_2.11:2.4.4 \
+  --packages org.apache.hudi:hudi-spark2.4-bundle_2.11:0.11.0 \
   --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
 ```
 
@@ -69,24 +79,24 @@ Hudi support using Spark SQL to write and read data with the **HoodieSparkSessio
 From the extracted directory run Spark SQL with Hudi as:
 
 ```shell
+# Spark SQL for spark 3.2
+spark-sql --packages org.apache.hudi:hudi-spark3.2-bundle_2.12:0.11.0 \
+--conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
+--conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension'
+
 # Spark SQL for spark 3.1
-spark-sql --packages org.apache.hudi:hudi-spark3.1.2-bundle_2.12:0.10.1,org.apache.spark:spark-avro_2.12:3.1.2 \
+spark-sql --packages org.apache.hudi:hudi-spark3.1-bundle_2.12:0.11.0 \
 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
 --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension'
 
-# Spark SQL for spark 3.0
-spark-sql --packages org.apache.hudi:hudi-spark3.0.3-bundle_2.12:0.10.1,org.apache.spark:spark-avro_2.12:3.0.3 \
+# Spark SQL for spark 2.4 with scala 2.11
+spark-sql --packages org.apache.hudi:hudi-spark2.4-bundle_2.11:0.11.0 \
 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
 --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension'
 
-# Spark SQL for spark 2 with scala 2.11
-spark-sql --packages org.apache.hudi:hudi-spark-bundle_2.11:0.10.1,org.apache.spark:spark-avro_2.11:2.4.4 \
---conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
---conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension'
-
-# Spark SQL for spark 2 with scala 2.12
+# Spark SQL for spark 2.4 with scala 2.12
 spark-sql \
-  --packages org.apache.hudi:hudi-spark-bundle_2.12:0.10.1,org.apache.spark:spark-avro_2.12:2.4.4 \
+  --packages org.apache.hudi:hudi-spark2.4-bundle_2.12:0.11.0 \
   --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
   --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension'
 ```
@@ -100,24 +110,24 @@ From the extracted directory run pyspark with Hudi as:
 # pyspark
 export PYSPARK_PYTHON=$(which python3)
 
+# for spark3.2
+pyspark
+--packages org.apache.hudi:hudi-spark3.2-bundle_2.12:0.11.0
+--conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
+
 # for spark3.1
 pyspark
---packages org.apache.hudi:hudi-spark3.1.2-bundle_2.12:0.10.1,org.apache.spark:spark-avro_2.12:3.1.2
+--packages org.apache.hudi:hudi-spark3.1-bundle_2.12:0.11.0
 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
 
-# for spark3.0
+# for spark2.4 with scala 2.12
 pyspark
---packages org.apache.hudi:hudi-spark3.0.3-bundle_2.12:0.10.1,org.apache.spark:spark-avro_2.12:3.0.3
+--packages org.apache.hudi:hudi-spark2.4-bundle_2.12:0.11.0
 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
 
-# for spark2 with scala 2.12
+# for spark2.4 with scala 2.11
 pyspark
---packages org.apache.hudi:hudi-spark-bundle_2.12:0.10.1,org.apache.spark:spark-avro_2.12:2.4.4
---conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
-
-# for spark2 with scala 2.11
-pyspark
---packages org.apache.hudi:hudi-spark-bundle_2.11:0.10.1,org.apache.spark:spark-avro_2.11:2.4.4
+--packages org.apache.hudi:hudi-spark2.4-bundle_2.11:0.11.0
 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
 ```
 
@@ -126,10 +136,7 @@ pyspark
 
 :::note Please note the following
 <ul>
-  <li>spark-avro module needs to be specified in --packages as it is not included with spark-shell by default</li>
-  <li>spark-avro and spark versions must match (we have used 3.1.2 for both above)</li>
-  <li>we have used hudi-spark-bundle built for scala 2.12 since the spark-avro module used also depends on 2.12. 
-         If spark-avro_2.11 is used, correspondingly hudi-spark-bundle_2.11 needs to be used. </li>
+  <li>we have used hudi-spark-bundle built for scala 2.12 since the spark-avro module used can also depend on 2.12. </li>
 </ul>
 :::
 
@@ -1175,8 +1182,8 @@ more details please refer to [procedures](procedures).
 ## Where to go from here?
 
 You can also do the quickstart by [building hudi yourself](https://github.com/apache/hudi#building-apache-hudi-from-source), 
-and using `--jars <path to hudi_code>/packaging/hudi-spark-bundle/target/hudi-spark-bundle_2.1?-*.*.*-SNAPSHOT.jar` in the spark-shell command above
-instead of `--packages org.apache.hudi:hudi-spark3.1.2-bundle_2.12:0.10.1`. Hudi also supports scala 2.12. Refer [build with scala 2.12](https://github.com/apache/hudi#build-with-different-spark-versions)
+and using `--jars <path to hudi_code>/packaging/hudi-spark-bundle/target/hudi-spark3.2-bundle_2.1?-*.*.*-SNAPSHOT.jar` in the spark-shell command above
+instead of `--packages org.apache.hudi:hudi-spark3.2-bundle_2.12:0.11.0`. Hudi also supports scala 2.12. Refer [build with scala 2.12](https://github.com/apache/hudi#build-with-different-spark-versions)
 for more info.
 
 Also, we used Spark here to show case the capabilities of Hudi. However, Hudi can support multiple table types/query types and 

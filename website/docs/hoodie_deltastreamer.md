@@ -5,7 +5,7 @@ keywords: [hudi, deltastreamer, hoodiedeltastreamer]
 
 ## DeltaStreamer
 
-The `HoodieDeltaStreamer` utility (part of hudi-utilities-bundle) provides the way to ingest from different sources such as DFS or Kafka, with the following capabilities.
+The `HoodieDeltaStreamer` utility (part of `hudi-utilities-bundle`) provides the way to ingest from different sources such as DFS or Kafka, with the following capabilities.
 
 - Exactly once ingestion of new events from Kafka, [incremental imports](https://sqoop.apache.org/docs/1.4.2/SqoopUserGuide#_incremental_imports) from Sqoop or output of `HiveIncrementalPuller` or files under a DFS folder
 - Support json, avro or a custom record types for the incoming data
@@ -150,6 +150,12 @@ and then ingest it as follows.
 ```
 
 In some cases, you may want to migrate your existing table into Hudi beforehand. Please refer to [migration guide](/docs/migration_guide).
+
+From 0.11.0 release, we start to provide a new `hudi-utilities-slim-bundle` which aims to exclude dependencies that can
+cause conflicts and compatibility issues with different versions of Spark.  The `hudi-utilities-slim-bundle` should be
+used along with a Hudi Spark bundle corresponding the Spark version used to make utilities work with Spark, e.g.,
+`--packages org.apache.hudi:hudi-utilities-slim-bundle_2.12:0.11.0,org.apache.hudi:hudi-spark3.1-bundle_2.12:0.11.0`,
+if using `hudi-utilities-bundle` solely to run `HoodieDeltaStreamer` in Spark encounters compatibility issues.
 
 ### MultiTableDeltaStreamer
 
