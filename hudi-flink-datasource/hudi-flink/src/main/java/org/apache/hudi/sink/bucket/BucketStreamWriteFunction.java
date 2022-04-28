@@ -94,11 +94,6 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
   private boolean isEmptyTable;
 
   /**
-   * Returns whether this is an empty table.
-   */
-  private boolean isCowTable;
-
-  /**
    * Constructs a BucketStreamWriteFunction.
    *
    * @param config The config options
@@ -119,7 +114,6 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
     this.incBucketIndex = new HashSet<>();
     this.isEmptyTable = !this.metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().isPresent();
     this.fsBucketIndex = new HashMap<>();
-    this.isCowTable = OptionsResolver.isCowTable(config);
   }
 
   @Override
@@ -212,7 +206,7 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
 
     // no need to load from file System
     boolean noNeedLoadFiles = bucketToFileIDMap.size() == bucketToLoad.size();
-    if (noNeedLoadFiles || isCowTable) {
+    if (noNeedLoadFiles || OptionsResolver.isCowTable(config)) {
       return;
     }
     // reuse unCommitted log file id
