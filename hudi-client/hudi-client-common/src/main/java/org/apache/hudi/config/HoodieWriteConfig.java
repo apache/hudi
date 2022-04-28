@@ -2012,7 +2012,9 @@ public class HoodieWriteConfig extends HoodieConfig {
    * @return True if any table services are configured to run inline, false otherwise.
    */
   public Boolean areAnyTableServicesExecutedInline() {
-    return inlineClusteringEnabled() || inlineCompactionEnabled() || isAutoClean() || isAutoArchive();
+    return areTableServicesEnabled()
+        && (inlineClusteringEnabled() || inlineCompactionEnabled()
+        || (isAutoClean() && !isAsyncClean()) || (isAutoArchive() && !isAsyncArchive()));
   }
 
   /**
@@ -2021,9 +2023,10 @@ public class HoodieWriteConfig extends HoodieConfig {
    * @return True if any table services are configured to run async, false otherwise.
    */
   public Boolean areAnyTableServicesAsync() {
-    return isAsyncClusteringEnabled()
+    return areTableServicesEnabled()
+        && (isAsyncClusteringEnabled()
         || (getTableType() == HoodieTableType.MERGE_ON_READ && !inlineCompactionEnabled())
-        || isAsyncClean() || isAsyncArchive();
+        || (isAutoClean() && isAsyncClean()) || (isAutoArchive() && isAsyncArchive()));
   }
 
   public Boolean areAnyTableServicesScheduledInline() {

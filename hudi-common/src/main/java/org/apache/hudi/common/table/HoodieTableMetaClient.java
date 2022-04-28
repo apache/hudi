@@ -30,7 +30,6 @@ import org.apache.hudi.common.fs.NoOpConsistencyGuard;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieTimelineTimeZone;
-import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -377,16 +376,15 @@ public class HoodieTableMetaClient implements Serializable {
   /**
    * Validate table properties.
    * @param properties Properties from writeConfig.
-   * @param operationType operation type to be executed.
    */
-  public void validateTableProperties(Properties properties, WriteOperationType operationType) {
-    // once meta fields are disabled, it cant be re-enabled for a given table.
+  public void validateTableProperties(Properties properties) {
+    // Once meta fields are disabled, it cant be re-enabled for a given table.
     if (!getTableConfig().populateMetaFields()
         && Boolean.parseBoolean((String) properties.getOrDefault(HoodieTableConfig.POPULATE_META_FIELDS.key(), HoodieTableConfig.POPULATE_META_FIELDS.defaultValue()))) {
       throw new HoodieException(HoodieTableConfig.POPULATE_META_FIELDS.key() + " already disabled for the table. Can't be re-enabled back");
     }
 
-    // meta fields can be disabled only with SimpleKeyGenerator
+    // Meta fields can be disabled only when {@code SimpleKeyGenerator} is used
     if (!getTableConfig().populateMetaFields()
         && !properties.getProperty(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key(), "org.apache.hudi.keygen.SimpleKeyGenerator")
         .equals("org.apache.hudi.keygen.SimpleKeyGenerator")) {
@@ -698,7 +696,9 @@ public class HoodieTableMetaClient implements Serializable {
     private Boolean urlEncodePartitioning;
     private HoodieTimelineTimeZone commitTimeZone;
     private Boolean partitionMetafileUseBaseFormat;
-    private Boolean dropPartitionColumnsWhenWrite;
+    private Boolean shouldDropPartitionColumns;
+    private String metadataPartitions;
+    private String inflightMetadataPartitions;
 
     /**
      * Persist the configs that is written at the first time, and should not be changed.
@@ -818,8 +818,18 @@ public class HoodieTableMetaClient implements Serializable {
       return this;
     }
 
-    public PropertyBuilder setDropPartitionColumnsWhenWrite(Boolean dropPartitionColumnsWhenWrite) {
-      this.dropPartitionColumnsWhenWrite = dropPartitionColumnsWhenWrite;
+    public PropertyBuilder setShouldDropPartitionColumns(Boolean shouldDropPartitionColumns) {
+      this.shouldDropPartitionColumns = shouldDropPartitionColumns;
+      return this;
+    }
+
+    public PropertyBuilder setMetadataPartitions(String partitions) {
+      this.metadataPartitions = partitions;
+      return this;
+    }
+
+    public PropertyBuilder setInflightMetadataPartitions(String partitions) {
+      this.inflightMetadataPartitions = partitions;
       return this;
     }
 
@@ -921,9 +931,14 @@ public class HoodieTableMetaClient implements Serializable {
       if (hoodieConfig.contains(HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT)) {
         setPartitionMetafileUseBaseFormat(hoodieConfig.getBoolean(HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT));
       }
-
       if (hoodieConfig.contains(HoodieTableConfig.DROP_PARTITION_COLUMNS)) {
-        setDropPartitionColumnsWhenWrite(hoodieConfig.getBoolean(HoodieTableConfig.DROP_PARTITION_COLUMNS));
+        setShouldDropPartitionColumns(hoodieConfig.getBoolean(HoodieTableConfig.DROP_PARTITION_COLUMNS));
+      }
+      if (hoodieConfig.contains(HoodieTableConfig.TABLE_METADATA_PARTITIONS)) {
+        setMetadataPartitions(hoodieConfig.getString(HoodieTableConfig.TABLE_METADATA_PARTITIONS));
+      }
+      if (hoodieConfig.contains(HoodieTableConfig.TABLE_METADATA_PARTITIONS_INFLIGHT)) {
+        setInflightMetadataPartitions(hoodieConfig.getString(HoodieTableConfig.TABLE_METADATA_PARTITIONS_INFLIGHT));
       }
       return this;
     }
@@ -1006,9 +1021,14 @@ public class HoodieTableMetaClient implements Serializable {
       if (null != partitionMetafileUseBaseFormat) {
         tableConfig.setValue(HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT, partitionMetafileUseBaseFormat.toString());
       }
-
-      if (null != dropPartitionColumnsWhenWrite) {
-        tableConfig.setValue(HoodieTableConfig.DROP_PARTITION_COLUMNS, Boolean.toString(dropPartitionColumnsWhenWrite));
+      if (null != shouldDropPartitionColumns) {
+        tableConfig.setValue(HoodieTableConfig.DROP_PARTITION_COLUMNS, Boolean.toString(shouldDropPartitionColumns));
+      }
+      if (null != metadataPartitions) {
+        tableConfig.setValue(HoodieTableConfig.TABLE_METADATA_PARTITIONS, metadataPartitions);
+      }
+      if (null != inflightMetadataPartitions) {
+        tableConfig.setValue(HoodieTableConfig.TABLE_METADATA_PARTITIONS_INFLIGHT, inflightMetadataPartitions);
       }
       return tableConfig.getProps();
     }

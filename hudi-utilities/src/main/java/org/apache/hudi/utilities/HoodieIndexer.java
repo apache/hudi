@@ -84,7 +84,7 @@ import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE_AND_EXECUTE;
 public class HoodieIndexer {
 
   private static final Logger LOG = LogManager.getLogger(HoodieIndexer.class);
-  private static final String DROP_INDEX = "dropindex";
+  static final String DROP_INDEX = "dropindex";
 
   private final HoodieIndexer.Config cfg;
   private TypedProperties props;

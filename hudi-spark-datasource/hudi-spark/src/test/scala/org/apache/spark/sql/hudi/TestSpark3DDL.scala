@@ -445,28 +445,19 @@ class TestSpark3DDL extends TestHoodieSqlBase {
             Seq(null),
             Seq(Map("t1" -> 10.0d))
           )
+          spark.sql(s"alter table ${tableName} rename column members to mem")
+          spark.sql(s"alter table ${tableName} rename column mem.value.n to nn")
+          spark.sql(s"alter table ${tableName} rename column userx to us")
+          spark.sql(s"alter table ${tableName} rename column us.age to age1")
+
+          spark.sql(s"insert into ${tableName} values(2 , map('k1', struct('v1', 100), 'k2', struct('v2', 200)), struct('jackStructNew', 291 , 101), 'jacknew', 1000, map('t1', 10))")
+          spark.sql(s"select mem.value.nn, us.age1 from $tableName order by id").show()
+          checkAnswer(spark.sql(s"select mem.value.nn, us.age1 from $tableName order by id").collect())(
+            Seq(null, 29),
+            Seq(null, 291)
+          )
         }
       }
     }
-  }
-
-  private def performClustering(writeDf: DataFrame, basePath: String, tableName: String, tableType: String): Unit = {
-    writeDf.write.format("org.apache.hudi")
-      .option(DataSourceWriteOptions.TABLE_TYPE.key(), tableType)
-      .option("hoodie.upsert.shuffle.parallelism", "1")
-      .option(DataSourceWriteOptions.RECORDKEY_FIELD.key(), "id")
-      .option(DataSourceWriteOptions.PRECOMBINE_FIELD.key(), "comb")
-      .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key(), "par")
-      .option(HoodieWriteConfig.TBL_NAME.key, tableName)
-      .option("hoodie.schema.on.read.enable", "true")
-      // option for clustering
-      .option("hoodie.clustering.inline", "true")
-      .option("hoodie.clustering.inline.max.commits", "1")
-      .option("hoodie.clustering.plan.strategy.small.file.limit", String.valueOf(2*1024*1024L))
-      .option("hoodie.clustering.plan.strategy.max.bytes.per.group", String.valueOf(10*1024*1024L))
-      .option("hoodie.clustering.plan.strategy.target.file.max.bytes", String.valueOf(4 * 1024* 1024L))
-      .option(HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS.key, "col1, col2")
-      .mode(SaveMode.Append)
-      .save(basePath)
   }
 }

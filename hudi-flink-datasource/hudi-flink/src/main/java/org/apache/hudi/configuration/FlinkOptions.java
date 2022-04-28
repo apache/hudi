@@ -103,7 +103,7 @@ public class FlinkOptions extends HoodieConfig {
       .key("metadata.compaction.delta_commits")
       .intType()
       .defaultValue(10)
-      .withDescription("Max delta commits for metadata table to trigger compaction, default 24");
+      .withDescription("Max delta commits for metadata table to trigger compaction, default 10");
 
   // ------------------------------------------------------------------------
   //  Index Options
@@ -367,13 +367,14 @@ public class FlinkOptions extends HoodieConfig {
 
   public static final String PARTITION_FORMAT_HOUR = "yyyyMMddHH";
   public static final String PARTITION_FORMAT_DAY = "yyyyMMdd";
+  public static final String PARTITION_FORMAT_DASHED_DAY = "yyyy-MM-dd";
   public static final ConfigOption<String> PARTITION_FORMAT = ConfigOptions
       .key("write.partition.format")
       .stringType()
       .noDefaultValue()
       .withDescription("Partition path format, only valid when 'write.datetime.partitioning' is true, default is:\n"
           + "1) 'yyyyMMddHH' for timestamp(3) WITHOUT TIME ZONE, LONG, FLOAT, DOUBLE, DECIMAL;\n"
-          + "2) 'yyyyMMdd' for DAY and INT.");
+          + "2) 'yyyyMMdd' for DATE and INT.");
 
   public static final ConfigOption<Integer> INDEX_BOOTSTRAP_TASKS = ConfigOptions
       .key("write.index_bootstrap.tasks")

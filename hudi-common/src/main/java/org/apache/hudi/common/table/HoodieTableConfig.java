@@ -194,7 +194,7 @@ public class HoodieTableConfig extends HoodieConfig {
   public static final ConfigProperty<Boolean> PARTITION_METAFILE_USE_BASE_FORMAT = ConfigProperty
       .key("hoodie.partition.metafile.use.base.format")
       .defaultValue(false)
-      .withDocumentation("If true, partition metafiles are saved in the same format as basefiles for this dataset (e.g. Parquet / ORC). "
+      .withDocumentation("If true, partition metafiles are saved in the same format as base-files for this dataset (e.g. Parquet / ORC). "
           + "If false (default) partition metafiles are saved as properties files.");
 
   public static final ConfigProperty<Boolean> DROP_PARTITION_COLUMNS = ConfigProperty
@@ -610,7 +610,7 @@ public class HoodieTableConfig extends HoodieConfig {
     return getString(URL_ENCODE_PARTITIONING);
   }
 
-  public Boolean isDropPartitionColumns() {
+  public Boolean shouldDropPartitionColumns() {
     return getBooleanOrDefault(DROP_PARTITION_COLUMNS);
   }
 

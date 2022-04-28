@@ -37,7 +37,11 @@ if [ "$#" -gt "1" ]; then
 fi
 
 declare -a ALL_VERSION_OPTS=(
+"-Dscala-2.11 -Dspark2 -Dflink1.13" # for legacy bundle name
+"-Dscala-2.12 -Dspark2 -Dflink1.13" # for legacy bundle name
+"-Dscala-2.12 -Dspark3 -Dflink1.14" # for legacy bundle name
 "-Dscala-2.11 -Dspark2.4 -Dflink1.13"
+"-Dscala-2.11 -Dspark2.4 -Dflink1.14"
 "-Dscala-2.12 -Dspark2.4 -Dflink1.13"
 "-Dscala-2.12 -Dspark3.1 -Dflink1.14"
 "-Dscala-2.12 -Dspark3.2 -Dflink1.14"
