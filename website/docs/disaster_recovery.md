@@ -1,5 +1,5 @@
 ---
-title: Disaster Recovery with Apache Hudi
+title: Disaster Recovery
 toc: true
 ---
 

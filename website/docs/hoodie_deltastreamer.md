@@ -273,8 +273,8 @@ You can use hive tables to fetch source and target schema.
 |---|-------------------------------------------------------|
 |hoodie.deltastreamer.schemaprovider.source.schema.hive.database| Hive database from where source schema can be fetched |
 |hoodie.deltastreamer.schemaprovider.source.schema.hive.table| Hive table from where source schema can be fetched    |
-|hoodie.deltastreamer.schemaprovider.target.schema.hive.database| Hive database from where source schema can be fetched |
-|hoodie.deltastreamer.schemaprovider.target.schema.hive.table| Hive table from where source schema can be fetched    |
+|hoodie.deltastreamer.schemaprovider.target.schema.hive.database| Hive database from where target schema can be fetched |
+|hoodie.deltastreamer.schemaprovider.target.schema.hive.table| Hive table from where target schema can be fetched    |
 
 
 ### Schema Provider with Post Processor
