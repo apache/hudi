@@ -51,10 +51,9 @@ class TestHoodieUnsafeRowUtils {
   @Test
   def testGetNestedRowValue(): Unit = {
     val schema = StructType(Seq(
-      StructField("foo", StringType),
+      StructField("foo", StringType, nullable = false),
       StructField(
         name = "bar",
-        nullable = true,
         dataType = StructType(Seq(
           StructField("baz", DateType),
           StructField("bor", LongType)
