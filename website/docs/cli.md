@@ -394,7 +394,7 @@ Compaction successfully repaired
 
 ## Savepoint and Restore 
 As the name suggest, "savepoint" saves the table as of the commit time, so that it lets you restore the table to this 
-savepoint at a later point in time if need be. You can read more about savepoints and restore [here](/next/disaster_recovery)
+savepoint at a later point in time if need be. You can read more about savepoints and restore [here](/docs/next/disaster_recovery)
 
 To trigger savepoint for a hudi table
 ```java
