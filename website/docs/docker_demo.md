@@ -391,8 +391,7 @@ $SPARK_INSTALL/bin/spark-shell \
   --deploy-mode client \
   --driver-memory 1G \
   --executor-memory 3G \
-  --num-executors 1 \
-  --packages org.apache.spark:spark-avro_2.11:2.4.4
+  --num-executors 1
 ...
 
 Welcome to
@@ -793,8 +792,7 @@ $SPARK_INSTALL/bin/spark-shell \
   --driver-memory 1G \
   --master local[2] \
   --executor-memory 3G \
-  --num-executors 1 \
-  --packages org.apache.spark:spark-avro_2.11:2.4.4
+  --num-executors 1
 
 # Copy On Write Table:
 
@@ -1050,8 +1048,7 @@ $SPARK_INSTALL/bin/spark-shell \
   --driver-memory 1G \
   --master local[2] \
   --executor-memory 3G \
-  --num-executors 1 \
-  --packages org.apache.spark:spark-avro_2.11:2.4.4
+  --num-executors 1
 
 Welcome to
       ____              __
@@ -1247,8 +1244,7 @@ $SPARK_INSTALL/bin/spark-shell \
   --driver-memory 1G \
   --master local[2] \
   --executor-memory 3G \
-  --num-executors 1 \
-  --packages org.apache.spark:spark-avro_2.11:2.4.4
+  --num-executors 1
 
 # Read Optimized Query
 scala> spark.sql("select symbol, max(ts) from stock_ticks_mor_ro group by symbol HAVING symbol = 'GOOG'").show(100, false)

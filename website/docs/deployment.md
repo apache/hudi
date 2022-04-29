@@ -25,14 +25,23 @@ With Merge_On_Read Table, Hudi ingestion needs to also take care of compacting d
 
 ### DeltaStreamer
 
-[DeltaStreamer](/docs/hoodie_deltastreamer#deltastreamer) is the standalone utility to incrementally pull upstream changes from varied sources such as DFS, Kafka and DB Changelogs and ingest them to hudi tables. It runs as a spark application in 2 modes.
+[DeltaStreamer](/docs/hoodie_deltastreamer#deltastreamer) is the standalone utility to incrementally pull upstream changes 
+from varied sources such as DFS, Kafka and DB Changelogs and ingest them to hudi tables.  It runs as a spark application in two modes.
+
+To use DeltaStreamer in Spark, the `hudi-utilities-bundle` is required, by adding
+`--packages org.apache.hudi:hudi-utilities-bundle_2.11:0.11.0` to the `spark-submit` command. From 0.11.0 release, we start
+to provide a new `hudi-utilities-slim-bundle` which aims to exclude dependencies that can cause conflicts and compatibility
+issues with different versions of Spark.  The `hudi-utilities-slim-bundle` should be used along with a Hudi Spark bundle 
+corresponding to the Spark version used, e.g., 
+`--packages org.apache.hudi:hudi-utilities-slim-bundle_2.12:0.11.0,org.apache.hudi:hudi-spark3.1-bundle_2.12:0.11.0`,
+if using `hudi-utilities-bundle` solely in Spark encounters compatibility issues.
 
  - **Run Once Mode** : In this mode, Deltastreamer performs one ingestion round which includes incrementally pulling events from upstream sources and ingesting them to hudi table. Background operations like cleaning old file versions and archiving hoodie timeline are automatically executed as part of the run. For Merge-On-Read tables, Compaction is also run inline as part of ingestion unless disabled by passing the flag "--disable-compaction". By default, Compaction is run inline for every ingestion run and this can be changed by setting the property "hoodie.compact.inline.max.delta.commits". You can either manually run this spark application or use any cron trigger or workflow orchestrator (most common deployment strategy) such as Apache Airflow to spawn this application. See command line options in [this section](/docs/hoodie_deltastreamer#deltastreamer) for running the spark application.
 
 Here is an example invocation for reading from kafka topic in a single-run mode and writing to Merge On Read table type in a yarn cluster.
 
 ```java
-[hoodie]$ spark-submit --packages org.apache.hudi:hudi-utilities-bundle_2.11:0.5.3,org.apache.spark:spark-avro_2.11:2.4.4 \
+[hoodie]$ spark-submit --packages org.apache.hudi:hudi-utilities-bundle_2.11:0.11.0 \
  --master yarn \
  --deploy-mode cluster \
  --num-executors 10 \
@@ -80,7 +89,7 @@ Here is an example invocation for reading from kafka topic in a single-run mode 
 Here is an example invocation for reading from kafka topic in a continuous mode and writing to Merge On Read table type in a yarn cluster.
 
 ```java
-[hoodie]$ spark-submit --packages org.apache.hudi:hudi-utilities-bundle_2.11:0.5.3,org.apache.spark:spark-avro_2.11:2.4.4 \
+[hoodie]$ spark-submit --packages org.apache.hudi:hudi-utilities-bundle_2.11:0.11.0 \
  --master yarn \
  --deploy-mode cluster \
  --num-executors 10 \

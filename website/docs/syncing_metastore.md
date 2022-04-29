@@ -181,7 +181,6 @@ Assuming the metastore is configured properly, then start the spark-shell.
 
 ```
 $SPARK_INSTALL/bin/spark-shell   --jars $HUDI_SPARK_BUNDLE \
-  --packages org.apache.spark:spark-avro_2.11:2.4.4 \ 
   --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
 ```
 
