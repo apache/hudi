@@ -140,7 +140,7 @@ pyspark
 :::note Please note the following
 <ul>
   <li> For Spark 3.2, the additional spark_catalog config is required: 
-`--conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog'`</li>
+--conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog' </li>
   <li> We have used hudi-spark-bundle built for scala 2.12 since the spark-avro module used can also depend on 2.12. </li>
 </ul>
 :::
