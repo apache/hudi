@@ -18,184 +18,36 @@
 
 package org.apache.hudi.hadoop.utils;
 
-import org.apache.hudi.common.engine.HoodieLocalEngineContext;
-import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.FileSlice;
-import org.apache.hudi.common.model.HoodieBaseFile;
-import org.apache.hudi.common.model.HoodieLogFile;
-import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.table.HoodieTableConfig;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.TableSchemaResolver;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.view.FileSystemViewManager;
-import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
-import org.apache.hudi.common.util.CollectionUtils;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.hadoop.BootstrapBaseFileSplit;
-import org.apache.hudi.hadoop.realtime.HoodieRealtimeFileSplit;
-import org.apache.hudi.hadoop.realtime.HoodieVirtualKeyInfo;
-import org.apache.hudi.hadoop.realtime.RealtimeBootstrapBaseFileSplit;
-import org.apache.hudi.hadoop.realtime.RealtimeSplit;
-
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
 import org.apache.hadoop.mapred.FileSplit;
-import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.mapred.JobConf;
-import org.apache.hadoop.mapred.SplitLocationInfo;
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.hadoop.realtime.HoodieRealtimeBootstrapBaseFileSplit;
+import org.apache.hudi.hadoop.realtime.HoodieRealtimeFileSplit;
+import org.apache.hudi.hadoop.realtime.HoodieVirtualKeyInfo;
+import org.apache.hudi.hadoop.realtime.RealtimeSplit;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.apache.parquet.schema.MessageType;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
+import static org.apache.hudi.TypeUtils.unsafeCast;
 
 public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
 
   private static final Logger LOG = LogManager.getLogger(HoodieRealtimeInputFormatUtils.class);
 
-  public static InputSplit[] getRealtimeSplits(Configuration conf, Stream<FileSplit> fileSplits) throws IOException {
-    Map<Path, List<FileSplit>> partitionsToParquetSplits =
-        fileSplits.collect(Collectors.groupingBy(split -> split.getPath().getParent()));
-    // TODO(vc): Should we handle also non-hoodie splits here?
-    Map<Path, HoodieTableMetaClient> partitionsToMetaClient = getTableMetaClientByPartitionPath(conf, partitionsToParquetSplits.keySet());
-
-    // Create file system cache so metadata table is only instantiated once. Also can benefit normal file listing if
-    // partition path is listed twice so file groups will already be loaded in file system
-    Map<HoodieTableMetaClient, HoodieTableFileSystemView> fsCache = new HashMap<>();
-    // for all unique split parents, obtain all delta files based on delta commit timeline,
-    // grouped on file id
-    List<InputSplit> rtSplits = new ArrayList<>();
-    try {
-      // Pre process tableConfig from first partition to fetch virtual key info
-      Option<HoodieVirtualKeyInfo> hoodieVirtualKeyInfo = Option.empty();
-      if (partitionsToParquetSplits.size() > 0) {
-        HoodieTableMetaClient metaClient = partitionsToMetaClient.get(partitionsToParquetSplits.keySet().iterator().next());
-        HoodieTableConfig tableConfig = metaClient.getTableConfig();
-        if (!tableConfig.populateMetaFields()) {
-          TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
-          try {
-            MessageType parquetSchema = tableSchemaResolver.getTableParquetSchema();
-            hoodieVirtualKeyInfo = Option.of(new HoodieVirtualKeyInfo(tableConfig.getRecordKeyFieldProp(),
-                tableConfig.getPartitionFieldProp(), parquetSchema.getFieldIndex(tableConfig.getRecordKeyFieldProp()),
-                parquetSchema.getFieldIndex(tableConfig.getPartitionFieldProp())));
-          } catch (Exception exception) {
-            throw new HoodieException("Fetching table schema failed with exception ", exception);
-          }
-        }
-      }
-      Option<HoodieVirtualKeyInfo> finalHoodieVirtualKeyInfo = hoodieVirtualKeyInfo;
-      partitionsToParquetSplits.keySet().forEach(partitionPath -> {
-        // for each partition path obtain the data & log file groupings, then map back to inputsplits
-        HoodieTableMetaClient metaClient = partitionsToMetaClient.get(partitionPath);
-        if (!fsCache.containsKey(metaClient)) {
-          HoodieLocalEngineContext engineContext = new HoodieLocalEngineContext(conf);
-          HoodieTableFileSystemView fsView = FileSystemViewManager.createInMemoryFileSystemView(engineContext,
-              metaClient, HoodieInputFormatUtils.buildMetadataConfig(conf));
-          fsCache.put(metaClient, fsView);
-        }
-        HoodieTableFileSystemView fsView = fsCache.get(metaClient);
-
-        String relPartitionPath = FSUtils.getRelativePartitionPath(new Path(metaClient.getBasePath()), partitionPath);
-        // Both commit and delta-commits are included - pick the latest completed one
-        Option<HoodieInstant> latestCompletedInstant =
-            metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().lastInstant();
-
-        Stream<FileSlice> latestFileSlices = latestCompletedInstant
-            .map(instant -> fsView.getLatestMergedFileSlicesBeforeOrOn(relPartitionPath, instant.getTimestamp()))
-            .orElse(Stream.empty());
-
-        // subgroup splits again by file id & match with log files.
-        Map<String, List<FileSplit>> groupedInputSplits = partitionsToParquetSplits.get(partitionPath).stream()
-            .collect(Collectors.groupingBy(split -> FSUtils.getFileId(split.getPath().getName())));
-        // Get the maxCommit from the last delta or compaction or commit - when bootstrapped from COW table
-        String maxCommitTime = metaClient.getActiveTimeline().getTimelineOfActions(CollectionUtils.createSet(HoodieTimeline.COMMIT_ACTION,
-            HoodieTimeline.ROLLBACK_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION, HoodieTimeline.REPLACE_COMMIT_ACTION))
-            .filterCompletedInstants().lastInstant().get().getTimestamp();
-        latestFileSlices.forEach(fileSlice -> {
-          List<FileSplit> dataFileSplits = groupedInputSplits.get(fileSlice.getFileId());
-          dataFileSplits.forEach(split -> {
-            try {
-              List<String> logFilePaths = fileSlice.getLogFiles().sorted(HoodieLogFile.getLogFileComparator())
-                  .map(logFile -> logFile.getPath().toString()).collect(Collectors.toList());
-              if (split instanceof BootstrapBaseFileSplit) {
-                BootstrapBaseFileSplit eSplit = (BootstrapBaseFileSplit) split;
-                String[] hosts = split.getLocationInfo() != null ? Arrays.stream(split.getLocationInfo())
-                    .filter(x -> !x.isInMemory()).toArray(String[]::new) : new String[0];
-                String[] inMemoryHosts = split.getLocationInfo() != null ? Arrays.stream(split.getLocationInfo())
-                    .filter(SplitLocationInfo::isInMemory).toArray(String[]::new) : new String[0];
-                FileSplit baseSplit = new FileSplit(eSplit.getPath(), eSplit.getStart(), eSplit.getLength(),
-                    hosts, inMemoryHosts);
-                rtSplits.add(new RealtimeBootstrapBaseFileSplit(baseSplit, metaClient.getBasePath(),
-                    logFilePaths, maxCommitTime, eSplit.getBootstrapFileSplit()));
-              } else {
-                rtSplits.add(new HoodieRealtimeFileSplit(split, metaClient.getBasePath(), logFilePaths, maxCommitTime, finalHoodieVirtualKeyInfo));
-              }
-            } catch (IOException e) {
-              throw new HoodieIOException("Error creating hoodie real time split ", e);
-            }
-          });
-        });
-      });
-    } catch (Exception e) {
-      throw new HoodieException("Error obtaining data file/log file grouping ", e);
-    } finally {
-      // close all the open fs views.
-      fsCache.forEach((k, view) -> view.close());
+  public static boolean doesBelongToIncrementalQuery(FileSplit s) {
+    if (s instanceof HoodieRealtimeFileSplit) {
+      HoodieRealtimeFileSplit bs = unsafeCast(s);
+      return bs.getBelongsToIncrementalQuery();
+    } else if (s instanceof HoodieRealtimeBootstrapBaseFileSplit) {
+      HoodieRealtimeBootstrapBaseFileSplit bs = unsafeCast(s);
+      return bs.getBelongsToIncrementalQuery();
     }
-    LOG.info("Returning a total splits of " + rtSplits.size());
-    return rtSplits.toArray(new InputSplit[0]);
+
+    return false;
   }
-
-  // Return parquet file with a list of log files in the same file group.
-  public static List<Pair<Option<HoodieBaseFile>, List<String>>> groupLogsByBaseFile(Configuration conf, List<Path> partitionPaths) {
-    Set<Path> partitionSet = new HashSet<>(partitionPaths);
-    // TODO(vc): Should we handle also non-hoodie splits here?
-    Map<Path, HoodieTableMetaClient> partitionsToMetaClient = getTableMetaClientByPartitionPath(conf, partitionSet);
-
-    // Get all the base file and it's log files pairs in required partition paths.
-    List<Pair<Option<HoodieBaseFile>, List<String>>> baseAndLogsList = new ArrayList<>();
-    partitionSet.forEach(partitionPath -> {
-      // for each partition path obtain the data & log file groupings, then map back to inputsplits
-      HoodieTableMetaClient metaClient = partitionsToMetaClient.get(partitionPath);
-      HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline());
-      String relPartitionPath = FSUtils.getRelativePartitionPath(new Path(metaClient.getBasePath()), partitionPath);
-
-      try {
-        // Both commit and delta-commits are included - pick the latest completed one
-        Option<HoodieInstant> latestCompletedInstant =
-            metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().lastInstant();
-
-        Stream<FileSlice> latestFileSlices = latestCompletedInstant
-            .map(instant -> fsView.getLatestMergedFileSlicesBeforeOrOn(relPartitionPath, instant.getTimestamp()))
-            .orElse(Stream.empty());
-
-        latestFileSlices.forEach(fileSlice -> {
-          List<String> logFilePaths = fileSlice.getLogFiles().sorted(HoodieLogFile.getLogFileComparator())
-                  .map(logFile -> logFile.getPath().toString()).collect(Collectors.toList());
-          baseAndLogsList.add(Pair.of(fileSlice.getBaseFile(), logFilePaths));
-        });
-      } catch (Exception e) {
-        throw new HoodieException("Error obtaining data file/log file grouping: " + partitionPath, e);
-      }
-    });
-    return baseAndLogsList;
-  }
-
 
   /**
    * Add a field to the existing fields projected.
@@ -253,7 +105,7 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
 
   public static boolean canAddProjectionToJobConf(final RealtimeSplit realtimeSplit, final JobConf jobConf) {
     return jobConf.get(HoodieInputFormatUtils.HOODIE_READ_COLUMNS_PROP) == null
-            || (!realtimeSplit.getDeltaLogPaths().isEmpty() && !HoodieRealtimeInputFormatUtils.requiredProjectionFieldsExistInConf(jobConf, realtimeSplit.getHoodieVirtualKeyInfo()));
+            || (!realtimeSplit.getDeltaLogPaths().isEmpty() && !HoodieRealtimeInputFormatUtils.requiredProjectionFieldsExistInConf(jobConf, realtimeSplit.getVirtualKeyInfo()));
   }
 
   /**

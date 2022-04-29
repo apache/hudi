@@ -40,6 +40,7 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
@@ -133,6 +134,23 @@ public class TestSqlSource extends UtilitiesTestBase {
     InputBatch<Dataset<Row>> fetch1AsRows =
         sourceFormatAdapter.fetchNewDataInRowFormat(Option.empty(), Long.MAX_VALUE);
     assertEquals(10000, fetch1AsRows.getBatch().get().count());
+  }
+
+  /**
+   * Runs the test scenario of reading data from the source in row format.
+   * Source has no records.
+   *
+   * @throws IOException
+   */
+  @Test
+  public void testSqlSourceCheckpoint() throws IOException {
+    props.setProperty(sqlSourceConfig, "select * from test_sql_table where 1=0");
+    sqlSource = new SqlSource(props, jsc, sparkSession, schemaProvider);
+    sourceFormatAdapter = new SourceFormatAdapter(sqlSource);
+
+    InputBatch<Dataset<Row>> fetch1AsRows =
+            sourceFormatAdapter.fetchNewDataInRowFormat(Option.empty(), Long.MAX_VALUE);
+    assertNull(fetch1AsRows.getCheckpointForNextBatch());
   }
 
   /**

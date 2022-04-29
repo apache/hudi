@@ -18,21 +18,20 @@
 
 package org.apache.hudi
 
+import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
-
-import java.io.File
-import java.nio.file.Paths
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
+import org.apache.hudi.exception.SchemaCompatibilityException
 import org.apache.hudi.testutils.DataSourceTestUtils
-import org.apache.spark.sql.avro.IncompatibleSchemaException
-import org.apache.spark.sql.types.{IntegerType, StringType, StructField, StructType}
+import org.apache.spark.sql.types.{StructType, TimestampType}
 import org.apache.spark.sql.{Row, SparkSession}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertNull, assertTrue, fail}
+import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 
-import java.util
+import java.io.File
+import java.nio.file.Paths
 import scala.collection.JavaConverters
 
 class TestHoodieSparkUtils {
@@ -41,14 +40,18 @@ class TestHoodieSparkUtils {
   def testGlobPaths(@TempDir tempDir: File): Unit = {
     val folders: Seq[Path] = Seq(
       new Path(Paths.get(tempDir.getAbsolutePath, "folder1").toUri),
-      new Path(Paths.get(tempDir.getAbsolutePath, "folder2").toUri)
+      new Path(Paths.get(tempDir.getAbsolutePath, "folder2").toUri),
+      new Path(Paths.get(tempDir.getAbsolutePath, ".hoodie").toUri),
+      new Path(Paths.get(tempDir.getAbsolutePath, ".hoodie", "metadata").toUri)
     )
 
     val files: Seq[Path] = Seq(
       new Path(Paths.get(tempDir.getAbsolutePath, "folder1", "file1").toUri),
       new Path(Paths.get(tempDir.getAbsolutePath, "folder1", "file2").toUri),
       new Path(Paths.get(tempDir.getAbsolutePath, "folder2", "file3").toUri),
-      new Path(Paths.get(tempDir.getAbsolutePath, "folder2", "file4").toUri)
+      new Path(Paths.get(tempDir.getAbsolutePath, "folder2","file4").toUri),
+      new Path(Paths.get(tempDir.getAbsolutePath, ".hoodie","metadata", "file5").toUri),
+      new Path(Paths.get(tempDir.getAbsolutePath, ".hoodie","metadata", "file6").toUri)
     )
 
     folders.foreach(folder => new File(folder.toUri).mkdir())
@@ -57,12 +60,14 @@ class TestHoodieSparkUtils {
     var paths = Seq(tempDir.getAbsolutePath + "/*")
     var globbedPaths = HoodieSparkUtils.checkAndGlobPathIfNecessary(paths,
       new Path(paths.head).getFileSystem(new Configuration()))
-    assertEquals(folders.sortWith(_.toString < _.toString), globbedPaths.sortWith(_.toString < _.toString))
+    assertEquals(folders.filterNot(entry => entry.toString.contains(".hoodie"))
+      .sortWith(_.toString < _.toString), globbedPaths.sortWith(_.toString < _.toString))
 
     paths = Seq(tempDir.getAbsolutePath + "/*/*")
     globbedPaths = HoodieSparkUtils.checkAndGlobPathIfNecessary(paths,
       new Path(paths.head).getFileSystem(new Configuration()))
-    assertEquals(files.sortWith(_.toString < _.toString), globbedPaths.sortWith(_.toString < _.toString))
+    assertEquals(files.filterNot(entry => entry.toString.contains(".hoodie"))
+      .sortWith(_.toString < _.toString), globbedPaths.sortWith(_.toString < _.toString))
 
     paths = Seq(tempDir.getAbsolutePath + "/folder1/*")
     globbedPaths = HoodieSparkUtils.checkAndGlobPathIfNecessary(paths,
@@ -79,36 +84,8 @@ class TestHoodieSparkUtils {
     paths = Seq(tempDir.getAbsolutePath + "/folder1/*", tempDir.getAbsolutePath + "/folder2/*")
     globbedPaths = HoodieSparkUtils.checkAndGlobPathIfNecessary(paths,
       new Path(paths.head).getFileSystem(new Configuration()))
-    assertEquals(files.sortWith(_.toString < _.toString), globbedPaths.sortWith(_.toString < _.toString))
-  }
-
-  @Test
-  def testCreateInMemoryIndex(@TempDir tempDir: File): Unit = {
-    val spark = SparkSession.builder
-      .appName("Hoodie Datasource test")
-      .master("local[2]")
-      .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
-      .getOrCreate
-
-    val folders: Seq[Path] = Seq(
-      new Path(Paths.get(tempDir.getAbsolutePath, "folder1").toUri),
-      new Path(Paths.get(tempDir.getAbsolutePath, "folder2").toUri)
-    )
-
-    val files: Seq[Path] = Seq(
-      new Path(Paths.get(tempDir.getAbsolutePath, "folder1", "file1").toUri),
-      new Path(Paths.get(tempDir.getAbsolutePath, "folder1", "file2").toUri),
-      new Path(Paths.get(tempDir.getAbsolutePath, "folder2", "file3").toUri),
-      new Path(Paths.get(tempDir.getAbsolutePath, "folder2", "file4").toUri)
-    )
-
-    folders.foreach(folder => new File(folder.toUri).mkdir())
-    files.foreach(file => new File(file.toUri).createNewFile())
-
-    val index = HoodieSparkUtils.createInMemoryFileIndex(spark, Seq(folders(0), folders(1)))
-    val indexedFilePaths = index.allFiles().map(fs => fs.getPath)
-    assertEquals(files.sortWith(_.toString < _.toString), indexedFilePaths.sortWith(_.toString < _.toString))
-    spark.stop()
+    assertEquals(files.filterNot(entry => entry.toString.contains(".hoodie"))
+      .sortWith(_.toString < _.toString), globbedPaths.sortWith(_.toString < _.toString))
   }
 
   @Test
@@ -181,7 +158,7 @@ class TestHoodieSparkUtils {
     val genRecRDD3 = HoodieSparkUtils.createRdd(df1, "test_struct_name", "test_namespace", true,
       org.apache.hudi.common.util.Option.of(schema2))
     assert(genRecRDD3.collect()(0).getSchema.equals(schema2))
-    genRecRDD3.foreach(entry => assertNull(entry.get("nonNullableInnerStruct2")))
+    genRecRDD3.foreach(entry => assertNull(entry.get("nullableInnerStruct2")))
 
     val innerStruct3 = new StructType().add("innerKey","string",false).add("innerValue", "long", true)
       .add("new_nested_col","string",true)
@@ -222,12 +199,36 @@ class TestHoodieSparkUtils {
       fail("createRdd should fail, because records don't have a column which is not nullable in the passed in schema")
     } catch {
       case e: Exception =>
-        e.getCause.asInstanceOf[NullPointerException]
-        assertTrue(e.getMessage.contains("null of string in field new_nested_col of"))
+        val cause = e.getCause
+        assertTrue(cause.isInstanceOf[SchemaCompatibilityException])
+        assertTrue(e.getMessage.contains("Unable to validate the rewritten record {\"innerKey\": \"innerKey1_2\", \"innerValue\": 2} against schema"))
     }
     spark.stop()
   }
 
-  def convertRowListToSeq(inputList: util.List[Row]): Seq[Row] =
+  @Test
+  def testGetRequiredSchema(): Unit = {
+    val avroSchemaString = "{\"type\":\"record\",\"name\":\"record\"," +
+    "\"fields\":[{\"name\":\"_hoodie_commit_time\",\"type\":[\"null\",\"string\"],\"doc\":\"\",\"default\":null}," +
+    "{\"name\":\"_hoodie_commit_seqno\",\"type\":[\"null\",\"string\"],\"doc\":\"\",\"default\":null}," +
+    "{\"name\":\"_hoodie_record_key\",\"type\":[\"null\",\"string\"],\"doc\":\"\",\"default\":null}," +
+    "{\"name\":\"_hoodie_partition_path\",\"type\":[\"null\",\"string\"],\"doc\":\"\",\"default\":null}," +
+    "{\"name\":\"_hoodie_file_name\",\"type\":[\"null\",\"string\"],\"doc\":\"\",\"default\":null}," +
+    "{\"name\":\"uuid\",\"type\":\"string\"},{\"name\":\"name\",\"type\":[\"null\",\"string\"],\"default\":null}," +
+    "{\"name\":\"age\",\"type\":[\"null\",\"int\"],\"default\":null}," +
+    "{\"name\":\"ts\",\"type\":[\"null\",{\"type\":\"long\",\"logicalType\":\"timestamp-millis\"}],\"default\":null}," +
+    "{\"name\":\"partition\",\"type\":[\"null\",\"string\"],\"default\":null}]}"
+
+    val tableAvroSchema = new Schema.Parser().parse(avroSchemaString)
+
+    val (requiredAvroSchema, requiredStructSchema, _) =
+      HoodieSparkUtils.getRequiredSchema(tableAvroSchema, Array("ts"))
+
+    assertEquals("timestamp-millis",
+      requiredAvroSchema.getField("ts").schema().getTypes.get(1).getLogicalType.getName)
+    assertEquals(TimestampType, requiredStructSchema.fields(0).dataType)
+  }
+
+  def convertRowListToSeq(inputList: java.util.List[Row]): Seq[Row] =
     JavaConverters.asScalaIteratorConverter(inputList.iterator).asScala.toSeq
 }

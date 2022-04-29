@@ -22,11 +22,15 @@ import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
+import org.apache.hudi.avro.model.HoodieIndexCommitMetadata;
+import org.apache.hudi.avro.model.HoodieIndexPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
+import org.apache.hudi.avro.model.HoodieRestorePlan;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
@@ -34,18 +38,23 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.io.HoodieCreateHandle;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.HoodieSortedMergeHandle;
 import org.apache.hudi.io.HoodieWriteHandle;
+import org.apache.hudi.keygen.BaseKeyGenerator;
+import org.apache.hudi.keygen.factory.HoodieAvroKeyGeneratorFactory;
+import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.bootstrap.HoodieBootstrapWriteMetadata;
-import org.apache.hudi.table.action.clean.FlinkCleanActionExecutor;
-import org.apache.hudi.table.action.clean.FlinkScheduleCleanActionExecutor;
+import org.apache.hudi.table.action.clean.CleanActionExecutor;
+import org.apache.hudi.table.action.clean.CleanPlanActionExecutor;
 import org.apache.hudi.table.action.commit.FlinkDeleteCommitActionExecutor;
 import org.apache.hudi.table.action.commit.FlinkInsertCommitActionExecutor;
 import org.apache.hudi.table.action.commit.FlinkInsertOverwriteCommitActionExecutor;
@@ -56,7 +65,6 @@ import org.apache.hudi.table.action.commit.FlinkUpsertCommitActionExecutor;
 import org.apache.hudi.table.action.commit.FlinkUpsertPreppedCommitActionExecutor;
 import org.apache.hudi.table.action.rollback.BaseRollbackPlanActionExecutor;
 import org.apache.hudi.table.action.rollback.CopyOnWriteRollbackActionExecutor;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -74,12 +82,18 @@ import java.util.Map;
  * <p>
  * UPDATES - Produce a new version of the file, just replacing the updated records with new values
  */
-public class HoodieFlinkCopyOnWriteTable<T extends HoodieRecordPayload> extends HoodieFlinkTable<T> {
+public class HoodieFlinkCopyOnWriteTable<T extends HoodieRecordPayload>
+    extends HoodieFlinkTable<T> implements HoodieCompactionHandler<T> {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieFlinkCopyOnWriteTable.class);
 
   public HoodieFlinkCopyOnWriteTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
     super(config, context, metaClient);
+  }
+
+  @Override
+  public boolean isTableServiceAction(String actionType) {
+    return !actionType.equals(HoodieTimeline.COMMIT_ACTION);
   }
 
   /**
@@ -217,7 +231,7 @@ public class HoodieFlinkCopyOnWriteTable<T extends HoodieRecordPayload> extends 
   public HoodieWriteMetadata<List<WriteStatus>> bulkInsert(HoodieEngineContext context,
                                                            String instantTime,
                                                            List<HoodieRecord<T>> records,
-                                                           Option<BulkInsertPartitioner<List<HoodieRecord<T>>>> bulkInsertPartitioner) {
+                                                           Option<BulkInsertPartitioner> bulkInsertPartitioner) {
     throw new HoodieNotSupportedException("BulkInsert is not supported yet");
   }
 
@@ -245,7 +259,7 @@ public class HoodieFlinkCopyOnWriteTable<T extends HoodieRecordPayload> extends 
   public HoodieWriteMetadata<List<WriteStatus>> bulkInsertPrepped(HoodieEngineContext context,
                                                                   String instantTime,
                                                                   List<HoodieRecord<T>> preppedRecords,
-                                                                  Option<BulkInsertPartitioner<List<HoodieRecord<T>>>> bulkInsertPartitioner) {
+                                                                  Option<BulkInsertPartitioner> bulkInsertPartitioner) {
     throw new HoodieNotSupportedException("BulkInsertPrepped is not supported yet");
   }
 
@@ -265,7 +279,8 @@ public class HoodieFlinkCopyOnWriteTable<T extends HoodieRecordPayload> extends 
   }
 
   @Override
-  public HoodieWriteMetadata<List<WriteStatus>> compact(HoodieEngineContext context, String compactionInstantTime) {
+  public HoodieWriteMetadata<List<WriteStatus>> compact(
+      HoodieEngineContext context, String compactionInstantTime) {
     throw new HoodieNotSupportedException("Compaction is not supported on a CopyOnWrite table");
   }
 
@@ -297,28 +312,45 @@ public class HoodieFlinkCopyOnWriteTable<T extends HoodieRecordPayload> extends 
    */
   @Override
   public Option<HoodieCleanerPlan> scheduleCleaning(HoodieEngineContext context, String instantTime, Option<Map<String, String>> extraMetadata) {
-    return new FlinkScheduleCleanActionExecutor(context, config, this, instantTime, extraMetadata).execute();
+    return new CleanPlanActionExecutor(context, config, this, instantTime, extraMetadata).execute();
   }
 
   @Override
   public Option<HoodieRollbackPlan> scheduleRollback(HoodieEngineContext context, String instantTime, HoodieInstant instantToRollback,
-                                                     boolean skipTimelinePublish) {
-    return new BaseRollbackPlanActionExecutor(context, config, this, instantTime, instantToRollback, skipTimelinePublish).execute();
+                                                     boolean skipTimelinePublish, boolean shouldRollbackUsingMarkers) {
+    return new BaseRollbackPlanActionExecutor(context, config, this, instantTime, instantToRollback, skipTimelinePublish,
+        shouldRollbackUsingMarkers).execute();
   }
 
   @Override
-  public HoodieCleanMetadata clean(HoodieEngineContext context, String cleanInstantTime) {
-    return new FlinkCleanActionExecutor(context, config, this, cleanInstantTime).execute();
+  public HoodieCleanMetadata clean(HoodieEngineContext context, String cleanInstantTime, boolean skipLocking) {
+    return new CleanActionExecutor(context, config, this, cleanInstantTime).execute();
   }
 
   @Override
-  public HoodieRollbackMetadata rollback(HoodieEngineContext context, String rollbackInstantTime, HoodieInstant commitInstant, boolean deleteInstants) {
-    return new CopyOnWriteRollbackActionExecutor(context, config, this, rollbackInstantTime, commitInstant, deleteInstants).execute();
+  public HoodieRollbackMetadata rollback(HoodieEngineContext context, String rollbackInstantTime, HoodieInstant commitInstant,
+                                         boolean deleteInstants, boolean skipLocking) {
+    return new CopyOnWriteRollbackActionExecutor(context, config, this, rollbackInstantTime, commitInstant, deleteInstants, skipLocking).execute();
+  }
+
+  @Override
+  public Option<HoodieIndexPlan> scheduleIndexing(HoodieEngineContext context, String indexInstantTime, List<MetadataPartitionType> partitionsToIndex) {
+    throw new HoodieNotSupportedException("Metadata indexing is not supported for a Flink table yet.");
+  }
+
+  @Override
+  public Option<HoodieIndexCommitMetadata> index(HoodieEngineContext context, String indexInstantTime) {
+    throw new HoodieNotSupportedException("Metadata indexing is not supported for a Flink table yet.");
   }
 
   @Override
   public HoodieSavepointMetadata savepoint(HoodieEngineContext context, String instantToSavepoint, String user, String comment) {
     throw new HoodieNotSupportedException("Savepoint is not supported yet");
+  }
+
+  @Override
+  public Option<HoodieRestorePlan> scheduleRestore(HoodieEngineContext context, String restoreInstantTime, String instantToRestore) {
+    throw new HoodieNotSupportedException("Restore is not supported yet");
   }
 
   @Override
@@ -329,9 +361,10 @@ public class HoodieFlinkCopyOnWriteTable<T extends HoodieRecordPayload> extends 
   // -------------------------------------------------------------------------
   //  Used for compaction
   // -------------------------------------------------------------------------
-
-  public Iterator<List<WriteStatus>> handleUpdate(String instantTime, String partitionPath, String fileId,
-                                                  Map<String, HoodieRecord<T>> keyToNewRecords, HoodieBaseFile oldDataFile) throws IOException {
+  @Override
+  public Iterator<List<WriteStatus>> handleUpdate(
+      String instantTime, String partitionPath, String fileId,
+      Map<String, HoodieRecord<T>> keyToNewRecords, HoodieBaseFile oldDataFile) throws IOException {
     // these are updates
     HoodieMergeHandle upsertHandle = getUpdateHandle(instantTime, partitionPath, fileId, keyToNewRecords, oldDataFile);
     return handleUpdateInternal(upsertHandle, instantTime, fileId);
@@ -357,18 +390,29 @@ public class HoodieFlinkCopyOnWriteTable<T extends HoodieRecordPayload> extends 
 
   protected HoodieMergeHandle getUpdateHandle(String instantTime, String partitionPath, String fileId,
                                               Map<String, HoodieRecord<T>> keyToNewRecords, HoodieBaseFile dataFileToBeMerged) {
+    Option<BaseKeyGenerator> keyGeneratorOpt = Option.empty();
+    if (!config.populateMetaFields()) {
+      try {
+        keyGeneratorOpt = Option.of((BaseKeyGenerator) HoodieAvroKeyGeneratorFactory.createKeyGenerator(new TypedProperties(config.getProps())));
+      } catch (IOException e) {
+        throw new HoodieIOException("Only BaseKeyGenerator (or any key generator that extends from BaseKeyGenerator) are supported when meta "
+            + "columns are disabled. Please choose the right key generator if you wish to disable meta fields.", e);
+      }
+    }
     if (requireSortedRecords()) {
       return new HoodieSortedMergeHandle<>(config, instantTime, this, keyToNewRecords, partitionPath, fileId,
-          dataFileToBeMerged, taskContextSupplier, Option.empty());
+          dataFileToBeMerged, taskContextSupplier, keyGeneratorOpt);
     } else {
       return new HoodieMergeHandle<>(config, instantTime, this, keyToNewRecords, partitionPath, fileId,
-          dataFileToBeMerged, taskContextSupplier, Option.empty());
+          dataFileToBeMerged, taskContextSupplier, keyGeneratorOpt);
     }
   }
 
-  public Iterator<List<WriteStatus>> handleInsert(String instantTime, String partitionPath, String fileId,
-                                                  Map<String, HoodieRecord<? extends HoodieRecordPayload>> recordMap) {
-    HoodieCreateHandle<?,?,?,?> createHandle =
+  @Override
+  public Iterator<List<WriteStatus>> handleInsert(
+      String instantTime, String partitionPath, String fileId,
+      Map<String, HoodieRecord<? extends HoodieRecordPayload>> recordMap) {
+    HoodieCreateHandle<?, ?, ?, ?> createHandle =
         new HoodieCreateHandle(config, instantTime, this, partitionPath, fileId, recordMap, taskContextSupplier);
     createHandle.write();
     return Collections.singletonList(createHandle.close()).iterator();

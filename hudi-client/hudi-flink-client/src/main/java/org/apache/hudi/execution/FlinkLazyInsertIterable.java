@@ -27,7 +27,8 @@ import org.apache.hudi.common.util.queue.BoundedInMemoryExecutor;
 import org.apache.hudi.common.util.queue.IteratorBasedQueueProducer;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.io.WriteHandleFactory;
+import org.apache.hudi.io.ExplicitWriteHandleFactory;
+import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.Schema;
@@ -36,15 +37,6 @@ import java.util.Iterator;
 import java.util.List;
 
 public class FlinkLazyInsertIterable<T extends HoodieRecordPayload> extends HoodieLazyInsertIterable<T> {
-  public FlinkLazyInsertIterable(Iterator<HoodieRecord<T>> recordItr,
-                                 boolean areRecordsSorted,
-                                 HoodieWriteConfig config,
-                                 String instantTime,
-                                 HoodieTable hoodieTable,
-                                 String idPrefix,
-                                 TaskContextSupplier taskContextSupplier) {
-    super(recordItr, areRecordsSorted, config, instantTime, hoodieTable, idPrefix, taskContextSupplier);
-  }
 
   public FlinkLazyInsertIterable(Iterator<HoodieRecord<T>> recordItr,
                                  boolean areRecordsSorted,
@@ -53,7 +45,7 @@ public class FlinkLazyInsertIterable<T extends HoodieRecordPayload> extends Hood
                                  HoodieTable hoodieTable,
                                  String idPrefix,
                                  TaskContextSupplier taskContextSupplier,
-                                 WriteHandleFactory writeHandleFactory) {
+                                 ExplicitWriteHandleFactory writeHandleFactory) {
     super(recordItr, areRecordsSorted, config, instantTime, hoodieTable, idPrefix, taskContextSupplier, writeHandleFactory);
   }
 
@@ -64,8 +56,8 @@ public class FlinkLazyInsertIterable<T extends HoodieRecordPayload> extends Hood
         null;
     try {
       final Schema schema = new Schema.Parser().parse(hoodieConfig.getSchema());
-      bufferedIteratorExecutor =
-          new BoundedInMemoryExecutor<>(hoodieConfig.getWriteBufferLimitBytes(), new IteratorBasedQueueProducer<>(inputItr), Option.of(getInsertHandler()), getTransformFunction(schema));
+      bufferedIteratorExecutor = new BoundedInMemoryExecutor<>(hoodieConfig.getWriteBufferLimitBytes(), new IteratorBasedQueueProducer<>(inputItr),
+          Option.of(getExplicitInsertHandler()), getTransformFunction(schema, hoodieConfig));
       final List<WriteStatus> result = bufferedIteratorExecutor.execute();
       assert result != null && !result.isEmpty() && !bufferedIteratorExecutor.isRemaining();
       return result;
@@ -76,5 +68,11 @@ public class FlinkLazyInsertIterable<T extends HoodieRecordPayload> extends Hood
         bufferedIteratorExecutor.shutdownNow();
       }
     }
+  }
+
+  @SuppressWarnings("rawtypes")
+  private ExplicitWriteHandler getExplicitInsertHandler() {
+    HoodieWriteHandle handle = ((ExplicitWriteHandleFactory) writeHandleFactory).getWriteHandle();
+    return new ExplicitWriteHandler(handle);
   }
 }

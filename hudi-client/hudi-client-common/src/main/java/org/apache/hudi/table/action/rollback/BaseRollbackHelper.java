@@ -18,6 +18,8 @@
 
 package org.apache.hudi.table.action.rollback;
 
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.model.HoodieRollbackRequest;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -33,11 +35,6 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieRollbackException;
-
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.PathFilter;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -122,19 +119,11 @@ public class BaseRollbackHelper implements Serializable {
         rollbackStats.forEach(entry -> partitionToRollbackStats.add(Pair.of(entry.getPartitionPath(), entry)));
         return partitionToRollbackStats.stream();
       } else if (!rollbackRequest.getLogBlocksToBeDeleted().isEmpty()) {
-        Map<String, Long> logFilesToBeDeleted = rollbackRequest.getLogBlocksToBeDeleted();
-        String fileId = rollbackRequest.getFileId();
-        String latestBaseInstant = rollbackRequest.getLatestBaseInstant();
-        FileSystem fs = metaClient.getFs();
-        // collect all log files that is supposed to be deleted with this rollback
-        // what happens if file was deleted when invoking fs.getFileStatus(?) below.
-        // I understand we don't delete log files. but just curious if we need to handle this case.
-        Map<FileStatus, Long> writtenLogFileSizeMap = new HashMap<>();
-        for (Map.Entry<String, Long> entry : logFilesToBeDeleted.entrySet()) {
-          writtenLogFileSizeMap.put(fs.getFileStatus(new Path(entry.getKey())), entry.getValue());
-        }
         HoodieLogFormat.Writer writer = null;
         try {
+          String fileId = rollbackRequest.getFileId();
+          String latestBaseInstant = rollbackRequest.getLatestBaseInstant();
+
           writer = HoodieLogFormat.newWriterBuilder()
               .onParentPath(FSUtils.getPartitionPath(metaClient.getBasePath(), rollbackRequest.getPartitionPath()))
               .withFileId(fileId)
@@ -156,7 +145,7 @@ public class BaseRollbackHelper implements Serializable {
               writer.close();
             }
           } catch (IOException io) {
-            throw new HoodieIOException("Error appending rollback block..", io);
+            throw new HoodieIOException("Error appending rollback block", io);
           }
         }
 
@@ -167,15 +156,21 @@ public class BaseRollbackHelper implements Serializable {
             metaClient.getFs().getFileStatus(Objects.requireNonNull(writer).getLogFile().getPath()),
             1L
         );
-        return Collections.singletonList(Pair.of(rollbackRequest.getPartitionPath(),
-            HoodieRollbackStat.newBuilder().withPartitionPath(rollbackRequest.getPartitionPath())
-                .withRollbackBlockAppendResults(filesToNumBlocksRollback)
-                .withWrittenLogFileSizeMap(writtenLogFileSizeMap).build())).stream();
+
+        return Collections.singletonList(
+            Pair.of(rollbackRequest.getPartitionPath(),
+                HoodieRollbackStat.newBuilder()
+                    .withPartitionPath(rollbackRequest.getPartitionPath())
+                    .withRollbackBlockAppendResults(filesToNumBlocksRollback)
+                    .build()))
+            .stream();
       } else {
-        return Collections
-            .singletonList(Pair.of(rollbackRequest.getPartitionPath(),
-                HoodieRollbackStat.newBuilder().withPartitionPath(rollbackRequest.getPartitionPath())
-                    .build())).stream();
+        return Collections.singletonList(
+            Pair.of(rollbackRequest.getPartitionPath(),
+                HoodieRollbackStat.newBuilder()
+                    .withPartitionPath(rollbackRequest.getPartitionPath())
+                    .build()))
+            .stream();
       }
     }, numPartitions);
   }
@@ -217,9 +212,5 @@ public class BaseRollbackHelper implements Serializable {
     header.put(HoodieLogBlock.HeaderMetadataType.COMMAND_BLOCK_TYPE,
         String.valueOf(HoodieCommandBlock.HoodieCommandBlockTypeEnum.ROLLBACK_PREVIOUS_BLOCK.ordinal()));
     return header;
-  }
-
-  public interface SerializablePathFilter extends PathFilter, Serializable {
-
   }
 }

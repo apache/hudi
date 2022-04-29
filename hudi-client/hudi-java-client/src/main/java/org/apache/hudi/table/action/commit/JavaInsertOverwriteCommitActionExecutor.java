@@ -55,7 +55,7 @@ public class JavaInsertOverwriteCommitActionExecutor<T extends HoodieRecordPaylo
   @Override
   public HoodieWriteMetadata<List<WriteStatus>> execute() {
     return JavaWriteHelper.newInstance().write(instantTime, inputRecords, context, table,
-        config.shouldCombineBeforeInsert(), config.getInsertShuffleParallelism(), this, false);
+        config.shouldCombineBeforeInsert(), config.getInsertShuffleParallelism(), this, operationType);
   }
 
   @Override

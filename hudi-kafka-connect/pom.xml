@@ -19,13 +19,13 @@
     <parent>
         <artifactId>hudi</artifactId>
         <groupId>org.apache.hudi</groupId>
-        <version>0.10.0-SNAPSHOT</version>
+        <version>0.12.0-SNAPSHOT</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
     <artifactId>hudi-kafka-connect</artifactId>
     <description>Kafka Connect Sink Connector for Hudi</description>
-    <version>0.10.0-SNAPSHOT</version>
+    <version>0.12.0-SNAPSHOT</version>
     <packaging>jar</packaging>
 
     <properties>
@@ -62,6 +62,25 @@
             <plugin>
                 <groupId>org.apache.rat</groupId>
                 <artifactId>apache-rat-plugin</artifactId>
+            </plugin>
+            <plugin>
+                <groupId>com.github.os72</groupId>
+                <artifactId>protoc-jar-maven-plugin</artifactId>
+                <version>3.11.4</version>
+                <executions>
+                    <execution>
+                        <phase>generate-sources</phase>
+                        <goals>
+                            <goal>run</goal>
+                        </goals>
+                        <configuration>
+                            <protocVersion>${protoc.version}</protocVersion>
+                            <inputDirectories>
+                                <include>src/main/resources</include>
+                            </inputDirectories>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
 
@@ -123,19 +142,31 @@
         <!-- NOTE: This is temp (SchemaProvide dep) until PR3162 lands -->
         <dependency>
             <groupId>org.apache.hudi</groupId>
-            <artifactId>hudi-flink_${scala.binary.version}</artifactId>
+            <artifactId>hudi-flink</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
             <groupId>org.apache.flink</groupId>
             <artifactId>flink-core</artifactId>
-            <version>1.12.1</version>
+            <version>${flink.version}</version>
             <exclusions>
                 <exclusion>
                     <groupId>com.esotericsoftware.kryo</groupId>
                     <artifactId>*</artifactId>
                 </exclusion>
             </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.flink</groupId>
+            <artifactId>flink-hadoop-compatibility_${scala.binary.version}</artifactId>
+            <version>${flink.version}</version>
+        </dependency>
+
+        <!-- Protobuf -->
+        <dependency>
+            <groupId>com.google.protobuf</groupId>
+            <artifactId>protobuf-java</artifactId>
+            <version>${proto.version}</version>
         </dependency>
 
         <!-- Logging -->
@@ -168,6 +199,19 @@
             <artifactId>hadoop-common</artifactId>
             <version>${hadoop.version}</version>
         </dependency>
+
+        <!-- Hive -->
+        <dependency>
+            <groupId>org.apache.hive</groupId>
+            <artifactId>hive-common</artifactId>
+            <version>${hive.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>${hive.groupid}</groupId>
+            <artifactId>hive-metastore</artifactId>
+            <version>${hive.version}</version>
+        </dependency>
+
 
         <!-- Hudi - Test -->
         <dependency>

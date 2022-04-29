@@ -46,8 +46,9 @@ public class MockConnectTransactionServices implements ConnectTransactionService
   }
 
   @Override
-  public void endCommit(String commitTime, List<WriteStatus> writeStatuses, Map<String, String> extraMetadata) {
+  public boolean endCommit(String commitTime, List<WriteStatus> writeStatuses, Map<String, String> extraMetadata) {
     assertEquals(String.valueOf(this.commitTime), commitTime);
+    return true;
   }
 
   @Override

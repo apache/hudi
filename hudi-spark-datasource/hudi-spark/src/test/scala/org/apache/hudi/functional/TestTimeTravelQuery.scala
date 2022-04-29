@@ -46,6 +46,7 @@ class TestTimeTravelQuery extends HoodieClientTestBase {
   )
 
   @BeforeEach override def setUp() {
+    setTableName("hoodie_test")
     initPath()
     initSparkContexts()
     spark = sqlContext.sparkSession
@@ -217,13 +218,13 @@ class TestTimeTravelQuery extends HoodieClientTestBase {
   }
 
   private def defaultDateTimeFormat(queryInstant: String): String = {
-    val date = HoodieActiveTimeline.COMMIT_FORMATTER.parse(queryInstant)
-    val format = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
+    val date = HoodieActiveTimeline.parseDateFromInstantTime(queryInstant)
+    val format = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS")
     format.format(date)
   }
 
   private def defaultDateFormat(queryInstant: String): String = {
-    val date = HoodieActiveTimeline.COMMIT_FORMATTER.parse(queryInstant)
+    val date = HoodieActiveTimeline.parseDateFromInstantTime(queryInstant)
     val format = new SimpleDateFormat("yyyy-MM-dd")
     format.format(date)
   }

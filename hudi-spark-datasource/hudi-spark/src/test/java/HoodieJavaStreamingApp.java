@@ -27,7 +27,9 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.TableNotFoundException;
+import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.MultiPartKeysValueExtractor;
+import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
@@ -163,7 +165,7 @@ public class HoodieJavaStreamingApp {
     ExecutorService executor = Executors.newFixedThreadPool(2);
     int numInitialCommits = 0;
 
-    // thread for spark strucutured streaming
+    // thread for spark structured streaming
     try {
       Future<Void> streamFuture = executor.submit(() -> {
         LOG.info("===== Streaming Starting =====");
@@ -210,7 +212,7 @@ public class HoodieJavaStreamingApp {
     Dataset<Row> inputDF3 = newSpark.read().json(jssc.parallelize(deletes, 2));
     executor = Executors.newFixedThreadPool(2);
 
-    // thread for spark strucutured streaming
+    // thread for spark structured streaming
     try {
       Future<Void> streamFuture = executor.submit(() -> {
         LOG.info("===== Streaming Starting =====");
@@ -363,6 +365,7 @@ public class HoodieJavaStreamingApp {
         .option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "1")
         .option(DataSourceWriteOptions.ASYNC_COMPACT_ENABLE().key(), "true")
         .option(DataSourceWriteOptions.ASYNC_CLUSTERING_ENABLE().key(), "true")
+        .option(HoodieCompactionConfig.PRESERVE_COMMIT_METADATA.key(), "false")
         .option(HoodieWriteConfig.TBL_NAME.key(), tableName).option("checkpointLocation", checkpointLocation)
         .outputMode(OutputMode.Append());
 
@@ -380,18 +383,20 @@ public class HoodieJavaStreamingApp {
   private DataStreamWriter<Row> updateHiveSyncConfig(DataStreamWriter<Row> writer) {
     if (enableHiveSync) {
       LOG.info("Enabling Hive sync to " + hiveJdbcUrl);
-      writer = writer.option(DataSourceWriteOptions.HIVE_TABLE().key(), hiveTable)
-          .option(DataSourceWriteOptions.HIVE_DATABASE().key(), hiveDB)
-          .option(DataSourceWriteOptions.HIVE_URL().key(), hiveJdbcUrl)
-          .option(DataSourceWriteOptions.HIVE_USER().key(), hiveUser)
-          .option(DataSourceWriteOptions.HIVE_PASS().key(), hivePass)
-          .option(DataSourceWriteOptions.HIVE_SYNC_ENABLED().key(), "true");
+      writer = writer.option(HiveSyncConfig.META_SYNC_TABLE_NAME.key(), hiveTable)
+          .option(HiveSyncConfig.META_SYNC_DATABASE_NAME.key(), hiveDB)
+          .option(HiveSyncConfig.HIVE_URL.key(), hiveJdbcUrl)
+          .option(HiveSyncConfig.HIVE_USER.key(), hiveUser)
+          .option(HiveSyncConfig.HIVE_PASS.key(), hivePass)
+          .option(HiveSyncConfig.HIVE_SYNC_ENABLED.key(), "true");
       if (useMultiPartitionKeys) {
-        writer = writer.option(DataSourceWriteOptions.HIVE_PARTITION_FIELDS().key(), "year,month,day").option(
-            DataSourceWriteOptions.HIVE_PARTITION_EXTRACTOR_CLASS().key(),
+        writer = writer.option(HiveSyncConfig.META_SYNC_PARTITION_FIELDS.key(), "year,month,day").option(
+            HiveSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key(),
             MultiPartKeysValueExtractor.class.getCanonicalName());
       } else {
-        writer = writer.option(DataSourceWriteOptions.HIVE_PARTITION_FIELDS().key(), "dateStr");
+        writer = writer.option(HiveSyncConfig.META_SYNC_PARTITION_FIELDS.key(), "dateStr").option(
+            HiveSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key(),
+            SlashEncodedDayPartitionValueExtractor.class.getCanonicalName());
       }
     }
     return writer;

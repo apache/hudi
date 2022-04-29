@@ -21,13 +21,14 @@ package org.apache.hudi.table.action.cluster.strategy;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.util.collection.Pair;
 
 import java.util.Set;
 
 /**
  * When file groups in clustering, write records to these file group need to check.
  */
-public abstract class UpdateStrategy<T extends HoodieRecordPayload<T>, I> {
+public abstract class UpdateStrategy<T extends HoodieRecordPayload, I> {
 
   protected final HoodieEngineContext engineContext;
   protected Set<HoodieFileGroupId> fileGroupsInPendingClustering;
@@ -41,8 +42,8 @@ public abstract class UpdateStrategy<T extends HoodieRecordPayload<T>, I> {
    * Check the update records to the file group in clustering.
    * @param taggedRecordsRDD the records to write, tagged with target file id,
    *                         future can update tagged records location to a different fileId.
-   * @return the recordsRDD strategy updated
+   * @return the recordsRDD strategy updated and a set of file groups to be updated while pending clustering.
    */
-  public abstract I handleUpdate(I taggedRecordsRDD);
+  public abstract Pair<I, Set<HoodieFileGroupId>> handleUpdate(I taggedRecordsRDD);
 
 }

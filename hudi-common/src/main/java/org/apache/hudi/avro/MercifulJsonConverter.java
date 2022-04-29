@@ -18,15 +18,14 @@
 
 package org.apache.hudi.avro;
 
-import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.HoodieIOException;
-
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Type;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -293,7 +292,7 @@ public class MercifulJsonConverter {
         for (Object v : (List) value) {
           listRes.add(convertJsonToAvroField(v, name, elementSchema));
         }
-        return Pair.of(true, listRes);
+        return Pair.of(true, new GenericData.Array<>(schema, listRes));
       }
     };
   }

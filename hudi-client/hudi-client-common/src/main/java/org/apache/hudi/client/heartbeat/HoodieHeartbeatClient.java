@@ -29,7 +29,6 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import javax.annotation.concurrent.NotThreadSafe;
-import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.Serializable;
@@ -207,7 +206,7 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
   }
 
   public static Long getLastHeartbeatTime(FileSystem fs, String basePath, String instantTime) throws IOException {
-    Path heartbeatFilePath = new Path(HoodieTableMetaClient.getHeartbeatFolderPath(basePath) + File.separator + instantTime);
+    Path heartbeatFilePath = new Path(HoodieTableMetaClient.getHeartbeatFolderPath(basePath) + Path.SEPARATOR + instantTime);
     if (fs.exists(heartbeatFilePath)) {
       return fs.getFileStatus(heartbeatFilePath).getModificationTime();
     } else {
@@ -217,7 +216,7 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
   }
 
   public static Boolean heartbeatExists(FileSystem fs, String basePath, String instantTime) throws IOException {
-    Path heartbeatFilePath = new Path(HoodieTableMetaClient.getHeartbeatFolderPath(basePath) + File.separator + instantTime);
+    Path heartbeatFilePath = new Path(HoodieTableMetaClient.getHeartbeatFolderPath(basePath) + Path.SEPARATOR + instantTime);
     if (fs.exists(heartbeatFilePath)) {
       return true;
     }
@@ -255,7 +254,7 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
     try {
       Long newHeartbeatTime = System.currentTimeMillis();
       OutputStream outputStream =
-          this.fs.create(new Path(heartbeatFolderPath + File.separator + instantTime), true);
+          this.fs.create(new Path(heartbeatFolderPath + Path.SEPARATOR + instantTime), true);
       outputStream.close();
       Heartbeat heartbeat = instantToHeartbeatMap.get(instantTime);
       if (heartbeat.getLastHeartbeatTime() != null && isHeartbeatExpired(instantTime)) {

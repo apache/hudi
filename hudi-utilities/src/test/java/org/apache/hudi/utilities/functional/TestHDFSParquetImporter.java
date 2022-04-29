@@ -230,11 +230,10 @@ public class TestHDFSParquetImporter extends FunctionalTestHarness implements Se
 
   public List<GenericRecord> createInsertRecords(Path srcFolder) throws ParseException, IOException {
     Path srcFile = new Path(srcFolder.toString(), "file1.parquet");
-    long startTime = HoodieActiveTimeline.COMMIT_FORMATTER.parse("20170203000000").getTime() / 1000;
+    long startTime = HoodieActiveTimeline.parseDateFromInstantTime("20170203000000").getTime() / 1000;
     List<GenericRecord> records = new ArrayList<GenericRecord>();
     for (long recordNum = 0; recordNum < 96; recordNum++) {
-      records.add(HoodieTestDataGenerator.generateGenericRecord(Long.toString(recordNum), "0", "rider-" + recordNum,
-          "driver-" + recordNum, startTime + TimeUnit.HOURS.toSeconds(recordNum)));
+      records.add(new HoodieTestDataGenerator().generateGenericRecord(Long.toString(recordNum), "0", "rider-" + recordNum, "driver-" + recordNum, startTime + TimeUnit.HOURS.toSeconds(recordNum)));
     }
     try (ParquetWriter<GenericRecord> writer = AvroParquetWriter.<GenericRecord>builder(srcFile)
         .withSchema(HoodieTestDataGenerator.AVRO_SCHEMA).withConf(HoodieTestUtils.getDefaultHadoopConf()).build()) {
@@ -247,17 +246,20 @@ public class TestHDFSParquetImporter extends FunctionalTestHarness implements Se
 
   public List<GenericRecord> createUpsertRecords(Path srcFolder) throws ParseException, IOException {
     Path srcFile = new Path(srcFolder.toString(), "file1.parquet");
-    long startTime = HoodieActiveTimeline.COMMIT_FORMATTER.parse("20170203000000").getTime() / 1000;
+    long startTime = HoodieActiveTimeline.parseDateFromInstantTime("20170203000000").getTime() / 1000;
     List<GenericRecord> records = new ArrayList<GenericRecord>();
     // 10 for update
+    HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
     for (long recordNum = 0; recordNum < 11; recordNum++) {
-      records.add(HoodieTestDataGenerator.generateGenericRecord(Long.toString(recordNum), "0", "rider-upsert-" + recordNum,
-          "driver-upsert" + recordNum, startTime + TimeUnit.HOURS.toSeconds(recordNum)));
+      records.add(
+          dataGen.generateGenericRecord(Long.toString(recordNum), "0", "rider-upsert-" + recordNum,
+              "driver-upsert" + recordNum, startTime + TimeUnit.HOURS.toSeconds(recordNum)));
     }
     // 4 for insert
     for (long recordNum = 96; recordNum < 100; recordNum++) {
-      records.add(HoodieTestDataGenerator.generateGenericRecord(Long.toString(recordNum), "0", "rider-upsert-" + recordNum,
-          "driver-upsert" + recordNum, startTime + TimeUnit.HOURS.toSeconds(recordNum)));
+      records.add(
+          dataGen.generateGenericRecord(Long.toString(recordNum), "0", "rider-upsert-" + recordNum,
+              "driver-upsert" + recordNum, startTime + TimeUnit.HOURS.toSeconds(recordNum)));
     }
     try (ParquetWriter<GenericRecord> writer = AvroParquetWriter.<GenericRecord>builder(srcFile)
         .withSchema(HoodieTestDataGenerator.AVRO_SCHEMA).withConf(HoodieTestUtils.getDefaultHadoopConf()).build()) {

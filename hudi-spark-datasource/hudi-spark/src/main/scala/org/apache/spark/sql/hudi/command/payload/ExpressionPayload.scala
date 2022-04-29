@@ -17,12 +17,10 @@
 
 package org.apache.spark.sql.hudi.command.payload
 
-import java.util.{Base64, Properties}
-import java.util.concurrent.Callable
-import scala.collection.JavaConverters._
 import com.google.common.cache.CacheBuilder
 import org.apache.avro.Schema
 import org.apache.avro.generic.{GenericData, GenericRecord, IndexedRecord}
+import org.apache.hudi.AvroConversionUtils
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.avro.HoodieAvroUtils.bytesToAvro
@@ -37,6 +35,9 @@ import org.apache.spark.sql.hudi.SerDeUtils
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload.getEvaluator
 import org.apache.spark.sql.types.{StructField, StructType}
 
+import java.util.concurrent.Callable
+import java.util.{Base64, Properties}
+import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
 
 /**
@@ -110,7 +111,7 @@ class ExpressionPayload(record: GenericRecord,
         if (targetRecord.isEmpty || needUpdatingPersistedRecord(targetRecord.get, resultRecord, properties)) {
           resultRecordOpt = HOption.of(resultRecord)
         } else {
-          // if the PreCombine field value of targetRecord is greate
+          // if the PreCombine field value of targetRecord is greater
           // than the new incoming record, just keep the old record value.
           resultRecordOpt = HOption.of(targetRecord.get)
         }
@@ -265,7 +266,7 @@ class ExpressionPayload(record: GenericRecord,
 object ExpressionPayload {
 
   /**
-   * Property for pass the merge-into delete clause condition expresssion.
+   * Property for pass the merge-into delete clause condition expression.
    */
   val PAYLOAD_DELETE_CONDITION = "hoodie.payload.delete.condition"
 
@@ -309,7 +310,7 @@ object ExpressionPayload {
                 SchemaConverters.toAvroType(conditionType), false)
               val conditionEvaluator = ExpressionCodeGen.doCodeGen(Seq(condition), conditionSerializer)
 
-              val assignSqlType = SchemaConverters.toSqlType(writeSchema).dataType.asInstanceOf[StructType]
+              val assignSqlType = AvroConversionUtils.convertAvroSchemaToStructType(writeSchema)
               val assignSerializer = new AvroSerializer(assignSqlType, writeSchema, false)
               val assignmentEvaluator = ExpressionCodeGen.doCodeGen(assignments, assignSerializer)
               conditionEvaluator -> assignmentEvaluator

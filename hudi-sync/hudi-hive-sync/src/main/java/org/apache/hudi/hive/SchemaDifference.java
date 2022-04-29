@@ -28,7 +28,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.StringJoiner;
 
-
 /**
  * Represents the schema difference between the storage schema and hive table schema.
  */

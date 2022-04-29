@@ -153,7 +153,7 @@ public class HoodieSnapshotExporter {
   }
 
   private List<String> getPartitions(HoodieEngineContext engineContext, Config cfg) {
-    return FSUtils.getAllPartitionPaths(engineContext, cfg.sourceBasePath, true, false, false);
+    return FSUtils.getAllPartitionPaths(engineContext, cfg.sourceBasePath, true, false);
   }
 
   private void createSuccessTag(FileSystem fs, Config cfg) throws IOException {
@@ -206,9 +206,9 @@ public class HoodieSnapshotExporter {
       Stream<HoodieBaseFile> dataFiles = fsView.getLatestBaseFilesBeforeOrOn(partition, latestCommitTimestamp);
       dataFiles.forEach(hoodieDataFile -> filePaths.add(new Tuple2<>(partition, hoodieDataFile.getPath())));
       // also need to copy over partition metadata
-      Path partitionMetaFile =
-          new Path(FSUtils.getPartitionPath(cfg.sourceBasePath, partition), HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE);
       FileSystem fs = FSUtils.getFs(cfg.sourceBasePath, serConf.newCopy());
+      Path partitionMetaFile = HoodiePartitionMetadata.getPartitionMetafilePath(fs,
+          FSUtils.getPartitionPath(cfg.sourceBasePath, partition)).get();
       if (fs.exists(partitionMetaFile)) {
         filePaths.add(new Tuple2<>(partition, partitionMetaFile.toString()));
       }

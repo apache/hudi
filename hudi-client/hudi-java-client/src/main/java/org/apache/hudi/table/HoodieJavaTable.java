@@ -20,6 +20,7 @@ package org.apache.hudi.table;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieJavaEngineContext;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -30,9 +31,12 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.index.JavaHoodieIndex;
+import org.apache.hudi.index.JavaHoodieIndexFactory;
+import org.apache.hudi.table.action.HoodieWriteMetadata;
 
 import java.util.List;
+
+import static org.apache.hudi.common.data.HoodieList.getList;
 
 public abstract class HoodieJavaTable<T extends HoodieRecordPayload>
     extends HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> {
@@ -61,8 +65,13 @@ public abstract class HoodieJavaTable<T extends HoodieRecordPayload>
     }
   }
 
+  public static HoodieWriteMetadata<List<WriteStatus>> convertMetadata(
+      HoodieWriteMetadata<HoodieData<WriteStatus>> metadata) {
+    return metadata.clone(getList(metadata.getWriteStatuses()));
+  }
+
   @Override
-  protected HoodieIndex<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> getIndex(HoodieWriteConfig config, HoodieEngineContext context) {
-    return JavaHoodieIndex.createIndex(config);
+  protected HoodieIndex getIndex(HoodieWriteConfig config, HoodieEngineContext context) {
+    return JavaHoodieIndexFactory.createIndex(config);
   }
 }

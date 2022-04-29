@@ -18,6 +18,7 @@
 
 package org.apache.hudi.cli.integ;
 
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.commands.TableCommand;
@@ -32,7 +33,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.shell.core.CommandResult;
 
-import java.io.File;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.Arrays;
@@ -59,8 +59,8 @@ public class ITTestBootstrapCommand extends AbstractShellIntegrationTest {
   public void init() {
     String srcName = "source";
     tableName = "test-table";
-    sourcePath = basePath + File.separator + srcName;
-    tablePath = basePath + File.separator + tableName;
+    sourcePath = basePath + Path.SEPARATOR + srcName;
+    tablePath = basePath + Path.SEPARATOR + tableName;
 
     // generate test data
     partitions = Arrays.asList("2018", "2019", "2020");
@@ -68,7 +68,7 @@ public class ITTestBootstrapCommand extends AbstractShellIntegrationTest {
     for (int i = 0; i < partitions.size(); i++) {
       Dataset<Row> df = TestBootstrap.generateTestRawTripDataset(timestamp,
           i * NUM_OF_RECORDS, i * NUM_OF_RECORDS + NUM_OF_RECORDS, null, jsc, sqlContext);
-      df.write().parquet(sourcePath + File.separator + PARTITION_FIELD + "=" + partitions.get(i));
+      df.write().parquet(sourcePath + Path.SEPARATOR + PARTITION_FIELD + "=" + partitions.get(i));
     }
   }
 

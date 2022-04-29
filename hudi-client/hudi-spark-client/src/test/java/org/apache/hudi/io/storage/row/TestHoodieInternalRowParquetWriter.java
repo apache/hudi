@@ -21,19 +21,21 @@ package org.apache.hudi.io.storage.row;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.testutils.HoodieClientTestHarness;
+import org.apache.hudi.testutils.SparkDatasetTestUtils;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.testutils.SparkDatasetTestUtils;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.List;
 import java.util.Random;
@@ -62,12 +64,15 @@ public class TestHoodieInternalRowParquetWriter extends HoodieClientTestHarness 
     cleanupResources();
   }
 
-  @Test
-  public void endToEndTest() throws Exception {
-    HoodieWriteConfig cfg = SparkDatasetTestUtils.getConfigBuilder(basePath).build();
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void endToEndTest(boolean parquetWriteLegacyFormatEnabled) throws Exception {
+    HoodieWriteConfig.Builder writeConfigBuilder =
+        SparkDatasetTestUtils.getConfigBuilder(basePath, timelineServicePort);
     for (int i = 0; i < 5; i++) {
       // init write support and parquet config
-      HoodieRowParquetWriteSupport writeSupport = getWriteSupport(cfg, hadoopConf);
+      HoodieRowParquetWriteSupport writeSupport = getWriteSupport(writeConfigBuilder, hadoopConf, parquetWriteLegacyFormatEnabled);
+      HoodieWriteConfig cfg = writeConfigBuilder.build();
       HoodieRowParquetConfig parquetConfig = new HoodieRowParquetConfig(writeSupport,
           CompressionCodecName.SNAPPY, cfg.getParquetBlockSize(), cfg.getParquetPageSize(), cfg.getParquetMaxFileSize(),
           writeSupport.getHadoopConf(), cfg.getParquetCompressionRatio());
@@ -101,12 +106,14 @@ public class TestHoodieInternalRowParquetWriter extends HoodieClientTestHarness 
     }
   }
 
-  private HoodieRowParquetWriteSupport getWriteSupport(HoodieWriteConfig writeConfig, Configuration hadoopConf) {
+  private HoodieRowParquetWriteSupport getWriteSupport(HoodieWriteConfig.Builder writeConfigBuilder, Configuration hadoopConf, boolean parquetWriteLegacyFormatEnabled) {
+    writeConfigBuilder.withStorageConfig(HoodieStorageConfig.newBuilder().parquetWriteLegacyFormat(String.valueOf(parquetWriteLegacyFormatEnabled)).build());
+    HoodieWriteConfig writeConfig = writeConfigBuilder.build();
     BloomFilter filter = BloomFilterFactory.createBloomFilter(
         writeConfig.getBloomFilterNumEntries(),
         writeConfig.getBloomFilterFPP(),
         writeConfig.getDynamicBloomFilterMaxNumEntries(),
         writeConfig.getBloomFilterType());
-    return new HoodieRowParquetWriteSupport(hadoopConf, SparkDatasetTestUtils.STRUCT_TYPE, filter);
+    return new HoodieRowParquetWriteSupport(hadoopConf, SparkDatasetTestUtils.STRUCT_TYPE, filter, writeConfig);
   }
 }

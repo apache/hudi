@@ -30,8 +30,11 @@ import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilterMode;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -55,6 +58,37 @@ public abstract class ClusteringPlanStrategy<T extends HoodieRecordPayload,I,K,O
   private final HoodieTable<T,I,K,O> hoodieTable;
   private final transient HoodieEngineContext engineContext;
   private final HoodieWriteConfig writeConfig;
+
+  /**
+   * Check if the given class is deprecated.
+   * If it is, then try to convert it to suitable one and update the write config accordingly.
+   * @param config write config
+   * @return class name of clustering plan strategy
+   */
+  public static String checkAndGetClusteringPlanStrategy(HoodieWriteConfig config) {
+    String className = config.getClusteringPlanStrategyClass();
+    String sparkSizeBasedClassName = HoodieClusteringConfig.SPARK_SIZED_BASED_CLUSTERING_PLAN_STRATEGY;
+    String sparkSelectedPartitionsClassName = "org.apache.hudi.client.clustering.plan.strategy.SparkSelectedPartitionsClusteringPlanStrategy";
+    String sparkRecentDaysClassName = "org.apache.hudi.client.clustering.plan.strategy.SparkRecentDaysClusteringPlanStrategy";
+    String javaSelectedPartitionClassName = "org.apache.hudi.client.clustering.plan.strategy.JavaRecentDaysClusteringPlanStrategy";
+    String javaSizeBasedClassName = HoodieClusteringConfig.JAVA_SIZED_BASED_CLUSTERING_PLAN_STRATEGY;
+
+    String logStr = "The clustering plan '%s' is deprecated. Please set the plan as '%s' and set '%s' as '%s' to achieve the same behaviour";
+    if (sparkRecentDaysClassName.equals(className)) {
+      config.setValue(HoodieClusteringConfig.PLAN_PARTITION_FILTER_MODE_NAME, ClusteringPlanPartitionFilterMode.RECENT_DAYS.name());
+      LOG.warn(String.format(logStr, className, sparkSizeBasedClassName, HoodieClusteringConfig.PLAN_PARTITION_FILTER_MODE_NAME.key(), ClusteringPlanPartitionFilterMode.RECENT_DAYS.name()));
+      return sparkSizeBasedClassName;
+    } else if (sparkSelectedPartitionsClassName.equals(className)) {
+      config.setValue(HoodieClusteringConfig.PLAN_PARTITION_FILTER_MODE_NAME, ClusteringPlanPartitionFilterMode.SELECTED_PARTITIONS.name());
+      LOG.warn(String.format(logStr, className, sparkSizeBasedClassName, HoodieClusteringConfig.PLAN_PARTITION_FILTER_MODE_NAME.key(), ClusteringPlanPartitionFilterMode.SELECTED_PARTITIONS.name()));
+      return sparkSizeBasedClassName;
+    } else if (javaSelectedPartitionClassName.equals(className)) {
+      config.setValue(HoodieClusteringConfig.PLAN_PARTITION_FILTER_MODE_NAME, ClusteringPlanPartitionFilterMode.RECENT_DAYS.name());
+      LOG.warn(String.format(logStr, className, javaSizeBasedClassName, HoodieClusteringConfig.PLAN_PARTITION_FILTER_MODE_NAME.key(), ClusteringPlanPartitionFilterMode.SELECTED_PARTITIONS.name()));
+      return javaSizeBasedClassName;
+    }
+    return className;
+  }
 
   public ClusteringPlanStrategy(HoodieTable table, HoodieEngineContext engineContext, HoodieWriteConfig writeConfig) {
     this.writeConfig = writeConfig;

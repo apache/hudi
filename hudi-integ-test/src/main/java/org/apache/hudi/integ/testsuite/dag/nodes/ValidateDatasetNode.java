@@ -18,7 +18,9 @@
 
 package org.apache.hudi.integ.testsuite.dag.nodes;
 
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config;
 import org.apache.hudi.integ.testsuite.dag.ExecutionContext;
 import org.apache.spark.sql.Dataset;
@@ -47,9 +49,10 @@ public class ValidateDatasetNode extends BaseValidateDatasetNode {
   @Override
   public Dataset<Row> getDatasetToValidate(SparkSession session, ExecutionContext context,
                                            StructType inputSchema) {
-    String hudiPath = context.getHoodieTestSuiteWriter().getCfg().targetBasePath + "/*/*/*";
-    log.info("Validate data in target hudi path " + hudiPath);
-    Dataset<Row> hudiDf = session.read().format("hudi").load(hudiPath);
+    String partitionPathField = context.getWriterContext().getProps().getString(DataSourceWriteOptions.PARTITIONPATH_FIELD().key());
+    String hudiPath = context.getHoodieTestSuiteWriter().getCfg().targetBasePath + (partitionPathField.isEmpty() ? "/" : "/*/*/*");
+    Dataset<Row> hudiDf = session.read().option(HoodieMetadataConfig.ENABLE.key(), String.valueOf(config.isEnableMetadataValidate()))
+        .format("hudi").load(hudiPath);
     return hudiDf.drop(HoodieRecord.COMMIT_TIME_METADATA_FIELD).drop(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD).drop(HoodieRecord.RECORD_KEY_METADATA_FIELD)
             .drop(HoodieRecord.PARTITION_PATH_METADATA_FIELD).drop(HoodieRecord.FILENAME_METADATA_FIELD);
   }

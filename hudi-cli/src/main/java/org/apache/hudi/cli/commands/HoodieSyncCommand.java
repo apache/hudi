@@ -89,7 +89,7 @@ public class HoodieSyncCommand implements CommandMarker {
   }
 
   private String getString(HoodieTableMetaClient target, HoodieTimeline targetTimeline, HoodieTableMetaClient source, long sourceCount, long targetCount, String sourceLatestCommit)
-          throws IOException {
+      throws IOException {
     List<HoodieInstant> commitsToCatchup = targetTimeline.findInstantsAfter(sourceLatestCommit, Integer.MAX_VALUE)
         .getInstants().collect(Collectors.toList());
     if (commitsToCatchup.isEmpty()) {

@@ -124,7 +124,7 @@ numBinaryFiles=`find . -iname '*' | xargs -I {} file -I {} | grep -va directory 
 if [ "$numBinaryFiles" -gt "0" ]; then
   echo -e "There were non-text files in source release. Please check below\n"
   find . -iname '*' | xargs -I {} file -I {} | grep -va directory | grep -v "/src/test/" | grep -va 'application/json' | grep -va 'text/' |  grep -va 'application/xml'
-  exit -1
+  exit 1
 fi
 echo -e "\t\tNo Binary Files in Source Release? - [OK]\n"
 ### END: Binary Files Check
@@ -134,7 +134,7 @@ echo "Checking for DISCLAIMER"
 disclaimerFile="./DISCLAIMER"
 if [ -f "$disclaimerFile" ]; then
   echo "DISCLAIMER file should not be present "
-  exit -1
+  exit 1
 fi
 echo -e "\t\tDISCLAIMER file exists ? [OK]\n"
 
@@ -144,23 +144,23 @@ licenseFile="./LICENSE"
 noticeFile="./NOTICE"
 if [ ! -f "$licenseFile" ]; then
   echo "License file missing"
-  exit -1
+  exit 1
 fi
 echo -e "\t\tLicense file exists ? [OK]"
 
 if [ ! -f "$noticeFile" ]; then
   echo "Notice file missing"
-  exit -1
+  exit 1
 fi
 echo -e "\t\tNotice file exists ? [OK]\n"
 
 ### Licensing Check
 echo "Performing custom Licensing Check "
-numfilesWithNoLicense=`find . -iname '*' -type f | grep -v NOTICE | grep -v LICENSE | grep -v '.json' | grep -v '.data'| grep -v '.commit' | grep -v DISCLAIMER | grep -v KEYS | grep -v '.mailmap' | grep -v '.sqltemplate' | grep -v 'ObjectSizeCalculator.java' | grep -v 'AvroConversionHelper.scala' | xargs grep -L "Licensed to the Apache Software Foundation (ASF)" | wc -l`
+numfilesWithNoLicense=`find . -iname '*' -type f | grep -v NOTICE | grep -v LICENSE | grep -v '.json' | grep -v '.hfile' | grep -v '.data' | grep -v '.commit' | grep -v DISCLAIMER | grep -v KEYS | grep -v '.mailmap' | grep -v '.sqltemplate' | grep -v 'ObjectSizeCalculator.java' | grep -v 'AvroConversionHelper.scala' | grep -v "fixtures" | xargs grep -L "Licensed to the Apache Software Foundation (ASF)" | wc -l`
 if [ "$numfilesWithNoLicense" -gt  "0" ]; then
   echo "There were some source files that did not have Apache License"
-  find . -iname '*' -type f | grep -v NOTICE | grep -v LICENSE | grep -v '.json' | grep -v '.data' | grep -v '.commit' | grep -v DISCLAIMER | grep -v '.sqltemplate' | grep -v KEYS | grep -v '.mailmap' | grep -v 'ObjectSizeCalculator.java' | grep -v 'AvroConversionHelper.scala' | xargs grep -L "Licensed to the Apache Software Foundation (ASF)"
-  exit -1
+  find . -iname '*' -type f | grep -v NOTICE | grep -v LICENSE | grep -v '.json' | grep -v '.hfile' | grep -v '.data' | grep -v '.commit' | grep -v DISCLAIMER | grep -v '.sqltemplate' | grep -v KEYS | grep -v '.mailmap' | grep -v 'ObjectSizeCalculator.java' | grep -v 'AvroConversionHelper.scala' | grep -v "fixtures" | xargs grep -L "Licensed to the Apache Software Foundation (ASF)"
+  exit 1
 fi
 echo -e "\t\tLicensing Check Passed [OK]\n"
 

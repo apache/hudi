@@ -45,7 +45,7 @@ import java.io.Serializable;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * Create handle with InternalRow for datasource implemention of bulk insert.
+ * Create handle with InternalRow for datasource implementation of bulk insert.
  */
 public class HoodieRowCreateHandle implements Serializable {
 
@@ -93,7 +93,8 @@ public class HoodieRowCreateHandle implements Serializable {
               fs,
               instantTime,
               new Path(writeConfig.getBasePath()),
-              FSUtils.getPartitionPath(writeConfig.getBasePath(), partitionPath));
+              FSUtils.getPartitionPath(writeConfig.getBasePath(), partitionPath),
+              table.getPartitionMetafileFormat());
       partitionMetadata.trySave(taskPartitionId);
       createMarkerFile(partitionPath, FSUtils.makeDataFileName(this.instantTime, getWriteToken(), this.fileId, table.getBaseFileExtension()));
       this.fileWriter = createNewFileWriter(path, table, writeConfig, structType);

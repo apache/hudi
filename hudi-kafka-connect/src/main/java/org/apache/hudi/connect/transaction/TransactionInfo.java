@@ -29,13 +29,13 @@ public class TransactionInfo<T> {
 
   private final String commitTime;
   private final ConnectWriter<T> writer;
-  private long lastWrittenKafkaOffset;
+  private long expectedKafkaOffset;
   private boolean commitInitiated;
 
   public TransactionInfo(String commitTime, ConnectWriter<T> writer) {
     this.commitTime = commitTime;
     this.writer = writer;
-    this.lastWrittenKafkaOffset = 0;
+    this.expectedKafkaOffset = 0;
     this.commitInitiated = false;
   }
 
@@ -47,16 +47,16 @@ public class TransactionInfo<T> {
     return writer;
   }
 
-  public long getLastWrittenKafkaOffset() {
-    return lastWrittenKafkaOffset;
+  public long getExpectedKafkaOffset() {
+    return expectedKafkaOffset;
   }
 
   public boolean isCommitInitiated() {
     return commitInitiated;
   }
 
-  public void setLastWrittenKafkaOffset(long lastWrittenKafkaOffset) {
-    this.lastWrittenKafkaOffset = lastWrittenKafkaOffset;
+  public void setExpectedKafkaOffset(long expectedKafkaOffset) {
+    this.expectedKafkaOffset = expectedKafkaOffset;
   }
 
   public void commitInitiated() {

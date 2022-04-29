@@ -23,8 +23,10 @@ import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 
@@ -38,6 +40,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -51,7 +54,6 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.model.HoodieFileFormat.HOODIE_LOG;
-import static org.apache.hudi.common.table.timeline.HoodieActiveTimeline.COMMIT_FORMATTER;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -67,7 +69,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
   private final long minCleanToKeep = 10;
 
   private static String TEST_WRITE_TOKEN = "1-0-1";
-  private static final String BASE_FILE_EXTENSION = HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension();
+  public static final String BASE_FILE_EXTENSION = HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension();
 
   @Rule
   public final EnvironmentVariables environmentVariables = new EnvironmentVariables();
@@ -75,18 +77,19 @@ public class TestFSUtils extends HoodieCommonTestHarness {
   @BeforeEach
   public void setUp() throws IOException {
     initMetaClient();
+    basePath = "file:" + basePath;
   }
 
   @Test
   public void testMakeDataFileName() {
-    String instantTime = COMMIT_FORMATTER.format(new Date());
+    String instantTime = HoodieActiveTimeline.formatDate(new Date());
     String fileName = UUID.randomUUID().toString();
     assertEquals(FSUtils.makeDataFileName(instantTime, TEST_WRITE_TOKEN, fileName), fileName + "_" + TEST_WRITE_TOKEN + "_" + instantTime + BASE_FILE_EXTENSION);
   }
 
   @Test
   public void testMaskFileName() {
-    String instantTime = COMMIT_FORMATTER.format(new Date());
+    String instantTime = HoodieActiveTimeline.formatDate(new Date());
     int taskPartitionId = 2;
     assertEquals(FSUtils.maskWithoutFileId(instantTime, taskPartitionId), "*_" + taskPartitionId + "_" + instantTime + BASE_FILE_EXTENSION);
   }
@@ -154,7 +157,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
 
   @Test
   public void testGetCommitTime() {
-    String instantTime = COMMIT_FORMATTER.format(new Date());
+    String instantTime = HoodieActiveTimeline.formatDate(new Date());
     String fileName = UUID.randomUUID().toString();
     String fullFileName = FSUtils.makeDataFileName(instantTime, TEST_WRITE_TOKEN, fileName);
     assertEquals(instantTime, FSUtils.getCommitTime(fullFileName));
@@ -165,7 +168,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
 
   @Test
   public void testGetFileNameWithoutMeta() {
-    String instantTime = COMMIT_FORMATTER.format(new Date());
+    String instantTime = HoodieActiveTimeline.formatDate(new Date());
     String fileName = UUID.randomUUID().toString();
     String fullFileName = FSUtils.makeDataFileName(instantTime, TEST_WRITE_TOKEN, fileName);
     assertEquals(fileName, FSUtils.getFileId(fullFileName));
@@ -187,6 +190,9 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     Path basePath = new Path("/test/apache");
     Path partitionPath = new Path("/test/apache/hudi/sub");
     assertEquals("hudi/sub", FSUtils.getRelativePartitionPath(basePath, partitionPath));
+
+    Path nonPartitionPath = new Path("/test/something/else");
+    assertThrows(IllegalArgumentException.class, () -> FSUtils.getRelativePartitionPath(basePath, nonPartitionPath));
   }
 
   @Test
@@ -310,7 +316,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     assertEquals(LOG_STR, FSUtils.getFileExtensionFromLog(new Path(logFileName)));
 
     // create three versions of log file
-    java.nio.file.Path partitionPath = Paths.get(basePath, partitionStr);
+    java.nio.file.Path partitionPath = Paths.get(URI.create(basePath + "/" + partitionStr));
     Files.createDirectories(partitionPath);
     String log1 = FSUtils.makeLogFileName(fileId, LOG_EXTENTION, instantTime, 1, writeToken);
     Files.createFile(partitionPath.resolve(log1));
@@ -454,5 +460,22 @@ public class TestFSUtils extends HoodieCommonTestHarness {
         assertEquals(Collections.singletonList("file3.txt"), result.get(subPath));
       }
     }
+  }
+
+  @Test
+  public void testGetFileStatusAtLevel() throws IOException {
+    String rootDir = basePath + "/.hoodie/.temp";
+    FileSystem fileSystem = metaClient.getFs();
+    prepareTestDirectory(fileSystem, rootDir);
+    List<FileStatus> fileStatusList = FSUtils.getFileStatusAtLevel(
+        new HoodieLocalEngineContext(fileSystem.getConf()), fileSystem,
+        new Path(basePath), 3, 2);
+    assertEquals(CollectionUtils.createImmutableSet(
+            basePath + "/.hoodie/.temp/subdir1/file1.txt",
+            basePath + "/.hoodie/.temp/subdir2/file2.txt"),
+        fileStatusList.stream()
+            .map(fileStatus -> fileStatus.getPath().toString())
+            .filter(filePath -> filePath.endsWith(".txt"))
+            .collect(Collectors.toSet()));
   }
 }

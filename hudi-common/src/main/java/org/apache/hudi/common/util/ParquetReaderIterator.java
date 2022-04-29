@@ -19,18 +19,17 @@
 package org.apache.hudi.common.util;
 
 import org.apache.hudi.common.util.queue.BoundedInMemoryQueue;
-import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieException;
 
 import org.apache.parquet.hadoop.ParquetReader;
 
 import java.io.IOException;
-import java.util.Iterator;
 
 /**
  * This class wraps a parquet reader and provides an iterator based api to read from a parquet file. This is used in
  * {@link BoundedInMemoryQueue}
  */
-public class ParquetReaderIterator<T> implements Iterator<T> {
+public class ParquetReaderIterator<T> implements ClosableIterator<T> {
 
   // Parquet reader for an existing parquet file
   private final ParquetReader<T> parquetReader;
@@ -49,8 +48,9 @@ public class ParquetReaderIterator<T> implements Iterator<T> {
         this.next = parquetReader.read();
       }
       return this.next != null;
-    } catch (IOException io) {
-      throw new HoodieIOException("unable to read next record from parquet file ", io);
+    } catch (Exception e) {
+      FileIOUtils.closeQuietly(parquetReader);
+      throw new HoodieException("unable to read next record from parquet file ", e);
     }
   }
 
@@ -60,18 +60,23 @@ public class ParquetReaderIterator<T> implements Iterator<T> {
       // To handle case when next() is called before hasNext()
       if (this.next == null) {
         if (!hasNext()) {
-          throw new HoodieIOException("No more records left to read from parquet file");
+          throw new HoodieException("No more records left to read from parquet file");
         }
       }
       T retVal = this.next;
       this.next = parquetReader.read();
       return retVal;
-    } catch (IOException io) {
-      throw new HoodieIOException("unable to read next record from parquet file ", io);
+    } catch (Exception e) {
+      FileIOUtils.closeQuietly(parquetReader);
+      throw new HoodieException("unable to read next record from parquet file ", e);
     }
   }
 
-  public void close() throws IOException {
-    parquetReader.close();
+  public void close() {
+    try {
+      parquetReader.close();
+    } catch (IOException e) {
+      throw new HoodieException("Exception while closing the parquet reader", e);
+    }
   }
 }

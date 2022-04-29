@@ -35,6 +35,9 @@ import org.apache.hudi.common.table.timeline.versioning.clean.CleanMetadataV1Mig
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanMetadataV2MigrationHandler;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanMigrator;
 
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
+
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
@@ -43,6 +46,9 @@ import java.util.Map;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 
 public class CleanerUtils {
+
+  private static final Logger LOG = LogManager.getLogger(CleanerUtils.class);
+
   public static final Integer CLEAN_METADATA_VERSION_1 = CleanMetadataV1MigrationHandler.VERSION;
   public static final Integer CLEAN_METADATA_VERSION_2 = CleanMetadataV2MigrationHandler.VERSION;
   public static final Integer LATEST_CLEAN_METADATA_VERSION = CLEAN_METADATA_VERSION_2;
@@ -58,13 +64,13 @@ public class CleanerUtils {
     for (HoodieCleanStat stat : cleanStats) {
       HoodieCleanPartitionMetadata metadata =
           new HoodieCleanPartitionMetadata(stat.getPartitionPath(), stat.getPolicy().name(),
-              stat.getDeletePathPatterns(), stat.getSuccessDeleteFiles(), stat.getFailedDeleteFiles());
+              stat.getDeletePathPatterns(), stat.getSuccessDeleteFiles(), stat.getFailedDeleteFiles(), stat.isPartitionDeleted());
       partitionMetadataMap.put(stat.getPartitionPath(), metadata);
       if ((null != stat.getDeleteBootstrapBasePathPatterns())
           && (!stat.getDeleteBootstrapBasePathPatterns().isEmpty())) {
         HoodieCleanPartitionMetadata bootstrapMetadata = new HoodieCleanPartitionMetadata(stat.getPartitionPath(),
             stat.getPolicy().name(), stat.getDeleteBootstrapBasePathPatterns(), stat.getSuccessDeleteBootstrapBaseFiles(),
-            stat.getFailedDeleteBootstrapBaseFiles());
+            stat.getFailedDeleteBootstrapBaseFiles(), stat.isPartitionDeleted());
         partitionBootstrapMetadataMap.put(stat.getPartitionPath(), bootstrapMetadata);
       }
       totalDeleted += stat.getSuccessDeleteFiles().size();
@@ -131,6 +137,7 @@ public class CleanerUtils {
           // No need to do any special cleanup for failed operations during clean
           return;
         } else if (cleaningPolicy.isLazy()) {
+          LOG.info("Cleaned failed attempts if any");
           // Perform rollback of failed operations for all types of actions during clean
           rollbackFailedWritesFunc.apply();
           return;
@@ -140,6 +147,7 @@ public class CleanerUtils {
       case COMMIT_ACTION:
         // For any other actions, perform rollback of failed writes
         if (cleaningPolicy.isEager()) {
+          LOG.info("Cleaned failed attempts if any");
           rollbackFailedWritesFunc.apply();
           return;
         }

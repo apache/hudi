@@ -20,6 +20,7 @@ package org.apache.hudi.table.action.rollback;
 
 import org.apache.hudi.avro.model.HoodieRollbackRequest;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -29,7 +30,7 @@ import java.util.Map;
  * HoodieRollbackRequest in HoodieRollbackPlan (avro pojo) is not operable direclty within spark parallel engine.
  * Hence converting the same to this {@link SerializableHoodieRollbackRequest} and then using it within spark.parallelize.
  */
-public class SerializableHoodieRollbackRequest {
+public class SerializableHoodieRollbackRequest implements Serializable {
 
   private final String partitionPath;
   private final String fileId;

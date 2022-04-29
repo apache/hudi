@@ -19,9 +19,11 @@
 package org.apache.hudi.table.marker;
 
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieRemoteException;
 import org.apache.hudi.table.HoodieTable;
 
@@ -132,18 +134,24 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
 
     Map<String, String> paramsMap = new HashMap<>();
     paramsMap.put(MARKER_DIR_PATH_PARAM, markerDirPath.toString());
-    paramsMap.put(MARKER_NAME_PARAM, partitionPath + "/" + markerFileName);
+    if (StringUtils.isNullOrEmpty(partitionPath)) {
+      paramsMap.put(MARKER_NAME_PARAM, markerFileName);
+    } else {
+      paramsMap.put(MARKER_NAME_PARAM, partitionPath + "/" + markerFileName);
+    }
+
     boolean success;
     try {
       success = executeRequestToTimelineServer(
-          CREATE_MARKER_URL, paramsMap, new TypeReference<Boolean>() {}, RequestMethod.POST);
+          CREATE_MARKER_URL, paramsMap, new TypeReference<Boolean>() {
+          }, RequestMethod.POST);
     } catch (IOException e) {
       throw new HoodieRemoteException("Failed to create marker file " + partitionPath + "/" + markerFileName, e);
     }
     LOG.info("[timeline-server-based] Created marker file " + partitionPath + "/" + markerFileName
         + " in " + timer.endTimer() + " ms");
     if (success) {
-      return Option.of(new Path(new Path(markerDirPath, partitionPath), markerFileName));
+      return Option.of(new Path(FSUtils.getPartitionPath(markerDirPath, partitionPath), markerFileName));
     } else {
       return Option.empty();
     }

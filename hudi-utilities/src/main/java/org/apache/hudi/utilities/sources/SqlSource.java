@@ -48,6 +48,8 @@ import java.util.Collections;
  * <p>To fetch and use the latest incremental checkpoint, you need to also set this hoodie_conf for deltastremer jobs:
  *
  * <p>hoodie.write.meta.key.prefixes = 'deltastreamer.checkpoint.key'
+ *
+ * Also, users are expected to set --allow-commit-on-no-checkpoint-change while using this SqlSource.
  */
 public class SqlSource extends RowSource {
   private static final long serialVersionUID = 1L;

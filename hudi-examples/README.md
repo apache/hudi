@@ -36,7 +36,7 @@ To run the demo:
 
       5.3 Run `bin/kafka-delta-streamer-example.sh`
 
-      5.4 continuously write source data to the Kafka topic your configured with `hoodie.deltastreamer.source.kafka.topic` in `kafka-source.properties`
+      5.4 Continuously write source data to the Kafka topic your configured with `hoodie.deltastreamer.source.kafka.topic` in `kafka-source.properties`
 
   6. Some notes delta streamer demo:
 

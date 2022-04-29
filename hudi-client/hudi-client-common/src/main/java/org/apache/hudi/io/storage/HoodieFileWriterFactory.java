@@ -30,6 +30,7 @@ import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.avro.AvroSchemaConverter;
 
@@ -38,6 +39,10 @@ import java.io.IOException;
 import static org.apache.hudi.common.model.HoodieFileFormat.HFILE;
 import static org.apache.hudi.common.model.HoodieFileFormat.ORC;
 import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
+import static org.apache.hudi.io.storage.HoodieHFileConfig.CACHE_DATA_IN_L1;
+import static org.apache.hudi.io.storage.HoodieHFileConfig.DROP_BEHIND_CACHE_COMPACTION;
+import static org.apache.hudi.io.storage.HoodieHFileConfig.HFILE_COMPARATOR;
+import static org.apache.hudi.io.storage.HoodieHFileConfig.PREFETCH_ON_OPEN;
 
 public class HoodieFileWriterFactory {
 
@@ -49,10 +54,12 @@ public class HoodieFileWriterFactory {
       return newParquetFileWriter(instantTime, path, config, schema, hoodieTable, taskContextSupplier, config.populateMetaFields());
     }
     if (HFILE.getFileExtension().equals(extension)) {
-      return newHFileFileWriter(instantTime, path, config, schema, hoodieTable, taskContextSupplier);
+      return newHFileFileWriter(
+          instantTime, path, config, schema, hoodieTable.getHadoopConf(), taskContextSupplier);
     }
     if (ORC.getFileExtension().equals(extension)) {
-      return newOrcFileWriter(instantTime, path, config, schema, hoodieTable, taskContextSupplier);
+      return newOrcFileWriter(
+          instantTime, path, config, schema, hoodieTable.getHadoopConf(), taskContextSupplier);
     }
     throw new UnsupportedOperationException(extension + " format not supported yet.");
   }
@@ -60,38 +67,41 @@ public class HoodieFileWriterFactory {
   private static <T extends HoodieRecordPayload, R extends IndexedRecord> HoodieFileWriter<R> newParquetFileWriter(
       String instantTime, Path path, HoodieWriteConfig config, Schema schema, HoodieTable hoodieTable,
       TaskContextSupplier taskContextSupplier, boolean populateMetaFields) throws IOException {
-    return newParquetFileWriter(instantTime, path, config, schema, hoodieTable, taskContextSupplier, populateMetaFields, populateMetaFields);
+    return newParquetFileWriter(instantTime, path, config, schema, hoodieTable.getHadoopConf(),
+        taskContextSupplier, populateMetaFields, populateMetaFields);
   }
 
   private static <T extends HoodieRecordPayload, R extends IndexedRecord> HoodieFileWriter<R> newParquetFileWriter(
-      String instantTime, Path path, HoodieWriteConfig config, Schema schema, HoodieTable hoodieTable,
+      String instantTime, Path path, HoodieWriteConfig config, Schema schema, Configuration conf,
       TaskContextSupplier taskContextSupplier, boolean populateMetaFields, boolean enableBloomFilter) throws IOException {
     Option<BloomFilter> filter = enableBloomFilter ? Option.of(createBloomFilter(config)) : Option.empty();
-    HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(new AvroSchemaConverter(hoodieTable.getHadoopConf()).convert(schema), schema, filter);
+    HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(new AvroSchemaConverter(conf).convert(schema), schema, filter);
 
     HoodieAvroParquetConfig parquetConfig = new HoodieAvroParquetConfig(writeSupport, config.getParquetCompressionCodec(),
         config.getParquetBlockSize(), config.getParquetPageSize(), config.getParquetMaxFileSize(),
-        hoodieTable.getHadoopConf(), config.getParquetCompressionRatio(), config.parquetDictionaryEnabled());
+        conf, config.getParquetCompressionRatio(), config.parquetDictionaryEnabled());
 
     return new HoodieParquetWriter<>(instantTime, path, parquetConfig, schema, taskContextSupplier, populateMetaFields);
   }
 
-  private static <T extends HoodieRecordPayload, R extends IndexedRecord> HoodieFileWriter<R> newHFileFileWriter(
-      String instantTime, Path path, HoodieWriteConfig config, Schema schema, HoodieTable hoodieTable,
+  static <T extends HoodieRecordPayload, R extends IndexedRecord> HoodieFileWriter<R> newHFileFileWriter(
+      String instantTime, Path path, HoodieWriteConfig config, Schema schema, Configuration conf,
       TaskContextSupplier taskContextSupplier) throws IOException {
 
     BloomFilter filter = createBloomFilter(config);
-    HoodieHFileConfig hfileConfig = new HoodieHFileConfig(hoodieTable.getHadoopConf(),
-        config.getHFileCompressionAlgorithm(), config.getHFileBlockSize(), config.getHFileMaxFileSize(), filter);
+    HoodieHFileConfig hfileConfig = new HoodieHFileConfig(conf,
+        config.getHFileCompressionAlgorithm(), config.getHFileBlockSize(), config.getHFileMaxFileSize(),
+        HoodieHFileReader.KEY_FIELD_NAME, PREFETCH_ON_OPEN, CACHE_DATA_IN_L1, DROP_BEHIND_CACHE_COMPACTION,
+        filter, HFILE_COMPARATOR);
 
-    return new HoodieHFileWriter<>(instantTime, path, hfileConfig, schema, taskContextSupplier);
+    return new HoodieHFileWriter<>(instantTime, path, hfileConfig, schema, taskContextSupplier, config.populateMetaFields());
   }
 
   private static <T extends HoodieRecordPayload, R extends IndexedRecord> HoodieFileWriter<R> newOrcFileWriter(
-      String instantTime, Path path, HoodieWriteConfig config, Schema schema, HoodieTable hoodieTable,
+      String instantTime, Path path, HoodieWriteConfig config, Schema schema, Configuration conf,
       TaskContextSupplier taskContextSupplier) throws IOException {
     BloomFilter filter = createBloomFilter(config);
-    HoodieOrcConfig orcConfig = new HoodieOrcConfig(hoodieTable.getHadoopConf(), config.getOrcCompressionCodec(),
+    HoodieOrcConfig orcConfig = new HoodieOrcConfig(conf, config.getOrcCompressionCodec(),
         config.getOrcStripeSize(), config.getOrcBlockSize(), config.getOrcMaxFileSize(), filter);
     return new HoodieOrcWriter<>(instantTime, path, orcConfig, schema, taskContextSupplier);
   }

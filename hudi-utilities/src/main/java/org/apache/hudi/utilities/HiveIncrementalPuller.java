@@ -52,7 +52,8 @@ import java.util.stream.Collectors;
 
 /**
  * Utility to pull data after a given commit, based on the supplied HiveQL and save the delta as another hive temporary
- * table.
+ * table. This temporary table can be further read using {@link org.apache.hudi.utilities.sources.HiveIncrPullSource} and the changes can
+ * be applied to the target table.
  * <p>
  * Current Limitations:
  * <p>
@@ -91,6 +92,8 @@ public class HiveIncrementalPuller {
     public String fromCommitTime;
     @Parameter(names = {"--maxCommits"})
     public int maxCommits = 3;
+    @Parameter(names = {"--fsDefaultFs"})
+    public String fsDefaultFs = "file:///";
     @Parameter(names = {"--help", "-h"}, help = true)
     public Boolean help = false;
   }
@@ -106,14 +109,14 @@ public class HiveIncrementalPuller {
 
   private Connection connection;
   protected final Config config;
-  private final ST incrementalPullSQLtemplate;
+  private final ST incrementalPullSQLTemplate;
 
   public HiveIncrementalPuller(Config config) throws IOException {
     this.config = config;
     validateConfig(config);
     String templateContent =
         FileIOUtils.readAsUTFString(this.getClass().getResourceAsStream("/IncrementalPull.sqltemplate"));
-    incrementalPullSQLtemplate = new ST(templateContent);
+    incrementalPullSQLTemplate = new ST(templateContent);
   }
 
   private void validateConfig(Config config) {
@@ -124,6 +127,7 @@ public class HiveIncrementalPuller {
 
   public void saveDelta() throws IOException {
     Configuration conf = new Configuration();
+    conf.set("fs.defaultFS",config.fsDefaultFs);
     FileSystem fs = FileSystem.get(conf);
     Statement stmt = null;
     try {
@@ -146,7 +150,7 @@ public class HiveIncrementalPuller {
       String tempDbTable = config.tmpDb + "." + config.targetTable + "__" + config.sourceTable;
       String tempDbTablePath =
           config.hoodieTmpDir + "/" + config.targetTable + "__" + config.sourceTable + "/" + lastCommitTime;
-      executeStatement("drop table " + tempDbTable, stmt);
+      executeStatement("drop table if exists " + tempDbTable, stmt);
       deleteHDFSPath(fs, tempDbTablePath);
       if (!ensureTempPathExists(fs, lastCommitTime)) {
         throw new IllegalStateException("Could not create target path at "
@@ -165,19 +169,19 @@ public class HiveIncrementalPuller {
           stmt.close();
         }
       } catch (SQLException e) {
-        LOG.error("Could not close the resultset opened ", e);
+        LOG.error("Could not close the resultSet opened ", e);
       }
     }
   }
 
   private void executeIncrementalSQL(String tempDbTable, String tempDbTablePath, Statement stmt)
       throws FileNotFoundException, SQLException {
-    incrementalPullSQLtemplate.add("tempDbTable", tempDbTable);
-    incrementalPullSQLtemplate.add("tempDbTablePath", tempDbTablePath);
+    incrementalPullSQLTemplate.add("tempDbTable", tempDbTable);
+    incrementalPullSQLTemplate.add("tempDbTablePath", tempDbTablePath);
 
     String storedAsClause = getStoredAsClause();
 
-    incrementalPullSQLtemplate.add("storedAsClause", storedAsClause);
+    incrementalPullSQLTemplate.add("storedAsClause", storedAsClause);
     String incrementalSQL = new Scanner(new File(config.incrementalSQLFile)).useDelimiter("\\Z").next();
     if (!incrementalSQL.contains(config.sourceDb + "." + config.sourceTable)) {
       LOG.error("Incremental SQL does not have " + config.sourceDb + "." + config.sourceTable
@@ -185,17 +189,17 @@ public class HiveIncrementalPuller {
       throw new HoodieIncrementalPullSQLException(
           "Incremental SQL does not have " + config.sourceDb + "." + config.sourceTable);
     }
-    if (!incrementalSQL.contains("`_hoodie_commit_time` > '%targetBasePath'")) {
+    if (!incrementalSQL.contains("`_hoodie_commit_time` > '%s'")) {
       LOG.error("Incremental SQL : " + incrementalSQL
-          + " does not contain `_hoodie_commit_time` > '%targetBasePath'. Please add "
+          + " does not contain `_hoodie_commit_time` > '%s'. Please add "
           + "this clause for incremental to work properly.");
       throw new HoodieIncrementalPullSQLException(
-          "Incremental SQL does not have clause `_hoodie_commit_time` > '%targetBasePath', which "
+          "Incremental SQL does not have clause `_hoodie_commit_time` > '%s', which "
               + "means its not pulling incrementally");
     }
 
-    incrementalPullSQLtemplate.add("incrementalSQL", String.format(incrementalSQL, config.fromCommitTime));
-    String sql = incrementalPullSQLtemplate.render();
+    incrementalPullSQLTemplate.add("incrementalSQL", String.format(incrementalSQL, config.fromCommitTime));
+    String sql = incrementalPullSQLTemplate.render();
     // Check if the SQL is pulling from the right database
     executeStatement(sql, stmt);
   }
@@ -208,13 +212,13 @@ public class HiveIncrementalPuller {
     LOG.info("Setting up Hive JDBC Session with properties");
     // set the queue
     executeStatement("set mapred.job.queue.name=" + config.yarnQueueName, stmt);
-    // Set the inputformat to HoodieCombineHiveInputFormat
+    // Set the inputFormat to HoodieCombineHiveInputFormat
     executeStatement("set hive.input.format=org.apache.hudi.hadoop.hive.HoodieCombineHiveInputFormat", stmt);
     // Allow queries without partition predicate
     executeStatement("set hive.strict.checks.large.query=false", stmt);
-    // Dont gather stats for the table created
+    // Don't gather stats for the table created
     executeStatement("set hive.stats.autogather=false", stmt);
-    // Set the hoodie modie
+    // Set the hoodie mode
     executeStatement("set hoodie." + config.sourceTable + ".consume.mode=INCREMENTAL", stmt);
     // Set the from commit time
     executeStatement("set hoodie." + config.sourceTable + ".consume.start.timestamp=" + config.fromCommitTime, stmt);
@@ -263,7 +267,7 @@ public class HiveIncrementalPuller {
           resultSet.close();
         }
       } catch (SQLException e) {
-        LOG.error("Could not close the resultset opened ", e);
+        LOG.error("Could not close the resultSet opened ", e);
       }
     }
     return null;

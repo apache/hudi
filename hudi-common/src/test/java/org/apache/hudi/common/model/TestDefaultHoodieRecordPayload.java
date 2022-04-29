@@ -143,6 +143,26 @@ public class TestDefaultHoodieRecordPayload {
         Long.parseLong(payload2.getMetadata().get().get(DefaultHoodieRecordPayload.METADATA_EVENT_TIME_KEY)));
   }
 
+  @Test
+  public void testEmptyProperty() throws IOException {
+    GenericRecord record1 = new GenericData.Record(schema);
+    record1.put("id", "1");
+    record1.put("partition", "partition0");
+    record1.put("ts", 0L);
+    record1.put("_hoodie_is_deleted", false);
+
+    GenericRecord record2 = new GenericData.Record(schema);
+    record2.put("id", "1");
+    record2.put("partition", "partition0");
+    record2.put("ts", 1L);
+    record2.put("_hoodie_is_deleted", false);
+
+    DefaultHoodieRecordPayload payload = new DefaultHoodieRecordPayload(Option.of(record1));
+    Properties properties = new Properties();
+    payload.getInsertValue(schema, properties);
+    payload.combineAndGetUpdateValue(record2, schema, properties);
+  }
+
   @ParameterizedTest
   @ValueSource(longs = {1L, 1612542030000L})
   public void testGetEventTimeInMetadataForInserts(long eventTime) throws IOException {

@@ -19,24 +19,27 @@
 package org.apache.hudi.io.storage.row;
 
 import org.apache.hudi.client.HoodieInternalWriteStatus;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieInsertException;
+import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieClientTestHarness;
-
 import org.apache.hudi.testutils.SparkDatasetTestUtils;
+
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
@@ -64,6 +67,7 @@ public class TestHoodieRowCreateHandle extends HoodieClientTestHarness {
     initFileSystem();
     initTestDataGenerator();
     initMetaClient();
+    initTimelineService();
   }
 
   @AfterEach
@@ -74,7 +78,8 @@ public class TestHoodieRowCreateHandle extends HoodieClientTestHarness {
   @Test
   public void testRowCreateHandle() throws Exception {
     // init config and table
-    HoodieWriteConfig cfg = SparkDatasetTestUtils.getConfigBuilder(basePath).build();
+    HoodieWriteConfig cfg =
+        SparkDatasetTestUtils.getConfigBuilder(basePath, timelineServicePort).build();
     HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
     List<String> fileNames = new ArrayList<>();
     List<String> fileAbsPaths = new ArrayList<>();
@@ -115,7 +120,8 @@ public class TestHoodieRowCreateHandle extends HoodieClientTestHarness {
   @Test
   public void testGlobalFailure() throws Exception {
     // init config and table
-    HoodieWriteConfig cfg = SparkDatasetTestUtils.getConfigBuilder(basePath).build();
+    HoodieWriteConfig cfg =
+        SparkDatasetTestUtils.getConfigBuilder(basePath, timelineServicePort).build();
     HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
     String partitionPath = HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS[0];
 
@@ -123,7 +129,8 @@ public class TestHoodieRowCreateHandle extends HoodieClientTestHarness {
     String fileId = UUID.randomUUID().toString();
     String instantTime = "000";
 
-    HoodieRowCreateHandle handle = new HoodieRowCreateHandle(table, cfg, partitionPath, fileId, instantTime, RANDOM.nextInt(100000), RANDOM.nextLong(), RANDOM.nextLong(), SparkDatasetTestUtils.STRUCT_TYPE);
+    HoodieRowCreateHandle handle =
+        new HoodieRowCreateHandle(table, cfg, partitionPath, fileId, instantTime, RANDOM.nextInt(100000), RANDOM.nextLong(), RANDOM.nextLong(), SparkDatasetTestUtils.STRUCT_TYPE);
     int size = 10 + RANDOM.nextInt(1000);
     int totalFailures = 5;
     // Generate first batch of valid rows
@@ -165,17 +172,29 @@ public class TestHoodieRowCreateHandle extends HoodieClientTestHarness {
     assertRows(inputRows, result, instantTime, fileNames);
   }
 
-  @Test
-  public void testInstantiationFailure() throws IOException {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testInstantiationFailure(boolean enableMetadataTable) {
     // init config and table
-    HoodieWriteConfig cfg = SparkDatasetTestUtils.getConfigBuilder(basePath).withPath("/dummypath/abc/").build();
-    HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
+    HoodieWriteConfig cfg = SparkDatasetTestUtils.getConfigBuilder(basePath, timelineServicePort)
+        .withPath("/dummypath/abc/")
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(enableMetadataTable).build())
+        .build();
 
     try {
+      HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
       new HoodieRowCreateHandle(table, cfg, " def", UUID.randomUUID().toString(), "001", RANDOM.nextInt(100000), RANDOM.nextLong(), RANDOM.nextLong(), SparkDatasetTestUtils.STRUCT_TYPE);
       fail("Should have thrown exception");
     } catch (HoodieInsertException ioe) {
-      // expected
+      // expected without metadata table
+      if (enableMetadataTable) {
+        fail("Should have thrown TableNotFoundException");
+      }
+    } catch (TableNotFoundException e) {
+      // expected with metadata table
+      if (!enableMetadataTable) {
+        fail("Should have thrown HoodieInsertException");
+      }
     }
   }
 

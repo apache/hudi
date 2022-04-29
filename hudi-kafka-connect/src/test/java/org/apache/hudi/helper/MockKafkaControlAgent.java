@@ -18,8 +18,8 @@
 
 package org.apache.hudi.helper;
 
+import org.apache.hudi.connect.ControlMessage;
 import org.apache.hudi.connect.kafka.KafkaControlAgent;
-import org.apache.hudi.connect.transaction.ControlEvent;
 import org.apache.hudi.connect.transaction.TransactionCoordinator;
 import org.apache.hudi.connect.transaction.TransactionParticipant;
 import org.apache.hudi.exception.HoodieException;
@@ -70,10 +70,10 @@ public class MockKafkaControlAgent implements KafkaControlAgent {
   }
 
   @Override
-  public void publishMessage(ControlEvent message) {
+  public void publishMessage(ControlMessage message) {
     try {
-      String topic = message.senderPartition().topic();
-      if (message.getSenderType().equals(ControlEvent.SenderType.COORDINATOR)) {
+      String topic = message.getTopicName();
+      if (message.getSenderType().equals(ControlMessage.EntityType.COORDINATOR)) {
         for (TransactionParticipant participant : participants.get(topic)) {
           participant.processControlEvent(message);
         }

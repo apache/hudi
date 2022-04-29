@@ -25,7 +25,10 @@ import org.junit.platform.suite.api.SelectPackages;
 import org.junit.runner.RunWith;
 
 @RunWith(JUnitPlatform.class)
-@SelectPackages({"org.apache.hudi.client.functional", "org.apache.hudi.table.functional"})
+@SelectPackages({
+    "org.apache.hudi.client.functional",
+    "org.apache.hudi.table.functional",
+    "org.apache.hudi.index.hbase"})
 @IncludeTags("functional")
 public class SparkClientFunctionalTestSuite {
 

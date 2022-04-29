@@ -19,7 +19,7 @@
   <parent>
     <artifactId>hudi</artifactId>
     <groupId>org.apache.hudi</groupId>
-    <version>0.10.0-SNAPSHOT</version>
+    <version>0.12.0-SNAPSHOT</version>
     <relativePath>../../../pom.xml</relativePath>
   </parent>
   <modelVersion>4.0.0</modelVersion>
@@ -28,6 +28,7 @@
   <packaging>pom</packaging>
   <modules>
     <module>base</module>
+    <module>base_java11</module>
     <module>namenode</module>
     <module>datanode</module>
     <module>historyserver</module>
@@ -37,6 +38,9 @@
     <module>sparkworker</module>
     <module>sparkadhoc</module>
     <module>prestobase</module>
+    <module>trinobase</module>
+    <module>trinocoordinator</module>
+    <module>trinoworker</module>
   </modules>
 
   <dependencies>
@@ -53,8 +57,9 @@
     <docker.spark.version>2.4.4</docker.spark.version>
     <docker.hive.version>2.3.3</docker.hive.version>
     <docker.hadoop.version>2.8.4</docker.hadoop.version>
-    <docker.presto.version>0.217</docker.presto.version>
-    <dockerfile.maven.version>1.4.3</dockerfile.maven.version>
+    <docker.presto.version>0.271</docker.presto.version>
+    <docker.trino.version>368</docker.trino.version>
+    <dockerfile.maven.version>1.4.13</dockerfile.maven.version>
     <checkstyle.skip>true</checkstyle.skip>
     <main.basedir>${project.parent.basedir}</main.basedir>
   </properties>

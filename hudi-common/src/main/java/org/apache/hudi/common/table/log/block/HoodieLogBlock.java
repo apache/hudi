@@ -18,15 +18,18 @@
 
 package org.apache.hudi.common.table.log.block;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.TypeUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.hadoop.fs.FSDataInputStream;
 
 import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
@@ -35,6 +38,8 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
+
+import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
 /**
  * Abstract class defining a block in HoodieLogFile.
@@ -46,7 +51,7 @@ public abstract class HoodieLogBlock {
    * corresponding changes need to be made to {@link HoodieLogBlockVersion} TODO : Change this to a class, something
    * like HoodieLogBlockVersionV1/V2 and implement/override operations there
    */
-  public static int version = 1;
+  public static int version = 2;
   // Header for each log block
   private final Map<HeaderMetadataType, String> logBlockHeader;
   // Footer for each log block
@@ -58,14 +63,17 @@ public abstract class HoodieLogBlock {
   // TODO : change this to just InputStream so this works for any FileSystem
   // create handlers to return specific type of inputstream based on FS
   // input stream corresponding to the log file where this logBlock belongs
-  protected FSDataInputStream inputStream;
+  private final FSDataInputStream inputStream;
   // Toggle flag, whether to read blocks lazily (I/O intensive) or not (Memory intensive)
   protected boolean readBlockLazily;
 
-  public HoodieLogBlock(@Nonnull Map<HeaderMetadataType, String> logBlockHeader,
+  public HoodieLogBlock(
+      @Nonnull Map<HeaderMetadataType, String> logBlockHeader,
       @Nonnull Map<HeaderMetadataType, String> logBlockFooter,
-      @Nonnull Option<HoodieLogBlockContentLocation> blockContentLocation, @Nonnull Option<byte[]> content,
-      FSDataInputStream inputStream, boolean readBlockLazily) {
+      @Nonnull Option<HoodieLogBlockContentLocation> blockContentLocation,
+      @Nonnull Option<byte[]> content,
+      @Nullable FSDataInputStream inputStream,
+      boolean readBlockLazily) {
     this.logBlockHeader = logBlockHeader;
     this.logBlockFooter = logBlockFooter;
     this.blockContentLocation = blockContentLocation;
@@ -109,7 +117,25 @@ public abstract class HoodieLogBlock {
    * Type of the log block WARNING: This enum is serialized as the ordinal. Only add new enums at the end.
    */
   public enum HoodieLogBlockType {
-    COMMAND_BLOCK, DELETE_BLOCK, CORRUPT_BLOCK, AVRO_DATA_BLOCK, HFILE_DATA_BLOCK
+    COMMAND_BLOCK(":command"),
+    DELETE_BLOCK(":delete"),
+    CORRUPT_BLOCK(":corrupted"),
+    AVRO_DATA_BLOCK("avro"),
+    HFILE_DATA_BLOCK("hfile"),
+    PARQUET_DATA_BLOCK("parquet");
+
+    private static final Map<String, HoodieLogBlockType> ID_TO_ENUM_MAP =
+        TypeUtils.getValueToEnumMap(HoodieLogBlockType.class, e -> e.id);
+
+    private final String id;
+
+    HoodieLogBlockType(String id) {
+      this.id = id;
+    }
+
+    public static HoodieLogBlockType fromId(String id) {
+      return ID_TO_ENUM_MAP.get(id);
+    }
   }
 
   /**
@@ -132,7 +158,8 @@ public abstract class HoodieLogBlock {
    * intensive CompactedScanner, the location helps to lazily read contents from the log file
    */
   public static final class HoodieLogBlockContentLocation {
-
+    // Hadoop Config required to access the file
+    private final Configuration hadoopConf;
     // The logFile that contains this block
     private final HoodieLogFile logFile;
     // The filePosition in the logFile for the contents of this block
@@ -142,12 +169,20 @@ public abstract class HoodieLogBlock {
     // The final position where the complete block ends
     private final long blockEndPos;
 
-    HoodieLogBlockContentLocation(HoodieLogFile logFile, long contentPositionInLogFile, long blockSize,
-        long blockEndPos) {
+    public HoodieLogBlockContentLocation(Configuration hadoopConf,
+                                         HoodieLogFile logFile,
+                                         long contentPositionInLogFile,
+                                         long blockSize,
+                                         long blockEndPos) {
+      this.hadoopConf = hadoopConf;
       this.logFile = logFile;
       this.contentPositionInLogFile = contentPositionInLogFile;
       this.blockSize = blockSize;
       this.blockEndPos = blockEndPos;
+    }
+
+    public Configuration getHadoopConf() {
+      return hadoopConf;
     }
 
     public HoodieLogFile getLogFile() {
@@ -210,24 +245,27 @@ public abstract class HoodieLogBlock {
    * Read or Skip block content of a log block in the log file. Depends on lazy reading enabled in
    * {@link HoodieMergedLogRecordScanner}
    */
-  public static byte[] readOrSkipContent(FSDataInputStream inputStream, Integer contentLength, boolean readBlockLazily)
+  public static Option<byte[]> tryReadContent(FSDataInputStream inputStream, Integer contentLength, boolean readLazily)
       throws IOException {
-    byte[] content = null;
-    if (!readBlockLazily) {
-      // Read the contents in memory
-      content = new byte[contentLength];
-      inputStream.readFully(content, 0, contentLength);
-    } else {
+    if (readLazily) {
       // Seek to the end of the content block
       inputStream.seek(inputStream.getPos() + contentLength);
+      return Option.empty();
     }
-    return content;
+
+    // TODO re-use buffer if stream is backed by buffer
+    // Read the contents in memory
+    byte[] content = new byte[contentLength];
+    inputStream.readFully(content, 0, contentLength);
+    return Option.of(content);
   }
 
   /**
    * When lazyReading of blocks is turned on, inflate the content of a log block from disk.
    */
   protected void inflate() throws HoodieIOException {
+    checkState(!content.isPresent(), "Block has already been inflated");
+    checkState(inputStream != null, "Block should have input-stream provided");
 
     try {
       content = Option.of(new byte[(int) this.getBlockContentLocation().get().getBlockSize()]);

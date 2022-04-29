@@ -18,23 +18,23 @@
 
 package org.apache.hudi.hive;
 
-import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.hive.util.HiveSchemaUtil;
-import org.apache.hudi.sync.common.AbstractSyncHoodieClient;
+import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.hive.ddl.DDLExecutor;
 import org.apache.hudi.hive.ddl.HMSDDLExecutor;
 import org.apache.hudi.hive.ddl.HiveQueryDDLExecutor;
 import org.apache.hudi.hive.ddl.HiveSyncMode;
 import org.apache.hudi.hive.ddl.JDBCExecutor;
+import org.apache.hudi.sync.common.model.Partition;
+
+import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
+import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.hadoop.hive.metastore.api.NoSuchObjectException;
-import org.apache.hadoop.hive.metastore.api.Partition;
 import org.apache.hadoop.hive.metastore.api.Table;
 import org.apache.hadoop.hive.ql.metadata.Hive;
 import org.apache.log4j.LogManager;
@@ -42,28 +42,26 @@ import org.apache.log4j.Logger;
 import org.apache.parquet.schema.MessageType;
 import org.apache.thrift.TException;
 
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.hadoop.utils.HoodieHiveUtils.GLOBALLY_CONSISTENT_READ_TIMESTAMP;
+import static org.apache.hudi.sync.common.util.TableUtils.tableId;
 
-public class HoodieHiveClient extends AbstractSyncHoodieClient {
-
-  private static final String HOODIE_LAST_COMMIT_TIME_SYNC = "last_commit_time_sync";
-  private static final String HIVE_ESCAPE_CHARACTER = HiveSchemaUtil.HIVE_ESCAPE_CHARACTER;
+/**
+ * This class implements logic to sync a Hudi table with either the Hive server or the Hive Metastore.
+ */
+public class HoodieHiveClient extends AbstractHiveSyncHoodieClient {
 
   private static final Logger LOG = LogManager.getLogger(HoodieHiveClient.class);
-  private final PartitionValueExtractor partitionValueExtractor;
-  private final HoodieTimeline activeTimeline;
   DDLExecutor ddlExecutor;
   private IMetaStoreClient client;
-  private final HiveSyncConfig syncConfig;
 
   public HoodieHiveClient(HiveSyncConfig cfg, HiveConf configuration, FileSystem fs) {
-    super(cfg.basePath, cfg.assumeDatePartitioning, cfg.useFileListingFromMetadata, cfg.verifyMetadataFileListing, cfg.withOperationField, fs);
-    this.syncConfig = cfg;
+    super(cfg, configuration, fs);
 
     // Support JDBC, HiveQL and metastore based implementations for backwards compatibility. Future users should
     // disable jdbc and depend on metastore client for all hive registrations
@@ -90,20 +88,6 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
     } catch (Exception e) {
       throw new HoodieHiveSyncException("Failed to create HiveMetaStoreClient", e);
     }
-
-    try {
-      this.partitionValueExtractor =
-          (PartitionValueExtractor) Class.forName(cfg.partitionValueExtractorClass).newInstance();
-    } catch (Exception e) {
-      throw new HoodieHiveSyncException(
-          "Failed to initialize PartitionValueExtractor class " + cfg.partitionValueExtractorClass, e);
-    }
-
-    activeTimeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
-  }
-
-  public HoodieTimeline getActiveTimeline() {
-    return activeTimeline;
   }
 
   /**
@@ -120,6 +104,14 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
   @Override
   public void updatePartitionsToTable(String tableName, List<String> changedPartitions) {
     ddlExecutor.updatePartitionsToTable(tableName, changedPartitions);
+  }
+
+  /**
+   * Partition path has changed - drop the following partitions.
+   */
+  @Override
+  public void dropPartitions(String tableName, List<String> partitionsToDrop) {
+    ddlExecutor.dropPartitionsToTable(tableName, partitionsToDrop);
   }
 
   /**
@@ -143,45 +135,30 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
   }
 
   /**
-   * Iterate over the storage partitions and find if there are any new partitions that need to be added or updated.
-   * Generate a list of PartitionEvent based on the changes required.
-   */
-  List<PartitionEvent> getPartitionEvents(List<Partition> tablePartitions, List<String> partitionStoragePartitions) {
-    Map<String, String> paths = new HashMap<>();
-    for (Partition tablePartition : tablePartitions) {
-      List<String> hivePartitionValues = tablePartition.getValues();
-      String fullTablePartitionPath =
-          Path.getPathWithoutSchemeAndAuthority(new Path(tablePartition.getSd().getLocation())).toUri().getPath();
-      paths.put(String.join(", ", hivePartitionValues), fullTablePartitionPath);
-    }
-
-    List<PartitionEvent> events = new ArrayList<>();
-    for (String storagePartition : partitionStoragePartitions) {
-      Path storagePartitionPath = FSUtils.getPartitionPath(syncConfig.basePath, storagePartition);
-      String fullStoragePartitionPath = Path.getPathWithoutSchemeAndAuthority(storagePartitionPath).toUri().getPath();
-      // Check if the partition values or if hdfs path is the same
-      List<String> storagePartitionValues = partitionValueExtractor.extractPartitionValuesInPath(storagePartition);
-      if (!storagePartitionValues.isEmpty()) {
-        String storageValue = String.join(", ", storagePartitionValues);
-        if (!paths.containsKey(storageValue)) {
-          events.add(PartitionEvent.newPartitionAddEvent(storagePartition));
-        } else if (!paths.get(storageValue).equals(fullStoragePartitionPath)) {
-          events.add(PartitionEvent.newPartitionUpdateEvent(storagePartition));
-        }
-      }
-    }
-    return events;
-  }
-
-  /**
    * Scan table partitions.
+   *
+   * @deprecated Use {@link #getAllPartitions} instead.
    */
-  public List<Partition> scanTablePartitions(String tableName) throws TException {
+  @Deprecated
+  public List<org.apache.hadoop.hive.metastore.api.Partition> scanTablePartitions(String tableName) throws TException {
     return client.listPartitions(syncConfig.databaseName, tableName, (short) -1);
   }
 
-  void updateTableDefinition(String tableName, MessageType newSchema) {
+  @Override
+  public void updateTableDefinition(String tableName, MessageType newSchema) {
     ddlExecutor.updateTableDefinition(tableName, newSchema);
+  }
+
+  @Override
+  public List<Partition> getAllPartitions(String tableName) {
+    try {
+      return client.listPartitions(syncConfig.databaseName, tableName, (short) -1)
+          .stream()
+          .map(p -> new Partition(p.getValues(), p.getSd().getLocation()))
+          .collect(Collectors.toList());
+    } catch (TException e) {
+      throw new HoodieHiveSyncException("Failed to get all partitions for table " + tableId(syncConfig.databaseName, tableName), e);
+    }
   }
 
   @Override
@@ -196,18 +173,21 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
    */
   @Override
   public Map<String, String> getTableSchema(String tableName) {
-    if (!doesTableExist(tableName)) {
+    if (!tableExists(tableName)) {
       throw new IllegalArgumentException(
           "Failed to get schema for table " + tableName + " does not exist");
     }
     return ddlExecutor.getTableSchema(tableName);
   }
 
-  /**
-   * @return true if the configured table exists
-   */
+  @Deprecated
   @Override
   public boolean doesTableExist(String tableName) {
+    return tableExists(tableName);
+  }
+
+  @Override
+  public boolean tableExists(String tableName) {
     try {
       return client.tableExists(syncConfig.databaseName, tableName);
     } catch (TException e) {
@@ -215,11 +195,13 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
     }
   }
 
-  /**
-   * @param databaseName
-   * @return true if the configured database exists
-   */
+  @Deprecated
   public boolean doesDataBaseExist(String databaseName) {
+    return databaseExists(databaseName);
+  }
+
+  @Override
+  public boolean databaseExists(String databaseName) {
     try {
       client.getDatabase(databaseName);
       return true;
@@ -231,6 +213,7 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
     }
   }
 
+  @Override
   public void createDatabase(String databaseName) {
     ddlExecutor.createDatabase(databaseName);
   }
@@ -239,23 +222,23 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
   public Option<String> getLastCommitTimeSynced(String tableName) {
     // Get the last commit time from the TBLproperties
     try {
-      Table database = client.getTable(syncConfig.databaseName, tableName);
-      return Option.ofNullable(database.getParameters().getOrDefault(HOODIE_LAST_COMMIT_TIME_SYNC, null));
+      Table table = client.getTable(syncConfig.databaseName, tableName);
+      return Option.ofNullable(table.getParameters().getOrDefault(HOODIE_LAST_COMMIT_TIME_SYNC, null));
     } catch (Exception e) {
-      throw new HoodieHiveSyncException("Failed to get the last commit time synced from the database", e);
+      throw new HoodieHiveSyncException("Failed to get the last commit time synced from the table " + tableName, e);
     }
   }
 
   public Option<String> getLastReplicatedTime(String tableName) {
     // Get the last replicated time from the TBLproperties
     try {
-      Table database = client.getTable(syncConfig.databaseName, tableName);
-      return Option.ofNullable(database.getParameters().getOrDefault(GLOBALLY_CONSISTENT_READ_TIMESTAMP, null));
+      Table table = client.getTable(syncConfig.databaseName, tableName);
+      return Option.ofNullable(table.getParameters().getOrDefault(GLOBALLY_CONSISTENT_READ_TIMESTAMP, null));
     } catch (NoSuchObjectException e) {
       LOG.warn("the said table not found in hms " + syncConfig.databaseName + "." + tableName);
       return Option.empty();
     } catch (Exception e) {
-      throw new HoodieHiveSyncException("Failed to get the last replicated time from the database", e);
+      throw new HoodieHiveSyncException("Failed to get the last replicated time from the table " + tableName, e);
     }
   }
 
@@ -291,6 +274,7 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
     }
   }
 
+  @Override
   public void close() {
     try {
       ddlExecutor.close();
@@ -303,20 +287,52 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
     }
   }
 
-  List<String> getAllTables(String db) throws Exception {
-    return client.getAllTables(db);
-  }
-
   @Override
   public void updateLastCommitTimeSynced(String tableName) {
     // Set the last commit time from the TBLproperties
-    String lastCommitSynced = activeTimeline.lastInstant().get().getTimestamp();
+    Option<String> lastCommitSynced = activeTimeline.lastInstant().map(HoodieInstant::getTimestamp);
+    if (lastCommitSynced.isPresent()) {
+      try {
+        Table table = client.getTable(syncConfig.databaseName, tableName);
+        table.putToParameters(HOODIE_LAST_COMMIT_TIME_SYNC, lastCommitSynced.get());
+        client.alter_table(syncConfig.databaseName, tableName, table);
+      } catch (Exception e) {
+        throw new HoodieHiveSyncException("Failed to get update last commit time synced to " + lastCommitSynced, e);
+      }
+    }
+  }
+
+  @Override
+  public List<FieldSchema> getTableCommentUsingMetastoreClient(String tableName) {
     try {
-      Table table = client.getTable(syncConfig.databaseName, tableName);
-      table.putToParameters(HOODIE_LAST_COMMIT_TIME_SYNC, lastCommitSynced);
-      client.alter_table(syncConfig.databaseName, tableName, table);
+      return client.getSchema(syncConfig.databaseName, tableName);
     } catch (Exception e) {
-      throw new HoodieHiveSyncException("Failed to get update last commit time synced to " + lastCommitSynced, e);
+      throw new HoodieHiveSyncException("Failed to get table comments for : " + tableName, e);
+    }
+  }
+
+  @Override
+  public void updateTableComments(String tableName, List<FieldSchema> oldSchema, List<Schema.Field> newSchema) {
+    Map<String,String> newComments = newSchema.stream().collect(Collectors.toMap(field -> field.name().toLowerCase(Locale.ROOT), field -> StringUtils.isNullOrEmpty(field.doc()) ? "" : field.doc()));
+    updateTableComments(tableName,oldSchema,newComments);
+  }
+
+  @Override
+  public void updateTableComments(String tableName, List<FieldSchema> oldSchema, Map<String,String> newComments) {
+    Map<String,String> oldComments = oldSchema.stream().collect(Collectors.toMap(fieldSchema -> fieldSchema.getName().toLowerCase(Locale.ROOT),
+        fieldSchema -> StringUtils.isNullOrEmpty(fieldSchema.getComment()) ? "" : fieldSchema.getComment()));
+    Map<String,String> types = oldSchema.stream().collect(Collectors.toMap(FieldSchema::getName, FieldSchema::getType));
+    Map<String, ImmutablePair<String,String>> alterComments = new HashMap<>();
+    oldComments.forEach((name,comment) -> {
+      String newComment = newComments.getOrDefault(name,"");
+      if (!newComment.equals(comment)) {
+        alterComments.put(name,new ImmutablePair<>(types.get(name),newComment));
+      }
+    });
+    if (alterComments.size() > 0) {
+      ddlExecutor.updateTableComments(tableName, alterComments);
+    } else {
+      LOG.info(String.format("No comment difference of %s ",tableName));
     }
   }
 }

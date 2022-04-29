@@ -18,7 +18,6 @@
 
 package org.apache.hudi.execution;
 
-import java.util.Properties;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.utils.LazyIterableIterator;
 import org.apache.hudi.common.engine.TaskContextSupplier;
@@ -36,6 +35,7 @@ import org.apache.avro.generic.IndexedRecord;
 
 import java.util.Iterator;
 import java.util.List;
+import java.util.Properties;
 import java.util.function.Function;
 
 /**
@@ -87,7 +87,7 @@ public abstract class HoodieLazyInsertIterable<T extends HoodieRecordPayload>
     public HoodieInsertValueGenResult(T record, Schema schema, Properties properties) {
       this.record = record;
       try {
-        this.insertValue = record.getData().getInsertValue(schema, properties);
+        this.insertValue = ((HoodieRecordPayload) record.getData()).getInsertValue(schema, properties);
       } catch (Exception e) {
         this.exception = Option.of(e);
       }

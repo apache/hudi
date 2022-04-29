@@ -30,6 +30,7 @@ import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.HoodieLogFormat.Reader;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.ClosableIterator;
 import org.apache.hudi.common.util.Option;
 
 import org.apache.avro.generic.GenericRecord;
@@ -80,8 +81,7 @@ public class ArchivedCommitsCommand implements CommandMarker {
       // read the avro blocks
       while (reader.hasNext()) {
         HoodieAvroDataBlock blk = (HoodieAvroDataBlock) reader.next();
-        List<IndexedRecord> records = blk.getRecords();
-        readRecords.addAll(records);
+        blk.getRecordIterator().forEachRemaining(readRecords::add);
       }
       List<Comparable[]> readCommits = readRecords.stream().map(r -> (GenericRecord) r)
           .filter(r -> r.get("actionType").toString().equals(HoodieTimeline.COMMIT_ACTION)
@@ -155,8 +155,9 @@ public class ArchivedCommitsCommand implements CommandMarker {
       // read the avro blocks
       while (reader.hasNext()) {
         HoodieAvroDataBlock blk = (HoodieAvroDataBlock) reader.next();
-        List<IndexedRecord> records = blk.getRecords();
-        readRecords.addAll(records);
+        try (ClosableIterator<IndexedRecord> recordItr = blk.getRecordIterator()) {
+          recordItr.forEachRemaining(readRecords::add);
+        }
       }
       List<Comparable[]> readCommits = readRecords.stream().map(r -> (GenericRecord) r)
           .map(r -> readCommit(r, skipMetadata)).collect(Collectors.toList());

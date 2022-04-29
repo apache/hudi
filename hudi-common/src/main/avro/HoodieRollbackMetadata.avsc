@@ -38,14 +38,6 @@
                     "type": "long",
                     "doc": "Size of this file in bytes"
                 }
-            }], "default":null },
-            {"name": "writtenLogFiles", "type": ["null", {
-                "type": "map",
-                "doc": "Log files written that were expected to be rolledback",
-                 "values": {
-                    "type": "long",
-                    "doc": "Size of this file in bytes"
-                }
             }], "default":null }
         ]
      }}},

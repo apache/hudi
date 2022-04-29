@@ -20,13 +20,19 @@ package org.apache.hudi.common.table.timeline;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieArchivedMetaEntry;
+import org.apache.hudi.avro.model.HoodieMergeArchiveFilePlan;
+import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
+import org.apache.hudi.common.table.log.block.HoodieLogBlock;
+import org.apache.hudi.common.util.ClosableIterator;
 import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.avro.generic.GenericRecord;
@@ -36,21 +42,26 @@ import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import javax.annotation.Nonnull;
+
 import java.io.IOException;
 import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.Spliterator;
+import java.util.Spliterators;
 import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
+import java.util.stream.StreamSupport;
 
 /**
  * Represents the Archived Timeline for the Hoodie table. Instants for the last 12 hours (configurable) is in the
@@ -64,20 +75,21 @@ import java.util.stream.Stream;
  * This class can be serialized and de-serialized and on de-serialization the FileSystem is re-initialized.
  */
 public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
+  public static final String MERGE_ARCHIVE_PLAN_NAME = "mergeArchivePlan";
   private static final Pattern ARCHIVE_FILE_PATTERN =
-          Pattern.compile("^\\.commits_\\.archive\\.([0-9]*)$");
+      Pattern.compile("^\\.commits_\\.archive\\.([0-9]+).*");
 
   private static final String HOODIE_COMMIT_ARCHIVE_LOG_FILE_PREFIX = "commits";
   private static final String ACTION_TYPE_KEY = "actionType";
   private static final String ACTION_STATE = "actionState";
   private HoodieTableMetaClient metaClient;
-  private Map<String, byte[]> readCommits = new HashMap<>();
+  private final Map<String, byte[]> readCommits = new HashMap<>();
 
   private static final Logger LOG = LogManager.getLogger(HoodieArchivedTimeline.class);
 
   /**
-   * Loads instants between (startTs, endTs].
-   * Note that there is no lazy loading, so this may not work if really long time range (endTs-startTs) is specified.
+   * Loads all the archived instants.
+   * Note that there is no lazy loading, so this may not work if the archived timeline range is really long.
    * TBD: Should we enforce maximum time range?
    */
   public HoodieArchivedTimeline(HoodieTableMetaClient metaClient) {
@@ -89,11 +101,25 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
   }
 
   /**
+   * Loads completed instants from startTs(inclusive).
+   * Note that there is no lazy loading, so this may not work if really early startTs is specified.
+   */
+  public HoodieArchivedTimeline(HoodieTableMetaClient metaClient, String startTs) {
+    this.metaClient = metaClient;
+    setInstants(loadInstants(new StartTsFilter(startTs), true,
+        record -> HoodieInstant.State.COMPLETED.toString().equals(record.get(ACTION_STATE).toString())));
+    // multiple casts will make this lambda serializable -
+    // http://docs.oracle.com/javase/specs/jls/se8/html/jls-15.html#jls-15.16
+    this.details = (Function<HoodieInstant, Option<byte[]>> & Serializable) this::getInstantDetails;
+  }
+
+  /**
    * For serialization and de-serialization only.
    *
    * @deprecated
    */
-  public HoodieArchivedTimeline() {}
+  public HoodieArchivedTimeline() {
+  }
 
   /**
    * This method is only used when this object is deserialized in a spark executor.
@@ -110,6 +136,11 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
 
   public void loadInstantDetailsInMemory(String startTs, String endTs) {
     loadInstants(startTs, endTs);
+  }
+
+  public void loadCompletedInstantDetailsInMemory() {
+    loadInstants(null, true,
+        record -> HoodieInstant.State.COMPLETED.toString().equals(record.get(ACTION_STATE).toString()));
   }
 
   public void loadCompactionDetailsInMemory(String compactionInstantTime) {
@@ -143,14 +174,17 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
   }
 
   private HoodieInstant readCommit(GenericRecord record, boolean loadDetails) {
-    final String instantTime  = record.get(HoodiePartitionMetadata.COMMIT_TIME_KEY).toString();
+    final String instantTime = record.get(HoodiePartitionMetadata.COMMIT_TIME_KEY).toString();
     final String action = record.get(ACTION_TYPE_KEY).toString();
     if (loadDetails) {
-      Option.ofNullable(record.get(getMetadataKey(action))).map(actionData -> {
-        if (action.equals(HoodieTimeline.COMPACTION_ACTION)) {
-          this.readCommits.put(instantTime, HoodieAvroUtils.indexedRecordToBytes((IndexedRecord)actionData));
-        } else {
-          this.readCommits.put(instantTime, actionData.toString().getBytes(StandardCharsets.UTF_8));
+      getMetadataKey(action).map(key -> {
+        Object actionData = record.get(key);
+        if (actionData != null) {
+          if (action.equals(HoodieTimeline.COMPACTION_ACTION)) {
+            this.readCommits.put(instantTime, HoodieAvroUtils.indexedRecordToBytes((IndexedRecord) actionData));
+          } else {
+            this.readCommits.put(instantTime, actionData.toString().getBytes(StandardCharsets.UTF_8));
+          }
         }
         return null;
       });
@@ -158,22 +192,27 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
     return new HoodieInstant(HoodieInstant.State.valueOf(record.get(ACTION_STATE).toString()), action, instantTime);
   }
 
-  private String getMetadataKey(String action) {
+  @Nonnull
+  private Option<String> getMetadataKey(String action) {
     switch (action) {
       case HoodieTimeline.CLEAN_ACTION:
-        return "hoodieCleanMetadata";
+        return Option.of("hoodieCleanMetadata");
       case HoodieTimeline.COMMIT_ACTION:
-        return "hoodieCommitMetadata";
       case HoodieTimeline.DELTA_COMMIT_ACTION:
-        return "hoodieCommitMetadata";
+        return Option.of("hoodieCommitMetadata");
       case HoodieTimeline.ROLLBACK_ACTION:
-        return "hoodieRollbackMetadata";
+        return Option.of("hoodieRollbackMetadata");
       case HoodieTimeline.SAVEPOINT_ACTION:
-        return "hoodieSavePointMetadata";
+        return Option.of("hoodieSavePointMetadata");
       case HoodieTimeline.COMPACTION_ACTION:
-        return "hoodieCompactionPlan";
+        return Option.of("hoodieCompactionPlan");
+      case HoodieTimeline.REPLACE_COMMIT_ACTION:
+        return Option.of("hoodieReplaceCommitMetadata");
+      case HoodieTimeline.INDEXING_ACTION:
+        return Option.of("hoodieIndexCommitMetadata");
       default:
-        throw new HoodieIOException("Unknown action in metadata " + action);
+        LOG.error(String.format("Unknown action in metadata (%s)", action));
+        return Option.empty();
     }
   }
 
@@ -198,36 +237,35 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
   private List<HoodieInstant> loadInstants(TimeRangeFilter filter, boolean loadInstantDetails,
        Function<GenericRecord, Boolean> commitsFilter) {
     try {
-      // list all files
+      // List all files
       FileStatus[] fsStatuses = metaClient.getFs().globStatus(
               new Path(metaClient.getArchivePath() + "/.commits_.archive*"));
 
-      // sort files by version suffix in reverse (implies reverse chronological order)
+      // Sort files by version suffix in reverse (implies reverse chronological order)
       Arrays.sort(fsStatuses, new ArchiveFileVersionComparator());
 
-      List<HoodieInstant> instantsInRange = new ArrayList<>();
+      Set<HoodieInstant> instantsInRange = new HashSet<>();
       for (FileStatus fs : fsStatuses) {
-        //read the archived file
-        HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(metaClient.getFs(),
-                new HoodieLogFile(fs.getPath()), HoodieArchivedMetaEntry.getClassSchema());
-        try {
+        // Read the archived file
+        try (HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(metaClient.getFs(),
+            new HoodieLogFile(fs.getPath()), HoodieArchivedMetaEntry.getClassSchema())) {
           int instantsInPreviousFile = instantsInRange.size();
-          //read the avro blocks
+          // Read the avro blocks
           while (reader.hasNext()) {
-            HoodieAvroDataBlock blk = (HoodieAvroDataBlock) reader.next();
-            // TODO If we can store additional metadata in datablock, we can skip parsing records
-            // (such as startTime, endTime of records in the block)
-            List<IndexedRecord> records = blk.getRecords();
-            // filter blocks in desired time window
-            Stream<HoodieInstant> instantsInBlkStream = records.stream()
+            HoodieLogBlock block = reader.next();
+            if (block instanceof HoodieAvroDataBlock) {
+              HoodieAvroDataBlock avroBlock = (HoodieAvroDataBlock) block;
+              // TODO If we can store additional metadata in datablock, we can skip parsing records
+              // (such as startTime, endTime of records in the block)
+              try (ClosableIterator<IndexedRecord> itr = avroBlock.getRecordIterator()) {
+                StreamSupport.stream(Spliterators.spliteratorUnknownSize(itr, Spliterator.IMMUTABLE), true)
+                    // Filter blocks in desired time window
                     .filter(r -> commitsFilter.apply((GenericRecord) r))
-                    .map(r -> readCommit((GenericRecord) r, loadInstantDetails));
-
-            if (filter != null) {
-              instantsInBlkStream = instantsInBlkStream.filter(filter::isInRange);
+                    .map(r -> readCommit((GenericRecord) r, loadInstantDetails))
+                    .filter(c -> filter == null || filter.isInRange(c))
+                    .forEach(instantsInRange::add);
+              }
             }
-
-            instantsInRange.addAll(instantsInBlkStream.collect(Collectors.toList()));
           }
 
           if (filter != null) {
@@ -238,12 +276,32 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
               break;
             }
           }
-        } finally {
-          reader.close();
+        } catch (Exception originalException) {
+          // merge small archive files may left uncompleted archive file which will cause exception.
+          // need to ignore this kind of exception here.
+          try {
+            Path planPath = new Path(metaClient.getArchivePath(), MERGE_ARCHIVE_PLAN_NAME);
+            HoodieWrapperFileSystem fileSystem = metaClient.getFs();
+            if (fileSystem.exists(planPath)) {
+              HoodieMergeArchiveFilePlan plan = TimelineMetadataUtils.deserializeAvroMetadata(FileIOUtils.readDataFromPath(fileSystem, planPath).get(), HoodieMergeArchiveFilePlan.class);
+              String mergedArchiveFileName = plan.getMergedArchiveFileName();
+              if (!StringUtils.isNullOrEmpty(mergedArchiveFileName) && fs.getPath().getName().equalsIgnoreCase(mergedArchiveFileName)) {
+                LOG.warn("Catch exception because of reading uncompleted merging archive file " + mergedArchiveFileName + ". Ignore it here.");
+                continue;
+              }
+            }
+            throw originalException;
+          } catch (Exception e) {
+            // If anything wrong during parsing merge archive plan, we need to throw the original exception.
+            // For example corrupted archive file and corrupted plan are both existed.
+            throw originalException;
+          }
         }
       }
 
-      return instantsInRange;
+      ArrayList<HoodieInstant> result = new ArrayList<>(instantsInRange);
+      Collections.sort(result);
+      return result;
     } catch (IOException e) {
       throw new HoodieIOException(
               "Could not load archived commit timeline from path " + metaClient.getArchivePath(), e);
@@ -261,6 +319,19 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
 
     public boolean isInRange(HoodieInstant instant) {
       return HoodieTimeline.isInRange(instant.getTimestamp(), this.startTs, this.endTs);
+    }
+  }
+
+  private static class StartTsFilter extends TimeRangeFilter {
+    private final String startTs;
+
+    public StartTsFilter(String startTs) {
+      super(startTs, null); // endTs is never used
+      this.startTs = startTs;
+    }
+
+    public boolean isInRange(HoodieInstant instant) {
+      return HoodieTimeline.compareTimestamps(instant.getTimestamp(), GREATER_THAN_OR_EQUALS, startTs);
     }
   }
 
@@ -294,7 +365,7 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
     // filter in-memory instants
     Set<String> validActions = CollectionUtils.createSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, COMPACTION_ACTION, REPLACE_COMMIT_ACTION);
     return new HoodieDefaultTimeline(getInstants().filter(i ->
-        readCommits.keySet().contains(i.getTimestamp()))
+        readCommits.containsKey(i.getTimestamp()))
         .filter(s -> validActions.contains(s.getAction())), details);
   }
 }

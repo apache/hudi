@@ -24,6 +24,9 @@ import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.cli.functional.CLIFunctionalTestHarness;
 import org.apache.hudi.cli.testutils.HoodieTestCommitMetadataGenerator;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
+import org.apache.hudi.common.fs.NoOpConsistencyGuard;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -32,13 +35,15 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
+import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.CompactionTestUtils;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.HoodieSparkTable;
-import org.apache.hudi.table.HoodieTimelineArchiveLog;
+import org.apache.hudi.client.HoodieTimelineArchiver;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -150,7 +155,11 @@ public class TestCompactionCommand extends CLIFunctionalTestHarness {
       activeTimeline.transitionCompactionInflightToComplete(
           new HoodieInstant(HoodieInstant.State.INFLIGHT, COMPACTION_ACTION, timestamp), Option.empty());
     });
-
+    // Simulate a compaction commit in metadata table timeline
+    // so the archival in data table can happen
+    HoodieTestUtils.createCompactionCommitInMetadataTable(hadoopConf(),
+        new HoodieWrapperFileSystem(
+            FSUtils.getFs(tablePath, hadoopConf()), new NoOpConsistencyGuard()), tablePath, "007");
   }
 
   private void generateArchive() throws IOException {
@@ -158,12 +167,14 @@ public class TestCompactionCommand extends CLIFunctionalTestHarness {
     HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(tablePath)
         .withSchema(HoodieTestCommitMetadataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().retainCommits(1).archiveCommitsWith(2, 3).build())
+        .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
+            .withRemoteServerPort(timelineServicePort).build())
         .forTable("test-trip-table").build();
     // archive
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient());
     HoodieSparkTable table = HoodieSparkTable.create(cfg, context(), metaClient);
-    HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(cfg, table);
-    archiveLog.archiveIfRequired(context());
+    HoodieTimelineArchiver archiver = new HoodieTimelineArchiver(cfg, table);
+    archiver.archiveIfRequired(context());
   }
 
   /**

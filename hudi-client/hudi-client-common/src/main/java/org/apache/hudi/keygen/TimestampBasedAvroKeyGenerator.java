@@ -26,8 +26,8 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieKeyGeneratorException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
-import org.apache.hudi.keygen.parser.AbstractHoodieDateTimeParser;
-import org.apache.hudi.keygen.parser.HoodieDateTimeParserImpl;
+import org.apache.hudi.keygen.parser.BaseHoodieDateTimeParser;
+import org.apache.hudi.keygen.parser.HoodieDateTimeParser;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
 import org.joda.time.format.DateTimeFormat;
@@ -36,6 +36,8 @@ import org.joda.time.format.DateTimeFormatter;
 import java.io.IOException;
 import java.io.Serializable;
 import java.math.BigDecimal;
+import java.sql.Timestamp;
+import java.time.LocalDate;
 import java.util.TimeZone;
 import java.util.concurrent.TimeUnit;
 
@@ -55,7 +57,7 @@ public class TimestampBasedAvroKeyGenerator extends SimpleAvroKeyGenerator {
   private final String outputDateFormat;
   private transient Option<DateTimeFormatter> inputFormatter;
   private transient DateTimeFormatter partitionFormatter;
-  private final AbstractHoodieDateTimeParser parser;
+  private final BaseHoodieDateTimeParser parser;
 
   // TimeZone detailed settings reference
   // https://docs.oracle.com/javase/8/docs/api/java/util/TimeZone.html
@@ -63,29 +65,6 @@ public class TimestampBasedAvroKeyGenerator extends SimpleAvroKeyGenerator {
   private final DateTimeZone outputDateTimeZone;
 
   protected final boolean encodePartitionPath;
-
-  /**
-   * Supported configs.
-   */
-  public static class Config {
-
-    // One value from TimestampType above
-    public static final String TIMESTAMP_TYPE_FIELD_PROP = "hoodie.deltastreamer.keygen.timebased.timestamp.type";
-    public static final String INPUT_TIME_UNIT =
-        "hoodie.deltastreamer.keygen.timebased.timestamp.scalar.time.unit";
-    //This prop can now accept list of input date formats.
-    public static final String TIMESTAMP_INPUT_DATE_FORMAT_PROP =
-        "hoodie.deltastreamer.keygen.timebased.input.dateformat";
-    public static final String TIMESTAMP_INPUT_DATE_FORMAT_LIST_DELIMITER_REGEX_PROP = "hoodie.deltastreamer.keygen.timebased.input.dateformat.list.delimiter.regex";
-    public static final String TIMESTAMP_INPUT_TIMEZONE_FORMAT_PROP = "hoodie.deltastreamer.keygen.timebased.input.timezone";
-    public static final String TIMESTAMP_OUTPUT_DATE_FORMAT_PROP =
-        "hoodie.deltastreamer.keygen.timebased.output.dateformat";
-    //still keeping this prop for backward compatibility so that functionality for existing users does not break.
-    public static final String TIMESTAMP_TIMEZONE_FORMAT_PROP =
-        "hoodie.deltastreamer.keygen.timebased.timezone";
-    public static final String TIMESTAMP_OUTPUT_TIMEZONE_FORMAT_PROP = "hoodie.deltastreamer.keygen.timebased.output.timezone";
-    static final String DATE_TIME_PARSER_PROP = "hoodie.deltastreamer.keygen.datetime.parser.class";
-  }
 
   public TimestampBasedAvroKeyGenerator(TypedProperties config) throws IOException {
     this(config, config.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()),
@@ -98,12 +77,12 @@ public class TimestampBasedAvroKeyGenerator extends SimpleAvroKeyGenerator {
 
   TimestampBasedAvroKeyGenerator(TypedProperties config, String recordKeyField, String partitionPathField) throws IOException {
     super(config, recordKeyField, partitionPathField);
-    String dateTimeParserClass = config.getString(Config.DATE_TIME_PARSER_PROP, HoodieDateTimeParserImpl.class.getName());
+    String dateTimeParserClass = config.getString(KeyGeneratorOptions.Config.DATE_TIME_PARSER_PROP, HoodieDateTimeParser.class.getName());
     this.parser = KeyGenUtils.createDateTimeParser(config, dateTimeParserClass);
     this.inputDateTimeZone = parser.getInputDateTimeZone();
     this.outputDateTimeZone = parser.getOutputDateTimeZone();
     this.outputDateFormat = parser.getOutputDateFormat();
-    this.timestampType = TimestampType.valueOf(config.getString(Config.TIMESTAMP_TYPE_FIELD_PROP));
+    this.timestampType = TimestampType.valueOf(config.getString(KeyGeneratorOptions.Config.TIMESTAMP_TYPE_FIELD_PROP));
 
     switch (this.timestampType) {
       case EPOCHMILLISECONDS:
@@ -113,7 +92,7 @@ public class TimestampBasedAvroKeyGenerator extends SimpleAvroKeyGenerator {
         timeUnit = SECONDS;
         break;
       case SCALAR:
-        String timeUnitStr = config.getString(Config.INPUT_TIME_UNIT, TimeUnit.SECONDS.toString());
+        String timeUnitStr = config.getString(KeyGeneratorOptions.Config.INPUT_TIME_UNIT, TimeUnit.SECONDS.toString());
         timeUnit = TimeUnit.valueOf(timeUnitStr.toUpperCase());
         break;
       default:
@@ -125,7 +104,7 @@ public class TimestampBasedAvroKeyGenerator extends SimpleAvroKeyGenerator {
 
   @Override
   public String getPartitionPath(GenericRecord record) {
-    Object partitionVal = HoodieAvroUtils.getNestedFieldVal(record, getPartitionPathFields().get(0), true);
+    Object partitionVal = HoodieAvroUtils.getNestedFieldVal(record, getPartitionPathFields().get(0), true, isConsistentLogicalTimestampEnabled());
     if (partitionVal == null) {
       partitionVal = getDefaultPartitionVal();
     }
@@ -147,7 +126,7 @@ public class TimestampBasedAvroKeyGenerator extends SimpleAvroKeyGenerator {
       // {Config.TIMESTAMP_INPUT_DATE_FORMAT_PROP} won't be null, it has been checked in the initialization process of
       // inputFormatter
       String delimiter = parser.getConfigInputDateFormatDelimiter();
-      String format = config.getString(Config.TIMESTAMP_INPUT_DATE_FORMAT_PROP, "").split(delimiter)[0];
+      String format = config.getString(KeyGeneratorOptions.Config.TIMESTAMP_INPUT_DATE_FORMAT_PROP, "").split(delimiter)[0];
 
       // if both input and output timeZone are not configured, use GMT.
       if (null != inputDateTimeZone) {
@@ -191,13 +170,18 @@ public class TimestampBasedAvroKeyGenerator extends SimpleAvroKeyGenerator {
       timeMs = convertLongTimeToMillis(((Float) partitionVal).longValue());
     } else if (partitionVal instanceof Long) {
       timeMs = convertLongTimeToMillis((Long) partitionVal);
+    } else if (partitionVal instanceof Timestamp && isConsistentLogicalTimestampEnabled()) {
+      timeMs = ((Timestamp) partitionVal).getTime();
     } else if (partitionVal instanceof Integer) {
       timeMs = convertLongTimeToMillis(((Integer) partitionVal).longValue());
     } else if (partitionVal instanceof BigDecimal) {
       timeMs = convertLongTimeToMillis(((BigDecimal) partitionVal).longValue());
+    } else if (partitionVal instanceof LocalDate) {
+      // Avro uses LocalDate to represent the Date value internal.
+      timeMs = convertLongTimeToMillis(((LocalDate) partitionVal).toEpochDay());
     } else if (partitionVal instanceof CharSequence) {
       if (!inputFormatter.isPresent()) {
-        throw new HoodieException("Missing inputformatter. Ensure " + Config.TIMESTAMP_INPUT_DATE_FORMAT_PROP + " config is set when timestampType is DATE_STRING or MIXED!");
+        throw new HoodieException("Missing inputformatter. Ensure " + KeyGeneratorOptions.Config.TIMESTAMP_INPUT_DATE_FORMAT_PROP + " config is set when timestampType is DATE_STRING or MIXED!");
       }
       DateTime parsedDateTime = inputFormatter.get().parseDateTime(partitionVal.toString());
       if (this.outputDateTimeZone == null) {
@@ -221,9 +205,8 @@ public class TimestampBasedAvroKeyGenerator extends SimpleAvroKeyGenerator {
   private long convertLongTimeToMillis(Long partitionVal) {
     if (timeUnit == null) {
       // should not be possible
-      throw new RuntimeException(Config.INPUT_TIME_UNIT + " is not specified but scalar it supplied as time value");
+      throw new RuntimeException(KeyGeneratorOptions.Config.INPUT_TIME_UNIT + " is not specified but scalar it supplied as time value");
     }
     return MILLISECONDS.convert(partitionVal, timeUnit);
   }
-
 }

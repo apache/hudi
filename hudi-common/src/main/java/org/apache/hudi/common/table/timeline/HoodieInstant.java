@@ -166,11 +166,20 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
       }
     } else if (HoodieTimeline.RESTORE_ACTION.equals(action)) {
       return isInflight() ? HoodieTimeline.makeInflightRestoreFileName(timestamp)
+          : isRequested() ? HoodieTimeline.makeRequestedRestoreFileName(timestamp)
           : HoodieTimeline.makeRestoreFileName(timestamp);
     } else if (HoodieTimeline.REPLACE_COMMIT_ACTION.equals(action)) {
       return isInflight() ? HoodieTimeline.makeInflightReplaceFileName(timestamp)
           : isRequested() ? HoodieTimeline.makeRequestedReplaceFileName(timestamp)
           : HoodieTimeline.makeReplaceFileName(timestamp);
+    } else if (HoodieTimeline.INDEXING_ACTION.equals(action)) {
+      return isInflight() ? HoodieTimeline.makeInflightIndexFileName(timestamp)
+          : isRequested() ? HoodieTimeline.makeRequestedIndexFileName(timestamp)
+          : HoodieTimeline.makeIndexCommitFileName(timestamp);
+    } else if (HoodieTimeline.SCHEMA_COMMIT_ACTION.equals(action)) {
+      return isInflight() ? HoodieTimeline.makeInflightSchemaFileName(timestamp)
+          : isRequested() ? HoodieTimeline.makeRequestSchemaFileName(timestamp)
+          : HoodieTimeline.makeSchemaFileName(timestamp);
     }
     throw new IllegalArgumentException("Cannot get file name for unknown action " + action);
   }

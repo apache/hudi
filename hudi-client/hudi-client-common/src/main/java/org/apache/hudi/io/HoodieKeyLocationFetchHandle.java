@@ -47,7 +47,7 @@ public class HoodieKeyLocationFetchHandle<T extends HoodieRecordPayload, I, K, O
 
   public HoodieKeyLocationFetchHandle(HoodieWriteConfig config, HoodieTable<T, I, K, O> hoodieTable,
                                       Pair<String, HoodieBaseFile> partitionPathBaseFilePair, Option<BaseKeyGenerator> keyGeneratorOpt) {
-    super(config, null, hoodieTable, Pair.of(partitionPathBaseFilePair.getLeft(), partitionPathBaseFilePair.getRight().getFileId()));
+    super(config, hoodieTable, Pair.of(partitionPathBaseFilePair.getLeft(), partitionPathBaseFilePair.getRight().getFileId()));
     this.partitionPathBaseFilePair = partitionPathBaseFilePair;
     this.keyGeneratorOpt = keyGeneratorOpt;
   }
@@ -57,9 +57,9 @@ public class HoodieKeyLocationFetchHandle<T extends HoodieRecordPayload, I, K, O
     BaseFileUtils baseFileUtils = BaseFileUtils.getInstance(baseFile.getPath());
     List<HoodieKey> hoodieKeyList = new ArrayList<>();
     if (keyGeneratorOpt.isPresent()) {
-      hoodieKeyList = baseFileUtils.fetchRecordKeyPartitionPath(hoodieTable.getHadoopConf(), new Path(baseFile.getPath()), keyGeneratorOpt);
+      hoodieKeyList = baseFileUtils.fetchHoodieKeys(hoodieTable.getHadoopConf(), new Path(baseFile.getPath()), keyGeneratorOpt);
     } else {
-      hoodieKeyList = baseFileUtils.fetchRecordKeyPartitionPath(hoodieTable.getHadoopConf(), new Path(baseFile.getPath()));
+      hoodieKeyList = baseFileUtils.fetchHoodieKeys(hoodieTable.getHadoopConf(), new Path(baseFile.getPath()));
     }
     return hoodieKeyList.stream()
         .map(entry -> Pair.of(entry,

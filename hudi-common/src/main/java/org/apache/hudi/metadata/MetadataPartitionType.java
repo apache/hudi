@@ -18,16 +18,58 @@
 
 package org.apache.hudi.metadata;
 
+import java.util.Arrays;
+import java.util.List;
+
 public enum MetadataPartitionType {
-  FILES("files");
+  FILES(HoodieTableMetadataUtil.PARTITION_NAME_FILES, "files-"),
+  COLUMN_STATS(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS, "col-stats-"),
+  BLOOM_FILTERS(HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS, "bloom-filters-");
 
+  // Partition path in metadata table.
   private final String partitionPath;
+  // FileId prefix used for all file groups in this partition.
+  private final String fileIdPrefix;
+  // Total file groups
+  // TODO fix: enum should not have any mutable aspect as this compromises whole idea
+  //      of the inum being static, immutable entity
+  private int fileGroupCount = 1;
 
-  MetadataPartitionType(String partitionPath) {
+  MetadataPartitionType(final String partitionPath, final String fileIdPrefix) {
     this.partitionPath = partitionPath;
+    this.fileIdPrefix = fileIdPrefix;
   }
 
-  public String partitionPath() {
+  public String getPartitionPath() {
     return partitionPath;
+  }
+
+  public String getFileIdPrefix() {
+    return fileIdPrefix;
+  }
+
+  void setFileGroupCount(final int fileGroupCount) {
+    this.fileGroupCount = fileGroupCount;
+  }
+
+  public int getFileGroupCount() {
+    return this.fileGroupCount;
+  }
+
+  public static List<String> allPaths() {
+    return Arrays.asList(
+        FILES.getPartitionPath(),
+        COLUMN_STATS.getPartitionPath(),
+        BLOOM_FILTERS.getPartitionPath()
+    );
+  }
+
+  @Override
+  public String toString() {
+    return "Metadata partition {"
+        + "name: " + getPartitionPath()
+        + ", prefix: " + getFileIdPrefix()
+        + ", groups: " + getFileGroupCount()
+        + "}";
   }
 }

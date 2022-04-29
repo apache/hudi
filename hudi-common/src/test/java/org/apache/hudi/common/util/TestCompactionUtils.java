@@ -27,6 +27,9 @@ import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.versioning.compaction.CompactionPlanMigrator;
 import org.apache.hudi.common.testutils.CompactionTestUtils.DummyHoodieBaseFile;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
@@ -35,15 +38,20 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.CompactionTestUtils.createCompactionPlan;
 import static org.apache.hudi.common.testutils.CompactionTestUtils.scheduleCompaction;
@@ -230,11 +238,95 @@ public class TestCompactionUtils extends HoodieCommonTestHarness {
     setupAndValidateCompactionOperations(metaClient, false, 0, 0, 0, 0);
   }
 
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testGetDeltaCommitsSinceLatestCompaction(boolean hasCompletedCompaction) {
+    HoodieActiveTimeline timeline = prepareTimeline(hasCompletedCompaction);
+    Pair<HoodieTimeline, HoodieInstant> actual =
+        CompactionUtils.getDeltaCommitsSinceLatestCompaction(timeline).get();
+    if (hasCompletedCompaction) {
+      Stream<HoodieInstant> instants = actual.getLeft().getInstants();
+      assertEquals(
+          Stream.of(
+              new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "07"),
+              new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "08"),
+              new HoodieInstant(true, HoodieTimeline.DELTA_COMMIT_ACTION, "09"))
+              .collect(Collectors.toList()),
+          actual.getLeft().getInstants().collect(Collectors.toList()));
+      assertEquals(
+          new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "06"),
+          actual.getRight());
+    } else {
+      assertEquals(
+          Stream.of(
+              new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "01"),
+              new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "02"),
+              new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "03"),
+              new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "04"),
+              new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "05"),
+              new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "07"),
+              new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "08"),
+              new HoodieInstant(true, HoodieTimeline.DELTA_COMMIT_ACTION, "09"))
+              .collect(Collectors.toList()),
+          actual.getLeft().getInstants().collect(Collectors.toList()));
+      assertEquals(
+          new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "01"),
+          actual.getRight());
+    }
+  }
+
+  @Test
+  public void testGetDeltaCommitsSinceLatestCompactionWithEmptyDeltaCommits() {
+    HoodieActiveTimeline timeline = new MockHoodieActiveTimeline();
+    assertEquals(Option.empty(), CompactionUtils.getDeltaCommitsSinceLatestCompaction(timeline));
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testGetOldestInstantToKeepForCompaction(boolean hasCompletedCompaction) {
+    HoodieActiveTimeline timeline = prepareTimeline(hasCompletedCompaction);
+    Option<HoodieInstant> actual = CompactionUtils.getOldestInstantToRetainForCompaction(timeline, 20);
+
+    if (hasCompletedCompaction) {
+      assertEquals(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "06"), actual.get());
+    } else {
+      assertEquals(new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "01"), actual.get());
+    }
+
+    actual = CompactionUtils.getOldestInstantToRetainForCompaction(timeline, 3);
+    assertEquals(new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "07"), actual.get());
+
+    actual = CompactionUtils.getOldestInstantToRetainForCompaction(timeline, 2);
+    assertEquals(new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "08"), actual.get());
+  }
+
+  @Test
+  public void testGetOldestInstantToKeepForCompactionWithEmptyDeltaCommits() {
+    HoodieActiveTimeline timeline = new MockHoodieActiveTimeline();
+    assertEquals(Option.empty(), CompactionUtils.getOldestInstantToRetainForCompaction(timeline, 20));
+  }
+
+  private HoodieActiveTimeline prepareTimeline(boolean hasCompletedCompaction) {
+    if (hasCompletedCompaction) {
+      return new MockHoodieActiveTimeline(
+          Stream.of("01", "02", "03", "04", "05", "07", "08"),
+          Stream.of("06"),
+          Stream.of(Pair.of("09", HoodieTimeline.DELTA_COMMIT_ACTION)));
+    } else {
+      return new MockHoodieActiveTimeline(
+          Stream.of("01", "02", "03", "04", "05", "07", "08"),
+          Stream.empty(),
+          Stream.of(
+              Pair.of("06", HoodieTimeline.COMMIT_ACTION),
+              Pair.of("09", HoodieTimeline.DELTA_COMMIT_ACTION)));
+    }
+  }
+
   /**
    * Validates if generated compaction plan matches with input file-slices.
    *
    * @param input File Slices with partition-path
-   * @param plan Compaction Plan
+   * @param plan  Compaction Plan
    */
   private void testFileSlicesCompactionPlanEquality(List<Pair<String, FileSlice>> input, HoodieCompactionPlan plan) {
     assertEquals(input.size(), plan.getOperations().size(), "All file-slices present");
@@ -245,12 +337,12 @@ public class TestCompactionUtils extends HoodieCommonTestHarness {
   /**
    * Validates if generated compaction operation matches with input file slice and partition path.
    *
-   * @param slice File Slice
-   * @param op HoodieCompactionOperation
+   * @param slice            File Slice
+   * @param op               HoodieCompactionOperation
    * @param expPartitionPath Partition path
    */
   private void testFileSliceCompactionOpEquality(FileSlice slice, HoodieCompactionOperation op, String expPartitionPath,
-      int version) {
+                                                 int version) {
     assertEquals(expPartitionPath, op.getPartitionPath(), "Partition path is correct");
     assertEquals(slice.getBaseInstantTime(), op.getBaseInstantTime(), "Same base-instant");
     assertEquals(slice.getFileId(), op.getFileId(), "Same file-id");
@@ -269,5 +361,25 @@ public class TestCompactionUtils extends HoodieCommonTestHarness {
   @Override
   protected HoodieTableType getTableType() {
     return HoodieTableType.MERGE_ON_READ;
+  }
+
+  class MockHoodieActiveTimeline extends HoodieActiveTimeline {
+
+    public MockHoodieActiveTimeline() {
+      super();
+      this.setInstants(new ArrayList<>());
+    }
+
+    public MockHoodieActiveTimeline(
+        Stream<String> completedDeltaCommits,
+        Stream<String> completedCompactionCommits,
+        Stream<Pair<String, String>> inflights) {
+      super();
+      this.setInstants(Stream.concat(
+          Stream.concat(completedDeltaCommits.map(s -> new HoodieInstant(false, DELTA_COMMIT_ACTION, s)),
+              completedCompactionCommits.map(s -> new HoodieInstant(false, COMMIT_ACTION, s))),
+              inflights.map(s -> new HoodieInstant(true, s.getRight(), s.getLeft())))
+          .sorted(Comparator.comparing(HoodieInstant::getFileName)).collect(Collectors.toList()));
+    }
   }
 }

@@ -46,6 +46,9 @@ import org.apache.log4j.Logger;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
+import java.util.HashMap;
+
+import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 
 /**
  * Base class for all write operations logically performed at the file group level.
@@ -98,6 +101,8 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
   protected final String fileId;
   protected final String writeToken;
   protected final TaskContextSupplier taskContextSupplier;
+  // For full schema evolution
+  protected final boolean schemaOnReadEnabled;
 
   public HoodieWriteHandle(HoodieWriteConfig config, String instantTime, String partitionPath,
                            String fileId, HoodieTable<T, I, K, O> hoodieTable, TaskContextSupplier taskContextSupplier) {
@@ -108,7 +113,7 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
   protected HoodieWriteHandle(HoodieWriteConfig config, String instantTime, String partitionPath, String fileId,
                               HoodieTable<T, I, K, O> hoodieTable, Option<Schema> overriddenSchema,
                               TaskContextSupplier taskContextSupplier) {
-    super(config, instantTime, hoodieTable);
+    super(config, Option.of(instantTime), hoodieTable);
     this.partitionPath = partitionPath;
     this.fileId = fileId;
     this.tableSchema = overriddenSchema.orElseGet(() -> getSpecifiedTableSchema(config));
@@ -120,6 +125,7 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
         !hoodieTable.getIndex().isImplicitWithStorage(), config.getWriteStatusFailureFraction());
     this.taskContextSupplier = taskContextSupplier;
     this.writeToken = makeWriteToken();
+    schemaOnReadEnabled = !isNullOrEmpty(hoodieTable.getConfig().getInternalSchema());
   }
 
   /**
@@ -195,6 +201,10 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
     return false;
   }
 
+  boolean layoutControlsNumFiles() {
+    return hoodieTable.getStorageLayout().determinesNumFileGroups();
+  }
+
   /**
    * Perform the actual writing of the given record into the backing file.
    */
@@ -206,7 +216,7 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
    * Perform the actual writing of the given record into the backing file.
    */
   public void write(HoodieRecord record, Option<IndexedRecord> avroRecord, Option<Exception> exception) {
-    Option recordMetadata = record.getData().getMetadata();
+    Option recordMetadata = ((HoodieRecordPayload) record.getData()).getMetadata();
     if (exception.isPresent() && exception.get() instanceof Throwable) {
       // Not throwing exception from here, since we don't want to fail the entire job for a single record
       writeStatus.markFailure(record, exception.get(), recordMetadata);
@@ -220,7 +230,13 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
    * Rewrite the GenericRecord with the Schema containing the Hoodie Metadata fields.
    */
   protected GenericRecord rewriteRecord(GenericRecord record) {
-    return HoodieAvroUtils.rewriteRecord(record, writeSchemaWithMetaFields);
+    return schemaOnReadEnabled ? HoodieAvroUtils.rewriteRecordWithNewSchema(record, writeSchemaWithMetaFields, new HashMap<>())
+        : HoodieAvroUtils.rewriteRecord(record, writeSchemaWithMetaFields);
+  }
+
+  protected GenericRecord rewriteRecordWithMetadata(GenericRecord record, String fileName) {
+    return schemaOnReadEnabled ? HoodieAvroUtils.rewriteEvolutionRecordWithMetadata(record, writeSchemaWithMetaFields, fileName)
+        : HoodieAvroUtils.rewriteRecordWithMetadata(record, writeSchemaWithMetaFields, fileName);
   }
 
   public abstract List<WriteStatus> close();

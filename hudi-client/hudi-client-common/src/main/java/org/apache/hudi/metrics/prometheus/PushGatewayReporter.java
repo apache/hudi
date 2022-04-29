@@ -29,6 +29,8 @@ import com.codahale.metrics.ScheduledReporter;
 import io.prometheus.client.CollectorRegistry;
 import io.prometheus.client.dropwizard.DropwizardExports;
 import io.prometheus.client.exporter.PushGateway;
+import java.net.MalformedURLException;
+import java.net.URL;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -51,15 +53,28 @@ public class PushGatewayReporter extends ScheduledReporter {
                                 TimeUnit rateUnit,
                                 TimeUnit durationUnit,
                                 String jobName,
-                                String address,
+                                String serverHost,
+                                int serverPort,
                                 boolean deleteShutdown) {
     super(registry, "hudi-push-gateway-reporter", filter, rateUnit, durationUnit);
     this.jobName = jobName;
     this.deleteShutdown = deleteShutdown;
     collectorRegistry = new CollectorRegistry();
     metricExports = new DropwizardExports(registry);
-    pushGateway = new PushGateway(address);
+    pushGateway = createPushGatewayClient(serverHost, serverPort);
     metricExports.register(collectorRegistry);
+  }
+
+  private PushGateway createPushGatewayClient(String serverHost, int serverPort) {
+    if (serverPort == 443) {
+      try {
+        return new PushGateway(new URL("https://" + serverHost + ":" + serverPort));
+      } catch (MalformedURLException e) {
+        e.printStackTrace();
+        throw new IllegalArgumentException("Malformed pushgateway host: " + serverHost);
+      }
+    }
+    return new PushGateway(serverHost + ":" + serverPort);
   }
 
   @Override

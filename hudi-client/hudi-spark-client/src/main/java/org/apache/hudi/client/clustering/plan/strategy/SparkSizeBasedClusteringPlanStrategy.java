@@ -68,35 +68,42 @@ public class SparkSizeBasedClusteringPlanStrategy<T extends HoodieRecordPayload<
 
   @Override
   protected Stream<HoodieClusteringGroup> buildClusteringGroupsForPartition(String partitionPath, List<FileSlice> fileSlices) {
+    HoodieWriteConfig writeConfig = getWriteConfig();
+
     List<Pair<List<FileSlice>, Integer>> fileSliceGroups = new ArrayList<>();
     List<FileSlice> currentGroup = new ArrayList<>();
     long totalSizeSoFar = 0;
+
     for (FileSlice currentSlice : fileSlices) {
-      // assume each filegroup size is ~= parquet.max.file.size
-      totalSizeSoFar += currentSlice.getBaseFile().isPresent() ? currentSlice.getBaseFile().get().getFileSize() : getWriteConfig().getParquetMaxFileSize();
       // check if max size is reached and create new group, if needed.
-      if (totalSizeSoFar >= getWriteConfig().getClusteringMaxBytesInGroup() && !currentGroup.isEmpty()) {
-        int numOutputGroups = getNumberOfOutputFileGroups(totalSizeSoFar, getWriteConfig().getClusteringTargetFileMaxBytes());
+      if (totalSizeSoFar >= writeConfig.getClusteringMaxBytesInGroup() && !currentGroup.isEmpty()) {
+        int numOutputGroups = getNumberOfOutputFileGroups(totalSizeSoFar, writeConfig.getClusteringTargetFileMaxBytes());
         LOG.info("Adding one clustering group " + totalSizeSoFar + " max bytes: "
-            + getWriteConfig().getClusteringMaxBytesInGroup() + " num input slices: " + currentGroup.size() + " output groups: " + numOutputGroups);
+            + writeConfig.getClusteringMaxBytesInGroup() + " num input slices: " + currentGroup.size() + " output groups: " + numOutputGroups);
         fileSliceGroups.add(Pair.of(currentGroup, numOutputGroups));
         currentGroup = new ArrayList<>();
         totalSizeSoFar = 0;
       }
+
+      // Add to the current file-group
       currentGroup.add(currentSlice);
+      // assume each file group size is ~= parquet.max.file.size
+      totalSizeSoFar += currentSlice.getBaseFile().isPresent() ? currentSlice.getBaseFile().get().getFileSize() : writeConfig.getParquetMaxFileSize();
     }
+
     if (!currentGroup.isEmpty()) {
-      int numOutputGroups = getNumberOfOutputFileGroups(totalSizeSoFar, getWriteConfig().getClusteringTargetFileMaxBytes());
+      int numOutputGroups = getNumberOfOutputFileGroups(totalSizeSoFar, writeConfig.getClusteringTargetFileMaxBytes());
       LOG.info("Adding final clustering group " + totalSizeSoFar + " max bytes: "
-          + getWriteConfig().getClusteringMaxBytesInGroup() + " num input slices: " + currentGroup.size() + " output groups: " + numOutputGroups);
+          + writeConfig.getClusteringMaxBytesInGroup() + " num input slices: " + currentGroup.size() + " output groups: " + numOutputGroups);
       fileSliceGroups.add(Pair.of(currentGroup, numOutputGroups));
     }
 
-    return fileSliceGroups.stream().map(fileSliceGroup -> HoodieClusteringGroup.newBuilder()
-        .setSlices(getFileSliceInfo(fileSliceGroup.getLeft()))
-        .setNumOutputFileGroups(fileSliceGroup.getRight())
-        .setMetrics(buildMetrics(fileSliceGroup.getLeft()))
-        .build());
+    return fileSliceGroups.stream().map(fileSliceGroup ->
+        HoodieClusteringGroup.newBuilder()
+          .setSlices(getFileSliceInfo(fileSliceGroup.getLeft()))
+          .setNumOutputFileGroups(fileSliceGroup.getRight())
+          .setMetrics(buildMetrics(fileSliceGroup.getLeft()))
+          .build());
   }
 
   @Override
@@ -109,14 +116,9 @@ public class SparkSizeBasedClusteringPlanStrategy<T extends HoodieRecordPayload<
   }
 
   @Override
-  protected List<String> filterPartitionPaths(List<String> partitionPaths) {
-    return partitionPaths;
-  }
-
-  @Override
   protected Stream<FileSlice> getFileSlicesEligibleForClustering(final String partition) {
     return super.getFileSlicesEligibleForClustering(partition)
-        // Only files that have basefile size smaller than small file size are eligible.
+        // Only files that have base file size smaller than small file size are eligible.
         .filter(slice -> slice.getBaseFile().map(HoodieBaseFile::getFileSize).orElse(0L) < getWriteConfig().getClusteringSmallFileLimit());
   }
 

@@ -208,7 +208,8 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
         // Note, the converter may over estimate the size of a record in the JVM
         this.estimatedPayloadSize = keySizeEstimator.sizeEstimate(key) + valueSizeEstimator.sizeEstimate(value);
         LOG.info("Estimated Payload size => " + estimatedPayloadSize);
-      } else if (shouldEstimatePayloadSize && inMemoryMap.size() % NUMBER_OF_RECORDS_TO_ESTIMATE_PAYLOAD_SIZE == 0) {
+      } else if (shouldEstimatePayloadSize && !inMemoryMap.isEmpty()
+          && (inMemoryMap.size() % NUMBER_OF_RECORDS_TO_ESTIMATE_PAYLOAD_SIZE == 0)) {
         // Re-estimate the size of a record by calculating the size of the entire map containing
         // N entries and then dividing by the number of entries present (N). This helps to get a
         // correct estimation of the size of each record in the JVM.

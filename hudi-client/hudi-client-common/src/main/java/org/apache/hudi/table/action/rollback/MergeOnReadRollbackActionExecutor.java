@@ -43,8 +43,9 @@ public class MergeOnReadRollbackActionExecutor<T extends HoodieRecordPayload, I,
                                            HoodieTable<T, I, K, O> table,
                                            String instantTime,
                                            HoodieInstant commitInstant,
-                                           boolean deleteInstants) {
-    super(context, config, table, instantTime, commitInstant, deleteInstants);
+                                           boolean deleteInstants,
+                                           boolean skipLocking) {
+    super(context, config, table, instantTime, commitInstant, deleteInstants, skipLocking);
   }
 
   public MergeOnReadRollbackActionExecutor(HoodieEngineContext context,
@@ -54,8 +55,9 @@ public class MergeOnReadRollbackActionExecutor<T extends HoodieRecordPayload, I,
                                            HoodieInstant commitInstant,
                                            boolean deleteInstants,
                                            boolean skipTimelinePublish,
-                                           boolean useMarkerBasedStrategy) {
-    super(context, config, table, instantTime, commitInstant, deleteInstants, skipTimelinePublish, useMarkerBasedStrategy);
+                                           boolean useMarkerBasedStrategy,
+                                           boolean skipLocking) {
+    super(context, config, table, instantTime, commitInstant, deleteInstants, skipTimelinePublish, useMarkerBasedStrategy, skipLocking);
   }
 
   @Override
@@ -65,7 +67,6 @@ public class MergeOnReadRollbackActionExecutor<T extends HoodieRecordPayload, I,
 
     LOG.info("Rolling back instant " + instantToRollback);
 
-    HoodieInstant resolvedInstant = instantToRollback;
     // Atomically un-publish all non-inflight commits
     if (instantToRollback.isCompleted()) {
       LOG.info("Un-publishing instant " + instantToRollback + ", deleteInstants=" + deleteInstants);
@@ -91,8 +92,6 @@ public class MergeOnReadRollbackActionExecutor<T extends HoodieRecordPayload, I,
 
     dropBootstrapIndexIfNeeded(resolvedInstant);
 
-    // Delete Inflight instants if enabled
-    deleteInflightAndRequestedInstant(deleteInstants, table.getActiveTimeline(), resolvedInstant);
     LOG.info("Time(in ms) taken to finish rollback " + rollbackTimer.endTimer());
     return allRollbackStats;
   }

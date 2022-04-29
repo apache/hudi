@@ -471,6 +471,9 @@ public class HiveSchemaUtil {
     if (!config.partitionFields.isEmpty()) {
       sb.append(" PARTITIONED BY (").append(partitionsStr).append(")");
     }
+    if (config.bucketSpec != null) {
+      sb.append(' ' + config.bucketSpec + ' ');
+    }
     sb.append(" ROW FORMAT SERDE '").append(serdeClass).append("'");
     if (serdeProperties != null && !serdeProperties.isEmpty()) {
       sb.append(" WITH SERDEPROPERTIES (").append(propertyToString(serdeProperties)).append(")");

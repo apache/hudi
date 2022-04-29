@@ -17,8 +17,8 @@
 
 package org.apache.hudi.async;
 
-import org.apache.hudi.client.AbstractCompactor;
-import org.apache.hudi.client.AbstractHoodieWriteClient;
+import org.apache.hudi.client.BaseCompactor;
+import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.common.engine.EngineProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -37,7 +37,7 @@ import java.util.stream.IntStream;
 /**
  * Async Compactor Service that runs in separate thread. Currently, only one compactor is allowed to run at any time.
  */
-public abstract class AsyncCompactService extends HoodieAsyncService {
+public abstract class AsyncCompactService extends HoodieAsyncTableService {
 
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LogManager.getLogger(AsyncCompactService.class);
@@ -48,21 +48,21 @@ public abstract class AsyncCompactService extends HoodieAsyncService {
   public static final String COMPACT_POOL_NAME = "hoodiecompact";
 
   private final int maxConcurrentCompaction;
-  private transient AbstractCompactor compactor;
+  private transient BaseCompactor compactor;
   protected transient HoodieEngineContext context;
 
-  public AsyncCompactService(HoodieEngineContext context, AbstractHoodieWriteClient client) {
+  public AsyncCompactService(HoodieEngineContext context, BaseHoodieWriteClient client) {
     this(context, client, false);
   }
 
-  public AsyncCompactService(HoodieEngineContext context, AbstractHoodieWriteClient client, boolean runInDaemonMode) {
-    super(runInDaemonMode);
+  public AsyncCompactService(HoodieEngineContext context, BaseHoodieWriteClient client, boolean runInDaemonMode) {
+    super(client.getConfig(), runInDaemonMode);
     this.context = context;
     this.compactor = createCompactor(client);
     this.maxConcurrentCompaction = 1;
   }
 
-  protected abstract AbstractCompactor createCompactor(AbstractHoodieWriteClient client);
+  protected abstract BaseCompactor createCompactor(BaseHoodieWriteClient client);
 
   /**
    * Start Compaction Service.
@@ -92,10 +92,16 @@ public abstract class AsyncCompactService extends HoodieAsyncService {
         }
         LOG.info("Compactor shutting down properly!!");
       } catch (InterruptedException ie) {
+        hasError = true;
         LOG.warn("Compactor executor thread got interrupted exception. Stopping", ie);
       } catch (IOException e) {
-        LOG.error("Compactor executor failed", e);
+        hasError = true;
+        LOG.error("Compactor executor failed due to IOException", e);
         throw new HoodieIOException(e.getMessage(), e);
+      } catch (Exception e) {
+        hasError = true;
+        LOG.error("Compactor executor failed", e);
+        throw e;
       }
       return true;
     }, executor)).toArray(CompletableFuture[]::new)), executor);
@@ -110,7 +116,7 @@ public abstract class AsyncCompactService extends HoodieAsyncService {
     return false;
   }
 
-  public synchronized void updateWriteClient(AbstractHoodieWriteClient writeClient) {
+  public synchronized void updateWriteClient(BaseHoodieWriteClient writeClient) {
     this.compactor.updateWriteClient(writeClient);
   }
 }

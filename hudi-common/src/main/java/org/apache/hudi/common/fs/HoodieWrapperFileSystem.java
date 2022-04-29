@@ -48,6 +48,7 @@ import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.hadoop.security.Credentials;
 import org.apache.hadoop.security.token.Token;
 import org.apache.hadoop.util.Progressable;
+import org.apache.hudi.hadoop.CachingPath;
 
 import java.io.IOException;
 import java.net.URI;
@@ -135,13 +136,13 @@ public class HoodieWrapperFileSystem extends FileSystem {
     }
   }
 
-  private static Path convertPathWithScheme(Path oldPath, String newScheme) {
+  public static Path convertPathWithScheme(Path oldPath, String newScheme) {
     URI oldURI = oldPath.toUri();
     URI newURI;
     try {
       newURI = new URI(newScheme, oldURI.getUserInfo(), oldURI.getHost(), oldURI.getPort(), oldURI.getPath(),
           oldURI.getQuery(), oldURI.getFragment());
-      return new Path(newURI);
+      return new CachingPath(newURI);
     } catch (URISyntaxException e) {
       // TODO - Better Exception handling
       throw new RuntimeException(e);

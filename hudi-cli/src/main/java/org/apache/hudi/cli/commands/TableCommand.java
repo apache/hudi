@@ -20,13 +20,16 @@ package org.apache.hudi.cli.commands;
 
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
+import org.apache.hudi.cli.HoodieTableHeaderFields;
 import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.exception.TableNotFoundException;
 
 import org.apache.avro.Schema;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.springframework.shell.core.CommandMarker;
@@ -35,12 +38,21 @@ import org.springframework.shell.core.annotation.CliOption;
 import org.springframework.stereotype.Component;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+import java.util.Set;
+import java.util.TreeSet;
+import java.util.stream.Collectors;
+
+import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME;
 
 /**
  * CLI command to display hudi table options.
@@ -168,6 +180,67 @@ public class TableCommand implements CommandMarker {
     } else {
       return String.format("Latest table schema %s", schema.toString(true));
     }
+  }
+
+  @CliCommand(value = "table recover-configs", help = "Recover table configs, from update/delete that failed midway.")
+  public String recoverTableConfig() throws IOException {
+    HoodieCLI.refreshTableMetadata();
+    HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
+    Path metaPathDir = new Path(client.getBasePath(), METAFOLDER_NAME);
+    HoodieTableConfig.recover(client.getFs(), metaPathDir);
+    return descTable();
+  }
+
+  @CliCommand(value = "table update-configs", help = "Update the table configs with configs with provided file.")
+  public String updateTableConfig(
+      @CliOption(key = {"props-file"}, mandatory = true, help = "Path to a properties file on local filesystem")
+      final String updatePropsFilePath) throws IOException {
+    HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
+    Map<String, String> oldProps = client.getTableConfig().propsMap();
+
+    Properties updatedProps = new Properties();
+    updatedProps.load(new FileInputStream(updatePropsFilePath));
+    Path metaPathDir = new Path(client.getBasePath(), METAFOLDER_NAME);
+    HoodieTableConfig.update(client.getFs(), metaPathDir, updatedProps);
+
+    HoodieCLI.refreshTableMetadata();
+    Map<String, String> newProps = HoodieCLI.getTableMetaClient().getTableConfig().propsMap();
+    return renderOldNewProps(newProps, oldProps);
+  }
+
+  @CliCommand(value = "table delete-configs", help = "Delete the supplied table configs from the table.")
+  public String deleteTableConfig(
+      @CliOption(key = {"comma-separated-configs"}, mandatory = true, help = "Comma separated list of configs to delete.")
+      final String csConfigs) {
+    HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
+    Map<String, String> oldProps = client.getTableConfig().propsMap();
+
+    Set<String> deleteConfigs = Arrays.stream(csConfigs.split(",")).collect(Collectors.toSet());
+    Path metaPathDir = new Path(client.getBasePath(), METAFOLDER_NAME);
+    HoodieTableConfig.delete(client.getFs(), metaPathDir, deleteConfigs);
+
+    HoodieCLI.refreshTableMetadata();
+    Map<String, String> newProps = HoodieCLI.getTableMetaClient().getTableConfig().propsMap();
+    return renderOldNewProps(newProps, oldProps);
+  }
+
+  private static String renderOldNewProps(Map<String, String> newProps, Map<String, String> oldProps) {
+    TreeSet<String> allPropKeys = new TreeSet<>();
+    allPropKeys.addAll(newProps.keySet().stream().map(Object::toString).collect(Collectors.toSet()));
+    allPropKeys.addAll(oldProps.keySet());
+
+    String[][] rows = new String[allPropKeys.size()][];
+    int ind = 0;
+    for (String propKey : allPropKeys) {
+      String[] row = new String[]{
+          propKey,
+          oldProps.getOrDefault(propKey, "null"),
+          newProps.getOrDefault(propKey, "null")
+      };
+      rows[ind++] = row;
+    }
+    return HoodiePrintHelper.print(new String[] {HoodieTableHeaderFields.HEADER_HOODIE_PROPERTY,
+        HoodieTableHeaderFields.HEADER_OLD_VALUE, HoodieTableHeaderFields.HEADER_NEW_VALUE}, rows);
   }
 
   /**

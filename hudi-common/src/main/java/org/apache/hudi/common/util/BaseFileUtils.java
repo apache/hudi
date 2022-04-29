@@ -18,14 +18,6 @@
 
 package org.apache.hudi.common.util;
 
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
@@ -35,6 +27,16 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
+
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
+
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 public abstract class BaseFileUtils {
 
@@ -167,18 +169,35 @@ public abstract class BaseFileUtils {
    * Fetch {@link HoodieKey}s from the given data file.
    * @param configuration configuration to build fs object
    * @param filePath      The data file path
-   * @return {@link List} of {@link HoodieKey}s fetched from the parquet file
+   * @return {@link List} of {@link HoodieKey}s fetched from the data file
    */
-  public abstract List<HoodieKey> fetchRecordKeyPartitionPath(Configuration configuration, Path filePath);
+  public abstract List<HoodieKey> fetchHoodieKeys(Configuration configuration, Path filePath);
+
+  /**
+   * Provides a closable iterator for reading the given data file.
+   * @param configuration configuration to build fs object
+   * @param filePath      The data file path
+   * @param keyGeneratorOpt instance of KeyGenerator.
+   * @return {@link ClosableIterator} of {@link HoodieKey}s for reading the file
+   */
+  public abstract ClosableIterator<HoodieKey> getHoodieKeyIterator(Configuration configuration, Path filePath, Option<BaseKeyGenerator> keyGeneratorOpt);
+
+  /**
+   * Provides a closable iterator for reading the given data file.
+   * @param configuration configuration to build fs object
+   * @param filePath      The data file path
+   * @return {@link ClosableIterator} of {@link HoodieKey}s for reading the file
+   */
+  public abstract ClosableIterator<HoodieKey> getHoodieKeyIterator(Configuration configuration, Path filePath);
 
   /**
    * Fetch {@link HoodieKey}s from the given data file.
    * @param configuration configuration to build fs object
    * @param filePath      The data file path
    * @param keyGeneratorOpt instance of KeyGenerator.
-   * @return {@link List} of {@link HoodieKey}s fetched from the parquet file
+   * @return {@link List} of {@link HoodieKey}s fetched from the data file
    */
-  public abstract List<HoodieKey> fetchRecordKeyPartitionPath(Configuration configuration, Path filePath, Option<BaseKeyGenerator> keyGeneratorOpt);
+  public abstract List<HoodieKey> fetchHoodieKeys(Configuration configuration, Path filePath, Option<BaseKeyGenerator> keyGeneratorOpt);
 
   /**
    * Read the Avro schema of the data file.
@@ -187,4 +206,9 @@ public abstract class BaseFileUtils {
    * @return The Avro schema of the data file
    */
   public abstract Schema readAvroSchema(Configuration configuration, Path filePath);
+
+  /**
+   * @return The subclass's {@link HoodieFileFormat}.
+   */
+  public abstract HoodieFileFormat getFormat();
 }

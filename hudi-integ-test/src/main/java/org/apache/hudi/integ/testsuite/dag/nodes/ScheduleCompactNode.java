@@ -56,5 +56,4 @@ public class ScheduleCompactNode extends DagNode<Option<String>> {
       this.result = scheduledInstant;
     }
   }
-
 }

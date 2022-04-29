@@ -19,15 +19,19 @@
   <parent>
     <artifactId>hudi-client</artifactId>
     <groupId>org.apache.hudi</groupId>
-    <version>0.10.0-SNAPSHOT</version>
+    <version>0.12.0-SNAPSHOT</version>
   </parent>
   <modelVersion>4.0.0</modelVersion>
 
   <artifactId>hudi-flink-client</artifactId>
-  <version>0.10.0-SNAPSHOT</version>
+  <version>0.12.0-SNAPSHOT</version>
 
   <name>hudi-flink-client</name>
   <packaging>jar</packaging>
+
+  <properties>
+    <parquet.version>${flink.format.parquet.version}</parquet.version>
+  </properties>
 
   <dependencies>
     <!-- Hudi  -->
@@ -60,7 +64,7 @@
     </dependency>
     <dependency>
       <groupId>org.apache.flink</groupId>
-      <artifactId>flink-table-runtime-blink_${scala.binary.version}</artifactId>
+      <artifactId>${flink.table.runtime.artifactId}</artifactId>
       <version>${flink.version}</version>
       <scope>provided</scope>
     </dependency>
@@ -87,6 +91,13 @@
     <dependency>
       <groupId>org.apache.parquet</groupId>
       <artifactId>parquet-avro</artifactId>
+      <version>${parquet.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>org.apache.parquet</groupId>
+      <artifactId>parquet-column</artifactId>
+      <version>${parquet.version}</version>
     </dependency>
 
     <!-- Hoodie - Test -->
@@ -159,7 +170,7 @@
     </dependency>
     <dependency>
       <groupId>org.apache.flink</groupId>
-      <artifactId>flink-runtime_${scala.binary.version}</artifactId>
+      <artifactId>${flink.runtime.artifactId}</artifactId>
       <version>${flink.version}</version>
       <scope>test</scope>
       <classifier>tests</classifier>

@@ -18,15 +18,15 @@
 
 package org.apache.hudi.integ.testsuite;
 
-import java.io.Serializable;
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.HoodieReadClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.util.Option;
@@ -35,6 +35,7 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodiePayloadConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.integ.testsuite.HoodieTestSuiteJob.HoodieTestSuiteConfig;
 import org.apache.hudi.integ.testsuite.dag.nodes.CleanNode;
@@ -42,8 +43,13 @@ import org.apache.hudi.integ.testsuite.dag.nodes.DagNode;
 import org.apache.hudi.integ.testsuite.dag.nodes.RollbackNode;
 import org.apache.hudi.integ.testsuite.dag.nodes.ScheduleCompactNode;
 import org.apache.hudi.integ.testsuite.writer.DeltaWriteStats;
+import org.apache.hudi.table.HoodieSparkTable;
+import org.apache.hudi.table.action.HoodieWriteMetadata;
+import org.apache.hudi.table.action.compact.CompactHelpers;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -51,6 +57,8 @@ import org.apache.spark.rdd.RDD;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
+import java.io.Serializable;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -127,7 +135,7 @@ public class HoodieTestSuiteWriter implements Serializable {
     Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> nextBatch = fetchSource();
     lastCheckpoint = Option.of(nextBatch.getValue().getLeft());
     JavaRDD<HoodieRecord> inputRDD = nextBatch.getRight().getRight();
-    return inputRDD.map(r -> (GenericRecord) r.getData()
+    return inputRDD.map(r -> (GenericRecord) ((HoodieAvroRecord) r).getData()
         .getInsertValue(new Schema.Parser().parse(schema)).get()).rdd();
   }
 
@@ -213,7 +221,8 @@ public class HoodieTestSuiteWriter implements Serializable {
         }
       }
       if (instantTime.isPresent()) {
-        return (JavaRDD<WriteStatus>) writeClient.compact(instantTime.get());
+        HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = writeClient.compact(instantTime.get());
+        return compactionMetadata.getWriteStatuses();
       } else {
         return null;
       }
@@ -236,7 +245,7 @@ public class HoodieTestSuiteWriter implements Serializable {
 
   public Option<String> scheduleCompaction(Option<Map<String, String>> previousCommitExtraMetadata) throws
       Exception {
-    if (!cfg.useDeltaStreamer) {
+    if (cfg.useDeltaStreamer) {
       deltaStreamerWrapper.scheduleCompact();
       return Option.empty();
     } else {
@@ -251,11 +260,28 @@ public class HoodieTestSuiteWriter implements Serializable {
       /** Store the checkpoint in the commit metadata just like
        * {@link HoodieDeltaStreamer#commit(SparkRDDWriteClient, JavaRDD, Option)} **/
       extraMetadata.put(HoodieDeltaStreamerWrapper.CHECKPOINT_KEY, lastCheckpoint.get());
-      if (generatedDataStats != null) {
+      if (generatedDataStats != null && generatedDataStats.count() > 1) {
         // Just stores the path where this batch of data is generated to
         extraMetadata.put(GENERATED_DATA_PATH, generatedDataStats.map(s -> s.getFilePath()).collect().get(0));
       }
       writeClient.commit(instantTime.get(), records, Option.of(extraMetadata));
+    }
+  }
+
+  public void commitCompaction(JavaRDD<WriteStatus> records, JavaRDD<DeltaWriteStats> generatedDataStats,
+                     Option<String> instantTime) throws IOException {
+    if (!cfg.useDeltaStreamer) {
+      Map<String, String> extraMetadata = new HashMap<>();
+      /** Store the checkpoint in the commit metadata just like
+       * {@link HoodieDeltaStreamer#commit(SparkRDDWriteClient, JavaRDD, Option)} **/
+      extraMetadata.put(HoodieDeltaStreamerWrapper.CHECKPOINT_KEY, lastCheckpoint.get());
+      if (generatedDataStats != null && generatedDataStats.count() > 1) {
+        // Just stores the path where this batch of data is generated to
+        extraMetadata.put(GENERATED_DATA_PATH, generatedDataStats.map(s -> s.getFilePath()).collect().get(0));
+      }
+      HoodieSparkTable<HoodieRecordPayload> table = HoodieSparkTable.create(writeClient.getConfig(), writeClient.getEngineContext());
+      HoodieCommitMetadata metadata = CompactHelpers.getInstance().createCompactionMetadata(table, instantTime.get(), HoodieJavaRDD.of(records), writeClient.getConfig().getSchema());
+      writeClient.commitCompaction(instantTime.get(), metadata, Option.of(extraMetadata));
     }
   }
 

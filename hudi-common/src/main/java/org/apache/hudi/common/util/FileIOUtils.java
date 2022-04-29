@@ -18,6 +18,11 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.hudi.exception.HoodieIOException;
+
+import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -98,6 +103,31 @@ public class FileIOUtils {
     }
   }
 
+  /**
+   * Copies the file content from source path to destination path.
+   *
+   * @param fileSystem     {@link FileSystem} instance.
+   * @param sourceFilePath Source file path.
+   * @param destFilePath   Destination file path.
+   */
+  public static void copy(
+      FileSystem fileSystem, org.apache.hadoop.fs.Path sourceFilePath,
+      org.apache.hadoop.fs.Path destFilePath) {
+    FSDataInputStream fsDataInputStream = null;
+    FSDataOutputStream fsDataOutputStream = null;
+    try {
+      fsDataInputStream = fileSystem.open(sourceFilePath);
+      fsDataOutputStream = fileSystem.create(destFilePath, false);
+      copy(fsDataInputStream, fsDataOutputStream);
+    } catch (IOException e) {
+      throw new HoodieIOException(String.format("Cannot copy from %s to %s",
+          sourceFilePath.toString(), destFilePath.toString()), e);
+    } finally {
+      closeQuietly(fsDataInputStream);
+      closeQuietly(fsDataOutputStream);
+    }
+  }
+
   public static byte[] readAsByteArray(InputStream input) throws IOException {
     return readAsByteArray(input, 128);
   }
@@ -129,5 +159,49 @@ public class FileIOUtils {
     } catch (IOException e) {
       LOG.warn("IOException during close", e);
     }
+  }
+
+  public static void createFileInPath(FileSystem fileSystem, org.apache.hadoop.fs.Path fullPath, Option<byte[]> content, boolean ignoreIOE) {
+    try {
+      // If the path does not exist, create it first
+      if (!fileSystem.exists(fullPath)) {
+        if (fileSystem.createNewFile(fullPath)) {
+          LOG.info("Created a new file in meta path: " + fullPath);
+        } else {
+          throw new HoodieIOException("Failed to create file " + fullPath);
+        }
+      }
+
+      if (content.isPresent()) {
+        FSDataOutputStream fsout = fileSystem.create(fullPath, true);
+        fsout.write(content.get());
+        fsout.close();
+      }
+    } catch (IOException e) {
+      LOG.warn("Failed to create file " + fullPath, e);
+      if (!ignoreIOE) {
+        throw new HoodieIOException("Failed to create file " + fullPath, e);
+      }
+    }
+  }
+
+  public static void createFileInPath(FileSystem fileSystem, org.apache.hadoop.fs.Path fullPath, Option<byte[]> content) {
+    createFileInPath(fileSystem, fullPath, content, false);
+  }
+
+  public static Option<byte[]> readDataFromPath(FileSystem fileSystem, org.apache.hadoop.fs.Path detailPath, boolean ignoreIOE) {
+    try (FSDataInputStream is = fileSystem.open(detailPath)) {
+      return Option.of(FileIOUtils.readAsByteArray(is));
+    } catch (IOException e) {
+      LOG.warn("Could not read commit details from " + detailPath, e);
+      if (!ignoreIOE) {
+        throw new HoodieIOException("Could not read commit details from " + detailPath, e);
+      }
+      return Option.empty();
+    }
+  }
+
+  public static Option<byte[]> readDataFromPath(FileSystem fileSystem, org.apache.hadoop.fs.Path detailPath) {
+    return readDataFromPath(fileSystem, detailPath, false);
   }
 }

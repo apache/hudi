@@ -203,6 +203,8 @@ public class TestHoodieSnapshotExporter extends SparkClientFunctionalTestHarness
     public void testExportDatasetWithNoPartition() throws IOException {
       // delete all source data
       lfs.delete(new Path(sourcePath + "/" + PARTITION_PATH), true);
+      // delete hudi metadata table too.
+      lfs.delete(new Path(cfg.sourceBasePath + "/" + ".hoodie/metadata"), true);
 
       // export
       final Throwable thrown = assertThrows(HoodieSnapshotExporterException.class, () -> {

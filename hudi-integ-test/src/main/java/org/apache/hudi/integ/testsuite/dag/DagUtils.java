@@ -106,6 +106,7 @@ public class DagUtils {
             Entry<String, JsonNode> dagContentNode = contentItr.next();
             allNodes.put(dagContentNode.getKey(), convertJsonToDagNode(allNodes, dagContentNode.getKey(), dagContentNode.getValue()));
           }
+          break;
         default:
           break;
       }

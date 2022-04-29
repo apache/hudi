@@ -22,73 +22,59 @@ pool:
   vmImage: 'ubuntu-18.04'
 
 variables:
-  MAVEN_CACHE_FOLDER: $(Pipeline.Workspace)/.m2/repository
-  MAVEN_OPTS: '-Dmaven.repo.local=$(MAVEN_CACHE_FOLDER) -Dcheckstyle.skip=true -Drat.skip=true -Djacoco.skip=true'
+  MAVEN_OPTS: '-Dcheckstyle.skip=true -Drat.skip=true -Djacoco.skip=true'
   SPARK_VERSION: '2.4.4'
   HADOOP_VERSION: '2.7'
-  SPARK_HOME: $(Pipeline.Workspace)/spark-$(SPARK_VERSION)-bin-hadoop$(HADOOP_VERSION)
+  SPARK_ARCHIVE: spark-$(SPARK_VERSION)-bin-hadoop$(HADOOP_VERSION)
+  EXCLUDE_TESTED_MODULES: '!hudi-examples/hudi-examples-common,!hudi-examples/hudi-examples-flink,!hudi-examples/hudi-examples-java,!hudi-examples/hudi-examples-spark,!hudi-common,!hudi-flink-datasource/hudi-flink,!hudi-client/hudi-spark-client,!hudi-client/hudi-client-common,!hudi-client/hudi-flink-client,!hudi-client/hudi-java-client,!hudi-cli,!hudi-utilities,!hudi-sync/hudi-hive-sync'
 
 stages:
   - stage: test
     jobs:
       - job: UT_FT_1
         displayName: UT FT common & flink & UT client/spark-client
+        timeoutInMinutes: '120'
         steps:
-          - task: Cache@2
-            displayName: set cache
-            inputs:
-              key: 'maven | "$(Agent.OS)" | **/pom.xml'
-              restoreKeys: |
-                maven | "$(Agent.OS)"
-                maven
-              path: $(MAVEN_CACHE_FOLDER)
           - task: Maven@3
             displayName: maven install
             inputs:
               mavenPomFile: 'pom.xml'
-              goals: 'install'
-              options: -DskipTests
+              goals: 'clean install'
+              options: -T 2.5C -DskipTests
               publishJUnitResults: false
               jdkVersionOption: '1.8'
-              mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
+              mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
           - task: Maven@3
             displayName: UT common flink client/spark-client
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
-              options: -Punit-tests -pl hudi-common,hudi-flink,hudi-client/hudi-spark-client
+              options: -Punit-tests -pl hudi-common,hudi-flink-datasource/hudi-flink,hudi-client/hudi-spark-client
               publishJUnitResults: false
               jdkVersionOption: '1.8'
-              mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
+              mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
           - task: Maven@3
             displayName: FT common flink
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
-              options: -Pfunctional-tests -pl hudi-common,hudi-flink
+              options: -Pfunctional-tests -pl hudi-common,hudi-flink-datasource/hudi-flink
               publishJUnitResults: false
               jdkVersionOption: '1.8'
-              mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
+              mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
       - job: UT_FT_2
         displayName: FT client/spark-client
+        timeoutInMinutes: '120'
         steps:
-          - task: Cache@2
-            displayName: set cache
-            inputs:
-              key: 'maven | "$(Agent.OS)" | **/pom.xml'
-              restoreKeys: |
-                maven | "$(Agent.OS)"
-                maven
-              path: $(MAVEN_CACHE_FOLDER)
           - task: Maven@3
             displayName: maven install
             inputs:
               mavenPomFile: 'pom.xml'
-              goals: 'install'
-              options: -DskipTests
+              goals: 'clean install'
+              options: -T 2.5C -DskipTests
               publishJUnitResults: false
               jdkVersionOption: '1.8'
-              mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
+              mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
           - task: Maven@3
             displayName: FT client/spark-client
             inputs:
@@ -97,89 +83,84 @@ stages:
               options: -Pfunctional-tests -pl hudi-client/hudi-spark-client
               publishJUnitResults: false
               jdkVersionOption: '1.8'
-              mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
+              mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
       - job: UT_FT_3
-        displayName: UT FT cli & utilities & sync/hive-sync
+        displayName: UT FT clients & cli & utilities & sync/hive-sync
+        timeoutInMinutes: '120'
         steps:
-          - task: Cache@2
-            displayName: set cache
-            inputs:
-              key: 'maven | "$(Agent.OS)" | **/pom.xml'
-              restoreKeys: |
-                maven | "$(Agent.OS)"
-                maven
-              path: $(MAVEN_CACHE_FOLDER)
           - task: Maven@3
             displayName: maven install
             inputs:
               mavenPomFile: 'pom.xml'
-              goals: 'install'
-              options: -DskipTests
+              goals: 'clean install'
+              options: -T 2.5C -DskipTests
               publishJUnitResults: false
               jdkVersionOption: '1.8'
-              mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
+              mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
           - task: Maven@3
-            displayName: UT cli & utilities & sync/hive-sync
+            displayName: UT clients & cli & utilities & sync/hive-sync
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
-              options: -Punit-tests -pl hudi-cli,hudi-utilities,hudi-sync/hudi-hive-sync
+              options: -Punit-tests -pl hudi-client/hudi-client-common,hudi-client/hudi-flink-client,hudi-client/hudi-java-client,hudi-cli,hudi-utilities,hudi-sync/hudi-hive-sync
               publishJUnitResults: false
               jdkVersionOption: '1.8'
-              mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
+              mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
           - task: Maven@3
-            displayName: FT cli & utilities & sync/hive-sync
+            displayName: FT clients & cli & utilities & sync/hive-sync
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
-              options: -Pfunctional-tests -pl hudi-cli,hudi-utilities,hudi-sync/hudi-hive-sync
+              options: -Pfunctional-tests -pl hudi-client/hudi-client-common,hudi-client/hudi-flink-client,hudi-client/hudi-java-client,hudi-cli,hudi-utilities,hudi-sync/hudi-hive-sync
               publishJUnitResults: false
               jdkVersionOption: '1.8'
-              mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
+              mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
       - job: UT_FT_4
         displayName: UT FT other modules
+        timeoutInMinutes: '120'
         steps:
-          - task: Cache@2
-            displayName: set cache
-            inputs:
-              key: 'maven | "$(Agent.OS)" | **/pom.xml'
-              restoreKeys: |
-                maven | "$(Agent.OS)"
-                maven
-              path: $(MAVEN_CACHE_FOLDER)
           - task: Maven@3
             displayName: maven install
             inputs:
               mavenPomFile: 'pom.xml'
-              goals: 'install'
-              options: -DskipTests
+              goals: 'clean install'
+              options: -T 2.5C -DskipTests
               publishJUnitResults: false
               jdkVersionOption: '1.8'
-              mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
+              mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
           - task: Maven@3
             displayName: UT other modules
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
-              options: -Punit-tests -pl !hudi-common,!hudi-flink,!hudi-client/hudi-spark-client,!hudi-cli,!hudi-utilities,!hudi-sync/hudi-hive-sync
+              options: -Punit-tests -pl $(EXCLUDE_TESTED_MODULES)
               publishJUnitResults: false
               jdkVersionOption: '1.8'
-              mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
+              mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
           - task: Maven@3
             displayName: FT other modules
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
-              options: -Pfunctional-tests -pl !hudi-common,!hudi-flink,!hudi-client/hudi-spark-client,!hudi-cli,!hudi-utilities,!hudi-sync/hudi-hive-sync
+              options: -Pfunctional-tests -pl $(EXCLUDE_TESTED_MODULES)
               publishJUnitResults: false
               jdkVersionOption: '1.8'
-              mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
+              mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
       - job: IT
+        displayName: IT modules
+        timeoutInMinutes: '120'
         steps:
+          - task: AzureCLI@2
+            displayName: Prepare for IT
+            inputs:
+              azureSubscription: apachehudici-service-connection
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                echo 'Downloading $(SPARK_ARCHIVE)'
+                az storage blob download -c ci-caches -n $(SPARK_ARCHIVE).tgz -f $(Pipeline.Workspace)/$(SPARK_ARCHIVE).tgz --account-name apachehudici
+                tar -xvf $(Pipeline.Workspace)/$(SPARK_ARCHIVE).tgz -C $(Pipeline.Workspace)/
+                mkdir /tmp/spark-events/
           - script: |
-              echo 'Downloading spark-$(SPARK_VERSION)-bin-hadoop$(HADOOP_VERSION)'
-              wget https://archive.apache.org/dist/spark/spark-$(SPARK_VERSION)/spark-$(SPARK_VERSION)-bin-hadoop$(HADOOP_VERSION).tgz -O $(Pipeline.Workspace)/spark-$(SPARK_VERSION).tgz
-              tar -xvf $(Pipeline.Workspace)/spark-$(SPARK_VERSION).tgz -C $(Pipeline.Workspace)/
-              mkdir /tmp/spark-events/
               mvn $(MAVEN_OPTS) -Pintegration-tests verify
             displayName: IT

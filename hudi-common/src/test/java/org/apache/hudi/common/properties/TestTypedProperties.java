@@ -19,11 +19,14 @@
 package org.apache.hudi.common.properties;
 
 import org.apache.hudi.common.config.TypedProperties;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestTypedProperties {
   @Test
@@ -77,8 +80,30 @@ public class TestTypedProperties {
     properties.put("key1", "true");
 
     TypedProperties typedProperties = new TypedProperties(properties);
-    assertEquals(true, typedProperties.getBoolean("key1"));
-    assertEquals(true, typedProperties.getBoolean("key1", false));
-    assertEquals(false, typedProperties.getBoolean("key2", false));
+    assertTrue(typedProperties.getBoolean("key1"));
+    assertTrue(typedProperties.getBoolean("key1", false));
+    assertFalse(typedProperties.getBoolean("key2", false));
+    // test getBoolean with non-string value for key2
+    properties.put("key2", true);
+    typedProperties = new TypedProperties(properties);
+    assertTrue(typedProperties.getBoolean("key1", false));
+    assertTrue(typedProperties.getBoolean("key2", false));
+    // put non-string value in TypedProperties
+    typedProperties.put("key3", true);
+    assertTrue(typedProperties.getBoolean("key3", false));
+  }
+
+  @Test
+  public void testTypedPropertiesWithNonStringValue() {
+    Properties properties = new Properties();
+    properties.put("key1", "1");
+    properties.put("key2", 2);
+
+    TypedProperties props = new TypedProperties(properties);
+    assertEquals(1, props.getInteger("key1"));
+    assertEquals(2, props.getInteger("key2"));
+    // put non-string value in TypedProperties
+    props.put("key2", 3);
+    assertEquals(3, props.getInteger("key2"));
   }
 }

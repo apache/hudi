@@ -119,7 +119,7 @@ public class FileSystemViewCommand implements CommandMarker {
 
   @CliCommand(value = "show fsview latest", help = "Show latest file-system view")
   public String showLatestFileSlices(
-      @CliOption(key = {"partitionPath"}, help = "A valid paritition path", mandatory = true) String partition,
+      @CliOption(key = {"partitionPath"}, help = "A valid partition path", mandatory = true) String partition,
       @CliOption(key = {"baseFileOnly"}, help = "Only display base file view",
           unspecifiedDefaultValue = "false") boolean baseFileOnly,
       @CliOption(key = {"maxInstant"}, help = "File-Slices upto this instant are displayed",

@@ -38,24 +38,34 @@ public class HoodieConfig implements Serializable {
 
   private static final Logger LOG = LogManager.getLogger(HoodieConfig.class);
 
+  protected static final String CONFIG_VALUES_DELIMITER = ",";
+
   public static HoodieConfig create(FSDataInputStream inputStream) throws IOException {
     HoodieConfig config = new HoodieConfig();
     config.props.load(inputStream);
     return config;
   }
 
-  protected Properties props;
+  protected TypedProperties props;
 
   public HoodieConfig() {
-    this.props = new Properties();
+    this.props = new TypedProperties();
   }
 
   public HoodieConfig(Properties props) {
-    this.props = props;
+    this.props = new TypedProperties(props);
   }
 
   public <T> void setValue(ConfigProperty<T> cfg, String val) {
     props.setProperty(cfg.key(), val);
+  }
+
+  public <T> void setValue(String key, String val) {
+    props.setProperty(key, val);
+  }
+
+  public void setAll(Properties properties) {
+    props.putAll(properties);
   }
 
   public <T> void setDefaultValue(ConfigProperty<T> configProperty) {
@@ -74,11 +84,15 @@ public class HoodieConfig implements Serializable {
     }
   }
 
+  public Boolean contains(String key) {
+    return props.containsKey(key);
+  }
+
   public <T> boolean contains(ConfigProperty<T> configProperty) {
     if (props.containsKey(configProperty.key())) {
       return true;
     }
-    return Arrays.stream(configProperty.getAlternatives()).anyMatch(props::containsKey);
+    return configProperty.getAlternatives().stream().anyMatch(props::containsKey);
   }
 
   private <T> Option<Object> getRawValue(ConfigProperty<T> configProperty) {
@@ -127,7 +141,16 @@ public class HoodieConfig implements Serializable {
     return rawValue.map(v -> Integer.parseInt(v.toString())).orElse(null);
   }
 
+  public <T> Integer getIntOrDefault(ConfigProperty<T> configProperty) {
+    Option<Object> rawValue = getRawValue(configProperty);
+    return rawValue.map(v -> Integer.parseInt(v.toString()))
+        .orElse((Integer) configProperty.defaultValue());
+  }
+
   public <T> Boolean getBoolean(ConfigProperty<T> configProperty) {
+    if (configProperty.hasDefaultValue()) {
+      return getBooleanOrDefault(configProperty);
+    }
     Option<Object> rawValue = getRawValue(configProperty);
     return rawValue.map(v -> Boolean.parseBoolean(v.toString())).orElse(null);
   }
@@ -135,7 +158,7 @@ public class HoodieConfig implements Serializable {
   public <T> boolean getBooleanOrDefault(ConfigProperty<T> configProperty) {
     Option<Object> rawValue = getRawValue(configProperty);
     return rawValue.map(v -> Boolean.parseBoolean(v.toString()))
-            .orElse((Boolean) configProperty.defaultValue());
+            .orElseGet(() -> Boolean.parseBoolean(configProperty.defaultValue().toString()));
   }
 
   public <T> Long getLong(ConfigProperty<T> configProperty) {
@@ -162,14 +185,28 @@ public class HoodieConfig implements Serializable {
     return rawValue.map(Object::toString).orElse(defaultVal);
   }
 
-  public Properties getProps() {
-    return props;
+  public TypedProperties getProps() {
+    return getProps(false);
+  }
+
+  public TypedProperties getProps(boolean includeGlobalProps) {
+    if (includeGlobalProps) {
+      TypedProperties mergedProps = DFSPropertiesConfiguration.getGlobalProps();
+      mergedProps.putAll(props);
+      return mergedProps;
+    } else {
+      return props;
+    }
   }
 
   public void setDefaultOnCondition(boolean condition, HoodieConfig config) {
     if (condition) {
-      props.putAll(config.getProps());
+      setDefault(config);
     }
+  }
+
+  public void setDefault(HoodieConfig config) {
+    props.putAll(config.getProps());
   }
 
   public <T> String getStringOrThrow(ConfigProperty<T> configProperty, String errorMessage) throws HoodieException {

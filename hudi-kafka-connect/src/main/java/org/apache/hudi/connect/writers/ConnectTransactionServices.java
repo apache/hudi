@@ -32,7 +32,7 @@ public interface ConnectTransactionServices {
 
   String startCommit();
 
-  void endCommit(String commitTime, List<WriteStatus> writeStatuses, Map<String, String> extraMetadata);
+  boolean endCommit(String commitTime, List<WriteStatus> writeStatuses, Map<String, String> extraMetadata);
 
   Map<String, String> fetchLatestExtraCommitMetadata();
 }

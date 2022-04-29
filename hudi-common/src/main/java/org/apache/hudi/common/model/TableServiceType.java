@@ -24,10 +24,13 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
  * Supported runtime table services.
  */
 public enum TableServiceType {
-  COMPACT, CLUSTER, CLEAN;
+  ARCHIVE, COMPACT, CLUSTER, CLEAN;
 
   public String getAction() {
     switch (this) {
+      case ARCHIVE:
+        // for table service type completeness; there is no timeline action associated with archive
+        return "NONE";
       case COMPACT:
         return HoodieTimeline.COMPACTION_ACTION;
       case CLEAN:

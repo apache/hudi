@@ -18,6 +18,8 @@
 
 package org.apache.hudi.connect.transaction;
 
+import org.apache.hudi.connect.ControlMessage;
+
 /**
  * The events within the Coordinator that trigger
  * the state changes in the state machine of
@@ -28,7 +30,7 @@ public class CoordinatorEvent {
   private final CoordinatorEventType eventType;
   private final String topicName;
   private final String commitTime;
-  private ControlEvent message;
+  private ControlMessage message;
 
   public CoordinatorEvent(CoordinatorEventType eventType,
                           String topicName,
@@ -50,11 +52,11 @@ public class CoordinatorEvent {
     return commitTime;
   }
 
-  public ControlEvent getMessage() {
+  public ControlMessage getMessage() {
     return message;
   }
 
-  public void setMessage(ControlEvent message) {
+  public void setMessage(ControlMessage message) {
     this.message = message;
   }
 

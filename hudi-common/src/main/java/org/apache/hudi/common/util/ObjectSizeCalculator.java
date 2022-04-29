@@ -90,7 +90,7 @@ public class ObjectSizeCalculator {
   private final Map<Class<?>, ClassSizeInfo> classSizeInfos = new IdentityHashMap<>();
 
   private final Set<Object> alreadyVisited = Collections.newSetFromMap(new IdentityHashMap<>());
-  private final Deque<Object> pending = new ArrayDeque<>(16 * 1024);
+  private final Deque<Object> pending = new ArrayDeque<>(64);
   private long size;
 
   /**

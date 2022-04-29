@@ -22,17 +22,37 @@ import org.apache.spark.sql.catalyst.plans.logical.CompactionOperation.Compactio
 case class CompactionTable(table: LogicalPlan, operation: CompactionOperation, instantTimestamp: Option[Long])
   extends Command {
   override def children: Seq[LogicalPlan] = Seq(table)
+
+  def withNewChildrenInternal(newChildren: IndexedSeq[LogicalPlan]): CompactionTable = {
+    copy(table = newChildren.head)
+  }
 }
 
 case class CompactionPath(path: String, operation: CompactionOperation, instantTimestamp: Option[Long])
-  extends Command
+  extends Command {
+  override def children: Seq[LogicalPlan] = Seq.empty
+
+  def withNewChildrenInternal(newChildren: IndexedSeq[LogicalPlan]): CompactionPath = {
+    this
+  }
+}
 
 case class CompactionShowOnTable(table: LogicalPlan, limit: Int = 20)
   extends Command {
   override def children: Seq[LogicalPlan] = Seq(table)
+
+  def withNewChildrenInternal(newChildren: IndexedSeq[LogicalPlan]): CompactionShowOnTable = {
+     copy(table = newChildren.head)
+  }
 }
 
-case class CompactionShowOnPath(path: String, limit: Int = 20) extends Command
+case class CompactionShowOnPath(path: String, limit: Int = 20) extends Command {
+  override def children: Seq[LogicalPlan] = Seq.empty
+
+  def withNewChildrenInternal(newChildren: IndexedSeq[LogicalPlan]): CompactionShowOnPath = {
+    this
+  }
+}
 
 object CompactionOperation extends Enumeration {
   type CompactionOperation = Value

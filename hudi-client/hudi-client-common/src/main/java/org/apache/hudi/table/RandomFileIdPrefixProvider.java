@@ -18,13 +18,12 @@
 
 package org.apache.hudi.table;
 
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
-
-import java.util.Properties;
 
 public class RandomFileIdPrefixProvider extends FileIdPrefixProvider {
 
-  public RandomFileIdPrefixProvider(Properties props) {
+  public RandomFileIdPrefixProvider(TypedProperties props) {
     super(props);
   }
 

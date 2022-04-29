@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.testutils;
 
+import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -25,6 +26,7 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
@@ -46,6 +48,7 @@ import java.util.UUID;
  */
 public class HoodieTestUtils {
 
+  public static final String HOODIE_DATABASE = "test_incremental";
   public static final String RAW_TRIPS_TEST_NAME = "raw_trips";
   public static final String DEFAULT_WRITE_TOKEN = "1-0-1";
   public static final int DEFAULT_LOG_VERSION = 1;
@@ -92,6 +95,14 @@ public class HoodieTestUtils {
   }
 
   public static HoodieTableMetaClient init(Configuration hadoopConf, String basePath, HoodieTableType tableType,
+                                           HoodieFileFormat baseFileFormat, String databaseName)
+      throws IOException {
+    Properties properties = new Properties();
+    properties.setProperty(HoodieTableConfig.BASE_FILE_FORMAT.key(), baseFileFormat.toString());
+    return init(hadoopConf, basePath, tableType, properties, databaseName);
+  }
+
+  public static HoodieTableMetaClient init(Configuration hadoopConf, String basePath, HoodieTableType tableType,
                                            HoodieFileFormat baseFileFormat)
       throws IOException {
     Properties properties = new Properties();
@@ -111,8 +122,28 @@ public class HoodieTestUtils {
     return HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf, basePath, properties);
   }
 
+  public static HoodieTableMetaClient init(Configuration hadoopConf, String basePath, HoodieTableType tableType,
+                                           Properties properties, String databaseName)
+      throws IOException {
+    properties = HoodieTableMetaClient.withPropertyBuilder()
+      .setDatabaseName(databaseName)
+      .setTableName(RAW_TRIPS_TEST_NAME)
+      .setTableType(tableType)
+      .setPayloadClass(HoodieAvroPayload.class)
+      .fromProperties(properties)
+      .build();
+    return HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf, basePath, properties);
+  }
+
+  public static HoodieTableMetaClient init(String basePath, HoodieTableType tableType, String bootstrapBasePath, HoodieFileFormat baseFileFormat) throws IOException {
+    Properties props = new Properties();
+    props.setProperty(HoodieTableConfig.BOOTSTRAP_BASE_PATH.key(), bootstrapBasePath);
+    props.setProperty(HoodieTableConfig.BASE_FILE_FORMAT.key(), baseFileFormat.name());
+    return init(getDefaultHadoopConf(), basePath, tableType, props);
+  }
+
   public static <T extends Serializable> T serializeDeserialize(T object, Class<T> clazz) {
-    // Using Kyro as the default serializer in Spark Jobs
+    // Using Kryo as the default serializer in Spark Jobs
     Kryo kryo = new Kryo();
     kryo.register(HoodieTableMetaClient.class, new JavaSerializer());
 
@@ -122,9 +153,9 @@ public class HoodieTestUtils {
     output.close();
 
     Input input = new Input(new ByteArrayInputStream(baos.toByteArray()));
-    T deseralizedObject = kryo.readObject(input, clazz);
+    T deserializedObject = kryo.readObject(input, clazz);
     input.close();
-    return deseralizedObject;
+    return deserializedObject;
   }
 
   public static List<HoodieWriteStat> generateFakeHoodieWriteStat(int limit) {
@@ -146,5 +177,18 @@ public class HoodieTestUtils {
       writeStatList.add(writeStat);
     }
     return writeStatList;
+  }
+
+  public static void createCompactionCommitInMetadataTable(
+      Configuration hadoopConf, HoodieWrapperFileSystem wrapperFs, String basePath,
+      String instantTime) throws IOException {
+    // This is to simulate a completed compaction commit in metadata table timeline,
+    // so that the commits on data table timeline can be archived
+    // Note that, if metadata table is enabled, instants in data table timeline,
+    // which are more recent than the last compaction on the metadata table,
+    // are not archived (HoodieTimelineArchiveLog::getInstantsToArchive)
+    String metadataTableBasePath = HoodieTableMetadata.getMetadataTableBasePath(basePath);
+    HoodieTestUtils.init(hadoopConf, metadataTableBasePath, HoodieTableType.MERGE_ON_READ);
+    HoodieTestDataGenerator.createCommitFile(metadataTableBasePath, instantTime + "001", wrapperFs.getConf());
   }
 }

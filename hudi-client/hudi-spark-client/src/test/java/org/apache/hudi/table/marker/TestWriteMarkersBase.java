@@ -31,8 +31,11 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -48,10 +51,10 @@ public abstract class TestWriteMarkersBase extends HoodieCommonTestHarness {
   protected JavaSparkContext jsc;
   protected HoodieSparkEngineContext context;
 
-  private void createSomeMarkers() {
-    writeMarkers.create("2020/06/01", "file1", IOType.MERGE);
-    writeMarkers.create("2020/06/02", "file2", IOType.APPEND);
-    writeMarkers.create("2020/06/03", "file3", IOType.CREATE);
+  private void createSomeMarkers(boolean isTablePartitioned) {
+    writeMarkers.create(isTablePartitioned ? "2020/06/01" : "", "file1", IOType.MERGE);
+    writeMarkers.create(isTablePartitioned ? "2020/06/02" : "", "file2", IOType.APPEND);
+    writeMarkers.create(isTablePartitioned ? "2020/06/03" : "", "file3", IOType.CREATE);
   }
 
   private void createInvalidFile(String partitionPath, String invalidFileName) {
@@ -64,22 +67,24 @@ public abstract class TestWriteMarkersBase extends HoodieCommonTestHarness {
     }
   }
 
-  abstract void verifyMarkersInFileSystem() throws IOException;
+  abstract void verifyMarkersInFileSystem(boolean isTablePartitioned) throws IOException;
 
-  @Test
-  public void testCreation() throws Exception {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testCreation(boolean isTablePartitioned) throws Exception {
     // when
-    createSomeMarkers();
+    createSomeMarkers(isTablePartitioned);
 
     // then
     assertTrue(fs.exists(markerFolderPath));
-    verifyMarkersInFileSystem();
+    verifyMarkersInFileSystem(isTablePartitioned);
   }
 
-  @Test
-  public void testDeletionWhenMarkerDirExists() throws IOException {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testDeletionWhenMarkerDirExists(boolean isTablePartitioned) throws IOException {
     //when
-    writeMarkers.create("2020/06/01", "file1", IOType.MERGE);
+    writeMarkers.create(isTablePartitioned ? "2020/06/01" : "", "file1", IOType.MERGE);
 
     // then
     assertTrue(writeMarkers.doesMarkerDirExist());
@@ -95,32 +100,40 @@ public abstract class TestWriteMarkersBase extends HoodieCommonTestHarness {
     assertFalse(writeMarkers.deleteMarkerDir(context, 2));
   }
 
-  @Test
-  public void testDataPathsWhenCreatingOrMerging() throws IOException {
-    // add markfiles
-    createSomeMarkers();
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testDataPathsWhenCreatingOrMerging(boolean isTablePartitioned) throws IOException {
+    // add marker files
+    createSomeMarkers(isTablePartitioned);
     // add invalid file
-    createInvalidFile("2020/06/01", "invalid_file3");
+    createInvalidFile(isTablePartitioned ? "2020/06/01" : "", "invalid_file3");
     long fileSize = FileSystemTestUtils.listRecursive(fs, markerFolderPath).stream()
         .filter(fileStatus -> !fileStatus.getPath().getName().contains(MarkerUtils.MARKER_TYPE_FILENAME))
         .count();
     assertEquals(fileSize, 4);
 
+    List<String> expectedPaths = isTablePartitioned
+        ? CollectionUtils.createImmutableList("2020/06/01/file1", "2020/06/03/file3")
+        : CollectionUtils.createImmutableList("file1", "file3");
     // then
-    assertIterableEquals(CollectionUtils.createImmutableList(
-        "2020/06/01/file1", "2020/06/03/file3"),
+    assertIterableEquals(expectedPaths,
         writeMarkers.createdAndMergedDataPaths(context, 2).stream().sorted().collect(Collectors.toList())
     );
   }
 
-  @Test
-  public void testAllMarkerPaths() throws IOException {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testAllMarkerPaths(boolean isTablePartitioned) throws IOException {
     // given
-    createSomeMarkers();
+    createSomeMarkers(isTablePartitioned);
 
+    List<String> expectedPaths = isTablePartitioned
+        ? CollectionUtils.createImmutableList("2020/06/01/file1.marker.MERGE",
+        "2020/06/02/file2.marker.APPEND", "2020/06/03/file3.marker.CREATE")
+        : CollectionUtils.createImmutableList(
+        "file1.marker.MERGE", "file2.marker.APPEND", "file3.marker.CREATE");
     // then
-    assertIterableEquals(CollectionUtils.createImmutableList("2020/06/01/file1.marker.MERGE",
-        "2020/06/02/file2.marker.APPEND", "2020/06/03/file3.marker.CREATE"),
+    assertIterableEquals(expectedPaths,
         writeMarkers.allMarkerFilePaths().stream()
             .filter(path -> !path.contains(MarkerUtils.MARKER_TYPE_FILENAME))
             .sorted().collect(Collectors.toList())

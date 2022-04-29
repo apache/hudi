@@ -29,7 +29,6 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
@@ -37,12 +36,15 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Function;
 
 /**
- * Base Class for running clean/delta-sync/compaction/clustering in separate thread and controlling their life-cycle.
+ * Base Class for running archive/clean/delta-sync/compaction/clustering in separate thread and controlling their life-cycles.
  */
 public abstract class HoodieAsyncService implements Serializable {
 
   private static final Logger LOG = LogManager.getLogger(HoodieAsyncService.class);
+  private static final long POLLING_SECONDS = 10;
 
+  // Flag indicating whether an error is incurred in the service
+  protected boolean hasError;
   // Flag to track if the service is started.
   private boolean started;
   // Flag indicating shutdown is externally requested
@@ -71,21 +73,32 @@ public abstract class HoodieAsyncService implements Serializable {
     this.runInDaemonMode = runInDaemonMode;
   }
 
-  protected boolean isShutdownRequested() {
+  public boolean isStarted() {
+    return started;
+  }
+
+  public boolean isShutdownRequested() {
     return shutdownRequested;
   }
 
-  protected boolean isShutdown() {
+  public boolean isShutdown() {
     return shutdown;
+  }
+
+  public boolean hasError() {
+    return hasError;
   }
 
   /**
    * Wait till the service shutdown. If the service shutdown with exception, it will be thrown
-   * 
+   *
    * @throws ExecutionException
    * @throws InterruptedException
    */
   public void waitForShutdown() throws ExecutionException, InterruptedException {
+    if (future == null) {
+      return;
+    }
     try {
       future.get();
     } catch (ExecutionException ex) {
@@ -103,6 +116,7 @@ public abstract class HoodieAsyncService implements Serializable {
   public void shutdown(boolean force) {
     if (!shutdownRequested || force) {
       shutdownRequested = true;
+      shutdown = true;
       if (executor != null) {
         if (force) {
           executor.shutdownNow();
@@ -126,50 +140,37 @@ public abstract class HoodieAsyncService implements Serializable {
    * @param onShutdownCallback
    */
   public void start(Function<Boolean, Boolean> onShutdownCallback) {
+    if (started) {
+      LOG.warn("The async service already started.");
+      return;
+    }
     Pair<CompletableFuture, ExecutorService> res = startService();
     future = res.getKey();
     executor = res.getValue();
     started = true;
-    monitorThreads(onShutdownCallback);
+    shutdownCallback(onShutdownCallback);
   }
 
   /**
    * Service implementation.
-   * 
-   * @return
    */
   protected abstract Pair<CompletableFuture, ExecutorService> startService();
 
   /**
-   * A monitor thread is started which would trigger a callback if the service is shutdown.
+   * Add shutdown callback for the completable future.
    * 
-   * @param onShutdownCallback
+   * @param callback The callback
    */
-  private void monitorThreads(Function<Boolean, Boolean> onShutdownCallback) {
-    LOG.info("Submitting monitor thread !!");
-    Executors.newSingleThreadExecutor(r -> {
-      Thread t = new Thread(r, "Monitor Thread");
-      t.setDaemon(isRunInDaemonMode());
-      return t;
-    }).submit(() -> {
-      boolean error = false;
-      try {
-        LOG.info("Monitoring thread(s) !!");
-        future.get();
-      } catch (ExecutionException ex) {
-        LOG.error("Monitor noticed one or more threads failed. Requesting graceful shutdown of other threads", ex);
-        error = true;
-      } catch (InterruptedException ie) {
-        LOG.error("Got interrupted Monitoring threads", ie);
-        error = true;
-      } finally {
-        // Mark as shutdown
-        shutdown = true;
-        if (null != onShutdownCallback) {
-          onShutdownCallback.apply(error);
-        }
-        shutdown(false);
+  @SuppressWarnings("unchecked")
+  private void shutdownCallback(Function<Boolean, Boolean> callback) {
+    if (future == null) {
+      return;
+    }
+    future.whenComplete((resp, error) -> {
+      if (null != callback) {
+        callback.apply(null != error);
       }
+      this.started = false;
     });
   }
 
@@ -186,8 +187,8 @@ public abstract class HoodieAsyncService implements Serializable {
   public void waitTillPendingAsyncServiceInstantsReducesTo(int numPending) throws InterruptedException {
     try {
       queueLock.lock();
-      while (!isShutdown() && (pendingInstants.size() > numPending)) {
-        consumed.await();
+      while (!isShutdown() && !hasError() && (pendingInstants.size() > numPending)) {
+        consumed.await(POLLING_SECONDS, TimeUnit.SECONDS);
       }
     } finally {
       queueLock.unlock();
@@ -210,8 +211,8 @@ public abstract class HoodieAsyncService implements Serializable {
    * @throws InterruptedException
    */
   HoodieInstant fetchNextAsyncServiceInstant() throws InterruptedException {
-    LOG.info("Waiting for next instant upto 10 seconds");
-    HoodieInstant instant = pendingInstants.poll(10, TimeUnit.SECONDS);
+    LOG.info(String.format("Waiting for next instant up to %d seconds", POLLING_SECONDS));
+    HoodieInstant instant = pendingInstants.poll(POLLING_SECONDS, TimeUnit.SECONDS);
     if (instant != null) {
       try {
         queueLock.lock();

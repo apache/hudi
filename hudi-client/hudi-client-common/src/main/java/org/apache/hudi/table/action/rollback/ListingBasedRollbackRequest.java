@@ -18,12 +18,15 @@
 
 package org.apache.hudi.table.action.rollback;
 
+import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.util.Option;
+
+import java.io.Serializable;
 
 /**
  * Request for performing one rollback action.
  */
-public class ListingBasedRollbackRequest {
+public class ListingBasedRollbackRequest implements Serializable {
 
   /**
    * Rollback commands, that trigger a specific handling for rollback.
@@ -49,32 +52,42 @@ public class ListingBasedRollbackRequest {
    */
   private final Option<String> latestBaseInstant;
 
+  /**
+   * TODO
+   */
+  private final Option<HoodieWriteStat> writeStat;
+
   private final Type type;
+
+  public ListingBasedRollbackRequest(String partitionPath, Type type) {
+    this(partitionPath, Option.empty(), Option.empty(), Option.empty(), type);
+  }
 
   public ListingBasedRollbackRequest(String partitionPath,
                                      Option<String> fileId,
                                      Option<String> latestBaseInstant,
+                                     Option<HoodieWriteStat> writeStat,
                                      Type type) {
     this.partitionPath = partitionPath;
     this.fileId = fileId;
     this.latestBaseInstant = latestBaseInstant;
+    this.writeStat = writeStat;
     this.type = type;
   }
 
   public static ListingBasedRollbackRequest createRollbackRequestWithDeleteDataFilesOnlyAction(String partitionPath) {
-    return new ListingBasedRollbackRequest(partitionPath, Option.empty(), Option.empty(),
-        Type.DELETE_DATA_FILES_ONLY);
+    return new ListingBasedRollbackRequest(partitionPath, Type.DELETE_DATA_FILES_ONLY);
   }
 
   public static ListingBasedRollbackRequest createRollbackRequestWithDeleteDataAndLogFilesAction(String partitionPath) {
-    return new ListingBasedRollbackRequest(partitionPath, Option.empty(), Option.empty(),
-        Type.DELETE_DATA_AND_LOG_FILES);
+    return new ListingBasedRollbackRequest(partitionPath, Type.DELETE_DATA_AND_LOG_FILES);
   }
 
-  public static ListingBasedRollbackRequest createRollbackRequestWithAppendRollbackBlockAction(String partitionPath, String fileId,
-                                                                                               String baseInstant) {
-    return new ListingBasedRollbackRequest(partitionPath, Option.of(fileId), Option.of(baseInstant),
-        Type.APPEND_ROLLBACK_BLOCK);
+  public static ListingBasedRollbackRequest createRollbackRequestWithAppendRollbackBlockAction(String partitionPath,
+                                                                                               String fileId,
+                                                                                               String baseInstant,
+                                                                                               HoodieWriteStat writeStat) {
+    return new ListingBasedRollbackRequest(partitionPath, Option.of(fileId), Option.of(baseInstant), Option.of(writeStat), Type.APPEND_ROLLBACK_BLOCK);
   }
 
   public String getPartitionPath() {
@@ -87,6 +100,10 @@ public class ListingBasedRollbackRequest {
 
   public Option<String> getLatestBaseInstant() {
     return latestBaseInstant;
+  }
+
+  public Option<HoodieWriteStat> getWriteStat() {
+    return writeStat;
   }
 
   public Type getType() {

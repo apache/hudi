@@ -59,15 +59,18 @@ public class TestDirectWriteMarkers extends TestWriteMarkersBase {
   }
 
   @Override
-  void verifyMarkersInFileSystem() throws IOException {
+  void verifyMarkersInFileSystem(boolean isTablePartitioned) throws IOException {
     List<FileStatus> markerFiles = FileSystemTestUtils.listRecursive(fs, markerFolderPath)
         .stream().filter(status -> status.getPath().getName().contains(".marker"))
         .sorted().collect(Collectors.toList());
     assertEquals(3, markerFiles.size());
     assertIterableEquals(CollectionUtils.createImmutableList(
-        "file:" + markerFolderPath.toString() + "/2020/06/01/file1.marker.MERGE",
-        "file:" + markerFolderPath.toString() + "/2020/06/02/file2.marker.APPEND",
-        "file:" + markerFolderPath.toString() + "/2020/06/03/file3.marker.CREATE"),
+            "file:" + markerFolderPath.toString()
+                + (isTablePartitioned ? "/2020/06/01" : "") + "/file1.marker.MERGE",
+            "file:" + markerFolderPath.toString()
+                + (isTablePartitioned ? "/2020/06/02" : "") + "/file2.marker.APPEND",
+            "file:" + markerFolderPath.toString()
+                + (isTablePartitioned ? "/2020/06/03" : "") + "/file3.marker.CREATE"),
         markerFiles.stream().map(m -> m.getPath().toString()).collect(Collectors.toList())
     );
   }

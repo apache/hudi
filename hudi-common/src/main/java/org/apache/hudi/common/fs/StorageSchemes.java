@@ -54,6 +54,8 @@ public enum StorageSchemes {
   COSN("cosn", false),
   // Tencent Cloud HDFS
   CHDFS("ofs", true),
+  // Tencent Cloud CacheFileSystem
+  GOOSEFS("gfs", false),
   // Databricks file system
   DBFS("dbfs", false),
   // IBM Cloud Object Storage
@@ -62,6 +64,8 @@ public enum StorageSchemes {
   OBS("obs", false),
   // Kingsoft Standard Storage ks3
   KS3("ks3", false),
+  // JuiceFileSystem
+  JFS("jfs", true),
   // Baidu Object Storage
   BOS("bos", false);
 

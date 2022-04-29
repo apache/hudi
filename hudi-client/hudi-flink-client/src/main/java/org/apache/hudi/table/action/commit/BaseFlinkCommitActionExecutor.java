@@ -134,6 +134,12 @@ public abstract class BaseFlinkCommitActionExecutor<T extends HoodieRecordPayloa
     commit(extraMetadata, result, result.getWriteStatuses().stream().map(WriteStatus::getStat).collect(Collectors.toList()));
   }
 
+  protected void setCommitMetadata(HoodieWriteMetadata<List<WriteStatus>> result) {
+    result.setCommitMetadata(Option.of(CommitUtils.buildMetadata(result.getWriteStatuses().stream().map(WriteStatus::getStat).collect(Collectors.toList()),
+        result.getPartitionToReplaceFileIds(),
+        extraMetadata, operationType, getSchemaToStoreInCommit(), getCommitActionType())));
+  }
+
   protected void commit(Option<Map<String, String>> extraMetadata, HoodieWriteMetadata<List<WriteStatus>> result, List<HoodieWriteStat> writeStats) {
     String actionType = getCommitActionType();
     LOG.info("Committing " + instantTime + ", action Type " + actionType);
@@ -141,12 +147,12 @@ public abstract class BaseFlinkCommitActionExecutor<T extends HoodieRecordPayloa
     result.setWriteStats(writeStats);
     // Finalize write
     finalizeWrite(instantTime, writeStats, result);
-    syncTableMetadata();
     try {
       LOG.info("Committing " + instantTime + ", action Type " + getCommitActionType());
       HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
-      HoodieCommitMetadata metadata = CommitUtils.buildMetadata(writeStats, result.getPartitionToReplaceFileIds(),
-          extraMetadata, operationType, getSchemaToStoreInCommit(), getCommitActionType());
+      HoodieCommitMetadata metadata = result.getCommitMetadata().get();
+
+      writeTableMetadata(metadata, actionType);
 
       activeTimeline.saveAsComplete(new HoodieInstant(true, getCommitActionType(), instantTime),
           Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));

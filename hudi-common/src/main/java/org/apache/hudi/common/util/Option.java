@@ -34,7 +34,7 @@ public final class Option<T> implements Serializable {
 
   private static final long serialVersionUID = 0L;
 
-  private static final Option<?> NULL_VAL = new Option<>();
+  private static final Option<?> EMPTY = new Option<>();
 
   private final T val;
 
@@ -67,8 +67,9 @@ public final class Option<T> implements Serializable {
     this.val = val;
   }
 
+  @SuppressWarnings("unchecked")
   public static <T> Option<T> empty() {
-    return (Option<T>) NULL_VAL;
+    return (Option<T>) EMPTY;
   }
 
   public static <T> Option<T> of(T value) {
@@ -108,14 +109,42 @@ public final class Option<T> implements Serializable {
     }
   }
 
+  public <U> Option<U> flatMap(Function<? super T, Option<U>> mapper) {
+    if (null == mapper) {
+      throw new NullPointerException("mapper should not be null");
+    }
+    if (!isPresent()) {
+      return empty();
+    } else {
+      return Objects.requireNonNull(mapper.apply(val));
+    }
+  }
+
+  /**
+   * Returns this {@link Option} if not empty, otherwise evaluates the provided supplier
+   * and returns the alternative
+   */
+  public Option<T> or(Supplier<? extends Option<T>> other) {
+    return val != null ? this : other.get();
+  }
+
+  /**
+   * Identical to {@code Optional.orElse}
+   */
   public T orElse(T other) {
     return val != null ? val : other;
   }
 
+  /**
+   * Identical to {@code Optional.orElseGet}
+   */
   public T orElseGet(Supplier<? extends T> other) {
     return val != null ? val : other.get();
   }
 
+  /**
+   * Identical to {@code Optional.orElseThrow}
+   */
   public <X extends Throwable> T orElseThrow(Supplier<? extends X> exceptionSupplier) throws X {
     if (val != null) {
       return val;

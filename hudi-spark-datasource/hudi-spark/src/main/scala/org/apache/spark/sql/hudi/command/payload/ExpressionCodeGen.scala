@@ -17,7 +17,6 @@
 
 package org.apache.spark.sql.hudi.command.payload
 
-import java.util.UUID
 import org.apache.avro.generic.{GenericRecord, IndexedRecord}
 import org.apache.hudi.sql.IExpressionEvaluator
 import org.apache.spark.executor.InputMetrics
@@ -36,6 +35,8 @@ import org.apache.spark.util.ParentClassLoader
 import org.apache.spark.{TaskContext, TaskKilledException}
 import org.codehaus.commons.compiler.CompileException
 import org.codehaus.janino.{ClassBodyEvaluator, InternalCompilerException}
+
+import java.util.UUID
 
 /**
  * Do CodeGen for expression based on IndexedRecord.

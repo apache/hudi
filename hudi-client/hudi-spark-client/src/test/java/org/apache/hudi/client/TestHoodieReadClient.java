@@ -18,6 +18,7 @@
 
 package org.apache.hudi.client;
 
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
@@ -209,7 +210,7 @@ public class TestHoodieReadClient extends HoodieClientTestBase {
       // since they have been modified in the DAG
       JavaRDD<HoodieRecord> recordRDD =
           jsc.parallelize(result.collect().stream().map(WriteStatus::getWrittenRecords).flatMap(Collection::stream)
-              .map(record -> new HoodieRecord(record.getKey(), null)).collect(Collectors.toList()));
+              .map(record -> new HoodieAvroRecord(record.getKey(), null)).collect(Collectors.toList()));
       // Should have 100 records in table (check using Index), all in locations marked at commit
       HoodieReadClient readClient = getHoodieReadClient(hoodieWriteConfig.getBasePath());
       List<HoodieRecord> taggedRecords = readClient.tagLocation(recordRDD).collect();
@@ -225,7 +226,7 @@ public class TestHoodieReadClient extends HoodieClientTestBase {
           numRecords, 200, 2);
       recordRDD =
           jsc.parallelize(result.collect().stream().map(WriteStatus::getWrittenRecords).flatMap(Collection::stream)
-              .map(record -> new HoodieRecord(record.getKey(), null)).collect(Collectors.toList()));
+              .map(record -> new HoodieAvroRecord(record.getKey(), null)).collect(Collectors.toList()));
       // Index should be able to locate all updates in correct locations.
       readClient = getHoodieReadClient(hoodieWriteConfig.getBasePath());
       taggedRecords = readClient.tagLocation(recordRDD).collect();

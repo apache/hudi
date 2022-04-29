@@ -18,14 +18,12 @@
 
 package org.apache.hudi;
 
-import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.client.HoodieReadClient;
 import org.apache.hudi.client.HoodieWriteResult;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -34,24 +32,31 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.TablePathUtils;
-import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodiePayloadConfig;
+import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
-import org.apache.hudi.index.HoodieIndex.IndexType;
+import org.apache.hudi.sync.common.HoodieSyncConfig;
 import org.apache.hudi.table.BulkInsertPartitioner;
+import org.apache.hudi.util.DataTypeUtils;
+
+import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
+import org.apache.spark.sql.hive.HiveExternalCatalog;
+import org.apache.spark.sql.types.StructType;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -172,8 +177,6 @@ public class DataSourceUtils {
     boolean asyncCompact = Boolean.parseBoolean(parameters.get(DataSourceWriteOptions.ASYNC_COMPACT_ENABLE().key()));
     boolean inlineCompact = !asyncCompact && parameters.get(DataSourceWriteOptions.TABLE_TYPE().key())
         .equals(DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL());
-    boolean asyncClusteringEnabled = Boolean.parseBoolean(parameters.get(DataSourceWriteOptions.ASYNC_CLUSTERING_ENABLE().key()));
-    boolean inlineClusteringEnabled = Boolean.parseBoolean(parameters.get(DataSourceWriteOptions.INLINE_CLUSTERING_ENABLE().key()));
     // insert/bulk-insert combining to be true, if filtering for duplicates
     boolean combineInserts = Boolean.parseBoolean(parameters.get(DataSourceWriteOptions.INSERT_DROP_DUPS().key()));
     HoodieWriteConfig.Builder builder = HoodieWriteConfig.newBuilder()
@@ -183,13 +186,9 @@ public class DataSourceUtils {
     }
 
     return builder.forTable(tblName)
-        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(IndexType.BLOOM).build())
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withPayloadClass(parameters.get(DataSourceWriteOptions.PAYLOAD_CLASS_NAME().key()))
             .withInlineCompaction(inlineCompact).build())
-        .withClusteringConfig(HoodieClusteringConfig.newBuilder()
-            .withInlineClustering(inlineClusteringEnabled)
-            .withAsyncClustering(asyncClusteringEnabled).build())
         .withPayloadConfig(HoodiePayloadConfig.newBuilder().withPayloadOrderingField(parameters.get(DataSourceWriteOptions.PRECOMBINE_FIELD().key()))
             .build())
         // override above with Hoodie configs specified as options.
@@ -234,13 +233,13 @@ public class DataSourceUtils {
   public static HoodieRecord createHoodieRecord(GenericRecord gr, Comparable orderingVal, HoodieKey hKey,
       String payloadClass) throws IOException {
     HoodieRecordPayload payload = DataSourceUtils.createPayload(payloadClass, gr, orderingVal);
-    return new HoodieRecord<>(hKey, payload);
+    return new HoodieAvroRecord<>(hKey, payload);
   }
 
   public static HoodieRecord createHoodieRecord(GenericRecord gr, HoodieKey hKey,
                                                 String payloadClass) throws IOException {
     HoodieRecordPayload payload = DataSourceUtils.createPayload(payloadClass, gr);
-    return new HoodieRecord<>(hKey, payload);
+    return new HoodieAvroRecord<>(hKey, payload);
   }
 
   /**
@@ -272,6 +271,11 @@ public class DataSourceUtils {
     return dropDuplicates(jssc, incomingHoodieRecords, writeConfig);
   }
 
+  /**
+   * @deprecated Use {@link HiveSyncConfig} constructor directly and provide the props,
+   * and set {@link HoodieSyncConfig#META_SYNC_BASE_PATH} and {@link HoodieSyncConfig#META_SYNC_BASE_FILE_FORMAT} instead.
+   */
+  @Deprecated
   public static HiveSyncConfig buildHiveSyncConfig(TypedProperties props, String basePath, String baseFileFormat) {
     checkRequiredProperties(props, Collections.singletonList(DataSourceWriteOptions.HIVE_TABLE().key()));
     HiveSyncConfig hiveSyncConfig = new HiveSyncConfig();
@@ -289,6 +293,8 @@ public class DataSourceUtils {
         props.getString(DataSourceWriteOptions.HIVE_PASS().key(), DataSourceWriteOptions.HIVE_PASS().defaultValue());
     hiveSyncConfig.jdbcUrl =
         props.getString(DataSourceWriteOptions.HIVE_URL().key(), DataSourceWriteOptions.HIVE_URL().defaultValue());
+    hiveSyncConfig.metastoreUris =
+            props.getString(DataSourceWriteOptions.METASTORE_URIS().key(), DataSourceWriteOptions.METASTORE_URIS().defaultValue());
     hiveSyncConfig.partitionFields =
         props.getStringList(DataSourceWriteOptions.HIVE_PARTITION_FIELDS().key(), ",", new ArrayList<>());
     hiveSyncConfig.partitionValueExtractorClass =
@@ -307,6 +313,28 @@ public class DataSourceUtils {
         DataSourceWriteOptions.HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE().defaultValue()));
     hiveSyncConfig.supportTimestamp = Boolean.valueOf(props.getString(DataSourceWriteOptions.HIVE_SUPPORT_TIMESTAMP_TYPE().key(),
         DataSourceWriteOptions.HIVE_SUPPORT_TIMESTAMP_TYPE().defaultValue()));
+    hiveSyncConfig.isConditionalSync = Boolean.valueOf(props.getString(DataSourceWriteOptions.HIVE_CONDITIONAL_SYNC().key(),
+        DataSourceWriteOptions.HIVE_CONDITIONAL_SYNC().defaultValue()));
+    hiveSyncConfig.bucketSpec = props.getBoolean(DataSourceWriteOptions.HIVE_SYNC_BUCKET_SYNC().key(),
+        DataSourceWriteOptions.HIVE_SYNC_BUCKET_SYNC().defaultValue())
+        ? HiveSyncConfig.getBucketSpec(props.getString(HoodieIndexConfig.BUCKET_INDEX_HASH_FIELD.key()),
+            props.getInteger(HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS.key())) : null;
+    if (props.containsKey(HiveExternalCatalog.CREATED_SPARK_VERSION())) {
+      hiveSyncConfig.sparkVersion = props.getString(HiveExternalCatalog.CREATED_SPARK_VERSION());
+    }
+    hiveSyncConfig.syncComment = Boolean.valueOf(props.getString(DataSourceWriteOptions.HIVE_SYNC_COMMENT().key(),
+            DataSourceWriteOptions.HIVE_SYNC_COMMENT().defaultValue()));
     return hiveSyncConfig;
+  }
+
+  // Now by default ParquetWriteSupport will write DecimalType to parquet as int32/int64 when the scale of decimalType < Decimal.MAX_LONG_DIGITS(),
+  // but AvroParquetReader which used by HoodieParquetReader cannot support read int32/int64 as DecimalType.
+  // try to find current schema whether contains that DecimalType, and auto set the value of "hoodie.parquet.writelegacyformat.enabled"
+  public static void mayBeOverwriteParquetWriteLegacyFormatProp(Map<String, String> properties, StructType schema) {
+    if (DataTypeUtils.foundSmallPrecisionDecimalType(schema)
+        && !Boolean.parseBoolean(properties.getOrDefault(HoodieStorageConfig.PARQUET_WRITE_LEGACY_FORMAT_ENABLED.key(), "false"))) {
+      properties.put(HoodieStorageConfig.PARQUET_WRITE_LEGACY_FORMAT_ENABLED.key(), "true");
+      LOG.warn("Small Decimal Type found in current schema, auto set the value of hoodie.parquet.writelegacyformat.enabled to true");
+    }
   }
 }

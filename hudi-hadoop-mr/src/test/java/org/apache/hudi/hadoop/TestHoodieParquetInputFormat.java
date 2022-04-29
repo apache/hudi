@@ -18,10 +18,20 @@
 
 package org.apache.hudi.hadoop;
 
+import org.apache.avro.Schema;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.io.ArrayWritable;
+import org.apache.hadoop.io.NullWritable;
+import org.apache.hadoop.mapred.FileInputFormat;
+import org.apache.hadoop.mapred.InputSplit;
+import org.apache.hadoop.mapred.JobConf;
+import org.apache.hadoop.mapred.RecordReader;
+import org.apache.hadoop.mapreduce.Job;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -33,16 +43,7 @@ import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.testutils.InputFormatTestUtil;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
-
-import org.apache.avro.Schema;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.io.ArrayWritable;
-import org.apache.hadoop.io.NullWritable;
-import org.apache.hadoop.mapred.FileInputFormat;
-import org.apache.hadoop.mapred.InputSplit;
-import org.apache.hadoop.mapred.JobConf;
-import org.apache.hadoop.mapred.RecordReader;
-import org.apache.hadoop.mapreduce.Job;
+import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
@@ -114,7 +115,7 @@ public class TestHoodieParquetInputFormat {
     timeline.setInstants(instants);
 
     // Verify getCommitsTimelineBeforePendingCompaction does not return instants after first compaction instant
-    HoodieTimeline filteredTimeline = inputFormat.filterInstantsTimeline(timeline);
+    HoodieTimeline filteredTimeline = HoodieInputFormatUtils.filterInstantsTimeline(timeline);
     assertTrue(filteredTimeline.containsInstant(t1));
     assertTrue(filteredTimeline.containsInstant(t2));
     assertFalse(filteredTimeline.containsInstant(t3));
@@ -125,7 +126,7 @@ public class TestHoodieParquetInputFormat {
     instants.remove(t3);
     timeline = new HoodieActiveTimeline(metaClient);
     timeline.setInstants(instants);
-    filteredTimeline = inputFormat.filterInstantsTimeline(timeline);
+    filteredTimeline = HoodieInputFormatUtils.filterInstantsTimeline(timeline);
 
     // verify all remaining instants are returned.
     assertTrue(filteredTimeline.containsInstant(t1));
@@ -139,7 +140,7 @@ public class TestHoodieParquetInputFormat {
     instants.remove(t5);
     timeline = new HoodieActiveTimeline(metaClient);
     timeline.setInstants(instants);
-    filteredTimeline = inputFormat.filterInstantsTimeline(timeline);
+    filteredTimeline = HoodieInputFormatUtils.filterInstantsTimeline(timeline);
 
     // verify all remaining instants are returned.
     assertTrue(filteredTimeline.containsInstant(t1));
@@ -164,6 +165,21 @@ public class TestHoodieParquetInputFormat {
 
     FileStatus[] files = inputFormat.listStatus(jobConf);
     assertEquals(10, files.length);
+  }
+
+  @Test
+  public void testInputFormatLoadWithEmptyTable() throws IOException {
+    // initial hoodie table
+    String bathPathStr = "/tmp/test_empty_table";
+    HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), bathPathStr, HoodieTableType.COPY_ON_WRITE,
+            baseFileFormat);
+    // Add the paths
+    FileInputFormat.setInputPaths(jobConf, bathPathStr);
+
+    FileStatus[] files = inputFormat.listStatus(jobConf);
+    assertEquals(0, files.length);
+    InputSplit[] inputSplits = inputFormat.getSplits(jobConf, 0);
+    assertEquals(0, inputSplits.length);
   }
 
   @Test
@@ -201,11 +217,11 @@ public class TestHoodieParquetInputFormat {
     FileInputFormat.setInputPaths(jobConf, partitionDir.getPath());
     InputFormatTestUtil.setupSnapshotIncludePendingCommits(jobConf, "1");
     Exception exception = assertThrows(HoodieIOException.class, () -> inputFormat.listStatus(jobConf));
-    assertEquals("Valid timestamp is required for hoodie.%s.consume.commit in snapshot mode", exception.getMessage());
+    assertEquals("Query instant (1) not found in the timeline", exception.getMessage());
 
     InputFormatTestUtil.setupSnapshotMaxCommitTimeQueryMode(jobConf, "1");
     exception = assertThrows(HoodieIOException.class, () -> inputFormat.listStatus(jobConf));
-    assertEquals("Valid timestamp is required for hoodie.%s.consume.commit in snapshot mode", exception.getMessage());
+    assertEquals("Query instant (1) not found in the timeline", exception.getMessage());
   }
 
   @Test
@@ -286,9 +302,90 @@ public class TestHoodieParquetInputFormat {
 
     InputFormatTestUtil.setupIncremental(jobConf, "100", 1);
 
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString(),
+            HoodieTableType.COPY_ON_WRITE, baseFileFormat);
+    assertEquals(null, metaClient.getTableConfig().getDatabaseName(),
+        "When hoodie.database.name is not set, it should default to null");
+
     FileStatus[] files = inputFormat.listStatus(jobConf);
     assertEquals(0, files.length,
         "We should exclude commit 100 when returning incremental pull with start commit time as 100");
+
+    InputFormatTestUtil.setupIncremental(jobConf, "100", 1, true);
+
+    files = inputFormat.listStatus(jobConf);
+    assertEquals(0, files.length,
+        "We should exclude commit 100 when returning incremental pull with start commit time as 100");
+
+    metaClient = HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString(), HoodieTableType.COPY_ON_WRITE,
+            baseFileFormat, HoodieTestUtils.HOODIE_DATABASE);
+    assertEquals(HoodieTestUtils.HOODIE_DATABASE, metaClient.getTableConfig().getDatabaseName(),
+        String.format("The hoodie.database.name should be %s ", HoodieTestUtils.HOODIE_DATABASE));
+
+    files = inputFormat.listStatus(jobConf);
+    assertEquals(10, files.length,
+        "When hoodie.incremental.use.database is true and hoodie.database.name is not null or empty"
+                + " and the incremental database name is not set, then the incremental query will not take effect");
+  }
+
+  @Test
+  public void testIncrementalWithDatabaseName() throws IOException {
+    // initial commit
+    File partitionDir = InputFormatTestUtil.prepareTable(basePath, baseFileFormat, 10, "100");
+    createCommitFile(basePath, "100", "2016/05/01");
+
+    // Add the paths
+    FileInputFormat.setInputPaths(jobConf, partitionDir.getPath());
+
+    InputFormatTestUtil.setupIncremental(jobConf, "100", 1, HoodieTestUtils.HOODIE_DATABASE, true);
+
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString(),
+            HoodieTableType.COPY_ON_WRITE, baseFileFormat);
+    assertEquals(null, metaClient.getTableConfig().getDatabaseName(),
+        "When hoodie.database.name is not set, it should default to null");
+
+    FileStatus[] files = inputFormat.listStatus(jobConf);
+    assertEquals(10, files.length,
+        "When hoodie.database.name is null, then the incremental query will not take effect");
+
+    metaClient = HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString(), HoodieTableType.COPY_ON_WRITE,
+            baseFileFormat, "");
+    assertEquals("", metaClient.getTableConfig().getDatabaseName(),
+        "The hoodie.database.name should be empty");
+
+    files = inputFormat.listStatus(jobConf);
+    assertEquals(10, files.length,
+        "When hoodie.database.name is empty, then the incremental query will not take effect");
+
+    metaClient = HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString(), HoodieTableType.COPY_ON_WRITE,
+            baseFileFormat, HoodieTestUtils.HOODIE_DATABASE);
+    assertEquals(HoodieTestUtils.HOODIE_DATABASE, metaClient.getTableConfig().getDatabaseName(),
+            String.format("The hoodie.database.name should be %s ", HoodieTestUtils.HOODIE_DATABASE));
+
+    files = inputFormat.listStatus(jobConf);
+    assertEquals(0, files.length,
+        "We should exclude commit 100 when returning incremental pull with start commit time as 100");
+
+    InputFormatTestUtil.setupIncremental(jobConf, "100", 1, HoodieTestUtils.HOODIE_DATABASE, false);
+
+    files = inputFormat.listStatus(jobConf);
+    assertEquals(10, files.length,
+        "When hoodie.incremental.use.database is false and the incremental database name is set, "
+                + "then the incremental query will not take effect");
+
+    // The configuration with and without database name exists together
+    InputFormatTestUtil.setupIncremental(jobConf, "1", 1, true);
+
+    files = inputFormat.listStatus(jobConf);
+    assertEquals(0, files.length,
+        "When hoodie.incremental.use.database is true, "
+                + "We should exclude commit 100 because the returning incremental pull with start commit time is 100");
+
+    InputFormatTestUtil.setupIncremental(jobConf, "1", 1, false);
+    files = inputFormat.listStatus(jobConf);
+    assertEquals(10, files.length,
+        "When hoodie.incremental.use.database is false, "
+                + "We should include commit 100 because the returning incremental pull with start commit time is 1");
   }
 
   @Test
@@ -429,7 +526,7 @@ public class TestHoodieParquetInputFormat {
     ensureFilesInCommit("Pulling all commits from 100, should get us the 1 files from 200 commit", files, "200", 1);
   }
 
-  @Disabled("enable this after enabling predicate pushdown")
+  @Disabled("enable this after enabling predicate push down")
   @Test
   public void testPredicatePushDown() throws IOException {
     // initial commit
@@ -451,7 +548,7 @@ public class TestHoodieParquetInputFormat {
     // check whether we have 2 records at this point
     ensureRecordsInCommit("We need to have 2 records that was modified at commit " + commit2 + " and no more", commit2,
         2, 2);
-    // Make sure we have the 10 records if we roll back the stattime
+    // Make sure we have the 10 records if we roll back the start time
     InputFormatTestUtil.setupIncremental(jobConf, "0", 2);
     ensureRecordsInCommit("We need to have 8 records that was modified at commit " + commit1 + " and no more", commit1,
         8, 10);
@@ -461,19 +558,19 @@ public class TestHoodieParquetInputFormat {
 
   @Test
   public void testGetIncrementalTableNames() throws IOException {
-    String[] expectedincrTables = {"db1.raw_trips", "db2.model_trips", "db3.model_trips"};
+    String[] expectedIncrTables = {"db1.raw_trips", "db2.model_trips", "db3.model_trips"};
     JobConf conf = new JobConf();
-    String incrementalMode1 = String.format(HoodieHiveUtils.HOODIE_CONSUME_MODE_PATTERN, expectedincrTables[0]);
+    String incrementalMode1 = String.format(HoodieHiveUtils.HOODIE_CONSUME_MODE_PATTERN, expectedIncrTables[0]);
     conf.set(incrementalMode1, HoodieHiveUtils.INCREMENTAL_SCAN_MODE);
-    String incrementalMode2 = String.format(HoodieHiveUtils.HOODIE_CONSUME_MODE_PATTERN, expectedincrTables[1]);
+    String incrementalMode2 = String.format(HoodieHiveUtils.HOODIE_CONSUME_MODE_PATTERN, expectedIncrTables[1]);
     conf.set(incrementalMode2, HoodieHiveUtils.INCREMENTAL_SCAN_MODE);
     String incrementalMode3 = String.format(HoodieHiveUtils.HOODIE_CONSUME_MODE_PATTERN, "db3.model_trips");
     conf.set(incrementalMode3, HoodieHiveUtils.INCREMENTAL_SCAN_MODE.toLowerCase());
-    String defaultmode = String.format(HoodieHiveUtils.HOODIE_CONSUME_MODE_PATTERN, "db3.first_trips");
-    conf.set(defaultmode, HoodieHiveUtils.DEFAULT_SCAN_MODE);
-    List<String> actualincrTables = HoodieHiveUtils.getIncrementalTableNames(Job.getInstance(conf));
-    for (String expectedincrTable : expectedincrTables) {
-      assertTrue(actualincrTables.contains(expectedincrTable));
+    String defaultMode = String.format(HoodieHiveUtils.HOODIE_CONSUME_MODE_PATTERN, "db3.first_trips");
+    conf.set(defaultMode, HoodieHiveUtils.DEFAULT_SCAN_MODE);
+    List<String> actualIncrTables = HoodieHiveUtils.getIncrementalTableNames(Job.getInstance(conf));
+    for (String expectedIncrTable : expectedIncrTables) {
+      assertTrue(actualIncrTables.contains(expectedIncrTable));
     }
   }
 

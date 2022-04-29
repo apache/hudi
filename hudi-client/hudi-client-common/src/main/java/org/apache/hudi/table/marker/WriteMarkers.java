@@ -23,7 +23,6 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
@@ -85,9 +84,10 @@ public abstract class WriteMarkers implements Serializable {
    */
   public void quietDeleteMarkerDir(HoodieEngineContext context, int parallelism) {
     try {
+      context.setJobStatus(this.getClass().getSimpleName(), "Deleting marker directory");
       deleteMarkerDir(context, parallelism);
-    } catch (HoodieIOException ioe) {
-      LOG.warn("Error deleting marker directory for instant " + instantTime, ioe);
+    } catch (Exception e) {
+      LOG.warn("Error deleting marker directory for instant " + instantTime, e);
     }
   }
 

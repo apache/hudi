@@ -62,7 +62,7 @@ class HoodieCommonSqlParser(session: SparkSession, delegate: ParserInterface)
   }
 
   def parseMultipartIdentifier(sqlText: String): Seq[String] = {
-    throw new UnsupportedOperationException(s"Unsupported parseMultipartIdentifier method")
+    sparkAdapter.parseMultipartIdentifier(delegate, sqlText)
   }
 
   protected def parse[T](command: String)(toResult: HoodieSqlCommonParser => T): T = {

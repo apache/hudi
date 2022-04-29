@@ -24,15 +24,20 @@ import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.engine.EngineType;
+import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import javax.annotation.concurrent.Immutable;
 
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Properties;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.config.HoodieHBaseIndexConfig.GET_BATCH_SIZE;
 import static org.apache.hudi.config.HoodieHBaseIndexConfig.PUT_BATCH_SIZE;
@@ -54,7 +59,7 @@ public class HoodieIndexConfig extends HoodieConfig {
       .key("hoodie.index.type")
       .noDefaultValue()
       .withDocumentation("Type of index to use. Default is Bloom filter. "
-          + "Possible options are [BLOOM | GLOBAL_BLOOM |SIMPLE | GLOBAL_SIMPLE | INMEMORY | HBASE]. "
+          + "Possible options are [BLOOM | GLOBAL_BLOOM |SIMPLE | GLOBAL_SIMPLE | INMEMORY | HBASE | BUCKET]. "
           + "Bloom filters removes the dependency on a external system "
           + "and is stored in the footer of the Parquet Data Files");
 
@@ -110,6 +115,14 @@ public class HoodieIndexConfig extends HoodieConfig {
           + "When true, the input RDD will cached to speed up index lookup by reducing IO "
           + "for computing parallelism or affected partitions");
 
+  public static final ConfigProperty<Boolean> BLOOM_INDEX_USE_METADATA = ConfigProperty
+      .key("hoodie.bloom.index.use.metadata")
+      .defaultValue(false)
+      .sinceVersion("0.11.0")
+      .withDocumentation("Only applies if index type is BLOOM."
+          + "When true, the index lookup uses bloom filters and column stats from metadata "
+          + "table when available to speed up the process.");
+
   public static final ConfigProperty<String> BLOOM_INDEX_TREE_BASED_FILTER = ConfigProperty
       .key("hoodie.bloom.index.use.treebased.filter")
       .defaultValue("true")
@@ -147,7 +160,7 @@ public class HoodieIndexConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> SIMPLE_INDEX_PARALLELISM = ConfigProperty
       .key("hoodie.simple.index.parallelism")
-      .defaultValue("50")
+      .defaultValue("100")
       .withDocumentation("Only applies if index type is SIMPLE. "
           + "This is the amount of parallelism for index lookup, which involves a Spark Shuffle");
 
@@ -199,6 +212,30 @@ public class HoodieIndexConfig extends HoodieConfig {
       .key("hoodie.simple.index.update.partition.path")
       .defaultValue("true")
       .withDocumentation("Similar to " + BLOOM_INDEX_UPDATE_PARTITION_PATH_ENABLE + ", but for simple index.");
+
+  /**
+   * ***** Bucket Index Configs *****
+   * Bucket Index is targeted to locate the record fast by hash in big data scenarios.
+   * The current implementation is a basic version, so there are some constraints:
+   * 1. Unsupported operation: bulk insert, cluster and so on.
+   * 2. Bucket num change requires rewriting the partition.
+   * 3. Predict the table size and future data growth well to set a reasonable bucket num.
+   * 4. A bucket size is recommended less than 3GB and avoid bing too small.
+   * more details and progress see [HUDI-3039].
+   */
+  // Bucket num equals file groups num in each partition.
+  // Bucket num can be set according to partition size and file group size.
+  public static final ConfigProperty<Integer> BUCKET_INDEX_NUM_BUCKETS = ConfigProperty
+      .key("hoodie.bucket.index.num.buckets")
+      .defaultValue(256)
+      .withDocumentation("Only applies if index type is BUCKET_INDEX. Determine the number of buckets in the hudi table, "
+          + "and each partition is divided to N buckets.");
+
+  public static final ConfigProperty<String> BUCKET_INDEX_HASH_FIELD = ConfigProperty
+      .key("hoodie.bucket.index.hash.field")
+      .noDefaultValue()
+      .withDocumentation("Index key. It is used to index the record and find its file group. "
+          + "If not set, use record key field as default");
 
   /**
    * Deprecated configs. These are now part of {@link HoodieHBaseIndexConfig}.
@@ -461,6 +498,11 @@ public class HoodieIndexConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder bloomIndexUseMetadata(boolean useMetadata) {
+      hoodieIndexConfig.setValue(BLOOM_INDEX_USE_METADATA, String.valueOf(useMetadata));
+      return this;
+    }
+
     public Builder bloomIndexTreebasedFilter(boolean useTreeFilter) {
       hoodieIndexConfig.setValue(BLOOM_INDEX_TREE_BASED_FILTER, String.valueOf(useTreeFilter));
       return this;
@@ -516,19 +558,30 @@ public class HoodieIndexConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withBucketNum(String bucketNum) {
+      hoodieIndexConfig.setValue(BUCKET_INDEX_NUM_BUCKETS, bucketNum);
+      return this;
+    }
+
+    public Builder withIndexKeyField(String keyField) {
+      hoodieIndexConfig.setValue(BUCKET_INDEX_HASH_FIELD, keyField);
+      return this;
+    }
+
     public HoodieIndexConfig build() {
       hoodieIndexConfig.setDefaultValue(INDEX_TYPE, getDefaultIndexType(engineType));
       hoodieIndexConfig.setDefaults(HoodieIndexConfig.class.getName());
 
       // Throws IllegalArgumentException if the value set is not a known Hoodie Index Type
       HoodieIndex.IndexType.valueOf(hoodieIndexConfig.getString(INDEX_TYPE));
+      validateBucketIndexConfig();
       return hoodieIndexConfig;
     }
 
     private String getDefaultIndexType(EngineType engineType) {
       switch (engineType) {
         case SPARK:
-          return HoodieIndex.IndexType.BLOOM.name();
+          return HoodieIndex.IndexType.SIMPLE.name();
         case FLINK:
         case JAVA:
           return HoodieIndex.IndexType.INMEMORY.name();
@@ -539,6 +592,28 @@ public class HoodieIndexConfig extends HoodieConfig {
 
     public EngineType getEngineType() {
       return engineType;
+    }
+
+    private void validateBucketIndexConfig() {
+      if (hoodieIndexConfig.getString(INDEX_TYPE).equalsIgnoreCase(HoodieIndex.IndexType.BUCKET.toString())) {
+        // check the bucket index hash field
+        if (StringUtils.isNullOrEmpty(hoodieIndexConfig.getString(BUCKET_INDEX_HASH_FIELD))) {
+          hoodieIndexConfig.setValue(BUCKET_INDEX_HASH_FIELD,
+              hoodieIndexConfig.getStringOrDefault(KeyGeneratorOptions.RECORDKEY_FIELD_NAME));
+        } else {
+          boolean valid = Arrays
+              .stream(hoodieIndexConfig.getStringOrDefault(KeyGeneratorOptions.RECORDKEY_FIELD_NAME).split(","))
+              .collect(Collectors.toSet())
+              .containsAll(Arrays.asList(hoodieIndexConfig.getString(BUCKET_INDEX_HASH_FIELD).split(",")));
+          if (!valid) {
+            throw new HoodieIndexException("Bucket index key (if configured) must be subset of record key.");
+          }
+        }
+        // check the bucket num
+        if (hoodieIndexConfig.getIntOrDefault(BUCKET_INDEX_NUM_BUCKETS) <= 0) {
+          throw new HoodieIndexException("When using bucket index, hoodie.bucket.index.num.buckets cannot be negative.");
+        }
+      }
     }
   }
 }

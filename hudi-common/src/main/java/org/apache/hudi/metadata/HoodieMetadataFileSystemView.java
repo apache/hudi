@@ -66,6 +66,18 @@ public class HoodieMetadataFileSystemView extends HoodieTableFileSystemView {
   }
 
   @Override
+  public void reset() {
+    super.reset();
+    tableMetadata.reset();
+  }
+
+  @Override
+  public void sync() {
+    super.sync();
+    tableMetadata.reset();
+  }
+
+  @Override
   public void close() {
     try {
       tableMetadata.close();

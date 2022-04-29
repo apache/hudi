@@ -24,6 +24,7 @@ import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.HoodieTable;
 
+import com.esotericsoftware.minlog.Log;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -45,11 +46,17 @@ public class WriteMarkersFactory {
       case DIRECT:
         return new DirectWriteMarkers(table, instantTime);
       case TIMELINE_SERVER_BASED:
+        if (!table.getConfig().isEmbeddedTimelineServerEnabled()) {
+          Log.warn("Timeline-server-based markers are configured as the marker type "
+              + "but embedded timeline server is not enabled.  Falling back to direct markers.");
+          return new DirectWriteMarkers(table, instantTime);
+        }
         String basePath = table.getMetaClient().getBasePath();
         if (StorageSchemes.HDFS.getScheme().equals(
             FSUtils.getFs(basePath, table.getContext().getHadoopConf().newCopy()).getScheme())) {
-          throw new HoodieException("Timeline-server-based markers are not supported for HDFS: "
-              + "base path " + basePath);
+          Log.warn("Timeline-server-based markers are not supported for HDFS: "
+              + "base path " + basePath + ".  Falling back to direct markers.");
+          return new DirectWriteMarkers(table, instantTime);
         }
         return new TimelineServerBasedWriteMarkers(table, instantTime);
       default:

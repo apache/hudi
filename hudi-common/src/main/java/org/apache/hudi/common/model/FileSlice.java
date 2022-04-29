@@ -34,12 +34,12 @@ public class FileSlice implements Serializable {
   /**
    * File Group Id of the Slice.
    */
-  private HoodieFileGroupId fileGroupId;
+  private final HoodieFileGroupId fileGroupId;
 
   /**
    * Point in the timeline, at which the slice was created.
    */
-  private String baseInstantTime;
+  private final String baseInstantTime;
 
   /**
    * data file, with the compacted data, for this slice.

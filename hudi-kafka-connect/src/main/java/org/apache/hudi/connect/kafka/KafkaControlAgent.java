@@ -18,7 +18,7 @@
 
 package org.apache.hudi.connect.kafka;
 
-import org.apache.hudi.connect.transaction.ControlEvent;
+import org.apache.hudi.connect.ControlMessage;
 import org.apache.hudi.connect.transaction.TransactionCoordinator;
 import org.apache.hudi.connect.transaction.TransactionParticipant;
 
@@ -37,5 +37,5 @@ public interface KafkaControlAgent {
 
   void deregisterTransactionCoordinator(TransactionCoordinator coordinator);
 
-  void publishMessage(ControlEvent message);
+  void publishMessage(ControlMessage message);
 }

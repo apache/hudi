@@ -26,7 +26,7 @@ import org.apache.spark.sql.parser.HoodieCommonSqlParser
  * The Hoodie SparkSessionExtension for extending the syntax and add the rules.
  */
 class HoodieSparkSessionExtension extends (SparkSessionExtensions => Unit)
-  with SparkAdapterSupport{
+  with SparkAdapterSupport {
   override def apply(extensions: SparkSessionExtensions): Unit = {
 
     extensions.injectParser { (session, parser) =>
@@ -37,6 +37,10 @@ class HoodieSparkSessionExtension extends (SparkSessionExtensions => Unit)
       extensions.injectResolutionRule { session =>
         rule(session)
       }
+    }
+
+    extensions.injectResolutionRule { session =>
+      sparkAdapter.createResolveHudiAlterTableCommand(session)
     }
 
     HoodieAnalysis.customPostHocResolutionRules().foreach { rule =>

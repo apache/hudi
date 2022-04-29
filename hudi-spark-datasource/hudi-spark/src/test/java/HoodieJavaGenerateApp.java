@@ -23,8 +23,10 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.MultiPartKeysValueExtractor;
 import org.apache.hudi.hive.NonPartitionedExtractor;
+import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 
@@ -124,23 +126,25 @@ public class HoodieJavaGenerateApp {
   private DataFrameWriter<Row> updateHiveSyncConfig(DataFrameWriter<Row> writer) {
     if (enableHiveSync) {
       LOG.info("Enabling Hive sync to " + hiveJdbcUrl);
-      writer = writer.option(DataSourceWriteOptions.HIVE_TABLE().key(), hiveTable)
-          .option(DataSourceWriteOptions.HIVE_DATABASE().key(), hiveDB)
-          .option(DataSourceWriteOptions.HIVE_URL().key(), hiveJdbcUrl)
-          .option(DataSourceWriteOptions.HIVE_USER().key(), hiveUser)
-          .option(DataSourceWriteOptions.HIVE_PASS().key(), hivePass)
-          .option(DataSourceWriteOptions.HIVE_SYNC_ENABLED().key(), "true");
+      writer = writer.option(HiveSyncConfig.META_SYNC_TABLE_NAME.key(), hiveTable)
+          .option(HiveSyncConfig.META_SYNC_DATABASE_NAME.key(), hiveDB)
+          .option(HiveSyncConfig.HIVE_URL.key(), hiveJdbcUrl)
+          .option(HiveSyncConfig.HIVE_USER.key(), hiveUser)
+          .option(HiveSyncConfig.HIVE_PASS.key(), hivePass)
+          .option(HiveSyncConfig.HIVE_SYNC_ENABLED.key(), "true");
       if (nonPartitionedTable) {
         writer = writer
-            .option(DataSourceWriteOptions.HIVE_PARTITION_EXTRACTOR_CLASS().key(),
+            .option(HiveSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key(),
                 NonPartitionedExtractor.class.getCanonicalName())
             .option(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), "");
       } else if (useMultiPartitionKeys) {
-        writer = writer.option(DataSourceWriteOptions.HIVE_PARTITION_FIELDS().key(), "year,month,day").option(
-            DataSourceWriteOptions.HIVE_PARTITION_EXTRACTOR_CLASS().key(),
+        writer = writer.option(HiveSyncConfig.META_SYNC_PARTITION_FIELDS.key(), "year,month,day").option(
+            HiveSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key(),
             MultiPartKeysValueExtractor.class.getCanonicalName());
       } else {
-        writer = writer.option(DataSourceWriteOptions.HIVE_PARTITION_FIELDS().key(), "dateStr");
+        writer = writer.option(HiveSyncConfig.META_SYNC_PARTITION_FIELDS.key(), "dateStr").option(
+            HiveSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key(),
+            SlashEncodedDayPartitionValueExtractor.class.getCanonicalName());
       }
     }
     return writer;

@@ -22,6 +22,9 @@ import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.config.HoodieMetricsCloudWatchConfig;
 import org.apache.hudi.metrics.MetricsReporterType;
 
 import javax.annotation.concurrent.Immutable;
@@ -61,6 +64,18 @@ public class HoodieMetricsConfig extends HoodieConfig {
       .defaultValue("")
       .sinceVersion("0.6.0")
       .withDocumentation("");
+
+  public static final ConfigProperty<String> METRICS_REPORTER_PREFIX = ConfigProperty
+      .key(METRIC_PREFIX + ".reporter.metricsname.prefix")
+      .defaultValue("")
+      .sinceVersion("0.11.0")
+      .withInferFunction(cfg -> {
+        if (cfg.contains(HoodieTableConfig.NAME)) {
+          return Option.of(cfg.getString(HoodieTableConfig.NAME));
+        }
+        return Option.empty();
+      })
+      .withDocumentation("The prefix given to the metrics names.");
 
   // Enable metrics collection from executors
   public static final ConfigProperty<String> EXECUTOR_METRICS_ENABLE = ConfigProperty
@@ -165,6 +180,8 @@ public class HoodieMetricsConfig extends HoodieConfig {
           HoodieMetricsJmxConfig.newBuilder().fromProperties(hoodieMetricsConfig.getProps()).build());
       hoodieMetricsConfig.setDefaultOnCondition(reporterType == MetricsReporterType.GRAPHITE,
           HoodieMetricsGraphiteConfig.newBuilder().fromProperties(hoodieMetricsConfig.getProps()).build());
+      hoodieMetricsConfig.setDefaultOnCondition(reporterType == MetricsReporterType.CLOUDWATCH,
+            HoodieMetricsCloudWatchConfig.newBuilder().fromProperties(hoodieMetricsConfig.getProps()).build());
       return hoodieMetricsConfig;
     }
   }

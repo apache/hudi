@@ -22,6 +22,7 @@ import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.integ.testsuite.HoodieTestSuiteJob;
 import org.apache.hudi.integ.testsuite.HoodieTestSuiteJob.HoodieTestSuiteConfig;
@@ -35,7 +36,6 @@ import org.apache.hudi.integ.testsuite.schema.SchemaUtils;
 import org.apache.hudi.integ.testsuite.schema.TestSuiteFileBasedSchemaProvider;
 import org.apache.hudi.integ.testsuite.writer.DeltaOutputMode;
 import org.apache.hudi.keygen.TimestampBasedKeyGenerator;
-import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.sources.AvroDFSSource;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 
@@ -174,10 +174,10 @@ public class TestHoodieTestSuiteJob extends UtilitiesTestBase {
     // Make path selection test suite specific
     props.setProperty("hoodie.deltastreamer.source.input.selector", DFSTestSuitePathSelector.class.getName());
     // Hive Configs
-    props.setProperty(DataSourceWriteOptions.HIVE_URL().key(), "jdbc:hive2://127.0.0.1:9999/");
-    props.setProperty(DataSourceWriteOptions.HIVE_DATABASE().key(), "testdb1");
-    props.setProperty(DataSourceWriteOptions.HIVE_TABLE().key(), "table1");
-    props.setProperty(DataSourceWriteOptions.HIVE_PARTITION_FIELDS().key(), "datestr");
+    props.setProperty(HiveSyncConfig.HIVE_URL.key(), "jdbc:hive2://127.0.0.1:9999/");
+    props.setProperty(HiveSyncConfig.META_SYNC_DATABASE_NAME.key(), "testdb1");
+    props.setProperty(HiveSyncConfig.META_SYNC_TABLE_NAME.key(), "table1");
+    props.setProperty(HiveSyncConfig.META_SYNC_PARTITION_FIELDS.key(), "datestr");
     props.setProperty(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME().key(), TimestampBasedKeyGenerator.class.getName());
 
     props.setProperty("hoodie.write.lock.provider", "org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider");

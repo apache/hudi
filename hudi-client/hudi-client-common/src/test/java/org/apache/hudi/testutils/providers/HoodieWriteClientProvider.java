@@ -19,12 +19,12 @@
 
 package org.apache.hudi.testutils.providers;
 
-import org.apache.hudi.client.AbstractHoodieWriteClient;
+import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 import java.io.IOException;
 
 public interface HoodieWriteClientProvider {
 
-  AbstractHoodieWriteClient getHoodieWriteClient(HoodieWriteConfig cfg) throws IOException;
+  BaseHoodieWriteClient getHoodieWriteClient(HoodieWriteConfig cfg) throws IOException;
 }

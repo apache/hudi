@@ -26,11 +26,11 @@ public final class Base64CodecUtil {
   /**
    * Decodes data from the input string into using the encoding scheme.
    *
-   * @param serString
+   * @param encodedString - Base64 encoded string to decode
    * @return A newly-allocated byte array containing the decoded bytes.
    */
-  public static byte[] decode(String serString) {
-    return Base64.getDecoder().decode(serString.getBytes(StandardCharsets.UTF_8));
+  public static byte[] decode(String encodedString) {
+    return Base64.getDecoder().decode(encodedString.getBytes(StandardCharsets.UTF_8));
   }
 
   /**

@@ -22,6 +22,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.StorageSchemes;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncException;
 import org.apache.hudi.hive.PartitionValueExtractor;
@@ -39,13 +40,14 @@ import java.util.List;
 import java.util.Map;
 
 import static org.apache.hudi.hive.util.HiveSchemaUtil.HIVE_ESCAPE_CHARACTER;
-/*
-This class adds functionality for all query based DDLExecutors. The classes extending it only have to provide runSQL(sql) functions.
+
+/**
+ * This class adds functionality for all query based DDLExecutors. The classes extending it only have to provide runSQL(sql) functions.
  */
 public abstract class QueryBasedDDLExecutor implements DDLExecutor {
   private static final Logger LOG = LogManager.getLogger(QueryBasedDDLExecutor.class);
   private final HiveSyncConfig config;
-  private final PartitionValueExtractor partitionValueExtractor;
+  public final PartitionValueExtractor partitionValueExtractor;
   private final FileSystem fs;
 
   public QueryBasedDDLExecutor(HiveSyncConfig config, FileSystem fs) {
@@ -127,6 +129,24 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
     }
   }
 
+  @Override
+  public void updateTableComments(String tableName, Map<String, ImmutablePair<String,String>>  newSchema) {
+    for (Map.Entry<String, ImmutablePair<String,String>> field : newSchema.entrySet()) {
+      String name = field.getKey();
+      StringBuilder sql = new StringBuilder();
+      String type = field.getValue().getLeft();
+      String comment = field.getValue().getRight();
+      comment = comment.replace("'","");
+      sql.append("ALTER TABLE ").append(HIVE_ESCAPE_CHARACTER)
+              .append(config.databaseName).append(HIVE_ESCAPE_CHARACTER).append(".")
+              .append(HIVE_ESCAPE_CHARACTER).append(tableName)
+              .append(HIVE_ESCAPE_CHARACTER)
+              .append(" CHANGE COLUMN `").append(name).append("` `").append(name)
+              .append("` ").append(type).append(" comment '").append(comment).append("' ");
+      runSQL(sql.toString());
+    }
+  }
+
   private List<String> constructAddPartitions(String tableName, List<String> partitions) {
     if (config.batchSyncNum <= 0) {
       throw new HoodieHiveSyncException("batch-sync-num for sync hive table must be greater than 0, pls check your parameter");
@@ -159,7 +179,7 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
     return alterSQL;
   }
 
-  private String getPartitionClause(String partition) {
+  public String getPartitionClause(String partition) {
     List<String> partitionValues = partitionValueExtractor.extractPartitionValuesInPath(partition);
     ValidationUtils.checkArgument(config.partitionFields.size() == partitionValues.size(),
         "Partition key parts " + config.partitionFields + " does not match with partition values " + partitionValues

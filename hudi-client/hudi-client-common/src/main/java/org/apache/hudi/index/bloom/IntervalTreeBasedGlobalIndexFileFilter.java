@@ -46,8 +46,8 @@ class IntervalTreeBasedGlobalIndexFileFilter implements IndexFileFilter {
   IntervalTreeBasedGlobalIndexFileFilter(final Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo) {
     List<BloomIndexFileInfo> allIndexFiles = new ArrayList<>();
 
-    partitionToFileIndexInfo.forEach((parition, bloomIndexFileInfoList) -> bloomIndexFileInfoList.forEach(file -> {
-      fileIdToPartitionPathMap.put(file.getFileId(), parition);
+    partitionToFileIndexInfo.forEach((partition, bloomIndexFileInfoList) -> bloomIndexFileInfoList.forEach(file -> {
+      fileIdToPartitionPathMap.put(file.getFileId(), partition);
       allIndexFiles.add(file);
     }));
 

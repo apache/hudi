@@ -18,16 +18,15 @@
 
 package org.apache.hudi.io.storage;
 
+import org.apache.avro.Schema;
+import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
-import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-
-import org.apache.avro.Schema;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.fs.Path;
 import org.apache.parquet.hadoop.ParquetFileWriter;
 import org.apache.parquet.hadoop.ParquetWriter;
 
@@ -51,13 +50,23 @@ public class HoodieParquetWriter<T extends HoodieRecordPayload, R extends Indexe
   private final TaskContextSupplier taskContextSupplier;
   private final boolean populateMetaFields;
 
-  public HoodieParquetWriter(String instantTime, Path file, HoodieAvroParquetConfig parquetConfig,
-      Schema schema, TaskContextSupplier taskContextSupplier, boolean populateMetaFields) throws IOException {
+  public HoodieParquetWriter(String instantTime,
+                             Path file,
+                             HoodieAvroParquetConfig parquetConfig,
+                             Schema schema,
+                             TaskContextSupplier taskContextSupplier,
+                             boolean populateMetaFields) throws IOException {
     super(HoodieWrapperFileSystem.convertToHoodiePath(file, parquetConfig.getHadoopConf()),
-        ParquetFileWriter.Mode.CREATE, parquetConfig.getWriteSupport(), parquetConfig.getCompressionCodecName(),
-        parquetConfig.getBlockSize(), parquetConfig.getPageSize(), parquetConfig.getPageSize(),
-        parquetConfig.dictionaryEnabled(), DEFAULT_IS_VALIDATING_ENABLED,
-        DEFAULT_WRITER_VERSION, FSUtils.registerFileSystem(file, parquetConfig.getHadoopConf()));
+        ParquetFileWriter.Mode.CREATE,
+        parquetConfig.getWriteSupport(),
+        parquetConfig.getCompressionCodecName(),
+        parquetConfig.getBlockSize(),
+        parquetConfig.getPageSize(),
+        parquetConfig.getPageSize(),
+        parquetConfig.dictionaryEnabled(),
+        DEFAULT_IS_VALIDATING_ENABLED,
+        DEFAULT_WRITER_VERSION,
+        FSUtils.registerFileSystem(file, parquetConfig.getHadoopConf()));
     this.file = HoodieWrapperFileSystem.convertToHoodiePath(file, parquetConfig.getHadoopConf());
     this.fs =
         (HoodieWrapperFileSystem) this.file.getFileSystem(FSUtils.registerFileSystem(file, parquetConfig.getHadoopConf()));
@@ -74,12 +83,12 @@ public class HoodieParquetWriter<T extends HoodieRecordPayload, R extends Indexe
   }
 
   @Override
-  public void writeAvroWithMetadata(R avroRecord, HoodieRecord record) throws IOException {
+  public void writeAvroWithMetadata(HoodieKey key, R avroRecord) throws IOException {
     if (populateMetaFields) {
-      prepRecordWithMetadata(avroRecord, record, instantTime,
+      prepRecordWithMetadata(key, avroRecord, instantTime,
           taskContextSupplier.getPartitionIdSupplier().get(), recordIndex, file.getName());
       super.write(avroRecord);
-      writeSupport.add(record.getRecordKey());
+      writeSupport.add(key.getRecordKey());
     } else {
       super.write(avroRecord);
     }
@@ -87,7 +96,7 @@ public class HoodieParquetWriter<T extends HoodieRecordPayload, R extends Indexe
 
   @Override
   public boolean canWrite() {
-    return fs.getBytesWritten(file) < maxFileSize;
+    return getDataSize() < maxFileSize;
   }
 
   @Override
@@ -96,10 +105,5 @@ public class HoodieParquetWriter<T extends HoodieRecordPayload, R extends Indexe
     if (populateMetaFields) {
       writeSupport.add(key);
     }
-  }
-
-  @Override
-  public long getBytesWritten() {
-    return fs.getBytesWritten(file);
   }
 }

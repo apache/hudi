@@ -72,6 +72,17 @@ public class FunctionWrapper {
     };
   }
 
+  public static <I, K, V> Function<I, Stream<Pair<K, V>>> throwingFlatMapToPairWrapper(
+      SerializablePairFlatMapFunction<I, K, V> throwingPairFlatMapFunction) {
+    return v1 -> {
+      try {
+        return throwingPairFlatMapFunction.call(v1);
+      } catch (Exception e) {
+        throw new HoodieException("Error occurs when executing mapToPair", e);
+      }
+    };
+  }
+
   public static <V> BinaryOperator<V> throwingReduceWrapper(SerializableBiFunction<V, V, V> throwingReduceFunction) {
     return (v1, v2) -> {
       try {

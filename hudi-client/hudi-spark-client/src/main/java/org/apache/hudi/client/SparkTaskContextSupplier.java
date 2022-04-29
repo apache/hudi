@@ -78,6 +78,14 @@ public class SparkTaskContextSupplier extends TaskContextSupplier implements Ser
             .get(SPARK_EXECUTOR_MEMORY_FRACTION_PROP, DEFAULT_SPARK_EXECUTOR_MEMORY_FRACTION));
       }
       return Option.empty();
+    } else if (prop == EngineProperty.TOTAL_CORES_PER_EXECUTOR) {
+      final String DEFAULT_SPARK_EXECUTOR_CORES = "1";
+      final String SPARK_EXECUTOR_EXECUTOR_CORES_PROP = "spark.executor.cores";
+      if (SparkEnv.get() != null) {
+        return Option.ofNullable(SparkEnv.get().conf()
+            .get(SPARK_EXECUTOR_EXECUTOR_CORES_PROP, DEFAULT_SPARK_EXECUTOR_CORES));
+      }
+      return Option.empty();
     }
     throw new HoodieException("Unknown engine property :" + prop);
   }

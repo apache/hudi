@@ -59,9 +59,11 @@ class TestStructuredStreaming extends HoodieClientTestBase {
     spark = sqlContext.sparkSession
     initTestDataGenerator()
     initFileSystem()
+    initTimelineService()
   }
 
   @AfterEach override def tearDown() = {
+    cleanupTimelineService()
     cleanupSparkContexts()
     cleanupTestDataGenerator()
     cleanupFileSystem()

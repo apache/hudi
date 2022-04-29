@@ -18,6 +18,7 @@
 package org.apache.spark.sql.hudi
 
 import org.apache.hudi.common.table.HoodieTableMetaClient
+
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.types.{LongType, StructField, StructType}
 
@@ -38,13 +39,30 @@ class TestAlterTable extends TestHoodieSqlBase {
              |  ts long
              |) using hudi
              | location '$tablePath'
-             | options (
+             | tblproperties (
              |  type = '$tableType',
              |  primaryKey = 'id',
              |  preCombineField = 'ts'
              | )
        """.stripMargin)
-        // Alter table name.
+
+        // change column comment
+        spark.sql(s"alter table $tableName change column id id int comment 'primary id'")
+        var catalogTable = spark.sessionState.catalog.getTableMetadata(new TableIdentifier(tableName))
+        assertResult("primary id") (
+          catalogTable.schema(catalogTable.schema.fieldIndex("id")).getComment().get
+        )
+        spark.sql(s"alter table $tableName change column name name string comment 'name column'")
+        spark.sessionState.catalog.refreshTable(new TableIdentifier(tableName))
+        catalogTable = spark.sessionState.catalog.getTableMetadata(new TableIdentifier(tableName))
+        assertResult("primary id") (
+          catalogTable.schema(catalogTable.schema.fieldIndex("id")).getComment().get
+        )
+        assertResult("name column") (
+          catalogTable.schema(catalogTable.schema.fieldIndex("name")).getComment().get
+        )
+
+        // alter table name.
         val newTableName = s"${tableName}_1"
         spark.sql(s"alter table $tableName rename to $newTableName")
         assertResult(false)(
@@ -53,27 +71,30 @@ class TestAlterTable extends TestHoodieSqlBase {
         assertResult(true) (
           spark.sessionState.catalog.tableExists(new TableIdentifier(newTableName))
         )
+
         val hadoopConf = spark.sessionState.newHadoopConf()
         val metaClient = HoodieTableMetaClient.builder().setBasePath(tablePath)
           .setConf(hadoopConf).build()
-        assertResult(newTableName) (
-          metaClient.getTableConfig.getTableName
-        )
+        assertResult(newTableName) (metaClient.getTableConfig.getTableName)
+
+        // insert some data
         spark.sql(s"insert into $newTableName values(1, 'a1', 10, 1000)")
 
-        // Add table column
+        // add column
         spark.sql(s"alter table $newTableName add columns(ext0 string)")
-        val table = spark.sessionState.catalog.getTableMetadata(new TableIdentifier(newTableName))
+        catalogTable = spark.sessionState.catalog.getTableMetadata(new TableIdentifier(newTableName))
         assertResult(Seq("id", "name", "price", "ts", "ext0")) {
-          HoodieSqlUtils.removeMetaFields(table.schema).fields.map(_.name)
+          HoodieSqlCommonUtils.removeMetaFields(catalogTable.schema).fields.map(_.name)
         }
         checkAnswer(s"select id, name, price, ts, ext0 from $newTableName")(
           Seq(1, "a1", 10.0, 1000, null)
         )
-        // Alter table column type
-        spark.sql(s"alter table $newTableName change column id id bigint")
-        assertResult(StructType(Seq(StructField("id", LongType, nullable = true))))(
-        spark.sql(s"select id from $newTableName").schema)
+
+        // change column's data type
+        checkExceptionContain(s"alter table $newTableName change column id id bigint") (
+          "ALTER TABLE CHANGE COLUMN is not supported for changing column 'id'" +
+            " with type 'IntegerType' to 'id' with type 'LongType'"
+        )
 
         // Insert data to the new table.
         spark.sql(s"insert into $newTableName values(2, 'a2', 12, 1000, 'e0')")
@@ -127,7 +148,7 @@ class TestAlterTable extends TestHoodieSqlBase {
              |  dt string
              |) using hudi
              | location '${tmp.getCanonicalPath}/$partitionedTable'
-             | options (
+             | tblproperties (
              |  type = '$tableType',
              |  primaryKey = 'id',
              |  preCombineField = 'ts'

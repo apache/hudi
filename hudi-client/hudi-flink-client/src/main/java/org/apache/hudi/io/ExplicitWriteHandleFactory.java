@@ -28,7 +28,7 @@ import org.apache.hudi.table.HoodieTable;
  */
 public class ExplicitWriteHandleFactory<T extends HoodieRecordPayload, I, K, O>
     extends WriteHandleFactory<T, I, K, O> {
-  private HoodieWriteHandle<T, I, K, O> writeHandle;
+  private final HoodieWriteHandle<T, I, K, O> writeHandle;
 
   public ExplicitWriteHandleFactory(HoodieWriteHandle<T, I, K, O> writeHandle) {
     this.writeHandle = writeHandle;
@@ -39,6 +39,10 @@ public class ExplicitWriteHandleFactory<T extends HoodieRecordPayload, I, K, O>
       HoodieWriteConfig hoodieConfig, String commitTime,
       HoodieTable<T, I, K, O> hoodieTable, String partitionPath,
       String fileIdPrefix, TaskContextSupplier taskContextSupplier) {
+    return writeHandle;
+  }
+
+  public HoodieWriteHandle<T, I, K, O> getWriteHandle() {
     return writeHandle;
   }
 }

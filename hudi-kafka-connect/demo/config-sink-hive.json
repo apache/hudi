@@ -1,0 +1,30 @@
+{
+    "name": "hudi-sink",
+    "config": {
+		"bootstrap.servers": "kafkabroker:9092",
+		"connector.class": "org.apache.hudi.connect.HoodieSinkConnector",
+		"tasks.max": "4",
+		"key.converter": "org.apache.kafka.connect.storage.StringConverter",
+		"value.converter": "org.apache.kafka.connect.storage.StringConverter",
+		"value.converter.schemas.enable": "false",
+		"topics": "hudi-test-topic",
+		"hoodie.table.name": "hudi-test-topic",
+		"hoodie.table.type": "MERGE_ON_READ",
+		"hoodie.base.path": "hdfs://namenode:8020/user/hive/warehouse/hudi-test-topic",
+		"hoodie.datasource.write.recordkey.field": "volume",
+		"hoodie.datasource.write.partitionpath.field": "date",
+		"hoodie.schemaprovider.class": "org.apache.hudi.schema.SchemaRegistryProvider",
+		"hoodie.deltastreamer.schemaprovider.registry.url": "http://localhost:8082/subjects/hudi-test-topic/versions/latest",
+		"hoodie.kafka.commit.interval.secs": 60,
+		"hoodie.meta.sync.enable": "true",
+		"hoodie.meta.sync.classes": "org.apache.hudi.hive.HiveSyncTool",
+		"hoodie.datasource.hive_sync.table": "huditesttopic",
+		"hoodie.datasource.hive_sync.partition_fields": "date",
+		"hoodie.datasource.hive_sync.partition_extractor_class": "org.apache.hudi.hive.MultiPartKeysValueExtractor",
+		"hoodie.datasource.hive_sync.use_jdbc": "false",
+		"hoodie.datasource.hive_sync.mode": "hms",
+		"dfs.client.use.datanode.hostname": "true",
+		"hive.metastore.uris": "thrift://hivemetastore:9083",
+		"hive.metastore.client.socket.timeout": "1500s"
+      }
+}

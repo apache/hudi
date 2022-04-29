@@ -20,6 +20,7 @@ package org.apache.hudi.connect.transaction;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.connect.ControlMessage;
 import org.apache.hudi.connect.kafka.KafkaControlAgent;
 import org.apache.hudi.connect.utils.KafkaConnectUtils;
 import org.apache.hudi.connect.writers.ConnectTransactionServices;
@@ -52,6 +53,8 @@ import java.util.stream.Collectors;
  * across all the Kafka partitions for a single Kafka Topic.
  */
 public class ConnectTransactionCoordinator implements TransactionCoordinator, Runnable {
+
+  public static final int COORDINATOR_KAFKA_PARTITION = 0;
 
   private static final Logger LOG = LogManager.getLogger(ConnectTransactionCoordinator.class);
   private static final String BOOTSTRAP_SERVERS_CFG = "bootstrap.servers";
@@ -158,17 +161,18 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
   }
 
   @Override
-  public void processControlEvent(ControlEvent message) {
+  public void processControlEvent(ControlMessage message) {
     CoordinatorEvent.CoordinatorEventType type;
-    if (message.getMsgType().equals(ControlEvent.MsgType.WRITE_STATUS)) {
+    if (message.getType().equals(ControlMessage.EventType.WRITE_STATUS)) {
       type = CoordinatorEvent.CoordinatorEventType.WRITE_STATUS;
     } else {
-      LOG.warn(String.format("The Coordinator should not be receiving messages of type %s", message.getMsgType().name()));
+      LOG.warn(String.format("The Coordinator should not be receiving messages of type %s",
+          message.getType().name()));
       return;
     }
 
     CoordinatorEvent event = new CoordinatorEvent(type,
-        message.senderPartition().topic(),
+        message.getTopicName(),
         message.getCommitTime());
     event.setMessage(message);
     submitEvent(event);
@@ -242,15 +246,7 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
     partitionsWriteStatusReceived.clear();
     try {
       currentCommitTime = transactionServices.startCommit();
-      ControlEvent message = new ControlEvent.Builder(
-          ControlEvent.MsgType.START_COMMIT,
-          ControlEvent.SenderType.COORDINATOR,
-          currentCommitTime,
-          partition)
-          .setCoordinatorInfo(
-              new ControlEvent.CoordinatorInfo(globalCommittedKafkaOffsets))
-          .build();
-      kafkaControlClient.publishMessage(message);
+      kafkaControlClient.publishMessage(buildControlMessage(ControlMessage.EventType.START_COMMIT));
       currentState = State.STARTED_COMMIT;
       // schedule a timeout for ending the current commit
       submitEvent(new CoordinatorEvent(CoordinatorEvent.CoordinatorEventType.END_COMMIT,
@@ -268,14 +264,7 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
 
   private void endExistingCommit() {
     try {
-      ControlEvent message = new ControlEvent.Builder(
-          ControlEvent.MsgType.END_COMMIT,
-          ControlEvent.SenderType.COORDINATOR,
-          currentCommitTime,
-          partition)
-          .setCoordinatorInfo(new ControlEvent.CoordinatorInfo(globalCommittedKafkaOffsets))
-          .build();
-      kafkaControlClient.publishMessage(message);
+      kafkaControlClient.publishMessage(buildControlMessage(ControlMessage.EventType.END_COMMIT));
     } catch (Exception exception) {
       LOG.warn(String.format("Could not send END_COMMIT message for partition %s and commitTime %s", partition, currentCommitTime), exception);
     }
@@ -289,30 +278,56 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
         configs.getCoordinatorWriteTimeoutSecs(), TimeUnit.SECONDS);
   }
 
-  private void onReceiveWriteStatus(ControlEvent message) {
-    ControlEvent.ParticipantInfo participantInfo = message.getParticipantInfo();
-    if (participantInfo.getOutcomeType().equals(ControlEvent.OutcomeType.WRITE_SUCCESS)) {
-      int partition = message.senderPartition().partition();
-      partitionsWriteStatusReceived.put(partition, participantInfo.writeStatuses());
-      currentConsumedKafkaOffsets.put(partition, participantInfo.getKafkaCommitOffset());
-    }
+  private void onReceiveWriteStatus(ControlMessage message) {
+    ControlMessage.ParticipantInfo participantInfo = message.getParticipantInfo();
+    int partitionId = message.getSenderPartition();
+    partitionsWriteStatusReceived.put(partitionId, KafkaConnectUtils.getWriteStatuses(participantInfo));
+    currentConsumedKafkaOffsets.put(partitionId, participantInfo.getKafkaOffset());
     if (partitionsWriteStatusReceived.size() >= numPartitions
         && currentState.equals(State.ENDED_COMMIT)) {
       // Commit the kafka offsets to the commit file
       try {
         List<WriteStatus> allWriteStatuses = new ArrayList<>();
         partitionsWriteStatusReceived.forEach((key, value) -> allWriteStatuses.addAll(value));
-        // Commit the last write in Hudi, along with the latest kafka offset
-        if (!allWriteStatuses.isEmpty()) {
-          transactionServices.endCommit(currentCommitTime,
+
+        long totalErrorRecords = (long) allWriteStatuses.stream().mapToDouble(WriteStatus::getTotalErrorRecords).sum();
+        long totalRecords = (long) allWriteStatuses.stream().mapToDouble(WriteStatus::getTotalRecords).sum();
+        boolean hasErrors = totalErrorRecords > 0;
+
+        if (!hasErrors || configs.allowCommitOnErrors()) {
+          boolean success = transactionServices.endCommit(currentCommitTime,
               allWriteStatuses,
               transformKafkaOffsets(currentConsumedKafkaOffsets));
+
+          if (success) {
+            LOG.info("Commit " + currentCommitTime + " successful!");
+            currentState = State.WRITE_STATUS_RCVD;
+            globalCommittedKafkaOffsets.putAll(currentConsumedKafkaOffsets);
+            submitEvent(new CoordinatorEvent(CoordinatorEvent.CoordinatorEventType.ACK_COMMIT,
+                message.getTopicName(),
+                currentCommitTime));
+            return;
+          } else {
+            LOG.error("Commit " + currentCommitTime + " failed!");
+          }
+        } else if (hasErrors) {
+          LOG.error("Coordinator found errors when writing. Errors/Total=" + totalErrorRecords + "/" + totalRecords);
+          LOG.error("Printing out the top 100 errors");
+          allWriteStatuses.stream().filter(WriteStatus::hasErrors).limit(100).forEach(ws -> {
+            LOG.error("Global error :", ws.getGlobalError());
+            if (ws.getErrors().size() > 0) {
+              ws.getErrors().forEach((key, value) -> LOG.trace("Error for key:" + key + " is " + value));
+            }
+          });
         }
-        currentState = State.WRITE_STATUS_RCVD;
-        globalCommittedKafkaOffsets.putAll(currentConsumedKafkaOffsets);
-        submitEvent(new CoordinatorEvent(CoordinatorEvent.CoordinatorEventType.ACK_COMMIT,
-            partition.topic(),
-            currentCommitTime));
+
+        // Submit the next start commit, that will rollback the current commit.
+        currentState = State.FAILED_COMMIT;
+        LOG.warn("Current commit " + currentCommitTime + " failed, so starting a new commit after recovery delay");
+        submitEvent(new CoordinatorEvent(CoordinatorEvent.CoordinatorEventType.START_COMMIT,
+                partition.topic(),
+                StringUtils.EMPTY_STRING),
+            RESTART_COMMIT_DELAY_MS, TimeUnit.MILLISECONDS);
       } catch (Exception exception) {
         LOG.error("Fatal error while committing file", exception);
       }
@@ -323,7 +338,7 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
     // If we are still stuck in ENDED_STATE
     if (currentState.equals(State.ENDED_COMMIT)) {
       currentState = State.WRITE_STATUS_TIMEDOUT;
-      LOG.warn("Did not receive the Write Status from all partitions");
+      LOG.warn("Current commit " + currentCommitTime + " failed after a write status timeout, so starting a new commit after recovery delay");
       // Submit the next start commit
       submitEvent(new CoordinatorEvent(CoordinatorEvent.CoordinatorEventType.START_COMMIT,
               partition.topic(),
@@ -334,15 +349,7 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
 
   private void submitAckCommit() {
     try {
-      ControlEvent message = new ControlEvent.Builder(
-          ControlEvent.MsgType.ACK_COMMIT,
-          ControlEvent.SenderType.COORDINATOR,
-          currentCommitTime,
-          partition)
-          .setCoordinatorInfo(
-              new ControlEvent.CoordinatorInfo(globalCommittedKafkaOffsets))
-          .build();
-      kafkaControlClient.publishMessage(message);
+      kafkaControlClient.publishMessage(buildControlMessage(ControlMessage.EventType.ACK_COMMIT));
     } catch (Exception exception) {
       LOG.warn(String.format("Could not send ACK_COMMIT message for partition %s and commitTime %s", partition, currentCommitTime), exception);
     }
@@ -386,6 +393,7 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
     INIT,
     STARTED_COMMIT,
     ENDED_COMMIT,
+    FAILED_COMMIT,
     WRITE_STATUS_RCVD,
     WRITE_STATUS_TIMEDOUT,
     ACKED_COMMIT,
@@ -396,5 +404,21 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
    */
   public interface KafkaPartitionProvider {
     int getLatestNumPartitions(String bootstrapServers, String topicName);
+  }
+
+  private ControlMessage buildControlMessage(ControlMessage.EventType eventType) {
+    return ControlMessage.newBuilder()
+        .setProtocolVersion(KafkaConnectConfigs.CURRENT_PROTOCOL_VERSION)
+        .setType(eventType)
+        .setTopicName(partition.topic())
+        .setSenderType(ControlMessage.EntityType.COORDINATOR)
+        .setSenderPartition(partition.partition())
+        .setReceiverType(ControlMessage.EntityType.PARTICIPANT)
+        .setCommitTime(currentCommitTime)
+        .setCoordinatorInfo(
+            ControlMessage.CoordinatorInfo.newBuilder()
+                .putAllGlobalKafkaCommitOffsets(globalCommittedKafkaOffsets)
+                .build()
+        ).build();
   }
 }

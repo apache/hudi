@@ -32,10 +32,13 @@ public interface DowngradeHandler {
   /**
    * to be invoked to downgrade hoodie table from one version to a lower version.
    *
-   * @param config instance of {@link HoodieWriteConfig} to be used.
-   * @param context instance of {@link HoodieEngineContext} to be used.
-   * @param instantTime current instant time that should not touched.
+   * @param config                 instance of {@link HoodieWriteConfig} to be used.
+   * @param context                instance of {@link HoodieEngineContext} to be used.
+   * @param instantTime            current instant time that should not touched.
+   * @param upgradeDowngradeHelper instance of {@link SupportsUpgradeDowngrade} to be used.
    * @return Map of config properties and its values to be added to table properties.
    */
-  Map<ConfigProperty, String> downgrade(HoodieWriteConfig config, HoodieEngineContext context, String instantTime);
+  Map<ConfigProperty, String> downgrade(
+      HoodieWriteConfig config, HoodieEngineContext context, String instantTime,
+      SupportsUpgradeDowngrade upgradeDowngradeHelper);
 }

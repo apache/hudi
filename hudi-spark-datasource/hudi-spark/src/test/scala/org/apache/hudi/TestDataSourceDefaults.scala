@@ -243,21 +243,21 @@ class TestDataSourceDefaults {
     val partitionPathProp: String = props.getString(DataSourceWriteOptions.PARTITIONPATH_FIELD.key)
     val STRUCT_NAME: String = "hoodieRowTopLevelField"
     val NAMESPACE: String = "hoodieRow"
-    var converterFn: Function1[Any, Any] = _
+    var converterFn: Function1[Row, GenericRecord] = _
 
     override def getKey(record: GenericRecord): HoodieKey = {
-      new HoodieKey(HoodieAvroUtils.getNestedFieldValAsString(record, recordKeyProp, true),
-        HoodieAvroUtils.getNestedFieldValAsString(record, partitionPathProp, true))
+      new HoodieKey(HoodieAvroUtils.getNestedFieldValAsString(record, recordKeyProp, true, false),
+        HoodieAvroUtils.getNestedFieldValAsString(record, partitionPathProp, true, false))
     }
 
     override def getRecordKey(row: Row): String = {
-      if (null == converterFn) converterFn = AvroConversionHelper.createConverterToAvro(row.schema, STRUCT_NAME, NAMESPACE)
+      if (null == converterFn) converterFn = AvroConversionUtils.createConverterToAvro(row.schema, STRUCT_NAME, NAMESPACE)
       val genericRecord = converterFn.apply(row).asInstanceOf[GenericRecord]
       getKey(genericRecord).getRecordKey
     }
 
     override def getPartitionPath(row: Row): String = {
-      if (null == converterFn) converterFn = AvroConversionHelper.createConverterToAvro(row.schema, STRUCT_NAME, NAMESPACE)
+      if (null == converterFn) converterFn = AvroConversionUtils.createConverterToAvro(row.schema, STRUCT_NAME, NAMESPACE)
       val genericRecord = converterFn.apply(row).asInstanceOf[GenericRecord]
       getKey(genericRecord).getPartitionPath
     }
@@ -579,12 +579,12 @@ class TestDataSourceDefaults {
     val props = new TypedProperties()
     props.put(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, "favoriteIntNumber");
 
-    val basePayload = new OverwriteWithLatestAvroPayload(baseRecord, HoodieAvroUtils.convertValueForSpecificDataTypes(fieldSchema, baseOrderingVal).asInstanceOf[Comparable[_]])
+    val basePayload = new OverwriteWithLatestAvroPayload(baseRecord, HoodieAvroUtils.convertValueForSpecificDataTypes(fieldSchema, baseOrderingVal, false).asInstanceOf[Comparable[_]])
 
     val laterRecord = SchemaTestUtil
       .generateAvroRecordFromJson(schema, 2, "001", "f1")
     val laterOrderingVal: Object = laterRecord.get("favoriteIntNumber")
-    val newerPayload = new OverwriteWithLatestAvroPayload(laterRecord, HoodieAvroUtils.convertValueForSpecificDataTypes(fieldSchema, laterOrderingVal).asInstanceOf[Comparable[_]])
+    val newerPayload = new OverwriteWithLatestAvroPayload(laterRecord, HoodieAvroUtils.convertValueForSpecificDataTypes(fieldSchema, laterOrderingVal, false).asInstanceOf[Comparable[_]])
 
     // it will provide the record with greatest combine value
     val preCombinedPayload = basePayload.preCombine(newerPayload)
@@ -606,10 +606,10 @@ class TestDataSourceDefaults {
     val earlierOrderingVal: Object = earlierRecord.get("favoriteIntNumber")
 
     val laterPayload = new DefaultHoodieRecordPayload(laterRecord,
-      HoodieAvroUtils.convertValueForSpecificDataTypes(fieldSchema, laterOrderingVal).asInstanceOf[Comparable[_]])
+      HoodieAvroUtils.convertValueForSpecificDataTypes(fieldSchema, laterOrderingVal, false).asInstanceOf[Comparable[_]])
 
     val earlierPayload = new DefaultHoodieRecordPayload(earlierRecord,
-      HoodieAvroUtils.convertValueForSpecificDataTypes(fieldSchema, earlierOrderingVal).asInstanceOf[Comparable[_]])
+      HoodieAvroUtils.convertValueForSpecificDataTypes(fieldSchema, earlierOrderingVal, false).asInstanceOf[Comparable[_]])
 
     // it will provide the record with greatest combine value
     val preCombinedPayload = laterPayload.preCombine(earlierPayload)

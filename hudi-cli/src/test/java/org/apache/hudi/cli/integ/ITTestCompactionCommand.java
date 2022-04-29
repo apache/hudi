@@ -32,7 +32,6 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
@@ -48,7 +47,6 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.shell.core.CommandResult;
@@ -73,21 +71,18 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 public class ITTestCompactionCommand extends AbstractShellIntegrationTest {
 
-  private String tablePath;
-  private String tableName;
-
   @BeforeEach
   public void init() throws IOException {
     tableName = "test_table_" + ITTestCompactionCommand.class.getName();
-    tablePath = Paths.get(basePath, tableName).toString();
+    basePath = Paths.get(basePath, tableName).toString();
 
     HoodieCLI.conf = jsc.hadoopConfiguration();
     // Create table and connect
     new TableCommand().createTable(
-        tablePath, tableName, HoodieTableType.MERGE_ON_READ.name(),
+        basePath, tableName, HoodieTableType.MERGE_ON_READ.name(),
         "", TimelineLayoutVersion.VERSION_1, "org.apache.hudi.common.model.HoodieAvroPayload");
-    metaClient.setBasePath(tablePath);
-    metaClient = HoodieTableMetaClient.reload(metaClient);
+
+    initMetaClient();
   }
 
   /**
@@ -138,6 +133,33 @@ public class ITTestCompactionCommand extends AbstractShellIntegrationTest {
         .filterCompletedInstants().getInstants()
         .map(HoodieInstant::getTimestamp).collect(Collectors.toList()).contains(instance),
         "Pending compaction must be completed");
+  }
+
+  /**
+   * Test case for command 'compaction scheduleAndExecute'.
+   */
+  @Test
+  public void testCompactScheduleAndExecute() throws IOException {
+    // generate commits
+    generateCommits();
+
+    String schemaPath = Paths.get(basePath, "compaction.schema").toString();
+    writeSchemaToTmpFile(schemaPath);
+
+    CommandResult cr2 = getShell().executeCommand(
+        String.format("compaction scheduleAndExecute --parallelism %s --schemaFilePath %s --sparkMaster %s",
+            2, schemaPath, "local"));
+
+    assertAll("Command run failed",
+        () -> assertTrue(cr2.isSuccess()),
+        () -> assertTrue(
+            cr2.getResult().toString().startsWith("Schedule and execute compaction successfully completed")));
+
+    // assert compaction complete
+    assertTrue(HoodieCLI.getTableMetaClient().getActiveTimeline().reload()
+            .filterCompletedInstants().getInstants()
+            .map(HoodieInstant::getTimestamp).count() > 0,
+        "Completed compaction couldn't be 0");
   }
 
   /**
@@ -271,7 +293,7 @@ public class ITTestCompactionCommand extends AbstractShellIntegrationTest {
     HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
 
     // Create the write client to write some records in
-    HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(tablePath)
+    HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(basePath)
         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
         .withDeleteParallelism(2).forTable(tableName)
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build()).build();

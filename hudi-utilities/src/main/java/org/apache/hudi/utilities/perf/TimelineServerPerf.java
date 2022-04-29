@@ -74,7 +74,7 @@ public class TimelineServerPerf implements Serializable {
   public TimelineServerPerf(Config cfg) throws IOException {
     this.cfg = cfg;
     useExternalTimelineServer = (cfg.serverHost != null);
-    TimelineService.Config timelineServiceConf = cfg.getTimelinServerConfig();
+    TimelineService.Config timelineServiceConf = cfg.getTimelineServerConfig();
     this.timelineServer = new TimelineService(
         new HoodieLocalEngineContext(FSUtils.prepareHadoopConf(new Configuration())),
         new Configuration(), timelineServiceConf, FileSystem.get(new Configuration()),
@@ -95,8 +95,7 @@ public class TimelineServerPerf implements Serializable {
   public void run() throws IOException {
     JavaSparkContext jsc = UtilHelpers.buildSparkContext("hudi-view-perf-" + cfg.basePath, cfg.sparkMaster);
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
-    List<String> allPartitionPaths = FSUtils.getAllPartitionPaths(engineContext, cfg.basePath,
-        cfg.useFileListingFromMetadata, cfg.verifyMetadataFileListing, true);
+    List<String> allPartitionPaths = FSUtils.getAllPartitionPaths(engineContext, cfg.basePath, cfg.useFileListingFromMetadata, true);
     Collections.shuffle(allPartitionPaths);
     List<String> selected = allPartitionPaths.stream().filter(p -> !p.contains("error")).limit(cfg.maxPartitions)
         .collect(Collectors.toList());
@@ -282,7 +281,7 @@ public class TimelineServerPerf implements Serializable {
         description = " Server Host (Set it for externally managed timeline service")
     public String serverHost = null;
 
-    @Parameter(names = {"--view-storage", "-st"}, description = "View Storage Type. Defaut - SPILLABLE_DISK")
+    @Parameter(names = {"--view-storage", "-st"}, description = "View Storage Type. Default - SPILLABLE_DISK")
     public FileSystemViewStorageType viewStorageType = FileSystemViewStorageType.SPILLABLE_DISK;
 
     @Parameter(names = {"--max-view-mem-per-table", "-mv"},
@@ -308,13 +307,10 @@ public class TimelineServerPerf implements Serializable {
     @Parameter(names = {"--use-file-listing-from-metadata"}, description = "Fetch file listing from Hudi's metadata")
     public Boolean useFileListingFromMetadata = HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS;
 
-    @Parameter(names = {"--verify-metadata-file-listing"}, description = "Verify file listing from Hudi's metadata against file system")
-    public Boolean verifyMetadataFileListing = HoodieMetadataConfig.VALIDATE_ENABLE.defaultValue();
-
     @Parameter(names = {"--help", "-h"})
     public Boolean help = false;
 
-    public TimelineService.Config getTimelinServerConfig() {
+    public TimelineService.Config getTimelineServerConfig() {
       TimelineService.Config c = new TimelineService.Config();
       c.viewStorageType = viewStorageType;
       c.baseStorePathForFileGroups = baseStorePathForFileGroups;

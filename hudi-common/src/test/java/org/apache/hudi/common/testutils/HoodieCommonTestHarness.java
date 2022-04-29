@@ -34,11 +34,16 @@ import java.io.IOException;
  */
 public class HoodieCommonTestHarness {
 
+  protected String tableName = null;
   protected String basePath = null;
   protected transient HoodieTestDataGenerator dataGen = null;
   protected transient HoodieTableMetaClient metaClient;
   @TempDir
   public java.nio.file.Path tempDir;
+
+  protected void setTableName(String tableName) {
+    this.tableName = tableName;
+  }
 
   /**
    * Initializes basePath.

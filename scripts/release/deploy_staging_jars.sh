@@ -21,40 +21,62 @@
 ## Variables with defaults (if not overwritten by environment)
 ##
 MVN=${MVN:-mvn}
-SPARK_VERSION=2
 # fail immediately
 set -o errexit
 set -o nounset
-# print command before executing
-set -o xtrace
 
-CURR_DIR=`pwd`
-if [[ `basename $CURR_DIR` != "scripts" ]] ; then
-  echo "You have to call the script from the scripts/ dir"
+CURR_DIR=$(pwd)
+if [ ! -d "$CURR_DIR/packaging" ] ; then
+  echo "You have to call the script from the repository root dir that contains 'packaging/'"
   exit 1
 fi
 
-if [[ $# -lt 1 ]]; then
-    echo "This script will deploy artifacts to staging repositories"
-    echo "There is one param required:"
-    echo "--scala_version=\${SCALA_VERSION}"
-    exit
-else
-    for param in "$@"
-    do
-	if [[ $param =~ --scala_version\=(2\.1[1-2]) ]]; then
-		SCALA_VERSION=${BASH_REMATCH[1]}
-      elif [[ $param =~ --spark_version\=([2-3]) ]]; then
-              SPARK_VERSION=${BASH_REMATCH[1]}
-	fi
-    done
+if [ "$#" -gt "1" ]; then
+  echo "Only accept 0 or 1 argument. Use -h to see examples."
+  exit 1
 fi
 
-###########################
+declare -a ALL_VERSION_OPTS=(
+"-Dscala-2.11 -Dspark2 -Dflink1.13" # for legacy bundle name
+"-Dscala-2.12 -Dspark2 -Dflink1.13" # for legacy bundle name
+"-Dscala-2.12 -Dspark3 -Dflink1.14" # for legacy bundle name
+"-Dscala-2.11 -Dspark2.4 -Dflink1.13"
+"-Dscala-2.11 -Dspark2.4 -Dflink1.14"
+"-Dscala-2.12 -Dspark2.4 -Dflink1.13"
+"-Dscala-2.12 -Dspark3.1 -Dflink1.14"
+"-Dscala-2.12 -Dspark3.2 -Dflink1.14"
+)
+printf -v joined "'%s'\n" "${ALL_VERSION_OPTS[@]}"
 
-cd ..
+if [ "${1:-}" == "-h" ]; then
+  echo "
+Usage: $(basename "$0") [OPTIONS]
 
-echo "Deploying to repository.apache.org with scala version ${SCALA_VERSION}"
+Options:
+<version option>  One of the version options below
+${joined}
+-h, --help
+"
+  exit 0
+fi
 
-COMMON_OPTIONS="-Dscala-${SCALA_VERSION} -Dspark${SPARK_VERSION} -Prelease -DskipTests -DretryFailedDeploymentCount=10 -DdeployArtifacts=true"
-$MVN clean deploy $COMMON_OPTIONS
+VERSION_OPT=${1:-}
+valid_version_opt=false
+for v in "${ALL_VERSION_OPTS[@]}"; do
+    [[ $VERSION_OPT == "$v" ]] && valid_version_opt=true
+done
+
+if [ "$valid_version_opt" = true ]; then
+  # run deploy for only specified version option
+  ALL_VERSION_OPTS=("$VERSION_OPT")
+elif [ "$#" == "1" ]; then
+  echo "Version option $VERSION_OPT is invalid. Use -h to see examples."
+  exit 1
+fi
+
+for v in "${ALL_VERSION_OPTS[@]}"
+do
+  echo "Deploying to repository.apache.org with version option ${v}"
+  COMMON_OPTIONS="${v} -DdeployArtifacts=true -DskipTests -DretryFailedDeploymentCount=10"
+  $MVN clean deploy $COMMON_OPTIONS
+done

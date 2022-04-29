@@ -28,10 +28,12 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieSparkTable;
-import org.apache.hudi.table.HoodieTimelineArchiveLog;
+import org.apache.hudi.client.HoodieTimelineArchiver;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -71,6 +73,8 @@ public class TestArchivedCommitsCommand extends CLIFunctionalTestHarness {
     HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(tablePath)
         .withSchema(HoodieTestCommitMetadataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().retainCommits(1).archiveCommitsWith(2, 3).build())
+        .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
+            .withRemoteServerPort(timelineServicePort).build())
         .forTable("test-trip-table").build();
 
     // Create six commits
@@ -85,14 +89,19 @@ public class TestArchivedCommitsCommand extends CLIFunctionalTestHarness {
       HoodieTestCommitMetadataGenerator.createCommitFileWithMetadata(tablePath, timestamp, hadoopConf());
     }
 
+    // Simulate a compaction commit in metadata table timeline
+    // so the archival in data table can happen
+    HoodieTestUtils.createCompactionCommitInMetadataTable(
+        hadoopConf(), metaClient.getFs(), tablePath, "105");
+
     metaClient = HoodieTableMetaClient.reload(metaClient);
     // reload the timeline and get all the commits before archive
     metaClient.getActiveTimeline().reload().getAllCommitsTimeline().filterCompletedInstants();
 
     // archive
     HoodieSparkTable table = HoodieSparkTable.create(cfg, context(), metaClient);
-    HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(cfg, table);
-    archiveLog.archiveIfRequired(context());
+    HoodieTimelineArchiver archiver = new HoodieTimelineArchiver(cfg, table);
+    archiver.archiveIfRequired(context());
   }
 
   /**

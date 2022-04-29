@@ -50,7 +50,8 @@ public class PushGatewayMetricsReporter extends MetricsReporter {
         TimeUnit.SECONDS,
         TimeUnit.SECONDS,
         getJobName(),
-        serverHost + ":" + serverPort,
+        serverHost,
+        serverPort,
         deleteShutdown);
   }
 

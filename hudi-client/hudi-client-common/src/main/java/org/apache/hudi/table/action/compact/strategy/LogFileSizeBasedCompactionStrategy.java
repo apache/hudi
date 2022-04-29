@@ -27,7 +27,8 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * LogFileSizeBasedCompactionStrategy orders the compactions based on the total log files size and limits the
+ * LogFileSizeBasedCompactionStrategy orders the compactions based on the total log files size,
+ * filters the file group which log files size is greater than the threshold and limits the
  * compactions within a configured IO bound.
  *
  * @see BoundedIOCompactionStrategy
@@ -39,8 +40,12 @@ public class LogFileSizeBasedCompactionStrategy extends BoundedIOCompactionStrat
   @Override
   public List<HoodieCompactionOperation> orderAndFilter(HoodieWriteConfig writeConfig,
       List<HoodieCompactionOperation> operations, List<HoodieCompactionPlan> pendingCompactionPlans) {
+    // Filter the file group which log files size is greater than the threshold in bytes.
     // Order the operations based on the reverse size of the logs and limit them by the IO
-    return super.orderAndFilter(writeConfig, operations.stream().sorted(this).collect(Collectors.toList()),
+    long threshold = writeConfig.getCompactionLogFileSizeThreshold();
+    return super.orderAndFilter(writeConfig, operations.stream()
+            .filter(e -> e.getMetrics().getOrDefault(TOTAL_LOG_FILE_SIZE, 0d) >= threshold)
+            .sorted(this).collect(Collectors.toList()),
         pendingCompactionPlans);
   }
 

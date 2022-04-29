@@ -17,7 +17,7 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hadoop.fs.FileSystem
+import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hudi.bootstrap.SparkParquetBootstrapDataProvider
 import org.apache.hudi.client.bootstrap.selector.FullRecordBootstrapModeSelector
 import org.apache.hudi.common.fs.FSUtils
@@ -31,9 +31,9 @@ import org.apache.spark.sql.{SaveMode, SparkSession}
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.io.TempDir
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
-
 import java.time.Instant
 import java.util.Collections
+
 import scala.collection.JavaConverters._
 
 class TestDataSourceForBootstrap {
@@ -102,7 +102,12 @@ class TestDataSourceForBootstrap {
       .save(srcPath)
 
     // Perform bootstrap
-    val commitInstantTime1 = runMetadataBootstrapAndVerifyCommit(DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL)
+    val commitInstantTime1 = runMetadataBootstrapAndVerifyCommit(
+      DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL,
+      extraOpts = Map(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> "org.apache.hudi.keygen.NonpartitionedKeyGenerator")
+    )
+    // check marked directory clean up
+    assert(!fs.exists(new Path(basePath, ".hoodie/.temp/00000000000001")))
 
     // Read bootstrapped table and verify count
     var hoodieROViewDF1 = spark.read.format("hudi").load(basePath + "/*")
@@ -137,7 +142,8 @@ class TestDataSourceForBootstrap {
     verifyIncrementalViewResult(commitInstantTime1, commitInstantTime2, isPartitioned = false, isHiveStylePartitioned = false)
   }
 
-  @Test def testMetadataBootstrapCOWHiveStylePartitioned(): Unit = {
+  @Test
+  def testMetadataBootstrapCOWHiveStylePartitioned(): Unit = {
     val timestamp = Instant.now.toEpochMilli
     val jsc = JavaSparkContext.fromSparkContext(spark.sparkContext)
 
@@ -153,7 +159,12 @@ class TestDataSourceForBootstrap {
 
     // Perform bootstrap
     val commitInstantTime1 = runMetadataBootstrapAndVerifyCommit(
-      DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL, Some("datestr"))
+      DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL,
+      Some("datestr"),
+      Map(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING.key -> "true"))
+
+    // check marked directory clean up
+    assert(!fs.exists(new Path(basePath, ".hoodie/.temp/00000000000001")))
 
     // Read bootstrapped table and verify count
     val hoodieROViewDF1 = spark.read.format("hudi").load(basePath + "/*")
@@ -472,11 +483,13 @@ class TestDataSourceForBootstrap {
   }
 
   def runMetadataBootstrapAndVerifyCommit(tableType: String,
-                                          partitionColumns: Option[String] = None): String = {
+                                          partitionColumns: Option[String] = None,
+                                          extraOpts: Map[String, String] = Map.empty): String = {
     val bootstrapDF = spark.emptyDataFrame
     bootstrapDF.write
       .format("hudi")
       .options(commonOpts)
+      .options(extraOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.BOOTSTRAP_OPERATION_OPT_VAL)
       .option(DataSourceWriteOptions.TABLE_TYPE.key, tableType)
       .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, partitionColumns.getOrElse(""))

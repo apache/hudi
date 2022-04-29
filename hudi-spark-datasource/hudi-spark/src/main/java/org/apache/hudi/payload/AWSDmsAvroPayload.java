@@ -26,6 +26,7 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
+import java.util.Properties;
 
 /**
  * Provides support for seamlessly applying changes captured via Amazon Database Migration Service onto S3.
@@ -69,8 +70,21 @@ public class AWSDmsAvroPayload extends OverwriteWithLatestAvroPayload {
   }
 
   @Override
+  public Option<IndexedRecord> getInsertValue(Schema schema, Properties properties) throws IOException {
+    IndexedRecord insertValue = super.getInsertValue(schema, properties).get();
+    return handleDeleteOperation(insertValue);
+  }
+
+  @Override
   public Option<IndexedRecord> getInsertValue(Schema schema) throws IOException {
     IndexedRecord insertValue = super.getInsertValue(schema).get();
+    return handleDeleteOperation(insertValue);
+  }
+
+  @Override
+  public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema, Properties properties)
+      throws IOException {
+    IndexedRecord insertValue = super.getInsertValue(schema, properties).get();
     return handleDeleteOperation(insertValue);
   }
 

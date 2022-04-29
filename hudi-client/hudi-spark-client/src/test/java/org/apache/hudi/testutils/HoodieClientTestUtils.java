@@ -20,6 +20,7 @@ package org.apache.hudi.testutils;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.HoodieReadClient;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -30,13 +31,19 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.view.FileSystemViewManager;
+import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.io.storage.HoodieHFileUtils;
+import org.apache.hudi.timeline.service.TimelineService;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.Cell;
@@ -59,6 +66,8 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import static org.apache.hudi.io.storage.HoodieHFileReader.SCHEMA_KEY;
 
 /**
  * Utility methods to aid testing inside the HoodieClient module.
@@ -201,7 +210,7 @@ public class HoodieClientTestUtils {
   }
 
   /**
-   * Reads the paths under the a hoodie table out as a DataFrame.
+   * Reads the paths under the hoodie table out as a DataFrame.
    */
   public static Dataset<Row> read(JavaSparkContext jsc, String basePath, SQLContext sqlContext, FileSystem fs,
                                   String... paths) {
@@ -235,9 +244,10 @@ public class HoodieClientTestUtils {
     Schema schema = null;
     for (String path : paths) {
       try {
-        HFile.Reader reader = HFile.createReader(fs, new Path(path), cacheConfig, fs.getConf());
+        HFile.Reader reader =
+            HoodieHFileUtils.createHFileReader(fs, new Path(path), cacheConfig, fs.getConf());
         if (schema == null) {
-          schema = new Schema.Parser().parse(new String(reader.loadFileInfo().get("schema".getBytes())));
+          schema = new Schema.Parser().parse(new String(reader.getHFileInfo().get(SCHEMA_KEY.getBytes())));
         }
         HFileScanner scanner = reader.getScanner(false, false);
         if (!scanner.seekTo()) {
@@ -246,7 +256,7 @@ public class HoodieClientTestUtils {
         }
 
         do {
-          Cell c = scanner.getKeyValue();
+          Cell c = scanner.getCell();
           byte[] value = Arrays.copyOfRange(c.getValueArray(), c.getValueOffset(), c.getValueOffset() + c.getValueLength());
           valuesAsList.add(HoodieAvroUtils.bytesToAvro(value, schema));
         } while (scanner.next());
@@ -255,6 +265,36 @@ public class HoodieClientTestUtils {
       }
     }
     return valuesAsList.stream();
+  }
+
+  /**
+   * Initializes timeline service based on the write config.
+   *
+   * @param context             {@link HoodieEngineContext} instance to use.
+   * @param basePath            Base path of the table.
+   * @param timelineServicePort Port number to use for timeline service.
+   * @return started {@link TimelineService} instance.
+   */
+  public static TimelineService initTimelineService(
+      HoodieEngineContext context, String basePath, int timelineServicePort) {
+    try {
+      HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
+          .withPath(basePath)
+          .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
+              .withRemoteServerPort(timelineServicePort).build())
+          .build();
+      TimelineService timelineService = new TimelineService(context, new Configuration(),
+          TimelineService.Config.builder().enableMarkerRequests(true)
+              .serverPort(config.getViewStorageConfig().getRemoteViewServerPort()).build(),
+          FileSystem.get(new Configuration()),
+          FileSystemViewManager.createViewManager(context, config.getMetadataConfig(),
+              config.getViewStorageConfig(), config.getCommonConfig()));
+      timelineService.startService();
+      LOG.info("Timeline service server port: " + timelineServicePort);
+      return timelineService;
+    } catch (Exception ex) {
+      throw new RuntimeException(ex);
+    }
   }
 
   public static Option<HoodieCommitMetadata> getCommitMetadataForLatestInstant(HoodieTableMetaClient metaClient) {

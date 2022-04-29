@@ -19,6 +19,7 @@
 package org.apache.hudi.client.validator;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.config.HoodiePreCommitValidatorConfig;
@@ -28,19 +29,18 @@ import org.apache.hudi.table.HoodieSparkTable;
 
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
 
 import java.util.List;
 
 /**
- * Validator to run sql queries on new table state and expects a single result. If the result doesnt match expected result,
- * throw validation error. 
- * 
+ * Validator to run sql queries on new table state and expects a single result. If the result does not match expected result,
+ * throw validation error.
+ * <p>
  * Example configuration: "query1#expectedResult1;query2#expectedResult2;"
  */
-public class SqlQuerySingleResultPreCommitValidator<T extends HoodieRecordPayload, I, K, O extends JavaRDD<WriteStatus>> extends SqlQueryPreCommitValidator<T, I, K, O> {
+public class SqlQuerySingleResultPreCommitValidator<T extends HoodieRecordPayload, I, K, O extends HoodieData<WriteStatus>> extends SqlQueryPreCommitValidator<T, I, K, O> {
   private static final Logger LOG = LogManager.getLogger(SqlQueryInequalityPreCommitValidator.class);
 
   public SqlQuerySingleResultPreCommitValidator(HoodieSparkTable<T> table, HoodieEngineContext engineContext, HoodieWriteConfig config) {

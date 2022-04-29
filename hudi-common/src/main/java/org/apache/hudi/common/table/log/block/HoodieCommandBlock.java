@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.table.log.block;
 
-import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.util.Option;
 
 import org.apache.hadoop.fs.FSDataInputStream;
@@ -44,9 +43,9 @@ public class HoodieCommandBlock extends HoodieLogBlock {
     this(Option.empty(), null, false, Option.empty(), header, new HashMap<>());
   }
 
-  private HoodieCommandBlock(Option<byte[]> content, FSDataInputStream inputStream, boolean readBlockLazily,
-      Option<HoodieLogBlockContentLocation> blockContentLocation, Map<HeaderMetadataType, String> header,
-      Map<HeaderMetadataType, String> footer) {
+  public HoodieCommandBlock(Option<byte[]> content, FSDataInputStream inputStream, boolean readBlockLazily,
+                            Option<HoodieLogBlockContentLocation> blockContentLocation, Map<HeaderMetadataType, String> header,
+                            Map<HeaderMetadataType, String> footer) {
     super(header, footer, blockContentLocation, content, inputStream, readBlockLazily);
     this.type =
         HoodieCommandBlockTypeEnum.values()[Integer.parseInt(header.get(HeaderMetadataType.COMMAND_BLOCK_TYPE))];
@@ -64,13 +63,5 @@ public class HoodieCommandBlock extends HoodieLogBlock {
   @Override
   public byte[] getContentBytes() {
     return new byte[0];
-  }
-
-  public static HoodieLogBlock getBlock(HoodieLogFile logFile, FSDataInputStream inputStream, Option<byte[]> content,
-      boolean readBlockLazily, long position, long blockSize, long blockEndpos, Map<HeaderMetadataType, String> header,
-      Map<HeaderMetadataType, String> footer) {
-
-    return new HoodieCommandBlock(content, inputStream, readBlockLazily,
-        Option.of(new HoodieLogBlockContentLocation(logFile, position, blockSize, blockEndpos)), header, footer);
   }
 }

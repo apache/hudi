@@ -25,6 +25,7 @@ import org.apache.hudi.common.HoodieJsonPayload;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -112,7 +113,7 @@ public class HDFSParquetImporter implements Serializable {
   public int dataImport(JavaSparkContext jsc, int retry) {
     this.fs = FSUtils.getFs(cfg.targetPath, jsc.hadoopConfiguration());
     this.props = cfg.propsFilePath == null ? UtilHelpers.buildProperties(cfg.configs)
-        : UtilHelpers.readConfig(fs, new Path(cfg.propsFilePath), cfg.configs).getConfig();
+        : UtilHelpers.readConfig(fs.getConf(), new Path(cfg.propsFilePath), cfg.configs).getProps(true);
     LOG.info("Starting data import with configs : " + props.toString());
     int ret = -1;
     try {
@@ -197,7 +198,7 @@ public class HDFSParquetImporter implements Serializable {
               LOG.warn("Unable to parse date from partition field. Assuming partition as (" + partitionField + ")");
             }
           }
-          return new HoodieRecord<>(new HoodieKey(rowField.toString(), partitionPath),
+          return new HoodieAvroRecord<>(new HoodieKey(rowField.toString(), partitionPath),
               new HoodieJsonPayload(genericRecord.toString()));
         });
   }

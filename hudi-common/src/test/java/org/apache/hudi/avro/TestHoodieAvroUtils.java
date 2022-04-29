@@ -18,19 +18,25 @@
 
 package org.apache.hudi.avro;
 
-import org.apache.avro.JsonProperties;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.exception.SchemaCompatibilityException;
 
+import org.apache.avro.JsonProperties;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
+import java.math.BigDecimal;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.hudi.avro.HoodieAvroUtils.getNestedFieldSchemaFromWriteSchema;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -81,6 +87,17 @@ public class TestHoodieAvroUtils {
       + "{\"name\": \"nullable_field\",\"type\": [\"null\" ,\"string\"],\"default\": null},"
       + "{\"name\": \"non_nullable_field_with_default\",\"type\": \"string\", \"default\": \"dummy\"}]}";
 
+  private static String SCHEMA_WITH_DECIMAL_FIELD = "{\"type\":\"record\",\"name\":\"record\",\"fields\":["
+      + "{\"name\":\"key_col\",\"type\":[\"null\",\"int\"],\"default\":null},"
+      + "{\"name\":\"decimal_col\",\"type\":[\"null\","
+      + "{\"type\":\"bytes\",\"logicalType\":\"decimal\",\"precision\":8,\"scale\":4}],\"default\":null}]}";
+
+  private static String SCHEMA_WITH_NESTED_FIELD = "{\"name\":\"MyClass\",\"type\":\"record\",\"namespace\":\"com.acme.avro\",\"fields\":["
+      + "{\"name\":\"firstname\",\"type\":\"string\"},"
+      + "{\"name\":\"lastname\",\"type\":\"string\"},"
+      + "{\"name\":\"student\",\"type\":{\"name\":\"student\",\"type\":\"record\",\"fields\":["
+      + "{\"name\":\"firstname\",\"type\":[\"null\" ,\"string\"],\"default\": null},{\"name\":\"lastname\",\"type\":[\"null\" ,\"string\"],\"default\": null}]}}]}";
+
   @Test
   public void testPropsPresent() {
     Schema schema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(EXAMPLE_SCHEMA));
@@ -113,10 +130,10 @@ public class TestHoodieAvroUtils {
     rec.put("timestamp", 3.5);
     Schema schemaWithMetadata = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(EVOLVED_SCHEMA));
     GenericRecord rec1 = HoodieAvroUtils.rewriteRecord(rec, schemaWithMetadata);
-    assertEquals(rec1.get("new_col_not_nullable_default_dummy_val"), "dummy_val");
+    assertEquals("dummy_val", rec1.get("new_col_not_nullable_default_dummy_val"));
     assertNull(rec1.get("new_col_nullable_wo_default"));
     assertNull(rec1.get("new_col_nullable_default_null"));
-    assertEquals(rec1.get("new_col_nullable_default_dummy_val"), "dummy_val");
+    assertEquals("dummy_val", rec1.get("new_col_nullable_default_dummy_val"));
     assertNull(rec1.get(HoodieRecord.RECORD_KEY_METADATA_FIELD));
   }
 
@@ -128,7 +145,7 @@ public class TestHoodieAvroUtils {
     rec.put("pii_col", "val2");
     rec.put("timestamp", 3.5);
     GenericRecord rec1 = HoodieAvroUtils.rewriteRecord(rec, new Schema.Parser().parse(EVOLVED_SCHEMA));
-    assertEquals(rec1.get("new_col_not_nullable_default_dummy_val"), "dummy_val");
+    assertEquals("dummy_val", rec1.get("new_col_not_nullable_default_dummy_val"));
     assertNull(rec1.get("new_col_nullable_wo_default"));
   }
 
@@ -163,7 +180,7 @@ public class TestHoodieAvroUtils {
     rec.put("pii_col", "val2");
     rec.put("timestamp", 3.5);
     GenericRecord rec1 = HoodieAvroUtils.rewriteRecord(rec, new Schema.Parser().parse(SCHEMA_WITH_NON_NULLABLE_FIELD_WITH_DEFAULT));
-    assertEquals(rec1.get("non_nullable_field_with_default"), "dummy");
+    assertEquals("dummy", rec1.get("non_nullable_field_with_default"));
   }
 
   @Test
@@ -206,9 +223,45 @@ public class TestHoodieAvroUtils {
   @Test
   public void testAddingAndRemovingMetadataFields() {
     Schema schemaWithMetaCols = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(EXAMPLE_SCHEMA));
-    assertEquals(schemaWithMetaCols.getFields().size(), NUM_FIELDS_IN_EXAMPLE_SCHEMA + HoodieRecord.HOODIE_META_COLUMNS.size());
+    assertEquals(NUM_FIELDS_IN_EXAMPLE_SCHEMA + HoodieRecord.HOODIE_META_COLUMNS.size(), schemaWithMetaCols.getFields().size());
     Schema schemaWithoutMetaCols = HoodieAvroUtils.removeMetadataFields(schemaWithMetaCols);
-    assertEquals(schemaWithoutMetaCols.getFields().size(), NUM_FIELDS_IN_EXAMPLE_SCHEMA);
+    assertEquals(NUM_FIELDS_IN_EXAMPLE_SCHEMA, schemaWithoutMetaCols.getFields().size());
+  }
+
+  @Test
+  public void testRemoveFields() {
+    // partitioned table test.
+    String schemaStr = "{\"type\": \"record\",\"name\": \"testrec\",\"fields\": [ "
+        + "{\"name\": \"timestamp\",\"type\": \"double\"},{\"name\": \"_row_key\", \"type\": \"string\"},"
+        + "{\"name\": \"non_pii_col\", \"type\": \"string\"}]},";
+    Schema expectedSchema = new Schema.Parser().parse(schemaStr);
+    GenericRecord rec = new GenericData.Record(new Schema.Parser().parse(EXAMPLE_SCHEMA));
+    rec.put("_row_key", "key1");
+    rec.put("non_pii_col", "val1");
+    rec.put("pii_col", "val2");
+    rec.put("timestamp", 3.5);
+    GenericRecord rec1 = HoodieAvroUtils.removeFields(rec, Arrays.asList("pii_col"));
+    assertEquals("key1", rec1.get("_row_key"));
+    assertEquals("val1", rec1.get("non_pii_col"));
+    assertEquals(3.5, rec1.get("timestamp"));
+    assertNull(rec1.get("pii_col"));
+    assertEquals(expectedSchema, rec1.getSchema());
+
+    // non-partitioned table test with empty list of fields.
+    schemaStr = "{\"type\": \"record\",\"name\": \"testrec\",\"fields\": [ "
+        + "{\"name\": \"timestamp\",\"type\": \"double\"},{\"name\": \"_row_key\", \"type\": \"string\"},"
+        + "{\"name\": \"non_pii_col\", \"type\": \"string\"},"
+        + "{\"name\": \"pii_col\", \"type\": \"string\"}]},";
+    expectedSchema = new Schema.Parser().parse(schemaStr);
+    rec1 = HoodieAvroUtils.removeFields(rec, Arrays.asList(""));
+    assertEquals(expectedSchema, rec1.getSchema());
+  }
+
+  @Test
+  public void testGetRootLevelFieldName() {
+    assertEquals("a", HoodieAvroUtils.getRootLevelFieldName("a.b.c"));
+    assertEquals("a", HoodieAvroUtils.getRootLevelFieldName("a"));
+    assertEquals("", HoodieAvroUtils.getRootLevelFieldName(""));
   }
 
   @Test
@@ -218,15 +271,15 @@ public class TestHoodieAvroUtils {
     rec.put("non_pii_col", "val1");
     rec.put("pii_col", "val2");
 
-    Object rowKey = HoodieAvroUtils.getNestedFieldVal(rec, "_row_key", true);
-    assertEquals(rowKey, "key1");
+    Object rowKey = HoodieAvroUtils.getNestedFieldVal(rec, "_row_key", true, false);
+    assertEquals("key1", rowKey);
 
-    Object rowKeyNotExist = HoodieAvroUtils.getNestedFieldVal(rec, "fake_key", true);
+    Object rowKeyNotExist = HoodieAvroUtils.getNestedFieldVal(rec, "fake_key", true, false);
     assertNull(rowKeyNotExist);
 
     // Field does not exist
     try {
-      HoodieAvroUtils.getNestedFieldVal(rec, "fake_key", false);
+      HoodieAvroUtils.getNestedFieldVal(rec, "fake_key", false, false);
     } catch (Exception e) {
       assertEquals("fake_key(Part -fake_key) field not found in record. Acceptable fields were :[timestamp, _row_key, non_pii_col, pii_col]",
           e.getMessage());
@@ -234,10 +287,59 @@ public class TestHoodieAvroUtils {
 
     // Field exist while value not
     try {
-      HoodieAvroUtils.getNestedFieldVal(rec, "timestamp", false);
+      HoodieAvroUtils.getNestedFieldVal(rec, "timestamp", false, false);
     } catch (Exception e) {
       assertEquals("The value of timestamp can not be null", e.getMessage());
     }
   }
 
+  @Test
+  public void testGetNestedFieldValWithDecimalField() {
+    GenericRecord rec = new GenericData.Record(new Schema.Parser().parse(SCHEMA_WITH_DECIMAL_FIELD));
+    rec.put("key_col", "key");
+    BigDecimal bigDecimal = new BigDecimal("1234.5678");
+    ByteBuffer byteBuffer = ByteBuffer.wrap(bigDecimal.unscaledValue().toByteArray());
+    rec.put("decimal_col", byteBuffer);
+
+    Object decimalCol = HoodieAvroUtils.getNestedFieldVal(rec, "decimal_col", true, false);
+    assertEquals(bigDecimal, decimalCol);
+
+    Object obj = rec.get(1);
+    assertTrue(obj instanceof ByteBuffer);
+    ByteBuffer buffer = (ByteBuffer) obj;
+    assertEquals(0, buffer.position());
+  }
+
+  @Test
+  public void testGetNestedFieldSchema() throws IOException {
+    Schema schema = SchemaTestUtil.getEvolvedSchema();
+    GenericRecord rec = new GenericData.Record(schema);
+    rec.put("field1", "key1");
+    rec.put("field2", "val1");
+    rec.put("name", "val2");
+    rec.put("favorite_number", 2);
+    // test simple field schema
+    assertEquals(Schema.create(Schema.Type.STRING), getNestedFieldSchemaFromWriteSchema(rec.getSchema(), "field1"));
+
+    GenericRecord rec2 = new GenericData.Record(schema);
+    rec2.put("field1", "key1");
+    rec2.put("field2", "val1");
+    rec2.put("name", "val2");
+    rec2.put("favorite_number", 12);
+    // test comparison of non-string type
+    assertEquals(-1, GenericData.get().compare(rec.get("favorite_number"), rec2.get("favorite_number"), getNestedFieldSchemaFromWriteSchema(rec.getSchema(), "favorite_number")));
+
+    // test nested field schema
+    Schema nestedSchema = new Schema.Parser().parse(SCHEMA_WITH_NESTED_FIELD);
+    GenericRecord rec3 = new GenericData.Record(nestedSchema);
+    rec3.put("firstname", "person1");
+    rec3.put("lastname", "person2");
+    GenericRecord studentRecord = new GenericData.Record(rec3.getSchema().getField("student").schema());
+    studentRecord.put("firstname", "person1");
+    studentRecord.put("lastname", "person2");
+    rec3.put("student", studentRecord);
+
+    assertEquals(Schema.create(Schema.Type.STRING), getNestedFieldSchemaFromWriteSchema(rec3.getSchema(), "student.firstname"));
+    assertEquals(Schema.create(Schema.Type.STRING), getNestedFieldSchemaFromWriteSchema(nestedSchema, "student.firstname"));
+  }
 }

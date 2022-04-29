@@ -270,8 +270,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     List<HoodieInstant> rollbacks = new ArrayList<>();
     rollbacks.add(new HoodieInstant(false, actionType, commitTs));
 
-    HoodieRollbackStat rollbackStat = new HoodieRollbackStat(partition, deletedFiles, Collections.emptyList(), Collections.emptyMap(),
-        Collections.EMPTY_MAP);
+    HoodieRollbackStat rollbackStat = new HoodieRollbackStat(partition, deletedFiles, Collections.emptyList(), Collections.emptyMap());
     List<HoodieRollbackStat> rollbackStats = new ArrayList<>();
     rollbackStats.add(rollbackStat);
     return TimelineMetadataUtils.convertRollbackMetadata(commitTs, Option.empty(), rollbacks, rollbackStats);

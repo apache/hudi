@@ -18,14 +18,13 @@
 
 package org.apache.hudi.connect;
 
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.connect.utils.KafkaConnectUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.FileIdPrefixProvider;
 
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-
-import java.util.Properties;
 
 public class KafkaConnectFileIdPrefixProvider extends FileIdPrefixProvider {
 
@@ -34,7 +33,7 @@ public class KafkaConnectFileIdPrefixProvider extends FileIdPrefixProvider {
 
   private final String kafkaPartition;
 
-  public KafkaConnectFileIdPrefixProvider(Properties props) {
+  public KafkaConnectFileIdPrefixProvider(TypedProperties props) {
     super(props);
     if (!props.containsKey(KAFKA_CONNECT_PARTITION_ID)) {
       LOG.error("Fatal error due to Kafka Connect Partition Id is not set");

@@ -55,6 +55,7 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -335,7 +336,6 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
     HoodieCompactionPlan plan = CompactionTestUtils.createCompactionPlan(metaClient, "001", "002", 1, true, false);
     FileCreateUtils.createRequestedCompactionCommit(basePath, "002", plan);
     // Simulate one more commit so that inflight compaction is considered when building file groups in file system view
-    //
     FileCreateUtils.createBaseFile(basePath, testPartitionPath, "003", "2", 1);
     FileCreateUtils.createCommit(basePath, "003");
 
@@ -373,23 +373,23 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
             .setClusteringPlan(clusteringPlan).setOperationType(WriteOperationType.CLUSTER.name()).build();
     FileCreateUtils.createRequestedReplaceCommit(basePath,"002", Option.of(requestedReplaceMetadata));
 
-    // create file slice 002
-    FileCreateUtils.createBaseFile(basePath, testPartitionPath, "002", "2", 1);
-    FileCreateUtils.createCommit(basePath, "002");
+    // create file slice 003
+    FileCreateUtils.createBaseFile(basePath, testPartitionPath, "003", "3", 1);
+    FileCreateUtils.createCommit(basePath, "003");
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
 
     // generate new data to be ingested
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator(new String[] {testPartitionPath});
-    List<HoodieRecord> insertRecords = dataGenerator.generateInserts("003", 100);
+    List<HoodieRecord> insertRecords = dataGenerator.generateInserts("004", 100);
     WorkloadProfile profile = new WorkloadProfile(buildProfile(jsc.parallelize(insertRecords)));
 
     HoodieSparkTable table = HoodieSparkTable.create(config, context, metaClient);
     // create UpsertPartitioner
     UpsertPartitioner partitioner = new UpsertPartitioner(profile, context, table, config);
 
-    // for now we have file slice1 and file slice2 and file slice1 is contained in pending clustering plan
-    // So that only file slice2 can be used for ingestion.
+    // for now we have file slice1 and file slice3 and file slice1 is contained in pending clustering plan
+    // So that only file slice3 can be used for ingestion.
     assertEquals(1, partitioner.smallFiles.size(), "Should have 1 small file to be ingested.");
   }
 
@@ -431,6 +431,49 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
             "Bucket 0 should be UPDATE");
     assertEquals("fg1", partitioner.getBucketInfo(0).fileIdPrefix,
             "Insert should be assigned to fg1");
+  }
+
+  @Test
+  public void testUpsertPartitionerWithSmallFileHandlingPickingMultipleCandidates() throws Exception {
+    final String partitionPath = DEFAULT_PARTITION_PATHS[0];
+
+    HoodieWriteConfig config =
+        makeHoodieClientConfigBuilder()
+            .withMergeSmallFileGroupCandidatesLimit(3)
+            .withStorageConfig(
+                HoodieStorageConfig.newBuilder()
+                    .parquetMaxFileSize(2048)
+                    .build()
+            )
+            .build();
+
+    // Bootstrap base files ("small-file targets")
+    FileCreateUtils.createBaseFile(basePath, partitionPath, "002", "fg-1", 1024);
+    FileCreateUtils.createBaseFile(basePath, partitionPath, "002", "fg-2", 1024);
+    FileCreateUtils.createBaseFile(basePath, partitionPath, "002", "fg-3", 1024);
+
+    FileCreateUtils.createCommit(basePath, "002");
+
+    HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator(new String[] {partitionPath});
+    // Default estimated record size will be 1024 based on last file group created.
+    // Only 1 record can be added to small file
+    WorkloadProfile profile =
+        new WorkloadProfile(buildProfile(jsc.parallelize(dataGenerator.generateInserts("003", 3))));
+
+    HoodieTableMetaClient reloadedMetaClient = HoodieTableMetaClient.reload(this.metaClient);
+
+    HoodieSparkTable<?> table = HoodieSparkTable.create(config, context, reloadedMetaClient);
+
+    SparkUpsertDeltaCommitPartitioner<?> partitioner = new SparkUpsertDeltaCommitPartitioner<>(profile, context, table, config);
+
+    assertEquals(3, partitioner.numPartitions());
+    assertEquals(
+        Arrays.asList(
+            new BucketInfo(BucketType.UPDATE, "fg-1", partitionPath),
+            new BucketInfo(BucketType.UPDATE, "fg-2", partitionPath),
+            new BucketInfo(BucketType.UPDATE, "fg-3", partitionPath)
+        ),
+        partitioner.getBucketInfos());
   }
 
   private HoodieWriteConfig.Builder makeHoodieClientConfigBuilder() {

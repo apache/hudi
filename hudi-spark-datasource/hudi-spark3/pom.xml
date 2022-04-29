@@ -17,12 +17,12 @@
   <parent>
     <artifactId>hudi-spark-datasource</artifactId>
     <groupId>org.apache.hudi</groupId>
-    <version>0.10.0-SNAPSHOT</version>
+    <version>0.12.0-SNAPSHOT</version>
   </parent>
   <modelVersion>4.0.0</modelVersion>
 
   <artifactId>hudi-spark3_2.12</artifactId>
-  <version>0.10.0-SNAPSHOT</version>
+  <version>0.12.0-SNAPSHOT</version>
 
   <name>hudi-spark3_2.12</name>
   <packaging>jar</packaging>
@@ -80,6 +80,12 @@
       <plugin>
         <groupId>net.alchim31.maven</groupId>
         <artifactId>scala-maven-plugin</artifactId>
+        <configuration>
+          <args>
+            <arg>-nobootcp</arg>
+            <arg>-target:jvm-1.8</arg>
+          </args>
+        </configuration>
         <executions>
           <execution>
             <id>scala-compile-first</id>
@@ -144,6 +150,24 @@
         <groupId>org.jacoco</groupId>
         <artifactId>jacoco-maven-plugin</artifactId>
       </plugin>
+      <plugin>
+        <groupId>org.antlr</groupId>
+        <artifactId>antlr4-maven-plugin</artifactId>
+        <version>${antlr.version}</version>
+        <executions>
+          <execution>
+            <goals>
+              <goal>antlr4</goal>
+            </goals>
+          </execution>
+        </executions>
+        <configuration>
+          <visitor>true</visitor>
+          <listener>true</listener>
+          <sourceDirectory>../hudi-spark3/src/main/antlr4</sourceDirectory>
+          <libDirectory>../hudi-spark3/src/main/antlr4/imports</libDirectory>
+        </configuration>
+      </plugin>
     </plugins>
   </build>
 
@@ -157,8 +181,31 @@
     <dependency>
       <groupId>org.apache.spark</groupId>
       <artifactId>spark-sql_2.12</artifactId>
-      <version>${spark3.version}</version>
+      <version>${spark32.version}</version>
+      <scope>provided</scope>
       <optional>true</optional>
+    </dependency>
+
+    <dependency>
+      <groupId>org.apache.spark</groupId>
+      <artifactId>spark-catalyst_2.12</artifactId>
+      <version>${spark32.version}</version>
+      <scope>provided</scope>
+      <optional>true</optional>
+    </dependency>
+
+    <dependency>
+      <groupId>org.apache.spark</groupId>
+      <artifactId>spark-core_2.12</artifactId>
+      <version>${spark32.version}</version>
+      <scope>provided</scope>
+      <optional>true</optional>
+      <exclusions>
+        <exclusion>
+          <groupId>*</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
 
     <dependency>
@@ -181,13 +228,49 @@
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-spark-client</artifactId>
       <version>${project.version}</version>
+      <exclusions>
+        <exclusion>
+          <groupId>org.apache.spark</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
+
     <dependency>
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-spark-common_${scala.binary.version}</artifactId>
       <version>${project.version}</version>
+      <exclusions>
+        <exclusion>
+          <groupId>org.apache.spark</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
 
+    <dependency>
+      <groupId>org.json4s</groupId>
+      <artifactId>json4s-jackson_${scala.binary.version}</artifactId>
+      <version>3.7.0-M11</version>
+      <exclusions>
+        <exclusion>
+          <groupId>com.fasterxml.jackson.core</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-spark3-common</artifactId>
+      <version>${project.version}</version>
+      <exclusions>
+        <exclusion>
+          <groupId>org.apache.spark</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
     <!-- Hoodie - Test -->
     <dependency>
       <groupId>org.apache.hudi</groupId>
@@ -197,6 +280,7 @@
       <type>test-jar</type>
       <scope>test</scope>
     </dependency>
+
     <dependency>
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-spark-client</artifactId>
@@ -204,7 +288,14 @@
       <classifier>tests</classifier>
       <type>test-jar</type>
       <scope>test</scope>
+      <exclusions>
+        <exclusion>
+          <groupId>org.apache.spark</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
+
     <dependency>
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-common</artifactId>
@@ -213,6 +304,7 @@
       <type>test-jar</type>
       <scope>test</scope>
     </dependency>
+
     <dependency>
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-spark-common_${scala.binary.version}</artifactId>
@@ -220,6 +312,12 @@
       <classifier>tests</classifier>
       <type>test-jar</type>
       <scope>test</scope>
+      <exclusions>
+        <exclusion>
+          <groupId>org.apache.spark</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
 
     <dependency>

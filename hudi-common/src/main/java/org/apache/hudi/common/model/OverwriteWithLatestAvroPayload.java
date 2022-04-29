@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.avro.JsonProperties;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.util.Option;
 
@@ -84,7 +85,7 @@ public class OverwriteWithLatestAvroPayload extends BaseAvroPayload
    * @returns {@code true} if record represents a delete record. {@code false} otherwise.
    */
   protected boolean isDeleteRecord(GenericRecord genericRecord) {
-    final String isDeleteKey = "_hoodie_is_deleted";
+    final String isDeleteKey = HoodieRecord.HOODIE_IS_DELETED;
     // Modify to be compatible with new version Avro.
     // The new version Avro throws for GenericRecord.get if the field name
     // does not exist in the schema.
@@ -99,6 +100,14 @@ public class OverwriteWithLatestAvroPayload extends BaseAvroPayload
    * Return true if value equals defaultValue otherwise false.
    */
   public Boolean overwriteField(Object value, Object defaultValue) {
+    if (JsonProperties.NULL_VALUE.equals(defaultValue)) {
+      return value == null;
+    }
     return Objects.equals(value, defaultValue);
+  }
+
+  @Override
+  public Comparable<?> getOrderingValue() {
+    return this.orderingVal;
   }
 }

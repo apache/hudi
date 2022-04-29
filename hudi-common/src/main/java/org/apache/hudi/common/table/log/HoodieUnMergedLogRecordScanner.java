@@ -18,7 +18,7 @@
 
 package org.apache.hudi.common.table.log;
 
-import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.Option;
@@ -31,7 +31,7 @@ import java.util.List;
 /**
  * A scanner used to scan hoodie unmerged log records.
  */
-public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordScanner {
+public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordReader {
 
   private final LogRecordScannerCallback callback;
 
@@ -56,7 +56,7 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordScann
   }
 
   @Override
-  protected void processNextDeletedKey(HoodieKey key) {
+  protected void processNextDeletedRecord(DeleteRecord deleteRecord) {
     throw new IllegalStateException("Not expected to see delete records in this log-scan mode. Check Job Config");
   }
 
@@ -64,15 +64,15 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordScann
    * A callback for log record scanner.
    */
   @FunctionalInterface
-  public static interface LogRecordScannerCallback {
+  public interface LogRecordScannerCallback {
 
-    public void apply(HoodieRecord<? extends HoodieRecordPayload> record) throws Exception;
+    void apply(HoodieRecord<? extends HoodieRecordPayload> record) throws Exception;
   }
 
   /**
    * Builder used to build {@code HoodieUnMergedLogRecordScanner}.
    */
-  public static class Builder extends AbstractHoodieLogRecordScanner.Builder {
+  public static class Builder extends AbstractHoodieLogRecordReader.Builder {
     private FileSystem fs;
     private String basePath;
     private List<String> logFilePaths;

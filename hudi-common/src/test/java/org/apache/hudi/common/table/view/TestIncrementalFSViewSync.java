@@ -556,7 +556,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
       boolean isRestore) throws IOException {
     Map<String, List<String>> partititonToFiles = deleteFiles(files);
     List<HoodieRollbackStat> rollbackStats = partititonToFiles.entrySet().stream().map(e ->
-        new HoodieRollbackStat(e.getKey(), e.getValue(), new ArrayList<>(), new HashMap<>(), new HashMap<>())
+        new HoodieRollbackStat(e.getKey(), e.getValue(), new ArrayList<>(), new HashMap<>())
     ).collect(Collectors.toList());
 
     List<HoodieInstant> rollbacks = new ArrayList<>();

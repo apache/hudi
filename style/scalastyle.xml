@@ -27,7 +27,7 @@
  <check level="error" class="org.scalastyle.file.FileTabChecker" enabled="true"/>
  <check level="error" class="org.scalastyle.file.FileLengthChecker" enabled="true">
   <parameters>
-   <parameter name="maxFileLength"><![CDATA[900]]></parameter>
+   <parameter name="maxFileLength"><![CDATA[5000]]></parameter>
   </parameters>
  </check>
  <check level="error" class="org.scalastyle.scalariform.SpacesAfterPlusChecker" enabled="true"/>
@@ -113,7 +113,7 @@
  </check>
  <check level="error" class="org.scalastyle.scalariform.NumberOfMethodsInTypeChecker" enabled="true">
   <parameters>
-   <parameter name="maxMethods"><![CDATA[30]]></parameter>
+   <parameter name="maxMethods"><![CDATA[500]]></parameter>
   </parameters>
  </check>
  <check level="error" class="org.scalastyle.scalariform.PublicMethodsHaveTypeChecker" enabled="false"/>

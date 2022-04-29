@@ -17,41 +17,38 @@
 
 package org.apache.spark.sql.hudi.command
 
-import org.apache.hudi.DataSourceWriteOptions._
+import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.common.model.HoodieRecord
-import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
-import org.apache.hudi.hive.MultiPartKeysValueExtractor
-import org.apache.hudi.hive.ddl.HiveSyncMode
-import org.apache.hudi.{DataSourceWriteOptions, SparkAdapterSupport}
 import org.apache.spark.sql._
+import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.catalyst.expressions.{Alias, AttributeReference, Expression}
 import org.apache.spark.sql.catalyst.plans.logical.{Assignment, UpdateTable}
-import org.apache.spark.sql.execution.command.RunnableCommand
-import org.apache.spark.sql.hudi.HoodieOptionConfig
-import org.apache.spark.sql.hudi.HoodieSqlUtils._
+import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
+import org.apache.spark.sql.hudi.ProvidesHoodieConfig
+import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.StructField
 
 import scala.collection.JavaConverters._
 
-case class UpdateHoodieTableCommand(updateTable: UpdateTable) extends RunnableCommand
-  with SparkAdapterSupport {
+case class UpdateHoodieTableCommand(updateTable: UpdateTable) extends HoodieLeafRunnableCommand
+  with SparkAdapterSupport with ProvidesHoodieConfig {
 
   private val table = updateTable.table
-  private val tableId = getTableIdentify(table)
+  private val tableId = getTableIdentifier(table)
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
     logInfo(s"start execute update command for $tableId")
-    def cast(exp:Expression, field: StructField): Expression = {
-      castIfNeeded(exp, field.dataType, sparkSession.sqlContext.conf)
-    }
+    val sqlConf = sparkSession.sessionState.conf
     val name2UpdateValue = updateTable.assignments.map {
       case Assignment(attr: AttributeReference, value) =>
         attr.name -> value
     }.toMap
 
     val updateExpressions = table.output
-      .map(attr => name2UpdateValue.getOrElse(attr.name, attr))
+      .map(attr => {
+        val UpdateValueOption = name2UpdateValue.find(f => sparkSession.sessionState.conf.resolver(f._1, attr.name))
+        if(UpdateValueOption.isEmpty) attr else UpdateValueOption.get._2
+      })
       .filter { // filter the meta columns
         case attr: AttributeReference =>
           !HoodieRecord.HOODIE_META_COLUMNS.asScala.toSet.contains(attr.name)
@@ -60,9 +57,9 @@ case class UpdateHoodieTableCommand(updateTable: UpdateTable) extends RunnableCo
 
     val projects = updateExpressions.zip(removeMetaFields(table.schema).fields).map {
       case (attr: AttributeReference, field) =>
-        Column(cast(attr, field))
+        Column(cast(attr, field, sqlConf))
       case (exp, field) =>
-        Column(Alias(cast(exp, field), field.name)())
+        Column(Alias(cast(exp, field, sqlConf), field.name)())
     }
 
     var df = Dataset.ofRows(sparkSession, table)
@@ -70,7 +67,7 @@ case class UpdateHoodieTableCommand(updateTable: UpdateTable) extends RunnableCo
       df = df.filter(Column(updateTable.condition.get))
     }
     df = df.select(projects: _*)
-    val config = buildHoodieConfig(sparkSession)
+    val config = buildHoodieConfig(HoodieCatalogTable(sparkSession, tableId))
     df.write
       .format("hudi")
       .mode(SaveMode.Append)
@@ -81,38 +78,7 @@ case class UpdateHoodieTableCommand(updateTable: UpdateTable) extends RunnableCo
     Seq.empty[Row]
   }
 
-  private def buildHoodieConfig(sparkSession: SparkSession): Map[String, String] = {
-    val targetTable = sparkSession.sessionState.catalog
-      .getTableMetadata(tableId)
-    val path = getTableLocation(targetTable, sparkSession)
-
-    val primaryColumns = HoodieOptionConfig.getPrimaryColumns(targetTable.storage.properties)
-
-    assert(primaryColumns.nonEmpty,
-      s"There are no primary key in table $tableId, cannot execute update operator")
-    val enableHive = isEnableHive(sparkSession)
-    withSparkConf(sparkSession, targetTable.storage.properties) {
-      Map(
-        "path" -> path,
-        RECORDKEY_FIELD.key -> primaryColumns.mkString(","),
-        KEYGENERATOR_CLASS_NAME.key -> classOf[SqlKeyGenerator].getCanonicalName,
-        PRECOMBINE_FIELD.key -> primaryColumns.head, //set the default preCombine field.
-        TBL_NAME.key -> tableId.table,
-        OPERATION.key -> DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
-        PARTITIONPATH_FIELD.key -> targetTable.partitionColumnNames.mkString(","),
-        META_SYNC_ENABLED.key -> enableHive.toString,
-        HIVE_SYNC_MODE.key -> HiveSyncMode.HMS.name(),
-        HIVE_USE_JDBC.key -> "false",
-        HIVE_DATABASE.key -> tableId.database.getOrElse("default"),
-        HIVE_TABLE.key -> tableId.table,
-        HIVE_PARTITION_FIELDS.key -> targetTable.partitionColumnNames.mkString(","),
-        HIVE_PARTITION_EXTRACTOR_CLASS.key -> classOf[MultiPartKeysValueExtractor].getCanonicalName,
-        URL_ENCODE_PARTITIONING.key -> "true",
-        HIVE_SUPPORT_TIMESTAMP_TYPE.key -> "true",
-        HIVE_STYLE_PARTITIONING.key -> "true",
-        HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key -> "200",
-        SqlKeyGenerator.PARTITION_SCHEMA -> targetTable.partitionSchema.toDDL
-      )
-    }
+  def cast(exp:Expression, field: StructField, sqlConf: SQLConf): Expression = {
+    castIfNeeded(exp, field.dataType, sqlConf)
   }
 }

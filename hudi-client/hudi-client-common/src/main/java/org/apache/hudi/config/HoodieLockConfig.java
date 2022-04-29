@@ -25,6 +25,7 @@ import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.lock.LockProvider;
+import org.apache.hudi.common.util.Option;
 
 import java.io.File;
 import java.io.FileReader;
@@ -52,7 +53,6 @@ import static org.apache.hudi.common.config.LockConfiguration.ZK_CONNECT_URL_PRO
 import static org.apache.hudi.common.config.LockConfiguration.ZK_LOCK_KEY_PROP_KEY;
 import static org.apache.hudi.common.config.LockConfiguration.ZK_PORT_PROP_KEY;
 import static org.apache.hudi.common.config.LockConfiguration.ZK_SESSION_TIMEOUT_MS_PROP_KEY;
-
 
 /**
  * Hoodie Configs for Locks.
@@ -92,7 +92,7 @@ public class HoodieLockConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> LOCK_ACQUIRE_CLIENT_NUM_RETRIES = ConfigProperty
       .key(LOCK_ACQUIRE_CLIENT_NUM_RETRIES_PROP_KEY)
-      .defaultValue(String.valueOf(0))
+      .defaultValue(String.valueOf(10))
       .sinceVersion("0.8.0")
       .withDocumentation("Maximum number of times to retry to acquire lock additionally from the lock manager.");
 
@@ -160,9 +160,11 @@ public class HoodieLockConfig extends HoodieConfig {
   public static final ConfigProperty<String> ZK_LOCK_KEY = ConfigProperty
       .key(ZK_LOCK_KEY_PROP_KEY)
       .noDefaultValue()
+      .withInferFunction(p -> Option.ofNullable(p.getStringOrDefault(HoodieWriteConfig.TBL_NAME, null)))
       .sinceVersion("0.8.0")
       .withDocumentation("Key name under base_path at which to create a ZNode and acquire lock. "
-          + "Final path on zk will look like base_path/lock_key. We recommend setting this to the table name");
+          + "Final path on zk will look like base_path/lock_key. If this parameter is not set, we would "
+          + "set it as the table name");
 
   // Pluggable type of lock provider
   public static final ConfigProperty<String> LOCK_PROVIDER_CLASS_NAME = ConfigProperty

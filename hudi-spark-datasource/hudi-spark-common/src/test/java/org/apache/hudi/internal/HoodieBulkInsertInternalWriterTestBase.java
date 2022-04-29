@@ -77,7 +77,7 @@ public class HoodieBulkInsertInternalWriterTestBase extends HoodieClientTestHarn
       properties.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), SparkDatasetTestUtils.PARTITION_PATH_FIELD_NAME);
       properties.setProperty(HoodieTableConfig.POPULATE_META_FIELDS.key(), "false");
     }
-    return getConfigBuilder(basePath).withProperties(properties).build();
+    return getConfigBuilder(basePath, timelineServicePort).withProperties(properties).build();
   }
 
   protected void assertWriteStatuses(List<HoodieInternalWriteStatus> writeStatuses, int batches, int size,

@@ -31,7 +31,8 @@ public class ConfigGroups {
     WRITE_CLIENT("Write Client Configs"),
     METRICS("Metrics Configs"),
     RECORD_PAYLOAD("Record Payload Config"),
-    KAFKA_CONNECT("Kafka Connect Configs");
+    KAFKA_CONNECT("Kafka Connect Configs"),
+    AWS("Amazon Web Services Configs");
 
     public final String name;
 
@@ -74,7 +75,7 @@ public class ConfigGroups {
             + "Hudi stats and metrics.";
         break;
       case KAFKA_CONNECT:
-        description = "These set of configs are used for Kakfa Connect Sink Connector for writing Hudi Tables";
+        description = "These set of configs are used for Kafka Connect Sink Connector for writing Hudi Tables";
         break;
       default:
         description = "Please fill in the description for Config Group Name: " + names.name;

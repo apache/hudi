@@ -19,6 +19,8 @@
 package org.apache.hudi.io;
 
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 
@@ -31,8 +33,8 @@ public abstract class HoodieIOHandle<T extends HoodieRecordPayload, I, K, O> {
   protected final FileSystem fs;
   protected final HoodieTable<T, I, K, O> hoodieTable;
 
-  HoodieIOHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable) {
-    this.instantTime = instantTime;
+  HoodieIOHandle(HoodieWriteConfig config, Option<String> instantTime, HoodieTable<T, I, K, O> hoodieTable) {
+    this.instantTime = instantTime.orElse(StringUtils.EMPTY_STRING);
     this.config = config;
     this.hoodieTable = hoodieTable;
     this.fs = getFileSystem();

@@ -131,9 +131,9 @@ public class DatePartitionPathSelector extends DFSPathSelector {
     long lastCheckpointTime = lastCheckpointStr.map(Long::parseLong).orElse(Long.MIN_VALUE);
     HoodieSparkEngineContext context = new HoodieSparkEngineContext(sparkContext);
     SerializableConfiguration serializedConf = new SerializableConfiguration(fs.getConf());
-    List<String> prunedParitionPaths = pruneDatePartitionPaths(context, fs, props.getString(ROOT_INPUT_PATH_PROP), currentDate);
+    List<String> prunedPartitionPaths = pruneDatePartitionPaths(context, fs, props.getString(ROOT_INPUT_PATH_PROP), currentDate);
 
-    List<FileStatus> eligibleFiles = context.flatMap(prunedParitionPaths,
+    List<FileStatus> eligibleFiles = context.flatMap(prunedPartitionPaths,
         path -> {
           FileSystem fs = new Path(path).getFileSystem(serializedConf.get());
           return listEligibleFiles(fs, new Path(path), lastCheckpointTime).stream();

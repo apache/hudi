@@ -25,6 +25,8 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.ImmutablePair;
+import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.execution.bulkinsert.RDDCustomColumnsSortPartitioner;
@@ -40,10 +42,16 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
+import org.apache.spark.sql.types.DecimalType$;
+import org.apache.spark.sql.types.Metadata;
+import org.apache.spark.sql.types.StructField;
+import org.apache.spark.sql.types.StructType;
+import org.apache.spark.sql.types.StructType$;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
@@ -52,7 +60,12 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
+import static org.apache.hudi.DataSourceUtils.mayBeOverwriteParquetWriteLegacyFormatProp;
 import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
 import static org.apache.hudi.hive.ddl.HiveSyncMode.HMS;
 import static org.hamcrest.CoreMatchers.containsString;
@@ -130,16 +143,16 @@ public class TestDataSourceUtils {
     record.put("event_cost3", genericFixed);
 
     assertEquals(LocalDate.ofEpochDay(18000).toString(), HoodieAvroUtils.getNestedFieldValAsString(record, "event_date1",
-        true));
+        true, false));
     assertEquals(LocalDate.ofEpochDay(18001).toString(), HoodieAvroUtils.getNestedFieldValAsString(record, "event_date2",
-        true));
+        true, false));
     assertEquals(LocalDate.ofEpochDay(18002).toString(), HoodieAvroUtils.getNestedFieldValAsString(record, "event_date3",
-        true));
-    assertEquals("Hudi Meetup", HoodieAvroUtils.getNestedFieldValAsString(record, "event_name", true));
-    assertEquals("Hudi PMC", HoodieAvroUtils.getNestedFieldValAsString(record, "event_organizer", true));
-    assertEquals(bigDecimal.toString(), HoodieAvroUtils.getNestedFieldValAsString(record, "event_cost1", true));
-    assertEquals(bigDecimal.toString(), HoodieAvroUtils.getNestedFieldValAsString(record, "event_cost2", true));
-    assertEquals(bigDecimal.toString(), HoodieAvroUtils.getNestedFieldValAsString(record, "event_cost3", true));
+        true, false));
+    assertEquals("Hudi Meetup", HoodieAvroUtils.getNestedFieldValAsString(record, "event_name", true, false));
+    assertEquals("Hudi PMC", HoodieAvroUtils.getNestedFieldValAsString(record, "event_organizer", true, false));
+    assertEquals(bigDecimal.toString(), HoodieAvroUtils.getNestedFieldValAsString(record, "event_cost1", true, false));
+    assertEquals(bigDecimal.toString(), HoodieAvroUtils.getNestedFieldValAsString(record, "event_cost2", true, false));
+    assertEquals(bigDecimal.toString(), HoodieAvroUtils.getNestedFieldValAsString(record, "event_cost3", true, false));
   }
 
   @Test
@@ -180,7 +193,7 @@ public class TestDataSourceUtils {
 
   @Test
   public void testCreateUserDefinedBulkInsertPartitionerRowsWithInValidPartitioner() throws HoodieException {
-    config = HoodieWriteConfig.newBuilder().withPath("/").withUserDefinedBulkInsertPartitionerClass("NonExistantUserDefinedClass").build();
+    config = HoodieWriteConfig.newBuilder().withPath("/").withUserDefinedBulkInsertPartitionerClass("NonExistentUserDefinedClass").build();
 
     Exception exception = assertThrows(HoodieException.class, () -> {
       DataSourceUtils.createUserDefinedBulkInsertPartitionerWithRows(config);
@@ -209,6 +222,30 @@ public class TestDataSourceUtils {
 
     Option<BulkInsertPartitioner<Dataset<Row>>> partitioner = DataSourceUtils.createUserDefinedBulkInsertPartitionerWithRows(config);
     assertThat(partitioner.isPresent(), is(true));
+  }
+
+  @Test
+  public void testCreateHoodieConfigWithAsyncClustering() {
+    ArrayList<ImmutablePair<String, Boolean>> asyncClusteringKeyValues = new ArrayList<>(4);
+    asyncClusteringKeyValues.add(new ImmutablePair(DataSourceWriteOptions.ASYNC_CLUSTERING_ENABLE().key(), true));
+    asyncClusteringKeyValues.add(new ImmutablePair(HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE.key(), true));
+    asyncClusteringKeyValues.add(new ImmutablePair("hoodie.datasource.clustering.async.enable", true));
+    asyncClusteringKeyValues.add(new ImmutablePair("hoodie.clustering.async.enabled", true));
+
+    asyncClusteringKeyValues.stream().forEach(pair -> {
+      HashMap<String, String> params = new HashMap<>(3);
+      params.put(DataSourceWriteOptions.TABLE_TYPE().key(), DataSourceWriteOptions.TABLE_TYPE().defaultValue());
+      params.put(DataSourceWriteOptions.PAYLOAD_CLASS_NAME().key(),
+              DataSourceWriteOptions.PAYLOAD_CLASS_NAME().defaultValue());
+      params.put(pair.left, pair.right.toString());
+      HoodieWriteConfig hoodieConfig = DataSourceUtils
+              .createHoodieConfig(avroSchemaString, config.getBasePath(), "test", params);
+      assertEquals(pair.right, hoodieConfig.isAsyncClusteringEnabled());
+
+      TypedProperties prop = new TypedProperties();
+      prop.putAll(params);
+      assertEquals(pair.right, HoodieClusteringConfig.from(prop).isAsyncClusteringEnabled());
+    });
   }
 
   @ParameterizedTest
@@ -272,6 +309,35 @@ public class TestDataSourceUtils {
     @Override
     public boolean arePartitionRecordsSorted() {
       return false;
+    }
+  }
+
+  @ParameterizedTest
+  @CsvSource({"true, false", "true, true", "false, true", "false, false"})
+  public void testAutoModifyParquetWriteLegacyFormatParameter(boolean smallDecimal, boolean defaultWriteValue) {
+    // create test StructType
+    List<StructField> structFields = new ArrayList<>();
+    if (smallDecimal) {
+      structFields.add(StructField.apply("d1", DecimalType$.MODULE$.apply(10, 2), false, Metadata.empty()));
+    } else {
+      structFields.add(StructField.apply("d1", DecimalType$.MODULE$.apply(38, 10), false, Metadata.empty()));
+    }
+    StructType structType = StructType$.MODULE$.apply(structFields);
+    // create write options
+    Map<String, String> options = new HashMap<>();
+    options.put("hoodie.parquet.writelegacyformat.enabled", String.valueOf(defaultWriteValue));
+
+    // start test
+    mayBeOverwriteParquetWriteLegacyFormatProp(options, structType);
+
+    // check result
+    boolean res = Boolean.parseBoolean(options.get("hoodie.parquet.writelegacyformat.enabled"));
+    if (smallDecimal) {
+      // should auto modify "hoodie.parquet.writelegacyformat.enabled" = "true".
+      assertEquals(true, res);
+    } else {
+      // should not modify the value of "hoodie.parquet.writelegacyformat.enabled".
+      assertEquals(defaultWriteValue, res);
     }
   }
 }

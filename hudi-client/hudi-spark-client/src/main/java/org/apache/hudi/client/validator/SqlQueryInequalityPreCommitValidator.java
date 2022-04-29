@@ -19,6 +19,7 @@
 package org.apache.hudi.client.validator;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.config.HoodiePreCommitValidatorConfig;
@@ -28,19 +29,18 @@ import org.apache.hudi.table.HoodieSparkTable;
 
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
 
 /**
- * Validator to run sql query and compare table state 
+ * Validator to run sql query and compare table state
  * 1) before new commit started.
  * 2) current inflight commit (if successful).
- * 
- * Expects query results dont match.
+ * <p>
+ * Expects query results do not match.
  */
-public class SqlQueryInequalityPreCommitValidator<T extends HoodieRecordPayload, I, K, O extends JavaRDD<WriteStatus>> extends SqlQueryPreCommitValidator<T, I, K, O> {
+public class SqlQueryInequalityPreCommitValidator<T extends HoodieRecordPayload, I, K, O extends HoodieData<WriteStatus>> extends SqlQueryPreCommitValidator<T, I, K, O> {
   private static final Logger LOG = LogManager.getLogger(SqlQueryInequalityPreCommitValidator.class);
 
   public SqlQueryInequalityPreCommitValidator(HoodieSparkTable<T> table, HoodieEngineContext engineContext, HoodieWriteConfig config) {
@@ -66,7 +66,7 @@ public class SqlQueryInequalityPreCommitValidator<T extends HoodieRecordPayload,
     LOG.info("Completed Inequality Validation, datasets equal? " + areDatasetsEqual);
     if (areDatasetsEqual) {
       LOG.error("query validation failed. See stdout for sample query results. Query: " + query);
-      System.out.println("Expected query results to be inequal, but they are same. Result (sample records only):");
+      System.out.println("Expected query results to be different, but they are same. Result (sample records only):");
       prevRows.show();
       throw new HoodieValidationException("Query validation failed for '" + query 
           + "'. Expected " + prevRows.count() + " rows, Found " + newRows.count());

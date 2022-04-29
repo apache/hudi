@@ -47,6 +47,6 @@ public class FlinkUpsertDeltaCommitActionExecutor<T extends HoodieRecordPayload<
   @Override
   public HoodieWriteMetadata execute() {
     return FlinkWriteHelper.newInstance().write(instantTime, inputRecords, context, table,
-        config.shouldCombineBeforeUpsert(), config.getUpsertShuffleParallelism(), this, true);
+        config.shouldCombineBeforeUpsert(), config.getUpsertShuffleParallelism(), this, operationType);
   }
 }

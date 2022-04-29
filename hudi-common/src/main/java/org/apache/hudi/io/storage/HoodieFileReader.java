@@ -18,26 +18,28 @@
 
 package org.apache.hudi.io.storage;
 
-import java.io.IOException;
-import java.util.Iterator;
-import java.util.Set;
-
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.common.util.ClosableIterator;
 import org.apache.hudi.common.util.Option;
 
-public interface HoodieFileReader<R extends IndexedRecord> {
+import java.io.IOException;
+import java.io.UnsupportedEncodingException;
+import java.util.List;
+import java.util.Set;
 
-  public String[] readMinMaxRecordKeys();
+public interface HoodieFileReader<R extends IndexedRecord> extends AutoCloseable {
 
-  public BloomFilter readBloomFilter();
+  String[] readMinMaxRecordKeys();
 
-  public Set<String> filterRowKeys(Set<String> candidateRowKeys);
+  BloomFilter readBloomFilter();
 
-  public Iterator<R> getRecordIterator(Schema readerSchema) throws IOException;
+  Set<String> filterRowKeys(Set<String> candidateRowKeys);
 
-  default Iterator<R> getRecordIterator() throws IOException {
+  ClosableIterator<R> getRecordIterator(Schema readerSchema) throws IOException;
+
+  default ClosableIterator<R> getRecordIterator() throws IOException {
     return getRecordIterator(getSchema());
   }
 
@@ -47,6 +49,22 @@ public interface HoodieFileReader<R extends IndexedRecord> {
 
   default Option<R> getRecordByKey(String key) throws IOException {
     return getRecordByKey(key, getSchema());
+  }
+
+  default ClosableIterator<R> getRecordsByKeysIterator(List<String> keys, Schema schema) throws IOException {
+    throw new UnsupportedOperationException();
+  }
+
+  default ClosableIterator<R> getRecordsByKeysIterator(List<String> keys) throws IOException {
+    return getRecordsByKeysIterator(keys, getSchema());
+  }
+
+  default ClosableIterator<R> getRecordsByKeyPrefixIterator(List<String> keyPrefixes, Schema schema) throws IOException {
+    throw new UnsupportedEncodingException();
+  }
+
+  default ClosableIterator<R> getRecordsByKeyPrefixIterator(List<String> keyPrefixes) throws IOException {
+    return getRecordsByKeyPrefixIterator(keyPrefixes, getSchema());
   }
 
   Schema getSchema();

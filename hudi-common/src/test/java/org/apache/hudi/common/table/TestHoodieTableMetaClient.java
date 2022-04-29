@@ -54,15 +54,17 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     assertEquals(basePath, metaClient.getBasePath(), "Basepath should be the one assigned");
     assertEquals(basePath + "/.hoodie", metaClient.getMetaPath(),
         "Metapath should be ${basepath}/.hoodie");
+    assertTrue(metaClient.getTableConfig().getProps().containsKey(HoodieTableConfig.TABLE_CHECKSUM.key()));
+    assertTrue(HoodieTableConfig.validateChecksum(metaClient.getTableConfig().getProps()));
   }
 
   @Test
   public void checkSerDe() {
     // check if this object is serialized and de-serialized, we are able to read from the file system
-    HoodieTableMetaClient deseralizedMetaClient =
+    HoodieTableMetaClient deserializedMetaClient =
         HoodieTestUtils.serializeDeserialize(metaClient, HoodieTableMetaClient.class);
-    assertNotNull(deseralizedMetaClient);
-    HoodieActiveTimeline commitTimeline = deseralizedMetaClient.getActiveTimeline();
+    assertNotNull(deserializedMetaClient);
+    HoodieActiveTimeline commitTimeline = deserializedMetaClient.getActiveTimeline();
     HoodieInstant instant = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, "1");
     commitTimeline.createNewInstant(instant);
     commitTimeline.saveAsComplete(instant, Option.of("test-detail".getBytes()));
