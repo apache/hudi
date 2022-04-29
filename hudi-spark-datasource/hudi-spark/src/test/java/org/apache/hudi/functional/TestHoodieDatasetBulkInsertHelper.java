@@ -157,7 +157,8 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
   @Test
   public void testBulkInsertHelperNoMetaFields() {
     List<Row> rows = DataSourceTestUtils.generateRandomRows(10);
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
+    HoodieWriteConfig config = getConfigBuilder(schemaStr)
+        .withProps(getPropsAllSet("_row_key"))
         .withPopulateMetaFields(false)
         .build();
     Dataset<Row> dataset = sqlContext.createDataFrame(rows, structType);
@@ -215,13 +216,15 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
     int metadataCommitSeqNoIndex = resultSchema.fieldIndex(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD);
     int metadataFilenameIndex = resultSchema.fieldIndex(HoodieRecord.FILENAME_METADATA_FIELD);
 
-    result.toJavaRDD().foreach(entry -> {
-      assertTrue(entry.get(metadataRecordKeyIndex).equals(entry.getAs("_row_key")));
-      assertTrue(entry.get(metadataPartitionPathIndex).equals(entry.getAs("partition")));
-      assertTrue(entry.get(metadataCommitSeqNoIndex).equals(""));
-      assertTrue(entry.get(metadataCommitTimeIndex).equals(""));
-      assertTrue(entry.get(metadataFilenameIndex).equals(""));
-    });
+    result.toJavaRDD()
+        .collect()
+        .forEach(entry -> {
+          assertTrue(entry.get(metadataRecordKeyIndex).equals(entry.getAs("_row_key")));
+          assertTrue(entry.get(metadataPartitionPathIndex).equals(entry.getAs("partition")));
+          assertTrue(entry.get(metadataCommitSeqNoIndex).equals(""));
+          assertTrue(entry.get(metadataCommitTimeIndex).equals(""));
+          assertTrue(entry.get(metadataFilenameIndex).equals(""));
+        });
 
     Dataset<Row> trimmedOutput = result.drop(HoodieRecord.PARTITION_PATH_METADATA_FIELD).drop(HoodieRecord.RECORD_KEY_METADATA_FIELD)
         .drop(HoodieRecord.FILENAME_METADATA_FIELD).drop(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD).drop(HoodieRecord.COMMIT_TIME_METADATA_FIELD);
@@ -300,8 +303,9 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
     List<Row> rows = DataSourceTestUtils.generateRandomRows(10);
     Dataset<Row> dataset = sqlContext.createDataFrame(rows, structType);
     try {
-      HoodieDatasetBulkInsertHelper.prepareForBulkInsert(dataset, config,
+      Dataset<Row> preparedDF = HoodieDatasetBulkInsertHelper.prepareForBulkInsert(dataset, config,
           new NonSortPartitionerWithRows(), false, false);
+      preparedDF.count();
       fail("Should have thrown exception");
     } catch (Exception e) {
       // ignore
@@ -311,8 +315,9 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
     rows = DataSourceTestUtils.generateRandomRows(10);
     dataset = sqlContext.createDataFrame(rows, structType);
     try {
-      HoodieDatasetBulkInsertHelper.prepareForBulkInsert(dataset, config,
+      Dataset<Row> preparedDF = HoodieDatasetBulkInsertHelper.prepareForBulkInsert(dataset, config,
           new NonSortPartitionerWithRows(), false, false);
+      preparedDF.count();
       fail("Should have thrown exception");
     } catch (Exception e) {
       // ignore
@@ -322,8 +327,9 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
     rows = DataSourceTestUtils.generateRandomRows(10);
     dataset = sqlContext.createDataFrame(rows, structType);
     try {
-      HoodieDatasetBulkInsertHelper.prepareForBulkInsert(dataset, config,
+      Dataset<Row> preparedDF = HoodieDatasetBulkInsertHelper.prepareForBulkInsert(dataset, config,
           new NonSortPartitionerWithRows(), false, false);
+      preparedDF.count();
       fail("Should have thrown exception");
     } catch (Exception e) {
       // ignore
@@ -333,8 +339,9 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
     rows = DataSourceTestUtils.generateRandomRows(10);
     dataset = sqlContext.createDataFrame(rows, structType);
     try {
-      HoodieDatasetBulkInsertHelper.prepareForBulkInsert(dataset, config,
+      Dataset<Row> preparedDF = HoodieDatasetBulkInsertHelper.prepareForBulkInsert(dataset, config,
           new NonSortPartitionerWithRows(), false, false);
+      preparedDF.count();
       fail("Should have thrown exception");
     } catch (Exception e) {
       // ignore
