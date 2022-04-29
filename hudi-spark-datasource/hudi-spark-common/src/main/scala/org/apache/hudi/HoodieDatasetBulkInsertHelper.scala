@@ -142,8 +142,9 @@ object HoodieDatasetBulkInsertHelper extends Logging {
           val recordKey = row.getString(recordKeyMetaFieldOrd)
           s"$partitionPath:$recordKey"
         }
-
-        (rowKey, row)
+        // NOTE: It's critical whenever we keep the reference to the row, to make a copy
+        //       since Spark might be providing us with a mutable copy (updated during the iteration)
+        (rowKey, row.copy())
       }
       .reduceByKey {
         (oneRow, otherRow) =>
