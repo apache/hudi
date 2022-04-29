@@ -54,7 +54,8 @@ From the extracted directory run spark-shell with Hudi as:
 // spark-shell for spark 3.2
 spark-shell \
   --packages org.apache.hudi:hudi-spark3.2-bundle_2.12:0.11.0 \
-  --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
+  --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
+  --conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog'
 
 // spark-shell for spark 3.1
 spark-shell \
@@ -82,6 +83,7 @@ From the extracted directory run Spark SQL with Hudi as:
 # Spark SQL for spark 3.2
 spark-sql --packages org.apache.hudi:hudi-spark3.2-bundle_2.12:0.11.0 \
 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
+--conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog' \
 --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension'
 
 # Spark SQL for spark 3.1
@@ -114,6 +116,7 @@ export PYSPARK_PYTHON=$(which python3)
 pyspark
 --packages org.apache.hudi:hudi-spark3.2-bundle_2.12:0.11.0
 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
+--conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog'
 
 # for spark3.1
 pyspark
@@ -136,7 +139,9 @@ pyspark
 
 :::note Please note the following
 <ul>
-  <li>we have used hudi-spark-bundle built for scala 2.12 since the spark-avro module used can also depend on 2.12. </li>
+  <li> For Spark 3.2, the additional spark_catalog config is required: 
+`--conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog'`</li>
+  <li> We have used hudi-spark-bundle built for scala 2.12 since the spark-avro module used can also depend on 2.12. </li>
 </ul>
 :::
 
