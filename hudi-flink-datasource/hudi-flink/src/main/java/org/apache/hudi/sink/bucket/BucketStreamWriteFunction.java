@@ -18,14 +18,10 @@
 
 package org.apache.hudi.sink.bucket;
 
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.index.bucket.BucketIdentifier;
 import org.apache.hudi.sink.StreamWriteFunction;
 
@@ -36,14 +32,11 @@ import org.apache.flink.util.Collector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
-import java.util.Arrays;
-import java.util.function.Predicate;
 
 /**
  * A stream write function with bucket hash index.
@@ -76,22 +69,11 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
   private Map<String, Map<Integer, String>> bucketIndex;
 
   /**
-   * BucketID to file group mapping in each partition loaded from fileSystem.
-   * Map(partition -> Map(bucketId, fileID)).
-   */
-  private Map<String, Map<Integer, String>> fsBucketIndex;
-
-  /**
    * Incremental bucket index of the current checkpoint interval,
    * it is needed because the bucket type('I' or 'U') should be decided based on the committed files view,
    * all the records in one bucket should have the same bucket type.
    */
   private Set<String> incBucketIndex;
-
-  /**
-   * Returns whether this is an empty table.
-   */
-  private boolean isEmptyTable;
 
   /**
    * Constructs a BucketStreamWriteFunction.
@@ -112,8 +94,6 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
     this.bucketToLoad = getBucketToLoad();
     this.bucketIndex = new HashMap<>();
     this.incBucketIndex = new HashSet<>();
-    this.isEmptyTable = !this.metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().isPresent();
-    this.fsBucketIndex = new HashMap<>();
   }
 
   @Override
@@ -144,11 +124,7 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
     } else if (bucketToFileId.containsKey(bucketNum)) {
       location = new HoodieRecordLocation("U", bucketToFileId.get(bucketNum));
     } else {
-      Map<Integer, String> fsBucketToFileId = fsBucketIndex.computeIfAbsent(partition, p -> new HashMap<>());
       String newFileId = BucketIdentifier.newBucketFileIdPrefix(bucketNum);
-      if (fsBucketToFileId.containsKey(bucketNum)) {
-        newFileId = fsBucketToFileId.get(bucketNum);
-      }
       location = new HoodieRecordLocation("I", newFileId);
       bucketToFileId.put(bucketNum, newFileId);
       incBucketIndex.add(bucketId);
@@ -179,8 +155,8 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
    * Get partition_bucket -> fileID mapping from the existing hudi table.
    * This is a required operation for each restart to avoid having duplicate file ids for one bucket.
    */
-  private void bootstrapIndexIfNeed(String partition) throws IOException {
-    if (isEmptyTable || bucketIndex.containsKey(partition)) {
+  private void bootstrapIndexIfNeed(String partition) {
+    if (bucketIndex.containsKey(partition)) {
       return;
     }
     LOG.info(String.format("Loading Hoodie Table %s, with path %s", this.metaClient.getTableConfig().getTableName(),
@@ -188,8 +164,8 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
 
     // Load existing fileID belongs to this task
     Map<Integer, String> bucketToFileIDMap = new HashMap<>();
-    this.writeClient.getHoodieTable().getHoodieView().getLatestFileSlices(partition).forEach(fileSlice -> {
-      String fileID = fileSlice.getFileId();
+    this.writeClient.getHoodieTable().getFileSystemView().getAllFileGroups(partition).forEach(fileGroup -> {
+      String fileID = fileGroup.getFileGroupId().getFileId();
       int bucketNumber = BucketIdentifier.bucketIdFromFileId(fileID);
       if (bucketToLoad.contains(bucketNumber)) {
         LOG.info(String.format("Should load this partition bucket %s with fileID %s", bucketNumber, fileID));
@@ -203,30 +179,5 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
       }
     });
     bucketIndex.put(partition, bucketToFileIDMap);
-
-    // no need to load from file System
-    boolean noNeedLoadFiles = bucketToFileIDMap.size() == bucketToLoad.size();
-    if (noNeedLoadFiles || OptionsResolver.isCowTable(config)) {
-      return;
-    }
-    // reuse unCommitted log file id
-    try {
-      Map<Integer, String> partitionFsBucketToFileIDMap = new HashMap<>();
-      Predicate<FileStatus> rtFilePredicate = fileStatus -> fileStatus.getPath().getName()
-              .contains(metaClient.getTableConfig().getLogFileFormat().getFileExtension());
-      Arrays.stream(this.metaClient.getFs()
-              .listStatus(new Path(this.metaClient.getBasePath() + "/" + partition)))
-              .filter(rtFilePredicate)
-              .map(HoodieLogFile::new)
-              .forEach(s -> {
-                int bucketNumber = BucketIdentifier.bucketIdFromFileId(s.getFileId());
-                if (bucketToLoad.contains(bucketNumber)) {
-                  partitionFsBucketToFileIDMap.put(bucketNumber, s.getFileId());
-                }
-              });
-      fsBucketIndex.put(partition, partitionFsBucketToFileIDMap);
-    } catch (FileNotFoundException fileNotFoundException) {
-      LOG.warn("May be table was not initialed");
-    }
   }
 }
