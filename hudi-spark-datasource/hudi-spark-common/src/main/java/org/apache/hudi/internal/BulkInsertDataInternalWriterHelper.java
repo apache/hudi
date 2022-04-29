@@ -122,7 +122,7 @@ public class BulkInsertDataInternalWriterHelper {
     try {
       String partitionPath = null;
       if (populateMetaFields) { // usual path where meta fields are pre populated in prep step.
-        partitionPath = record.getUTF8String(3).toString();
+        partitionPath = String.valueOf(record.getUTF8String(3));
       } else { // if meta columns are disabled.
         if (!keyGeneratorOpt.isPresent()) { // NoPartitionerKeyGen
           partitionPath = "";

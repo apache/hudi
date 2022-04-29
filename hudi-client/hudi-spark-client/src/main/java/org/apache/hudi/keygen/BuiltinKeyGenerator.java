@@ -36,6 +36,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import scala.Function1;
 
@@ -45,10 +46,12 @@ import scala.Function1;
  */
 public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements SparkKeyGeneratorInterface {
 
+  private static final String DOT_STRING = ".";
   private static final String STRUCT_NAME = "hoodieRowTopLevelField";
   private static final String NAMESPACE = "hoodieRow";
   private Function1<Row, GenericRecord> converterFn = null;
   protected StructType structType;
+  private static AtomicBoolean validatePartitionFields = new AtomicBoolean(false);
 
   protected Map<String, Pair<List<Integer>, DataType>> recordKeySchemaInfo = new HashMap<>();
   protected Map<String, Pair<List<Integer>, DataType>> partitionPathSchemaInfo = new HashMap<>();
@@ -108,37 +111,40 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
 
   void buildFieldSchemaInfoIfNeeded(StructType structType) {
     if (this.structType == null) {
-      // parse simple fields
-      getRecordKeyFields().stream()
-          .filter(f -> !(f.contains(".")))
+      getRecordKeyFields()
+          .stream().filter(f -> !f.isEmpty())
           .forEach(f -> {
-            if (structType.getFieldIndex(f).isDefined()) {
-              int fieldIndex = (int) structType.getFieldIndex(f).get();
-              recordKeySchemaInfo.put(f, Pair.of(Collections.singletonList((fieldIndex)), structType.fields()[fieldIndex].dataType()));
+            if (f.contains(DOT_STRING)) {
+              // nested field
+              recordKeySchemaInfo.put(f, RowKeyGeneratorHelper.getNestedFieldSchemaInfo(structType, f, true));
             } else {
-              throw new HoodieKeyException("recordKey value not found for field: \"" + f + "\"");
-            }
-          });
-      // parse nested fields
-      getRecordKeyFields().stream()
-          .filter(f -> f.contains("."))
-          .forEach(f -> recordKeySchemaInfo.put(f, RowKeyGeneratorHelper.getNestedFieldSchemaInfo(structType, f, true)));
-      // parse simple fields
-      if (getPartitionPathFields() != null) {
-        getPartitionPathFields().stream().filter(f -> !f.isEmpty()).filter(f -> !(f.contains(".")))
-            .forEach(f -> {
+              // simple field
               if (structType.getFieldIndex(f).isDefined()) {
                 int fieldIndex = (int) structType.getFieldIndex(f).get();
-                partitionPathSchemaInfo.put(f,
-                    Pair.of(Collections.singletonList(fieldIndex), structType.fields()[fieldIndex].dataType()));
+                recordKeySchemaInfo.put(f, Pair.of(Collections.singletonList((fieldIndex)), structType.fields()[fieldIndex].dataType()));
               } else {
-                partitionPathSchemaInfo.put(f, Pair.of(Collections.singletonList(-1), null));
+                throw new HoodieKeyException("recordKey value not found for field: \"" + f + "\"");
+              }
+            }
+          });
+      if (getPartitionPathFields() != null) {
+        getPartitionPathFields().stream().filter(f -> !f.isEmpty())
+            .forEach(f -> {
+              // nested field
+              if (f.contains(DOT_STRING)) {
+                partitionPathSchemaInfo.put(f,
+                    RowKeyGeneratorHelper.getNestedFieldSchemaInfo(structType, f, false));
+              } else {
+                // simple field
+                if (structType.getFieldIndex(f).isDefined()) {
+                  int fieldIndex = (int) structType.getFieldIndex(f).get();
+                  partitionPathSchemaInfo.put(f,
+                      Pair.of(Collections.singletonList(fieldIndex), structType.fields()[fieldIndex].dataType()));
+                } else {
+                  partitionPathSchemaInfo.put(f, Pair.of(Collections.singletonList(-1), null));
+                }
               }
             });
-        // parse nested fields
-        getPartitionPathFields().stream().filter(f -> !f.isEmpty()).filter(f -> f.contains("."))
-            .forEach(f -> partitionPathSchemaInfo.put(f,
-                RowKeyGeneratorHelper.getNestedFieldSchemaInfo(structType, f, false)));
       }
       this.structType = structType;
     }
@@ -152,15 +158,13 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
   }
 
   protected void validatePartitionFieldsForInternalRow() {
-    partitionPathSchemaInfo.values().forEach(entry -> {
-      if (entry.getKey().size() > 1) {
-        throw new IllegalArgumentException("Nested column for partitioning is not supported with disabling meta columns");
-      }
-    });
-  }
-
-  void buildFieldDataTypesMapIfNeeded(StructType structType) {
-    buildFieldSchemaInfoIfNeeded(structType);
+    if (!validatePartitionFields.getAndSet(true)) {
+      partitionPathSchemaInfo.values().forEach(entry -> {
+        if (entry.getKey().size() > 1) {
+          throw new IllegalArgumentException("Nested column for partitioning is not supported with disabling meta columns");
+        }
+      });
+    }
   }
 }
 

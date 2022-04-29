@@ -113,9 +113,9 @@ public class HoodieRowCreateHandle implements Serializable {
    */
   public void write(InternalRow record) throws IOException {
     try {
-      String partitionPath = record.getUTF8String(3).toString();
-      String seqId = HoodieRecord.generateSequenceId(instantTime, taskPartitionId, SEQGEN.getAndIncrement());
-      String recordKey = record.getUTF8String(2).toString();
+      final String partitionPath = String.valueOf(record.getUTF8String(3));
+      final String seqId = HoodieRecord.generateSequenceId(instantTime, taskPartitionId, SEQGEN.getAndIncrement());
+      final String recordKey = String.valueOf(record.getUTF8String(2));
       HoodieInternalRow internalRow = new HoodieInternalRow(instantTime, seqId, recordKey, partitionPath, path.getName(),
           record);
       try {
