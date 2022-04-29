@@ -30,25 +30,26 @@ object HoodieUnsafeRowUtils {
    */
   def getNestedRowValue(row: InternalRow, nestedFieldPath: Array[(Int, StructField)]): Any = {
     var curRow = row
-    for (idx <- 0 until nestedFieldPath.length - 1) {
+    for (idx <- nestedFieldPath.indices) {
       val (ord, f) = nestedFieldPath(idx)
       if (curRow.isNullAt(ord)) {
         // scalastyle:off return
         if (f.nullable) return null
         else throw new IllegalArgumentException(s"Found null value for the field that is declared as non-nullable: $f")
         // scalastyle:on return
+      } else if (idx == nestedFieldPath.length - 1) {
+        // scalastyle:off return
+        return curRow.get(ord, f.dataType)
+        // scalastyle:on return
       } else {
         curRow = f.dataType match {
           case st: StructType =>
             curRow.getStruct(ord, st.fields.length)
-          case dt@_ =>
+          case dt @ _ =>
             throw new IllegalArgumentException(s"Invalid nested-field path: expected StructType, but was $dt")
         }
       }
     }
-    // Fetch terminal node of the path
-    val (ord, f) = nestedFieldPath.last
-    curRow.get(ord, f.dataType)
   }
 
   /**
