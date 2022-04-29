@@ -25,10 +25,12 @@ import org.apache.hudi.keygen.BuiltinKeyGenerator
 import org.apache.hudi.table.BulkInsertPartitioner
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.HoodieUnsafeRDDUtils.createDataFrame
+import org.apache.spark.sql.HoodieUnsafeRowUtils.{composeNestedFieldPath, getNestedRowValue}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
-import org.apache.spark.sql.{DataFrame, Dataset, HoodieUnsafeRDDUtils, Row, SQLContext}
+import org.apache.spark.sql.{DataFrame, Dataset, HoodieUnsafeRDDUtils, Row}
 import org.apache.spark.unsafe.types.UTF8String
 
 import scala.collection.JavaConverters.asScalaBufferConverter
@@ -53,7 +55,8 @@ object HoodieDatasetBulkInsertHelper extends Logging {
     val populateMetaFields = config.populateMetaFields()
     val schema = df.schema
 
-    val keyGeneratorClassName = config.getString(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key)
+    val keyGeneratorClassName = config.getStringOrThrow(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME,
+      "Key-generator class name is required")
 
     val prependedRdd: RDD[InternalRow] =
       df.queryExecution.toRdd.mapPartitions { iter =>
@@ -115,12 +118,47 @@ object HoodieDatasetBulkInsertHelper extends Logging {
       }
 
       val dedupedDF = if (config.shouldCombineBeforeInsert) {
-        SparkRowWriteHelper.newInstance.deduplicateRows(trimmedDF, config.getPreCombineField, isGlobalIndex)
+        dedupeRows(trimmedDF, config.getPreCombineField, isGlobalIndex)
       } else {
         trimmedDF
       }
 
       partitioner.repartitionRecords(dedupedDF, config.getBulkInsertShuffleParallelism)
     }
+  }
+
+  private def dedupeRows(df: DataFrame, preCombineFieldRef: String, isGlobalIndex: Boolean): DataFrame = {
+    val recordKeyMetaFieldOrd = df.schema.fieldIndex(HoodieRecord.RECORD_KEY_METADATA_FIELD)
+    val partitionPathMetaFieldOrd = df.schema.fieldIndex(HoodieRecord.PARTITION_PATH_METADATA_FIELD)
+    // NOTE: Pre-combine field could be a nested field
+    val preCombineFieldPath = composeNestedFieldPath(df.schema, preCombineFieldRef)
+
+    val dedupedRdd = df.queryExecution.toRdd
+      .map { row =>
+        val rowKey = if (isGlobalIndex) {
+          row.getString(recordKeyMetaFieldOrd)
+        } else {
+          val partitionPath = row.getString(partitionPathMetaFieldOrd)
+          val recordKey = row.getString(recordKeyMetaFieldOrd)
+          s"$partitionPath:$recordKey"
+        }
+
+        (rowKey, row)
+      }
+      .reduceByKey {
+        (oneRow, otherRow) =>
+          val onePreCombineVal = getNestedRowValue(oneRow, preCombineFieldPath).asInstanceOf[Ordered[AnyRef]]
+          val otherPreCombineVal = getNestedRowValue(otherRow, preCombineFieldPath).asInstanceOf[Ordered[AnyRef]]
+          if (onePreCombineVal.compareTo(otherPreCombineVal.asInstanceOf[AnyRef]) >= 0) {
+            oneRow
+          } else {
+            otherRow
+          }
+      }
+      .map {
+        case (_, row) => row
+      }
+
+    createDataFrame(df.sparkSession, dedupedRdd, df.schema)
   }
 }
