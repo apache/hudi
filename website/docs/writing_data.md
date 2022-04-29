@@ -446,6 +446,24 @@ You can push a commit notification to a Kafka topic so it can be used by other r
 | BOOTSTRAP_SERVERS | Bootstrap servers of kafka cluster, to be used for publishing commit metadata | required | N/A |
 | | | | |
 
+#### Pulsar Endpoints
+You can push a commit notification to a Pulsar topic so it can be used by other real time systems. 
+
+|  Config  | Description                                                                 | Required | Default |
+|  -----------  |-----------------------------------------------------------------------------| ------- |--------|
+| hoodie.write.commit.callback.pulsar.broker.service.url | Server's Url of pulsar cluster to use to publish commit metadata.   | required | N/A    |
+| hoodie.write.commit.callback.pulsar.topic | Pulsar topic name to publish timeline activity into | required | N/A    |
+| hoodie.write.commit.callback.pulsar.producer.route-mode | Message routing logic for producers on partitioned topics.  | optional |   RoundRobinPartition     |
+| hoodie.write.commit.callback.pulsar.producer.pending-queue-size | The maximum size of a queue holding pending messages.               | optional | 1000   |
+| hoodie.write.commit.callback.pulsar.producer.pending-total-size | The maximum number of pending messages across partitions. | required | 50000  |
+| hoodie.write.commit.callback.pulsar.producer.block-if-queue-full | When the queue is full, the method is blocked instead of an exception is thrown. | optional | true   |
+| hoodie.write.commit.callback.pulsar.producer.send-timeout | The timeout in each sending to pulsar.     | optional | 30s    |
+| hoodie.write.commit.callback.pulsar.operation-timeout | Duration of waiting for completing an operation.     | optional | 30s    |
+| hoodie.write.commit.callback.pulsar.connection-timeout | Duration of waiting for a connection to a broker to be established.     | optional | 10s    |
+| hoodie.write.commit.callback.pulsar.request-timeout | Duration of waiting for completing a request.  | optional | 60s    |
+| hoodie.write.commit.callback.pulsar.keepalive-interval | Duration of keeping alive interval for each client broker connection. | optional | 30s    |
+| |                                                                             | |        |
+
 #### Bring your own implementation
 You can extend the HoodieWriteCommitCallback class to implement your own way to asynchronously handle the callback
 of a successful write. Use this public API:
