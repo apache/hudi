@@ -18,25 +18,23 @@
 
 package org.apache.hudi.keygen;
 
+import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.ApiMaturityLevel;
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.exception.HoodieIOException;
-
-import org.apache.avro.generic.GenericRecord;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.types.DataType;
 import org.apache.spark.sql.types.StructType;
+import scala.Function1;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
-
-import scala.Function1;
 
 /**
  * Base class for the built-in key generators. Contains methods structured for
@@ -74,6 +72,18 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
     return getKey(converterFn.apply(row)).getRecordKey();
   }
 
+  @Override
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public String getRecordKey(InternalRow internalRow, StructType schema) {
+    try {
+      initDeserializer(structType);
+      Row row = sparkRowSerDe.deserializeRow(internalRow);
+      return getRecordKey(row);
+    } catch (Exception e) {
+      throw new HoodieException("Conversion of InternalRow to Row failed with exception", e);
+    }
+  }
+
   /**
    * Fetch partition path from {@link Row}.
    *
@@ -104,7 +114,7 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
       return RowKeyGeneratorHelper.getPartitionPathFromInternalRow(internalRow, getPartitionPathFields(),
           hiveStylePartitioning, partitionPathSchemaInfo);
     } catch (Exception e) {
-      throw new HoodieIOException("Conversion of InternalRow to Row failed with exception " + e);
+      throw new HoodieException("Conversion of InternalRow to Row failed with exception", e);
     }
   }
 
