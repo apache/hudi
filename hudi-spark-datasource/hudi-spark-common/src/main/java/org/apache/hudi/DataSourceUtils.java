@@ -40,7 +40,6 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.table.BulkInsertPartitioner;
-import org.apache.hudi.util.DataTypeUtils;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.FileSystem;

@@ -33,8 +33,10 @@ object HoodieUnsafeRowUtils {
     for (idx <- 0 until nestedFieldPath.length - 1) {
       val (ord, f) = nestedFieldPath(idx)
       if (curRow.isNullAt(ord)) {
+        // scalastyle:off return
         if (f.nullable) return null
         else throw new IllegalArgumentException(s"Found null value for the field that is declared as non-nullable: $f")
+        // scalastyle:on return
       } else {
         curRow = f.dataType match {
           case st: StructType =>
