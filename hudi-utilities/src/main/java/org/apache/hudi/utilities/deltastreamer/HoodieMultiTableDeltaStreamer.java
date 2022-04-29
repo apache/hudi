@@ -343,8 +343,8 @@ public class HoodieMultiTableDeltaStreamer {
         description = "the min sync interval of each sync in continuous mode")
     public Integer minSyncIntervalSeconds = 0;
 
-    @Parameter(names = {"--spark-master"}, description = "spark master to use.")
-    public String sparkMaster = "local[2]";
+    @Parameter(names = {"--spark-master"}, description = "spark master to use, if not defined inherits (e.g. not using spark-summit command).")
+    public String sparkMaster = "";
 
     @Parameter(names = {"--commit-on-errors"}, description = "Commit even when some records failed to be written")
     public Boolean commitOnErrors = false;
