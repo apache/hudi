@@ -233,7 +233,7 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
     ExpressionEncoder encoder = getEncoder(dataset.schema());
     if (enablePreCombine) {
       Dataset<Row> inputSnapshotDf = dataset.groupByKey(
-          (MapFunction<Row, String>) value -> value.getAs("partition") + "+" + value.getAs("_row_key"), Encoders.STRING())
+          (MapFunction<Row, String>) value -> value.getAs("partition") + ":" + value.getAs("_row_key"), Encoders.STRING())
           .reduceGroups((ReduceFunction<Row>) (v1, v2) -> {
             long ts1 = v1.getAs("ts");
             long ts2 = v2.getAs("ts");
@@ -245,9 +245,9 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
           })
           .map((MapFunction<Tuple2<String, Row>, Row>) value -> value._2, encoder);
 
-      assertTrue(inputSnapshotDf.except(trimmedOutput).count() == 0);
+      assertEquals(0, inputSnapshotDf.except(trimmedOutput).count());
     } else {
-      assertTrue(dataset.except(trimmedOutput).count() == 0);
+      assertEquals(0, dataset.except(trimmedOutput).count());
     }
   }
 

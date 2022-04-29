@@ -148,17 +148,15 @@ object HoodieDatasetBulkInsertHelper extends Logging {
       }
       .reduceByKey {
         (oneRow, otherRow) =>
-          val onePreCombineVal = getNestedRowValue(oneRow, preCombineFieldPath).asInstanceOf[Ordered[AnyRef]]
-          val otherPreCombineVal = getNestedRowValue(otherRow, preCombineFieldPath).asInstanceOf[Ordered[AnyRef]]
+          val onePreCombineVal = getNestedRowValue(oneRow, preCombineFieldPath).asInstanceOf[Comparable[AnyRef]]
+          val otherPreCombineVal = getNestedRowValue(otherRow, preCombineFieldPath).asInstanceOf[Comparable[AnyRef]]
           if (onePreCombineVal.compareTo(otherPreCombineVal.asInstanceOf[AnyRef]) >= 0) {
             oneRow
           } else {
             otherRow
           }
       }
-      .map {
-        case (_, row) => row
-      }
+      .map { case (_, row) => row }
 
     createDataFrame(df.sparkSession, dedupedRdd, df.schema)
   }
