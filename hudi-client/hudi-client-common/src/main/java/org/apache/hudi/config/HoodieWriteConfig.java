@@ -2485,8 +2485,6 @@ public class HoodieWriteConfig extends HoodieConfig {
       writeConfig.setDefaultValue(MARKERS_TYPE, getDefaultMarkersType(engineType));
       // Check for mandatory properties
       writeConfig.setDefaults(HoodieWriteConfig.class.getName());
-
-      writeConfig.setDefaults(HoodieHBaseIndexConfig.class.getName());
       // Make sure the props is propagated
       writeConfig.setDefaultOnCondition(
           !isIndexConfigSet, HoodieIndexConfig.newBuilder().withEngineType(engineType).fromProperties(
