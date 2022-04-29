@@ -76,7 +76,7 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public String getRecordKey(InternalRow internalRow, StructType schema) {
     try {
-      initDeserializer(structType);
+      initDeserializer(schema);
       Row row = sparkRowSerDe.deserializeRow(internalRow);
       return getRecordKey(row);
     } catch (Exception e) {
