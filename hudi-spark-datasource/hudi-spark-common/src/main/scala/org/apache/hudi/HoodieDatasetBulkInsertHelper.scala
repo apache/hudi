@@ -75,10 +75,11 @@ object HoodieDatasetBulkInsertHelper extends Logging {
           // To minimize # of allocations, we're going to allocate a single array
           // setting all column values in place for the updated row
           val newColVals = new Array[Any](schema.fields.length + HoodieRecord.HOODIE_META_COLUMNS.size)
-          newColVals.update(0, recordKey)
-          newColVals.update(1, partitionPath)
-          newColVals.update(2, commitTimestamp)
-          newColVals.update(3, commitSeqNo)
+          // NOTE: Order of the fields have to match that one of `HoodieRecord.HOODIE_META_COLUMNS`
+          newColVals.update(0, commitTimestamp)
+          newColVals.update(1, commitSeqNo)
+          newColVals.update(2, recordKey)
+          newColVals.update(3, partitionPath)
           newColVals.update(4, filename)
           // Prepend existing row column values
           row.toSeq(schema).copyToArray(newColVals, 5)
@@ -87,11 +88,11 @@ object HoodieDatasetBulkInsertHelper extends Logging {
       }
 
     val metaFields = Seq(
-        StructField(HoodieRecord.RECORD_KEY_METADATA_FIELD, StringType),
-        StructField(HoodieRecord.PARTITION_PATH_METADATA_FIELD, StringType),
-        StructField(HoodieRecord.COMMIT_TIME_METADATA_FIELD, StringType),
-        StructField(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, StringType),
-        StructField(HoodieRecord.FILENAME_METADATA_FIELD, StringType))
+      StructField(HoodieRecord.COMMIT_TIME_METADATA_FIELD, StringType),
+      StructField(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, StringType),
+      StructField(HoodieRecord.RECORD_KEY_METADATA_FIELD, StringType),
+      StructField(HoodieRecord.PARTITION_PATH_METADATA_FIELD, StringType),
+      StructField(HoodieRecord.FILENAME_METADATA_FIELD, StringType))
 
     val updatedSchema = StructType(metaFields ++ schema.fields)
     val updatedDF = HoodieUnsafeRDDUtils.createDataFrame(df.sparkSession, prependedRdd, updatedSchema)
