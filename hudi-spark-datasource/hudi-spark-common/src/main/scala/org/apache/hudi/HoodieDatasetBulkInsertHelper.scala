@@ -64,7 +64,8 @@ object HoodieDatasetBulkInsertHelper extends Logging {
         iter.map { row =>
           val (recordKey, partitionPath) =
             if (populateMetaFields) {
-              (keyGenerator.getRecordKey(row, schema), keyGenerator.getPartitionPath(row, schema))
+              (UTF8String.fromString(keyGenerator.getRecordKey(row, schema)),
+                UTF8String.fromString(keyGenerator.getPartitionPath(row, schema)))
             } else {
               (UTF8String.EMPTY_UTF8, UTF8String.EMPTY_UTF8)
             }
