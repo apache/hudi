@@ -68,6 +68,7 @@ module.exports = {
                 'migration_guide',
                 'compaction',
                 'clustering',
+                'async_meta_indexing',
                 'hoodie_cleaner',
                 'transforms',
                 'markers',
@@ -75,7 +76,6 @@ module.exports = {
                 'disaster_recovery',
                 'snapshot_exporter',
                 'precommit_validator',
-                'async_meta_indexing'
             ],
         },
         'configurations',
