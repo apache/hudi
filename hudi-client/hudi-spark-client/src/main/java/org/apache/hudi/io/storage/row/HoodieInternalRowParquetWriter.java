@@ -27,6 +27,7 @@ import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.spark.sql.catalyst.InternalRow;
 
 import java.io.IOException;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Parquet's impl of {@link HoodieInternalRowFileWriter} to write {@link InternalRow}s.
@@ -34,6 +35,8 @@ import java.io.IOException;
 public class HoodieInternalRowParquetWriter extends ParquetWriter<InternalRow>
     implements HoodieInternalRowFileWriter {
 
+  private static final int MIN_WRITTEN_RECORDS_COUNT_FOR_FILE_SIZE_CHECK = 1000;
+  private final AtomicLong writtenRecordCount = new AtomicLong(1);
   private final Path file;
   private final HoodieWrapperFileSystem fs;
   private final long maxFileSize;
@@ -56,7 +59,7 @@ public class HoodieInternalRowParquetWriter extends ParquetWriter<InternalRow>
 
   @Override
   public boolean canWrite() {
-    return getDataSize() < maxFileSize;
+    return writtenRecordCount.get() % MIN_WRITTEN_RECORDS_COUNT_FOR_FILE_SIZE_CHECK != 0 || getDataSize() < maxFileSize;
   }
 
   @Override

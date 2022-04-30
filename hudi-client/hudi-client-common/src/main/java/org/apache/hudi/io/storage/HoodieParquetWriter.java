@@ -45,7 +45,8 @@ import java.util.concurrent.atomic.AtomicLong;
 public class HoodieParquetWriter<T extends HoodieRecordPayload, R extends IndexedRecord>
     extends ParquetWriter<IndexedRecord> implements HoodieFileWriter<R> {
 
-  private static AtomicLong recordIndex = new AtomicLong(1);
+  private static final int MIN_WRITTEN_RECORDS_COUNT_FOR_FILE_SIZE_CHECK = 1000;
+  private final AtomicLong writtenRecordCount = new AtomicLong(1);
 
   private final Path file;
   private final HoodieWrapperFileSystem fs;
@@ -89,6 +90,7 @@ public class HoodieParquetWriter<T extends HoodieRecordPayload, R extends Indexe
 
   @Override
   public void writeAvroWithMetadata(HoodieKey key, R avroRecord) throws IOException {
+    long recordIndex = writtenRecordCount.incrementAndGet();
     if (populateMetaFields) {
       prepRecordWithMetadata(key, avroRecord, instantTime,
           taskContextSupplier.getPartitionIdSupplier().get(), recordIndex, file.getName());
@@ -101,7 +103,7 @@ public class HoodieParquetWriter<T extends HoodieRecordPayload, R extends Indexe
 
   @Override
   public boolean canWrite() {
-    return getDataSize() < maxFileSize;
+    return writtenRecordCount.get() % MIN_WRITTEN_RECORDS_COUNT_FOR_FILE_SIZE_CHECK != 0 || getDataSize() < maxFileSize;
   }
 
   @Override
