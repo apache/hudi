@@ -18,6 +18,7 @@
 
 package org.apache.spark.sql
 
+import org.apache.hudi.common.util.collection.Pair
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types.{StructField, StructType}
 
@@ -28,7 +29,34 @@ object HoodieUnsafeRowUtils {
   /**
    * TODO scala-doc
    */
-  def getNestedRowValue(row: InternalRow, nestedFieldPath: Array[(Int, StructField)]): Any = {
+  def getNestedRowValue(row: Row, nestedFieldPath: Array[(Int, StructField)]): Any = {
+    var curRow = row
+    for (idx <- nestedFieldPath.indices) {
+      val (ord, f) = nestedFieldPath(idx)
+      if (curRow.isNullAt(ord)) {
+        // scalastyle:off return
+        if (f.nullable) return null
+        else throw new IllegalArgumentException(s"Found null value for the field that is declared as non-nullable: $f")
+        // scalastyle:on return
+      } else if (idx == nestedFieldPath.length - 1) {
+        // scalastyle:off return
+        return curRow.get(ord)
+        // scalastyle:on return
+      } else {
+        curRow = f.dataType match {
+          case _: StructType =>
+            curRow.getStruct(ord)
+          case dt@_ =>
+            throw new IllegalArgumentException(s"Invalid nested-field path: expected StructType, but was $dt")
+        }
+      }
+    }
+  }
+
+  /**
+   * TODO scala-doc
+   */
+  def getNestedInternalRowValue(row: InternalRow, nestedFieldPath: Array[(Int, StructField)]): Any = {
     var curRow = row
     for (idx <- nestedFieldPath.indices) {
       val (ord, f) = nestedFieldPath(idx)
@@ -45,7 +73,7 @@ object HoodieUnsafeRowUtils {
         curRow = f.dataType match {
           case st: StructType =>
             curRow.getStruct(ord, st.fields.length)
-          case dt @ _ =>
+          case dt@_ =>
             throw new IllegalArgumentException(s"Invalid nested-field path: expected StructType, but was $dt")
         }
       }
@@ -69,7 +97,7 @@ object HoodieUnsafeRowUtils {
       if (idx < fieldRefParts.length - 1) {
         curSchema = field.dataType match {
           case st: StructType => st
-          case dt @ _ =>
+          case dt@_ =>
             throw new IllegalArgumentException(s"Invalid nested field reference ${fieldRefParts.drop(idx).mkString(".")} into $dt")
         }
       }

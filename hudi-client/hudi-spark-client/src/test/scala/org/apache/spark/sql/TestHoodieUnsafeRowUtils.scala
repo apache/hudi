@@ -18,7 +18,7 @@
 
 package org.apache.spark.sql
 
-import org.apache.spark.sql.HoodieUnsafeRowUtils.{composeNestedFieldPath, getNestedRowValue}
+import org.apache.spark.sql.HoodieUnsafeRowUtils.{composeNestedFieldPath, getNestedInternalRowValue}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types._
 import org.junit.jupiter.api.Assertions.{assertEquals, fail}
@@ -65,36 +65,36 @@ class TestHoodieUnsafeRowUtils {
 
     assertEquals(
       123,
-      getNestedRowValue(row, composeNestedFieldPath(schema, "bar.baz"))
+      getNestedInternalRowValue(row, composeNestedFieldPath(schema, "bar.baz"))
     )
     assertEquals(
       456L,
-      getNestedRowValue(row, composeNestedFieldPath(schema, "bar.bor"))
+      getNestedInternalRowValue(row, composeNestedFieldPath(schema, "bar.bor"))
     )
     assertEquals(
       "str",
-      getNestedRowValue(row, composeNestedFieldPath(schema, "foo"))
+      getNestedInternalRowValue(row, composeNestedFieldPath(schema, "foo"))
     )
     assertEquals(
       row.getStruct(1, 2),
-      getNestedRowValue(row, composeNestedFieldPath(schema, "bar"))
+      getNestedInternalRowValue(row, composeNestedFieldPath(schema, "bar"))
     )
 
     val rowProperNullable = InternalRow("str", null)
 
     assertEquals(
       null,
-      getNestedRowValue(rowProperNullable, composeNestedFieldPath(schema, "bar.baz"))
+      getNestedInternalRowValue(rowProperNullable, composeNestedFieldPath(schema, "bar.baz"))
     )
     assertEquals(
       null,
-      getNestedRowValue(rowProperNullable, composeNestedFieldPath(schema, "bar"))
+      getNestedInternalRowValue(rowProperNullable, composeNestedFieldPath(schema, "bar"))
     )
 
     val rowInvalidNullable = InternalRow(null, InternalRow(123, 456L))
 
     assertThrows(classOf[IllegalArgumentException]) { () =>
-      getNestedRowValue(rowInvalidNullable, composeNestedFieldPath(schema, "foo"))
+      getNestedInternalRowValue(rowInvalidNullable, composeNestedFieldPath(schema, "foo"))
     }
   }
 

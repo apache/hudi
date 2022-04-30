@@ -26,7 +26,7 @@ import org.apache.hudi.table.BulkInsertPartitioner
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.HoodieUnsafeRDDUtils.createDataFrame
-import org.apache.spark.sql.HoodieUnsafeRowUtils.{composeNestedFieldPath, getNestedRowValue}
+import org.apache.spark.sql.HoodieUnsafeRowUtils.{composeNestedFieldPath, getNestedInternalRowValue}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
@@ -148,8 +148,8 @@ object HoodieDatasetBulkInsertHelper extends Logging {
       }
       .reduceByKey {
         (oneRow, otherRow) =>
-          val onePreCombineVal = getNestedRowValue(oneRow, preCombineFieldPath).asInstanceOf[Comparable[AnyRef]]
-          val otherPreCombineVal = getNestedRowValue(otherRow, preCombineFieldPath).asInstanceOf[Comparable[AnyRef]]
+          val onePreCombineVal = getNestedInternalRowValue(oneRow, preCombineFieldPath).asInstanceOf[Comparable[AnyRef]]
+          val otherPreCombineVal = getNestedInternalRowValue(otherRow, preCombineFieldPath).asInstanceOf[Comparable[AnyRef]]
           if (onePreCombineVal.compareTo(otherPreCombineVal.asInstanceOf[AnyRef]) >= 0) {
             oneRow
           } else {
