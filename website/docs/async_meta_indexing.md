@@ -62,6 +62,7 @@ spark-submit \
 From version 0.11.0 onwards, Hudi metadata table is enabled by default and the files index will be automatically created. While the deltastreamer is running in continuous mode, let
 us schedule the indexing for COLUMN_STATS index. First we need to define a properties file for the indexer.
 
+Note Enabling metadata table and configuring a lock provider are the prerequisites for using async indexer.
 ```
 # ensure that both metadata and async indexing is enabled as below two configs
 hoodie.metadata.enable=true
@@ -171,12 +172,17 @@ spark-submit \
 
 ## Caveats
 
-Asynchronous indexing feature is still evolving. There are a few gotchas while running the indexer:
+Asynchronous indexing feature is still evolving. Few points to note from deployment perspective while running the indexer:
 
-- Stop other writers before dropping any index.
+- While an index can be created concurrently with ingestion, it cannot be dropped concurrently. Please stop all writers
+  before dropping an index.
+- Files index is created by default as long as the metadata table is enabled.
 - Trigger indexing for one metadata partition (or index type) at a time.
 - If an index is enabled via async HoodieIndexer, then ensure that index is also enabled in configs corresponding to regular ingestion writers. Otherwise, metadata writer will
   think that particular index was disabled and cleanup the metadata partition.
-- Enable async indexing and specific index configs for all writers in multi-writer scenario.
+- In the case of multi-writers, enable async index and specific index config for all writers.
 - Unlike other table services like compaction and clustering, where we have a separate configuration to run inline, there is no such inline config here. 
-  If async indexing is disabled and metadata is enabled along with column stats index type, then both files and column stats index will be created synchronously with ingestion.
+  For example, if async indexing is disabled and metadata is enabled along with column stats index type, then both files and column stats index will be created synchronously with ingestion.
+
+Some of these limitations will be overcome in the upcoming releases. Please
+follow [HUDI-2488](https://issues.apache.org/jira/browse/HUDI-2488) for developments on this feature.
