@@ -11,16 +11,19 @@ last_modified_at: 2022-01-27T22:07:00+08:00
 
 ### Multi-Modal Index
 
-In 0.11.0, we enable the [metadata table](/docs/metadata) with synchronous updates and
-metadata-table-based file listing by default with Spark engine, to improve the performance of partition and file listing
-on large Hudi tables. The metadata table and related file listing functionality can still be turned off by setting
-`hoodie.metadata.enable` to `false`. Please follow the upgrade steps in the migration guide to safely use this feature.
+In 0.11.0, we enable the [metadata table](/docs/metadata) with synchronous updates and metadata-table-based file listing
+by default for Spark writers, to improve the performance of partition and file listing on large Hudi tables. On the
+reader side, users need to set it to `true` benefit from it. The metadata table and related file listing functionality
+can still be turned off by setting `hoodie.metadata.enable=false`. Due to this, users deploying Hudi with async table
+services need to configure a locking service. If this feature is not relevant for you, you can set
+`hoodie.metadata.enable=false` additionally and use Hudi as before. Please follow the upgrade steps in the migration
+guide to safely use this feature.
 
 We introduce a multi-modal index in metadata table to drastically improve the lookup performance in file index and query
 latency with data skipping. Two new indices are added to the metadata table
 
-1. bloom filter index containing the file-level bloom filter to facilitate bloom filter key lookup and file pruning in
-   the writer
+1. bloom filter index containing the file-level bloom filter to facilitate key lookup and file pruning as a part of
+   bloom index during upserts by the writers
 2. column stats index containing the statistics of all/interested columns to improve file pruning based on key and
    column value range in both the writer and the reader, in query planning in Spark for example.
 
@@ -29,26 +32,27 @@ and `hoodie.metadata.index.column.stats.enable` to `true`, respectively.
 
 ### Data Skipping with Metadata Table
 
-With the added support for Column Statistics in Metadata Table, Data Skipping is now relying on the Metadata Table's
+With the added support for Column Statistics in metadata table, Data Skipping is now relying on the metadata table's
 Column Stats Index (CSI) instead of its own bespoke index implementation (comparing to Spatial Curves added in 0.10.0),
 allowing to leverage Data Skipping for all datasets regardless of whether they execute layout optimization procedures (
-like clustering) or not. To enable Data Skipping make sure to set `hoodie.enable.data.skipping` to `true`, as well as
-enable Metadata Table and Column Stats Index in Metadata table.
+like clustering) or not. To benefit from Data Skipping, make sure to set `hoodie.enable.data.skipping=true` on both
+writer and reader, as well as enable metadata table and Column Stats Index in the metadata table.
 
 Data Skipping supports standard functions (as well as some common expressions) allowing you to apply common standard
 transformations onto the raw data in your columns within your query's filters. For example, if you have column "ts" that
 stores timestamp as string, you can now query it using human-readable dates in your predicate like
 following: `date_format(ts, "MM/dd/yyyy" ) < "04/01/2022"`.
 
-*Note: Currently Data Skipping is only supported in COW tables and MOR tables in read-optimized mode.*
+*Note: Currently Data Skipping is only supported in COW tables and MOR tables in read-optimized mode. The work of full
+support for MOR tables is tracked in [HUDI-3866](https://issues.apache.org/jira/browse/HUDI-3866)*
 
 ### Async Indexer
 
 In 0.11.0, we added a new asynchronous service for indexing to our rich set of table services. It allows users to create
 different kinds of indices (e.g., files, bloom filters, and column stats) in the metadata table without blocking
-ingestion. The indexer adds a new action `indexing` on the timeline. While most of the indexing process is lock-free, to
-avoid any contention with the timeline, the indexer needs to take a lock while scheduling the indexing action. See the
-migration guide for more details.
+ingestion. The indexer adds a new action `indexing` on the timeline. While the indexing process itself is asynchronous
+and non-blocking to writers, a lock provider needs to be configured to safely co-ordinate the process with the inflight
+writers. See the migration guide for more details.
 
 ### Spark DataSource Improvements
 
@@ -62,6 +66,8 @@ bring both compute and data throughput efficiencies when querying the data.
   fetch *strictly necessary* columns (primary key, pre-combine key) on top of those referenced by the query,
   substantially reducing wasted data throughput as well as compute spent on decompressing and decoding the data. This is
   significantly beneficial to "wide" MOR tables with 1000s of columns, for example.
+
+See the migration guide for the relevant configurations' usage.
 
 ### Schema-on-read for Spark
 
@@ -94,7 +100,7 @@ In 0.11.0, a new `hudi-utilities-slim-bundle` is added to exclude dependencies t
 compatibility issues with other frameworks such as Spark.
 
 - `hudi-utilities-slim-bundle` works with Spark 3.1 and 2.4.
-- `hudi-utilities-bundle` continues to work with Spark 3.1 as it does in Hudi 0.10.
+- `hudi-utilities-bundle` continues to work with Spark 3.1 as it does in Hudi 0.10.x.
 
 ### BigQuery Integration
 
@@ -126,13 +132,12 @@ to [Sync to DataHub](/docs/next/syncing_datahub) guide page for more details.
 ### Bucket Index
 
 Bucket index, an efficient and light-weight index type, is added in 0.11.0. It distributes records to buckets using a
-hash function based on the record keys, where each bucket corresponds to a single file group. It has around ~3x
-improvement on throughput compared to using Bloom index when upsert. To use this index, set the index type to `BUCKET`
-and set `hoodie.storage.layout.partitioner.class` to `org.apache.hudi.table.action.commit.SparkBucketIndexPartitioner`.
-Similar settings work for Flink. For more details, please refer to `HoodieIndexConfig` in
-the [configurations](/docs/configurations) page.
+hash function based on the record keys, where each bucket corresponds to a single file group. To use this index, set the
+index type to `BUCKET` and set `hoodie.storage.layout.partitioner.class`
+to `org.apache.hudi.table.action.commit.SparkBucketIndexPartitioner`. Similar settings work for Flink. For more details,
+please refer to `HoodieIndexConfig` in the [configurations](/docs/configurations) page.
 
-### CLI Savepoint & Restore
+### Savepoint & Restore
 
 Disaster recovery is a mission critical feature in any production deployment. Especially when it comes to systems that
 store data. Hudi had savepoint and restore functionality right from the beginning for COW tables. In 0.11.0, we have
@@ -152,7 +157,7 @@ tables. This is useful when tailing Hive tables in `HoodieDeltaStreamer` instead
 
 ## Migration Guide
 
-### Upgrade steps for enabling metadata table
+### Upgrade steps to enable metadata table
 
 *Before the upgrade, stop all writers on the same table.*
 
@@ -165,7 +170,7 @@ tables. This is useful when tailing Hive tables in `HoodieDeltaStreamer` instead
   MOR table, Spark streaming (where compaction is async by default), and your own job setup enabling async table
   services inside the same writer, it is a must to have the optimistic concurrency control, the lock provider, lazy
   failed write clean policy configured before enabling metadata table. More details can be found [here](/docs/metadata).
-  Failing to follow the configuration guide leads to loss of data.
+  Failing to follow the configuration guide may lead to loss of data.
 - Deployment Model C: If your current deployment model is [multi-writer](/docs/concurrency_control) along
   with [a lock provider](/docs/concurrency_control/#enabling-multi-writing) and other required configs set for every
   writer, there is no additional configuration required. You can bring up the writers with 0.11.0 sequentially. Applying
@@ -174,9 +179,9 @@ tables. This is useful when tailing Hive tables in `HoodieDeltaStreamer` instead
 
 ### Use async indexer
 
-Configuring a lock provider is a prerequisite for using async indexer. The implementation details were illustrated
-in [RFC-45](https://github.com/apache/hudi/blob/master/rfc/rfc-45/rfc-45.md). At the minimum, users need to set the
-following configurations to schedule and run the indexer:
+Enabling metadata table and configuring a lock provider are the prerequisites for using async indexer. The
+implementation details were illustrated in [RFC-45](https://github.com/apache/hudi/blob/master/rfc/rfc-45/rfc-45.md). At
+the minimum, users need to set the following configurations to schedule and run the indexer:
 
 ```shell
 # enable async index
@@ -200,6 +205,22 @@ Few points to note from deployment perspective:
 
 Some of these limitations will be overcome in the upcoming releases. Please
 follow [HUDI-2488](https://issues.apache.org/jira/browse/HUDI-2488) for developments on this feature.
+
+### Bundle usage
+
+As we relax the requirement of adding `spark-avro` package in 0.11.0 to work with Spark and Utilities bundle,
+the option `--package org.apache.spark:spark-avro_2.1*:*` can be dropped.
+
+### Configuration updates
+
+- For MOR tables, `hoodie.datasource.write.precombine.field` is required for both write and read.
+- Only set `hoodie.datasource.write.drop.partition.columns=true` when work
+  with [BigQuery integration](/docs/next/gcp_bigquery) scenarios.
+- For Spark readers that rely on extracting physical partition path,
+  set `hoodie.datasource.read.extract.partition.values.from.path=true` to stay compatible with existing behaviors.
+- Default index type for Spark was change from `BLOOM`
+  to `SIMPLE` [HUDI-3091](https://issues.apache.org/jira/browse/HUDI-3091). If you currently rely on the default `BLOOM`
+  index type, please update your configuration accordingly.
 
 ## Raw Release Notes
 
