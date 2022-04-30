@@ -98,11 +98,11 @@ module.exports = {
           },
           {
             from: ['/docs/releases', '/docs/next/releases'],
-            to: '/releases/release-0.10.1',
+            to: '/releases/release-0.11.0',
           },
           {
             from: ['/releases'],
-            to: '/releases/release-0.10.1',
+            to: '/releases/release-0.11.0',
           },
           {
             from: ['/docs/learn'],
@@ -255,7 +255,7 @@ module.exports = {
             },
             {
               label: 'Releases',
-              to: '/releases/release-0.10.1',
+              to: '/releases/release-0.11.0',
             },
             {
               label: 'Download',
@@ -423,8 +423,8 @@ module.exports = {
               path: 'next',
               banner: 'unreleased',
             },
-            '0.10.1': {
-              label: '0.10.1',
+            '0.11.0': {
+              label: '0.11.0',
               path: '',
             }
           },

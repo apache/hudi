@@ -56,7 +56,7 @@ ingestion. The indexer adds a new action `indexing` on the timeline. While the i
 and non-blocking to writers, a lock provider needs to be configured to safely co-ordinate the process with the inflight
 writers.
 
-*See the [async indexing guide](/docs/next/async_meta_indexing) for more details.*
+*See the [async indexing guide](/docs/async_meta_indexing) for more details.*
 
 ### Spark DataSource Improvements
 
@@ -122,7 +122,7 @@ compatibility issues with other frameworks such as Spark.
 
 In 0.11.0, Hudi tables can be queried from BigQuery as external tables. Users can
 set `org.apache.hudi.gcp.bigquery.BigQuerySyncTool` as the sync tool implementation for `HoodieDeltaStreamer` and make
-the target Hudi table discoverable in BigQuery. Please refer to the [BigQuery integration](/docs/next/gcp_bigquery) guide
+the target Hudi table discoverable in BigQuery. Please refer to the [BigQuery integration](/docs/gcp_bigquery) guide
 page for more details.
 
 *Note: this is an experimental feature and only works with hive-style partitioned Copy-On-Write tables.*
@@ -132,7 +132,7 @@ page for more details.
 In 0.11.0, Hudi tables can be sync'ed to AWS Glue Data Catalog via AWS SDK directly. Users can
 set `org.apache.hudi.aws.sync.AwsGlueCatalogSyncTool` as the sync tool implementation for `HoodieDeltaStreamer` and make
 the target Hudi table discoverable in Glue catalog. Please refer
-to [Sync to AWS Glue Data Catalog](/docs/next/syncing_aws_glue_data_catalog) guide page for more details.
+to [Sync to AWS Glue Data Catalog](/docs/syncing_aws_glue_data_catalog) guide page for more details.
 
 *Note: this is an experimental feature.*
 
@@ -141,14 +141,14 @@ to [Sync to AWS Glue Data Catalog](/docs/next/syncing_aws_glue_data_catalog) gui
 In 0.11.0, Hudi table's metadata (specifically, schema and last sync commit time) can be sync'ed
 to [DataHub](https://datahubproject.io/). Users can set `org.apache.hudi.sync.datahub.DataHubSyncTool` as the sync tool
 implementation for `HoodieDeltaStreamer` and sync the target table as a Dataset in DataHub. Please refer
-to [Sync to DataHub](/docs/next/syncing_datahub) guide page for more details.
+to [Sync to DataHub](/docs/syncing_datahub) guide page for more details.
 
 *Note: this is an experimental feature.*
 
 ### Encryption
 
 In 0.11.0, Spark 3.2 support has been added and accompanying that, Parquet 1.12 has been included, which brings
-encryption feature to Hudi (Copy-on-Write tables). Please refer to [Encryption](/docs/next/encryption) guide page for more
+encryption feature to Hudi (Copy-on-Write tables). Please refer to [Encryption](/docs/encryption) guide page for more
 details.
 
 ### Bucket Index
@@ -158,7 +158,7 @@ hash function based on the record keys, where each bucket corresponds to a singl
 index type to `BUCKET` and set `hoodie.storage.layout.partitioner.class` to `org.apache.hudi.table.action.commit.SparkBucketIndexPartitioner`.
 For Flink, set `index.type=BUCKET`.
 
-*For more details, please refer to `HoodieIndexConfig` in the [configurations](/docs/configurations) page.*
+*For more details, please refer to hoodie.bucket.index.\* in the [configurations page](/docs/configurations).*
 
 ### Savepoint & Restore
 
@@ -166,14 +166,14 @@ Disaster recovery is a mission critical feature in any production deployment. Es
 store data. Hudi had savepoint and restore functionality right from the beginning for COW tables. In 0.11.0, we have
 added support for MOR tables.
 
-*More info about this feature can be found in [Disaster Recovery](/docs/next/disaster_recovery).*
+*More info about this feature can be found in [Disaster Recovery](/docs/disaster_recovery).*
 
 ### Write Commit Callback for Pulsar
 
 Hudi users can use `org.apache.hudi.callback.HoodieWriteCommitCallback` to invoke callback function upon successful
 commits. In 0.11.0, we add`HoodieWriteCommitPulsarCallback` in addition to the existing HTTP callback and Kafka
-callback. Please refer to `org.apache.hudi.utilities.callback.pulsar.HoodieWriteCommitPulsarCallbackConfig` for
-configurations to set.
+callback. Please refer to the [configurations page](/docs/configurations#Write-commit-pulsar-callback-configs) for
+detailed settings.
 
 ### HiveSchemaProvider
 
@@ -191,7 +191,7 @@ the option `--package org.apache.spark:spark-avro_2.1*:*` can be dropped.
 
 - For MOR tables, `hoodie.datasource.write.precombine.field` is required for both write and read.
 - Only set `hoodie.datasource.write.drop.partition.columns=true` when work
-  with [BigQuery integration](/docs/next/gcp_bigquery).
+  with [BigQuery integration](/docs/gcp_bigquery).
 - For Spark readers that rely on extracting physical partition path,
   set `hoodie.datasource.read.extract.partition.values.from.path=true` to stay compatible with existing behaviors.
 - Default index type for Spark was change from `BLOOM`
