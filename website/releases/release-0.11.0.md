@@ -122,7 +122,7 @@ compatibility issues with other frameworks such as Spark.
 
 In 0.11.0, Hudi tables can be queried from BigQuery as external tables. Users can
 set `org.apache.hudi.gcp.bigquery.BigQuerySyncTool` as the sync tool implementation for `HoodieDeltaStreamer` and make
-the target Hudi table discoverable in BigQuery. Please refer to [Google Cloud BigQuery](/docs/next/gcp_bigquery) guide
+the target Hudi table discoverable in BigQuery. Please refer to the [BigQuery integration](/docs/next/gcp_bigquery) guide
 page for more details.
 
 *Note: this is an experimental feature and only works with hive-style partitioned Copy-On-Write tables.*
@@ -144,6 +144,12 @@ implementation for `HoodieDeltaStreamer` and sync the target table as a Dataset 
 to [Sync to DataHub](/docs/next/syncing_datahub) guide page for more details.
 
 *Note: this is an experimental feature.*
+
+### Encryption
+
+In 0.11.0, Spark 3.2 support has been added and accompanying that, Parquet 1.12 has been included, which brings
+encryption feature to Hudi (Copy-on-Write tables). Please refer to [Encryption](/docs/next/encryption) guide page for more
+details.
 
 ### Bucket Index
 
