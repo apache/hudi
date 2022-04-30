@@ -61,6 +61,7 @@ import org.apache.parquet.schema.MessageType;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Iterator;
 import java.util.List;
 
 import static org.apache.hudi.avro.AvroSchemaUtils.appendFieldsToSchema;
@@ -109,13 +110,18 @@ public class TableSchemaResolver {
           // Determine the file format based on the file name, and then extract schema from it.
           if (instantAndCommitMetadata.isPresent()) {
             HoodieCommitMetadata commitMetadata = instantAndCommitMetadata.get().getRight();
-            String filePath = commitMetadata.getFileIdAndFullPaths(metaClient.getBasePath()).values().stream().findAny().get();
-            if (filePath.contains(HoodieFileFormat.HOODIE_LOG.getFileExtension())) {
-              // this is a log file
-              return readSchemaFromLogFile(new Path(filePath));
-            } else {
-              return readSchemaFromBaseFile(filePath);
+            Iterator<String> filePaths = commitMetadata.getFileIdAndFullPaths(metaClient.getBasePath()).values().iterator();
+            MessageType type = null;
+            while (filePaths.hasNext() && type == null) {
+              String filePath = filePaths.next();
+              if (filePath.contains(HoodieFileFormat.HOODIE_LOG.getFileExtension())) {
+                // this is a log file
+                type = readSchemaFromLogFile(new Path(filePath));
+              } else {
+                type = readSchemaFromBaseFile(filePath);
+              }
             }
+            return type;
           } else {
             throw new IllegalArgumentException("Could not find any data file written for commit, "
                 + "so could not get schema for table " + metaClient.getBasePath());
