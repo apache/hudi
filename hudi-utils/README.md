@@ -25,9 +25,22 @@ mvn install
 ```
 Set the appropriate SNAPSHOT version and execute the below commands
 ```shell
-VERSION=0.11.0
+VERSION=0.12.0
 
-java -cp target/hudi-utils-1.0-SNAPSHOT-jar-with-dependencies.jar:$HOME/.m2/repository/org/apache/hudi/hudi-utilities-bundle_2.11/$VERSION-SNAPSHOT/hudi-utilities-bundle_2.11-$VERSION-SNAPSHOT.jar:$HOME/.m2/repository/org/apache/hudi/hudi-spark-bundle_2.11/$VERSION-SNAPSHOT/hudi-spark-bundle_2.11-$VERSION-SNAPSHOT.jar:$HOME/.m2/repository/org/apache/hudi/hudi-flink-bundle_2.11/$VERSION-SNAPSHOT/hudi-flink-bundle_2.11-$VERSION-SNAPSHOT.jar:$HOME/.m2/repository/org/apache/hudi/hudi-kafka-connect-bundle/$VERSION-SNAPSHOT/hudi-kafka-connect-bundle-$VERSION-SNAPSHOT.jar org.apache.hudi.utils.HoodieConfigDocGenerator
+JARS=(
+"$HOME/.m2/repository/org/apache/hudi/hudi-utilities-bundle_2.11/$VERSION-SNAPSHOT/hudi-utilities-bundle_2.11-$VERSION-SNAPSHOT.jar"
+"$HOME/.m2/repository/org/apache/hudi/hudi-spark2.4-bundle_2.11/$VERSION-SNAPSHOT/hudi-spark2.4-bundle_2.11-$VERSION-SNAPSHOT.jar"
+"$HOME/.m2/repository/org/apache/hudi/hudi-flink1.14-bundle_2.11/$VERSION-SNAPSHOT/hudi-flink1.14-bundle_2.11-$VERSION-SNAPSHOT.jar"
+"$HOME/.m2/repository/org/apache/hudi/hudi-kafka-connect-bundle/$VERSION-SNAPSHOT/hudi-kafka-connect-bundle-$VERSION-SNAPSHOT.jar"
+"$HOME/.m2/repository/org/apache/hudi/hudi-datahub-sync-bundle/$VERSION-SNAPSHOT/hudi-datahub-sync-bundle-$VERSION-SNAPSHOT.jar"
+"$HOME/.m2/repository/org/apache/hudi/hudi-gcp-bundle/$VERSION-SNAPSHOT/hudi-gcp-bundle-$VERSION-SNAPSHOT.jar"
+)
+
+printf -v CLASSPATH ':%s' "${JARS[@]}"
+echo "CLASSPATH=$CLASSPATH"
+
+java -cp target/hudi-utils-1.0-SNAPSHOT-jar-with-dependencies.jar$CLASSPATH \
+org.apache.hudi.utils.HoodieConfigDocGenerator
 
 cp /tmp/configurations.md ../website/docs/configurations.md
 ```
