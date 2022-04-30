@@ -30,6 +30,9 @@ latency with data skipping. Two new indices are added to the metadata table
 They are disabled by default. You can enable them by setting `hoodie.metadata.index.bloom.filter.enable` 
 and `hoodie.metadata.index.column.stats.enable` to `true`, respectively.
 
+*Refer to the [metadata table guide](/docs/metadata#deployment-considerations) for detailed instructions on upgrade and
+deployment.*
+
 ### Data Skipping with Metadata Table
 
 With the added support for Column Statistics in metadata table, Data Skipping is now relying on the metadata table's
@@ -156,26 +159,6 @@ In 0.11.0, `org.apache.hudi.utilities.schema.HiveSchemaProvider` is added for ge
 tables. This is useful when tailing Hive tables in `HoodieDeltaStreamer` instead of having to provide avro schema files.
 
 ## Migration Guide
-
-### Upgrade steps to enable metadata table
-
-*Before the upgrade, stop all writers on the same table.*
-
-- Deployment Model A: If your current deployment model is single writer and all table services (cleaning, clustering,
-  compaction) are configured to be **inline**, such as Deltastreamer sync-once mode and Spark Datasource with default
-  configs, there is no additional configuration required. Restarting the Single Writer with 0.11.0 is sufficient to
-  safely enable metadata table.
-- Deployment Model B: If your current deployment model is single writer along with async table services (such as
-  cleaning, clustering, compaction) running in the same process, such as `HoodieDeltaStreamer` continuous mode writing
-  MOR table, Spark streaming (where compaction is async by default), and your own job setup enabling async table
-  services inside the same writer, it is a must to have the optimistic concurrency control, the lock provider, lazy
-  failed write clean policy configured before enabling metadata table. More details can be found [here](/docs/metadata).
-  Failing to follow the configuration guide may lead to loss of data.
-- Deployment Model C: If your current deployment model is [multi-writer](/docs/concurrency_control) along
-  with [a lock provider](/docs/concurrency_control/#enabling-multi-writing) and other required configs set for every
-  writer, there is no additional configuration required. You can bring up the writers with 0.11.0 sequentially. Applying
-  the proper configurations to only partial writers leads to loss of data from the inconsistent writer. So, ensure you
-  enable metadata table across all writers.
 
 ### Use async indexer
 
