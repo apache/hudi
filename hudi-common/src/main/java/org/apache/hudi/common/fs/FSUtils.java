@@ -633,6 +633,7 @@ public class FSUtils {
     String scheme = FSUtils.getFs(file.toString(), conf).getScheme();
     returnConf.set("fs." + HoodieWrapperFileSystem.getHoodieScheme(scheme) + ".impl",
         HoodieWrapperFileSystem.class.getName());
+    returnConf.setClassLoader(Thread.currentThread().getContextClassLoader());
     return returnConf;
   }
 
