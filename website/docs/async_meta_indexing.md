@@ -62,7 +62,10 @@ spark-submit \
 From version 0.11.0 onwards, Hudi metadata table is enabled by default and the files index will be automatically created. While the deltastreamer is running in continuous mode, let
 us schedule the indexing for COLUMN_STATS index. First we need to define a properties file for the indexer.
 
-Note Enabling metadata table and configuring a lock provider are the prerequisites for using async indexer.
+:::note
+Enabling metadata table and configuring a lock provider are the prerequisites for using async indexer.
+:::
+
 ```
 # ensure that both metadata and async indexing is enabled as below two configs
 hoodie.metadata.enable=true
