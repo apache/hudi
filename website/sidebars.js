@@ -74,7 +74,8 @@ module.exports = {
                 'file_sizing',
                 'disaster_recovery',
                 'snapshot_exporter',
-                'precommit_validator'
+                'precommit_validator',
+                'async_meta_indexing'
             ],
         },
         'configurations',

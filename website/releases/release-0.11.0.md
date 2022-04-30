@@ -56,7 +56,7 @@ ingestion. The indexer adds a new action `indexing` on the timeline. While the i
 and non-blocking to writers, a lock provider needs to be configured to safely co-ordinate the process with the inflight
 writers.
 
-*See the [migration guide](#migration-guide) for more details.*
+*See the [async indexing guide](/docs/next/async_meta_indexing) for more details.*
 
 ### Spark DataSource Improvements
 
@@ -181,35 +181,6 @@ In 0.11.0, `org.apache.hudi.utilities.schema.HiveSchemaProvider` is added for ge
 tables. This is useful when tailing Hive tables in `HoodieDeltaStreamer` instead of having to provide avro schema files.
 
 ## Migration Guide
-
-### Use async indexer
-
-Enabling metadata table and configuring a lock provider are the prerequisites for using async indexer. The
-implementation details were illustrated in [RFC-45](https://github.com/apache/hudi/blob/master/rfc/rfc-45/rfc-45.md). At
-the minimum, users need to set the following configurations to schedule and run the indexer:
-
-```shell
-# enable async index
-hoodie.metadata.index.async=true
-# enable specific index type, column stats for example 
-hoodie.metadata.index.column.stats.enable=true
-# set OCC concurrency mode
-hoodie.write.concurrency.mode=optimistic_concurrency_control
-# set lock provider configs
-hoodie.write.lock.provider=<LockProviderClass>
-```
-
-Few points to note from deployment perspective:
-
-1. Files index is created by default as long as the metadata table is enabled.
-2. If you intend to build any index asynchronously, say column stats, then be sure to enable the async index and column
-   stats index type on the regular ingestion writers as well.
-3. In the case of multi-writers, enable async index and specific index config for all writers.
-4. While an index can be created concurrently with ingestion, it cannot be dropped concurrently. Please stop all writers
-   before dropping an index.
-
-Some of these limitations will be overcome in the upcoming releases. Please
-follow [HUDI-2488](https://issues.apache.org/jira/browse/HUDI-2488) for developments on this feature.
 
 ### Bundle usage
 
