@@ -7,135 +7,122 @@ last_modified_at: 2019-12-30T15:59:57-04:00
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-This guide provides a quick peek at Hudi's capabilities using spark-shell. Using Spark datasources, we will walk through 
-code snippets that allows you to insert and update a Hudi table of default table type: 
-[Copy on Write](/docs/concepts#copy-on-write-table). 
-After each write operation we will also show how to read the data both snapshot and incrementally.
+This guide provides a quick peek at Hudi's capabilities using spark-shell. Using Spark datasources, we will walk through
+code snippets that allows you to insert and update a Hudi table of default table type:
+[Copy on Write](/docs/table_types#copy-on-write-table). After each write operation we will also show how to read the
+data both snapshot and incrementally.
 
 ## Setup
 
-Hudi works with Spark-2.4.3+ & Spark 3.x versions. You can follow instructions [here](https://spark.apache.org/downloads) for setting up spark.
+Hudi works with Spark-2.4.3+ & Spark 3.x versions. You can follow instructions [here](https://spark.apache.org/downloads) for setting up Spark.
 
 **Spark 3 Support Matrix**
 
-| Hudi            | Supported Spark 3 version     |
-|:----------------|:------------------------------|
-| 0.11.0          | 3.2.x (default build, Spark bundle only), 3.1.x  |
-| 0.10.0          | 3.1.x (default build), 3.0.x  |
-| 0.7.0 - 0.9.0   | 3.0.x                         |
-| 0.6.0 and prior | not supported                 |
+| Hudi            | Supported Spark 3 version                       |
+|:----------------|:------------------------------------------------|
+| 0.11.0          | 3.2.x (default build, Spark bundle only), 3.1.x |
+| 0.10.0          | 3.1.x (default build), 3.0.x                    |
+| 0.7.0 - 0.9.0   | 3.0.x                                           |
+| 0.6.0 and prior | not supported                                   |
 
-*The "default build" Spark version indicates that it is used to build the `hudi-spark3-bundle`.*
+The *default build* Spark version indicates that it is used to build the `hudi-spark3-bundle`.
 
-As of 0.9.0 release, Spark SQL DML support has been added and is experimental.
-
-In 0.11.0 release, we add support for Spark 3.2.x and continue the support for Spark 3.1.x and Spark 2.4.x.  We officially
-do not provide the support for Spark 3.0.x any more.  To make it easier for the users to pick the right Hudi Spark bundle
-in their deployment, we make the following adjustment to the naming of the bundles:
-
-- For each supported Spark minor version, there is a corresponding Hudi Spark bundle with the major and minor version 
-in the naming, i.e., `hudi-spark3.2-bundle`, `hudi-spark3.1-bundle`, and `hudi-spark2.4-bundle`.
-- We encourage users to migrate to using the new bundles above.  We keep the bundles with the legacy naming in this
-release, i.e., `hudi-spark3-bundle` targeting at Spark 3.2.x, the latest Spark 3 version, and `hudi-spark-bundle` for
-Spark 2.4.x.
+:::note
+In 0.11.0, there are changes on using Spark bundles, please refer
+to [0.11.0 release notes](https://hudi.apache.org/releases/release-0.11.0/#spark-versions-and-bundles) for detailed
+instructions.
+:::
 
 <Tabs
 defaultValue="scala"
 values={[
 { label: 'Scala', value: 'scala', },
 { label: 'Python', value: 'python', },
-{ label: 'SparkSQL', value: 'sparksql', },
-]}>
+{ label: 'Spark SQL', value: 'sparksql', },
+]}
+>
 <TabItem value="scala">
 
-From the extracted directory run spark-shell with Hudi as:
+From the extracted directory run spark-shell with Hudi:
 
-```scala
-// spark-shell for spark 3.2
+```shell
+# Spark 3.2
 spark-shell \
   --packages org.apache.hudi:hudi-spark3.2-bundle_2.12:0.11.0 \
   --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
   --conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog'
-
-// spark-shell for spark 3.1
+```
+```shell
+# Spark 3.1
 spark-shell \
   --packages org.apache.hudi:hudi-spark3.1-bundle_2.12:0.11.0 \
   --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
-  
-// spark-shell for spark 2.4 with scala 2.12
-spark-shell \
-  --packages org.apache.hudi:hudi-spark2.4-bundle_2.12:0.11.0 \
-  --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
-  
-// spark-shell for spark 2.4 with scala 2.11
+```
+```shell
+# Spark 2.4
 spark-shell \
   --packages org.apache.hudi:hudi-spark2.4-bundle_2.11:0.11.0 \
   --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
 ```
-
 </TabItem>
+
+<TabItem value="python">
+
+From the extracted directory run pyspark with Hudi:
+
+```shell
+# Spark 3.2
+export PYSPARK_PYTHON=$(which python3)
+pyspark \
+--packages org.apache.hudi:hudi-spark3.2-bundle_2.12:0.11.0 \
+--conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
+--conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog'
+```
+```shell
+# Spark 3.1
+export PYSPARK_PYTHON=$(which python3)
+pyspark \
+--packages org.apache.hudi:hudi-spark3.1-bundle_2.12:0.11.0 \
+--conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
+```
+```shell
+# Spark 2.4
+export PYSPARK_PYTHON=$(which python3)
+pyspark \
+--packages org.apache.hudi:hudi-spark2.4-bundle_2.11:0.11.0 \
+--conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
+```
+</TabItem>
+
 <TabItem value="sparksql">
 
 Hudi support using Spark SQL to write and read data with the **HoodieSparkSessionExtension** sql extension.
-From the extracted directory run Spark SQL with Hudi as:
+From the extracted directory run Spark SQL with Hudi:
 
 ```shell
-# Spark SQL for spark 3.2
+# Spark 3.2
 spark-sql --packages org.apache.hudi:hudi-spark3.2-bundle_2.12:0.11.0 \
 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
---conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog' \
---conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension'
-
-# Spark SQL for spark 3.1
+--conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' \
+--conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog'
+```
+```shell
+# Spark 3.1
 spark-sql --packages org.apache.hudi:hudi-spark3.1-bundle_2.12:0.11.0 \
 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
 --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension'
-
-# Spark SQL for spark 2.4 with scala 2.11
+```
+```shell
+# Spark 2.4
 spark-sql --packages org.apache.hudi:hudi-spark2.4-bundle_2.11:0.11.0 \
 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
 --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension'
-
-# Spark SQL for spark 2.4 with scala 2.12
-spark-sql \
-  --packages org.apache.hudi:hudi-spark2.4-bundle_2.12:0.11.0 \
-  --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
-  --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension'
 ```
 
 </TabItem>
-<TabItem value="python">
 
-From the extracted directory run pyspark with Hudi as:
-
-```python
-# pyspark
-export PYSPARK_PYTHON=$(which python3)
-
-# for spark3.2
-pyspark
---packages org.apache.hudi:hudi-spark3.2-bundle_2.12:0.11.0
---conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
---conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog'
-
-# for spark3.1
-pyspark
---packages org.apache.hudi:hudi-spark3.1-bundle_2.12:0.11.0
---conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
-
-# for spark2.4 with scala 2.12
-pyspark
---packages org.apache.hudi:hudi-spark2.4-bundle_2.12:0.11.0
---conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
-
-# for spark2.4 with scala 2.11
-pyspark
---packages org.apache.hudi:hudi-spark2.4-bundle_2.11:0.11.0
---conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
-```
-
-</TabItem>
-</Tabs>
+</Tabs
+>
 
 :::note Please note the following
 <ul>
@@ -152,7 +139,9 @@ defaultValue="scala"
 values={[
 { label: 'Scala', value: 'scala', },
 { label: 'Python', value: 'python', },
-]}>
+]}
+>
+
 <TabItem value="scala">
 
 ```scala
@@ -180,37 +169,14 @@ dataGen = sc._jvm.org.apache.hudi.QuickstartUtils.DataGenerator()
 ```
 
 </TabItem>
-</Tabs>
+
+</Tabs
+>
 
 :::tip
 The [DataGenerator](https://github.com/apache/hudi/blob/master/hudi-spark-datasource/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L51) 
 can generate sample inserts and updates based on the the sample trip schema [here](https://github.com/apache/hudi/blob/master/hudi-spark-datasource/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L58)
 :::
-
-## Spark SQL Type Support
-
-| Spark           |     Hudi     |     Notes     |
-|-----------------|--------------|---------------|
-| boolean         |  boolean     |               |
-| byte            |  int         |               |
-| short           |  int         |               |
-| integer         |  int         |               |
-| long            |  long        |               |
-| date            |  date        |               |
-| timestamp       |  timestamp   |               |
-| float           |  float       |               |
-| double          |  double      |               |
-| string          |  string      |               |
-| decimal         |  decimal     |               |
-| binary          |  bytes       |               |
-| array           |  array       |               |
-| map             |  map         |               |
-| struct          |  struct      |               |
-| char            |              | not supported |
-| varchar         |              | not supported |
-| numeric         |              | not supported |
-| null            |              | not supported |
-| object          |              | not supported |
 
 ## Create Table
 
@@ -219,8 +185,9 @@ defaultValue="scala"
 values={[
 { label: 'Scala', value: 'scala', },
 { label: 'Python', value: 'python', },
-{ label: 'SparkSQL', value: 'sparksql', },
-]}>
+{ label: 'Spark SQL', value: 'sparksql', },
+]}
+>
 <TabItem value="scala">
 
 ```scala
@@ -242,32 +209,40 @@ values={[
 Spark SQL needs an explicit create table command.
 
 **Table Concepts**
-- Table types:
-  Both of Hudi's table types (Copy-On-Write (COW) and Merge-On-Read (MOR)) can be created using Spark SQL.
 
-  While creating the table, table type can be specified using **type** option. **type = 'cow'** represents COW table, while **type = 'mor'** represents MOR table.
+- Table types
 
-- Partitioned & Non-Partitioned table:
-  Users can create a partitioned table or a non-partitioned table in Spark SQL.
-  To create a partitioned table, one needs to use **partitioned by** statement to specify the partition columns to create a partitioned table.
-  When there is no **partitioned by** statement with create table command, table is considered to be a non-partitioned table.
+  Both Hudi's table types, Copy-On-Write (COW) and Merge-On-Read (MOR), can be created using Spark SQL.
+  While creating the table, table type can be specified using **type** option: **type = 'cow'** or **type = 'mor'**.
 
-- Managed & External table:
-  In general, Spark SQL supports two kinds of tables, namely managed and external.
-  If one specifies a location using **location** statement or use `create external table` to create table explicitly, it is an external table, else its considered a managed table.
-  You can read more about external vs managed tables [here](https://sparkbyexamples.com/apache-hive/difference-between-hive-internal-tables-and-external-tables/).
+- Partitioned & Non-Partitioned tables
+
+  Users can create a partitioned table or a non-partitioned table in Spark SQL. To create a partitioned table, one needs
+  to use **partitioned by** statement to specify the partition columns to create a partitioned table. When there is
+  no **partitioned by** statement with create table command, table is considered to be a non-partitioned table.
+
+- Managed & External tables
+
+  In general, Spark SQL supports two kinds of tables, namely managed and external. If one specifies a location using **
+  location** statement or use `create external table` to create table explicitly, it is an external table, else its
+  considered a managed table. You can read more about external vs managed
+  tables [here](https://sparkbyexamples.com/apache-hive/difference-between-hive-internal-tables-and-external-tables/).
+
+*Read more in the [table management](/docs/table_management) guide.*
 
 :::note
-1. Since hudi 0.10.0, `primaryKey` is required to specify. It can align with Hudi datasource writer’s and resolve many behavioural discrepancies reported in previous versions.
- Non-primaryKey tables are no longer supported. Any hudi table created pre 0.10.0 without a `primaryKey` needs to be recreated with a `primaryKey` field with 0.10.0.
- Same as `hoodie.datasource.write.recordkey.field`, hudi use `uuid` as the default primaryKey. So if you want to use `uuid` as your table's `primaryKey`, you can omit the `primaryKey` config in `tblproperties`.
-2. `primaryKey`, `preCombineField`, `type` is case sensitive.
-3. To specify `primaryKey`, `preCombineField`, `type` or other hudi configs, `tblproperties` is the preferred way than `options`. Spark SQL syntax is detailed here.
-4. A new hudi table created by Spark SQL will set `hoodie.table.keygenerator.class` as `org.apache.hudi.keygen.ComplexKeyGenerator`, and
-`hoodie.datasource.write.hive_style_partitioning` as `true` by default.
+1. Since Hudi 0.10.0, `primaryKey` is required. It aligns with Hudi DataSource writer’s and resolves behavioural
+   discrepancies reported in previous versions. Non-primary-key tables are no longer supported. Any Hudi table created
+   pre-0.10.0 without a `primaryKey` needs to be re-created with a `primaryKey` field with 0.10.0.
+2. Similar to `hoodie.datasource.write.recordkey.field`, `uuid` is used as primary key by default; if that's the case
+   for your table, you can skip setting `primaryKey` in `tblproperties`.
+3. `primaryKey`, `preCombineField`, and `type` are case-sensitive.
+4. `preCombineField` is required for MOR tables.
+5. When set `primaryKey`, `preCombineField`, `type` or other Hudi configs, `tblproperties` is preferred over `options`.
+6. A new Hudi table created by Spark SQL will by default
+   set `hoodie.table.keygenerator.class=org.apache.hudi.keygen.ComplexKeyGenerator` and
+   `hoodie.datasource.write.hive_style_partitioning=true`.
 :::
-
-Let's go over some of the create table commands.
 
 **Create a Non-Partitioned Table**
 
@@ -395,7 +370,9 @@ Users can set table properties while creating a hudi table. Critical options are
 To set any custom hudi config(like index type, max parquet size, etc), see the  "Set hudi config section" .
 
 </TabItem>
-</Tabs>
+
+</Tabs
+>
 
 
 ## Insert data
@@ -405,8 +382,10 @@ defaultValue="scala"
 values={[
 { label: 'Scala', value: 'scala', },
 { label: 'Python', value: 'python', },
-{ label: 'SparkSQL', value: 'sparksql', },
-]}>
+{ label: 'Spark SQL', value: 'sparksql', },
+]}
+>
+
 <TabItem value="scala">
 
 Generate some new trips, load them into a DataFrame and write the DataFrame into the Hudi table as below.
@@ -508,7 +487,9 @@ select id, name, price, ts from hudi_mor_tbl;
 ```
 
 </TabItem>
-</Tabs>
+
+</Tabs
+>
 
 
 Checkout https://hudi.apache.org/blog/2021/02/13/hudi-key-generators for various key generator options, like Timestamp based,
@@ -523,8 +504,10 @@ defaultValue="scala"
 values={[
 { label: 'Scala', value: 'scala', },
 { label: 'Python', value: 'python', },
-{ label: 'SparkSQL', value: 'sparksql', },
-]}>
+{ label: 'Spark SQL', value: 'sparksql', },
+]}
+>
+
 <TabItem value="scala">
 
 ```scala
@@ -561,7 +544,9 @@ spark.sql("select _hoodie_commit_time, _hoodie_record_key, _hoodie_partition_pat
  select fare, begin_lon, begin_lat, ts from  hudi_trips_snapshot where fare > 20.0
 ```
 </TabItem>
-</Tabs>
+
+</Tabs
+>
 
 :::info
 Since 0.9.0 hudi has support a hudi built-in FileIndex: **HoodieFileIndex** to query hudi table,
@@ -581,8 +566,10 @@ defaultValue="scala"
 values={[
 { label: 'Scala', value: 'scala', },
 { label: 'Python', value: 'python', },
-{ label: 'SparkSQL', value: 'sparksql', },
-]}>
+{ label: 'Spark SQL', value: 'sparksql', },
+]}
+>
+
 <TabItem value="scala">
 
 ```scala
@@ -664,7 +651,9 @@ select * from hudi_cow_pt_tbl timestamp as of '2022-03-08' where id = 1;
 ```
 
 </TabItem>
-</Tabs>
+
+</Tabs
+>
 
 ## Update data
 
@@ -676,8 +665,10 @@ defaultValue="scala"
 values={[
 { label: 'Scala', value: 'scala', },
 { label: 'Python', value: 'python', },
-{ label: 'SparkSQL', value: 'sparksql', },
-]}>
+{ label: 'Spark SQL', value: 'sparksql', },
+]}
+>
+
 <TabItem value="scala">
 
 ```scala
@@ -794,7 +785,9 @@ denoted by the timestamp. Look for changes in `_hoodie_commit_time`, `rider`, `d
 :::
 
 </TabItem>
-</Tabs>
+
+</Tabs
+>
 
 
 ## Incremental query
@@ -808,7 +801,9 @@ defaultValue="scala"
 values={[
 { label: 'Scala', value: 'scala', },
 { label: 'Python', value: 'python', },
-]}>
+]}
+>
+
 <TabItem value="scala">
 
 ```scala
@@ -863,7 +858,9 @@ spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from  hu
 ```
 
 </TabItem>
-</Tabs>
+
+</Tabs
+>
 
 :::info
 This will give all changes that happened after the beginTime commit with the filter of fare > 20.0. The unique thing about this
@@ -880,7 +877,9 @@ defaultValue="scala"
 values={[
 { label: 'Scala', value: 'scala', },
 { label: 'Python', value: 'python', },
-]}>
+]}
+>
+
 <TabItem value="scala">
 
 ```scala
@@ -922,7 +921,9 @@ spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from hud
 ```
 
 </TabItem>
-</Tabs>
+
+</Tabs
+>
 
 ## Delete data {#deletes}
 
@@ -931,8 +932,10 @@ defaultValue="scala"
 values={[
 { label: 'Scala', value: 'scala', },
 { label: 'Python', value: 'python', },
-{ label: 'SparkSQL', value: 'sparksql', },
-]}>
+{ label: 'Spark SQL', value: 'sparksql', },
+]}
+>
+
 <TabItem value="scala">
 Delete records for the HoodieKeys passed in.<br/>
 
@@ -1031,7 +1034,9 @@ spark.sql("select uuid, partitionpath from hudi_trips_snapshot").count()
 Only `Append` mode is supported for delete operation.
 :::
 </TabItem>
-</Tabs>
+
+</Tabs
+>
 
 
 See the [deletion section](/docs/writing_data#deletes) of the writing data page for more details.
@@ -1047,8 +1052,10 @@ steps in the upsert write path completely.
 defaultValue="scala"
 values={[
 { label: 'Scala', value: 'scala', },
-{ label: 'SparkSQL', value: 'sparksql', },
-]}>
+{ label: 'Spark SQL', value: 'sparksql', },
+]}
+>
+
 <TabItem value="scala">
 
 ```scala
@@ -1100,7 +1107,9 @@ insert overwrite table hudi_cow_pt_tbl select 10, 'a10', 1100, '2021-12-09', '10
 insert overwrite hudi_cow_pt_tbl partition(dt = '2021-12-09', hh='12') select 13, 'a13', 1100;
 ```
 </TabItem>
-</Tabs>
+
+</Tabs
+>
 
 ## More Spark SQL Commands
 
@@ -1196,4 +1205,4 @@ Hudi tables can be queried from query engines like Hive, Spark, Presto and much 
 [demo video](https://www.youtube.com/watch?v=VhNgUsxdrD0) that show cases all of this on a docker based setup with all 
 dependent systems running locally. We recommend you replicate the same setup and run the demo yourself, by following 
 steps [here](/docs/docker_demo) to get a taste for it. Also, if you are looking for ways to migrate your existing data 
-to Hudi, refer to [migration guide](/docs/migration_guide). 
+to Hudi, refer to [migration guide](/docs/migration_guide).

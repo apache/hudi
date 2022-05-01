@@ -90,14 +90,11 @@ time. Spark SQL DDL support (experimental) was added for Spark 3.1.x and Spark 3
 
 ### Spark Versions and Bundles
 
-In 0.11.0,
-
-- Spark 3.2 support is added; users can use `hudi-spark3.2-bundle` or `hudi-spark3-bundle` with Spark 3.2.
+- Spark 3.2 support is added; users who are on Spark 3.2 can use `hudi-spark3.2-bundle` or `hudi-spark3-bundle` (legacy bundle name).
 - Spark 3.1 will continue to be supported via `hudi-spark3.1-bundle`. 
-- Spark 2.4 will continue to be supported via `hudi-spark2.4-bundle` or `hudi-spark-bundle`.
-- Users are encouraged to use bundles with specific Spark version in the name: `hudi-sparkX.Y-bundle`.
-- Spark bundle for 3.0.x is no longer officially supported. Users are encouraged to upgrade to Spark 3.2 or 3.1.
-- `spark-avro` package is no longer required to work with Spark bundles.
+- Spark 2.4 will continue to be supported via `hudi-spark2.4-bundle` or `hudi-spark-bundle` (legacy bundle name).
+
+*See the [migration guide](#migration-guide) for usage updates.*
 
 ### Slim Utilities Bundle
 
@@ -118,7 +115,7 @@ compatibility issues with other frameworks such as Spark.
   default Flink state-based index, bucket index is in constant number of buckets. Specify SQL option `index.type`
   as `BUCKET` to enable it.
 
-### BigQuery Integration
+### Google BigQuery Integration
 
 In 0.11.0, Hudi tables can be queried from BigQuery as external tables. Users can
 set `org.apache.hudi.gcp.bigquery.BigQuerySyncTool` as the sync tool implementation for `HoodieDeltaStreamer` and make
@@ -168,7 +165,7 @@ added support for MOR tables.
 
 *More info about this feature can be found in [Disaster Recovery](/docs/disaster_recovery).*
 
-### Write Commit Callback for Pulsar
+### Pulsar Write Commit Callback
 
 Hudi users can use `org.apache.hudi.callback.HoodieWriteCommitCallback` to invoke callback function upon successful
 commits. In 0.11.0, we add`HoodieWriteCommitPulsarCallback` in addition to the existing HTTP callback and Kafka
@@ -182,10 +179,13 @@ tables. This is useful when tailing Hive tables in `HoodieDeltaStreamer` instead
 
 ## Migration Guide
 
-### Bundle usage
+### Bundle usage updates
 
-As we relax the requirement of adding `spark-avro` package in 0.11.0 to work with Spark and Utilities bundle,
-the option `--package org.apache.spark:spark-avro_2.1*:*` can be dropped.
+- Spark bundle for 3.0.x is no longer officially supported. Users are encouraged to upgrade to Spark 3.2 or 3.1.
+- Users are encouraged to use bundles with specific Spark version in the name (`hudi-sparkX.Y-bundle`) and move away
+  from the legacy bundles (`hudi-spark-bundle` and `hudi-spark3-bundle`).
+- Spark or Utilities bundle no longer requires additional `spark-avro` package at runtime; the
+  option `--package org.apache.spark:spark-avro_2.1*:*` can be dropped.
 
 ### Configuration updates
 
