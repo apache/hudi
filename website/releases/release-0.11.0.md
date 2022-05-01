@@ -48,6 +48,8 @@ following: `date_format(ts, "MM/dd/yyyy" ) < "04/01/2022"`.
 *Note: Currently Data Skipping is only supported in COW tables and MOR tables in read-optimized mode. The work of full
 support for MOR tables is tracked in [HUDI-3866](https://issues.apache.org/jira/browse/HUDI-3866)*
 
+*Refer to the [performance](/docs/performance#read-path) guide for more info.*
+
 ### Async Indexer
 
 In 0.11.0, we added a new asynchronous service for indexing to our rich set of table services. It allows users to create
