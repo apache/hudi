@@ -1,5 +1,5 @@
 ---
-title: Google Cloud BigQuery
+title: Google BigQuery
 keywords: [ hudi, gcp, bigquery ]
 summary: Introduce BigQuery integration in Hudi.
 ---

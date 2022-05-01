@@ -4,8 +4,8 @@ toc: true
 last_modified_at: 2020-08-12T15:19:57+08:00
 ---
 
-This guide provides an instruction for Flink Hudi integration. We can feel the unique charm of how Flink brings in the power of streaming into Hudi.
-Reading this guide, you can quickly start using Flink on Hudi, learn different modes for reading/writing Hudi by Flink:
+This page introduces Flink-Hudi integration. We can feel the unique charm of how Flink brings in the power of streaming into Hudi.
+This guide helps you quickly start using Flink on Hudi, and learn different modes for reading/writing Hudi by Flink:
 
 - **Quick Start** : Read [Quick Start](#quick-start) to get started quickly Flink sql client to write to(read from) Hudi.
 - **Configuration** : For [Global Configuration](flink_configuration#global-configurations), sets up through `$FLINK_HOME/conf/flink-conf.yaml`. For per job configuration, sets up through [Table Option](flink_configuration#table-options).
@@ -23,8 +23,15 @@ We use the [Flink Sql Client](https://ci.apache.org/projects/flink/flink-docs-re
 quick start tool for SQL users.
 
 #### Step.1 download Flink jar
-Hudi works with Flink-1.13.x version. You can follow instructions [here](https://flink.apache.org/downloads) for setting up Flink.
-The hudi-flink-bundle jar is archived with scala 2.11, so it’s recommended to use flink 1.13.x bundled with scala 2.11.
+
+Hudi works with both Flink 1.13 and Flink 1.14. You can follow the
+instructions [here](https://flink.apache.org/downloads) for setting up Flink. Then choose the desired Hudi-Flink bundle
+jar to work with different Flink and Scala versions:
+
+- `hudi-flink1.13-bundle_2.11`
+- `hudi-flink1.13-bundle_2.12`
+- `hudi-flink1.14-bundle_2.11`
+- `hudi-flink1.14-bundle_2.12`
 
 #### Step.2 start Flink cluster
 Start a standalone Flink cluster within hadoop environment.

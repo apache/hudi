@@ -235,3 +235,28 @@ WITH (
 ```sql
 alter table h0 rename to h0_1;
 ```
+
+## Supported Types
+
+| Spark           |     Hudi     |     Notes     |
+|-----------------|--------------|---------------|
+| boolean         |  boolean     |               |
+| byte            |  int         |               |
+| short           |  int         |               |
+| integer         |  int         |               |
+| long            |  long        |               |
+| date            |  date        |               |
+| timestamp       |  timestamp   |               |
+| float           |  float       |               |
+| double          |  double      |               |
+| string          |  string      |               |
+| decimal         |  decimal     |               |
+| binary          |  bytes       |               |
+| array           |  array       |               |
+| map             |  map         |               |
+| struct          |  struct      |               |
+| char            |              | not supported |
+| varchar         |              | not supported |
+| numeric         |              | not supported |
+| null            |              | not supported |
+| object          |              | not supported |
