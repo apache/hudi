@@ -58,14 +58,14 @@ ingestion. The indexer adds a new action `indexing` on the timeline. While the i
 and non-blocking to writers, a lock provider needs to be configured to safely co-ordinate the process with the inflight
 writers.
 
-*See the [async indexing guide](/docs/async_meta_indexing) for more details.*
+*See the [indexing guide](/docs/metadata_indexing) for more details.*
 
 ### Spark DataSource Improvements
 
 Hudi's Spark low-level integration got considerable overhaul consolidating common flows to share the infrastructure and
 bring both compute and data throughput efficiencies when querying the data.
 
-- Both COW and MOR (except for incremental queries) tables are now leveraging Vectorized Parquet reader while reading
+- MOR queries with no log files (except for incremental queries) tables are now leveraging Vectorized Parquet reader while reading
   the data, meaning that Parquet reader is now able to leverage modern processors vectorized instructions to further
   speed up decoding of the data. Enabled by default.
 - When standard Record Payload implementation is used (e.g., `OverwriteWithLatestAvroPayload`), MOR table will only

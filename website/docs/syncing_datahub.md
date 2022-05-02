@@ -1,5 +1,5 @@
 ---
-title: Sync to DataHub
+title: DataHub
 keywords: [hudi, datahub, sync]
 ---
 
