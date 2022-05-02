@@ -48,15 +48,15 @@ module.exports = {
                 'writing_data',
                 'hoodie_deltastreamer',
                 'querying_data',
-                'gcp_bigquery',
                 'flink_configuration',
                 {
                     type: 'category',
-                    label: 'Sync to Metastore',
+                    label: 'Syncing to Catalogs',
                     items: [
                         'syncing_aws_glue_data_catalog',
                         'syncing_datahub',
-                        'syncing_metastore'
+                        'syncing_metastore',
+                        "gcp_bigquery"
                     ],
                 }
             ],
@@ -68,7 +68,7 @@ module.exports = {
                 'migration_guide',
                 'compaction',
                 'clustering',
-                'async_meta_indexing',
+                'metadata_indexing',
                 'hoodie_cleaner',
                 'transforms',
                 'markers',

@@ -1,5 +1,5 @@
 ---
-title: Sync to AWS Glue Data Catalog
+title: AWS Glue Data Catalog
 keywords: [hudi, aws, glue, sync]
 ---
 

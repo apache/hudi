@@ -1,15 +1,17 @@
 ---
-title: Async Metadata Indexing
+title: Metadata Indexing
 summary: "In this page, we describe how to run metadata indexing asynchronously."
 toc: true
 last_modified_at:
 ---
 
-We can now create different metadata indexes, including files, bloom filters and column stats, 
-asynchronously in Hudi. Being able to index without blocking ingestion has two benefits, 
-improved ingestion latency (and hence even lesser gap between event time and arrival time), 
-and reduced point of failure on the ingestion path. To learn more about the design of this 
-feature, please check out [RFC-45](https://github.com/apache/hudi/blob/master/rfc/rfc-45/rfc-45.md).
+We can now create different metadata indexes, including files, bloom filters and column stats,
+asynchronously in Hudi, which are then used by queries and writing to improve performance.
+Being able to index without blocking writing has two benefits,
+- improved write latency
+- reduced resource wastage due to contention between writing and indexing.
+
+To learn more about the design of this feature, please check out [RFC-45](https://github.com/apache/hudi/blob/master/rfc/rfc-45/rfc-45.md).
 
 ## Setup Async Indexing
 
@@ -19,7 +21,7 @@ from raw parquet to Hudi table. We used the widely available [NY Taxi dataset](h
   <summary>Ingestion write config</summary>
 <p>
 
-```
+```bash
 hoodie.datasource.write.recordkey.field=VendorID
 hoodie.datasource.write.partitionpath.field=tpep_dropoff_datetime
 hoodie.datasource.write.precombine.field=tpep_dropoff_datetime
@@ -41,7 +43,7 @@ hoodie.write.lock.zookeeper.base_path=<zk_base_path>
   <summary>Run deltastreamer</summary>
 <p>
 
-```
+```bash
 spark-submit \
 --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer `ls /Users/home/path/to/hudi-utilities-bundle/target/hudi-utilities-bundle_2.11-0.12.0-SNAPSHOT.jar` \
 --props `ls /Users/home/path/to/write/config.properties` \
@@ -184,8 +186,8 @@ Asynchronous indexing feature is still evolving. Few points to note from deploym
 - If an index is enabled via async HoodieIndexer, then ensure that index is also enabled in configs corresponding to regular ingestion writers. Otherwise, metadata writer will
   think that particular index was disabled and cleanup the metadata partition.
 - In the case of multi-writers, enable async index and specific index config for all writers.
-- Unlike other table services like compaction and clustering, where we have a separate configuration to run inline, there is no such inline config here. 
+- Unlike other table services like compaction and clustering, where we have a separate configuration to run inline, there is no such inline config here.
   For example, if async indexing is disabled and metadata is enabled along with column stats index type, then both files and column stats index will be created synchronously with ingestion.
 
-Some of these limitations will be overcome in the upcoming releases. Please
+Some of these limitations will be removed in the upcoming releases. Please
 follow [HUDI-2488](https://issues.apache.org/jira/browse/HUDI-2488) for developments on this feature.
