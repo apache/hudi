@@ -21,7 +21,8 @@
 
 ## Approvers
 
-- @
+- @codope
+- @vinothchandar
 
 ## Status
 
@@ -131,7 +132,8 @@ tracking framework. A native log file reader optimized for Presto might be provi
 - What impact (if any) will there be on existing users?
   
   There will be no impact on existing users because this is a new connector. It does not change the behavior of current
-  integration through the existing Hive connector. It gives users more choice.
+  integration through the existing Hive connector. It gives users more choice. However, in order to use this connector, the catalog name should be changed to `hudi` from `hive`.
+  For example, after users have configured Hudi connector, then `USE hudi.schema_name` should be used instead of `USE hive.schema_name`.
 
 - What do we lose if we move away from the Hive connector?
 
