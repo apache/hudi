@@ -27,28 +27,42 @@ import org.apache.spark.sql.types.Decimal;
 import org.apache.spark.unsafe.types.CalendarInterval;
 import org.apache.spark.unsafe.types.UTF8String;
 
+import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
+
 /**
- * Internal Row implementation for Hoodie Row. It wraps an {@link InternalRow} and keeps meta columns locally. But the {@link InternalRow}
- * does include the meta columns as well just that {@link HoodieInternalRow} will intercept queries for meta columns and serve from its
- * copy rather than fetching from {@link InternalRow}.
+ * TODO should be only limited to be used to add meta columns
+ * TODO rebase to extend BaseGenericInternalRow
  */
 public class HoodieInternalRow extends InternalRow {
 
-  private String commitTime;
-  private String commitSeqNumber;
-  private String recordKey;
-  private String partitionPath;
-  private String fileName;
-  private InternalRow row;
+  private static final int INTERNAL_META_COLUMNS_COUNT = HoodieRecord.HOODIE_META_COLUMNS.size();
 
-  public HoodieInternalRow(String commitTime, String commitSeqNumber, String recordKey, String partitionPath,
-      String fileName, InternalRow row) {
+  private UTF8String commitTime;
+  private UTF8String commitSeqNumber;
+  private UTF8String recordKey;
+  private UTF8String partitionPath;
+  private UTF8String fileName;
+  private final InternalRow row;
+
+  /**
+   * Specifies whether source row contains meta-fields
+   */
+  private final boolean containsMetaFields;
+
+  public HoodieInternalRow(UTF8String commitTime,
+                           UTF8String commitSeqNumber,
+                           UTF8String recordKey,
+                           UTF8String partitionPath,
+                           UTF8String fileName,
+                           InternalRow row,
+                           boolean containsMetaFields) {
     this.commitTime = commitTime;
     this.commitSeqNumber = commitSeqNumber;
     this.recordKey = recordKey;
     this.partitionPath = partitionPath;
     this.fileName = fileName;
     this.row = row;
+    this.containsMetaFields = containsMetaFields;
   }
 
   @Override
@@ -57,9 +71,11 @@ public class HoodieInternalRow extends InternalRow {
   }
 
   @Override
-  public void setNullAt(int i) {
-    if (i < HoodieRecord.HOODIE_META_COLUMNS.size()) {
-      switch (i) {
+  public void setNullAt(int ordinal) {
+    if (ordinal >= HoodieRecord.HOODIE_META_COLUMNS.size()) {
+      row.setNullAt(rebaseOrdinal(ordinal));
+    } else {
+      switch (ordinal) {
         case 0: {
           this.commitTime = null;
           break;
@@ -82,162 +98,152 @@ public class HoodieInternalRow extends InternalRow {
         }
         default: throw new IllegalArgumentException("Not expected");
       }
-    } else {
-      row.setNullAt(i);
     }
   }
 
   @Override
-  public void update(int i, Object value) {
-    if (i < HoodieRecord.HOODIE_META_COLUMNS.size()) {
-      switch (i) {
-        case 0: {
-          this.commitTime = value.toString();
-          break;
-        }
-        case 1: {
-          this.commitSeqNumber = value.toString();
-          break;
-        }
-        case 2: {
-          this.recordKey = value.toString();
-          break;
-        }
-        case 3: {
-          this.partitionPath = value.toString();
-          break;
-        }
-        case 4: {
-          this.fileName = value.toString();
-          break;
-        }
-        default: throw new IllegalArgumentException("Not expected");
-      }
+  public void update(int ordinal, Object value) {
+    if (ordinal >= HoodieRecord.HOODIE_META_COLUMNS.size()) {
+      row.update(rebaseOrdinal(ordinal), value);
     } else {
-      row.update(i, value);
-    }
-  }
-
-  private String getMetaColumnVal(int ordinal) {
-    switch (ordinal) {
-      case 0: {
-        return commitTime;
+      switch (ordinal) {
+        case 0:
+          this.commitTime = unsafeCast(value);
+          break;
+        case 1:
+          this.commitSeqNumber = unsafeCast(value);
+          break;
+        case 2:
+          this.recordKey = unsafeCast(value);
+          break;
+        case 3:
+          this.partitionPath = unsafeCast(value);
+          break;
+        case 4:
+          this.fileName = unsafeCast(value);
+          break;
+        default:
+          throw new IllegalArgumentException(String.format("Invalid ordinal (%d)", ordinal));
       }
-      case 1: {
-        return commitSeqNumber;
-      }
-      case 2: {
-        return recordKey;
-      }
-      case 3: {
-        return partitionPath;
-      }
-      case 4: {
-        return fileName;
-      }
-      default: throw new IllegalArgumentException("Not expected");
     }
   }
 
   @Override
   public boolean isNullAt(int ordinal) {
     if (ordinal < HoodieRecord.HOODIE_META_COLUMNS.size()) {
-      return null == getMetaColumnVal(ordinal);
+      return getMetaColumnVal(ordinal) == null;
     }
-    return row.isNullAt(ordinal);
+    return row.isNullAt(rebaseOrdinal(ordinal));
   }
 
   @Override
   public boolean getBoolean(int ordinal) {
-    return row.getBoolean(ordinal);
+    // TODO throw for meta columns
+    return row.getBoolean(rebaseOrdinal(ordinal));
   }
 
   @Override
   public byte getByte(int ordinal) {
-    return row.getByte(ordinal);
+    return row.getByte(rebaseOrdinal(ordinal));
   }
 
   @Override
   public short getShort(int ordinal) {
-    return row.getShort(ordinal);
+    return row.getShort(rebaseOrdinal(ordinal));
   }
 
   @Override
   public int getInt(int ordinal) {
-    return row.getInt(ordinal);
+    return row.getInt(rebaseOrdinal(ordinal));
   }
 
   @Override
   public long getLong(int ordinal) {
-    return row.getLong(ordinal);
+    return row.getLong(rebaseOrdinal(ordinal));
   }
 
   @Override
   public float getFloat(int ordinal) {
-    return row.getFloat(ordinal);
+    return row.getFloat(rebaseOrdinal(ordinal));
   }
 
   @Override
   public double getDouble(int ordinal) {
-    return row.getDouble(ordinal);
+    return row.getDouble(rebaseOrdinal(ordinal));
   }
 
   @Override
   public Decimal getDecimal(int ordinal, int precision, int scale) {
-    return row.getDecimal(ordinal, precision, scale);
+    return row.getDecimal(rebaseOrdinal(ordinal), precision, scale);
   }
 
   @Override
   public UTF8String getUTF8String(int ordinal) {
     if (ordinal < HoodieRecord.HOODIE_META_COLUMNS.size()) {
-      return UTF8String.fromBytes(getMetaColumnVal(ordinal).getBytes());
+      return getMetaColumnVal(ordinal);
     }
-    return row.getUTF8String(ordinal);
-  }
-
-  @Override
-  public String getString(int ordinal) {
-    if (ordinal < HoodieRecord.HOODIE_META_COLUMNS.size()) {
-      return new String(getMetaColumnVal(ordinal).getBytes());
-    }
-    return row.getString(ordinal);
+    return row.getUTF8String(rebaseOrdinal(ordinal));
   }
 
   @Override
   public byte[] getBinary(int ordinal) {
-    return row.getBinary(ordinal);
+    return row.getBinary(rebaseOrdinal(ordinal));
   }
 
   @Override
   public CalendarInterval getInterval(int ordinal) {
-    return row.getInterval(ordinal);
+    return row.getInterval(rebaseOrdinal(ordinal));
   }
 
   @Override
   public InternalRow getStruct(int ordinal, int numFields) {
-    return row.getStruct(ordinal, numFields);
+    return row.getStruct(rebaseOrdinal(ordinal), numFields);
   }
 
   @Override
   public ArrayData getArray(int ordinal) {
-    return row.getArray(ordinal);
+    return row.getArray(rebaseOrdinal(ordinal));
   }
 
   @Override
   public MapData getMap(int ordinal) {
-    return row.getMap(ordinal);
+    return row.getMap(rebaseOrdinal(ordinal));
   }
 
   @Override
   public Object get(int ordinal, DataType dataType) {
     if (ordinal < HoodieRecord.HOODIE_META_COLUMNS.size()) {
-      return UTF8String.fromBytes(getMetaColumnVal(ordinal).getBytes());
+      // TODO assert data-type
+      return getMetaColumnVal(ordinal);
     }
-    return row.get(ordinal, dataType);
+    return row.get(rebaseOrdinal(ordinal), dataType);
   }
 
   @Override
   public InternalRow copy() {
-    return new HoodieInternalRow(commitTime, commitSeqNumber, recordKey, partitionPath, fileName, row.copy());
+    return new HoodieInternalRow(commitTime, commitSeqNumber, recordKey, partitionPath, fileName, row.copy(), containsMetaFields);
+  }
+
+  private UTF8String getMetaColumnVal(int ordinal) {
+    switch (ordinal) {
+      case 0:
+        return commitTime;
+      case 1:
+        return commitSeqNumber;
+      case 2:
+        return recordKey;
+      case 3:
+        return partitionPath;
+      case 4:
+        return fileName;
+      default:
+        throw new IllegalArgumentException("Not expected");
+    }
+  }
+
+  private int rebaseOrdinal(int ordinal) {
+    // NOTE: In cases when source row does not contain meta fields, we will have to
+    //       rebase ordinal onto its indexes
+    return containsMetaFields ? ordinal : ordinal - INTERNAL_META_COLUMNS_COUNT;
   }
 }
