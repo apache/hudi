@@ -17,6 +17,7 @@
 
 package org.apache.hudi
 
+import org.apache.hudi.client.model.HoodieInternalRow
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.util.ReflectionUtils
@@ -54,7 +55,6 @@ object HoodieDatasetBulkInsertHelper extends Logging {
                            dropPartitionColumns: Boolean): Dataset[Row] = {
     val populateMetaFields = config.populateMetaFields()
     val schema = df.schema
-    val dataTypes = schema.map(_.dataType)
 
     val keyGeneratorClassName = config.getStringOrThrow(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME,
       "Key-generator class name is required")
@@ -76,23 +76,9 @@ object HoodieDatasetBulkInsertHelper extends Logging {
           val commitTimestamp = UTF8String.EMPTY_UTF8
           val commitSeqNo = UTF8String.EMPTY_UTF8
           val filename = UTF8String.EMPTY_UTF8
-          // To minimize # of allocations, we're going to allocate a single array
-          // setting all column values in place for the updated row
-          val newColVals = new Array[Any](schema.fields.length + HoodieRecord.HOODIE_META_COLUMNS.size)
-          // NOTE: Order of the fields have to match that one of `HoodieRecord.HOODIE_META_COLUMNS`
-          newColVals.update(0, commitTimestamp)
-          newColVals.update(1, commitSeqNo)
-          newColVals.update(2, recordKey)
-          newColVals.update(3, partitionPath)
-          newColVals.update(4, filename)
-          // Append existing row column values
-          var idx = 0
-          while (idx < row.numFields) {
-            newColVals.update(5 + idx, row.get(idx, dataTypes(idx)))
-            idx += 1
-          }
 
-          new GenericInternalRow(newColVals)
+          // TODO use mutable row, avoid re-allocating
+          new HoodieInternalRow(commitTimestamp, commitSeqNo, recordKey, partitionPath, filename, row, false)
         }
       }
 
