@@ -18,7 +18,6 @@
 
 package org.apache.spark.sql
 
-import org.apache.hudi.common.util.collection.Pair
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types.{StructField, StructType}
 
@@ -57,8 +56,13 @@ object HoodieUnsafeRowUtils {
    * TODO scala-doc
    */
   def getNestedInternalRowValue(row: InternalRow, nestedFieldPath: Array[(Int, StructField)]): Any = {
+    if (nestedFieldPath.length == 0) {
+      throw new IllegalArgumentException("Nested field-path could not be empty")
+    }
+
     var curRow = row
-    for (idx <- nestedFieldPath.indices) {
+    var idx = 0
+    while (idx < nestedFieldPath.length) {
       val (ord, f) = nestedFieldPath(idx)
       if (curRow.isNullAt(ord)) {
         // scalastyle:off return
@@ -77,6 +81,7 @@ object HoodieUnsafeRowUtils {
             throw new IllegalArgumentException(s"Invalid nested-field path: expected StructType, but was $dt")
         }
       }
+      idx += 1
     }
   }
 
@@ -87,7 +92,8 @@ object HoodieUnsafeRowUtils {
     val fieldRefParts = nestedFieldRef.split('.')
     val ordSeq = ArrayBuffer[(Int, StructField)]()
     var curSchema = schema
-    for (idx <- fieldRefParts.indices) {
+    var idx = 0
+    while (idx < fieldRefParts.length) {
       val fieldRefPart = fieldRefParts(idx)
       val ord = curSchema.fieldIndex(fieldRefPart)
       val field = curSchema(ord)
@@ -101,6 +107,7 @@ object HoodieUnsafeRowUtils {
             throw new IllegalArgumentException(s"Invalid nested field reference ${fieldRefParts.drop(idx).mkString(".")} into $dt")
         }
       }
+      idx += 1
     }
 
     ordSeq.toArray
