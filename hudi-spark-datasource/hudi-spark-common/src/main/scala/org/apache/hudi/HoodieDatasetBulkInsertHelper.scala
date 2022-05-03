@@ -54,13 +54,14 @@ object HoodieDatasetBulkInsertHelper extends Logging {
                            dropPartitionColumns: Boolean): Dataset[Row] = {
     val populateMetaFields = config.populateMetaFields()
     val schema = df.schema
+    val dataTypes = schema.map(_.dataType)
 
     val keyGeneratorClassName = config.getStringOrThrow(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME,
       "Key-generator class name is required")
 
     val prependedRdd: RDD[InternalRow] =
       df.queryExecution.toRdd.mapPartitions { iter =>
-        lazy val keyGenerator =
+        val keyGenerator =
           ReflectionUtils.loadClass(keyGeneratorClassName, new TypedProperties(config.getProps))
             .asInstanceOf[BuiltinKeyGenerator]
 
@@ -84,8 +85,13 @@ object HoodieDatasetBulkInsertHelper extends Logging {
           newColVals.update(2, recordKey)
           newColVals.update(3, partitionPath)
           newColVals.update(4, filename)
-          // Prepend existing row column values
-          row.toSeq(schema).copyToArray(newColVals, 5)
+          // Append existing row column values
+          var idx = 0
+          while (idx < row.numFields) {
+            newColVals.update(5 + idx, row.get(idx, dataTypes(idx)))
+            idx += 1
+          }
+
           new GenericInternalRow(newColVals)
         }
       }
