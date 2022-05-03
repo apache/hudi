@@ -25,7 +25,6 @@ import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.IOType;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
@@ -45,6 +44,7 @@ import org.apache.spark.unsafe.types.UTF8String;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Function;
 
 /**
  * Create handle with InternalRow for datasource implementation of bulk insert.
@@ -54,27 +54,29 @@ public class HoodieRowCreateHandle implements Serializable {
   private static final long serialVersionUID = 1L;
 
   private static final Logger LOG = LogManager.getLogger(HoodieRowCreateHandle.class);
-
-  private static final AtomicLong SEQNO_GEN = new AtomicLong(1);
+  private static final AtomicLong GLOBAL_SEQ_NO = new AtomicLong(1);
 
   private static final Integer RECORD_KEY_META_FIELD_ORD =
       HoodieRecord.HOODIE_META_COLUMNS_NAME_TO_POS.get(HoodieRecord.RECORD_KEY_METADATA_FIELD);
   private static final Integer PARTITION_PATH_META_FIELD_ORD =
       HoodieRecord.HOODIE_META_COLUMNS_NAME_TO_POS.get(HoodieRecord.PARTITION_PATH_METADATA_FIELD);
 
-  private final String instantTime;
-  private final int taskPartitionId;
-  private final long taskId;
-  private final long taskEpochId;
   private final HoodieTable table;
   private final HoodieWriteConfig writeConfig;
-  protected final HoodieInternalRowFileWriter fileWriter;
+
+  private final FileSystem fs;
+
   private final String partitionPath;
   private final Path path;
   private final String fileId;
-  private final FileSystem fs;
-  protected final HoodieInternalWriteStatus writeStatus;
+  private final UTF8String fileName;
+  private final UTF8String commitTime;
+  private final Function<Long, String> seqIdGenerator;
+
   private final HoodieTimer currTimer;
+
+  protected final HoodieInternalRowFileWriter fileWriter;
+  protected final HoodieInternalWriteStatus writeStatus;
 
   public HoodieRowCreateHandle(HoodieTable table, HoodieWriteConfig writeConfig, String partitionPath, String fileId,
                                String instantTime, int taskPartitionId, long taskId, long taskEpochId,
@@ -82,15 +84,18 @@ public class HoodieRowCreateHandle implements Serializable {
     this.partitionPath = partitionPath;
     this.table = table;
     this.writeConfig = writeConfig;
-    this.instantTime = instantTime;
-    this.taskPartitionId = taskPartitionId;
-    this.taskId = taskId;
-    this.taskEpochId = taskEpochId;
     this.fileId = fileId;
-    this.currTimer = new HoodieTimer();
-    this.currTimer.startTimer();
+    this.currTimer = new HoodieTimer(true);
     this.fs = table.getMetaClient().getFs();
-    this.path = makeNewPath(partitionPath);
+
+    String writeToken = getWriteToken(taskPartitionId, taskId, taskEpochId);
+    String fileName = FSUtils.makeBaseFileName(instantTime, writeToken, this.fileId, table.getBaseFileExtension());
+    this.path = makeNewPath(fs, partitionPath, fileName, writeConfig);
+
+    this.fileName = UTF8String.fromString(path.getName());
+    this.commitTime = UTF8String.fromString(instantTime);
+    this.seqIdGenerator = (id) -> HoodieRecord.generateSequenceId(instantTime, taskPartitionId, id);
+
     this.writeStatus = new HoodieInternalWriteStatus(!table.getIndex().isImplicitWithStorage(),
         writeConfig.getWriteStatusFailureFraction());
     writeStatus.setPartitionPath(partitionPath);
@@ -105,7 +110,7 @@ public class HoodieRowCreateHandle implements Serializable {
               FSUtils.getPartitionPath(writeConfig.getBasePath(), partitionPath),
               table.getPartitionMetafileFormat());
       partitionMetadata.trySave(taskPartitionId);
-      createMarkerFile(partitionPath, FSUtils.makeBaseFileName(this.instantTime, getWriteToken(), this.fileId, table.getBaseFileExtension()));
+      createMarkerFile(partitionPath, fileName, instantTime, table, writeConfig);
       this.fileWriter = createNewFileWriter(path, table, writeConfig, structType);
     } catch (IOException e) {
       throw new HoodieInsertException("Failed to initialize file writer for path " + path, e);
@@ -122,13 +127,18 @@ public class HoodieRowCreateHandle implements Serializable {
    */
   public void write(InternalRow row) throws IOException {
     try {
+      // NOTE: PLEASE READ THIS CAREFULLY BEFORE MODIFYING
+      //       This code lays in the hot-path, and substantial caution should be
+      //       exercised making changes to it to minimize amount of excessive:
+      //          - Conversions b/w Spark internal (low-level) types and JVM native ones (like
+      //         [[UTF8String]] and [[String]])
+      //          - Repeated computations (for ex, converting file-path to [[UTF8String]] over and
+      //          over again)
       UTF8String recordKey = row.getUTF8String(RECORD_KEY_META_FIELD_ORD);
-
-      UTF8String partitionPath = row.getUTF8String(PARTITION_PATH_META_FIELD_ORD).copy();
-      UTF8String seqId = UTF8String.fromString(
-          HoodieRecord.generateSequenceId(instantTime, taskPartitionId, SEQNO_GEN.getAndIncrement()));
-      UTF8String fileName = UTF8String.fromString(path.getName());
-      UTF8String commitTime = UTF8String.fromString(instantTime);
+      UTF8String partitionPath = row.getUTF8String(PARTITION_PATH_META_FIELD_ORD);
+      // This is the only meta-field that is generated dynamically, hence conversion b/w
+      // [[String]] and [[UTF8String]] is unavoidable
+      UTF8String seqId = UTF8String.fromString(seqIdGenerator.apply(GLOBAL_SEQ_NO.getAndIncrement()));
 
       HoodieInternalRow updatedRow = new HoodieInternalRow(commitTime, seqId, recordKey,
           partitionPath, fileName, row, true);
@@ -186,7 +196,7 @@ public class HoodieRowCreateHandle implements Serializable {
     return path.getName();
   }
 
-  private Path makeNewPath(String partitionPath) {
+  private static Path makeNewPath(FileSystem fs, String partitionPath, String fileName, HoodieWriteConfig writeConfig) {
     Path path = FSUtils.getPartitionPath(writeConfig.getBasePath(), partitionPath);
     try {
       if (!fs.exists(path)) {
@@ -195,9 +205,7 @@ public class HoodieRowCreateHandle implements Serializable {
     } catch (IOException e) {
       throw new HoodieIOException("Failed to make dir " + path, e);
     }
-    HoodieTableConfig tableConfig = table.getMetaClient().getTableConfig();
-    return new CachingPath(path.toString(), FSUtils.makeBaseFileName(instantTime, getWriteToken(), fileId,
-        tableConfig.getBaseFileFormat().getFileExtension()));
+    return new CachingPath(path.toString(), fileName);
   }
 
   /**
@@ -205,12 +213,17 @@ public class HoodieRowCreateHandle implements Serializable {
    *
    * @param partitionPath Partition path
    */
-  private void createMarkerFile(String partitionPath, String dataFileName) {
+  private static void createMarkerFile(String partitionPath,
+                                       String dataFileName,
+                                       String instantTime,
+                                       HoodieTable<?, ?, ?, ?> table,
+                                       HoodieWriteConfig writeConfig) {
     WriteMarkersFactory.get(writeConfig.getMarkersType(), table, instantTime)
         .create(partitionPath, dataFileName, IOType.CREATE);
   }
 
-  private String getWriteToken() {
+  // TODO extract to utils
+  private static String getWriteToken(int taskPartitionId, long taskId, long taskEpochId) {
     return taskPartitionId + "-" + taskId + "-" + taskEpochId;
   }
 
