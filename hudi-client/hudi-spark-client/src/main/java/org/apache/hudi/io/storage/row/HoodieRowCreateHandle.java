@@ -30,6 +30,7 @@ import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieInsertException;
+import org.apache.hudi.hadoop.CachingPath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 
@@ -134,9 +135,12 @@ public class HoodieRowCreateHandle implements Serializable {
 
       try {
         fileWriter.writeRow(recordKey, updatedRow);
-        writeStatus.markSuccess(recordKey);
+
+        if (writeStatus.isTrackingSuccessfulWrites()) {
+          writeStatus.markSuccess(recordKey.toString());
+        }
       } catch (Throwable t) {
-        writeStatus.markFailure(recordKey, t);
+        writeStatus.markFailure(recordKey.toString(), t);
       }
     } catch (Throwable ge) {
       writeStatus.setGlobalError(ge);
@@ -192,7 +196,7 @@ public class HoodieRowCreateHandle implements Serializable {
       throw new HoodieIOException("Failed to make dir " + path, e);
     }
     HoodieTableConfig tableConfig = table.getMetaClient().getTableConfig();
-    return new Path(path.toString(), FSUtils.makeBaseFileName(instantTime, getWriteToken(), fileId,
+    return new CachingPath(path.toString(), FSUtils.makeBaseFileName(instantTime, getWriteToken(), fileId,
         tableConfig.getBaseFileFormat().getFileExtension()));
   }
 
