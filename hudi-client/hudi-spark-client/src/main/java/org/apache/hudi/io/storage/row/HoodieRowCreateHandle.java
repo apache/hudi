@@ -145,10 +145,9 @@ public class HoodieRowCreateHandle implements Serializable {
 
       try {
         fileWriter.writeRow(recordKey, updatedRow);
-
-        if (writeStatus.isTrackingSuccessfulWrites()) {
-          writeStatus.markSuccess(recordKey.toString());
-        }
+        // NOTE: To avoid conversion on the hot-path we only convert [[UTF8String]] into [[String]]
+        //       in cases when successful records' writes are being tracked
+        writeStatus.markSuccess(writeStatus.isTrackingSuccessfulWrites() ? recordKey.toString() : null);
       } catch (Throwable t) {
         writeStatus.markFailure(recordKey.toString(), t);
       }
