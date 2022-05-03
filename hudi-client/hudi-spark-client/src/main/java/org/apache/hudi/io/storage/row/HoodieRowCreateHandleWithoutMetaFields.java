@@ -41,13 +41,13 @@ public class HoodieRowCreateHandleWithoutMetaFields extends HoodieRowCreateHandl
   /**
    * Write the incoming InternalRow as is.
    *
-   * @param record instance of {@link InternalRow} that needs to be written to the fileWriter.
+   * @param row instance of {@link InternalRow} that needs to be written to the fileWriter.
    * @throws IOException
    */
   @Override
-  public void write(InternalRow record) throws IOException {
+  public void write(InternalRow row) throws IOException {
     try {
-      fileWriter.writeRow(record);
+      fileWriter.writeRow(row);
       writeStatus.markSuccess();
     } catch (Throwable ge) {
       writeStatus.setGlobalError(ge);

@@ -39,6 +39,7 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.types.StructType;
+import org.apache.spark.unsafe.types.UTF8String;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -50,8 +51,15 @@ import java.util.concurrent.atomic.AtomicLong;
 public class HoodieRowCreateHandle implements Serializable {
 
   private static final long serialVersionUID = 1L;
+
   private static final Logger LOG = LogManager.getLogger(HoodieRowCreateHandle.class);
-  private static final AtomicLong SEQGEN = new AtomicLong(1);
+
+  private static final AtomicLong SEQNO_GEN = new AtomicLong(1);
+
+  private static final Integer RECORD_KEY_META_FIELD_ORD =
+      HoodieRecord.HOODIE_META_COLUMNS_NAME_TO_POS.get(HoodieRecord.RECORD_KEY_METADATA_FIELD);
+  private static final Integer PARTITION_PATH_META_FIELD_ORD =
+      HoodieRecord.HOODIE_META_COLUMNS_NAME_TO_POS.get(HoodieRecord.PARTITION_PATH_METADATA_FIELD);
 
   private final String instantTime;
   private final int taskPartitionId;
@@ -108,18 +116,24 @@ public class HoodieRowCreateHandle implements Serializable {
    * Writes an {@link InternalRow} to the underlying HoodieInternalRowFileWriter. Before writing, value for meta columns are computed as required
    * and wrapped in {@link HoodieInternalRow}. {@link HoodieInternalRow} is what gets written to HoodieInternalRowFileWriter.
    *
-   * @param record instance of {@link InternalRow} that needs to be written to the fileWriter.
+   * @param row instance of {@link InternalRow} that needs to be written to the fileWriter.
    * @throws IOException
    */
-  public void write(InternalRow record) throws IOException {
+  public void write(InternalRow row) throws IOException {
     try {
-      final String partitionPath = String.valueOf(record.getUTF8String(HoodieRecord.PARTITION_PATH_META_FIELD_POS));
-      final String seqId = HoodieRecord.generateSequenceId(instantTime, taskPartitionId, SEQGEN.getAndIncrement());
-      final String recordKey = String.valueOf(record.getUTF8String(HoodieRecord.RECORD_KEY_META_FIELD_POS));
-      HoodieInternalRow internalRow = new HoodieInternalRow(instantTime, seqId, recordKey, partitionPath, path.getName(),
-          record);
+      UTF8String recordKey = row.getUTF8String(RECORD_KEY_META_FIELD_ORD);
+
+      UTF8String partitionPath = row.getUTF8String(PARTITION_PATH_META_FIELD_ORD).copy();
+      UTF8String seqId = UTF8String.fromString(
+          HoodieRecord.generateSequenceId(instantTime, taskPartitionId, SEQNO_GEN.getAndIncrement()));
+      UTF8String fileName = UTF8String.fromString(path.getName());
+      UTF8String commitTime = UTF8String.fromString(instantTime);
+
+      HoodieInternalRow updatedRow = new HoodieInternalRow(commitTime, seqId, recordKey,
+          partitionPath, fileName, row, true);
+
       try {
-        fileWriter.writeRow(recordKey, internalRow);
+        fileWriter.writeRow(recordKey, updatedRow);
         writeStatus.markSuccess(recordKey);
       } catch (Throwable t) {
         writeStatus.markFailure(recordKey, t);
