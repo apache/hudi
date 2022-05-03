@@ -69,6 +69,9 @@ public class HoodieRowCreateHandle implements Serializable {
   private final String partitionPath;
   private final Path path;
   private final String fileId;
+
+  private final boolean populateMetaFields;
+
   private final UTF8String fileName;
   private final UTF8String commitTime;
   private final Function<Long, String> seqIdGenerator;
@@ -78,20 +81,30 @@ public class HoodieRowCreateHandle implements Serializable {
   protected final HoodieInternalRowFileWriter fileWriter;
   protected final HoodieInternalWriteStatus writeStatus;
 
-  public HoodieRowCreateHandle(HoodieTable table, HoodieWriteConfig writeConfig, String partitionPath, String fileId,
-                               String instantTime, int taskPartitionId, long taskId, long taskEpochId,
-                               StructType structType) {
+  public HoodieRowCreateHandle(HoodieTable table,
+                               HoodieWriteConfig writeConfig,
+                               String partitionPath,
+                               String fileId,
+                               String instantTime,
+                               int taskPartitionId,
+                               long taskId,
+                               long taskEpochId,
+                               StructType structType,
+                               boolean populateMetaFields) {
     this.partitionPath = partitionPath;
     this.table = table;
     this.writeConfig = writeConfig;
     this.fileId = fileId;
+
     this.currTimer = new HoodieTimer(true);
+
     this.fs = table.getMetaClient().getFs();
 
     String writeToken = getWriteToken(taskPartitionId, taskId, taskEpochId);
     String fileName = FSUtils.makeBaseFileName(instantTime, writeToken, this.fileId, table.getBaseFileExtension());
     this.path = makeNewPath(fs, partitionPath, fileName, writeConfig);
 
+    this.populateMetaFields = populateMetaFields;
     this.fileName = UTF8String.fromString(path.getName());
     this.commitTime = UTF8String.fromString(instantTime);
     this.seqIdGenerator = (id) -> HoodieRecord.generateSequenceId(instantTime, taskPartitionId, id);
@@ -135,13 +148,19 @@ public class HoodieRowCreateHandle implements Serializable {
       //          - Repeated computations (for ex, converting file-path to [[UTF8String]] over and
       //          over again)
       UTF8String recordKey = row.getUTF8String(RECORD_KEY_META_FIELD_ORD);
-      UTF8String partitionPath = row.getUTF8String(PARTITION_PATH_META_FIELD_ORD);
-      // This is the only meta-field that is generated dynamically, hence conversion b/w
-      // [[String]] and [[UTF8String]] is unavoidable
-      UTF8String seqId = UTF8String.fromString(seqIdGenerator.apply(GLOBAL_SEQ_NO.getAndIncrement()));
 
-      HoodieInternalRow updatedRow = new HoodieInternalRow(commitTime, seqId, recordKey,
-          partitionPath, fileName, row, true);
+      InternalRow updatedRow;
+      if (!populateMetaFields) {
+        updatedRow = row;
+      } else {
+        UTF8String partitionPath = row.getUTF8String(PARTITION_PATH_META_FIELD_ORD);
+        // This is the only meta-field that is generated dynamically, hence conversion b/w
+        // [[String]] and [[UTF8String]] is unavoidable
+        UTF8String seqId = UTF8String.fromString(seqIdGenerator.apply(GLOBAL_SEQ_NO.getAndIncrement()));
+
+        updatedRow = new HoodieInternalRow(commitTime, seqId, recordKey,
+            partitionPath, fileName, row, true);
+      }
 
       try {
         fileWriter.writeRow(recordKey, updatedRow);
