@@ -21,7 +21,6 @@ package org.apache.hudi.utilities.deltastreamer;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.spark.api.java.JavaRDD;
 

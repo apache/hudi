@@ -761,7 +761,6 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT);
     cfg.continuousMode = true;
     if (testShutdownGracefully) {
-      cfg.enablePostWriteTerminationStrategy = true;
       cfg.postWriteTerminationStrategyClass = NoNewDataTerminationStrategy.class.getName();
     }
     cfg.tableType = tableType.name();
@@ -798,7 +797,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       }
     });
     TestHelpers.waitTillCondition(condition, dsFuture, 360);
-    if (cfg.enablePostWriteTerminationStrategy) {
+    if (!cfg.postWriteTerminationStrategyClass.isEmpty()) {
       awaitDeltaStreamerShutdown(ds);
     } else {
       ds.shutdownGracefully();
@@ -810,7 +809,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     // await until deltastreamer shuts down on its own
     boolean shutDownRequested = false;
     int timeSoFar = 0;
-    while(!shutDownRequested) {
+    while (!shutDownRequested) {
       shutDownRequested = ds.getDeltaSyncService().isShutdownRequested();
       Thread.sleep(500);
       timeSoFar += 500;
@@ -819,7 +818,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       }
     }
     boolean shutdownComplete = false;
-    while(!shutdownComplete) {
+    while (!shutdownComplete) {
       shutdownComplete = ds.getDeltaSyncService().isShutdown();
       Thread.sleep(500);
       timeSoFar += 500;
