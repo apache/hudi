@@ -35,19 +35,19 @@ public class NoNewDataTerminationStrategy implements PostWriteTerminationStrateg
 
   private static final Logger LOG = LogManager.getLogger(NoNewDataTerminationStrategy.class);
 
-  public static final String NUM_TIMES_NO_NEW_DATA_TO_SHUTDOWN = "no.new.data.termination.strategy.num.times.no.new.data.to.shutdown";
-  public static final int DEFAULT_NUM_TIMES_NO_NEW_DATA_TO_SHUTDOWN = 3;
+  public static final String MAX_ROUNDS_WITHOUT_NEW_DATA_TO_SHUTDOWN = "max.rounds.without.new.data.to.shutdown";
+  public static final int DEFAULT_MAX_ROUNDS_WITHOUT_NEW_DATA_TO_SHUTDOWN = 3;
 
   private final int numTimesNoNewDataToShutdown;
   private int numTimesNoNewData = 0;
 
   public NoNewDataTerminationStrategy(TypedProperties properties) {
-    numTimesNoNewDataToShutdown = properties.getInteger(NUM_TIMES_NO_NEW_DATA_TO_SHUTDOWN, DEFAULT_NUM_TIMES_NO_NEW_DATA_TO_SHUTDOWN);
+    numTimesNoNewDataToShutdown = properties.getInteger(MAX_ROUNDS_WITHOUT_NEW_DATA_TO_SHUTDOWN, DEFAULT_MAX_ROUNDS_WITHOUT_NEW_DATA_TO_SHUTDOWN);
   }
 
   @Override
-  public boolean shouldShutdown(Option<Pair<Option<String>, JavaRDD<WriteStatus>>> scheduledCompactionInstantAndWriteStatuses) {
-    numTimesNoNewData = scheduledCompactionInstantAndWriteStatuses.isPresent() ? 0 : numTimesNoNewData + 1;
+  public boolean shouldShutdown(Option<JavaRDD<WriteStatus>> writeStatuses) {
+    numTimesNoNewData = writeStatuses.isPresent() ? 0 : numTimesNoNewData + 1;
     if (numTimesNoNewData >= numTimesNoNewDataToShutdown) {
       LOG.info("Shutting down on continuous mode as there is no new data for " + numTimesNoNewData);
       return true;

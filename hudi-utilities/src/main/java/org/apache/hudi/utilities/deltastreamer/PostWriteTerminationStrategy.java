@@ -32,9 +32,9 @@ public interface PostWriteTerminationStrategy {
 
   /**
    * Returns whether deltastreamer needs to be shutdown.
-   * @param scheduledCompactionInstantAndWriteStatuses optional pair of scheduled compaction instant and write statuses.
+   * @param writeStatuses optional pair of scheduled compaction instant and write statuses.
    * @return true if deltastreamer has to be shutdown. false otherwise.
    */
-  boolean shouldShutdown(Option<Pair<Option<String>, JavaRDD<WriteStatus>>> scheduledCompactionInstantAndWriteStatuses);
+  boolean shouldShutdown(Option<JavaRDD<WriteStatus>> writeStatuses);
 
 }
