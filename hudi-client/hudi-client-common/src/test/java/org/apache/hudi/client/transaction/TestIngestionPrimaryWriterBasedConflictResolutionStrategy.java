@@ -84,6 +84,9 @@ public class TestIngestionPrimaryWriterBasedConflictResolutionStrategy extends H
     createInflightCommit(currentWriterInstant, metaClient);
     // compaction 1 gets scheduled and finishes
     String newInstantTime = HoodieActiveTimeline.createNewInstantTime();
+    // TODO: Remove sleep stmt once the modified times issue is fixed.
+    // Sleep thread for atleast 1sec for consecutive commits that way they do not have two commits modified times falls on the same millisecond.
+    Thread.sleep(1000);
     createCompaction(newInstantTime, metaClient);
 
     Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
@@ -198,6 +201,9 @@ public class TestIngestionPrimaryWriterBasedConflictResolutionStrategy extends H
     // writer 1 starts
     String currentWriterInstant = HoodieActiveTimeline.createNewInstantTime();
     createInflightCommit(currentWriterInstant, metaClient);
+    // TODO: Remove sleep stmt once the modified times issue is fixed.
+    // Sleep thread for atleast 1sec for consecutive commits that way they do not have two commits modified times falls on the same millisecond.
+    Thread.sleep(1000);
     // clustering writer starts and complete before ingestion commit.
     String replaceWriterInstant = HoodieActiveTimeline.createNewInstantTime();
     createReplace(replaceWriterInstant, WriteOperationType.CLUSTER, metaClient);
@@ -231,6 +237,9 @@ public class TestIngestionPrimaryWriterBasedConflictResolutionStrategy extends H
     // writer 1 starts
     String currentWriterInstant = HoodieActiveTimeline.createNewInstantTime();
     createInflightCommit(currentWriterInstant, metaClient);
+    // TODO: Remove sleep stmt once the modified times issue is fixed.
+    // Sleep thread for atleast 1sec for consecutive commits that way they do not have two commits modified times falls on the same millisecond.
+    Thread.sleep(1000);
     // replace 1 gets scheduled and finished
     String newInstantTime = HoodieActiveTimeline.createNewInstantTime();
     createReplace(newInstantTime, WriteOperationType.INSERT_OVERWRITE, metaClient);
