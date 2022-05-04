@@ -28,6 +28,8 @@ import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.CatalogTableType
 import org.apache.spark.sql.types._
 
+import org.junit.jupiter.api.Assertions.assertFalse
+
 import scala.collection.JavaConverters._
 
 class TestCreateTable extends TestHoodieSqlBase {
@@ -48,8 +50,11 @@ class TestCreateTable extends TestHoodieSqlBase {
          |  ts long
          | ) using hudi
          | tblproperties (
+         |   hoodie.database.name = "databaseName",
+         |   hoodie.table.name = "tableName",
          |   primaryKey = 'id',
-         |   preCombineField = 'ts'
+         |   preCombineField = 'ts',
+         |   hoodie.datasource.write.operation = 'upsert'
          | )
        """.stripMargin)
     val table = spark.sessionState.catalog.getTableMetadata(TableIdentifier(tableName))
@@ -64,6 +69,9 @@ class TestCreateTable extends TestHoodieSqlBase {
         StructField("price", DoubleType),
         StructField("ts", LongType))
     )(table.schema.fields)
+    assertFalse(table.properties.contains(HoodieTableConfig.DATABASE_NAME.key()))
+    assertFalse(table.properties.contains(HoodieTableConfig.NAME.key()))
+    assertFalse(table.properties.contains(OPERATION.key()))
 
     val tablePath = table.storage.properties("path")
     val metaClient = HoodieTableMetaClient.builder()
@@ -72,6 +80,10 @@ class TestCreateTable extends TestHoodieSqlBase {
       .build()
     val tableConfig = metaClient.getTableConfig
     assertResult(databaseName)(tableConfig.getDatabaseName)
+    assertResult(tableName)(tableConfig.getTableName)
+    assertFalse(tableConfig.contains(OPERATION.key()))
+
+    spark.sql("use default")
   }
 
   test("Test Create Hoodie Table With Options") {
@@ -87,8 +99,11 @@ class TestCreateTable extends TestHoodieSqlBase {
          | ) using hudi
          | partitioned by (dt)
          | options (
+         |   hoodie.database.name = "databaseName",
+         |   hoodie.table.name = "tableName",
          |   primaryKey = 'id',
-         |   preCombineField = 'ts'
+         |   preCombineField = 'ts',
+         |   hoodie.datasource.write.operation = 'upsert'
          | )
        """.stripMargin)
     val table = spark.sessionState.catalog.getTableMetadata(TableIdentifier(tableName))
@@ -107,6 +122,9 @@ class TestCreateTable extends TestHoodieSqlBase {
         StructField("ts", LongType),
         StructField("dt", StringType))
     )(table.schema.fields)
+    assertFalse(table.properties.contains(HoodieTableConfig.DATABASE_NAME.key()))
+    assertFalse(table.properties.contains(HoodieTableConfig.NAME.key()))
+    assertFalse(table.properties.contains(OPERATION.key()))
 
     val tablePath = table.storage.properties("path")
     val metaClient = HoodieTableMetaClient.builder()
@@ -119,6 +137,9 @@ class TestCreateTable extends TestHoodieSqlBase {
     assertResult("id")(tableConfig(HoodieTableConfig.RECORDKEY_FIELDS.key))
     assertResult("ts")(tableConfig(HoodieTableConfig.PRECOMBINE_FIELD.key))
     assertResult(classOf[ComplexKeyGenerator].getCanonicalName)(tableConfig(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key))
+    assertResult("default")(tableConfig(HoodieTableConfig.DATABASE_NAME.key()))
+    assertResult(tableName)(tableConfig(HoodieTableConfig.NAME.key()))
+    assertFalse(tableConfig.contains(OPERATION.key()))
   }
 
   test("Test Create External Hoodie Table") {
@@ -357,6 +378,84 @@ class TestCreateTable extends TestHoodieSqlBase {
           Seq(1, "a1", 10, "2021-05-06")
         )
       }
+    }
+  }
+
+  test("Test Create Table As Select With Tblproperties For Filter Props") {
+    Seq("cow", "mor").foreach { tableType =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           | create table $tableName using hudi
+           | partitioned by (dt)
+           | tblproperties(
+           |    hoodie.database.name = "databaseName",
+           |    hoodie.table.name = "tableName",
+           |    primaryKey = 'id',
+           |    preCombineField = 'ts',
+           |    hoodie.datasource.write.operation = 'upsert',
+           |    type = '$tableType'
+           | )
+           | AS
+           | select 1 as id, 'a1' as name, 10 as price, '2021-04-01' as dt, 1000 as ts
+         """.stripMargin
+      )
+      checkAnswer(s"select id, name, price, dt from $tableName")(
+        Seq(1, "a1", 10, "2021-04-01")
+      )
+      val table = spark.sessionState.catalog.getTableMetadata(TableIdentifier(tableName))
+      assertFalse(table.properties.contains(HoodieTableConfig.DATABASE_NAME.key()))
+      assertFalse(table.properties.contains(HoodieTableConfig.NAME.key()))
+      assertFalse(table.properties.contains(OPERATION.key()))
+
+      val tablePath = table.storage.properties("path")
+      val metaClient = HoodieTableMetaClient.builder()
+        .setBasePath(tablePath)
+        .setConf(spark.sessionState.newHadoopConf())
+        .build()
+      val tableConfig = metaClient.getTableConfig.getProps.asScala.toMap
+      assertResult("default")(tableConfig(HoodieTableConfig.DATABASE_NAME.key()))
+      assertResult(tableName)(tableConfig(HoodieTableConfig.NAME.key()))
+      assertFalse(tableConfig.contains(OPERATION.key()))
+    }
+  }
+
+  test("Test Create Table As Select With Options For Filter Props") {
+    Seq("cow", "mor").foreach { tableType =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           | create table $tableName using hudi
+           | partitioned by (dt)
+           | options(
+           |    hoodie.database.name = "databaseName",
+           |    hoodie.table.name = "tableName",
+           |    primaryKey = 'id',
+           |    preCombineField = 'ts',
+           |    hoodie.datasource.write.operation = 'upsert',
+           |    type = '$tableType'
+           | )
+           | AS
+           | select 1 as id, 'a1' as name, 10 as price, '2021-04-01' as dt, 1000 as ts
+         """.stripMargin
+      )
+      checkAnswer(s"select id, name, price, dt from $tableName")(
+        Seq(1, "a1", 10, "2021-04-01")
+      )
+      val table = spark.sessionState.catalog.getTableMetadata(TableIdentifier(tableName))
+      assertFalse(table.properties.contains(HoodieTableConfig.DATABASE_NAME.key()))
+      assertFalse(table.properties.contains(HoodieTableConfig.NAME.key()))
+      assertFalse(table.properties.contains(OPERATION.key()))
+
+      val tablePath = table.storage.properties("path")
+      val metaClient = HoodieTableMetaClient.builder()
+        .setBasePath(tablePath)
+        .setConf(spark.sessionState.newHadoopConf())
+        .build()
+      val tableConfig = metaClient.getTableConfig.getProps.asScala.toMap
+      assertResult("default")(tableConfig(HoodieTableConfig.DATABASE_NAME.key()))
+      assertResult(tableName)(tableConfig(HoodieTableConfig.NAME.key()))
+      assertFalse(tableConfig.contains(OPERATION.key()))
     }
   }
 
