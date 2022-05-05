@@ -122,6 +122,9 @@ public class UtilHelpers {
                 HoodieDeltaStreamerMetrics.class},
             cfg, jssc, sparkSession, schemaProvider, metrics);
       } catch (HoodieException e) {
+        if (e.getCause() != null && !(e.getCause() instanceof NoSuchMethodException)) {
+          LOG.error("Could not load source class " + sourceClass, e);
+        }
         return (Source) ReflectionUtils.loadClass(sourceClass,
             new Class<?>[] {TypedProperties.class, JavaSparkContext.class,
                 SparkSession.class, SchemaProvider.class},
