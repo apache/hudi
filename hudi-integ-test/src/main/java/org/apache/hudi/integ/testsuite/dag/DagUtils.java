@@ -18,25 +18,28 @@
 
 package org.apache.hudi.integ.testsuite.dag;
 
-import com.fasterxml.jackson.core.JsonGenerator;
-import com.fasterxml.jackson.core.JsonToken;
-import com.fasterxml.jackson.databind.DeserializationContext;
-import com.fasterxml.jackson.databind.JsonDeserializer;
-import com.fasterxml.jackson.databind.JsonSerializer;
-import com.fasterxml.jackson.databind.SerializerProvider;
-import com.fasterxml.jackson.databind.module.SimpleModule;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig;
 import org.apache.hudi.integ.testsuite.dag.nodes.DagNode;
 
+import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.core.JsonToken;
+import com.fasterxml.jackson.databind.DeserializationContext;
+import com.fasterxml.jackson.databind.JsonDeserializer;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.JsonSerializer;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializerProvider;
+import com.fasterxml.jackson.databind.module.SimpleModule;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import com.fasterxml.jackson.dataformat.yaml.YAMLGenerator.Feature;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -48,8 +51,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.stream.Collectors;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
+
+import static org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config.CONFIG_NAME;
+import static org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config.NO_DEPENDENCY_VALUE;
 
 /**
  * Utility class to SerDe workflow dag.
@@ -121,7 +125,12 @@ public class DagUtils {
     final ObjectMapper yamlWriter = new ObjectMapper(new YAMLFactory().disable(Feature.WRITE_DOC_START_MARKER)
         .enable(Feature.MINIMIZE_QUOTES).enable(JsonParser.Feature.ALLOW_UNQUOTED_FIELD_NAMES));
     JsonNode yamlNode = MAPPER.createObjectNode();
-    convertDagToYaml(yamlNode, dag.getNodeList());
+    ((ObjectNode) yamlNode).put(DAG_NAME, dag.getDagName());
+    ((ObjectNode) yamlNode).put(DAG_ROUNDS, dag.getRounds());
+    ((ObjectNode) yamlNode).put(DAG_INTERMITTENT_DELAY_MINS, dag.getIntermittentDelayMins());
+    JsonNode dagContentNode = MAPPER.createObjectNode();
+    convertDagToYaml(dagContentNode, dag.getNodeList());
+    ((ObjectNode) yamlNode).put(DAG_CONTENT, dagContentNode);
     return yamlWriter.writerWithDefaultPrettyPrinter().writeValueAsString(yamlNode);
   }
 
@@ -179,7 +188,7 @@ public class DagUtils {
 
   private static Map<String, Object> convertJsonNodeToMap(JsonNode node) {
     Map<String, Object> configsMap = new HashMap<>();
-    Iterator<Entry<String, JsonNode>> itr = node.get(DeltaConfig.Config.CONFIG_NAME).fields();
+    Iterator<Entry<String, JsonNode>> itr = node.get(CONFIG_NAME).fields();
     while (itr.hasNext()) {
       Entry<String, JsonNode> entry = itr.next();
       switch (entry.getKey()) {
@@ -257,9 +266,14 @@ public class DagUtils {
           break;
       }
     }
-    ((ObjectNode) jsonNode).put(DeltaConfig.Config.CONFIG_NAME, configNode);
+    ((ObjectNode) jsonNode).put(CONFIG_NAME, configNode);
     ((ObjectNode) jsonNode).put(DeltaConfig.Config.TYPE, type);
-    ((ObjectNode) jsonNode).put(DeltaConfig.Config.DEPENDENCIES, getDependencyNames(node));
+    String dependencyNames = getDependencyNames(node);
+    if (StringUtils.isNullOrEmpty(dependencyNames) || "\"\"".equals(dependencyNames)) {
+      // Set "none" if there is no dependency
+      dependencyNames = NO_DEPENDENCY_VALUE;
+    }
+    ((ObjectNode) jsonNode).put(DeltaConfig.Config.DEPENDENCIES, dependencyNames);
     return jsonNode;
   }
 
