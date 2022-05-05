@@ -425,4 +425,17 @@ public class FilePathUtils {
     }
     return conf.getString(FlinkOptions.PARTITION_PATH_FIELD).split(",");
   }
+
+  /**
+   * Extracts the hive sync partition fields with given configuration.
+   *
+   * @param conf The flink configuration
+   * @return array of the hive partition fields
+   */
+  public static String[] extractHivePartitionFields(org.apache.flink.configuration.Configuration conf) {
+    if (FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.HIVE_SYNC_PARTITION_FIELDS)) {
+      return extractPartitionKeys(conf);
+    }
+    return conf.getString(FlinkOptions.HIVE_SYNC_PARTITION_FIELDS).split(",");
+  }
 }

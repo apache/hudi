@@ -18,13 +18,9 @@
 
 package org.apache.hudi.metadata;
 
-import org.apache.avro.specific.SpecificRecordBase;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieIndexPartitionInfo;
+import org.apache.hudi.avro.model.HoodieIndexPlan;
 import org.apache.hudi.avro.model.HoodieInstantInfo;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
@@ -70,6 +66,12 @@ import org.apache.hudi.config.metrics.HoodieMetricsJmxConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.HoodieMetadataException;
+
+import org.apache.avro.specific.SpecificRecordBase;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -88,6 +90,9 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
+import static org.apache.hudi.common.table.timeline.HoodieInstant.State.REQUESTED;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.getIndexInflightInstant;
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeIndexPlan;
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 import static org.apache.hudi.metadata.HoodieTableMetadata.METADATA_TABLE_NAME_SUFFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP;
@@ -379,21 +384,24 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     }
 
     // if metadata table exists, then check if any of the enabled partition types needs to be initialized
-    Set<String> inflightAndCompletedPartitions = getInflightAndCompletedMetadataPartitions(dataMetaClient.getTableConfig());
-    List<MetadataPartitionType> partitionsToInit = this.enabledPartitionTypes.stream()
-        .filter(p -> !inflightAndCompletedPartitions.contains(p.getPartitionPath()) && !MetadataPartitionType.FILES.equals(p))
-        .collect(Collectors.toList());
+    // NOTE: It needs to be guarded by async index config because if that is enabled then initialization happens through the index scheduler.
+    if (!dataWriteConfig.isMetadataAsyncIndex()) {
+      Set<String> inflightAndCompletedPartitions = getInflightAndCompletedMetadataPartitions(dataMetaClient.getTableConfig());
+      LOG.info("Async metadata indexing enabled and following partitions already initialized: " + inflightAndCompletedPartitions);
+      List<MetadataPartitionType> partitionsToInit = this.enabledPartitionTypes.stream()
+          .filter(p -> !inflightAndCompletedPartitions.contains(p.getPartitionPath()) && !MetadataPartitionType.FILES.equals(p))
+          .collect(Collectors.toList());
+      // if there are no partitions to initialize or there is a pending operation, then don't initialize in this round
+      if (partitionsToInit.isEmpty() || anyPendingDataInstant(dataMetaClient, inflightInstantTimestamp)) {
+        return;
+      }
 
-    // if there are no partitions to initialize or there is a pending operation, then don't initialize in this round
-    if (partitionsToInit.isEmpty() || anyPendingDataInstant(dataMetaClient, inflightInstantTimestamp)) {
-      return;
+      String createInstantTime = getInitialCommitInstantTime(dataMetaClient);
+      initTableMetadata(); // re-init certain flags in BaseTableMetadata
+      initializeEnabledFileGroups(dataMetaClient, createInstantTime, partitionsToInit);
+      initialCommit(createInstantTime, partitionsToInit);
+      updateInitializedPartitionsInTableConfig(partitionsToInit);
     }
-
-    String createInstantTime = getInitialCommitInstantTime(dataMetaClient);
-    initTableMetadata(); // re-init certain flags in BaseTableMetadata
-    initializeEnabledFileGroups(dataMetaClient, createInstantTime, partitionsToInit);
-    initialCommit(createInstantTime, partitionsToInit);
-    updateInitializedPartitionsInTableConfig(partitionsToInit);
   }
 
   private <T extends SpecificRecordBase> boolean metadataTableExists(HoodieTableMetaClient dataMetaClient,
@@ -557,6 +565,8 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     List<HoodieInstant> pendingDataInstant = dataMetaClient.getActiveTimeline()
         .getInstants().filter(i -> !i.isCompleted())
         .filter(i -> !inflightInstantTimestamp.isPresent() || !i.getTimestamp().equals(inflightInstantTimestamp.get()))
+        // regular writers should not be blocked due to pending indexing action
+        .filter(i -> !HoodieTimeline.INDEXING_ACTION.equals(i.getAction()))
         .collect(Collectors.toList());
 
     if (!pendingDataInstant.isEmpty()) {
@@ -722,7 +732,31 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       HoodieTableConfig.update(dataMetaClient.getFs(), new Path(dataMetaClient.getMetaPath()), dataMetaClient.getTableConfig().getProps());
       LOG.warn("Deleting Metadata Table partitions: " + partitionPath);
       dataMetaClient.getFs().delete(new Path(metadataWriteConfig.getBasePath(), partitionPath), true);
+      // delete corresponding pending indexing instant file in the timeline
+      LOG.warn("Deleting pending indexing instant from the timeline for partition: " + partitionPath);
+      deletePendingIndexingInstant(dataMetaClient, partitionPath);
     }
+  }
+
+  /**
+   * Deletes any pending indexing instant, if it exists.
+   * It reads the plan from indexing.requested file and deletes both requested and inflight instants,
+   * if the partition path in the plan matches with the given partition path.
+   */
+  private static void deletePendingIndexingInstant(HoodieTableMetaClient metaClient, String partitionPath) {
+    metaClient.reloadActiveTimeline().filterPendingIndexTimeline().getInstants().filter(instant -> REQUESTED.equals(instant.getState()))
+        .forEach(instant -> {
+          try {
+            HoodieIndexPlan indexPlan = deserializeIndexPlan(metaClient.getActiveTimeline().readIndexPlanAsBytes(instant).get());
+            if (indexPlan.getIndexPartitionInfos().stream()
+                .anyMatch(indexPartitionInfo -> indexPartitionInfo.getMetadataPartitionPath().equals(partitionPath))) {
+              metaClient.getActiveTimeline().deleteInstantFileIfExists(instant);
+              metaClient.getActiveTimeline().deleteInstantFileIfExists(getIndexInflightInstant(instant.getTimestamp()));
+            }
+          } catch (IOException e) {
+            LOG.error("Failed to delete the instant file corresponding to " + instant);
+          }
+        });
   }
 
   private MetadataRecordsGenerationParams getRecordsGenerationParams() {
@@ -774,11 +808,15 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     // fetch partitions to update from table config
     Set<String> partitionsToUpdate = getCompletedMetadataPartitions(dataMetaClient.getTableConfig());
     // add inflight indexes as well because the file groups have already been initialized, so writers can log updates
+    // NOTE: Async HoodieIndexer can move some partition to inflight. While that partition is still being built,
+    //       the regular ingestion writers should not be blocked. They can go ahead and log updates to the metadata partition.
+    //       Instead of depending on enabledPartitionTypes, the table config becomes the source of truth for which partitions to update.
     partitionsToUpdate.addAll(getInflightMetadataPartitions(dataMetaClient.getTableConfig()));
     if (!partitionsToUpdate.isEmpty()) {
       return partitionsToUpdate;
     }
     // fallback to all enabled partitions if table config returned no partitions
+    LOG.warn("There are no partitions to update according to table config. Falling back to enabled partition types in the write config.");
     return getEnabledPartitionTypes().stream().map(MetadataPartitionType::getPartitionPath).collect(Collectors.toSet());
   }
 

@@ -47,7 +47,7 @@ import java.util.Queue;
  */
 public class HoodieSortedMergeHandle<T extends HoodieRecordPayload, I, K, O> extends HoodieMergeHandle<T, I, K, O> {
 
-  private Queue<String> newRecordKeysSorted = new PriorityQueue<>();
+  private final Queue<String> newRecordKeysSorted = new PriorityQueue<>();
 
   public HoodieSortedMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                                  Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId, TaskContextSupplier taskContextSupplier,

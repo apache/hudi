@@ -99,7 +99,11 @@ public class DFSPropertiesConfiguration {
     if (defaultConfPath.isPresent()) {
       conf.addPropsFromFile(defaultConfPath.get());
     } else {
-      conf.addPropsFromFile(DEFAULT_PATH);
+      try {
+        conf.addPropsFromFile(DEFAULT_PATH);
+      } catch (Exception e) {
+        LOG.warn("Cannot load default config file: " + DEFAULT_PATH, e);
+      }
     }
     return conf.getProps();
   }
@@ -126,13 +130,17 @@ public class DFSPropertiesConfiguration {
         filePath.toString(),
         Option.ofNullable(hadoopConfig).orElseGet(Configuration::new)
     );
+
     try {
       if (filePath.equals(DEFAULT_PATH) && !fs.exists(filePath)) {
         LOG.warn("Properties file " + filePath + " not found. Ignoring to load props file");
         return;
       }
+    } catch (IOException ioe) {
+      throw new HoodieIOException("Cannot check if the properties file exist: " + filePath, ioe);
+    }
 
-      BufferedReader reader = new BufferedReader(new InputStreamReader(fs.open(filePath)));
+    try (BufferedReader reader = new BufferedReader(new InputStreamReader(fs.open(filePath)))) {
       visitedFilePaths.add(filePath.toString());
       currentFilePath = filePath;
       addPropsFromStream(reader);

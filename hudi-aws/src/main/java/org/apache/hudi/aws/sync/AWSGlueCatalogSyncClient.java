@@ -94,13 +94,19 @@ public class AWSGlueCatalogSyncClient extends AbstractHiveSyncHoodieClient {
   @Override
   public List<Partition> getAllPartitions(String tableName) {
     try {
-      GetPartitionsRequest request = new GetPartitionsRequest();
-      request.withDatabaseName(databaseName).withTableName(tableName);
-      GetPartitionsResult result = awsGlue.getPartitions(request);
-      return result.getPartitions()
-          .stream()
-          .map(p -> new Partition(p.getValues(), p.getStorageDescriptor().getLocation()))
-          .collect(Collectors.toList());
+      List<Partition> partitions = new ArrayList<>();
+      String nextToken = null;
+      do {
+        GetPartitionsResult result = awsGlue.getPartitions(new GetPartitionsRequest()
+            .withDatabaseName(databaseName)
+            .withTableName(tableName)
+            .withNextToken(nextToken));
+        partitions.addAll(result.getPartitions().stream()
+            .map(p -> new Partition(p.getValues(), p.getStorageDescriptor().getLocation()))
+            .collect(Collectors.toList()));
+        nextToken = result.getNextToken();
+      } while (nextToken != null);
+      return partitions;
     } catch (Exception e) {
       throw new HoodieGlueSyncException("Failed to get all partitions for table " + tableId(databaseName, tableName), e);
     }

@@ -157,7 +157,8 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
   public boolean archiveIfRequired(HoodieEngineContext context, boolean acquireLock) throws IOException {
     try {
       if (acquireLock) {
-        txnManager.beginTransaction();
+        // there is no owner or instant time per se for archival.
+        txnManager.beginTransaction(Option.empty(), Option.empty());
       }
       List<HoodieInstant> instantsToArchive = getInstantsToArchive().collect(Collectors.toList());
       verifyLastMergeArchiveFilesIfNecessary(context);
@@ -179,7 +180,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
     } finally {
       close();
       if (acquireLock) {
-        txnManager.endTransaction();
+        txnManager.endTransaction(Option.empty());
       }
     }
   }
@@ -587,19 +588,16 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
       List<IndexedRecord> records = new ArrayList<>();
       for (HoodieInstant hoodieInstant : instants) {
         try {
-          if (table.getActiveTimeline().isEmpty(hoodieInstant)
-                  && (
-                          hoodieInstant.getAction().equals(HoodieTimeline.CLEAN_ACTION)
-                          || (hoodieInstant.getAction().equals(HoodieTimeline.ROLLBACK_ACTION) && hoodieInstant.isCompleted())
-                     )
-          ) {
-            table.getActiveTimeline().deleteEmptyInstantIfExists(hoodieInstant);
+          deleteAnyLeftOverMarkers(context, hoodieInstant);
+          // in local FS and HDFS, there could be empty completed instants due to crash.
+          if (table.getActiveTimeline().isEmpty(hoodieInstant) && hoodieInstant.isCompleted()) {
+            // lets add an entry to the archival, even if not for the plan.
+            records.add(createAvroRecordFromEmptyInstant(hoodieInstant));
           } else {
-            deleteAnyLeftOverMarkers(context, hoodieInstant);
             records.add(convertToAvroRecord(hoodieInstant));
-            if (records.size() >= this.config.getCommitArchivalBatchSize()) {
-              writeToFile(wrapperSchema, records);
-            }
+          }
+          if (records.size() >= this.config.getCommitArchivalBatchSize()) {
+            writeToFile(wrapperSchema, records);
           }
         } catch (Exception e) {
           LOG.error("Failed to archive commits, .commit file: " + hoodieInstant.getFileName(), e);
@@ -635,5 +633,9 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
   private IndexedRecord convertToAvroRecord(HoodieInstant hoodieInstant)
       throws IOException {
     return MetadataConversionUtils.createMetaWrapper(hoodieInstant, metaClient);
+  }
+
+  private IndexedRecord createAvroRecordFromEmptyInstant(HoodieInstant hoodieInstant) throws IOException {
+    return MetadataConversionUtils.createMetaWrapperForEmptyInstant(hoodieInstant);
   }
 }

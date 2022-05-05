@@ -67,8 +67,6 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static junit.framework.TestCase.assertEquals;
-import static org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath;
-import static org.apache.hudi.common.util.CollectionUtils.isNullOrEmpty;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -663,7 +661,7 @@ public class TestData {
       List<String> logPaths,
       Schema readSchema,
       String instant) {
-    HoodieMergedLogRecordScanner.Builder logRecordScannerBuilder = HoodieMergedLogRecordScanner.newBuilder()
+    return HoodieMergedLogRecordScanner.newBuilder()
         .withFileSystem(fs)
         .withBasePath(basePath)
         .withLogFilePaths(logPaths)
@@ -675,12 +673,8 @@ public class TestData {
         .withMaxMemorySizeInBytes(1024 * 1024L)
         .withSpillableMapBasePath("/tmp/")
         .withDiskMapType(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.defaultValue())
-        .withBitCaskDiskMapCompressionEnabled(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue());
-    if (!isNullOrEmpty(logPaths)) {
-      logRecordScannerBuilder
-          .withPartition(getRelativePartitionPath(new Path(basePath), new Path(logPaths.get(0)).getParent()));
-    }
-    return logRecordScannerBuilder.build();
+        .withBitCaskDiskMapCompressionEnabled(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue())
+        .build();
   }
 
   /**

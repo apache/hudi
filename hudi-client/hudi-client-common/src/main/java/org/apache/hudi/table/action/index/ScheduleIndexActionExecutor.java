@@ -87,7 +87,7 @@ public class ScheduleIndexActionExecutor<T extends HoodieRecordPayload, I, K, O>
     Set<String> requestedPartitions = partitionIndexTypes.stream().map(MetadataPartitionType::getPartitionPath).collect(Collectors.toSet());
     requestedPartitions.removeAll(indexesInflightOrCompleted);
     if (!requestedPartitions.isEmpty()) {
-      LOG.warn(String.format("Following partitions already exist or inflight: %s. Going to index only these partitions: %s",
+      LOG.warn(String.format("Following partitions already exist or inflight: %s. Going to schedule indexing of only these partitions: %s",
           indexesInflightOrCompleted, requestedPartitions));
     } else {
       LOG.error("All requested index types are inflight or completed: " + partitionIndexTypes);

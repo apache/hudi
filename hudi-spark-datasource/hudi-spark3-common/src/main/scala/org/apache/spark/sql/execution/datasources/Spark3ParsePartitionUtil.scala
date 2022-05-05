@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.execution.datasources
 
-import java.lang.{Double => JDouble, Long => JLong}
+import java.lang.{Boolean => JBoolean, Double => JDouble, Long => JLong}
 import java.math.{BigDecimal => JBigDecimal}
 import java.time.ZoneId
 import java.util.{Locale, TimeZone}
@@ -253,6 +253,7 @@ class Spark3ParsePartitionUtil(conf: SQLConf) extends SparkParsePartitionUtil {
       zoneId: ZoneId): Any = desiredType match {
     case _ if value == DEFAULT_PARTITION_PATH => null
     case NullType => null
+    case BooleanType => JBoolean.parseBoolean(value)
     case StringType => UTF8String.fromString(unescapePathName(value))
     case IntegerType => Integer.parseInt(value)
     case LongType => JLong.parseLong(value)

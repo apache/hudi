@@ -795,7 +795,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
     final String restoreInstantTime = HoodieActiveTimeline.createNewInstantTime();
     Timer.Context timerContext = metrics.getRollbackCtx();
     try {
-      HoodieTable<T, I, K, O> table = initTable(WriteOperationType.UNKNOWN, Option.empty(), initialMetadataTableIfNecessary);
+      HoodieTable<T, I, K, O> table = initTable(WriteOperationType.UNKNOWN, Option.of(restoreInstantTime), initialMetadataTableIfNecessary);
       Option<HoodieRestorePlan> restorePlanOption = table.scheduleRestore(context, restoreInstantTime, instantTime);
       if (restorePlanOption.isPresent()) {
         HoodieRestoreMetadata restoreMetadata = table.restore(context, restoreInstantTime, instantTime);
@@ -1035,7 +1035,8 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
   public void dropIndex(List<MetadataPartitionType> partitionTypes) {
     HoodieTable table = createTable(config, hadoopConf);
     String dropInstant = HoodieActiveTimeline.createNewInstantTime();
-    this.txnManager.beginTransaction();
+    HoodieInstant ownerInstant = new HoodieInstant(true, HoodieTimeline.INDEXING_ACTION, dropInstant);
+    this.txnManager.beginTransaction(Option.of(ownerInstant), Option.empty());
     try {
       context.setJobStatus(this.getClass().getSimpleName(), "Dropping partitions from metadata table");
       table.getMetadataWriter(dropInstant).ifPresent(w -> {
@@ -1046,7 +1047,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
         }
       });
     } finally {
-      this.txnManager.endTransaction();
+      this.txnManager.endTransaction(Option.of(ownerInstant));
     }
   }
 
@@ -1451,17 +1452,20 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
     }
 
     HoodieTable table;
-
-    this.txnManager.beginTransaction();
+    Option<HoodieInstant> ownerInstant = Option.empty();
+    if (instantTime.isPresent()) {
+      ownerInstant = Option.of(new HoodieInstant(true, CommitUtils.getCommitActionType(operationType, metaClient.getTableType()), instantTime.get()));
+    }
+    this.txnManager.beginTransaction(ownerInstant, Option.empty());
     try {
       tryUpgrade(metaClient, instantTime);
       table = doInitTable(metaClient, instantTime, initialMetadataTableIfNecessary);
     } finally {
-      this.txnManager.endTransaction();
+      this.txnManager.endTransaction(ownerInstant);
     }
 
     // Validate table properties
-    metaClient.validateTableProperties(config.getProps(), operationType);
+    metaClient.validateTableProperties(config.getProps());
     // Make sure that FS View is in sync
     table.getHoodieView().sync();
 

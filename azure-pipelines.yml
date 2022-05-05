@@ -33,7 +33,7 @@ stages:
     jobs:
       - job: UT_FT_1
         displayName: UT FT common & flink & UT client/spark-client
-        timeoutInMinutes: '90'
+        timeoutInMinutes: '120'
         steps:
           - task: Maven@3
             displayName: maven install
@@ -64,7 +64,7 @@ stages:
               mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
       - job: UT_FT_2
         displayName: FT client/spark-client
-        timeoutInMinutes: '90'
+        timeoutInMinutes: '120'
         steps:
           - task: Maven@3
             displayName: maven install
@@ -86,7 +86,7 @@ stages:
               mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
       - job: UT_FT_3
         displayName: UT FT clients & cli & utilities & sync/hive-sync
-        timeoutInMinutes: '90'
+        timeoutInMinutes: '120'
         steps:
           - task: Maven@3
             displayName: maven install
@@ -117,7 +117,7 @@ stages:
               mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
       - job: UT_FT_4
         displayName: UT FT other modules
-        timeoutInMinutes: '90'
+        timeoutInMinutes: '120'
         steps:
           - task: Maven@3
             displayName: maven install
@@ -148,8 +148,26 @@ stages:
               mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
       - job: IT
         displayName: IT modules
-        timeoutInMinutes: '90'
+        timeoutInMinutes: '120'
         steps:
+          - task: Maven@3
+            displayName: maven install
+            inputs:
+              mavenPomFile: 'pom.xml'
+              goals: 'clean install'
+              options: -T 2.5C -Pintegration-tests -DskipTests
+              publishJUnitResults: false
+              jdkVersionOption: '1.8'
+              mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
+          - task: Maven@3
+            displayName: UT integ-test
+            inputs:
+              mavenPomFile: 'pom.xml'
+              goals: 'test'
+              options: -Pintegration-tests -DskipUTs=false -DskipITs=true -pl hudi-integ-test test
+              publishJUnitResults: false
+              jdkVersionOption: '1.8'
+              mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
           - task: AzureCLI@2
             displayName: Prepare for IT
             inputs:

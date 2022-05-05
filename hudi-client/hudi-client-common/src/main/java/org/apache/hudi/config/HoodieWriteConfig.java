@@ -150,7 +150,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       .key("hoodie.table.base.file.format")
       .defaultValue(HoodieFileFormat.PARQUET)
       .withAlternatives("hoodie.table.ro.file.format")
-      .withDocumentation("");
+      .withDocumentation("Base file format to store all the base file data.");
 
   public static final ConfigProperty<String> BASE_PATH = ConfigProperty
       .key("hoodie.base.path")
@@ -2012,7 +2012,9 @@ public class HoodieWriteConfig extends HoodieConfig {
    * @return True if any table services are configured to run inline, false otherwise.
    */
   public Boolean areAnyTableServicesExecutedInline() {
-    return inlineClusteringEnabled() || inlineCompactionEnabled() || isAutoClean() || isAutoArchive();
+    return areTableServicesEnabled()
+        && (inlineClusteringEnabled() || inlineCompactionEnabled()
+        || (isAutoClean() && !isAsyncClean()) || (isAutoArchive() && !isAsyncArchive()));
   }
 
   /**
@@ -2021,9 +2023,10 @@ public class HoodieWriteConfig extends HoodieConfig {
    * @return True if any table services are configured to run async, false otherwise.
    */
   public Boolean areAnyTableServicesAsync() {
-    return isAsyncClusteringEnabled()
+    return areTableServicesEnabled()
+        && (isAsyncClusteringEnabled()
         || (getTableType() == HoodieTableType.MERGE_ON_READ && !inlineCompactionEnabled())
-        || isAsyncClean() || isAsyncArchive();
+        || (isAutoClean() && isAsyncClean()) || (isAutoArchive() && isAsyncArchive()));
   }
 
   public Boolean areAnyTableServicesScheduledInline() {
@@ -2465,6 +2468,8 @@ public class HoodieWriteConfig extends HoodieConfig {
       writeConfig.setDefaultValue(MARKERS_TYPE, getDefaultMarkersType(engineType));
       // Check for mandatory properties
       writeConfig.setDefaults(HoodieWriteConfig.class.getName());
+      // Set default values of HoodieHBaseIndexConfig
+      writeConfig.setDefaults(HoodieHBaseIndexConfig.class.getName());
       // Make sure the props is propagated
       writeConfig.setDefaultOnCondition(
           !isIndexConfigSet, HoodieIndexConfig.newBuilder().withEngineType(engineType).fromProperties(

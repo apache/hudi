@@ -69,20 +69,28 @@ public class TestTransactionManager extends HoodieCommonTestHarness {
 
   @Test
   public void testSingleWriterTransaction() {
-    transactionManager.beginTransaction();
-    transactionManager.endTransaction();
+    Option<HoodieInstant> lastCompletedInstant = getInstant("0000001");
+    Option<HoodieInstant> newTxnOwnerInstant = getInstant("0000002");
+    transactionManager.beginTransaction(newTxnOwnerInstant, lastCompletedInstant);
+    transactionManager.endTransaction(newTxnOwnerInstant);
   }
 
   @Test
   public void testSingleWriterNestedTransaction() {
-    transactionManager.beginTransaction();
+    Option<HoodieInstant> lastCompletedInstant = getInstant("0000001");
+    Option<HoodieInstant> newTxnOwnerInstant = getInstant("0000002");
+    transactionManager.beginTransaction(newTxnOwnerInstant, lastCompletedInstant);
+
+    Option<HoodieInstant> lastCompletedInstant1 = getInstant("0000003");
+    Option<HoodieInstant> newTxnOwnerInstant1 = getInstant("0000004");
+
     assertThrows(HoodieLockException.class, () -> {
-      transactionManager.beginTransaction();
+      transactionManager.beginTransaction(newTxnOwnerInstant1, lastCompletedInstant1);
     });
 
-    transactionManager.endTransaction();
+    transactionManager.endTransaction(newTxnOwnerInstant);
     assertDoesNotThrow(() -> {
-      transactionManager.endTransaction();
+      transactionManager.endTransaction(newTxnOwnerInstant1);
     });
   }
 
@@ -94,11 +102,16 @@ public class TestTransactionManager extends HoodieCommonTestHarness {
     final AtomicBoolean writer1Completed = new AtomicBoolean(false);
     final AtomicBoolean writer2Completed = new AtomicBoolean(false);
 
+    Option<HoodieInstant> lastCompletedInstant1 = getInstant("0000001");
+    Option<HoodieInstant> newTxnOwnerInstant1 = getInstant("0000002");
+    Option<HoodieInstant> lastCompletedInstant2 = getInstant("0000003");
+    Option<HoodieInstant> newTxnOwnerInstant2 = getInstant("0000004");
+
     // Let writer1 get the lock first, then wait for others
     // to join the sync up point.
     Thread writer1 = new Thread(() -> {
       assertDoesNotThrow(() -> {
-        transactionManager.beginTransaction();
+        transactionManager.beginTransaction(newTxnOwnerInstant1, lastCompletedInstant1);
       });
       latch.countDown();
       try {
@@ -111,7 +124,7 @@ public class TestTransactionManager extends HoodieCommonTestHarness {
         //
       }
       assertDoesNotThrow(() -> {
-        transactionManager.endTransaction();
+        transactionManager.endTransaction(newTxnOwnerInstant1);
       });
       writer1Completed.set(true);
     });
@@ -127,10 +140,10 @@ public class TestTransactionManager extends HoodieCommonTestHarness {
         //
       }
       assertDoesNotThrow(() -> {
-        transactionManager.beginTransaction();
+        transactionManager.beginTransaction(newTxnOwnerInstant2, lastCompletedInstant2);
       });
       assertDoesNotThrow(() -> {
-        transactionManager.endTransaction();
+        transactionManager.endTransaction(newTxnOwnerInstant2);
       });
       writer2Completed.set(true);
     });
@@ -153,6 +166,32 @@ public class TestTransactionManager extends HoodieCommonTestHarness {
   }
 
   @Test
+  public void testEndTransactionByDiffOwner() throws InterruptedException {
+    // 1. Begin and end by the same transaction owner
+    Option<HoodieInstant> lastCompletedInstant = getInstant("0000001");
+    Option<HoodieInstant> newTxnOwnerInstant = getInstant("0000002");
+    transactionManager.beginTransaction(newTxnOwnerInstant, lastCompletedInstant);
+
+    CountDownLatch countDownLatch = new CountDownLatch(1);
+    // Another writer thread
+    Thread writer2 = new Thread(() -> {
+      Option<HoodieInstant> newTxnOwnerInstant1 = getInstant("0000003");
+      transactionManager.endTransaction(newTxnOwnerInstant1);
+      countDownLatch.countDown();
+    });
+
+    writer2.start();
+    countDownLatch.await(30, TimeUnit.SECONDS);
+    // should not have reset the state within transaction manager since the owner is different.
+    Assertions.assertTrue(transactionManager.getCurrentTransactionOwner().isPresent());
+    Assertions.assertTrue(transactionManager.getLastCompletedTransactionOwner().isPresent());
+
+    transactionManager.endTransaction(newTxnOwnerInstant);
+    Assertions.assertFalse(transactionManager.getCurrentTransactionOwner().isPresent());
+    Assertions.assertFalse(transactionManager.getLastCompletedTransactionOwner().isPresent());
+  }
+
+  @Test
   public void testTransactionsWithInstantTime() {
     // 1. Begin and end by the same transaction owner
     Option<HoodieInstant> lastCompletedInstant = getInstant("0000001");
@@ -164,14 +203,15 @@ public class TestTransactionManager extends HoodieCommonTestHarness {
     Assertions.assertFalse(transactionManager.getCurrentTransactionOwner().isPresent());
     Assertions.assertFalse(transactionManager.getLastCompletedTransactionOwner().isPresent());
 
-    // 2. Begin transaction with a new txn owner, but end transaction with no/wrong owner
+    // 2. Begin transaction with a new txn owner, but end transaction with wrong owner
     lastCompletedInstant = getInstant("0000002");
     newTxnOwnerInstant = getInstant("0000003");
     transactionManager.beginTransaction(newTxnOwnerInstant, lastCompletedInstant);
-    transactionManager.endTransaction();
+    transactionManager.endTransaction(getInstant("0000004"));
     // Owner reset would not happen as the end txn was invoked with an incorrect current txn owner
     Assertions.assertTrue(transactionManager.getCurrentTransactionOwner() == newTxnOwnerInstant);
     Assertions.assertTrue(transactionManager.getLastCompletedTransactionOwner() == lastCompletedInstant);
+    transactionManager.endTransaction(newTxnOwnerInstant);
 
     // 3. But, we should be able to begin a new transaction for a new owner
     lastCompletedInstant = getInstant("0000003");
@@ -183,15 +223,7 @@ public class TestTransactionManager extends HoodieCommonTestHarness {
     Assertions.assertFalse(transactionManager.getCurrentTransactionOwner().isPresent());
     Assertions.assertFalse(transactionManager.getLastCompletedTransactionOwner().isPresent());
 
-    // 4. Transactions with no owners should also go through
-    transactionManager.beginTransaction();
-    Assertions.assertFalse(transactionManager.getCurrentTransactionOwner().isPresent());
-    Assertions.assertFalse(transactionManager.getLastCompletedTransactionOwner().isPresent());
-    transactionManager.endTransaction();
-    Assertions.assertFalse(transactionManager.getCurrentTransactionOwner().isPresent());
-    Assertions.assertFalse(transactionManager.getLastCompletedTransactionOwner().isPresent());
-
-    // 5. Transactions with new instants but with same timestamps should properly reset owners
+    // 4. Transactions with new instants but with same timestamps should properly reset owners
     transactionManager.beginTransaction(getInstant("0000005"), Option.empty());
     Assertions.assertTrue(transactionManager.getCurrentTransactionOwner().isPresent());
     Assertions.assertFalse(transactionManager.getLastCompletedTransactionOwner().isPresent());

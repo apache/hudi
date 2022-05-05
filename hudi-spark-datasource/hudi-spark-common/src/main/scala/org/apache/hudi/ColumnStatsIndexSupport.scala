@@ -26,6 +26,7 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig
+import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.common.util.hash.ColumnIndexID
 import org.apache.hudi.data.HoodieJavaRDD
 import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadata, HoodieTableMetadataUtil, MetadataPartitionType}
@@ -68,7 +69,7 @@ trait ColumnStatsIndexSupport extends SparkAdapterSupport {
       if (targetColumns.nonEmpty) {
         readColumnStatsIndexForColumnsInternal(spark, targetColumns, metadataConfig, tableBasePath)
       } else {
-        readFullColumnStatsIndexInternal(spark, tableBasePath)
+        readFullColumnStatsIndexInternal(spark, metadataConfig, tableBasePath)
       }
     }
 
@@ -113,21 +114,17 @@ trait ColumnStatsIndexSupport extends SparkAdapterSupport {
    *
    * @param spark Spark session ref
    * @param colStatsDF [[DataFrame]] bearing raw Column Stats Index table
-   * @param targetColumns target columns to be included into the final table
+   * @param queryColumns target columns to be included into the final table
    * @param tableSchema schema of the source data table
    * @return reshaped table according to the format outlined above
    */
-  def transposeColumnStatsIndex(spark: SparkSession, colStatsDF: DataFrame, targetColumns: Seq[String], tableSchema: StructType): DataFrame = {
+  def transposeColumnStatsIndex(spark: SparkSession, colStatsDF: DataFrame, queryColumns: Seq[String], tableSchema: StructType): DataFrame = {
     val colStatsSchema = colStatsDF.schema
     val colStatsSchemaOrdinalsMap = colStatsSchema.fields.zipWithIndex.map({
       case (field, ordinal) => (field.name, ordinal)
     }).toMap
 
     val tableSchemaFieldMap = tableSchema.fields.map(f => (f.name, f)).toMap
-
-    // NOTE: We're sorting the columns to make sure final index schema matches layout
-    //       of the transposed table
-    val sortedColumns = TreeSet(targetColumns: _*)
 
     val colNameOrdinal = colStatsSchemaOrdinalsMap(HoodieMetadataPayload.COLUMN_STATS_FIELD_COLUMN_NAME)
     val minValueOrdinal = colStatsSchemaOrdinalsMap(HoodieMetadataPayload.COLUMN_STATS_FIELD_MIN_VALUE)
@@ -136,36 +133,69 @@ trait ColumnStatsIndexSupport extends SparkAdapterSupport {
     val nullCountOrdinal = colStatsSchemaOrdinalsMap(HoodieMetadataPayload.COLUMN_STATS_FIELD_NULL_COUNT)
     val valueCountOrdinal = colStatsSchemaOrdinalsMap(HoodieMetadataPayload.COLUMN_STATS_FIELD_VALUE_COUNT)
 
+    // NOTE: We have to collect list of indexed columns to make sure we properly align the rows
+    //       w/in the transposed dataset: since some files might not have all of the columns indexed
+    //       either due to the Column Stats Index config changes, schema evolution, etc, we have
+    //       to make sure that all of the rows w/in transposed data-frame are properly padded (with null
+    //       values) for such file-column combinations
+    val indexedColumns: Seq[String] = colStatsDF.rdd.map(row => row.getString(colNameOrdinal)).distinct().collect()
+
+    // NOTE: We're sorting the columns to make sure final index schema matches layout
+    //       of the transposed table
+    val sortedTargetColumns = TreeSet(queryColumns.intersect(indexedColumns): _*)
+
     val transposedRDD = colStatsDF.rdd
-      .filter(row => sortedColumns.contains(row.getString(colNameOrdinal)))
+      .filter(row => sortedTargetColumns.contains(row.getString(colNameOrdinal)))
       .map { row =>
-        val (minValue, _) = tryUnpackNonNullVal(row.getAs[Row](minValueOrdinal))
-        val (maxValue, _) = tryUnpackNonNullVal(row.getAs[Row](maxValueOrdinal))
+        if (row.isNullAt(minValueOrdinal) && row.isNullAt(maxValueOrdinal)) {
+          // Corresponding row could be null in either of the 2 cases
+          //    - Column contains only null values (in that case both min/max have to be nulls)
+          //    - This is a stubbed Column Stats record (used as a tombstone)
+          row
+        } else {
+          val minValueStruct = row.getAs[Row](minValueOrdinal)
+          val maxValueStruct = row.getAs[Row](maxValueOrdinal)
 
-        val colName = row.getString(colNameOrdinal)
-        val colType = tableSchemaFieldMap(colName).dataType
+          checkState(minValueStruct != null && maxValueStruct != null, "Invalid Column Stats record: either both min/max have to be null, or both have to be non-null")
 
-        val rowValsSeq = row.toSeq.toArray
+          val colName = row.getString(colNameOrdinal)
+          val colType = tableSchemaFieldMap(colName).dataType
 
-        rowValsSeq(minValueOrdinal) = deserialize(minValue, colType)
-        rowValsSeq(maxValueOrdinal) = deserialize(maxValue, colType)
+          val (minValue, _) = tryUnpackNonNullVal(minValueStruct)
+          val (maxValue, _) = tryUnpackNonNullVal(maxValueStruct)
+          val rowValsSeq = row.toSeq.toArray
+          // Update min-/max-value structs w/ unwrapped values in-place
+          rowValsSeq(minValueOrdinal) = deserialize(minValue, colType)
+          rowValsSeq(maxValueOrdinal) = deserialize(maxValue, colType)
 
-        Row(rowValsSeq:_*)
+          Row(rowValsSeq: _*)
+        }
       }
       .groupBy(r => r.getString(fileNameOrdinal))
       .foldByKey(Seq[Row]()) {
-        case (_, columnRows) =>
+        case (_, columnRowsSeq) =>
           // Rows seq is always non-empty (otherwise it won't be grouped into)
-          val fileName = columnRows.head.get(fileNameOrdinal)
-          val valueCount = columnRows.head.get(valueCountOrdinal)
+          val fileName = columnRowsSeq.head.get(fileNameOrdinal)
+          val valueCount = columnRowsSeq.head.get(valueCountOrdinal)
 
-          val coalescedRowValuesSeq = columnRows.toSeq
-            // NOTE: It's crucial to maintain appropriate ordering of the columns
-            //       matching table layout
-            .sortBy(_.getString(colNameOrdinal))
-            .foldLeft(Seq[Any](fileName, valueCount)) {
-              case (acc, columnRow) =>
-                acc ++ Seq(minValueOrdinal, maxValueOrdinal, nullCountOrdinal).map(ord => columnRow.get(ord))
+          // To properly align individual rows (corresponding to a file) w/in the transposed projection, we need
+          // to align existing column-stats for individual file with the list of expected ones for the
+          // whole transposed projection (a superset of all files)
+          val columnRowsMap = columnRowsSeq.map(row => (row.getString(colNameOrdinal), row)).toMap
+          val alignedColumnRowsSeq = sortedTargetColumns.toSeq.map(columnRowsMap.get)
+
+          val coalescedRowValuesSeq =
+            alignedColumnRowsSeq.foldLeft(Seq[Any](fileName, valueCount)) {
+              case (acc, opt) =>
+                opt match {
+                  case Some(columnStatsRow) =>
+                    acc ++ Seq(minValueOrdinal, maxValueOrdinal, nullCountOrdinal).map(ord => columnStatsRow.get(ord))
+                  case None =>
+                    // NOTE: Since we're assuming missing column to essentially contain exclusively
+                    //       null values, we set null-count to be equal to value-count (this behavior is
+                    //       consistent with reading non-existent columns from Parquet)
+                    acc ++ Seq(null, null, valueCount)
+                }
             }
 
           Seq(Row(coalescedRowValuesSeq:_*))
@@ -176,15 +206,16 @@ trait ColumnStatsIndexSupport extends SparkAdapterSupport {
     // NOTE: It's crucial to maintain appropriate ordering of the columns
     //       matching table layout: hence, we cherry-pick individual columns
     //       instead of simply filtering in the ones we're interested in the schema
-    val indexSchema = composeIndexSchema(sortedColumns.toSeq, tableSchema)
+    val indexSchema = composeIndexSchema(sortedTargetColumns.toSeq, tableSchema)
 
     spark.createDataFrame(transposedRDD, indexSchema)
   }
 
-  private def readFullColumnStatsIndexInternal(spark: SparkSession, tableBasePath: String) = {
+  private def readFullColumnStatsIndexInternal(spark: SparkSession, metadataConfig: HoodieMetadataConfig, tableBasePath: String): DataFrame = {
     val metadataTablePath = HoodieTableMetadata.getMetadataTableBasePath(tableBasePath)
     // Read Metadata Table's Column Stats Index into Spark's [[DataFrame]]
     spark.read.format("org.apache.hudi")
+      .options(metadataConfig.getProps.asScala)
       .load(s"$metadataTablePath/${MetadataPartitionType.COLUMN_STATS.getPartitionPath}")
   }
 

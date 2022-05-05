@@ -30,6 +30,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.sink.event.CommitAckEvent;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.meta.CkpMetadata;
 import org.apache.hudi.sink.utils.HiveSyncContext;
@@ -42,6 +43,7 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.runtime.operators.coordination.OperatorCoordinator;
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
+import org.apache.flink.runtime.operators.coordination.TaskNotRunningException;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -430,6 +432,31 @@ public class StreamWriteOperatorCoordinator
   }
 
   /**
+   * The coordinator reuses the instant if there is no data for this round of checkpoint,
+   * sends the commit ack events to unblock the flushing.
+   */
+  private void sendCommitAckEvents(long checkpointId) {
+    CompletableFuture<?>[] futures = Arrays.stream(this.gateways).filter(Objects::nonNull)
+        .map(gw -> gw.sendEvent(CommitAckEvent.getInstance(checkpointId)))
+        .toArray(CompletableFuture<?>[]::new);
+    CompletableFuture.allOf(futures).whenComplete((resp, error) -> {
+      if (!sendToFinishedTasks(error)) {
+        throw new HoodieException("Error while waiting for the commit ack events to finish sending", error);
+      }
+    });
+  }
+
+  /**
+   * Decides whether the given exception is caused by sending events to FINISHED tasks.
+   *
+   * <p>Ugly impl: the exception may change in the future.
+   */
+  private static boolean sendToFinishedTasks(Throwable throwable) {
+    return throwable.getCause() instanceof TaskNotRunningException
+        || throwable.getCause().getMessage().contains("running");
+  }
+
+  /**
    * Commits the instant.
    */
   private void commitInstant(String instant) {
@@ -456,6 +483,10 @@ public class StreamWriteOperatorCoordinator
     if (writeResults.size() == 0) {
       // No data has written, reset the buffer and returns early
       reset();
+      // Send commit ack event to the write function to unblock the flushing
+      // If this checkpoint has no inputs while the next checkpoint has inputs,
+      // the 'isConfirming' flag should be switched with the ack event.
+      sendCommitAckEvents(checkpointId);
       return false;
     }
     doCommit(instant, writeResults);

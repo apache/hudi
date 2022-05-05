@@ -419,7 +419,6 @@ public class TestHoodieTableFactory {
   @Test
   void testSetupTimestampBasedKeyGenForSink() {
     this.conf.setString(FlinkOptions.RECORD_KEY_FIELD, "dummyField");
-    this.conf.setString(FlinkOptions.KEYGEN_CLASS_NAME, "dummyKeyGenClass");
     // definition with simple primary key and partition path
     ResolvedSchema schema1 = SchemaBuilder.instance()
         .field("f0", DataTypes.INT().notNull())

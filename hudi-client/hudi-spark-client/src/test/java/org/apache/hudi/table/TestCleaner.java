@@ -744,7 +744,7 @@ public class TestCleaner extends HoodieClientTestBase {
 
     for (int i = 0; i < cleanCount; i++, startInstant++) {
       String commitTime = makeNewCommitTime(startInstant, "%09d");
-      createCleanMetadata(commitTime + "", false, true);
+      createEmptyCleanMetadata(commitTime + "", false);
     }
 
     int instantClean = startInstant;

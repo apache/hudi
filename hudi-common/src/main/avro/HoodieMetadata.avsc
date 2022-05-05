@@ -107,7 +107,8 @@
                             "type": [
                                 "null",
                                 "string"
-                            ]
+                            ],
+                            "default" : null
                         },
                         {
                             "doc": "Column name for which this column statistics applies",
@@ -318,7 +319,8 @@
                             "type": [
                                 "null",
                                 "long"
-                            ]
+                            ],
+                            "default": null
                         },
                         {
                             "doc": "Total count of null values",
@@ -326,7 +328,8 @@
                             "type": [
                                 "null",
                                 "long"
-                            ]
+                            ],
+                            "default": null
                         },
                         {
                             "doc": "Total storage size on disk",
@@ -334,7 +337,8 @@
                             "type": [
                                 "null",
                                 "long"
-                            ]
+                            ],
+                            "default": null
                         },
                         {
                             "doc": "Total uncompressed storage size on disk",
@@ -342,7 +346,8 @@
                             "type": [
                                 "null",
                                 "long"
-                            ]
+                            ],
+                            "default": null
                         },
                         {
                             "doc": "Column range entry valid/deleted flag",
