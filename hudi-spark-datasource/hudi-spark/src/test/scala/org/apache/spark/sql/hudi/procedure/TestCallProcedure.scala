@@ -17,9 +17,9 @@
 
 package org.apache.spark.sql.hudi.procedure
 
-import org.apache.spark.sql.hudi.TestHoodieSqlBase
+import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase
 
-class TestCallProcedure extends TestHoodieSqlBase {
+class TestCallProcedure extends HoodieSparkSqlTestBase {
 
   test("Test Call show_commits Procedure") {
     withTempDir { tmp =>

@@ -20,7 +20,7 @@ package org.apache.spark.sql.hudi
 import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.common.table.HoodieTableMetaClient
 
-class TestTimeTravelTable extends TestHoodieSqlBase {
+class TestTimeTravelTable extends HoodieSparkSqlTestBase {
   test("Test Insert and Update Record with time travel") {
     if (HoodieSparkUtils.gteqSpark3_2) {
       withTempDir { tmp =>
