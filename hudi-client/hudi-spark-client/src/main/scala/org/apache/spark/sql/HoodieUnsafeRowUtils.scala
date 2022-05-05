@@ -26,7 +26,8 @@ import scala.collection.mutable.ArrayBuffer
 object HoodieUnsafeRowUtils {
 
   /**
-   * TODO scala-doc
+   * Fetches (nested) value w/in provided [[Row]] uniquely identified by the provided nested-field path
+   * previously composed by [[composeNestedFieldPath]]
    */
   def getNestedRowValue(row: Row, nestedFieldPath: Array[(Int, StructField)]): Any = {
     var curRow = row
@@ -53,7 +54,8 @@ object HoodieUnsafeRowUtils {
   }
 
   /**
-   * TODO scala-doc
+   * Fetches (nested) value w/in provided [[InternalRow]] uniquely identified by the provided nested-field path
+   * previously composed by [[composeNestedFieldPath]]
    */
   def getNestedInternalRowValue(row: InternalRow, nestedFieldPath: Array[(Int, StructField)]): Any = {
     if (nestedFieldPath.length == 0) {
@@ -86,7 +88,10 @@ object HoodieUnsafeRowUtils {
   }
 
   /**
-   * TODO scala-doc
+   * For the provided [[nestedFieldRef]] (of the form "a.b.c") and [[schema]], produces nested-field path comprised
+   * of (ordinal, data-type) tuples of the respective fields w/in the provided schema.
+   *
+   * This method produces nested-field path, that is subsequently used by [[getNestedInternalRowValue]], [[getNestedRowValue]]
    */
   def composeNestedFieldPath(schema: StructType, nestedFieldRef: String): Array[(Int, StructField)] = {
     val fieldRefParts = nestedFieldRef.split('.')
