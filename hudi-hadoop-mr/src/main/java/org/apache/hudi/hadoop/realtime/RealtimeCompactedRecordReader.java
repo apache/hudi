@@ -112,15 +112,11 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
         if (deltaRecordMap.containsKey(key)) {
           // mark the key as handled
           this.deltaRecordKeys.remove(key);
-          // TODO(NA): Invoke preCombine here by converting arrayWritable to Avro. This is required since the
-          // deltaRecord may not be a full record and needs values of columns from the parquet
-          Option<GenericRecord> rec = buildGenericRecordwithCustomPayload(deltaRecordMap.get(key));
-          // If the record is not present, this is a delete record using an empty payload so skip this base record
-          // and move to the next record
-          if (!rec.isPresent()) {
+          Option<GenericRecord> mergedRecord = merge(arrayWritable, key);
+          if (!mergedRecord.isPresent()) {
             continue;
           }
-          setUpWritable(rec, arrayWritable, key);
+          setUpWritable(mergedRecord, arrayWritable, key);
           return true;
         }
       }
@@ -138,6 +134,17 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
       }
     }
     return false;
+  }
+
+  private Option<GenericRecord> merge(ArrayWritable arrayWritable, String key) throws IOException {
+    HoodieRecordPayload logRecord = deltaRecordMap.get(key).getData();
+    GenericRecord currentRecord = (GenericRecord) HoodieRealtimeRecordReaderUtils.arrayWritableToAvro(
+        arrayWritable, getHiveSchema(), getReaderSchema());
+    if (usesCustomPayload) {
+      return logRecord.combineAndGetUpdateValue(currentRecord, getWriterSchema(), payloadProps);
+    } else {
+      return logRecord.combineAndGetUpdateValue(currentRecord, getReaderSchema(), payloadProps);
+    }
   }
 
   private void setUpWritable(Option<GenericRecord> rec, ArrayWritable arrayWritable, String key) {
