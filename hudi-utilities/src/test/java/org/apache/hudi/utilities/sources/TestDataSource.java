@@ -39,13 +39,14 @@ import java.util.stream.Collectors;
 public class TestDataSource extends AbstractBaseTestSource {
 
   private static final Logger LOG = LogManager.getLogger(TestDataSource.class);
-  public static transient boolean returnEmptyBatch = false;
+  public static boolean returnEmptyBatch = false;
   private static int counter = 0;
 
   public TestDataSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
       SchemaProvider schemaProvider) {
     super(props, sparkContext, sparkSession, schemaProvider);
     initDataGen();
+    returnEmptyBatch = false;
   }
 
   @Override

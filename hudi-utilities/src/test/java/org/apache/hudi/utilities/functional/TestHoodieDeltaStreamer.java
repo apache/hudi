@@ -797,7 +797,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       }
     });
     TestHelpers.waitTillCondition(condition, dsFuture, 360);
-    if (!cfg.postWriteTerminationStrategyClass.isEmpty()) {
+    if (cfg != null && !cfg.postWriteTerminationStrategyClass.isEmpty()) {
       awaitDeltaStreamerShutdown(ds);
     } else {
       ds.shutdownGracefully();
