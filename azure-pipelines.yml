@@ -30,6 +30,7 @@ variables:
 
 stages:
   - stage: test
+    condition: false
     jobs:
       - job: UT_FT_1
         displayName: UT FT common & flink & UT client/spark-client
