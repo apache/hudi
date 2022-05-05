@@ -240,7 +240,7 @@ public class ITTestHoodieDataSource extends AbstractTestBase {
 
     List<Row> rows = CollectionUtil.iterableToList(
         () -> streamTableEnv.sqlQuery("select * from t1").execute().collect());
-    assertRowsEquals(rows, TestData.DATA_SET_SOURCE_INSERT);
+    assertRowsEquals(rows, TestData.DATA_SET_SOURCE_INSERT_FIRST_COMMIT);
   }
 
   @Test
