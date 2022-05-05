@@ -625,7 +625,7 @@ public class HoodieDeltaStreamer implements Serializable {
         ValidationUtils.checkArgument(baseFileFormat.equals(cfg.baseFileFormat) || cfg.baseFileFormat == null,
             "Hoodie table's base file format is of type " + baseFileFormat + " but passed in CLI argument is "
                 + cfg.baseFileFormat);
-        cfg.baseFileFormat =baseFileFormat;
+        cfg.baseFileFormat = baseFileFormat;
         this.cfg.baseFileFormat = baseFileFormat;
       } else {
         tableType = HoodieTableType.valueOf(cfg.tableType);
