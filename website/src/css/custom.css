@@ -51,6 +51,22 @@ html[data-theme='dark'] .docusaurus-highlight-code-line {
   }
 }
 
+@media only screen and (max-width: 1410px){
+  .navbar__item {
+    font-size: 0.7em !important;
+  }
+  
+
+}
+@media only screen and (max-width: 1250px){
+  .navbar__item {
+    font-size: 0.6em !important;
+    padding: 5px;
+  }
+  
+
+}
+
 .header-twitter-link:before {
   background: url(/assets/images/twitter.png) no-repeat;
   content: "";
