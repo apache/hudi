@@ -85,7 +85,7 @@
                                     <include>org.apache.hudi:hudi-aws</include>
 
                                     <!-- NOTE: This is temp (SchemaProvide dep) until PR3162 lands -->
-                                    <include>org.apache.hudi:hudi-flink_${scala.binary.version}</include>
+                                    <include>org.apache.hudi:hudi-flink</include>
                                     <include>org.apache.hudi:flink-core</include>
                                     <include>org.apache.hudi:hudi-flink-client</include>
                                     <include>org.apache.flink:flink-core</include>

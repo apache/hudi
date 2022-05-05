@@ -282,13 +282,13 @@ public class HoodieTestTable {
   }
 
   public HoodieTestTable addClean(String instantTime, HoodieCleanerPlan cleanerPlan, HoodieCleanMetadata metadata) throws IOException {
-    return addClean(instantTime, cleanerPlan, metadata, false);
+    return addClean(instantTime, cleanerPlan, metadata, false, false);
   }
 
-  public HoodieTestTable addClean(String instantTime, HoodieCleanerPlan cleanerPlan, HoodieCleanMetadata metadata, boolean isEmpty) throws IOException {
-    createRequestedCleanFile(basePath, instantTime, cleanerPlan, isEmpty);
-    createInflightCleanFile(basePath, instantTime, cleanerPlan, isEmpty);
-    createCleanFile(basePath, instantTime, metadata, isEmpty);
+  public HoodieTestTable addClean(String instantTime, HoodieCleanerPlan cleanerPlan, HoodieCleanMetadata metadata, boolean isEmptyForAll, boolean isEmptyCompleted) throws IOException {
+    createRequestedCleanFile(basePath, instantTime, cleanerPlan, isEmptyForAll);
+    createInflightCleanFile(basePath, instantTime, cleanerPlan, isEmptyForAll);
+    createCleanFile(basePath, instantTime, metadata, isEmptyCompleted);
     currentInstantTime = instantTime;
     return this;
   }
@@ -335,6 +335,7 @@ public class HoodieTestTable {
   }
 
   public HoodieTestTable addRollback(String instantTime, HoodieRollbackMetadata rollbackMetadata, boolean isEmpty) throws IOException {
+    createRequestedRollbackFile(basePath, instantTime);
     createInflightRollbackFile(basePath, instantTime);
     createRollbackFile(basePath, instantTime, rollbackMetadata, isEmpty);
     currentInstantTime = instantTime;
@@ -680,7 +681,8 @@ public class HoodieTestTable {
           boolean toReturn = true;
           String filePath = entry.getPath().toString();
           String fileName = entry.getPath().getName();
-          if (fileName.startsWith(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX) || (!fileName.contains("log") && !fileName.contains("parquet"))
+          if (fileName.startsWith(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX)
+              || !FileCreateUtils.isBaseOrLogFilename(fileName)
               || filePath.contains("metadata")) {
             toReturn = false;
           } else {

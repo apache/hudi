@@ -78,9 +78,8 @@ pushd $WORK_DIR
 
 # Checkout dist repo
 LOCAL_SVN_DIR=local_svn_dir
-ROOT_SVN_URL=https://dist.apache.org/repos/dist/
+ROOT_SVN_URL=https://dist.apache.org/repos/dist
 REPO_TYPE=${RELEASE_TYPE}
-#RELEASE_REPO=release
 HUDI_REPO=hudi
 
 if [ $RC_NUM == -1 ]; then
@@ -99,7 +98,15 @@ echo "Downloading from svn co ${ROOT_SVN_URL}/${REPO_TYPE}/${HUDI_REPO}"
 (bash -c "svn co ${ROOT_SVN_URL}/${REPO_TYPE}/${HUDI_REPO} $REDIRECT") || (echo -e "\t\t Unable to checkout  ${ROOT_SVN_URL}/${REPO_TYPE}/${HUDI_REPO} to $REDIRECT. Please run with --verbose to get details\n" && exit -1)
 
 echo "Validating hudi-${ARTIFACT_SUFFIX} with release type \"${REPO_TYPE}\""
-cd ${HUDI_REPO}/hudi-${ARTIFACT_SUFFIX}
+if [ $RELEASE_TYPE == "release" ]; then
+  ARTIFACT_PREFIX=
+elif [ $RELEASE_TYPE == "dev" ]; then
+  ARTIFACT_PREFIX='hudi-'
+else
+  echo "Unexpected RELEASE_TYPE: $RELEASE_TYPE"
+  exit 1;
+fi
+cd ${HUDI_REPO}/${ARTIFACT_PREFIX}${ARTIFACT_SUFFIX}
 $SHASUM hudi-${ARTIFACT_SUFFIX}.src.tgz > got.sha512
 
 echo "Checking Checksum of Source Release"

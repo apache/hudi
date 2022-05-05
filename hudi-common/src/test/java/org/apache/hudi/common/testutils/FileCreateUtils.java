@@ -248,6 +248,10 @@ public class FileCreateUtils {
     createMetaFile(basePath, instantTime, HoodieTimeline.REQUESTED_ROLLBACK_EXTENSION, content);
   }
 
+  public static void createRequestedRollbackFile(String basePath, String instantTime) throws IOException {
+    createMetaFile(basePath, instantTime, HoodieTimeline.REQUESTED_ROLLBACK_EXTENSION);
+  }
+
   public static void createInflightRollbackFile(String basePath, String instantTime) throws IOException {
     createMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_ROLLBACK_EXTENSION);
   }
@@ -399,9 +403,19 @@ public class FileCreateUtils {
     if (Files.notExists(basePath)) {
       return Collections.emptyList();
     }
-    return Files.list(basePath).filter(entry -> (!entry.getFileName().toString().equals(HoodieTableMetaClient.METAFOLDER_NAME)
-        && !entry.getFileName().toString().contains("parquet") && !entry.getFileName().toString().contains("log"))
-        && !entry.getFileName().toString().startsWith(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX)).collect(Collectors.toList());
+    return Files.list(basePath).filter(entry -> !entry.getFileName().toString().equals(HoodieTableMetaClient.METAFOLDER_NAME)
+            && !isBaseOrLogFilename(entry.getFileName().toString())
+            && !entry.getFileName().toString().startsWith(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX))
+        .collect(Collectors.toList());
+  }
+
+  public static boolean isBaseOrLogFilename(String filename) {
+    for (HoodieFileFormat format : HoodieFileFormat.values()) {
+      if (filename.contains(format.getFileExtension())) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**

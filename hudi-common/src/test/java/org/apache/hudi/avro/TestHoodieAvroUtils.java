@@ -32,6 +32,7 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -225,6 +226,42 @@ public class TestHoodieAvroUtils {
     assertEquals(NUM_FIELDS_IN_EXAMPLE_SCHEMA + HoodieRecord.HOODIE_META_COLUMNS.size(), schemaWithMetaCols.getFields().size());
     Schema schemaWithoutMetaCols = HoodieAvroUtils.removeMetadataFields(schemaWithMetaCols);
     assertEquals(NUM_FIELDS_IN_EXAMPLE_SCHEMA, schemaWithoutMetaCols.getFields().size());
+  }
+
+  @Test
+  public void testRemoveFields() {
+    // partitioned table test.
+    String schemaStr = "{\"type\": \"record\",\"name\": \"testrec\",\"fields\": [ "
+        + "{\"name\": \"timestamp\",\"type\": \"double\"},{\"name\": \"_row_key\", \"type\": \"string\"},"
+        + "{\"name\": \"non_pii_col\", \"type\": \"string\"}]},";
+    Schema expectedSchema = new Schema.Parser().parse(schemaStr);
+    GenericRecord rec = new GenericData.Record(new Schema.Parser().parse(EXAMPLE_SCHEMA));
+    rec.put("_row_key", "key1");
+    rec.put("non_pii_col", "val1");
+    rec.put("pii_col", "val2");
+    rec.put("timestamp", 3.5);
+    GenericRecord rec1 = HoodieAvroUtils.removeFields(rec, Arrays.asList("pii_col"));
+    assertEquals("key1", rec1.get("_row_key"));
+    assertEquals("val1", rec1.get("non_pii_col"));
+    assertEquals(3.5, rec1.get("timestamp"));
+    assertNull(rec1.get("pii_col"));
+    assertEquals(expectedSchema, rec1.getSchema());
+
+    // non-partitioned table test with empty list of fields.
+    schemaStr = "{\"type\": \"record\",\"name\": \"testrec\",\"fields\": [ "
+        + "{\"name\": \"timestamp\",\"type\": \"double\"},{\"name\": \"_row_key\", \"type\": \"string\"},"
+        + "{\"name\": \"non_pii_col\", \"type\": \"string\"},"
+        + "{\"name\": \"pii_col\", \"type\": \"string\"}]},";
+    expectedSchema = new Schema.Parser().parse(schemaStr);
+    rec1 = HoodieAvroUtils.removeFields(rec, Arrays.asList(""));
+    assertEquals(expectedSchema, rec1.getSchema());
+  }
+
+  @Test
+  public void testGetRootLevelFieldName() {
+    assertEquals("a", HoodieAvroUtils.getRootLevelFieldName("a.b.c"));
+    assertEquals("a", HoodieAvroUtils.getRootLevelFieldName("a"));
+    assertEquals("", HoodieAvroUtils.getRootLevelFieldName(""));
   }
 
   @Test
