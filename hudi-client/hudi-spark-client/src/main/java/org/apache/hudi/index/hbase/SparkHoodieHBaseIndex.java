@@ -173,7 +173,7 @@ public class SparkHoodieHBaseIndex extends HoodieIndex<Object, Object> {
       } else {
         return ConnectionFactory.createConnection(hbaseConfig);
       }
-    } catch (IOException | InterruptedException e ) {
+    } catch (IOException | InterruptedException e) {
       throw new HoodieDependentSystemUnavailableException(HoodieDependentSystemUnavailableException.HBASE,
           quorum + ":" + port, e);
     }
