@@ -81,7 +81,7 @@ public class HoodieFileWriterFactory {
         config.getParquetBlockSize(), config.getParquetPageSize(), config.getParquetMaxFileSize(),
         conf, config.getParquetCompressionRatio(), config.parquetDictionaryEnabled());
 
-    return new HoodieParquetWriter<>(instantTime, path, parquetConfig, schema, taskContextSupplier, populateMetaFields);
+    return new HoodieParquetWriter<>(path, parquetConfig, instantTime, taskContextSupplier, populateMetaFields);
   }
 
   static <T extends HoodieRecordPayload, R extends IndexedRecord> HoodieFileWriter<R> newHFileFileWriter(
