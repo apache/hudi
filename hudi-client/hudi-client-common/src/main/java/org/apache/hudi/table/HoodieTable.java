@@ -550,6 +550,10 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
         -> entry.getRollbackInstant().getTimestamp()).orElse(HoodieActiveTimeline.createNewInstantTime());
     scheduleRollback(context, commitTime, inflightInstant, false, config.shouldRollbackUsingMarkers());
     rollback(context, commitTime, inflightInstant, false, false);
+    // The instant time for compaction is reused by reverting the state from INFLIGHT to REQUESTED,
+    // clean the markers because the write handle checks the existence of the marker file.
+    WriteMarkersFactory.get(config.getMarkersType(), this, inflightInstant.getTimestamp())
+        .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
     getActiveTimeline().revertCompactionInflightToRequested(inflightInstant);
   }
 
