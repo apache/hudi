@@ -54,4 +54,4 @@ dag_content:
       validate_hive: false
       delete_input_data: false
     type: ValidateDatasetNode
-    deps: first_delete_partition
+    deps: second_insert
