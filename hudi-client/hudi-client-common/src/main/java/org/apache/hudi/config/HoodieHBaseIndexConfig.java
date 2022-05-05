@@ -495,6 +495,7 @@ public class HoodieHBaseIndexConfig extends HoodieConfig {
       hBaseIndexConfig.setValue(MASTER_PRINCIPAL, principal);
       return this;
     }
+
     /**
      * <p>
      * Method to set maximum QPS allowed per Region Server. This should be same across various jobs. This is intended to
