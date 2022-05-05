@@ -153,7 +153,7 @@ public class SparkHoodieHBaseIndex extends HoodieIndex<Object, Object> {
     String port = String.valueOf(config.getHbaseZkPort());
     hbaseConfig.set("hbase.zookeeper.property.clientPort", port);
 
-   try {
+    try {
       String authentication = config.getHBaseIndexSecurityAuthentication();
       if (authentication.equals("kerberos")) {
         hbaseConfig.set("hbase.security.authentication", "kerberos");
