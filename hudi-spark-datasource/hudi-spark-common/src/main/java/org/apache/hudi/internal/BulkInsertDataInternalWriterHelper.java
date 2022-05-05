@@ -170,9 +170,9 @@ public class BulkInsertDataInternalWriterHelper {
       //
       // NOTE: Helper keeps track of [[lastKnownPartitionPath]] as [[UTF8String]] to avoid
       //       conversion from Catalyst internal representation into a [[String]]
-      partitionPath = row.getString(
-          HoodieRecord.HOODIE_META_COLUMNS_NAME_TO_POS.get(HoodieRecord.PARTITION_PATH_METADATA_FIELD));
+      partitionPath = row.getString(HoodieRecord.PARTITION_PATH_META_FIELD_POS);
     } else if (keyGeneratorOpt.isPresent()) {
+      // TODO(HUDI-4039) this should be handled by the SimpleKeyGenerator itself
       if (simpleKeyGen) {
         String partitionPathValue = row.get(simplePartitionFieldIndex, simplePartitionFieldDataType).toString();
         partitionPath = partitionPathValue != null ? partitionPathValue : PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH;
