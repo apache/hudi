@@ -28,11 +28,14 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import javax.annotation.concurrent.NotThreadSafe;
+
 /**
  * A HoodieCreateHandle which writes all data into a single file.
  * <p>
  * Please use this with caution. This can end up creating very large files if not used correctly.
  */
+@NotThreadSafe
 public class HoodieUnboundedCreateHandle<T extends HoodieRecordPayload, I, K, O> extends HoodieCreateHandle<T, I, K, O> {
 
   private static final Logger LOG = LogManager.getLogger(HoodieUnboundedCreateHandle.class);

@@ -30,13 +30,18 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.parquet.hadoop.ParquetFileWriter;
 import org.apache.parquet.hadoop.ParquetWriter;
 
+import javax.annotation.concurrent.NotThreadSafe;
+
 import java.io.IOException;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * HoodieParquetWriter extends the ParquetWriter to help limit the size of underlying file. Provides a way to check if
  * the current file can take more records with the <code>canWrite()</code>
+ *
+ * ATTENTION: HoodieParquetWriter is not thread safe and developer should take care of the order of write and close
  */
+@NotThreadSafe
 public class HoodieParquetWriter<T extends HoodieRecordPayload, R extends IndexedRecord>
     extends ParquetWriter<IndexedRecord> implements HoodieFileWriter<R> {
 
@@ -105,5 +110,10 @@ public class HoodieParquetWriter<T extends HoodieRecordPayload, R extends Indexe
     if (populateMetaFields) {
       writeSupport.add(key);
     }
+  }
+
+  @Override
+  public void close() throws IOException {
+    super.close();
   }
 }
