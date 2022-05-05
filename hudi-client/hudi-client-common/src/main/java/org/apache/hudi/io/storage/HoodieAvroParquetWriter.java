@@ -35,7 +35,7 @@ import java.io.IOException;
  * ATTENTION: HoodieParquetWriter is not thread safe and developer should take care of the order of write and close
  */
 @NotThreadSafe
-public class HoodieParquetWriter<R extends IndexedRecord>
+public class HoodieAvroParquetWriter<R extends IndexedRecord>
     extends HoodieBaseParquetWriter<IndexedRecord>
     implements HoodieFileWriter<R> {
 
@@ -46,11 +46,11 @@ public class HoodieParquetWriter<R extends IndexedRecord>
   private final HoodieAvroWriteSupport writeSupport;
 
   @SuppressWarnings({"unchecked", "rawtypes"})
-  public HoodieParquetWriter(Path file,
-                             HoodieAvroParquetConfig parquetConfig,
-                             String instantTime,
-                             TaskContextSupplier taskContextSupplier,
-                             boolean populateMetaFields) throws IOException {
+  public HoodieAvroParquetWriter(Path file,
+                                 HoodieAvroParquetConfig parquetConfig,
+                                 String instantTime,
+                                 TaskContextSupplier taskContextSupplier,
+                                 boolean populateMetaFields) throws IOException {
     super(file, (HoodieBaseParquetConfig) parquetConfig);
     this.fileName = file.getName();
 
