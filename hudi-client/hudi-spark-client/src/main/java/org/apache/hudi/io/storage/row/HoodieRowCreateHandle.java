@@ -64,8 +64,6 @@ public class HoodieRowCreateHandle implements Serializable {
   private final HoodieTable table;
   private final HoodieWriteConfig writeConfig;
 
-  private final FileSystem fs;
-
   private final String partitionPath;
   private final Path path;
   private final String fileId;
@@ -98,7 +96,7 @@ public class HoodieRowCreateHandle implements Serializable {
 
     this.currTimer = new HoodieTimer(true);
 
-    this.fs = table.getMetaClient().getFs();
+    FileSystem fs = table.getMetaClient().getFs();
 
     String writeToken = getWriteToken(taskPartitionId, taskId, taskEpochId);
     String fileName = FSUtils.makeBaseFileName(instantTime, writeToken, this.fileId, table.getBaseFileExtension());
@@ -150,6 +148,8 @@ public class HoodieRowCreateHandle implements Serializable {
       UTF8String recordKey = row.getUTF8String(RECORD_KEY_META_FIELD_ORD);
 
       InternalRow updatedRow;
+      // In cases when no meta-fields need to be added we simply relay provided row to
+      // the writer as is
       if (!populateMetaFields) {
         updatedRow = row;
       } else {
