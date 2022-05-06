@@ -53,6 +53,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
   static final Random RANDOM = new Random();
   static final String PROPS_FILENAME_TEST_SOURCE = "test-source.properties";
   static final String PROPS_FILENAME_TEST_SOURCE1 = "test-source1.properties";
+  static final String PROPS_FILENAME_TEST_SOURCE2 = "test-source2.properties";
   static final String PROPS_INVALID_HIVE_SYNC_TEST_SOURCE1 = "test-invalid-hive-sync-source1.properties";
   static final String PROPS_INVALID_FILE = "test-invalid-props.properties";
   static final String PROPS_INVALID_TABLE_CONFIG_FILE = "test-invalid-table-config.properties";

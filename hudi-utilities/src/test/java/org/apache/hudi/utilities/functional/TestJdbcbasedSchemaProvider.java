@@ -36,6 +36,7 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
+import java.util.Objects;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -60,7 +61,8 @@ public class TestJdbcbasedSchemaProvider extends SparkClientFunctionalTestHarnes
   public void testJdbcbasedSchemaProvider() throws Exception {
     try {
       initH2Database();
-      Schema sourceSchema = UtilHelpers.createSchemaProvider(JdbcbasedSchemaProvider.class.getName(), PROPS, jsc()).getSourceSchema();
+      Schema sourceSchema = Objects.requireNonNull(
+        UtilHelpers.createSchemaProvider(JdbcbasedSchemaProvider.class.getName(), PROPS, jsc())).getSourceSchema();
       assertEquals(sourceSchema.toString().toUpperCase(), new Schema.Parser().parse(UtilitiesTestBase.Helpers.readFile("delta-streamer-config/source-jdbc.avsc")).toString().toUpperCase());
     } catch (HoodieException e) {
       LOG.error("Failed to get connection through jdbc. ", e);

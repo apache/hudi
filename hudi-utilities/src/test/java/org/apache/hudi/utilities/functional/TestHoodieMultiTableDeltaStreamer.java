@@ -18,10 +18,14 @@
 
 package org.apache.hudi.utilities.functional;
 
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.deltastreamer.HoodieMultiTableDeltaStreamer;
 import org.apache.hudi.utilities.deltastreamer.TableExecutionContext;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
@@ -38,6 +42,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -134,9 +139,9 @@ public class TestHoodieMultiTableDeltaStreamer extends HoodieDeltaStreamerTestBa
     assertTrue(e.getMessage().contains("Please provide valid table config arguments!"));
   }
 
-  @Test //0 corresponds to fg
+  @Test
   public void testMultiTableExecutionWithKafkaSource() throws IOException {
-    //create topics for each table
+    // create topics for each table
     String topicName1 = "topic" + testNum++;
     String topicName2 = "topic" + testNum;
     testUtils.createTopic(topicName1, 2);
@@ -168,7 +173,7 @@ public class TestHoodieMultiTableDeltaStreamer extends HoodieDeltaStreamerTestBa
     TestHoodieDeltaStreamer.TestHelpers.assertRecordCount(5, targetBasePath1, sqlContext);
     TestHoodieDeltaStreamer.TestHelpers.assertRecordCount(10, targetBasePath2, sqlContext);
 
-    //insert updates for already existing records in kafka topics
+    // insert updates for already existing records in kafka topics
     testUtils.sendMessages(topicName1, Helpers.jsonifyRecords(dataGenerator.generateUpdatesAsPerSchema("001", 5, HoodieTestDataGenerator.TRIP_SCHEMA)));
     testUtils.sendMessages(topicName2, Helpers.jsonifyRecords(dataGenerator.generateUpdatesAsPerSchema("001", 10, HoodieTestDataGenerator.SHORT_TRIP_SCHEMA)));
 
@@ -180,9 +185,119 @@ public class TestHoodieMultiTableDeltaStreamer extends HoodieDeltaStreamerTestBa
     assertEquals(2, streamer.getSuccessTables().size());
     assertTrue(streamer.getFailedTables().isEmpty());
 
-    //assert the record count matches now
+    // assert the record count matches now
     TestHoodieDeltaStreamer.TestHelpers.assertRecordCount(5, targetBasePath1, sqlContext);
     TestHoodieDeltaStreamer.TestHelpers.assertRecordCount(10, targetBasePath2, sqlContext);
+    testNum++;
+  }
+
+  @Test
+  public void testMultiTableExecutionWithKafkaSourceWhenMultiSinkTablesBoundMultiSources() throws IOException {
+    // create topics for each table
+    String topicName1 = "topic" + testNum++;
+    String topicName2 = "topic" + testNum++;
+    String topicName3 = "topic" + testNum;
+
+    testUtils.createTopic(topicName1, 2);
+    testUtils.createTopic(topicName2, 2);
+    testUtils.createTopic(topicName3, 2);
+
+    HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
+    testUtils.sendMessages(topicName1, Helpers.jsonifyRecords(dataGenerator.generateInsertsAsPerSchema("000", 5, HoodieTestDataGenerator.TRIP_SCHEMA)));
+    testUtils.sendMessages(topicName2, Helpers.jsonifyRecords(dataGenerator.generateInsertsAsPerSchema("000", 10, HoodieTestDataGenerator.LONG_TRIP_SCHEMA)));
+    testUtils.sendMessages(topicName3, Helpers.jsonifyRecords(dataGenerator.generateInsertsAsPerSchema("000", 10, HoodieTestDataGenerator.SHORT_TRIP_SCHEMA)));
+
+    FileSystem fs = FSUtils.getFs(dfsBasePath, jsc.hadoopConfiguration());
+    TypedProperties commonProperties = new TypedProperties();
+    commonProperties.setProperty("hoodie.deltastreamer.ingestion.tablesToBeIngested", "sink_table1" + "," + "sink_table2");
+    commonProperties.setProperty("hoodie.deltastreamer.source.sourcesBoundTo" + "." + "sink_table1", topicName1 + "," + topicName2);
+    commonProperties.setProperty("hoodie.deltastreamer.source.sourcesBoundTo" + "." + "sink_table2", topicName3);
+    commonProperties.setProperty("hoodie.deltastreamer.source" + ".default." + topicName1 + ".configFile", dfsBasePath + "/" + PROPS_FILENAME_TEST_SOURCE1);
+    commonProperties.setProperty("hoodie.deltastreamer.source" + ".default." + topicName2 + ".configFile", dfsBasePath + "/" + PROPS_FILENAME_TEST_SOURCE1);
+    commonProperties.setProperty("hoodie.deltastreamer.source" + ".default." + topicName3 + ".configFile", dfsBasePath + "/" + PROPS_FILENAME_TEST_SOURCE1);
+    commonProperties.setProperty("hoodie.deltastreamer.source.kafka.enable.commit.offset", "true");
+    commonProperties.setProperty("hoodie.deltastreamer.source.transformerClassNames", "org.apache.hudi.utilities.transform.SqlQueryBasedTransformer");
+    commonProperties.setProperty("hoodie.deltastreamer.transformer.sql", "select _row_key, rider, driver, fare, timestamp, _hoodie_is_deleted from <SRC>");
+    commonProperties.setProperty("hoodie.datasource.write.partitionpath.field", "rider");
+    commonProperties.setProperty("hoodie.datasource.write.recordkey.field", "_row_key");
+    commonProperties.setProperty("hoodie.datasource.write.precombine.field", "timestamp");
+    commonProperties.setProperty("group.id", "consumer-example");
+    // We can also use hoodie.deltastreamer.current.source.checkpoint to set an special checkpoint for each source.
+    commonProperties.setProperty("auto.offset.reset", "latest");
+
+    UtilitiesTestBase.Helpers.savePropsToDFS(commonProperties, fs, dfsBasePath + "/" + PROPS_FILENAME_TEST_SOURCE2);
+    UtilitiesTestBase.Helpers.saveStringsToDFS(new String[] {HoodieTestDataGenerator.TRIP_SCHEMA}, fs, dfsBasePath + "/source_trip_schema.avsc");
+    UtilitiesTestBase.Helpers.saveStringsToDFS(new String[] {HoodieTestDataGenerator.LONG_TRIP_SCHEMA}, fs, dfsBasePath + "/source_long_trip_schema.avsc");
+    UtilitiesTestBase.Helpers.saveStringsToDFS(new String[] {HoodieTestDataGenerator.SHORT_TRIP_SCHEMA}, fs, dfsBasePath + "/source_short_trip_schema.avsc");
+    UtilitiesTestBase.Helpers.saveStringsToDFS(new String[] {HoodieTestDataGenerator.TRIP_SCHEMA}, fs, dfsBasePath + "/target_trip_schema.avsc");
+
+    HoodieMultiTableDeltaStreamer.Config cfg = TestHelpers.getConfig(PROPS_FILENAME_TEST_SOURCE2, dfsBasePath + "/config",
+      JsonKafkaSource.class.getName(), false, false, true, "MultiTableBoundMultiSource", null);
+    // set the mode that fetch data from multi sources is true
+    cfg.allowFetchFromMultipleSources = true;
+    cfg.allowContinuousWhenMultipleSources = false;
+    HoodieMultiTableDeltaStreamer streamer = new HoodieMultiTableDeltaStreamer(cfg, jsc);
+    List<TableExecutionContext> executionContexts = streamer.getTableExecutionContexts();
+
+    TypedProperties properties0 = executionContexts.get(0).getProperties();
+    properties0.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.file", dfsBasePath + "/source_trip_schema.avsc");
+    properties0.setProperty("hoodie.deltastreamer.schemaprovider.target.schema.file", dfsBasePath + "/target_trip_schema.avsc");
+    properties0.setProperty("hoodie.deltastreamer.source.kafka.topic", topicName1);
+    properties0.setProperty("hoodie.deltastreamer.current.source.name", topicName1);
+    executionContexts.get(0).setProperties(properties0);
+
+    TypedProperties properties1 = executionContexts.get(1).getProperties();
+    properties1.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.file", dfsBasePath + "/source_long_trip_schema.avsc");
+    properties1.setProperty("hoodie.deltastreamer.schemaprovider.target.schema.file", dfsBasePath + "/target_trip_schema.avsc");
+    properties1.setProperty("hoodie.deltastreamer.source.kafka.topic", topicName2);
+    properties1.setProperty("hoodie.deltastreamer.current.source.name", topicName2);
+    executionContexts.get(1).setProperties(properties1);
+
+    TypedProperties properties2 = executionContexts.get(2).getProperties();
+    properties2.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.file", dfsBasePath + "/source_short_trip_schema.avsc");
+    properties2.setProperty("hoodie.deltastreamer.schemaprovider.target.schema.file", dfsBasePath + "/target_trip_schema.avsc");
+    properties2.setProperty("hoodie.deltastreamer.source.kafka.topic", topicName3);
+    properties2.setProperty("hoodie.deltastreamer.current.source.name", topicName3);
+    executionContexts.get(2).setProperties(properties2);
+
+    String targetBasePath0 = executionContexts.get(0).getConfig().targetBasePath;
+    String targetBasePath1 = executionContexts.get(1).getConfig().targetBasePath;
+    String targetBasePath2 = executionContexts.get(2).getConfig().targetBasePath;
+
+    streamer.sync();
+    assertEquals(targetBasePath0, targetBasePath1);
+    assertEquals(3, streamer.getSuccessTables().size());
+    assertTrue(streamer.getFailedTables().isEmpty());
+    TestHoodieDeltaStreamer.TestHelpers.assertRecordCount(15, targetBasePath1, sqlContext);
+    TestHoodieDeltaStreamer.TestHelpers.assertRecordCount(10, targetBasePath2, sqlContext);
+
+    // insert updates for already existing records in kafka topics
+    testUtils.sendMessages(topicName1, Helpers.jsonifyRecords(dataGenerator.generateInsertsAsPerSchema("000", 5, HoodieTestDataGenerator.TRIP_SCHEMA)));
+    testUtils.sendMessages(topicName2, Helpers.jsonifyRecords(dataGenerator.generateInsertsAsPerSchema("000", 10, HoodieTestDataGenerator.LONG_TRIP_SCHEMA)));
+    testUtils.sendMessages(topicName3, Helpers.jsonifyRecords(dataGenerator.generateInsertsAsPerSchema("000", 10, HoodieTestDataGenerator.SHORT_TRIP_SCHEMA)));
+
+    streamer = new HoodieMultiTableDeltaStreamer(cfg, jsc);
+    streamer.getTableExecutionContexts().get(0).setProperties(properties0);
+    streamer.getTableExecutionContexts().get(1).setProperties(properties1);
+    streamer.getTableExecutionContexts().get(2).setProperties(properties2);
+
+    streamer.sync();
+    // Because there are multiple mapping relationships between sources and sinks, SuccessTables counts the number of mapping relationships between them.
+    assertEquals(3, streamer.getSuccessTables().size());
+    assertTrue(streamer.getFailedTables().isEmpty());
+
+    // assert the record count matches now
+    TestHoodieDeltaStreamer.TestHelpers.assertRecordCount(15, targetBasePath1, sqlContext);
+    TestHoodieDeltaStreamer.TestHelpers.assertRecordCount(10, targetBasePath2, sqlContext);
+
+    UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, dfsBasePath + "/" + PROPS_FILENAME_TEST_SOURCE2);
+    UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, dfsBasePath + "/source_trip_schema.avsc");
+    UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, dfsBasePath + "/source_long_trip_schema.avsc");
+    UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, dfsBasePath + "/source_short_trip_schema.avsc");
+    UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, dfsBasePath + "/target_trip_schema.avsc");
+    UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, targetBasePath1);
+    UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, targetBasePath2);
+
     testNum++;
   }
 
