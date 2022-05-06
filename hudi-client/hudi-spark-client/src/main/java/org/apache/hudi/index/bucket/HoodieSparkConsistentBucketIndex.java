@@ -29,9 +29,9 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.table.HoodieTable;
 
@@ -44,10 +44,10 @@ import org.apache.log4j.Logger;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Predicate;
+import java.util.stream.Collectors;
 
 /**
  * Consistent hashing bucket index implementation, with auto-adjust bucket number.
@@ -56,8 +56,6 @@ import java.util.function.Predicate;
 public class HoodieSparkConsistentBucketIndex extends HoodieBucketIndex {
 
   private static final Logger LOG = LogManager.getLogger(HoodieSparkConsistentBucketIndex.class);
-
-  private Map<String, ConsistentBucketIdentifier> partitionToIdentifier;
 
   public HoodieSparkConsistentBucketIndex(HoodieWriteConfig config) {
     super(config);
@@ -73,54 +71,15 @@ public class HoodieSparkConsistentBucketIndex extends HoodieBucketIndex {
    * A failed write may create a hashing metadata for a partition. In this case, we still do nothing when rolling back
    * the failed write. Because the hashing metadata created by a writer must have 00000000000000 timestamp and can be viewed
    * as the initialization of a partition rather than as a part of the failed write.
-   *
-   * @param instantTime
-   * @return
    */
   @Override
   public boolean rollbackCommit(String instantTime) {
     return true;
   }
 
-  /**
-   * Initialize bucket metadata for each partition
-   *
-   * @param table
-   * @param partitions partitions that need to be initialized
-   */
   @Override
-  protected void initialize(HoodieTable table, List<String> partitions) {
-    partitionToIdentifier = new HashMap(partitions.size() + partitions.size() / 3);
-
-    // TODO maybe parallel
-    partitions.stream().forEach(p -> {
-      HoodieConsistentHashingMetadata metadata = loadOrCreateMetadata(table, p);
-      ConsistentBucketIdentifier identifier = new ConsistentBucketIdentifier(metadata);
-      partitionToIdentifier.put(p, identifier);
-    });
-  }
-
-  /**
-   * Get bucket location for given key and partition
-   *
-   * @param key
-   * @param partitionPath
-   * @return
-   */
-  @Override
-  protected HoodieRecordLocation getBucket(HoodieKey key, String partitionPath) {
-    ConsistentHashingNode node = partitionToIdentifier.get(partitionPath).getBucket(key, indexKeyFields);
-    if (node.getFileIdPfx() != null && !node.getFileIdPfx().isEmpty()) {
-      /**
-       * Dynamic Bucket Index doesn't need the instant time of the latest file group.
-       * We add suffix 0 here to the file uuid, following the naming convention, i.e., fileId = [uuid]_[numWrites]
-       */
-      return new HoodieRecordLocation(null, FSUtils.createNewFileId(node.getFileIdPfx(), 0));
-    }
-
-    LOG.error("Consistent hashing node has no file group, partition: " + partitionPath + ", meta: "
-        + partitionToIdentifier.get(partitionPath).getMetadata().getFilename() + ", record_key: " + key.toString());
-    throw new HoodieIndexException("Failed to getBucket as hashing node has no file group");
+  protected BucketIndexLocationMapper getLocationMapper(HoodieTable table, List<String> partitionPath) {
+    return new ConsistentBucketIndexLocationMapper(table, partitionPath);
   }
 
   /**
@@ -193,33 +152,55 @@ public class HoodieSparkConsistentBucketIndex extends HoodieBucketIndex {
   /**
    * Save metadata into storage
    *
-   * @param table
-   * @param metadata
-   * @param overwrite
-   * @return
+   * @param table hoodie table
+   * @param metadata hashing metadata to be saved
+   * @param overwrite whether to overwrite existing metadata
+   * @return true if the metadata is saved successfully
    */
   private static boolean saveMetadata(HoodieTable table, HoodieConsistentHashingMetadata metadata, boolean overwrite) {
-    FSDataOutputStream fsOut = null;
     HoodieWrapperFileSystem fs = table.getMetaClient().getFs();
     Path dir = FSUtils.getPartitionPath(table.getMetaClient().getHashingMetadataPath(), metadata.getPartitionPath());
     Path fullPath = new Path(dir, metadata.getFilename());
-    try {
+    try (FSDataOutputStream fsOut = fs.create(fullPath, overwrite)) {
       byte[] bytes = metadata.toBytes();
-      fsOut = fs.create(fullPath, overwrite);
       fsOut.write(bytes);
       fsOut.close();
       return true;
     } catch (IOException e) {
       LOG.warn("Failed to update bucket metadata: " + metadata, e);
-    } finally {
-      try {
-        if (fsOut != null) {
-          fsOut.close();
-        }
-      } catch (IOException e) {
-        throw new HoodieIOException("Failed to close file: " + fullPath, e);
-      }
     }
     return false;
+  }
+
+  public class ConsistentBucketIndexLocationMapper implements BucketIndexLocationMapper {
+
+    /**
+     * Mapping from partitionPath -> bucket identifier
+     */
+    private final Map<String, ConsistentBucketIdentifier> partitionToIdentifier;
+
+    public ConsistentBucketIndexLocationMapper(HoodieTable table, List<String> partitions) {
+      // TODO maybe parallel
+      partitionToIdentifier = partitions.stream().collect(Collectors.toMap(p -> p, p -> {
+        HoodieConsistentHashingMetadata metadata = loadOrCreateMetadata(table, p);
+        return new ConsistentBucketIdentifier(metadata);
+      }));
+    }
+
+    @Override
+    public HoodieRecordLocation getRecordLocation(HoodieKey key, String partitionPath) {
+      ConsistentHashingNode node = partitionToIdentifier.get(partitionPath).getBucket(key, indexKeyFields);
+      if (!StringUtils.isNullOrEmpty(node.getFileIdPrefix())) {
+        /**
+         * Dynamic Bucket Index doesn't need the instant time of the latest file group.
+         * We add suffix 0 here to the file uuid, following the naming convention, i.e., fileId = [uuid]_[numWrites]
+         */
+        return new HoodieRecordLocation(null, FSUtils.createNewFileId(node.getFileIdPrefix(), 0));
+      }
+
+      LOG.error("Consistent hashing node has no file group, partition: " + partitionPath + ", meta: "
+          + partitionToIdentifier.get(partitionPath).getMetadata().getFilename() + ", record_key: " + key.toString());
+      throw new HoodieIndexException("Failed to getBucket as hashing node has no file group");
+    }
   }
 }

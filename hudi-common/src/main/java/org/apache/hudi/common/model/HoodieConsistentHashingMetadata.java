@@ -20,14 +20,11 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.JsonUtils;
 
-import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.annotation.PropertyAccessor;
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -49,12 +46,6 @@ public class HoodieConsistentHashingMetadata implements Serializable {
    */
   public static final int HASH_VALUE_MASK = Integer.MAX_VALUE;
   public static final String HASHING_METADATA_FILE_SUFFIX = ".hashing_meta";
-  private static final ObjectMapper MAPPER = new ObjectMapper();
-
-  static {
-    MAPPER.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
-    MAPPER.setVisibility(PropertyAccessor.FIELD, JsonAutoDetect.Visibility.ANY);
-  }
 
   private final short version;
   private final String partitionPath;
@@ -81,9 +72,6 @@ public class HoodieConsistentHashingMetadata implements Serializable {
 
   /**
    * Construct default metadata with all bucket's file group uuid initialized
-   *
-   * @param partitionPath
-   * @param numBuckets
    */
   private HoodieConsistentHashingMetadata(short version, String partitionPath, String instant, int numBuckets, int seqNo) {
     this.version = version;
@@ -140,7 +128,7 @@ public class HoodieConsistentHashingMetadata implements Serializable {
   }
 
   private String toJsonString() throws IOException {
-    return MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(this);
+    return JsonUtils.getObjectMapper().writerWithDefaultPrettyPrinter().writeValueAsString(this);
   }
 
   protected static <T> T fromJsonString(String jsonStr, Class<T> clazz) throws Exception {
@@ -148,15 +136,12 @@ public class HoodieConsistentHashingMetadata implements Serializable {
       // For empty commit file (no data or something bad happen).
       return clazz.newInstance();
     }
-    return MAPPER.readValue(jsonStr, clazz);
+    return JsonUtils.getObjectMapper().readValue(jsonStr, clazz);
   }
 
   /**
    * Get instant time from the hashing metadata filename
    * Pattern of the filename: <instant>.HASHING_METADATA_FILE_SUFFIX
-   *
-   * @param filename
-   * @return
    */
   public static String getTimestampFromFile(String filename) {
     return filename.split("\\.")[0];

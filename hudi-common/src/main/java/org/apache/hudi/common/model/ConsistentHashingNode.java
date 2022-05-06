@@ -18,13 +18,11 @@
 
 package org.apache.hudi.common.model;
 
-import com.fasterxml.jackson.annotation.JsonAutoDetect;
+import org.apache.hudi.common.util.JsonUtils;
+
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.annotation.PropertyAccessor;
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -39,23 +37,17 @@ import java.util.List;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class ConsistentHashingNode implements Serializable {
 
-  private static final ObjectMapper MAPPER = new ObjectMapper();
-  static {
-    MAPPER.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
-    MAPPER.setVisibility(PropertyAccessor.FIELD, JsonAutoDetect.Visibility.ANY);
-  }
-
   private final int value;
-  private final String fileIdPfx;
+  private final String fileIdPrefix;
 
   @JsonCreator
-  public ConsistentHashingNode(@JsonProperty("value") int value, @JsonProperty("fileIdPfx") String fileIdPfx) {
+  public ConsistentHashingNode(@JsonProperty("value") int value, @JsonProperty("fileIdPrefix") String fileIdPrefix) {
     this.value = value;
-    this.fileIdPfx = fileIdPfx;
+    this.fileIdPrefix = fileIdPrefix;
   }
 
   public static String toJsonString(List<ConsistentHashingNode> nodes) throws IOException {
-    return MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(nodes);
+    return JsonUtils.getObjectMapper().writerWithDefaultPrettyPrinter().writeValueAsString(nodes);
   }
 
   public static List<ConsistentHashingNode> fromJsonString(String json) throws Exception {
@@ -63,7 +55,7 @@ public class ConsistentHashingNode implements Serializable {
       return Collections.emptyList();
     }
 
-    ConsistentHashingNode[] nodes = MAPPER.readValue(json, ConsistentHashingNode[].class);
+    ConsistentHashingNode[] nodes = JsonUtils.getObjectMapper().readValue(json, ConsistentHashingNode[].class);
     return Arrays.asList(nodes);
   }
 
@@ -71,15 +63,15 @@ public class ConsistentHashingNode implements Serializable {
     return value;
   }
 
-  public String getFileIdPfx() {
-    return fileIdPfx;
+  public String getFileIdPrefix() {
+    return fileIdPrefix;
   }
 
   @Override
   public String toString() {
     final StringBuilder sb = new StringBuilder("ConsistentHashingNode{");
     sb.append("value=").append(value);
-    sb.append(", fileIdPfx='").append(fileIdPfx).append('\'');
+    sb.append(", fileIdPfx='").append(fileIdPrefix).append('\'');
     sb.append('}');
     return sb.toString();
   }

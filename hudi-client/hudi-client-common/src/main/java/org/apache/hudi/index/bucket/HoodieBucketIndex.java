@@ -22,7 +22,6 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.utils.LazyIterableIterator;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -36,6 +35,7 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -46,13 +46,13 @@ public abstract class HoodieBucketIndex extends HoodieIndex<Object, Object> {
   private static final Logger LOG = LogManager.getLogger(HoodieBucketIndex.class);
 
   protected final int numBuckets;
-  protected final String indexKeyFields;
+  protected final List<String> indexKeyFields;
 
   public HoodieBucketIndex(HoodieWriteConfig config) {
     super(config);
 
     this.numBuckets = config.getBucketIndexNumBuckets();
-    this.indexKeyFields = config.getBucketIndexHashField();
+    this.indexKeyFields = Arrays.asList(config.getBucketIndexHashField().split(","));
     LOG.info("Use bucket index, numBuckets = " + numBuckets + ", indexFields: " + indexKeyFields);
   }
 
@@ -72,7 +72,7 @@ public abstract class HoodieBucketIndex extends HoodieIndex<Object, Object> {
     // Initialize necessary information before tagging. e.g., hashing metadata
     List<String> partitions = records.map(HoodieRecord::getPartitionPath).distinct().collectAsList();
     LOG.info("Initializing hashing metadata for partitions: " + partitions);
-    initialize(hoodieTable, partitions);
+    BucketIndexLocationMapper mapper = getLocationMapper(hoodieTable, partitions);
 
     return records.mapPartitions(iterator ->
         new LazyIterableIterator<HoodieRecord<R>, HoodieRecord<R>>(iterator) {
@@ -80,7 +80,7 @@ public abstract class HoodieBucketIndex extends HoodieIndex<Object, Object> {
           protected HoodieRecord<R> computeNext() {
             // TODO maybe batch the operation to improve performance
             HoodieRecord record = inputItr.next();
-            HoodieRecordLocation loc = getBucket(record.getKey(), record.getPartitionPath());
+            HoodieRecordLocation loc = mapper.getRecordLocation(record.getKey(), record.getPartitionPath());
             return HoodieIndexUtils.getTaggedRecord(record, Option.ofNullable(loc));
           }
         }
@@ -125,19 +125,7 @@ public abstract class HoodieBucketIndex extends HoodieIndex<Object, Object> {
   }
 
   /**
-   * Initialize necessary fields
-   *
-   * @param table
-   * @param partitions
+   * Get a location mapper for the given table & partitionPath
    */
-  protected abstract void initialize(HoodieTable table, List<String> partitions);
-
-  /**
-   * Get record location given the record key and its partition
-   *
-   * @param key
-   * @param partitionPath
-   * @return
-   */
-  protected abstract HoodieRecordLocation getBucket(HoodieKey key, String partitionPath);
+  protected abstract BucketIndexLocationMapper getLocationMapper(HoodieTable table, List<String> partitionPath);
 }

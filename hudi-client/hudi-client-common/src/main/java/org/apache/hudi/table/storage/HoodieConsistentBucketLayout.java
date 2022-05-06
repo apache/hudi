@@ -54,8 +54,6 @@ public class HoodieConsistentBucketLayout extends HoodieStorageLayout {
 
   /**
    * Consistent hashing will tag all incoming records, so we could go ahead reusing an existing Partitioner
-   *
-   * @return
    */
   @Override
   public Option<String> layoutPartitionerClass() {

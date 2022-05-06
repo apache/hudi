@@ -31,6 +31,7 @@ import org.apache.log4j.Logger;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * Simple bucket index implementation, with fixed bucket number.
@@ -38,11 +39,6 @@ import java.util.Map;
 public class HoodieSimpleBucketIndex extends HoodieBucketIndex {
 
   private static final Logger LOG = LogManager.getLogger(HoodieSimpleBucketIndex.class);
-
-  /**
-   * Mapping from partitionPath -> bucketId -> fileInfo
-   */
-  private Map<String, Map<Integer, HoodieRecordLocation>> partitionPathFileIDList;
 
   public HoodieSimpleBucketIndex(HoodieWriteConfig config) {
     super(config);
@@ -77,15 +73,26 @@ public class HoodieSimpleBucketIndex extends HoodieBucketIndex {
   }
 
   @Override
-  protected void initialize(HoodieTable table, List<String> partitions) {
-    partitionPathFileIDList = new HashMap<>();
-    partitions.forEach(p -> partitionPathFileIDList.put(p, loadPartitionBucketIdFileIdMapping(table, p)));
+  protected BucketIndexLocationMapper getLocationMapper(HoodieTable table, List<String> partitionPath) {
+    return new SimpleBucketIndexLocationMapper(table, partitionPath);
   }
 
-  @Override
-  protected HoodieRecordLocation getBucket(HoodieKey key, String partitionPath) {
-    int bucketId = BucketIdentifier.getBucketId(key, config.getBucketIndexHashField(), numBuckets);
-    Map<Integer, HoodieRecordLocation> bucketIdToFileIdMapping = partitionPathFileIDList.get(partitionPath);
-    return bucketIdToFileIdMapping.getOrDefault(bucketId, null);
+  public class SimpleBucketIndexLocationMapper implements BucketIndexLocationMapper {
+
+    /**
+     * Mapping from partitionPath -> bucketId -> fileInfo
+     */
+    private final Map<String, Map<Integer, HoodieRecordLocation>> partitionPathFileIDList;
+
+    public SimpleBucketIndexLocationMapper(HoodieTable table, List<String> partitions) {
+      partitionPathFileIDList = partitions.stream().collect(Collectors.toMap(p -> p, p -> loadPartitionBucketIdFileIdMapping(table, p)));
+    }
+
+    @Override
+    public HoodieRecordLocation getRecordLocation(HoodieKey key, String partitionPath) {
+      int bucketId = BucketIdentifier.getBucketId(key, indexKeyFields, numBuckets);
+      Map<Integer, HoodieRecordLocation> bucketIdToFileIdMapping = partitionPathFileIDList.get(partitionPath);
+      return bucketIdToFileIdMapping.getOrDefault(bucketId, null);
+    }
   }
 }

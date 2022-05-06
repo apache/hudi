@@ -42,8 +42,16 @@ public class BucketIdentifier implements Serializable {
     return (getHashKeys(hoodieKey, indexKeyFields).hashCode() & Integer.MAX_VALUE) % numBuckets;
   }
 
+  public static int getBucketId(HoodieKey hoodieKey, List<String> indexKeyFields, int numBuckets) {
+    return (getHashKeys(hoodieKey.getRecordKey(), indexKeyFields).hashCode() & Integer.MAX_VALUE) % numBuckets;
+  }
+
   public static int getBucketId(String recordKey, String indexKeyFields, int numBuckets) {
-    return (getHashKeys(recordKey, indexKeyFields).hashCode() & Integer.MAX_VALUE) % numBuckets;
+    return getBucketId(getHashKeys(recordKey, indexKeyFields), numBuckets);
+  }
+
+  public  static int getBucketId(List<String> hashKeyFields, int numBuckets) {
+    return (hashKeyFields.hashCode() & Integer.MAX_VALUE) % numBuckets;
   }
 
   public static List<String> getHashKeys(HoodieKey hoodieKey, String indexKeyFields) {
@@ -51,23 +59,21 @@ public class BucketIdentifier implements Serializable {
   }
 
   protected static List<String> getHashKeys(String recordKey, String indexKeyFields) {
-    List<String> hashKeys;
-    if (!recordKey.contains(":")) {
-      hashKeys = Collections.singletonList(recordKey);
-    } else {
-      Map<String, String> recordKeyPairs = Arrays.stream(recordKey.split(","))
-          .map(p -> p.split(":"))
-          .collect(Collectors.toMap(p -> p[0], p -> p[1]));
-      hashKeys = Arrays.stream(indexKeyFields.split(","))
-          .map(f -> recordKeyPairs.get(f))
-          .collect(Collectors.toList());
-    }
-    return hashKeys;
+    return !recordKey.contains(":") ? Collections.singletonList(recordKey) :
+        getHashKeysUsingIndexFields(recordKey, Arrays.asList(indexKeyFields.split(",")));
   }
 
-  // Only for test
-  public  static int getBucketId(List<String> hashKeyFields, int numBuckets) {
-    return hashKeyFields.hashCode() % numBuckets;
+  protected static List<String> getHashKeys(String recordKey, List<String> indexKeyFields) {
+    return !recordKey.contains(":") ? Collections.singletonList(recordKey) :
+        getHashKeysUsingIndexFields(recordKey, indexKeyFields);
+  }
+
+  private static List<String> getHashKeysUsingIndexFields(String recordKey, List<String> indexKeyFields) {
+    Map<String, String> recordKeyPairs = Arrays.stream(recordKey.split(","))
+        .map(p -> p.split(":"))
+        .collect(Collectors.toMap(p -> p[0], p -> p[1]));
+    return indexKeyFields.stream()
+        .map(f -> recordKeyPairs.get(f)).collect(Collectors.toList());
   }
 
   public static String partitionBucketIdStr(String partition, int bucketId) {

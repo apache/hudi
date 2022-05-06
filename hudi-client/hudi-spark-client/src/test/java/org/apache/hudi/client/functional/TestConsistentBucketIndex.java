@@ -73,7 +73,7 @@ import java.util.stream.Stream;
 @Tag("functional")
 public class TestConsistentBucketIndex extends HoodieClientTestHarness {
 
-  private final Random random = new Random();
+  private final Random random = new Random(1);
   private HoodieIndex index;
   private HoodieWriteConfig config;
 
@@ -170,20 +170,21 @@ public class TestConsistentBucketIndex extends HoodieClientTestHarness {
     writeClient.startCommitWithTime(newCommitTime);
     List<WriteStatus> writeStatues = writeClient.upsert(writeRecords, newCommitTime).collect();
     org.apache.hudi.testutils.Assertions.assertNoWriteErrors(writeStatues);
-    Assertions.assertTrue(writeClient.commitStats(newCommitTime, writeStatues.stream().map(WriteStatus::getStat).collect(Collectors.toList()),
-        Option.empty(), metaClient.getCommitActionType()));
+    boolean success = writeClient.commitStats(newCommitTime, writeStatues.stream().map(WriteStatus::getStat).collect(Collectors.toList()), Option.empty(), metaClient.getCommitActionType());
+    Assertions.assertTrue(success);
     metaClient = HoodieTableMetaClient.reload(metaClient);
     // The number of distinct fileId should be the same as total log file numbers
     Assertions.assertEquals(writeStatues.stream().map(WriteStatus::getFileId).distinct().count(),
         Arrays.stream(dataGen.getPartitionPaths()).mapToInt(p -> Objects.requireNonNull(listStatus(p, true)).length).sum());
+    Assertions.assertEquals(totalRecords, readRecords(dataGen.getPartitionPaths(), populateMetaFields).size());
 
     // Upsert the same set of records, the number of records should be same
     newCommitTime = "002";
     writeClient.startCommitWithTime(newCommitTime);
     writeStatues = writeClient.upsert(writeRecords, newCommitTime).collect();
     org.apache.hudi.testutils.Assertions.assertNoWriteErrors(writeStatues);
-    Assertions.assertTrue(writeClient.commitStats(newCommitTime, writeStatues.stream().map(WriteStatus::getStat).collect(Collectors.toList()),
-        Option.empty(), metaClient.getCommitActionType()));
+    success = writeClient.commitStats(newCommitTime, writeStatues.stream().map(WriteStatus::getStat).collect(Collectors.toList()), Option.empty(), metaClient.getCommitActionType());
+    Assertions.assertTrue(success);
     // The number of log file should double after this insertion
     long numberOfLogFiles = Arrays.stream(dataGen.getPartitionPaths())
         .mapToInt(p -> {

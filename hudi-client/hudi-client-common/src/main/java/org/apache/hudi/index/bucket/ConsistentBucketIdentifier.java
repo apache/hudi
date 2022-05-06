@@ -62,21 +62,20 @@ public class ConsistentBucketIdentifier extends BucketIdentifier {
   }
 
   public int getNumBuckets() {
-    return getNodes().size();
+    return ring.size();
   }
 
   /**
    * Get bucket of the given file group
    *
    * @param fileId the file group id. NOTE: not filePfx (i.e., uuid)
-   * @return
    */
   public ConsistentHashingNode getBucketByFileId(String fileId) {
     return fileIdToBucket.get(fileId);
   }
 
-  public ConsistentHashingNode getBucket(HoodieKey hoodieKey, String indexKeyFields) {
-    return getBucket(getHashKeys(hoodieKey, indexKeyFields));
+  public ConsistentHashingNode getBucket(HoodieKey hoodieKey, List<String> indexKeyFields) {
+    return getBucket(getHashKeys(hoodieKey.getRecordKey(), indexKeyFields));
   }
 
   protected ConsistentHashingNode getBucket(List<String> hashKeys) {
@@ -102,7 +101,7 @@ public class ConsistentBucketIdentifier extends BucketIdentifier {
     for (ConsistentHashingNode p : metadata.getNodes()) {
       ring.put(p.getValue(), p);
       // One bucket has only one file group, so append 0 directly
-      fileIdToBucket.put(FSUtils.createNewFileId(p.getFileIdPfx(), 0), p);
+      fileIdToBucket.put(FSUtils.createNewFileId(p.getFileIdPrefix(), 0), p);
     }
   }
 }
