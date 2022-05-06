@@ -18,13 +18,11 @@
 
 package org.apache.hudi.table.format.mor;
 
+import org.apache.flink.core.io.InputSplit;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.util.Option;
 
-import org.apache.flink.core.io.InputSplit;
-
 import javax.annotation.Nullable;
-
 import java.util.List;
 
 /**
@@ -43,6 +41,8 @@ public class MergeOnReadInputSplit implements InputSplit {
   private final long maxCompactionMemoryInBytes;
   private final String mergeType;
   private final Option<InstantRange> instantRange;
+  private String fileId;
+
 
   // for streaming reader to record the consumed offset,
   // which is the start of next round reading.
@@ -65,6 +65,34 @@ public class MergeOnReadInputSplit implements InputSplit {
     this.maxCompactionMemoryInBytes = maxCompactionMemoryInBytes;
     this.mergeType = mergeType;
     this.instantRange = Option.ofNullable(instantRange);
+  }
+
+  public MergeOnReadInputSplit(
+          int splitNum,
+          @Nullable String basePath,
+          Option<List<String>> logPaths,
+          String latestCommit,
+          String tablePath,
+          long maxCompactionMemoryInBytes,
+          String mergeType,
+          @Nullable InstantRange instantRange,String fileId ) {
+    this.splitNum = splitNum;
+    this.basePath = Option.ofNullable(basePath);
+    this.logPaths = logPaths;
+    this.latestCommit = latestCommit;
+    this.tablePath = tablePath;
+    this.maxCompactionMemoryInBytes = maxCompactionMemoryInBytes;
+    this.mergeType = mergeType;
+    this.instantRange = Option.ofNullable(instantRange);
+    this.fileId = fileId;
+  }
+
+  public String getFileId() {
+    return fileId;
+  }
+
+  public void setFileId(String fileId) {
+    this.fileId = fileId;
   }
 
   public Option<String> getBasePath() {
