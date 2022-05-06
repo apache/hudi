@@ -237,9 +237,9 @@ public class RowKeyGeneratorHelper {
    * @param structType  schema of interest
    * @param field       field of interest for which the positions are requested for
    * @param isRecordKey {@code true} if the field requested for is a record key. {@code false} in case of a partition path.
-   * @return the positions of the field as per the struct type and the root fields datatype.
+   * @return the positions of the field as per the struct type and the leaf field's datatype.
    */
-  public static Pair<List<Integer>, DataType> getNestedFieldSchemaInfo(StructType structType, String field, boolean isRecordKey) {
+  public static Pair<List<Integer>, DataType> getFieldSchemaInfo(StructType structType, String field, boolean isRecordKey) {
     String[] slices = field.split("\\.");
     List<Integer> positions = new ArrayList<>();
     int index = 0;
