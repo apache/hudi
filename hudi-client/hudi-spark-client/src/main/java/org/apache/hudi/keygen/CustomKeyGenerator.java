@@ -96,7 +96,7 @@ public class CustomKeyGenerator extends BuiltinKeyGenerator {
     StringBuilder partitionPath = new StringBuilder();
 
     //Corresponds to no partition case
-    if (getPartitionPathFields().size() == 1 && getPartitionPathFields().get(0).isEmpty()) {
+    if (getPartitionPathFields().isEmpty()) {
       return "";
     }
     for (String field : getPartitionPathFields()) {

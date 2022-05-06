@@ -71,12 +71,15 @@ public class TestComplexKeyGenerator extends KeyGeneratorTestUtilities {
 
   @Test
   public void testNullPartitionPathFields() {
-    Assertions.assertThrows(IllegalArgumentException.class, () -> new ComplexKeyGenerator(getPropertiesWithoutPartitionPathProp()));
+    ComplexKeyGenerator compositeKeyGenerator = new ComplexKeyGenerator(getPropertiesWithoutPartitionPathProp());
+    assertEquals(compositeKeyGenerator.getPartitionPathFields().size(), 0);
   }
 
   @Test
   public void testNullRecordKeyFields() {
-    Assertions.assertThrows(IllegalArgumentException.class, () -> new ComplexKeyGenerator(getPropertiesWithoutRecordKeyProp()));
+    ComplexKeyGenerator compositeKeyGenerator = new ComplexKeyGenerator(getPropertiesWithoutRecordKeyProp());
+    assertEquals(compositeKeyGenerator.getRecordKeyFields().size(), 1);
+    assertEquals(compositeKeyGenerator.getRecordKeyFields().get(0), KeyGeneratorOptions.RECORDKEY_FIELD_NAME.defaultValue());
   }
 
   @Test

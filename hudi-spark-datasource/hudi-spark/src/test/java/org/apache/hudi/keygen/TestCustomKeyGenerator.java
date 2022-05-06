@@ -240,59 +240,22 @@ public class TestCustomKeyGenerator extends KeyGeneratorTestUtilities {
   }
 
   @Test
-  public void testNoRecordKeyFieldPropWithKeyGeneratorClass() {
+  public void testNoRecordKeyFieldPropWithKeyGeneratorClass() throws IOException {
     testNoRecordKeyFieldProp(true);
   }
 
   @Test
-  public void testNoRecordKeyFieldPropWithKeyGeneratorType() {
+  public void testNoRecordKeyFieldPropWithKeyGeneratorType() throws IOException {
     testNoRecordKeyFieldProp(false);
   }
 
-  public void testNoRecordKeyFieldProp(boolean useKeyGeneratorClassName) {
+  public void testNoRecordKeyFieldProp(boolean useKeyGeneratorClassName) throws IOException {
     TypedProperties propsWithoutRecordKeyFieldProps = getPropsWithoutRecordKeyFieldProps(useKeyGeneratorClassName);
-    try {
-      BuiltinKeyGenerator keyGenerator =
-          (BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(propsWithoutRecordKeyFieldProps);
+    BuiltinKeyGenerator keyGenerator =
+        (BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(propsWithoutRecordKeyFieldProps);
 
-      keyGenerator.getKey(getRecord());
-      Assertions.fail("should fail when record key field is not provided!");
-    } catch (Exception e) {
-      if (useKeyGeneratorClassName) {
-        // "Property hoodie.datasource.write.recordkey.field not found" exception cause CustomKeyGenerator init fail
-        Assertions.assertTrue(e
-            .getCause()
-            .getCause()
-            .getCause()
-            .getMessage()
-            .contains("Property hoodie.datasource.write.recordkey.field not found"));
-      } else {
-        Assertions.assertTrue(stackTraceToString(e).contains("Property hoodie.datasource.write.recordkey.field not found"));
-      }
-
-    }
-
-    try {
-      BuiltinKeyGenerator keyGenerator =
-          (BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(propsWithoutRecordKeyFieldProps);
-
-      GenericRecord record = getRecord();
-      Row row = KeyGeneratorTestUtilities.getRow(record);
-      keyGenerator.getRecordKey(row);
-      Assertions.fail("should fail when record key field is not provided!");
-    } catch (Exception e) {
-      if (useKeyGeneratorClassName) {
-        // "Property hoodie.datasource.write.recordkey.field not found" exception cause CustomKeyGenerator init fail
-        Assertions.assertTrue(e
-            .getCause()
-            .getCause()
-            .getCause()
-            .getMessage()
-            .contains("Property hoodie.datasource.write.recordkey.field not found"));
-      } else {
-        Assertions.assertTrue(stackTraceToString(e).contains("Property hoodie.datasource.write.recordkey.field not found"));
-      }
-    }
+    Assertions.assertEquals(keyGenerator.getRecordKeyFields().size(), 1);
+    Assertions.assertEquals(keyGenerator.getRecordKeyFields().get(0), KeyGeneratorOptions.RECORDKEY_FIELD_NAME.defaultValue());
   }
 
   @Test
