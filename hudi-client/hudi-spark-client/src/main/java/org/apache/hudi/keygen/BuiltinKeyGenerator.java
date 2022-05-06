@@ -19,8 +19,9 @@
 package org.apache.hudi.keygen;
 
 import org.apache.avro.generic.GenericRecord;
-import org.apache.hudi.ApiMaturityLevel;
 import org.apache.hudi.AvroConversionUtils;
+import org.apache.hudi.HoodieSparkUtils;
+import org.apache.hudi.client.utils.SparkRowSerDe;
 import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.collection.Pair;
@@ -31,6 +32,8 @@ import org.apache.spark.sql.types.DataType;
 import org.apache.spark.sql.types.StructType;
 import scala.Function1;
 
+import java.nio.charset.StandardCharsets;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -44,6 +47,7 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
 
   private static final String STRUCT_NAME = "hoodieRowTopLevelField";
   private static final String NAMESPACE = "hoodieRow";
+
   private Function1<Row, GenericRecord> converterFn = null;
   private final AtomicBoolean validatePartitionFields = new AtomicBoolean(false);
   protected StructType structType;
@@ -55,17 +59,8 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
     super(config);
   }
 
-  /**
-   * Fetch record key from {@link Row}.
-   *
-   * @param row instance of {@link Row} from which record key is requested.
-   * @return the record key of interest from {@link Row}.
-   */
   @Override
-  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public String getRecordKey(Row row) {
-    // TODO avoid conversion to avro
-    //      since converterFn is transient this will be repeatedly initialized over and over again
     if (null == converterFn) {
       converterFn = AvroConversionUtils.createConverterToAvro(row.schema(), STRUCT_NAME, NAMESPACE);
     }
@@ -73,25 +68,17 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
   }
 
   @Override
-  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
-  public String getRecordKey(InternalRow internalRow, StructType schema) {
+  public byte[] getRecordKey(InternalRow internalRow, StructType schema) {
     try {
       // TODO fix
       buildFieldSchemaInfoIfNeeded(schema);
-      return RowKeyGeneratorHelper.getRecordKeyFromInternalRow(internalRow, getRecordKeyFields(), recordKeySchemaInfo, false);
+      return RowKeyGeneratorHelper.getRecordKeyFromInternalRow(internalRow, getRecordKeyFields(), recordKeySchemaInfo, false).getBytes(StandardCharsets.UTF_8);
     } catch (Exception e) {
       throw new HoodieException("Conversion of InternalRow to Row failed with exception", e);
     }
   }
-  /**
-   * Fetch partition path from {@link Row}.
-   *
-   * @param row instance of {@link Row} from which partition path is requested
-   * @return the partition path of interest from {@link Row}.
-   */
 
   @Override
-  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public String getPartitionPath(Row row) {
     if (null == converterFn) {
       converterFn = AvroConversionUtils.createConverterToAvro(row.schema(), STRUCT_NAME, NAMESPACE);
@@ -107,12 +94,11 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
    * @return the partition path.
    */
   @Override
-  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
-  public String getPartitionPath(InternalRow internalRow, StructType structType) {
+  public byte[] getPartitionPath(InternalRow internalRow, StructType structType) {
     try {
       buildFieldSchemaInfoIfNeeded(structType);
       return RowKeyGeneratorHelper.getPartitionPathFromInternalRow(internalRow, getPartitionPathFields(),
-          hiveStylePartitioning, partitionPathSchemaInfo);
+          hiveStylePartitioning, partitionPathSchemaInfo).getBytes(StandardCharsets.UTF_8);
     } catch (Exception e) {
       throw new HoodieException("Conversion of InternalRow to Row failed with exception", e);
     }
