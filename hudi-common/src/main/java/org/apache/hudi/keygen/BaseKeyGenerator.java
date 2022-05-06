@@ -66,15 +66,6 @@ public abstract class BaseKeyGenerator extends KeyGenerator {
   }
 
   @Override
-  public final List<String> getRecordKeyFieldNames() {
-    // For nested columns, pick top level column name
-    // TODO materialize
-    return getRecordKeyFields().stream().map(k -> {
-      int idx = k.indexOf('.');
-      return idx > 0 ? k.substring(0, idx) : k;
-    }).collect(Collectors.toList());
-  }
-
   public List<String> getRecordKeyFields() {
     return recordKeyFields;
   }

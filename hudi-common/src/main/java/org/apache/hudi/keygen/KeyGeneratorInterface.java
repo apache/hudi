@@ -31,6 +31,6 @@ public interface KeyGeneratorInterface extends Serializable {
 
   HoodieKey getKey(GenericRecord record);
 
-  List<String> getRecordKeyFieldNames();
+  List<String> getRecordKeyFields();
 
 }

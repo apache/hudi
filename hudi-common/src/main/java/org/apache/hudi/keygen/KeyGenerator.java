@@ -52,7 +52,7 @@ public abstract class KeyGenerator implements KeyGeneratorInterface {
    * @return list of field names, when concatenated make up the record key.
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
-  public List<String> getRecordKeyFieldNames() {
+  public List<String> getRecordKeyFields() {
     throw new UnsupportedOperationException("Bootstrap not supported for key generator. "
         + "Please override this method in your custom key generator.");
   }
