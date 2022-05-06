@@ -73,7 +73,7 @@ public class TypedProperties extends Properties implements Serializable {
     if (!containsKey(property)) {
       return defaultVal;
     }
-    return Arrays.stream(getProperty(property).split(delimiter)).map(String::trim).collect(Collectors.toList());
+    return Arrays.stream(getProperty(property).split(delimiter)).map(String::trim).filter(s -> !s.isEmpty()).collect(Collectors.toList());
   }
 
   public int getInteger(String property) {

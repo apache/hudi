@@ -26,10 +26,8 @@ import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.types.StructType;
 
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * Simple Key generator for non-partitioned Hive Tables.
@@ -40,8 +38,8 @@ public class NonpartitionedKeyGenerator extends BuiltinKeyGenerator {
 
   public NonpartitionedKeyGenerator(TypedProperties props) {
     super(props);
-    this.recordKeyFields = Arrays.stream(props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key())
-        .split(",")).map(String::trim).collect(Collectors.toList());
+    this.recordKeyFields = props.getStringList(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), ",",
+        Collections.singletonList(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.defaultValue()));
     this.partitionPathFields = Collections.emptyList();
     nonpartitionedAvroKeyGenerator = new NonpartitionedAvroKeyGenerator(props);
   }

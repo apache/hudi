@@ -31,8 +31,7 @@ import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.types.StructType;
 
 import java.io.IOException;
-import java.util.Arrays;
-import java.util.stream.Collectors;
+import java.util.Collections;
 
 /**
  * This is a generic implementation of KeyGenerator where users can configure record key as a single field or a combination of fields. Similarly partition path can be configured to have multiple
@@ -53,8 +52,10 @@ public class CustomKeyGenerator extends BuiltinKeyGenerator {
 
   public CustomKeyGenerator(TypedProperties props) {
     super(props);
-    this.recordKeyFields = Arrays.stream(props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()).split(",")).map(String::trim).collect(Collectors.toList());
-    this.partitionPathFields = Arrays.stream(props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()).split(",")).map(String::trim).collect(Collectors.toList());
+    this.recordKeyFields = props.getStringList(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), ",",
+        Collections.singletonList(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.defaultValue()));
+    this.partitionPathFields = props.getStringList(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), ",",
+        Collections.emptyList());
     customAvroKeyGenerator = new CustomAvroKeyGenerator(props);
   }
 
