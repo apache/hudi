@@ -20,7 +20,7 @@ package org.apache.spark.sql.hudi
 import org.apache.hudi.{DataSourceReadOptions, HoodieDataSourceHelpers}
 import org.apache.hudi.common.fs.FSUtils
 
-class TestMergeIntoTable extends TestHoodieSqlBase {
+class TestMergeIntoTable extends HoodieSparkSqlTestBase {
 
   test("Test MergeInto Basic") {
     withTempDir { tmp =>

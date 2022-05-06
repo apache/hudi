@@ -19,9 +19,9 @@
 
 package org.apache.spark.sql.hudi.procedure
 
-import org.apache.spark.sql.hudi.TestHoodieSqlBase
+import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase
 
-class TestCompactionProcedure extends TestHoodieSqlBase {
+class TestCompactionProcedure extends HoodieSparkSqlTestBase {
 
   test("Test Call run_compaction Procedure by Table") {
     withTempDir { tmp =>

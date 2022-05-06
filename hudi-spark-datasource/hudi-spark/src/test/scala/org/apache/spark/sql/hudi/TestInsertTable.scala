@@ -26,7 +26,7 @@ import org.apache.spark.sql.SaveMode
 
 import java.io.File
 
-class TestInsertTable extends TestHoodieSqlBase {
+class TestInsertTable extends HoodieSparkSqlTestBase {
 
   test("Test Insert Into") {
     withTempDir { tmp =>
