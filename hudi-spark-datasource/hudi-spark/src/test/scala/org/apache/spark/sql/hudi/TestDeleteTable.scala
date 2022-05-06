@@ -22,7 +22,7 @@ import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.keygen.SimpleKeyGenerator
 import org.apache.spark.sql.SaveMode
 
-class TestDeleteTable extends TestHoodieSqlBase {
+class TestDeleteTable extends HoodieSparkSqlTestBase {
 
   test("Test Delete Table") {
     withTempDir { tmp =>

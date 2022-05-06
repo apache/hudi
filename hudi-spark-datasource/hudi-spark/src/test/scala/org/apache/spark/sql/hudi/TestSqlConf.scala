@@ -28,7 +28,7 @@ import java.nio.file.{Files, Paths}
 
 import org.scalatest.BeforeAndAfter
 
-class TestSqlConf extends TestHoodieSqlBase with BeforeAndAfter {
+class TestSqlConf extends HoodieSparkSqlTestBase with BeforeAndAfter {
 
   def setEnv(key: String, value: String): String = {
     val field = System.getenv().getClass.getDeclaredField("m")

@@ -23,7 +23,7 @@ import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.keygen.{ComplexKeyGenerator, SimpleKeyGenerator}
 import org.apache.spark.sql.SaveMode
 
-class TestAlterTableDropPartition extends TestHoodieSqlBase {
+class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
 
   test("Drop non-partitioned table") {
     val tableName = generateTableName

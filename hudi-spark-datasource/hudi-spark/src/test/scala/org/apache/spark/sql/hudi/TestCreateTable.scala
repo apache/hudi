@@ -30,7 +30,7 @@ import org.apache.spark.sql.types._
 
 import scala.collection.JavaConverters._
 
-class TestCreateTable extends TestHoodieSqlBase {
+class TestCreateTable extends HoodieSparkSqlTestBase {
 
   test("Test Create Managed Hoodie Table") {
     val databaseName = "hudi_database"
