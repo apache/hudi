@@ -30,9 +30,9 @@ import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.types.DataType;
 import org.apache.spark.sql.types.StructType;
+import org.apache.spark.unsafe.types.UTF8String;
 import scala.Function1;
 
-import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -40,17 +40,23 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * Base class for the built-in key generators. Contains methods structured for
- * code reuse amongst them.
+ * Base class for all built-in key generators.
+ *
+ * NOTE: By default it implements all the methods of {@link SparkKeyGeneratorInterface}, which
+ *       by default however fallback to Avro implementation. For maximum performance (to avoid
+ *       conversion from Spark's internal data-types to Avro) you should override these methods
+ *       in your implementation.
+ *
+ * TODO rename to AvroFallbackBaseKeyGenerator
  */
 public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements SparkKeyGeneratorInterface {
 
   private static final String STRUCT_NAME = "hoodieRowTopLevelField";
   private static final String NAMESPACE = "hoodieRow";
 
-  private Function1<Row, GenericRecord> converterFn = null;
+  private transient Function1<Row, GenericRecord> converterFn = null;
   private final AtomicBoolean validatePartitionFields = new AtomicBoolean(false);
-  protected StructType structType;
+  protected transient StructType structType;
 
   protected Map<String, Pair<List<Integer>, DataType>> recordKeySchemaInfo = new HashMap<>();
   protected Map<String, Pair<List<Integer>, DataType>> partitionPathSchemaInfo = new HashMap<>();
@@ -68,11 +74,11 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
   }
 
   @Override
-  public byte[] getRecordKey(InternalRow internalRow, StructType schema) {
+  public UTF8String getRecordKey(InternalRow internalRow, StructType schema) {
     try {
       // TODO fix
       buildFieldSchemaInfoIfNeeded(schema);
-      return RowKeyGeneratorHelper.getRecordKeyFromInternalRow(internalRow, getRecordKeyFields(), recordKeySchemaInfo, false).getBytes(StandardCharsets.UTF_8);
+      return UTF8String.fromString(RowKeyGeneratorHelper.getRecordKeyFromInternalRow(internalRow, getRecordKeyFields(), recordKeySchemaInfo, false));
     } catch (Exception e) {
       throw new HoodieException("Conversion of InternalRow to Row failed with exception", e);
     }
@@ -94,11 +100,10 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
    * @return the partition path.
    */
   @Override
-  public byte[] getPartitionPath(InternalRow internalRow, StructType structType) {
+  public UTF8String getPartitionPath(InternalRow internalRow, StructType structType) {
     try {
       buildFieldSchemaInfoIfNeeded(structType);
-      return RowKeyGeneratorHelper.getPartitionPathFromInternalRow(internalRow, getPartitionPathFields(),
-          hiveStylePartitioning, partitionPathSchemaInfo).getBytes(StandardCharsets.UTF_8);
+      return UTF8String.fromString(RowKeyGeneratorHelper.getPartitionPathFromInternalRow(internalRow, getPartitionPathFields(), hiveStylePartitioning, partitionPathSchemaInfo));
     } catch (Exception e) {
       throw new HoodieException("Conversion of InternalRow to Row failed with exception", e);
     }

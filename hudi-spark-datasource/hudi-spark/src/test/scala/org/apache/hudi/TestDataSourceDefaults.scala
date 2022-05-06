@@ -17,6 +17,7 @@
 
 package org.apache.hudi
 
+import javolution.io.Struct.UTF8String
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.apache.hudi.avro.HoodieAvroUtils
@@ -256,7 +257,7 @@ class TestDataSourceDefaults {
       getKey(genericRecord).getRecordKey
     }
 
-    override def getRecordKey(row: InternalRow, schema: StructType): String = null
+    override def getRecordKey(row: InternalRow, schema: StructType): UTF8String = null
 
     override def getPartitionPath(row: Row): String = {
       if (null == converterFn) converterFn = AvroConversionUtils.createConverterToAvro(row.schema, STRUCT_NAME, NAMESPACE)
