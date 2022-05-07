@@ -266,7 +266,7 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends SparkHo
     }
 
     if (partitionPaths != null && partitionPaths.size() > 0) {
-      context.setJobStatus(this.getClass().getSimpleName(), "Getting small files from partitions");
+      context.setJobStatus(this.getClass().getSimpleName(), "Getting small files from partitions: " + config.getTableName());
       JavaRDD<String> partitionPathRdds = jsc.parallelize(partitionPaths, partitionPaths.size());
       partitionSmallFilesMap = partitionPathRdds.mapToPair((PairFunction<String, String, List<SmallFile>>)
           partitionPath -> new Tuple2<>(partitionPath, getSmallFiles(partitionPath))).collectAsMap();

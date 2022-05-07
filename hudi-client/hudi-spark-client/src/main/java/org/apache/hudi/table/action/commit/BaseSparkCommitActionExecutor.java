@@ -113,7 +113,7 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
   }
 
   private HoodieData<HoodieRecord<T>> clusteringHandleUpdate(HoodieData<HoodieRecord<T>> inputRecords, Set<HoodieFileGroupId> fileGroupsInPendingClustering) {
-    context.setJobStatus(this.getClass().getSimpleName(), "Handling updates which are under clustering");
+    context.setJobStatus(this.getClass().getSimpleName(), "Handling updates which are under clustering: " + config.getTableName());
     UpdateStrategy<T, HoodieData<HoodieRecord<T>>> updateStrategy = (UpdateStrategy<T, HoodieData<HoodieRecord<T>>>) ReflectionUtils
         .loadClass(config.getClusteringUpdatesStrategyClass(), this.context, fileGroupsInPendingClustering);
     Pair<HoodieData<HoodieRecord<T>>, Set<HoodieFileGroupId>> recordsAndPendingClusteringFileGroups =
@@ -152,7 +152,7 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
 
     WorkloadProfile workloadProfile = null;
     if (isWorkloadProfileNeeded()) {
-      context.setJobStatus(this.getClass().getSimpleName(), "Building workload profile");
+      context.setJobStatus(this.getClass().getSimpleName(), "Building workload profile: " + config.getTableName());
       workloadProfile = new WorkloadProfile(buildProfile(inputRecords), operationType, table.getIndex().canIndexLogFiles());
       LOG.info("Input workload profile :" + workloadProfile);
     }
@@ -168,7 +168,7 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
         table.getFileSystemView().getFileGroupsInPendingClustering().map(Pair::getKey).collect(Collectors.toSet());
     HoodieData<HoodieRecord<T>> inputRecordsWithClusteringUpdate = fileGroupsInPendingClustering.isEmpty() ? inputRecords : clusteringHandleUpdate(inputRecords, fileGroupsInPendingClustering);
 
-    context.setJobStatus(this.getClass().getSimpleName(), "Doing partition and writing data");
+    context.setJobStatus(this.getClass().getSimpleName(), "Doing partition and writing data: " + config.getTableName());
     HoodieData<WriteStatus> writeStatuses = mapPartitionsAsRDD(inputRecordsWithClusteringUpdate, partitioner);
     HoodieWriteMetadata<HoodieData<WriteStatus>> result = new HoodieWriteMetadata<>();
     updateIndexAndCommitIfNeeded(writeStatuses, result);
@@ -280,7 +280,7 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
 
   @Override
   protected void commit(Option<Map<String, String>> extraMetadata, HoodieWriteMetadata<HoodieData<WriteStatus>> result) {
-    context.setJobStatus(this.getClass().getSimpleName(), "Commit write status collect");
+    context.setJobStatus(this.getClass().getSimpleName(), "Commit write status collect: " + config.getTableName());
     commit(extraMetadata, result, result.getWriteStatuses().map(WriteStatus::getStat).collectAsList());
   }
 

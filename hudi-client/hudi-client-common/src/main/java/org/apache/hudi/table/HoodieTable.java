@@ -566,7 +566,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
 
   private void deleteInvalidFilesByPartitions(HoodieEngineContext context, Map<String, List<Pair<String, String>>> invalidFilesByPartition) {
     // Now delete partially written files
-    context.setJobStatus(this.getClass().getSimpleName(), "Delete invalid files generated during the write operation");
+    context.setJobStatus(this.getClass().getSimpleName(), "Delete invalid files generated during the write operation: " + config.getTableName());
     context.map(new ArrayList<>(invalidFilesByPartition.values()), partitionWithFileList -> {
       final FileSystem fileSystem = metaClient.getFs();
       LOG.info("Deleting invalid data files=" + partitionWithFileList);
@@ -642,7 +642,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
         }
 
         // Now delete partially written files
-        context.setJobStatus(this.getClass().getSimpleName(), "Delete all partially written files");
+        context.setJobStatus(this.getClass().getSimpleName(), "Delete all partially written files: " + config.getTableName());
         deleteInvalidFilesByPartitions(context, invalidPathsByPartition);
 
         // Now ensure the deleted files disappear
@@ -665,7 +665,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
    */
   private void waitForAllFiles(HoodieEngineContext context, Map<String, List<Pair<String, String>>> groupByPartition, FileVisibility visibility) {
     // This will either ensure all files to be deleted are present.
-    context.setJobStatus(this.getClass().getSimpleName(), "Wait for all files to appear/disappear");
+    context.setJobStatus(this.getClass().getSimpleName(), "Wait for all files to appear/disappear: " + config.getTableName());
     boolean checkPassed =
         context.map(new ArrayList<>(groupByPartition.entrySet()), partitionWithFileList -> waitForCondition(partitionWithFileList.getKey(),
             partitionWithFileList.getValue().stream(), visibility), config.getFinalizeWriteParallelism())
