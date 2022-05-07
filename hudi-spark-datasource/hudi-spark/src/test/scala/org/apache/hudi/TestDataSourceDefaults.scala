@@ -277,50 +277,19 @@ class TestDataSourceDefaults {
     assertEquals("field1/name1", keyGen.getPartitionPath(baseRow))
 
     // partition path field not specified
-    try {
+    keyGen = {
       val props = new TypedProperties()
       props.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD.key, "field1")
-      new ComplexKeyGenerator(props).getKey(baseRecord)
-      fail("Should have errored out")
-    } catch {
-      case e: IllegalArgumentException =>
-      // do nothing
+      new ComplexKeyGenerator(props)
     }
+
+    val nonPartitionedHk = keyGen.getKey(baseRecord)
+    assertEquals("field1:field1", nonPartitionedHk.getRecordKey)
+    assertEquals("", nonPartitionedHk.getPartitionPath)
 
     // partition path field not specified using Row
-    try {
-      val props = new TypedProperties()
-      props.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD.key, "field1")
-      val keyGen = new ComplexKeyGenerator(props)
-      keyGen.getRecordKey(baseRow)
-      fail("Should have errored out")
-    } catch {
-      case e: IllegalArgumentException =>
-      // do nothing
-    }
-
-    // recordkey field not specified
-    try {
-      val props = new TypedProperties()
-      props.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "partitionField")
-      new ComplexKeyGenerator(props).getKey(baseRecord)
-      fail("Should have errored out")
-    } catch {
-      case e: IllegalArgumentException =>
-      // do nothing
-    }
-
-    // recordkey field not specified
-    try {
-      val props = new TypedProperties()
-      props.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "partitionField")
-      val keyGen = new ComplexKeyGenerator(props)
-      keyGen.getPartitionPath(baseRow)
-      fail("Should have errored out")
-    } catch {
-      case e: IllegalArgumentException =>
-      // do nothing
-    }
+    assertEquals("field1:field1", keyGen.getRecordKey(baseRow))
+    assertEquals("", keyGen.getPartitionPath(baseRow))
 
     // nested field as record key and partition path
     keyGen = new ComplexKeyGenerator(getKeyConfig("testNestedRecord.userId,testNestedRecord.isAdmin", "testNestedRecord.userId,testNestedRecord.isAdmin", "false"))
