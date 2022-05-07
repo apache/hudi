@@ -93,7 +93,7 @@ public class HoodieCatalog extends AbstractCatalog {
   public HoodieCatalog(String name, Configuration options) {
     super(name, options.get(DEFAULT_DATABASE));
     this.catalogPathStr = options.get(CATALOG_PATH);
-    this.hadoopConf = StreamerUtil.getHadoopConf();
+    this.hadoopConf = FlinkOptions.getHadoopConf(options);
     this.tableCommonOptions = CatalogOptions.tableCommonOptions(options);
   }
 

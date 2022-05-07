@@ -101,7 +101,7 @@ public class StreamerUtil {
       return new TypedProperties();
     }
     return readConfig(
-        getHadoopConf(),
+        FlinkOptions.getHadoopConf(cfg),
         new Path(cfg.propsFilePath), cfg.configs).getProps();
   }
 
@@ -140,9 +140,13 @@ public class StreamerUtil {
     return conf;
   }
 
-  // Keep the redundant to avoid too many modifications.
+  /**
+   * Keep the redundant to avoid too many modifications.
+   * @deprecated Use {@link FlinkOptions#getHadoopConf(Configuration)} instead.
+   */
+  @Deprecated
   public static org.apache.hadoop.conf.Configuration getHadoopConf() {
-    return FlinkClientUtil.getHadoopConf();
+    return FlinkOptions.getHadoopConf(new Configuration());
   }
 
   /**
@@ -215,7 +219,7 @@ public class StreamerUtil {
     HoodieWriteConfig writeConfig = builder.build();
     if (loadFsViewStorageConfig) {
       // do not use the builder to give a change for recovering the original fs view storage config
-      FileSystemViewStorageConfig viewStorageConfig = ViewStorageProperties.loadFromProperties(conf.getString(FlinkOptions.PATH));
+      FileSystemViewStorageConfig viewStorageConfig = ViewStorageProperties.loadFromProperties(conf.getString(FlinkOptions.PATH), conf);
       writeConfig.setViewStorageConfig(viewStorageConfig);
     }
     return writeConfig;
@@ -255,7 +259,7 @@ public class StreamerUtil {
    */
   public static HoodieTableMetaClient initTableIfNotExists(Configuration conf) throws IOException {
     final String basePath = conf.getString(FlinkOptions.PATH);
-    final org.apache.hadoop.conf.Configuration hadoopConf = StreamerUtil.getHadoopConf();
+    final org.apache.hadoop.conf.Configuration hadoopConf = FlinkOptions.getHadoopConf(conf);
     if (!tableExists(basePath, hadoopConf)) {
       HoodieTableMetaClient metaClient = HoodieTableMetaClient.withPropertyBuilder()
           .setTableCreateSchema(conf.getString(FlinkOptions.SOURCE_AVRO_SCHEMA))
@@ -382,7 +386,7 @@ public class StreamerUtil {
   public static HoodieFlinkWriteClient createWriteClient(Configuration conf, RuntimeContext runtimeContext, boolean loadFsViewStorageConfig) {
     HoodieFlinkEngineContext context =
         new HoodieFlinkEngineContext(
-            new SerializableConfiguration(getHadoopConf()),
+            new SerializableConfiguration(FlinkOptions.getHadoopConf(conf)),
             new FlinkTaskContextSupplier(runtimeContext));
 
     HoodieWriteConfig writeConfig = getHoodieClientConfig(conf, loadFsViewStorageConfig);
@@ -410,7 +414,7 @@ public class StreamerUtil {
         .withRemoteServerPort(viewStorageConfig.getRemoteViewServerPort())
         .withRemoteTimelineClientTimeoutSecs(viewStorageConfig.getRemoteTimelineClientTimeoutSecs())
         .build();
-    ViewStorageProperties.createProperties(conf.getString(FlinkOptions.PATH), rebuilt);
+    ViewStorageProperties.createProperties(conf.getString(FlinkOptions.PATH), rebuilt, conf);
     return writeClient;
   }
 

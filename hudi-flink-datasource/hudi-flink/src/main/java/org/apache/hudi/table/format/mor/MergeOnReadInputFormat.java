@@ -36,7 +36,6 @@ import org.apache.hudi.table.format.cow.vector.reader.ParquetColumnarRowSplitRea
 import org.apache.hudi.util.AvroToRowDataConverters;
 import org.apache.hudi.util.RowDataProjection;
 import org.apache.hudi.util.RowDataToAvroConverters;
-import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.util.StringToRowDataConverter;
 
 import org.apache.avro.Schema;
@@ -167,7 +166,7 @@ public class MergeOnReadInputFormat
   public void open(MergeOnReadInputSplit split) throws IOException {
     this.currentReadCount = 0L;
     this.closed = false;
-    this.hadoopConf = StreamerUtil.getHadoopConf();
+    this.hadoopConf = FlinkOptions.getHadoopConf(this.conf);
     if (!(split.getLogPaths().isPresent() && split.getLogPaths().get().size() > 0)) {
       if (split.getInstantRange() != null) {
         // base file only with commit time filtering
@@ -306,7 +305,7 @@ public class MergeOnReadInputFormat
     return ParquetSplitReaderUtil.genPartColumnarRowReader(
         this.conf.getBoolean(FlinkOptions.UTC_TIMEZONE),
         true,
-        FormatUtils.getParquetConf(this.conf, hadoopConf),
+        FlinkOptions.getParquetConf(this.conf, hadoopConf),
         fieldNames.toArray(new String[0]),
         fieldTypes.toArray(new DataType[0]),
         partObjects,

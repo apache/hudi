@@ -157,7 +157,7 @@ public class StreamReadMonitoringFunction
   @Override
   public void open(Configuration parameters) throws Exception {
     super.open(parameters);
-    this.hadoopConf = StreamerUtil.getHadoopConf();
+    this.hadoopConf = FlinkOptions.getHadoopConf(parameters);
   }
 
   @Override

@@ -122,7 +122,7 @@ public class BootstrapOperator<I, O extends HoodieRecord<?>>
       }
     }
 
-    this.hadoopConf = StreamerUtil.getHadoopConf();
+    this.hadoopConf = FlinkOptions.getHadoopConf(this.conf);
     this.writeConfig = StreamerUtil.getHoodieClientConfig(this.conf, true);
     this.hoodieTable = FlinkTables.createTable(writeConfig, hadoopConf, getRuntimeContext());
     this.ckpMetadata = CkpMetadata.getInstance(hoodieTable.getMetaClient().getFs(), this.writeConfig.getBasePath());

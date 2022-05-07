@@ -239,7 +239,7 @@ public class TestStreamReadOperator {
 
   private OneInputStreamOperatorTestHarness<MergeOnReadInputSplit, RowData> createReader() throws Exception {
     final String basePath = tempFile.getAbsolutePath();
-    final org.apache.hadoop.conf.Configuration hadoopConf = StreamerUtil.getHadoopConf();
+    final org.apache.hadoop.conf.Configuration hadoopConf = FlinkOptions.getHadoopConf(new Configuration());
     final HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
         .setConf(hadoopConf).setBasePath(basePath).build();
     final List<String> partitionKeys = Collections.singletonList("partition");

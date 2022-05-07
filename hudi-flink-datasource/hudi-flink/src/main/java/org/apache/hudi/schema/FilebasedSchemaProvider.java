@@ -49,9 +49,10 @@ public class FilebasedSchemaProvider extends SchemaProvider {
 
   private Schema targetSchema;
 
+  @Deprecated
   public FilebasedSchemaProvider(TypedProperties props) {
     StreamerUtil.checkRequiredProperties(props, Collections.singletonList(Config.SOURCE_SCHEMA_FILE_PROP));
-    FileSystem fs = FSUtils.getFs(props.getString(Config.SOURCE_SCHEMA_FILE_PROP), StreamerUtil.getHadoopConf());
+    FileSystem fs = FSUtils.getFs(props.getString(Config.SOURCE_SCHEMA_FILE_PROP), FlinkOptions.getHadoopConf(new Configuration()));
     try {
       this.sourceSchema = new Schema.Parser().parse(fs.open(new Path(props.getString(Config.SOURCE_SCHEMA_FILE_PROP))));
       if (props.containsKey(Config.TARGET_SCHEMA_FILE_PROP)) {
@@ -65,7 +66,7 @@ public class FilebasedSchemaProvider extends SchemaProvider {
 
   public FilebasedSchemaProvider(Configuration conf) {
     final String sourceSchemaPath = conf.getString(FlinkOptions.SOURCE_AVRO_SCHEMA_PATH);
-    final FileSystem fs = FSUtils.getFs(sourceSchemaPath, StreamerUtil.getHadoopConf());
+    final FileSystem fs = FSUtils.getFs(sourceSchemaPath, FlinkOptions.getHadoopConf(conf));
     try {
       this.sourceSchema = new Schema.Parser().parse(fs.open(new Path(sourceSchemaPath)));
     } catch (IOException ioe) {

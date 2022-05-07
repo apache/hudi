@@ -54,7 +54,7 @@ public class FileIndex {
   private FileIndex(Path path, Configuration conf) {
     this.path = path;
     this.metadataConfig = metadataConfig(conf);
-    this.tableExists = StreamerUtil.tableExists(path.toString(), StreamerUtil.getHadoopConf());
+    this.tableExists = StreamerUtil.tableExists(path.toString(), FlinkOptions.getHadoopConf(conf));
   }
 
   public static FileIndex instance(Path path, Configuration conf) {
