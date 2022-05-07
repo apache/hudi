@@ -240,7 +240,15 @@ public class ITTestHoodieDataSource extends AbstractTestBase {
 
     List<Row> rows = CollectionUtil.iterableToList(
         () -> streamTableEnv.sqlQuery("select * from t1").execute().collect());
-    assertRowsEquals(rows, TestData.DATA_SET_SOURCE_INSERT);
+
+    // the test is flaky based on whether the first compaction is pending when
+    // scheduling the 2nd compaction.
+    // see details in CompactionPlanOperator#scheduleCompaction.
+    if (rows.size() < TestData.DATA_SET_SOURCE_INSERT.size()) {
+      assertRowsEquals(rows, TestData.DATA_SET_SOURCE_INSERT_FIRST_COMMIT);
+    } else {
+      assertRowsEquals(rows, TestData.DATA_SET_SOURCE_INSERT);
+    }
   }
 
   @Test
@@ -1358,11 +1366,7 @@ public class ITTestHoodieDataSource extends AbstractTestBase {
     TableResult tableResult = tEnv.executeSql("insert into sink " + select);
     // wait for the timeout then cancels the job
     TimeUnit.SECONDS.sleep(timeout);
-    try {
-      tableResult.getJobClient().ifPresent(JobClient::cancel);
-    } catch (IllegalStateException e) {
-      log.info("MiniCluster has already been shut down, do nothing.");
-    }
+    tableResult.getJobClient().ifPresent(JobClient::cancel);
     tEnv.executeSql("DROP TABLE IF EXISTS sink");
     return CollectSinkTableFactory.RESULT.values().stream()
         .flatMap(Collection::stream)
