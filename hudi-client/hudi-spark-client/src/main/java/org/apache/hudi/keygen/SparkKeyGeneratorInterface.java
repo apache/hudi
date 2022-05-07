@@ -23,6 +23,7 @@ import org.apache.hudi.PublicAPIMethod;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.types.StructType;
+import org.apache.spark.unsafe.types.UTF8String;
 
 /**
  * Spark-specific {@link KeyGenerator} interface extension allowing implementation to
@@ -50,10 +51,10 @@ public interface SparkKeyGeneratorInterface extends KeyGeneratorInterface {
    *
    * @param row instance of {@link InternalRow} from which record-key is extracted
    * @param schema schema {@link InternalRow} is adhering to
-   * @return byte array holding record's (primary) key as *UTF8* string
+   * @return record-key as instance of {@link UTF8String}
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
-  byte[] getRecordKey(InternalRow row, StructType schema);
+  UTF8String getRecordKey(InternalRow row, StructType schema);
 
   /**
    * Extracts partition-path from {@link Row}
@@ -74,8 +75,8 @@ public interface SparkKeyGeneratorInterface extends KeyGeneratorInterface {
    *
    * @param row instance of {@link InternalRow} from which record-key is extracted
    * @param schema schema {@link InternalRow} is adhering to
-   * @return byte array holding record's partition-path as *UTF8* string
+   * @return partition-path as instance of {@link UTF8String}
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
-  byte[] getPartitionPath(InternalRow row, StructType schema);
+  UTF8String getPartitionPath(InternalRow row, StructType schema);
 }
