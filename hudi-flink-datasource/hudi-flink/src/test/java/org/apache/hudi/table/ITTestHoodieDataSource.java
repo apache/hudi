@@ -1358,11 +1358,7 @@ public class ITTestHoodieDataSource extends AbstractTestBase {
     TableResult tableResult = tEnv.executeSql("insert into sink " + select);
     // wait for the timeout then cancels the job
     TimeUnit.SECONDS.sleep(timeout);
-    try {
-      tableResult.getJobClient().ifPresent(JobClient::cancel);
-    } catch (IllegalStateException e) {
-      log.info("MiniCluster has already been shut down, do nothing.");
-    }
+    tableResult.getJobClient().ifPresent(JobClient::cancel);
     tEnv.executeSql("DROP TABLE IF EXISTS sink");
     return CollectSinkTableFactory.RESULT.values().stream()
         .flatMap(Collection::stream)
