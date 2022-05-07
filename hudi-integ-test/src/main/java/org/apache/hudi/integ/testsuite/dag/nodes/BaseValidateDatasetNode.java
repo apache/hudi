@@ -74,81 +74,84 @@ public abstract class BaseValidateDatasetNode extends DagNode<Boolean> {
 
   @Override
   public void execute(ExecutionContext context, int curItrCount) throws Exception {
-
-    SparkSession session = SparkSession.builder().sparkContext(context.getJsc().sc()).getOrCreate();
-
-    // todo: Fix partitioning schemes. For now, assumes data based partitioning.
-    String inputPath = context.getHoodieTestSuiteWriter().getCfg().inputBasePath + "/*/*";
-    log.warn("Validation using data from input path " + inputPath);
-    // listing batches to be validated
-    String inputPathStr = context.getHoodieTestSuiteWriter().getCfg().inputBasePath;
-    if (log.isDebugEnabled()) {
-      FileSystem fs = new Path(inputPathStr)
-          .getFileSystem(context.getHoodieTestSuiteWriter().getConfiguration());
-      FileStatus[] fileStatuses = fs.listStatus(new Path(inputPathStr));
-      log.info("fileStatuses length: " + fileStatuses.length);
-      for (FileStatus fileStatus : fileStatuses) {
-        log.debug("Listing all Micro batches to be validated :: " + fileStatus.getPath().toString());
-      }
-    }
-
-    Dataset<Row> inputSnapshotDf = getInputDf(context, session, inputPath);
-
-    // read from hudi and remove meta columns.
-    Dataset<Row> trimmedHudiDf = getDatasetToValidate(session, context, inputSnapshotDf.schema());
-    if (config.isValidateFullData()) {
-      log.debug("Validating full dataset");
-      Dataset<Row> exceptInputDf = inputSnapshotDf.except(trimmedHudiDf);
-      Dataset<Row> exceptHudiDf = trimmedHudiDf.except(inputSnapshotDf);
-      long exceptInputCount = exceptInputDf.count();
-      long exceptHudiCount = exceptHudiDf.count();
-      log.debug("Except input df count " + exceptInputDf + ", except hudi count " + exceptHudiCount);
-      if (exceptInputCount != 0 || exceptHudiCount != 0) {
-        log.error("Data set validation failed. Total count in hudi " + trimmedHudiDf.count() + ", input df count " + inputSnapshotDf.count()
-            + ". InputDf except hudi df = " + exceptInputCount + ", Hudi df except Input df " + exceptHudiCount);
-        throw new AssertionError("Hudi contents does not match contents input data. ");
-      }
-    } else {
-      Dataset<Row> intersectionDf = inputSnapshotDf.intersect(trimmedHudiDf);
-      long inputCount = inputSnapshotDf.count();
-      long outputCount = trimmedHudiDf.count();
-      log.debug("Input count: " + inputCount + "; output count: " + outputCount);
-      // the intersected df should be same as inputDf. if not, there is some mismatch.
-      if (outputCount == 0 || inputCount == 0 || inputSnapshotDf.except(intersectionDf).count() != 0) {
-        log.error("Data set validation failed. Total count in hudi " + outputCount + ", input df count " + inputCount);
-        throw new AssertionError("Hudi contents does not match contents input data. ");
-      }
-
-      if (config.isValidateHive()) {
-        String database = context.getWriterContext().getProps().getString(DataSourceWriteOptions.HIVE_DATABASE().key());
-        String tableName = context.getWriterContext().getProps().getString(DataSourceWriteOptions.HIVE_TABLE().key());
-        log.warn("Validating hive table with db : " + database + " and table : " + tableName);
-        session.sql("REFRESH TABLE " + database + "." + tableName);
-        Dataset<Row> cowDf = session.sql("SELECT _row_key, rider, driver, begin_lat, begin_lon, end_lat, end_lon, fare, _hoodie_is_deleted, " +
-            "test_suite_source_ordering_field FROM " + database + "." + tableName);
-        Dataset<Row> reorderedInputDf = inputSnapshotDf.select("_row_key", "rider", "driver", "begin_lat", "begin_lon", "end_lat", "end_lon", "fare",
-            "_hoodie_is_deleted", "test_suite_source_ordering_field");
-
-        Dataset<Row> intersectedHiveDf = reorderedInputDf.intersect(cowDf);
-        outputCount = trimmedHudiDf.count();
-        log.warn("Input count: " + inputCount + "; output count: " + outputCount);
-        // the intersected df should be same as inputDf. if not, there is some mismatch.
-        if (outputCount == 0 || reorderedInputDf.except(intersectedHiveDf).count() != 0) {
-          log.error("Data set validation failed for COW hive table. Total count in hudi " + outputCount + ", input df count " + inputCount);
-          throw new AssertionError("Hudi hive table contents does not match contents input data. ");
-        }
-      }
-
-      // if delete input data is enabled, erase input data.
-      if (config.isDeleteInputData()) {
-        // clean up input data for current group of writes.
-        inputPathStr = context.getHoodieTestSuiteWriter().getCfg().inputBasePath;
+    int validateOnceEveryItr = config.validateOnceEveryIteration();
+    int itrCountToExecute = config.getIterationCountToExecute();
+    if ((itrCountToExecute != -1 && itrCountToExecute == curItrCount) ||
+        (itrCountToExecute == -1 && ((curItrCount % validateOnceEveryItr) == 0))) {
+      SparkSession session = SparkSession.builder().sparkContext(context.getJsc().sc()).getOrCreate();
+      // todo: Fix partitioning schemes. For now, assumes data based partitioning.
+      String inputPath = context.getHoodieTestSuiteWriter().getCfg().inputBasePath + "/*/*";
+      log.info("Validation using data from input path " + inputPath);
+      // listing batches to be validated
+      String inputPathStr = context.getHoodieTestSuiteWriter().getCfg().inputBasePath;
+      if (log.isDebugEnabled()) {
         FileSystem fs = new Path(inputPathStr)
             .getFileSystem(context.getHoodieTestSuiteWriter().getConfiguration());
         FileStatus[] fileStatuses = fs.listStatus(new Path(inputPathStr));
+        log.info("fileStatuses length: " + fileStatuses.length);
         for (FileStatus fileStatus : fileStatuses) {
-          log.debug("Micro batch to be deleted " + fileStatus.getPath().toString());
-          fs.delete(fileStatus.getPath(), true);
+          log.debug("Listing all Micro batches to be validated :: " + fileStatus.getPath().toString());
+        }
+      }
+
+      Dataset<Row> inputSnapshotDf = getInputDf(context, session, inputPath);
+
+      // read from hudi and remove meta columns.
+      Dataset<Row> trimmedHudiDf = getDatasetToValidate(session, context, inputSnapshotDf.schema());
+      if (config.isValidateFullData()) {
+        log.debug("Validating full dataset");
+        Dataset<Row> exceptInputDf = inputSnapshotDf.except(trimmedHudiDf);
+        Dataset<Row> exceptHudiDf = trimmedHudiDf.except(inputSnapshotDf);
+        long exceptInputCount = exceptInputDf.count();
+        long exceptHudiCount = exceptHudiDf.count();
+        log.debug("Except input df count " + exceptInputDf + ", except hudi count " + exceptHudiCount);
+        if (exceptInputCount != 0 || exceptHudiCount != 0) {
+          log.error("Data set validation failed. Total count in hudi " + trimmedHudiDf.count() + ", input df count " + inputSnapshotDf.count()
+              + ". InputDf except hudi df = " + exceptInputCount + ", Hudi df except Input df " + exceptHudiCount);
+          throw new AssertionError("Hudi contents does not match contents input data. ");
+        }
+      } else {
+        Dataset<Row> intersectionDf = inputSnapshotDf.intersect(trimmedHudiDf);
+        long inputCount = inputSnapshotDf.count();
+        long outputCount = trimmedHudiDf.count();
+        log.debug("Input count: " + inputCount + "; output count: " + outputCount);
+        // the intersected df should be same as inputDf. if not, there is some mismatch.
+        if (outputCount == 0 || inputCount == 0 || inputSnapshotDf.except(intersectionDf).count() != 0) {
+          log.error("Data set validation failed. Total count in hudi " + outputCount + ", input df count " + inputCount);
+          throw new AssertionError("Hudi contents does not match contents input data. ");
+        }
+
+        if (config.isValidateHive()) {
+          String database = context.getWriterContext().getProps().getString(DataSourceWriteOptions.HIVE_DATABASE().key());
+          String tableName = context.getWriterContext().getProps().getString(DataSourceWriteOptions.HIVE_TABLE().key());
+          log.warn("Validating hive table with db : " + database + " and table : " + tableName);
+          session.sql("REFRESH TABLE " + database + "." + tableName);
+          Dataset<Row> cowDf = session.sql("SELECT _row_key, rider, driver, begin_lat, begin_lon, end_lat, end_lon, fare, _hoodie_is_deleted, " +
+              "test_suite_source_ordering_field FROM " + database + "." + tableName);
+          Dataset<Row> reorderedInputDf = inputSnapshotDf.select("_row_key", "rider", "driver", "begin_lat", "begin_lon", "end_lat", "end_lon", "fare",
+              "_hoodie_is_deleted", "test_suite_source_ordering_field");
+
+          Dataset<Row> intersectedHiveDf = reorderedInputDf.intersect(cowDf);
+          outputCount = trimmedHudiDf.count();
+          log.warn("Input count: " + inputCount + "; output count: " + outputCount);
+          // the intersected df should be same as inputDf. if not, there is some mismatch.
+          if (outputCount == 0 || reorderedInputDf.except(intersectedHiveDf).count() != 0) {
+            log.error("Data set validation failed for COW hive table. Total count in hudi " + outputCount + ", input df count " + inputCount);
+            throw new AssertionError("Hudi hive table contents does not match contents input data. ");
+          }
+        }
+
+        // if delete input data is enabled, erase input data.
+        if (config.isDeleteInputData()) {
+          // clean up input data for current group of writes.
+          inputPathStr = context.getHoodieTestSuiteWriter().getCfg().inputBasePath;
+          FileSystem fs = new Path(inputPathStr)
+              .getFileSystem(context.getHoodieTestSuiteWriter().getConfiguration());
+          FileStatus[] fileStatuses = fs.listStatus(new Path(inputPathStr));
+          for (FileStatus fileStatus : fileStatuses) {
+            log.debug("Micro batch to be deleted " + fileStatus.getPath().toString());
+            fs.delete(fileStatus.getPath(), true);
+          }
         }
       }
     }
@@ -163,7 +166,7 @@ public abstract class BaseValidateDatasetNode extends DagNode<Boolean> {
     ExpressionEncoder encoder = getEncoder(inputDf.schema());
     return inputDf.groupByKey(
             (MapFunction<Row, String>) value ->
-                value.getAs(partitionPathField) + "+" + value.getAs(recordKeyField), Encoders.STRING())
+                (partitionPathField.isEmpty() ? value.getAs(recordKeyField) : (value.getAs(partitionPathField) + "+" + value.getAs(recordKeyField))), Encoders.STRING())
         .reduceGroups((ReduceFunction<Row>) (v1, v2) -> {
           int ts1 = v1.getAs(SchemaUtils.SOURCE_ORDERING_FIELD);
           int ts2 = v2.getAs(SchemaUtils.SOURCE_ORDERING_FIELD);

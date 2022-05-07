@@ -44,9 +44,12 @@ import org.apache.hudi.common.table.view.TableFileSystemView.SliceView;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.io.IOUtils;
 import org.apache.hudi.table.HoodieCompactionHandler;
 import org.apache.hudi.table.HoodieTable;
@@ -117,8 +120,10 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
     // log file.That is because in the case of MergeInto, the config.getSchema may not
     // the same with the table schema.
     try {
-      Schema readerSchema = schemaResolver.getTableAvroSchema(false);
-      config.setSchema(readerSchema.toString());
+      if (StringUtils.isNullOrEmpty(config.getInternalSchema())) {
+        Schema readerSchema = schemaResolver.getTableAvroSchema(false);
+        config.setSchema(readerSchema.toString());
+      }
     } catch (Exception e) {
       // If there is no commit in the table, just ignore the exception.
     }
@@ -145,9 +150,17 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
                                    String instantTime,
                                    TaskContextSupplier taskContextSupplier) throws IOException {
     FileSystem fs = metaClient.getFs();
-
-    Schema readerSchema = HoodieAvroUtils.addMetadataFields(
-        new Schema.Parser().parse(config.getSchema()), config.allowOperationMetadataField());
+    Schema readerSchema;
+    Option<InternalSchema> internalSchemaOption = Option.empty();
+    if (!StringUtils.isNullOrEmpty(config.getInternalSchema())) {
+      readerSchema = new Schema.Parser().parse(config.getSchema());
+      internalSchemaOption = SerDeHelper.fromJson(config.getInternalSchema());
+      // its safe to modify config here, since we running in task side.
+      ((HoodieTable) compactionHandler).getConfig().setDefault(config);
+    } else {
+      readerSchema = HoodieAvroUtils.addMetadataFields(
+          new Schema.Parser().parse(config.getSchema()), config.allowOperationMetadataField());
+    }
     LOG.info("Compacting base " + operation.getDataFileName() + " with delta files " + operation.getDeltaFileNames()
         + " for commit " + instantTime);
     // TODO - FIX THIS
@@ -172,6 +185,7 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
         .withLogFilePaths(logFiles)
         .withReaderSchema(readerSchema)
         .withLatestInstantTime(maxInstantTime)
+        .withInternalSchema(internalSchemaOption.orElse(InternalSchema.getEmptyInternalSchema()))
         .withMaxMemorySizeInBytes(maxMemoryPerCompaction)
         .withReadBlocksLazily(config.getCompactionLazyBlockReadEnabled())
         .withReverseReader(config.getCompactionReverseLogReadEnabled())

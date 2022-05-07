@@ -53,19 +53,13 @@ dag_content:
       num_partitions_upsert: 10
     type: SparkUpsertNode
     deps: second_insert
-  first_hive_sync:
-    config:
-      queue_name: "adhoc"
-      engine: "mr"
-    type: HiveSyncNode
-    deps: second_upsert
   first_insert_overwrite_table:
     config:
       record_size: 1000
-      repeat_count: 10
+      repeat_count: 1
       num_records_insert: 10
     type: SparkInsertOverwriteTableNode
-    deps: first_hive_sync
+    deps: second_upsert
   delete_all_input_except_last:
     config:
       delete_input_data_except_latest: true
@@ -89,16 +83,10 @@ dag_content:
       num_partitions_upsert: 10
     type: SparkUpsertNode
     deps: third_insert
-  second_hive_sync:
-    config:
-      queue_name: "adhoc"
-      engine: "mr"
-    type: HiveSyncNode
-    deps: third_upsert
   second_validate:
     config:
       validate_full_data : true
       validate_hive: false
       delete_input_data: false
     type: ValidateDatasetNode
-    deps: second_hive_sync
+    deps: third_upsert

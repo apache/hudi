@@ -53,7 +53,7 @@ public class DefaultSource extends BaseDefaultSource implements TableProvider {
     String path = properties.get("path");
     String tblName = properties.get(HoodieWriteConfig.TBL_NAME.key());
     boolean populateMetaFields = Boolean.parseBoolean(properties.getOrDefault(HoodieTableConfig.POPULATE_META_FIELDS.key(),
-        HoodieTableConfig.POPULATE_META_FIELDS.defaultValue()));
+        Boolean.toString(HoodieTableConfig.POPULATE_META_FIELDS.defaultValue())));
     boolean arePartitionRecordsSorted = Boolean.parseBoolean(properties.getOrDefault(HoodieInternalConfig.BULKINSERT_ARE_PARTITIONER_RECORDS_SORTED,
         Boolean.toString(HoodieInternalConfig.DEFAULT_BULKINSERT_ARE_PARTITIONER_RECORDS_SORTED)));
     // Create a new map as the properties is an unmodifiableMap on Spark 3.2.0

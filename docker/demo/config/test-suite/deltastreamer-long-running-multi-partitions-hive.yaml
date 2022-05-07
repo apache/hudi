@@ -47,11 +47,6 @@ dag_content:
       engine: "mr"
     type: HiveSyncNode
     deps: third_insert
-  first_validate:
-    config:
-      validate_hive: false
-    type: ValidateDatasetNode
-    deps: first_hive_sync
   first_upsert:
     config:
       record_size: 1000
@@ -61,11 +56,11 @@ dag_content:
       num_records_upsert: 100
       num_partitions_upsert: 1
     type: UpsertNode
-    deps: first_validate
+    deps: first_hive_sync
   first_delete:
     config:
       num_partitions_delete: 50
-      num_records_delete: 8000
+      num_records_delete: 4000
     type: DeleteNode
     deps: first_upsert
   second_hive_sync:
@@ -76,6 +71,7 @@ dag_content:
     deps: first_delete
   second_validate:
     config:
+      validate_once_every_itr : 5
       validate_hive: true
       delete_input_data: true
     type: ValidateDatasetNode
@@ -83,7 +79,5 @@ dag_content:
   last_validate:
     config:
       execute_itr_count: 50
-      validate_clean: true
-      validate_archival: true
     type: ValidateAsyncOperations
     deps: second_validate

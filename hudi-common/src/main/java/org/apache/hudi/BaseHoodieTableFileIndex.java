@@ -18,8 +18,6 @@
 
 package org.apache.hudi;
 
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -37,6 +35,9 @@ import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
+
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -68,7 +69,7 @@ public abstract class BaseHoodieTableFileIndex {
   private final String[] partitionColumns;
 
   private final FileSystemViewStorageConfig fileSystemStorageConfig;
-  private final HoodieMetadataConfig metadataConfig;
+  protected final HoodieMetadataConfig metadataConfig;
 
   private final HoodieTableQueryType queryType;
   private final Option<String> specifiedQueryInstant;
@@ -197,7 +198,7 @@ public abstract class BaseHoodieTableFileIndex {
     //       that is under the pending compaction process, new log-file will bear the compaction's instant (on the
     //       timeline) in its name, as opposed to the base-file's commit instant. To make sure we're not filtering
     //       such log-file we have to _always_ include pending compaction instants into consideration
-    // TODO(HUDI-3302) re-evaluate whether we should not filter any commits in here
+    // TODO(HUDI-3302) re-evaluate whether we should filter any commits in here
     HoodieTimeline timeline = metaClient.getCommitsAndCompactionTimeline();
     if (shouldIncludePendingCommits) {
       return timeline;
@@ -333,13 +334,17 @@ public abstract class BaseHoodieTableFileIndex {
     return fileSlice.getBaseFile().map(BaseFile::getFileLen).orElse(0L) + logFileSize;
   }
 
-  protected static final class PartitionPath {
+  public static final class PartitionPath {
     final String path;
     final Object[] values;
 
     public PartitionPath(String path, Object[] values) {
       this.path = path;
       this.values = values;
+    }
+
+    public String getPath() {
+      return path;
     }
 
     Path fullPartitionPath(String basePath) {

@@ -18,27 +18,16 @@
 
 package org.apache.hudi.hive;
 
-import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.ConfigProperty;
+import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.sync.common.HoodieSyncConfig;
 
 import com.beust.jcommander.Parameter;
 
-import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.List;
-
 /**
- * Configs needed to sync data into Hive.
+ * Configs needed to sync data into the Hive Metastore.
  */
-public class HiveSyncConfig implements Serializable {
-
-  @Parameter(names = {"--database"}, description = "name of the target database in Hive", required = true)
-  public String databaseName;
-
-  @Parameter(names = {"--table"}, description = "name of the target table in Hive", required = true)
-  public String tableName;
-
-  @Parameter(names = {"--base-file-format"}, description = "Format of the base files (PARQUET (or) HFILE)")
-  public String baseFileFormat = "PARQUET";
+public class HiveSyncConfig extends HoodieSyncConfig {
 
   @Parameter(names = {"--user"}, description = "Hive username")
   public String hiveUser;
@@ -52,48 +41,31 @@ public class HiveSyncConfig implements Serializable {
   @Parameter(names = {"--metastore-uris"}, description = "Hive metastore uris")
   public String metastoreUris;
 
-  @Parameter(names = {"--base-path"}, description = "Basepath of hoodie table to sync", required = true)
-  public String basePath;
-
-  @Parameter(names = "--partitioned-by", description = "Fields in the schema partitioned by")
-  public List<String> partitionFields = new ArrayList<>();
-
-  @Parameter(names = "--partition-value-extractor", description = "Class which implements PartitionValueExtractor "
-      + "to extract the partition values from HDFS path")
-  public String partitionValueExtractorClass = SlashEncodedDayPartitionValueExtractor.class.getName();
-
-  @Parameter(names = {"--assume-date-partitioning"}, description = "Assume standard yyyy/mm/dd partitioning, this"
-      + " exists to support backward compatibility. If you use hoodie 0.3.x, do not set this parameter")
-  public Boolean assumeDatePartitioning = false;
-
   @Parameter(names = {"--use-pre-apache-input-format"},
       description = "Use InputFormat under com.uber.hoodie package "
           + "instead of org.apache.hudi package. Use this when you are in the process of migrating from "
           + "com.uber.hoodie to org.apache.hudi. Stop using this after you migrated the table definition to "
           + "org.apache.hudi input format.")
-  public Boolean usePreApacheInputFormat = false;
+  public Boolean usePreApacheInputFormat;
 
   @Parameter(names = {"--bucket-spec"}, description = "bucket spec stored in metastore", required = false)
   public String bucketSpec;
 
   @Deprecated
   @Parameter(names = {"--use-jdbc"}, description = "Hive jdbc connect url")
-  public Boolean useJdbc = true;
+  public Boolean useJdbc;
 
-  @Parameter(names = {"--sync-mode"}, description = "Mode to choose for Hive ops. Valid values are hms, jdbc and hiveql")
+  @Parameter(names = {"--sync-mode"}, description = "Mode to choose for Hive ops. Valid values are hms,glue,jdbc and hiveql")
   public String syncMode;
 
   @Parameter(names = {"--auto-create-database"}, description = "Auto create hive database")
-  public Boolean autoCreateDatabase = true;
+  public Boolean autoCreateDatabase;
 
   @Parameter(names = {"--ignore-exceptions"}, description = "Ignore hive exceptions")
-  public Boolean ignoreExceptions = false;
+  public Boolean ignoreExceptions;
 
   @Parameter(names = {"--skip-ro-suffix"}, description = "Skip the `_ro` suffix for Read optimized table, when registering")
-  public Boolean skipROSuffix = false;
-
-  @Parameter(names = {"--use-file-listing-from-metadata"}, description = "Fetch file listing from Hudi's metadata")
-  public Boolean useFileListingFromMetadata = HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS;
+  public Boolean skipROSuffix;
 
   @Parameter(names = {"--table-properties"}, description = "Table properties to hive table")
   public String tableProperties;
@@ -106,60 +78,170 @@ public class HiveSyncConfig implements Serializable {
 
   @Parameter(names = {"--support-timestamp"}, description = "'INT64' with original type TIMESTAMP_MICROS is converted to hive 'timestamp' type."
       + "Disabled by default for backward compatibility.")
-  public Boolean supportTimestamp = false;
-
-  @Parameter(names = {"--decode-partition"}, description = "Decode the partition value if the partition has encoded during writing")
-  public Boolean decodePartition = false;
+  public Boolean supportTimestamp;
 
   @Parameter(names = {"--managed-table"}, description = "Create a managed table")
-  public Boolean createManagedTable = false;
+  public Boolean createManagedTable;
 
   @Parameter(names = {"--batch-sync-num"}, description = "The number of partitions one batch when synchronous partitions to hive")
-  public Integer batchSyncNum = 1000;
+  public Integer batchSyncNum;
 
   @Parameter(names = {"--spark-datasource"}, description = "Whether sync this table as spark data source table.")
-  public Boolean syncAsSparkDataSourceTable = true;
+  public Boolean syncAsSparkDataSourceTable;
 
   @Parameter(names = {"--spark-schema-length-threshold"}, description = "The maximum length allowed in a single cell when storing additional schema information in Hive's metastore.")
-  public int sparkSchemaLengthThreshold = 4000;
+  public int sparkSchemaLengthThreshold;
 
   @Parameter(names = {"--with-operation-field"}, description = "Whether to include the '_hoodie_operation' field in the metadata fields")
   public Boolean withOperationField = false;
 
-  @Parameter(names = {"--conditional-sync"}, description = "If true, only sync on conditions like schema change or partition change.")
-  public Boolean isConditionalSync = false;
+  @Parameter(names = {"--sync-comment"}, description = "synchronize table comments to hive")
+  public boolean syncComment = false;
 
-  @Parameter(names = {"--spark-version"}, description = "The spark version", required = false)
-  public String sparkVersion;
+  // HIVE SYNC SPECIFIC CONFIGS
+  // NOTE: DO NOT USE uppercase for the keys as they are internally lower-cased. Using upper-cases causes
+  // unexpected issues with config getting reset
+  public static final ConfigProperty<String> HIVE_SYNC_ENABLED = ConfigProperty
+      .key("hoodie.datasource.hive_sync.enable")
+      .defaultValue("false")
+      .withDocumentation("When set to true, register/sync the table to Apache Hive metastore.");
 
-  // enhance the similar function in child class
-  public static HiveSyncConfig copy(HiveSyncConfig cfg) {
-    HiveSyncConfig newConfig = new HiveSyncConfig();
-    newConfig.basePath = cfg.basePath;
-    newConfig.assumeDatePartitioning = cfg.assumeDatePartitioning;
-    newConfig.databaseName = cfg.databaseName;
-    newConfig.hivePass = cfg.hivePass;
-    newConfig.hiveUser = cfg.hiveUser;
-    newConfig.partitionFields = cfg.partitionFields;
-    newConfig.partitionValueExtractorClass = cfg.partitionValueExtractorClass;
-    newConfig.jdbcUrl = cfg.jdbcUrl;
-    newConfig.metastoreUris = cfg.metastoreUris;
-    newConfig.tableName = cfg.tableName;
-    newConfig.bucketSpec = cfg.bucketSpec;
-    newConfig.usePreApacheInputFormat = cfg.usePreApacheInputFormat;
-    newConfig.useFileListingFromMetadata = cfg.useFileListingFromMetadata;
-    newConfig.supportTimestamp = cfg.supportTimestamp;
-    newConfig.decodePartition = cfg.decodePartition;
-    newConfig.tableProperties = cfg.tableProperties;
-    newConfig.serdeProperties = cfg.serdeProperties;
-    newConfig.createManagedTable = cfg.createManagedTable;
-    newConfig.batchSyncNum = cfg.batchSyncNum;
-    newConfig.syncAsSparkDataSourceTable = cfg.syncAsSparkDataSourceTable;
-    newConfig.sparkSchemaLengthThreshold = cfg.sparkSchemaLengthThreshold;
-    newConfig.withOperationField = cfg.withOperationField;
-    newConfig.isConditionalSync = cfg.isConditionalSync;
-    newConfig.sparkVersion = cfg.sparkVersion;
-    return newConfig;
+  public static final ConfigProperty<String> HIVE_USER = ConfigProperty
+      .key("hoodie.datasource.hive_sync.username")
+      .defaultValue("hive")
+      .withDocumentation("hive user name to use");
+
+  public static final ConfigProperty<String> HIVE_PASS = ConfigProperty
+      .key("hoodie.datasource.hive_sync.password")
+      .defaultValue("hive")
+      .withDocumentation("hive password to use");
+
+  public static final ConfigProperty<String> HIVE_URL = ConfigProperty
+      .key("hoodie.datasource.hive_sync.jdbcurl")
+      .defaultValue("jdbc:hive2://localhost:10000")
+      .withDocumentation("Hive metastore url");
+
+  public static final ConfigProperty<String> HIVE_USE_PRE_APACHE_INPUT_FORMAT = ConfigProperty
+      .key("hoodie.datasource.hive_sync.use_pre_apache_input_format")
+      .defaultValue("false")
+      .withDocumentation("Flag to choose InputFormat under com.uber.hoodie package instead of org.apache.hudi package. "
+          + "Use this when you are in the process of migrating from "
+          + "com.uber.hoodie to org.apache.hudi. Stop using this after you migrated the table definition to org.apache.hudi input format");
+
+  /**
+   * @deprecated Use {@link #HIVE_SYNC_MODE} instead of this config from 0.9.0
+   */
+  @Deprecated
+  public static final ConfigProperty<String> HIVE_USE_JDBC = ConfigProperty
+      .key("hoodie.datasource.hive_sync.use_jdbc")
+      .defaultValue("true")
+      .deprecatedAfter("0.9.0")
+      .withDocumentation("Use JDBC when hive synchronization is enabled");
+
+  public static final ConfigProperty<String> METASTORE_URIS = ConfigProperty
+      .key("hoodie.datasource.hive_sync.metastore.uris")
+      .defaultValue("thrift://localhost:9083")
+      .withDocumentation("Hive metastore url");
+
+  public static final ConfigProperty<String> HIVE_AUTO_CREATE_DATABASE = ConfigProperty
+      .key("hoodie.datasource.hive_sync.auto_create_database")
+      .defaultValue("true")
+      .withDocumentation("Auto create hive database if does not exists");
+
+  public static final ConfigProperty<String> HIVE_IGNORE_EXCEPTIONS = ConfigProperty
+      .key("hoodie.datasource.hive_sync.ignore_exceptions")
+      .defaultValue("false")
+      .withDocumentation("Ignore exceptions when syncing with Hive.");
+
+  public static final ConfigProperty<String> HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE = ConfigProperty
+      .key("hoodie.datasource.hive_sync.skip_ro_suffix")
+      .defaultValue("false")
+      .withDocumentation("Skip the _ro suffix for Read optimized table, when registering");
+
+  public static final ConfigProperty<String> HIVE_SUPPORT_TIMESTAMP_TYPE = ConfigProperty
+      .key("hoodie.datasource.hive_sync.support_timestamp")
+      .defaultValue("false")
+      .withDocumentation("‘INT64’ with original type TIMESTAMP_MICROS is converted to hive ‘timestamp’ type. "
+          + "Disabled by default for backward compatibility.");
+
+  public static final ConfigProperty<String> HIVE_TABLE_PROPERTIES = ConfigProperty
+      .key("hoodie.datasource.hive_sync.table_properties")
+      .noDefaultValue()
+      .withDocumentation("Additional properties to store with table.");
+
+  public static final ConfigProperty<String> HIVE_TABLE_SERDE_PROPERTIES = ConfigProperty
+      .key("hoodie.datasource.hive_sync.serde_properties")
+      .noDefaultValue()
+      .withDocumentation("Serde properties to hive table.");
+
+  public static final ConfigProperty<String> HIVE_SYNC_AS_DATA_SOURCE_TABLE = ConfigProperty
+      .key("hoodie.datasource.hive_sync.sync_as_datasource")
+      .defaultValue("true")
+      .withDocumentation("");
+
+  public static final ConfigProperty<Integer> HIVE_SYNC_SCHEMA_STRING_LENGTH_THRESHOLD = ConfigProperty
+      .key("hoodie.datasource.hive_sync.schema_string_length_thresh")
+      .defaultValue(4000)
+      .withDocumentation("");
+
+  // Create table as managed table
+  public static final ConfigProperty<Boolean> HIVE_CREATE_MANAGED_TABLE = ConfigProperty
+      .key("hoodie.datasource.hive_sync.create_managed_table")
+      .defaultValue(false)
+      .withDocumentation("Whether to sync the table as managed table.");
+
+  public static final ConfigProperty<Integer> HIVE_BATCH_SYNC_PARTITION_NUM = ConfigProperty
+      .key("hoodie.datasource.hive_sync.batch_num")
+      .defaultValue(1000)
+      .withDocumentation("The number of partitions one batch when synchronous partitions to hive.");
+
+  public static final ConfigProperty<String> HIVE_SYNC_MODE = ConfigProperty
+      .key("hoodie.datasource.hive_sync.mode")
+      .noDefaultValue()
+      .withDocumentation("Mode to choose for Hive ops. Valid values are hms, jdbc and hiveql.");
+
+  public static final ConfigProperty<Boolean> HIVE_SYNC_BUCKET_SYNC = ConfigProperty
+      .key("hoodie.datasource.hive_sync.bucket_sync")
+      .defaultValue(false)
+      .withDocumentation("Whether sync hive metastore bucket specification when using bucket index."
+          + "The specification is 'CLUSTERED BY (trace_id) SORTED BY (trace_id ASC) INTO 65536 BUCKETS'");
+
+  public static final ConfigProperty<String> HIVE_SYNC_BUCKET_SYNC_SPEC = ConfigProperty
+      .key("hoodie.datasource.hive_sync.bucket_sync_spec")
+      .defaultValue("")
+      .withDocumentation("The hive metastore bucket specification when using bucket index."
+          + "The specification is 'CLUSTERED BY (trace_id) SORTED BY (trace_id ASC) INTO 65536 BUCKETS'");
+
+  public static final ConfigProperty<String> HIVE_SYNC_COMMENT = ConfigProperty
+      .key("hoodie.datasource.hive_sync.sync_comment")
+      .defaultValue("false")
+      .withDocumentation("Whether to sync the table column comments while syncing the table.");
+
+  public HiveSyncConfig() {
+    this(new TypedProperties());
+  }
+
+  public HiveSyncConfig(TypedProperties props) {
+    super(props);
+    this.hiveUser = getStringOrDefault(HIVE_USER);
+    this.hivePass = getStringOrDefault(HIVE_PASS);
+    this.jdbcUrl = getStringOrDefault(HIVE_URL);
+    this.usePreApacheInputFormat = getBooleanOrDefault(HIVE_USE_PRE_APACHE_INPUT_FORMAT);
+    this.useJdbc = getBooleanOrDefault(HIVE_USE_JDBC);
+    this.metastoreUris = getStringOrDefault(METASTORE_URIS);
+    this.syncMode = getString(HIVE_SYNC_MODE);
+    this.autoCreateDatabase = getBooleanOrDefault(HIVE_AUTO_CREATE_DATABASE);
+    this.ignoreExceptions = getBooleanOrDefault(HIVE_IGNORE_EXCEPTIONS);
+    this.skipROSuffix = getBooleanOrDefault(HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE);
+    this.tableProperties = getString(HIVE_TABLE_PROPERTIES);
+    this.serdeProperties = getString(HIVE_TABLE_SERDE_PROPERTIES);
+    this.supportTimestamp = getBooleanOrDefault(HIVE_SUPPORT_TIMESTAMP_TYPE);
+    this.batchSyncNum = getIntOrDefault(HIVE_BATCH_SYNC_PARTITION_NUM);
+    this.syncAsSparkDataSourceTable = getBooleanOrDefault(HIVE_SYNC_AS_DATA_SOURCE_TABLE);
+    this.sparkSchemaLengthThreshold = getIntOrDefault(HIVE_SYNC_SCHEMA_STRING_LENGTH_THRESHOLD);
+    this.createManagedTable = getBooleanOrDefault(HIVE_CREATE_MANAGED_TABLE);
+    this.bucketSpec = getStringOrDefault(HIVE_SYNC_BUCKET_SYNC_SPEC);
+    this.syncComment = getBooleanOrDefault(HIVE_SYNC_COMMENT);
   }
 
   @Override
@@ -193,6 +275,8 @@ public class HiveSyncConfig implements Serializable {
       + ", sparkSchemaLengthThreshold=" + sparkSchemaLengthThreshold
       + ", withOperationField=" + withOperationField
       + ", isConditionalSync=" + isConditionalSync
+      + ", sparkVersion=" + sparkVersion
+      + ", syncComment=" + syncComment
       + '}';
   }
 

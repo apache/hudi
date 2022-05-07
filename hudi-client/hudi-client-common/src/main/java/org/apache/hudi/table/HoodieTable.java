@@ -18,16 +18,24 @@
 
 package org.apache.hudi.table;
 
+import org.apache.avro.Schema;
+import org.apache.avro.specific.SpecificRecordBase;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
+import org.apache.hudi.avro.model.HoodieIndexCommitMetadata;
+import org.apache.hudi.avro.model.HoodieIndexPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRestorePlan;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
+import org.apache.hudi.common.HoodiePendingRollbackInfo;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -42,6 +50,7 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -61,26 +70,20 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieInsertException;
+import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
+import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.bootstrap.HoodieBootstrapWriteMetadata;
 import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.table.storage.HoodieLayoutFactory;
 import org.apache.hudi.table.storage.HoodieStorageLayout;
-
-import org.apache.avro.Schema;
-import org.apache.avro.specific.SpecificRecordBase;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-
-import javax.annotation.Nonnull;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -89,8 +92,16 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_METADATA_PARTITIONS;
+import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.deleteMetadataPartition;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.deleteMetadataTable;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getCompletedMetadataPartitions;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.metadataPartitionExists;
 
 /**
  * Abstract implementation of a HoodieTable.
@@ -178,7 +189,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
    * @return HoodieWriteMetadata
    */
   public abstract HoodieWriteMetadata<O> bulkInsert(HoodieEngineContext context, String instantTime,
-      I records, Option<BulkInsertPartitioner<I>> bulkInsertPartitioner);
+      I records, Option<BulkInsertPartitioner> bulkInsertPartitioner);
 
   /**
    * Deletes a list of {@link HoodieKey}s from the Hoodie table, at the supplied instantTime {@link HoodieKey}s will be
@@ -235,7 +246,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
    * @return HoodieWriteMetadata
    */
   public abstract HoodieWriteMetadata<O> bulkInsertPrepped(HoodieEngineContext context, String instantTime,
-      I preppedRecords,  Option<BulkInsertPartitioner<I>> bulkInsertPartitioner);
+      I preppedRecords,  Option<BulkInsertPartitioner> bulkInsertPartitioner);
 
   /**
    * Replaces all the existing records and inserts the specified new records into Hoodie table at the supplied instantTime,
@@ -258,19 +269,6 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
    * @return HoodieWriteMetadata
    */
   public abstract HoodieWriteMetadata<O> insertOverwriteTable(HoodieEngineContext context, String instantTime, I records);
-
-  /**
-   * Updates Metadata Indexes (like Column Stats index)
-   * TODO rebase onto metadata table (post RFC-27)
-   *
-   * @param context instance of {@link HoodieEngineContext}
-   * @param instantTime instant of the carried operation triggering the update
-   */
-  public abstract void updateMetadataIndexes(
-      @Nonnull HoodieEngineContext context,
-      @Nonnull List<HoodieWriteStat> stats,
-      @Nonnull String instantTime
-  ) throws Exception;
 
   public HoodieWriteConfig getConfig() {
     return config;
@@ -445,7 +443,6 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
    */
   public abstract void rollbackBootstrap(HoodieEngineContext context, String instantTime);
 
-
   /**
    * Schedule cleaning for the instant time.
    *
@@ -478,7 +475,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
                                                               String instantTime,
                                                               HoodieInstant instantToRollback,
                                                               boolean skipTimelinePublish, boolean shouldRollbackUsingMarkers);
-  
+
   /**
    * Rollback the (inflight/committed) record changes with the given commit time.
    * <pre>
@@ -494,6 +491,25 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
                                                   HoodieInstant commitInstant,
                                                   boolean deleteInstants,
                                                   boolean skipLocking);
+
+  /**
+   * Schedules Indexing for the table to the given instant.
+   *
+   * @param context HoodieEngineContext
+   * @param indexInstantTime Instant time for scheduling index action.
+   * @param partitionsToIndex List of {@link MetadataPartitionType} that should be indexed.
+   * @return HoodieIndexPlan containing metadata partitions and instant upto which they should be indexed.
+   */
+  public abstract Option<HoodieIndexPlan> scheduleIndexing(HoodieEngineContext context, String indexInstantTime, List<MetadataPartitionType> partitionsToIndex);
+
+  /**
+   * Execute requested index action.
+   *
+   * @param context HoodieEngineContext
+   * @param indexInstantTime Instant time for which index action was scheduled.
+   * @return HoodieIndexCommitMetadata containing write stats for each metadata partition.
+   */
+  public abstract Option<HoodieIndexCommitMetadata> index(HoodieEngineContext context, String indexInstantTime);
 
   /**
    * Create a savepoint at the specified instant, so that the table can be restored
@@ -519,14 +535,19 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
                                                     String restoreInstantTime,
                                                     String instantToRestore);
 
+  public void rollbackInflightCompaction(HoodieInstant inflightInstant) {
+    rollbackInflightCompaction(inflightInstant, s -> Option.empty());
+  }
+
   /**
    * Rollback failed compactions. Inflight rollbacks for compactions revert the .inflight file
    * to the .requested file.
    *
    * @param inflightInstant Inflight Compaction Instant
    */
-  public void rollbackInflightCompaction(HoodieInstant inflightInstant) {
-    String commitTime = HoodieActiveTimeline.createNewInstantTime();
+  public void rollbackInflightCompaction(HoodieInstant inflightInstant, Function<String, Option<HoodiePendingRollbackInfo>> getPendingRollbackInstantFunc) {
+    final String commitTime = getPendingRollbackInstantFunc.apply(inflightInstant.getTimestamp()).map(entry
+        -> entry.getRollbackInstant().getTimestamp()).orElse(HoodieActiveTimeline.createNewInstantTime());
     scheduleRollback(context, commitTime, inflightInstant, false, config.shouldRollbackUsingMarkers());
     rollback(context, commitTime, inflightInstant, false, false);
     getActiveTimeline().revertCompactionInflightToRequested(inflightInstant);
@@ -739,6 +760,10 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
     return metaClient.getTableConfig().getLogFileFormat();
   }
 
+  public Option<HoodieFileFormat> getPartitionMetafileFormat() {
+    return metaClient.getTableConfig().getPartitionMetafileFormat();
+  }
+
   public String getBaseFileExtension() {
     return getBaseFileFormat().getFileExtension();
   }
@@ -757,7 +782,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
    * Get Table metadata writer.
    *
    * @param triggeringInstantTimestamp - The instant that is triggering this metadata write
-   * @return instance of {@link HoodieTableMetadataWriter
+   * @return instance of {@link HoodieTableMetadataWriter}
    */
   public final Option<HoodieTableMetadataWriter> getMetadataWriter(String triggeringInstantTimestamp) {
     return getMetadataWriter(triggeringInstantTimestamp, Option.empty());
@@ -788,6 +813,96 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
     // Each engine is expected to override this and
     // provide the actual metadata writer, if enabled.
     return Option.empty();
+  }
+
+  /**
+   * Deletes the metadata table if the writer disables metadata table with hoodie.metadata.enable=false
+   */
+  public void maybeDeleteMetadataTable() {
+    if (shouldExecuteMetadataTableDeletion()) {
+      try {
+        LOG.info("Deleting metadata table because it is disabled in writer.");
+        deleteMetadataTable(config.getBasePath(), context);
+        clearMetadataTablePartitionsConfig(Option.empty(), true);
+      } catch (HoodieMetadataException e) {
+        throw new HoodieException("Failed to delete metadata table.", e);
+      }
+    }
+  }
+
+  /**
+   * Deletes the metadata partition if the writer disables any metadata index.
+   */
+  public void deleteMetadataIndexIfNecessary() {
+    Stream.of(MetadataPartitionType.values()).forEach(partitionType -> {
+      if (shouldDeleteMetadataPartition(partitionType)) {
+        try {
+          LOG.info("Deleting metadata partition because it is disabled in writer: " + partitionType.name());
+          if (metadataPartitionExists(metaClient.getBasePath(), context, partitionType)) {
+            deleteMetadataPartition(metaClient.getBasePath(), context, partitionType);
+          }
+          clearMetadataTablePartitionsConfig(Option.of(partitionType), false);
+        } catch (HoodieMetadataException e) {
+          throw new HoodieException("Failed to delete metadata partition: " + partitionType.name(), e);
+        }
+      }
+    });
+  }
+
+  private boolean shouldDeleteMetadataPartition(MetadataPartitionType partitionType) {
+    // Only delete metadata table partition when all the following conditions are met:
+    // (1) This is data table.
+    // (2) Index corresponding to this metadata partition is disabled in HoodieWriteConfig.
+    // (3) The completed metadata partitions in table config contains this partition.
+    // NOTE: Inflight metadata partitions are not considered as they could have been inflight due to async indexer.
+    if (HoodieTableMetadata.isMetadataTable(metaClient.getBasePath()) || !config.isMetadataTableEnabled()) {
+      return false;
+    }
+    boolean metadataIndexDisabled;
+    switch (partitionType) {
+      // NOTE: FILES partition type is always considered in sync with hoodie.metadata.enable.
+      //       It cannot be the case that metadata is enabled but FILES is disabled.
+      case COLUMN_STATS:
+        metadataIndexDisabled = !config.isMetadataColumnStatsIndexEnabled();
+        break;
+      case BLOOM_FILTERS:
+        metadataIndexDisabled = !config.isMetadataBloomFilterIndexEnabled();
+        break;
+      default:
+        LOG.debug("Not a valid metadata partition type: " + partitionType.name());
+        return false;
+    }
+    return metadataIndexDisabled
+        && getCompletedMetadataPartitions(metaClient.getTableConfig()).contains(partitionType.getPartitionPath());
+  }
+
+  private boolean shouldExecuteMetadataTableDeletion() {
+    // Only execute metadata table deletion when all the following conditions are met
+    // (1) This is data table
+    // (2) Metadata table is disabled in HoodieWriteConfig for the writer
+    // (3) Check `HoodieTableConfig.TABLE_METADATA_PARTITIONS`.  Either the table config
+    // does not exist, or the table config is non-empty indicating that metadata table
+    // partitions are ready to use
+    return !HoodieTableMetadata.isMetadataTable(metaClient.getBasePath())
+        && !config.isMetadataTableEnabled()
+        && (!metaClient.getTableConfig().contains(TABLE_METADATA_PARTITIONS)
+        || !metaClient.getTableConfig().getMetadataPartitions().isEmpty());
+  }
+
+  /**
+   * Clears hoodie.table.metadata.partitions in hoodie.properties
+   */
+  private void clearMetadataTablePartitionsConfig(Option<MetadataPartitionType> partitionType, boolean clearAll) {
+    if (clearAll) {
+      LOG.info("Clear hoodie.table.metadata.partitions in hoodie.properties");
+      metaClient.getTableConfig().setValue(TABLE_METADATA_PARTITIONS.key(), EMPTY_STRING);
+      HoodieTableConfig.update(metaClient.getFs(), new Path(metaClient.getMetaPath()), metaClient.getTableConfig().getProps());
+      return;
+    }
+    Set<String> completedPartitions = getCompletedMetadataPartitions(metaClient.getTableConfig());
+    completedPartitions.remove(partitionType.get().getPartitionPath());
+    metaClient.getTableConfig().setValue(HoodieTableConfig.TABLE_METADATA_PARTITIONS.key(), String.join(",", completedPartitions));
+    HoodieTableConfig.update(metaClient.getFs(), new Path(metaClient.getMetaPath()), metaClient.getTableConfig().getProps());
   }
 
   public HoodieTableMetadata getMetadataTable() {

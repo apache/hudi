@@ -20,6 +20,7 @@ package org.apache.hudi.io;
 
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -33,6 +34,8 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+
+import javax.annotation.concurrent.NotThreadSafe;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -65,6 +68,7 @@ import java.util.Map;
  * Users should ensure there are no duplicates when "insert" operation is used and if the respective config is enabled. So, above scenario should not
  * happen and every batch should have new records to be inserted. Above example is for illustration purposes only.
  */
+@NotThreadSafe
 public class HoodieConcatHandle<T extends HoodieRecordPayload, I, K, O> extends HoodieMergeHandle<T, I, K, O> {
 
   private static final Logger LOG = LogManager.getLogger(HoodieConcatHandle.class);
@@ -93,7 +97,8 @@ public class HoodieConcatHandle<T extends HoodieRecordPayload, I, K, O> extends 
   public void write(GenericRecord oldRecord) {
     String key = KeyGenUtils.getRecordKeyFromGenericRecord(oldRecord, keyGeneratorOpt);
     try {
-      fileWriter.writeAvro(key, oldRecord);
+      // NOTE: We're enforcing preservation of the record metadata to keep existing semantic
+      writeToFile(new HoodieKey(key, partitionPath), oldRecord, true);
     } catch (IOException | RuntimeException e) {
       String errMsg = String.format("Failed to write old record into new file for key %s from old file %s to new file %s with writerSchema %s",
           key, getOldFilePath(), newFilePath, writeSchemaWithMetaFields.toString(true));

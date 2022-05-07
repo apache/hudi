@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi
 
-class TestUpdateTable extends TestHoodieSqlBase {
+class TestUpdateTable extends HoodieSparkSqlTestBase {
 
   test("Test Update Table") {
     withTempDir { tmp =>

@@ -34,7 +34,7 @@ public abstract class BaseBulkInsertHelper<T extends HoodieRecordPayload, I, K, 
   public abstract HoodieWriteMetadata<O> bulkInsert(I inputRecords, String instantTime,
                                                     HoodieTable<T, I, K, O> table, HoodieWriteConfig config,
                                                     BaseCommitActionExecutor<T, I, K, O, R> executor, boolean performDedupe,
-                                                    Option<BulkInsertPartitioner<I>> userDefinedBulkInsertPartitioner);
+                                                    Option<BulkInsertPartitioner> userDefinedBulkInsertPartitioner);
 
   /**
    * Only write input records. Does not change timeline/index. Return information about new files created.
@@ -42,7 +42,7 @@ public abstract class BaseBulkInsertHelper<T extends HoodieRecordPayload, I, K, 
   public abstract O bulkInsert(I inputRecords, String instantTime,
                                HoodieTable<T, I, K, O> table, HoodieWriteConfig config,
                                boolean performDedupe,
-                               Option<BulkInsertPartitioner<I>> userDefinedBulkInsertPartitioner,
+                               BulkInsertPartitioner partitioner,
                                boolean addMetadataFields,
                                int parallelism,
                                WriteHandleFactory writeHandleFactory);

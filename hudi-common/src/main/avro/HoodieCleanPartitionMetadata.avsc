@@ -24,6 +24,7 @@
      {"name": "policy", "type": "string"},
      {"name": "deletePathPatterns", "type": {"type": "array", "items": "string"}},
      {"name": "successDeleteFiles", "type": {"type": "array", "items": "string"}},
-     {"name": "failedDeleteFiles", "type": {"type": "array", "items": "string"}}
+     {"name": "failedDeleteFiles", "type": {"type": "array", "items": "string"}},
+     {"name": "isPartitionDeleted", "type":["null", "boolean"], "default": null }
   ] 
 }

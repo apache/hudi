@@ -24,8 +24,10 @@ import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.getTableLocation
 import org.apache.spark.sql.types.StringType
 import org.apache.spark.sql.{Row, SparkSession}
 
+@Deprecated
 case class CompactionHoodieTableCommand(table: CatalogTable,
-  operation: CompactionOperation, instantTimestamp: Option[Long])
+                                        operation: CompactionOperation,
+                                        instantTimestamp: Option[Long])
   extends HoodieLeafRunnableCommand {
 
   override def run(sparkSession: SparkSession): Seq[Row] = {

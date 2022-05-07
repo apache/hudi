@@ -17,16 +17,16 @@
  */
 
 package org.apache.hudi
+
 import org.apache.avro.Schema.Type
 import org.apache.avro.generic.{GenericRecord, GenericRecordBuilder, IndexedRecord}
 import org.apache.avro.{AvroRuntimeException, JsonProperties, Schema}
 import org.apache.hudi.HoodieSparkUtils.sparkAdapter
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.avro.SchemaConverters
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
-import org.apache.spark.sql.types.{DataType, StructType}
+import org.apache.spark.sql.types.{ArrayType, DataType, MapType, StructType}
 import org.apache.spark.sql.{Dataset, Row, SparkSession}
 
 import scala.collection.JavaConversions._
@@ -62,10 +62,12 @@ object AvroConversionUtils {
    * @param rootCatalystType Catalyst [[StructType]] to be transformed into
    * @return converter accepting Avro payload and transforming it into a Catalyst one (in the form of [[InternalRow]])
    */
-  def createAvroToInternalRowConverter(rootAvroType: Schema, rootCatalystType: StructType): GenericRecord => Option[InternalRow] =
-    record => sparkAdapter.createAvroDeserializer(rootAvroType, rootCatalystType)
+  def createAvroToInternalRowConverter(rootAvroType: Schema, rootCatalystType: StructType): GenericRecord => Option[InternalRow] = {
+    val deserializer = sparkAdapter.createAvroDeserializer(rootAvroType, rootCatalystType)
+    record => deserializer
       .deserialize(record)
       .map(_.asInstanceOf[InternalRow])
+  }
 
   /**
    * Creates converter to transform Catalyst payload into Avro one
@@ -76,7 +78,8 @@ object AvroConversionUtils {
    * @return converter accepting Catalyst payload (in the form of [[InternalRow]]) and transforming it into an Avro one
    */
   def createInternalRowToAvroConverter(rootCatalystType: StructType, rootAvroType: Schema, nullable: Boolean): InternalRow => GenericRecord = {
-    row => sparkAdapter.createAvroSerializer(rootCatalystType, rootAvroType, nullable)
+    val serializer = sparkAdapter.createAvroSerializer(rootCatalystType, rootAvroType, nullable)
+    row => serializer
       .serialize(row)
       .asInstanceOf[GenericRecord]
   }
@@ -133,34 +136,50 @@ object AvroConversionUtils {
   }
 
   /**
-    *
-    * Returns avro schema from spark StructType.
-    *
-    * @param structType       Dataframe Struct Type.
-    * @param structName       Avro record name.
-    * @param recordNamespace  Avro record namespace.
-    * @return                 Avro schema corresponding to given struct type.
-    */
+   *
+   * Returns avro schema from spark StructType.
+   *
+   * @param structType      Dataframe Struct Type.
+   * @param structName      Avro record name.
+   * @param recordNamespace Avro record namespace.
+   * @return Avro schema corresponding to given struct type.
+   */
   def convertStructTypeToAvroSchema(structType: DataType,
                                     structName: String,
                                     recordNamespace: String): Schema = {
-    getAvroSchemaWithDefaults(SchemaConverters.toAvroType(structType, nullable = false, structName, recordNamespace))
+    val schemaConverters = sparkAdapter.getAvroSchemaConverters
+    val avroSchema = schemaConverters.toAvroType(structType, nullable = false, structName, recordNamespace)
+    getAvroSchemaWithDefaults(avroSchema, structType)
+  }
+
+  def convertAvroSchemaToStructType(avroSchema: Schema): StructType = {
+    val schemaConverters = sparkAdapter.getAvroSchemaConverters
+    schemaConverters.toSqlType(avroSchema) match {
+      case (dataType, _) => dataType.asInstanceOf[StructType]
+    }
   }
 
   /**
-    *
-    * Method to add default value of null to nullable fields in given avro schema
-    *
-    * @param schema     input avro schema
-    * @return           Avro schema with null default set to nullable fields
-    */
-  def getAvroSchemaWithDefaults(schema: Schema): Schema = {
+   *
+   * Method to add default value of null to nullable fields in given avro schema
+   *
+   * @param schema input avro schema
+   * @return Avro schema with null default set to nullable fields
+   */
+  def getAvroSchemaWithDefaults(schema: Schema, dataType: DataType): Schema = {
 
     schema.getType match {
       case Schema.Type.RECORD => {
-
+        val structType = dataType.asInstanceOf[StructType]
+        val structFields = structType.fields
         val modifiedFields = schema.getFields.map(field => {
-          val newSchema = getAvroSchemaWithDefaults(field.schema())
+          val i: Int = structType.fieldIndex(field.name())
+          val comment: String = if (structFields(i).metadata.contains("comment")) {
+            structFields(i).metadata.getString("comment")
+          } else {
+            field.doc()
+          }
+          val newSchema = getAvroSchemaWithDefaults(field.schema(), structFields(i).dataType)
           field.schema().getType match {
             case Schema.Type.UNION => {
               val innerFields = newSchema.getTypes
@@ -168,46 +187,31 @@ object AvroConversionUtils {
               if(containsNullSchema) {
                 // Need to re shuffle the fields in list because to set null as default, null schema must be head in union schema
                 val restructuredNewSchema = Schema.createUnion(List(Schema.create(Schema.Type.NULL)) ++ innerFields.filter(innerSchema => !(innerSchema.getType == Schema.Type.NULL)))
-                new Schema.Field(field.name(), restructuredNewSchema, field.doc(), JsonProperties.NULL_VALUE)
+                new Schema.Field(field.name(), restructuredNewSchema, comment, JsonProperties.NULL_VALUE)
               } else {
-                new Schema.Field(field.name(), newSchema, field.doc(), field.defaultVal())
+                new Schema.Field(field.name(), newSchema, comment, field.defaultVal())
               }
             }
-            case _ => new Schema.Field(field.name(), newSchema, field.doc(), field.defaultVal())
+            case _ => new Schema.Field(field.name(), newSchema, comment, field.defaultVal())
           }
         }).toList
         Schema.createRecord(schema.getName, schema.getDoc, schema.getNamespace, schema.isError, modifiedFields)
       }
 
       case Schema.Type.UNION => {
-        Schema.createUnion(schema.getTypes.map(innerSchema => getAvroSchemaWithDefaults(innerSchema)))
+        Schema.createUnion(schema.getTypes.map(innerSchema => getAvroSchemaWithDefaults(innerSchema, dataType)))
       }
 
       case Schema.Type.MAP => {
-        Schema.createMap(getAvroSchemaWithDefaults(schema.getValueType))
+        Schema.createMap(getAvroSchemaWithDefaults(schema.getValueType, dataType.asInstanceOf[MapType].valueType))
       }
 
       case Schema.Type.ARRAY => {
-        Schema.createArray(getAvroSchemaWithDefaults(schema.getElementType))
+        Schema.createArray(getAvroSchemaWithDefaults(schema.getElementType, dataType.asInstanceOf[ArrayType].elementType))
       }
 
       case _ => schema
     }
-  }
-
-  def convertAvroSchemaToStructType(avroSchema: Schema): StructType = {
-    SchemaConverters.toSqlType(avroSchema).dataType.asInstanceOf[StructType]
-  }
-
-  def buildAvroRecordBySchema(record: IndexedRecord,
-                              requiredSchema: Schema,
-                              requiredPos: Seq[Int],
-                              recordBuilder: GenericRecordBuilder): GenericRecord = {
-    val requiredFields = requiredSchema.getFields.asScala
-    assert(requiredFields.length == requiredPos.length)
-    val positionIterator = requiredPos.iterator
-    requiredFields.foreach(f => recordBuilder.set(f, record.get(positionIterator.next())))
-    recordBuilder.build()
   }
 
   def getAvroRecordNameAndNamespace(tableName: String): (String, String) = {

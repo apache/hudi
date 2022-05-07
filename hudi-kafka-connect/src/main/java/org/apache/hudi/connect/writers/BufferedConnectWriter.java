@@ -96,9 +96,9 @@ public class BufferedConnectWriter extends AbstractConnectWriter {
     try {
       LOG.info("Number of entries in MemoryBasedMap => "
           + bufferedRecords.getInMemoryMapNumEntries()
-          + "Total size in bytes of MemoryBasedMap => "
-          + bufferedRecords.getCurrentInMemoryMapSize() + "Number of entries in BitCaskDiskMap => "
-          + bufferedRecords.getDiskBasedMapNumEntries() + "Size of file spilled to disk => "
+          + ", Total size in bytes of MemoryBasedMap => "
+          + bufferedRecords.getCurrentInMemoryMapSize() + ", Number of entries in BitCaskDiskMap => "
+          + bufferedRecords.getDiskBasedMapNumEntries() + ", Size of file spilled to disk => "
           + bufferedRecords.getSizeOfFileOnDiskInBytes());
       List<WriteStatus> writeStatuses = new ArrayList<>();
 

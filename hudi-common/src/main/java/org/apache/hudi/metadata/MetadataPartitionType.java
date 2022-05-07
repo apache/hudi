@@ -31,6 +31,8 @@ public enum MetadataPartitionType {
   // FileId prefix used for all file groups in this partition.
   private final String fileIdPrefix;
   // Total file groups
+  // TODO fix: enum should not have any mutable aspect as this compromises whole idea
+  //      of the inum being static, immutable entity
   private int fileGroupCount = 1;
 
   MetadataPartitionType(final String partitionPath, final String fileIdPrefix) {

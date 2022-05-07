@@ -83,6 +83,8 @@ public class HoodieTableHeaderFields {
   public static final String HEADER_HOODIE_PROPERTY = "Property";
   public static final String HEADER_OLD_VALUE = "Old Value";
   public static final String HEADER_NEW_VALUE = "New Value";
+  public static final String HEADER_TEXT_METAFILE_PRESENT = "Text Metafile present ?";
+  public static final String HEADER_BASE_METAFILE_PRESENT = "Base Metafile present ?";
 
   /**
    * Fields of Savepoints.

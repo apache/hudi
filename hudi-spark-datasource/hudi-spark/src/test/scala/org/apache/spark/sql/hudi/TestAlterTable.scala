@@ -22,7 +22,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.types.{LongType, StructField, StructType}
 
-class TestAlterTable extends TestHoodieSqlBase {
+class TestAlterTable extends HoodieSparkSqlTestBase {
 
   test("Test Alter Table") {
     withTempDir { tmp =>

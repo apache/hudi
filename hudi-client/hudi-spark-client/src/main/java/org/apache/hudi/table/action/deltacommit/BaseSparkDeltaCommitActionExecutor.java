@@ -18,7 +18,6 @@
 
 package org.apache.hudi.table.action.deltacommit;
 
-import java.util.Map;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -42,13 +41,14 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 
 public abstract class BaseSparkDeltaCommitActionExecutor<T extends HoodieRecordPayload<T>>
     extends BaseSparkCommitActionExecutor<T> {
   private static final Logger LOG = LogManager.getLogger(BaseSparkDeltaCommitActionExecutor.class);
 
   // UpsertPartitioner for MergeOnRead table type
-  private SparkUpsertDeltaCommitPartitioner mergeOnReadUpsertPartitioner;
+  private SparkUpsertDeltaCommitPartitioner<T> mergeOnReadUpsertPartitioner;
 
   public BaseSparkDeltaCommitActionExecutor(HoodieSparkEngineContext context, HoodieWriteConfig config, HoodieTable table,
                                                 String instantTime, WriteOperationType operationType) {
@@ -66,7 +66,7 @@ public abstract class BaseSparkDeltaCommitActionExecutor<T extends HoodieRecordP
     if (profile == null) {
       throw new HoodieUpsertException("Need workload profile to construct the upsert partitioner.");
     }
-    mergeOnReadUpsertPartitioner = new SparkUpsertDeltaCommitPartitioner(profile, (HoodieSparkEngineContext) context, table, config);
+    mergeOnReadUpsertPartitioner = new SparkUpsertDeltaCommitPartitioner<>(profile, (HoodieSparkEngineContext) context, table, config);
     return mergeOnReadUpsertPartitioner;
   }
 
@@ -79,7 +79,7 @@ public abstract class BaseSparkDeltaCommitActionExecutor<T extends HoodieRecordP
       LOG.info("Small file corrections for updates for commit " + instantTime + " for file " + fileId);
       return super.handleUpdate(partitionPath, fileId, recordItr);
     } else {
-      HoodieAppendHandle<?,?,?,?> appendHandle = new HoodieAppendHandle<>(config, instantTime, table,
+      HoodieAppendHandle<?, ?, ?, ?> appendHandle = new HoodieAppendHandle<>(config, instantTime, table,
           partitionPath, fileId, recordItr, taskContextSupplier);
       appendHandle.doAppend();
       return Collections.singletonList(appendHandle.close()).iterator();

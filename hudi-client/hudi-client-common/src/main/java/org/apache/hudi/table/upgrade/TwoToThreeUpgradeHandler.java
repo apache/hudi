@@ -20,6 +20,7 @@
 package org.apache.hudi.table.upgrade;
 
 import org.apache.hudi.common.config.ConfigProperty;
+import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
@@ -34,6 +35,8 @@ import java.util.Map;
  * UpgradeHandler to assist in upgrading {@link org.apache.hudi.table.HoodieTable} from version 2 to 3.
  */
 public class TwoToThreeUpgradeHandler implements UpgradeHandler {
+  public static final String SPARK_SIMPLE_KEY_GENERATOR = "org.apache.hudi.keygen.SimpleKeyGenerator";
+
   @Override
   public Map<ConfigProperty, String> upgrade(HoodieWriteConfig config, HoodieEngineContext context, String instantTime, SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     if (config.isMetadataTableEnabled()) {
@@ -47,8 +50,13 @@ public class TwoToThreeUpgradeHandler implements UpgradeHandler {
     tablePropsToAdd.put(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE, config.getStringOrDefault(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE));
     String keyGenClassName = Option.ofNullable(config.getString(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME))
         .orElse(config.getString(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME));
+    if (keyGenClassName == null && config.getEngineType() == EngineType.SPARK) {
+      // For Spark, if the key generator class is not configured by user,
+      // set it to SimpleKeyGenerator as default
+      keyGenClassName = SPARK_SIMPLE_KEY_GENERATOR;
+    }
     ValidationUtils.checkState(keyGenClassName != null, String.format("Missing config: %s or %s",
-            HoodieTableConfig.KEY_GENERATOR_CLASS_NAME, HoodieWriteConfig.KEYGENERATOR_CLASS_NAME));
+        HoodieTableConfig.KEY_GENERATOR_CLASS_NAME, HoodieWriteConfig.KEYGENERATOR_CLASS_NAME));
     tablePropsToAdd.put(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME, keyGenClassName);
     return tablePropsToAdd;
   }

@@ -62,6 +62,7 @@ public abstract class ITTestBase {
   protected static final String ADHOC_2_CONTAINER = "/adhoc-2";
   protected static final String HIVESERVER = "/hiveserver";
   protected static final String PRESTO_COORDINATOR = "/presto-coordinator-1";
+  protected static final String TRINO_COORDINATOR = "/trino-coordinator-1";
   protected static final String HOODIE_WS_ROOT = "/var/hoodie/ws";
   protected static final String HOODIE_JAVA_APP = HOODIE_WS_ROOT + "/hudi-spark-datasource/hudi-spark/run_hoodie_app.sh";
   protected static final String HOODIE_GENERATE_APP = HOODIE_WS_ROOT + "/hudi-spark-datasource/hudi-spark/run_hoodie_generate_app.sh";
@@ -76,6 +77,7 @@ public abstract class ITTestBase {
       HOODIE_WS_ROOT + "/docker/hoodie/hadoop/hive_base/target/hoodie-utilities.jar";
   protected static final String HIVE_SERVER_JDBC_URL = "jdbc:hive2://hiveserver:10000";
   protected static final String PRESTO_COORDINATOR_URL = "presto-coordinator-1:8090";
+  protected static final String TRINO_COORDINATOR_URL = "trino-coordinator-1:8091";
   protected static final String HADOOP_CONF_DIR = "/etc/hadoop";
 
   // Skip these lines when capturing output from hive
@@ -113,11 +115,17 @@ public abstract class ITTestBase {
         .append(" --master local[2] --driver-class-path ").append(HADOOP_CONF_DIR)
         .append(
             " --conf spark.sql.hive.convertMetastoreParquet=false --deploy-mode client  --driver-memory 1G --executor-memory 1G --num-executors 1 ")
-        .append(" --packages org.apache.spark:spark-avro_2.11:2.4.4 ").append(" -i ").append(commandFile).toString();
+        .append(" -i ").append(commandFile).toString();
   }
 
   static String getPrestoConsoleCommand(String commandFile) {
     return new StringBuilder().append("presto --server " + PRESTO_COORDINATOR_URL)
+        .append(" --catalog hive --schema default")
+        .append(" -f " + commandFile).toString();
+  }
+
+  static String getTrinoConsoleCommand(String commandFile) {
+    return new StringBuilder().append("trino --server " + TRINO_COORDINATOR_URL)
         .append(" --catalog hive --schema default")
         .append(" -f " + commandFile).toString();
   }
@@ -215,7 +223,7 @@ public abstract class ITTestBase {
 
     boolean completed =
         dockerClient.execStartCmd(createCmdResponse.getId()).withDetach(false).withTty(false).exec(callback)
-        .awaitCompletion(540, SECONDS);
+            .awaitCompletion(540, SECONDS);
     if (!completed) {
       callback.getStderr().flush();
       callback.getStdout().flush();
@@ -304,6 +312,20 @@ public abstract class ITTestBase {
   void executePrestoCopyCommand(String fromFile, String remotePath) {
     Container sparkWorkerContainer = runningContainers.get(PRESTO_COORDINATOR);
     dockerClient.copyArchiveToContainerCmd(sparkWorkerContainer.getId())
+        .withHostResource(fromFile)
+        .withRemotePath(remotePath)
+        .exec();
+  }
+
+  Pair<String, String> executeTrinoCommandFile(String commandFile) throws Exception {
+    String trinoCmd = getTrinoConsoleCommand(commandFile);
+    TestExecStartResultCallback callback = executeCommandStringInDocker(ADHOC_1_CONTAINER, trinoCmd, true);
+    return Pair.of(callback.getStdout().toString().trim(), callback.getStderr().toString().trim());
+  }
+
+  void executeTrinoCopyCommand(String fromFile, String remotePath) {
+    Container adhocContainer = runningContainers.get(ADHOC_1_CONTAINER);
+    dockerClient.copyArchiveToContainerCmd(adhocContainer.getId())
         .withHostResource(fromFile)
         .withRemotePath(remotePath)
         .exec();

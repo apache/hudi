@@ -69,7 +69,7 @@ public class HoodieInstantTimeGenerator {
     return lastInstantTime.updateAndGet((oldVal) -> {
       String newCommitTime;
       do {
-        if (commitTimeZone.equals(HoodieTimelineTimeZone.UTC.toString())) {
+        if (commitTimeZone.equals(HoodieTimelineTimeZone.UTC)) {
           LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
           newCommitTime = now.format(MILLIS_INSTANT_TIME_FORMATTER);
         } else {

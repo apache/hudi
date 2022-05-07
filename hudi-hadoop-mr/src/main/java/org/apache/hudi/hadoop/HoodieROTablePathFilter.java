@@ -45,6 +45,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 /**
@@ -93,7 +94,7 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
   }
 
   public HoodieROTablePathFilter(Configuration conf) {
-    this.hoodiePathCache = new HashMap<>();
+    this.hoodiePathCache = new ConcurrentHashMap<>();
     this.nonHoodiePathCache = new HashSet<>();
     this.conf = new SerializableConfiguration(conf);
     this.metaClientCache = new HashMap<>();

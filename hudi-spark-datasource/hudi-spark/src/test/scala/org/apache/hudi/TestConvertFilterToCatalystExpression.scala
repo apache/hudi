@@ -17,11 +17,9 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.HoodieSparkUtils.convertToCatalystExpressions
 import org.apache.hudi.HoodieSparkUtils.convertToCatalystExpression
-
-import org.apache.spark.sql.sources.{And, EqualNullSafe, EqualTo, Filter, GreaterThan, GreaterThanOrEqual, In, IsNotNull, IsNull, LessThan, LessThanOrEqual, Not, Or, StringContains, StringEndsWith, StringStartsWith}
-import org.apache.spark.sql.types.{DoubleType, IntegerType, LongType, StringType, StructField, StructType}
+import org.apache.spark.sql.sources._
+import org.apache.spark.sql.types._
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 
@@ -93,7 +91,7 @@ class TestConvertFilterToCatalystExpression {
     } else {
       expectExpression
     }
-    val exp = convertToCatalystExpressions(filters, tableSchema)
+    val exp = convertToCatalystExpression(filters, tableSchema)
     if (removeQuotesIfNeed == null) {
       assertEquals(exp.isEmpty, true)
     } else {

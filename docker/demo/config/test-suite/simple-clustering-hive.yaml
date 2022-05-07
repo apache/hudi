@@ -44,7 +44,7 @@ dag_content:
   first_delete:
     config:
       num_partitions_delete: 1
-      num_records_delete: 9000
+      num_records_delete: 3000
     type: DeleteNode
     deps: third_insert
   first_hive_sync:

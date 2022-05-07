@@ -30,7 +30,7 @@ import org.apache.hudi.index.HoodieIndex.IndexType
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions.Config
 import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieClientTestBase}
-import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers, HoodieSparkUtils}
+import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers, HoodieSparkUtils, SparkDatasetMixin}
 import org.apache.log4j.LogManager
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql._
@@ -48,7 +48,7 @@ import scala.collection.JavaConverters._
 /**
  * Tests on Spark DataSource for MOR table.
  */
-class TestMORDataSource extends HoodieClientTestBase {
+class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
 
   var spark: SparkSession = null
   private val log = LogManager.getLogger(classOf[TestMORDataSource])
@@ -272,8 +272,9 @@ class TestMORDataSource extends HoodieClientTestBase {
       .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, commit5Time)
       .option(DataSourceReadOptions.END_INSTANTTIME.key, commit6Time)
       .load(basePath)
-    // compaction updated 150 rows + inserted 2 new row
-    assertEquals(152, hudiIncDF6.count())
+    // even though compaction updated 150 rows, since preserve commit metadata is true, they won't be part of incremental query.
+    // inserted 2 new row
+    assertEquals(2, hudiIncDF6.count())
   }
 
   @Test
@@ -355,7 +356,7 @@ class TestMORDataSource extends HoodieClientTestBase {
 
     val hoodieRecords1 = dataGen.generateInserts("001", 100)
 
-    val inputDF1 = toDataset(hoodieRecords1)
+    val inputDF1 = toDataset(spark, hoodieRecords1)
     inputDF1.write.format("org.apache.hudi")
       .options(opts)
       .option("hoodie.compact.inline", "false") // else fails due to compaction & deltacommit instant times being same
@@ -381,7 +382,7 @@ class TestMORDataSource extends HoodieClientTestBase {
     // Upsert 50 update records
     // Snopshot view should read 100 records
     val records2 = dataGen.generateUniqueUpdates("002", 50)
-    val inputDF2 = toDataset(records2)
+    val inputDF2 = toDataset(spark, records2)
     inputDF2.write.format("org.apache.hudi")
       .options(opts)
       .mode(SaveMode.Append)
@@ -428,7 +429,7 @@ class TestMORDataSource extends HoodieClientTestBase {
     verifyShow(hudiIncDF1Skipmerge)
 
     val record3 = dataGen.generateUpdatesWithTS("003", hoodieRecords1, -1)
-    val inputDF3 = toDataset(record3)
+    val inputDF3 = toDataset(spark, record3)
     inputDF3.write.format("org.apache.hudi").options(opts)
       .mode(SaveMode.Append).save(basePath)
 
@@ -440,16 +441,6 @@ class TestMORDataSource extends HoodieClientTestBase {
 
     assertEquals(100, hudiSnapshotDF3.count())
     assertEquals(0, hudiSnapshotDF3.filter("rider = 'rider-003'").count())
-  }
-
-  private def toDataset(records: util.List[HoodieRecord[_]]) = {
-    val avroRecords = records.map(_.getData
-      .asInstanceOf[HoodieRecordPayload[_]]
-      .getInsertValue(HoodieTestDataGenerator.AVRO_SCHEMA)
-      .get
-      .asInstanceOf[GenericRecord])
-    val rdd: RDD[GenericRecord] = spark.sparkContext.parallelize(avroRecords, 2)
-    AvroConversionUtils.createDataFrame(rdd, HoodieTestDataGenerator.AVRO_SCHEMA.toString, spark)
   }
 
   @Test
@@ -498,6 +489,28 @@ class TestMORDataSource extends HoodieClientTestBase {
     hudiSnapshotDF2.show(1)
   }
 
+  @Test def testNoPrecombine() {
+    // Insert Operation
+    val records = recordsToStrings(dataGen.generateInserts("000", 100)).toList
+    val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
+
+    val commonOptsNoPreCombine = Map(
+      "hoodie.insert.shuffle.parallelism" -> "4",
+      "hoodie.upsert.shuffle.parallelism" -> "4",
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
+      HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
+    )
+    inputDF.write.format("hudi")
+      .options(commonOptsNoPreCombine)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.TABLE_TYPE.key(), "MERGE_ON_READ")
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    spark.read.format("org.apache.hudi").load(basePath).count()
+  }
+
   @Test
   def testPreCombineFiledForReadMOR(): Unit = {
     writeData((1, "a0", 10, 100, false))
@@ -516,17 +529,14 @@ class TestMORDataSource extends HoodieClientTestBase {
     checkAnswer((1, "a0", 12, 101, false))
 
     writeData((1, "a0", 16, 97, true))
-    // Ordering value will not be honored for a delete record as the payload is sent as empty payload
-    checkAnswer((1, "a0", 16, 97, true))
+    // Ordering value will be honored, the delete record is considered as obsolete
+    // because it has smaller version number (97 < 101)
+    checkAnswer((1, "a0", 12, 101, false))
 
     writeData((1, "a0", 18, 96, false))
-    // Ideally, once a record is deleted, preCombine does not kick. So, any new record will be considered valid ignoring
-    // ordering val. But what happens ini hudi is, all records in log files are reconciled and then merged with base
-    // file. After reconciling all records from log files, it results in (1, "a0", 18, 96, false) and ths is merged with
-    // (1, "a0", 10, 100, false) in base file and hence we see (1, "a0", 10, 100, false) as it has higher preComine value.
-    // the result might differ depending on whether compaction was triggered or not(after record is deleted). In this
-    // test, no compaction is triggered and hence we see the record from base file.
-    checkAnswer((1, "a0", 10, 100, false))
+    // Ordering value will be honored, the data record is considered as obsolete
+    // because it has smaller version number (96 < 101)
+    checkAnswer((1, "a0", 12, 101, false))
   }
 
   private def writeData(data: (Int, String, Int, Int, Boolean)): Unit = {

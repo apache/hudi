@@ -60,6 +60,12 @@ public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase {
     return jsc.parallelize(records1, 1).union(jsc.parallelize(records2, 1));
   }
 
+  public static JavaRDD<HoodieRecord> generateTestRecordsForBulkInsert(JavaSparkContext jsc, int count) {
+    HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
+    List<HoodieRecord> records = dataGenerator.generateInserts("0", count);
+    return jsc.parallelize(records, 1);
+  }
+
   public static Map<String, Long> generateExpectedPartitionNumRecords(JavaRDD<HoodieRecord> records) {
     return records.map(record -> record.getPartitionPath()).countByValue();
   }

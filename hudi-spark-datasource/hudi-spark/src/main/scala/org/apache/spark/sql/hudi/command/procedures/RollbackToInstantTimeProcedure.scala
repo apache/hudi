@@ -45,8 +45,8 @@ class RollbackToInstantTimeProcedure extends BaseProcedure with ProcedureBuilder
   override def call(args: ProcedureArgs): Seq[Row] = {
     super.checkArgs(PARAMETERS, args)
 
-    val table = getArgValueOrDefault(args, PARAMETERS(0)).asInstanceOf[String]
-    val instantTime = getArgValueOrDefault(args, PARAMETERS(1)).asInstanceOf[String]
+    val table = getArgValueOrDefault(args, PARAMETERS(0)).get.asInstanceOf[String]
+    val instantTime = getArgValueOrDefault(args, PARAMETERS(1)).get.asInstanceOf[String]
 
     val hoodieCatalogTable = HoodieCatalogTable(sparkSession, new TableIdentifier(table))
     val basePath = hoodieCatalogTable.tableLocation

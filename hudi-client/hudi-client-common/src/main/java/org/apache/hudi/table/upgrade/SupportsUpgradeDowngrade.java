@@ -23,10 +23,12 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 
+import java.io.Serializable;
+
 /**
  * Interface for engine-specific logic needed for upgrade and downgrade actions.
  */
-public interface SupportsUpgradeDowngrade {
+public interface SupportsUpgradeDowngrade extends Serializable {
   /**
    * @param config  Write config.
    * @param context {@link HoodieEngineContext} instance to use.

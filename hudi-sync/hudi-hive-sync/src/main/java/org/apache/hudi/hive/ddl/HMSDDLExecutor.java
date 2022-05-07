@@ -18,9 +18,9 @@
 
 package org.apache.hudi.hive.ddl;
 
-import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.StorageSchemes;
+import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncException;
 import org.apache.hudi.hive.PartitionValueExtractor;
@@ -43,6 +43,7 @@ import org.apache.hadoop.hive.metastore.api.StorageDescriptor;
 import org.apache.hadoop.hive.metastore.api.Table;
 import org.apache.hadoop.hive.ql.metadata.Hive;
 import org.apache.hadoop.hive.ql.metadata.HiveException;
+import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.parquet.schema.MessageType;
@@ -237,13 +238,37 @@ public class HMSDDLExecutor implements DDLExecutor {
     LOG.info("Drop partitions " + partitionsToDrop.size() + " on " + tableName);
     try {
       for (String dropPartition : partitionsToDrop) {
-        String partitionClause = HivePartitionUtil.getPartitionClauseForDrop(dropPartition, partitionValueExtractor, syncConfig);
-        client.dropPartition(syncConfig.databaseName, tableName, partitionClause, false);
+        if (HivePartitionUtil.partitionExists(client, tableName, dropPartition, partitionValueExtractor, syncConfig)) {
+          String partitionClause =
+              HivePartitionUtil.getPartitionClauseForDrop(dropPartition, partitionValueExtractor, syncConfig);
+          client.dropPartition(syncConfig.databaseName, tableName, partitionClause, false);
+        }
         LOG.info("Drop partition " + dropPartition + " on " + tableName);
       }
     } catch (TException e) {
       LOG.error(syncConfig.databaseName + "." + tableName + " drop partition failed", e);
       throw new HoodieHiveSyncException(syncConfig.databaseName + "." + tableName + " drop partition failed", e);
+    }
+  }
+
+  @Override
+  public void updateTableComments(String tableName, Map<String, ImmutablePair<String,String>> alterSchema) {
+    try {
+      Table table = client.getTable(syncConfig.databaseName, tableName);
+      StorageDescriptor sd = new StorageDescriptor(table.getSd());
+      for (FieldSchema fieldSchema : sd.getCols()) {
+        if (alterSchema.containsKey(fieldSchema.getName())) {
+          String comment = alterSchema.get(fieldSchema.getName()).getRight();
+          fieldSchema.setComment(comment);
+        }
+      }
+      table.setSd(sd);
+      EnvironmentContext environmentContext = new EnvironmentContext();
+      client.alter_table_with_environmentContext(syncConfig.databaseName, tableName, table, environmentContext);
+      sd.clear();
+    } catch (Exception e) {
+      LOG.error("Failed to update table comments for " + tableName, e);
+      throw new HoodieHiveSyncException("Failed to update table comments for " + tableName, e);
     }
   }
 

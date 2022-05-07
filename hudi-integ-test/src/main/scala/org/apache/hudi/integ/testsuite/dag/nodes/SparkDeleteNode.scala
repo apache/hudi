@@ -19,7 +19,6 @@
 package org.apache.hudi.integ.testsuite.dag.nodes
 
 import org.apache.avro.Schema
-import org.apache.avro.generic.GenericRecord
 import org.apache.hudi.client.WriteStatus
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config
@@ -51,39 +50,26 @@ class SparkDeleteNode(dagNodeConfig: Config) extends DagNode[RDD[WriteStatus]] {
   override def execute(context: ExecutionContext, curItrCount: Int): Unit = {
     // Deletes can't be fetched using getNextBatch() bcoz, getInsert(schema) from payload will return empty for delete
     // records
-    val genRecsRDD = generateRecordsForDelete(config, context)
+
+    val batchIdRecords = context.getDeltaGenerator().writeRecords(context.getDeltaGenerator().generateDeletes(config))
+    batchIdRecords.getValue().count()
+
+    val pathToRead = context.getWriterContext.getCfg.inputBasePath + "/" + batchIdRecords.getKey()
+    val avroDf = context.getWriterContext.getSparkSession.read.format("avro").load(pathToRead)
+    val genRecsRDD = HoodieSparkUtils.createRdd(avroDf, "testStructName", "testNamespace", false,
+      org.apache.hudi.common.util.Option.of(new Schema.Parser().parse(context.getWriterContext.getHoodieTestSuiteWriter.getSchema)))
+
     val inputDF = AvroConversionUtils.createDataFrame(genRecsRDD,
       context.getWriterContext.getHoodieTestSuiteWriter.getSchema,
       context.getWriterContext.getSparkSession)
+
     inputDF.write.format("hudi")
       .options(DataSourceWriteOptions.translateSqlOptions(context.getWriterContext.getProps.asScala.toMap))
       .option(DataSourceWriteOptions.TABLE_NAME.key, context.getHoodieTestSuiteWriter.getCfg.targetTableName)
       .option(DataSourceWriteOptions.TABLE_TYPE.key, context.getHoodieTestSuiteWriter.getCfg.tableType)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.DELETE_OPERATION_OPT_VAL)
-      .option(DataSourceWriteOptions.COMMIT_METADATA_KEYPREFIX.key, "deltastreamer.checkpoint.key")
-      .option("deltastreamer.checkpoint.key", context.getWriterContext.getHoodieTestSuiteWriter.getLastCheckpoint.orElse(""))
       .option(HoodieWriteConfig.TBL_NAME.key, context.getHoodieTestSuiteWriter.getCfg.targetTableName)
       .mode(SaveMode.Append)
       .save(context.getHoodieTestSuiteWriter.getWriteConfig.getBasePath)
-  }
-
-  /**
-   * Generates records for delete operations in Spark.
-   *
-   * @param config  Node configs.
-   * @param context The context needed for an execution of a node.
-   * @return Records in {@link RDD}.
-   */
-  private def generateRecordsForDelete(config: Config, context: ExecutionContext): RDD[GenericRecord] = {
-    if (!config.isDisableGenerate) {
-      context.getDeltaGenerator().writeRecords(context.getDeltaGenerator().generateDeletes(config)).count()
-    }
-
-    context.getWriterContext.getHoodieTestSuiteWriter.getNextBatchForDeletes()
-    val pathToRead = context.getWriterContext.getCfg.inputBasePath + "/" + context.getWriterContext.getHoodieTestSuiteWriter.getLastCheckpoint.orElse("")
-
-    val avroDf = context.getWriterContext.getSparkSession.read.format("avro").load(pathToRead)
-    HoodieSparkUtils.createRdd(avroDf, "testStructName", "testNamespace", false,
-      org.apache.hudi.common.util.Option.of(new Schema.Parser().parse(context.getWriterContext.getHoodieTestSuiteWriter.getSchema)))
   }
 }

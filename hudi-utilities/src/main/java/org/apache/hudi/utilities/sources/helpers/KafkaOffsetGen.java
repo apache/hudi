@@ -189,6 +189,12 @@ public class KafkaOffsetGen {
             .defaultValue(KafkaResetOffsetStrategies.LATEST)
             .withDocumentation("Kafka consumer strategy for reading data.");
 
+    public static final ConfigProperty<String> JSON_KAFKA_PROCESSOR_CLASS_OPT = ConfigProperty
+        .key("hoodie.deltastreamer.source.json.kafka.processor.class")
+        .noDefaultValue()
+        .withDocumentation("Json kafka source post processor class name, post process data after consuming from"
+            + "source and before giving it to deltastreamer.");
+
     public static final String KAFKA_CHECKPOINT_TYPE_TIMESTAMP = "timestamp";
   }
 

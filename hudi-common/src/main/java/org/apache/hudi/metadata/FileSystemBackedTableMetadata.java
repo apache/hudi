@@ -19,10 +19,13 @@
 package org.apache.hudi.metadata;
 
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
+import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.config.SerializableConfiguration;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -33,7 +36,6 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hudi.exception.HoodieMetadataException;
 
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -96,7 +98,7 @@ public class FileSystemBackedTableMetadata implements HoodieTableMetadata {
               } else if (!fileStatus.getPath().getName().equals(HoodieTableMetaClient.METAFOLDER_NAME)) {
                 pathsToList.add(fileStatus.getPath());
               }
-            } else if (fileStatus.getPath().getName().equals(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE)) {
+            } else if (fileStatus.getPath().getName().startsWith(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX)) {
               String partitionName = FSUtils.getRelativePartitionPath(new Path(datasetBasePath), fileStatus.getPath().getParent());
               partitionPaths.add(partitionName);
             }
@@ -143,13 +145,13 @@ public class FileSystemBackedTableMetadata implements HoodieTableMetadata {
     // no-op
   }
 
-  public Option<ByteBuffer> getBloomFilter(final String partitionName, final String fileName)
+  public Option<BloomFilter> getBloomFilter(final String partitionName, final String fileName)
       throws HoodieMetadataException {
     throw new HoodieMetadataException("Unsupported operation: getBloomFilter for " + fileName);
   }
 
   @Override
-  public Map<Pair<String, String>, ByteBuffer> getBloomFilters(final List<Pair<String, String>> partitionNameFileNameList)
+  public Map<Pair<String, String>, BloomFilter> getBloomFilters(final List<Pair<String, String>> partitionNameFileNameList)
       throws HoodieMetadataException {
     throw new HoodieMetadataException("Unsupported operation: getBloomFilters!");
   }
@@ -158,5 +160,10 @@ public class FileSystemBackedTableMetadata implements HoodieTableMetadata {
   public Map<Pair<String, String>, HoodieMetadataColumnStats> getColumnStats(final List<Pair<String, String>> partitionNameFileNameList, final String columnName)
       throws HoodieMetadataException {
     throw new HoodieMetadataException("Unsupported operation: getColumnsStats!");
+  }
+
+  @Override
+  public HoodieData<HoodieRecord<HoodieMetadataPayload>> getRecordsByKeyPrefixes(List<String> keyPrefixes, String partitionName) {
+    throw new HoodieMetadataException("Unsupported operation: getRecordsByKeyPrefixes!");
   }
 }

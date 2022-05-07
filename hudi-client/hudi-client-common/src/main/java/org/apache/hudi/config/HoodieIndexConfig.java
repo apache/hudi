@@ -115,6 +115,14 @@ public class HoodieIndexConfig extends HoodieConfig {
           + "When true, the input RDD will cached to speed up index lookup by reducing IO "
           + "for computing parallelism or affected partitions");
 
+  public static final ConfigProperty<Boolean> BLOOM_INDEX_USE_METADATA = ConfigProperty
+      .key("hoodie.bloom.index.use.metadata")
+      .defaultValue(false)
+      .sinceVersion("0.11.0")
+      .withDocumentation("Only applies if index type is BLOOM."
+          + "When true, the index lookup uses bloom filters and column stats from metadata "
+          + "table when available to speed up the process.");
+
   public static final ConfigProperty<String> BLOOM_INDEX_TREE_BASED_FILTER = ConfigProperty
       .key("hoodie.bloom.index.use.treebased.filter")
       .defaultValue("true")
@@ -487,6 +495,11 @@ public class HoodieIndexConfig extends HoodieConfig {
 
     public Builder bloomIndexUseCaching(boolean useCaching) {
       hoodieIndexConfig.setValue(BLOOM_INDEX_USE_CACHING, String.valueOf(useCaching));
+      return this;
+    }
+
+    public Builder bloomIndexUseMetadata(boolean useMetadata) {
+      hoodieIndexConfig.setValue(BLOOM_INDEX_USE_METADATA, String.valueOf(useMetadata));
       return this;
     }
 

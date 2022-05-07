@@ -56,7 +56,7 @@ public class HoodieInternalRowParquetWriter extends ParquetWriter<InternalRow>
 
   @Override
   public boolean canWrite() {
-    return fs.getBytesWritten(file) < maxFileSize;
+    return getDataSize() < maxFileSize;
   }
 
   @Override

@@ -18,12 +18,16 @@
 
 package org.apache.hudi;
 
+import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.hadoop.fs.FileSystem;
 
@@ -78,6 +82,19 @@ public class HoodieDataSourceHelpers {
               HoodieActiveTimeline.REPLACE_COMMIT_ACTION)).filterCompletedInstants();
     } else {
       return metaClient.getCommitTimeline().filterCompletedInstants();
+    }
+  }
+
+  @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
+  public static Option<HoodieClusteringPlan> getClusteringPlan(FileSystem fs, String basePath, String instantTime) {
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(fs.getConf())
+        .setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
+    HoodieInstant hoodieInstant = HoodieTimeline.getReplaceCommitRequestedInstant(instantTime);
+    Option<Pair<HoodieInstant, HoodieClusteringPlan>> clusteringPlan = ClusteringUtils.getClusteringPlan(metaClient, hoodieInstant);
+    if (clusteringPlan.isPresent()) {
+      return Option.of(clusteringPlan.get().getValue());
+    } else {
+      return Option.empty();
     }
   }
 }

@@ -79,7 +79,7 @@ public class TestHoodieSparkCopyOnWriteTableArchiveWithReplace extends SparkClie
       client.startCommitWithTime(instantTime4, HoodieActiveTimeline.REPLACE_COMMIT_ACTION);
       client.deletePartitions(Arrays.asList(DEFAULT_FIRST_PARTITION_PATH, DEFAULT_SECOND_PARTITION_PATH), instantTime4);
 
-      // 2nd write batch; 4 commits for the 3rd partition; the 3rd commit to trigger archiving the replace commit
+      // 2nd write batch; 4 commits for the 4th partition; the 4th commit to trigger archiving the replace commit
       for (int i = 5; i < 9; i++) {
         String instantTime = HoodieActiveTimeline.createNewInstantTime(i * 1000);
         client.startCommitWithTime(instantTime);
@@ -97,7 +97,7 @@ public class TestHoodieSparkCopyOnWriteTableArchiveWithReplace extends SparkClie
       // verify records
       final HoodieTimeline timeline2 = metaClient.getCommitTimeline().filterCompletedInstants();
       assertEquals(5, countRecordsOptionallySince(jsc(), basePath(), sqlContext(), timeline2, Option.empty()),
-          "should only have the 4 records from the 3rd partition.");
+          "should only have the 5 records from the 3rd partition.");
     }
   }
 }

@@ -18,7 +18,6 @@
 
 package org.apache.hudi.cli.commands;
 
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.cli.DeDupeType;
 import org.apache.hudi.cli.DedupeSparkJob;
@@ -28,6 +27,7 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
@@ -35,6 +35,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieBootstrapConfig;
+import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieSavepointException;
@@ -52,9 +53,10 @@ import org.apache.hudi.utilities.HoodieClusteringJob;
 import org.apache.hudi.utilities.HoodieCompactionAdminTool;
 import org.apache.hudi.utilities.HoodieCompactionAdminTool.Operation;
 import org.apache.hudi.utilities.HoodieCompactor;
-import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.deltastreamer.BootstrapExecutor;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
+
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SQLContext;
@@ -64,6 +66,12 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
+
+import static org.apache.hudi.utilities.UtilHelpers.EXECUTE;
+import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE;
+import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE_AND_EXECUTE;
+import static org.apache.hudi.utilities.UtilHelpers.buildProperties;
+import static org.apache.hudi.utilities.UtilHelpers.readConfig;
 
 /**
  * This class deals with initializing spark context based on command entered to hudi-cli.
@@ -102,8 +110,8 @@ public class SparkMain {
           returnCode = deduplicatePartitionPath(jsc, args[3], args[4], args[5], Boolean.parseBoolean(args[6]), args[7]);
           break;
         case ROLLBACK_TO_SAVEPOINT:
-          assert (args.length == 5);
-          returnCode = rollbackToSavepoint(jsc, args[3], args[4]);
+          assert (args.length == 6);
+          returnCode = rollbackToSavepoint(jsc, args[3], args[4], Boolean.parseBoolean(args[5]));
           break;
         case IMPORT:
         case UPSERT:
@@ -192,7 +200,7 @@ public class SparkMain {
             configs.addAll(Arrays.asList(args).subList(9, args.length));
           }
           returnCode = cluster(jsc, args[3], args[4], args[5], Integer.parseInt(args[6]), args[2],
-              Integer.parseInt(args[7]), HoodieClusteringJob.EXECUTE, propsFilePath, configs);
+              Integer.parseInt(args[7]), EXECUTE, propsFilePath, configs);
           break;
         case CLUSTERING_SCHEDULE_AND_EXECUTE:
           assert (args.length >= 8);
@@ -205,7 +213,7 @@ public class SparkMain {
             configs.addAll(Arrays.asList(args).subList(8, args.length));
           }
           returnCode = cluster(jsc, args[3], args[4], null, Integer.parseInt(args[5]), args[2],
-              Integer.parseInt(args[6]), HoodieClusteringJob.SCHEDULE_AND_EXECUTE, propsFilePath, configs);
+              Integer.parseInt(args[6]), SCHEDULE_AND_EXECUTE, propsFilePath, configs);
           break;
         case CLUSTERING_SCHEDULE:
           assert (args.length >= 7);
@@ -218,7 +226,7 @@ public class SparkMain {
             configs.addAll(Arrays.asList(args).subList(7, args.length));
           }
           returnCode = cluster(jsc, args[3], args[4], args[5], 1, args[2],
-              0, HoodieClusteringJob.SCHEDULE, propsFilePath, configs);
+              0, SCHEDULE, propsFilePath, configs);
           break;
         case CLEAN:
           assert (args.length >= 5);
@@ -285,7 +293,7 @@ public class SparkMain {
 
   protected static int deleteMarker(JavaSparkContext jsc, String instantTime, String basePath) {
     try {
-      SparkRDDWriteClient client = createHoodieClient(jsc, basePath);
+      SparkRDDWriteClient client = createHoodieClient(jsc, basePath, false);
       HoodieWriteConfig config = client.getConfig();
       HoodieEngineContext context = client.getEngineContext();
       HoodieSparkTable table = HoodieSparkTable.create(config, context, true);
@@ -411,8 +419,8 @@ public class SparkMain {
       String bootstrapIndexClass, String selectorClass, String keyGenerator, String fullBootstrapInputProvider,
       String payloadClassName, String enableHiveSync, String propsFilePath, List<String> configs) throws IOException {
 
-    TypedProperties properties = propsFilePath == null ? UtilHelpers.buildProperties(configs)
-        : UtilHelpers.readConfig(jsc.hadoopConfiguration(), new Path(propsFilePath), configs).getProps(true);
+    TypedProperties properties = propsFilePath == null ? buildProperties(configs)
+        : readConfig(jsc.hadoopConfiguration(), new Path(propsFilePath), configs).getProps(true);
 
     properties.setProperty(HoodieBootstrapConfig.BASE_PATH.key(), sourcePath);
 
@@ -455,7 +463,7 @@ public class SparkMain {
 
   private static int createSavepoint(JavaSparkContext jsc, String commitTime, String user,
       String comments, String basePath) throws Exception {
-    SparkRDDWriteClient client = createHoodieClient(jsc, basePath);
+    SparkRDDWriteClient client = createHoodieClient(jsc, basePath, false);
     try {
       client.savepoint(commitTime, user, comments);
       LOG.info(String.format("The commit \"%s\" has been savepointed.", commitTime));
@@ -466,8 +474,8 @@ public class SparkMain {
     }
   }
 
-  private static int rollbackToSavepoint(JavaSparkContext jsc, String savepointTime, String basePath) throws Exception {
-    SparkRDDWriteClient client = createHoodieClient(jsc, basePath);
+  private static int rollbackToSavepoint(JavaSparkContext jsc, String savepointTime, String basePath, boolean lazyCleanPolicy) throws Exception {
+    SparkRDDWriteClient client = createHoodieClient(jsc, basePath, lazyCleanPolicy);
     try {
       client.restoreToSavepoint(savepointTime);
       LOG.info(String.format("The commit \"%s\" rolled back.", savepointTime));
@@ -479,7 +487,7 @@ public class SparkMain {
   }
 
   private static int deleteSavepoint(JavaSparkContext jsc, String savepointTime, String basePath) throws Exception {
-    SparkRDDWriteClient client = createHoodieClient(jsc, basePath);
+    SparkRDDWriteClient client = createHoodieClient(jsc, basePath, false);
     try {
       client.deleteSavepoint(savepointTime);
       LOG.info(String.format("Savepoint \"%s\" deleted.", savepointTime));
@@ -500,7 +508,8 @@ public class SparkMain {
    * @throws Exception
    */
   protected static int upgradeOrDowngradeTable(JavaSparkContext jsc, String basePath, String toVersion) {
-    HoodieWriteConfig config = getWriteConfig(basePath, Boolean.parseBoolean(HoodieWriteConfig.ROLLBACK_USING_MARKERS_ENABLE.defaultValue()));
+    HoodieWriteConfig config = getWriteConfig(basePath, Boolean.parseBoolean(HoodieWriteConfig.ROLLBACK_USING_MARKERS_ENABLE.defaultValue()),
+        false);
     HoodieTableMetaClient metaClient =
         HoodieTableMetaClient.builder().setConf(jsc.hadoopConfiguration()).setBasePath(config.getBasePath())
             .setLoadActiveTimelineOnLoad(false).setConsistencyGuardConfig(config.getConsistencyGuardConfig())
@@ -517,18 +526,20 @@ public class SparkMain {
     }
   }
 
-  private static SparkRDDWriteClient createHoodieClient(JavaSparkContext jsc, String basePath, Boolean rollbackUsingMarkers) throws Exception {
-    HoodieWriteConfig config = getWriteConfig(basePath, rollbackUsingMarkers);
+  private static SparkRDDWriteClient createHoodieClient(JavaSparkContext jsc, String basePath, Boolean rollbackUsingMarkers, boolean lazyCleanPolicy) throws Exception {
+    HoodieWriteConfig config = getWriteConfig(basePath, rollbackUsingMarkers, lazyCleanPolicy);
     return new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), config);
   }
 
-  private static SparkRDDWriteClient createHoodieClient(JavaSparkContext jsc, String basePath) throws Exception {
-    return createHoodieClient(jsc, basePath, Boolean.parseBoolean(HoodieWriteConfig.ROLLBACK_USING_MARKERS_ENABLE.defaultValue()));
+  private static SparkRDDWriteClient createHoodieClient(JavaSparkContext jsc, String basePath, boolean lazyCleanPolicy) throws Exception {
+    return createHoodieClient(jsc, basePath, Boolean.parseBoolean(HoodieWriteConfig.ROLLBACK_USING_MARKERS_ENABLE.defaultValue()), lazyCleanPolicy);
   }
 
-  private static HoodieWriteConfig getWriteConfig(String basePath, Boolean rollbackUsingMarkers) {
+  private static HoodieWriteConfig getWriteConfig(String basePath, Boolean rollbackUsingMarkers, boolean lazyCleanPolicy) {
     return HoodieWriteConfig.newBuilder().withPath(basePath)
         .withRollbackUsingMarkers(rollbackUsingMarkers)
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder().withFailedWritesCleaningPolicy(lazyCleanPolicy ? HoodieFailedWritesCleaningPolicy.LAZY :
+            HoodieFailedWritesCleaningPolicy.EAGER).build())
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build()).build();
   }
 }

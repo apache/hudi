@@ -21,7 +21,9 @@ package org.apache.hudi.client.utils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.validator.SparkPreCommitValidator;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.table.view.HoodieTablePreCommitFileSystemView;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
@@ -34,13 +36,11 @@ import org.apache.hudi.table.action.commit.BaseSparkCommitActionExecutor;
 
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
 
 import java.util.Arrays;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -61,7 +61,7 @@ public class SparkValidatorUtils {
    * Throw error if there are validation failures.
    */
   public static void runValidators(HoodieWriteConfig config,
-                                   HoodieWriteMetadata<JavaRDD<WriteStatus>> writeMetadata,
+                                   HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata,
                                    HoodieEngineContext context,
                                    HoodieTable table,
                                    String instantTime) {
@@ -69,10 +69,10 @@ public class SparkValidatorUtils {
       LOG.info("no validators configured.");
     } else {
       if (!writeMetadata.getWriteStats().isPresent()) {
-        writeMetadata.setWriteStats(writeMetadata.getWriteStatuses().map(WriteStatus::getStat).collect());
+        writeMetadata.setWriteStats(writeMetadata.getWriteStatuses().map(WriteStatus::getStat).collectAsList());
       }
-      Set<String> partitionsModified = new HashSet<>(writeMetadata.getWriteStats().get().stream().map(writeStats ->
-          writeStats.getPartitionPath()).collect(Collectors.toList()));
+      Set<String> partitionsModified = writeMetadata.getWriteStats().get().stream().map(writeStats ->
+          writeStats.getPartitionPath()).collect(Collectors.toSet());
       SQLContext sqlContext = new SQLContext(HoodieSparkEngineContext.getSparkContext(context));
       // Refresh timeline to ensure validator sees the any other operations done on timeline (async operations such as other clustering/compaction/rollback)
       table.getMetaClient().reloadActiveTimeline();
@@ -101,8 +101,8 @@ public class SparkValidatorUtils {
   /**
    * Run validators in a separate thread pool for parallelism. Each of validator can submit a distributed spark job if needed.
    */
-  private static CompletableFuture<Boolean> runValidatorAsync(SparkPreCommitValidator validator, HoodieWriteMetadata writeMetadata,
-                                                       Dataset<Row> beforeState, Dataset<Row> afterState, String instantTime) {
+  private static CompletableFuture<Boolean> runValidatorAsync(SparkPreCommitValidator validator, HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata,
+                                                              Dataset<Row> beforeState, Dataset<Row> afterState, String instantTime) {
     return CompletableFuture.supplyAsync(() -> {
       try {
         validator.validate(instantTime, writeMetadata, beforeState, afterState);
@@ -120,10 +120,10 @@ public class SparkValidatorUtils {
    * Note that this only works for COW tables.
    */
   public static Dataset<Row> getRecordsFromCommittedFiles(SQLContext sqlContext,
-                                                      Set<String> partitionsAffected, HoodieTable table) {
+                                                          Set<String> partitionsAffected, HoodieTable table) {
 
     List<String> committedFiles = partitionsAffected.stream()
-        .flatMap(partition -> table.getBaseFileOnlyView().getLatestBaseFiles(partition).map(bf -> bf.getPath()))
+        .flatMap(partition -> table.getBaseFileOnlyView().getLatestBaseFiles(partition).map(BaseFile::getPath))
         .collect(Collectors.toList());
 
     if (committedFiles.isEmpty()) {
@@ -145,7 +145,7 @@ public class SparkValidatorUtils {
    */
   public static Dataset<Row> getRecordsFromPendingCommits(SQLContext sqlContext, 
                                                           Set<String> partitionsAffected, 
-                                                          HoodieWriteMetadata<JavaRDD<WriteStatus>> writeMetadata,
+                                                          HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata,
                                                           HoodieTable table,
                                                           String instantTime) {
 
@@ -157,7 +157,7 @@ public class SparkValidatorUtils {
         instantTime);
 
     List<String> newFiles = partitionsAffected.stream()
-        .flatMap(partition ->  fsView.getLatestBaseFiles(partition).map(bf -> bf.getPath()))
+        .flatMap(partition ->  fsView.getLatestBaseFiles(partition).map(BaseFile::getPath))
         .collect(Collectors.toList());
 
     if (newFiles.isEmpty()) {

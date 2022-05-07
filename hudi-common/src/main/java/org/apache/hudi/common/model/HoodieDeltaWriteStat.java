@@ -19,20 +19,24 @@
 package org.apache.hudi.common.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import org.apache.hudi.common.util.Option;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Statistics about a single Hoodie delta log operation.
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
+@SuppressWarnings("rawtypes")
 public class HoodieDeltaWriteStat extends HoodieWriteStat {
 
   private int logVersion;
   private long logOffset;
   private String baseFile;
   private List<String> logFiles = new ArrayList<>();
+  private Option<Map<String, HoodieColumnRangeMetadata<Comparable>>> recordsStats = Option.empty();
 
   public void setLogVersion(int logVersion) {
     this.logVersion = logVersion;
@@ -68,5 +72,13 @@ public class HoodieDeltaWriteStat extends HoodieWriteStat {
 
   public List<String> getLogFiles() {
     return logFiles;
+  }
+
+  public void setRecordsStats(Map<String, HoodieColumnRangeMetadata<Comparable>> stats) {
+    recordsStats = Option.of(stats);
+  }
+
+  public Option<Map<String, HoodieColumnRangeMetadata<Comparable>>> getColumnStats() {
+    return recordsStats;
   }
 }

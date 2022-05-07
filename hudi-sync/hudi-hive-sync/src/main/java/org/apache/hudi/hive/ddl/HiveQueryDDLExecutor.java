@@ -137,8 +137,12 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
     LOG.info("Drop partitions " + partitionsToDrop.size() + " on " + tableName);
     try {
       for (String dropPartition : partitionsToDrop) {
-        String partitionClause = HivePartitionUtil.getPartitionClauseForDrop(dropPartition, partitionValueExtractor, config);
-        metaStoreClient.dropPartition(config.databaseName, tableName, partitionClause, false);
+        if (HivePartitionUtil.partitionExists(metaStoreClient, tableName, dropPartition, partitionValueExtractor,
+            config)) {
+          String partitionClause =
+              HivePartitionUtil.getPartitionClauseForDrop(dropPartition, partitionValueExtractor, config);
+          metaStoreClient.dropPartition(config.databaseName, tableName, partitionClause, false);
+        }
         LOG.info("Drop partition " + dropPartition + " on " + tableName);
       }
     } catch (Exception e) {
