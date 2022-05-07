@@ -345,7 +345,7 @@ public class TestWriteBase {
     }
 
     private void checkWrittenDataMor(File baseFile, Map<String, String> expected, int partitions) throws Exception {
-      HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(basePath);
+      HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(basePath, FlinkOptions.getHadoopConf(conf));
       Schema schema = new TableSchemaResolver(metaClient).getTableAvroSchema();
       String latestInstant = lastCompleteInstant();
       FileSystem fs = FSUtils.getFs(basePath, new org.apache.hadoop.conf.Configuration());

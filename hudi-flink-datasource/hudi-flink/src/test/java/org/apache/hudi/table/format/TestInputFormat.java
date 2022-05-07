@@ -400,7 +400,7 @@ public class TestInputFormat {
       TestData.writeData(dataset, conf);
     }
 
-    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(tempFile.getAbsolutePath());
+    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(tempFile.getAbsolutePath(), FlinkOptions.getHadoopConf(conf));
     List<String> commits = metaClient.getCommitsTimeline().filterCompletedInstants().getInstants()
         .map(HoodieInstant::getTimestamp).collect(Collectors.toList());
 

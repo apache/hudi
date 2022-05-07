@@ -355,6 +355,7 @@ public class StreamerUtil {
   /**
    * Creates the meta client.
    */
+  @Deprecated
   public static HoodieTableMetaClient createMetaClient(String basePath) {
     return createMetaClient(basePath, FlinkClientUtil.getHadoopConf());
   }
@@ -363,7 +364,7 @@ public class StreamerUtil {
    * Creates the meta client.
    */
   public static HoodieTableMetaClient createMetaClient(Configuration conf) {
-    return createMetaClient(conf.getString(FlinkOptions.PATH));
+    return createMetaClient(conf.getString(FlinkOptions.PATH), FlinkOptions.getHadoopConf(conf));
   }
 
   /**
