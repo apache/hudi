@@ -25,12 +25,12 @@ import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
 import org.apache.spark.sql.catalyst.catalog.{CatalogTableType, HoodieCatalogTable}
-import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{getPartitionPathToDrop, normalizePartitionSpec}
+import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{getMatchingPartitions, normalizePartitionSpec}
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
 import org.apache.spark.sql.{AnalysisException, Row, SaveMode, SparkSession}
 
 /**
- * Command for truncate hudi table.
+ * Command for truncating hudi table.
  */
 case class TruncateHoodieTableCommand(
    tableIdentifier: TableIdentifier,
@@ -83,7 +83,7 @@ case class TruncateHoodieTableCommand(
       }.get)
 
       // drop partitions to lazy clean
-      val partitionsToDrop = getPartitionPathToDrop(hoodieCatalogTable, normalizedSpecs)
+      val partitionsToDrop = getMatchingPartitions(hoodieCatalogTable, normalizedSpecs).mkString(",")
       val parameters = buildHoodieDropPartitionsConfig(sparkSession, hoodieCatalogTable, partitionsToDrop)
       HoodieSparkSqlWriter.write(
         sparkSession.sqlContext,
