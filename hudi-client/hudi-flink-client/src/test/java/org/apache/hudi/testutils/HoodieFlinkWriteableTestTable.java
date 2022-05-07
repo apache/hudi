@@ -108,7 +108,8 @@ public class HoodieFlinkWriteableTestTable extends HoodieWriteableTestTable {
   }
 
   public HoodieFlinkWriteableTestTable withInserts(String partition, String fileId, List<HoodieRecord> records) throws Exception {
-    return (HoodieFlinkWriteableTestTable) withInserts(partition, fileId, records, new org.apache.hudi.client.FlinkTaskContextSupplier(null));
+    withInserts(partition, fileId, records, new org.apache.hudi.client.FlinkTaskContextSupplier(null));
+    return this;
   }
 
   public Map<String, List<HoodieLogFile>> withLogAppends(List<HoodieRecord> records) throws Exception {

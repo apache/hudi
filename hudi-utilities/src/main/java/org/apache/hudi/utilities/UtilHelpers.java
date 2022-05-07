@@ -18,7 +18,6 @@
 
 package org.apache.hudi.utilities;
 
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
@@ -44,6 +43,9 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.utilities.checkpointing.InitialCheckPointProvider;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerMetrics;
+import org.apache.hudi.utilities.exception.HoodieSchemaPostProcessException;
+import org.apache.hudi.utilities.exception.HoodieSourcePostProcessException;
+import org.apache.hudi.utilities.schema.ChainedSchemaPostProcessor;
 import org.apache.hudi.utilities.schema.DelegatingSchemaProvider;
 import org.apache.hudi.utilities.schema.RowBasedSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaPostProcessor;
@@ -52,10 +54,13 @@ import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProviderWithPostProcessor;
 import org.apache.hudi.utilities.schema.SparkAvroPostProcessor;
 import org.apache.hudi.utilities.sources.Source;
+import org.apache.hudi.utilities.sources.processor.ChainedJsonKafkaSourcePostProcessor;
+import org.apache.hudi.utilities.sources.processor.JsonKafkaSourcePostProcessor;
 import org.apache.hudi.utilities.transform.ChainedTransformer;
 import org.apache.hudi.utilities.transform.Transformer;
 
 import org.apache.avro.Schema;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -99,21 +104,26 @@ import java.util.Properties;
  * Bunch of helper methods.
  */
 public class UtilHelpers {
+
+  public static final String EXECUTE = "execute";
+  public static final String SCHEDULE = "schedule";
+  public static final String SCHEDULE_AND_EXECUTE = "scheduleandexecute";
+
   private static final Logger LOG = LogManager.getLogger(UtilHelpers.class);
 
   public static Source createSource(String sourceClass, TypedProperties cfg, JavaSparkContext jssc,
-                                    SparkSession sparkSession, SchemaProvider schemaProvider,
-                                    HoodieDeltaStreamerMetrics metrics) throws IOException {
+      SparkSession sparkSession, SchemaProvider schemaProvider,
+      HoodieDeltaStreamerMetrics metrics) throws IOException {
     try {
       try {
         return (Source) ReflectionUtils.loadClass(sourceClass,
-            new Class<?>[]{TypedProperties.class, JavaSparkContext.class,
+            new Class<?>[] {TypedProperties.class, JavaSparkContext.class,
                 SparkSession.class, SchemaProvider.class,
                 HoodieDeltaStreamerMetrics.class},
             cfg, jssc, sparkSession, schemaProvider, metrics);
       } catch (HoodieException e) {
         return (Source) ReflectionUtils.loadClass(sourceClass,
-            new Class<?>[]{TypedProperties.class, JavaSparkContext.class,
+            new Class<?>[] {TypedProperties.class, JavaSparkContext.class,
                 SparkSession.class, SchemaProvider.class},
             cfg, jssc, sparkSession, schemaProvider);
       }
@@ -122,8 +132,24 @@ public class UtilHelpers {
     }
   }
 
+  public static JsonKafkaSourcePostProcessor createJsonKafkaSourcePostProcessor(String postProcessorClassNames, TypedProperties props) throws IOException {
+    if (StringUtils.isNullOrEmpty(postProcessorClassNames)) {
+      return null;
+    }
+
+    try {
+      List<JsonKafkaSourcePostProcessor> processors = new ArrayList<>();
+      for (String className : (postProcessorClassNames.split(","))) {
+        processors.add((JsonKafkaSourcePostProcessor) ReflectionUtils.loadClass(className, props));
+      }
+      return new ChainedJsonKafkaSourcePostProcessor(processors, props);
+    } catch (Throwable e) {
+      throw new HoodieSourcePostProcessException("Could not load postProcessorClassNames class(es) " + postProcessorClassNames, e);
+    }
+  }
+
   public static SchemaProvider createSchemaProvider(String schemaProviderClass, TypedProperties cfg,
-      JavaSparkContext jssc) throws IOException {
+                                                    JavaSparkContext jssc) throws IOException {
     try {
       return StringUtils.isNullOrEmpty(schemaProviderClass) ? null
           : (SchemaProvider) ReflectionUtils.loadClass(schemaProviderClass, cfg, jssc);
@@ -133,10 +159,22 @@ public class UtilHelpers {
   }
 
   public static SchemaPostProcessor createSchemaPostProcessor(
-      String schemaPostProcessorClass, TypedProperties cfg, JavaSparkContext jssc) {
-    return schemaPostProcessorClass == null
-        ? null
-        : (SchemaPostProcessor) ReflectionUtils.loadClass(schemaPostProcessorClass, cfg, jssc);
+      String schemaPostProcessorClassNames, TypedProperties cfg, JavaSparkContext jssc) {
+
+    if (StringUtils.isNullOrEmpty(schemaPostProcessorClassNames)) {
+      return null;
+    }
+
+    try {
+      List<SchemaPostProcessor> processors = new ArrayList<>();
+      for (String className : (schemaPostProcessorClassNames.split(","))) {
+        processors.add((SchemaPostProcessor) ReflectionUtils.loadClass(className, cfg, jssc));
+      }
+      return new ChainedSchemaPostProcessor(cfg, jssc, processors);
+    } catch (Throwable e) {
+      throw new HoodieSchemaPostProcessException("Could not load schemaPostProcessorClassNames class(es) " + schemaPostProcessorClassNames, e);
+    }
+
   }
 
   public static Option<Transformer> createTransformer(List<String> classNames) throws IOException {
@@ -154,7 +192,7 @@ public class UtilHelpers {
   public static InitialCheckPointProvider createInitialCheckpointProvider(
       String className, TypedProperties props) throws IOException {
     try {
-      return (InitialCheckPointProvider) ReflectionUtils.loadClass(className, new Class<?>[] {TypedProperties.class}, props);
+      return (InitialCheckPointProvider) ReflectionUtils.loadClass(className, new Class<?>[]{TypedProperties.class}, props);
     } catch (Throwable e) {
       throw new IOException("Could not load initial checkpoint provider class " + className, e);
     }
@@ -205,7 +243,7 @@ public class UtilHelpers {
   /**
    * Parse Schema from file.
    *
-   * @param fs         File System
+   * @param fs File System
    * @param schemaFile Schema File
    */
   public static String parseSchema(FileSystem fs, String schemaFile) throws Exception {
@@ -234,12 +272,14 @@ public class UtilHelpers {
       sparkConf.set("spark.eventLog.overwrite", "true");
       sparkConf.set("spark.eventLog.enabled", "true");
     }
+    sparkConf.set("spark.ui.port", "8090");
     sparkConf.setIfMissing("spark.driver.maxResultSize", "2g");
     sparkConf.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer");
     sparkConf.set("spark.hadoop.mapred.output.compress", "true");
     sparkConf.set("spark.hadoop.mapred.output.compression.codec", "true");
     sparkConf.set("spark.hadoop.mapred.output.compression.codec", "org.apache.hadoop.io.compress.GzipCodec");
     sparkConf.set("spark.hadoop.mapred.output.compression.type", "BLOCK");
+    sparkConf.set("spark.driver.allowMultipleContexts", "true");
 
     additionalConfigs.forEach(sparkConf::set);
     return SparkRDDWriteClient.registerClasses(sparkConf);
@@ -267,13 +307,13 @@ public class UtilHelpers {
   /**
    * Build Hoodie write client.
    *
-   * @param jsc         Java Spark Context
-   * @param basePath    Base Path
-   * @param schemaStr   Schema
+   * @param jsc Java Spark Context
+   * @param basePath Base Path
+   * @param schemaStr Schema
    * @param parallelism Parallelism
    */
   public static SparkRDDWriteClient<HoodieRecordPayload> createHoodieClient(JavaSparkContext jsc, String basePath, String schemaStr,
-                                                                            int parallelism, Option<String> compactionStrategyClass, TypedProperties properties) {
+      int parallelism, Option<String> compactionStrategyClass, TypedProperties properties) {
     HoodieCompactionConfig compactionConfig = compactionStrategyClass
         .map(strategy -> HoodieCompactionConfig.newBuilder().withInlineCompaction(false)
             .withCompactionStrategy(ReflectionUtils.loadClass(strategy)).build())
@@ -411,21 +451,21 @@ public class UtilHelpers {
   }
 
   public static SchemaProviderWithPostProcessor wrapSchemaProviderWithPostProcessor(SchemaProvider provider,
-      TypedProperties cfg, JavaSparkContext jssc, List<String> transformerClassNames) {
+                                                                                    TypedProperties cfg, JavaSparkContext jssc, List<String> transformerClassNames) {
 
     if (provider == null) {
       return null;
     }
 
-    if (provider instanceof  SchemaProviderWithPostProcessor) {
-      return (SchemaProviderWithPostProcessor)provider;
+    if (provider instanceof SchemaProviderWithPostProcessor) {
+      return (SchemaProviderWithPostProcessor) provider;
     }
 
     String schemaPostProcessorClass = cfg.getString(Config.SCHEMA_POST_PROCESSOR_PROP, null);
     boolean enableSparkAvroPostProcessor = Boolean.parseBoolean(cfg.getString(SparkAvroPostProcessor.Config.SPARK_AVRO_POST_PROCESSOR_PROP_ENABLE, "true"));
 
     if (transformerClassNames != null && !transformerClassNames.isEmpty()
-            && enableSparkAvroPostProcessor && StringUtils.isNullOrEmpty(schemaPostProcessorClass)) {
+        && enableSparkAvroPostProcessor && StringUtils.isNullOrEmpty(schemaPostProcessorClass)) {
       schemaPostProcessorClass = SparkAvroPostProcessor.class.getName();
     }
 
@@ -433,8 +473,7 @@ public class UtilHelpers {
         Option.ofNullable(createSchemaPostProcessor(schemaPostProcessorClass, cfg, jssc)));
   }
 
-  public static SchemaProvider createRowBasedSchemaProvider(StructType structType,
-                                                            TypedProperties cfg, JavaSparkContext jssc) {
+  public static SchemaProvider createRowBasedSchemaProvider(StructType structType, TypedProperties cfg, JavaSparkContext jssc) {
     SchemaProvider rowSchemaProvider = new RowBasedSchemaProvider(structType);
     return wrapSchemaProviderWithPostProcessor(rowSchemaProvider, cfg, jssc, null);
   }
@@ -443,13 +482,13 @@ public class UtilHelpers {
    * Create latest schema provider for Target schema.
    *
    * @param structType spark data type of incoming batch.
-   * @param jssc       instance of {@link JavaSparkContext}.
-   * @param fs         instance of {@link FileSystem}.
-   * @param basePath   base path of the table.
+   * @param jssc instance of {@link JavaSparkContext}.
+   * @param fs instance of {@link FileSystem}.
+   * @param basePath base path of the table.
    * @return the schema provider where target schema refers to latest schema(either incoming schema or table schema).
    */
   public static SchemaProvider createLatestSchemaProvider(StructType structType,
-                                                          JavaSparkContext jssc, FileSystem fs, String basePath) {
+      JavaSparkContext jssc, FileSystem fs, String basePath) {
     SchemaProvider rowSchemaProvider = new RowBasedSchemaProvider(structType);
     Schema writeSchema = rowSchemaProvider.getTargetSchema();
     Schema latestTableSchema = writeSchema;
@@ -507,4 +546,12 @@ public class UtilHelpers {
     return ret;
   }
 
+  public static String getSchemaFromLatestInstant(HoodieTableMetaClient metaClient) throws Exception {
+    TableSchemaResolver schemaResolver = new TableSchemaResolver(metaClient);
+    if (metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().countInstants() == 0) {
+      throw new HoodieException("Cannot run clustering without any completed commits");
+    }
+    Schema schema = schemaResolver.getTableAvroSchema(false);
+    return schema.toString();
+  }
 }

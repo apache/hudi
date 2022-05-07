@@ -26,17 +26,19 @@ import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.internal.schema.InternalSchema
+import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
+import org.apache.hudi.internal.schema.utils.InternalSchemaUtils
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.keygen.{BaseKeyGenerator, CustomAvroKeyGenerator, CustomKeyGenerator, KeyGenerator}
 import org.apache.spark.SPARK_VERSION
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, Literal}
-import org.apache.spark.sql.execution.datasources.{FileStatusCache, InMemoryFileIndex}
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
-import org.apache.spark.sql.{DataFrame, SparkSession}
 
 import java.util.Properties
 import scala.collection.JavaConverters._
@@ -51,9 +53,15 @@ object HoodieSparkUtils extends SparkAdapterSupport {
 
   def isSpark3_1: Boolean = SPARK_VERSION.startsWith("3.1")
 
+  def gteqSpark3_1: Boolean = SPARK_VERSION > "3.1"
+
+  def gteqSpark3_1_3: Boolean = SPARK_VERSION >= "3.1.3"
+
   def isSpark3_2: Boolean = SPARK_VERSION.startsWith("3.2")
 
   def gteqSpark3_2: Boolean = SPARK_VERSION > "3.2"
+
+  def gteqSpark3_2_1: Boolean = SPARK_VERSION >= "3.2.1"
 
   def getMetaSchema: StructType = {
     StructType(HoodieRecord.HOODIE_META_COLUMNS.asScala.map(col => {
@@ -118,17 +126,20 @@ object HoodieSparkUtils extends SparkAdapterSupport {
     })
   }
 
-  def createInMemoryFileIndex(sparkSession: SparkSession, globbedPaths: Seq[Path]): InMemoryFileIndex = {
-    val fileStatusCache = FileStatusCache.getOrCreate(sparkSession)
-    new InMemoryFileIndex(sparkSession, globbedPaths, Map(), Option.empty, fileStatusCache)
-  }
-
   /**
    * @deprecated please use other overload [[createRdd]]
    */
   def createRdd(df: DataFrame, structName: String, recordNamespace: String, reconcileToLatestSchema: Boolean,
                 latestTableSchema: org.apache.hudi.common.util.Option[Schema] = org.apache.hudi.common.util.Option.empty()): RDD[GenericRecord] = {
-    val latestTableSchemaConverted = if (latestTableSchema.isPresent && reconcileToLatestSchema) Some(latestTableSchema.get()) else None
+    var latestTableSchemaConverted : Option[Schema] = None
+
+    if (latestTableSchema.isPresent && reconcileToLatestSchema) {
+      latestTableSchemaConverted = Some(latestTableSchema.get())
+    } else {
+      // cases when users want to use latestTableSchema but have not turned on reconcileToLatestSchema explicitly
+      // for example, when using a Transformer implementation to transform source RDD to target RDD
+      latestTableSchemaConverted = if (latestTableSchema.isPresent) Some(latestTableSchema.get()) else None
+    }
     createRdd(df, structName, recordNamespace, latestTableSchemaConverted)
   }
 
@@ -177,14 +188,24 @@ object HoodieSparkUtils extends SparkAdapterSupport {
    * Convert Filters to Catalyst Expressions and joined by And. If convert success return an
    * Non-Empty Option[Expression],or else return None.
    */
-  def convertToCatalystExpressions(filters: Array[Filter],
-                                   tableSchema: StructType): Option[Expression] = {
-    val expressions = filters.map(convertToCatalystExpression(_, tableSchema))
+  def convertToCatalystExpressions(filters: Seq[Filter],
+                                   tableSchema: StructType): Seq[Option[Expression]] = {
+    filters.map(convertToCatalystExpression(_, tableSchema))
+  }
+
+
+  /**
+   * Convert Filters to Catalyst Expressions and joined by And. If convert success return an
+   * Non-Empty Option[Expression],or else return None.
+   */
+  def convertToCatalystExpression(filters: Array[Filter],
+                                  tableSchema: StructType): Option[Expression] = {
+    val expressions = convertToCatalystExpressions(filters, tableSchema)
     if (expressions.forall(p => p.isDefined)) {
       if (expressions.isEmpty) {
         None
       } else if (expressions.length == 1) {
-        expressions(0)
+        expressions.head
       } else {
         Some(expressions.map(_.get).reduce(org.apache.spark.sql.catalyst.expressions.And))
       }
@@ -297,17 +318,25 @@ object HoodieSparkUtils extends SparkAdapterSupport {
     AttributeReference(columnName, field.get.dataType, field.get.nullable)()
   }
 
-  def getRequiredSchema(tableAvroSchema: Schema, requiredColumns: Array[String]): (Schema, StructType) = {
-    // First get the required avro-schema, then convert the avro-schema to spark schema.
-    val name2Fields = tableAvroSchema.getFields.asScala.map(f => f.name() -> f).toMap
-    // Here have to create a new Schema.Field object
-    // to prevent throwing exceptions like "org.apache.avro.AvroRuntimeException: Field already used".
-    val requiredFields = requiredColumns.map(c => name2Fields(c))
-      .map(f => new Schema.Field(f.name(), f.schema(), f.doc(), f.defaultVal(), f.order())).toList
-    val requiredAvroSchema = Schema.createRecord(tableAvroSchema.getName, tableAvroSchema.getDoc,
-      tableAvroSchema.getNamespace, tableAvroSchema.isError, requiredFields.asJava)
-    val requiredStructSchema = AvroConversionUtils.convertAvroSchemaToStructType(requiredAvroSchema)
-    (requiredAvroSchema, requiredStructSchema)
+  def getRequiredSchema(tableAvroSchema: Schema, requiredColumns: Array[String], internalSchema: InternalSchema = InternalSchema.getEmptyInternalSchema): (Schema, StructType, InternalSchema) = {
+    if (internalSchema.isEmptySchema || requiredColumns.isEmpty) {
+      // First get the required avro-schema, then convert the avro-schema to spark schema.
+      val name2Fields = tableAvroSchema.getFields.asScala.map(f => f.name() -> f).toMap
+      // Here have to create a new Schema.Field object
+      // to prevent throwing exceptions like "org.apache.avro.AvroRuntimeException: Field already used".
+      val requiredFields = requiredColumns.map(c => name2Fields(c))
+        .map(f => new Schema.Field(f.name(), f.schema(), f.doc(), f.defaultVal(), f.order())).toList
+      val requiredAvroSchema = Schema.createRecord(tableAvroSchema.getName, tableAvroSchema.getDoc,
+        tableAvroSchema.getNamespace, tableAvroSchema.isError, requiredFields.asJava)
+      val requiredStructSchema = AvroConversionUtils.convertAvroSchemaToStructType(requiredAvroSchema)
+      (requiredAvroSchema, requiredStructSchema, internalSchema)
+    } else {
+      // now we support nested project
+      val prunedInternalSchema = InternalSchemaUtils.pruneInternalSchema(internalSchema, requiredColumns.toList.asJava)
+      val requiredAvroSchema = AvroInternalSchemaConverter.convert(prunedInternalSchema, tableAvroSchema.getName)
+      val requiredStructSchema = AvroConversionUtils.convertAvroSchemaToStructType(requiredAvroSchema)
+      (requiredAvroSchema, requiredStructSchema, prunedInternalSchema)
+    }
   }
 
   def toAttribute(tableSchema: StructType): Seq[AttributeReference] = {

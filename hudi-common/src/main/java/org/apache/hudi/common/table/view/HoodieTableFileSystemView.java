@@ -18,9 +18,9 @@
 
 package org.apache.hudi.common.table.view;
 
-import org.apache.hadoop.fs.FileStatus;
 import org.apache.hudi.common.model.BootstrapBaseFileMapping;
 import org.apache.hudi.common.model.CompactionOperation;
+import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -29,6 +29,8 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
+
+import org.apache.hadoop.fs.FileStatus;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -356,6 +358,19 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
   @Override
   protected Option<HoodieInstant> getReplaceInstant(final HoodieFileGroupId fileGroupId) {
     return Option.ofNullable(fgIdToReplaceInstants.get(fileGroupId));
+  }
+
+  /**
+   * Get the latest file slices for a given partition including the inflight ones.
+   *
+   * @param partitionPath
+   * @return Stream of latest {@link FileSlice} in the partition path.
+   */
+  public Stream<FileSlice> fetchLatestFileSlicesIncludingInflight(String partitionPath) {
+    return fetchAllStoredFileGroups(partitionPath)
+        .map(HoodieFileGroup::getLatestFileSlicesIncludingInflight)
+        .filter(Option::isPresent)
+        .map(Option::get);
   }
 
   @Override

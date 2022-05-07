@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.table.action.clean.CleaningTriggerStrategy;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 import org.apache.hudi.table.action.compact.strategy.LogFileSizeBasedCompactionStrategy;
@@ -128,6 +129,17 @@ public class HoodieCompactionConfig extends HoodieConfig {
       .defaultValue(CompactionTriggerStrategy.NUM_COMMITS.name())
       .withDocumentation("Controls how compaction scheduling is triggered, by time or num delta commits or combination of both. "
           + "Valid options: " + Arrays.stream(CompactionTriggerStrategy.values()).map(Enum::name).collect(Collectors.joining(",")));
+
+  public static final ConfigProperty<String> CLEAN_TRIGGER_STRATEGY = ConfigProperty
+          .key("hoodie.clean.trigger.strategy")
+          .defaultValue(CleaningTriggerStrategy.NUM_COMMITS.name())
+          .withDocumentation("Controls how cleaning is scheduled. Valid options: "
+                  + Arrays.stream(CleaningTriggerStrategy.values()).map(Enum::name).collect(Collectors.joining(",")));
+
+  public static final ConfigProperty<String> CLEAN_MAX_COMMITS = ConfigProperty
+          .key("hoodie.clean.max.commits")
+          .defaultValue("1")
+          .withDocumentation("Number of commits after the last clean operation, before scheduling of a new clean is attempted.");
 
   public static final ConfigProperty<String> CLEANER_FILE_VERSIONS_RETAINED = ConfigProperty
       .key("hoodie.cleaner.fileversions.retained")
@@ -250,7 +262,7 @@ public class HoodieCompactionConfig extends HoodieConfig {
 
   public static final ConfigProperty<Boolean> PRESERVE_COMMIT_METADATA = ConfigProperty
       .key("hoodie.compaction.preserve.commit.metadata")
-      .defaultValue(false)
+      .defaultValue(true)
       .sinceVersion("0.11.0")
       .withDocumentation("When rewriting data, preserves existing hoodie_commit_time");
 
@@ -580,6 +592,16 @@ public class HoodieCompactionConfig extends HoodieConfig {
 
     public Builder withInlineCompactionTriggerStrategy(CompactionTriggerStrategy compactionTriggerStrategy) {
       compactionConfig.setValue(INLINE_COMPACT_TRIGGER_STRATEGY, compactionTriggerStrategy.name());
+      return this;
+    }
+
+    public Builder withCleaningTriggerStrategy(String cleaningTriggerStrategy) {
+      compactionConfig.setValue(CLEAN_TRIGGER_STRATEGY, cleaningTriggerStrategy);
+      return this;
+    }
+
+    public Builder withMaxCommitsBeforeCleaning(int maxCommitsBeforeCleaning) {
+      compactionConfig.setValue(CLEAN_MAX_COMMITS, String.valueOf(maxCommitsBeforeCleaning));
       return this;
     }
 

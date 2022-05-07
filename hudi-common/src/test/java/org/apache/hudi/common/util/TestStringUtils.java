@@ -20,6 +20,9 @@ package org.apache.hudi.common.util;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -60,5 +63,13 @@ public class TestStringUtils {
     assertTrue(StringUtils.isNullOrEmpty(""));
     assertNotEquals(null, StringUtils.isNullOrEmpty("this is not empty"));
     assertTrue(StringUtils.isNullOrEmpty(""));
+  }
+
+  @Test
+  public void testSplit() {
+    assertEquals(new ArrayList<>(), StringUtils.split(null, ","));
+    assertEquals(new ArrayList<>(), StringUtils.split("", ","));
+    assertEquals(Arrays.asList("a", "b", "c"), StringUtils.split("a,b, c", ","));
+    assertEquals(Arrays.asList("a", "b", "c"), StringUtils.split("a,b,, c ", ","));
   }
 }

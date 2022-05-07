@@ -75,8 +75,8 @@ class ShowCommitsProcedure(includeExtraMetadata: Boolean) extends BaseProcedure 
   override def call(args: ProcedureArgs): Seq[Row] = {
     super.checkArgs(PARAMETERS, args)
 
-    val table = getArgValueOrDefault(args, PARAMETERS(0)).asInstanceOf[String]
-    val limit = getArgValueOrDefault(args, PARAMETERS(1)).asInstanceOf[Int]
+    val table = getArgValueOrDefault(args, PARAMETERS(0)).get.asInstanceOf[String]
+    val limit = getArgValueOrDefault(args, PARAMETERS(1)).get.asInstanceOf[Int]
 
     val hoodieCatalogTable = HoodieCatalogTable(sparkSession, new TableIdentifier(table))
     val basePath = hoodieCatalogTable.tableLocation

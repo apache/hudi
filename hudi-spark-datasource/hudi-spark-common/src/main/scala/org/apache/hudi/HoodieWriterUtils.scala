@@ -24,7 +24,11 @@ import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE
 import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieConfig, TypedProperties}
 import org.apache.hudi.common.table.HoodieTableConfig
+import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.hive.HiveSyncConfig
+import org.apache.hudi.keygen.{NonpartitionedKeyGenerator, SimpleKeyGenerator}
+import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.hudi.command.SqlKeyGenerator
 
@@ -64,21 +68,21 @@ object HoodieWriterUtils {
     hoodieConfig.setDefaultValue(STREAMING_RETRY_INTERVAL_MS)
     hoodieConfig.setDefaultValue(STREAMING_IGNORE_FAILED_BATCH)
     hoodieConfig.setDefaultValue(META_SYNC_CLIENT_TOOL_CLASS_NAME)
-    hoodieConfig.setDefaultValue(HIVE_SYNC_ENABLED)
-    hoodieConfig.setDefaultValue(META_SYNC_ENABLED)
-    hoodieConfig.setDefaultValue(HIVE_DATABASE)
-    hoodieConfig.setDefaultValue(HIVE_TABLE)
-    hoodieConfig.setDefaultValue(HIVE_BASE_FILE_FORMAT)
-    hoodieConfig.setDefaultValue(HIVE_USER)
-    hoodieConfig.setDefaultValue(HIVE_PASS)
-    hoodieConfig.setDefaultValue(HIVE_URL)
-    hoodieConfig.setDefaultValue(METASTORE_URIS)
-    hoodieConfig.setDefaultValue(HIVE_PARTITION_FIELDS)
-    hoodieConfig.setDefaultValue(HIVE_PARTITION_EXTRACTOR_CLASS)
+    hoodieConfig.setDefaultValue(HiveSyncConfig.HIVE_SYNC_ENABLED)
+    hoodieConfig.setDefaultValue(HoodieSyncConfig.META_SYNC_ENABLED)
+    hoodieConfig.setDefaultValue(HoodieSyncConfig.META_SYNC_DATABASE_NAME)
+    hoodieConfig.setDefaultValue(HoodieSyncConfig.META_SYNC_TABLE_NAME)
+    hoodieConfig.setDefaultValue(HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT)
+    hoodieConfig.setDefaultValue(HiveSyncConfig.METASTORE_URIS)
+    hoodieConfig.setDefaultValue(HiveSyncConfig.HIVE_USER)
+    hoodieConfig.setDefaultValue(HiveSyncConfig.HIVE_PASS)
+    hoodieConfig.setDefaultValue(HiveSyncConfig.HIVE_URL)
+    hoodieConfig.setDefaultValue(HoodieSyncConfig.META_SYNC_PARTITION_FIELDS)
+    hoodieConfig.setDefaultValue(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS)
     hoodieConfig.setDefaultValue(HIVE_STYLE_PARTITIONING)
-    hoodieConfig.setDefaultValue(HIVE_USE_JDBC)
-    hoodieConfig.setDefaultValue(HIVE_CREATE_MANAGED_TABLE)
-    hoodieConfig.setDefaultValue(HIVE_SYNC_AS_DATA_SOURCE_TABLE)
+    hoodieConfig.setDefaultValue(HiveSyncConfig.HIVE_USE_JDBC)
+    hoodieConfig.setDefaultValue(HiveSyncConfig.HIVE_CREATE_MANAGED_TABLE)
+    hoodieConfig.setDefaultValue(HiveSyncConfig.HIVE_SYNC_AS_DATA_SOURCE_TABLE)
     hoodieConfig.setDefaultValue(ASYNC_COMPACT_ENABLE)
     hoodieConfig.setDefaultValue(INLINE_CLUSTERING_ENABLE)
     hoodieConfig.setDefaultValue(ASYNC_CLUSTERING_ENABLE)
@@ -87,12 +91,6 @@ object HoodieWriterUtils {
     hoodieConfig.setDefaultValue(DROP_PARTITION_COLUMNS)
     hoodieConfig.setDefaultValue(KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED)
     Map() ++ hoodieConfig.getProps.asScala ++ globalProps ++ DataSourceOptionsHelper.translateConfigurations(parameters)
-  }
-
-  def toProperties(params: Map[String, String]): TypedProperties = {
-    val props = new TypedProperties()
-    params.foreach(kv => props.setProperty(kv._1, kv._2))
-    props
   }
 
   /**
@@ -155,6 +153,36 @@ object HoodieWriterUtils {
       if (null != datasourceKeyGen && null != tableConfigKeyGen
           && datasourceKeyGen != tableConfigKeyGen) {
         diffConfigs.append(s"KeyGenerator:\t$datasourceKeyGen\t$tableConfigKeyGen\n")
+      }
+    }
+
+    if (diffConfigs.nonEmpty) {
+      diffConfigs.insert(0, "\nConfig conflict(key\tcurrent value\texisting value):\n")
+      throw new HoodieException(diffConfigs.toString.trim)
+    }
+    // Check schema evolution for bootstrap table.
+    // now we do not support bootstrap table.
+    if (params.get(OPERATION.key).contains(BOOTSTRAP_OPERATION_OPT_VAL)
+      && params.getOrElse(HoodieWriteConfig.SCHEMA_EVOLUTION_ENABLE.key(), "false").toBoolean) {
+      throw new HoodieException(String
+        .format("now schema evolution cannot support bootstrap table, pls set %s to false", HoodieWriteConfig.SCHEMA_EVOLUTION_ENABLE.key()))
+    }
+  }
+
+  /**
+   * Detects conflicts between datasourceKeyGen and existing table configuration keyGen
+   */
+  def validateKeyGeneratorConfig(datasourceKeyGen: String, tableConfig: HoodieConfig): Unit = {
+    val diffConfigs = StringBuilder.newBuilder
+
+    if (null != tableConfig) {
+      val tableConfigKeyGen = tableConfig.getString(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME)
+      if (null != tableConfigKeyGen && null != datasourceKeyGen) {
+        val nonPartitionedTableConfig = tableConfigKeyGen.equals(classOf[NonpartitionedKeyGenerator].getCanonicalName)
+        val simpleKeyDataSourceConfig = datasourceKeyGen.equals(classOf[SimpleKeyGenerator].getCanonicalName)
+        if (nonPartitionedTableConfig && simpleKeyDataSourceConfig) {
+          diffConfigs.append(s"KeyGenerator:\t$datasourceKeyGen\t$tableConfigKeyGen\n")
+        }
       }
     }
 

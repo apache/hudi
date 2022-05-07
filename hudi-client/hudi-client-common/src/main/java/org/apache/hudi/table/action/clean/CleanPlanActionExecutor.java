@@ -22,6 +22,7 @@ import org.apache.hudi.avro.model.HoodieActionInstant;
 import org.apache.hudi.avro.model.HoodieCleanFileInfo;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.CleanFileInfo;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -32,6 +33,7 @@ import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseActionExecutor;
@@ -58,8 +60,30 @@ public class CleanPlanActionExecutor<T extends HoodieRecordPayload, I, K, O> ext
     this.extraMetadata = extraMetadata;
   }
 
-  protected Option<HoodieCleanerPlan> createCleanerPlan() {
-    return execute();
+  private int getCommitsSinceLastCleaning() {
+    Option<HoodieInstant> lastCleanInstant = table.getActiveTimeline().getCleanerTimeline().filterCompletedInstants().lastInstant();
+    HoodieTimeline commitTimeline = table.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
+
+    String latestCleanTs;
+    int numCommits = 0;
+    if (lastCleanInstant.isPresent()) {
+      latestCleanTs = lastCleanInstant.get().getTimestamp();
+      numCommits = commitTimeline.findInstantsAfter(latestCleanTs).countInstants();
+    } else {
+      numCommits = commitTimeline.countInstants();
+    }
+
+    return numCommits;
+  }
+
+  private boolean needsCleaning(CleaningTriggerStrategy strategy) {
+    if (strategy == CleaningTriggerStrategy.NUM_COMMITS) {
+      int numberOfCommits = getCommitsSinceLastCleaning();
+      int maxInlineCommitsForNextClean = config.getCleaningMaxCommits();
+      return numberOfCommits >= maxInlineCommitsForNextClean;
+    } else {
+      throw new HoodieException("Unsupported cleaning trigger strategy: " + config.getCleaningTriggerStrategy());
+    }
   }
 
   /**
@@ -85,15 +109,22 @@ public class CleanPlanActionExecutor<T extends HoodieRecordPayload, I, K, O> ext
 
       context.setJobStatus(this.getClass().getSimpleName(), "Generating list of file slices to be cleaned");
 
-      Map<String, List<HoodieCleanFileInfo>> cleanOps = context
+      Map<String, Pair<Boolean, List<CleanFileInfo>>> cleanOpsWithPartitionMeta = context
           .map(partitionsToClean, partitionPathToClean -> Pair.of(partitionPathToClean, planner.getDeletePaths(partitionPathToClean)), cleanerParallelism)
           .stream()
-          .collect(Collectors.toMap(Pair::getKey, y -> CleanerUtils.convertToHoodieCleanFileInfoList(y.getValue())));
+          .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
+
+      Map<String, List<HoodieCleanFileInfo>> cleanOps = cleanOpsWithPartitionMeta.entrySet().stream()
+          .collect(Collectors.toMap(Map.Entry::getKey,
+              e -> CleanerUtils.convertToHoodieCleanFileInfoList(e.getValue().getValue())));
+
+      List<String> partitionsToDelete = cleanOpsWithPartitionMeta.entrySet().stream().filter(entry -> entry.getValue().getKey()).map(Map.Entry::getKey)
+          .collect(Collectors.toList());
 
       return new HoodieCleanerPlan(earliestInstant
           .map(x -> new HoodieActionInstant(x.getTimestamp(), x.getAction(), x.getState().name())).orElse(null),
           config.getCleanerPolicy().name(), CollectionUtils.createImmutableMap(),
-          CleanPlanner.LATEST_CLEAN_PLAN_VERSION, cleanOps);
+          CleanPlanner.LATEST_CLEAN_PLAN_VERSION, cleanOps, partitionsToDelete);
     } catch (IOException e) {
       throw new HoodieIOException("Failed to schedule clean operation", e);
     }
@@ -128,6 +159,9 @@ public class CleanPlanActionExecutor<T extends HoodieRecordPayload, I, K, O> ext
 
   @Override
   public Option<HoodieCleanerPlan> execute() {
+    if (!needsCleaning(config.getCleaningTriggerStrategy())) {
+      return Option.empty();
+    }
     // Plan a new clean action
     return requestClean(instantTime);
   }

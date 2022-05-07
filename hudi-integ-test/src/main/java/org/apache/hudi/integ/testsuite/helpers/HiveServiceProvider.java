@@ -21,6 +21,9 @@ package org.apache.hudi.integ.testsuite.helpers;
 import java.io.IOException;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hive.service.server.HiveServer2;
+
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.hive.testutils.HiveTestService;
 import org.apache.hudi.integ.testsuite.HoodieTestSuiteWriter;
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config;
@@ -46,12 +49,17 @@ public class HiveServiceProvider {
   }
 
   public void syncToLocalHiveIfNeeded(HoodieTestSuiteWriter writer) {
+    HiveSyncTool hiveSyncTool;
     if (this.config.isHiveLocal()) {
-      writer.getDeltaStreamerWrapper().getDeltaSyncService().getDeltaSync()
-          .syncHive(getLocalHiveServer().getHiveConf());
+      hiveSyncTool = new HiveSyncTool(writer.getWriteConfig().getProps(),
+          getLocalHiveServer().getHiveConf(),
+          FSUtils.getFs(writer.getWriteConfig().getBasePath(), getLocalHiveServer().getHiveConf()));
     } else {
-      writer.getDeltaStreamerWrapper().getDeltaSyncService().getDeltaSync().syncHive();
+      hiveSyncTool = new HiveSyncTool(writer.getWriteConfig().getProps(),
+          getLocalHiveServer().getHiveConf(),
+          FSUtils.getFs(writer.getWriteConfig().getBasePath(), writer.getConfiguration()));
     }
+    hiveSyncTool.syncHoodieTable();
   }
 
   public void stopLocalHiveServiceIfNeeded() throws IOException {

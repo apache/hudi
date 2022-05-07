@@ -19,10 +19,10 @@
 
 package org.apache.hudi.metadata;
 
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.model.HoodieMetadataBloomFilter;
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
+import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -40,11 +40,15 @@ import org.apache.hudi.common.util.hash.ColumnIndexID;
 import org.apache.hudi.common.util.hash.FileIndexID;
 import org.apache.hudi.common.util.hash.PartitionIndexID;
 import org.apache.hudi.exception.HoodieMetadataException;
+
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -143,9 +147,8 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
       throws IOException {
     if (isMetadataTableEnabled) {
       try {
-        List<Path> partitionPaths = partitions.stream().map(entry -> new Path(entry)).collect(Collectors.toList());
-        Map<String, FileStatus[]> partitionsFilesMap = fetchAllFilesInPartitionPaths(partitionPaths);
-        return partitionsFilesMap;
+        List<Path> partitionPaths = partitions.stream().map(Path::new).collect(Collectors.toList());
+        return fetchAllFilesInPartitionPaths(partitionPaths);
       } catch (Exception e) {
         throw new HoodieMetadataException("Failed to retrieve files in partition from metadata", e);
       }
@@ -156,7 +159,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
   }
 
   @Override
-  public Option<ByteBuffer> getBloomFilter(final String partitionName, final String fileName)
+  public Option<BloomFilter> getBloomFilter(final String partitionName, final String fileName)
       throws HoodieMetadataException {
     if (!isBloomFilterIndexEnabled) {
       LOG.error("Metadata bloom filter index is disabled!");
@@ -164,7 +167,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
     }
 
     final Pair<String, String> partitionFileName = Pair.of(partitionName, fileName);
-    Map<Pair<String, String>, ByteBuffer> bloomFilters = getBloomFilters(Collections.singletonList(partitionFileName));
+    Map<Pair<String, String>, BloomFilter> bloomFilters = getBloomFilters(Collections.singletonList(partitionFileName));
     if (bloomFilters.isEmpty()) {
       LOG.error("Meta index: missing bloom filter for partition: " + partitionName + ", file: " + fileName);
       return Option.empty();
@@ -175,7 +178,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
   }
 
   @Override
-  public Map<Pair<String, String>, ByteBuffer> getBloomFilters(final List<Pair<String, String>> partitionNameFileNameList)
+  public Map<Pair<String, String>, BloomFilter> getBloomFilters(final List<Pair<String, String>> partitionNameFileNameList)
       throws HoodieMetadataException {
     if (!isBloomFilterIndexEnabled) {
       LOG.error("Metadata bloom filter index is disabled!");
@@ -202,7 +205,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
     metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_BLOOM_FILTERS_METADATA_STR,
         (timer.endTimer() / partitionIDFileIDStrings.size())));
 
-    Map<Pair<String, String>, ByteBuffer> partitionFileToBloomFilterMap = new HashMap<>();
+    Map<Pair<String, String>, BloomFilter> partitionFileToBloomFilterMap = new HashMap<>();
     for (final Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>> entry : hoodieRecordList) {
       if (entry.getRight().isPresent()) {
         final Option<HoodieMetadataBloomFilter> bloomFilterMetadata =
@@ -210,7 +213,11 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
         if (bloomFilterMetadata.isPresent()) {
           if (!bloomFilterMetadata.get().getIsDeleted()) {
             ValidationUtils.checkState(fileToKeyMap.containsKey(entry.getLeft()));
-            partitionFileToBloomFilterMap.put(fileToKeyMap.get(entry.getLeft()), bloomFilterMetadata.get().getBloomFilter());
+            final ByteBuffer bloomFilterByteBuffer = bloomFilterMetadata.get().getBloomFilter();
+            final String bloomFilterType = bloomFilterMetadata.get().getType();
+            final BloomFilter bloomFilter = BloomFilterFactory.fromString(
+                StandardCharsets.UTF_8.decode(bloomFilterByteBuffer).toString(), bloomFilterType);
+            partitionFileToBloomFilterMap.put(fileToKeyMap.get(entry.getLeft()), bloomFilter);
           }
         } else {
           LOG.error("Meta index bloom filter missing for: " + fileToKeyMap.get(entry.getLeft()));
@@ -269,7 +276,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
   /**
    * Returns a list of all partitions.
    */
-  protected List<String> fetchAllPartitionPaths() throws IOException {
+  protected List<String> fetchAllPartitionPaths() {
     HoodieTimer timer = new HoodieTimer().startTimer();
     Option<HoodieRecord<HoodieMetadataPayload>> hoodieRecord = getRecordByKey(RECORDKEY_PARTITION_LIST,
         MetadataPartitionType.FILES.getPartitionPath());
@@ -277,7 +284,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
 
     List<String> partitions = Collections.emptyList();
     if (hoodieRecord.isPresent()) {
-      mayBeHandleSpuriousDeletes(hoodieRecord, "\"all partitions\"");
+      handleSpuriousDeletes(hoodieRecord, "\"all partitions\"");
       partitions = hoodieRecord.get().getData().getFilenames();
       // Partition-less tables have a single empty partition
       if (partitions.contains(NON_PARTITIONED_NAME)) {
@@ -308,7 +315,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
 
     FileStatus[] statuses = {};
     if (hoodieRecord.isPresent()) {
-      mayBeHandleSpuriousDeletes(hoodieRecord, partitionName);
+      handleSpuriousDeletes(hoodieRecord, partitionName);
       statuses = hoodieRecord.get().getData().getFileStatuses(hadoopConf.get(), partitionPath);
     }
 
@@ -343,7 +350,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
 
     for (Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>> entry: partitionsFileStatus) {
       if (entry.getValue().isPresent()) {
-        mayBeHandleSpuriousDeletes(entry.getValue(), entry.getKey());
+        handleSpuriousDeletes(entry.getValue(), entry.getKey());
         result.put(partitionInfo.get(entry.getKey()).toString(), entry.getValue().get().getData().getFileStatuses(hadoopConf.get(), partitionInfo.get(entry.getKey())));
       }
     }
@@ -353,11 +360,11 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
   }
 
   /**
-   * Maybe handle spurious deletes. Depending on config, throw an exception or log a warn msg.
+   * Handle spurious deletes. Depending on config, throw an exception or log a warn msg.
    * @param hoodieRecord instance of {@link HoodieRecord} of interest.
    * @param partitionName partition name of interest.
    */
-  private void mayBeHandleSpuriousDeletes(Option<HoodieRecord<HoodieMetadataPayload>> hoodieRecord, String partitionName) {
+  private void handleSpuriousDeletes(Option<HoodieRecord<HoodieMetadataPayload>> hoodieRecord, String partitionName) {
     if (!hoodieRecord.get().getData().getDeletions().isEmpty()) {
       if (metadataConfig.ignoreSpuriousDeletes()) {
         LOG.warn("Metadata record for " + partitionName + " encountered some files to be deleted which was not added before. "
@@ -371,7 +378,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
 
   protected abstract Option<HoodieRecord<HoodieMetadataPayload>> getRecordByKey(String key, String partitionName);
 
-  protected abstract List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> getRecordsByKeys(List<String> key, String partitionName);
+  public abstract List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> getRecordsByKeys(List<String> key, String partitionName);
 
   protected HoodieEngineContext getEngineContext() {
     return engineContext != null ? engineContext : new HoodieLocalEngineContext(hadoopConf.get());

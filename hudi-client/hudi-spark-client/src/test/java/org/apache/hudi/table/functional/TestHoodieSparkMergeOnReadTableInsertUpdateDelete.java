@@ -35,6 +35,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView;
+import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
@@ -180,6 +181,61 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
     }
   }
 
+  @Test
+  public void testRepeatedRollbackOfCompaction() throws Exception {
+    boolean scheduleInlineCompaction = false;
+    HoodieFileFormat fileFormat = HoodieFileFormat.PARQUET;
+    Properties properties = new Properties();
+    properties.setProperty(HoodieTableConfig.BASE_FILE_FORMAT.key(), fileFormat.toString());
+    HoodieTableMetaClient metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, properties);
+
+    HoodieWriteConfig cfg = getConfigBuilder(false)
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024 * 1024)
+            .withInlineCompaction(false).withMaxNumDeltaCommitsBeforeCompaction(2).withPreserveCommitMetadata(true).withScheduleInlineCompaction(scheduleInlineCompaction).build())
+        .build();
+    try (SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
+
+      HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
+      /*
+       * Write 1 (only inserts)
+       */
+      String newCommitTime = "001";
+      client.startCommitWithTime(newCommitTime);
+
+      List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 200);
+      Stream<HoodieBaseFile> dataFiles = insertRecordsToMORTable(metaClient, records, client, cfg, newCommitTime, true);
+      assertTrue(dataFiles.findAny().isPresent(), "should list the base files we wrote in the delta commit");
+
+      /*
+       * Write 2 (updates)
+       */
+      newCommitTime = "004";
+      client.startCommitWithTime(newCommitTime);
+      records = dataGen.generateUpdates(newCommitTime, 100);
+      updateRecordsInMORTable(metaClient, records, client, cfg, newCommitTime, true);
+
+      Option<String> compactionInstant = client.scheduleCompaction(Option.empty());
+      client.compact(compactionInstant.get());
+
+      // trigger compaction again.
+      client.compact(compactionInstant.get());
+
+      metaClient.reloadActiveTimeline();
+      // verify that there is no new rollback instant generated
+      HoodieInstant rollbackInstant = metaClient.getActiveTimeline().getRollbackTimeline().lastInstant().get();
+      FileCreateUtils.deleteRollbackCommit(metaClient.getBasePath().substring(metaClient.getBasePath().indexOf(":") + 1),
+          rollbackInstant.getTimestamp());
+      metaClient.reloadActiveTimeline();
+      SparkRDDWriteClient client1 = getHoodieWriteClient(cfg);
+      // trigger compaction again.
+      client1.compact(compactionInstant.get());
+      metaClient.reloadActiveTimeline();
+      // verify that there is no new rollback instant generated
+      HoodieInstant newRollbackInstant = metaClient.getActiveTimeline().getRollbackTimeline().lastInstant().get();
+      assertEquals(rollbackInstant.getTimestamp(), newRollbackInstant.getTimestamp());
+    }
+  }
+
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testSimpleInsertUpdateAndDelete(boolean populateMetaFields) throws Exception {
@@ -264,7 +320,7 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
           .map(baseFile -> new Path(baseFile.getPath()).getParent().toString())
           .collect(Collectors.toList());
       List<GenericRecord> recordsRead =
-          HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(hadoopConf(), inputPaths, basePath(), new JobConf(hadoopConf()), true, false);
+          HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(hadoopConf(), inputPaths, basePath(), new JobConf(hadoopConf()), true, populateMetaFields);
       // Wrote 20 records and deleted 20 records, so remaining 20-20 = 0
       assertEquals(0, recordsRead.size(), "Must contain 0 records");
     }

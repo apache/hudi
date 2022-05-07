@@ -38,7 +38,7 @@ public class UpsertNode extends InsertNode {
   protected void generate(DeltaGenerator deltaGenerator) throws Exception {
     if (!config.isDisableGenerate()) {
       log.info("Generating input data {}", this.getName());
-      deltaGenerator.writeRecords(deltaGenerator.generateUpdates(config)).count();
+      deltaGenerator.writeRecords(deltaGenerator.generateUpdates(config)).getValue().count();
     }
   }
 

@@ -21,6 +21,7 @@ package org.apache.hudi.io.storage;
 import java.util.concurrent.atomic.AtomicLong;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 
 import org.apache.avro.generic.IndexedRecord;
@@ -29,7 +30,7 @@ import java.io.IOException;
 
 public interface HoodieFileWriter<R extends IndexedRecord> {
 
-  void writeAvroWithMetadata(R newRecord, HoodieRecord record) throws IOException;
+  void writeAvroWithMetadata(HoodieKey key, R newRecord) throws IOException;
 
   boolean canWrite();
 
@@ -37,11 +38,9 @@ public interface HoodieFileWriter<R extends IndexedRecord> {
 
   void writeAvro(String key, R oldRecord) throws IOException;
 
-  long getBytesWritten();
-
-  default void prepRecordWithMetadata(R avroRecord, HoodieRecord record, String instantTime, Integer partitionId, AtomicLong recordIndex, String fileName) {
+  default void prepRecordWithMetadata(HoodieKey key, R avroRecord, String instantTime, Integer partitionId, AtomicLong recordIndex, String fileName) {
     String seqId = HoodieRecord.generateSequenceId(instantTime, partitionId, recordIndex.getAndIncrement());
-    HoodieAvroUtils.addHoodieKeyToRecord((GenericRecord) avroRecord, record.getRecordKey(), record.getPartitionPath(), fileName);
+    HoodieAvroUtils.addHoodieKeyToRecord((GenericRecord) avroRecord, key.getRecordKey(), key.getPartitionPath(), fileName);
     HoodieAvroUtils.addCommitMetadataToRecord((GenericRecord) avroRecord, instantTime, seqId);
     return;
   }

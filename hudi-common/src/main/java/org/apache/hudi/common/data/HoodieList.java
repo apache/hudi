@@ -133,6 +133,26 @@ public class HoodieList<T> extends HoodieData<T> {
   }
 
   @Override
+  public HoodieData<T> distinct(int parallelism) {
+    return distinct();
+  }
+
+  @Override
+  public <O> HoodieData<T> distinctWithKey(SerializableFunction<T, O> keyGetter, int parallelism) {
+    return mapToPair(i -> Pair.of(keyGetter.apply(i), i))
+        .reduceByKey((value1, value2) -> value1, parallelism)
+        .values();
+  }
+
+  @Override
+  public HoodieData<T> filter(SerializableFunction<T, Boolean> filterFunc) {
+    return HoodieList.of(listData
+        .stream()
+        .filter(i -> throwingMapWrapper(filterFunc).apply(i))
+        .collect(Collectors.toList()));
+  }
+
+  @Override
   public HoodieData<T> union(HoodieData<T> other) {
     List<T> unionResult = new ArrayList<>();
     unionResult.addAll(listData);
@@ -143,5 +163,11 @@ public class HoodieList<T> extends HoodieData<T> {
   @Override
   public List<T> collectAsList() {
     return listData;
+  }
+
+  @Override
+  public HoodieData<T> repartition(int parallelism) {
+    // no op
+    return this;
   }
 }

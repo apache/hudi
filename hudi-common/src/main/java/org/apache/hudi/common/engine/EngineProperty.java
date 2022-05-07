@@ -26,6 +26,7 @@ public enum EngineProperty {
   EMBEDDED_SERVER_HOST,
   // Pool/queue to use to run compaction.
   COMPACTION_POOL_NAME,
+  CLUSTERING_POOL_NAME,
   TOTAL_CORES_PER_EXECUTOR,
   // Amount of total memory available to each engine executor
   TOTAL_MEMORY_AVAILABLE,

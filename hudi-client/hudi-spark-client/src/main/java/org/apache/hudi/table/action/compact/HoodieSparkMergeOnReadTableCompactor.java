@@ -19,7 +19,6 @@
 package org.apache.hudi.table.action.compact;
 
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.utils.SparkMemoryUtils;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -27,10 +26,9 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.table.HoodieTable;
 
-import org.apache.spark.api.java.JavaRDD;
+import static org.apache.hudi.config.HoodieWriteConfig.WRITE_STATUS_STORAGE_LEVEL_VALUE;
 
 /**
  * Compacts a hoodie table with merge on read storage. Computes all possible compactions,
@@ -39,7 +37,7 @@ import org.apache.spark.api.java.JavaRDD;
  */
 @SuppressWarnings("checkstyle:LineLength")
 public class HoodieSparkMergeOnReadTableCompactor<T extends HoodieRecordPayload>
-    extends HoodieCompactor<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {
+    extends HoodieCompactor<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> {
 
   @Override
   public void preCompact(
@@ -53,6 +51,6 @@ public class HoodieSparkMergeOnReadTableCompactor<T extends HoodieRecordPayload>
 
   @Override
   public void maybePersist(HoodieData<WriteStatus> writeStatus, HoodieWriteConfig config) {
-    HoodieJavaRDD.getJavaRDD(writeStatus).persist(SparkMemoryUtils.getWriteStatusStorageLevel(config.getProps()));
+    writeStatus.persist(config.getString(WRITE_STATUS_STORAGE_LEVEL_VALUE));
   }
 }

@@ -18,12 +18,14 @@
 
 package org.apache.hudi.functional
 
+import org.apache.hudi.HoodieFileIndex.DataSkippingFailureMode
+import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieWriteConfig}
 import org.apache.hudi.testutils.HoodieClientTestBase
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieFileIndex}
 import org.apache.spark.sql._
 import org.apache.spark.sql.types._
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -49,6 +51,11 @@ class TestLayoutOptimization extends HoodieClientTestBase {
       .add("c7", BinaryType)
       .add("c8", ByteType)
 
+  val metadataOpts = Map(
+    HoodieMetadataConfig.ENABLE.key -> "true",
+    HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true"
+  )
+
   val commonOpts = Map(
     "hoodie.insert.shuffle.parallelism" -> "4",
     "hoodie.upsert.shuffle.parallelism" -> "4",
@@ -57,7 +64,7 @@ class TestLayoutOptimization extends HoodieClientTestBase {
     DataSourceWriteOptions.PARTITIONPATH_FIELD.key() -> "partition",
     DataSourceWriteOptions.PRECOMBINE_FIELD.key() -> "timestamp",
     HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
-  )
+  ) ++ metadataOpts
 
   @BeforeEach
   override def setUp() {
@@ -88,6 +95,9 @@ class TestLayoutOptimization extends HoodieClientTestBase {
     // Bulk Insert Operation
     val records = recordsToStrings(dataGen.generateInserts("001", targetRecordsCount)).toList
     val writeDf: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records, 2))
+
+    // If there are any failures in the Data Skipping flow, test should fail
+    spark.sqlContext.setConf(DataSkippingFailureMode.configName, DataSkippingFailureMode.Strict.value);
 
     writeDf.write.format("org.apache.hudi")
       .options(commonOpts)
@@ -127,6 +137,7 @@ class TestLayoutOptimization extends HoodieClientTestBase {
     val readDfSkip =
       spark.read
         .option(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key(), "true")
+        .options(metadataOpts)
         .format("hudi")
         .load(basePath)
 

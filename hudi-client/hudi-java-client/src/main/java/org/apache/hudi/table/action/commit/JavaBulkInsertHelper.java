@@ -19,6 +19,7 @@
 package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -65,7 +66,7 @@ public class JavaBulkInsertHelper<T extends HoodieRecordPayload, R> extends Base
                                                            final HoodieWriteConfig config,
                                                            final BaseCommitActionExecutor<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>, R> executor,
                                                            final boolean performDedupe,
-                                                           final Option<BulkInsertPartitioner<List<HoodieRecord<T>>>> userDefinedBulkInsertPartitioner) {
+                                                           final Option<BulkInsertPartitioner> userDefinedBulkInsertPartitioner) {
     HoodieWriteMetadata result = new HoodieWriteMetadata();
 
     // It's possible the transition to inflight could have already happened.
@@ -76,8 +77,11 @@ public class JavaBulkInsertHelper<T extends HoodieRecordPayload, R> extends Base
           config.shouldAllowMultiWriteOnSameInstant());
     }
 
+    BulkInsertPartitioner partitioner = userDefinedBulkInsertPartitioner.orElse(JavaBulkInsertInternalPartitionerFactory.get(config.getBulkInsertSortMode()));
+
     // write new files
-    List<WriteStatus> writeStatuses = bulkInsert(inputRecords, instantTime, table, config, performDedupe, userDefinedBulkInsertPartitioner, false, config.getBulkInsertShuffleParallelism(), new CreateHandleFactory(false));
+    List<WriteStatus> writeStatuses = bulkInsert(inputRecords, instantTime, table, config, performDedupe, partitioner, false,
+        config.getBulkInsertShuffleParallelism(), new CreateHandleFactory(false));
     //update index
     ((BaseJavaCommitActionExecutor) executor).updateIndexAndCommitIfNeeded(writeStatuses, result);
     return result;
@@ -89,7 +93,7 @@ public class JavaBulkInsertHelper<T extends HoodieRecordPayload, R> extends Base
                                       HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table,
                                       HoodieWriteConfig config,
                                       boolean performDedupe,
-                                      Option<BulkInsertPartitioner<List<HoodieRecord<T>>>> userDefinedBulkInsertPartitioner,
+                                      BulkInsertPartitioner partitioner,
                                       boolean useWriterSchema,
                                       int parallelism,
                                       WriteHandleFactory writeHandleFactory) {
@@ -102,22 +106,19 @@ public class JavaBulkInsertHelper<T extends HoodieRecordPayload, R> extends Base
           parallelism, table);
     }
 
-    final List<HoodieRecord<T>> repartitionedRecords;
-    BulkInsertPartitioner partitioner = userDefinedBulkInsertPartitioner.isPresent()
-        ? userDefinedBulkInsertPartitioner.get()
-        : JavaBulkInsertInternalPartitionerFactory.get(config.getBulkInsertSortMode());
-    repartitionedRecords = (List<HoodieRecord<T>>) partitioner.repartitionRecords(dedupedRecords, parallelism);
+    final List<HoodieRecord<T>> repartitionedRecords = (List<HoodieRecord<T>>) partitioner.repartitionRecords(dedupedRecords, parallelism);
 
     FileIdPrefixProvider fileIdPrefixProvider = (FileIdPrefixProvider) ReflectionUtils.loadClass(
         config.getFileIdPrefixProviderClassName(),
-        config.getProps());
+        new TypedProperties(config.getProps()));
 
     List<WriteStatus> writeStatuses = new ArrayList<>();
 
     new JavaLazyInsertIterable<>(repartitionedRecords.iterator(), true,
         config, instantTime, table,
         fileIdPrefixProvider.createFilePrefix(""), table.getTaskContextSupplier(),
-        new CreateHandleFactory<>()).forEachRemaining(writeStatuses::addAll);
+        // Always get the first WriteHandleFactory, as there is only a single data partition for hudi java engine.
+        (WriteHandleFactory) partitioner.getWriteHandleFactory(0).orElse(writeHandleFactory)).forEachRemaining(writeStatuses::addAll);
 
     return writeStatuses;
   }

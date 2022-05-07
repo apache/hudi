@@ -89,35 +89,6 @@ class TestHoodieSparkUtils {
   }
 
   @Test
-  def testCreateInMemoryIndex(@TempDir tempDir: File): Unit = {
-    val spark = SparkSession.builder
-      .appName("Hoodie Datasource test")
-      .master("local[2]")
-      .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
-      .getOrCreate
-
-    val folders: Seq[Path] = Seq(
-      new Path(Paths.get(tempDir.getAbsolutePath, "folder1").toUri),
-      new Path(Paths.get(tempDir.getAbsolutePath, "folder2").toUri)
-    )
-
-    val files: Seq[Path] = Seq(
-      new Path(Paths.get(tempDir.getAbsolutePath, "folder1", "file1").toUri),
-      new Path(Paths.get(tempDir.getAbsolutePath, "folder1", "file2").toUri),
-      new Path(Paths.get(tempDir.getAbsolutePath, "folder2", "file3").toUri),
-      new Path(Paths.get(tempDir.getAbsolutePath, "folder2", "file4").toUri)
-    )
-
-    folders.foreach(folder => new File(folder.toUri).mkdir())
-    files.foreach(file => new File(file.toUri).createNewFile())
-
-    val index = HoodieSparkUtils.createInMemoryFileIndex(spark, Seq(folders(0), folders(1)))
-    val indexedFilePaths = index.allFiles().map(fs => fs.getPath)
-    assertEquals(files.sortWith(_.toString < _.toString), indexedFilePaths.sortWith(_.toString < _.toString))
-    spark.stop()
-  }
-
-  @Test
   def testCreateRddSchemaEvol(): Unit = {
     val spark = SparkSession.builder
       .appName("Hoodie Datasource test")
@@ -250,7 +221,7 @@ class TestHoodieSparkUtils {
 
     val tableAvroSchema = new Schema.Parser().parse(avroSchemaString)
 
-    val (requiredAvroSchema, requiredStructSchema) =
+    val (requiredAvroSchema, requiredStructSchema, _) =
       HoodieSparkUtils.getRequiredSchema(tableAvroSchema, Array("ts"))
 
     assertEquals("timestamp-millis",

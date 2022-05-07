@@ -19,14 +19,9 @@
 package org.apache.hudi.io;
 
 import org.apache.hudi.common.bloom.BloomFilter;
-import org.apache.hudi.common.bloom.BloomFilterTypeCode;
-import org.apache.hudi.common.bloom.HoodieDynamicBoundedBloomFilter;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.HoodieTimer;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIndexException;
@@ -39,10 +34,11 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getCompletedMetadataPartitions;
+import static org.apache.hudi.metadata.MetadataPartitionType.BLOOM_FILTERS;
 
 /**
  * Takes a bunch of keys and returns ones that are present in the file group.
@@ -53,27 +49,13 @@ public class HoodieKeyLookupHandle<T extends HoodieRecordPayload, I, K, O> exten
 
   private final BloomFilter bloomFilter;
   private final List<String> candidateRecordKeys;
-  private final boolean useMetadataTableIndex;
-  private Option<String> fileName = Option.empty();
   private long totalKeysChecked;
 
   public HoodieKeyLookupHandle(HoodieWriteConfig config, HoodieTable<T, I, K, O> hoodieTable,
                                Pair<String, String> partitionPathFileIDPair) {
-    this(config, hoodieTable, partitionPathFileIDPair, Option.empty(), false);
-  }
-
-  public HoodieKeyLookupHandle(HoodieWriteConfig config, HoodieTable<T, I, K, O> hoodieTable,
-                               Pair<String, String> partitionPathFileIDPair, Option<String> fileName,
-                               boolean useMetadataTableIndex) {
     super(config, hoodieTable, partitionPathFileIDPair);
     this.candidateRecordKeys = new ArrayList<>();
     this.totalKeysChecked = 0;
-    if (fileName.isPresent()) {
-      ValidationUtils.checkArgument(FSUtils.getFileId(fileName.get()).equals(getFileId()),
-          "File name '" + fileName.get() + "' doesn't match this lookup handle fileid '" + getFileId() + "'");
-      this.fileName = fileName;
-    }
-    this.useMetadataTableIndex = useMetadataTableIndex;
     this.bloomFilter = getBloomFilter();
   }
 
@@ -81,25 +63,18 @@ public class HoodieKeyLookupHandle<T extends HoodieRecordPayload, I, K, O> exten
     BloomFilter bloomFilter = null;
     HoodieTimer timer = new HoodieTimer().startTimer();
     try {
-      if (this.useMetadataTableIndex) {
-        ValidationUtils.checkArgument(this.fileName.isPresent(),
-            "File name not available to fetch bloom filter from the metadata table index.");
-        Option<ByteBuffer> bloomFilterByteBuffer =
-            hoodieTable.getMetadataTable().getBloomFilter(partitionPathFileIDPair.getLeft(), fileName.get());
-        if (!bloomFilterByteBuffer.isPresent()) {
-          throw new HoodieIndexException("BloomFilter missing for " + partitionPathFileIDPair.getRight());
-        }
-        bloomFilter =
-            new HoodieDynamicBoundedBloomFilter(StandardCharsets.UTF_8.decode(bloomFilterByteBuffer.get()).toString(),
-                BloomFilterTypeCode.DYNAMIC_V0);
+      if (config.getBloomIndexUseMetadata()
+          && getCompletedMetadataPartitions(hoodieTable.getMetaClient().getTableConfig())
+          .contains(BLOOM_FILTERS.getPartitionPath())) {
+        bloomFilter = hoodieTable.getMetadataTable().getBloomFilter(partitionPathFileIDPair.getLeft(), partitionPathFileIDPair.getRight())
+            .orElseThrow(() -> new HoodieIndexException("BloomFilter missing for " + partitionPathFileIDPair.getRight()));
       } else {
         try (HoodieFileReader reader = createNewFileReader()) {
           bloomFilter = reader.readBloomFilter();
         }
       }
     } catch (IOException e) {
-      throw new HoodieIndexException(String.format("Error reading bloom filter from %s/%s - %s",
-          getPartitionPathFileIDPair().getLeft(), this.fileName, e));
+      throw new HoodieIndexException(String.format("Error reading bloom filter from %s", getPartitionPathFileIDPair()), e);
     }
     LOG.info(String.format("Read bloom filter from %s in %d ms", partitionPathFileIDPair, timer.endTimer()));
     return bloomFilter;

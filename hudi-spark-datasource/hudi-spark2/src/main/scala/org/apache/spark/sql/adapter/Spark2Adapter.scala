@@ -1,3 +1,4 @@
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -20,33 +21,39 @@ package org.apache.spark.sql.adapter
 import org.apache.avro.Schema
 import org.apache.hudi.Spark2RowSerDe
 import org.apache.hudi.client.utils.SparkRowSerDe
-import org.apache.spark.sql.avro.{HoodieAvroDeserializerTrait, HoodieAvroSerializerTrait, Spark2HoodieAvroDeserializer, HoodieAvroSerializer}
+import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSchemaConverters, HoodieAvroSerializer, HoodieSpark2_4AvroDeserializer, HoodieSpark2_4AvroSerializer, HoodieSparkAvroSchemaConverters}
 import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
 import org.apache.spark.sql.catalyst.expressions.{Expression, Like}
 import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.catalyst.plans.JoinType
 import org.apache.spark.sql.catalyst.plans.logical.{InsertIntoTable, Join, LogicalPlan}
+import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.catalyst.{AliasIdentifier, TableIdentifier}
+import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark24HoodieParquetFileFormat}
 import org.apache.spark.sql.execution.datasources.{FilePartition, PartitionedFile, Spark2ParsePartitionUtil, SparkParsePartitionUtil}
 import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.hudi.parser.HoodieSpark2ExtendedSqlParser
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.DataType
-import org.apache.spark.sql.{Row, SparkSession}
+import org.apache.spark.sql.{HoodieCatalystExpressionUtils, HoodieSpark2CatalystExpressionUtils, Row, SparkSession}
 
 import scala.collection.mutable.ArrayBuffer
 
 /**
- * The adapter for spark2.
+ * Implementation of [[SparkAdapter]] for Spark 2.4.x
  */
 class Spark2Adapter extends SparkAdapter {
 
-  def createAvroSerializer(rootCatalystType: DataType, rootAvroType: Schema, nullable: Boolean): HoodieAvroSerializerTrait =
-    new HoodieAvroSerializer(rootCatalystType, rootAvroType, nullable)
+  override def createCatalystExpressionUtils(): HoodieCatalystExpressionUtils = HoodieSpark2CatalystExpressionUtils
 
-  def createAvroDeserializer(rootAvroType: Schema, rootCatalystType: DataType): HoodieAvroDeserializerTrait =
-    new Spark2HoodieAvroDeserializer(rootAvroType, rootCatalystType)
+  override def createAvroSerializer(rootCatalystType: DataType, rootAvroType: Schema, nullable: Boolean): HoodieAvroSerializer =
+    new HoodieSpark2_4AvroSerializer(rootCatalystType, rootAvroType, nullable)
+
+  override def createAvroDeserializer(rootAvroType: Schema, rootCatalystType: DataType): HoodieAvroDeserializer =
+    new HoodieSpark2_4AvroDeserializer(rootAvroType, rootCatalystType)
+
+  override def getAvroSchemaConverters: HoodieAvroSchemaConverters = HoodieSparkAvroSchemaConverters
 
   override def createSparkRowSerDe(encoder: ExpressionEncoder[Row]): SparkRowSerDe = {
     new Spark2RowSerDe(encoder)
@@ -136,5 +143,29 @@ class Spark2Adapter extends SparkAdapter {
     }
     closePartition()
     partitions.toSeq
+  }
+
+  /**
+   * if the logical plan is a TimeTravelRelation LogicalPlan.
+   */
+  override def isRelationTimeTravel(plan: LogicalPlan): Boolean = {
+    false
+  }
+
+  /**
+   * Get the member of the TimeTravelRelation LogicalPlan.
+   */
+  override def getRelationTimeTravel(plan: LogicalPlan): Option[(LogicalPlan, Option[Expression], Option[String])] = {
+    throw new IllegalStateException(s"Should not call getRelationTimeTravel for spark2")
+  }
+
+  override def createResolveHudiAlterTableCommand(sparkSession: SparkSession): Rule[LogicalPlan] = {
+    new Rule[LogicalPlan] {
+      override def apply(plan: LogicalPlan): LogicalPlan = plan
+    }
+  }
+
+  override def createHoodieParquetFileFormat(appendPartitionValues: Boolean): Option[ParquetFileFormat] = {
+    Some(new Spark24HoodieParquetFileFormat(appendPartitionValues))
   }
 }

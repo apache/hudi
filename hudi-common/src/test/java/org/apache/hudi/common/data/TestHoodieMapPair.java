@@ -25,6 +25,9 @@ import org.apache.hudi.common.util.collection.Pair;
 
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -33,7 +36,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
+import static org.apache.hudi.common.util.CollectionUtils.createImmutableList;
+import static org.apache.hudi.common.util.CollectionUtils.createImmutableMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class TestHoodieMapPair {
@@ -115,6 +121,29 @@ public class TestHoodieMapPair {
               return new ImmutablePair<>(pair.getKey() + "0",
                   Integer.parseInt(String.valueOf(value.charAt(value.length() - 1))));
             })));
+  }
+
+  private static Stream<Arguments> testReduceByKey() {
+    return Stream.of(
+        Arguments.of(
+            createImmutableMap(
+                Pair.of(1, createImmutableList(1001)),
+                Pair.of(2, createImmutableList(2001)),
+                Pair.of(3, createImmutableList(3001)),
+                Pair.of(4, createImmutableList())),
+            createImmutableMap(
+                Pair.of(1, createImmutableList(1001, 1002, 1003)),
+                Pair.of(2, createImmutableList(2001, 2002)),
+                Pair.of(3, createImmutableList(3001)),
+                Pair.of(4, createImmutableList())))
+    );
+  }
+
+  @ParameterizedTest
+  @MethodSource
+  public void testReduceByKey(Map<Integer, List<Integer>> expected, Map<Integer, List<Integer>> original) {
+    HoodiePairData<Integer, Integer> reduced = HoodieMapPair.of(original).reduceByKey((a, b) -> a, 1);
+    assertEquals(expected, HoodieMapPair.getMapPair(reduced));
   }
 
   @Test

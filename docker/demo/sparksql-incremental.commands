@@ -21,6 +21,8 @@ import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.spark.sql.SaveMode;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.HoodieDataSourceHelpers;
+import org.apache.hudi.hive.HiveSyncConfig;
+import org.apache.hudi.sync.common.HoodieSyncConfig;
 import org.apache.hudi.hive.MultiPartKeysValueExtractor;
 import org.apache.hadoop.fs.FileSystem;
 
@@ -43,14 +45,14 @@ spark.sql("select key, `_hoodie_partition_path` as datestr, symbol, ts, open, cl
     option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key(), "datestr").
     option(DataSourceWriteOptions.PRECOMBINE_FIELD.key(), "ts").
     option(HoodieWriteConfig.TBL_NAME.key(), "stock_ticks_derived_mor").
-    option(DataSourceWriteOptions.HIVE_TABLE.key(), "stock_ticks_derived_mor").
-    option(DataSourceWriteOptions.HIVE_DATABASE.key(), "default").
-    option(DataSourceWriteOptions.HIVE_URL.key(), "jdbc:hive2://hiveserver:10000").
-    option(DataSourceWriteOptions.HIVE_USER.key(), "hive").
-    option(DataSourceWriteOptions.HIVE_PASS.key(), "hive").
-    option(DataSourceWriteOptions.HIVE_SYNC_ENABLED.key(), "true").
-    option(DataSourceWriteOptions.HIVE_PARTITION_FIELDS.key(), "datestr").
-    option(DataSourceWriteOptions.HIVE_PARTITION_EXTRACTOR_CLASS.key(), classOf[MultiPartKeysValueExtractor].getCanonicalName).
+    option(HoodieSyncConfig.META_SYNC_TABLE_NAME.key(), "stock_ticks_derived_mor").
+    option(HoodieSyncConfig.META_SYNC_DATABASE_NAME.key(), "default").
+    option(HiveSyncConfig.HIVE_URL.key(), "jdbc:hive2://hiveserver:10000").
+    option(HiveSyncConfig.HIVE_USER.key(), "hive").
+    option(HiveSyncConfig.HIVE_PASS.key(), "hive").
+    option(HiveSyncConfig.HIVE_SYNC_ENABLED.key(), "true").
+    option(HoodieSyncConfig.META_SYNC_PARTITION_FIELDS.key(), "datestr").
+    option(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key(), classOf[MultiPartKeysValueExtractor].getCanonicalName).
     option(DataSourceWriteOptions.URL_ENCODE_PARTITIONING.key(), "true").
     mode(SaveMode.Overwrite).
     save("/user/hive/warehouse/stock_ticks_derived_mor");
@@ -75,14 +77,14 @@ spark.sql("select key, `_hoodie_partition_path` as datestr, symbol, ts, open, cl
     option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key(), "datestr").
     option(DataSourceWriteOptions.PRECOMBINE_FIELD.key(), "ts").
     option(HoodieWriteConfig.TBL_NAME.key(), "stock_ticks_derived_mor_bs").
-    option(DataSourceWriteOptions.HIVE_TABLE.key(), "stock_ticks_derived_mor_bs").
-    option(DataSourceWriteOptions.HIVE_DATABASE.key(), "default").
-    option(DataSourceWriteOptions.HIVE_URL.key(), "jdbc:hive2://hiveserver:10000").
-    option(DataSourceWriteOptions.HIVE_USER.key(), "hive").
-    option(DataSourceWriteOptions.HIVE_PASS.key(), "hive").
-    option(DataSourceWriteOptions.HIVE_SYNC_ENABLED.key(), "true").
-    option(DataSourceWriteOptions.HIVE_PARTITION_FIELDS.key(), "datestr").
-    option(DataSourceWriteOptions.HIVE_PARTITION_EXTRACTOR_CLASS.key(), classOf[MultiPartKeysValueExtractor].getCanonicalName).
+    option(HoodieSyncConfig.META_SYNC_TABLE_NAME.key(), "stock_ticks_derived_mor_bs").
+    option(HoodieSyncConfig.META_SYNC_DATABASE_NAME.key(), "default").
+    option(HiveSyncConfig.HIVE_URL.key(), "jdbc:hive2://hiveserver:10000").
+    option(HiveSyncConfig.HIVE_USER.key(), "hive").
+    option(HiveSyncConfig.HIVE_PASS.key(), "hive").
+    option(HiveSyncConfig.HIVE_SYNC_ENABLED.key(), "true").
+    option(HoodieSyncConfig.META_SYNC_PARTITION_FIELDS.key(), "datestr").
+    option(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key(), classOf[MultiPartKeysValueExtractor].getCanonicalName).
     option(DataSourceWriteOptions.URL_ENCODE_PARTITIONING.key(), "true").
     mode(SaveMode.Overwrite).
     save("/user/hive/warehouse/stock_ticks_derived_mor_bs");

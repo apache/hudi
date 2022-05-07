@@ -39,6 +39,7 @@ import org.apache.hudi.common.testutils.Transformations;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.HoodieIndex.IndexType;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
@@ -556,7 +557,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       // initialize partitioner
       hoodieTable.getHoodieView().sync();
       BaseSparkDeltaCommitActionExecutor actionExecutor = new SparkDeleteDeltaCommitActionExecutor(context(), cfg, hoodieTable,
-          newDeleteTime, deleteRDD);
+          newDeleteTime, HoodieJavaRDD.of(deleteRDD));
       actionExecutor.getUpsertPartitioner(new WorkloadProfile(buildProfile(deleteRDD)));
       final List<List<WriteStatus>> deleteStatus = jsc().parallelize(Arrays.asList(1)).map(x -> {
         return actionExecutor.handleUpdate(partitionPath, fileId, fewRecordsForDelete.iterator());

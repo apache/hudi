@@ -20,8 +20,7 @@ package org.apache.hudi.index.bloom;
 
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.client.utils.LazyIterableIterator;
-import org.apache.hudi.common.bloom.BloomFilterTypeCode;
-import org.apache.hudi.common.bloom.HoodieDynamicBoundedBloomFilter;
+import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
@@ -37,8 +36,6 @@ import org.apache.log4j.Logger;
 import org.apache.spark.api.java.function.Function2;
 import scala.Tuple2;
 
-import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -113,7 +110,7 @@ public class HoodieMetadataBloomIndexCheckFunction implements
       }
 
       List<Pair<String, String>> partitionNameFileNameList = new ArrayList<>(fileToKeysMap.keySet());
-      Map<Pair<String, String>, ByteBuffer> fileToBloomFilterMap =
+      Map<Pair<String, String>, BloomFilter> fileToBloomFilterMap =
           hoodieTable.getMetadataTable().getBloomFilters(partitionNameFileNameList);
 
       final AtomicInteger totalKeys = new AtomicInteger(0);
@@ -126,11 +123,7 @@ public class HoodieMetadataBloomIndexCheckFunction implements
         if (!fileToBloomFilterMap.containsKey(partitionPathFileNamePair)) {
           throw new HoodieIndexException("Failed to get the bloom filter for " + partitionPathFileNamePair);
         }
-        final ByteBuffer fileBloomFilterByteBuffer = fileToBloomFilterMap.get(partitionPathFileNamePair);
-
-        HoodieDynamicBoundedBloomFilter fileBloomFilter =
-            new HoodieDynamicBoundedBloomFilter(StandardCharsets.UTF_8.decode(fileBloomFilterByteBuffer).toString(),
-                BloomFilterTypeCode.DYNAMIC_V0);
+        final BloomFilter fileBloomFilter = fileToBloomFilterMap.get(partitionPathFileNamePair);
 
         List<String> candidateRecordKeys = new ArrayList<>();
         hoodieKeyList.forEach(hoodieKey -> {

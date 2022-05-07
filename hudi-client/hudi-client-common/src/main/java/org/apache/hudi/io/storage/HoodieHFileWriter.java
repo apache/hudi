@@ -18,14 +18,6 @@
 
 package org.apache.hudi.io.storage;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.common.bloom.BloomFilter;
-import org.apache.hudi.common.engine.TaskContextSupplier;
-import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
-import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
-
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -38,6 +30,13 @@ import org.apache.hadoop.hbase.io.hfile.HFile;
 import org.apache.hadoop.hbase.io.hfile.HFileContext;
 import org.apache.hadoop.hbase.io.hfile.HFileContextBuilder;
 import org.apache.hadoop.io.Writable;
+import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.common.engine.TaskContextSupplier;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
+import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 
@@ -95,6 +94,7 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
 
     HFileContext context = new HFileContextBuilder().withBlockSize(hfileConfig.getBlockSize())
         .withCompression(hfileConfig.getCompressionAlgorithm())
+        .withCellComparator(hfileConfig.getHFileComparator())
         .build();
 
     conf.set(CacheConfig.PREFETCH_BLOCKS_ON_OPEN_KEY, String.valueOf(hfileConfig.shouldPrefetchBlocksOnOpen()));
@@ -104,20 +104,19 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
     this.writer = HFile.getWriterFactory(conf, cacheConfig)
         .withPath(this.fs, this.file)
         .withFileContext(context)
-        .withComparator(hfileConfig.getHfileComparator())
         .create();
 
-    writer.appendFileInfo(HoodieHFileReader.KEY_SCHEMA.getBytes(), schema.toString().getBytes());
+    writer.appendFileInfo(HoodieHFileReader.SCHEMA_KEY.getBytes(), schema.toString().getBytes());
   }
 
   @Override
-  public void writeAvroWithMetadata(R avroRecord, HoodieRecord record) throws IOException {
+  public void writeAvroWithMetadata(HoodieKey key, R avroRecord) throws IOException {
     if (populateMetaFields) {
-      prepRecordWithMetadata(avroRecord, record, instantTime,
+      prepRecordWithMetadata(key, avroRecord, instantTime,
           taskContextSupplier.getPartitionIdSupplier().get(), recordIndex, file.getName());
-      writeAvro(record.getRecordKey(), (IndexedRecord) avroRecord);
+      writeAvro(key.getRecordKey(), avroRecord);
     } else {
-      writeAvro(record.getRecordKey(), (IndexedRecord) avroRecord);
+      writeAvro(key.getRecordKey(), avroRecord);
     }
   }
 
@@ -186,10 +185,5 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
 
     writer.close();
     writer = null;
-  }
-
-  @Override
-  public long getBytesWritten() {
-    return fs.getBytesWritten(file);
   }
 }

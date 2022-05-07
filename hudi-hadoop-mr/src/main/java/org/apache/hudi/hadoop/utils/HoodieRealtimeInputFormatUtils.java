@@ -19,35 +19,17 @@
 package org.apache.hudi.hadoop.utils;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
 import org.apache.hadoop.mapred.FileSplit;
 import org.apache.hadoop.mapred.JobConf;
-import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.FileSlice;
-import org.apache.hudi.common.model.HoodieBaseFile;
-import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.realtime.HoodieRealtimeBootstrapBaseFileSplit;
 import org.apache.hudi.hadoop.realtime.HoodieRealtimeFileSplit;
 import org.apache.hudi.hadoop.realtime.HoodieVirtualKeyInfo;
 import org.apache.hudi.hadoop.realtime.RealtimeSplit;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import static org.apache.hudi.TypeUtils.unsafeCast;
 
@@ -66,41 +48,6 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
 
     return false;
   }
-
-  // Return parquet file with a list of log files in the same file group.
-  public static List<Pair<Option<HoodieBaseFile>, List<HoodieLogFile>>> groupLogsByBaseFile(Configuration conf, List<Path> partitionPaths) {
-    Set<Path> partitionSet = new HashSet<>(partitionPaths);
-    // TODO(vc): Should we handle also non-hoodie splits here?
-    Map<Path, HoodieTableMetaClient> partitionsToMetaClient = getTableMetaClientByPartitionPath(conf, partitionSet);
-
-    // Get all the base file and it's log files pairs in required partition paths.
-    List<Pair<Option<HoodieBaseFile>, List<HoodieLogFile>>> baseAndLogsList = new ArrayList<>();
-    partitionSet.forEach(partitionPath -> {
-      // for each partition path obtain the data & log file groupings, then map back to inputsplits
-      HoodieTableMetaClient metaClient = partitionsToMetaClient.get(partitionPath);
-      HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline());
-      String relPartitionPath = FSUtils.getRelativePartitionPath(new Path(metaClient.getBasePath()), partitionPath);
-
-      try {
-        // Both commit and delta-commits are included - pick the latest completed one
-        Option<HoodieInstant> latestCompletedInstant =
-            metaClient.getCommitsAndCompactionTimeline().filterCompletedAndCompactionInstants().lastInstant();
-
-        Stream<FileSlice> latestFileSlices = latestCompletedInstant
-            .map(instant -> fsView.getLatestMergedFileSlicesBeforeOrOn(relPartitionPath, instant.getTimestamp()))
-            .orElse(Stream.empty());
-
-        latestFileSlices.forEach(fileSlice -> {
-          List<HoodieLogFile> logFilePaths = fileSlice.getLogFiles().sorted(HoodieLogFile.getLogFileComparator()).collect(Collectors.toList());
-          baseAndLogsList.add(Pair.of(fileSlice.getBaseFile(), logFilePaths));
-        });
-      } catch (Exception e) {
-        throw new HoodieException("Error obtaining data file/log file grouping: " + partitionPath, e);
-      }
-    });
-    return baseAndLogsList;
-  }
-
 
   /**
    * Add a field to the existing fields projected.

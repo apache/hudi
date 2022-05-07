@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi
 
-class TestDropTable extends TestHoodieSqlBase {
+class TestDropTable extends HoodieSparkSqlTestBase {
 
   test("Test Drop Table") {
     withTempDir { tmp =>

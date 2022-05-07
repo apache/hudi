@@ -21,11 +21,14 @@ package org.apache.hudi.utilities.sources;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerMetrics;
+import org.apache.hudi.utilities.exception.HoodieSourcePostProcessException;
 import org.apache.hudi.utilities.exception.HoodieSourceTimeoutException;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.CheckpointUtils;
+import org.apache.hudi.utilities.sources.processor.JsonKafkaSourcePostProcessor;
 
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.log4j.LogManager;
@@ -36,6 +39,8 @@ import org.apache.spark.sql.SparkSession;
 import org.apache.spark.streaming.kafka010.KafkaUtils;
 import org.apache.spark.streaming.kafka010.LocationStrategies;
 import org.apache.spark.streaming.kafka010.OffsetRange;
+
+import java.io.IOException;
 
 /**
  * Read json kafka data.
@@ -74,12 +79,30 @@ public class JsonKafkaSource extends JsonSource {
   }
 
   private JavaRDD<String> toRDD(OffsetRange[] offsetRanges) {
-    return KafkaUtils.createRDD(sparkContext,
+    JavaRDD<String> jsonStringRDD = KafkaUtils.createRDD(sparkContext,
             offsetGen.getKafkaParams(),
             offsetRanges,
             LocationStrategies.PreferConsistent())
-        .filter(x -> !StringUtils.isNullOrEmpty((String)x.value()))
+        .filter(x -> !StringUtils.isNullOrEmpty((String) x.value()))
         .map(x -> x.value().toString());
+    return postProcess(jsonStringRDD);
+  }
+
+  private JavaRDD<String> postProcess(JavaRDD<String> jsonStringRDD) {
+    String postProcessorClassName = this.props.getString(KafkaOffsetGen.Config.JSON_KAFKA_PROCESSOR_CLASS_OPT.key(), null);
+    // no processor, do nothing
+    if (StringUtils.isNullOrEmpty(postProcessorClassName)) {
+      return jsonStringRDD;
+    }
+
+    JsonKafkaSourcePostProcessor processor;
+    try {
+      processor = UtilHelpers.createJsonKafkaSourcePostProcessor(postProcessorClassName, this.props);
+    } catch (IOException e) {
+      throw new HoodieSourcePostProcessException("Could not init " + postProcessorClassName, e);
+    }
+
+    return processor.process(jsonStringRDD);
   }
 
   @Override

@@ -18,23 +18,38 @@
 
 package org.apache.hudi.common.model;
 
+import javax.annotation.Nullable;
+import java.io.Serializable;
 import java.util.Objects;
 
 /**
- * Hoodie Range metadata.
+ * Hoodie metadata for the column range of data stored in columnar format (like Parquet)
+ *
+ * NOTE: {@link Comparable} is used as raw-type so that we can handle polymorphism, where
+ *        caller apriori is not aware of the type {@link HoodieColumnRangeMetadata} is
+ *        associated with
  */
-public class HoodieColumnRangeMetadata<T> {
+@SuppressWarnings("rawtype")
+public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializable {
   private final String filePath;
   private final String columnName;
+  @Nullable
   private final T minValue;
+  @Nullable
   private final T maxValue;
   private final long nullCount;
   private final long valueCount;
   private final long totalSize;
   private final long totalUncompressedSize;
 
-  public HoodieColumnRangeMetadata(final String filePath, final String columnName, final T minValue, final T maxValue,
-                                   final long nullCount, long valueCount, long totalSize, long totalUncompressedSize) {
+  private HoodieColumnRangeMetadata(String filePath,
+                                    String columnName,
+                                    @Nullable T minValue,
+                                    @Nullable T maxValue,
+                                    long nullCount,
+                                    long valueCount,
+                                    long totalSize,
+                                    long totalUncompressedSize) {
     this.filePath = filePath;
     this.columnName = columnName;
     this.minValue = minValue;
@@ -53,10 +68,12 @@ public class HoodieColumnRangeMetadata<T> {
     return this.columnName;
   }
 
+  @Nullable
   public T getMinValue() {
     return this.minValue;
   }
 
+  @Nullable
   public T getMaxValue() {
     return this.maxValue;
   }
@@ -113,5 +130,22 @@ public class HoodieColumnRangeMetadata<T> {
         + ", totalSize=" + totalSize
         + ", totalUncompressedSize=" + totalUncompressedSize
         + '}';
+  }
+
+  public static <T extends Comparable<T>> HoodieColumnRangeMetadata<T> create(String filePath,
+                                                                              String columnName,
+                                                                              @Nullable T minValue,
+                                                                              @Nullable T maxValue,
+                                                                              long nullCount,
+                                                                              long valueCount,
+                                                                              long totalSize,
+                                                                              long totalUncompressedSize) {
+    return new HoodieColumnRangeMetadata<>(filePath, columnName, minValue, maxValue, nullCount, valueCount, totalSize, totalUncompressedSize);
+  }
+
+  @SuppressWarnings("rawtype")
+  public static HoodieColumnRangeMetadata<Comparable> stub(String filePath,
+                                                           String columnName) {
+    return new HoodieColumnRangeMetadata<>(filePath, columnName, null, null, -1, -1, -1, -1);
   }
 }

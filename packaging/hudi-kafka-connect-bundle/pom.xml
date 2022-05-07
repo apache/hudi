@@ -20,7 +20,7 @@
     <parent>
         <artifactId>hudi</artifactId>
         <groupId>org.apache.hudi</groupId>
-        <version>0.11.0-SNAPSHOT</version>
+        <version>0.12.0-SNAPSHOT</version>
         <relativePath>../../pom.xml</relativePath>
     </parent>
     <modelVersion>4.0.0</modelVersion>
@@ -58,14 +58,16 @@
                                         implementation="org.apache.maven.plugins.shade.resource.ApacheLicenseResourceTransformer">
                                 </transformer>
                                 <transformer
-                                        implementation="org.apache.maven.plugins.shade.resource.ApacheNoticeResourceTransformer">
+                                    implementation="org.apache.maven.plugins.shade.resource.ApacheNoticeResourceTransformer">
                                     <addHeader>true</addHeader>
                                 </transformer>
                                 <transformer
-                                        implementation="org.apache.maven.plugins.shade.resource.IncludeResourceTransformer">
+                                    implementation="org.apache.maven.plugins.shade.resource.IncludeResourceTransformer">
                                     <resource>META-INF/LICENSE</resource>
                                     <file>target/classes/META-INF/LICENSE</file>
                                 </transformer>
+                                <transformer
+                                    implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
                             </transformers>
                             <artifactSet>
                                 <includes>
@@ -83,7 +85,7 @@
                                     <include>org.apache.hudi:hudi-aws</include>
 
                                     <!-- NOTE: This is temp (SchemaProvide dep) until PR3162 lands -->
-                                    <include>org.apache.hudi:hudi-flink_${scala.binary.version}</include>
+                                    <include>org.apache.hudi:hudi-flink</include>
                                     <include>org.apache.hudi:flink-core</include>
                                     <include>org.apache.hudi:hudi-flink-client</include>
                                     <include>org.apache.flink:flink-core</include>
@@ -115,13 +117,21 @@
                                     <include>org.objenesis:objenesis</include>
                                     <include>com.esotericsoftware:kryo-shaded</include>
                                     <include>com.esotericsoftware:minlog</include>
-                                    
+
                                     <include>org.apache.hbase:hbase-client</include>
                                     <include>org.apache.hbase:hbase-common</include>
-                                    <include>org.apache.hbase:hbase-protocol</include>
+                                    <include>org.apache.hbase:hbase-hadoop-compat</include>
+                                    <include>org.apache.hbase:hbase-hadoop2-compat</include>
+                                    <include>org.apache.hbase:hbase-metrics</include>
+                                    <include>org.apache.hbase:hbase-metrics-api</include>
+                                    <include>org.apache.hbase:hbase-protocol-shaded</include>
                                     <include>org.apache.hbase:hbase-server</include>
-                                    <include>org.apache.htrace:htrace-core</include>
+                                    <include>org.apache.hbase.thirdparty:hbase-shaded-miscellaneous</include>
+                                    <include>org.apache.hbase.thirdparty:hbase-shaded-netty</include>
+                                    <include>org.apache.hbase.thirdparty:hbase-shaded-protobuf</include>
+                                    <include>org.apache.htrace:htrace-core4</include>
                                     <include>org.scala-lang:*</include>
+                                    <include>commons-io:commons-io</include>
                                 </includes>
                             </artifactSet>
                             <relocations>
@@ -131,15 +141,107 @@
                                 </relocation>
                                 <relocation>
                                     <pattern>com.yammer.metrics.</pattern>
-                                    <shadedPattern>${kafka.connect.bundle.shade.prefix}com.yammer.metrics.</shadedPattern>
+                                    <shadedPattern>${kafka.connect.bundle.shade.prefix}com.yammer.metrics.
+                                    </shadedPattern>
                                 </relocation>
                                 <relocation>
                                     <pattern>com.beust.jcommander.</pattern>
-                                    <shadedPattern>${kafka.connect.bundle.shade.prefix}com.beust.jcommander.</shadedPattern>
+                                    <shadedPattern>${kafka.connect.bundle.shade.prefix}com.beust.jcommander.
+                                    </shadedPattern>
                                 </relocation>
                                 <relocation>
                                     <pattern>org.eclipse.jetty.</pattern>
-                                    <shadedPattern>${kafka.connect.bundle.shade.prefix}org.eclipse.jetty.</shadedPattern>
+                                    <shadedPattern>${kafka.connect.bundle.shade.prefix}org.eclipse.jetty.
+                                    </shadedPattern>
+                                </relocation>
+                                <relocation>
+                                    <pattern>org.apache.commons.io.</pattern>
+                                    <shadedPattern>org.apache.hudi.org.apache.commons.io.</shadedPattern>
+                                </relocation>
+                                <relocation>
+                                    <pattern>org.apache.hadoop.hbase.</pattern>
+                                    <shadedPattern>org.apache.hudi.org.apache.hadoop.hbase.</shadedPattern>
+                                    <excludes>
+                                        <exclude>org.apache.hadoop.hbase.KeyValue$KeyComparator</exclude>
+                                    </excludes>
+                                </relocation>
+                                <relocation>
+                                    <pattern>org.apache.hbase.</pattern>
+                                    <shadedPattern>org.apache.hudi.org.apache.hbase.</shadedPattern>
+                                </relocation>
+                                <relocation>
+                                    <pattern>org.apache.htrace.</pattern>
+                                    <shadedPattern>org.apache.hudi.org.apache.htrace.</shadedPattern>
+                                </relocation>
+                                <!-- The classes below in org.apache.hadoop.metrics2 package come from
+                hbase-hadoop-compat and hbase-hadoop2-compat, which have to be shaded one by one,
+                instead of shading all classes under org.apache.hadoop.metrics2 including ones
+                from hadoop. -->
+                                <relocation>
+                                    <pattern>org.apache.hadoop.metrics2.MetricHistogram</pattern>
+                                    <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.MetricHistogram
+                                    </shadedPattern>
+                                </relocation>
+                                <relocation>
+                                    <pattern>org.apache.hadoop.metrics2.MetricsExecutor</pattern>
+                                    <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.MetricsExecutor
+                                    </shadedPattern>
+                                </relocation>
+                                <relocation>
+                                    <pattern>org.apache.hadoop.metrics2.impl.JmxCacheBuster</pattern>
+                                    <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.impl.JmxCacheBuster
+                                    </shadedPattern>
+                                </relocation>
+                                <relocation>
+                                    <pattern>org.apache.hadoop.metrics2.lib.DefaultMetricsSystemHelper</pattern>
+                                    <shadedPattern>
+                                        org.apache.hudi.org.apache.hadoop.metrics2.lib.DefaultMetricsSystemHelper
+                                    </shadedPattern>
+                                </relocation>
+                                <relocation>
+                                    <pattern>org.apache.hadoop.metrics2.lib.DynamicMetricsRegistry</pattern>
+                                    <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.DynamicMetricsRegistry
+                                    </shadedPattern>
+                                </relocation>
+                                <relocation>
+                                    <pattern>org.apache.hadoop.metrics2.lib.MetricsExecutorImpl</pattern>
+                                    <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.MetricsExecutorImpl
+                                    </shadedPattern>
+                                </relocation>
+                                <relocation>
+                                    <pattern>org.apache.hadoop.metrics2.lib.MutableFastCounter</pattern>
+                                    <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.MutableFastCounter
+                                    </shadedPattern>
+                                </relocation>
+                                <relocation>
+                                    <pattern>org.apache.hadoop.metrics2.lib.MutableHistogram</pattern>
+                                    <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.MutableHistogram
+                                    </shadedPattern>
+                                </relocation>
+                                <relocation>
+                                    <pattern>org.apache.hadoop.metrics2.lib.MutableRangeHistogram</pattern>
+                                    <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.MutableRangeHistogram
+                                    </shadedPattern>
+                                </relocation>
+                                <relocation>
+                                    <pattern>org.apache.hadoop.metrics2.lib.MutableSizeHistogram</pattern>
+                                    <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.MutableSizeHistogram
+                                    </shadedPattern>
+                                </relocation>
+                                <relocation>
+                                    <pattern>org.apache.hadoop.metrics2.lib.MutableTimeHistogram</pattern>
+                                    <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.MutableTimeHistogram
+                                    </shadedPattern>
+                                </relocation>
+                                <relocation>
+                                    <pattern>org.apache.hadoop.metrics2.util.MetricQuantile</pattern>
+                                    <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.util.MetricQuantile
+                                    </shadedPattern>
+                                </relocation>
+                                <relocation>
+                                    <pattern>org.apache.hadoop.metrics2.util.MetricSampleQuantiles</pattern>
+                                    <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.util.MetricSampleQuantiles
+                                    </shadedPattern>
                                 </relocation>
                             </relocations>
                             <filters>
@@ -150,6 +252,8 @@
                                         <exclude>META-INF/*.DSA</exclude>
                                         <exclude>META-INF/*.RSA</exclude>
                                         <exclude>META-INF/services/javax.*</exclude>
+                                        <exclude>**/*.proto</exclude>
+                                        <exclude>hbase-webapps/**</exclude>
                                     </excludes>
                                 </filter>
                             </filters>
@@ -320,13 +424,6 @@
             <artifactId>hive-common</artifactId>
             <version>${hive.version}</version>
             <scope>${utilities.bundle.hive.scope}</scope>
-        </dependency>
-
-        <dependency>
-            <groupId>org.apache.htrace</groupId>
-            <artifactId>htrace-core</artifactId>
-            <version>${htrace.version}</version>
-            <scope>compile</scope>
         </dependency>
 
     </dependencies>
