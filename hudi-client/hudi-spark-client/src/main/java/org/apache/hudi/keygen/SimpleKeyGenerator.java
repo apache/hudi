@@ -35,8 +35,6 @@ import static org.apache.hudi.keygen.KeyGenUtils.HUDI_DEFAULT_PARTITION_PATH;
  */
 public class SimpleKeyGenerator extends BuiltinKeyGenerator {
 
-  protected static final UTF8String HUDI_DEFAULT_PARTITION_PATH_UTF8 = UTF8String.fromString(HUDI_DEFAULT_PARTITION_PATH);
-
   private final SimpleAvroKeyGenerator simpleAvroKeyGenerator;
 
   public SimpleKeyGenerator(TypedProperties props) {
@@ -100,28 +98,12 @@ public class SimpleKeyGenerator extends BuiltinKeyGenerator {
   @Override
   public String getPartitionPath(Row row) {
     tryInitRowAccessor(row.schema());
-
-    Object[] partitionPathValues = rowAccessor.getRecordPartitionPathValues(row);
-    // NOTE: [[SimpleKeyGenerator]] is restricted to allow only primitive (non-composite)
-    //       partition-path field
-    if (partitionPathValues[0] == null) {
-      return combinePartitionPath(HUDI_DEFAULT_PARTITION_PATH);
-    } else {
-      return combinePartitionPath(partitionPathValues[0]);
-    }
+    return combinePartitionPath(rowAccessor.getRecordPartitionPathValues(row));
   }
 
   @Override
   public UTF8String getPartitionPath(InternalRow row, StructType schema) {
     tryInitRowAccessor(schema);
-
-    Object[] partitionPathValues = rowAccessor.getRecordPartitionPathValues(row);
-    // NOTE: [[SimpleKeyGenerator]] is restricted to allow only primitive (non-composite)
-    //       partition-path field
-    if (partitionPathValues[0] == null) {
-      return combinePartitionPathUnsafe(HUDI_DEFAULT_PARTITION_PATH_UTF8);
-    } else {
-      return combinePartitionPathUnsafe(partitionPathValues[0].toString());
-    }
+    return combinePartitionPathUnsafe(rowAccessor.getRecordPartitionPathValues(row));
   }
 }

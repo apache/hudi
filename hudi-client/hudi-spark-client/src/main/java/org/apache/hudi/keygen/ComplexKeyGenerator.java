@@ -23,15 +23,25 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
+import org.apache.spark.sql.catalyst.expressions.codegen.UTF8StringBuilder;
 import org.apache.spark.sql.types.StructType;
+import org.apache.spark.unsafe.types.UTF8String;
 
 import java.util.Arrays;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.keygen.KeyGenUtils.DEFAULT_RECORD_KEY_PARTS_SEPARATOR;
+
 /**
- * Complex key generator, which takes names of fields to be used for recordKey and partitionPath as configs.
+ * Key generator prefixing field names before corresponding record-key parts.
+ *
+ * <p/>
+ * For example, for the schema of {@code { "key": string, "value": bytes }}, and corresponding record
+ * {@code { "key": "foo" }}, record-key "key:foo" will be produced.
  */
 public class ComplexKeyGenerator extends BuiltinKeyGenerator {
+
+  private static final String COMPOSITE_KEY_FIELD_VALUE_INFIX = ":";
 
   private final ComplexAvroKeyGenerator complexAvroKeyGenerator;
 
@@ -60,8 +70,14 @@ public class ComplexKeyGenerator extends BuiltinKeyGenerator {
 
   @Override
   public String getRecordKey(Row row) {
-    buildFieldSchemaInfoIfNeeded(row.schema());
-    return RowKeyGeneratorHelper.getRecordKeyFromRow(row, getRecordKeyFields(), recordKeySchemaInfo, true);
+    tryInitRowAccessor(row.schema());
+    return combineCompositeRecordKey(rowAccessor.getRecordKeyParts(row));
+  }
+
+  @Override
+  public UTF8String getRecordKey(InternalRow internalRow, StructType schema) {
+    tryInitRowAccessor(schema);
+    return combineCompositeRecordKeyUnsafe(rowAccessor.getRecordKeyParts(internalRow));
   }
 
   @Override
@@ -72,14 +88,44 @@ public class ComplexKeyGenerator extends BuiltinKeyGenerator {
 
   @Override
   public String getPartitionPath(Row row) {
-    buildFieldSchemaInfoIfNeeded(row.schema());
-    return RowKeyGeneratorHelper.getPartitionPathFromRow(row, getPartitionPathFields(),
-        hiveStylePartitioning, partitionPathSchemaInfo);
+    tryInitRowAccessor(row.schema());
+    return combinePartitionPath(rowAccessor.getRecordPartitionPathValues(row));
   }
 
   @Override
-  public String getPartitionPath(InternalRow row, StructType structType) {
-    return getPartitionPathInternal(row, structType);
+  public UTF8String getPartitionPath(InternalRow row, StructType schema) {
+    tryInitRowAccessor(schema);
+    return combinePartitionPathUnsafe(rowAccessor.getRecordPartitionPathValues(row));
   }
 
+  private String combineCompositeRecordKey(Object ...recordKeyParts) {
+    StringBuilder sb = new StringBuilder();
+    for (int i = 0; i < recordKeyParts.length; ++i) {
+      sb.append(recordKeyFields.get(i));
+      sb.append(COMPOSITE_KEY_FIELD_VALUE_INFIX);
+      // NOTE: If record-key part has already been a string [[toString]] will be a no-op
+      sb.append(requireNonNullNonEmptyKey(recordKeyParts[i].toString()));
+
+      if (i < recordKeyParts.length - 1) {
+        sb.append(DEFAULT_RECORD_KEY_PARTS_SEPARATOR);
+      }
+    }
+
+    return sb.toString();
+  }
+
+  private UTF8String combineCompositeRecordKeyUnsafe(Object ...recordKeyParts) {
+    UTF8StringBuilder sb = new UTF8StringBuilder();
+    for (int i = 0; i < recordKeyParts.length; ++i) {
+      sb.append(recordKeyFields.get(i));
+      sb.append(COMPOSITE_KEY_FIELD_VALUE_INFIX);
+      sb.append(requireNonNullNonEmptyKey(toUTF8String(recordKeyParts[i])));
+
+      if (i < recordKeyParts.length - 1) {
+        sb.append(DEFAULT_RECORD_KEY_PARTS_SEPARATOR);
+      }
+    }
+
+    return sb.build();
+  }
 }

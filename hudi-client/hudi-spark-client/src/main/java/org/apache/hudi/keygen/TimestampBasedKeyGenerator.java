@@ -19,16 +19,18 @@
 package org.apache.hudi.keygen;
 
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.exception.HoodieKeyGeneratorException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.types.StructType;
+import org.apache.spark.unsafe.types.UTF8String;
 
 import java.io.IOException;
+import java.util.Objects;
 
+import static org.apache.hudi.keygen.KeyGenUtils.HUDI_DEFAULT_PARTITION_PATH;
 import static org.apache.hudi.keygen.KeyGenUtils.EMPTY_RECORDKEY_PLACEHOLDER;
 import static org.apache.hudi.keygen.KeyGenUtils.HUDI_DEFAULT_PARTITION_PATH;
 import static org.apache.hudi.keygen.KeyGenUtils.NULL_RECORDKEY_PLACEHOLDER;
@@ -61,39 +63,38 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
 
   @Override
   public String getRecordKey(Row row) {
-    buildFieldSchemaInfoIfNeeded(row.schema());
-    return RowKeyGeneratorHelper.getRecordKeyFromRow(row, getRecordKeyFields(), recordKeySchemaInfo, false);
+    tryInitRowAccessor(row.schema());
+    return combineRecordKey(rowAccessor.getRecordKeyParts(row));
+  }
+
+  @Override
+  public UTF8String getRecordKey(InternalRow internalRow, StructType schema) {
+    tryInitRowAccessor(schema);
+    return combineRecordKeyUnsafe(rowAccessor.getRecordKeyParts(internalRow));
   }
 
   @Override
   public String getPartitionPath(Row row) {
-    buildFieldSchemaInfoIfNeeded(row.schema());
-    Object partitionPathFieldVal = RowKeyGeneratorHelper.getNestedFieldVal(row, partitionPathSchemaInfo.get(getPartitionPathFields().get(0)).getKey());
-    return getTimestampBasedPartitionPath(partitionPathFieldVal);
+    tryInitRowAccessor(row.schema());
+    Object[] partitionPathValues = rowAccessor.getRecordPartitionPathValues(row);
+    return getFormattedPartitionPath(partitionPathValues[0]);
   }
 
   @Override
-  public String getPartitionPath(InternalRow internalRow, StructType structType) {
-    buildFieldSchemaInfoIfNeeded(structType);
-    validatePartitionFieldsForInternalRow();
-    Object partitionPathFieldVal = RowKeyGeneratorHelper.getFieldValFromInternalRow(internalRow,
-        partitionPathSchemaInfo.get(getPartitionPathFields().get(0)).getKey().get(0),
-        partitionPathSchemaInfo.get(getPartitionPathFields().get(0)).getValue());
-    return getTimestampBasedPartitionPath(partitionPathFieldVal);
+  public UTF8String getPartitionPath(InternalRow row, StructType schema) {
+    tryInitRowAccessor(schema);
+    Object[] partitionPathValues = rowAccessor.getRecordPartitionPathValues(row);
+    return UTF8String.fromString(getFormattedPartitionPath(partitionPathValues[0]));
   }
 
-  private String getTimestampBasedPartitionPath(Object partitionPathFieldVal) {
-    Object fieldVal = null;
-    try {
-      if (partitionPathFieldVal == null || partitionPathFieldVal.toString().contains(HUDI_DEFAULT_PARTITION_PATH) || partitionPathFieldVal.toString().contains(NULL_RECORDKEY_PLACEHOLDER)
-          || partitionPathFieldVal.toString().contains(EMPTY_RECORDKEY_PLACEHOLDER)) {
-        fieldVal = timestampBasedAvroKeyGenerator.getDefaultPartitionVal();
-      } else {
-        fieldVal = partitionPathFieldVal;
-      }
-      return timestampBasedAvroKeyGenerator.getPartitionPath(fieldVal);
-    } catch (Exception e) {
-      throw new HoodieKeyGeneratorException("Unable to parse input partition field :" + fieldVal, e);
+  private String getFormattedPartitionPath(Object partitionPathPart) {
+    Object fieldVal;
+    if (partitionPathPart == null || Objects.equals(partitionPathPart, HUDI_DEFAULT_PARTITION_PATH)) {
+      fieldVal = timestampBasedAvroKeyGenerator.getDefaultPartitionVal();
+    } else {
+      fieldVal = partitionPathPart;
     }
+
+    return timestampBasedAvroKeyGenerator.getPartitionPath(fieldVal);
   }
 }
