@@ -94,7 +94,7 @@ public class FlinkWriteHelper<T extends HoodieRecordPayload, R> extends BaseWrit
     Map<Object, List<HoodieRecord<T>>> keyedRecords = records.stream()
         .collect(Collectors.groupingBy(record -> record.getKey().getRecordKey()));
 
-    return keyedRecords.values().stream().map(x -> x.stream().reduce((rec1, rec2) -> {
+    List<HoodieRecord<T>> deduplicated = keyedRecords.values().stream().map(x -> x.stream().reduce((rec1, rec2) -> {
       final T data1 = rec1.getData();
       final T data2 = rec2.getData();
 
@@ -110,5 +110,13 @@ public class FlinkWriteHelper<T extends HoodieRecordPayload, R> extends BaseWrit
       hoodieRecord.setCurrentLocation(rec1.getCurrentLocation());
       return hoodieRecord;
     }).orElse(null)).filter(Objects::nonNull).collect(Collectors.toList());
+
+    // the deduplicated records would then hand over to the writer,
+    // in which the first record should log the bucket type, here is the instant time.
+    if (deduplicated.size() > 0) {
+      deduplicated.get(0).setCurrentLocation(records.get(0).getCurrentLocation());
+    }
+
+    return deduplicated;
   }
 }
