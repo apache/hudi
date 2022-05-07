@@ -41,7 +41,7 @@ class TestHoodieUnsafeRowUtils {
 
     assertEquals(
       Seq((1, schema(1)), (0, schema(1).dataType.asInstanceOf[StructType](0))),
-      composeNestedFieldPath(schema, "bar.baz").toSeq)
+      composeNestedFieldPath(schema, "bar.baz").parts.toSeq)
 
     assertThrows(classOf[IllegalArgumentException]) { () =>
       composeNestedFieldPath(schema, "foo.baz")
