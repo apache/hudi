@@ -28,26 +28,26 @@ import org.apache.spark.sql.{AnalysisException, Row, SaveMode, SparkSession}
 
 case class AlterHoodieTableDropPartitionCommand(
    tableIdentifier: TableIdentifier,
-   partitionSpecs: Seq[TablePartitionSpec],
+   specs: Seq[TablePartitionSpec],
    ifExists : Boolean,
    purge : Boolean,
    retainData : Boolean)
   extends HoodieLeafRunnableCommand with ProvidesHoodieConfig {
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
-    val fullTableName = s"${tableIdentifier.database}.${tableIdentifier.table}"
-    logInfo(s"start execute alter table drop partition command for $fullTableName")
+    logInfo(s"Dropping partition(s) of ${tableIdentifier.unquotedString} with condition: $specs.")
 
     val hoodieCatalogTable = HoodieCatalogTable(sparkSession, tableIdentifier)
 
     if (!hoodieCatalogTable.isPartitionedTable) {
-      throw new AnalysisException(s"$fullTableName is a non-partitioned table that is not allowed to drop partition")
+      throw new AnalysisException(s"${tableIdentifier.unquotedString} is a non-partitioned" +
+        s" table that is not allowed to drop partition.")
     }
 
     DDLUtils.verifyAlterTableType(
       sparkSession.sessionState.catalog, hoodieCatalogTable.table, isView = false)
 
-    val normalizedSpecs: Seq[Map[String, String]] = partitionSpecs.map { spec =>
+    val normalizedSpecs: Seq[Map[String, String]] = specs.map { spec =>
       normalizePartitionSpec(
         spec,
         hoodieCatalogTable.partitionFields,
@@ -57,7 +57,7 @@ case class AlterHoodieTableDropPartitionCommand(
 
     // drop partitions to lazy clean (https://github.com/apache/hudi/pull/4489)
     // delete partition files by enabling cleaner and setting retention policies.
-    val partitionsToDrop = getPartitionPathToDrop(hoodieCatalogTable, normalizedSpecs)
+    val partitionsToDrop = getMatchingPartitions(hoodieCatalogTable, normalizedSpecs).mkString(",")
     val parameters = buildHoodieDropPartitionsConfig(sparkSession, hoodieCatalogTable, partitionsToDrop)
     HoodieSparkSqlWriter.write(
       sparkSession.sqlContext,
@@ -66,7 +66,7 @@ case class AlterHoodieTableDropPartitionCommand(
       sparkSession.emptyDataFrame)
 
     sparkSession.catalog.refreshTable(tableIdentifier.unquotedString)
-    logInfo(s"Finish execute alter table drop partition command for $fullTableName")
+    logInfo(s"Finished dropping partition(s) on ${tableIdentifier.unquotedString}.")
     Seq.empty[Row]
   }
 }
