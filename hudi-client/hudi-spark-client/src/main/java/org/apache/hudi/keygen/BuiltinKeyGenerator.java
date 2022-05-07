@@ -42,6 +42,7 @@ import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 import static org.apache.hudi.keygen.KeyGenUtils.DEFAULT_PARTITION_PATH_SEPARATOR;
 import static org.apache.hudi.keygen.KeyGenUtils.DEFAULT_RECORD_KEY_PARTS_SEPARATOR;
+import static org.apache.hudi.keygen.KeyGenUtils.HUDI_DEFAULT_PARTITION_PATH;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -56,6 +57,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 @ThreadSafe
 public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements SparkKeyGeneratorInterface {
+
+  protected static final UTF8String HUDI_DEFAULT_PARTITION_PATH_UTF8 = UTF8String.fromString(HUDI_DEFAULT_PARTITION_PATH);
 
   protected transient volatile SparkRowConverter rowConverter;
   protected transient volatile SparkRowAccessor rowAccessor;
@@ -120,17 +123,23 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
     // Avoid creating [[StringBuilder]] in case there's just one partition-path part,
     // and Hive-style of partitioning is not required
     if (!hiveStylePartitioning && partitionPathParts.length == 1) {
-      return partitionPathParts[0].toString();
+      return partitionPathParts[0] != null
+          ? partitionPathParts[0].toString()
+          : HUDI_DEFAULT_PARTITION_PATH;
     }
 
     StringBuilder sb = new StringBuilder();
     for (int i = 0; i < partitionPathParts.length; ++i) {
+      String partitionPathPartStr = partitionPathParts[i] != null
+          ? partitionPathParts[i].toString()
+          : HUDI_DEFAULT_PARTITION_PATH;
+
       if (hiveStylePartitioning) {
         sb.append(recordKeyFields.get(i))
             .append("=")
-            .append(partitionPathParts[i].toString());
+            .append(partitionPathPartStr);
       } else {
-        sb.append(partitionPathParts[i]);
+        sb.append(partitionPathPartStr);
       }
 
       if (i < partitionPathParts.length - 1) {
@@ -150,17 +159,23 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
     // Avoid creating [[StringBuilder]] in case there's just one partition-path part,
     // and Hive-style of partitioning is not required
     if (!hiveStylePartitioning && partitionPathParts.length == 1) {
-      return toUTF8String(partitionPathParts[0]);
+      return partitionPathParts[0] != null
+          ? toUTF8String(partitionPathParts[0])
+          : HUDI_DEFAULT_PARTITION_PATH_UTF8;
     }
 
     UTF8StringBuilder sb = new UTF8StringBuilder();
     for (int i = 0; i < partitionPathParts.length; ++i) {
+      UTF8String partitionPathPartStr = partitionPathParts[i] != null
+          ? toUTF8String(partitionPathParts[i])
+          : HUDI_DEFAULT_PARTITION_PATH_UTF8;
+
       if (hiveStylePartitioning) {
         sb.append(recordKeyFields.get(i));
         sb.append("=");
-        sb.append(toUTF8String(partitionPathParts[i]));
+        sb.append(partitionPathPartStr);
       } else {
-        sb.append(toUTF8String(partitionPathParts[i]));
+        sb.append(partitionPathPartStr);
       }
 
       if (i < partitionPathParts.length - 1) {
