@@ -18,20 +18,24 @@
 
 package org.apache.hudi.keygen;
 
+import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
-
-import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.types.StructType;
+import org.apache.spark.unsafe.types.UTF8String;
 
 import java.util.Collections;
+
+import static org.apache.hudi.keygen.KeyGenUtils.HUDI_DEFAULT_PARTITION_PATH;
 
 /**
  * Simple key generator, which takes names of fields to be used for recordKey and partitionPath as configs.
  */
 public class SimpleKeyGenerator extends BuiltinKeyGenerator {
+
+  protected static final UTF8String HUDI_DEFAULT_PARTITION_PATH_UTF8 = UTF8String.fromString(HUDI_DEFAULT_PARTITION_PATH);
 
   private final SimpleAvroKeyGenerator simpleAvroKeyGenerator;
 
@@ -50,7 +54,7 @@ public class SimpleKeyGenerator extends BuiltinKeyGenerator {
         ? Collections.emptyList() : Collections.singletonList(recordKeyField);
     this.partitionPathFields = partitionPathField == null
         ? Collections.emptyList() : Collections.singletonList(partitionPathField);
-    simpleAvroKeyGenerator = new SimpleAvroKeyGenerator(props, recordKeyField, partitionPathField);
+    this.simpleAvroKeyGenerator = new SimpleAvroKeyGenerator(props, recordKeyField, partitionPathField);
   }
 
   @Override
@@ -65,19 +69,59 @@ public class SimpleKeyGenerator extends BuiltinKeyGenerator {
 
   @Override
   public String getRecordKey(Row row) {
-    buildFieldSchemaInfoIfNeeded(row.schema());
-    return RowKeyGeneratorHelper.getRecordKeyFromRow(row, getRecordKeyFields(), recordKeySchemaInfo, false);
+    tryInitRowAccessor(row.schema());
+
+    Object[] recordKeys = rowAccessor.getRecordKeyParts(row);
+    // NOTE: [[SimpleKeyGenerator]] is restricted to allow only primitive (non-composite)
+    //       record-key field
+    if (recordKeys[0] == null) {
+      return handleNullRecordKey();
+    } else {
+      return requireNonNullNonEmptyKey(recordKeys[0].toString());
+    }
+  }
+
+  @Override
+  public UTF8String getRecordKey(InternalRow internalRow, StructType schema) {
+    tryInitRowAccessor(schema);
+
+    Object[] recordKeyValues = rowAccessor.getRecordKeyParts(internalRow);
+    // NOTE: [[SimpleKeyGenerator]] is restricted to allow only primitive (non-composite)
+    //       record-key field
+    if (recordKeyValues[0] == null) {
+      return handleNullRecordKey();
+    } else if (recordKeyValues[0] instanceof UTF8String) {
+      return requireNonNullNonEmptyKey((UTF8String) recordKeyValues[0]);
+    } else {
+      return requireNonNullNonEmptyKey(UTF8String.fromString(recordKeyValues[0].toString()));
+    }
   }
 
   @Override
   public String getPartitionPath(Row row) {
-    buildFieldSchemaInfoIfNeeded(row.schema());
-    return RowKeyGeneratorHelper.getPartitionPathFromRow(row, getPartitionPathFields(),
-        hiveStylePartitioning, partitionPathSchemaInfo);
+    tryInitRowAccessor(row.schema());
+
+    Object[] partitionPathValues = rowAccessor.getRecordPartitionPathValues(row);
+    // NOTE: [[SimpleKeyGenerator]] is restricted to allow only primitive (non-composite)
+    //       partition-path field
+    if (partitionPathValues[0] == null) {
+      return combinePartitionPath(HUDI_DEFAULT_PARTITION_PATH);
+    } else {
+      return combinePartitionPath(partitionPathValues[0]);
+    }
   }
 
   @Override
-  public String getPartitionPath(InternalRow row, StructType structType) {
-    return getPartitionPathInternal(row, structType);
+  public UTF8String getPartitionPath(InternalRow row, StructType schema) {
+    tryInitRowAccessor(schema);
+
+    Object[] partitionPathValues = rowAccessor.getRecordPartitionPathValues(row);
+    // NOTE: [[SimpleKeyGenerator]] is restricted to allow only primitive (non-composite)
+    //       partition-path field
+    if (partitionPathValues[0] == null) {
+      return combinePartitionPathUnsafe(HUDI_DEFAULT_PARTITION_PATH_UTF8);
+    } else {
+      return combinePartitionPathUnsafe(partitionPathValues[0].toString());
+    }
   }
 }

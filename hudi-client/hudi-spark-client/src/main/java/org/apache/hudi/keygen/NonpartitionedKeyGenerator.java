@@ -18,42 +18,39 @@
 
 package org.apache.hudi.keygen;
 
+import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
-
-import org.apache.avro.generic.GenericRecord;
-import org.apache.spark.sql.HoodieUnsafeRowUtils$;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
-import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
-import scala.Tuple2;
+import org.apache.spark.unsafe.types.UTF8String;
 
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
-import java.util.function.Function;
 import java.util.stream.Collectors;
-
-import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 
 /**
  * Simple Key generator for non-partitioned Hive Tables.
  */
 public class NonpartitionedKeyGenerator extends BuiltinKeyGenerator {
 
-  // TODO reconcile
-  private Map<String, Tuple2<Object, StructField>[]> recordKeyFieldToNestedFieldPath;
-
   private final NonpartitionedAvroKeyGenerator nonpartitionedAvroKeyGenerator;
 
   public NonpartitionedKeyGenerator(TypedProperties props) {
     super(props);
     this.recordKeyFields = Arrays.stream(props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key())
-        .split(",")).map(String::trim).collect(Collectors.toList());
+        .split(","))
+        .map(String::trim)
+        .collect(Collectors.toList());
     this.partitionPathFields = Collections.emptyList();
-    nonpartitionedAvroKeyGenerator = new NonpartitionedAvroKeyGenerator(props);
+    this.nonpartitionedAvroKeyGenerator = new NonpartitionedAvroKeyGenerator(props);
+  }
+
+  @Override
+  public List<String> getPartitionPathFields() {
+    return nonpartitionedAvroKeyGenerator.getPartitionPathFields();
   }
 
   @Override
@@ -63,24 +60,16 @@ public class NonpartitionedKeyGenerator extends BuiltinKeyGenerator {
 
   @Override
   public String getRecordKey(Row row) {
-    initRecordKeyNestedFieldPaths(row.schema());
+    tryInitRowAccessor(row.schema());
 
-    // TODO support composite keys
-    Tuple2<Object, StructField>[] nestedFieldPath = recordKeyFieldToNestedFieldPath.get(getRecordKeyFields().get(0));
-    return unsafeCast(HoodieUnsafeRowUtils$.MODULE$.getNestedRowValue(row, nestedFieldPath));
+    return combineRecordKey(rowAccessor.getRecordKeyParts(row));
   }
 
   @Override
-  public String getRecordKey(InternalRow internalRow, StructType schema) {
-    initRecordKeyNestedFieldPaths(schema);
+  public UTF8String getRecordKey(InternalRow internalRow, StructType schema) {
+    tryInitRowAccessor(schema);
 
-    // TODO support composite keys
-    Tuple2<Object, StructField>[] nestedFieldPath = recordKeyFieldToNestedFieldPath.get(getRecordKeyFields().get(0));
-    return HoodieUnsafeRowUtils$.MODULE$.getNestedInternalRowValue(internalRow, nestedFieldPath)
-        // NOTE: Spark stores all strings as UTF8, while Java by default stores them as UTF16;
-        //       We have to invoke [[toString]] to convert from Spark's [[UTF8String]] to Java's
-        //       [[String]]
-        .toString();
+    return combineRecordKeyUnsafe(rowAccessor.getRecordKeyParts(internalRow));
   }
 
   @Override
@@ -89,34 +78,13 @@ public class NonpartitionedKeyGenerator extends BuiltinKeyGenerator {
   }
 
   @Override
-  public List<String> getPartitionPathFields() {
-    return nonpartitionedAvroKeyGenerator.getPartitionPathFields();
-  }
-
-  @Override
-  public String getRecordKey(Row row) {
-    buildFieldSchemaInfoIfNeeded(row.schema());
-    return RowKeyGeneratorHelper.getRecordKeyFromRow(row, getRecordKeyFields(), recordKeySchemaInfo, false);
-  }
-
-  @Override
   public String getPartitionPath(Row row) {
     return nonpartitionedAvroKeyGenerator.getEmptyPartition();
   }
 
   @Override
-  public String getPartitionPath(InternalRow internalRow, StructType structType) {
-    return nonpartitionedAvroKeyGenerator.getEmptyPartition();
-  }
-
-  private void initRecordKeyNestedFieldPaths(StructType schema) {
-    if (structType == null) {
-      this.structType = schema;
-      this.recordKeyFieldToNestedFieldPath = getRecordKeyFields().stream()
-          .collect(Collectors.toMap(
-              Function.identity(),
-              keyField -> HoodieUnsafeRowUtils$.MODULE$.composeNestedFieldPath(schema, keyField)));
-    }
+  public UTF8String getPartitionPath(InternalRow row, StructType schema) {
+    return UTF8String.EMPTY_UTF8;
   }
 }
 

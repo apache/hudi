@@ -24,12 +24,14 @@ import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.client.utils.SparkRowSerDe;
 import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.spark.sql.HoodieUnsafeRowUtils;
 import org.apache.spark.sql.HoodieUnsafeRowUtils$;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
+import org.apache.spark.sql.catalyst.expressions.codegen.UTF8StringBuilder;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.unsafe.types.UTF8String;
 import scala.Function1;
@@ -37,6 +39,9 @@ import scala.Function1;
 import javax.annotation.concurrent.ThreadSafe;
 
 import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
+import static org.apache.hudi.common.util.ValidationUtils.checkState;
+import static org.apache.hudi.keygen.KeyGenUtils.DEFAULT_PARTITION_PATH_SEPARATOR;
+import static org.apache.hudi.keygen.KeyGenUtils.DEFAULT_RECORD_KEY_PARTS_SEPARATOR;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -96,21 +101,154 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
     return UTF8String.fromString(getPartitionPath(avroRecord));
   }
 
-  private void tryInitRowConverter(StructType structType) {
-    if (rowConverter == null) {
+  protected void tryInitRowAccessor(StructType schema) {
+    if (this.rowAccessor == null) {
       synchronized (this) {
-        if (rowConverter == null) {
-          rowConverter = new SparkRowConverter(structType);
+        if (this.rowAccessor == null) {
+          this.rowAccessor = new SparkRowAccessor(schema);
         }
       }
     }
   }
 
-  void tryInitRowAccessor(StructType schema) {
-    if (this.rowAccessor == null) {
+  /**
+   * NOTE: This method has to stay final (so that it's easier for JIT compiler to apply certain
+   *       optimizations, like inlining)
+   */
+  protected final String combinePartitionPath(Object ...partitionPathParts) {
+    checkState(partitionPathParts.length == recordKeyFields.size());
+    // Avoid creating [[StringBuilder]] in case there's just one partition-path part,
+    // and Hive-style of partitioning is not required
+    if (!hiveStylePartitioning && partitionPathParts.length == 1) {
+      return partitionPathParts[0].toString();
+    }
+
+    StringBuilder sb = new StringBuilder();
+    for (int i = 0; i < partitionPathParts.length; ++i) {
+      if (hiveStylePartitioning) {
+        sb.append(recordKeyFields.get(i))
+            .append("=")
+            .append(partitionPathParts[i].toString());
+      } else {
+        sb.append(partitionPathParts[i]);
+      }
+
+      if (i < partitionPathParts.length - 1) {
+        sb.append(DEFAULT_PARTITION_PATH_SEPARATOR);
+      }
+    }
+
+    return sb.toString();
+  }
+
+  /**
+   * NOTE: This method has to stay final (so that it's easier for JIT compiler to apply certain
+   *       optimizations, like inlining)
+   */
+  protected final UTF8String combinePartitionPathUnsafe(Object ...partitionPathParts) {
+    checkState(partitionPathParts.length == recordKeyFields.size());
+    // Avoid creating [[StringBuilder]] in case there's just one partition-path part,
+    // and Hive-style of partitioning is not required
+    if (!hiveStylePartitioning && partitionPathParts.length == 1) {
+      return toUTF8String(partitionPathParts[0]);
+    }
+
+    UTF8StringBuilder sb = new UTF8StringBuilder();
+    for (int i = 0; i < partitionPathParts.length; ++i) {
+      if (hiveStylePartitioning) {
+        sb.append(recordKeyFields.get(i));
+        sb.append("=");
+        sb.append(toUTF8String(partitionPathParts[i]));
+      } else {
+        sb.append(toUTF8String(partitionPathParts[i]));
+      }
+
+      if (i < partitionPathParts.length - 1) {
+        sb.append(DEFAULT_PARTITION_PATH_SEPARATOR);
+      }
+    }
+
+    return sb.build();
+  }
+
+  /**
+   * NOTE: This method has to stay final (so that it's easier for JIT compiler to apply certain
+   *       optimizations, like inlining)
+   */
+  protected final String combineRecordKey(Object ...recordKeyParts) {
+    if (recordKeyParts.length == 1) {
+      return requireNonNullNonEmptyKey(recordKeyParts[0].toString());
+    }
+
+    StringBuilder sb = new StringBuilder();
+    for (int i = 0; i < recordKeyParts.length; ++i) {
+      // NOTE: If record-key part has already been a string [[toString]] will be a no-op
+      sb.append(requireNonNullNonEmptyKey(recordKeyParts[i].toString()));
+
+      if (i < recordKeyParts.length - 1) {
+        sb.append(DEFAULT_RECORD_KEY_PARTS_SEPARATOR);
+      }
+    }
+
+    return sb.toString();
+  }
+
+  /**
+   * NOTE: This method has to stay final (so that it's easier for JIT compiler to apply certain
+   *       optimizations, like inlining)
+   */
+  protected final UTF8String combineRecordKeyUnsafe(Object ...recordKeyParts) {
+    if (recordKeyParts.length == 1) {
+      return requireNonNullNonEmptyKey(toUTF8String(recordKeyParts[0]));
+    }
+
+    UTF8StringBuilder sb = new UTF8StringBuilder();
+    for (int i = 0; i < recordKeyParts.length; ++i) {
+      // NOTE: If record-key part has already been a string [[toString]] will be a no-op
+      sb.append(requireNonNullNonEmptyKey(toUTF8String(recordKeyParts[i])));
+
+      if (i < recordKeyParts.length - 1) {
+        sb.append(DEFAULT_RECORD_KEY_PARTS_SEPARATOR);
+      }
+    }
+
+    return sb.build();
+  }
+
+  protected static UTF8String toUTF8String(Object o) {
+    if (o instanceof UTF8String) {
+      return (UTF8String) o;
+    } else {
+      // NOTE: If object is a [[String]], [[toString]] would be a no-op
+      return UTF8String.fromString(o.toString());
+    }
+  }
+
+  protected static String requireNonNullNonEmptyKey(String key) {
+    if (key != null && key.length() > 0) {
+      return key;
+    } else {
+      throw new HoodieKeyException("Record key has to be non-empty string!");
+    }
+  }
+
+  protected static UTF8String requireNonNullNonEmptyKey(UTF8String key) {
+    if (key != null && key.numChars() > 0) {
+      return key;
+    } else {
+      throw new HoodieKeyException("Record key has to be non-empty string!");
+    }
+  }
+
+  protected static <T> T handleNullRecordKey() {
+    throw new HoodieKeyException("Record key has to be non-null!");
+  }
+
+  private void tryInitRowConverter(StructType structType) {
+    if (rowConverter == null) {
       synchronized (this) {
-        if (this.rowAccessor == null) {
-          this.rowAccessor = new SparkRowAccessor(schema);
+        if (rowConverter == null) {
+          rowConverter = new SparkRowConverter(structType);
         }
       }
     }
@@ -152,7 +290,7 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
               .toArray());
     }
 
-    public Object[] getRecordKeys(Row row) {
+    public Object[] getRecordKeyParts(Row row) {
       return getNestedFieldValues(row, recordKeyFieldsPaths);
     }
 
@@ -160,7 +298,7 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
       return getNestedFieldValues(row, partitionPathFieldsPaths);
     }
 
-    public Object[] getRecordKeys(InternalRow row) {
+    public Object[] getRecordKeyParts(InternalRow row) {
       return getNestedFieldValues(row, recordKeyFieldsPaths);
     }
 

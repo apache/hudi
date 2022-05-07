@@ -42,6 +42,7 @@ public class KeyGenUtils {
 
   protected static final String HUDI_DEFAULT_PARTITION_PATH = PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH;
   public static final String DEFAULT_PARTITION_PATH_SEPARATOR = "/";
+  public static final String DEFAULT_RECORD_KEY_PARTS_SEPARATOR = ",";
 
   /**
    * Fetches record key from the GenericRecord.
