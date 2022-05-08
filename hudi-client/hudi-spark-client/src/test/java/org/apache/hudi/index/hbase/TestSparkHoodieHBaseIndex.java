@@ -58,6 +58,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -91,6 +92,8 @@ import static org.mockito.Mockito.when;
  * (see one problem here : https://issues.apache.org/jira/browse/HBASE-15835). Hence, the need to use
  * {@link MethodOrderer.Alphanumeric} to make sure the tests run in order. Please alter the order of tests running carefully.
  */
+
+@Disabled
 @TestMethodOrder(MethodOrderer.Alphanumeric.class)
 @Tag("functional")
 public class TestSparkHoodieHBaseIndex extends SparkClientFunctionalTestHarness {
