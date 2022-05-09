@@ -45,12 +45,9 @@ public class MergeOnReadInputSplit implements InputSplit {
   private final Option<InstantRange> instantRange;
   private String fileId;
 
-
   // for streaming reader to record the consumed offset,
   // which is the start of next round reading.
   private long consumed = NUM_NO_CONSUMPTION;
-
-
 
   public MergeOnReadInputSplit(
       int splitNum,
