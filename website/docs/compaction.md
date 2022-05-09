@@ -136,3 +136,5 @@ Offline compaction needs to submit the Flink task on the command line. The progr
 | `--compaction-max-memory` | `false` | `100` | The index map size of log data during compaction, 100 MB by default. If you have enough memory, you can turn up this parameter |
 | `--schedule` | `false` | `false` | whether to execute the operation of scheduling compaction plan. When the write process is still writing， turning on this parameter have a risk of losing data. Therefore, it must be ensured that there are no write tasks currently writing data to this table when this parameter is turned on |
 | `--seq` | `false` | `LIFO` | The order in which compaction tasks are executed. Executing from the latest compaction plan by default. `LIFO`: executing from the latest plan. `FIFO`: executing from the oldest plan. |
+| `--service` | `false` | `false` | Whether to start a monitoring service that checks and schedules new compaction task in configured interval. |
+| `--min-compaction-interval-seconds` | `false` | `600(s)` | The checking interval for service mode, by default 10 minutes. |

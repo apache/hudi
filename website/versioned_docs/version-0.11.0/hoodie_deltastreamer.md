@@ -369,8 +369,6 @@ We recommend two ways for syncing CDC data into Hudi:
 
 :::note
 - If the upstream data cannot guarantee the order, you need to specify option `write.precombine.field` explicitly;
-- The MOR table can not handle DELETEs in event time sequence now, thus causing data loss. You better switch on the changelog mode through
-  option `changelog.enabled`.
 :::
 
 ### Bulk Insert
@@ -401,8 +399,8 @@ will rollover to the new file handle. Finally, `the number of files` >= [`write.
 |  -----------  | -------  | ------- | ------- |
 | `write.operation` | `true` | `upsert` | Setting as `bulk_insert` to open this function  |
 | `write.tasks`  |  `false`  | `4` | The parallelism of `bulk_insert`, `the number of files` >= [`write.bucket_assign.tasks`](/docs/configurations#writebucket_assigntasks) |
-| `write.bulk_insert.shuffle_by_partition` | `false` | `true` | Whether to shuffle data according to the partition field before writing. Enabling this option will reduce the number of small files, but there may be a risk of data skew |
-| `write.bulk_insert.sort_by_partition` | `false`  | `true` | Whether to sort data according to the partition field before writing. Enabling this option will reduce the number of small files when a write task writes multiple partitions |
+| `write.bulk_insert.shuffle_input` | `false` | `true` | Whether to shuffle data according to the input field before writing. Enabling this option will reduce the number of small files, but there may be a risk of data skew |
+| `write.bulk_insert.sort_input` | `false`  | `true` | Whether to sort data according to the input field before writing. Enabling this option will reduce the number of small files when a write task writes multiple partitions |
 | `write.sort.memory` | `false` | `128` | Available managed memory of sort operator. default  `128` MB |
 
 ### Index Bootstrap
@@ -495,7 +493,9 @@ value as `earliest` if you want to consume all the history data set.
 
 :::note
 When option `read.streaming.skip_compaction` turns on and the streaming reader lags behind by commits of number
-`clean.retain_commits`, the data loss may occur.
+`clean.retain_commits`, the data loss may occur. The compaction keeps the original instant time as the per-record metadata,
+the streaming reader would read and skip the whole base files if the log has been consumed. For efficiency, option `read.streaming.skip_compaction`
+is till suggested being `true`.
 :::
 
 ### Incremental Query
