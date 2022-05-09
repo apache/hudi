@@ -1585,6 +1585,24 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
       assertNotEquals(tableSchemaResolver.getTableAvroSchema(), Schema.create(Schema.Type.NULL).toString());
     }
+
+    // proceed w/ non empty batch.
+    prepareParquetDFSFiles(100, PARQUET_SOURCE_ROOT, "3.parquet", false, null, null);
+    deltaStreamer.sync();
+    TestHelpers.assertRecordCount(PARQUET_NUM_RECORDS + 100, tableBasePath, sqlContext);
+    // validate commit metadata for all completed commits to have valid schema in extra metadata.
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(tableBasePath).setConf(jsc.hadoopConfiguration()).build();
+    metaClient.reloadActiveTimeline().getCommitsTimeline().filterCompletedInstants().getInstants().forEach(entry -> assertValidSchemaInCommitMetadata(entry, metaClient));
+  }
+
+  private void assertValidSchemaInCommitMetadata(HoodieInstant instant, HoodieTableMetaClient metaClient) {
+    try {
+      HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
+          .fromBytes(metaClient.getActiveTimeline().getInstantDetails(instant).get(), HoodieCommitMetadata.class);
+      assertFalse(StringUtils.isNullOrEmpty(commitMetadata.getMetadata(HoodieCommitMetadata.SCHEMA_KEY)));
+    } catch (IOException ioException) {
+      throw new HoodieException("Failed to parse commit metadata for " + instant.toString());
+    }
   }
 
   private void testORCDFSSource(boolean useSchemaProvider, List<String> transformerClassNames) throws Exception {
