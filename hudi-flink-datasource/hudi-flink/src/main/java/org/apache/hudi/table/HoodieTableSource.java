@@ -18,7 +18,6 @@
 
 package org.apache.hudi.table;
 
-import org.apache.flink.api.java.functions.KeySelector;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.HoodieLogFile;
