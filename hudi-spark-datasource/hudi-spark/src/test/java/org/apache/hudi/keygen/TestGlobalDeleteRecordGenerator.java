@@ -68,7 +68,7 @@ public class TestGlobalDeleteRecordGenerator extends KeyGeneratorTestUtilities {
   public void testWrongRecordKeyField() {
     GlobalDeleteKeyGenerator keyGenerator = new GlobalDeleteKeyGenerator(getWrongRecordKeyFieldProps());
     Assertions.assertThrows(HoodieKeyException.class, () -> keyGenerator.getRecordKey(getRecord()));
-    Assertions.assertThrows(HoodieKeyException.class, () -> keyGenerator.buildFieldPositionMapIfNeeded(KeyGeneratorTestUtilities.structType));
+    Assertions.assertThrows(HoodieKeyException.class, () -> keyGenerator.buildFieldSchemaInfoIfNeeded(KeyGeneratorTestUtilities.structType));
   }
 
   @Test
@@ -78,7 +78,7 @@ public class TestGlobalDeleteRecordGenerator extends KeyGeneratorTestUtilities {
     HoodieKey key = keyGenerator.getKey(record);
     Assertions.assertEquals(key.getRecordKey(), "_row_key:key1,pii_col:pi");
     Assertions.assertEquals(key.getPartitionPath(), "");
-    keyGenerator.buildFieldPositionMapIfNeeded(KeyGeneratorTestUtilities.structType);
+    keyGenerator.buildFieldSchemaInfoIfNeeded(KeyGeneratorTestUtilities.structType);
     Row row = KeyGeneratorTestUtilities.getRow(record);
     Assertions.assertEquals(keyGenerator.getRecordKey(row), "_row_key:key1,pii_col:pi");
     Assertions.assertEquals(keyGenerator.getPartitionPath(row), "");

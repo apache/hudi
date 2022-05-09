@@ -384,12 +384,14 @@ public class HoodieTableMetaClient implements Serializable {
       throw new HoodieException(HoodieTableConfig.POPULATE_META_FIELDS.key() + " already disabled for the table. Can't be re-enabled back");
     }
 
-    // Meta fields can be disabled only when {@code SimpleKeyGenerator} is used
-    if (!getTableConfig().populateMetaFields()
-        && !properties.getProperty(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key(), "org.apache.hudi.keygen.SimpleKeyGenerator")
-        .equals("org.apache.hudi.keygen.SimpleKeyGenerator")) {
-      throw new HoodieException("Only simple key generator is supported when meta fields are disabled. KeyGenerator used : "
-          + properties.getProperty(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key()));
+    // meta fields can be disabled only with SimpleKeyGenerator, NonPartitioned and ComplexKeyGen.
+    if (!getTableConfig().populateMetaFields()) {
+      String keyGenClass = properties.getProperty(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key(), "org.apache.hudi.keygen.SimpleKeyGenerator");
+      if (!keyGenClass.equals("org.apache.hudi.keygen.SimpleKeyGenerator") && !keyGenClass.equals("org.apache.hudi.keygen.NonpartitionedKeyGenerator")
+          && !keyGenClass.equals("org.apache.hudi.keygen.ComplexKeyGenerator")) {
+        throw new HoodieException("Only simple, non partitioned and complex key generator is supported when meta fields are disabled. KeyGenerator used : "
+            + properties.getProperty(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key()));
+      }
     }
   }
 
