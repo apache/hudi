@@ -156,7 +156,7 @@ stages:
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'clean install'
-              options: -T 2.5C -Pintegration-tests -DskipTests
+              options: -T 2.5C -P$(SPARK_PROFILE),integration-tests -DskipTests
               publishJUnitResults: false
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
@@ -165,7 +165,7 @@ stages:
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
-              options: -Pintegration-tests -DskipUTs=false -DskipITs=true -pl hudi-integ-test test
+              options: -P$(SPARK_PROFILE),integration-tests -DskipUTs=false -DskipITs=true -pl hudi-integ-test test
               publishJUnitResults: false
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
