@@ -63,10 +63,6 @@ import org.apache.hudi.table.action.commit.JavaInsertPreppedCommitActionExecutor
 import org.apache.hudi.table.action.commit.JavaInsertOverwriteCommitActionExecutor;
 import org.apache.hudi.table.action.commit.JavaBulkInsertPreppedCommitActionExecutor;
 import org.apache.hudi.table.action.commit.JavaInsertOverwriteTableCommitActionExecutor;
-import org.apache.hudi.table.action.commit.JavaInsertPreppedCommitActionExecutor;
-import org.apache.hudi.table.action.commit.JavaMergeHelper;
-import org.apache.hudi.table.action.commit.JavaUpsertCommitActionExecutor;
-import org.apache.hudi.table.action.commit.JavaUpsertPreppedCommitActionExecutor;
 import org.apache.hudi.table.action.index.RunIndexActionExecutor;
 import org.apache.hudi.table.action.index.ScheduleIndexActionExecutor;
 import org.apache.hudi.table.action.commit.HoodieMergeHelper;
