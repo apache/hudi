@@ -42,6 +42,7 @@ import org.apache.flink.table.catalog.exceptions.DatabaseNotExistException;
 import org.apache.flink.table.catalog.exceptions.TableAlreadyExistException;
 import org.apache.flink.table.catalog.exceptions.TableNotExistException;
 import org.apache.flink.table.types.logical.LogicalTypeRoot;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -138,7 +139,7 @@ public class TestHoodieCatalog {
     catalog.open();
   }
 
-  @BeforeEach
+  @AfterEach
   void afterEach() {
     if (catalog != null) {
       catalog.close();
