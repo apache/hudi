@@ -34,13 +34,8 @@ import org.apache.hudi.index.FlinkHoodieIndexFactory;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.metadata.FlinkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
-import org.apache.hudi.table.action.HoodieWriteMetadata;
 
 import org.apache.avro.specific.SpecificRecordBase;
-
-import java.util.List;
-
-import static org.apache.hudi.common.data.HoodieList.getList;
 
 public abstract class HoodieFlinkTable<T extends HoodieRecordPayload>
     extends HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>>
