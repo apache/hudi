@@ -133,10 +133,6 @@ module.exports = {
           position: 'left',
           items: [
             {
-              label: 'Blog',
-              to: '/blog',
-            },
-            {
               label: 'Talks & Articles',
               to: 'talks-articles',
             },
@@ -194,6 +190,7 @@ module.exports = {
             }
           ],
         },
+        {to: '/blog', label: "Blog", position: 'left'},
         {to: '/powered-by', label: "Who's Using", position: 'left'},
         {to: '/roadmap', label: "Roadmap", position: 'left'},
         {to: '/releases/download', label: 'Download', position: 'left'},
