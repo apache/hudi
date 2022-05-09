@@ -37,6 +37,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.Map;
 
 /**
  * Helper class for bucket index bulk insert used by Flink.
@@ -90,14 +91,16 @@ public class BucketBulkInsertWriterHelper extends BulkInsertWriterHelper {
     return new SortOperatorGen(rowType, new String[] {FILE_GROUP_META_FIELD});
   }
 
-  private static String getFileId(RowDataKeyGen keyGen, RowData record, String indexKeyFields, int bucketNum) {
+  private static String getFileId(Map<String, String> bucketIdToFileId, RowDataKeyGen keyGen, RowData record, String indexKeys, int numBuckets) {
     String recordKey = keyGen.getRecordKey(record);
-    final int bucketId = BucketIdentifier.getBucketId(recordKey, indexKeyFields, bucketNum);
-    return BucketIdentifier.newBucketFileIdPrefix(bucketId);
+    String partition = keyGen.getPartitionPath(record);
+    final int bucketNum = BucketIdentifier.getBucketId(recordKey, indexKeys, numBuckets);
+    String bucketId = partition + bucketNum;
+    return bucketIdToFileId.computeIfAbsent(bucketId, k -> BucketIdentifier.newBucketFileIdPrefix(bucketNum));
   }
 
-  public static RowData rowWithFileId(RowDataKeyGen keyGen, RowData record, String indexKeyFields, int bucketNum) {
-    final String fileId = getFileId(keyGen, record, indexKeyFields, bucketNum);
+  public static RowData rowWithFileId(Map<String, String> bucketIdToFileId, RowDataKeyGen keyGen, RowData record, String indexKeys, int numBuckets) {
+    final String fileId = getFileId(bucketIdToFileId, keyGen, record, indexKeys, numBuckets);
     return GenericRowData.of(StringData.fromString(fileId), record);
   }
 

@@ -17,13 +17,13 @@
  */
 
 package org.apache.hudi
+
 import org.apache.avro.Schema.Type
 import org.apache.avro.generic.{GenericRecord, GenericRecordBuilder, IndexedRecord}
 import org.apache.avro.{AvroRuntimeException, JsonProperties, Schema}
 import org.apache.hudi.HoodieSparkUtils.sparkAdapter
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.avro.SchemaConverters
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.types.{ArrayType, DataType, MapType, StructType}
@@ -136,27 +136,36 @@ object AvroConversionUtils {
   }
 
   /**
-    *
-    * Returns avro schema from spark StructType.
-    *
-    * @param structType       Dataframe Struct Type.
-    * @param structName       Avro record name.
-    * @param recordNamespace  Avro record namespace.
-    * @return                 Avro schema corresponding to given struct type.
-    */
+   *
+   * Returns avro schema from spark StructType.
+   *
+   * @param structType      Dataframe Struct Type.
+   * @param structName      Avro record name.
+   * @param recordNamespace Avro record namespace.
+   * @return Avro schema corresponding to given struct type.
+   */
   def convertStructTypeToAvroSchema(structType: DataType,
                                     structName: String,
                                     recordNamespace: String): Schema = {
-    getAvroSchemaWithDefaults(SchemaConverters.toAvroType(structType, nullable = false, structName, recordNamespace), structType)
+    val schemaConverters = sparkAdapter.getAvroSchemaConverters
+    val avroSchema = schemaConverters.toAvroType(structType, nullable = false, structName, recordNamespace)
+    getAvroSchemaWithDefaults(avroSchema, structType)
+  }
+
+  def convertAvroSchemaToStructType(avroSchema: Schema): StructType = {
+    val schemaConverters = sparkAdapter.getAvroSchemaConverters
+    schemaConverters.toSqlType(avroSchema) match {
+      case (dataType, _) => dataType.asInstanceOf[StructType]
+    }
   }
 
   /**
-    *
-    * Method to add default value of null to nullable fields in given avro schema
-    *
-    * @param schema     input avro schema
-    * @return           Avro schema with null default set to nullable fields
-    */
+   *
+   * Method to add default value of null to nullable fields in given avro schema
+   *
+   * @param schema input avro schema
+   * @return Avro schema with null default set to nullable fields
+   */
   def getAvroSchemaWithDefaults(schema: Schema, dataType: DataType): Schema = {
 
     schema.getType match {
@@ -203,10 +212,6 @@ object AvroConversionUtils {
 
       case _ => schema
     }
-  }
-
-  def convertAvroSchemaToStructType(avroSchema: Schema): StructType = {
-    SchemaConverters.toSqlType(avroSchema).dataType.asInstanceOf[StructType]
   }
 
   def getAvroRecordNameAndNamespace(tableName: String): (String, String) = {

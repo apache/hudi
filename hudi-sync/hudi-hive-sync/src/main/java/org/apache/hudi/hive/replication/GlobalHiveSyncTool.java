@@ -55,10 +55,6 @@ public class GlobalHiveSyncTool extends HiveSyncTool {
     LOG.info("Sync complete for " + tableName);
   }
 
-  public void close() {
-    hoodieHiveClient.close();
-  }
-
   public Map<String, Option<String>> getLastReplicatedTimeStampMap() {
     Map<String, Option<String>> timeStampMap = new HashMap<>();
     Option<String> timeStamp = hoodieHiveClient.getLastReplicatedTime(snapshotTableName);

@@ -69,7 +69,7 @@ public abstract class BaseHoodieTableFileIndex {
   private final String[] partitionColumns;
 
   private final FileSystemViewStorageConfig fileSystemStorageConfig;
-  private final HoodieMetadataConfig metadataConfig;
+  protected final HoodieMetadataConfig metadataConfig;
 
   private final HoodieTableQueryType queryType;
   private final Option<String> specifiedQueryInstant;

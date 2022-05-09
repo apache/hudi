@@ -18,14 +18,16 @@
 package org.apache.hudi
 
 import org.apache.hudi.DataSourceReadOptions.{QUERY_TYPE, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, QUERY_TYPE_SNAPSHOT_OPT_VAL}
+import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.common.config.{ConfigProperty, HoodieConfig}
 import org.apache.hudi.common.fs.ConsistencyGuardConfig
 import org.apache.hudi.common.model.{HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.util.Option
+import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieWriteConfig}
 import org.apache.hudi.hive.util.ConfigUtils
-import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncTool, MultiPartKeysValueExtractor, NonPartitionedExtractor, SlashEncodedDayPartitionValueExtractor}
+import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncTool}
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.{ComplexKeyGenerator, CustomKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.sync.common.HoodieSyncConfig
@@ -45,6 +47,7 @@ import scala.language.implicitConversions
   * Options supported for reading hoodie tables.
   */
 object DataSourceReadOptions {
+  import DataSourceOptionsHelper._
 
   val QUERY_TYPE_SNAPSHOT_OPT_VAL = "snapshot"
   val QUERY_TYPE_READ_OPTIMIZED_OPT_VAL = "read_optimized"
@@ -119,10 +122,19 @@ object DataSourceReadOptions {
 
   val ENABLE_DATA_SKIPPING: ConfigProperty[Boolean] = ConfigProperty
     .key("hoodie.enable.data.skipping")
-    .defaultValue(true)
+    .defaultValue(false)
     .sinceVersion("0.10.0")
     .withDocumentation("Enables data-skipping allowing queries to leverage indexes to reduce the search space by " +
       "skipping over files")
+
+  val EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH: ConfigProperty[Boolean] =
+    ConfigProperty.key("hoodie.datasource.read.extract.partition.values.from.path")
+      .defaultValue(false)
+      .sinceVersion("0.11.0")
+      .withDocumentation("When set to true, values for partition columns (partition values) will be extracted" +
+        " from physical partition path (default Spark behavior). When set to false partition values will be" +
+        " read from the data file (in Hudi partition columns are persisted by default)." +
+        " This config is a fallback allowing to preserve existing behavior, and should not be used otherwise.")
 
   val INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.incr.fallback.fulltablescan.enable")
@@ -184,6 +196,8 @@ object DataSourceReadOptions {
   * Options supported for writing hoodie tables.
   */
 object DataSourceWriteOptions {
+
+  import DataSourceOptionsHelper._
 
   val BULK_INSERT_OPERATION_OPT_VAL = WriteOperationType.BULK_INSERT.value
   val INSERT_OPERATION_OPT_VAL = WriteOperationType.INSERT.value
@@ -471,11 +485,7 @@ object DataSourceWriteOptions {
     .sinceVersion("0.9.0")
     .withDocumentation("This class is used by kafka client to deserialize the records")
 
-  val DROP_PARTITION_COLUMNS: ConfigProperty[String] = ConfigProperty
-    .key("hoodie.datasource.write.drop.partition.columns")
-    .defaultValue("false")
-    .withDocumentation("When set to true, will not write the partition columns into hudi. " +
-      "By default, false.")
+  val DROP_PARTITION_COLUMNS: ConfigProperty[Boolean] = HoodieTableConfig.DROP_PARTITION_COLUMNS
 
   /** @deprecated Use {@link HIVE_ASSUME_DATE_PARTITION} and its methods instead */
   @Deprecated
@@ -774,5 +784,24 @@ object DataSourceOptionsHelper {
     new JavaFunction[From, To] {
       override def apply (input: From): To = function (input)
     }
+  }
+
+  implicit def convert[T, U](prop: ConfigProperty[T])(implicit converter: T => U): ConfigProperty[U] = {
+    checkState(prop.hasDefaultValue)
+    var newProp: ConfigProperty[U] = ConfigProperty.key(prop.key())
+      .defaultValue(converter(prop.defaultValue()))
+      .withDocumentation(prop.doc())
+      .withAlternatives(prop.getAlternatives.asScala: _*)
+
+    newProp = toScalaOption(prop.getSinceVersion) match {
+      case Some(version) => newProp.sinceVersion(version)
+      case None => newProp
+    }
+    newProp = toScalaOption(prop.getDeprecatedVersion) match {
+      case Some(version) => newProp.deprecatedAfter(version)
+      case None => newProp
+    }
+
+    newProp
   }
 }

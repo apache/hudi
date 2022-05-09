@@ -150,7 +150,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       .key("hoodie.table.base.file.format")
       .defaultValue(HoodieFileFormat.PARQUET)
       .withAlternatives("hoodie.table.ro.file.format")
-      .withDocumentation("");
+      .withDocumentation("Base file format to store all the base file data.");
 
   public static final ConfigProperty<String> BASE_PATH = ConfigProperty
       .key("hoodie.base.path")
@@ -166,6 +166,22 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("Schema string representing the current write schema of the table. Hudi passes this to "
           + "implementations of HoodieRecordPayload to convert incoming records to avro. This is also used as the write schema "
           + "evolving records during an update.");
+
+  public static final ConfigProperty<String> INTERNAL_SCHEMA_STRING = ConfigProperty
+      .key("hoodie.internal.schema")
+      .noDefaultValue()
+      .withDocumentation("Schema string representing the latest schema of the table. Hudi passes this to "
+          + "implementations of evolution of schema");
+
+  public static final ConfigProperty<Boolean> SCHEMA_EVOLUTION_ENABLE = ConfigProperty
+      .key("hoodie.schema.on.read.enable")
+      .defaultValue(false)
+      .withDocumentation("enable full schema evolution for hoodie");
+
+  public static final ConfigProperty<Boolean> ENABLE_INTERNAL_SCHEMA_CACHE = ConfigProperty
+      .key("hoodie.schema.cache.enable")
+      .defaultValue(false)
+      .withDocumentation("cache query internalSchemas in driver/executor side");
 
   public static final ConfigProperty<String> AVRO_SCHEMA_VALIDATE_ENABLE = ConfigProperty
       .key("hoodie.avro.schema.validate")
@@ -463,6 +479,12 @@ public class HoodieWriteConfig extends HoodieConfig {
       .defaultValue(true)
       .sinceVersion("0.11.0")
       .withDocumentation("Control to enable release all persist rdds when the spark job finish.");
+
+  public static final ConfigProperty<Boolean> AUTO_ADJUST_LOCK_CONFIGS = ConfigProperty
+      .key("hoodie.auto.adjust.lock.configs")
+      .defaultValue(false)
+      .sinceVersion("0.11.0")
+      .withDocumentation("Auto adjust lock configurations when metadata table is enabled and for async table services.");
 
   private ConsistencyGuardConfig consistencyGuardConfig;
   private FileSystemRetryConfig fileSystemRetryConfig;
@@ -884,6 +906,30 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public void setSchema(String schemaStr) {
     setValue(AVRO_SCHEMA_STRING, schemaStr);
+  }
+
+  public String getInternalSchema() {
+    return getString(INTERNAL_SCHEMA_STRING);
+  }
+
+  public boolean getInternalSchemaCacheEnable() {
+    return getBoolean(ENABLE_INTERNAL_SCHEMA_CACHE);
+  }
+
+  public void setInternalSchemaString(String internalSchemaString) {
+    setValue(INTERNAL_SCHEMA_STRING, internalSchemaString);
+  }
+
+  public void setInternalSchemaCacheEnable(boolean enable) {
+    setValue(ENABLE_INTERNAL_SCHEMA_CACHE, String.valueOf(enable));
+  }
+
+  public boolean getSchemaEvolutionEnable() {
+    return getBoolean(SCHEMA_EVOLUTION_ENABLE);
+  }
+
+  public void setSchemaEvolutionEnable(boolean enable) {
+    setValue(SCHEMA_EVOLUTION_ENABLE, String.valueOf(enable));
   }
 
   /**
@@ -1495,6 +1541,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(HoodieIndexConfig.BLOOM_INDEX_USE_CACHING);
   }
 
+  public boolean getBloomIndexUseMetadata() {
+    return getBooleanOrDefault(HoodieIndexConfig.BLOOM_INDEX_USE_METADATA);
+  }
+
   public boolean useBloomIndexTreebasedFilter() {
     return getBoolean(HoodieIndexConfig.BLOOM_INDEX_TREE_BASED_FILTER);
   }
@@ -1507,8 +1557,24 @@ public class HoodieWriteConfig extends HoodieConfig {
     return isMetadataTableEnabled() && getMetadataConfig().isBloomFilterIndexEnabled();
   }
 
-  public boolean isMetadataIndexColumnStatsForAllColumnsEnabled() {
-    return isMetadataTableEnabled() && getMetadataConfig().isMetadataColumnStatsIndexForAllColumnsEnabled();
+  public boolean isMetadataColumnStatsIndexEnabled() {
+    return isMetadataTableEnabled() && getMetadataConfig().isColumnStatsIndexEnabled();
+  }
+
+  public List<String> getColumnsEnabledForColumnStatsIndex() {
+    return getMetadataConfig().getColumnsEnabledForColumnStatsIndex();
+  }
+
+  public List<String> getColumnsEnabledForBloomFilterIndex() {
+    return getMetadataConfig().getColumnsEnabledForBloomFilterIndex();
+  }
+
+  public int getIndexingCheckTimeoutSeconds() {
+    return getMetadataConfig().getIndexingCheckTimeoutSeconds();
+  }
+
+  public int getMetadataBloomFilterIndexParallelism() {
+    return metadataConfig.getBloomFilterIndexParallelism();
   }
 
   public int getColumnStatsIndexParallelism() {
@@ -1892,6 +1958,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(HoodieMetadataConfig.ASYNC_CLEAN_ENABLE);
   }
 
+  public boolean isMetadataAsyncIndex() {
+    return getBooleanOrDefault(HoodieMetadataConfig.ASYNC_INDEX_ENABLE);
+  }
+
   public int getMetadataMaxCommitsToKeep() {
     return getInt(HoodieMetadataConfig.MAX_COMMITS_TO_KEEP);
   }
@@ -1908,6 +1978,9 @@ public class HoodieWriteConfig extends HoodieConfig {
    * Hoodie Client Lock Configs.
    * @return
    */
+  public boolean isAutoAdjustLockConfigs() {
+    return getBooleanOrDefault(AUTO_ADJUST_LOCK_CONFIGS);
+  }
 
   public String getLockProviderClass() {
     return getString(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME);
@@ -1939,7 +2012,9 @@ public class HoodieWriteConfig extends HoodieConfig {
    * @return True if any table services are configured to run inline, false otherwise.
    */
   public Boolean areAnyTableServicesExecutedInline() {
-    return inlineClusteringEnabled() || inlineCompactionEnabled() || isAutoClean() || isAutoArchive();
+    return areTableServicesEnabled()
+        && (inlineClusteringEnabled() || inlineCompactionEnabled()
+        || (isAutoClean() && !isAsyncClean()) || (isAutoArchive() && !isAsyncArchive()));
   }
 
   /**
@@ -1948,9 +2023,10 @@ public class HoodieWriteConfig extends HoodieConfig {
    * @return True if any table services are configured to run async, false otherwise.
    */
   public Boolean areAnyTableServicesAsync() {
-    return isAsyncClusteringEnabled()
+    return areTableServicesEnabled()
+        && (isAsyncClusteringEnabled()
         || (getTableType() == HoodieTableType.MERGE_ON_READ && !inlineCompactionEnabled())
-        || isAsyncClean() || isAsyncArchive();
+        || (isAutoClean() && isAsyncClean()) || (isAutoArchive() && isAsyncArchive()));
   }
 
   public Boolean areAnyTableServicesScheduledInline() {
@@ -2056,6 +2132,16 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withSchema(String schemaStr) {
       writeConfig.setValue(AVRO_SCHEMA_STRING, schemaStr);
+      return this;
+    }
+
+    public Builder withSchemaEvolutionEnable(boolean enable) {
+      writeConfig.setValue(SCHEMA_EVOLUTION_ENABLE, String.valueOf(enable));
+      return this;
+    }
+
+    public Builder withInternalSchemaCacheEnable(boolean enable) {
+      writeConfig.setValue(ENABLE_INTERNAL_SCHEMA_CACHE, String.valueOf(enable));
       return this;
     }
 
@@ -2373,10 +2459,17 @@ public class HoodieWriteConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withAutoAdjustLockConfigs(boolean autoAdjustLockConfigs) {
+      writeConfig.setValue(AUTO_ADJUST_LOCK_CONFIGS, String.valueOf(autoAdjustLockConfigs));
+      return this;
+    }
+
     protected void setDefaults() {
       writeConfig.setDefaultValue(MARKERS_TYPE, getDefaultMarkersType(engineType));
       // Check for mandatory properties
       writeConfig.setDefaults(HoodieWriteConfig.class.getName());
+      // Set default values of HoodieHBaseIndexConfig
+      writeConfig.setDefaults(HoodieHBaseIndexConfig.class.getName());
       // Make sure the props is propagated
       writeConfig.setDefaultOnCondition(
           !isIndexConfigSet, HoodieIndexConfig.newBuilder().withEngineType(engineType).fromProperties(
@@ -2410,41 +2503,42 @@ public class HoodieWriteConfig extends HoodieConfig {
           HoodieLayoutConfig.newBuilder().fromProperties(writeConfig.getProps()).build());
       writeConfig.setDefaultValue(TIMELINE_LAYOUT_VERSION_NUM, String.valueOf(TimelineLayoutVersion.CURR_VERSION));
 
-      autoAdjustConfigsForConcurrencyMode();
-    }
-
-    private void autoAdjustConfigsForConcurrencyMode() {
-      boolean isMetadataTableEnabled = writeConfig.getBoolean(HoodieMetadataConfig.ENABLE);
+      // isLockProviderPropertySet must be fetched before setting defaults of HoodieLockConfig
       final TypedProperties writeConfigProperties = writeConfig.getProps();
       final boolean isLockProviderPropertySet = writeConfigProperties.containsKey(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME)
           || writeConfigProperties.containsKey(HoodieLockConfig.LOCK_PROVIDER_CLASS_PROP);
-      
-      if (!isLockConfigSet) {
-        HoodieLockConfig.Builder lockConfigBuilder = HoodieLockConfig.newBuilder().fromProperties(writeConfig.getProps());
-        writeConfig.setDefault(lockConfigBuilder.build());
-      }
+      writeConfig.setDefaultOnCondition(!isLockConfigSet,
+          HoodieLockConfig.newBuilder().fromProperties(writeConfig.getProps()).build());
 
-      if (isMetadataTableEnabled) {
-        // When metadata table is enabled, optimistic concurrency control must be used for
-        // single writer with async table services.
-        // Async table services can update the metadata table and a lock provider is
-        // needed to guard against any concurrent table write operations. If user has
-        // not configured any lock provider, let's use the InProcess lock provider.
-        boolean areTableServicesEnabled = writeConfig.areTableServicesEnabled();
-        boolean areAsyncTableServicesEnabled = writeConfig.areAnyTableServicesAsync();
+      autoAdjustConfigsForConcurrencyMode(isLockProviderPropertySet);
+    }
 
-        if (!isLockProviderPropertySet && areTableServicesEnabled && areAsyncTableServicesEnabled) {
-          // This is targeted at Single writer with async table services
-          // If user does not set the lock provider, likely that the concurrency mode is not set either
-          // Override the configs for metadata table
-          writeConfig.setValue(WRITE_CONCURRENCY_MODE.key(),
-              WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.value());
-          writeConfig.setValue(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(),
-              InProcessLockProvider.class.getName());
-          LOG.info(String.format("Automatically set %s=%s and %s=%s since user has not set the "
-                  + "lock provider for single writer with async table services",
-              WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.value(),
-              HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(), InProcessLockProvider.class.getName()));
+    private void autoAdjustConfigsForConcurrencyMode(boolean isLockProviderPropertySet) {
+      if (writeConfig.isAutoAdjustLockConfigs()) {
+        // auto adjustment is required only for deltastreamer and spark streaming where async table services can be executed in the same JVM.
+        boolean isMetadataTableEnabled = writeConfig.getBoolean(HoodieMetadataConfig.ENABLE);
+
+        if (isMetadataTableEnabled) {
+          // When metadata table is enabled, optimistic concurrency control must be used for
+          // single writer with async table services.
+          // Async table services can update the metadata table and a lock provider is
+          // needed to guard against any concurrent table write operations. If user has
+          // not configured any lock provider, let's use the InProcess lock provider.
+          boolean areTableServicesEnabled = writeConfig.areTableServicesEnabled();
+          boolean areAsyncTableServicesEnabled = writeConfig.areAnyTableServicesAsync();
+          if (!isLockProviderPropertySet && areTableServicesEnabled && areAsyncTableServicesEnabled) {
+            // This is targeted at Single writer with async table services
+            // If user does not set the lock provider, likely that the concurrency mode is not set either
+            // Override the configs for metadata table
+            writeConfig.setValue(WRITE_CONCURRENCY_MODE.key(),
+                WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.value());
+            writeConfig.setValue(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(),
+                InProcessLockProvider.class.getName());
+            LOG.info(String.format("Automatically set %s=%s and %s=%s since user has not set the "
+                    + "lock provider for single writer with async table services",
+                WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.value(),
+                HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(), InProcessLockProvider.class.getName()));
+          }
         }
       }
 

@@ -188,7 +188,6 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
           out.collect((O) deleteRecord);
         }
         location = getNewRecordLocation(partitionPath);
-        updateIndexState(partitionPath, location);
       } else {
         location = oldLoc.toLocal("U");
         this.bucketAssigner.addUpdate(partitionPath, location.getFileId());

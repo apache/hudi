@@ -18,6 +18,29 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.MetadataNotFoundException;
+import org.apache.hudi.keygen.BaseKeyGenerator;
+
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
+import org.apache.orc.OrcFile;
+import org.apache.orc.OrcProto.UserMetadataItem;
+import org.apache.orc.Reader;
+import org.apache.orc.Reader.Options;
+import org.apache.orc.RecordReader;
+import org.apache.orc.TypeDescription;
+import org.apache.orc.storage.ql.exec.vector.BytesColumnVector;
+import org.apache.orc.storage.ql.exec.vector.VectorizedRowBatch;
+
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -28,27 +51,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
-import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.HoodieKey;
-import org.apache.orc.storage.ql.exec.vector.BytesColumnVector;
-import org.apache.orc.storage.ql.exec.vector.VectorizedRowBatch;
-import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.exception.MetadataNotFoundException;
-import org.apache.hudi.keygen.BaseKeyGenerator;
-
-import org.apache.orc.OrcFile;
-import org.apache.orc.OrcProto.UserMetadataItem;
-import org.apache.orc.Reader;
-import org.apache.orc.Reader.Options;
-import org.apache.orc.RecordReader;
-import org.apache.orc.TypeDescription;
 
 /**
  * Utility functions for ORC files.
@@ -246,6 +248,11 @@ public class OrcUtils extends BaseFileUtils {
     } catch (IOException io) {
       throw new HoodieIOException("Unable to get Avro schema for ORC file:" + orcFilePath, io);
     }
+  }
+
+  @Override
+  public HoodieFileFormat getFormat() {
+    return HoodieFileFormat.ORC;
   }
 
   @Override

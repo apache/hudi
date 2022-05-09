@@ -30,7 +30,7 @@ import org.apache.spark.sql.types._
 
 import scala.collection.JavaConverters._
 
-class TestCreateTable extends TestHoodieSqlBase {
+class TestCreateTable extends HoodieSparkSqlTestBase {
 
   test("Test Create Managed Hoodie Table") {
     val databaseName = "hudi_database"
@@ -263,83 +263,100 @@ class TestCreateTable extends TestHoodieSqlBase {
 
   test("Test Create Table As Select") {
     withTempDir { tmp =>
-      // Create Non-Partitioned table
-      val tableName1 = generateTableName
-      spark.sql(
-        s"""
-           | create table $tableName1 using hudi
-           | tblproperties(primaryKey = 'id')
-           | location '${tmp.getCanonicalPath}/$tableName1'
-           | AS
-           | select 1 as id, 'a1' as name, 10 as price, 1000 as ts
+      Seq("cow", "mor").foreach { tableType =>
+        // Create Non-Partitioned table
+        val tableName1 = generateTableName
+        spark.sql(
+          s"""
+             | create table $tableName1 using hudi
+             | tblproperties(
+             |    primaryKey = 'id',
+             |    type = '$tableType'
+             | )
+             | location '${tmp.getCanonicalPath}/$tableName1'
+             | AS
+             | select 1 as id, 'a1' as name, 10 as price, 1000 as ts
        """.stripMargin)
-      checkAnswer(s"select id, name, price, ts from $tableName1")(
-        Seq(1, "a1", 10.0, 1000)
-      )
+        checkAnswer(s"select id, name, price, ts from $tableName1")(
+          Seq(1, "a1", 10.0, 1000)
+        )
 
-      // Create Partitioned table
-      val tableName2 = generateTableName
-      spark.sql(
-        s"""
-           | create table $tableName2 using hudi
-           | partitioned by (dt)
-           | tblproperties(primaryKey = 'id')
-           | location '${tmp.getCanonicalPath}/$tableName2'
-           | AS
-           | select 1 as id, 'a1' as name, 10 as price, '2021-04-01' as dt
+        // Create Partitioned table
+        val tableName2 = generateTableName
+        spark.sql(
+          s"""
+             | create table $tableName2 using hudi
+             | partitioned by (dt)
+             | tblproperties(
+             |    primaryKey = 'id',
+             |    type = '$tableType'
+             | )
+             | location '${tmp.getCanonicalPath}/$tableName2'
+             | AS
+             | select 1 as id, 'a1' as name, 10 as price, '2021-04-01' as dt
          """.stripMargin
-      )
-      checkAnswer(s"select id, name, price, dt from $tableName2")(
-        Seq(1, "a1", 10, "2021-04-01")
-      )
+        )
+        checkAnswer(s"select id, name, price, dt from $tableName2")(
+          Seq(1, "a1", 10, "2021-04-01")
+        )
 
-      // Create Partitioned table with timestamp data type
-      val tableName3 = generateTableName
-      // CTAS failed with null primaryKey
-      assertThrows[Exception] {
+        // Create Partitioned table with timestamp data type
+        val tableName3 = generateTableName
+        // CTAS failed with null primaryKey
+        assertThrows[Exception] {
+          spark.sql(
+            s"""
+               | create table $tableName3 using hudi
+               | partitioned by (dt)
+               | tblproperties(
+               |    primaryKey = 'id',
+               |    type = '$tableType'
+               | )
+               | location '${tmp.getCanonicalPath}/$tableName3'
+               | AS
+               | select null as id, 'a1' as name, 10 as price, '2021-05-07' as dt
+               |
+             """.stripMargin
+          )
+        }
+        // Create table with timestamp type partition
         spark.sql(
           s"""
              | create table $tableName3 using hudi
              | partitioned by (dt)
-             | tblproperties(primaryKey = 'id')
+             | tblproperties(
+             |    primaryKey = 'id',
+             |    type = '$tableType'
+             | )
              | location '${tmp.getCanonicalPath}/$tableName3'
              | AS
-             | select null as id, 'a1' as name, 10 as price, '2021-05-07' as dt
-             |
-             """.stripMargin
+             | select cast('2021-05-06 00:00:00' as timestamp) as dt, 1 as id, 'a1' as name, 10 as
+             | price
+         """.stripMargin
+        )
+        checkAnswer(s"select id, name, price, cast(dt as string) from $tableName3")(
+          Seq(1, "a1", 10, "2021-05-06 00:00:00")
+        )
+        // Create table with date type partition
+        val tableName4 = generateTableName
+        spark.sql(
+          s"""
+             | create table $tableName4 using hudi
+             | partitioned by (dt)
+             | tblproperties(
+             |    primaryKey = 'id',
+             |    type = '$tableType'
+             | )
+             | location '${tmp.getCanonicalPath}/$tableName4'
+             | AS
+             | select cast('2021-05-06' as date) as dt, 1 as id, 'a1' as name, 10 as
+             | price
+         """.stripMargin
+        )
+        checkAnswer(s"select id, name, price, cast(dt as string) from $tableName4")(
+          Seq(1, "a1", 10, "2021-05-06")
         )
       }
-      // Create table with timestamp type partition
-      spark.sql(
-        s"""
-           | create table $tableName3 using hudi
-           | partitioned by (dt)
-           | tblproperties(primaryKey = 'id')
-           | location '${tmp.getCanonicalPath}/$tableName3'
-           | AS
-           | select cast('2021-05-06 00:00:00' as timestamp) as dt, 1 as id, 'a1' as name, 10 as
-           | price
-         """.stripMargin
-      )
-      checkAnswer(s"select id, name, price, cast(dt as string) from $tableName3")(
-        Seq(1, "a1", 10, "2021-05-06 00:00:00")
-      )
-      // Create table with date type partition
-      val tableName4 = generateTableName
-      spark.sql(
-        s"""
-           | create table $tableName4 using hudi
-           | partitioned by (dt)
-           | tblproperties(primaryKey = 'id')
-           | location '${tmp.getCanonicalPath}/$tableName4'
-           | AS
-           | select cast('2021-05-06' as date) as dt, 1 as id, 'a1' as name, 10 as
-           | price
-         """.stripMargin
-      )
-      checkAnswer(s"select id, name, price, cast(dt as string) from $tableName4")(
-        Seq(1, "a1", 10, "2021-05-06")
-      )
     }
   }
 

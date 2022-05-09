@@ -18,7 +18,6 @@
 
 package org.apache.hudi.table;
 
-import org.apache.avro.specific.SpecificRecordBase;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.data.HoodieData;
@@ -35,6 +34,13 @@ import org.apache.hudi.index.FlinkHoodieIndexFactory;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.metadata.FlinkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
+import org.apache.hudi.table.action.HoodieWriteMetadata;
+
+import org.apache.avro.specific.SpecificRecordBase;
+
+import java.util.List;
+
+import static org.apache.hudi.common.data.HoodieList.getList;
 
 public abstract class HoodieFlinkTable<T extends HoodieRecordPayload>
     extends HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>>
@@ -94,9 +100,13 @@ public abstract class HoodieFlinkTable<T extends HoodieRecordPayload>
   public <T extends SpecificRecordBase> Option<HoodieTableMetadataWriter> getMetadataWriter(String triggeringInstantTimestamp,
                                                                                             Option<T> actionMetadata) {
     if (config.isMetadataTableEnabled()) {
+      // even with metadata enabled, some index could have been disabled
+      // delete metadata partitions corresponding to such indexes
+      deleteMetadataIndexIfNecessary();
       return Option.of(FlinkHoodieBackedTableMetadataWriter.create(context.getHadoopConf().get(), config,
           context, actionMetadata, Option.of(triggeringInstantTimestamp)));
     } else {
+      maybeDeleteMetadataTable();
       return Option.empty();
     }
   }

@@ -57,6 +57,9 @@ import org.apache.flink.table.planner.plan.nodes.exec.utils.ExecNodeUtil;
 import org.apache.flink.table.runtime.typeutils.InternalTypeInfo;
 import org.apache.flink.table.types.logical.RowType;
 
+import java.util.HashMap;
+import java.util.Map;
+
 /**
  * Utilities to generate all kinds of sub-pipelines.
  */
@@ -90,18 +93,22 @@ public class Pipelines {
   public static DataStreamSink<Object> bulkInsert(Configuration conf, RowType rowType, DataStream<RowData> dataStream) {
     WriteOperatorFactory<RowData> operatorFactory = BulkInsertWriteOperator.getFactory(conf, rowType);
     if (OptionsResolver.isBucketIndexType(conf)) {
-      int bucketNum = conf.getInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS);
-      String indexKeyFields = conf.getString(FlinkOptions.INDEX_KEY_FIELD);
-      BucketIndexPartitioner<String> partitioner = new BucketIndexPartitioner<>(bucketNum, indexKeyFields);
-      RowDataKeyGen rowDataKeyGen = RowDataKeyGen.instance(conf, rowType);
+      String indexKeys = conf.getString(FlinkOptions.INDEX_KEY_FIELD);
+      int numBuckets = conf.getInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS);
+
+      BucketIndexPartitioner<String> partitioner = new BucketIndexPartitioner<>(numBuckets, indexKeys);
+      RowDataKeyGen keyGen = RowDataKeyGen.instance(conf, rowType);
       RowType rowTypeWithFileId = BucketBulkInsertWriterHelper.rowTypeWithFileId(rowType);
       InternalTypeInfo<RowData> typeInfo = InternalTypeInfo.of(rowTypeWithFileId);
-      dataStream = dataStream.partitionCustom(partitioner, rowDataKeyGen::getRecordKey)
-          .map(record -> BucketBulkInsertWriterHelper.rowWithFileId(rowDataKeyGen, record, indexKeyFields, bucketNum),
-              typeInfo);
+
+      Map<String, String> bucketIdToFileId = new HashMap<>();
+      dataStream = dataStream.partitionCustom(partitioner, keyGen::getRecordKey)
+          .map(record -> BucketBulkInsertWriterHelper.rowWithFileId(bucketIdToFileId, keyGen, record, indexKeys, numBuckets), typeInfo)
+          .setParallelism(conf.getInteger(FlinkOptions.WRITE_TASKS)); // same parallelism as write task to avoid shuffle
       if (conf.getBoolean(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT)) {
         SortOperatorGen sortOperatorGen = BucketBulkInsertWriterHelper.getFileIdSorterGen(rowTypeWithFileId);
-        dataStream = dataStream.transform("file_sorter", typeInfo, sortOperatorGen.createSortOperator());
+        dataStream = dataStream.transform("file_sorter", typeInfo, sortOperatorGen.createSortOperator())
+            .setParallelism(conf.getInteger(FlinkOptions.WRITE_TASKS)); // same parallelism as write task to avoid shuffle
         ExecNodeUtil.setManagedMemoryWeight(dataStream.getTransformation(),
             conf.getInteger(FlinkOptions.WRITE_SORT_MEMORY) * 1024L * 1024L);
       }
@@ -166,9 +173,19 @@ public class Pipelines {
    * @param conf       The configuration
    * @param rowType    The input row type
    * @param dataStream The input data stream
+   * @param bounded    Whether the input stream is bounded
    * @return the appending data stream sink
    */
-  public static DataStreamSink<Object> append(Configuration conf, RowType rowType, DataStream<RowData> dataStream) {
+  public static DataStreamSink<Object> append(
+      Configuration conf,
+      RowType rowType,
+      DataStream<RowData> dataStream,
+      boolean bounded) {
+    if (!bounded) {
+      // In principle, the config should be immutable, but the boundedness
+      // is only visible when creating the sink pipeline.
+      conf.setBoolean(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT, false);
+    }
     WriteOperatorFactory<RowData> operatorFactory = AppendWriteOperator.getFactory(conf, rowType);
 
     return dataStream

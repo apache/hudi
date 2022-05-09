@@ -18,15 +18,22 @@
 
 package org.apache.hudi.hive.util;
 
+import java.util.ArrayList;
+import java.util.List;
+import org.apache.hadoop.hive.metastore.IMetaStoreClient;
+import org.apache.hadoop.hive.metastore.api.NoSuchObjectException;
+import org.apache.hadoop.hive.metastore.api.Partition;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.hive.HiveSyncConfig;
+import org.apache.hudi.hive.HoodieHiveSyncException;
 import org.apache.hudi.hive.PartitionValueExtractor;
-
-import java.util.ArrayList;
-import java.util.List;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
+import org.apache.thrift.TException;
 
 public class HivePartitionUtil {
+  private static final Logger LOG = LogManager.getLogger(HivePartitionUtil.class);
 
   /**
    * Build String, example as year=2021/month=06/day=25
@@ -47,5 +54,20 @@ public class HivePartitionUtil {
       partBuilder.add(config.partitionFields.get(i) + "=" + partitionValue);
     }
     return String.join("/", partBuilder);
+  }
+
+  public static Boolean partitionExists(IMetaStoreClient client, String tableName, String partitionPath,
+                                        PartitionValueExtractor partitionValueExtractor, HiveSyncConfig config) {
+    Partition newPartition;
+    try {
+      List<String> partitionValues = partitionValueExtractor.extractPartitionValuesInPath(partitionPath);
+      newPartition = client.getPartition(config.databaseName, tableName, partitionValues);
+    } catch (NoSuchObjectException ignored) {
+      newPartition = null;
+    } catch (TException e) {
+      LOG.error("Failed to get partition " + partitionPath, e);
+      throw new HoodieHiveSyncException("Failed to get partition " + partitionPath, e);
+    }
+    return newPartition != null;
   }
 }

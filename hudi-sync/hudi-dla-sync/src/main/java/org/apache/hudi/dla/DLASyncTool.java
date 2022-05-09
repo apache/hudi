@@ -114,7 +114,7 @@ public class DLASyncTool extends AbstractSyncTool {
     LOG.info("Trying to sync hoodie table " + tableName + " with base path " + hoodieDLAClient.getBasePath()
         + " of type " + hoodieDLAClient.getTableType());
     // Check if the necessary table exists
-    boolean tableExists = hoodieDLAClient.doesTableExist(tableName);
+    boolean tableExists = hoodieDLAClient.tableExists(tableName);
     // Get the parquet schema for this table looking at the latest commit
     MessageType schema = hoodieDLAClient.getDataSchema();
     // Sync schema if needed

@@ -21,7 +21,7 @@
   <parent>
     <artifactId>hudi</artifactId>
     <groupId>org.apache.hudi</groupId>
-    <version>0.11.0-SNAPSHOT</version>
+    <version>0.12.0-SNAPSHOT</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
   <modelVersion>4.0.0</modelVersion>
@@ -34,8 +34,8 @@
     <flink.bundle.hive.scope>provided</flink.bundle.hive.scope>
     <flink.bundle.shade.prefix>org.apache.hudi.</flink.bundle.shade.prefix>
     <javax.servlet.version>3.1.0</javax.servlet.version>
-    <!-- override to be same with flink 1.12.2 -->
-    <parquet.version>1.11.1</parquet.version>
+    <!-- override to be same with flink 1.15.x -->
+    <parquet.version>${flink.format.parquet.version}</parquet.version>
     <hive.version>2.3.1</hive.version>
     <thrift.version>0.9.3</thrift.version>
   </properties>
@@ -111,6 +111,7 @@
 
                   <include>com.github.davidmoten:guava-mini</include>
                   <include>com.github.davidmoten:hilbert-curve</include>
+                  <include>com.github.ben-manes.caffeine:caffeine</include>
                   <include>com.twitter:bijection-avro_${scala.binary.version}</include>
                   <include>com.twitter:bijection-core_${scala.binary.version}</include>
                   <include>io.dropwizard.metrics:metrics-core</include>
@@ -153,8 +154,8 @@
                   <include>org.apache.hbase:hbase-hadoop2-compat</include>
                   <include>org.apache.hbase:hbase-metrics</include>
                   <include>org.apache.hbase:hbase-metrics-api</include>
-                  <include>org.apache.hbase:hbase-server</include>
                   <include>org.apache.hbase:hbase-protocol-shaded</include>
+                  <include>org.apache.hbase:hbase-server</include>
                   <include>org.apache.hbase.thirdparty:hbase-shaded-miscellaneous</include>
                   <include>org.apache.hbase.thirdparty:hbase-shaded-netty</include>
                   <include>org.apache.hbase.thirdparty:hbase-shaded-protobuf</include>

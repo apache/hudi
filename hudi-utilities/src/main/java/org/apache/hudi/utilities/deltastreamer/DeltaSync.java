@@ -105,6 +105,7 @@ import java.util.stream.Collectors;
 import scala.collection.JavaConversions;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
+import static org.apache.hudi.common.table.HoodieTableConfig.DROP_PARTITION_COLUMNS;
 import static org.apache.hudi.config.HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE;
 import static org.apache.hudi.config.HoodieClusteringConfig.INLINE_CLUSTERING;
 import static org.apache.hudi.config.HoodieCompactionConfig.INLINE_COMPACT;
@@ -278,6 +279,9 @@ public class DeltaSync implements Serializable {
           .setKeyGeneratorClassProp(props.getProperty(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME().key(),
               SimpleKeyGenerator.class.getName()))
           .setPreCombineField(cfg.sourceOrderingField)
+          .setPartitionMetafileUseBaseFormat(props.getBoolean(HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT.key(),
+              HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT.defaultValue()))
+          .setShouldDropPartitionColumns(isDropPartitionColumns())
           .initTable(new Configuration(jssc.hadoopConfiguration()),
             cfg.targetBasePath);
     }
@@ -371,6 +375,9 @@ public class DeltaSync implements Serializable {
               HoodieTableConfig.POPULATE_META_FIELDS.defaultValue()))
           .setKeyGeneratorClassProp(props.getProperty(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME().key(),
               SimpleKeyGenerator.class.getName()))
+          .setPartitionMetafileUseBaseFormat(props.getBoolean(HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT.key(),
+              HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT.defaultValue()))
+          .setShouldDropPartitionColumns(isDropPartitionColumns())
           .initTable(new Configuration(jssc.hadoopConfiguration()), cfg.targetBasePath);
     }
 
@@ -473,14 +480,16 @@ public class DeltaSync implements Serializable {
     }
 
     boolean shouldCombine = cfg.filterDupes || cfg.operation.equals(WriteOperationType.UPSERT);
+    List<String> partitionColumns = getPartitionColumns(keyGenerator, props);
     JavaRDD<GenericRecord> avroRDD = avroRDDOptional.get();
-    JavaRDD<HoodieRecord> records = avroRDD.map(gr -> {
+    JavaRDD<HoodieRecord> records = avroRDD.map(record -> {
+      GenericRecord gr = isDropPartitionColumns() ? HoodieAvroUtils.removeFields(record, partitionColumns) : record;
       HoodieRecordPayload payload = shouldCombine ? DataSourceUtils.createPayload(cfg.payloadClassName, gr,
           (Comparable) HoodieAvroUtils.getNestedFieldVal(gr, cfg.sourceOrderingField, false, props.getBoolean(
               KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
               Boolean.parseBoolean(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()))))
           : DataSourceUtils.createPayload(cfg.payloadClassName, gr);
-      return new HoodieAvroRecord<>(keyGenerator.getKey(gr), payload);
+      return new HoodieAvroRecord<>(keyGenerator.getKey(record), payload);
     });
 
     return Pair.of(schemaProvider, Pair.of(checkpointStr, records));
@@ -723,6 +732,9 @@ public class DeltaSync implements Serializable {
 
   private void reInitWriteClient(Schema sourceSchema, Schema targetSchema) throws IOException {
     LOG.info("Setting up new Hoodie Write Client");
+    if (isDropPartitionColumns()) {
+      targetSchema = HoodieAvroUtils.removeFields(targetSchema, getPartitionColumns(keyGenerator, props));
+    }
     registerAvroSchemas(sourceSchema, targetSchema);
     HoodieWriteConfig hoodieCfg = getHoodieClientConfig(targetSchema);
     if (hoodieCfg.isEmbeddedTimelineServerEnabled()) {
@@ -893,5 +905,25 @@ public class DeltaSync implements Serializable {
     } else {
       return Option.empty();
     }
+  }
+
+  /**
+   * Set based on hoodie.datasource.write.drop.partition.columns config.
+   * When set to true, will not write the partition columns into the table.
+   */
+  private Boolean isDropPartitionColumns() {
+    return props.getBoolean(DROP_PARTITION_COLUMNS.key(), DROP_PARTITION_COLUMNS.defaultValue());
+  }
+
+  /**
+   * Get the list of partition columns as a list of strings.
+   *
+   * @param keyGenerator KeyGenerator
+   * @param props TypedProperties
+   * @return List of partition columns.
+   */
+  private List<String> getPartitionColumns(KeyGenerator keyGenerator, TypedProperties props) {
+    String partitionColumns = HoodieSparkUtils.getPartitionColumns(keyGenerator, props);
+    return Arrays.asList(partitionColumns.split(","));
   }
 }

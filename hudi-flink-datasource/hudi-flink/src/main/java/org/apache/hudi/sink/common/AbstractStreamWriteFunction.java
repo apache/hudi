@@ -247,7 +247,7 @@ public abstract class AbstractStreamWriteFunction<I>
       // wait condition:
       // 1. there is no inflight instant
       // 2. the inflight instant does not change and the checkpoint has buffering data
-      if (instant == null || (instant.equals(this.currentInstant) && hasData && !this.ckpMetadata.isAborted(instant))) {
+      if (instant == null || invalidInstant(instant, hasData)) {
         // sleep for a while
         timeWait.waitFor();
         // refresh the inflight instant
@@ -259,5 +259,12 @@ public abstract class AbstractStreamWriteFunction<I>
       }
     }
     return instant;
+  }
+
+  /**
+   * Returns whether the pending instant is invalid to write with.
+   */
+  private boolean invalidInstant(String instant, boolean hasData) {
+    return instant.equals(this.currentInstant) && hasData && !this.ckpMetadata.isAborted(instant);
   }
 }

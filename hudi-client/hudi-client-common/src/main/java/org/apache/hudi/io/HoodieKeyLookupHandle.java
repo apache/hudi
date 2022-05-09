@@ -37,6 +37,9 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getCompletedMetadataPartitions;
+import static org.apache.hudi.metadata.MetadataPartitionType.BLOOM_FILTERS;
+
 /**
  * Takes a bunch of keys and returns ones that are present in the file group.
  */
@@ -60,7 +63,9 @@ public class HoodieKeyLookupHandle<T extends HoodieRecordPayload, I, K, O> exten
     BloomFilter bloomFilter = null;
     HoodieTimer timer = new HoodieTimer().startTimer();
     try {
-      if (config.isMetadataBloomFilterIndexEnabled()) {
+      if (config.getBloomIndexUseMetadata()
+          && getCompletedMetadataPartitions(hoodieTable.getMetaClient().getTableConfig())
+          .contains(BLOOM_FILTERS.getPartitionPath())) {
         bloomFilter = hoodieTable.getMetadataTable().getBloomFilter(partitionPathFileIDPair.getLeft(), partitionPathFileIDPair.getRight())
             .orElseThrow(() -> new HoodieIndexException("BloomFilter missing for " + partitionPathFileIDPair.getRight()));
       } else {

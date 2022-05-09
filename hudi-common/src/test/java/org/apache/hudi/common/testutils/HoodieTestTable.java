@@ -117,8 +117,12 @@ import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 
 public class HoodieTestTable {
 
+  public static final String PHONY_TABLE_SCHEMA =
+      "{\"namespace\": \"org.apache.hudi.avro.model\", \"type\": \"record\", \"name\": \"PhonyRecord\", \"fields\": []}";
+
   private static final Logger LOG = LogManager.getLogger(HoodieTestTable.class);
   private static final Random RANDOM = new Random();
+
   protected static HoodieTestTableState testTableState;
   private final List<String> inflightCommits = new ArrayList<>();
 
@@ -215,7 +219,7 @@ public class HoodieTestTable {
       writeStats.addAll(generateHoodieWriteStatForPartitionLogFiles(testTableState.getPartitionToLogFileInfoMap(commitTime), commitTime, bootstrap));
     }
     Map<String, String> extraMetadata = createImmutableMap("test", "test");
-    return buildMetadata(writeStats, partitionToReplaceFileIds, Option.of(extraMetadata), operationType, EMPTY_STRING, action);
+    return buildMetadata(writeStats, partitionToReplaceFileIds, Option.of(extraMetadata), operationType, PHONY_TABLE_SCHEMA, action);
   }
 
   public HoodieTestTable moveInflightCommitToComplete(String instantTime, HoodieCommitMetadata metadata) throws IOException {
@@ -257,6 +261,13 @@ public class HoodieTestTable {
     return this;
   }
 
+  public HoodieTestTable addPendingReplace(String instantTime, Option<HoodieRequestedReplaceMetadata> requestedReplaceMetadata, Option<HoodieCommitMetadata> inflightReplaceMetadata) throws Exception {
+    createRequestedReplaceCommit(basePath, instantTime, requestedReplaceMetadata);
+    createInflightReplaceCommit(basePath, instantTime, inflightReplaceMetadata);
+    currentInstantTime = instantTime;
+    return this;
+  }
+
   public HoodieTestTable addRequestedReplace(String instantTime, Option<HoodieRequestedReplaceMetadata> requestedReplaceMetadata) throws Exception {
     createRequestedReplaceCommit(basePath, instantTime, requestedReplaceMetadata);
     currentInstantTime = instantTime;
@@ -271,20 +282,20 @@ public class HoodieTestTable {
   }
 
   public HoodieTestTable addClean(String instantTime, HoodieCleanerPlan cleanerPlan, HoodieCleanMetadata metadata) throws IOException {
-    return addClean(instantTime, cleanerPlan, metadata, false);
+    return addClean(instantTime, cleanerPlan, metadata, false, false);
   }
 
-  public HoodieTestTable addClean(String instantTime, HoodieCleanerPlan cleanerPlan, HoodieCleanMetadata metadata, boolean isEmpty) throws IOException {
-    createRequestedCleanFile(basePath, instantTime, cleanerPlan, isEmpty);
-    createInflightCleanFile(basePath, instantTime, cleanerPlan, isEmpty);
-    createCleanFile(basePath, instantTime, metadata, isEmpty);
+  public HoodieTestTable addClean(String instantTime, HoodieCleanerPlan cleanerPlan, HoodieCleanMetadata metadata, boolean isEmptyForAll, boolean isEmptyCompleted) throws IOException {
+    createRequestedCleanFile(basePath, instantTime, cleanerPlan, isEmptyForAll);
+    createInflightCleanFile(basePath, instantTime, cleanerPlan, isEmptyForAll);
+    createCleanFile(basePath, instantTime, metadata, isEmptyCompleted);
     currentInstantTime = instantTime;
     return this;
   }
 
   public HoodieTestTable addClean(String instantTime) throws IOException {
     HoodieCleanerPlan cleanerPlan = new HoodieCleanerPlan(new HoodieActionInstant(EMPTY_STRING, EMPTY_STRING, EMPTY_STRING), EMPTY_STRING, new HashMap<>(),
-        CleanPlanV2MigrationHandler.VERSION, new HashMap<>());
+        CleanPlanV2MigrationHandler.VERSION, new HashMap<>(), new ArrayList<>());
     HoodieCleanStat cleanStats = new HoodieCleanStat(
         HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS,
         HoodieTestUtils.DEFAULT_PARTITION_PATHS[RANDOM.nextInt(HoodieTestUtils.DEFAULT_PARTITION_PATHS.length)],
@@ -298,7 +309,7 @@ public class HoodieTestTable {
 
   public Pair<HoodieCleanerPlan, HoodieCleanMetadata> getHoodieCleanMetadata(String commitTime, HoodieTestTableState testTableState) {
     HoodieCleanerPlan cleanerPlan = new HoodieCleanerPlan(new HoodieActionInstant(commitTime, CLEAN_ACTION, EMPTY_STRING), EMPTY_STRING, new HashMap<>(),
-        CleanPlanV2MigrationHandler.VERSION, new HashMap<>());
+        CleanPlanV2MigrationHandler.VERSION, new HashMap<>(), new ArrayList<>());
     List<HoodieCleanStat> cleanStats = new ArrayList<>();
     for (Map.Entry<String, List<String>> entry : testTableState.getPartitionToFileIdMapForCleaner(commitTime).entrySet()) {
       cleanStats.add(new HoodieCleanStat(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS,
@@ -324,6 +335,7 @@ public class HoodieTestTable {
   }
 
   public HoodieTestTable addRollback(String instantTime, HoodieRollbackMetadata rollbackMetadata, boolean isEmpty) throws IOException {
+    createRequestedRollbackFile(basePath, instantTime);
     createInflightRollbackFile(basePath, instantTime);
     createRollbackFile(basePath, instantTime, rollbackMetadata, isEmpty);
     currentInstantTime = instantTime;
@@ -669,7 +681,8 @@ public class HoodieTestTable {
           boolean toReturn = true;
           String filePath = entry.getPath().toString();
           String fileName = entry.getPath().getName();
-          if (fileName.equals(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE) || (!fileName.contains("log") && !fileName.contains("parquet"))
+          if (fileName.startsWith(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX)
+              || !FileCreateUtils.isBaseOrLogFilename(fileName)
               || filePath.contains("metadata")) {
             toReturn = false;
           } else {
@@ -772,7 +785,7 @@ public class HoodieTestTable {
       this.withBaseFilesInPartition(partition, testTableState.getPartitionToBaseFileInfoMap(commitTime).get(partition));
     }
     HoodieReplaceCommitMetadata replaceMetadata =
-        (HoodieReplaceCommitMetadata) buildMetadata(writeStats, partitionToReplaceFileIds, Option.empty(), CLUSTER, EMPTY_STRING,
+        (HoodieReplaceCommitMetadata) buildMetadata(writeStats, partitionToReplaceFileIds, Option.empty(), CLUSTER, PHONY_TABLE_SCHEMA,
             REPLACE_COMMIT_ACTION);
     addReplaceCommit(commitTime, Option.empty(), Option.empty(), replaceMetadata);
     return replaceMetadata;

@@ -201,7 +201,7 @@ public class UtilitiesTestBase {
    * 
    * @throws IOException
    */
-  private static void clearHiveDb() throws IOException {
+  private static void clearHiveDb() throws Exception {
     HiveConf hiveConf = new HiveConf();
     // Create Dummy hive sync config
     HiveSyncConfig hiveSyncConfig = getHiveSyncConfig("/dummy", "dummy");

@@ -57,7 +57,7 @@ abstract class BaseSparkSqlNode(dagNodeConfig: Config) extends DagNode[RDD[Write
    */
   def prepareData(context: ExecutionContext): RDD[GenericRecord] = {
     if (!config.isDisableGenerate) {
-      context.getDeltaGenerator().writeRecords(context.getDeltaGenerator().generateInserts(config)).count()
+      context.getDeltaGenerator().writeRecords(context.getDeltaGenerator().generateInserts(config)).getValue().count()
     }
     context.getWriterContext.getHoodieTestSuiteWriter.getNextBatch
   }

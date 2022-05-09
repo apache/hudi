@@ -73,12 +73,12 @@ public class HoodieTableSink implements DynamicTableSink, SupportsPartitioning, 
       // bulk_insert mode
       final String writeOperation = this.conf.get(FlinkOptions.OPERATION);
       if (WriteOperationType.fromValue(writeOperation) == WriteOperationType.BULK_INSERT) {
-        return context.isBounded() ? Pipelines.bulkInsert(conf, rowType, dataStream) : Pipelines.append(conf, rowType, dataStream);
+        return Pipelines.bulkInsert(conf, rowType, dataStream);
       }
 
       // Append mode
       if (OptionsResolver.isAppendMode(conf)) {
-        return Pipelines.append(conf, rowType, dataStream);
+        return Pipelines.append(conf, rowType, dataStream, context.isBounded());
       }
 
       // default parallelism

@@ -47,6 +47,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -59,6 +60,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 /**
  * Unit test against {@link HoodieTestSuiteJob}.
  */
+@Disabled
+// TODO(HUDI-3668): Fix this test
 public class TestHoodieTestSuiteJob extends UtilitiesTestBase {
 
   private static final String TEST_NAME_WITH_PARAMS = "[{index}] Test with useDeltaStreamer={0}, tableType={1}";

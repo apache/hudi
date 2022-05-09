@@ -24,7 +24,9 @@ import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 
@@ -158,6 +160,17 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
    */
   Map<Pair<String, String>, HoodieMetadataColumnStats> getColumnStats(final List<Pair<String, String>> partitionNameFileNameList, final String columnName)
       throws HoodieMetadataException;
+
+  /**
+   * Fetch records by key prefixes. Key prefix passed is expected to match the same prefix as stored in Metadata table partitions. For eg, in case of col stats partition,
+   * actual keys in metadata partition is encoded values of column name, partition name and file name. So, key prefixes passed to this method is expected to be encoded already.
+   *
+   * @param keyPrefixes list of key prefixes for which interested records are looked up for.
+   * @param partitionName partition name in metadata table where the records are looked up for.
+   * @return {@link HoodieData} of {@link HoodieRecord}s with records matching the passed in key prefixes.
+   */
+  HoodieData<HoodieRecord<HoodieMetadataPayload>> getRecordsByKeyPrefixes(List<String> keyPrefixes,
+                                                                          String partitionName);
 
   /**
    * Get the instant time to which the metadata is synced w.r.t data timeline.

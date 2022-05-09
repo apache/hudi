@@ -27,6 +27,7 @@ import org.apache.parquet.hadoop.api.WriteSupport;
 import org.apache.parquet.schema.MessageType;
 
 import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Wrap AvroWriterSupport for plugging in the bloom filter.
@@ -36,6 +37,7 @@ public class HoodieAvroWriteSupport extends AvroWriteSupport {
   private Option<BloomFilter> bloomFilterOpt;
   private String minRecordKey;
   private String maxRecordKey;
+  private Map<String, String> footerMetadata = new HashMap<>();
 
   public static final String OLD_HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY = "com.uber.hoodie.bloomfilter";
   public static final String HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY = "org.apache.hudi.bloomfilter";
@@ -44,24 +46,23 @@ public class HoodieAvroWriteSupport extends AvroWriteSupport {
   public static final String HOODIE_BLOOM_FILTER_TYPE_CODE = "hoodie_bloom_filter_type_code";
 
   public HoodieAvroWriteSupport(MessageType schema, Schema avroSchema, Option<BloomFilter> bloomFilterOpt) {
-    super(schema, avroSchema);
+    super(schema, avroSchema, ConvertingGenericData.INSTANCE);
     this.bloomFilterOpt = bloomFilterOpt;
   }
 
   @Override
   public WriteSupport.FinalizedWriteContext finalizeWrite() {
-    HashMap<String, String> extraMetaData = new HashMap<>();
     if (bloomFilterOpt.isPresent()) {
-      extraMetaData.put(HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY, bloomFilterOpt.get().serializeToString());
+      footerMetadata.put(HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY, bloomFilterOpt.get().serializeToString());
       if (minRecordKey != null && maxRecordKey != null) {
-        extraMetaData.put(HOODIE_MIN_RECORD_KEY_FOOTER, minRecordKey);
-        extraMetaData.put(HOODIE_MAX_RECORD_KEY_FOOTER, maxRecordKey);
+        footerMetadata.put(HOODIE_MIN_RECORD_KEY_FOOTER, minRecordKey);
+        footerMetadata.put(HOODIE_MAX_RECORD_KEY_FOOTER, maxRecordKey);
       }
       if (bloomFilterOpt.get().getBloomFilterTypeCode().name().contains(HoodieDynamicBoundedBloomFilter.TYPE_CODE_PREFIX)) {
-        extraMetaData.put(HOODIE_BLOOM_FILTER_TYPE_CODE, bloomFilterOpt.get().getBloomFilterTypeCode().name());
+        footerMetadata.put(HOODIE_BLOOM_FILTER_TYPE_CODE, bloomFilterOpt.get().getBloomFilterTypeCode().name());
       }
     }
-    return new WriteSupport.FinalizedWriteContext(extraMetaData);
+    return new WriteSupport.FinalizedWriteContext(footerMetadata);
   }
 
   public void add(String recordKey) {
@@ -79,5 +80,9 @@ public class HoodieAvroWriteSupport extends AvroWriteSupport {
         maxRecordKey = recordKey;
       }
     }
+  }
+
+  public void addFooterMetadata(String key, String value) {
+    footerMetadata.put(key, value);
   }
 }

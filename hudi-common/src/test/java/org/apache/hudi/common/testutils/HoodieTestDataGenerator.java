@@ -205,7 +205,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
    */
   public void writePartitionMetadata(FileSystem fs, String[] partitionPaths, String basePath) {
     for (String partitionPath : partitionPaths) {
-      new HoodiePartitionMetadata(fs, "000", new Path(basePath), new Path(basePath, partitionPath)).trySave(0);
+      new HoodiePartitionMetadata(fs, "000", new Path(basePath), new Path(basePath, partitionPath), Option.empty()).trySave(0);
     }
   }
 
@@ -860,12 +860,14 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     return false;
   }
 
+  public GenericRecord generateGenericRecord() {
+    return generateGenericRecord(genPseudoRandomUUID(rand).toString(), "0",
+        genPseudoRandomUUID(rand).toString(), genPseudoRandomUUID(rand).toString(), rand.nextLong());
+  }
+
   public List<GenericRecord> generateGenericRecords(int numRecords) {
     List<GenericRecord> list = new ArrayList<>();
-    IntStream.range(0, numRecords).forEach(i -> {
-      list.add(generateGenericRecord(genPseudoRandomUUID(rand).toString(), "0",
-          genPseudoRandomUUID(rand).toString(), genPseudoRandomUUID(rand).toString(), rand.nextLong()));
-    });
+    IntStream.range(0, numRecords).forEach(i -> list.add(generateGenericRecord()));
     return list;
   }
 

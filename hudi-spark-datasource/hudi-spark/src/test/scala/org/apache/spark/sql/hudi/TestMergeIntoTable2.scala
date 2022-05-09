@@ -21,7 +21,7 @@ import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.spark.sql.Row
 
-class TestMergeIntoTable2 extends TestHoodieSqlBase {
+class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
 
   test("Test MergeInto for MOR table 2") {
     withTempDir { tmp =>

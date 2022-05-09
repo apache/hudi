@@ -40,18 +40,20 @@ public class DFSDeltaConfig extends DeltaConfig {
   private int inputParallelism;
   // Whether to delete older input data once it has been ingested
   private boolean deleteOldInputData;
+  private boolean useHudiToGenerateUpdates;
 
   public DFSDeltaConfig(DeltaOutputMode deltaOutputMode, DeltaInputType deltaInputType,
                         SerializableConfiguration configuration,
                         String deltaBasePath, String targetBasePath, String schemaStr, Long maxFileSize,
-                        int inputParallelism, boolean deleteOldInputData) {
-    super(deltaOutputMode, deltaInputType, configuration);
+                        int inputParallelism, boolean deleteOldInputData, boolean useHudiToGenerateUpdates) {
+     super(deltaOutputMode, deltaInputType, configuration);
     this.deltaBasePath = deltaBasePath;
     this.schemaStr = schemaStr;
     this.maxFileSize = maxFileSize;
     this.datasetOutputPath = targetBasePath;
     this.inputParallelism = inputParallelism;
     this.deleteOldInputData = deleteOldInputData;
+    this.useHudiToGenerateUpdates = useHudiToGenerateUpdates;
   }
 
   public String getDeltaBasePath() {
@@ -84,5 +86,9 @@ public class DFSDeltaConfig extends DeltaConfig {
 
   public boolean shouldDeleteOldInputData() {
     return deleteOldInputData;
+  }
+
+  public boolean shouldUseHudiToGenerateUpdates() {
+    return useHudiToGenerateUpdates;
   }
 }

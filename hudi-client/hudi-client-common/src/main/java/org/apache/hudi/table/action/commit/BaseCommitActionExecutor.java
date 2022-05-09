@@ -80,6 +80,7 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload, I,
   protected final TaskContextSupplier taskContextSupplier;
   protected final TransactionManager txnManager;
   protected Option<Pair<HoodieInstant, Map<String, String>>> lastCompletedTxn;
+  protected Set<String> pendingInflightAndRequestedInstants;
 
   public BaseCommitActionExecutor(HoodieEngineContext context, HoodieWriteConfig config,
                                   HoodieTable<T, I, K, O> table, String instantTime, WriteOperationType operationType,
@@ -91,6 +92,8 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload, I,
     // TODO : Remove this once we refactor and move out autoCommit method from here, since the TxnManager is held in {@link BaseHoodieWriteClient}.
     this.txnManager = new TransactionManager(config, table.getMetaClient().getFs());
     this.lastCompletedTxn = TransactionUtils.getLastCompletedTxnInstantAndMetadata(table.getMetaClient());
+    this.pendingInflightAndRequestedInstants = TransactionUtils.getInflightAndRequestedInstants(table.getMetaClient());
+    this.pendingInflightAndRequestedInstants.remove(instantTime);
     if (table.getStorageLayout().doesNotSupport(operationType)) {
       throw new UnsupportedOperationException("Executor " + this.getClass().getSimpleName()
           + " is not compatible with table layout " + table.getStorageLayout().getClass().getSimpleName());
@@ -184,7 +187,7 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload, I,
       setCommitMetadata(result);
       // reload active timeline so as to get all updates after current transaction have started. hence setting last arg to true.
       TransactionUtils.resolveWriteConflictIfAny(table, this.txnManager.getCurrentTransactionOwner(),
-          result.getCommitMetadata(), config, this.txnManager.getLastCompletedTransactionOwner(), true);
+          result.getCommitMetadata(), config, this.txnManager.getLastCompletedTransactionOwner(), true, pendingInflightAndRequestedInstants);
       commit(extraMetadata, result);
     } finally {
       this.txnManager.endTransaction(inflightInstant);

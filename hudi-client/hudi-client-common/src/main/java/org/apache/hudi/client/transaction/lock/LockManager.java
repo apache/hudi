@@ -70,11 +70,12 @@ public class LockManager implements Serializable, AutoCloseable {
           }
           LOG.info("Retrying to acquire lock...");
           Thread.sleep(maxWaitTimeInMs);
-          retryCount++;
         } catch (HoodieLockException | InterruptedException e) {
           if (retryCount >= maxRetries) {
             throw new HoodieLockException("Unable to acquire lock, lock object ", e);
           }
+        } finally {
+          retryCount++;
         }
       }
       if (!acquired) {

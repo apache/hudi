@@ -20,7 +20,7 @@ package org.apache.spark.sql.hudi
 
 import org.apache.avro.Schema
 import org.apache.hudi.client.utils.SparkRowSerDe
-import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSerializer}
+import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSchemaConverters, HoodieAvroSerializer}
 import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
@@ -33,6 +33,9 @@ import org.apache.spark.sql.execution.datasources.{FilePartition, LogicalRelatio
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.DataType
 import org.apache.spark.sql.{HoodieCatalystExpressionUtils, Row, SparkSession}
+import org.apache.spark.sql.{Row, SparkSession}
+import org.apache.spark.sql.catalyst.rules.Rule
+import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 
 import java.util.Locale
 
@@ -58,6 +61,11 @@ trait SparkAdapter extends Serializable {
    * Avro payloads into Spark's [[InternalRow]]
    */
   def createAvroDeserializer(rootAvroType: Schema, rootCatalystType: DataType): HoodieAvroDeserializer
+
+  /**
+   * Creates instance of [[HoodieAvroSchemaConverters]] allowing to convert b/w Avro and Catalyst schemas
+   */
+  def getAvroSchemaConverters: HoodieAvroSchemaConverters
 
   /**
    * Create the SparkRowSerDe.
@@ -162,4 +170,14 @@ trait SparkAdapter extends Serializable {
         other
     }
   }
+
+  /**
+    * Create customresolutionRule to deal with alter command for hudi.
+    */
+  def createResolveHudiAlterTableCommand(sparkSession: SparkSession): Rule[LogicalPlan]
+
+  /**
+    * Create instance of [[ParquetFileFormat]]
+    */
+  def createHoodieParquetFileFormat(appendPartitionValues: Boolean): Option[ParquetFileFormat]
 }

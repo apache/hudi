@@ -186,7 +186,12 @@ public abstract class BaseRollbackActionExecutor<T extends HoodieRecordPayload, 
         }
       }
 
-      List<String> inflights = inflightAndRequestedCommitTimeline.getInstants().map(HoodieInstant::getTimestamp)
+      List<String> inflights = inflightAndRequestedCommitTimeline.getInstants().filter(instant -> {
+        if (!instant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION)) {
+          return true;
+        }
+        return !ClusteringUtils.isPendingClusteringInstant(table.getMetaClient(), instant);
+      }).map(HoodieInstant::getTimestamp)
           .collect(Collectors.toList());
       if ((instantTimeToRollback != null) && !inflights.isEmpty()
           && (inflights.indexOf(instantTimeToRollback) != inflights.size() - 1)) {

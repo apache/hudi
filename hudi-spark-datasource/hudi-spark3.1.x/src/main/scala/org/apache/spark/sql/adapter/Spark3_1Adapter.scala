@@ -18,8 +18,15 @@
 
 package org.apache.spark.sql.adapter
 
+import org.apache.avro.Schema
+import org.apache.spark.SPARK_VERSION
+import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSerializer, HoodieSpark3_1AvroDeserializer, HoodieSpark3_1AvroSerializer}
+import org.apache.spark.sql.catalyst.plans.logical._
+import org.apache.spark.sql.catalyst.rules.Rule
+import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark31HoodieParquetFileFormat}
 import org.apache.spark.sql.hudi.SparkAdapter
-import org.apache.spark.sql.{HoodieCatalystExpressionUtils, HoodieSpark3_1CatalystExpressionUtils}
+import org.apache.spark.sql.types.DataType
+import org.apache.spark.sql.{HoodieCatalystExpressionUtils, HoodieSpark3_1CatalystExpressionUtils, SparkSession}
 
 /**
  * Implementation of [[SparkAdapter]] for Spark 3.1.x
@@ -28,4 +35,26 @@ class Spark3_1Adapter extends BaseSpark3Adapter {
 
   override def createCatalystExpressionUtils(): HoodieCatalystExpressionUtils = HoodieSpark3_1CatalystExpressionUtils
 
+  override def createAvroSerializer(rootCatalystType: DataType, rootAvroType: Schema, nullable: Boolean): HoodieAvroSerializer =
+    new HoodieSpark3_1AvroSerializer(rootCatalystType, rootAvroType, nullable)
+
+  override def createAvroDeserializer(rootAvroType: Schema, rootCatalystType: DataType): HoodieAvroDeserializer =
+    new HoodieSpark3_1AvroDeserializer(rootAvroType, rootCatalystType)
+
+  override def createResolveHudiAlterTableCommand(sparkSession: SparkSession): Rule[LogicalPlan] = {
+    if (SPARK_VERSION.startsWith("3.1")) {
+      val loadClassName = "org.apache.spark.sql.hudi.ResolveHudiAlterTableCommand312"
+      val clazz = Class.forName(loadClassName, true, Thread.currentThread().getContextClassLoader)
+      val ctor = clazz.getConstructors.head
+      ctor.newInstance(sparkSession).asInstanceOf[Rule[LogicalPlan]]
+    } else {
+      new Rule[LogicalPlan] {
+        override def apply(plan: LogicalPlan): LogicalPlan = plan
+      }
+    }
+  }
+
+  override def createHoodieParquetFileFormat(appendPartitionValues: Boolean): Option[ParquetFileFormat] = {
+    Some(new Spark31HoodieParquetFileFormat(appendPartitionValues))
+  }
 }

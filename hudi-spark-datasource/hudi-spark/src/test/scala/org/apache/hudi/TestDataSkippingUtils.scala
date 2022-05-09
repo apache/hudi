@@ -17,11 +17,12 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.index.columnstats.ColumnStatsIndexHelper
+import org.apache.hudi.ColumnStatsIndexSupport.composeIndexSchema
 import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.spark.sql.catalyst.expressions.{Expression, Not}
 import org.apache.spark.sql.functions.{col, lower}
 import org.apache.spark.sql.hudi.DataSkippingUtils
+import org.apache.spark.sql.internal.SQLConf.SESSION_LOCAL_TIMEZONE
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{Column, HoodieCatalystExpressionUtils, Row, SparkSession}
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -34,24 +35,23 @@ import java.sql.Timestamp
 import scala.collection.JavaConverters._
 
 // NOTE: Only A, B columns are indexed
-case class IndexRow(
-  file: String,
+case class IndexRow(fileName: String,
+                    valueCount: Long = 1,
 
-  // Corresponding A column is LongType
-  A_minValue: Long = -1,
-  A_maxValue: Long = -1,
-  A_num_nulls: Long = -1,
+                    // Corresponding A column is LongType
+                    A_minValue: Long = -1,
+                    A_maxValue: Long = -1,
+                    A_nullCount: Long = -1,
 
-  // Corresponding B column is StringType
-  B_minValue: String = null,
-  B_maxValue: String = null,
-  B_num_nulls: Long = -1,
+                    // Corresponding B column is StringType
+                    B_minValue: String = null,
+                    B_maxValue: String = null,
+                    B_nullCount: Long = -1,
 
-  // Corresponding B column is TimestampType
-  C_minValue: Timestamp = null,
-  C_maxValue: Timestamp = null,
-  C_num_nulls: Long = -1
-) {
+                    // Corresponding B column is TimestampType
+                    C_minValue: Timestamp = null,
+                    C_maxValue: Timestamp = null,
+                    C_nullCount: Long = -1) {
   def toRow: Row = Row(productIterator.toSeq: _*)
 }
 
@@ -78,28 +78,27 @@ class TestDataSkippingUtils extends HoodieClientTestBase with SparkAdapterSuppor
       )
     )
 
-  val indexSchema: StructType =
-    ColumnStatsIndexHelper.composeIndexSchema(
-      sourceTableSchema.fields.toSeq
-        .filter(f => indexedCols.contains(f.name))
-        .asJava
-    )
+  val indexSchema: StructType = composeIndexSchema(indexedCols, sourceTableSchema)
 
   @ParameterizedTest
   @MethodSource(
     Array(
-        "testBasicLookupFilterExpressionsSource",
-        "testAdvancedLookupFilterExpressionsSource",
-        "testCompositeFilterExpressionsSource"
+      "testBasicLookupFilterExpressionsSource",
+      "testAdvancedLookupFilterExpressionsSource",
+      "testCompositeFilterExpressionsSource"
     ))
   def testLookupFilterExpressions(sourceExpr: String, input: Seq[IndexRow], output: Seq[String]): Unit = {
+    // We have to fix the timezone to make sure all date-bound utilities output
+    // is consistent with the fixtures
+    spark.sqlContext.setConf(SESSION_LOCAL_TIMEZONE.key, "UTC")
+
     val resolvedExpr: Expression = exprUtils.resolveExpr(spark, sourceExpr, sourceTableSchema)
     val lookupFilter = DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr(resolvedExpr, indexSchema)
 
     val indexDf = spark.createDataFrame(input.map(_.toRow).asJava, indexSchema)
 
     val rows = indexDf.where(new Column(lookupFilter))
-      .select("file")
+      .select("fileName")
       .collect()
       .map(_.getString(0))
       .toSeq
@@ -119,7 +118,7 @@ class TestDataSkippingUtils extends HoodieClientTestBase with SparkAdapterSuppor
     val indexDf = spark.createDataset(input)
 
     val rows = indexDf.where(new Column(lookupFilter))
-      .select("file")
+      .select("fileName")
       .collect()
       .map(_.getString(0))
       .toSeq
@@ -134,28 +133,28 @@ object TestDataSkippingUtils {
       arguments(
         col("B").startsWith("abc").expr,
         Seq(
-          IndexRow("file_1", 0, 0, 0, "aba", "adf", 1), // may contain strings starting w/ "abc"
-          IndexRow("file_2", 0, 0, 0, "adf", "azy", 0),
-          IndexRow("file_3", 0, 0, 0, "aaa", "aba", 0)
+          IndexRow("file_1", valueCount = 1, B_minValue = "aba", B_maxValue = "adf", B_nullCount = 1), // may contain strings starting w/ "abc"
+          IndexRow("file_2", valueCount = 1, B_minValue = "adf", B_maxValue = "azy", B_nullCount = 0),
+          IndexRow("file_3", valueCount = 1, B_minValue = "aaa", B_maxValue = "aba", B_nullCount = 0)
         ),
         Seq("file_1")),
       arguments(
         Not(col("B").startsWith("abc").expr),
         Seq(
-          IndexRow("file_1", 0, 0, 0, "aba", "adf", 1), // may contain strings starting w/ "abc"
-          IndexRow("file_2", 0, 0, 0, "adf", "azy", 0),
-          IndexRow("file_3", 0, 0, 0, "aaa", "aba", 0),
-          IndexRow("file_4", 0, 0, 0, "abc123", "abc345", 0) // all strings start w/ "abc"
+          IndexRow("file_1", valueCount = 1, B_minValue = "aba", B_maxValue = "adf", B_nullCount = 1), // may contain strings starting w/ "abc"
+          IndexRow("file_2", valueCount = 1, B_minValue = "adf", B_maxValue = "azy", B_nullCount = 0),
+          IndexRow("file_3", valueCount = 1, B_minValue = "aaa", B_maxValue = "aba", B_nullCount = 0),
+          IndexRow("file_4", valueCount = 1, B_minValue = "abc123", B_maxValue = "abc345", B_nullCount = 0) // all strings start w/ "abc"
         ),
         Seq("file_1", "file_2", "file_3")),
       arguments(
         // Composite expression
         Not(lower(col("B")).startsWith("abc").expr),
         Seq(
-          IndexRow("file_1", 0, 0, 0, "ABA", "ADF", 1), // may contain strings starting w/ "ABC" (after upper)
-          IndexRow("file_2", 0, 0, 0, "ADF", "AZY", 0),
-          IndexRow("file_3", 0, 0, 0, "AAA", "ABA", 0),
-          IndexRow("file_4", 0, 0, 0, "ABC123", "ABC345", 0) // all strings start w/ "ABC" (after upper)
+          IndexRow("file_1", valueCount = 1, B_minValue = "ABA", B_maxValue = "ADF", B_nullCount = 1), // may contain strings starting w/ "ABC" (after upper)
+          IndexRow("file_2", valueCount = 1, B_minValue = "ADF", B_maxValue = "AZY", B_nullCount = 0),
+          IndexRow("file_3", valueCount = 1, B_minValue = "AAA", B_maxValue = "ABA", B_nullCount = 0),
+          IndexRow("file_4", valueCount = 1, B_minValue = "ABC123", B_maxValue = "ABC345", B_nullCount = 0) // all strings start w/ "ABC" (after upper)
         ),
         Seq("file_1", "file_2", "file_3"))
     )
@@ -168,144 +167,151 @@ object TestDataSkippingUtils {
       arguments(
         "A = 0",
         Seq(
-          IndexRow("file_1", 1, 2, 0),
-          IndexRow("file_2", -1, 1, 0)
+          IndexRow("file_1", valueCount = 1, 1, 2, 0),
+          IndexRow("file_2", valueCount = 1, -1, 1, 0)
         ),
         Seq("file_2")),
       arguments(
         "0 = A",
         Seq(
-          IndexRow("file_1", 1, 2, 0),
-          IndexRow("file_2", -1, 1, 0)
+          IndexRow("file_1", valueCount = 1, 1, 2, 0),
+          IndexRow("file_2", valueCount = 1, -1, 1, 0)
         ),
         Seq("file_2")),
       arguments(
         "A != 0",
         Seq(
-          IndexRow("file_1", 1, 2, 0),
-          IndexRow("file_2", -1, 1, 0),
-          IndexRow("file_3", 0, 0, 0) // Contains only 0s
+          IndexRow("file_1", valueCount = 1, 1, 2, 0),
+          IndexRow("file_2", valueCount = 1, -1, 1, 0),
+          IndexRow("file_3", valueCount = 1, 0, 0, 0) // Contains only 0s
         ),
         Seq("file_1", "file_2")),
       arguments(
         "0 != A",
         Seq(
-          IndexRow("file_1", 1, 2, 0),
-          IndexRow("file_2", -1, 1, 0),
-          IndexRow("file_3", 0, 0, 0) // Contains only 0s
+          IndexRow("file_1", valueCount = 1, 1, 2, 0),
+          IndexRow("file_2", valueCount = 1, -1, 1, 0),
+          IndexRow("file_3", valueCount = 1, 0, 0, 0) // Contains only 0s
         ),
         Seq("file_1", "file_2")),
       arguments(
         "A < 0",
         Seq(
-          IndexRow("file_1", 1, 2, 0),
-          IndexRow("file_2", -1, 1, 0),
-          IndexRow("file_3", -2, -1, 0)
+          IndexRow("file_1", valueCount = 1, 1, 2, 0),
+          IndexRow("file_2", valueCount = 1, -1, 1, 0),
+          IndexRow("file_3", valueCount = 1, -2, -1, 0)
         ),
         Seq("file_2", "file_3")),
       arguments(
         "0 > A",
         Seq(
-          IndexRow("file_1", 1, 2, 0),
-          IndexRow("file_2", -1, 1, 0),
-          IndexRow("file_3", -2, -1, 0)
+          IndexRow("file_1", valueCount = 1, 1, 2, 0),
+          IndexRow("file_2", valueCount = 1, -1, 1, 0),
+          IndexRow("file_3", valueCount = 1, -2, -1, 0)
         ),
         Seq("file_2", "file_3")),
       arguments(
         "A > 0",
         Seq(
-          IndexRow("file_1", 1, 2, 0),
-          IndexRow("file_2", -1, 1, 0),
-          IndexRow("file_3", -2, -1, 0)
+          IndexRow("file_1", valueCount = 1, 1, 2, 0),
+          IndexRow("file_2", valueCount = 1, -1, 1, 0),
+          IndexRow("file_3", valueCount = 1, -2, -1, 0)
         ),
         Seq("file_1", "file_2")),
       arguments(
         "0 < A",
         Seq(
-          IndexRow("file_1", 1, 2, 0),
-          IndexRow("file_2", -1, 1, 0),
-          IndexRow("file_3", -2, -1, 0)
+          IndexRow("file_1", valueCount = 1, 1, 2, 0),
+          IndexRow("file_2", valueCount = 1, -1, 1, 0),
+          IndexRow("file_3", valueCount = 1, -2, -1, 0)
         ),
         Seq("file_1", "file_2")),
       arguments(
         "A <= -1",
         Seq(
-          IndexRow("file_1", 1, 2, 0),
-          IndexRow("file_2", -1, 1, 0),
-          IndexRow("file_3", -2, -1, 0)
+          IndexRow("file_1", valueCount = 1, 1, 2, 0),
+          IndexRow("file_2", valueCount = 1, -1, 1, 0),
+          IndexRow("file_3", valueCount = 1, -2, -1, 0)
         ),
         Seq("file_2", "file_3")),
       arguments(
         "-1 >= A",
         Seq(
-          IndexRow("file_1", 1, 2, 0),
-          IndexRow("file_2", -1, 1, 0),
-          IndexRow("file_3", -2, -1, 0)
+          IndexRow("file_1", valueCount = 1, 1, 2, 0),
+          IndexRow("file_2", valueCount = 1, -1, 1, 0),
+          IndexRow("file_3", valueCount = 1, -2, -1, 0)
         ),
         Seq("file_2", "file_3")),
       arguments(
         "A >= 1",
         Seq(
-          IndexRow("file_1", 1, 2, 0),
-          IndexRow("file_2", -1, 1, 0),
-          IndexRow("file_3", -2, -1, 0)
+          IndexRow("file_1", valueCount = 1, 1, 2, 0),
+          IndexRow("file_2", valueCount = 1, -1, 1, 0),
+          IndexRow("file_3", valueCount = 1, -2, -1, 0)
         ),
         Seq("file_1", "file_2")),
       arguments(
         "1 <= A",
         Seq(
-          IndexRow("file_1", 1, 2, 0),
-          IndexRow("file_2", -1, 1, 0),
-          IndexRow("file_3", -2, -1, 0)
+          IndexRow("file_1", valueCount = 1, 1, 2, 0),
+          IndexRow("file_2", valueCount = 1, -1, 1, 0),
+          IndexRow("file_3", valueCount = 1, -2, -1, 0)
         ),
         Seq("file_1", "file_2")),
       arguments(
         "A is null",
         Seq(
-          IndexRow("file_1", 1, 2, 0),
-          IndexRow("file_2", -1, 1, 1)
+          IndexRow("file_1", valueCount = 1, 1, 2, 0),
+          IndexRow("file_2", valueCount = 1, -1, 1, 1)
         ),
         Seq("file_2")),
       arguments(
         "A is not null",
         Seq(
-          IndexRow("file_1", 1, 2, 0),
-          IndexRow("file_2", -1, 1, 1)
+          IndexRow("file_1", valueCount = 1, 1, 2, 0),
+          IndexRow("file_2", valueCount = 2, -1, 1, 1) // might still contain non-null values (if nullCount < valueCount)
+        ),
+        Seq("file_1", "file_2")),
+      arguments(
+        "A is not null",
+        Seq(
+          IndexRow("file_1", valueCount = 1, 1, 2, 0),
+          IndexRow("file_2", valueCount = 1, -1, 1, 1) // might NOT contain non-null values (nullCount == valueCount)
         ),
         Seq("file_1")),
       arguments(
         "A in (0, 1)",
         Seq(
-          IndexRow("file_1", 1, 2, 0),
-          IndexRow("file_2", -1, 1, 0),
-          IndexRow("file_3", -2, -1, 0)
+          IndexRow("file_1", valueCount = 1, 1, 2, 0),
+          IndexRow("file_2", valueCount = 1, -1, 1, 0),
+          IndexRow("file_3", valueCount = 1, -2, -1, 0)
         ),
         Seq("file_1", "file_2")),
       arguments(
         "A not in (0, 1)",
         Seq(
-          IndexRow("file_1", 1, 2, 0),
-          IndexRow("file_2", -1, 1, 0),
-          IndexRow("file_3", -2, -1, 0),
-          IndexRow("file_4", 0, 0, 0), // only contains 0
-          IndexRow("file_5", 1, 1, 0) // only contains 1
+          IndexRow("file_1", valueCount = 1, 1, 2, 0),
+          IndexRow("file_2", valueCount = 1, -1, 1, 0),
+          IndexRow("file_3", valueCount = 1, -2, -1, 0),
+          IndexRow("file_4", valueCount = 1, 0, 0, 0), // only contains 0
+          IndexRow("file_5", valueCount = 1, 1, 1, 0) // only contains 1
         ),
         Seq("file_1", "file_2", "file_3")),
       arguments(
         // Value expression containing expression, which isn't a literal
         "A = int('0')",
         Seq(
-          IndexRow("file_1", 1, 2, 0),
-          IndexRow("file_2", -1, 1, 0)
+          IndexRow("file_1", valueCount = 1, 1, 2, 0),
+          IndexRow("file_2", valueCount = 1, -1, 1, 0)
         ),
         Seq("file_2")),
       arguments(
         // Value expression containing reference to the other attribute (column), fallback
         "A = D",
         Seq(
-          IndexRow("file_1", 1, 2, 0),
-          IndexRow("file_2", -1, 1, 0),
-          IndexRow("file_3", -2, -1, 0)
+          IndexRow("file_1", valueCount = 1, 1, 2, 0),
+          IndexRow("file_2", valueCount = 1, -1, 1, 0),
+          IndexRow("file_3", valueCount = 1, -2, -1, 0)
         ),
         Seq("file_1", "file_2", "file_3"))
     )
@@ -317,45 +323,45 @@ object TestDataSkippingUtils {
         // Filter out all rows that contain either A = 0 OR A = 1
         "A != 0 AND A != 1",
         Seq(
-          IndexRow("file_1", 1, 2, 0),
-          IndexRow("file_2", -1, 1, 0),
-          IndexRow("file_3", -2, -1, 0),
-          IndexRow("file_4", 0, 0, 0), // only contains 0
-          IndexRow("file_5", 1, 1, 0) // only contains 1
+          IndexRow("file_1", valueCount = 1, 1, 2, 0),
+          IndexRow("file_2", valueCount = 1, -1, 1, 0),
+          IndexRow("file_3", valueCount = 1, -2, -1, 0),
+          IndexRow("file_4", valueCount = 1, 0, 0, 0), // only contains 0
+          IndexRow("file_5", valueCount = 1, 1, 1, 0) // only contains 1
         ),
         Seq("file_1", "file_2", "file_3")),
       arguments(
         // This is an equivalent to the above expression
         "NOT(A = 0 OR A = 1)",
         Seq(
-          IndexRow("file_1", 1, 2, 0),
-          IndexRow("file_2", -1, 1, 0),
-          IndexRow("file_3", -2, -1, 0),
-          IndexRow("file_4", 0, 0, 0), // only contains 0
-          IndexRow("file_5", 1, 1, 0) // only contains 1
+          IndexRow("file_1", valueCount = 1, 1, 2, 0),
+          IndexRow("file_2", valueCount = 1, -1, 1, 0),
+          IndexRow("file_3", valueCount = 1, -2, -1, 0),
+          IndexRow("file_4", valueCount = 1, 0, 0, 0), // only contains 0
+          IndexRow("file_5", valueCount = 1, 1, 1, 0) // only contains 1
         ),
         Seq("file_1", "file_2", "file_3")),
 
       arguments(
         // Filter out all rows that contain A = 0 AND B = 'abc'
-      "A != 0 OR B != 'abc'",
+        "A != 0 OR B != 'abc'",
         Seq(
-          IndexRow("file_1", 1, 2, 0),
-          IndexRow("file_2", -1, 1, 0),
-          IndexRow("file_3", -2, -1, 0),
-          IndexRow("file_4", 0, 0, 0, "abc", "abc", 0), // only contains A = 0, B = 'abc'
-          IndexRow("file_5", 0, 0, 0, "abc", "abc", 0) // only contains A = 0, B = 'abc'
+          IndexRow("file_1", valueCount = 1, A_minValue = 1,  A_maxValue = 2,  A_nullCount = 0),
+          IndexRow("file_2", valueCount = 1, A_minValue = -1, A_maxValue = 1,  A_nullCount = 0),
+          IndexRow("file_3", valueCount = 1, A_minValue = -2, A_maxValue = -1, A_nullCount =  0),
+          IndexRow("file_4", valueCount = 1, A_minValue = 0, A_maxValue = 0, A_nullCount = 0, B_minValue = "abc", B_maxValue = "abc", B_nullCount = 0), // only contains A = 0, B = 'abc'
+          IndexRow("file_5", valueCount = 1, A_minValue = 0, A_maxValue = 0, A_nullCount = 0, B_minValue = "abc", B_maxValue = "abc", B_nullCount = 0) // only contains A = 0, B = 'abc'
         ),
         Seq("file_1", "file_2", "file_3")),
       arguments(
         // This is an equivalent to the above expression
         "NOT(A = 0 AND B = 'abc')",
         Seq(
-          IndexRow("file_1", 1, 2, 0),
-          IndexRow("file_2", -1, 1, 0),
-          IndexRow("file_3", -2, -1, 0),
-          IndexRow("file_4", 0, 0, 0, "abc", "abc", 0), // only contains A = 0, B = 'abc'
-          IndexRow("file_5", 0, 0, 0, "abc", "abc", 0) // only contains A = 0, B = 'abc'
+          IndexRow("file_1", valueCount = 1, A_minValue = 1, A_maxValue = 2, A_nullCount = 0),
+          IndexRow("file_2", valueCount = 1, A_minValue = -1, A_maxValue = 1, A_nullCount = 0),
+          IndexRow("file_3", valueCount = 1, A_minValue = -2, A_maxValue = -1, A_nullCount = 0),
+          IndexRow("file_4", valueCount = 1, A_minValue = 0, A_maxValue = 0, A_nullCount = 0, B_minValue = "abc", B_maxValue = "abc", B_nullCount = 0), // only contains A = 0, B = 'abc'
+          IndexRow("file_5", valueCount = 1, A_minValue = 0, A_maxValue = 0, A_nullCount = 0, B_minValue = "abc", B_maxValue = "abc", B_nullCount = 0) // only contains A = 0, B = 'abc'
         ),
         Seq("file_1", "file_2", "file_3")),
 
@@ -363,10 +369,10 @@ object TestDataSkippingUtils {
         // Queries contains expression involving non-indexed column D
         "A = 0 AND B = 'abc' AND D IS NULL",
         Seq(
-          IndexRow("file_1", 1, 2, 0),
-          IndexRow("file_2", -1, 1, 0),
-          IndexRow("file_3", -2, -1, 0),
-          IndexRow("file_4", 0, 0, 0, "aaa", "xyz", 0) // might contain A = 0 AND B = 'abc'
+          IndexRow("file_1", valueCount = 1, A_minValue = 1, A_maxValue = 2, A_nullCount = 0),
+          IndexRow("file_2", valueCount = 1, A_minValue = -1, A_maxValue = 1, A_nullCount = 0),
+          IndexRow("file_3", valueCount = 1, A_minValue = -2, A_maxValue = -1, A_nullCount = 0),
+          IndexRow("file_4", valueCount = 1, A_minValue = 0, A_maxValue = 0, A_nullCount = 0, B_minValue = "aaa", B_maxValue = "xyz", B_nullCount = 0) // might contain A = 0 AND B = 'abc'
         ),
         Seq("file_4")),
 
@@ -374,211 +380,212 @@ object TestDataSkippingUtils {
         // Queries contains expression involving non-indexed column D
         "A = 0 OR B = 'abc' OR D IS NULL",
         Seq(
-          IndexRow("file_1", 1, 2, 0),
-          IndexRow("file_2", -1, 1, 0),
-          IndexRow("file_3", -2, -1, 0),
-          IndexRow("file_4", 0, 0, 0, "aaa", "xyz", 0) // might contain B = 'abc'
+          IndexRow("file_1", valueCount = 1, A_minValue = 1, A_maxValue = 2, A_nullCount = 0),
+          IndexRow("file_2", valueCount = 1, A_minValue = -1, A_maxValue =  1, A_nullCount = 0),
+          IndexRow("file_3", valueCount = 1, A_minValue = -2, A_maxValue =  -1, A_nullCount = 0),
+          IndexRow("file_4", valueCount = 1, B_minValue = "aaa", B_maxValue = "xyz", B_nullCount = 0) // might contain B = 'abc'
         ),
         Seq("file_1", "file_2", "file_3", "file_4"))
     )
   }
 
   def testCompositeFilterExpressionsSource(): java.util.stream.Stream[Arguments] = {
+    // NOTE: all timestamps in UTC
     java.util.stream.Stream.of(
       arguments(
-        "date_format(C, 'MM/dd/yyyy') = '03/06/2022'",
+        "date_format(C, 'MM/dd/yyyy') = '03/07/2022'",
         Seq(
-          IndexRow("file_1",
-            C_minValue = new Timestamp(1646711448000L), // 03/07/2022
-            C_maxValue = new Timestamp(1646797848000L), // 03/08/2022
-            C_num_nulls = 0),
-          IndexRow("file_2",
-            C_minValue = new Timestamp(1646625048000L), // 03/06/2022
-            C_maxValue = new Timestamp(1646711448000L), // 03/07/2022
-            C_num_nulls = 0)
+          IndexRow("file_1", valueCount = 1,
+            C_minValue = new Timestamp(1646711448000L), // 03/08/2022
+            C_maxValue = new Timestamp(1646797848000L), // 03/09/2022
+            C_nullCount = 0),
+          IndexRow("file_2", valueCount = 1,
+            C_minValue = new Timestamp(1646625048000L), // 03/07/2022
+            C_maxValue = new Timestamp(1646711448000L), // 03/08/2022
+            C_nullCount = 0)
         ),
         Seq("file_2")),
       arguments(
-        "'03/06/2022' = date_format(C, 'MM/dd/yyyy')",
+        "'03/07/2022' = date_format(C, 'MM/dd/yyyy')",
         Seq(
-          IndexRow("file_1",
-            C_minValue = new Timestamp(1646711448000L), // 03/07/2022
-            C_maxValue = new Timestamp(1646797848000L), // 03/08/2022
-            C_num_nulls = 0),
-          IndexRow("file_2",
-            C_minValue = new Timestamp(1646625048000L), // 03/06/2022
-            C_maxValue = new Timestamp(1646711448000L), // 03/07/2022
-            C_num_nulls = 0)
+          IndexRow("file_1", valueCount = 1,
+            C_minValue = new Timestamp(1646711448000L), // 03/08/2022
+            C_maxValue = new Timestamp(1646797848000L), // 03/09/2022
+            C_nullCount = 0),
+          IndexRow("file_2", valueCount = 1,
+            C_minValue = new Timestamp(1646625048000L), // 03/07/2022
+            C_maxValue = new Timestamp(1646711448000L), // 03/08/2022
+            C_nullCount = 0)
         ),
         Seq("file_2")),
       arguments(
-        "'03/06/2022' != date_format(C, 'MM/dd/yyyy')",
+        "'03/07/2022' != date_format(C, 'MM/dd/yyyy')",
         Seq(
-          IndexRow("file_1",
-            C_minValue = new Timestamp(1646711448000L), // 03/07/2022
-            C_maxValue = new Timestamp(1646797848000L), // 03/08/2022
-            C_num_nulls = 0),
-          IndexRow("file_2",
-            C_minValue = new Timestamp(1646625048000L), // 03/06/2022
-            C_maxValue = new Timestamp(1646625048000L), // 03/06/2022
-            C_num_nulls = 0)
+          IndexRow("file_1", valueCount = 1,
+            C_minValue = new Timestamp(1646711448000L), // 03/08/2022
+            C_maxValue = new Timestamp(1646797848000L), // 03/09/2022
+            C_nullCount = 0),
+          IndexRow("file_2", valueCount = 1,
+            C_minValue = new Timestamp(1646625048000L), // 03/07/2022
+            C_maxValue = new Timestamp(1646625048000L), // 03/07/2022
+            C_nullCount = 0)
         ),
         Seq("file_1")),
       arguments(
-        "date_format(C, 'MM/dd/yyyy') != '03/06/2022'",
+        "date_format(C, 'MM/dd/yyyy') != '03/07/2022'",
         Seq(
-          IndexRow("file_1",
-            C_minValue = new Timestamp(1646711448000L), // 03/07/2022
-            C_maxValue = new Timestamp(1646797848000L), // 03/08/2022
-            C_num_nulls = 0),
-          IndexRow("file_2",
-            C_minValue = new Timestamp(1646625048000L), // 03/06/2022
-            C_maxValue = new Timestamp(1646625048000L), // 03/06/2022
-            C_num_nulls = 0)
+          IndexRow("file_1", valueCount = 1,
+            C_minValue = new Timestamp(1646711448000L), // 03/08/2022
+            C_maxValue = new Timestamp(1646797848000L), // 03/09/2022
+            C_nullCount = 0),
+          IndexRow("file_2", valueCount = 1,
+            C_minValue = new Timestamp(1646625048000L), // 03/07/2022
+            C_maxValue = new Timestamp(1646625048000L), // 03/07/2022
+            C_nullCount = 0)
         ),
         Seq("file_1")),
       arguments(
-        "date_format(C, 'MM/dd/yyyy') < '03/07/2022'",
+        "date_format(C, 'MM/dd/yyyy') < '03/08/2022'",
         Seq(
-          IndexRow("file_1",
-            C_minValue = new Timestamp(1646711448000L), // 03/07/2022
-            C_maxValue = new Timestamp(1646797848000L), // 03/08/2022
-            C_num_nulls = 0),
-          IndexRow("file_2",
-            C_minValue = new Timestamp(1646625048000L), // 03/06/2022
-            C_maxValue = new Timestamp(1646711448000L), // 03/07/2022
-            C_num_nulls = 0)
+          IndexRow("file_1", valueCount = 1,
+            C_minValue = new Timestamp(1646711448000L), // 03/08/2022
+            C_maxValue = new Timestamp(1646797848000L), // 03/09/2022
+            C_nullCount = 0),
+          IndexRow("file_2", valueCount = 1,
+            C_minValue = new Timestamp(1646625048000L), // 03/07/2022
+            C_maxValue = new Timestamp(1646711448000L), // 03/08/2022
+            C_nullCount = 0)
         ),
         Seq("file_2")),
       arguments(
-        "'03/07/2022' > date_format(C, 'MM/dd/yyyy')",
+        "'03/08/2022' > date_format(C, 'MM/dd/yyyy')",
         Seq(
-          IndexRow("file_1",
-            C_minValue = new Timestamp(1646711448000L), // 03/07/2022
-            C_maxValue = new Timestamp(1646797848000L), // 03/08/2022
-            C_num_nulls = 0),
-          IndexRow("file_2",
-            C_minValue = new Timestamp(1646625048000L), // 03/06/2022
-            C_maxValue = new Timestamp(1646711448000L), // 03/07/2022
-            C_num_nulls = 0)
+          IndexRow("file_1", valueCount = 1,
+            C_minValue = new Timestamp(1646711448000L), // 03/08/2022
+            C_maxValue = new Timestamp(1646797848000L), // 03/09/2022
+            C_nullCount = 0),
+          IndexRow("file_2", valueCount = 1,
+            C_minValue = new Timestamp(1646625048000L), // 03/07/2022
+            C_maxValue = new Timestamp(1646711448000L), // 03/08/2022
+            C_nullCount = 0)
         ),
         Seq("file_2")),
       arguments(
-        "'03/07/2022' < date_format(C, 'MM/dd/yyyy')",
+        "'03/08/2022' < date_format(C, 'MM/dd/yyyy')",
         Seq(
-          IndexRow("file_1",
-            C_minValue = new Timestamp(1646711448000L), // 03/07/2022
-            C_maxValue = new Timestamp(1646797848000L), // 03/08/2022
-            C_num_nulls = 0),
-          IndexRow("file_2",
-            C_minValue = new Timestamp(1646625048000L), // 03/06/2022
-            C_maxValue = new Timestamp(1646711448000L), // 03/07/2022
-            C_num_nulls = 0)
+          IndexRow("file_1", valueCount = 1,
+            C_minValue = new Timestamp(1646711448000L), // 03/08/2022
+            C_maxValue = new Timestamp(1646797848000L), // 03/09/2022
+            C_nullCount = 0),
+          IndexRow("file_2", valueCount = 1,
+            C_minValue = new Timestamp(1646625048000L), // 03/07/2022
+            C_maxValue = new Timestamp(1646711448000L), // 03/08/2022
+            C_nullCount = 0)
         ),
         Seq("file_1")),
       arguments(
-        "date_format(C, 'MM/dd/yyyy') > '03/07/2022'",
+        "date_format(C, 'MM/dd/yyyy') > '03/08/2022'",
         Seq(
-          IndexRow("file_1",
-            C_minValue = new Timestamp(1646711448000L), // 03/07/2022
-            C_maxValue = new Timestamp(1646797848000L), // 03/08/2022
-            C_num_nulls = 0),
-          IndexRow("file_2",
-            C_minValue = new Timestamp(1646625048000L), // 03/06/2022
-            C_maxValue = new Timestamp(1646711448000L), // 03/07/2022
-            C_num_nulls = 0)
+          IndexRow("file_1", valueCount = 1,
+            C_minValue = new Timestamp(1646711448000L), // 03/08/2022
+            C_maxValue = new Timestamp(1646797848000L), // 03/09/2022
+            C_nullCount = 0),
+          IndexRow("file_2", valueCount = 1,
+            C_minValue = new Timestamp(1646625048000L), // 03/07/2022
+            C_maxValue = new Timestamp(1646711448000L), // 03/08/2022
+            C_nullCount = 0)
         ),
         Seq("file_1")),
       arguments(
-        "date_format(C, 'MM/dd/yyyy') <= '03/06/2022'",
+        "date_format(C, 'MM/dd/yyyy') <= '03/07/2022'",
         Seq(
-          IndexRow("file_1",
-            C_minValue = new Timestamp(1646711448000L), // 03/07/2022
-            C_maxValue = new Timestamp(1646797848000L), // 03/08/2022
-            C_num_nulls = 0),
-          IndexRow("file_2",
-            C_minValue = new Timestamp(1646625048000L), // 03/06/2022
-            C_maxValue = new Timestamp(1646711448000L), // 03/07/2022
-            C_num_nulls = 0)
+          IndexRow("file_1", valueCount = 1,
+            C_minValue = new Timestamp(1646711448000L), // 03/08/2022
+            C_maxValue = new Timestamp(1646797848000L), // 03/09/2022
+            C_nullCount = 0),
+          IndexRow("file_2", valueCount = 1,
+            C_minValue = new Timestamp(1646625048000L), // 03/07/2022
+            C_maxValue = new Timestamp(1646711448000L), // 03/08/2022
+            C_nullCount = 0)
         ),
         Seq("file_2")),
       arguments(
-        "'03/06/2022' >= date_format(C, 'MM/dd/yyyy')",
+        "'03/07/2022' >= date_format(C, 'MM/dd/yyyy')",
         Seq(
-          IndexRow("file_1",
-            C_minValue = new Timestamp(1646711448000L), // 03/07/2022
-            C_maxValue = new Timestamp(1646797848000L), // 03/08/2022
-            C_num_nulls = 0),
-          IndexRow("file_2",
-            C_minValue = new Timestamp(1646625048000L), // 03/06/2022
-            C_maxValue = new Timestamp(1646711448000L), // 03/07/2022
-            C_num_nulls = 0)
+          IndexRow("file_1", valueCount = 1,
+            C_minValue = new Timestamp(1646711448000L), // 03/08/2022
+            C_maxValue = new Timestamp(1646797848000L), // 03/09/2022
+            C_nullCount = 0),
+          IndexRow("file_2", valueCount = 1,
+            C_minValue = new Timestamp(1646625048000L), // 03/07/2022
+            C_maxValue = new Timestamp(1646711448000L), // 03/08/2022
+            C_nullCount = 0)
         ),
         Seq("file_2")),
       arguments(
-        "'03/08/2022' <= date_format(C, 'MM/dd/yyyy')",
+        "'03/09/2022' <= date_format(C, 'MM/dd/yyyy')",
         Seq(
-          IndexRow("file_1",
-            C_minValue = new Timestamp(1646711448000L), // 03/07/2022
-            C_maxValue = new Timestamp(1646797848000L), // 03/08/2022
-            C_num_nulls = 0),
-          IndexRow("file_2",
-            C_minValue = new Timestamp(1646625048000L), // 03/06/2022
-            C_maxValue = new Timestamp(1646711448000L), // 03/07/2022
-            C_num_nulls = 0)
+          IndexRow("file_1", valueCount = 1,
+            C_minValue = new Timestamp(1646711448000L), // 03/08/2022
+            C_maxValue = new Timestamp(1646797848000L), // 03/09/2022
+            C_nullCount = 0),
+          IndexRow("file_2", valueCount = 1,
+            C_minValue = new Timestamp(1646625048000L), // 03/07/2022
+            C_maxValue = new Timestamp(1646711448000L), // 03/08/2022
+            C_nullCount = 0)
         ),
         Seq("file_1")),
       arguments(
-        "date_format(C, 'MM/dd/yyyy') >= '03/08/2022'",
+        "date_format(C, 'MM/dd/yyyy') >= '03/09/2022'",
         Seq(
-          IndexRow("file_1",
-            C_minValue = new Timestamp(1646711448000L), // 03/07/2022
-            C_maxValue = new Timestamp(1646797848000L), // 03/08/2022
-            C_num_nulls = 0),
-          IndexRow("file_2",
-            C_minValue = new Timestamp(1646625048000L), // 03/06/2022
-            C_maxValue = new Timestamp(1646711448000L), // 03/07/2022
-            C_num_nulls = 0)
+          IndexRow("file_1", valueCount = 1,
+            C_minValue = new Timestamp(1646711448000L), // 03/08/2022
+            C_maxValue = new Timestamp(1646797848000L), // 03/09/2022
+            C_nullCount = 0),
+          IndexRow("file_2", valueCount = 1,
+            C_minValue = new Timestamp(1646625048000L), // 03/07/2022
+            C_maxValue = new Timestamp(1646711448000L), // 03/08/2022
+            C_nullCount = 0)
         ),
         Seq("file_1")),
       arguments(
-        "date_format(C, 'MM/dd/yyyy') IN ('03/08/2022')",
+        "date_format(C, 'MM/dd/yyyy') IN ('03/09/2022')",
         Seq(
-          IndexRow("file_1",
-            C_minValue = new Timestamp(1646711448000L), // 03/07/2022
-            C_maxValue = new Timestamp(1646797848000L), // 03/08/2022
-            C_num_nulls = 0),
-          IndexRow("file_2",
-            C_minValue = new Timestamp(1646625048000L), // 03/06/2022
-            C_maxValue = new Timestamp(1646711448000L), // 03/07/2022
-            C_num_nulls = 0)
+          IndexRow("file_1", valueCount = 1,
+            C_minValue = new Timestamp(1646711448000L), // 03/08/2022
+            C_maxValue = new Timestamp(1646797848000L), // 03/09/2022
+            C_nullCount = 0),
+          IndexRow("file_2", valueCount = 1,
+            C_minValue = new Timestamp(1646625048000L), // 03/07/2022
+            C_maxValue = new Timestamp(1646711448000L), // 03/08/2022
+            C_nullCount = 0)
         ),
         Seq("file_1")),
       arguments(
-        "date_format(C, 'MM/dd/yyyy') NOT IN ('03/06/2022')",
+        "date_format(C, 'MM/dd/yyyy') NOT IN ('03/07/2022')",
         Seq(
-          IndexRow("file_1",
-            C_minValue = new Timestamp(1646711448000L), // 03/07/2022
-            C_maxValue = new Timestamp(1646797848000L), // 03/08/2022
-            C_num_nulls = 0),
-          IndexRow("file_2",
-            C_minValue = new Timestamp(1646625048000L), // 03/06/2022
-            C_maxValue = new Timestamp(1646625048000L), // 03/06/2022
-            C_num_nulls = 0)
+          IndexRow("file_1", valueCount = 1,
+            C_minValue = new Timestamp(1646711448000L), // 03/08/2022
+            C_maxValue = new Timestamp(1646797848000L), // 03/09/2022
+            C_nullCount = 0),
+          IndexRow("file_2", valueCount = 1,
+            C_minValue = new Timestamp(1646625048000L), // 03/07/2022
+            C_maxValue = new Timestamp(1646625048000L), // 03/07/2022
+            C_nullCount = 0)
         ),
         Seq("file_1")),
       arguments(
         // Should be identical to the one above
         "date_format(to_timestamp(B, 'yyyy-MM-dd'), 'MM/dd/yyyy') NOT IN ('03/06/2022')",
         Seq(
-          IndexRow("file_1",
+          IndexRow("file_1", valueCount = 1,
             B_minValue = "2022-03-07", // 03/07/2022
             B_maxValue = "2022-03-08", // 03/08/2022
-            B_num_nulls = 0),
-          IndexRow("file_2",
+            B_nullCount = 0),
+          IndexRow("file_2", valueCount = 1,
             B_minValue = "2022-03-06", // 03/06/2022
             B_maxValue = "2022-03-06", // 03/06/2022
-            B_num_nulls = 0)
+            B_nullCount = 0)
         ),
         Seq("file_1"))
 

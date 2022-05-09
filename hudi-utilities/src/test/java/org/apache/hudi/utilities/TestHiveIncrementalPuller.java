@@ -167,7 +167,7 @@ public class TestHiveIncrementalPuller {
     puller.saveDelta();
     HoodieHiveClient assertingClient = new HoodieHiveClient(new HiveSyncConfig(getAssertionSyncConfig(cfg.tmpDb)), HiveTestUtil.getHiveConf(), fileSystem);
     String tmpTable = cfg.targetTable + "__" + cfg.sourceTable;
-    assertTrue(assertingClient.doesTableExist(tmpTable));
+    assertTrue(assertingClient.tableExists(tmpTable));
   }
 
 }

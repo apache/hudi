@@ -32,16 +32,22 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieFileGroup;
+import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
+import org.apache.hudi.common.table.log.HoodieLogFormat;
+import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.CleanerUtils;
+import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetUtils;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -49,15 +55,20 @@ import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.utilities.util.BloomFilterData;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import jline.internal.Log;
+import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+import org.apache.parquet.avro.AvroSchemaConverter;
+import org.apache.parquet.schema.MessageType;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 
@@ -67,6 +78,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -74,6 +86,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
+
+import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType.INSTANT_TIME;
 
 /**
  * A validator with spark-submit to compare information, such as partitions, file listing, index, etc.,
@@ -85,6 +99,9 @@ import java.util.stream.Collectors;
  * - `--validate-all-file-groups`: validate all file groups, and all file slices within file groups.
  * - `--validate-all-column-stats`: validate column stats for all columns in the schema
  * - `--validate-bloom-filters`: validate bloom filters of base files
+ *
+ * If the Hudi table is on the local file system, the base path passed to `--base-path` must have
+ * "file:" prefix to avoid validation failure.
  * <p>
  * - Default : This validator will compare the results between metadata table and filesystem only once.
  * <p>
@@ -92,7 +109,6 @@ import java.util.stream.Collectors;
  * ```
  * spark-submit \
  *  --class org.apache.hudi.utilities.HoodieMetadataTableValidator \
- *  --packages org.apache.spark:spark-avro_2.11:2.4.4 \
  *  --master spark://xxxx:7077 \
  *  --driver-memory 1g \
  *  --executor-memory 1g \
@@ -111,7 +127,6 @@ import java.util.stream.Collectors;
  * ```
  * spark-submit \
  *  --class org.apache.hudi.utilities.HoodieMetadataTableValidator \
- *  --packages org.apache.spark:spark-avro_2.11:2.4.4 \
  *  --master spark://xxxx:7077 \
  *  --driver-memory 1g \
  *  --executor-memory 1g \
@@ -140,8 +155,11 @@ public class HoodieMetadataTableValidator implements Serializable {
 
   protected transient Option<AsyncMetadataTableValidateService> asyncMetadataTableValidateService;
 
+  private final String taskLabels;
+
   public HoodieMetadataTableValidator(HoodieTableMetaClient metaClient) {
     this.metaClient = metaClient;
+    this.taskLabels = StringUtils.EMPTY_STRING;
   }
 
   public HoodieMetadataTableValidator(JavaSparkContext jsc, Config cfg) {
@@ -158,6 +176,27 @@ public class HoodieMetadataTableValidator implements Serializable {
         .build();
 
     this.asyncMetadataTableValidateService = cfg.continuous ? Option.of(new AsyncMetadataTableValidateService()) : Option.empty();
+    this.taskLabels = generateValidationTaskLabels();
+  }
+
+  private String generateValidationTaskLabels() {
+    List<String> labelList = new ArrayList<>();
+    if (cfg.validateLatestBaseFiles) {
+      labelList.add("validate-latest-base-files");
+    }
+    if (cfg.validateLatestFileSlices) {
+      labelList.add("validate-latest-file-slices");
+    }
+    if (cfg.validateAllFileGroups) {
+      labelList.add("validate-all-file-groups");
+    }
+    if (cfg.validateAllColumnStats) {
+      labelList.add("validate-all-column-stats");
+    }
+    if (cfg.validateBloomFilters) {
+      labelList.add("validate-bloom-filters");
+    }
+    return String.join(",", labelList);
   }
 
   /**
@@ -359,6 +398,9 @@ public class HoodieMetadataTableValidator implements Serializable {
     String basePath = metaClient.getBasePath();
     Set<String> baseFilesForCleaning = Collections.emptySet();
 
+    // check metadata table is available to read.
+    checkMetadataTableIsAvailable();
+
     if (cfg.skipDataFilesForCleaning) {
       HoodieTimeline inflightCleaningTimeline = metaClient.getActiveTimeline().getCleanerTimeline().filterInflights();
 
@@ -395,10 +437,12 @@ public class HoodieMetadataTableValidator implements Serializable {
     List<Boolean> result = engineContext.parallelize(allPartitions, allPartitions.size()).map(partitionPath -> {
       try {
         validateFilesInPartition(metadataTableBasedContext, fsBasedContext, partitionPath, finalBaseFilesForCleaning);
-        LOG.info("Metadata table validation succeeded for " + partitionPath);
+        LOG.info(String.format("Metadata table validation succeeded for partition %s (partition %s)", partitionPath, taskLabels));
         return true;
       } catch (HoodieValidationException e) {
-        LOG.error("Metadata table validation failed for " + partitionPath + " due to HoodieValidationException", e);
+        LOG.error(
+            String.format("Metadata table validation failed for partition %s due to HoodieValidationException (partition %s)",
+                partitionPath, taskLabels), e);
         if (!cfg.ignoreFailed) {
           throw e;
         }
@@ -411,9 +455,28 @@ public class HoodieMetadataTableValidator implements Serializable {
     }
 
     if (finalResult) {
-      LOG.info("Metadata table validation succeeded.");
+      LOG.info(String.format("Metadata table validation succeeded (%s).", taskLabels));
     } else {
-      LOG.warn("Metadata table validation failed.");
+      LOG.warn(String.format("Metadata table validation failed (%s).", taskLabels));
+    }
+  }
+
+  /**
+   * Check metadata is initialized and available to ready.
+   * If not we will log.warn and skip current validation.
+   */
+  private void checkMetadataTableIsAvailable() {
+    try {
+      HoodieTableMetaClient mdtMetaClient = HoodieTableMetaClient.builder()
+          .setConf(jsc.hadoopConfiguration()).setBasePath(new Path(cfg.basePath, HoodieTableMetaClient.METADATA_TABLE_FOLDER_PATH).toString())
+          .setLoadActiveTimelineOnLoad(true)
+          .build();
+      int finishedInstants = mdtMetaClient.getActiveTimeline().filterCompletedInstants().countInstants();
+      if (finishedInstants == 0) {
+        throw new HoodieValidationException("There is no completed instant for metadata table.");
+      }
+    } catch (Exception ex) {
+      LOG.warn("Metadata table is not available to ready for now, ", ex);
     }
   }
 
@@ -423,6 +486,22 @@ public class HoodieMetadataTableValidator implements Serializable {
   private List<String> validatePartitions(HoodieSparkEngineContext engineContext, String basePath) {
     // compare partitions
     List<String> allPartitionPathsFromFS = FSUtils.getAllPartitionPaths(engineContext, basePath, false, cfg.assumeDatePartitioning);
+    HoodieTimeline completedTimeline = metaClient.getActiveTimeline().filterCompletedInstants();
+
+    // ignore partitions created by uncommitted ingestion.
+    allPartitionPathsFromFS = allPartitionPathsFromFS.stream().parallel().filter(part -> {
+      HoodiePartitionMetadata hoodiePartitionMetadata =
+          new HoodiePartitionMetadata(metaClient.getFs(), FSUtils.getPartitionPath(basePath, part));
+
+      Option<String> instantOption = hoodiePartitionMetadata.readPartitionCreatedCommitTime();
+      if (instantOption.isPresent()) {
+        String instantTime = instantOption.get();
+        return completedTimeline.containsOrBeforeTimelineStarts(instantTime);
+      } else {
+        return false;
+      }
+    }).collect(Collectors.toList());
+
     List<String> allPartitionPathsMeta = FSUtils.getAllPartitionPaths(engineContext, basePath, true, cfg.assumeDatePartitioning);
 
     Collections.sort(allPartitionPathsFromFS);
@@ -511,9 +590,9 @@ public class HoodieMetadataTableValidator implements Serializable {
 
     LOG.debug("All file slices from metadata: " + allFileSlicesFromMeta + ". For partitions " + partitionPath);
     LOG.debug("All file slices from direct listing: " + allFileSlicesFromFS + ". For partitions " + partitionPath);
-    validate(allFileSlicesFromMeta, allFileSlicesFromFS, partitionPath, "file slices");
-
-    LOG.info("Validation of all file groups succeeded for partition " + partitionPath);
+    validateFileSlices(
+        allFileSlicesFromMeta, allFileSlicesFromFS, partitionPath,
+        fsBasedContext.getMetaClient(), "all file groups");
   }
 
   /**
@@ -538,16 +617,8 @@ public class HoodieMetadataTableValidator implements Serializable {
 
     LOG.debug("Latest base file from metadata: " + latestFilesFromMetadata + ". For partitions " + partitionPath);
     LOG.debug("Latest base file from direct listing: " + latestFilesFromFS + ". For partitions " + partitionPath);
-    if (latestFilesFromMetadata.size() != latestFilesFromFS.size()
-        || !latestFilesFromMetadata.equals(latestFilesFromFS)) {
-      String message = "Validation of metadata get latest base file for partition " + partitionPath + " failed. "
-          + "Latest base file from metadata: " + latestFilesFromMetadata
-          + "Latest base file from direct listing: " + latestFilesFromFS;
-      LOG.error(message);
-      throw new HoodieValidationException(message);
-    } else {
-      LOG.info("Validation of getLatestBaseFiles succeeded for partition " + partitionPath);
-    }
+
+    validate(latestFilesFromMetadata, latestFilesFromFS, partitionPath, "latest base files");
   }
 
   /**
@@ -572,8 +643,9 @@ public class HoodieMetadataTableValidator implements Serializable {
     LOG.debug("Latest file list from metadata: " + latestFileSlicesFromMetadataTable + ". For partition " + partitionPath);
     LOG.debug("Latest file list from direct listing: " + latestFileSlicesFromFS + ". For partition " + partitionPath);
 
-    validate(latestFileSlicesFromMetadataTable, latestFileSlicesFromFS, partitionPath, "file slices");
-    LOG.info("Validation of getLatestFileSlices succeeded for partition " + partitionPath);
+    validateFileSlices(
+        latestFileSlicesFromMetadataTable, latestFileSlicesFromFS, partitionPath,
+        fsBasedContext.getMetaClient(), "latest file slices");
   }
 
   private List<FileSlice> filterFileSliceBasedOnInflightCleaning(List<FileSlice> sortedLatestFileSliceList, Set<String> baseDataFilesForCleaning) {
@@ -594,6 +666,7 @@ public class HoodieMetadataTableValidator implements Serializable {
         }).collect(Collectors.toList());
   }
 
+  @SuppressWarnings("rawtypes")
   private void validateAllColumnStats(
       HoodieMetadataValidationContext metadataTableBasedContext,
       HoodieMetadataValidationContext fsBasedContext,
@@ -601,14 +674,12 @@ public class HoodieMetadataTableValidator implements Serializable {
       Set<String> baseDataFilesForCleaning) {
 
     List<String> latestBaseFilenameList = getLatestBaseFileNames(fsBasedContext, partitionPath, baseDataFilesForCleaning);
-    List<HoodieColumnRangeMetadata<String>> metadataBasedColStats = metadataTableBasedContext
+    List<HoodieColumnRangeMetadata<Comparable>> metadataBasedColStats = metadataTableBasedContext
         .getSortedColumnStatsList(partitionPath, latestBaseFilenameList);
-    List<HoodieColumnRangeMetadata<String>> fsBasedColStats = fsBasedContext
+    List<HoodieColumnRangeMetadata<Comparable>> fsBasedColStats = fsBasedContext
         .getSortedColumnStatsList(partitionPath, latestBaseFilenameList);
 
     validate(metadataBasedColStats, fsBasedColStats, partitionPath, "column stats");
-
-    LOG.info("Validation of column stats succeeded for partition " + partitionPath);
   }
 
   private void validateBloomFilters(
@@ -624,8 +695,6 @@ public class HoodieMetadataTableValidator implements Serializable {
         .getSortedBloomFilterList(partitionPath, latestBaseFilenameList);
 
     validate(metadataBasedBloomFilters, fsBasedBloomFilters, partitionPath, "bloom filters");
-
-    LOG.info("Validation of bloom filters succeeded for partition " + partitionPath);
   }
 
   private List<String> getLatestBaseFileNames(HoodieMetadataValidationContext fsBasedContext, String partitionPath, Set<String> baseDataFilesForCleaning) {
@@ -653,6 +722,128 @@ public class HoodieMetadataTableValidator implements Serializable {
     } else {
       LOG.info(String.format("Validation of %s succeeded for partition %s", label, partitionPath));
     }
+  }
+
+  private void validateFileSlices(
+      List<FileSlice> fileSliceListFromMetadataTable, List<FileSlice> fileSliceListFromFS,
+      String partitionPath, HoodieTableMetaClient metaClient, String label) {
+    boolean mismatch = false;
+    if (fileSliceListFromMetadataTable.size() != fileSliceListFromFS.size()) {
+      mismatch = true;
+    } else if (!fileSliceListFromMetadataTable.equals(fileSliceListFromFS)) {
+      for (int i = 0; i < fileSliceListFromMetadataTable.size(); i++) {
+        FileSlice fileSlice1 = fileSliceListFromMetadataTable.get(i);
+        FileSlice fileSlice2 = fileSliceListFromFS.get(i);
+        if (!Objects.equals(fileSlice1.getFileGroupId(), fileSlice2.getFileGroupId())
+            || !Objects.equals(fileSlice1.getBaseInstantTime(), fileSlice2.getBaseInstantTime())
+            || !Objects.equals(fileSlice1.getBaseFile(), fileSlice2.getBaseFile())) {
+          mismatch = true;
+          break;
+        }
+        if (!areFileSliceCommittedLogFilesMatching(fileSlice1, fileSlice2, metaClient)) {
+          mismatch = true;
+          break;
+        } else {
+          LOG.warn(String.format("There are uncommitted log files in the latest file slices "
+              + "but the committed log files match: %s %s", fileSlice1, fileSlice2));
+        }
+      }
+    }
+
+    if (mismatch) {
+      String message = String.format("Validation of %s for partition %s failed."
+              + "\n%s from metadata: %s\n%s from file system and base files: %s",
+          label, partitionPath, label, fileSliceListFromMetadataTable, label, fileSliceListFromFS);
+      LOG.error(message);
+      throw new HoodieValidationException(message);
+    } else {
+      LOG.info(String.format("Validation of %s succeeded for partition %s", label, partitionPath));
+    }
+  }
+
+  /**
+   * Compares committed log files from two file slices.
+   *
+   * @param fs1        File slice 1
+   * @param fs2        File slice 2
+   * @param metaClient {@link HoodieTableMetaClient} instance
+   * @return {@code true} if matching; {@code false} otherwise.
+   */
+  private boolean areFileSliceCommittedLogFilesMatching(
+      FileSlice fs1, FileSlice fs2, HoodieTableMetaClient metaClient) {
+    Set<String> fs1LogPathSet =
+        fs1.getLogFiles().map(f -> f.getPath().toString()).collect(Collectors.toSet());
+    Set<String> fs2LogPathSet =
+        fs2.getLogFiles().map(f -> f.getPath().toString()).collect(Collectors.toSet());
+    Set<String> commonLogPathSet = new HashSet<>(fs1LogPathSet);
+    commonLogPathSet.retainAll(fs2LogPathSet);
+    // Only keep log file paths that differ
+    fs1LogPathSet.removeAll(commonLogPathSet);
+    fs2LogPathSet.removeAll(commonLogPathSet);
+    // Check if the remaining log files are uncommitted.  If there is any log file
+    // that is committed, the committed log files of two file slices are different
+    FileSystem fileSystem = metaClient.getFs();
+    HoodieTimeline commitsTimeline = metaClient.getCommitsTimeline();
+    if (hasCommittedLogFiles(fileSystem, fs1LogPathSet, commitsTimeline)) {
+      LOG.error("The first file slice has committed log files that cause mismatching: "
+          + fs1);
+      return false;
+    }
+    if (hasCommittedLogFiles(fileSystem, fs2LogPathSet, commitsTimeline)) {
+      LOG.error("The second file slice has committed log files that cause mismatching: "
+          + fs2);
+      return false;
+    }
+    return true;
+  }
+
+  private boolean hasCommittedLogFiles(
+      FileSystem fs, Set<String> logFilePathSet, HoodieTimeline commitsTimeline) {
+    if (logFilePathSet.isEmpty()) {
+      return false;
+    }
+
+    AvroSchemaConverter converter = new AvroSchemaConverter();
+    HoodieTimeline completedInstantsTimeline = commitsTimeline.filterCompletedInstants();
+    HoodieTimeline inflightInstantsTimeline = commitsTimeline.filterInflights();
+
+    for (String logFilePathStr : logFilePathSet) {
+      HoodieLogFormat.Reader reader = null;
+      try {
+        MessageType messageType =
+            TableSchemaResolver.readSchemaFromLogFile(fs, new Path(logFilePathStr));
+        if (messageType == null) {
+          LOG.warn(String.format("Cannot read schema from log file %s. "
+              + "Skip the check as it's likely being written by an inflight instant.", logFilePathStr));
+          continue;
+        }
+        Schema readerSchema = converter.convert(messageType);
+        reader =
+            HoodieLogFormat.newReader(fs, new HoodieLogFile(new Path(logFilePathStr)), readerSchema);
+        // read the avro blocks
+        if (reader.hasNext()) {
+          HoodieLogBlock block = reader.next();
+          final String instantTime = block.getLogBlockHeader().get(INSTANT_TIME);
+          if (!completedInstantsTimeline.containsOrBeforeTimelineStarts(instantTime)
+              || inflightInstantsTimeline.containsInstant(instantTime)) {
+            // hit an uncommitted block possibly from a failed write
+            LOG.warn("Log file is uncommitted: " + logFilePathStr);
+          } else {
+            LOG.warn("Log file is committed: " + logFilePathStr);
+            return true;
+          }
+        } else {
+          LOG.warn("There is no log block in " + logFilePathStr);
+        }
+      } catch (IOException e) {
+        LOG.warn(String.format("Cannot read log file %s: %s. "
+                + "Skip the check as it's likely being written by an inflight instant.",
+            logFilePathStr, e.getMessage()), e);
+      } finally {
+        FileIOUtils.closeQuietly(reader);
+      }
+    }
+    return false;
   }
 
   public class AsyncMetadataTableValidateService extends HoodieAsyncService {
@@ -711,10 +902,10 @@ public class HoodieMetadataTableValidator implements Serializable {
   }
 
   public static class HoodieColumnRangeMetadataComparator
-      implements Comparator<HoodieColumnRangeMetadata<String>>, Serializable {
+      implements Comparator<HoodieColumnRangeMetadata<Comparable>>, Serializable {
 
     @Override
-    public int compare(HoodieColumnRangeMetadata<String> o1, HoodieColumnRangeMetadata<String> o2) {
+    public int compare(HoodieColumnRangeMetadata<Comparable> o1, HoodieColumnRangeMetadata<Comparable> o2) {
       return o1.toString().compareTo(o2.toString());
     }
   }
@@ -744,7 +935,6 @@ public class HoodieMetadataTableValidator implements Serializable {
           .enable(enableMetadataTable)
           .withMetadataIndexBloomFilter(enableMetadataTable)
           .withMetadataIndexColumnStats(enableMetadataTable)
-          .withMetadataIndexForAllColumns(enableMetadataTable)
           .withAssumeDatePartitioning(cfg.assumeDatePartitioning)
           .build();
       this.fileSystemView = FileSystemViewManager.createInMemoryFileSystemView(engineContext,
@@ -754,6 +944,10 @@ public class HoodieMetadataTableValidator implements Serializable {
       if (metaClient.getCommitsTimeline().filterCompletedInstants().countInstants() > 0) {
         this.allColumnNameList = getAllColumnNames();
       }
+    }
+
+    public HoodieTableMetaClient getMetaClient() {
+      return metaClient;
     }
 
     public List<HoodieBaseFile> getSortedLatestBaseFileList(String partitionPath) {
@@ -771,7 +965,8 @@ public class HoodieMetadataTableValidator implements Serializable {
           .sorted(new HoodieFileGroupComparator()).collect(Collectors.toList());
     }
 
-    public List<HoodieColumnRangeMetadata<String>> getSortedColumnStatsList(
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    public List<HoodieColumnRangeMetadata<Comparable>> getSortedColumnStatsList(
         String partitionPath, List<String> baseFileNameList) {
       LOG.info("All column names for getting column stats: " + allColumnNameList);
       if (enableMetadataTable) {
@@ -780,15 +975,7 @@ public class HoodieMetadataTableValidator implements Serializable {
         return allColumnNameList.stream()
             .flatMap(columnName ->
                 tableMetadata.getColumnStats(partitionFileNameList, columnName).values().stream()
-                    .map(stats -> HoodieColumnRangeMetadata.create(
-                        stats.getFileName(),
-                        columnName,
-                        stats.getMinValue(),
-                        stats.getMaxValue(),
-                        stats.getNullCount(),
-                        stats.getValueCount(),
-                        stats.getTotalSize(),
-                        stats.getTotalUncompressedSize()))
+                    .map(HoodieTableMetadataUtil::convertColumnStatsRecordToColumnRangeMetadata)
                     .collect(Collectors.toList())
                     .stream())
             .sorted(new HoodieColumnRangeMetadataComparator())
@@ -797,20 +984,8 @@ public class HoodieMetadataTableValidator implements Serializable {
         return baseFileNameList.stream().flatMap(filename ->
                 new ParquetUtils().readRangeFromParquetMetadata(
                     metaClient.getHadoopConf(),
-                    new Path(new Path(metaClient.getBasePath(), partitionPath), filename),
+                    new Path(FSUtils.getPartitionPath(metaClient.getBasePath(), partitionPath), filename),
                     allColumnNameList).stream())
-            .map(rangeMetadata -> HoodieColumnRangeMetadata.create(
-                rangeMetadata.getFilePath(),
-                rangeMetadata.getColumnName(),
-                // Note: here we ignore the type in the validation,
-                // since column stats from metadata table store the min/max values as String
-                rangeMetadata.getMinValue().toString(),
-                rangeMetadata.getMaxValue().toString(),
-                rangeMetadata.getNullCount(),
-                rangeMetadata.getValueCount(),
-                rangeMetadata.getTotalSize(),
-                rangeMetadata.getTotalUncompressedSize()
-            ))
             .sorted(new HoodieColumnRangeMetadataComparator())
             .collect(Collectors.toList());
       }
@@ -850,7 +1025,7 @@ public class HoodieMetadataTableValidator implements Serializable {
     }
 
     private Option<BloomFilterData> readBloomFilterFromFile(String partitionPath, String filename) {
-      Path path = new Path(new Path(metaClient.getBasePath(), partitionPath), filename);
+      Path path = new Path(FSUtils.getPartitionPath(metaClient.getBasePath(), partitionPath), filename);
       HoodieFileReader<IndexedRecord> fileReader;
       try {
         fileReader = HoodieFileReaderFactory.getFileReader(metaClient.getHadoopConf(), path);

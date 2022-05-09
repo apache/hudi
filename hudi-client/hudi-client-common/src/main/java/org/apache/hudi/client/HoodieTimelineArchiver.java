@@ -21,6 +21,7 @@ package org.apache.hudi.client;
 
 import org.apache.hudi.avro.model.HoodieArchivedMetaEntry;
 import org.apache.hudi.avro.model.HoodieMergeArchiveFilePlan;
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.client.utils.MetadataConversionUtils;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
@@ -71,6 +72,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -96,6 +98,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
   private final int minInstantsToKeep;
   private final HoodieTable<T, I, K, O> table;
   private final HoodieTableMetaClient metaClient;
+  private final TransactionManager txnManager;
 
   public HoodieTimelineArchiver(HoodieWriteConfig config, HoodieTable<T, I, K, O> table) {
     this.config = config;
@@ -104,6 +107,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
     this.archiveFilePath = HoodieArchivedTimeline.getArchiveLogPath(metaClient.getArchivePath());
     this.maxInstantsToKeep = config.getMaxCommitsToKeep();
     this.minInstantsToKeep = config.getMinCommitsToKeep();
+    this.txnManager = new TransactionManager(config, table.getMetaClient().getFs());
   }
 
   private Writer openWriter() {
@@ -143,11 +147,19 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
     }
   }
 
+  public boolean archiveIfRequired(HoodieEngineContext context) throws IOException {
+    return archiveIfRequired(context, false);
+  }
+
   /**
    * Check if commits need to be archived. If yes, archive commits.
    */
-  public boolean archiveIfRequired(HoodieEngineContext context) throws IOException {
+  public boolean archiveIfRequired(HoodieEngineContext context, boolean acquireLock) throws IOException {
     try {
+      if (acquireLock) {
+        // there is no owner or instant time per se for archival.
+        txnManager.beginTransaction(Option.empty(), Option.empty());
+      }
       List<HoodieInstant> instantsToArchive = getInstantsToArchive().collect(Collectors.toList());
       verifyLastMergeArchiveFilesIfNecessary(context);
       boolean success = true;
@@ -167,6 +179,9 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
       return success;
     } finally {
       close();
+      if (acquireLock) {
+        txnManager.endTransaction(Option.empty());
+      }
     }
   }
 
@@ -325,7 +340,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
           // Read the avro blocks
           while (reader.hasNext()) {
             HoodieAvroDataBlock blk = (HoodieAvroDataBlock) reader.next();
-            blk.getRecordItr().forEachRemaining(records::add);
+            blk.getRecordIterator().forEachRemaining(records::add);
             if (records.size() >= this.config.getCommitArchivalBatchSize()) {
               writeToFile(wrapperSchema, records);
             }
@@ -485,9 +500,16 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
       }
     }
 
-    return instants.flatMap(hoodieInstant ->
-        groupByTsAction.get(Pair.of(hoodieInstant.getTimestamp(),
-            HoodieInstant.getComparableAction(hoodieInstant.getAction()))).stream());
+    return instants.flatMap(hoodieInstant -> {
+      List<HoodieInstant> instantsToStream = groupByTsAction.get(Pair.of(hoodieInstant.getTimestamp(),
+                HoodieInstant.getComparableAction(hoodieInstant.getAction())));
+      if (instantsToStream != null) {
+        return instantsToStream.stream();
+      } else {
+        // if a concurrent writer archived the instant
+        return Collections.EMPTY_LIST.stream();
+      }
+    });
   }
 
   private boolean deleteArchivedInstants(List<HoodieInstant> archivedInstants, HoodieEngineContext context) throws IOException {
@@ -566,19 +588,16 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
       List<IndexedRecord> records = new ArrayList<>();
       for (HoodieInstant hoodieInstant : instants) {
         try {
-          if (table.getActiveTimeline().isEmpty(hoodieInstant)
-                  && (
-                          hoodieInstant.getAction().equals(HoodieTimeline.CLEAN_ACTION)
-                          || (hoodieInstant.getAction().equals(HoodieTimeline.ROLLBACK_ACTION) && hoodieInstant.isCompleted())
-                     )
-          ) {
-            table.getActiveTimeline().deleteEmptyInstantIfExists(hoodieInstant);
+          deleteAnyLeftOverMarkers(context, hoodieInstant);
+          // in local FS and HDFS, there could be empty completed instants due to crash.
+          if (table.getActiveTimeline().isEmpty(hoodieInstant) && hoodieInstant.isCompleted()) {
+            // lets add an entry to the archival, even if not for the plan.
+            records.add(createAvroRecordFromEmptyInstant(hoodieInstant));
           } else {
-            deleteAnyLeftOverMarkers(context, hoodieInstant);
             records.add(convertToAvroRecord(hoodieInstant));
-            if (records.size() >= this.config.getCommitArchivalBatchSize()) {
-              writeToFile(wrapperSchema, records);
-            }
+          }
+          if (records.size() >= this.config.getCommitArchivalBatchSize()) {
+            writeToFile(wrapperSchema, records);
           }
         } catch (Exception e) {
           LOG.error("Failed to archive commits, .commit file: " + hoodieInstant.getFileName(), e);
@@ -614,5 +633,9 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
   private IndexedRecord convertToAvroRecord(HoodieInstant hoodieInstant)
       throws IOException {
     return MetadataConversionUtils.createMetaWrapper(hoodieInstant, metaClient);
+  }
+
+  private IndexedRecord createAvroRecordFromEmptyInstant(HoodieInstant hoodieInstant) throws IOException {
+    return MetadataConversionUtils.createMetaWrapperForEmptyInstant(hoodieInstant);
   }
 }

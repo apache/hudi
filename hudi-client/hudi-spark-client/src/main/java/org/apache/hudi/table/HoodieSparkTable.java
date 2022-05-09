@@ -113,6 +113,9 @@ public abstract class HoodieSparkTable<T extends HoodieRecordPayload>
       // existence after the creation is needed.
       final HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(
           context.getHadoopConf().get(), config, context, actionMetadata, Option.of(triggeringInstantTimestamp));
+      // even with metadata enabled, some index could have been disabled
+      // delete metadata partitions corresponding to such indexes
+      deleteMetadataIndexIfNecessary();
       try {
         if (isMetadataTableExists || metaClient.getFs().exists(new Path(
             HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath())))) {
@@ -122,6 +125,8 @@ public abstract class HoodieSparkTable<T extends HoodieRecordPayload>
       } catch (IOException e) {
         throw new HoodieMetadataException("Checking existence of metadata table failed", e);
       }
+    } else {
+      maybeDeleteMetadataTable();
     }
 
     return Option.empty();

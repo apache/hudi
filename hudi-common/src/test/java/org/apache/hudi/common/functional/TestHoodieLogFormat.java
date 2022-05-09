@@ -20,9 +20,9 @@ package org.apache.hudi.common.functional;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieArchivedLogFile;
 import org.apache.hudi.common.model.HoodieAvroRecord;
-import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -1016,13 +1016,13 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
             .collect(Collectors.toList());
 
     // Delete 50 keys
-    List<HoodieKey> deletedKeys = copyOfRecords1.stream()
-        .map(s -> (new HoodieKey(((GenericRecord) s).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString(),
+    List<DeleteRecord> deletedRecords = copyOfRecords1.stream()
+        .map(s -> (DeleteRecord.create(((GenericRecord) s).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString(),
             ((GenericRecord) s).get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString())))
         .collect(Collectors.toList()).subList(0, 50);
 
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "102");
-    HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deletedKeys.toArray(new HoodieKey[50]), header);
+    HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deletedRecords.toArray(new DeleteRecord[50]), header);
     writer.appendBlock(deleteBlock);
 
     List<String> allLogFiles =
@@ -1063,7 +1063,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     });
     assertEquals(200, readKeys.size(), "Stream collect should return all 200 records");
     assertEquals(50, emptyPayloads.size(), "Stream collect should return all 50 records with empty payloads");
-    originalKeys.removeAll(deletedKeys);
+    originalKeys.removeAll(deletedRecords);
     Collections.sort(originalKeys);
     Collections.sort(readKeys);
     assertEquals(originalKeys, readKeys, "CompositeAvroLogReader should return 150 records from 2 versions");
@@ -1095,6 +1095,123 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .build();
     scanner.forEach(s -> readKeys.add(s.getKey().getRecordKey()));
     assertEquals(200, readKeys.size(), "Stream collect should return all 200 records after rollback of delete");
+  }
+
+  @ParameterizedTest
+  @MethodSource("testArguments")
+  public void testAvroLogRecordReaderWithDisorderDelete(ExternalSpillableMap.DiskMapType diskMapType,
+                                                        boolean isCompressionEnabled,
+                                                        boolean readBlocksLazily)
+      throws IOException, URISyntaxException, InterruptedException {
+    Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
+    // Set a small threshold so that every block is a new version
+    Writer writer =
+        HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath).withFileExtension(HoodieLogFile.DELTA_EXTENSION)
+            .withFileId("test-fileid1").overBaseCommit("100").withFs(fs).build();
+
+    // Write 1
+    List<IndexedRecord> records1 = SchemaTestUtil.generateHoodieTestRecords(0, 100);
+    List<IndexedRecord> copyOfRecords1 = records1.stream()
+        .map(record -> HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema)).collect(Collectors.toList());
+    Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
+    header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
+    header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
+    HoodieDataBlock dataBlock = getDataBlock(DEFAULT_DATA_BLOCK_TYPE, records1, header);
+    writer.appendBlock(dataBlock);
+
+    // Write 2
+    header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "101");
+    List<IndexedRecord> records2 = SchemaTestUtil.generateHoodieTestRecords(0, 100);
+    List<IndexedRecord> copyOfRecords2 = records2.stream()
+        .map(record -> HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema)).collect(Collectors.toList());
+    dataBlock = getDataBlock(DEFAULT_DATA_BLOCK_TYPE, records2, header);
+    writer.appendBlock(dataBlock);
+
+    copyOfRecords1.addAll(copyOfRecords2);
+    List<String> originalKeys =
+        copyOfRecords1.stream().map(s -> ((GenericRecord) s).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString())
+            .collect(Collectors.toList());
+
+    // Delete 10 keys
+    // Default orderingVal is 0, which means natural order, the DELETE records
+    // should overwrite the data records.
+    List<DeleteRecord> deleteRecords1 = copyOfRecords1.subList(0, 10).stream()
+        .map(s -> (DeleteRecord.create(((GenericRecord) s).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString(),
+            ((GenericRecord) s).get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString())))
+        .collect(Collectors.toList());
+
+    header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "102");
+    HoodieDeleteBlock deleteBlock1 = new HoodieDeleteBlock(deleteRecords1.toArray(new DeleteRecord[0]), header);
+    writer.appendBlock(deleteBlock1);
+
+    // Delete another 10 keys with -1 as orderingVal.
+    // The deletion should not work
+
+    header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "103");
+    HoodieDeleteBlock deleteBlock2 = new HoodieDeleteBlock(copyOfRecords1.subList(10, 20).stream()
+        .map(s -> (DeleteRecord.create(((GenericRecord) s).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString(),
+            ((GenericRecord) s).get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString(), -1))).toArray(DeleteRecord[]::new), header);
+    writer.appendBlock(deleteBlock2);
+
+    // Delete another 10 keys with +1 as orderingVal.
+    // The deletion should work because the keys has greater ordering value.
+    List<DeleteRecord> deletedRecords3 = copyOfRecords1.subList(20, 30).stream()
+        .map(s -> (DeleteRecord.create(((GenericRecord) s).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString(),
+            ((GenericRecord) s).get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString(), 1)))
+        .collect(Collectors.toList());
+
+    header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "104");
+    HoodieDeleteBlock deleteBlock3 = new HoodieDeleteBlock(deletedRecords3.toArray(new DeleteRecord[0]), header);
+    writer.appendBlock(deleteBlock3);
+
+    List<String> allLogFiles =
+        FSUtils.getAllLogFiles(fs, partitionPath, "test-fileid1", HoodieLogFile.DELTA_EXTENSION, "100")
+            .map(s -> s.getPath().toString()).collect(Collectors.toList());
+
+    FileCreateUtils.createDeltaCommit(basePath, "100", fs);
+    FileCreateUtils.createDeltaCommit(basePath, "101", fs);
+    FileCreateUtils.createDeltaCommit(basePath, "102", fs);
+    FileCreateUtils.createDeltaCommit(basePath, "103", fs);
+    FileCreateUtils.createDeltaCommit(basePath, "104", fs);
+
+    HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
+        .withFileSystem(fs)
+        .withBasePath(basePath)
+        .withLogFilePaths(allLogFiles)
+        .withReaderSchema(schema)
+        .withLatestInstantTime("104")
+        .withMaxMemorySizeInBytes(10240L)
+        .withReadBlocksLazily(readBlocksLazily)
+        .withReverseReader(false)
+        .withBufferSize(bufferSize)
+        .withSpillableMapBasePath(BASE_OUTPUT_PATH)
+        .withDiskMapType(diskMapType)
+        .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
+        .build();
+
+    assertEquals(200, scanner.getTotalLogRecords(), "We still would read 200 records");
+    final List<String> readKeys = new ArrayList<>(200);
+    final List<String> emptyPayloadKeys = new ArrayList<>();
+    scanner.forEach(s -> readKeys.add(s.getRecordKey()));
+    scanner.forEach(s -> {
+      try {
+        if (!s.getData().getInsertValue(schema).isPresent()) {
+          emptyPayloadKeys.add(s.getRecordKey());
+        }
+      } catch (IOException io) {
+        throw new UncheckedIOException(io);
+      }
+    });
+    assertEquals(200, readKeys.size(), "Stream collect should return all 200 records");
+    assertEquals(20, emptyPayloadKeys.size(), "Stream collect should return all 20 records with empty payloads");
+
+    originalKeys.removeAll(deleteRecords1.stream().map(DeleteRecord::getRecordKey).collect(Collectors.toSet()));
+    originalKeys.removeAll(deletedRecords3.stream().map(DeleteRecord::getRecordKey).collect(Collectors.toSet()));
+    readKeys.removeAll(emptyPayloadKeys);
+
+    Collections.sort(originalKeys);
+    Collections.sort(readKeys);
+    assertEquals(originalKeys, readKeys, "HoodieMergedLogRecordScanner should return 180 records from 4 versions");
   }
 
   @ParameterizedTest
@@ -1131,12 +1248,12 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
     // Delete 50 keys
     // Delete 50 keys
-    List<HoodieKey> deletedKeys = copyOfRecords1.stream()
-        .map(s -> (new HoodieKey(((GenericRecord) s).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString(),
+    List<DeleteRecord> deleteRecords = copyOfRecords1.stream()
+        .map(s -> (DeleteRecord.create(((GenericRecord) s).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString(),
             ((GenericRecord) s).get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString())))
         .collect(Collectors.toList()).subList(0, 50);
 
-    HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deletedKeys.toArray(new HoodieKey[50]), header);
+    HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deleteRecords.toArray(new DeleteRecord[50]), header);
     writer.appendBlock(deleteBlock);
 
     FileCreateUtils.createDeltaCommit(basePath, "100", fs);
@@ -1208,11 +1325,11 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     writer.appendBlock(dataBlock);
 
     // Delete 50 keys
-    List<HoodieKey> deletedKeys = copyOfRecords1.stream()
-        .map(s -> (new HoodieKey(((GenericRecord) s).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString(),
+    List<DeleteRecord> deleteRecords = copyOfRecords1.stream()
+        .map(s -> (DeleteRecord.create(((GenericRecord) s).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString(),
             ((GenericRecord) s).get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString())))
         .collect(Collectors.toList()).subList(0, 50);
-    HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deletedKeys.toArray(new HoodieKey[50]), header);
+    HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deleteRecords.toArray(new DeleteRecord[50]), header);
     writer.appendBlock(deleteBlock);
 
     FileCreateUtils.createDeltaCommit(basePath, "100", fs);
@@ -1328,11 +1445,11 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
     // Delete 50 keys
     // Delete 50 keys
-    List<HoodieKey> deletedKeys = copyOfRecords1.stream()
-        .map(s -> (new HoodieKey(((GenericRecord) s).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString(),
+    List<DeleteRecord> deleteRecords = copyOfRecords1.stream()
+        .map(s -> (DeleteRecord.create(((GenericRecord) s).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString(),
             ((GenericRecord) s).get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString())))
         .collect(Collectors.toList()).subList(0, 50);
-    HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deletedKeys.toArray(new HoodieKey[50]), header);
+    HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deleteRecords.toArray(new DeleteRecord[50]), header);
     writer.appendBlock(deleteBlock);
 
     FileCreateUtils.createDeltaCommit(basePath, "100", fs);
@@ -1632,40 +1749,39 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
     FileCreateUtils.createDeltaCommit(basePath, "100", fs);
 
-    HoodieLogFileReader reader = new HoodieLogFileReader(fs, new HoodieLogFile(writer.getLogFile().getPath(),
-        fs.getFileStatus(writer.getLogFile().getPath()).getLen()), SchemaTestUtil.getSimpleSchema(),
-        bufferSize, readBlocksLazily, true);
+    HoodieLogFile logFile = new HoodieLogFile(writer.getLogFile().getPath(), fs.getFileStatus(writer.getLogFile().getPath()).getLen());
+    try (HoodieLogFileReader reader = new HoodieLogFileReader(fs, logFile, SchemaTestUtil.getSimpleSchema(), bufferSize, readBlocksLazily, true)) {
 
-    assertTrue(reader.hasPrev(), "Last block should be available");
-    HoodieLogBlock prevBlock = reader.prev();
-    HoodieDataBlock dataBlockRead = (HoodieDataBlock) prevBlock;
+      assertTrue(reader.hasPrev(), "Last block should be available");
+      HoodieLogBlock prevBlock = reader.prev();
+      HoodieDataBlock dataBlockRead = (HoodieDataBlock) prevBlock;
 
-    List<IndexedRecord> recordsRead1 = getRecords(dataBlockRead);
-    assertEquals(copyOfRecords3.size(), recordsRead1.size(),
-        "Third records size should be equal to the written records size");
-    assertEquals(copyOfRecords3, recordsRead1,
-        "Both records lists should be the same. (ordering guaranteed)");
+      List<IndexedRecord> recordsRead1 = getRecords(dataBlockRead);
+      assertEquals(copyOfRecords3.size(), recordsRead1.size(),
+          "Third records size should be equal to the written records size");
+      assertEquals(copyOfRecords3, recordsRead1,
+          "Both records lists should be the same. (ordering guaranteed)");
 
-    assertTrue(reader.hasPrev(), "Second block should be available");
-    prevBlock = reader.prev();
-    dataBlockRead = (HoodieDataBlock) prevBlock;
-    List<IndexedRecord> recordsRead2 = getRecords(dataBlockRead);
-    assertEquals(copyOfRecords2.size(), recordsRead2.size(),
-        "Read records size should be equal to the written records size");
-    assertEquals(copyOfRecords2, recordsRead2,
-        "Both records lists should be the same. (ordering guaranteed)");
+      assertTrue(reader.hasPrev(), "Second block should be available");
+      prevBlock = reader.prev();
+      dataBlockRead = (HoodieDataBlock) prevBlock;
+      List<IndexedRecord> recordsRead2 = getRecords(dataBlockRead);
+      assertEquals(copyOfRecords2.size(), recordsRead2.size(),
+          "Read records size should be equal to the written records size");
+      assertEquals(copyOfRecords2, recordsRead2,
+          "Both records lists should be the same. (ordering guaranteed)");
 
-    assertTrue(reader.hasPrev(), "First block should be available");
-    prevBlock = reader.prev();
-    dataBlockRead = (HoodieDataBlock) prevBlock;
-    List<IndexedRecord> recordsRead3 = getRecords(dataBlockRead);
-    assertEquals(copyOfRecords1.size(), recordsRead3.size(),
-        "Read records size should be equal to the written records size");
-    assertEquals(copyOfRecords1, recordsRead3,
-        "Both records lists should be the same. (ordering guaranteed)");
+      assertTrue(reader.hasPrev(), "First block should be available");
+      prevBlock = reader.prev();
+      dataBlockRead = (HoodieDataBlock) prevBlock;
+      List<IndexedRecord> recordsRead3 = getRecords(dataBlockRead);
+      assertEquals(copyOfRecords1.size(), recordsRead3.size(),
+          "Read records size should be equal to the written records size");
+      assertEquals(copyOfRecords1, recordsRead3,
+          "Both records lists should be the same. (ordering guaranteed)");
 
-    assertFalse(reader.hasPrev());
-    reader.close();
+      assertFalse(reader.hasPrev());
+    }
   }
 
   @ParameterizedTest
@@ -1713,19 +1829,20 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     writer.close();
 
     // First round of reads - we should be able to read the first block and then EOF
-    HoodieLogFileReader reader =
-        new HoodieLogFileReader(fs, new HoodieLogFile(writer.getLogFile().getPath(),
-            fs.getFileStatus(writer.getLogFile().getPath()).getLen()), schema, bufferSize, readBlocksLazily, true);
+    HoodieLogFile logFile = new HoodieLogFile(writer.getLogFile().getPath(), fs.getFileStatus(writer.getLogFile().getPath()).getLen());
 
-    assertTrue(reader.hasPrev(), "Last block should be available");
-    HoodieLogBlock block = reader.prev();
-    assertTrue(block instanceof HoodieDataBlock, "Last block should be datablock");
+    try (HoodieLogFileReader reader =
+        new HoodieLogFileReader(fs, logFile, schema, bufferSize, readBlocksLazily, true)) {
 
-    assertTrue(reader.hasPrev(), "Last block should be available");
-    assertThrows(CorruptedLogFileException.class, () -> {
-      reader.prev();
-    });
-    reader.close();
+      assertTrue(reader.hasPrev(), "Last block should be available");
+      HoodieLogBlock block = reader.prev();
+      assertTrue(block instanceof HoodieDataBlock, "Last block should be datablock");
+
+      assertTrue(reader.hasPrev(), "Last block should be available");
+      assertThrows(CorruptedLogFileException.class, () -> {
+        reader.prev();
+      });
+    }
   }
 
   @ParameterizedTest
@@ -1765,28 +1882,28 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
     FileCreateUtils.createDeltaCommit(basePath, "100", fs);
 
-    HoodieLogFileReader reader = new HoodieLogFileReader(fs, new HoodieLogFile(writer.getLogFile().getPath(),
-        fs.getFileStatus(writer.getLogFile().getPath()).getLen()), SchemaTestUtil.getSimpleSchema(),
-        bufferSize, readBlocksLazily, true);
+    HoodieLogFile logFile = new HoodieLogFile(writer.getLogFile().getPath(), fs.getFileStatus(writer.getLogFile().getPath()).getLen());
+    try (HoodieLogFileReader reader =
+             new HoodieLogFileReader(fs, logFile, SchemaTestUtil.getSimpleSchema(), bufferSize, readBlocksLazily, true)) {
 
-    assertTrue(reader.hasPrev(), "Third block should be available");
-    reader.moveToPrev();
+      assertTrue(reader.hasPrev(), "Third block should be available");
+      reader.moveToPrev();
 
-    assertTrue(reader.hasPrev(), "Second block should be available");
-    reader.moveToPrev();
+      assertTrue(reader.hasPrev(), "Second block should be available");
+      reader.moveToPrev();
 
-    // After moving twice, this last reader.prev() should read the First block written
-    assertTrue(reader.hasPrev(), "First block should be available");
-    HoodieLogBlock prevBlock = reader.prev();
-    HoodieDataBlock dataBlockRead = (HoodieDataBlock) prevBlock;
-    List<IndexedRecord> recordsRead = getRecords(dataBlockRead);
-    assertEquals(copyOfRecords1.size(), recordsRead.size(),
-        "Read records size should be equal to the written records size");
-    assertEquals(copyOfRecords1, recordsRead,
-        "Both records lists should be the same. (ordering guaranteed)");
+      // After moving twice, this last reader.prev() should read the First block written
+      assertTrue(reader.hasPrev(), "First block should be available");
+      HoodieLogBlock prevBlock = reader.prev();
+      HoodieDataBlock dataBlockRead = (HoodieDataBlock) prevBlock;
+      List<IndexedRecord> recordsRead = getRecords(dataBlockRead);
+      assertEquals(copyOfRecords1.size(), recordsRead.size(),
+          "Read records size should be equal to the written records size");
+      assertEquals(copyOfRecords1, recordsRead,
+          "Both records lists should be the same. (ordering guaranteed)");
 
-    assertFalse(reader.hasPrev());
-    reader.close();
+      assertFalse(reader.hasPrev());
+    }
   }
 
   @Test
@@ -1923,7 +2040,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
    * Utility to convert the given iterator to a List.
    */
   private static List<IndexedRecord> getRecords(HoodieDataBlock dataBlock) {
-    ClosableIterator<IndexedRecord> itr = dataBlock.getRecordItr();
+    ClosableIterator<IndexedRecord> itr = dataBlock.getRecordIterator();
 
     List<IndexedRecord> elements = new ArrayList<>();
     itr.forEachRemaining(elements::add);

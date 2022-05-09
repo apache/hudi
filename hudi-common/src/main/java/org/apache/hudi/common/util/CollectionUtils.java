@@ -22,6 +22,7 @@ import org.apache.hudi.common.util.collection.Pair;
 
 import java.lang.reflect.Array;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -31,12 +32,34 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
+import java.util.Spliterator;
+import java.util.Spliterators;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
+import java.util.stream.StreamSupport;
 
 public class CollectionUtils {
 
   public static final Properties EMPTY_PROPERTIES = new Properties();
+
+  public static boolean isNullOrEmpty(Collection<?> c) {
+    return Objects.isNull(c) || c.isEmpty();
+  }
+
+  public static boolean nonEmpty(Collection<?> c) {
+    return !isNullOrEmpty(c);
+  }
+
+  /**
+   * Collects provided {@link Iterator} to a {@link Stream}
+   */
+  public static <T> Stream<T> toStream(Iterator<T> iterator) {
+    return StreamSupport.stream(
+        Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED),
+        false
+    );
+  }
 
   /**
    * Combines provided arrays into one
@@ -103,6 +126,21 @@ public class CollectionUtils {
     List<E> diff = new ArrayList<>(one);
     diff.removeAll(another);
     return diff;
+  }
+
+  public static <E> Stream<List<E>> batchesAsStream(List<E> list, int batchSize) {
+    ValidationUtils.checkArgument(batchSize > 0, "batch size must be positive.");
+    int total = list.size();
+    if (total <= 0) {
+      return Stream.empty();
+    }
+    int numFullBatches = (total - 1) / batchSize;
+    return IntStream.range(0, numFullBatches + 1).mapToObj(
+        n -> list.subList(n * batchSize, n == numFullBatches ? total : (n + 1) * batchSize));
+  }
+
+  public static <E> List<List<E>> batches(List<E> list, int batchSize) {
+    return batchesAsStream(list, batchSize).collect(Collectors.toList());
   }
 
   /**

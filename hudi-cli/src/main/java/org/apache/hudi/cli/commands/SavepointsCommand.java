@@ -93,6 +93,8 @@ public class SavepointsCommand implements CommandMarker {
       @CliOption(key = {"savepoint"}, help = "Savepoint to rollback") final String instantTime,
       @CliOption(key = {"sparkProperties"}, help = "Spark Properties File Path") final String sparkPropertiesPath,
       @CliOption(key = "sparkMaster", unspecifiedDefaultValue = "", help = "Spark Master") String master,
+      @CliOption(key = {"lazyFailedWritesCleanPolicy"}, help = "True if FailedWriteCleanPolicy is lazy",
+          unspecifiedDefaultValue = "false") final String lazyFailedWritesCleanPolicy,
       @CliOption(key = "sparkMemory", unspecifiedDefaultValue = "4G",
           help = "Spark executor memory") final String sparkMemory)
       throws Exception {
@@ -110,7 +112,7 @@ public class SavepointsCommand implements CommandMarker {
 
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
     sparkLauncher.addAppArgs(SparkMain.SparkCommand.ROLLBACK_TO_SAVEPOINT.toString(), master, sparkMemory,
-        instantTime, metaClient.getBasePath());
+        instantTime, metaClient.getBasePath(), lazyFailedWritesCleanPolicy);
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);
     int exitCode = process.waitFor();

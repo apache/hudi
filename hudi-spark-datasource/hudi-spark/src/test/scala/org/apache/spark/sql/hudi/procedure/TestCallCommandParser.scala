@@ -18,15 +18,16 @@
 package org.apache.spark.sql.hudi.procedure
 
 import com.google.common.collect.ImmutableList
+import org.apache.hudi.HoodieSparkUtils
 import org.apache.spark.sql.catalyst.expressions.Literal
 import org.apache.spark.sql.catalyst.plans.logical.{CallCommand, NamedArgument, PositionalArgument}
-import org.apache.spark.sql.hudi.TestHoodieSqlBase
+import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase
 import org.apache.spark.sql.types.{DataType, DataTypes}
 
 import java.math.BigDecimal
 import scala.collection.JavaConverters
 
-class TestCallCommandParser extends TestHoodieSqlBase {
+class TestCallCommandParser extends HoodieSparkSqlTestBase {
   private val parser = spark.sessionState.sqlParser
 
   test("Test Call Produce with Positional Arguments") {
@@ -40,7 +41,13 @@ class TestCallCommandParser extends TestHoodieSqlBase {
     checkArg(call, 2, 3L, DataTypes.LongType)
     checkArg(call, 3, true, DataTypes.BooleanType)
     checkArg(call, 4, 1.0D, DataTypes.DoubleType)
-    checkArg(call, 5, new BigDecimal("9.0e1"), DataTypes.createDecimalType(2, 0))
+
+    if (HoodieSparkUtils.isSpark2) {
+      checkArg(call, 5, 9.0e1, DataTypes.createDecimalType(2, 0))
+    } else {
+      checkArg(call, 5, 9.0e1, DataTypes.DoubleType)
+    }
+
     checkArg(call, 6, new BigDecimal("900e-1"), DataTypes.createDecimalType(3, 1))
   }
 
@@ -108,7 +115,7 @@ class TestCallCommandParser extends TestHoodieSqlBase {
     assertResult(expectedExpr.dataType)(actualExpr.dataType)
   }
 
-  private def toSparkLiteral(value: Any, dataType: DataType) = Literal.apply(value, dataType)
+  private def toSparkLiteral(value: Any, dataType: DataType) = Literal.create(value, dataType)
 
   private def checkCast[T](value: Any, expectedClass: Class[T]) = {
     assertResult(true)(expectedClass.isInstance(value))
