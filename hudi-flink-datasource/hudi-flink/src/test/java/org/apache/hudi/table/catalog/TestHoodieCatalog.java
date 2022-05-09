@@ -138,6 +138,13 @@ public class TestHoodieCatalog {
     catalog.open();
   }
 
+  @BeforeEach
+  void afterEach() {
+    if (catalog != null) {
+      catalog.close();
+    }
+  }
+
   @Test
   public void testListDatabases() {
     List<String> actual = catalog.listDatabases();
