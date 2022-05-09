@@ -31,8 +31,9 @@ import org.apache.log4j.Logger;
 import java.io.IOException;
 import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 /**
  * All the metadata that is used for consistent hashing bucket index
@@ -66,25 +67,17 @@ public class HoodieConsistentHashingMetadata implements Serializable {
     this.nodes = nodes;
   }
 
-  public HoodieConsistentHashingMetadata(String partitionPath, int numBuckets) {
-    this((short) 0, partitionPath, HoodieTimeline.INIT_INSTANT_TS, numBuckets, 0);
-  }
-
   /**
    * Construct default metadata with all bucket's file group uuid initialized
    */
-  private HoodieConsistentHashingMetadata(short version, String partitionPath, String instant, int numBuckets, int seqNo) {
-    this.version = version;
-    this.partitionPath = partitionPath;
-    this.instant = instant;
-    this.numBuckets = numBuckets;
-    this.seqNo = seqNo;
+  public HoodieConsistentHashingMetadata(String partitionPath, int numBuckets) {
+    this((short) 0, partitionPath, HoodieTimeline.INIT_INSTANT_TS, numBuckets, 0, constructDefaultHashingNodes(numBuckets));
+  }
 
-    nodes = new ArrayList<>();
+  private static List<ConsistentHashingNode> constructDefaultHashingNodes(int numBuckets) {
     long step = ((long) HASH_VALUE_MASK + numBuckets - 1) / numBuckets;
-    for (int i = 1; i <= numBuckets; ++i) {
-      nodes.add(new ConsistentHashingNode((int) Math.min(step * i, HASH_VALUE_MASK), FSUtils.createNewFileIdPfx()));
-    }
+    return IntStream.range(1, numBuckets + 1)
+        .mapToObj(i -> new ConsistentHashingNode((int) Math.min(step * i, HASH_VALUE_MASK), FSUtils.createNewFileIdPfx())).collect(Collectors.toList());
   }
 
   public short getVersion() {

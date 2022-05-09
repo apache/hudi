@@ -50,9 +50,9 @@ public class TestConsistentBucketIdIdentifier {
     Assertions.assertEquals(nodes.get(2), identifier.getBucket(Arrays.asList("Hudi")));
     Assertions.assertEquals(nodes.get(1), identifier.getBucket(Arrays.asList("bucket_index")));
     Assertions.assertEquals(nodes.get(1), identifier.getBucket(Arrays.asList("consistent_hashing")));
-    Assertions.assertEquals(nodes.get(2), identifier.getBucket(Arrays.asList("bucket_index", "consistent_hashing")));
+    Assertions.assertEquals(nodes.get(1), identifier.getBucket(Arrays.asList("bucket_index", "consistent_hashing")));
     int[] ref1 = {2, 2, 1, 1, 0, 1, 1, 1, 0, 1};
-    int[] ref2 = {0, 2, 2, 1, 2, 0, 1, 2, 0, 1};
+    int[] ref2 = {1, 0, 1, 0, 1, 1, 1, 0, 1, 2};
     for (int i = 0; i < 10; ++i) {
       Assertions.assertEquals(nodes.get(ref1[i]), identifier.getBucket(Arrays.asList(Integer.toString(i))));
       Assertions.assertEquals(nodes.get(ref2[i]), identifier.getBucket(Arrays.asList(Integer.toString(i), Integer.toString(i + 1))));
