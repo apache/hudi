@@ -237,7 +237,7 @@ public class HoodieTableConfig extends HoodieConfig {
 
   private static final String TABLE_CHECKSUM_FORMAT = "%s.%s"; // <database_name>.<table_name>
 
-  private static Set<String> metadataPartition = null;
+  private Set<String> metadataPartition = null;
 
   public HoodieTableConfig(FileSystem fs, String metaPath, String payloadClassName) {
     super();
@@ -630,7 +630,7 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public Set<String> getMetadataPartitions() {
     if (metadataPartition == null) {
-      return new HashSet<>(
+      metadataPartition = new HashSet<>(
               StringUtils.split(getStringOrDefault(TABLE_METADATA_PARTITIONS, StringUtils.EMPTY_STRING),
                       CONFIG_VALUES_DELIMITER)
       );
