@@ -55,7 +55,7 @@ The purpose of LogCompaction is to reduce the write amplification caused due to 
 
 ## Background
 
-To stitch the log blocks together and to write a new log block, clustering can also be used, 
+To stitch the log blocks together and to write a new compacted log block, clustering can also be used, 
 but it would not make sense to add replacecommit which actually works at a base file to merge the blocks 
 and complicate the existing logic. Instead existing compaction logic can be enhanced by adding LogCompaction action. 
 The schedule and execution of LogCompaction will be similar to compaction but it would create log blocks or files after merging them.
@@ -73,15 +73,16 @@ if LogCompaction is scheduled to run for these log blocks it creates a
 <COMMIT_TIME>.logcompaction.requested on the timeline.
 
 
-Now LogCompaction executes and merges all the 3 log blocks and creates a merged 
+Now LogCompaction executes and merges all the 3 log blocks and creates a new compacted 
 log block .log.4. When reading the log blocks, AbstractHoodieLogRecordReader sees 
-following 4 log blocks, but it should consider only log block 4.
+following 4 log blocks, but it will consider only log block 4.
 
 ![](base_case.jpeg)
 
 
-To do that, merged log block uses a new command block type called MERGED_LOG_BLOCK, 
-which basically contains the list of log blocks that should not be considered.
+Compacted log blocks are special type of HoodieLogBlock and they can be differentiated 
+based on the header key COMPACTED_BLOCKS_INSTANTS, which basically contains the list of
+log block's instants this compacted blocks contain.
 
 
 Along with the creation of a new command block type, rollback logic also need to be changed
@@ -128,13 +129,15 @@ AbstractHoodieLogRecordReader class.
 ### Scheduling LogCompaction:
 
 Similar to compaction operation a new ActionExecutor called ScheduleLogCompactionActionExecutor is used to schedule LogCompaction action. 
-ScheduleLogCompactionActionExecutor relies on ConsecutiveBlockMergingLogCompactionPlanStrategy to generate the plan.
+ScheduleLogCompactionActionExecutor uses default strategy which basically considers all the log blocks seen in a file slice to generate the plan for each HoodieFileGroup.
 
 Plan strategy class fetches all the file groups from the eligible partition paths and filters out file groups that are not eligible for LogCompaction. File groups are excluded from LogCompaction if any of the following properties holds true.
-1. File groups are already part of a major compaction plan.
-2. File groups whose log blocks or files are part of a LogCompaction operation and with a state inflight.
-3. File groups whose log blocks or files are part of a LogCompaction plan and with state requested and not executed for more than a certain amount of time or if the log blocks count or size did not cross a certain threshold.
-If a file group does not satisfy any of the property then the LogCompaction action is scheduled for it.
+1. File groups are already part of a major compaction plan or clustering operation.
+2. File groups whose file slices or log files are part of a LogCompaction operation.
+
+####Note:
+Here Logcompaction can also be scheduled on a pending compaction operation. Since, pending compaction operation 
+creates a new file slice and delta commits can still come into the latest file slice without compaction being done.
 
 
 #### Disadvantages:
