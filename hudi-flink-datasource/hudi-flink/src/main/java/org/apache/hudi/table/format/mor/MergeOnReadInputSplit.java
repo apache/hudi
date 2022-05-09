@@ -18,11 +18,13 @@
 
 package org.apache.hudi.table.format.mor;
 
-import org.apache.flink.core.io.InputSplit;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.util.Option;
 
+import org.apache.flink.core.io.InputSplit;
+
 import javax.annotation.Nullable;
+
 import java.util.List;
 
 /**
@@ -51,15 +53,15 @@ public class MergeOnReadInputSplit implements InputSplit {
 
 
   public MergeOnReadInputSplit(
-          int splitNum,
-          @Nullable String basePath,
-          Option<List<String>> logPaths,
-          String latestCommit,
-          String tablePath,
-          long maxCompactionMemoryInBytes,
-          String mergeType,
-          @Nullable InstantRange instantRange,
-          String fileId) {
+      int splitNum,
+      @Nullable String basePath,
+      Option<List<String>> logPaths,
+      String latestCommit,
+      String tablePath,
+      long maxCompactionMemoryInBytes,
+      String mergeType,
+      @Nullable InstantRange instantRange,
+      String fileId) {
     this.splitNum = splitNum;
     this.basePath = Option.ofNullable(basePath);
     this.logPaths = logPaths;

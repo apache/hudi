@@ -182,8 +182,8 @@ public class HoodieTableSource implements
           OneInputStreamOperatorFactory<MergeOnReadInputSplit, RowData> factory = StreamReadOperator.factory((MergeOnReadInputFormat) inputFormat);
           SingleOutputStreamOperator<RowData> source = execEnv.addSource(monitoringFunction, getSourceOperatorName("split_monitor"))
               .setParallelism(1)
-                  .keyBy((KeySelector<MergeOnReadInputSplit, String>) mos -> mos.getFileId())
-                  .transform("split_reader", typeInfo, factory)
+              .keyBy(inputSplit -> inputSplit.getFileId())
+              .transform("split_reader", typeInfo, factory)
               .setParallelism(conf.getInteger(FlinkOptions.READ_TASKS));
           return new DataStreamSource<>(source);
         } else {
