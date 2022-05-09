@@ -19,27 +19,13 @@ package org.apache.spark.sql.hudi
 
 import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, OverwriteWithLatestAvroPayload}
 import org.apache.hudi.common.table.HoodieTableConfig
-import org.apache.hudi.testutils.HoodieClientTestBase
-
-import org.apache.spark.sql.SparkSession
+import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.spark.sql.types._
-
 import org.junit.jupiter.api.Assertions.assertTrue
-import org.junit.jupiter.api.{BeforeEach, Test}
-
+import org.junit.jupiter.api.Test
 import org.scalatest.Matchers.intercept
 
-class TestHoodieOptionConfig extends HoodieClientTestBase {
-
-  var spark: SparkSession = _
-
-  /**
-   * Setup method running before each test.
-   */
-  @BeforeEach override def setUp() {
-    initSparkContexts()
-    spark = sqlContext.sparkSession
-  }
+class TestHoodieOptionConfig extends SparkClientFunctionalTestHarness {
 
   @Test
   def testWithDefaultSqlOptions(): Unit = {

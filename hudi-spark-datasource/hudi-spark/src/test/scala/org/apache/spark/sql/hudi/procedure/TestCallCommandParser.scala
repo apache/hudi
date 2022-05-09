@@ -21,13 +21,13 @@ import com.google.common.collect.ImmutableList
 import org.apache.hudi.HoodieSparkUtils
 import org.apache.spark.sql.catalyst.expressions.Literal
 import org.apache.spark.sql.catalyst.plans.logical.{CallCommand, NamedArgument, PositionalArgument}
-import org.apache.spark.sql.hudi.TestHoodieSqlBase
+import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase
 import org.apache.spark.sql.types.{DataType, DataTypes}
 
 import java.math.BigDecimal
 import scala.collection.JavaConverters
 
-class TestCallCommandParser extends TestHoodieSqlBase {
+class TestCallCommandParser extends HoodieSparkSqlTestBase {
   private val parser = spark.sessionState.sqlParser
 
   test("Test Call Produce with Positional Arguments") {

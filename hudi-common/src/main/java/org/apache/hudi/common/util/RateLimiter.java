@@ -53,19 +53,22 @@ public class RateLimiter {
   }
 
   public boolean tryAcquire(int numPermits) {
-    if (numPermits > maxPermits) {
-      acquire(maxPermits);
-      return tryAcquire(numPermits - maxPermits);
-    } else {
-      return acquire(numPermits);
+    int remainingPermits = numPermits;
+    while (remainingPermits > 0) {
+      if (remainingPermits > maxPermits) {
+        acquire(maxPermits);
+        remainingPermits -= maxPermits;
+      } else {
+        return acquire(remainingPermits);
+      }
     }
+    return true;
   }
 
   public boolean acquire(int numOps) {
     try {
-      if (!semaphore.tryAcquire(numOps)) {
+      while (!semaphore.tryAcquire(numOps)) {
         Thread.sleep(WAIT_BEFORE_NEXT_ACQUIRE_PERMIT_IN_MS);
-        return acquire(numOps);
       }
       LOG.debug(String.format("acquire permits: %s, maxPremits: %s", numOps, maxPermits));
     } catch (InterruptedException e) {
