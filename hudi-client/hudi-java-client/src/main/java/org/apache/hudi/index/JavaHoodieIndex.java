@@ -26,7 +26,6 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieList;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.table.HoodieTable;
@@ -34,7 +33,7 @@ import org.apache.hudi.table.HoodieTable;
 import java.util.List;
 import java.util.stream.Collectors;
 
-public abstract class JavaHoodieIndex<T extends HoodieRecordPayload> extends HoodieIndex<List<HoodieRecord<T>>, List<WriteStatus>> {
+public abstract class JavaHoodieIndex<T> extends HoodieIndex<List<HoodieRecord<T>>, List<WriteStatus>> {
   protected JavaHoodieIndex(HoodieWriteConfig config) {
     super(config);
   }

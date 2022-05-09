@@ -23,8 +23,10 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieArchivedLogFile;
 import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.log.AppendResult;
 import org.apache.hudi.common.table.log.HoodieLogFileReader;
@@ -1054,7 +1056,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     scanner.forEach(s -> readKeys.add(s.getKey().getRecordKey()));
     scanner.forEach(s -> {
       try {
-        if (!s.getData().getInsertValue(schema).isPresent()) {
+        if (!((HoodieRecordPayload)s.getData()).getInsertValue(schema).isPresent()) {
           emptyPayloads.add(true);
         }
       } catch (IOException io) {
@@ -1195,7 +1197,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     scanner.forEach(s -> readKeys.add(s.getRecordKey()));
     scanner.forEach(s -> {
       try {
-        if (!s.getData().getInsertValue(schema).isPresent()) {
+        if (!((HoodieRecordPayload)s.getData()).getInsertValue(schema).isPresent()) {
           emptyPayloadKeys.add(s.getRecordKey());
         }
       } catch (IOException io) {
@@ -1916,7 +1918,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     List<IndexedRecord> recordsCopy = new ArrayList<>(records);
     assertEquals(100, records.size());
     assertEquals(100, recordsCopy.size());
-    HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records, schema);
+    HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records.stream().map(HoodieAvroIndexedRecord::new).collect(Collectors.toList()), schema);
     byte[] content = dataBlock.getBytes(schema);
     assertTrue(content.length > 0);
 
@@ -2003,10 +2005,10 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
   private HoodieDataBlock getDataBlock(HoodieLogBlockType dataBlockType, List<IndexedRecord> records,
                                        Map<HeaderMetadataType, String> header) {
-    return getDataBlock(dataBlockType, records, header, new Path("dummy_path"));
+    return getDataBlock(dataBlockType, records.stream().map(HoodieAvroIndexedRecord::new).collect(Collectors.toList()), header, new Path("dummy_path"));
   }
 
-  private HoodieDataBlock getDataBlock(HoodieLogBlockType dataBlockType, List<IndexedRecord> records,
+  private HoodieDataBlock getDataBlock(HoodieLogBlockType dataBlockType, List<HoodieRecord> records,
                                        Map<HeaderMetadataType, String> header, Path pathForReader) {
     switch (dataBlockType) {
       case AVRO_DATA_BLOCK:
@@ -2038,10 +2040,10 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
    * Utility to convert the given iterator to a List.
    */
   private static List<IndexedRecord> getRecords(HoodieDataBlock dataBlock) {
-    ClosableIterator<IndexedRecord> itr = dataBlock.getRecordIterator();
+    ClosableIterator<HoodieRecord> itr = dataBlock.getRecordIterator(HoodieAvroIndexedRecord::new);
 
     List<IndexedRecord> elements = new ArrayList<>();
-    itr.forEachRemaining(elements::add);
+    itr.forEachRemaining(r -> elements.add((IndexedRecord) r.getData()));
     return elements;
   }
 }

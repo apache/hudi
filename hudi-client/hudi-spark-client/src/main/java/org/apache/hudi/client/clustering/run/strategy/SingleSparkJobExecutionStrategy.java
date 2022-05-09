@@ -72,7 +72,7 @@ import java.util.stream.StreamSupport;
  * Clustering strategy to submit single spark jobs.
  * MultipleSparkJobExecution strategy is not ideal for use cases that require large number of clustering groups
  */
-public abstract class SingleSparkJobExecutionStrategy<T extends HoodieRecordPayload<T>>
+public abstract class SingleSparkJobExecutionStrategy<T>
     extends ClusteringExecutionStrategy<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> {
   private static final Logger LOG = LogManager.getLogger(SingleSparkJobExecutionStrategy.class);
 

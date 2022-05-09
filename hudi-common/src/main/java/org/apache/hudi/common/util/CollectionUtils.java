@@ -194,6 +194,15 @@ public class CollectionUtils {
   }
 
   @SafeVarargs
+  public static <K,V> HashMap<K, V> createHashMap(final Pair<K, V>... elements) {
+    HashMap<K,V> map = new HashMap<>();
+    for (Pair<K,V> pair: elements) {
+      map.put(pair.getLeft(), pair.getRight());
+    }
+    return map;
+  }
+
+  @SafeVarargs
   public static <T> Set<T> createImmutableSet(final T... elements) {
     return Collections.unmodifiableSet(createSet(elements));
   }

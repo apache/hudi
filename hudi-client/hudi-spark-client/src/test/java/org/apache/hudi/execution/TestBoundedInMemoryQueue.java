@@ -44,6 +44,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.Semaphore;
@@ -97,12 +98,12 @@ public class TestBoundedInMemoryQueue extends HoodieClientTestHarness {
       final HoodieAvroRecord originalRecord = (HoodieAvroRecord) originalRecordIterator.next();
       final Option<IndexedRecord> originalInsertValue =
           originalRecord.getData().getInsertValue(HoodieTestDataGenerator.AVRO_SCHEMA);
-      final HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord> payload = queue.iterator().next();
+      final HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord> genResult = queue.iterator().next();
       // Ensure that record ordering is guaranteed.
-      assertEquals(originalRecord, payload.record);
+      assertEquals(originalRecord, genResult.getResult());
       // cached insert value matches the expected insert value.
       assertEquals(originalInsertValue,
-          ((HoodieAvroRecord) payload.record).getData().getInsertValue(HoodieTestDataGenerator.AVRO_SCHEMA));
+          ((HoodieAvroRecord) genResult.getResult()).getData().getInsertValue(HoodieTestDataGenerator.AVRO_SCHEMA));
       recordsRead++;
     }
     assertFalse(queue.iterator().hasNext() || originalRecordIterator.hasNext());
@@ -189,8 +190,8 @@ public class TestBoundedInMemoryQueue extends HoodieClientTestHarness {
 
     // Read recs and ensure we have covered all producer recs.
     while (queue.iterator().hasNext()) {
-      final HoodieLazyInsertIterable.HoodieInsertValueGenResult payload = queue.iterator().next();
-      final HoodieRecord rec = payload.record;
+      final HoodieLazyInsertIterable.HoodieInsertValueGenResult genResult = queue.iterator().next();
+      final HoodieRecord rec = genResult.getResult();
       Tuple2<Integer, Integer> producerPos = keyToProducerAndIndexMap.get(rec.getRecordKey());
       Integer lastSeenPos = lastSeenMap.get(producerPos._1());
       countMap.put(producerPos._1(), countMap.get(producerPos._1()) + 1);
@@ -218,9 +219,9 @@ public class TestBoundedInMemoryQueue extends HoodieClientTestHarness {
     // maximum number of records to keep in memory.
     final int recordLimit = 5;
     final SizeEstimator<HoodieLazyInsertIterable.HoodieInsertValueGenResult> sizeEstimator = new DefaultSizeEstimator<>();
-    HoodieLazyInsertIterable.HoodieInsertValueGenResult payload =
+    HoodieLazyInsertIterable.HoodieInsertValueGenResult genResult =
         getTransformFunction(HoodieTestDataGenerator.AVRO_SCHEMA).apply((HoodieAvroRecord) hoodieRecords.get(0));
-    final long objSize = sizeEstimator.sizeEstimate(payload);
+    final long objSize = sizeEstimator.sizeEstimate(genResult);
     final long memoryLimitInBytes = recordLimit * objSize;
     final BoundedInMemoryQueue<HoodieRecord, HoodieLazyInsertIterable.HoodieInsertValueGenResult> queue =
         new BoundedInMemoryQueue(memoryLimitInBytes, getTransformFunction(HoodieTestDataGenerator.AVRO_SCHEMA));
@@ -240,8 +241,8 @@ public class TestBoundedInMemoryQueue extends HoodieClientTestHarness {
     assertEquals(recordLimit - 1, queue.samplingRecordCounter.get());
 
     // try to read 2 records.
-    assertEquals(hoodieRecords.get(0), queue.iterator().next().record);
-    assertEquals(hoodieRecords.get(1), queue.iterator().next().record);
+    assertEquals(hoodieRecords.get(0), queue.iterator().next().getResult());
+    assertEquals(hoodieRecords.get(1), queue.iterator().next().getResult());
 
     // waiting for permits to expire.
     while (!isQueueFull(queue.rateLimiter)) {
@@ -267,9 +268,9 @@ public class TestBoundedInMemoryQueue extends HoodieClientTestHarness {
     final List<HoodieRecord> hoodieRecords = dataGen.generateInserts(instantTime, numRecords);
     final SizeEstimator<Tuple2<HoodieRecord, Option<IndexedRecord>>> sizeEstimator = new DefaultSizeEstimator<>();
     // queue memory limit
-    HoodieLazyInsertIterable.HoodieInsertValueGenResult payload =
+    HoodieLazyInsertIterable.HoodieInsertValueGenResult genResult =
         getTransformFunction(HoodieTestDataGenerator.AVRO_SCHEMA).apply((HoodieAvroRecord) hoodieRecords.get(0));
-    final long objSize = sizeEstimator.sizeEstimate(new Tuple2<>(payload.record, payload.insertValue));
+    final long objSize = sizeEstimator.sizeEstimate(new Tuple2<>(genResult.getResult(), genResult.getResult().toIndexedRecord(HoodieTestDataGenerator.AVRO_SCHEMA, new Properties())));
     final long memoryLimitInBytes = 4 * objSize;
 
     // first let us throw exception from queueIterator reader and test that queueing thread

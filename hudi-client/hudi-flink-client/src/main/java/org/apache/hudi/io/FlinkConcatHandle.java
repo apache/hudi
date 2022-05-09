@@ -20,13 +20,9 @@ package org.apache.hudi.io;
 
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieUpsertException;
-import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.table.HoodieTable;
-
-import org.apache.avro.generic.GenericRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,7 +36,7 @@ import java.util.Iterator;
  * <P>The records iterator for super constructor is reset as empty thus the initialization for new records
  * does nothing. This handle keep the iterator for itself to override the write behavior.
  */
-public class FlinkConcatHandle<T extends HoodieRecordPayload, I, K, O>
+public class FlinkConcatHandle<T, I, K, O>
     extends FlinkMergeHandle<T, I, K, O> {
   private static final Logger LOG = LoggerFactory.getLogger(FlinkConcatHandle.class);
 
@@ -58,10 +54,10 @@ public class FlinkConcatHandle<T extends HoodieRecordPayload, I, K, O>
    * Write old record as is w/o merging with incoming record.
    */
   @Override
-  public void write(GenericRecord oldRecord) {
-    String key = KeyGenUtils.getRecordKeyFromGenericRecord(oldRecord, keyGeneratorOpt);
+  public void write(HoodieRecord oldRecord) {
+    String key = oldRecord.getRecordKey(keyGeneratorOpt);
     try {
-      fileWriter.writeAvro(key, oldRecord);
+      fileWriter.write(key, oldRecord, writeSchema);
     } catch (IOException | RuntimeException e) {
       String errMsg = String.format("Failed to write old record into new file for key %s from old file %s to new file %s with writerSchema %s",
           key, getOldFilePath(), newFilePath, writeSchemaWithMetaFields.toString(true));

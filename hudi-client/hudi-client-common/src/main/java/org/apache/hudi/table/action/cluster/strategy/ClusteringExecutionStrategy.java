@@ -20,7 +20,6 @@ package org.apache.hudi.table.action.cluster.strategy;
 
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -34,7 +33,7 @@ import java.io.Serializable;
 /**
  * Pluggable implementation for writing data into new file groups based on ClusteringPlan.
  */
-public abstract class ClusteringExecutionStrategy<T extends HoodieRecordPayload, I, K, O> implements Serializable {
+public abstract class ClusteringExecutionStrategy<T, I, K, O> implements Serializable {
   private static final Logger LOG = LogManager.getLogger(ClusteringExecutionStrategy.class);
 
   private final HoodieTable<T, I, K, O> hoodieTable;
