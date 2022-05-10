@@ -226,7 +226,7 @@ public class IncrementalInputSplits implements Serializable {
               String basePath = fileSlice.getBaseFile().map(BaseFile::getPath).orElse(null);
               return new MergeOnReadInputSplit(cnt.getAndAdd(1),
                   basePath, logPaths, endInstant,
-                  metaClient.getBasePath(), maxCompactionMemoryInBytes, mergeType, instantRange);
+                  metaClient.getBasePath(), maxCompactionMemoryInBytes, mergeType, instantRange, fileSlice.getFileId());
             }).collect(Collectors.toList()))
         .flatMap(Collection::stream)
         .collect(Collectors.toList());
