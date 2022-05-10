@@ -19,6 +19,7 @@
 package org.apache.hudi.sink.meta;
 
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
 
@@ -47,7 +48,7 @@ public class TestCkpMetadata {
   @BeforeEach
   public void beforeEach() throws Exception {
     String basePath = tempFile.getAbsolutePath();
-    FileSystem fs = FSUtils.getFs(tempFile.getAbsolutePath(), StreamerUtil.getHadoopConf());
+    FileSystem fs = FSUtils.getFs(tempFile.getAbsolutePath(), FlinkOptions.getHadoopConf(new Configuration()));
 
     Configuration conf = TestConfigurations.getDefaultConf(basePath);
     StreamerUtil.initTableIfNotExists(conf);

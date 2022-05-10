@@ -738,16 +738,14 @@ public class FlinkOptions extends HoodieConfig {
     return copy;
   }
 
-  // Keep the redundant to avoid too many modifications.
+  /**
+   * Create a new hadoop configuration that is initialized with the given flink configuration.
+   */
   public static org.apache.hadoop.conf.Configuration getHadoopConf(Configuration conf) {
-    if (conf == null) {
-      return FlinkClientUtil.getHadoopConf();
-    } else {
-      org.apache.hadoop.conf.Configuration hadoopConf = FlinkClientUtil.getHadoopConf();
-      Map<String, String> options = getPropertiesWithPrefix(conf.toMap(), HADOOP_PREFIX);
-      options.forEach((k, v) -> hadoopConf.set(k, v));
-      return hadoopConf;
-    }
+    org.apache.hadoop.conf.Configuration hadoopConf = FlinkClientUtil.getHadoopConf();
+    Map<String, String> options = getPropertiesWithPrefix(conf.toMap(), HADOOP_PREFIX);
+    options.forEach((k, v) -> hadoopConf.set(k, v));
+    return hadoopConf;
   }
 
   /**
@@ -771,9 +769,7 @@ public class FlinkOptions extends HoodieConfig {
 
   /**
    * Creates a new configuration that is initialized with the options of the given map.
-   * @deprecated Use {@link Configuration#fromMap(Map)} instead.
    */
-  @Deprecated
   public static Configuration fromMap(Map<String, String> map) {
     final Configuration configuration = new Configuration();
     map.forEach(configuration::setString);

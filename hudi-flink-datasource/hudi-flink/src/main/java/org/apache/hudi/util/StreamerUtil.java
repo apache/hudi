@@ -141,15 +141,6 @@ public class StreamerUtil {
   }
 
   /**
-   * Keep the redundant to avoid too many modifications.
-   * @deprecated Use {@link FlinkOptions#getHadoopConf(Configuration)} instead.
-   */
-  @Deprecated
-  public static org.apache.hadoop.conf.Configuration getHadoopConf() {
-    return FlinkOptions.getHadoopConf(new Configuration());
-  }
-
-  /**
    * Mainly used for tests.
    */
   public static HoodieWriteConfig getHoodieClientConfig(Configuration conf) {
@@ -350,14 +341,6 @@ public class StreamerUtil {
    */
   public static HoodieTableMetaClient createMetaClient(String basePath, org.apache.hadoop.conf.Configuration hadoopConf) {
     return HoodieTableMetaClient.builder().setBasePath(basePath).setConf(hadoopConf).build();
-  }
-
-  /**
-   * Creates the meta client.
-   */
-  @Deprecated
-  public static HoodieTableMetaClient createMetaClient(String basePath) {
-    return createMetaClient(basePath, FlinkClientUtil.getHadoopConf());
   }
 
   /**

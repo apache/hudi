@@ -113,7 +113,7 @@ public class BulkInsertWriteFunction<I>
   public void open(Configuration parameters) throws IOException {
     this.taskID = getRuntimeContext().getIndexOfThisSubtask();
     this.writeClient = StreamerUtil.createWriteClient(this.config, getRuntimeContext());
-    this.ckpMetadata = CkpMetadata.getInstance(config.getString(FlinkOptions.PATH));
+    this.ckpMetadata = CkpMetadata.getInstance(config);
     this.initInstant = lastPendingInstant();
     sendBootstrapEvent();
     initWriterHelper();
