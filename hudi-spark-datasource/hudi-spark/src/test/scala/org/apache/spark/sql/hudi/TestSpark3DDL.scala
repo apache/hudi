@@ -27,7 +27,7 @@ import org.apache.spark.sql.{DataFrame, Row, SaveMode, SparkSession}
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 
-class TestSpark3DDL extends TestHoodieSqlBase {
+class TestSpark3DDL extends HoodieSparkSqlTestBase {
 
   def createTestResult(tableName: String): Array[Row] = {
     spark.sql(s"select * from ${tableName} order by id")

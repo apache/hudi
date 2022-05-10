@@ -24,11 +24,11 @@ import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieTimeli
 import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.{HoodieCLIUtils, HoodieDataSourceHelpers}
 
-import org.apache.spark.sql.hudi.TestHoodieSqlBase
+import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase
 
 import scala.collection.JavaConverters.asScalaIteratorConverter
 
-class TestClusteringProcedure extends TestHoodieSqlBase {
+class TestClusteringProcedure extends HoodieSparkSqlTestBase {
 
   test("Test Call run_clustering Procedure By Table") {
     withTempDir { tmp =>

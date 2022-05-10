@@ -35,6 +35,8 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import javax.annotation.concurrent.NotThreadSafe;
+
 import java.io.IOException;
 import java.util.Collections;
 import java.util.Iterator;
@@ -66,6 +68,7 @@ import java.util.Map;
  * Users should ensure there are no duplicates when "insert" operation is used and if the respective config is enabled. So, above scenario should not
  * happen and every batch should have new records to be inserted. Above example is for illustration purposes only.
  */
+@NotThreadSafe
 public class HoodieConcatHandle<T extends HoodieRecordPayload, I, K, O> extends HoodieMergeHandle<T, I, K, O> {
 
   private static final Logger LOG = LogManager.getLogger(HoodieConcatHandle.class);
