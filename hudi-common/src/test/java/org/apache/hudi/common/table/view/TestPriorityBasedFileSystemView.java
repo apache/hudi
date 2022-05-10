@@ -375,30 +375,30 @@ public class TestPriorityBasedFileSystemView {
     String partitionPath = "/table2";
     String maxCommitTime = "2020-01-01";
 
-    when(primary.getLatestFileSlicesBeforeOrOn(partitionPath, maxCommitTime, false))
+    when(primary.getLatestFileSlicesBeforeOrOn(partitionPath, maxCommitTime, false, false))
         .thenReturn(testFileSliceStream);
-    actual = fsView.getLatestFileSlicesBeforeOrOn(partitionPath, maxCommitTime, false);
+    actual = fsView.getLatestFileSlicesBeforeOrOn(partitionPath, maxCommitTime, false, false);
     assertEquals(expected, actual);
 
     resetMocks();
-    when(primary.getLatestFileSlicesBeforeOrOn(partitionPath, maxCommitTime, false))
+    when(primary.getLatestFileSlicesBeforeOrOn(partitionPath, maxCommitTime, false, false))
         .thenThrow(new RuntimeException());
-    when(secondary.getLatestFileSlicesBeforeOrOn(partitionPath, maxCommitTime, false))
+    when(secondary.getLatestFileSlicesBeforeOrOn(partitionPath, maxCommitTime, false, false))
         .thenReturn(testFileSliceStream);
-    actual = fsView.getLatestFileSlicesBeforeOrOn(partitionPath, maxCommitTime, false);
+    actual = fsView.getLatestFileSlicesBeforeOrOn(partitionPath, maxCommitTime, false, false);
     assertEquals(expected, actual);
 
     resetMocks();
-    when(secondary.getLatestFileSlicesBeforeOrOn(partitionPath, maxCommitTime, false))
+    when(secondary.getLatestFileSlicesBeforeOrOn(partitionPath, maxCommitTime, false, false))
         .thenReturn(testFileSliceStream);
-    actual = fsView.getLatestFileSlicesBeforeOrOn(partitionPath, maxCommitTime, false);
+    actual = fsView.getLatestFileSlicesBeforeOrOn(partitionPath, maxCommitTime, false, false);
     assertEquals(expected, actual);
 
     resetMocks();
-    when(secondary.getLatestFileSlicesBeforeOrOn(partitionPath, maxCommitTime, false))
+    when(secondary.getLatestFileSlicesBeforeOrOn(partitionPath, maxCommitTime, false, false))
         .thenThrow(new RuntimeException());
     assertThrows(RuntimeException.class, () -> {
-      fsView.getLatestFileSlicesBeforeOrOn(partitionPath, maxCommitTime, false);
+      fsView.getLatestFileSlicesBeforeOrOn(partitionPath, maxCommitTime, false, false);
     });
   }
 
