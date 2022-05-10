@@ -53,7 +53,6 @@ public class HoodieAvroParquetWriter<R extends IndexedRecord>
                                  boolean populateMetaFields) throws IOException {
     super(file, (HoodieBaseParquetConfig) parquetConfig);
     this.fileName = file.getName();
-
     this.writeSupport = parquetConfig.getWriteSupport();
     this.instantTime = instantTime;
     this.taskContextSupplier = taskContextSupplier;
@@ -63,9 +62,8 @@ public class HoodieAvroParquetWriter<R extends IndexedRecord>
   @Override
   public void writeAvroWithMetadata(HoodieKey key, R avroRecord) throws IOException {
     if (populateMetaFields) {
-      long recordIndex = getWrittenRecordCount();
       prepRecordWithMetadata(key, avroRecord, instantTime,
-          taskContextSupplier.getPartitionIdSupplier().get(), recordIndex, fileName);
+          taskContextSupplier.getPartitionIdSupplier().get(), getWrittenRecordCount(), fileName);
       super.write(avroRecord);
       writeSupport.add(key.getRecordKey());
     } else {

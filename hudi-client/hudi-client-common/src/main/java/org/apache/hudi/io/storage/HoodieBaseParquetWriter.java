@@ -39,9 +39,7 @@ public abstract class HoodieBaseParquetWriter<R> extends ParquetWriter<R> {
   private static final int WRITTEN_RECORDS_THRESHOLD_FOR_FILE_SIZE_CHECK = 1000;
 
   private final AtomicLong writtenRecordCount = new AtomicLong(1);
-
   private final long maxFileSize;
-
   private long lastCachedDataSize = -1;
 
   public HoodieBaseParquetWriter(Path file,
@@ -71,7 +69,10 @@ public abstract class HoodieBaseParquetWriter<R> extends ParquetWriter<R> {
     //      if we cache last data size check, since we account for how many records
     //      were written we can accurately project avg record size, and therefore
     //      estimate how many more records we can write before cut off
-    return writtenRecordCount.get() % WRITTEN_RECORDS_THRESHOLD_FOR_FILE_SIZE_CHECK != 0 || (lastCachedDataSize = getDataSize()) < maxFileSize;
+    if (writtenRecordCount.get() % WRITTEN_RECORDS_THRESHOLD_FOR_FILE_SIZE_CHECK == 0) {
+      lastCachedDataSize = getDataSize();
+    }
+    return lastCachedDataSize < maxFileSize;
   }
 
   @Override
