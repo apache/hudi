@@ -202,24 +202,24 @@ services:
 
   presto-worker-1:
     container_name: presto-worker-1
-      hostname: presto-worker-1
+    hostname: presto-worker-1
     image: yihua/hudi-hadoop_3.1.0-prestobase_0.271:latest
-      depends_on: ["presto-coordinator-1"]
-      environment:
-        - PRESTO_JVM_MAX_HEAP=512M
-        - PRESTO_QUERY_MAX_MEMORY=1GB
-        - PRESTO_QUERY_MAX_MEMORY_PER_NODE=256MB
-        - PRESTO_QUERY_MAX_TOTAL_MEMORY_PER_NODE=384MB
-        - PRESTO_MEMORY_HEAP_HEADROOM_PER_NODE=100MB
-        - TERM=xterm
-      links:
-        - "hivemetastore"
-        - "hiveserver"
-        - "hive-metastore-postgresql"
-        - "namenode"
-      volumes:
-        - ${HUDI_WS}:/var/hoodie/ws
-      command: worker
+    depends_on: [ "presto-coordinator-1" ]
+    environment:
+      - PRESTO_JVM_MAX_HEAP=512M
+      - PRESTO_QUERY_MAX_MEMORY=1GB
+      - PRESTO_QUERY_MAX_MEMORY_PER_NODE=256MB
+      - PRESTO_QUERY_MAX_TOTAL_MEMORY_PER_NODE=384MB
+      - PRESTO_MEMORY_HEAP_HEADROOM_PER_NODE=100MB
+      - TERM=xterm
+    links:
+      - "hivemetastore"
+      - "hiveserver"
+      - "hive-metastore-postgresql"
+      - "namenode"
+    volumes:
+      - ${HUDI_WS}:/var/hoodie/ws
+    command: worker
 
   trino-coordinator-1:
     container_name: trino-coordinator-1
@@ -307,4 +307,3 @@ volumes:
 
 networks:
   default:
-    name: rahil-test

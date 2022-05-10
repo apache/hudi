@@ -26,7 +26,7 @@ WS_ROOT=`dirname $SCRIPT_PATH`
 HUDI_WS=${WS_ROOT} docker-compose -f ${SCRIPT_PATH}/compose/docker-compose_hadoop310_hive312_spark321.yml down
 if [ "$HUDI_DEMO_ENV" != "dev" ]; then
   echo "Pulling docker demo images ..."
-  HUDI_WS=${WS_ROOT} docker-compose -f ${SCRIPT_PATH}/compose/docker-compose_hadoop284_hive233_spark321.yml pull
+  HUDI_WS=${WS_ROOT} docker-compose -f ${SCRIPT_PATH}/compose/docker-compose_hadoop310_hive312_spark321.yml pull
 fi
 sleep 5
 #HUDI_WS=${WS_ROOT} docker-compose -f ${SCRIPT_PATH}/compose/docker-compose_hadoop284_hive233_spark244.yml up -d
