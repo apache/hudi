@@ -69,7 +69,7 @@ public abstract class HoodieBaseParquetWriter<R> extends ParquetWriter<R> {
     //      if we cache last data size check, since we account for how many records
     //      were written we can accurately project avg record size, and therefore
     //      estimate how many more records we can write before cut off
-    if (writtenRecordCount.get() % WRITTEN_RECORDS_THRESHOLD_FOR_FILE_SIZE_CHECK == 0) {
+    if (lastCachedDataSize == -1 || writtenRecordCount.get() % WRITTEN_RECORDS_THRESHOLD_FOR_FILE_SIZE_CHECK == 0) {
       lastCachedDataSize = getDataSize();
     }
     return lastCachedDataSize < maxFileSize;
