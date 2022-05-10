@@ -17,7 +17,7 @@
 
 ARG HADOOP_VERSION=3.1.0
 ARG HADOOP_WEBHDFS_PORT=50070
-FROM apachehudi/hudi-hadoop_${HADOOP_VERSION}-base:latest
+FROM yihua/hudi-hadoop_${HADOOP_VERSION}-base:latest
 
 ENV HADOOP_WEBHDFS_PORT ${HADOOP_WEBHDFS_PORT}
 

@@ -20,7 +20,7 @@
 
 ARG HADOOP_VERSION=3.1.0
 ARG HIVE_VERSION=3.1.2
-FROM apachehudi/hudi-hadoop_${HADOOP_VERSION}-base:latest as hadoop-base
+FROM yihua/hudi-hadoop_${HADOOP_VERSION}-base:latest as hadoop-base
 
 ARG PRESTO_VERSION=0.271
 
