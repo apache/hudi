@@ -312,7 +312,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
 
   @Override
   public Stream<FileSlice> getLatestFileSlicesBeforeOrOn(String partitionPath, String maxCommitTime,
-      boolean includeFileSlicesInPendingCompaction) {
+      boolean includeFileSlicesInPendingCompaction, boolean includeFilesInPendingCompaction) {
     Map<String, String> paramsMap = getParamsWithAdditionalParams(partitionPath,
         new String[] {MAX_INSTANT_PARAM, INCLUDE_FILES_IN_PENDING_COMPACTION_PARAM},
         new String[] {maxCommitTime, String.valueOf(includeFileSlicesInPendingCompaction)});
