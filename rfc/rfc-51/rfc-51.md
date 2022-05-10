@@ -72,6 +72,10 @@ Here the illustration ignores all the metadata columns like `_hoodie_commit_time
 Notice:
 Other operations like `Compact`, `Clean`, `Index` do not write/change any data. So we don't need to consider in CDC scenario.
  
+### Points to be upgraded
+
+![](points.jpg)
+
 ### Config Definitions
 
 |  | default |  |
