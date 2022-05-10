@@ -118,6 +118,11 @@ public class DynamoDBBasedLockProvider implements LockProvider<LockItem> {
   }
 
   @Override
+  public boolean tryLockWithInstant(long time, TimeUnit unit, String timestamp){
+    return tryLock(time, unit);
+  }
+
+  @Override
   public void unlock() {
     try {
       LOG.info(generateLogStatement(LockState.RELEASING, generateLogSuffixString()));

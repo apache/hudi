@@ -39,6 +39,9 @@ public class LockConfiguration implements Serializable {
   public static final String LOCK_ACQUIRE_NUM_RETRIES_PROP_KEY = LOCK_PREFIX + "num_retries";
   public static final String DEFAULT_LOCK_ACQUIRE_NUM_RETRIES = String.valueOf(15);
 
+  public static final String LOCK_ACQUIRE_EXPIRE_PROP_KEY = LOCK_PREFIX + "expire";
+  public static final String DEFAULT_LOCK_EXPIRE = String.valueOf(300);
+
   public static final String LOCK_ACQUIRE_CLIENT_NUM_RETRIES_PROP_KEY = LOCK_PREFIX + "client.num_retries";
 
   public static final String LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY = LOCK_PREFIX + "wait_time_ms";

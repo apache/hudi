@@ -90,6 +90,11 @@ public class InProcessLockProvider implements LockProvider<ReentrantReadWriteLoc
   }
 
   @Override
+  public boolean tryLockWithInstant(long time, TimeUnit unit, String timestamp){
+    return tryLock(time, unit);
+  }
+
+  @Override
   public void unlock() {
     LOG.info(getLogMessage(LockState.RELEASING));
     try {

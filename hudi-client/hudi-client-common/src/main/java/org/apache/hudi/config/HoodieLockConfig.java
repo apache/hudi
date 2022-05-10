@@ -34,6 +34,7 @@ import java.util.Properties;
 
 import static org.apache.hudi.common.config.LockConfiguration.DEFAULT_LOCK_ACQUIRE_NUM_RETRIES;
 import static org.apache.hudi.common.config.LockConfiguration.DEFAULT_LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS;
+import static org.apache.hudi.common.config.LockConfiguration.DEFAULT_LOCK_EXPIRE;
 import static org.apache.hudi.common.config.LockConfiguration.DEFAULT_ZK_CONNECTION_TIMEOUT_MS;
 import static org.apache.hudi.common.config.LockConfiguration.DEFAULT_ZK_SESSION_TIMEOUT_MS;
 import static org.apache.hudi.common.config.LockConfiguration.FILESYSTEM_LOCK_PATH_PROP_KEY;
@@ -42,6 +43,7 @@ import static org.apache.hudi.common.config.LockConfiguration.HIVE_METASTORE_URI
 import static org.apache.hudi.common.config.LockConfiguration.HIVE_TABLE_NAME_PROP_KEY;
 import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_CLIENT_NUM_RETRIES_PROP_KEY;
 import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY;
+import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_EXPIRE_PROP_KEY;
 import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_NUM_RETRIES_PROP_KEY;
 import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_RETRY_MAX_WAIT_TIME_IN_MILLIS_PROP_KEY;
 import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY;
@@ -89,6 +91,12 @@ public class HoodieLockConfig extends HoodieConfig {
       .defaultValue(DEFAULT_LOCK_ACQUIRE_NUM_RETRIES)
       .sinceVersion("0.8.0")
       .withDocumentation("Maximum number of times to retry lock acquire, at each lock provider");
+
+  public static final ConfigProperty<String> LOCK_ACQUIRE_EXPIRE = ConfigProperty
+          .key(LOCK_ACQUIRE_EXPIRE_PROP_KEY)
+          .defaultValue(DEFAULT_LOCK_EXPIRE)
+          .sinceVersion("0.10.0")
+          .withDocumentation("Maximum number of times to retry lock acquire, at each lock provider");
 
   public static final ConfigProperty<String> LOCK_ACQUIRE_CLIENT_NUM_RETRIES = ConfigProperty
       .key(LOCK_ACQUIRE_CLIENT_NUM_RETRIES_PROP_KEY)
