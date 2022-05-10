@@ -100,12 +100,7 @@ public class TableSchemaResolver {
           if (instantAndCommitMetadata.isPresent()) {
             HoodieCommitMetadata commitMetadata = instantAndCommitMetadata.get().getRight();
             Iterator<String> filePaths = commitMetadata.getFileIdAndFullPaths(metaClient.getBasePath()).values().iterator();
-            MessageType type = null;
-            while (filePaths.hasNext() && type == null) {
-              String filePath = filePaths.next();
-              type = readSchemaFromBaseFile(filePath);
-            }
-            return type;
+            return fetchSchemaFromFiles(filePaths);
           } else {
             throw new IllegalArgumentException("Could not find any data file written for commit, "
                 + "so could not get schema for table " + metaClient.getBasePath());
@@ -116,17 +111,7 @@ public class TableSchemaResolver {
           if (instantAndCommitMetadata.isPresent()) {
             HoodieCommitMetadata commitMetadata = instantAndCommitMetadata.get().getRight();
             Iterator<String> filePaths = commitMetadata.getFileIdAndFullPaths(metaClient.getBasePath()).values().iterator();
-            MessageType type = null;
-            while (filePaths.hasNext() && type == null) {
-              String filePath = filePaths.next();
-              if (filePath.contains(HoodieFileFormat.HOODIE_LOG.getFileExtension())) {
-                // this is a log file
-                type = readSchemaFromLogFile(new Path(filePath));
-              } else {
-                type = readSchemaFromBaseFile(filePath);
-              }
-            }
-            return type;
+            return fetchSchemaFromFiles(filePaths);
           } else {
             throw new IllegalArgumentException("Could not find any data file written for commit, "
                 + "so could not get schema for table " + metaClient.getBasePath());
@@ -138,6 +123,20 @@ public class TableSchemaResolver {
     } catch (IOException e) {
       throw new HoodieException("Failed to read data schema", e);
     }
+  }
+
+  private MessageType fetchSchemaFromFiles(Iterator<String> filePaths) throws IOException {
+    MessageType type = null;
+    while (filePaths.hasNext() && type == null) {
+      String filePath = filePaths.next();
+      if (filePath.contains(HoodieFileFormat.HOODIE_LOG.getFileExtension())) {
+        // this is a log file
+        type = readSchemaFromLogFile(new Path(filePath));
+      } else {
+        type = readSchemaFromBaseFile(filePath);
+      }
+    }
+    return type;
   }
 
   private MessageType readSchemaFromBaseFile(String filePath) throws IOException {
