@@ -104,7 +104,7 @@ public class ZookeeperBasedLockProvider implements LockProvider<InterProcessMute
   }
 
   @Override
-  public boolean tryLockWithInstant(long time, TimeUnit unit, String timestamp){
+  public boolean tryLockWithInstant(long time, TimeUnit unit, String timestamp) {
     return tryLock(time, unit);
   }
 

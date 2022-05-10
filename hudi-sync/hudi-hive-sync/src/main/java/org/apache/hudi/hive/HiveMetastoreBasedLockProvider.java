@@ -117,7 +117,7 @@ public class HiveMetastoreBasedLockProvider implements LockProvider<LockResponse
   }
 
   @Override
-  public boolean tryLockWithInstant(long time, TimeUnit unit, String timestamp){
+  public boolean tryLockWithInstant(long time, TimeUnit unit, String timestamp) {
     return tryLock(time, unit);
   }
 
