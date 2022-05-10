@@ -144,7 +144,7 @@ In addition to all the existing strategies to load the data, with hudi you can u
 
 If you are using the merge strategy and have specified a unique_key, by default, dbt will entirely overwrite matched rows with new values.
 
-Since Apache Spark adapter supports the merge strategy, you may optionally pass a list of column names to a merge_update_columns config. In that case, dbt will update _only_ the columns specified by the config, and keep the previous values of other columns.
+Since Apache Spark adapter supports the merge strategy, you may optionally pass a list of column names to a `merge_update_columns` config. In that case, dbt will update only the columns specified by the config, and keep the previous values of other columns.
 
 ```sql title="models/my_model.sql"
 {{ config(
