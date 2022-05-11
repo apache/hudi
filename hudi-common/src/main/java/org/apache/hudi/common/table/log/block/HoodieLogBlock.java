@@ -64,22 +64,18 @@ public abstract class HoodieLogBlock {
   // create handlers to return specific type of inputstream based on FS
   // input stream corresponding to the log file where this logBlock belongs
   private final FSDataInputStream inputStream;
-  // Toggle flag, whether to read blocks lazily (I/O intensive) or not (Memory intensive)
-  protected boolean readBlockLazily;
 
   public HoodieLogBlock(
       @Nonnull Map<HeaderMetadataType, String> logBlockHeader,
       @Nonnull Map<HeaderMetadataType, String> logBlockFooter,
       @Nonnull Option<HoodieLogBlockContentLocation> blockContentLocation,
       @Nonnull Option<byte[]> content,
-      @Nullable FSDataInputStream inputStream,
-      boolean readBlockLazily) {
+      @Nullable FSDataInputStream inputStream) {
     this.logBlockHeader = logBlockHeader;
     this.logBlockFooter = logBlockFooter;
     this.blockContentLocation = blockContentLocation;
     this.content = content;
     this.inputStream = inputStream;
-    this.readBlockLazily = readBlockLazily;
   }
 
   // Return the bytes representation of the data belonging to a LogBlock
@@ -245,19 +241,11 @@ public abstract class HoodieLogBlock {
    * Read or Skip block content of a log block in the log file. Depends on lazy reading enabled in
    * {@link HoodieMergedLogRecordScanner}
    */
-  public static Option<byte[]> tryReadContent(FSDataInputStream inputStream, Integer contentLength, boolean readLazily)
+  public static Option<byte[]> tryReadContent(FSDataInputStream inputStream, Integer contentLength)
       throws IOException {
-    if (readLazily) {
-      // Seek to the end of the content block
-      inputStream.seek(inputStream.getPos() + contentLength);
-      return Option.empty();
-    }
-
-    // TODO re-use buffer if stream is backed by buffer
-    // Read the contents in memory
-    byte[] content = new byte[contentLength];
-    inputStream.readFully(content, 0, contentLength);
-    return Option.of(content);
+    // Seek to the end of the content block
+    inputStream.seek(inputStream.getPos() + contentLength);
+    return Option.empty();
   }
 
   /**

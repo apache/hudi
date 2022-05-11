@@ -65,24 +65,22 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
 
   public HoodieAvroDataBlock(FSDataInputStream inputStream,
                              Option<byte[]> content,
-                             boolean readBlockLazily,
                              HoodieLogBlockContentLocation logBlockContentLocation,
                              Option<Schema> readerSchema,
                              Map<HeaderMetadataType, String> header,
                              Map<HeaderMetadataType, String> footer,
                              String keyField, InternalSchema internalSchema) {
-    super(content, inputStream, readBlockLazily, Option.of(logBlockContentLocation), readerSchema, header, footer, keyField, false, internalSchema);
+    super(content, inputStream, Option.of(logBlockContentLocation), readerSchema, header, footer, keyField, false, internalSchema);
   }
 
   public HoodieAvroDataBlock(FSDataInputStream inputStream,
                              Option<byte[]> content,
-                             boolean readBlockLazily,
                              HoodieLogBlockContentLocation logBlockContentLocation,
                              Option<Schema> readerSchema,
                              Map<HeaderMetadataType, String> header,
                              Map<HeaderMetadataType, String> footer,
                              String keyField) {
-    super(content, inputStream, readBlockLazily, Option.of(logBlockContentLocation), readerSchema, header, footer, keyField, false);
+    super(content, inputStream, Option.of(logBlockContentLocation), readerSchema, header, footer, keyField, false);
   }
 
   public HoodieAvroDataBlock(@Nonnull List<IndexedRecord> records,

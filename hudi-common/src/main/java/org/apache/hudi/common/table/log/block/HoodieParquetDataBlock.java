@@ -59,13 +59,12 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
 
   public HoodieParquetDataBlock(FSDataInputStream inputStream,
                                 Option<byte[]> content,
-                                boolean readBlockLazily,
                                 HoodieLogBlockContentLocation logBlockContentLocation,
                                 Option<Schema> readerSchema,
                                 Map<HeaderMetadataType, String> header,
                                 Map<HeaderMetadataType, String> footer,
                                 String keyField) {
-    super(content, inputStream, readBlockLazily, Option.of(logBlockContentLocation), readerSchema, header, footer, keyField, false);
+    super(content, inputStream, Option.of(logBlockContentLocation), readerSchema, header, footer, keyField, false);
 
     this.compressionCodecName = Option.empty();
   }

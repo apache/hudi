@@ -31,15 +31,15 @@ import java.util.Map;
  */
 public class HoodieCorruptBlock extends HoodieLogBlock {
 
-  public HoodieCorruptBlock(Option<byte[]> corruptedBytes, FSDataInputStream inputStream, boolean readBlockLazily,
+  public HoodieCorruptBlock(Option<byte[]> corruptedBytes, FSDataInputStream inputStream,
                             Option<HoodieLogBlockContentLocation> blockContentLocation, Map<HeaderMetadataType, String> header,
                             Map<HeaderMetadataType, String> footer) {
-    super(header, footer, blockContentLocation, corruptedBytes, inputStream, readBlockLazily);
+    super(header, footer, blockContentLocation, corruptedBytes, inputStream);
   }
 
   @Override
   public byte[] getContentBytes() throws IOException {
-    if (!getContent().isPresent() && readBlockLazily) {
+    if (!getContent().isPresent()) {
       // read content from disk
       inflate();
     }

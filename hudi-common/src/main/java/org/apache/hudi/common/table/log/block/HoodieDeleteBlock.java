@@ -44,14 +44,14 @@ public class HoodieDeleteBlock extends HoodieLogBlock {
   private DeleteRecord[] recordsToDelete;
 
   public HoodieDeleteBlock(DeleteRecord[] recordsToDelete, Map<HeaderMetadataType, String> header) {
-    this(Option.empty(), null, false, Option.empty(), header, new HashMap<>());
+    this(Option.empty(), null, Option.empty(), header, new HashMap<>());
     this.recordsToDelete = recordsToDelete;
   }
 
-  public HoodieDeleteBlock(Option<byte[]> content, FSDataInputStream inputStream, boolean readBlockLazily,
+  public HoodieDeleteBlock(Option<byte[]> content, FSDataInputStream inputStream,
       Option<HoodieLogBlockContentLocation> blockContentLocation, Map<HeaderMetadataType, String> header,
       Map<HeaderMetadataType, String> footer) {
-    super(header, footer, blockContentLocation, content, inputStream, readBlockLazily);
+    super(header, footer, blockContentLocation, content, inputStream);
   }
 
   @Override
@@ -61,7 +61,7 @@ public class HoodieDeleteBlock extends HoodieLogBlock {
     // In case this method is called before realizing keys from content
     if (content.isPresent()) {
       return content.get();
-    } else if (readBlockLazily && recordsToDelete == null) {
+    } else if (recordsToDelete == null) {
       // read block lazily
       getRecordsToDelete();
     }
@@ -78,7 +78,7 @@ public class HoodieDeleteBlock extends HoodieLogBlock {
   public DeleteRecord[] getRecordsToDelete() {
     try {
       if (recordsToDelete == null) {
-        if (!getContent().isPresent() && readBlockLazily) {
+        if (!getContent().isPresent()) {
           // read content from disk
           inflate();
         }

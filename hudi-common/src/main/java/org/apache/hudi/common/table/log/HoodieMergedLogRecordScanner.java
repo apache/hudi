@@ -80,14 +80,13 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
 
   @SuppressWarnings("unchecked")
   protected HoodieMergedLogRecordScanner(FileSystem fs, String basePath, List<String> logFilePaths, Schema readerSchema,
-                                         String latestInstantTime, Long maxMemorySizeInBytes, boolean readBlocksLazily,
-                                         boolean reverseReader, int bufferSize, String spillableMapBasePath,
-                                         Option<InstantRange> instantRange,
+                                         String latestInstantTime, Long maxMemorySizeInBytes,int bufferSize,
+                                         String spillableMapBasePath, Option<InstantRange> instantRange,
                                          ExternalSpillableMap.DiskMapType diskMapType,
                                          boolean isBitCaskDiskMapCompressionEnabled,
                                          boolean withOperationField, boolean forceFullScan,
                                          Option<String> partitionName, InternalSchema internalSchema) {
-    super(fs, basePath, logFilePaths, readerSchema, latestInstantTime, readBlocksLazily, reverseReader, bufferSize,
+    super(fs, basePath, logFilePaths, readerSchema, latestInstantTime, bufferSize,
         instantRange, withOperationField,
         forceFullScan, partitionName, internalSchema);
     try {
@@ -318,8 +317,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
         this.partitionName = getRelativePartitionPath(new Path(basePath), new Path(this.logFilePaths.get(0)).getParent());
       }
       return new HoodieMergedLogRecordScanner(fs, basePath, logFilePaths, readerSchema,
-          latestInstantTime, maxMemorySizeInBytes, readBlocksLazily, reverseReader,
-          bufferSize, spillableMapBasePath, instantRange,
+          latestInstantTime, maxMemorySizeInBytes, bufferSize, spillableMapBasePath, instantRange,
           diskMapType, isBitCaskDiskMapCompressionEnabled, withOperationField, true,
           Option.ofNullable(partitionName), internalSchema);
     }

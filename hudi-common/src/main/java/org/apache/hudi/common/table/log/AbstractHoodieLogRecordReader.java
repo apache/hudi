@@ -101,11 +101,6 @@ public abstract class AbstractHoodieLogRecordReader {
   private Option<Pair<String, String>> simpleKeyGenFields = Option.empty();
   // Log File Paths
   protected final List<String> logFilePaths;
-  // Read Lazily flag
-  private final boolean readBlocksLazily;
-  // Reverse reader - Not implemented yet (NA -> Why do we need ?)
-  // but present here for plumbing for future implementation
-  private final boolean reverseReader;
   // Buffer Size for log file reader
   private final int bufferSize;
   // optional instant range for incremental block filtering
@@ -141,19 +136,18 @@ public abstract class AbstractHoodieLogRecordReader {
   private boolean populateMetaFields = true;
 
   protected AbstractHoodieLogRecordReader(FileSystem fs, String basePath, List<String> logFilePaths,
-                                          Schema readerSchema,
-                                          String latestInstantTime, boolean readBlocksLazily, boolean reverseReader,
+                                          Schema readerSchema, String latestInstantTime,
                                           int bufferSize, Option<InstantRange> instantRange,
                                           boolean withOperationField) {
-    this(fs, basePath, logFilePaths, readerSchema, latestInstantTime, readBlocksLazily, reverseReader, bufferSize,
+    this(fs, basePath, logFilePaths, readerSchema, latestInstantTime, bufferSize,
         instantRange, withOperationField, true, Option.empty(), InternalSchema.getEmptyInternalSchema());
   }
 
   protected AbstractHoodieLogRecordReader(FileSystem fs, String basePath, List<String> logFilePaths,
-                                          Schema readerSchema, String latestInstantTime, boolean readBlocksLazily,
-                                          boolean reverseReader, int bufferSize, Option<InstantRange> instantRange,
-                                          boolean withOperationField, boolean forceFullScan,
-                                          Option<String> partitionName, InternalSchema internalSchema) {
+                                          Schema readerSchema, String latestInstantTime, int bufferSize,
+                                          Option<InstantRange> instantRange, boolean withOperationField,
+                                          boolean forceFullScan, Option<String> partitionName,
+                                          InternalSchema internalSchema) {
     this.readerSchema = readerSchema;
     this.latestInstantTime = latestInstantTime;
     this.hoodieTableMetaClient = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(basePath).build();
@@ -163,8 +157,6 @@ public abstract class AbstractHoodieLogRecordReader {
     this.preCombineField = tableConfig.getPreCombineField();
     this.totalLogFiles.addAndGet(logFilePaths.size());
     this.logFilePaths = logFilePaths;
-    this.reverseReader = reverseReader;
-    this.readBlocksLazily = readBlocksLazily;
     this.fs = fs;
     this.bufferSize = bufferSize;
     this.instantRange = instantRange;
@@ -219,36 +211,22 @@ public abstract class AbstractHoodieLogRecordReader {
       boolean enableRecordLookups = !forceFullScan;
       logFormatReaderWrapper = new HoodieLogFormatReader(fs,
           logFilePaths.stream().map(logFile -> new HoodieLogFile(new Path(logFile))).collect(Collectors.toList()),
-          readerSchema, readBlocksLazily, reverseReader, bufferSize, enableRecordLookups, keyField, internalSchema);
+          readerSchema, bufferSize, enableRecordLookups, keyField, internalSchema);
 
       /**
-       * Traversal of log blocks from log files can be done in two directions.
-       * 1. Forward traversal
-       * 2. Reverse traversal
-       * For example:   BaseFile, LogFile1(LogBlock11,LogBlock12,LogBlock13), LofFile2(LogBlock21,LogBlock22,LogBlock23)
-       *    Forward traversal look like,
-       *        LogBlock11, LogBlock12, LogBlock13, LogBlock21, LogBlock22, LogBlock23
-       *    If we are considering reverse traversal including log blocks,
-       *        LogBlock23, LogBlock22, LogBlock21, LogBlock13, LogBlock12, LogBlock11
-       * Here, reverse traversal also traverses blocks in reverse order of creation.
+       * Scanning log blocks require two traversals on the log blocks.
+       * First traversal to identify the rollback blocks and
        *
-       * 1. Forward traversal
-       *  Forward traversal is easy to do in single writer mode. Where the rollback block is right after the effected data blocks.
+       *  Scanning blocks is easy to do in single writer mode, where the rollback block is right after the effected data blocks.
        *  With multiwriter mode the blocks can be out of sync. An example scenario.
        *  B1, B2, B3, B4, R1(B3), B5
        *  In this case, rollback block R1 is invalidating the B3 which is not the previous block.
        *  This becomes more complicated if we have compacted blocks, which are data blocks created using log compaction.
        *  TODO: Include support for log compacted blocks. https://issues.apache.org/jira/browse/HUDI-3580
        *
-       *  To solve this do traversal twice.
+       *  To solve this need to do traversal twice.
        *  In first traversal, collect all the valid data and delete blocks that are not corrupted along with the rollback block's target instant times.
        *  For second traversal, traverse on the collected data blocks by considering the rollback instants.
-       * 2. Reverse traversal
-       *  Reverse traversal is more intuitive in multiwriter mode. Reverse traversal would mean not just traversing
-       *  log files in reverse order, but also the log blocks within them.
-       *  This is harder to achieve when there are corrupt blocks, since the blocks size information
-       *  might not be stored at the end of the corrupt block. So, hopping to the starting of the block is not possible.
-       *  So, defaulting to use forward traversal and lazy read as true.
        */
 
       // Collect targetRollbackInstants, using which we can determine which blocks are invalid.
@@ -273,7 +251,7 @@ public abstract class AbstractHoodieLogRecordReader {
             && !HoodieTimeline.compareTimestamps(logBlock.getLogBlockHeader().get(INSTANT_TIME), HoodieTimeline.LESSER_THAN_OR_EQUALS, this.latestInstantTime
         )) {
           // hit a block with instant time greater than should be processed, stop processing further
-          break;
+          continue;
         }
         if (logBlock.getBlockType() != CORRUPT_BLOCK && logBlock.getBlockType() != COMMAND_BLOCK) {
           if (!completedInstantsTimeline.containsOrBeforeTimelineStarts(instantTime)
@@ -286,13 +264,8 @@ public abstract class AbstractHoodieLogRecordReader {
             continue;
           }
         }
-        if (logBlock.getBlockType().equals(CORRUPT_BLOCK)) {
-          LOG.info("Found a corrupt block in " + logFile.getPath());
-          totalCorruptBlocks.incrementAndGet();
-          continue;
-        }
 
-        // Rollback blocks contain information of instants that are failed, collect them in a set..
+        // First traversal to collect data and delete blocks and rollback block's target instant times.
         switch (logBlock.getBlockType()) {
           case HFILE_DATA_BLOCK:
           case AVRO_DATA_BLOCK:
@@ -308,10 +281,15 @@ public abstract class AbstractHoodieLogRecordReader {
               totalRollbacks.incrementAndGet();
               String targetInstantForCommandBlock =
                   logBlock.getLogBlockHeader().get(TARGET_INSTANT_TIME);
+              // Rollback blocks contain information of instants that are failed, collect them in a set..
               targetRollbackInstants.add(targetInstantForCommandBlock);
             } else {
               throw new UnsupportedOperationException("Command type not yet supported.");
             }
+            break;
+          case CORRUPT_BLOCK:
+            LOG.info("Found a corrupt block in " + logFile.getPath());
+            totalCorruptBlocks.incrementAndGet();
             break;
           default:
             throw new UnsupportedOperationException("Block type not yet supported.");
@@ -319,7 +297,7 @@ public abstract class AbstractHoodieLogRecordReader {
       }
 
       int numBlocksRolledBack = 0;
-      // This is a reverse traversal on the collected data blocks.
+      // Second traversal to filter out the blocks whose block instant times are part of targetRollbackInstants set.
       for (HoodieLogBlock logBlock : dataAndDeleteBlocks) {
         String blockInstantTime = logBlock.getLogBlockHeader().get(INSTANT_TIME);
 

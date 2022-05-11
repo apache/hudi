@@ -40,13 +40,13 @@ public class HoodieCommandBlock extends HoodieLogBlock {
   }
 
   public HoodieCommandBlock(Map<HeaderMetadataType, String> header) {
-    this(Option.empty(), null, false, Option.empty(), header, new HashMap<>());
+    this(Option.empty(), null, Option.empty(), header, new HashMap<>());
   }
 
-  public HoodieCommandBlock(Option<byte[]> content, FSDataInputStream inputStream, boolean readBlockLazily,
+  public HoodieCommandBlock(Option<byte[]> content, FSDataInputStream inputStream,
                             Option<HoodieLogBlockContentLocation> blockContentLocation, Map<HeaderMetadataType, String> header,
                             Map<HeaderMetadataType, String> footer) {
-    super(header, footer, blockContentLocation, content, inputStream, readBlockLazily);
+    super(header, footer, blockContentLocation, content, inputStream);
     this.type =
         HoodieCommandBlockTypeEnum.values()[Integer.parseInt(header.get(HeaderMetadataType.COMMAND_BLOCK_TYPE))];
   }

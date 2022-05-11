@@ -70,7 +70,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
                          Map<HeaderMetadataType, String> header,
                          Map<HeaderMetadataType, String> footer,
                          String keyFieldName) {
-    super(header, footer, Option.empty(), Option.empty(), null, false);
+    super(header, footer, Option.empty(), Option.empty(), null);
     this.records = Option.of(records);
     this.keyFieldName = keyFieldName;
     // If no reader-schema has been provided assume writer-schema as one
@@ -83,14 +83,13 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
    */
   protected HoodieDataBlock(Option<byte[]> content,
                             FSDataInputStream inputStream,
-                            boolean readBlockLazily,
                             Option<HoodieLogBlockContentLocation> blockContentLocation,
                             Option<Schema> readerSchema,
                             Map<HeaderMetadataType, String> headers,
                             Map<HeaderMetadataType, String> footer,
                             String keyFieldName,
                             boolean enablePointLookups) {
-    super(headers, footer, blockContentLocation, content, inputStream, readBlockLazily);
+    super(headers, footer, blockContentLocation, content, inputStream);
     this.records = Option.empty();
     this.keyFieldName = keyFieldName;
     // If no reader-schema has been provided assume writer-schema as one
@@ -100,7 +99,6 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
 
   protected HoodieDataBlock(Option<byte[]> content,
                             FSDataInputStream inputStream,
-                            boolean readBlockLazily,
                             Option<HoodieLogBlockContentLocation> blockContentLocation,
                             Option<Schema> readerSchema,
                             Map<HeaderMetadataType, String> headers,
@@ -108,7 +106,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
                             String keyFieldName,
                             boolean enablePointLookups,
                             InternalSchema internalSchema) {
-    super(headers, footer, blockContentLocation, content, inputStream, readBlockLazily);
+    super(headers, footer, blockContentLocation, content, inputStream);
     this.records = Option.empty();
     this.keyFieldName = keyFieldName;
     // If no reader-schema has been provided assume writer-schema as one
@@ -180,7 +178,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
   }
 
   protected ClosableIterator<IndexedRecord> readRecordsFromBlockPayload() throws IOException {
-    if (readBlockLazily && !getContent().isPresent()) {
+    if (!getContent().isPresent()) {
       // read log block contents from disk
       inflate();
     }

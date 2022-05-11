@@ -74,14 +74,13 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
 
   public HoodieHFileDataBlock(FSDataInputStream inputStream,
                               Option<byte[]> content,
-                              boolean readBlockLazily,
                               HoodieLogBlockContentLocation logBlockContentLocation,
                               Option<Schema> readerSchema,
                               Map<HeaderMetadataType, String> header,
                               Map<HeaderMetadataType, String> footer,
                               boolean enablePointLookups,
                               Path pathForReader) {
-    super(content, inputStream, readBlockLazily, Option.of(logBlockContentLocation), readerSchema, header, footer, HoodieHFileReader.KEY_FIELD_NAME, enablePointLookups);
+    super(content, inputStream, Option.of(logBlockContentLocation), readerSchema, header, footer, HoodieHFileReader.KEY_FIELD_NAME, enablePointLookups);
     this.compressionAlgorithm = Option.empty();
     this.pathForReader = pathForReader;
   }
