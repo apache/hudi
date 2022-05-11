@@ -61,9 +61,9 @@ public class FileSliceHandler extends Handler {
   }
 
   public List<FileSliceDTO> getLatestFileSlicesBeforeOrOn(String basePath, String partitionPath, String maxInstantTime,
-      boolean includeFileSlicesInPendingCompaction, boolean includeFilesInPendingCompaction) {
+      boolean includeFileSlicesInPendingCompaction) {
     return viewManager.getFileSystemView(basePath)
-        .getLatestFileSlicesBeforeOrOn(partitionPath, maxInstantTime, includeFileSlicesInPendingCompaction, includeFilesInPendingCompaction)
+        .getLatestFileSlicesBeforeOrOn(partitionPath, maxInstantTime, includeFileSlicesInPendingCompaction)
         .map(FileSliceDTO::fromFileSlice).collect(Collectors.toList());
   }
 

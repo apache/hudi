@@ -364,10 +364,7 @@ public class RequestHandler {
           ctx.queryParam(RemoteHoodieTableFileSystemView.PARTITION_PARAM,""),
           ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.MAX_INSTANT_PARAM).getOrThrow(),
           Boolean.parseBoolean(
-              ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.INCLUDE_IN_PENDING_COMPACTION_PARAM)
-                  .getOrThrow()),
-          Boolean.parseBoolean(
-              ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.INCLUDE_FILES_IN_PENDING_COMPACTION_PARAM, "false")
+              ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.INCLUDE_FILES_IN_PENDING_COMPACTION_PARAM)
                   .getOrThrow()));
       writeValueAsString(ctx, dtos);
     }, true));

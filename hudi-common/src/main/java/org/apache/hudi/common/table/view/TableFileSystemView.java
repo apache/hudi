@@ -106,21 +106,15 @@ public interface TableFileSystemView {
      */
     Stream<FileSlice> getLatestUnCompactedFileSlices(String partitionPath);
 
-    default Stream<FileSlice> getLatestFileSlicesBeforeOrOn(String partitionPath, String maxCommitTime,
-        boolean includeFileSlicesInPendingCompaction) {
-      return getLatestFileSlicesBeforeOrOn(partitionPath, maxCommitTime, includeFileSlicesInPendingCompaction, false);
-    }
-
     /**
      * Stream all latest file slices in given partition with precondition that commitTime(file) before maxCommitTime.
      *
      * @param partitionPath Partition path
      * @param maxCommitTime Max Instant Time
      * @param includeFileSlicesInPendingCompaction include file-slices that are in pending compaction
-     * @param includeFilesInPendingCompaction include files that are in pending compaction
      */
     Stream<FileSlice> getLatestFileSlicesBeforeOrOn(String partitionPath, String maxCommitTime,
-        boolean includeFileSlicesInPendingCompaction, boolean includeFilesInPendingCompaction);
+        boolean includeFileSlicesInPendingCompaction);
 
     /**
      * Stream all "merged" file-slices before on an instant time If a file-group has a pending compaction request, the

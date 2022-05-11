@@ -29,7 +29,6 @@ import org.apache.hudi.common.util.Functions.Function0;
 import org.apache.hudi.common.util.Functions.Function1;
 import org.apache.hudi.common.util.Functions.Function2;
 import org.apache.hudi.common.util.Functions.Function3;
-import org.apache.hudi.common.util.Functions.Function4;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 
@@ -107,7 +106,7 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
   }
 
   private <T1, T2, T3, R> R execute(T1 val, T2 val2, T3 val3, Function3<T1, T2, T3, R> preferredFunction,
-                                    Function3<T1, T2, T3, R> secondaryFunction) {
+      Function3<T1, T2, T3, R> secondaryFunction) {
     if (errorOnPreferredView) {
       LOG.warn("Routing request to secondary file-system view");
       return secondaryFunction.apply(val, val2, val3);
@@ -118,22 +117,6 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
         handleRuntimeException(re);
         errorOnPreferredView = true;
         return secondaryFunction.apply(val, val2, val3);
-      }
-    }
-  }
-
-  private <T1, T2, T3, T4, R> R execute(T1 val, T2 val2, T3 val3, T4 val4, Function4<T1, T2, T3, T4, R> preferredFunction,
-      Function4<T1, T2, T3, T4, R> secondaryFunction) {
-    if (errorOnPreferredView) {
-      LOG.warn("Routing request to secondary file-system view");
-      return secondaryFunction.apply(val, val2, val3, val4);
-    } else {
-      try {
-        return preferredFunction.apply(val, val2, val3, val4);
-      } catch (RuntimeException re) {
-        handleRuntimeException(re);
-        errorOnPreferredView = true;
-        return secondaryFunction.apply(val, val2, val3, val4);
       }
     }
   }
@@ -195,8 +178,8 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
 
   @Override
   public Stream<FileSlice> getLatestFileSlicesBeforeOrOn(String partitionPath, String maxCommitTime,
-      boolean includeFileSlicesInPendingCompaction, boolean includeFilesInPendingCompaction) {
-    return execute(partitionPath, maxCommitTime, includeFileSlicesInPendingCompaction, includeFilesInPendingCompaction,
+      boolean includeFileSlicesInPendingCompaction) {
+    return execute(partitionPath, maxCommitTime, includeFileSlicesInPendingCompaction,
         preferredView::getLatestFileSlicesBeforeOrOn, secondaryView::getLatestFileSlicesBeforeOrOn);
   }
 

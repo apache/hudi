@@ -57,11 +57,4 @@ public interface Functions {
   interface Function3<T1, T2, T3, R> extends Serializable {
     R apply(T1 val1, T2 val2, T3 val3);
   }
-
-  /**
-   * A function which contains 4 parameters.
-   */
-  interface Function4<T1, T2, T3, T4, R> extends Serializable {
-    R apply(T1 val1, T2 val2, T3 val3, T4 val4);
-  }
 }

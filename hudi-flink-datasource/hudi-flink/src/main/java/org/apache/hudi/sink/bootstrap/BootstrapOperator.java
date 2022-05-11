@@ -198,7 +198,7 @@ public class BootstrapOperator<I, O extends HoodieRecord<?>>
       Schema schema = new TableSchemaResolver(this.hoodieTable.getMetaClient()).getTableAvroSchema();
 
       List<FileSlice> fileSlices = this.hoodieTable.getSliceView()
-          .getLatestFileSlicesBeforeOrOn(partitionPath, latestCommitTime.get().getTimestamp(), true, true)
+          .getLatestMergedFileSlicesBeforeOrOn(partitionPath, latestCommitTime.get().getTimestamp())
           .collect(toList());
 
       for (FileSlice fileSlice : fileSlices) {

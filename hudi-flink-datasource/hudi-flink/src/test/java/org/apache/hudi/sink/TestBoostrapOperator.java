@@ -33,7 +33,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.sink.transform.Transformer;
 import org.apache.hudi.sink.utils.Pipelines;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.table.format.FormatUtils;
@@ -80,12 +79,11 @@ public class TestBoostrapOperator extends TestLogger {
   @Test
   public void testLoadRecords() throws Exception {
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
-    conf.setInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS, 4);
     conf.setString(FlinkOptions.INDEX_KEY_FIELD, "id");
     conf.setInteger(FlinkOptions.COMPACTION_DELTA_COMMITS, 1);
     conf.setString(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ.name());
 
-    testWriteToHoodie(conf, Option.empty(), "mor_write_with_compact", 5);
+    testWriteToHoodie(conf);
 
     deleteLastCompactionCommit();
 
@@ -98,7 +96,7 @@ public class TestBoostrapOperator extends TestLogger {
     Schema schema = new TableSchemaResolver(hoodieTable.getMetaClient()).getTableAvroSchema();
     if (latestCommitTime.isPresent()) {
       List<FileSlice> fileSlices = hoodieTable.getSliceView()
-          .getLatestFileSlicesBeforeOrOn("par1", latestCommitTime.get().getTimestamp(), true, true)
+          .getLatestMergedFileSlicesBeforeOrOn("par1", latestCommitTime.get().getTimestamp())
           .collect(toList());
       for (FileSlice fileSlice : fileSlices) {
         fileSlice.getBaseFile().ifPresent(baseFile -> {
@@ -108,7 +106,7 @@ public class TestBoostrapOperator extends TestLogger {
           }
           try (ClosableIterator<HoodieKey> iterator = fileUtils.getHoodieKeyIterator(FlinkClientUtil.getHadoopConf(), new org.apache.hadoop.fs.Path(baseFile.getPath()))) {
             iterator.forEachRemaining(hoodieKey -> {
-              count.getAndIncrement();
+              count.incrementAndGet();
             });
           }
         });
@@ -124,7 +122,7 @@ public class TestBoostrapOperator extends TestLogger {
 
         try {
           for (String recordKey : scanner.getRecords().keySet()) {
-            count.getAndIncrement();
+            count.incrementAndGet();
           }
         } catch (Exception e) {
           throw new HoodieException(String.format("Error when loading record keys from files: %s", logPaths), e);
@@ -149,11 +147,7 @@ public class TestBoostrapOperator extends TestLogger {
     }
   }
 
-  private void testWriteToHoodie(
-      Configuration conf,
-      Option<Transformer> transformer,
-      String jobName,
-      int checkpoints) throws Exception {
+  private void testWriteToHoodie(Configuration conf) throws Exception {
 
     StreamExecutionEnvironment execEnv = StreamExecutionEnvironment.getExecutionEnvironment();
     execEnv.getConfig().disableObjectReuse();
@@ -175,21 +169,17 @@ public class TestBoostrapOperator extends TestLogger {
         TimestampFormat.ISO_8601
     );
     String sourcePath = Objects.requireNonNull(Thread.currentThread()
-        .getContextClassLoader().getResource("test_source6.data")).toString();
+        .getContextClassLoader().getResource("test_source_6.data")).toString();
 
     DataStream<RowData> dataStream;
 
     dataStream = execEnv
         // use continuous file source to trigger checkpoint
-        .addSource(new ContinuousFileSource.BoundedSourceFunction(new Path(sourcePath), checkpoints))
+        .addSource(new ContinuousFileSource.BoundedSourceFunction(new Path(sourcePath), 5))
         .name("continuous_file_source")
         .setParallelism(1)
         .map(record -> deserializationSchema.deserialize(record.getBytes(StandardCharsets.UTF_8)))
         .setParallelism(1);
-
-    if (transformer.isPresent()) {
-      dataStream = transformer.get().apply(dataStream);
-    }
 
     int parallelism = execEnv.getParallelism();
     DataStream<HoodieRecord> hoodieRecordDataStream = Pipelines.bootstrap(conf, rowType, parallelism, dataStream);
@@ -199,7 +189,7 @@ public class TestBoostrapOperator extends TestLogger {
     Pipelines.clean(conf, pipeline);
     Pipelines.compact(conf, pipeline);
 
-    JobClient client = execEnv.executeAsync(jobName);
+    JobClient client = execEnv.executeAsync("mor_write_with_compact");
     // wait for the streaming job to finish
     client.getJobExecutionResult().get();
   }
