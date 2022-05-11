@@ -489,7 +489,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   public static final ConfigProperty<String> WRITER_CLIENT_ID = ConfigProperty
         .key("hoodie.writer.client.id")
         .defaultValue("")
-        .sinceVersion("0.11.0")
+        .sinceVersion("0.12.0")
         .withDocumentation("only useful for multiple writers scenario, each writer should has a unique id");
 
   private ConsistencyGuardConfig consistencyGuardConfig;

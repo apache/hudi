@@ -95,8 +95,8 @@ public class HoodieLockConfig extends HoodieConfig {
   public static final ConfigProperty<String> LOCK_ACQUIRE_EXPIRE = ConfigProperty
           .key(LOCK_ACQUIRE_EXPIRE_PROP_KEY)
           .defaultValue(DEFAULT_LOCK_EXPIRE)
-          .sinceVersion("0.10.0")
-          .withDocumentation("Maximum number of times to retry lock acquire, at each lock provider");
+          .sinceVersion("0.12.0")
+          .withDocumentation("Timeout in seconds, for each lock, if it doesn't release for specific expire time, can remove it");
 
   public static final ConfigProperty<String> LOCK_ACQUIRE_CLIENT_NUM_RETRIES = ConfigProperty
       .key(LOCK_ACQUIRE_CLIENT_NUM_RETRIES_PROP_KEY)
