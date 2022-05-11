@@ -24,6 +24,7 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.lock.LockProvider;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -58,13 +59,17 @@ public class LockManager implements Serializable, AutoCloseable {
   }
 
   public void lock() {
+    lockWithInstant(Option.empty());
+  }
+
+  public void lockWithInstant(Option<String> timestamp) {
     if (writeConfig.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()) {
       LockProvider lockProvider = getLockProvider();
       int retryCount = 0;
       boolean acquired = false;
       while (retryCount <= maxRetries) {
         try {
-          acquired = lockProvider.tryLock(writeConfig.getLockAcquireWaitTimeoutInMs(), TimeUnit.MILLISECONDS);
+          acquired = lockProvider.tryLockWithInstant(writeConfig.getLockAcquireWaitTimeoutInMs(), TimeUnit.MILLISECONDS, timestamp);
           if (acquired) {
             break;
           }
@@ -99,7 +104,7 @@ public class LockManager implements Serializable, AutoCloseable {
     if (lockProvider == null) {
       LOG.info("LockProvider " + writeConfig.getLockProviderClass());
       lockProvider = (LockProvider) ReflectionUtils.loadClass(writeConfig.getLockProviderClass(),
-          lockConfiguration, hadoopConf.get());
+          lockConfiguration, writeConfig, hadoopConf.get());
     }
     return lockProvider;
   }

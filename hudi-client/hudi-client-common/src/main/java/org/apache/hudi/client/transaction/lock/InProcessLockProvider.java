@@ -23,7 +23,9 @@ import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.lock.LockProvider;
 import org.apache.hudi.common.lock.LockState;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieLockException;
 
 import org.apache.hadoop.conf.Configuration;
@@ -51,6 +53,10 @@ public class InProcessLockProvider implements LockProvider<ReentrantReadWriteLoc
   private final long maxWaitTimeMillis;
 
   public InProcessLockProvider(final LockConfiguration lockConfiguration, final Configuration conf) {
+    this(lockConfiguration, null, conf);
+  }
+
+  public InProcessLockProvider(final LockConfiguration lockConfiguration, final HoodieWriteConfig writeConfig, final Configuration conf) {
     TypedProperties typedProperties = lockConfiguration.getConfig();
     maxWaitTimeMillis = typedProperties.getLong(LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY,
         LockConfiguration.DEFAULT_ACQUIRE_LOCK_WAIT_TIMEOUT_MS);
@@ -90,7 +96,7 @@ public class InProcessLockProvider implements LockProvider<ReentrantReadWriteLoc
   }
 
   @Override
-  public boolean tryLockWithInstant(long time, TimeUnit unit, String timestamp) {
+  public boolean tryLockWithInstant(long time, TimeUnit unit, Option<String> timestamp) {
     return tryLock(time, unit);
   }
 

@@ -18,6 +18,8 @@
 
 package org.apache.hudi.common.lock;
 
+import org.apache.hudi.common.util.Option;
+
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
@@ -47,7 +49,11 @@ public interface LockProvider<T> extends Lock, AutoCloseable {
     throw new UnsupportedOperationException();
   }
 
-  default boolean tryLockWithInstant(long time, TimeUnit unit, String timestamp) {
+  default boolean tryLockWithInstant(long time, TimeUnit unit, Option<String> timestamp) {
+    throw new UnsupportedOperationException();
+  }
+
+  default boolean unlockWithInstant(String timestamp) {
     throw new UnsupportedOperationException();
   }
 

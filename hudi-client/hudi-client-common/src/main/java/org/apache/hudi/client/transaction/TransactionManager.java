@@ -50,7 +50,11 @@ public class TransactionManager implements Serializable {
     if (isOptimisticConcurrencyControlEnabled) {
       LOG.info("Transaction starting for " + newTxnOwnerInstant
           + " with latest completed transaction instant " + lastCompletedTxnOwnerInstant);
-      lockManager.lock();
+      if (newTxnOwnerInstant.isPresent()) {
+        lockManager.lockWithInstant(Option.of(newTxnOwnerInstant.get().getTimestamp()));
+      } else {
+        lockManager.lock();
+      }
       reset(currentTxnOwnerInstant, newTxnOwnerInstant, lastCompletedTxnOwnerInstant);
       LOG.info("Transaction started for " + newTxnOwnerInstant
           + " with latest completed transaction instant " + lastCompletedTxnOwnerInstant);

@@ -486,6 +486,12 @@ public class HoodieWriteConfig extends HoodieConfig {
       .sinceVersion("0.11.0")
       .withDocumentation("Auto adjust lock configurations when metadata table is enabled and for async table services.");
 
+  public static final ConfigProperty<String> WRITER_CLIENT_ID = ConfigProperty
+        .key("hoodie.writer.client.id")
+        .defaultValue("")
+        .sinceVersion("0.11.0")
+        .withDocumentation("only useful for multiple writers scenario, each writer should has a unique id");
+
   private ConsistencyGuardConfig consistencyGuardConfig;
   private FileSystemRetryConfig fileSystemRetryConfig;
 
@@ -2004,6 +2010,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public WriteConcurrencyMode getWriteConcurrencyMode() {
     return WriteConcurrencyMode.fromValue(getString(WRITE_CONCURRENCY_MODE));
+  }
+
+  public String getWriterClientId() {
+    return getString(WRITER_CLIENT_ID);
   }
 
   /**

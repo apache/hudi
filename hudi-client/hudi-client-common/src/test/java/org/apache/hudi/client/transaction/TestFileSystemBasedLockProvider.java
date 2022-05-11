@@ -20,7 +20,9 @@ package org.apache.hudi.client.transaction;
 
 import org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider;
 import org.apache.hudi.common.config.LockConfiguration;
+import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieLockException;
 import org.junit.jupiter.api.Assertions;
@@ -47,7 +49,7 @@ public class TestFileSystemBasedLockProvider extends HoodieCommonTestHarness {
     properties = new Properties();
     properties.setProperty(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY, "1000");
     properties.setProperty(LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY, "1000");
-    properties.setProperty(LOCK_ACQUIRE_NUM_RETRIES_PROP_KEY, "15");
+    properties.setProperty(LOCK_ACQUIRE_NUM_RETRIES_PROP_KEY, "6");
     properties.setProperty(LOCK_ACQUIRE_EXPIRE_PROP_KEY, "5");
     lockConfiguration = new LockConfiguration(properties);
     properties.setProperty("hoodie.base.path", this.metaClient.getBasePath());
@@ -58,8 +60,9 @@ public class TestFileSystemBasedLockProvider extends HoodieCommonTestHarness {
   public void testAcquireLock() {
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withProperties(properties).build();
     FileSystemBasedLockProvider fileSystemBasedLockProvider = new FileSystemBasedLockProvider(lockConfiguration, writeConfig, this.metaClient.getHadoopConf());
+    String timestamp = HoodieInstantTimeGenerator.createNewInstantTime(1);
     Assertions.assertTrue(fileSystemBasedLockProvider.tryLockWithInstant(lockConfiguration.getConfig()
-          .getLong(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY), TimeUnit.MILLISECONDS, "123"));
+          .getLong(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY), TimeUnit.MILLISECONDS, Option.of(timestamp)));
     fileSystemBasedLockProvider.unlock();
   }
 
@@ -78,6 +81,7 @@ public class TestFileSystemBasedLockProvider extends HoodieCommonTestHarness {
   public void testReentrantLock() {
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withProperties(properties).build();
     FileSystemBasedLockProvider fileSystemBasedLockProvider = new FileSystemBasedLockProvider(lockConfiguration, writeConfig, this.metaClient.getHadoopConf());
+    fileSystemBasedLockProvider.unlock();
     Assertions.assertTrue(fileSystemBasedLockProvider.tryLock(lockConfiguration.getConfig()
           .getLong(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY), TimeUnit.MILLISECONDS));
     try {
@@ -85,7 +89,7 @@ public class TestFileSystemBasedLockProvider extends HoodieCommonTestHarness {
             .getLong(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY), TimeUnit.MILLISECONDS);
       Assertions.assertFalse(lockHold);
     } catch (HoodieLockException e) {
-        // pass
+      // pass
     }
     fileSystemBasedLockProvider.unlock();
   }
@@ -93,18 +97,42 @@ public class TestFileSystemBasedLockProvider extends HoodieCommonTestHarness {
   @Test
   public void testReentrantLockWithExpire() {
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withProperties(properties).build();
+    writeConfig.setValue(writeConfig.WRITER_CLIENT_ID.key(), "1");
     FileSystemBasedLockProvider fileSystemBasedLockProvider = new FileSystemBasedLockProvider(lockConfiguration, writeConfig, this.metaClient.getHadoopConf());
-    String timestamp = String.valueOf(System.currentTimeMillis());
+    String timestamp = HoodieInstantTimeGenerator.createNewInstantTime(1);
     Assertions.assertTrue(fileSystemBasedLockProvider.tryLockWithInstant(lockConfiguration.getConfig()
-          .getLong(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY), TimeUnit.MILLISECONDS, timestamp));
+          .getLong(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY), TimeUnit.MILLISECONDS, Option.of(timestamp)));
     try {
       boolean lockHold = fileSystemBasedLockProvider.tryLockWithInstant(lockConfiguration.getConfig()
-            .getLong(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY), TimeUnit.MILLISECONDS, timestamp);
+            .getLong(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY), TimeUnit.MILLISECONDS, Option.of(timestamp));
       Assertions.assertTrue(lockHold);
     } catch (HoodieLockException e) {
-        //pass
+      //pass
     }
     fileSystemBasedLockProvider.unlock();
+  }
+
+  @Test
+  public void testReentrantLockWithDiffWriters() {
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withProperties(properties).build();
+    writeConfig.setValue(writeConfig.WRITER_CLIENT_ID.key(), "1");
+    FileSystemBasedLockProvider fileSystemBasedLockProvider1 = new FileSystemBasedLockProvider(lockConfiguration, writeConfig, this.metaClient.getHadoopConf());
+    String timestamp = HoodieInstantTimeGenerator.createNewInstantTime(1);
+    Assertions.assertTrue(fileSystemBasedLockProvider1.tryLockWithInstant(lockConfiguration.getConfig()
+          .getLong(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY), TimeUnit.MILLISECONDS, Option.of(timestamp)));
+
+    writeConfig.setValue(writeConfig.WRITER_CLIENT_ID.key(), "2");
+    lockConfiguration.getConfig().setProperty(LOCK_ACQUIRE_EXPIRE_PROP_KEY, "100");
+    FileSystemBasedLockProvider fileSystemBasedLockProvider2 = new FileSystemBasedLockProvider(lockConfiguration, writeConfig, this.metaClient.getHadoopConf());
+    try {
+      boolean lockHold = fileSystemBasedLockProvider2.tryLockWithInstant(lockConfiguration.getConfig()
+            .getLong(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY), TimeUnit.MILLISECONDS, Option.of(timestamp));
+      Assertions.assertFalse(lockHold);
+    } catch (HoodieLockException e) {
+      //pass
+    }
+    fileSystemBasedLockProvider1.unlock();
+    fileSystemBasedLockProvider2.unlock();
   }
 
   @Test

@@ -78,8 +78,8 @@ public class TestZookeeperBasedLockProvider {
   @Test
   public void testAcquireLock() {
     ZookeeperBasedLockProvider zookeeperBasedLockProvider = new ZookeeperBasedLockProvider(lockConfiguration, client);
-    Assertions.assertTrue(zookeeperBasedLockProvider.tryLockWithInstant(lockConfiguration.getConfig()
-        .getLong(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY), TimeUnit.MILLISECONDS, "123"));
+    Assertions.assertTrue(zookeeperBasedLockProvider.tryLock(lockConfiguration.getConfig()
+        .getLong(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY), TimeUnit.MILLISECONDS));
     zookeeperBasedLockProvider.unlock();
   }
 

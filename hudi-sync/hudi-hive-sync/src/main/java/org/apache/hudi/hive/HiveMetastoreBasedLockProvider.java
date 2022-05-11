@@ -31,8 +31,10 @@ import org.apache.hadoop.hive.metastore.api.LockType;
 import org.apache.hadoop.hive.metastore.api.MetaException;
 import org.apache.hadoop.hive.ql.metadata.Hive;
 import org.apache.hadoop.hive.ql.metadata.HiveException;
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.lock.LockProvider;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieLockException;
@@ -81,6 +83,10 @@ public class HiveMetastoreBasedLockProvider implements LockProvider<LockResponse
   ExecutorService executor = Executors.newSingleThreadExecutor();
 
   public HiveMetastoreBasedLockProvider(final LockConfiguration lockConfiguration, final Configuration conf) {
+    this(lockConfiguration, null, conf);
+  }
+
+  public HiveMetastoreBasedLockProvider(final LockConfiguration lockConfiguration, final HoodieConfig writeConfig, final Configuration conf) {
     this(lockConfiguration);
     try {
       HiveConf hiveConf = new HiveConf();
@@ -117,7 +123,7 @@ public class HiveMetastoreBasedLockProvider implements LockProvider<LockResponse
   }
 
   @Override
-  public boolean tryLockWithInstant(long time, TimeUnit unit, String timestamp) {
+  public boolean tryLockWithInstant(long time, TimeUnit unit, Option<String> timestamp) {
     return tryLock(time, unit);
   }
 

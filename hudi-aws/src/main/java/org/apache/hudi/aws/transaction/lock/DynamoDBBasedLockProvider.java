@@ -37,9 +37,11 @@ import com.amazonaws.services.dynamodbv2.model.ScalarAttributeType;
 import com.amazonaws.services.dynamodbv2.util.TableUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.aws.credentials.HoodieAWSCredentialsProviderFactory;
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.lock.LockProvider;
 import org.apache.hudi.common.lock.LockState;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.DynamoDbBasedLockConfig;
@@ -74,6 +76,10 @@ public class DynamoDBBasedLockProvider implements LockProvider<LockItem> {
   private volatile LockItem lock;
 
   public DynamoDBBasedLockProvider(final LockConfiguration lockConfiguration, final Configuration conf) {
+    this(lockConfiguration, null, conf);
+  }
+
+  public DynamoDBBasedLockProvider(final LockConfiguration lockConfiguration, final HoodieConfig writeConfig, final Configuration conf) {
     this(lockConfiguration, conf, null);
   }
 
@@ -118,7 +124,7 @@ public class DynamoDBBasedLockProvider implements LockProvider<LockItem> {
   }
 
   @Override
-  public boolean tryLockWithInstant(long time, TimeUnit unit, String timestamp) {
+  public boolean tryLockWithInstant(long time, TimeUnit unit, Option<String> timestamp) {
     return tryLock(time, unit);
   }
 
