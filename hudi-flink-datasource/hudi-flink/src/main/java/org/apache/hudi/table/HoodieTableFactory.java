@@ -67,7 +67,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
 
   @Override
   public DynamicTableSource createDynamicTableSource(Context context) {
-    Configuration conf = Configuration.fromMap(context.getCatalogTable().getOptions());
+    Configuration conf = FlinkOptions.fromMap(context.getCatalogTable().getOptions());
     ResolvedSchema schema = context.getCatalogTable().getResolvedSchema();
     sanityCheck(conf, schema);
     setupConfOptions(conf, context.getObjectIdentifier().getObjectName(), context.getCatalogTable(), schema);
@@ -84,7 +84,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
 
   @Override
   public DynamicTableSink createDynamicTableSink(Context context) {
-    Configuration conf = Configuration.fromMap(context.getCatalogTable().getOptions());
+    Configuration conf = FlinkOptions.fromMap(context.getCatalogTable().getOptions());
     checkArgument(!StringUtils.isNullOrEmpty(conf.getString(FlinkOptions.PATH)),
         "Option [path] should not be empty.");
     ResolvedSchema schema = context.getCatalogTable().getResolvedSchema();

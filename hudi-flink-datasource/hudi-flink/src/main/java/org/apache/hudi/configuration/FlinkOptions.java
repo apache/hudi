@@ -760,7 +760,7 @@ public class FlinkOptions extends HoodieConfig {
           : key;
       propsMap.put(subKey, value);
     });
-    return Configuration.fromMap(propsMap);
+    return fromMap(propsMap);
   }
 
   private static boolean hasPropertyOptions(Map<String, String> options, String prefix) {
