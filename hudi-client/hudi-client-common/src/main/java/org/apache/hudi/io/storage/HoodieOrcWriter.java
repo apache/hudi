@@ -97,7 +97,7 @@ public class HoodieOrcWriter<T extends HoodieRecordPayload, R extends IndexedRec
   @Override
   public void writeAvroWithMetadata(HoodieKey key, R avroRecord) throws IOException {
     prepRecordWithMetadata(key, avroRecord, instantTime,
-        taskContextSupplier.getPartitionIdSupplier().get(), RECORD_INDEX, file.getName());
+        taskContextSupplier.getPartitionIdSupplier().get(), RECORD_INDEX.getAndIncrement(), file.getName());
     writeAvro(key.getRecordKey(), avroRecord);
   }
 

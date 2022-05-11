@@ -18,22 +18,15 @@
 
 package org.apache.hudi.io.storage;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
 import org.apache.hudi.common.engine.TaskContextSupplier;
-import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.parquet.hadoop.ParquetFileWriter;
-import org.apache.parquet.hadoop.ParquetWriter;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
 import java.io.IOException;
-import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * HoodieParquetWriter extends the ParquetWriter to help limit the size of underlying file. Provides a way to check if
@@ -42,45 +35,24 @@ import java.util.concurrent.atomic.AtomicLong;
  * ATTENTION: HoodieParquetWriter is not thread safe and developer should take care of the order of write and close
  */
 @NotThreadSafe
-public class HoodieParquetWriter<T extends HoodieRecordPayload, R extends IndexedRecord>
-    extends ParquetWriter<IndexedRecord> implements HoodieFileWriter<R> {
+public class HoodieAvroParquetWriter<R extends IndexedRecord>
+    extends HoodieBaseParquetWriter<IndexedRecord>
+    implements HoodieFileWriter<R> {
 
-  private static AtomicLong recordIndex = new AtomicLong(1);
-
-  private final Path file;
-  private final HoodieWrapperFileSystem fs;
-  private final long maxFileSize;
-  private final HoodieAvroWriteSupport writeSupport;
+  private final String fileName;
   private final String instantTime;
   private final TaskContextSupplier taskContextSupplier;
   private final boolean populateMetaFields;
+  private final HoodieAvroWriteSupport writeSupport;
 
-  public HoodieParquetWriter(String instantTime,
-                             Path file,
-                             HoodieAvroParquetConfig parquetConfig,
-                             Schema schema,
-                             TaskContextSupplier taskContextSupplier,
-                             boolean populateMetaFields) throws IOException {
-    super(HoodieWrapperFileSystem.convertToHoodiePath(file, parquetConfig.getHadoopConf()),
-        ParquetFileWriter.Mode.CREATE,
-        parquetConfig.getWriteSupport(),
-        parquetConfig.getCompressionCodecName(),
-        parquetConfig.getBlockSize(),
-        parquetConfig.getPageSize(),
-        parquetConfig.getPageSize(),
-        parquetConfig.dictionaryEnabled(),
-        DEFAULT_IS_VALIDATING_ENABLED,
-        DEFAULT_WRITER_VERSION,
-        FSUtils.registerFileSystem(file, parquetConfig.getHadoopConf()));
-    this.file = HoodieWrapperFileSystem.convertToHoodiePath(file, parquetConfig.getHadoopConf());
-    this.fs =
-        (HoodieWrapperFileSystem) this.file.getFileSystem(FSUtils.registerFileSystem(file, parquetConfig.getHadoopConf()));
-    // We cannot accurately measure the snappy compressed output file size. We are choosing a
-    // conservative 10%
-    // TODO - compute this compression ratio dynamically by looking at the bytes written to the
-    // stream and the actual file size reported by HDFS
-    this.maxFileSize = parquetConfig.getMaxFileSize()
-        + Math.round(parquetConfig.getMaxFileSize() * parquetConfig.getCompressionRatio());
+  @SuppressWarnings({"unchecked", "rawtypes"})
+  public HoodieAvroParquetWriter(Path file,
+                                 HoodieAvroParquetConfig parquetConfig,
+                                 String instantTime,
+                                 TaskContextSupplier taskContextSupplier,
+                                 boolean populateMetaFields) throws IOException {
+    super(file, (HoodieBaseParquetConfig) parquetConfig);
+    this.fileName = file.getName();
     this.writeSupport = parquetConfig.getWriteSupport();
     this.instantTime = instantTime;
     this.taskContextSupplier = taskContextSupplier;
@@ -91,17 +63,12 @@ public class HoodieParquetWriter<T extends HoodieRecordPayload, R extends Indexe
   public void writeAvroWithMetadata(HoodieKey key, R avroRecord) throws IOException {
     if (populateMetaFields) {
       prepRecordWithMetadata(key, avroRecord, instantTime,
-          taskContextSupplier.getPartitionIdSupplier().get(), recordIndex, file.getName());
+          taskContextSupplier.getPartitionIdSupplier().get(), getWrittenRecordCount(), fileName);
       super.write(avroRecord);
       writeSupport.add(key.getRecordKey());
     } else {
       super.write(avroRecord);
     }
-  }
-
-  @Override
-  public boolean canWrite() {
-    return getDataSize() < maxFileSize;
   }
 
   @Override
