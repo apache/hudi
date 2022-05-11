@@ -160,15 +160,6 @@ stages:
               publishJUnitResults: false
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
-          - task: Maven@3
-            displayName: UT integ-test
-            inputs:
-              mavenPomFile: 'pom.xml'
-              goals: 'test'
-              options: -P$(SPARK_PROFILE),integration-tests -DskipUTs=false -DskipITs=true -pl hudi-integ-test test
-              publishJUnitResults: false
-              jdkVersionOption: '1.8'
-              mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
           - task: AzureCLI@2
             displayName: Prepare for IT
             inputs:
