@@ -58,6 +58,7 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.source.InputFormatSourceFunction;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperatorFactory;
 import org.apache.flink.table.api.DataTypes;
+import org.apache.flink.table.catalog.ObjectIdentifier;
 import org.apache.flink.table.catalog.ResolvedSchema;
 import org.apache.flink.table.connector.ChangelogMode;
 import org.apache.flink.table.connector.source.DataStreamScanProvider;
@@ -124,13 +125,16 @@ public class HoodieTableSource implements
 
   private List<Map<String, String>> requiredPartitions;
 
+  private final ObjectIdentifier objectIdentifier;
+
   public HoodieTableSource(
       ResolvedSchema schema,
       Path path,
       List<String> partitionKeys,
       String defaultPartName,
-      Configuration conf) {
-    this(schema, path, partitionKeys, defaultPartName, conf, null, null, null, null);
+      Configuration conf,
+      ObjectIdentifier objectIdentifier) {
+    this(schema, path, partitionKeys, defaultPartName, conf, null, null, null, null, objectIdentifier);
   }
 
   public HoodieTableSource(
@@ -142,7 +146,8 @@ public class HoodieTableSource implements
       @Nullable List<Map<String, String>> requiredPartitions,
       @Nullable int[] requiredPos,
       @Nullable Long limit,
-      @Nullable List<Expression> filters) {
+      @Nullable List<Expression> filters,
+      @Nullable ObjectIdentifier objectIdentifier) {
     this.schema = schema;
     this.path = path;
     this.partitionKeys = partitionKeys;
@@ -158,6 +163,7 @@ public class HoodieTableSource implements
     this.hadoopConf = StreamerUtil.getHadoopConf();
     this.metaClient = StreamerUtil.metaClientForReader(conf, hadoopConf);
     this.maxCompactionMemoryInBytes = StreamerUtil.getMaxCompactionMemoryInBytes(conf);
+    this.objectIdentifier = objectIdentifier;
   }
 
   @Override
@@ -179,16 +185,16 @@ public class HoodieTableSource implements
               conf, FilePathUtils.toFlinkPath(path), maxCompactionMemoryInBytes, getRequiredPartitionPaths());
           InputFormat<RowData, ?> inputFormat = getInputFormat(true);
           OneInputStreamOperatorFactory<MergeOnReadInputSplit, RowData> factory = StreamReadOperator.factory((MergeOnReadInputFormat) inputFormat);
-          SingleOutputStreamOperator<RowData> source = execEnv.addSource(monitoringFunction, getSourceOperatorName("split_monitor"))
+          SingleOutputStreamOperator<RowData> source = execEnv.addSource(monitoringFunction, getSourceOperatorName(objectIdentifier + "_split_monitor"))
               .setParallelism(1)
               .keyBy(inputSplit -> inputSplit.getFileId())
-              .transform("split_reader", typeInfo, factory)
+              .transform(objectIdentifier + "_split_reader", typeInfo, factory)
               .setParallelism(conf.getInteger(FlinkOptions.READ_TASKS));
           return new DataStreamSource<>(source);
         } else {
           InputFormatSourceFunction<RowData> func = new InputFormatSourceFunction<>(getInputFormat(), typeInfo);
           DataStreamSource<RowData> source = execEnv.addSource(func, asSummaryString(), typeInfo);
-          return source.name(getSourceOperatorName("bounded_source")).setParallelism(conf.getInteger(FlinkOptions.READ_TASKS));
+          return source.name(getSourceOperatorName(objectIdentifier + "_bounded_source")).setParallelism(conf.getInteger(FlinkOptions.READ_TASKS));
         }
       }
     };
@@ -204,7 +210,7 @@ public class HoodieTableSource implements
   @Override
   public DynamicTableSource copy() {
     return new HoodieTableSource(schema, path, partitionKeys, defaultPartName,
-        conf, requiredPartitions, requiredPos, limit, filters);
+        conf, requiredPartitions, requiredPos, limit, filters, objectIdentifier);
   }
 
   @Override

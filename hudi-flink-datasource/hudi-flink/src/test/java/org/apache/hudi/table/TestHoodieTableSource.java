@@ -27,6 +27,7 @@ import org.apache.avro.Schema;
 import org.apache.flink.api.common.io.FileInputFormat;
 import org.apache.flink.api.common.io.InputFormat;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.table.catalog.ObjectIdentifier;
 import org.apache.flink.table.data.RowData;
 import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.Test;
@@ -56,6 +57,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 public class TestHoodieTableSource {
   private static final Logger LOG = LoggerFactory.getLogger(TestHoodieTableSource.class);
 
+  private static ObjectIdentifier objectIdentifier =  ObjectIdentifier.of("default_catalog", "default_database", "t1");
   private Configuration conf;
 
   @TempDir
@@ -75,7 +77,8 @@ public class TestHoodieTableSource {
         new Path(tempFile.getPath()),
         Arrays.asList(conf.getString(FlinkOptions.PARTITION_PATH_FIELD).split(",")),
         "default-par",
-        conf);
+        conf,
+        objectIdentifier);
     Path[] paths = tableSource.getReadPaths();
     assertNotNull(paths);
     String[] names = Arrays.stream(paths).map(Path::getName)
@@ -105,7 +108,8 @@ public class TestHoodieTableSource {
         new Path(tempFile.getPath()),
         Arrays.asList(conf.getString(FlinkOptions.PARTITION_PATH_FIELD).split(",")),
         "default-par",
-        conf);
+        conf,
+        objectIdentifier);
     InputFormat<RowData, ?> inputFormat = tableSource.getInputFormat();
     assertThat(inputFormat, is(instanceOf(FileInputFormat.class)));
     conf.setString(FlinkOptions.TABLE_TYPE, FlinkOptions.TABLE_TYPE_MERGE_ON_READ);
@@ -128,7 +132,8 @@ public class TestHoodieTableSource {
         new Path(tempFile.getPath()),
         Arrays.asList(conf.getString(FlinkOptions.PARTITION_PATH_FIELD).split(",")),
         "default-par",
-        conf);
+        conf,
+        objectIdentifier);
     assertNull(tableSource.getMetaClient(), "Streaming source with empty table path is allowed");
     final String schemaFields = tableSource.getTableAvroSchema().getFields().stream()
         .map(Schema.Field::name)

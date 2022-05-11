@@ -33,6 +33,7 @@ import org.apache.hudi.utils.TestData;
 import org.apache.flink.api.common.io.InputFormat;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.io.InputSplit;
+import org.apache.flink.table.catalog.ObjectIdentifier;
 import org.apache.flink.table.data.RowData;
 import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.Test;
@@ -499,7 +500,8 @@ public class TestInputFormat {
         new Path(tempFile.getAbsolutePath()),
         Collections.singletonList("partition"),
         "default",
-        conf);
+        conf,
+        ObjectIdentifier.of("default_catalog", "default_database", "t1"));
   }
 
   @SuppressWarnings("unchecked, rawtypes")
