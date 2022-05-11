@@ -42,7 +42,7 @@ public class HoodieDefaultLayout extends HoodieStorageLayout {
   }
 
   @Override
-  public boolean doesNotSupport(WriteOperationType operationType) {
-    return false;
+  public boolean writeOperationSupported(WriteOperationType operationType) {
+    return true;
   }
 }

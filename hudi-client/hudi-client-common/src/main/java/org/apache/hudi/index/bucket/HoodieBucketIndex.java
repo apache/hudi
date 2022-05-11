@@ -80,8 +80,8 @@ public abstract class HoodieBucketIndex extends HoodieIndex<Object, Object> {
           protected HoodieRecord<R> computeNext() {
             // TODO maybe batch the operation to improve performance
             HoodieRecord record = inputItr.next();
-            HoodieRecordLocation loc = mapper.getRecordLocation(record.getKey(), record.getPartitionPath());
-            return HoodieIndexUtils.getTaggedRecord(record, Option.ofNullable(loc));
+            Option<HoodieRecordLocation> loc = mapper.getRecordLocation(record.getKey(), record.getPartitionPath());
+            return HoodieIndexUtils.getTaggedRecord(record, loc);
           }
         }
     );

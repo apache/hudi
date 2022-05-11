@@ -29,6 +29,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -62,7 +63,10 @@ public class HoodieSparkConsistentBucketIndex extends HoodieBucketIndex {
   }
 
   @Override
-  public HoodieData<WriteStatus> updateLocation(HoodieData<WriteStatus> writeStatuses, HoodieEngineContext context, HoodieTable hoodieTable) throws HoodieIndexException {
+  public HoodieData<WriteStatus> updateLocation(HoodieData<WriteStatus> writeStatuses,
+                                                HoodieEngineContext context,
+                                                HoodieTable hoodieTable)
+      throws HoodieIndexException {
     return writeStatuses;
   }
 
@@ -144,7 +148,7 @@ public class HoodieSparkConsistentBucketIndex extends HoodieBucketIndex {
       byte[] content = FileIOUtils.readAsByteArray(table.getMetaClient().getFs().open(metaFile.getPath()));
       return HoodieConsistentHashingMetadata.fromBytes(content);
     } catch (IOException e) {
-      LOG.warn("Error when loading hashing metadata, partition: " + partition, e);
+      LOG.error("Error when loading hashing metadata, partition: " + partition, e);
       throw new HoodieIndexException("Error while loading hashing metadata", e);
     }
   }
@@ -188,14 +192,14 @@ public class HoodieSparkConsistentBucketIndex extends HoodieBucketIndex {
     }
 
     @Override
-    public HoodieRecordLocation getRecordLocation(HoodieKey key, String partitionPath) {
+    public Option<HoodieRecordLocation> getRecordLocation(HoodieKey key, String partitionPath) {
       ConsistentHashingNode node = partitionToIdentifier.get(partitionPath).getBucket(key, indexKeyFields);
       if (!StringUtils.isNullOrEmpty(node.getFileIdPrefix())) {
         /**
          * Dynamic Bucket Index doesn't need the instant time of the latest file group.
          * We add suffix 0 here to the file uuid, following the naming convention, i.e., fileId = [uuid]_[numWrites]
          */
-        return new HoodieRecordLocation(null, FSUtils.createNewFileId(node.getFileIdPrefix(), 0));
+        return Option.of(new HoodieRecordLocation(null, FSUtils.createNewFileId(node.getFileIdPrefix(), 0)));
       }
 
       LOG.error("Consistent hashing node has no file group, partition: " + partitionPath + ", meta: "

@@ -61,8 +61,8 @@ public class HoodieConsistentBucketLayout extends HoodieStorageLayout {
   }
 
   @Override
-  public boolean doesNotSupport(WriteOperationType operationType) {
-    return !SUPPORTED_OPERATIONS.contains(operationType);
+  public boolean writeOperationSupported(WriteOperationType operationType) {
+    return SUPPORTED_OPERATIONS.contains(operationType);
   }
 
 }

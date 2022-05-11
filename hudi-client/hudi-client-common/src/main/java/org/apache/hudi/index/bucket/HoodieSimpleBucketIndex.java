@@ -20,6 +20,7 @@ package org.apache.hudi.index.bucket;
 
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecordLocation;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.HoodieIndexUtils;
@@ -89,10 +90,10 @@ public class HoodieSimpleBucketIndex extends HoodieBucketIndex {
     }
 
     @Override
-    public HoodieRecordLocation getRecordLocation(HoodieKey key, String partitionPath) {
+    public Option<HoodieRecordLocation> getRecordLocation(HoodieKey key, String partitionPath) {
       int bucketId = BucketIdentifier.getBucketId(key, indexKeyFields, numBuckets);
       Map<Integer, HoodieRecordLocation> bucketIdToFileIdMapping = partitionPathFileIDList.get(partitionPath);
-      return bucketIdToFileIdMapping.getOrDefault(bucketId, null);
+      return Option.ofNullable(bucketIdToFileIdMapping.getOrDefault(bucketId, null));
     }
   }
 }

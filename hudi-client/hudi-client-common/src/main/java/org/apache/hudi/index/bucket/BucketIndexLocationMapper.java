@@ -21,6 +21,7 @@ package org.apache.hudi.index.bucket;
 
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecordLocation;
+import org.apache.hudi.common.util.Option;
 
 import java.io.Serializable;
 
@@ -29,6 +30,6 @@ public interface BucketIndexLocationMapper extends Serializable {
   /**
    * Get record location given hoodie key and partition path
    */
-  HoodieRecordLocation getRecordLocation(HoodieKey key, String partitionPath);
+  Option<HoodieRecordLocation> getRecordLocation(HoodieKey key, String partitionPath);
 
 }
