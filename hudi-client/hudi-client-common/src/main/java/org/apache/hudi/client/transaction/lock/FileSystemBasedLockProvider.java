@@ -47,6 +47,10 @@ import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_EXPIR
 import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_NUM_RETRIES_PROP_KEY;
 import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY;
 
+/**
+ * A fileSystem based lock. This {@link LockProvider} implementation allows locking table operations
+ * using FileSystem.  and if you set writer.client.id in {@link HoodieWriteConfig}, this lock will also allow to reentrant Lock
+ */
 public class FileSystemBasedLockProvider implements LockProvider<String>, Serializable {
 
   private static final Logger LOG = LogManager.getLogger(FileSystemBasedLockProvider.class);
@@ -152,14 +156,18 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
   private void acquireLock(String timestamp) {
     try {
       Date date = HoodieInstantTimeGenerator.parseDateFromInstantTime(timestamp);
-      FSDataOutputStream stream = fs.create(this.lockFile, false);
-      stream.writeLong(date.getTime());
-      stream.writeLong(System.currentTimeMillis());
-      stream.writeBytes(clientId);
-      stream.close();
+      writeDataToFile(date);
     } catch (IOException | ParseException e) {
       throw new HoodieException("Failed to acquire lock: " + getLock(), e);
     }
+  }
+
+  private void writeDataToFile(Date date) throws IOException {
+    FSDataOutputStream stream = fs.create(this.lockFile, false);
+    stream.writeLong(date.getTime());
+    stream.writeLong(System.currentTimeMillis());
+    stream.writeBytes(clientId);
+    stream.close();
   }
 
   private boolean isLockExpireOrBelongsToMe() {
