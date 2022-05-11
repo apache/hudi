@@ -112,8 +112,8 @@ public class UtilHelpers {
   private static final Logger LOG = LogManager.getLogger(UtilHelpers.class);
 
   public static Source createSource(String sourceClass, TypedProperties cfg, JavaSparkContext jssc,
-      SparkSession sparkSession, SchemaProvider schemaProvider,
-      HoodieDeltaStreamerMetrics metrics) throws IOException {
+                                    SparkSession sparkSession, SchemaProvider schemaProvider,
+                                    HoodieDeltaStreamerMetrics metrics) throws IOException {
     try {
       try {
         return (Source) ReflectionUtils.loadClass(sourceClass,
@@ -192,7 +192,7 @@ public class UtilHelpers {
   public static InitialCheckPointProvider createInitialCheckpointProvider(
       String className, TypedProperties props) throws IOException {
     try {
-      return (InitialCheckPointProvider) ReflectionUtils.loadClass(className, new Class<?>[]{TypedProperties.class}, props);
+      return (InitialCheckPointProvider) ReflectionUtils.loadClass(className, new Class<?>[] {TypedProperties.class}, props);
     } catch (Throwable e) {
       throw new IOException("Could not load initial checkpoint provider class " + className, e);
     }
@@ -243,7 +243,7 @@ public class UtilHelpers {
   /**
    * Parse Schema from file.
    *
-   * @param fs File System
+   * @param fs         File System
    * @param schemaFile Schema File
    */
   public static String parseSchema(FileSystem fs, String schemaFile) throws Exception {
@@ -299,7 +299,6 @@ public class UtilHelpers {
     return SparkRDDWriteClient.registerClasses(sparkConf);
   }
 
-  
   public static JavaSparkContext buildSparkContext(String appName, String defaultMaster, Map<String, String> configs) {
     return new JavaSparkContext(buildSparkConf(appName, defaultMaster, configs));
   }
@@ -307,7 +306,7 @@ public class UtilHelpers {
   public static JavaSparkContext buildSparkContext(String appName, Map<String, String> configs) {
     return new JavaSparkContext(buildSparkConf(appName, configs));
   }
-  
+
   public static JavaSparkContext buildSparkContext(String appName, String defaultMaster) {
     return new JavaSparkContext(buildSparkConf(appName, defaultMaster));
   }
@@ -326,13 +325,13 @@ public class UtilHelpers {
   /**
    * Build Hoodie write client.
    *
-   * @param jsc Java Spark Context
-   * @param basePath Base Path
-   * @param schemaStr Schema
+   * @param jsc         Java Spark Context
+   * @param basePath    Base Path
+   * @param schemaStr   Schema
    * @param parallelism Parallelism
    */
   public static SparkRDDWriteClient<HoodieRecordPayload> createHoodieClient(JavaSparkContext jsc, String basePath, String schemaStr,
-      int parallelism, Option<String> compactionStrategyClass, TypedProperties properties) {
+                                                                            int parallelism, Option<String> compactionStrategyClass, TypedProperties properties) {
     HoodieCompactionConfig compactionConfig = compactionStrategyClass
         .map(strategy -> HoodieCompactionConfig.newBuilder().withInlineCompaction(false)
             .withCompactionStrategy(ReflectionUtils.loadClass(strategy)).build())
@@ -501,13 +500,13 @@ public class UtilHelpers {
    * Create latest schema provider for Target schema.
    *
    * @param structType spark data type of incoming batch.
-   * @param jssc instance of {@link JavaSparkContext}.
-   * @param fs instance of {@link FileSystem}.
-   * @param basePath base path of the table.
+   * @param jssc       instance of {@link JavaSparkContext}.
+   * @param fs         instance of {@link FileSystem}.
+   * @param basePath   base path of the table.
    * @return the schema provider where target schema refers to latest schema(either incoming schema or table schema).
    */
   public static SchemaProvider createLatestSchemaProvider(StructType structType,
-      JavaSparkContext jssc, FileSystem fs, String basePath) {
+                                                          JavaSparkContext jssc, FileSystem fs, String basePath) {
     SchemaProvider rowSchemaProvider = new RowBasedSchemaProvider(structType);
     Schema writeSchema = rowSchemaProvider.getTargetSchema();
     Schema latestTableSchema = writeSchema;
