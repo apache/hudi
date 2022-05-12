@@ -75,6 +75,7 @@
                   <include>org.apache.hudi:hudi-hive-sync</include>
                   <include>org.apache.hudi:hudi-integ-test</include>
                   <include>org.apache.hudi:hudi-sync-common</include>
+                  <include>com.beust:jcommander</include>
                   <!--
 
                   <include>org.apache.hbase:hbase-common</include>
@@ -567,6 +568,10 @@
       <groupId>org.slf4j</groupId>
       <artifactId>slf4j-api</artifactId>
       <version>${slf4j.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>com.beust</groupId>
+      <artifactId>jcommander</artifactId>
     </dependency>
 
     <!--<dependency>
