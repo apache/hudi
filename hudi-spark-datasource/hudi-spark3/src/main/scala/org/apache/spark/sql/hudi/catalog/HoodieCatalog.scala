@@ -89,19 +89,21 @@ class HoodieCatalog extends DelegatingCatalogExtension
   }
 
   override def loadTable(ident: Identifier): Table = {
-    try {
-      super.loadTable(ident) match {
-        case v1: V1Table if sparkAdapter.isHoodieTable(v1.catalogTable) =>
-          HoodieInternalV2Table(
-            spark,
-            v1.catalogTable.location.toString,
-            catalogTable = Some(v1.catalogTable),
-            tableIdentifier = Some(ident.toString))
-        case o => o
-      }
-    } catch {
-      case e: Exception =>
-        throw e
+    super.loadTable(ident) match {
+      case V1Table(catalogTable0) if sparkAdapter.isHoodieTable(catalogTable0) =>
+        val catalogTable = catalogTable0.comment match {
+          case Some(v) =>
+            val newProps = catalogTable0.properties + (TableCatalog.PROP_COMMENT -> v)
+            catalogTable0.copy(properties = newProps)
+          case _ =>
+            catalogTable0
+        }
+        HoodieInternalV2Table(
+          spark = spark,
+          path = catalogTable.location.toString,
+          catalogTable = Some(catalogTable),
+          tableIdentifier = Some(ident.toString))
+      case o => o
     }
   }
 
@@ -139,7 +141,7 @@ class HoodieCatalog extends DelegatingCatalogExtension
   override def renameTable(oldIdent: Identifier, newIdent: Identifier): Unit = {
     loadTable(oldIdent) match {
       case _: HoodieInternalV2Table =>
-        new AlterHoodieTableRenameCommand(oldIdent.asTableIdentifier, newIdent.asTableIdentifier, false).run(spark)
+        AlterHoodieTableRenameCommand(oldIdent.asTableIdentifier, newIdent.asTableIdentifier, false).run(spark)
       case _ => super.renameTable(oldIdent, newIdent)
     }
   }

@@ -113,7 +113,7 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
   public void writeAvroWithMetadata(HoodieKey key, R avroRecord) throws IOException {
     if (populateMetaFields) {
       prepRecordWithMetadata(key, avroRecord, instantTime,
-          taskContextSupplier.getPartitionIdSupplier().get(), recordIndex, file.getName());
+          taskContextSupplier.getPartitionIdSupplier().get(), recordIndex.getAndIncrement(), file.getName());
       writeAvro(key.getRecordKey(), avroRecord);
     } else {
       writeAvro(key.getRecordKey(), avroRecord);
