@@ -21,6 +21,7 @@ package org.apache.hudi.table;
 import org.apache.hudi.adapter.TestTableEnvs;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.util.StreamerUtil;
@@ -1091,6 +1092,20 @@ public class ITTestHoodieDataSource extends AbstractTestBase {
     List<Row> result1 = CollectionUtil.iterableToList(
         () -> tableEnv.sqlQuery("select * from decimals").execute().collect());
     assertRowsEquals(result1, "[+I[1.23, 12345678.12, 12345.12, 123456789.123450000000000000]]");
+  }
+
+  @Test
+  void testWriteReadOrc() {
+    TableEnvironment tableEnv = batchTableEnv;
+    String createTable = sql("t1")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(HoodieTableConfig.BASE_FILE_FORMAT.key(), "ORC")
+        .end();
+    tableEnv.executeSql(createTable);
+
+    execInsertSql(tableEnv, TestSQL.INSERT_T1);
+
+    // Read is not supported yet.
   }
 
   @ParameterizedTest

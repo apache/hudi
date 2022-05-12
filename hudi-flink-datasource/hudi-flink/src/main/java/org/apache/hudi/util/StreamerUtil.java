@@ -270,6 +270,7 @@ public class StreamerUtil {
           .setHiveStylePartitioningEnable(conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING))
           .setUrlEncodePartitioning(conf.getBoolean(FlinkOptions.URL_ENCODE_PARTITIONING))
           .setTimelineLayoutVersion(1)
+          .setBaseFileFormat(conf.getString(FlinkOptions.BASE_FILE_FORMAT))
           .initTable(hadoopConf, basePath);
       LOG.info("Table initialized under base path {}", basePath);
       return metaClient;

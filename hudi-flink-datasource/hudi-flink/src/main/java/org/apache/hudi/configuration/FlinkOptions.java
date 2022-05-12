@@ -24,6 +24,7 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -89,6 +90,12 @@ public class FlinkOptions extends HoodieConfig {
           + "2). The source try to emit every changes of a record.\n"
           + "The semantics is best effort because the compaction job would finally merge all changes of a record into one.\n"
           + " default false to have UPSERT semantics");
+
+  public static final ConfigOption<String> BASE_FILE_FORMAT = ConfigOptions
+      .key("base_file.format")
+      .stringType()
+      .defaultValue(HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().toString())
+      .withDescription("Base file format to store all the base file data.");
 
   // ------------------------------------------------------------------------
   //  Metadata table Options

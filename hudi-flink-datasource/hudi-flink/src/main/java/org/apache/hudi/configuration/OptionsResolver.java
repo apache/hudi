@@ -115,4 +115,14 @@ public class OptionsResolver {
     return conf.getBoolean(FlinkOptions.READ_AS_STREAMING)
         && conf.getBoolean(FlinkOptions.CHANGELOG_ENABLED);
   }
+
+  /**
+   * Returns the base file format.
+   */
+  public static String getHiveSyncBaseFileFormat(Configuration conf) {
+    if (conf.contains(FlinkOptions.HIVE_SYNC_FILE_FORMAT)) {
+      return conf.getString(FlinkOptions.HIVE_SYNC_FILE_FORMAT);
+    }
+    return conf.getString(FlinkOptions.BASE_FILE_FORMAT);
+  }
 }

@@ -22,6 +22,7 @@ import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.hudi.aws.sync.AwsGlueCatalogSyncTool;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.hive.ddl.HiveSyncMode;
@@ -75,7 +76,7 @@ public class HiveSyncContext {
   public static HiveSyncConfig buildSyncConfig(Configuration conf) {
     HiveSyncConfig hiveSyncConfig = new HiveSyncConfig();
     hiveSyncConfig.basePath = conf.getString(FlinkOptions.PATH);
-    hiveSyncConfig.baseFileFormat = conf.getString(FlinkOptions.HIVE_SYNC_FILE_FORMAT);
+    hiveSyncConfig.baseFileFormat = OptionsResolver.getHiveSyncBaseFileFormat(conf);
     hiveSyncConfig.usePreApacheInputFormat = false;
     hiveSyncConfig.databaseName = conf.getString(FlinkOptions.HIVE_SYNC_DB);
     hiveSyncConfig.tableName = conf.getString(FlinkOptions.HIVE_SYNC_TABLE);
