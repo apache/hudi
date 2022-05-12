@@ -24,6 +24,7 @@ import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.common.engine.EngineProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.util.CustomizedThreadFactory;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 
@@ -42,13 +43,12 @@ import java.util.stream.IntStream;
  */
 public abstract class AsyncClusteringService extends HoodieAsyncTableService {
 
+  public static final String CLUSTERING_POOL_NAME = "hoodiecluster";
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LogManager.getLogger(AsyncClusteringService.class);
-  public static final String CLUSTERING_POOL_NAME = "hoodiecluster";
-
   private final int maxConcurrentClustering;
-  private transient BaseClusterer clusteringClient;
   protected transient HoodieEngineContext context;
+  private transient BaseClusterer clusteringClient;
 
   public AsyncClusteringService(HoodieEngineContext context, BaseHoodieWriteClient writeClient) {
     this(context, writeClient, false);
@@ -69,12 +69,7 @@ public abstract class AsyncClusteringService extends HoodieAsyncTableService {
   @Override
   protected Pair<CompletableFuture, ExecutorService> startService() {
     ExecutorService executor = Executors.newFixedThreadPool(maxConcurrentClustering,
-        r -> {
-          Thread t = new Thread(r, "async_clustering_thread");
-          t.setDaemon(isRunInDaemonMode());
-          return t;
-        });
-
+        new CustomizedThreadFactory("async_clustering_thread", isRunInDaemonMode()));
     return Pair.of(CompletableFuture.allOf(IntStream.range(0, maxConcurrentClustering).mapToObj(i -> CompletableFuture.supplyAsync(() -> {
       try {
         // Set Compactor Pool Name for allowing users to prioritize compaction
