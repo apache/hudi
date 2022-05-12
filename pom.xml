@@ -1384,6 +1384,7 @@
         <module>docker/hoodie/hadoop</module>
         <module>hudi-integ-test</module>
         <module>packaging/hudi-integ-test-bundle</module>
+        <module>packaging/hudi-integ-test-slim-bundle</module>
       </modules>
       <properties>
         <skipUTs>true</skipUTs>
