@@ -43,19 +43,24 @@ To implement this capacity, we have to upgrade the write and read parts. Let hud
 
 ## Scenario Definition
 
-Here use a simply case to explain the CDC.
+Here use a simple case to explain the CDC.
 
 ![](scenario-definition.jpg)
 
-Here one metadata column named `_changing_type` is added. It represents that how the record is changed, and it have four enum values:
+Here we follow the debezium output format, there are four columns shown:
+- op: the operation of this record;
+- ts_ms: the timestamp;
+- source: source information such as the name of database and table. **Maybe we don't need this column in Hudi**;
+- before: the previous image before this operation;
+- after: the current image after this operation;
 
-- update_preimage: The old value before a certain commit;
-- update_postiamge: The new value after a certain commit;
-- insert: a new coming record in a certain commit;
-- delete: a record that has been deleted in a certain commit;
+`op` column has three enum values:
+- i: represent `insert`; when `op` is `i`, `before` is always null;
+- u: represent `update`; when `op` is `u`, both `before` and `after` don't be null;
+- d: represent `delete`; when `op` is `d`, `after` is always null;
 
 Notice:
-Here the illustration ignores all the metadata columns like `_hoodie_commit_time`.
+Here the illustration ignores all the metadata columns in `before` and `after` columns like `_hoodie_commit_time`.
 
 ## Goals
 
@@ -80,7 +85,7 @@ Other operations like `Compact`, `Clean`, `Index` do not write/change any data. 
 
 |  | default |  |
 | --- | --- | --- |
-| hoodie.table.cdf.enabled | false | if true, write the changing data to FS. |
+| hoodie.table.cdf.enabled | false | `true` represents the table to be used for CDC queries and will write cdc data if needed. |
 |  |  |  |
 | hoodie.datasource.read.cdc.enabled | false | if true, return the CDC data. |
 | hoodie.datasource.read.start.timestamp | - | requried. |
@@ -89,50 +94,34 @@ Other operations like `Compact`, `Clean`, `Index` do not write/change any data. 
 
 ### Write
 
-Hoodie writes data by `HoodieWriteHandle`. In the different sub classes of `HoodieWriteHandle`, we will create `FileWriter`which can receive data and save to `FileSystem`. So We can upgrade these sub classes to archieve the CDC data's generation and persistence.
+Hoodie writes data by `HoodieWriteHandle`.
+We notice that only `HoodieMergeHandle` and it's subclasses will receive both the old record and the new-coming record at the same time, merge and write.
+So we will add a `LogFormatWriter` in these classes. If there is CDC data need to be written out, then call this writer to write out a log file which consist of, maybe `CDCBlock`.
+The CDC log file will be placed in the same position as the base files and other log files, so that the clean service can clean up them without extra work.
 
 The directory of the CDC file is`tablePath/.cdc/`. The file structure is like:
-For non-partition table:
 ```
 hudi_cdc_table/
     .hoodie/
         hoodie.properties
         00001.commit
         00002.replacecommit
-        ...
-    .cdc/
-        xxxx123.parquet
-        xxxx456.parquet
-        ...
-    default/
-        fileId1_xxx_00001.parquet
-        fileId1_xxx_00002.parquet
-        ...
-```
-
-For partition table (the partition column is `year`):
-```
-hudi_cdc_table/
-    .hoodie/
-        hoodie.properties
-        00001.commit
-        00002.replacecommit
-        ...
-    .cdc/
-        year=2021/xxxx123.parquet
-        year=2022/xxxx456.parquet
         ...
     default/
         year=2021/
+            filegroup1-instant1.parquet
+            .filegroup1-instant1.cdc.log
         year=2022/
+            filegroup2-instant1.parquet
+            .filegroup1-instant1.cdc.log
         ...
 ```
 
 One Design Idea is that **Write CDC files as little as possible, and reuse data files as much as possible**.
 
-As the idea, define three file types for CDC:
+As the idea, there are four file types visible for CDC:
 
-- CDC File: Record all the related changing data with an extra column which name `changing_type`for one commit. For the following cases, will generate the CDC file:
+- CDC File: Record all the related changing data with the cdc schema for one commit. For the following cases, will generate the CDC file:
    - `UPSERT` operation;
    - `DELETE` operation and the files where the data to be deleted resides has other data that doesn't need to be deleted and need to be rewrited.
 - pure Add-File: all the data in this file ars incoming, and don't affect the existing data and files. In the following cases, we do not have data to be rewrited and need to write CDC data to the CDC file:
@@ -143,25 +132,26 @@ As the idea, define three file types for CDC:
 - pure Remove-File: all the data in the file will be deleted, and don't affect the existing data and files. In the following cases, we also do not have data to be rewrited:
    - `DELETE`operation and no old data should be rewrite.
    - `DELETE_PARTITION` operation;
+- Log-File: this will be written out when writing to the MOR tables.
 
 Notice:
 
-- Only CDC File is an additional workload. The pure Add-File and pure Remove-File are just representations of the existing data files in the CDC scenario. For some examples:
+- **Only CDC File is a new file type and written out by CDC**. The pure Add-File, pure Remove-File and Log-File are just representations of the existing data files in the CDC scenario. For some examples:
    - `INSERT` operation will create a list of new data files. Each of these can be considered a pure Add-File.
    - `DELETE_PARTITION` operation will delete a group of data files. Each of these can be considered a pure Remove-File.
-- For a single commit, if CDC files is existed, we just load CDC files to respone. If no any CDC files, extract the list of pure Add-File and Remove-File, load these files and respone CDC query.
-- every CDC file must be related to a commit. Use parquet format to storage uniformly.
+- For a single commit, if CDC files is existed, we just load CDC files to response. If no any CDC files, extract the list of other types of files, load (or merge for mor tables) these files and response CDC query.
+- every CDC file must be related to a commit. Here I think both the parquet format and the log file format are ok to storage the cdc data.
 
 
 ### Read
 
-This part just discuss how to make Spark (including Spark DataFram, SQL, Streaming) to read the Hudi CDC data.
+This part just discuss how to make Spark (including Spark DataFrame, SQL, Streaming) to read the Hudi CDC data.
 
 Implement `CDCReader` that do these steps to response the CDC request:
 
 - judge whether this is a table that has enabled `hoodie.table.cdf.enabled`, and the query range is valid.
 - extract and filter the commits needed from `ActiveTimeline`.
-- For each of commit, get and load the changing files, append the cdc columns and return `DataFrame`.
+- For each of commit, get and load (and merge for mor tables) the changing files, union and return `DataFrame`.
 
 ```scala
 class CDCReader(
@@ -170,7 +160,7 @@ class CDCReader(
 ) extends BaseRelation with PrunedFilteredScan {
 
   override def schema: StructType = {
-  // append the `changing_type` column
+  // 'op', 'source', 'mt_ms', 'before', 'after'
   }
   
   override def buildScan(
@@ -185,7 +175,7 @@ class CDCReader(
 Notice:
 
 - Only instants that are active can be queried in a CDC scenario.
-- `CDCReader` manages all the things on CDC, and all the spark entrances(DataFrame, SQL, Streaming) call the funcations in `CDCReader`. 
+- `CDCReader` manages all the things on CDC, and all the spark entrances(DataFrame, SQL, Streaming) call the functions in `CDCReader`.
 
 #### COW table
 
@@ -193,8 +183,12 @@ Just follow the above steps without further consideration.
 
 #### MOR table
 
-For the inc data stored in log files, we need to merge them and the base file, to figure out how each record changed.
-But if users don't need to the exact changing, we can use a config to skip the merge process, and return directly.
+According to the design of the writing part, only the cases where writing mor tables will write out the base file (which call the `HoodieMergeHandle` and it's subclasses) will write out the cdc files.
+In other words, cdc files will be written out only for the index and file size reasons.
+
+Here use an illustration to explain how we can query the CDC on MOR table in kinds of cases.
+
+![](query_cdc_on_mor.jpg)
 
 ####Syntax
 
@@ -229,12 +223,6 @@ val df = spark.readStream.format("hudi").
 // and output at the console.
 val stream = df.writeStream.format("console").start
 ```
-
-### Others
-
-Upgrade `Clean`: 
-Since only instants is active that can be queried in a CDC scenario, the unreached CDC files should be delete in time when `Clean` is triggered.
-
 
 # Rollout/Adoption Plan
 This is a new feature that can enable CDF and CDC query, does not impact existing jobs and tables. Also this dos not depend on Spark versions.
