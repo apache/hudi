@@ -57,6 +57,8 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 public abstract class ITTestBase {
 
   public static final Logger LOG = LogManager.getLogger(ITTestBase.class);
+  protected static final String KAFKA_BROKER_CONTAINER = "/kafkabroker";
+  protected static final String KAFKA_CONNECT_CONTAINER = "/connect";
   protected static final String SPARK_WORKER_CONTAINER = "/spark-worker-1";
   protected static final String ADHOC_1_CONTAINER = "/adhoc-1";
   protected static final String ADHOC_2_CONTAINER = "/adhoc-2";
@@ -236,9 +238,9 @@ public abstract class ITTestBase {
     int exitCode = dockerClient.inspectExecCmd(createCmdResponse.getId()).exec().getExitCode();
     LOG.info("Exit code for command : " + exitCode);
     if (exitCode != 0) {
-      LOG.error("\n\n ###### Stdout #######\n" + callback.getStdout().toString());
+      LOG.error(String.format("\n\n ###### Stdout #######\nContainer: %s\n%s", containerName, callback.getStdout().toString()));
     }
-    LOG.error("\n\n ###### Stderr #######\n" + callback.getStderr().toString());
+    LOG.error(String.format("\n\n ###### Stderr #######\nContainer: %s\n%s", containerName, callback.getStderr().toString()));
 
     if (checkIfSucceed) {
       if (expectedToSucceed) {
@@ -294,6 +296,10 @@ public abstract class ITTestBase {
     String hiveCmd = getHiveConsoleCommandFile(commandFile, additionalVar);
     TestExecStartResultCallback callback = executeCommandStringInDocker(HIVESERVER, hiveCmd, true);
     return Pair.of(callback.getStdout().toString().trim(), callback.getStderr().toString().trim());
+  }
+
+  Pair<String, String> executeSparkDataSourceCommand(String commandFile, boolean expectedToSucceed) throws Exception {
+    return executeSparkSQLCommand(commandFile, expectedToSucceed);
   }
 
   Pair<String, String> executeSparkSQLCommand(String commandFile, boolean expectedToSucceed) throws Exception {

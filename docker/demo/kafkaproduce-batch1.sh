@@ -1,3 +1,4 @@
+#!/bin/bash
 
 #  Licensed to the Apache Software Foundation (ASF) under one
 #  or more contributor license agreements.  See the NOTICE file
@@ -15,10 +16,5 @@
 #  See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG CP_KAFKA_VERSION=5.5.8
-# CP Kafka 5.5.8 works with Apache Kafka 2.5.x
-FROM confluentinc/cp-kafka-connect-base:${CP_KAFKA_VERSION}
-
-RUN confluent-hub install --no-prompt confluentinc/kafka-connect-hdfs:10.1.0
-ADD target/hudi-kafka-connect-bundle.jar /usr/share/confluent-hub-components/confluentinc-kafka-connect-hdfs/lib
-ENV CONNECT_PLUGIN_PATH=/usr/share/java,/usr/share/confluent-hub-components
+kafka-console-producer --bootstrap-server localhost:9092 --topic stock_ticks < /var/hoodie/ws/docker/demo/data/batch_1.json
+sleep 60

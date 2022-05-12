@@ -190,6 +190,8 @@ services:
     container_name: kafkabroker
     depends_on:
       - zookeeper
+    volumes:
+      - ${HUDI_WS}:/var/hoodie/ws
     ports:
       - "9092:9092"
       - "29092:29092"
@@ -206,6 +208,8 @@ services:
     depends_on:
       - zookeeper
       - kafkabroker
+    volumes:
+      - ${HUDI_WS}:/var/hoodie/ws
     ports:
       - "8083:8083"
     environment:

@@ -32,17 +32,32 @@
   <artifactId>hudi-kafka-connect-docker</artifactId>
   <description>Hoodie Kafka Connect Docker</description>
 
+  <dependencies>
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-kafka-connect-bundle</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+  </dependencies>
+
   <properties>
     <skipITs>false</skipITs>
     <docker.build.skip>true</docker.build.skip>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <dockerfile.maven.version>1.4.13</dockerfile.maven.version>
     <checkstyle.skip>true</checkstyle.skip>
     <main.basedir>${project.parent.basedir}</main.basedir>
     <docker.kafka.connect.version>2.5.0</docker.kafka.connect.version>
-    <dockerfile.maven.version>1.4.13</dockerfile.maven.version>
   </properties>
 
   <build>
+    <extensions>
+      <extension>
+        <groupId>com.spotify</groupId>
+        <artifactId>dockerfile-maven-extension</artifactId>
+        <version>${dockerfile.maven.version}</version>
+      </extension>
+    </extensions>
     <plugins>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
