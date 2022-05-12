@@ -72,18 +72,21 @@ The list of all RFCs can be found here.
 | 34 | [Hudi BigQuery Integration](./rfc-34/rfc-34.md) | `COMPLETED` | 
 | 35 | [Make Flink MOR table writing streaming friendly](https://cwiki.apache.org/confluence/display/HUDI/RFC-35%3A+Make+Flink+MOR+table+writing+streaming+friendly)| `UNDER REVIEW` | 
 | 36 | [HUDI Metastore Server](https://cwiki.apache.org/confluence/display/HUDI/%5BWIP%5D+RFC-36%3A+HUDI+Metastore+Server)| `UNDER REVIEW` | 
-| 37 | [Hudi Metadata based Bloom Index](rfc-37/rfc-37.md) | `IN PROGRESS` | 
+| 37 | [Hudi Metadata based Bloom Index](rfc-37/rfc-37.md) | `ONGOING` | 
 | 38 | [Spark Datasource V2 Integration](./rfc-38/rfc-38.md) | `IN PROGRESS` | 
 | 39 | [Incremental source for Debezium](./rfc-39/rfc-39.md) | `ONGOING` | 
-| 40 | [Hudi Connector for Trino](./rfc-40/rfc-40.md) | `ONGOING` | 
+| 40 | [Hudi Connector for Trino](./rfc-40/rfc-40.md) | `IN PROGRESS` | 
 | 41 | [Hudi Snowflake Integration] | `UNDER REVIEW`| 
 | 42 | [Consistent Hashing Index](./rfc-42/rfc-42.md) | `IN PROGRESS` | 
 | 43 | [Compaction / Clustering Service](./rfc-43/rfc-43.md) | `UNDER REVIEW` | 
-| 44 | [Hudi Connector for Presto](./rfc-44/rfc-44.md) | `UNDER REVIEW` | 
+| 44 | [Hudi Connector for Presto](./rfc-44/rfc-44.md) | `IN PROGRESS` | 
 | 45 | [Asynchronous Metadata Indexing](./rfc-45/rfc-45.md) | `ONGOING` | 
 | 46 | [Optimizing Record Payload Handling](./rfc-46/rfc-46.md) | `UNDER REVIEW` | 
 | 47 | [Add Call Produce Command for Spark SQL](./rfc-47/rfc-47.md) | `UNDER REVIEW` | 
 | 48 | [LogCompaction for MOR tables](./rfc-48/rfc-48.md) | `UNDER REVIEW` | 
 | 49 | [Support sync with DataHub](./rfc-49/rfc-49.md)    | `ONGOING` |
 | 50 | [Improve Timeline Server](./rfc-50/rfc-50.md) | `UNDER REVIEW` | 
-| 51 | [Improve Hoodie Writing Data Efficiency Using Lock-Free Message Queue](./rfc-51/rfc-51.md) | `UNDER REVIEW` | 
+| 51 | [Change Data Capture](./rfc-51/rfc-51.md) | `UNDER REVIEW` |
+| 52 | [Introduce Secondary Index to Improve HUDI Query Performance](./rfc-52/rfc-52.md) | `UNDER REVIEW` |
+| 53 | [Improve Hoodie Writing Data Efficiency Using Lock-Free Message Queue](./rfc-53/rfc-53.md) | `UNDER REVIEW` | 
+

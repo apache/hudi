@@ -60,6 +60,7 @@ import org.apache.hudi.utilities.HoodieClusteringJob;
 import org.apache.hudi.utilities.HoodieIndexer;
 import org.apache.hudi.utilities.deltastreamer.DeltaSync;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
+import org.apache.hudi.utilities.deltastreamer.NoNewDataTerminationStrategy;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.schema.SparkAvroPostProcessor;
@@ -739,17 +740,29 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   }
 
   @Test
+  public void testUpsertsCOWContinuousModeShutdownGracefully() throws Exception {
+    testUpsertsContinuousMode(HoodieTableType.COPY_ON_WRITE, "continuous_cow", true);
+  }
+
+  @Test
   public void testUpsertsMORContinuousMode() throws Exception {
     testUpsertsContinuousMode(HoodieTableType.MERGE_ON_READ, "continuous_mor");
   }
 
   private void testUpsertsContinuousMode(HoodieTableType tableType, String tempDir) throws Exception {
+    testUpsertsContinuousMode(tableType, tempDir, false);
+  }
+
+  private void testUpsertsContinuousMode(HoodieTableType tableType, String tempDir, boolean testShutdownGracefully) throws Exception {
     String tableBasePath = dfsBasePath + "/" + tempDir;
     // Keep it higher than batch-size to test continuous mode
     int totalRecords = 3000;
     // Initial bulk insert
     HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT);
     cfg.continuousMode = true;
+    if (testShutdownGracefully) {
+      cfg.postWriteTerminationStrategyClass = NoNewDataTerminationStrategy.class.getName();
+    }
     cfg.tableType = tableType.name();
     cfg.configs.add(String.format("%s=%d", SourceConfigs.MAX_UNIQUE_RECORDS_PROP, totalRecords));
     cfg.configs.add(String.format("%s=false", HoodieCompactionConfig.AUTO_CLEAN.key()));
@@ -763,6 +776,9 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       }
       TestHelpers.assertRecordCount(totalRecords, tableBasePath, sqlContext);
       TestHelpers.assertDistanceCount(totalRecords, tableBasePath, sqlContext);
+      if (testShutdownGracefully) {
+        TestDataSource.returnEmptyBatch = true;
+      }
       return true;
     });
   }
@@ -781,8 +797,35 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       }
     });
     TestHelpers.waitTillCondition(condition, dsFuture, 360);
-    ds.shutdownGracefully();
-    dsFuture.get();
+    if (cfg != null && !cfg.postWriteTerminationStrategyClass.isEmpty()) {
+      awaitDeltaStreamerShutdown(ds);
+    } else {
+      ds.shutdownGracefully();
+      dsFuture.get();
+    }
+  }
+
+  static void awaitDeltaStreamerShutdown(HoodieDeltaStreamer ds) throws InterruptedException {
+    // await until deltastreamer shuts down on its own
+    boolean shutDownRequested = false;
+    int timeSoFar = 0;
+    while (!shutDownRequested) {
+      shutDownRequested = ds.getDeltaSyncService().isShutdownRequested();
+      Thread.sleep(500);
+      timeSoFar += 500;
+      if (timeSoFar > (2 * 60 * 1000)) {
+        Assertions.fail("Deltastreamer should have shutdown by now");
+      }
+    }
+    boolean shutdownComplete = false;
+    while (!shutdownComplete) {
+      shutdownComplete = ds.getDeltaSyncService().isShutdown();
+      Thread.sleep(500);
+      timeSoFar += 500;
+      if (timeSoFar > (2 * 60 * 1000)) {
+        Assertions.fail("Deltastreamer should have shutdown by now");
+      }
+    }
   }
 
   static void deltaStreamerTestRunner(HoodieDeltaStreamer ds, Function<Boolean, Boolean> condition) throws Exception {
@@ -1466,9 +1509,13 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     testUtils.sendMessages(topicName, Helpers.jsonifyRecords(dataGenerator.generateInsertsAsPerSchema("000", numRecords, HoodieTestDataGenerator.TRIP_SCHEMA)));
   }
 
-  private void prepareParquetDFSSource(boolean useSchemaProvider, boolean hasTransformer) throws IOException {
+  private void prepareParquetDFSSource(boolean useSchemaProvider, boolean hasTransformer, String emptyBatchParam) throws IOException {
     prepareParquetDFSSource(useSchemaProvider, hasTransformer, "source.avsc", "target.avsc",
-        PROPS_FILENAME_TEST_PARQUET, PARQUET_SOURCE_ROOT, false);
+        PROPS_FILENAME_TEST_PARQUET, PARQUET_SOURCE_ROOT, false, "partition_path", emptyBatchParam);
+  }
+
+  private void prepareParquetDFSSource(boolean useSchemaProvider, boolean hasTransformer) throws IOException {
+    prepareParquetDFSSource(useSchemaProvider, hasTransformer, "");
   }
 
   private void prepareParquetDFSSource(boolean useSchemaProvider, boolean hasTransformer, String sourceSchemaFile, String targetSchemaFile,
@@ -1478,8 +1525,14 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   }
 
   private void prepareParquetDFSSource(boolean useSchemaProvider, boolean hasTransformer, String sourceSchemaFile, String targetSchemaFile,
+                                       String propsFileName, String parquetSourceRoot, boolean addCommonProps, String partitionPath) throws IOException {
+    prepareParquetDFSSource(useSchemaProvider, hasTransformer, sourceSchemaFile, targetSchemaFile, propsFileName, parquetSourceRoot, addCommonProps,
+        partitionPath, "");
+  }
+
+  private void prepareParquetDFSSource(boolean useSchemaProvider, boolean hasTransformer, String sourceSchemaFile, String targetSchemaFile,
                                        String propsFileName, String parquetSourceRoot, boolean addCommonProps,
-                                       String partitionPath) throws IOException {
+                                       String partitionPath, String emptyBatchParam) throws IOException {
     // Properties used for testing delta-streamer with Parquet source
     TypedProperties parquetProps = new TypedProperties();
 
@@ -1498,6 +1551,9 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       }
     }
     parquetProps.setProperty("hoodie.deltastreamer.source.dfs.root", parquetSourceRoot);
+    if (!StringUtils.isNullOrEmpty(emptyBatchParam)) {
+      parquetProps.setProperty(TestParquetDFSSourceEmptyBatch.RETURN_EMPTY_BATCH, emptyBatchParam);
+    }
     UtilitiesTestBase.Helpers.savePropsToDFS(parquetProps, dfs, dfsBasePath + "/" + propsFileName);
   }
 
@@ -1506,7 +1562,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   }
 
   private void testParquetDFSSource(boolean useSchemaProvider, List<String> transformerClassNames, boolean testEmptyBatch) throws Exception {
-    prepareParquetDFSSource(useSchemaProvider, transformerClassNames != null);
+    prepareParquetDFSSource(useSchemaProvider, transformerClassNames != null, testEmptyBatch ? "1" : "");
     String tableBasePath = dfsBasePath + "/test_parquet_table" + testNum;
     HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(
         TestHelpers.makeConfig(tableBasePath, WriteOperationType.INSERT, testEmptyBatch ? TestParquetDFSSourceEmptyBatch.class.getName()
@@ -1520,7 +1576,6 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     if (testEmptyBatch) {
       prepareParquetDFSFiles(100, PARQUET_SOURCE_ROOT, "2.parquet", false, null, null);
       // parquet source to return empty batch
-      TestParquetDFSSourceEmptyBatch.returnEmptyBatch = true;
       deltaStreamer.sync();
       // since we mimic'ed empty batch, total records should be same as first sync().
       TestHelpers.assertRecordCount(PARQUET_NUM_RECORDS, tableBasePath, sqlContext);

@@ -41,6 +41,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieClusteringException;
+import org.apache.hudi.execution.bulkinsert.JavaBulkInsertInternalPartitionerFactory;
 import org.apache.hudi.execution.bulkinsert.JavaCustomColumnsSortPartitioner;
 import org.apache.hudi.io.IOUtils;
 import org.apache.hudi.io.storage.HoodieFileReader;
@@ -121,16 +122,16 @@ public abstract class JavaExecutionStrategy<T extends HoodieRecordPayload<T>>
    *
    * @param strategyParams Strategy parameters containing columns to sort the data by when clustering.
    * @param schema         Schema of the data including metadata fields.
-   * @return empty for now.
+   * @return partitioner for the java engine
    */
-  protected Option<BulkInsertPartitioner<List<HoodieRecord<T>>>> getPartitioner(Map<String, String> strategyParams, Schema schema) {
+  protected BulkInsertPartitioner<List<HoodieRecord<T>>> getPartitioner(Map<String, String> strategyParams, Schema schema) {
     if (strategyParams.containsKey(PLAN_STRATEGY_SORT_COLUMNS.key())) {
-      return Option.of(new JavaCustomColumnsSortPartitioner(
+      return new JavaCustomColumnsSortPartitioner(
           strategyParams.get(PLAN_STRATEGY_SORT_COLUMNS.key()).split(","),
           HoodieAvroUtils.addMetadataFields(schema),
-          getWriteConfig().isConsistentLogicalTimestampEnabled()));
+          getWriteConfig().isConsistentLogicalTimestampEnabled());
     } else {
-      return Option.empty();
+      return JavaBulkInsertInternalPartitionerFactory.get(getWriteConfig().getBulkInsertSortMode());
     }
   }
 

@@ -860,12 +860,14 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     return false;
   }
 
+  public GenericRecord generateGenericRecord() {
+    return generateGenericRecord(genPseudoRandomUUID(rand).toString(), "0",
+        genPseudoRandomUUID(rand).toString(), genPseudoRandomUUID(rand).toString(), rand.nextLong());
+  }
+
   public List<GenericRecord> generateGenericRecords(int numRecords) {
     List<GenericRecord> list = new ArrayList<>();
-    IntStream.range(0, numRecords).forEach(i -> {
-      list.add(generateGenericRecord(genPseudoRandomUUID(rand).toString(), "0",
-          genPseudoRandomUUID(rand).toString(), genPseudoRandomUUID(rand).toString(), rand.nextLong()));
-    });
+    IntStream.range(0, numRecords).forEach(i -> list.add(generateGenericRecord()));
     return list;
   }
 

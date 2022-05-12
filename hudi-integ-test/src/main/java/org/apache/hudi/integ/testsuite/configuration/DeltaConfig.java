@@ -18,13 +18,14 @@
 
 package org.apache.hudi.integ.testsuite.configuration;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.integ.testsuite.reader.DeltaInputType;
 import org.apache.hudi.integ.testsuite.writer.DeltaOutputMode;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.hadoop.conf.Configuration;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -69,6 +70,7 @@ public class DeltaConfig implements Serializable {
     public static final String TYPE = "type";
     public static final String NODE_NAME = "name";
     public static final String DEPENDENCIES = "deps";
+    public static final String NO_DEPENDENCY_VALUE = "none";
     public static final String CHILDREN = "children";
     public static final String HIVE_QUERIES = "hive_queries";
     public static final String HIVE_PROPERTIES = "hive_props";

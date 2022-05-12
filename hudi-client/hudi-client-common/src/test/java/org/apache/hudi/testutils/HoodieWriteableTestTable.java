@@ -41,7 +41,7 @@ import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.io.storage.HoodieAvroParquetConfig;
 import org.apache.hudi.io.storage.HoodieOrcConfig;
 import org.apache.hudi.io.storage.HoodieOrcWriter;
-import org.apache.hudi.io.storage.HoodieParquetWriter;
+import org.apache.hudi.io.storage.HoodieAvroParquetWriter;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 
 import org.apache.avro.Schema;
@@ -113,10 +113,9 @@ public class HoodieWriteableTestTable extends HoodieMetadataTestTable {
       HoodieAvroParquetConfig config = new HoodieAvroParquetConfig(writeSupport, CompressionCodecName.GZIP,
           ParquetWriter.DEFAULT_BLOCK_SIZE, ParquetWriter.DEFAULT_PAGE_SIZE, 120 * 1024 * 1024,
           new Configuration(), Double.parseDouble(HoodieStorageConfig.PARQUET_COMPRESSION_RATIO_FRACTION.defaultValue()));
-      try (HoodieParquetWriter writer = new HoodieParquetWriter(
-          currentInstantTime,
-          new Path(Paths.get(basePath, partition, fileName).toString()),
-          config, schema, contextSupplier, populateMetaFields)) {
+      try (HoodieAvroParquetWriter writer = new HoodieAvroParquetWriter<>(
+          new Path(Paths.get(basePath, partition, fileName).toString()), config, currentInstantTime,
+          contextSupplier, populateMetaFields)) {
         int seqId = 1;
         for (HoodieRecord record : records) {
           GenericRecord avroRecord = (GenericRecord) ((HoodieRecordPayload) record.getData()).getInsertValue(schema).get();

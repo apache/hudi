@@ -27,11 +27,11 @@ import org.apache.spark.sql.execution.command.AlterTableRenameCommand
 /**
  * Command for alter hudi table's table name.
  */
-class AlterHoodieTableRenameCommand(
+case class AlterHoodieTableRenameCommand(
      oldName: TableIdentifier,
      newName: TableIdentifier,
      isView: Boolean)
-  extends AlterTableRenameCommand(oldName, newName, isView) {
+  extends HoodieLeafRunnableCommand {
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
     if (newName != oldName) {
@@ -45,7 +45,7 @@ class AlterHoodieTableRenameCommand(
         .initTable(hadoopConf, hoodieCatalogTable.tableLocation)
 
       // Call AlterTableRenameCommand#run to rename table in meta.
-      super.run(sparkSession)
+      AlterTableRenameCommand(oldName, newName, isView).run(sparkSession)
     }
     Seq.empty[Row]
   }

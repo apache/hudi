@@ -150,6 +150,24 @@ stages:
         displayName: IT modules
         timeoutInMinutes: '120'
         steps:
+          - task: Maven@3
+            displayName: maven install
+            inputs:
+              mavenPomFile: 'pom.xml'
+              goals: 'clean install'
+              options: -T 2.5C -Pintegration-tests -DskipTests
+              publishJUnitResults: false
+              jdkVersionOption: '1.8'
+              mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
+          - task: Maven@3
+            displayName: UT integ-test
+            inputs:
+              mavenPomFile: 'pom.xml'
+              goals: 'test'
+              options: -Pintegration-tests -DskipUTs=false -DskipITs=true -pl hudi-integ-test test
+              publishJUnitResults: false
+              jdkVersionOption: '1.8'
+              mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
           - task: AzureCLI@2
             displayName: Prepare for IT
             inputs:

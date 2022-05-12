@@ -37,6 +37,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.math.BigDecimal;
 import java.sql.Timestamp;
+import java.time.LocalDate;
 import java.util.TimeZone;
 import java.util.concurrent.TimeUnit;
 
@@ -175,6 +176,9 @@ public class TimestampBasedAvroKeyGenerator extends SimpleAvroKeyGenerator {
       timeMs = convertLongTimeToMillis(((Integer) partitionVal).longValue());
     } else if (partitionVal instanceof BigDecimal) {
       timeMs = convertLongTimeToMillis(((BigDecimal) partitionVal).longValue());
+    } else if (partitionVal instanceof LocalDate) {
+      // Avro uses LocalDate to represent the Date value internal.
+      timeMs = convertLongTimeToMillis(((LocalDate) partitionVal).toEpochDay());
     } else if (partitionVal instanceof CharSequence) {
       if (!inputFormatter.isPresent()) {
         throw new HoodieException("Missing inputformatter. Ensure " + KeyGeneratorOptions.Config.TIMESTAMP_INPUT_DATE_FORMAT_PROP + " config is set when timestampType is DATE_STRING or MIXED!");

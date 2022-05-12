@@ -19,7 +19,7 @@ package org.apache.spark.sql.hudi
 
 import org.apache.hudi.testutils.DataSourceTestUtils
 
-class TestMergeIntoLogOnlyTable extends TestHoodieSqlBase {
+class TestMergeIntoLogOnlyTable extends HoodieSparkSqlTestBase {
 
   test("Test Query Log Only MOR Table") {
     withTempDir { tmp =>

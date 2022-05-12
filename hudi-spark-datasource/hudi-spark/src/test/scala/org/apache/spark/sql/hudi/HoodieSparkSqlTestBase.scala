@@ -31,7 +31,7 @@ import org.scalatest.{BeforeAndAfterAll, FunSuite, Tag}
 import java.io.File
 import java.util.TimeZone
 
-class TestHoodieSqlBase extends FunSuite with BeforeAndAfterAll {
+class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
   org.apache.log4j.Logger.getRootLogger.setLevel(Level.WARN)
 
   private lazy val sparkWareHouse = {

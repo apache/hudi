@@ -82,8 +82,7 @@ public class HoodieTableSink implements DynamicTableSink, SupportsPartitioning, 
       }
 
       // default parallelism
-      int parallelism = conf.getInteger(FlinkOptions.SINK_PARALLELISM,
-              dataStream.getExecutionConfig().getParallelism());
+      int parallelism = dataStream.getExecutionConfig().getParallelism();
       DataStream<Object> pipeline;
       // bootstrap
       final DataStream<HoodieRecord> hoodieRecordDataStream =

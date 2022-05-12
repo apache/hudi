@@ -240,7 +240,15 @@ public class ITTestHoodieDataSource extends AbstractTestBase {
 
     List<Row> rows = CollectionUtil.iterableToList(
         () -> streamTableEnv.sqlQuery("select * from t1").execute().collect());
-    assertRowsEquals(rows, TestData.DATA_SET_SOURCE_INSERT);
+
+    // the test is flaky based on whether the first compaction is pending when
+    // scheduling the 2nd compaction.
+    // see details in CompactionPlanOperator#scheduleCompaction.
+    if (rows.size() < TestData.DATA_SET_SOURCE_INSERT.size()) {
+      assertRowsEquals(rows, TestData.DATA_SET_SOURCE_INSERT_FIRST_COMMIT);
+    } else {
+      assertRowsEquals(rows, TestData.DATA_SET_SOURCE_INSERT);
+    }
   }
 
   @Test
@@ -1026,6 +1034,37 @@ public class ITTestHoodieDataSource extends AbstractTestBase {
         + "+I[id6, Emma, 20, 1970-01-01T00:00:06, par3], "
         + "+I[id7, Bob, 44, 1970-01-01T00:00:07, par4], "
         + "+I[id8, Han, 56, 1970-01-01T00:00:08, par4]]");
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {FlinkOptions.PARTITION_FORMAT_DAY, FlinkOptions.PARTITION_FORMAT_DASHED_DAY})
+  void testWriteAndReadWithDatePartitioning(String partitionFormat) {
+    TableEnvironment tableEnv = batchTableEnv;
+    String hoodieTableDDL = sql("t1")
+        .field("uuid varchar(20)")
+        .field("name varchar(10)")
+        .field("age int")
+        .field("ts date")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.PARTITION_FORMAT, partitionFormat)
+        .partitionField("ts") // use date as partition path field
+        .end();
+    tableEnv.executeSql(hoodieTableDDL);
+
+    execInsertSql(tableEnv, TestSQL.INSERT_DATE_PARTITION_T1);
+
+    List<Row> result = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1").execute().collect());
+    String expected = "["
+        + "+I[id1, Danny, 23, 1970-01-01], "
+        + "+I[id2, Stephen, 33, 1970-01-01], "
+        + "+I[id3, Julian, 53, 1970-01-01], "
+        + "+I[id4, Fabian, 31, 1970-01-01], "
+        + "+I[id5, Sophia, 18, 1970-01-01], "
+        + "+I[id6, Emma, 20, 1970-01-01], "
+        + "+I[id7, Bob, 44, 1970-01-01], "
+        + "+I[id8, Han, 56, 1970-01-01]]";
+    assertRowsEquals(result, expected);
   }
 
   @ParameterizedTest

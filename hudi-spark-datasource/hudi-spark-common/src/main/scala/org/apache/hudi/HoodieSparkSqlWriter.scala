@@ -150,7 +150,9 @@ object HoodieSparkSqlWriter {
           .setBaseFileFormat(baseFileFormat)
           .setArchiveLogFolder(archiveLogFolder)
           .setPayloadClassName(hoodieConfig.getString(PAYLOAD_CLASS_NAME))
-          .setPreCombineField(hoodieConfig.getStringOrDefault(PRECOMBINE_FIELD, null))
+          // we can't fetch preCombine field from hoodieConfig object, since it falls back to "ts" as default value,
+          // but we are interested in what user has set, hence fetching from optParams.
+          .setPreCombineField(optParams.getOrElse(PRECOMBINE_FIELD.key(), null))
           .setPartitionFields(partitionColumns)
           .setPopulateMetaFields(populateMetaFields)
           .setRecordKeyFields(hoodieConfig.getString(RECORDKEY_FIELD))
@@ -562,8 +564,7 @@ object HoodieSparkSqlWriter {
       throw new HoodieException("Bulk insert using row writer is not supported with current Spark version."
         + " To use row writer please switch to spark 2 or spark 3")
     }
-    val hoodieConfig = HoodieWriterUtils.convertMapToHoodieConfig(params)
-    val syncHiveSuccess = metaSync(sqlContext.sparkSession, hoodieConfig, basePath, df.schema)
+    val syncHiveSuccess = metaSync(sqlContext.sparkSession, writeConfig, basePath, df.schema)
     (syncHiveSuccess, common.util.Option.ofNullable(instantTime))
   }
 
