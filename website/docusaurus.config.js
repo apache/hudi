@@ -133,8 +133,8 @@ module.exports = {
           position: 'left',
           items: [
             {
-              label: 'Talks & Articles',
-              to: 'talks-articles',
+              label: 'Talks',
+              to: 'talks',
             },
             {
               label: 'FAQ',
@@ -280,8 +280,8 @@ module.exports = {
               to: '/blog',
             },
             {
-              label: 'Talks & Articles',
-              to: 'talks-articles',
+              label: 'Talks',
+              to: 'talks',
             },
             {
               label: 'FAQ',
