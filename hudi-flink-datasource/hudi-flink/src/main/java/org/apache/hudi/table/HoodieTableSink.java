@@ -29,7 +29,6 @@ import org.apache.hudi.util.StreamerUtil;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.datastream.DataStream;
-import org.apache.flink.table.catalog.ObjectIdentifier;
 import org.apache.flink.table.catalog.ResolvedSchema;
 import org.apache.flink.table.connector.ChangelogMode;
 import org.apache.flink.table.connector.sink.DataStreamSinkProvider;
@@ -38,7 +37,14 @@ import org.apache.flink.table.connector.sink.abilities.SupportsOverwrite;
 import org.apache.flink.table.connector.sink.abilities.SupportsPartitioning;
 import org.apache.flink.table.types.logical.RowType;
 
+import javax.annotation.Nullable;
+
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 /**
  * Hoodie table sink.
@@ -47,20 +53,20 @@ public class HoodieTableSink implements DynamicTableSink, SupportsPartitioning, 
 
   private final Configuration conf;
   private final ResolvedSchema schema;
-  private final ObjectIdentifier objectIdentifier;
   private boolean overwrite = false;
+  private int[] requiredPos;
 
-  public HoodieTableSink(Configuration conf, ResolvedSchema schema, ObjectIdentifier objectIdentifier) {
-    this.conf = conf;
-    this.schema = schema;
-    this.objectIdentifier = objectIdentifier;
+  public HoodieTableSink(Configuration conf, ResolvedSchema schema) {
+    this(conf, schema, false, null);
   }
 
-  public HoodieTableSink(Configuration conf, ResolvedSchema schema, boolean overwrite, ObjectIdentifier objectIdentifier) {
+  public HoodieTableSink(Configuration conf, ResolvedSchema schema, boolean overwrite, @Nullable int[] requiredPos) {
     this.conf = conf;
     this.schema = schema;
     this.overwrite = overwrite;
-    this.objectIdentifier = objectIdentifier;
+    this.requiredPos = requiredPos == null
+        ? IntStream.range(0, schema.getColumnCount()).toArray()
+        : requiredPos;
   }
 
   @Override
@@ -77,12 +83,12 @@ public class HoodieTableSink implements DynamicTableSink, SupportsPartitioning, 
       // bulk_insert mode
       final String writeOperation = this.conf.get(FlinkOptions.OPERATION);
       if (WriteOperationType.fromValue(writeOperation) == WriteOperationType.BULK_INSERT) {
-        return Pipelines.bulkInsert(conf, rowType, dataStream, objectIdentifier);
+        return Pipelines.bulkInsert(conf, rowType, dataStream);
       }
 
       // Append mode
       if (OptionsResolver.isAppendMode(conf)) {
-        return Pipelines.append(conf, rowType, dataStream, context.isBounded(), objectIdentifier);
+        return Pipelines.append(conf, rowType, dataStream, context.isBounded());
       }
 
       // default parallelism
@@ -90,14 +96,14 @@ public class HoodieTableSink implements DynamicTableSink, SupportsPartitioning, 
       DataStream<Object> pipeline;
       // bootstrap
       final DataStream<HoodieRecord> hoodieRecordDataStream =
-          Pipelines.bootstrap(conf, rowType, parallelism, dataStream, context.isBounded(), overwrite, objectIdentifier);
+          Pipelines.bootstrap(conf, rowType, parallelism, dataStream, context.isBounded(), overwrite);
       // write pipeline
-      pipeline = Pipelines.hoodieStreamWrite(conf, parallelism, hoodieRecordDataStream, objectIdentifier);
+      pipeline = Pipelines.hoodieStreamWrite(conf, parallelism, hoodieRecordDataStream, getSinkOperatorNameSuffix());
       // compaction
       if (StreamerUtil.needsAsyncCompaction(conf)) {
-        return Pipelines.compact(conf, pipeline, objectIdentifier);
+        return Pipelines.compact(conf, pipeline);
       } else {
-        return Pipelines.clean(conf, pipeline, objectIdentifier);
+        return Pipelines.clean(conf, pipeline);
       }
     };
   }
@@ -118,7 +124,7 @@ public class HoodieTableSink implements DynamicTableSink, SupportsPartitioning, 
 
   @Override
   public DynamicTableSink copy() {
-    return new HoodieTableSink(this.conf, this.schema, this.overwrite, this.objectIdentifier);
+    return new HoodieTableSink(this.conf, this.schema, this.overwrite, this.requiredPos);
   }
 
   @Override
@@ -140,5 +146,19 @@ public class HoodieTableSink implements DynamicTableSink, SupportsPartitioning, 
     // set up the operation as INSERT_OVERWRITE_TABLE first,
     // if there are explicit partitions, #applyStaticPartition would overwrite the option.
     this.conf.setString(FlinkOptions.OPERATION, WriteOperationType.INSERT_OVERWRITE_TABLE.value());
+  }
+
+  private String getSinkOperatorNameSuffix() {
+    String[] schemaFieldNames = this.schema.getColumnNames().toArray(new String[0]);
+    List<String> fields = Arrays.stream(this.requiredPos)
+        .mapToObj(i -> schemaFieldNames[i])
+        .collect(Collectors.toList());
+    StringBuilder sb = new StringBuilder();
+    sb.append("(")
+        .append("table=").append(Collections.singletonList(conf.getString(FlinkOptions.TABLE_NAME)))
+        .append(", ")
+        .append("fields=").append(fields)
+        .append(")");
+    return sb.toString();
   }
 }

@@ -38,7 +38,6 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.api.ValidationException;
 import org.apache.flink.table.api.constraints.UniqueConstraint;
 import org.apache.flink.table.catalog.CatalogTable;
-import org.apache.flink.table.catalog.ObjectIdentifier;
 import org.apache.flink.table.catalog.ResolvedSchema;
 import org.apache.flink.table.connector.sink.DynamicTableSink;
 import org.apache.flink.table.connector.source.DynamicTableSource;
@@ -70,7 +69,6 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
   public DynamicTableSource createDynamicTableSource(Context context) {
     Configuration conf = FlinkOptions.fromMap(context.getCatalogTable().getOptions());
     ResolvedSchema schema = context.getCatalogTable().getResolvedSchema();
-    final ObjectIdentifier objectIdentifier = context.getObjectIdentifier();
     sanityCheck(conf, schema);
     setupConfOptions(conf, context.getObjectIdentifier().getObjectName(), context.getCatalogTable(), schema);
 
@@ -81,8 +79,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
         path,
         context.getCatalogTable().getPartitionKeys(),
         conf.getString(FlinkOptions.PARTITION_DEFAULT_NAME),
-        conf,
-        objectIdentifier);
+        conf);
   }
 
   @Override
@@ -91,10 +88,9 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
     checkArgument(!StringUtils.isNullOrEmpty(conf.getString(FlinkOptions.PATH)),
         "Option [path] should not be empty.");
     ResolvedSchema schema = context.getCatalogTable().getResolvedSchema();
-    final ObjectIdentifier objectIdentifier = context.getObjectIdentifier();
     sanityCheck(conf, schema);
     setupConfOptions(conf, context.getObjectIdentifier().getObjectName(), context.getCatalogTable(), schema);
-    return new HoodieTableSink(conf, schema, objectIdentifier);
+    return new HoodieTableSink(conf, schema);
   }
 
   @Override

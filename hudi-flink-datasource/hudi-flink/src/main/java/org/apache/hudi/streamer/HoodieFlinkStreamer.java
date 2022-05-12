@@ -35,7 +35,6 @@ import org.apache.flink.formats.json.JsonRowDataDeserializationSchema;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer;
-import org.apache.flink.table.catalog.ObjectIdentifier;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.runtime.typeutils.InternalTypeInfo;
 import org.apache.flink.table.types.logical.RowType;
@@ -97,13 +96,13 @@ public class HoodieFlinkStreamer {
         dataStream = transformer.get().apply(dataStream);
       }
     }
-    ObjectIdentifier identifier =  ObjectIdentifier.of("default_catalog", "default_database", "t1");
-    DataStream<HoodieRecord> hoodieRecordDataStream = Pipelines.bootstrap(conf, rowType, parallelism, dataStream, identifier);
-    DataStream<Object> pipeline = Pipelines.hoodieStreamWrite(conf, parallelism, hoodieRecordDataStream, identifier);
+
+    DataStream<HoodieRecord> hoodieRecordDataStream = Pipelines.bootstrap(conf, rowType, parallelism, dataStream);
+    DataStream<Object> pipeline = Pipelines.hoodieStreamWrite(conf, parallelism, hoodieRecordDataStream, conf.getString(FlinkOptions.TABLE_NAME));
     if (StreamerUtil.needsAsyncCompaction(conf)) {
-      Pipelines.compact(conf, pipeline, identifier);
+      Pipelines.compact(conf, pipeline);
     } else {
-      Pipelines.clean(conf, pipeline, identifier);
+      Pipelines.clean(conf, pipeline);
     }
 
     env.execute(cfg.targetTableName);

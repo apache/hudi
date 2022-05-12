@@ -45,7 +45,6 @@ import org.apache.flink.streaming.api.CheckpointingMode;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.source.FileProcessingMode;
-import org.apache.flink.table.catalog.ObjectIdentifier;
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.runtime.typeutils.InternalTypeInfo;
@@ -225,15 +224,15 @@ public class ITTestDataStreamWrite extends TestLogger {
     if (transformer.isPresent()) {
       dataStream = transformer.get().apply(dataStream);
     }
-    ObjectIdentifier identifier =  ObjectIdentifier.of("default_catalog", "default_database", "t1");
+
     int parallelism = execEnv.getParallelism();
-    DataStream<HoodieRecord> hoodieRecordDataStream = Pipelines.bootstrap(conf, rowType, parallelism, dataStream, identifier);
-    DataStream<Object> pipeline = Pipelines.hoodieStreamWrite(conf, parallelism, hoodieRecordDataStream, identifier);
+    DataStream<HoodieRecord> hoodieRecordDataStream = Pipelines.bootstrap(conf, rowType, parallelism, dataStream);
+    DataStream<Object> pipeline = Pipelines.hoodieStreamWrite(conf, parallelism, hoodieRecordDataStream, "default_catalog.default_database.t1");
     execEnv.addOperator(pipeline.getTransformation());
 
     if (isMor) {
-      Pipelines.clean(conf, pipeline, identifier);
-      Pipelines.compact(conf, pipeline, identifier);
+      Pipelines.clean(conf, pipeline);
+      Pipelines.compact(conf, pipeline);
     }
     JobClient client = execEnv.executeAsync(jobName);
     if (isMor) {
