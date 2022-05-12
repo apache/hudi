@@ -515,13 +515,25 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
   private boolean deleteArchivedInstants(List<HoodieInstant> archivedInstants, HoodieEngineContext context) throws IOException {
     LOG.info("Deleting instants " + archivedInstants);
     boolean success = true;
-    List<String> instantFiles = archivedInstants.stream().map(archivedInstant ->
-        new Path(metaClient.getMetaPath(), archivedInstant.getFileName())
-    ).map(Path::toString).collect(Collectors.toList());
-
+    List<HoodieInstant> nonCommitInstants = new ArrayList<>();
+    List<HoodieInstant> commitInstant = new ArrayList<>();
+    for (HoodieInstant hoodieInstant : archivedInstants) {
+      if (hoodieInstant.isCompleted()) {
+        commitInstant.add(hoodieInstant);
+      } else {
+        nonCommitInstants.add(hoodieInstant);
+      }
+    }
+    List<String> nonCommitInstantFiles = mapInstantToFile(nonCommitInstants);
+    List<String> commitInstantFiles = mapInstantToFile(commitInstant);
     context.setJobStatus(this.getClass().getSimpleName(), "Delete archived instants");
-    Map<String, Boolean> resultDeleteInstantFiles = deleteFilesParallelize(metaClient, instantFiles, context, false);
-
+    // Suppose an application crashes while archiving, it leaves some instant files that should be deleted.
+    // If the commit file is deleted but the in-flight file is left,
+    // when the application starts, it will scan and get the last pending instant and throw an exception.
+    // So we need to delete non-commit instant files first.
+    Map<String, Boolean> resultDeleteInstantFiles = new HashMap<>();
+    resultDeleteInstantFiles.putAll(deleteFilesParallelize(metaClient, nonCommitInstantFiles, context, false));
+    resultDeleteInstantFiles.putAll(deleteFilesParallelize(metaClient, commitInstantFiles, context, false));
     for (Map.Entry<String, Boolean> result : resultDeleteInstantFiles.entrySet()) {
       LOG.info("Archived and deleted instant file " + result.getKey() + " : " + result.getValue());
       success &= result.getValue();
@@ -535,6 +547,12 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
       success &= deleteAllInstantsOlderOrEqualsInAuxMetaFolder(latestCommitted.get());
     }
     return success;
+  }
+
+  private List<String> mapInstantToFile(List<HoodieInstant> instants) {
+    return instants.stream().map(instant ->
+        new Path(metaClient.getMetaPath(), instant.getFileName())
+    ).map(Path::toString).collect(Collectors.toList());
   }
 
   /**
