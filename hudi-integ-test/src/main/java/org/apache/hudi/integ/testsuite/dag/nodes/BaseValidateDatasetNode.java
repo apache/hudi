@@ -94,7 +94,7 @@ public abstract class BaseValidateDatasetNode extends DagNode<Boolean> {
         }
       }
 
-      Dataset<Row> inputSnapshotDf = getInputDf(context, session, inputPath, config.partitonsToSkipWithValidate());
+      Dataset<Row> inputSnapshotDf = getInputDf(context, session, inputPath);
 
       // read from hudi and remove meta columns.
       Dataset<Row> trimmedHudiDf = getDatasetToValidate(session, context, inputSnapshotDf.schema());
@@ -157,15 +157,15 @@ public abstract class BaseValidateDatasetNode extends DagNode<Boolean> {
     }
   }
 
-  private Dataset<Row> getInputDf(ExecutionContext context, SparkSession session, String inputPath, String partitionsToSkipWithValidate) {
+  private Dataset<Row> getInputDf(ExecutionContext context, SparkSession session, String inputPath) {
     String recordKeyField = context.getWriterContext().getProps().getString(DataSourceWriteOptions.RECORDKEY_FIELD().key());
     String partitionPathField = context.getWriterContext().getProps().getString(DataSourceWriteOptions.PARTITIONPATH_FIELD().key());
     // todo: fix hard coded fields from configs.
     // read input and resolve insert, updates, etc.
     Dataset<Row> inputDf = session.read().format("avro").load(inputPath);
     Dataset<Row> trimmedDf = inputDf;
-    if (!config.partitonsToSkipWithValidate().isEmpty()) {
-      trimmedDf = inputDf.filter("instr("+partitionPathField+", \'"+ config.partitonsToSkipWithValidate() +"\') != 1");
+    if (!config.inputPartitonsToSkipWithValidate().isEmpty()) {
+      trimmedDf = inputDf.filter("instr("+partitionPathField+", \'"+ config.inputPartitonsToSkipWithValidate() +"\') != 1");
     }
 
     ExpressionEncoder encoder = getEncoder(inputDf.schema());

@@ -100,7 +100,7 @@ public class DeltaConfig implements Serializable {
     private static String VALIDATE_FULL_DATA = "validate_full_data";
     private static String DELETE_INPUT_DATA_EXCEPT_LATEST = "delete_input_data_except_latest";
     private static String PARTITIONS_TO_DELETE = "partitions_to_delete";
-    private static String PARTITIONS_TO_SKIP_VALIDATE = "partitions_to_skip_validate";
+    private static String INPUT_PARTITIONS_TO_SKIP_VALIDATE = "input_partitions_to_skip_validate";
 
     // Spark SQL Create Table
     private static String TABLE_TYPE = "table_type";
@@ -227,8 +227,8 @@ public class DeltaConfig implements Serializable {
       return Integer.valueOf(configsMap.getOrDefault(VALIDATE_ONCE_EVERY_ITR, 1).toString());
     }
 
-    public String partitonsToSkipWithValidate() {
-      return configsMap.getOrDefault(PARTITIONS_TO_SKIP_VALIDATE, "").toString();
+    public String inputPartitonsToSkipWithValidate() {
+      return configsMap.getOrDefault(INPUT_PARTITIONS_TO_SKIP_VALIDATE, "").toString();
     }
 
     public boolean isValidateFullData() {

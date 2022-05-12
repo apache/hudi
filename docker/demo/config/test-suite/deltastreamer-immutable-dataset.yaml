@@ -13,45 +13,41 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-dag_name: simple-deltastreamer.yaml
-dag_rounds: 1
-dag_intermittent_delay_mins: 1
+dag_name: deltastreamer-immutable-dataset.yaml
+dag_rounds: 5
+dag_intermittent_delay_mins: 0
 dag_content:
+  first_bulk_insert:
+    config:
+      record_size: 200
+      num_partitions_insert: 10
+      repeat_count: 3
+      num_records_insert: 5000
+    type: BulkInsertNode
+    deps: none
+  first_validate:
+    config:
+      validate_hive: false
+      delete_input_data: false
+    type: ValidateDatasetNode
+    deps: first_bulk_insert
   first_insert:
     config:
-      record_size: 1000
-      num_partitions_insert: 5
-      repeat_count: 1
-      num_records_insert: 10
-    type: SparkInsertNode
-    deps: none
-  first_delete_partition:
-    config:
-      partitions_to_delete: "1969/12/31"
-    type: SparkDeletePartitionNode
-    deps: first_insert
+      record_size: 200
+      num_partitions_insert: 10
+      repeat_count: 3
+      num_records_insert: 5000
+    type: InsertNode
+    deps: first_validate
   second_validate:
     config:
-      validate_full_data : true
-      partitions_to_skip_validate : "0"
       validate_hive: false
       delete_input_data: false
     type: ValidateDatasetNode
-    deps: first_delete_partition
-  second_insert:
+    deps: first_insert
+  last_validate:
     config:
-      record_size: 1000
-      num_partitions_insert: 5
-      repeat_count: 1
-      num_records_insert: 10
-      start_partition: 2
-    type: SparkInsertNode
+      execute_itr_count: 5
+      delete_input_data: true
+    type: ValidateAsyncOperations
     deps: second_validate
-  third_validate:
-    config:
-      validate_full_data : true
-      partitions_to_skip_validate : "0"
-      validate_hive: false
-      delete_input_data: false
-    type: ValidateDatasetNode
-    deps: second_insert

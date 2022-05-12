@@ -13,7 +13,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-dag_name: simple-deltastreamer.yaml
+dag_name: spark-non-core-operations.yaml
 dag_rounds: 1
 dag_intermittent_delay_mins: 1
 dag_content:
@@ -180,7 +180,7 @@ dag_content:
   fourth_validate:
     config:
       validate_full_data : true
-      partitions_to_skip_validate : "0"
+      input_partitions_to_skip_validate : "0"
       validate_hive: false
       delete_input_data: false
     type: ValidateDatasetNode
@@ -197,7 +197,7 @@ dag_content:
   fifth_validate:
     config:
       validate_full_data : true
-      partitions_to_skip_validate : "0"
+      input_partitions_to_skip_validate : "0"
       validate_hive: false
       delete_input_data: false
     type: ValidateDatasetNode

@@ -13,18 +13,32 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-dag_name: spark-pure-inserts.yaml
+dag_name: spark-immutable-dataset.yaml
 dag_rounds: 5
-dag_intermittent_delay_mins: 1
+dag_intermittent_delay_mins: 0
 dag_content:
+  first_bulk_insert:
+    config:
+      record_size: 200
+      num_partitions_insert: 10
+      repeat_count: 5
+      num_records_insert: 5000
+    type: SparkBulkInsertNode
+    deps: none
+  first_validate:
+    config:
+      validate_hive: false
+      delete_input_data: false
+    type: ValidateDatasetNode
+    deps: first_bulk_insert
   first_insert:
     config:
       record_size: 200
       num_partitions_insert: 10
-      repeat_count: 3
+      repeat_count: 5
       num_records_insert: 5000
     type: SparkInsertNode
-    deps: none
+    deps: first_validate
   second_validate:
     config:
       validate_hive: false
@@ -33,6 +47,7 @@ dag_content:
     deps: first_insert
   last_validate:
     config:
-      execute_itr_count: 10
+      execute_itr_count: 5
+      delete_input_data: true
     type: ValidateAsyncOperations
     deps: second_validate

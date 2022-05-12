@@ -13,7 +13,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-dag_name: simple-deltastreamer.yaml
+dag_name: deltastreamer-pure-inserts.yaml
 dag_rounds: 10
 dag_intermittent_delay_mins: 0
 dag_content:
@@ -22,7 +22,7 @@ dag_content:
       record_size: 200
       num_partitions_insert: 10
       repeat_count: 3
-      num_records_insert: 10000
+      num_records_insert: 5000
     type: InsertNode
     deps: none
   second_validate:
