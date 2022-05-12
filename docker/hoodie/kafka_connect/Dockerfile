@@ -1,4 +1,3 @@
-#!/bin/bash
 
 #  Licensed to the Apache Software Foundation (ASF) under one
 #  or more contributor license agreements.  See the NOTICE file
@@ -16,10 +15,14 @@
 #  See the License for the specific language governing permissions and
 # limitations under the License.
 
-echo "Copying spark default config and setting up configs"
-cp /var/hoodie/ws/docker/demo/config/spark-defaults.conf $SPARK_CONF_DIR/.
-cp /var/hoodie/ws/docker/demo/config/log4j.properties $SPARK_CONF_DIR/.
-hadoop fs -mkdir -p /var/demo/
-hadoop fs -mkdir -p /tmp/spark-events
-hadoop fs -copyFromLocal  -f /var/hoodie/ws/docker/demo/config /var/demo/.
-chmod +x /var/hoodie/ws/hudi-sync/hudi-hive-sync/run_sync_tool.sh
+ARG CP_KAFKA_VERSION=5.5.8
+# work with Apache Kafka 2.5.x
+FROM confluentinc/cp-kafka-connect-base:${CP_KAFKA_VERSION}
+
+RUN confluent-hub install --no-prompt confluentinc/kafka-connect-hdfs:10.1.0
+ADD target/hudi-kafka-connect-bundle.jar /usr/share/confluent-hub-components/confluentinc-kafka-connect-hdfs/lib
+ENV CONNECT_PLUGIN_PATH=/usr/share/java,/usr/share/confluent-hub-components
+
+ADD bin/launch.sh /home/
+
+CMD /home/launch.sh

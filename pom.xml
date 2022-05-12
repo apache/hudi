@@ -1381,6 +1381,7 @@
       </activation>
       <modules>
         <module>docker/hoodie/hadoop</module>
+        <module>docker/hoodie/kafka_connect</module>
         <module>hudi-integ-test</module>
         <module>packaging/hudi-integ-test-bundle</module>
       </modules>

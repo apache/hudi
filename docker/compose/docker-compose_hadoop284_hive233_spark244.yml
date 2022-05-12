@@ -175,23 +175,78 @@ services:
       - "namenode"
 
   zookeeper:
-    image: 'bitnami/zookeeper:3.4.12-r68'
+    image: 'confluentinc/cp-zookeeper:5.5.8'
     hostname: zookeeper
     container_name: zookeeper
     ports:
       - "2181:2181"
     environment:
-      - ALLOW_ANONYMOUS_LOGIN=yes
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
 
-  kafka:
-    image: 'bitnami/kafka:2.0.0'
+  kafkabroker:
+    image: 'confluentinc/cp-kafka:5.5.8'
     hostname: kafkabroker
     container_name: kafkabroker
+    depends_on:
+      - zookeeper
     ports:
       - "9092:9092"
+      - "29092:29092"
     environment:
-      - KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181
-      - ALLOW_PLAINTEXT_LISTENER=yes
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafkabroker:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+
+  connect:
+    image: 'apachehudi/hudi-kafka-connect_2.5.0:latest'
+    container_name: connect
+    depends_on:
+      - zookeeper
+      - kafkabroker
+    ports:
+      - "8083:8083"
+    environment:
+      CONNECT_BOOTSTRAP_SERVERS: 'kafkabroker:9092'
+      CONNECT_REST_ADVERTISED_HOST_NAME: connect
+      CONNECT_REST_PORT: 8083
+      CONNECT_GROUP_ID: hudi-connect-cluster
+      CONNECT_CONFIG_STORAGE_TOPIC: connect-configs
+      CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_OFFSET_FLUSH_INTERVAL_MS: 10000
+      CONNECT_OFFSET_STORAGE_TOPIC: connect-offsets
+      CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_STATUS_STORAGE_TOPIC: connect-statuses
+      CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_KEY_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      CONNECT_VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      CONNECT_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+      CONNECT_LOG4J_LOGGERS: org.apache.zookeeper=ERROR,org.I0Itec.zkclient=ERROR,org.reflections=ERROR
+      CONNECT_INTERNAL_KEY_CONVERTER: "org.apache.kafka.connect.json.JsonConverter"
+      CONNECT_INTERNAL_VALUE_CONVERTER: "org.apache.kafka.connect.json.JsonConverter"
+
+  # This container bootstraps topics
+  kafka-setup:
+    image: 'confluentinc/cp-kafka:5.5.8'
+    container_name: kafka-setup
+    depends_on:
+      - kafkabroker
+    environment:
+      # The following settings are listed here only to satisfy the image's requirements.
+      # We override the image's `command` anyways, hence this container will not start a broker.
+      KAFKA_BROKER_ID: ignored
+      KAFKA_ZOOKEEPER_CONNECT: ignored
+    command:
+      - bash
+      - -c
+      - |
+        echo "Waiting for Kafka to be ready..."
+        cub kafka-ready -b kafkabroker:9092 1 40
+        echo "Kafka broker ready"
+        echo "Creating Hoodie control topic"
+        kafka-topics --create --topic hudi-control-topic --partitions 1 --replication-factor 1 --bootstrap-server kafkabroker:9092
 
   presto-coordinator-1:
     container_name: presto-coordinator-1
