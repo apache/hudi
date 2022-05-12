@@ -72,4 +72,154 @@ class TestDropTable extends HoodieSparkSqlTestBase {
       }
     }
   }
+
+  test("Test Drop RO & RT table by purging base table.") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  ts long
+           |) using hudi
+           | location '${tmp.getCanonicalPath}/$tableName'
+           | tblproperties (
+           |  type = 'mor',
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts'
+           | )
+       """.stripMargin)
+
+      spark.sql(
+        s"""
+           |create table ${tableName}_ro using hudi
+           | location '${tmp.getCanonicalPath}/$tableName'
+           | tblproperties (
+           |  type = 'mor',
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts',
+           |  hoodie.query.as.ro.table='true'
+           | )
+       """.stripMargin)
+
+      spark.sql(
+        s"""
+           |create table ${tableName}_rt using hudi
+           | location '${tmp.getCanonicalPath}/$tableName'
+           | tblproperties (
+           |  type = 'mor',
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts',
+           |  hoodie.query.as.ro.table='false'
+           | )
+       """.stripMargin)
+
+      spark.sql(s"drop table ${tableName} purge")
+      checkAnswer("show tables")()
+    }
+  }
+
+  test("Test Drop RO & RT table by one by one.") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  ts long
+           |) using hudi
+           | location '${tmp.getCanonicalPath}/$tableName'
+           | tblproperties (
+           |  type = 'mor',
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts'
+           | )
+       """.stripMargin)
+
+      spark.sql(
+        s"""
+           |create table ${tableName}_ro using hudi
+           | location '${tmp.getCanonicalPath}/$tableName'
+           | tblproperties (
+           |  type = 'mor',
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts',
+           |  hoodie.query.as.ro.table='true'
+           | )
+       """.stripMargin)
+
+      spark.sql(
+        s"""
+           |create table ${tableName}_rt using hudi
+           | location '${tmp.getCanonicalPath}/$tableName'
+           | tblproperties (
+           |  type = 'mor',
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts',
+           |  hoodie.query.as.ro.table='false'
+           | )
+       """.stripMargin)
+
+      spark.sql(s"drop table ${tableName}_ro")
+      checkAnswer("show tables")(
+        Seq("default", tableName, false), Seq("default", s"${tableName}_rt", false))
+
+      spark.sql(s"drop table ${tableName}_rt")
+      checkAnswer("show tables")(Seq("default", tableName, false))
+
+      spark.sql(s"drop table ${tableName}")
+      checkAnswer("show tables")()
+    }
+  }
+
+  test("Test Drop RO table with purge") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  ts long
+           |) using hudi
+           | location '${tmp.getCanonicalPath}/$tableName'
+           | tblproperties (
+           |  type = 'mor',
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts'
+           | )
+       """.stripMargin)
+
+      spark.sql(
+        s"""
+           |create table ${tableName}_ro using hudi
+           | location '${tmp.getCanonicalPath}/$tableName'
+           | tblproperties (
+           |  type = 'mor',
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts',
+           |  hoodie.query.as.ro.table='true'
+           | )
+       """.stripMargin)
+
+      spark.sql(
+        s"""
+           |create table ${tableName}_rt using hudi
+           | location '${tmp.getCanonicalPath}/$tableName'
+           | tblproperties (
+           |  type = 'mor',
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts',
+           |  hoodie.query.as.ro.table='false'
+           | )
+       """.stripMargin)
+
+      spark.sql(s"drop table ${tableName}_ro purge")
+      checkAnswer("show tables")()
+    }
+  }
+
+
 }
