@@ -642,8 +642,9 @@ public class TestData {
           file.getName().contains(".log.") && !file.getName().startsWith(".."));
       assertNotNull(dataFiles);
       HoodieMergedLogRecordScanner scanner = getScanner(
-          fs, baseFile.getPath(), Arrays.stream(dataFiles).map(File::getAbsolutePath)
-              .sorted(Comparator.naturalOrder()).collect(Collectors.toList()),
+          fs, baseFile.getPath(), Arrays.stream(dataFiles)
+              .sorted(Comparator.comparing(f -> FSUtils.getCommitTime(f.getName())))
+              .map(File::getAbsolutePath).collect(Collectors.toList()),
           schema, latestInstant);
       List<String> readBuffer = scanner.getRecords().values().stream()
           .map(hoodieRecord -> {
