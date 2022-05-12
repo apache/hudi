@@ -88,5 +88,5 @@ The list of all RFCs can be found here.
 | 50 | [Improve Timeline Server](./rfc-50/rfc-50.md) | `UNDER REVIEW` | 
 | 51 | [Change Data Capture](./rfc-51/rfc-51.md) | `UNDER REVIEW` |
 | 52 | [Introduce Secondary Index to Improve HUDI Query Performance](./rfc-52/rfc-52.md) | `UNDER REVIEW` |
-| 53 | [Using Lock-Free Message Queue Improving Hoodie Writing Efficiency](./rfc-53/rfc-53.md) | `UNDER REVIEW` | 
+| 53 | [Use Lock-Free Message Queue Improving Hoodie Writing Efficiency](./rfc-53/rfc-53.md) | `UNDER REVIEW` | 
 
