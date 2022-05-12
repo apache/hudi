@@ -21,6 +21,7 @@ package org.apache.hudi.source;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 import org.apache.hudi.util.StreamerUtil;
 
@@ -157,7 +158,7 @@ public class StreamReadMonitoringFunction
   @Override
   public void open(Configuration parameters) throws Exception {
     super.open(parameters);
-    this.hadoopConf = FlinkOptions.getHadoopConf(parameters);
+    this.hadoopConf = HadoopConfigurations.getHadoopConf(parameters);
   }
 
   @Override

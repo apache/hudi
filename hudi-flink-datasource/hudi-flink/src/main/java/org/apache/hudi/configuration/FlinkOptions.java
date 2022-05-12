@@ -35,7 +35,6 @@ import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.ConfigOptions;
 import org.apache.flink.configuration.Configuration;
-import org.apache.hudi.util.FlinkClientUtil;
 
 import java.lang.reflect.Field;
 import java.util.ArrayList;
@@ -709,8 +708,6 @@ public class FlinkOptions extends HoodieConfig {
 
   // Prefix for Hoodie specific properties.
   private static final String PROPERTIES_PREFIX = "properties.";
-  private static final String HADOOP_PREFIX = "hadoop.";
-  private static final  String PARQUET_PREFIX = "parquet.";
 
   /**
    * Collects the config options that start with specified prefix {@code prefix} into a 'key'='value' list.
@@ -727,25 +724,6 @@ public class FlinkOptions extends HoodieConfig {
           });
     }
     return hoodieProperties;
-  }
-
-  public static org.apache.hadoop.conf.Configuration getParquetConf(
-          org.apache.flink.configuration.Configuration options,
-          org.apache.hadoop.conf.Configuration hadoopConf) {
-    org.apache.hadoop.conf.Configuration copy = new org.apache.hadoop.conf.Configuration(hadoopConf);
-    Map<String, String> parquetOptions = getPropertiesWithPrefix(options.toMap(), PARQUET_PREFIX);
-    parquetOptions.forEach((k, v) -> copy.set(PARQUET_PREFIX + k, v));
-    return copy;
-  }
-
-  /**
-   * Create a new hadoop configuration that is initialized with the given flink configuration.
-   */
-  public static org.apache.hadoop.conf.Configuration getHadoopConf(Configuration conf) {
-    org.apache.hadoop.conf.Configuration hadoopConf = FlinkClientUtil.getHadoopConf();
-    Map<String, String> options = getPropertiesWithPrefix(conf.toMap(), HADOOP_PREFIX);
-    options.forEach((k, v) -> hadoopConf.set(k, v));
-    return hadoopConf;
   }
 
   /**

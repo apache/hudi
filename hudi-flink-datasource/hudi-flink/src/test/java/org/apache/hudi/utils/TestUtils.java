@@ -22,6 +22,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.source.StreamReadMonitoringFunction;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 import org.apache.hudi.util.StreamerUtil;
@@ -39,19 +40,19 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class TestUtils {
   public static String getLastPendingInstant(String basePath) {
     final HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
-        .setConf(FlinkOptions.getHadoopConf(new Configuration())).setBasePath(basePath).build();
+        .setConf(HadoopConfigurations.getHadoopConf(new Configuration())).setBasePath(basePath).build();
     return StreamerUtil.getLastPendingInstant(metaClient);
   }
 
   public static String getLastCompleteInstant(String basePath) {
     final HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
-        .setConf(FlinkOptions.getHadoopConf(new Configuration())).setBasePath(basePath).build();
+        .setConf(HadoopConfigurations.getHadoopConf(new Configuration())).setBasePath(basePath).build();
     return StreamerUtil.getLastCompletedInstant(metaClient);
   }
 
   public static String getLastDeltaCompleteInstant(String basePath) {
     final HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
-        .setConf(FlinkOptions.getHadoopConf(new Configuration())).setBasePath(basePath).build();
+        .setConf(HadoopConfigurations.getHadoopConf(new Configuration())).setBasePath(basePath).build();
     return metaClient.getCommitsTimeline().filterCompletedInstants()
         .filter(hoodieInstant -> hoodieInstant.getAction().equals(HoodieTimeline.DELTA_COMMIT_ACTION))
         .lastInstant()
@@ -61,7 +62,7 @@ public class TestUtils {
 
   public static String getFirstCompleteInstant(String basePath) {
     final HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
-        .setConf(FlinkOptions.getHadoopConf(new Configuration())).setBasePath(basePath).build();
+        .setConf(HadoopConfigurations.getHadoopConf(new Configuration())).setBasePath(basePath).build();
     return metaClient.getCommitsAndCompactionTimeline().filterCompletedInstants().firstInstant()
         .map(HoodieInstant::getTimestamp).orElse(null);
   }
@@ -69,7 +70,7 @@ public class TestUtils {
   @Nullable
   public static String getNthCompleteInstant(String basePath, int n, boolean isDelta) {
     final HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
-        .setConf(FlinkOptions.getHadoopConf(new Configuration())).setBasePath(basePath).build();
+        .setConf(HadoopConfigurations.getHadoopConf(new Configuration())).setBasePath(basePath).build();
     return metaClient.getActiveTimeline()
         .filterCompletedInstants()
         .filter(instant -> isDelta ? HoodieTimeline.DELTA_COMMIT_ACTION.equals(instant.getAction()) : HoodieTimeline.COMMIT_ACTION.equals(instant.getAction()))
