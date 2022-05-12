@@ -27,7 +27,7 @@ dag_content:
     deps: none
   first_delete_partition:
     config:
-      partitions_to_delete: "1969/12/31"
+      partitions_to_delete: "1970/01/01"
     type: SparkDeletePartitionNode
     deps: first_insert
   second_validate:
