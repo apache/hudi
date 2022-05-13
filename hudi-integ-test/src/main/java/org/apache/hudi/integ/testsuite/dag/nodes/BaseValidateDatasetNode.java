@@ -163,8 +163,13 @@ public abstract class BaseValidateDatasetNode extends DagNode<Boolean> {
     // todo: fix hard coded fields from configs.
     // read input and resolve insert, updates, etc.
     Dataset<Row> inputDf = session.read().format("avro").load(inputPath);
+    Dataset<Row> trimmedDf = inputDf;
+    if (!config.inputPartitonsToSkipWithValidate().isEmpty()) {
+      trimmedDf = inputDf.filter("instr("+partitionPathField+", \'"+ config.inputPartitonsToSkipWithValidate() +"\') != 1");
+    }
+
     ExpressionEncoder encoder = getEncoder(inputDf.schema());
-    return inputDf.groupByKey(
+    return trimmedDf.groupByKey(
             (MapFunction<Row, String>) value ->
                 (partitionPathField.isEmpty() ? value.getAs(recordKeyField) : (value.getAs(partitionPathField) + "+" + value.getAs(recordKeyField))), Encoders.STRING())
         .reduceGroups((ReduceFunction<Row>) (v1, v2) -> {
