@@ -33,28 +33,28 @@ public interface Functions {
   /**
    * A function which has not any parameter.
    */
-  public interface Function0<R> extends Serializable {
+  interface Function0<R> extends Serializable {
     R apply();
   }
 
   /**
    * A function which contains only one parameter.
    */
-  public interface Function1<T1, R> extends Serializable {
+  interface Function1<T1, R> extends Serializable {
     R apply(T1 val1);
   }
 
   /**
    * A function which contains two parameters.
    */
-  public interface Function2<T1, T2, R> extends Serializable {
+  interface Function2<T1, T2, R> extends Serializable {
     R apply(T1 val1, T2 val2);
   }
 
   /**
    * A function which contains three parameters.
    */
-  public interface Function3<T1, T2, T3, R> extends Serializable {
+  interface Function3<T1, T2, T3, R> extends Serializable {
     R apply(T1 val1, T2 val2, T3 val3);
   }
 }
