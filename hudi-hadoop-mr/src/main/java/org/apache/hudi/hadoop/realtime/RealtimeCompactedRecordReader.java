@@ -152,7 +152,7 @@ public class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
     // we assume, a later safe record in the log, is newer than what we have in the map &
     // replace it. Since we want to return an arrayWritable which is the same length as the elements in the latest
     // schema, we use writerSchema to create the arrayWritable from the latest generic record
-    ArrayWritable aWritable = (ArrayWritable) HoodieRealtimeRecordReaderUtils.avroToArrayWritable(recordToReturn, getHiveSchema());
+    ArrayWritable aWritable = (ArrayWritable) HoodieRealtimeRecordReaderUtils.avroToArrayWritable(recordToReturn, getHiveSchema(), isSupportTimestamp());
     Writable[] replaceValue = aWritable.get();
     if (LOG.isDebugEnabled()) {
       LOG.debug(String.format("key %s, base values: %s, log values: %s", key, HoodieRealtimeRecordReaderUtils.arrayWritableToString(arrayWritable),

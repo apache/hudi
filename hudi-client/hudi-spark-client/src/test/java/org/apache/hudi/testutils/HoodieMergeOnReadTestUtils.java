@@ -211,7 +211,7 @@ public class HoodieMergeOnReadTestUtils {
     conf.set(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, "datestr");
     conf.set(hive_metastoreConstants.META_TABLE_COLUMN_TYPES, hiveColumnTypesWithDatestr);
     conf.set(IOConstants.COLUMNS, hiveColumnNames);
-    conf.get(IOConstants.COLUMNS_TYPES, hiveColumnTypesWithDatestr);
+    conf.set(IOConstants.COLUMNS_TYPES, hiveColumnTypesWithDatestr);
 
     // Hoodie Input formats are also configurable
     Configurable configurable = (Configurable)inputFormat;

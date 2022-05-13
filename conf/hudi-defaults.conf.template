@@ -21,6 +21,6 @@
 # Example:
 # hoodie.datasource.hive_sync.jdbcurl            jdbc:hive2://localhost:10000
 # hoodie.datasource.hive_sync.use_jdbc           true
-# hoodie.datasource.hive_sync.support_timestamp  false
+# hoodie.datasource.hive_sync.support_timestamp  true
 # hoodie.index.type                              BLOOM
 # hoodie.metadata.enable                         false

@@ -20,13 +20,21 @@ package org.apache.hudi.hadoop.utils;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hive.serde2.io.DateWritable;
+import org.apache.hadoop.hive.serde2.io.TimestampWritable;
+import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapreduce.JobContext;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -145,5 +153,75 @@ public class HoodieHiveUtils {
 
   public static boolean isIncrementalUseDatabase(Configuration conf) {
     return conf.getBoolean(HOODIE_INCREMENTAL_USE_DATABASE, false);
+  }
+
+  public static boolean SUPPORT_TIMESTAMP_WRITEABLE_V2;
+  private static Class timestampClass = null;
+  private static Method setTimeInMillis = null;
+  private static Constructor timestampWriteableV2constructor = null;
+
+  public static boolean SUPPORT_DATE_WRITEABLE_V2;
+  private static Constructor dateWriteableV2constructor = null;
+
+  static {
+    // timestamp
+    try {
+      timestampClass = Class.forName("org.apache.hadoop.hive.common.type.Timestamp");
+      setTimeInMillis = timestampClass.getDeclaredMethod("setTimeInMillis", long.class);
+      Class twV2Class = Class.forName("org.apache.hadoop.hive.serde2.io.TimestampWritableV2");
+      timestampWriteableV2constructor = twV2Class.getConstructor(timestampClass);
+      SUPPORT_TIMESTAMP_WRITEABLE_V2 = (null != timestampWriteableV2constructor);
+      LOG.trace("use TimestampWritableV2 to read hudi timestamp columns");
+    } catch (ClassNotFoundException | NoSuchMethodException e) {
+      LOG.trace("can not find hive3 timestampv2 class or method, use hive2 class!", e);
+      SUPPORT_TIMESTAMP_WRITEABLE_V2 = false;
+    }
+    // date
+    try {
+      Class dateV2Class = Class.forName("org.apache.hadoop.hive.serde2.io.DateWritableV2");
+      dateWriteableV2constructor = dateV2Class.getConstructor(int.class);
+      SUPPORT_DATE_WRITEABLE_V2 = (null != dateWriteableV2constructor);
+      LOG.trace("use DateWritableV2 to read hudi date columns");
+    } catch (ClassNotFoundException | NoSuchMethodException e) {
+      LOG.trace("can not find hive3 datev2 class or method, use hive2 class!", e);
+      SUPPORT_DATE_WRITEABLE_V2 = false;
+    }
+  }
+
+  /**
+   * Get timestamp writeable object from long value.
+   * Hive3 use TimestampWritableV2 to build timestamp objects and Hive2 use TimestampWritable.
+   * So that we need to initialize timestamp according to the version of Hive.
+   */
+  public static Writable getTimestampWriteable(long value, boolean timestampMillis) {
+    if (SUPPORT_TIMESTAMP_WRITEABLE_V2) {
+      try {
+        Object timestamp = timestampClass.newInstance();
+        setTimeInMillis.invoke(timestamp, timestampMillis ? value : value / 1000);
+        return (Writable) timestampWriteableV2constructor.newInstance(timestamp);
+      } catch (IllegalAccessException | InstantiationException | InvocationTargetException e) {
+        throw new HoodieException("can not create writable v2 class!", e);
+      }
+    } else {
+      Timestamp timestamp = new Timestamp(timestampMillis ? value : value / 1000);
+      return new TimestampWritable(timestamp);
+    }
+  }
+
+  /**
+   * Get date writeable object from int value.
+   * Hive3 use DateWritableV2 to build date objects and Hive2 use DateWritable.
+   * So that we need to initialize date according to the version of Hive.
+   */
+  public static Writable getDateWriteable(int value) {
+    if (SUPPORT_DATE_WRITEABLE_V2) {
+      try {
+        return (Writable) dateWriteableV2constructor.newInstance(value);
+      } catch (IllegalAccessException | InstantiationException | InvocationTargetException e) {
+        throw new HoodieException("can not create writable v2 class!", e);
+      }
+    } else {
+      return new DateWritable(value);
+    }
   }
 }

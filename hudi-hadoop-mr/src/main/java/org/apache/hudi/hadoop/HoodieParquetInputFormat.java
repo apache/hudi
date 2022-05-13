@@ -18,6 +18,7 @@
 
 package org.apache.hudi.hadoop;
 
+import org.apache.hadoop.hive.ql.io.parquet.read.ParquetRecordReaderWrapper;
 import org.apache.hadoop.hive.ql.io.sarg.ConvertAstToSearchArg;
 import org.apache.hadoop.hive.ql.plan.TableScanDesc;
 import org.apache.hadoop.io.ArrayWritable;
@@ -29,11 +30,15 @@ import org.apache.hadoop.mapred.RecordReader;
 import org.apache.hadoop.mapred.Reporter;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.hadoop.avro.HudiAvroParquetInputFormat;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+import org.apache.parquet.hadoop.ParquetInputFormat;
 
 import java.io.IOException;
+import java.lang.reflect.Constructor;
+import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -49,12 +54,32 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
 
   private static final Logger LOG = LogManager.getLogger(HoodieParquetInputFormat.class);
 
+  private boolean supportAvroRead = false;
+
   public HoodieParquetInputFormat() {
     super(new HoodieCopyOnWriteTableInputFormat());
+    initAvroInputFormat();
   }
 
   protected HoodieParquetInputFormat(HoodieCopyOnWriteTableInputFormat delegate) {
     super(delegate);
+    initAvroInputFormat();
+  }
+
+  /**
+   * Spark2 use `parquet.hadoopParquetInputFormat` in `com.twitter:parquet-hadoop-bundle`.
+   * So that we need to distinguish the constructions of classes with
+   *  `parquet.hadoopParquetInputFormat` or `org.apache.parquet.hadoop.ParquetInputFormat`.
+   * If we use `org.apache.parquet:parquet-hadoop`, we can use `HudiAvroParquetInputFormat`
+   *  in Hive or Spark3 to get timestamp with correct type.
+   */
+  private void initAvroInputFormat() {
+    Constructor[] constructors = ParquetRecordReaderWrapper.class.getConstructors();
+    if (Arrays.stream(constructors)
+            .anyMatch(c -> c.getParameterCount() > 0 && c.getParameterTypes()[0]
+                    .getName().equals(ParquetInputFormat.class.getName()))) {
+      supportAvroRead = true;
+    }
   }
 
   @Override
@@ -89,7 +114,15 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
   private RecordReader<NullWritable, ArrayWritable> getRecordReaderInternal(InputSplit split,
                                                                             JobConf job,
                                                                             Reporter reporter) throws IOException {
-    return super.getRecordReader(split, job, reporter);
+    try {
+      if (supportAvroRead && HoodieColumnProjectionUtils.supportTimestamp(job)) {
+        return new ParquetRecordReaderWrapper(new HudiAvroParquetInputFormat(), split, job, reporter);
+      } else {
+        return super.getRecordReader(split, job, reporter);
+      }
+    } catch (final InterruptedException | IOException e) {
+      throw new RuntimeException("Cannot create a RecordReaderWrapper", e);
+    }
   }
 
   private RecordReader<NullWritable, ArrayWritable> createBootstrappingRecordReader(InputSplit split,

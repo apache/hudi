@@ -478,7 +478,7 @@ public class InputFormatTestUtil {
     jobConf.addResource(conf);
   }
 
-  private static void setupPartition(java.nio.file.Path basePath, java.nio.file.Path partitionPath) throws IOException {
+  public static void setupPartition(java.nio.file.Path basePath, java.nio.file.Path partitionPath) throws IOException {
     Files.createDirectories(partitionPath);
 
     // Create partition metadata to properly setup table's partition
