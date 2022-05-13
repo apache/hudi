@@ -154,15 +154,16 @@
 
                   <include>org.apache.httpcomponents:httpclient</include>
                   <include>org.apache.httpcomponents:httpcore</include>
-                  <include>org.apache.httpcomponents:fluent-hc</include>
+                  <include>org.apache.httpcomponents:fluent-hc</include>-->
 
-                  <include>org.codehaus.jackson:jackson-core-asl</include>
-                  <include>org.codehaus.jackson:jackson-mapper-asl</include>
+                  <!--<include>org.codehaus.jackson:jackson-core-asl</include>
+                  <include>org.codehaus.jackson:jackson-mapper-asl</include>-->
+                  <include>com.esotericsoftware:minlog</include>
                   <include>com.fasterxml.jackson.core:jackson-annotations</include>
                   <include>com.fasterxml.jackson.core:jackson-core</include>
                   <include>com.fasterxml.jackson.core:jackson-databind</include>
-                  <include>com.fasterxml.jackson.dataformat:jackson-dataformat-yaml</include>-->
-
+                  <include>com.fasterxml.jackson.dataformat:jackson-dataformat-yaml</include>
+                  <include>org.apache.parquet:parquet-avro</include>
                   <include>org.apache.curator:curator-framework</include>
                   <include>org.apache.curator:curator-client</include>
                   <include>org.apache.curator:curator-recipes</include>
@@ -331,6 +332,11 @@
   </repositories>
 
   <dependencies>
+
+
+
+
+
     <dependency>
       <groupId>io.javalin</groupId>
       <artifactId>javalin</artifactId>
@@ -342,10 +348,10 @@
       <artifactId>metrics-core</artifactId>
     </dependency>
 
-    <dependency>
+    <!--<dependency>
       <groupId>com.fasterxml.jackson.module</groupId>
       <artifactId>jackson-module-scala_${scala.binary.version}</artifactId>
-    </dependency>
+    </dependency>-->
 
     <dependency>
       <groupId>com.fasterxml.jackson.dataformat</groupId>
@@ -394,7 +400,7 @@
       <version>${project.version}</version>
     </dependency>-->
 
-    <!--<dependency>
+    <dependency>
       <groupId>org.apache.hadoop</groupId>
       <artifactId>hadoop-hdfs</artifactId>
       <classifier>tests</classifier>
@@ -420,7 +426,7 @@
       </exclusions>
     </dependency>
 
-    <dependency>
+    <!--<dependency>
       <groupId>${hive.groupid}</groupId>
       <artifactId>hive-exec</artifactId>
       <version>${hive.version}</version>
@@ -536,6 +542,10 @@
       <type>test-jar</type>
       <scope>test</scope>
     </dependency>
+    <dependency>
+      <groupId>org.apache.spark</groupId>
+      <artifactId>spark-sql_${scala.binary.version}</artifactId>
+    </dependency>
 
     <!--<dependency>
       <groupId>commons-codec</groupId>
@@ -636,21 +646,21 @@
       <artifactId>mockito-all</artifactId>
       <version>1.10.19</version>
       <scope>test</scope>
-    </dependency>
+    </dependency>-->
     <dependency>
       <groupId>org.apache.avro</groupId>
       <artifactId>avro-mapred</artifactId>
       <version>1.7.7</version>
     </dependency>
 
-    &lt;!&ndash; Parquet &ndash;&gt;
+    <!-- Parquet -->
     <dependency>
       <groupId>org.apache.parquet</groupId>
       <artifactId>parquet-avro</artifactId>
       <scope>compile</scope>
     </dependency>
 
-    <dependency>
+    <!--<dependency>
       <groupId>org.apache.parquet</groupId>
       <artifactId>parquet-hadoop</artifactId>
       <version>${parquet.version}</version>
