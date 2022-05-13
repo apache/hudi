@@ -32,7 +32,7 @@
 
   <modules>
     <module>hudi-datahub-sync</module>
-    <module>hudi-dla-sync</module>
+    <module>hudi-adb-sync</module>
     <module>hudi-hive-sync</module>
     <module>hudi-sync-common</module>
   </modules>
