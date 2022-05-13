@@ -20,12 +20,14 @@ package org.apache.hudi.common.table.view;
 
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.HoodieMetastoreConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.function.SerializableSupplier;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Functions.Function2;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.metadata.HoodieMetadataFileSystemView;
 import org.apache.hudi.metadata.HoodieTableMetadata;
@@ -165,6 +167,11 @@ public class FileSystemViewManager {
       return new HoodieMetadataFileSystemView(metaClient, metaClient.getActiveTimeline().filterCompletedAndCompactionInstants(),
           metadataSupplier.get());
     }
+    if (metaClient.getMetastoreConfig().enableMetastore()) {
+      return (HoodieTableFileSystemView) ReflectionUtils.loadClass("org.apache.hudi.common.table.view.HoodieMetastoreFileSystemView",
+          new Class<?>[] {HoodieTableMetaClient.class, HoodieTimeline.class, HoodieMetastoreConfig.class},
+          metaClient, metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants(), metaClient.getMetastoreConfig());
+    }
     return new HoodieTableFileSystemView(metaClient, timeline, viewConf.isIncrementalTimelineSyncEnabled());
   }
 
@@ -183,6 +190,11 @@ public class FileSystemViewManager {
     LOG.info("Creating InMemory based view for basePath " + metaClient.getBasePath());
     if (metadataConfig.enabled()) {
       return new HoodieMetadataFileSystemView(engineContext, metaClient, timeline, metadataConfig);
+    }
+    if (metaClient.getMetastoreConfig().enableMetastore()) {
+      return (HoodieTableFileSystemView) ReflectionUtils.loadClass("org.apache.hudi.common.table.view.HoodieMetastoreFileSystemView",
+          new Class<?>[] {HoodieTableMetaClient.class, HoodieTimeline.class, HoodieMetadataConfig.class},
+          metaClient, metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants(), metaClient.getMetastoreConfig());
     }
     return new HoodieTableFileSystemView(metaClient, timeline);
   }
