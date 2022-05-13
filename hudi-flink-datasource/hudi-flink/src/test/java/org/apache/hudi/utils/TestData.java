@@ -21,6 +21,7 @@ package org.apache.hudi.utils;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
@@ -641,11 +642,11 @@ public class TestData {
       File[] dataFiles = partitionDir.listFiles(file ->
           file.getName().contains(".log.") && !file.getName().startsWith(".."));
       assertNotNull(dataFiles);
-      HoodieMergedLogRecordScanner scanner = getScanner(
-          fs, baseFile.getPath(), Arrays.stream(dataFiles)
-              .sorted(Comparator.comparing(f -> FSUtils.getCommitTime(f.getName())))
-              .map(File::getAbsolutePath).collect(Collectors.toList()),
-          schema, latestInstant);
+      List<String> logPaths = Arrays.stream(dataFiles)
+          .sorted((f1, f2) -> HoodieLogFile.getLogFileComparator()
+              .compare(new HoodieLogFile(f1.getPath()), new HoodieLogFile(f2.getPath())))
+          .map(File::getAbsolutePath).collect(Collectors.toList());
+      HoodieMergedLogRecordScanner scanner = getScanner(fs, baseFile.getPath(), logPaths, schema, latestInstant);
       List<String> readBuffer = scanner.getRecords().values().stream()
           .map(hoodieRecord -> {
             try {
