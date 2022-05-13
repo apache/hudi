@@ -30,6 +30,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.MultiPartKeysValueExtractor;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
+import org.apache.hudi.utilities.sources.TestDataSource;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 
 import org.apache.avro.Schema;
@@ -191,6 +192,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
   @BeforeEach
   public void setup() throws Exception {
     super.setup();
+    TestDataSource.returnEmptyBatch = false;
   }
 
   @AfterAll

@@ -18,6 +18,7 @@
 package org.apache.spark.sql.hudi
 
 import org.apache.hudi.DataSourceWriteOptions._
+import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.config.HoodieWriteConfig
@@ -640,5 +641,27 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
          |tblproperties(primaryKey = 'id')
          |""".stripMargin
     )
+  }
+
+  if (HoodieSparkUtils.gteqSpark3_2) {
+    test("Test create table with comment") {
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           | create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           | ) using hudi
+           | comment "This is a simple hudi table"
+           | tblproperties (
+           |   primaryKey = 'id',
+           |   preCombineField = 'ts'
+           | )
+       """.stripMargin)
+      val shown = spark.sql(s"show create table $tableName").head.getString(0)
+      assertResult(true)(shown.contains("COMMENT 'This is a simple hudi table'"))
+    }
   }
 }

@@ -42,8 +42,6 @@ public abstract class HoodieRecord<T> implements Serializable {
   public static final String OPERATION_METADATA_FIELD = "_hoodie_operation";
   public static final String HOODIE_IS_DELETED = "_hoodie_is_deleted";
 
-  public static int FILENAME_METADATA_FIELD_POS = 4;
-
   public static final List<String> HOODIE_META_COLUMNS =
       CollectionUtils.createImmutableList(COMMIT_TIME_METADATA_FIELD, COMMIT_SEQNO_METADATA_FIELD,
           RECORD_KEY_METADATA_FIELD, PARTITION_PATH_METADATA_FIELD, FILENAME_METADATA_FIELD);
@@ -58,6 +56,10 @@ public abstract class HoodieRecord<T> implements Serializable {
   public static final Map<String, Integer> HOODIE_META_COLUMNS_NAME_TO_POS =
       IntStream.range(0, HOODIE_META_COLUMNS.size()).mapToObj(idx -> Pair.of(HOODIE_META_COLUMNS.get(idx), idx))
           .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
+
+  public static int RECORD_KEY_META_FIELD_POS = HOODIE_META_COLUMNS_NAME_TO_POS.get(RECORD_KEY_METADATA_FIELD);
+  public static int PARTITION_PATH_META_FIELD_POS = HOODIE_META_COLUMNS_NAME_TO_POS.get(PARTITION_PATH_METADATA_FIELD);
+  public static int FILENAME_META_FIELD_POS = HOODIE_META_COLUMNS_NAME_TO_POS.get(FILENAME_METADATA_FIELD);
 
   /**
    * Identifies the record across the table.
