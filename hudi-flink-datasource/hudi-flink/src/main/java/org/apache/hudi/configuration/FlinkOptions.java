@@ -710,24 +710,16 @@ public class FlinkOptions extends HoodieConfig {
   private static final String PROPERTIES_PREFIX = "properties.";
 
   /**
-   * Collects the config options that start with 'properties.' into a 'key'='value' list.
-   */
-  public static Map<String, String> getHoodieProperties(Map<String, String> options) {
-    return getHoodiePropertiesWithPrefix(options, PROPERTIES_PREFIX);
-  }
-
-  /**
    * Collects the config options that start with specified prefix {@code prefix} into a 'key'='value' list.
    */
-  public static Map<String, String> getHoodiePropertiesWithPrefix(Map<String, String> options, String prefix) {
+  public static Map<String, String> getPropertiesWithPrefix(Map<String, String> options, String prefix) {
     final Map<String, String> hoodieProperties = new HashMap<>();
-
-    if (hasPropertyOptions(options)) {
+    if (hasPropertyOptions(options, prefix)) {
       options.keySet().stream()
-          .filter(key -> key.startsWith(PROPERTIES_PREFIX))
+          .filter(key -> key.startsWith(prefix))
           .forEach(key -> {
             final String value = options.get(key);
-            final String subKey = key.substring((prefix).length());
+            final String subKey = key.substring(prefix.length());
             hoodieProperties.put(subKey, value);
           });
     }
@@ -749,8 +741,8 @@ public class FlinkOptions extends HoodieConfig {
     return fromMap(propsMap);
   }
 
-  private static boolean hasPropertyOptions(Map<String, String> options) {
-    return options.keySet().stream().anyMatch(k -> k.startsWith(PROPERTIES_PREFIX));
+  private static boolean hasPropertyOptions(Map<String, String> options, String prefix) {
+    return options.keySet().stream().anyMatch(k -> k.startsWith(prefix));
   }
 
   /**
