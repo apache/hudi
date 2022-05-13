@@ -13,40 +13,26 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-dag_name: cow-spark-simple.yaml
-dag_rounds: 5
-dag_intermittent_delay_mins: 1
+dag_name: deltastreamer-pure-bulk-inserts.yaml
+dag_rounds: 10
+dag_intermittent_delay_mins: 0
 dag_content:
-  first_insert:
+  first_bulk_insert:
     config:
-      record_size: 1000
-      num_partitions_insert: 1
-      repeat_count: 1
-      num_records_insert: 100000
-      start_partition: 10
-    type: SparkInsertNode
+      record_size: 200
+      num_partitions_insert: 10
+      repeat_count: 3
+      num_records_insert: 5000
+    type: BulkInsertNode
     deps: none
-  first_upsert:
-    config:
-      record_size: 1000
-      num_partitions_insert: 1
-      num_records_insert: 50000
-      repeat_count: 1
-      num_records_upsert: 50000
-      num_partitions_upsert: 1
-      start_partition: 10
-    type: SparkUpsertNode
-    deps: first_insert
-  first_delete:
-    config:
-      num_partitions_delete: 0
-      num_records_delete: 10000
-      start_partition: 10
-    type: SparkDeleteNode
-    deps: first_upsert
   second_validate:
     config:
       validate_hive: false
-      delete_input_data: true
+      delete_input_data: false
     type: ValidateDatasetNode
-    deps: first_delete
+    deps: first_bulk_insert
+  last_validate:
+    config:
+      execute_itr_count: 10
+    type: ValidateAsyncOperations
+    deps: second_validate

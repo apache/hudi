@@ -212,7 +212,6 @@ object HoodieSparkSqlWriter {
             (writeStatuses, client)
           }
           case WriteOperationType.DELETE_PARTITION => {
-            val genericRecords = registerKryoClassesAndGetGenericRecords(tblName, sparkContext, df, reconcileSchema)
             if (!tableExists) {
               throw new HoodieException(s"hoodie table at $basePath does not exist")
             }
@@ -222,6 +221,7 @@ object HoodieSparkSqlWriter {
               val partitionColsToDelete = parameters(DataSourceWriteOptions.PARTITIONS_TO_DELETE.key()).split(",")
               java.util.Arrays.asList(partitionColsToDelete: _*)
             } else {
+              val genericRecords = registerKryoClassesAndGetGenericRecords(tblName, sparkContext, df, reconcileSchema)
               genericRecords.map(gr => keyGenerator.getKey(gr).getPartitionPath).toJavaRDD().distinct().collect()
             }
             // Create a HoodieWriteClient & issue the delete.
