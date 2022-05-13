@@ -113,6 +113,7 @@
     <hadoop.version>2.10.1</hadoop.version>
     <hive.groupid>org.apache.hive</hive.groupid>
     <hive.version>2.3.1</hive.version>
+    <presto.version>0.272</presto.version>
     <hive.exec.classifier>core</hive.exec.classifier>
     <metrics.version>4.1.1</metrics.version>
     <orc.version>1.6.0</orc.version>
@@ -1067,6 +1068,12 @@
             <artifactId>*</artifactId>
           </exclusion>
         </exclusions>
+      </dependency>
+
+      <dependency>
+        <groupId>com.facebook.presto</groupId>
+        <artifactId>presto-jdbc</artifactId>
+        <version>${presto.version}</version>
       </dependency>
 
       <!-- Zookeeper -->

@@ -43,7 +43,7 @@ public class DeltaConfig implements Serializable {
   private final SerializableConfiguration configuration;
 
   public DeltaConfig(DeltaOutputMode deltaOutputMode, DeltaInputType deltaInputType,
-                     SerializableConfiguration configuration) {
+      SerializableConfiguration configuration) {
     this.deltaOutputMode = deltaOutputMode;
     this.deltaInputType = deltaInputType;
     this.configuration = configuration;
@@ -74,6 +74,8 @@ public class DeltaConfig implements Serializable {
     public static final String CHILDREN = "children";
     public static final String HIVE_QUERIES = "hive_queries";
     public static final String HIVE_PROPERTIES = "hive_props";
+    public static final String PRESTO_QUERIES = "presto_queries";
+    public static final String PRESTO_PROPERTIES = "presto_props";
     private static String NUM_RECORDS_INSERT = "num_records_insert";
     private static String NUM_RECORDS_UPSERT = "num_records_upsert";
     private static String NUM_RECORDS_DELETE = "num_records_delete";
@@ -283,7 +285,7 @@ public class DeltaConfig implements Serializable {
 
     public Option<String> getPartitionField() {
       return !configsMap.containsKey(PARTITION_FIELD) ? Option.empty()
-              : Option.of(configsMap.get(PARTITION_FIELD).toString());
+          : Option.of(configsMap.get(PARTITION_FIELD).toString());
     }
 
     public String getMergeCondition() {
@@ -319,7 +321,7 @@ public class DeltaConfig implements Serializable {
 
     public List<Pair<String, Integer>> getHiveQueries() {
       try {
-        return (List<Pair<String, Integer>>) this.configsMap.getOrDefault("hive_queries", new ArrayList<>());
+        return (List<Pair<String, Integer>>) this.configsMap.getOrDefault(HIVE_QUERIES, new ArrayList<>());
       } catch (Exception e) {
         throw new RuntimeException("unable to get hive queries from configs");
       }
@@ -331,6 +333,18 @@ public class DeltaConfig implements Serializable {
 
     public List<String> getHiveProperties() {
       return (List<String>) this.configsMap.getOrDefault(HIVE_PROPERTIES, new ArrayList<>());
+    }
+
+    public List<String> getPrestoProperties() {
+      return (List<String>) this.configsMap.getOrDefault(PRESTO_PROPERTIES, new ArrayList<>());
+    }
+
+    public List<Pair<String, Integer>> getPrestoQueries() {
+      try {
+        return (List<Pair<String, Integer>>) this.configsMap.getOrDefault(PRESTO_QUERIES, new ArrayList<>());
+      } catch (Exception e) {
+        throw new RuntimeException("unable to get presto queries from configs");
+      }
     }
 
     @Override
@@ -446,6 +460,16 @@ public class DeltaConfig implements Serializable {
 
       public Builder withHiveProperties(List<String> hiveProperties) {
         this.configsMap.put(HIVE_PROPERTIES, hiveProperties);
+        return this;
+      }
+
+      public Builder withPrestoProperties(List<String> prestoProperties) {
+        this.configsMap.put(PRESTO_PROPERTIES, prestoProperties);
+        return this;
+      }
+
+      public Builder withPrestoQueryAndResults(List<Pair<String, Integer>> prestoQueries) {
+        this.configsMap.put(PRESTO_QUERIES, prestoQueries);
         return this;
       }
 
