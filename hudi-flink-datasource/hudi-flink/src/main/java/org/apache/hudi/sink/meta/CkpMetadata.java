@@ -18,11 +18,13 @@
 
 package org.apache.hudi.sink.meta;
 
+import org.apache.flink.configuration.Configuration;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -70,8 +72,8 @@ public class CkpMetadata implements Serializable {
   private List<CkpMessage> messages;
   private List<String> instantCache;
 
-  private CkpMetadata(String basePath) {
-    this(FSUtils.getFs(basePath, StreamerUtil.getHadoopConf()), basePath);
+  private CkpMetadata(Configuration config) {
+    this(FSUtils.getFs(config.getString(FlinkOptions.PATH), HadoopConfigurations.getHadoopConf(config)), config.getString(FlinkOptions.PATH));
   }
 
   private CkpMetadata(FileSystem fs, String basePath) {
@@ -196,8 +198,8 @@ public class CkpMetadata implements Serializable {
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
-  public static CkpMetadata getInstance(String basePath) {
-    return new CkpMetadata(basePath);
+  public static CkpMetadata getInstance(Configuration config) {
+    return new CkpMetadata(config);
   }
 
   public static CkpMetadata getInstance(FileSystem fs, String basePath) {
