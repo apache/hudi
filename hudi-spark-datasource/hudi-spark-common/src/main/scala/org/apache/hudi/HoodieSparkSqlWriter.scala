@@ -85,7 +85,7 @@ object HoodieSparkSqlWriter {
     var tableConfig = getHoodieTableConfig(sparkContext, path, hoodieTableConfigOpt)
     validateTableConfig(sqlContext.sparkSession, optParams, tableConfig)
 
-    val (parameters, hoodieConfig) = mergeParamsAndGetHoodieConfig(optParams, tableConfig)
+    var (parameters, hoodieConfig) = mergeParamsAndGetHoodieConfig(optParams, tableConfig)
     val originKeyGeneratorClassName = HoodieWriterUtils.getOriginKeyGenerator(parameters)
     val timestampKeyGeneratorConfigs = extractConfigsRelatedToTimestampBasedKeyGenerator(
       originKeyGeneratorClassName, parameters)
@@ -282,6 +282,7 @@ object HoodieSparkSqlWriter {
             }).toJavaRDD()
 
             val writeSchema = if (dropPartitionColumns) generateSchemaWithoutPartitionColumns(partitionColumns, schema) else schema
+            parameters = parameters ++ Map(HoodieWriteConfig.AVRO_SCHEMA_STRING.key() -> writeSchema.toString())
             // Create a HoodieWriteClient & issue the write.
 
             val client = hoodieWriteClient.getOrElse(DataSourceUtils.createHoodieClient(jsc, writeSchema.toString, path,
@@ -347,7 +348,6 @@ object HoodieSparkSqlWriter {
     * @param fs           instance of FileSystem.
     * @param basePath     base path.
     * @param sparkContext instance of spark context.
-    * @param schema       incoming record's schema.
     * @return Pair of(boolean, table schema), where first entry will be true only if schema conversion is required.
     */
   def getLatestTableInternalSchema(fs: FileSystem, basePath: Path, sparkContext: SparkContext): Option[InternalSchema] = {
@@ -645,10 +645,12 @@ object HoodieSparkSqlWriter {
       val metaMap = parameters.filter(kv =>
         kv._1.startsWith(parameters(COMMIT_METADATA_KEYPREFIX.key)))
       val commitSuccess =
-        client.commit(tableInstantInfo.instantTime, writeResult.getWriteStatuses,
+        client.commitWithSchema(tableInstantInfo.instantTime, writeResult.getWriteStatuses,
           common.util.Option.of(new java.util.HashMap[String, String](mapAsJavaMap(metaMap))),
           tableInstantInfo.commitActionType,
-          writeResult.getPartitionToReplaceFileIds)
+          writeResult.getPartitionToReplaceFileIds,
+          common.util.Option.ofNullable(parameters.getOrElse(HoodieWriteConfig.AVRO_SCHEMA_STRING.key(), null))
+        )
 
       if (commitSuccess) {
         log.info("Commit " + tableInstantInfo.instantTime + " successful!")

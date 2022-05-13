@@ -85,7 +85,7 @@ public class HoodieJavaWriteClient<T extends HoodieRecordPayload> extends
                         String commitActionType,
                         Map<String, List<String>> partitionToReplacedFileIds) {
     List<HoodieWriteStat> writeStats = writeStatuses.stream().map(WriteStatus::getStat).collect(Collectors.toList());
-    return commitStats(instantTime, writeStats, extraMetadata, commitActionType, partitionToReplacedFileIds);
+    return commitStats(instantTime, writeStats, extraMetadata, commitActionType, partitionToReplacedFileIds, Option.empty(), Option.empty());
   }
 
   @Override
