@@ -418,6 +418,10 @@ public class HiveSchemaUtil {
       return true;
     } else if (prevType.equalsIgnoreCase("float") && newType.equalsIgnoreCase("double")) {
       return true;
+    } else if (prevType.contains("varchar") && newType.equalsIgnoreCase("string")) {
+      return true;
+    } else if (prevType.contains("char") && newType.equalsIgnoreCase("string")) {
+      return true;
     } else {
       return prevType.contains("struct") && newType.toLowerCase().contains("struct");
     }
