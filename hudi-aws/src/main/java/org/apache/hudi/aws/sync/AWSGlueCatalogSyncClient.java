@@ -394,7 +394,7 @@ public class AWSGlueCatalogSyncClient extends AbstractHiveSyncHoodieClient {
   public Option<String> getLastCommitTimeSynced(String tableName) {
     try {
       Table table = getTable(awsGlue, databaseName, tableName);
-      return Option.of(table.getParameters().getOrDefault(HOODIE_LAST_COMMIT_TIME_SYNC, null));
+      return Option.ofNullable(table.getParameters().get(HOODIE_LAST_COMMIT_TIME_SYNC));
     } catch (Exception e) {
       throw new HoodieGlueSyncException("Fail to get last sync commit time for " + tableId(databaseName, tableName), e);
     }
