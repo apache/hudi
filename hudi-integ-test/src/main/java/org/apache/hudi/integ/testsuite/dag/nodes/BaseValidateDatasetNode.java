@@ -181,7 +181,7 @@ public abstract class BaseValidateDatasetNode extends DagNode<Boolean> {
     String latestSubDir = subDirList.get(subDirList.size() -1).getPath().getName();
     log.info("Latest sub directory in input path " + latestSubDir + ", latest checkpoint from deltastreamer " +
         (latestCheckpoint.isPresent() ? latestCheckpoint.get() : "none"));
-    long maxWaitTime = 5 * 60 * 1000;
+    long maxWaitTime = config.maxWaitTimeForDeltastreamerToCatchupMs();
     long waitedSoFar = 0;
     while (!(latestCheckpoint.isPresent() && latestCheckpoint.get().equals(latestSubDir))) {
       log.warn("Sleeping for 20 secs awaiting for deltastreamer to catch up with ingested data");

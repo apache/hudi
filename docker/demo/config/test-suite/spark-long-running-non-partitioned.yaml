@@ -46,10 +46,12 @@ dag_content:
       validate_once_every_itr : 3
       validate_hive: false
       delete_input_data: true
+      max_wait_time_for_deltastreamer_catch_up_ms: 600000
     type: ValidateDatasetNode
     deps: first_delete
   last_validate:
     config:
       execute_itr_count: 6
+      max_wait_time_for_deltastreamer_catch_up_ms: 600000
     type: ValidateAsyncOperations
     deps: second_validate
