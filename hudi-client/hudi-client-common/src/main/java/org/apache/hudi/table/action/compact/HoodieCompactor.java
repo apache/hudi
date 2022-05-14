@@ -133,7 +133,7 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
         .map(CompactionOperation::convertFromAvroRecordInstance).collect(toList());
     LOG.info("Compactor compacting " + operations + " files");
 
-    context.setJobStatus(this.getClass().getSimpleName(), "Compacting file slices");
+    context.setJobStatus(this.getClass().getSimpleName(), "Compacting file slices: " + config.getTableName());
     TaskContextSupplier taskContextSupplier = table.getTaskContextSupplier();
     return context.parallelize(operations).map(operation -> compact(
         compactionHandler, metaClient, config, operation, compactionInstantTime, taskContextSupplier))
@@ -288,7 +288,7 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
 
     SliceView fileSystemView = hoodieTable.getSliceView();
     LOG.info("Compaction looking for files to compact in " + partitionPaths + " partitions");
-    context.setJobStatus(this.getClass().getSimpleName(), "Looking for files to compact");
+    context.setJobStatus(this.getClass().getSimpleName(), "Looking for files to compact: " + config.getTableName());
 
     List<HoodieCompactionOperation> operations = context.flatMap(partitionPaths, partitionPath -> fileSystemView
         .getLatestFileSlices(partitionPath)
