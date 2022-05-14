@@ -41,26 +41,22 @@ From the extracted directory run spark-shell with Hudi as:
 // spark-shell for spark 3.1
 spark-shell \
   --packages org.apache.hudi:hudi-spark3.1.2-bundle_2.12:0.10.1,org.apache.spark:spark-avro_2.12:3.1.2 \
-  --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
-  --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension'
+  --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
 
 // spark-shell for spark 3.0
 spark-shell \
   --packages org.apache.hudi:hudi-spark3.0.3-bundle_2.12:0.10.1,org.apache.spark:spark-avro_2.12:3.0.3 \
-  --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
-  --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension'
+  --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
   
 // spark-shell for spark 2 with scala 2.12
 spark-shell \
   --packages org.apache.hudi:hudi-spark-bundle_2.12:0.10.1,org.apache.spark:spark-avro_2.12:2.4.4 \
-  --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
-  --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension'
+  --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
   
 // spark-shell for spark 2 with scala 2.11
 spark-shell \
   --packages org.apache.hudi:hudi-spark-bundle_2.11:0.10.1,org.apache.spark:spark-avro_2.11:2.4.4 \
-  --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
-  --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension'
+  --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
 ```
 
 </TabItem>
@@ -104,26 +100,22 @@ export PYSPARK_PYTHON=$(which python3)
 # for spark3.1
 pyspark
 --packages org.apache.hudi:hudi-spark3.1.2-bundle_2.12:0.10.1,org.apache.spark:spark-avro_2.12:3.1.2
---conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
---conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension'
+--conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
 
 # for spark3.0
 pyspark
 --packages org.apache.hudi:hudi-spark3.0.3-bundle_2.12:0.10.1,org.apache.spark:spark-avro_2.12:3.0.3
---conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
---conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension'
+--conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
 
 # for spark2 with scala 2.12
 pyspark
 --packages org.apache.hudi:hudi-spark-bundle_2.12:0.10.1,org.apache.spark:spark-avro_2.12:2.4.4
---conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
---conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension'
+--conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
 
 # for spark2 with scala 2.11
 pyspark
 --packages org.apache.hudi:hudi-spark-bundle_2.11:0.10.1,org.apache.spark:spark-avro_2.11:2.4.4
---conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
---conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension'
+--conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
 ```
 
 </TabItem>
