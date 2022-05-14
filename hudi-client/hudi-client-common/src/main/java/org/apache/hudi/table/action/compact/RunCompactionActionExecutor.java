@@ -88,7 +88,7 @@ public class RunCompactionActionExecutor<T extends HoodieRecordPayload> extends
           context, compactionPlan, table, configCopy, instantTime, compactionHandler);
 
       compactor.maybePersist(statuses, config);
-      context.setJobStatus(this.getClass().getSimpleName(), "Preparing compaction metadata");
+      context.setJobStatus(this.getClass().getSimpleName(), "Preparing compaction metadata: " + config.getTableName());
       List<HoodieWriteStat> updateStatusMap = statuses.map(WriteStatus::getStat).collectAsList();
       HoodieCommitMetadata metadata = new HoodieCommitMetadata(true);
       for (HoodieWriteStat stat : updateStatusMap) {

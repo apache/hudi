@@ -519,7 +519,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
         new Path(metaClient.getMetaPath(), archivedInstant.getFileName())
     ).map(Path::toString).collect(Collectors.toList());
 
-    context.setJobStatus(this.getClass().getSimpleName(), "Delete archived instants");
+    context.setJobStatus(this.getClass().getSimpleName(), "Delete archived instants: " + config.getTableName());
     Map<String, Boolean> resultDeleteInstantFiles = deleteFilesParallelize(metaClient, instantFiles, context, false);
 
     for (Map.Entry<String, Boolean> result : resultDeleteInstantFiles.entrySet()) {
