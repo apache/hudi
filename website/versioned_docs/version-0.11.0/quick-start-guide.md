@@ -57,15 +57,13 @@ spark-shell \
 # Spark 3.1
 spark-shell \
   --packages org.apache.hudi:hudi-spark3.1-bundle_2.12:0.11.0 \
-  --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
-  --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension'
+  --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
 ```
 ```shell
 # Spark 2.4
 spark-shell \
   --packages org.apache.hudi:hudi-spark2.4-bundle_2.11:0.11.0 \
-  --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
-  --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension'
+  --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
 ```
 </TabItem>
 
@@ -87,16 +85,14 @@ pyspark \
 export PYSPARK_PYTHON=$(which python3)
 pyspark \
 --packages org.apache.hudi:hudi-spark3.1-bundle_2.12:0.11.0 \
---conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
---conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension'
+--conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
 ```
 ```shell
 # Spark 2.4
 export PYSPARK_PYTHON=$(which python3)
 pyspark \
 --packages org.apache.hudi:hudi-spark2.4-bundle_2.11:0.11.0 \
---conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
---conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension'
+--conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
 ```
 </TabItem>
 
