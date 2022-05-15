@@ -95,10 +95,10 @@ extends HoodieLeafRunnableCommand {
 
     var rtTableOpt: Option[CatalogTable] = None
     var roTableOpt: Option[CatalogTable] = None
-    if (catalog.tableExists(roIdt)) {
+    if (catalog.tableExists(rtIdt)) {
       val rtTable = catalog.getTableMetadata(rtIdt)
       if (rtTable.storage.locationUri.equals(hoodieTable.table.storage.locationUri)) {
-        rtTable.properties.get(ConfigUtils.IS_QUERY_AS_RO_TABLE) match {
+        rtTable.storage.properties.get(ConfigUtils.IS_QUERY_AS_RO_TABLE) match {
           case Some(v) if v.equalsIgnoreCase("false") => rtTableOpt = Some(rtTable)
           case _ => // do-nothing
         }
@@ -107,7 +107,7 @@ extends HoodieLeafRunnableCommand {
     if (catalog.tableExists(roIdt)) {
       val roTable = catalog.getTableMetadata(roIdt)
       if (roTable.storage.locationUri.equals(hoodieTable.table.storage.locationUri)) {
-        roTable.properties.get(ConfigUtils.IS_QUERY_AS_RO_TABLE) match {
+        roTable.storage.properties.get(ConfigUtils.IS_QUERY_AS_RO_TABLE) match {
           case Some(v) if v.equalsIgnoreCase("true") => roTableOpt = Some(roTable)
           case _ => // do-nothing
         }

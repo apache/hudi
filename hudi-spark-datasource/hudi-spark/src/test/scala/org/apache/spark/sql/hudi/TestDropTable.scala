@@ -17,6 +17,9 @@
 
 package org.apache.spark.sql.hudi
 
+import org.apache.spark.sql.catalyst.TableIdentifier
+import org.apache.spark.sql.catalyst.catalog.SessionCatalog
+
 class TestDropTable extends HoodieSparkSqlTestBase {
 
   test("Test Drop Table") {
@@ -98,10 +101,11 @@ class TestDropTable extends HoodieSparkSqlTestBase {
            | tblproperties (
            |  type = 'mor',
            |  primaryKey = 'id',
-           |  preCombineField = 'ts',
-           |  hoodie.query.as.ro.table='true'
+           |  preCombineField = 'ts'
            | )
        """.stripMargin)
+      alterSerdeProperties(spark.sessionState.catalog, TableIdentifier(s"${tableName}_ro"),
+        Map("hoodie.query.as.ro.table" -> "true"))
 
       spark.sql(
         s"""
@@ -110,10 +114,11 @@ class TestDropTable extends HoodieSparkSqlTestBase {
            | tblproperties (
            |  type = 'mor',
            |  primaryKey = 'id',
-           |  preCombineField = 'ts',
-           |  hoodie.query.as.ro.table='false'
+           |  preCombineField = 'ts'
            | )
        """.stripMargin)
+      alterSerdeProperties(spark.sessionState.catalog, TableIdentifier(s"${tableName}_rt"),
+        Map("hoodie.query.as.ro.table" -> "false"))
 
       spark.sql(s"drop table ${tableName} purge")
       checkAnswer("show tables")()
@@ -145,10 +150,11 @@ class TestDropTable extends HoodieSparkSqlTestBase {
            | tblproperties (
            |  type = 'mor',
            |  primaryKey = 'id',
-           |  preCombineField = 'ts',
-           |  hoodie.query.as.ro.table='true'
+           |  preCombineField = 'ts'
            | )
        """.stripMargin)
+      alterSerdeProperties(spark.sessionState.catalog, TableIdentifier(s"${tableName}_ro"),
+        Map("hoodie.query.as.ro.table" -> "true"))
 
       spark.sql(
         s"""
@@ -157,10 +163,11 @@ class TestDropTable extends HoodieSparkSqlTestBase {
            | tblproperties (
            |  type = 'mor',
            |  primaryKey = 'id',
-           |  preCombineField = 'ts',
-           |  hoodie.query.as.ro.table='false'
+           |  preCombineField = 'ts'
            | )
        """.stripMargin)
+      alterSerdeProperties(spark.sessionState.catalog, TableIdentifier(s"${tableName}_rt"),
+        Map("hoodie.query.as.ro.table" -> "false"))
 
       spark.sql(s"drop table ${tableName}_ro")
       checkAnswer("show tables")(
@@ -199,10 +206,11 @@ class TestDropTable extends HoodieSparkSqlTestBase {
            | tblproperties (
            |  type = 'mor',
            |  primaryKey = 'id',
-           |  preCombineField = 'ts',
-           |  hoodie.query.as.ro.table='true'
+           |  preCombineField = 'ts'
            | )
        """.stripMargin)
+      alterSerdeProperties(spark.sessionState.catalog, TableIdentifier(s"${tableName}_ro"),
+        Map("hoodie.query.as.ro.table" -> "true"))
 
       spark.sql(
         s"""
@@ -211,15 +219,23 @@ class TestDropTable extends HoodieSparkSqlTestBase {
            | tblproperties (
            |  type = 'mor',
            |  primaryKey = 'id',
-           |  preCombineField = 'ts',
-           |  hoodie.query.as.ro.table='false'
+           |  preCombineField = 'ts'
            | )
        """.stripMargin)
+      alterSerdeProperties(spark.sessionState.catalog, TableIdentifier(s"${tableName}_rt"),
+        Map("hoodie.query.as.ro.table" -> "false"))
 
       spark.sql(s"drop table ${tableName}_ro purge")
       checkAnswer("show tables")()
     }
   }
 
-
+  private def alterSerdeProperties(sessionCatalog: SessionCatalog, tableIdt: TableIdentifier,
+    newProperties: Map[String, String]): Unit = {
+    val catalogTable = spark.sessionState.catalog.getTableMetadata(tableIdt)
+    val storage = catalogTable.storage
+    val storageProperties = storage.properties ++ newProperties
+    val newCatalogTable = catalogTable.copy(storage = storage.copy(properties = storageProperties))
+    sessionCatalog.alterTable(newCatalogTable)
+  }
 }
