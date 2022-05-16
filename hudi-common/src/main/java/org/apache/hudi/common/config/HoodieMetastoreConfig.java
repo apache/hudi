@@ -22,7 +22,7 @@ import javax.annotation.concurrent.Immutable;
 import java.util.Properties;
 
 /**
- * Configurations used by the HUDI Metadata Table.
+ * Configurations used by the HUDI Metastore.
  */
 @Immutable
 @ConfigClassProperty(name = "Metastore Configs",
