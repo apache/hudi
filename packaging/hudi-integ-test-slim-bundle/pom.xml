@@ -125,6 +125,7 @@
                                     <include>
                                         org.apache.curator:curator-recipes
                                     </include>
+                                    <include>org.apache.hive:hive-exec</include>
                                 </includes>
                             </artifactSet>
                             <relocations>
@@ -526,6 +527,13 @@
             <groupId>org.apache.avro</groupId>
             <artifactId>avro-mapred</artifactId>
             <version>1.7.7</version>
+        </dependency>
+
+        <dependency>
+            <groupId>${hive.groupid}</groupId>
+            <artifactId>hive-exec</artifactId>
+            <version>${hive.version}</version>
+            <scope>compile</scope>
         </dependency>
 
         <!-- Parquet -->
