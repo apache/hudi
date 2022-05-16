@@ -16,33 +16,16 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.table.storage;
+package org.apache.hudi.common.model;
 
-import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.config.HoodieWriteConfig;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 
-/**
- * Default storage layout with non-constraints.
- */
-public class HoodieDefaultLayout extends HoodieStorageLayout {
+public class TestHoodieConsistentHashingMetadata {
 
-  public HoodieDefaultLayout(HoodieWriteConfig config) {
-    super(config);
-  }
-
-  @Override
-  public boolean determinesNumFileGroups() {
-    return false;
-  }
-
-  @Override
-  public Option<String> layoutPartitionerClass() {
-    return Option.empty();
-  }
-
-  @Override
-  public boolean writeOperationSupported(WriteOperationType operationType) {
-    return true;
+  @Test
+  public void testGetTimestamp() {
+    Assertions.assertTrue(HoodieConsistentHashingMetadata.getTimestampFromFile("0000.hashing_metadata").equals("0000"));
+    Assertions.assertTrue(HoodieConsistentHashingMetadata.getTimestampFromFile("1234.hashing_metadata").equals("1234"));
   }
 }

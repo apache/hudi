@@ -1428,6 +1428,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getString(HoodieIndexConfig.INDEX_CLASS_NAME);
   }
 
+  public HoodieIndex.BucketIndexEngineType getBucketIndexEngineType() {
+    return HoodieIndex.BucketIndexEngineType.valueOf(getString(HoodieIndexConfig.BUCKET_INDEX_ENGINE_TYPE));
+  }
+
   public int getBloomFilterNumEntries() {
     return getInt(HoodieIndexConfig.BLOOM_FILTER_NUM_ENTRIES_VALUE);
   }

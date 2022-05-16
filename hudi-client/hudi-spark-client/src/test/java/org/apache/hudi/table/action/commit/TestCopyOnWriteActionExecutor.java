@@ -148,7 +148,10 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase {
     props.putAll(indexConfig.build().getProps());
     if (indexType.equals(HoodieIndex.IndexType.BUCKET)) {
       props.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key");
-      indexConfig.fromProperties(props).withIndexKeyField("_row_key").withBucketNum("1");
+      indexConfig.fromProperties(props)
+          .withIndexKeyField("_row_key")
+          .withBucketNum("1")
+          .withBucketIndexEngineType(HoodieIndex.BucketIndexEngineType.SIMPLE);
       props.putAll(indexConfig.build().getProps());
       props.putAll(HoodieLayoutConfig.newBuilder().fromProperties(props)
           .withLayoutType(HoodieStorageLayout.LayoutType.BUCKET.name())

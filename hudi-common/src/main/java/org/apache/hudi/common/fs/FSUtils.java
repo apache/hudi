@@ -348,6 +348,10 @@ public class FSUtils {
     return UUID.randomUUID().toString();
   }
 
+  public static String createNewFileId(String idPfx, int id) {
+    return String.format("%s-%d", idPfx, id);
+  }
+
   /**
    * Get the file extension from the log file.
    */
