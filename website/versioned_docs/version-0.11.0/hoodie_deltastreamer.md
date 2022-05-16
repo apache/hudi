@@ -48,8 +48,15 @@ Options:
       Compaction is enabled for MoR table by default. This flag disables it
       Default: false
     --enable-hive-sync
-      Enable syncing to hive
+      Enable syncing to hive (Deprecated in favor of --enable-sync and --sync-tool-classes)
       Default: false
+    --enable-sync
+      Enable syncing meta
+      Default: false
+    --sync-tool-classes
+      Classes (comma-separated) to be used for syncing meta. Shall be used only when --enable-sync or --enable-hive-sync is set to true
+      Note: When used this with deprecated --enable-hive-sync flag, HiveSyncTool will always be run along with any other classes mentioned in here.
+      Default: org.apache.hudi.hive.HiveSyncTool
     --filter-dupes
       Should duplicate records from source be dropped/filtered out before
       insert/bulk-insert
