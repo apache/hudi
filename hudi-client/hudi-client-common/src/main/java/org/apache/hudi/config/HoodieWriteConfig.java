@@ -18,6 +18,7 @@
 
 package org.apache.hudi.config;
 
+import org.apache.hadoop.hbase.io.compress.Compression;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.bootstrap.BootstrapMode;
 import org.apache.hudi.client.transaction.ConflictResolutionStrategy;
@@ -66,15 +67,12 @@ import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilterMode;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 import org.apache.hudi.table.storage.HoodieStorageLayout;
-
-import org.apache.hadoop.hbase.io.compress.Compression;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.orc.CompressionKind;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 
 import javax.annotation.concurrent.Immutable;
-
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
@@ -200,10 +198,10 @@ public class HoodieWriteConfig extends HoodieConfig {
           + "before writing records to the table.");
 
   public static final ConfigProperty<String> BULKINSERT_USER_DEFINED_PARTITIONER_SORT_COLUMNS = ConfigProperty
-          .key("hoodie.bulkinsert.user.defined.partitioner.sort.columns")
-          .noDefaultValue()
-          .withDocumentation("Columns to sort the data by when use org.apache.hudi.execution.bulkinsert.RDDCustomColumnsSortPartitioner as user defined partitioner during bulk_insert. "
-                  + "For example 'column1,column2'");
+      .key("hoodie.bulkinsert.user.defined.partitioner.sort.columns")
+      .noDefaultValue()
+      .withDocumentation("Columns to sort the data by when use org.apache.hudi.execution.bulkinsert.RDDCustomColumnsSortPartitioner as user defined partitioner during bulk_insert. "
+          + "For example 'column1,column2'");
 
   public static final ConfigProperty<String> BULKINSERT_USER_DEFINED_PARTITIONER_CLASS_NAME = ConfigProperty
       .key("hoodie.bulkinsert.user.defined.partitioner.class")
@@ -934,9 +932,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   /**
    * Get the write schema for written records.
-   *
+   * <p>
    * If the WRITE_SCHEMA has specified, we use the WRITE_SCHEMA.
    * Or else we use the AVRO_SCHEMA as the write schema.
+   *
    * @return
    */
   public String getWriteSchema() {
@@ -1633,6 +1632,46 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getString(HoodieIndexConfig.BUCKET_INDEX_HASH_FIELD);
   }
 
+  public String getRedisIndexAddress() {
+    return getString(HoodieRedisIndexConfig.ADDRESS);
+  }
+
+  public String getRedisIndexPassword() {
+    return getString(HoodieRedisIndexConfig.PASSWORD);
+  }
+
+  public Boolean getRedisIndexClusterMode() {
+    return getBooleanOrDefault(HoodieRedisIndexConfig.CLUSTER_MODE);
+  }
+
+  public String getRedisIndexConnectTimeout() {
+    return getStringOrDefault(HoodieRedisIndexConfig.CONNECT_TIMEOUT);
+  }
+
+  public String getRedisIndexSocketTimeout() {
+    return getStringOrDefault(HoodieRedisIndexConfig.SOCKET_TIMEOUT);
+  }
+
+  public Integer getRedisIndexClusterMaxIdle() {
+    return getIntOrDefault(HoodieRedisIndexConfig.CLUSTER_MAX_IDLE);
+  }
+
+  public Integer getRedisIndexClusterMaxTotal() {
+    return getIntOrDefault(HoodieRedisIndexConfig.CLUSTER_MAX_TOTAL);
+  }
+
+  public String getRedisIndexClusterMaxWait() {
+    return getStringOrDefault(HoodieRedisIndexConfig.CLUSTER_MAX_WAIT);
+  }
+
+  public String getRedisIndexExpireTime() {
+    return getStringOrDefault(HoodieRedisIndexConfig.EXPIRE_TIME);
+  }
+
+  public Integer getRedisIndexMaxRetries() {
+    return getIntOrDefault(HoodieRedisIndexConfig.MAX_RETRIES);
+  }
+
   /**
    * storage properties.
    */
@@ -1996,6 +2035,7 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   /**
    * Hoodie Client Lock Configs.
+   *
    * @return
    */
   public boolean isAutoAdjustLockConfigs() {

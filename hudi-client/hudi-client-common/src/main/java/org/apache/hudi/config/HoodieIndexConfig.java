@@ -473,6 +473,11 @@ public class HoodieIndexConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withRedisIndexConfig(HoodieRedisIndexConfig redisIndexConfig) {
+      hoodieIndexConfig.getProps().putAll(redisIndexConfig.getProps());
+      return this;
+    }
+
     public Builder bloomFilterNumEntries(int numEntries) {
       hoodieIndexConfig.setValue(BLOOM_FILTER_NUM_ENTRIES_VALUE, String.valueOf(numEntries));
       return this;

@@ -182,6 +182,7 @@
     <zookeeper.version>3.5.7</zookeeper.version>
     <dynamodb-local.port>8000</dynamodb-local.port>
     <dynamodb-local.endpoint>http://localhost:${dynamodb-local.port}</dynamodb-local.endpoint>
+    <jedis.version>2.9.0</jedis.version>
   </properties>
 
   <scm>

@@ -84,6 +84,16 @@
       <scope>test</scope>
     </dependency>
 
+    <!-- Hudi  -->
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-client-common</artifactId>
+      <version>${project.parent.version}</version>
+      <classifier>tests</classifier>
+      <type>test-jar</type>
+      <scope>test</scope>
+    </dependency>
+
     <!-- HBase - Tests -->
     <dependency>
       <groupId>org.apache.hbase</groupId>
@@ -168,7 +178,16 @@
       <artifactId>junit-platform-commons</artifactId>
       <scope>test</scope>
     </dependency>
-      <!-- Other Utils -->
+
+    <!-- Redis Test -->
+    <dependency>
+      <groupId>it.ozimov</groupId>
+      <artifactId>embedded-redis</artifactId>
+      <version>0.7.1</version>
+      <scope>test</scope>
+    </dependency>
+
+    <!-- Other Utils -->
     <dependency>
       <groupId>org.awaitility</groupId>
       <artifactId>awaitility</artifactId>
