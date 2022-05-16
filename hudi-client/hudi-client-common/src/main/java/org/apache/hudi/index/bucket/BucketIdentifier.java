@@ -73,7 +73,7 @@ public class BucketIdentifier implements Serializable {
         .map(p -> p.split(":"))
         .collect(Collectors.toMap(p -> p[0], p -> p[1]));
     return indexKeyFields.stream()
-        .map(f -> recordKeyPairs.get(f)).collect(Collectors.toList());
+        .map(recordKeyPairs::get).collect(Collectors.toList());
   }
 
   public static String partitionBucketIdStr(String partition, int bucketId) {
