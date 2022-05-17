@@ -243,7 +243,7 @@ class TestDataSourceDefaults {
     val partitionPathProp: String = props.getString(DataSourceWriteOptions.PARTITIONPATH_FIELD.key)
     val STRUCT_NAME: String = "hoodieRowTopLevelField"
     val NAMESPACE: String = "hoodieRow"
-    var converterFn: Function1[Any, Any] = _
+    var converterFn: Function1[Row, GenericRecord] = _
 
     override def getKey(record: GenericRecord): HoodieKey = {
       new HoodieKey(HoodieAvroUtils.getNestedFieldValAsString(record, recordKeyProp, true, false),
@@ -251,13 +251,13 @@ class TestDataSourceDefaults {
     }
 
     override def getRecordKey(row: Row): String = {
-      if (null == converterFn) converterFn = AvroConversionHelper.createConverterToAvro(row.schema, STRUCT_NAME, NAMESPACE)
+      if (null == converterFn) converterFn = AvroConversionUtils.createConverterToAvro(row.schema, STRUCT_NAME, NAMESPACE)
       val genericRecord = converterFn.apply(row).asInstanceOf[GenericRecord]
       getKey(genericRecord).getRecordKey
     }
 
     override def getPartitionPath(row: Row): String = {
-      if (null == converterFn) converterFn = AvroConversionHelper.createConverterToAvro(row.schema, STRUCT_NAME, NAMESPACE)
+      if (null == converterFn) converterFn = AvroConversionUtils.createConverterToAvro(row.schema, STRUCT_NAME, NAMESPACE)
       val genericRecord = converterFn.apply(row).asInstanceOf[GenericRecord]
       getKey(genericRecord).getPartitionPath
     }

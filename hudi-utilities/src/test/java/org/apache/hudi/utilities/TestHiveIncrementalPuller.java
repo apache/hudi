@@ -20,10 +20,13 @@ package org.apache.hudi.utilities;
 
 import org.apache.hadoop.hive.metastore.api.MetaException;
 import org.apache.hadoop.hive.ql.metadata.HiveException;
+
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.hive.HoodieHiveClient;
 import org.apache.hudi.hive.testutils.HiveTestUtil;
+import org.apache.hudi.sync.common.HoodieSyncConfig;
 import org.apache.hudi.utilities.exception.HoodieIncrementalPullSQLException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -38,7 +41,7 @@ import java.nio.file.Paths;
 import java.time.Instant;
 
 import static org.apache.hudi.hive.testutils.HiveTestUtil.fileSystem;
-import static org.apache.hudi.hive.testutils.HiveTestUtil.hiveSyncConfig;
+import static org.apache.hudi.hive.testutils.HiveTestUtil.hiveSyncProps;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -69,12 +72,12 @@ public class TestHiveIncrementalPuller {
   }
 
   private HiveIncrementalPuller.Config getHivePullerConfig(String incrementalSql) throws IOException {
-    config.hiveJDBCUrl = hiveSyncConfig.jdbcUrl;
-    config.hiveUsername = hiveSyncConfig.hiveUser;
-    config.hivePassword = hiveSyncConfig.hivePass;
+    config.hiveJDBCUrl = hiveSyncProps.getString(HiveSyncConfig.HIVE_URL.key());
+    config.hiveUsername = hiveSyncProps.getString(HiveSyncConfig.HIVE_USER.key());
+    config.hivePassword = hiveSyncProps.getString(HiveSyncConfig.HIVE_PASS.key());
     config.hoodieTmpDir = Files.createTempDirectory("hivePullerTest").toUri().toString();
-    config.sourceDb = hiveSyncConfig.databaseName;
-    config.sourceTable = hiveSyncConfig.tableName;
+    config.sourceDb = hiveSyncProps.getString(HoodieSyncConfig.META_SYNC_DATABASE_NAME.key());
+    config.sourceTable = hiveSyncProps.getString(HoodieSyncConfig.META_SYNC_TABLE_NAME.key());
     config.targetDb = "tgtdb";
     config.targetTable = "test2";
     config.tmpDb = "tmp_db";
@@ -98,9 +101,9 @@ public class TestHiveIncrementalPuller {
   private void createSourceTable() throws IOException, URISyntaxException {
     String instantTime = "101";
     HiveTestUtil.createCOWTable(instantTime, 5, true);
-    hiveSyncConfig.syncMode = "jdbc";
-    HiveTestUtil.hiveSyncConfig.batchSyncNum = 3;
-    HiveSyncTool tool = new HiveSyncTool(hiveSyncConfig, HiveTestUtil.getHiveConf(), fileSystem);
+    hiveSyncProps.setProperty(HiveSyncConfig.HIVE_SYNC_MODE.key(), "jdbc");
+
+    HiveSyncTool tool = new HiveSyncTool(hiveSyncProps, HiveTestUtil.getHiveConf(), fileSystem);
     tool.syncHoodieTable();
   }
 
@@ -113,20 +116,20 @@ public class TestHiveIncrementalPuller {
     tool.syncHoodieTable();
   }
 
-  private HiveSyncConfig getTargetHiveSyncConfig(String basePath) {
-    HiveSyncConfig config = HiveSyncConfig.copy(hiveSyncConfig);
-    config.databaseName = "tgtdb";
-    config.tableName = "test2";
-    config.basePath = basePath;
-    config.batchSyncNum = 3;
-    config.syncMode = "jdbc";
-    return config;
+  private TypedProperties getTargetHiveSyncConfig(String basePath) {
+    TypedProperties targetHiveSyncProps = new TypedProperties(hiveSyncProps);
+    targetHiveSyncProps.setProperty(HoodieSyncConfig.META_SYNC_DATABASE_NAME.key(), "tgtdb");
+    targetHiveSyncProps.setProperty(HoodieSyncConfig.META_SYNC_TABLE_NAME.key(), "test2");
+    targetHiveSyncProps.setProperty(HoodieSyncConfig.META_SYNC_BASE_PATH.key(), basePath);
+    targetHiveSyncProps.setProperty(HiveSyncConfig.HIVE_SYNC_MODE.key(), "jdbc");
+
+    return targetHiveSyncProps;
   }
 
-  private HiveSyncConfig getAssertionSyncConfig(String databaseName) {
-    HiveSyncConfig config = HiveSyncConfig.copy(hiveSyncConfig);
-    config.databaseName = databaseName;
-    return config;
+  private TypedProperties getAssertionSyncConfig(String databaseName) {
+    TypedProperties assertHiveSyncProps = new TypedProperties(hiveSyncProps);
+    assertHiveSyncProps.setProperty(HoodieSyncConfig.META_SYNC_DATABASE_NAME.key(), databaseName);
+    return assertHiveSyncProps;
   }
 
   private void createTables() throws IOException, URISyntaxException {
@@ -158,14 +161,13 @@ public class TestHiveIncrementalPuller {
   public void testPuller() throws IOException, URISyntaxException {
     createTables();
     HiveIncrementalPuller.Config cfg = getHivePullerConfig("select name from testdb.test1 where `_hoodie_commit_time` > '%s'");
-    HoodieHiveClient hiveClient = new HoodieHiveClient(hiveSyncConfig, HiveTestUtil.getHiveConf(), fileSystem);
+    HoodieHiveClient hiveClient = new HoodieHiveClient(new HiveSyncConfig(hiveSyncProps), HiveTestUtil.getHiveConf(), fileSystem);
     hiveClient.createDatabase(cfg.tmpDb);
     HiveIncrementalPuller puller = new HiveIncrementalPuller(cfg);
     puller.saveDelta();
-    HiveSyncConfig assertingConfig = getAssertionSyncConfig(cfg.tmpDb);
-    HoodieHiveClient assertingClient = new HoodieHiveClient(assertingConfig, HiveTestUtil.getHiveConf(), fileSystem);
+    HoodieHiveClient assertingClient = new HoodieHiveClient(new HiveSyncConfig(getAssertionSyncConfig(cfg.tmpDb)), HiveTestUtil.getHiveConf(), fileSystem);
     String tmpTable = cfg.targetTable + "__" + cfg.sourceTable;
-    assertTrue(assertingClient.doesTableExist(tmpTable));
+    assertTrue(assertingClient.tableExists(tmpTable));
   }
 
 }

@@ -65,7 +65,7 @@ public abstract class BaseActionExecutor<T extends HoodieRecordPayload, I, K, O,
    * Writes clean metadata to table metadata.
    * @param metadata clean metadata of interest.
    */
-  protected final void writeTableMetadata(HoodieCleanMetadata metadata) {
+  protected final void writeTableMetadata(HoodieCleanMetadata metadata, String instantTime) {
     table.getMetadataWriter(instantTime).ifPresent(w -> w.update(metadata, instantTime));
   }
 

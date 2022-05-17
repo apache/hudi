@@ -121,7 +121,7 @@ public abstract class HoodieIndex<I, O> implements Serializable {
   public abstract boolean isImplicitWithStorage();
 
   /**
-   * If the `getCustomizedPartitioner` returns a partitioner, it has to be true.
+   * To indicate if a operation type requires location tagging before writing
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public boolean requiresTagging(WriteOperationType operationType) {
@@ -141,6 +141,10 @@ public abstract class HoodieIndex<I, O> implements Serializable {
   }
 
   public enum IndexType {
-    HBASE, INMEMORY, BLOOM, GLOBAL_BLOOM, SIMPLE, GLOBAL_SIMPLE, BUCKET
+    HBASE, INMEMORY, BLOOM, GLOBAL_BLOOM, SIMPLE, GLOBAL_SIMPLE, BUCKET, FLINK_STATE
+  }
+
+  public enum BucketIndexEngineType {
+    SIMPLE, CONSISTENT_HASHING
   }
 }

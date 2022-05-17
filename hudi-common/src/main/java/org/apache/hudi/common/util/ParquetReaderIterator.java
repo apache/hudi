@@ -24,13 +24,12 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.parquet.hadoop.ParquetReader;
 
 import java.io.IOException;
-import java.util.Iterator;
 
 /**
  * This class wraps a parquet reader and provides an iterator based api to read from a parquet file. This is used in
  * {@link BoundedInMemoryQueue}
  */
-public class ParquetReaderIterator<T> implements Iterator<T> {
+public class ParquetReaderIterator<T> implements ClosableIterator<T> {
 
   // Parquet reader for an existing parquet file
   private final ParquetReader<T> parquetReader;
@@ -73,7 +72,11 @@ public class ParquetReaderIterator<T> implements Iterator<T> {
     }
   }
 
-  public void close() throws IOException {
-    parquetReader.close();
+  public void close() {
+    try {
+      parquetReader.close();
+    } catch (IOException e) {
+      throw new HoodieException("Exception while closing the parquet reader", e);
+    }
   }
 }

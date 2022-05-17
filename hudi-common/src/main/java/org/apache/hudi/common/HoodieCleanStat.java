@@ -47,19 +47,22 @@ public class HoodieCleanStat implements Serializable {
   private final List<String> failedDeleteBootstrapBaseFiles;
   // Earliest commit that was retained in this clean
   private final String earliestCommitToRetain;
+  // set to true if partition is deleted
+  private final boolean isPartitionDeleted;
 
   public HoodieCleanStat(HoodieCleaningPolicy policy, String partitionPath, List<String> deletePathPatterns,
       List<String> successDeleteFiles, List<String> failedDeleteFiles, String earliestCommitToRetain) {
     this(policy, partitionPath, deletePathPatterns, successDeleteFiles, failedDeleteFiles, earliestCommitToRetain,
         CollectionUtils.createImmutableList(), CollectionUtils.createImmutableList(),
-        CollectionUtils.createImmutableList());
+        CollectionUtils.createImmutableList(), false);
   }
 
   public HoodieCleanStat(HoodieCleaningPolicy policy, String partitionPath, List<String> deletePathPatterns,
                          List<String> successDeleteFiles, List<String> failedDeleteFiles,
                          String earliestCommitToRetain, List<String> deleteBootstrapBasePathPatterns,
                          List<String> successDeleteBootstrapBaseFiles,
-                         List<String> failedDeleteBootstrapBaseFiles) {
+                         List<String> failedDeleteBootstrapBaseFiles,
+                         boolean isPartitionDeleted) {
     this.policy = policy;
     this.partitionPath = partitionPath;
     this.deletePathPatterns = deletePathPatterns;
@@ -69,6 +72,7 @@ public class HoodieCleanStat implements Serializable {
     this.deleteBootstrapBasePathPatterns = deleteBootstrapBasePathPatterns;
     this.successDeleteBootstrapBaseFiles = successDeleteBootstrapBaseFiles;
     this.failedDeleteBootstrapBaseFiles = failedDeleteBootstrapBaseFiles;
+    this.isPartitionDeleted = isPartitionDeleted;
   }
 
   public HoodieCleaningPolicy getPolicy() {
@@ -107,6 +111,10 @@ public class HoodieCleanStat implements Serializable {
     return earliestCommitToRetain;
   }
 
+  public boolean isPartitionDeleted() {
+    return isPartitionDeleted;
+  }
+
   public static HoodieCleanStat.Builder newBuilder() {
     return new Builder();
   }
@@ -125,6 +133,7 @@ public class HoodieCleanStat implements Serializable {
     private List<String> deleteBootstrapBasePathPatterns;
     private List<String> successDeleteBootstrapBaseFiles;
     private List<String> failedDeleteBootstrapBaseFiles;
+    private boolean isPartitionDeleted;
 
     public Builder withPolicy(HoodieCleaningPolicy policy) {
       this.policy = policy;
@@ -172,10 +181,15 @@ public class HoodieCleanStat implements Serializable {
       return this;
     }
 
+    public Builder isPartitionDeleted(boolean isPartitionDeleted) {
+      this.isPartitionDeleted = isPartitionDeleted;
+      return this;
+    }
+
     public HoodieCleanStat build() {
       return new HoodieCleanStat(policy, partitionPath, deletePathPatterns, successDeleteFiles, failedDeleteFiles,
           earliestCommitToRetain, deleteBootstrapBasePathPatterns, successDeleteBootstrapBaseFiles,
-        failedDeleteBootstrapBaseFiles);
+        failedDeleteBootstrapBaseFiles, isPartitionDeleted);
     }
   }
 
@@ -190,7 +204,8 @@ public class HoodieCleanStat implements Serializable {
         + ", earliestCommitToRetain='" + earliestCommitToRetain
         + ", deleteBootstrapBasePathPatterns=" + deleteBootstrapBasePathPatterns
         + ", successDeleteBootstrapBaseFiles=" + successDeleteBootstrapBaseFiles
-        + ", failedDeleteBootstrapBaseFiles=" + failedDeleteBootstrapBaseFiles + '\''
+        + ", failedDeleteBootstrapBaseFiles=" + failedDeleteBootstrapBaseFiles
+        + ", isPartitionDeleted=" + isPartitionDeleted + '\''
         + '}';
   }
 }

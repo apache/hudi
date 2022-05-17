@@ -17,11 +17,12 @@
 
 package org.apache.hudi
 
+import java.io.IOException
+import java.time.Instant
+import java.util.{Collections, Date, UUID}
 import org.apache.commons.io.FileUtils
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.client.SparkRDDWriteClient
-import org.apache.hudi.common.config.HoodieConfig
 import org.apache.hudi.common.model._
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
@@ -29,16 +30,14 @@ import org.apache.hudi.config.{HoodieBootstrapConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode
 import org.apache.hudi.functional.TestBootstrap
-import org.apache.hudi.hive.HiveSyncConfig
 import org.apache.hudi.keygen.{ComplexKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.testutils.DataSourceTestUtils
-import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions.{expr, lit}
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.hudi.command.SqlKeyGenerator
-import org.apache.spark.sql.internal.{SQLConf, StaticSQLConf}
+import org.apache.spark.{SparkConf, SparkContext}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue, fail}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
@@ -46,11 +45,8 @@ import org.junit.jupiter.params.provider.{CsvSource, EnumSource, ValueSource}
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.{spy, times, verify}
 import org.scalatest.Assertions.assertThrows
-import org.scalatest.Matchers.{assertResult, be, convertToAnyShouldWrapper, intercept}
+import org.scalatest.Matchers.{be, convertToAnyShouldWrapper, intercept}
 
-import java.io.IOException
-import java.time.Instant
-import java.util.{Collections, Date, UUID}
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters
 
@@ -95,7 +91,7 @@ class TestHoodieSparkSqlWriter {
    */
   def initSparkContext(): Unit = {
     val sparkConf = new SparkConf()
-    if (!HoodieSparkUtils.beforeSpark3_2()) {
+    if (HoodieSparkUtils.gteqSpark3_2) {
       sparkConf.set("spark.sql.catalog.spark_catalog",
         "org.apache.spark.sql.hudi.catalog.HoodieCatalog")
     }
@@ -665,55 +661,6 @@ class TestHoodieSparkSqlWriter {
   }
 
   /**
-   * Test case for build sync config for spark sql.
-   */
-  @Test
-  def testBuildSyncConfigForSparkSql(): Unit = {
-    val params = Map(
-      "path" -> tempBasePath,
-      DataSourceWriteOptions.TABLE_NAME.key -> "test_hoodie",
-      DataSourceWriteOptions.HIVE_PARTITION_FIELDS.key -> "partition",
-      DataSourceWriteOptions.HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE.key -> "true",
-      DataSourceWriteOptions.HIVE_CREATE_MANAGED_TABLE.key -> "true"
-    )
-    val parameters = HoodieWriterUtils.parametersWithWriteDefaults(params)
-    val hoodieConfig = HoodieWriterUtils.convertMapToHoodieConfig(parameters)
-
-    val buildSyncConfigMethod =
-      HoodieSparkSqlWriter.getClass.getDeclaredMethod("buildSyncConfig", classOf[Path],
-        classOf[HoodieConfig], classOf[SQLConf])
-    buildSyncConfigMethod.setAccessible(true)
-
-    val hiveSyncConfig = buildSyncConfigMethod.invoke(HoodieSparkSqlWriter,
-      new Path(tempBasePath), hoodieConfig, spark.sessionState.conf).asInstanceOf[HiveSyncConfig]
-    assertTrue(hiveSyncConfig.skipROSuffix)
-    assertTrue(hiveSyncConfig.createManagedTable)
-    assertTrue(hiveSyncConfig.syncAsSparkDataSourceTable)
-    assertResult(spark.sessionState.conf.getConf(StaticSQLConf.SCHEMA_STRING_LENGTH_THRESHOLD))(hiveSyncConfig.sparkSchemaLengthThreshold)
-  }
-
-  /**
-   * Test case for build sync config for skip Ro Suffix values.
-   */
-  @Test
-  def testBuildSyncConfigForSkipRoSuffixValues(): Unit = {
-    val params = Map(
-      "path" -> tempBasePath,
-      DataSourceWriteOptions.TABLE_NAME.key -> "test_hoodie",
-      DataSourceWriteOptions.HIVE_PARTITION_FIELDS.key -> "partition"
-    )
-    val parameters = HoodieWriterUtils.parametersWithWriteDefaults(params)
-    val hoodieConfig = HoodieWriterUtils.convertMapToHoodieConfig(parameters)
-    val buildSyncConfigMethod =
-      HoodieSparkSqlWriter.getClass.getDeclaredMethod("buildSyncConfig", classOf[Path],
-        classOf[HoodieConfig], classOf[SQLConf])
-    buildSyncConfigMethod.setAccessible(true)
-    val hiveSyncConfig = buildSyncConfigMethod.invoke(HoodieSparkSqlWriter,
-      new Path(tempBasePath), hoodieConfig, spark.sessionState.conf).asInstanceOf[HiveSyncConfig]
-    assertFalse(hiveSyncConfig.skipROSuffix)
-  }
-
-  /**
    * Test case for incremental view with replacement.
    */
   @Test
@@ -827,33 +774,32 @@ class TestHoodieSparkSqlWriter {
   /**
    * Test case for non partition table with metatable support.
    */
-  @Test
-  def testNonPartitionTableWithMetatableSupport(): Unit = {
-    List(DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL).foreach { tableType =>
-      val options = Map(DataSourceWriteOptions.TABLE_TYPE.key -> tableType,
-        DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "col3",
-        DataSourceWriteOptions.RECORDKEY_FIELD.key -> "keyid",
-        DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "",
-        DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> "org.apache.hudi.keygen.NonpartitionedKeyGenerator",
-        HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
-        "hoodie.insert.shuffle.parallelism" -> "1",
-        "hoodie.metadata.enable" -> "true")
-      val df = spark.range(0, 10).toDF("keyid")
-        .withColumn("col3", expr("keyid"))
-        .withColumn("age", expr("keyid + 1000"))
-      df.write.format("hudi")
-        .options(options.updated(DataSourceWriteOptions.OPERATION.key, "insert"))
-        .mode(SaveMode.Overwrite).save(tempBasePath)
-      // upsert same record again
-      val df_update = spark.range(0, 10).toDF("keyid")
-        .withColumn("col3", expr("keyid"))
-        .withColumn("age", expr("keyid + 2000"))
-      df_update.write.format("hudi")
-        .options(options.updated(DataSourceWriteOptions.OPERATION.key, "upsert"))
-        .mode(SaveMode.Append).save(tempBasePath)
-      assert(spark.read.format("hudi").load(tempBasePath).count() == 10)
-      assert(spark.read.format("hudi").load(tempBasePath).where("age >= 2000").count() == 10)
-    }
+  @ParameterizedTest
+  @EnumSource(value = classOf[HoodieTableType])
+  def testNonPartitionTableWithMetatableSupport(tableType: HoodieTableType): Unit = {
+    val options = Map(DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name,
+      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "col3",
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "keyid",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "",
+      DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> "org.apache.hudi.keygen.NonpartitionedKeyGenerator",
+      HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
+      "hoodie.insert.shuffle.parallelism" -> "1",
+      "hoodie.metadata.enable" -> "true")
+    val df = spark.range(0, 10).toDF("keyid")
+      .withColumn("col3", expr("keyid"))
+      .withColumn("age", expr("keyid + 1000"))
+    df.write.format("hudi")
+      .options(options.updated(DataSourceWriteOptions.OPERATION.key, "insert"))
+      .mode(SaveMode.Overwrite).save(tempBasePath)
+    // upsert same record again
+    val df_update = spark.range(0, 10).toDF("keyid")
+      .withColumn("col3", expr("keyid"))
+      .withColumn("age", expr("keyid + 2000"))
+    df_update.write.format("hudi")
+      .options(options.updated(DataSourceWriteOptions.OPERATION.key, "upsert"))
+      .mode(SaveMode.Append).save(tempBasePath)
+    assert(spark.read.format("hudi").load(tempBasePath).count() == 10)
+    assert(spark.read.format("hudi").load(tempBasePath).where("age >= 2000").count() == 10)
   }
 
   /**
@@ -935,6 +881,139 @@ class TestHoodieSparkSqlWriter {
     val data = spark.read.format("hudi").load(tablePath2 + "/*")
     assert(data.count() == 2)
     assert(data.select("_hoodie_partition_path").map(_.getString(0)).distinct.collect.head == "2021-10-16")
+  }
+
+  @Test
+  def testNonpartitonedToDefaultKeyGen(): Unit = {
+    val _spark = spark
+    import _spark.implicits._
+    val df = Seq((1, "a1", 10, 1000, "2021-10-16")).toDF("id", "name", "value", "ts", "dt")
+    val options = Map(
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "id",
+      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "ts",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "dt"
+    )
+
+    // case 1: When commit C1 specificies a key generator and commit C2 does not specify key generator
+    val (tableName1, tablePath1) = ("hoodie_test_params_1", s"$tempBasePath" + "_1")
+
+    // the first write need to specify KEYGENERATOR_CLASS_NAME params
+    df.write.format("hudi")
+      .options(options)
+      .option(HoodieWriteConfig.TBL_NAME.key, tableName1)
+      .option(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key, classOf[NonpartitionedKeyGenerator].getName)
+      .mode(SaveMode.Overwrite).save(tablePath1)
+
+    val df2 = Seq((2, "a2", 20, 1000, "2021-10-16")).toDF("id", "name", "value", "ts", "dt")
+    // raise exception when no KEYGENERATOR_CLASS_NAME is specified and it is expected to default to SimpleKeyGenerator
+    val configConflictException = intercept[HoodieException] {
+      df2.write.format("hudi")
+        .options(options)
+        .option(HoodieWriteConfig.TBL_NAME.key, tableName1)
+        .mode(SaveMode.Append).save(tablePath1)
+    }
+    assert(configConflictException.getMessage.contains("Config conflict"))
+    assert(configConflictException.getMessage.contains(s"KeyGenerator:\t${classOf[SimpleKeyGenerator].getName}\t${classOf[NonpartitionedKeyGenerator].getName}"))
+  }
+
+  @Test
+  def testDefaultKeyGenToNonpartitoned(): Unit = {
+    val _spark = spark
+    import _spark.implicits._
+    val df = Seq((1, "a1", 10, 1000, "2021-10-16")).toDF("id", "name", "value", "ts", "dt")
+    val options = Map(
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "id",
+      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "ts",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "dt"
+    )
+
+    // case 1: When commit C1 does not specify key generator and commit C2 specificies a key generator
+    val (tableName1, tablePath1) = ("hoodie_test_params_1", s"$tempBasePath" + "_1")
+
+    // the first write need to specify KEYGENERATOR_CLASS_NAME params
+    df.write.format("hudi")
+      .options(options)
+      .option(HoodieWriteConfig.TBL_NAME.key, tableName1)
+      .mode(SaveMode.Overwrite).save(tablePath1)
+
+    val df2 = Seq((2, "a2", 20, 1000, "2021-10-16")).toDF("id", "name", "value", "ts", "dt")
+    // raise exception when NonpartitionedKeyGenerator is specified
+    val configConflictException = intercept[HoodieException] {
+      df2.write.format("hudi")
+        .options(options)
+        .option(HoodieWriteConfig.TBL_NAME.key, tableName1)
+        .option(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key, classOf[NonpartitionedKeyGenerator].getName)
+        .mode(SaveMode.Append).save(tablePath1)
+    }
+    assert(configConflictException.getMessage.contains("Config conflict"))
+    assert(configConflictException.getMessage.contains(s"KeyGenerator:\t${classOf[NonpartitionedKeyGenerator].getName}\t${classOf[SimpleKeyGenerator].getName}"))
+  }
+
+
+  @Test
+  def testNoKeyGenToSimpleKeyGen(): Unit = {
+    val _spark = spark
+    import _spark.implicits._
+    val df = Seq((1, "a1", 10, 1000, "2021-10-16")).toDF("id", "name", "value", "ts", "dt")
+    val options = Map(
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "id",
+      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "ts",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "dt"
+    )
+
+    // case 1: When commit C1 specificies a key generator and commkt C2 does not specify key generator
+    val (tableName1, tablePath1) = ("hoodie_test_params_1", s"$tempBasePath" + "_1")
+
+    // the first write need to specify KEYGENERATOR_CLASS_NAME params
+    df.write.format("hudi")
+      .options(options)
+      .option(HoodieWriteConfig.TBL_NAME.key, tableName1)
+      .mode(SaveMode.Overwrite).save(tablePath1)
+
+    val df2 = Seq((2, "a2", 20, 1000, "2021-10-16")).toDF("id", "name", "value", "ts", "dt")
+    // No Exception Should be raised
+    try {
+      df2.write.format("hudi")
+        .options(options)
+        .option(HoodieWriteConfig.TBL_NAME.key, tableName1)
+        .option(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key, classOf[SimpleKeyGenerator].getName)
+        .mode(SaveMode.Append).save(tablePath1)
+    } catch {
+      case _ => fail("Switching from no keygen to explicit SimpleKeyGenerator should not fail");
+    }
+  }
+
+  @Test
+  def testSimpleKeyGenToNoKeyGen(): Unit = {
+    val _spark = spark
+    import _spark.implicits._
+    val df = Seq((1, "a1", 10, 1000, "2021-10-16")).toDF("id", "name", "value", "ts", "dt")
+    val options = Map(
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "id",
+      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "ts",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "dt"
+    )
+
+    // case 1: When commit C1 specificies a key generator and commkt C2 does not specify key generator
+    val (tableName1, tablePath1) = ("hoodie_test_params_1", s"$tempBasePath" + "_1")
+
+    // the first write need to specify KEYGENERATOR_CLASS_NAME params
+    df.write.format("hudi")
+      .options(options)
+      .option(HoodieWriteConfig.TBL_NAME.key, tableName1)
+      .option(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key, classOf[SimpleKeyGenerator].getName)
+      .mode(SaveMode.Overwrite).save(tablePath1)
+
+    val df2 = Seq((2, "a2", 20, 1000, "2021-10-16")).toDF("id", "name", "value", "ts", "dt")
+    // No Exception Should be raised when default keygen is used
+    try {
+      df2.write.format("hudi")
+        .options(options)
+        .option(HoodieWriteConfig.TBL_NAME.key, tableName1)
+        .mode(SaveMode.Append).save(tablePath1)
+    } catch {
+      case _ => fail("Switching from  explicit SimpleKeyGenerator to default keygen should not fail");
+    }
   }
 
   @Test

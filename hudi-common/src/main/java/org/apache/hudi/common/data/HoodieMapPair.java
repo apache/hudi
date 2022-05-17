@@ -20,6 +20,7 @@
 package org.apache.hudi.common.data;
 
 import org.apache.hudi.common.function.FunctionWrapper;
+import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.function.SerializablePairFunction;
 import org.apache.hudi.common.util.Option;
@@ -27,6 +28,7 @@ import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -108,6 +110,15 @@ public class HoodieMapPair<K, V> extends HoodiePairData<K, V> {
   public Map<K, Long> countByKey() {
     return mapPairData.entrySet().stream().collect(
         Collectors.toMap(Map.Entry::getKey, entry -> (long) entry.getValue().size()));
+  }
+
+  @Override
+  public HoodiePairData<K, V> reduceByKey(SerializableBiFunction<V, V, V> func, int parallelism) {
+    return HoodieMapPair.of(mapPairData.entrySet().stream()
+        .collect(Collectors.toMap(Map.Entry::getKey, e -> {
+          Option<V> reducedValue = Option.fromJavaOptional(e.getValue().stream().reduce(func::apply));
+          return reducedValue.isPresent() ? Collections.singletonList(reducedValue.get()) : Collections.emptyList();
+        })));
   }
 
   @Override

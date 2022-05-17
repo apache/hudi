@@ -34,6 +34,7 @@ import org.apache.flink.table.types.logical.RowType;
 
 import org.apache.flink.table.types.logical.TimestampType;
 import org.apache.parquet.schema.GroupType;
+import org.apache.parquet.schema.LogicalTypeAnnotation;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.OriginalType;
 import org.apache.parquet.schema.PrimitiveType;
@@ -45,6 +46,8 @@ import org.slf4j.LoggerFactory;
 import java.lang.reflect.Array;
 import java.util.ArrayList;
 import java.util.List;
+
+import static org.apache.parquet.schema.LogicalTypeAnnotation.TimeUnit;
 
 /**
  * Schema converter converts Parquet schema to and from Flink internal types.
@@ -436,7 +439,7 @@ public class ParquetSchemaConverter {
             String.format(
                 "Can not convert Flink MapTypeInfo %s to Parquet"
                     + " Map type as key has to be String",
-                typeInfo.toString()));
+                typeInfo));
       }
     } else if (typeInfo instanceof ObjectArrayTypeInfo) {
       ObjectArrayTypeInfo objectArrayTypeInfo = (ObjectArrayTypeInfo) typeInfo;
@@ -567,18 +570,16 @@ public class ParquetSchemaConverter {
         int numBytes = computeMinBytesForDecimalPrecision(precision);
         return Types.primitive(
             PrimitiveType.PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY, repetition)
-            .precision(precision)
-            .scale(scale)
+            .as(LogicalTypeAnnotation.decimalType(scale, precision))
             .length(numBytes)
-            .as(OriginalType.DECIMAL)
             .named(name);
       case TINYINT:
         return Types.primitive(PrimitiveType.PrimitiveTypeName.INT32, repetition)
-            .as(OriginalType.INT_8)
+            .as(LogicalTypeAnnotation.intType(8, true))
             .named(name);
       case SMALLINT:
         return Types.primitive(PrimitiveType.PrimitiveTypeName.INT32, repetition)
-            .as(OriginalType.INT_16)
+            .as(LogicalTypeAnnotation.intType(16, true))
             .named(name);
       case INTEGER:
         return Types.primitive(PrimitiveType.PrimitiveTypeName.INT32, repetition)
@@ -594,16 +595,17 @@ public class ParquetSchemaConverter {
             .named(name);
       case DATE:
         return Types.primitive(PrimitiveType.PrimitiveTypeName.INT32, repetition)
-            .as(OriginalType.DATE)
+            .as(LogicalTypeAnnotation.dateType())
             .named(name);
       case TIME_WITHOUT_TIME_ZONE:
         return Types.primitive(PrimitiveType.PrimitiveTypeName.INT32, repetition)
-            .as(OriginalType.TIME_MILLIS)
+            .as(LogicalTypeAnnotation.timeType(true, TimeUnit.MILLIS))
             .named(name);
       case TIMESTAMP_WITHOUT_TIME_ZONE:
         TimestampType timestampType = (TimestampType) type;
         if (timestampType.getPrecision() == 3) {
           return Types.primitive(PrimitiveType.PrimitiveTypeName.INT64, repetition)
+              .as(LogicalTypeAnnotation.timestampType(true, TimeUnit.MILLIS))
               .named(name);
         } else {
           return Types.primitive(PrimitiveType.PrimitiveTypeName.INT96, repetition)
@@ -613,6 +615,7 @@ public class ParquetSchemaConverter {
         LocalZonedTimestampType localZonedTimestampType = (LocalZonedTimestampType) type;
         if (localZonedTimestampType.getPrecision() == 3) {
           return Types.primitive(PrimitiveType.PrimitiveTypeName.INT64, repetition)
+              .as(LogicalTypeAnnotation.timestampType(false, TimeUnit.MILLIS))
               .named(name);
         } else {
           return Types.primitive(PrimitiveType.PrimitiveTypeName.INT96, repetition)

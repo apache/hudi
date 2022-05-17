@@ -78,7 +78,7 @@ public class FileSystemViewStorageConfig extends HoodieConfig {
   public static final ConfigProperty<Long> SPILLABLE_MEMORY = ConfigProperty
       .key("hoodie.filesystem.view.spillable.mem")
       .defaultValue(100 * 1024 * 1024L) // 100 MB
-      .withDocumentation("Amount of memory to be used for holding file system view, before spilling to disk.");
+      .withDocumentation("Amount of memory to be used in bytes for holding file system view, before spilling to disk.");
 
   public static final ConfigProperty<Double> SPILLABLE_COMPACTION_MEM_FRACTION = ConfigProperty
       .key("hoodie.filesystem.view.spillable.compaction.mem.fraction")
@@ -240,7 +240,7 @@ public class FileSystemViewStorageConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder withRemoteTimelineClientTimeoutSecs(Long timelineClientTimeoutSecs) {
+    public Builder withRemoteTimelineClientTimeoutSecs(Integer timelineClientTimeoutSecs) {
       fileSystemViewStorageConfig.setValue(REMOTE_TIMEOUT_SECS, timelineClientTimeoutSecs.toString());
       return this;
     }

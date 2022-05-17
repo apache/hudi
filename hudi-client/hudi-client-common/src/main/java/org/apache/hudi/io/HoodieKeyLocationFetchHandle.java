@@ -57,9 +57,9 @@ public class HoodieKeyLocationFetchHandle<T extends HoodieRecordPayload, I, K, O
     BaseFileUtils baseFileUtils = BaseFileUtils.getInstance(baseFile.getPath());
     List<HoodieKey> hoodieKeyList = new ArrayList<>();
     if (keyGeneratorOpt.isPresent()) {
-      hoodieKeyList = baseFileUtils.fetchRecordKeyPartitionPath(hoodieTable.getHadoopConf(), new Path(baseFile.getPath()), keyGeneratorOpt);
+      hoodieKeyList = baseFileUtils.fetchHoodieKeys(hoodieTable.getHadoopConf(), new Path(baseFile.getPath()), keyGeneratorOpt);
     } else {
-      hoodieKeyList = baseFileUtils.fetchRecordKeyPartitionPath(hoodieTable.getHadoopConf(), new Path(baseFile.getPath()));
+      hoodieKeyList = baseFileUtils.fetchHoodieKeys(hoodieTable.getHadoopConf(), new Path(baseFile.getPath()));
     }
     return hoodieKeyList.stream()
         .map(entry -> Pair.of(entry,

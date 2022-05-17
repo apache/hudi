@@ -90,7 +90,7 @@ public class SparkBucketIndexPartitioner<T extends HoodieRecordPayload<T>> exten
   private void assignUpdates(WorkloadProfile profile) {
     updatePartitionPathFileIds = new HashMap<>();
     // each update location gets a partition
-    Set<Entry<String, WorkloadStat>> partitionStatEntries = profile.getPartitionPathStatMap()
+    Set<Entry<String, WorkloadStat>> partitionStatEntries = profile.getInputPartitionPathStatMap()
         .entrySet();
     for (Entry<String, WorkloadStat> partitionStat : partitionStatEntries) {
       if (!updatePartitionPathFileIds.containsKey(partitionStat.getKey())) {

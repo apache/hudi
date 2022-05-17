@@ -18,8 +18,9 @@
 
 package org.apache.spark.sql.hudi
 
-import org.apache.hudi.HoodieSparkUtils.sparkAdapter
+import org.apache.avro.Schema
 import org.apache.hudi.client.utils.SparkRowSerDe
+import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSchemaConverters, HoodieAvroSerializer}
 import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
@@ -30,15 +31,41 @@ import org.apache.spark.sql.catalyst.plans.logical.{Join, LogicalPlan, SubqueryA
 import org.apache.spark.sql.catalyst.{AliasIdentifier, TableIdentifier}
 import org.apache.spark.sql.execution.datasources.{FilePartition, LogicalRelation, PartitionedFile, SparkParsePartitionUtil}
 import org.apache.spark.sql.internal.SQLConf
+import org.apache.spark.sql.types.DataType
+import org.apache.spark.sql.{HoodieCatalystExpressionUtils, Row, SparkSession}
 import org.apache.spark.sql.{Row, SparkSession}
+import org.apache.spark.sql.catalyst.rules.Rule
+import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 
 import java.util.Locale
 
 /**
- * An interface to adapter the difference between spark2 and spark3
- * in some spark related class.
+ * Interface adapting discrepancies and incompatibilities between different Spark versions
  */
 trait SparkAdapter extends Serializable {
+
+  /**
+   * Creates instance of [[HoodieCatalystExpressionUtils]] providing for common utils operating
+   * on Catalyst Expressions
+   */
+  def createCatalystExpressionUtils(): HoodieCatalystExpressionUtils
+
+  /**
+   * Creates instance of [[HoodieAvroSerializer]] providing for ability to serialize
+   * Spark's [[InternalRow]] into Avro payloads
+   */
+  def createAvroSerializer(rootCatalystType: DataType, rootAvroType: Schema, nullable: Boolean): HoodieAvroSerializer
+
+  /**
+   * Creates instance of [[HoodieAvroDeserializer]] providing for ability to deserialize
+   * Avro payloads into Spark's [[InternalRow]]
+   */
+  def createAvroDeserializer(rootAvroType: Schema, rootCatalystType: DataType): HoodieAvroDeserializer
+
+  /**
+   * Creates instance of [[HoodieAvroSchemaConverters]] allowing to convert b/w Avro and Catalyst schemas
+   */
+  def getAvroSchemaConverters: HoodieAvroSchemaConverters
 
   /**
    * Create the SparkRowSerDe.
@@ -70,6 +97,16 @@ trait SparkAdapter extends Serializable {
    */
   def getInsertIntoChildren(plan: LogicalPlan):
     Option[(LogicalPlan, Map[String, Option[String]], LogicalPlan, Boolean, Boolean)]
+
+  /**
+   * if the logical plan is a TimeTravelRelation LogicalPlan.
+   */
+  def isRelationTimeTravel(plan: LogicalPlan): Boolean
+
+  /**
+   * Get the member of the TimeTravelRelation LogicalPlan.
+   */
+  def getRelationTimeTravel(plan: LogicalPlan): Option[(LogicalPlan, Option[Expression], Option[String])]
 
   /**
    * Create a Insert Into LogicalPlan.
@@ -133,4 +170,14 @@ trait SparkAdapter extends Serializable {
         other
     }
   }
+
+  /**
+    * Create customresolutionRule to deal with alter command for hudi.
+    */
+  def createResolveHudiAlterTableCommand(sparkSession: SparkSession): Rule[LogicalPlan]
+
+  /**
+    * Create instance of [[ParquetFileFormat]]
+    */
+  def createHoodieParquetFileFormat(appendPartitionValues: Boolean): Option[ParquetFileFormat]
 }

@@ -79,7 +79,9 @@ public class SparkUtil {
     if (properties.getProperty(HoodieCliSparkConfig.CLI_SPARK_MASTER) != null) {
       sparkMasterNode = properties.getProperty(HoodieCliSparkConfig.CLI_SPARK_MASTER);
     }
-    sparkMasterNode = sparkMaster.orElse(sparkMasterNode);
+    if (sparkMaster.isPresent() && !sparkMaster.get().trim().isEmpty()) {
+      sparkMasterNode = sparkMaster.orElse(sparkMasterNode);
+    }
     sparkConf.setMaster(sparkMasterNode);
 
     // Configure driver

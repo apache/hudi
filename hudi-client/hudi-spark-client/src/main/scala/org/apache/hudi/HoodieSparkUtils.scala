@@ -18,32 +18,30 @@
 
 package org.apache.hudi
 
-import java.util.Properties
-
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
-
 import org.apache.hadoop.fs.{FileSystem, Path}
-
+import org.apache.hudi.avro.HoodieAvroUtils.rewriteRecord
 import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.internal.schema.InternalSchema
+import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
+import org.apache.hudi.internal.schema.utils.InternalSchemaUtils
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.keygen.{BaseKeyGenerator, CustomAvroKeyGenerator, CustomKeyGenerator, KeyGenerator}
-
 import org.apache.spark.SPARK_VERSION
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, Literal}
-import org.apache.spark.sql.execution.datasources.{FileStatusCache, InMemoryFileIndex}
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
-import org.apache.spark.sql.{DataFrame, SparkSession}
 
+import java.util.Properties
 import scala.collection.JavaConverters._
-import scala.collection.JavaConverters.asScalaBufferConverter
 
 object HoodieSparkUtils extends SparkAdapterSupport {
 
@@ -55,15 +53,15 @@ object HoodieSparkUtils extends SparkAdapterSupport {
 
   def isSpark3_1: Boolean = SPARK_VERSION.startsWith("3.1")
 
+  def gteqSpark3_1: Boolean = SPARK_VERSION > "3.1"
+
+  def gteqSpark3_1_3: Boolean = SPARK_VERSION >= "3.1.3"
+
   def isSpark3_2: Boolean = SPARK_VERSION.startsWith("3.2")
 
-  def beforeSpark3_2(): Boolean = {
-    if (isSpark2 || isSpark3_0 || isSpark3_1) {
-      true
-    } else {
-      false
-    }
-  }
+  def gteqSpark3_2: Boolean = SPARK_VERSION > "3.2"
+
+  def gteqSpark3_2_1: Boolean = SPARK_VERSION >= "3.2.1"
 
   def getMetaSchema: StructType = {
     StructType(HoodieRecord.HOODIE_META_COLUMNS.asScala.map(col => {
@@ -128,51 +126,57 @@ object HoodieSparkUtils extends SparkAdapterSupport {
     })
   }
 
-  def createInMemoryFileIndex(sparkSession: SparkSession, globbedPaths: Seq[Path]): InMemoryFileIndex = {
-    val fileStatusCache = FileStatusCache.getOrCreate(sparkSession)
-    new InMemoryFileIndex(sparkSession, globbedPaths, Map(), Option.empty, fileStatusCache)
-  }
+  /**
+   * @deprecated please use other overload [[createRdd]]
+   */
+  def createRdd(df: DataFrame, structName: String, recordNamespace: String, reconcileToLatestSchema: Boolean,
+                latestTableSchema: org.apache.hudi.common.util.Option[Schema] = org.apache.hudi.common.util.Option.empty()): RDD[GenericRecord] = {
+    var latestTableSchemaConverted : Option[Schema] = None
 
-  def createRdd(df: DataFrame, structName: String, recordNamespace: String, reconcileToLatestSchema: Boolean, latestTableSchema:
-  org.apache.hudi.common.util.Option[Schema] = org.apache.hudi.common.util.Option.empty()): RDD[GenericRecord] = {
-    val dfWriteSchema = AvroConversionUtils.convertStructTypeToAvroSchema(df.schema, structName, recordNamespace)
-    var writeSchema : Schema = null;
-    var toReconcileSchema : Schema = null;
-    if (reconcileToLatestSchema && latestTableSchema.isPresent) {
-      // if reconcileToLatestSchema is set to true and latestSchema is present, then try to leverage latestTableSchema.
-      // this code path will handle situations where records are serialized in odl schema, but callers wish to convert
-      // to Rdd[GenericRecord] using different schema(could be evolved schema or could be latest table schema)
-      writeSchema = dfWriteSchema
-      toReconcileSchema = latestTableSchema.get()
+    if (latestTableSchema.isPresent && reconcileToLatestSchema) {
+      latestTableSchemaConverted = Some(latestTableSchema.get())
     } else {
-      // there are paths where callers wish to use latestTableSchema to convert to Rdd[GenericRecords] and not use
-      // row's schema. So use latestTableSchema if present. if not available, fallback to using row's schema.
-      writeSchema = if (latestTableSchema.isPresent) { latestTableSchema.get()} else { dfWriteSchema}
+      // cases when users want to use latestTableSchema but have not turned on reconcileToLatestSchema explicitly
+      // for example, when using a Transformer implementation to transform source RDD to target RDD
+      latestTableSchemaConverted = if (latestTableSchema.isPresent) Some(latestTableSchema.get()) else None
     }
-    createRddInternal(df, writeSchema, toReconcileSchema, structName, recordNamespace)
+    createRdd(df, structName, recordNamespace, latestTableSchemaConverted)
   }
 
-  def createRddInternal(df: DataFrame, writeSchema: Schema, latestTableSchema: Schema, structName: String, recordNamespace: String)
-  : RDD[GenericRecord] = {
-    // Use the write avro schema to derive the StructType which has the correct nullability information
-    val writeDataType = AvroConversionUtils.convertAvroSchemaToStructType(writeSchema)
-    val encoder = RowEncoder.apply(writeDataType).resolveAndBind()
-    val deserializer = sparkAdapter.createSparkRowSerDe(encoder)
-    // if records were serialized with old schema, but an evolved schema was passed in with latestTableSchema, we need
-    // latestTableSchema equivalent datatype to be passed in to AvroConversionHelper.createConverterToAvro()
-    val reconciledDataType =
-      if (latestTableSchema != null) AvroConversionUtils.convertAvroSchemaToStructType(latestTableSchema) else writeDataType
-    // Note: deserializer.deserializeRow(row) is not capable of handling evolved schema. i.e. if Row was serialized in
-    // old schema, but deserializer was created with an encoder with evolved schema, deserialization fails.
-    // Hence we always need to deserialize in the same schema as serialized schema.
-    df.queryExecution.toRdd.map(row => deserializer.deserializeRow(row))
-      .mapPartitions { records =>
-        if (records.isEmpty) Iterator.empty
-        else {
-          val convertor = AvroConversionHelper.createConverterToAvro(reconciledDataType, structName, recordNamespace)
-          records.map { x => convertor(x).asInstanceOf[GenericRecord] }
-        }
+  def createRdd(df: DataFrame, structName: String, recordNamespace: String, readerAvroSchemaOpt: Option[Schema]): RDD[GenericRecord] = {
+    val writerSchema = df.schema
+    val writerAvroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(writerSchema, structName, recordNamespace)
+    val readerAvroSchema = readerAvroSchemaOpt.getOrElse(writerAvroSchema)
+    // We check whether passed in reader schema is identical to writer schema to avoid costly serde loop of
+    // making Spark deserialize its internal representation [[InternalRow]] into [[Row]] for subsequent conversion
+    // (and back)
+    val sameSchema = writerAvroSchema.equals(readerAvroSchema)
+    val (nullable, _) = AvroConversionUtils.resolveAvroTypeNullability(writerAvroSchema)
+
+    // NOTE: We have to serialize Avro schema, and then subsequently parse it on the executor node, since Spark
+    //       serializer is not able to digest it
+    val readerAvroSchemaStr = readerAvroSchema.toString
+    val writerAvroSchemaStr = writerAvroSchema.toString
+    // NOTE: We're accessing toRdd here directly to avoid [[InternalRow]] to [[Row]] conversion
+    df.queryExecution.toRdd.mapPartitions { rows =>
+      if (rows.isEmpty) {
+        Iterator.empty
+      } else {
+        val transform: GenericRecord => GenericRecord =
+          if (sameSchema) identity
+          else {
+            val readerAvroSchema = new Schema.Parser().parse(readerAvroSchemaStr)
+            rewriteRecord(_, readerAvroSchema)
+          }
+
+        // Since caller might request to get records in a different ("evolved") schema, we will be rewriting from
+        // existing Writer's schema into Reader's (avro) schema
+        val writerAvroSchema = new Schema.Parser().parse(writerAvroSchemaStr)
+        val convert = AvroConversionUtils.createInternalRowToAvroConverter(writerSchema, writerAvroSchema, nullable = nullable)
+
+        rows.map { ir => transform(convert(ir)) }
       }
+    }
   }
 
   def getDeserializer(structType: StructType) : SparkRowSerDe = {
@@ -184,14 +188,24 @@ object HoodieSparkUtils extends SparkAdapterSupport {
    * Convert Filters to Catalyst Expressions and joined by And. If convert success return an
    * Non-Empty Option[Expression],or else return None.
    */
-  def convertToCatalystExpressions(filters: Array[Filter],
-                                   tableSchema: StructType): Option[Expression] = {
-    val expressions = filters.map(convertToCatalystExpression(_, tableSchema))
+  def convertToCatalystExpressions(filters: Seq[Filter],
+                                   tableSchema: StructType): Seq[Option[Expression]] = {
+    filters.map(convertToCatalystExpression(_, tableSchema))
+  }
+
+
+  /**
+   * Convert Filters to Catalyst Expressions and joined by And. If convert success return an
+   * Non-Empty Option[Expression],or else return None.
+   */
+  def convertToCatalystExpression(filters: Array[Filter],
+                                  tableSchema: StructType): Option[Expression] = {
+    val expressions = convertToCatalystExpressions(filters, tableSchema)
     if (expressions.forall(p => p.isDefined)) {
       if (expressions.isEmpty) {
         None
       } else if (expressions.length == 1) {
-        expressions(0)
+        expressions.head
       } else {
         Some(expressions.map(_.get).reduce(org.apache.spark.sql.catalyst.expressions.And))
       }
@@ -304,17 +318,25 @@ object HoodieSparkUtils extends SparkAdapterSupport {
     AttributeReference(columnName, field.get.dataType, field.get.nullable)()
   }
 
-  def getRequiredSchema(tableAvroSchema: Schema, requiredColumns: Array[String]): (Schema, StructType) = {
-    // First get the required avro-schema, then convert the avro-schema to spark schema.
-    val name2Fields = tableAvroSchema.getFields.asScala.map(f => f.name() -> f).toMap
-    // Here have to create a new Schema.Field object
-    // to prevent throwing exceptions like "org.apache.avro.AvroRuntimeException: Field already used".
-    val requiredFields = requiredColumns.map(c => name2Fields(c))
-      .map(f => new Schema.Field(f.name(), f.schema(), f.doc(), f.defaultVal(), f.order())).toList
-    val requiredAvroSchema = Schema.createRecord(tableAvroSchema.getName, tableAvroSchema.getDoc,
-      tableAvroSchema.getNamespace, tableAvroSchema.isError, requiredFields.asJava)
-    val requiredStructSchema = AvroConversionUtils.convertAvroSchemaToStructType(requiredAvroSchema)
-    (requiredAvroSchema, requiredStructSchema)
+  def getRequiredSchema(tableAvroSchema: Schema, requiredColumns: Array[String], internalSchema: InternalSchema = InternalSchema.getEmptyInternalSchema): (Schema, StructType, InternalSchema) = {
+    if (internalSchema.isEmptySchema || requiredColumns.isEmpty) {
+      // First get the required avro-schema, then convert the avro-schema to spark schema.
+      val name2Fields = tableAvroSchema.getFields.asScala.map(f => f.name() -> f).toMap
+      // Here have to create a new Schema.Field object
+      // to prevent throwing exceptions like "org.apache.avro.AvroRuntimeException: Field already used".
+      val requiredFields = requiredColumns.map(c => name2Fields(c))
+        .map(f => new Schema.Field(f.name(), f.schema(), f.doc(), f.defaultVal(), f.order())).toList
+      val requiredAvroSchema = Schema.createRecord(tableAvroSchema.getName, tableAvroSchema.getDoc,
+        tableAvroSchema.getNamespace, tableAvroSchema.isError, requiredFields.asJava)
+      val requiredStructSchema = AvroConversionUtils.convertAvroSchemaToStructType(requiredAvroSchema)
+      (requiredAvroSchema, requiredStructSchema, internalSchema)
+    } else {
+      // now we support nested project
+      val prunedInternalSchema = InternalSchemaUtils.pruneInternalSchema(internalSchema, requiredColumns.toList.asJava)
+      val requiredAvroSchema = AvroInternalSchemaConverter.convert(prunedInternalSchema, tableAvroSchema.getName)
+      val requiredStructSchema = AvroConversionUtils.convertAvroSchemaToStructType(requiredAvroSchema)
+      (requiredAvroSchema, requiredStructSchema, prunedInternalSchema)
+    }
   }
 
   def toAttribute(tableSchema: StructType): Seq[AttributeReference] = {

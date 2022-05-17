@@ -18,13 +18,14 @@
 
 package org.apache.hudi.integ.testsuite.configuration;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.integ.testsuite.reader.DeltaInputType;
 import org.apache.hudi.integ.testsuite.writer.DeltaOutputMode;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.hadoop.conf.Configuration;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -69,6 +70,7 @@ public class DeltaConfig implements Serializable {
     public static final String TYPE = "type";
     public static final String NODE_NAME = "name";
     public static final String DEPENDENCIES = "deps";
+    public static final String NO_DEPENDENCY_VALUE = "none";
     public static final String CHILDREN = "children";
     public static final String HIVE_QUERIES = "hive_queries";
     public static final String HIVE_PROPERTIES = "hive_props";
@@ -89,6 +91,7 @@ public class DeltaConfig implements Serializable {
     private static String START_PARTITION = "start_partition";
     private static String DELETE_INPUT_DATA = "delete_input_data";
     private static String VALIDATE_HIVE = "validate_hive";
+    private static String VALIDATE_ONCE_EVERY_ITR = "validate_once_every_itr";
     private static String EXECUTE_ITR_COUNT = "execute_itr_count";
     private static String VALIDATE_ARCHIVAL = "validate_archival";
     private static String VALIDATE_CLEAN = "validate_clean";
@@ -96,6 +99,10 @@ public class DeltaConfig implements Serializable {
     private static String NUM_ROLLBACKS = "num_rollbacks";
     private static String ENABLE_ROW_WRITING = "enable_row_writing";
     private static String ENABLE_METADATA_VALIDATE = "enable_metadata_validate";
+    private static String VALIDATE_FULL_DATA = "validate_full_data";
+    private static String DELETE_INPUT_DATA_EXCEPT_LATEST = "delete_input_data_except_latest";
+    private static String PARTITIONS_TO_DELETE = "partitions_to_delete";
+    private static String INPUT_PARTITIONS_TO_SKIP_VALIDATE = "input_partitions_to_skip_validate";
 
     // Spark SQL Create Table
     private static String TABLE_TYPE = "table_type";
@@ -198,6 +205,10 @@ public class DeltaConfig implements Serializable {
       return Boolean.valueOf(configsMap.getOrDefault(DISABLE_INGEST, false).toString());
     }
 
+    public String getPartitionsToDelete() {
+      return configsMap.getOrDefault(PARTITIONS_TO_DELETE, "").toString();
+    }
+
     public boolean getReinitContext() {
       return Boolean.valueOf(configsMap.getOrDefault(REINIT_CONTEXT, false).toString());
     }
@@ -206,8 +217,24 @@ public class DeltaConfig implements Serializable {
       return Boolean.valueOf(configsMap.getOrDefault(DELETE_INPUT_DATA, false).toString());
     }
 
+    public boolean isDeleteInputDataExceptLatest() {
+      return Boolean.valueOf(configsMap.getOrDefault(DELETE_INPUT_DATA_EXCEPT_LATEST, false).toString());
+    }
+
     public boolean isValidateHive() {
       return Boolean.valueOf(configsMap.getOrDefault(VALIDATE_HIVE, false).toString());
+    }
+
+    public int validateOnceEveryIteration() {
+      return Integer.valueOf(configsMap.getOrDefault(VALIDATE_ONCE_EVERY_ITR, 1).toString());
+    }
+
+    public String inputPartitonsToSkipWithValidate() {
+      return configsMap.getOrDefault(INPUT_PARTITIONS_TO_SKIP_VALIDATE, "").toString();
+    }
+
+    public boolean isValidateFullData() {
+      return Boolean.valueOf(configsMap.getOrDefault(VALIDATE_FULL_DATA, false).toString());
     }
 
     public int getIterationCountToExecute() {

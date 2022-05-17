@@ -39,6 +39,7 @@ import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.internal.schema.io.FileBasedInternalSchemaStorageManager;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseActionExecutor;
 
@@ -72,11 +73,12 @@ public class CleanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends
     this.skipLocking = skipLocking;
   }
 
-  static Boolean deleteFileAndGetResult(FileSystem fs, String deletePathStr) throws IOException {
+  private static Boolean deleteFileAndGetResult(FileSystem fs, String deletePathStr) throws IOException {
     Path deletePath = new Path(deletePathStr);
     LOG.debug("Working on delete path :" + deletePath);
     try {
-      boolean deleteResult = fs.delete(deletePath, false);
+      boolean isDirectory = fs.isDirectory(deletePath);
+      boolean deleteResult = fs.delete(deletePath, isDirectory);
       if (deleteResult) {
         LOG.debug("Cleaned file at path :" + deletePath);
       }
@@ -87,7 +89,7 @@ public class CleanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends
     }
   }
 
-  static Stream<Pair<String, PartitionCleanStat>> deleteFilesFunc(Iterator<Pair<String, CleanFileInfo>> cleanFileInfo, HoodieTable table) {
+  private static Stream<Pair<String, PartitionCleanStat>> deleteFilesFunc(Iterator<Pair<String, CleanFileInfo>> cleanFileInfo, HoodieTable table) {
     Map<String, PartitionCleanStat> partitionCleanStatMap = new HashMap<>();
     FileSystem fs = table.getMetaClient().getFs();
 
@@ -130,7 +132,7 @@ public class CleanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends
         config.getCleanerParallelism());
     LOG.info("Using cleanerParallelism: " + cleanerParallelism);
 
-    context.setJobStatus(this.getClass().getSimpleName(), "Perform cleaning of partitions");
+    context.setJobStatus(this.getClass().getSimpleName(), "Perform cleaning of partitions: " + config.getTableName());
 
     Stream<Pair<String, CleanFileInfo>> filesToBeDeletedPerPartition =
         cleanerPlan.getFilePathsToBeDeletedPerPartition().entrySet().stream()
@@ -143,6 +145,15 @@ public class CleanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends
 
     Map<String, PartitionCleanStat> partitionCleanStatsMap = partitionCleanStats
         .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
+
+    List<String> partitionsToBeDeleted = cleanerPlan.getPartitionsToBeDeleted() != null ? cleanerPlan.getPartitionsToBeDeleted() : new ArrayList<>();
+    partitionsToBeDeleted.forEach(entry -> {
+      try {
+        deleteFileAndGetResult(table.getMetaClient().getFs(), table.getMetaClient().getBasePath() + "/" + entry);
+      } catch (IOException e) {
+        LOG.warn("Partition deletion failed " + entry);
+      }
+    });
 
     // Return PartitionCleanStat for each partition passed.
     return cleanerPlan.getFilePathsToBeDeletedPerPartition().keySet().stream().map(partitionPath -> {
@@ -162,6 +173,7 @@ public class CleanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends
           .withDeleteBootstrapBasePathPatterns(partitionCleanStat.getDeleteBootstrapBasePathPatterns())
           .withSuccessfulDeleteBootstrapBaseFiles(partitionCleanStat.getSuccessfulDeleteBootstrapBaseFiles())
           .withFailedDeleteBootstrapBaseFiles(partitionCleanStat.getFailedDeleteBootstrapBaseFiles())
+          .isPartitionDeleted(partitionsToBeDeleted.contains(partitionPath))
           .build();
     }).collect(Collectors.toList());
   }
@@ -208,7 +220,7 @@ public class CleanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends
       if (!skipLocking) {
         this.txnManager.beginTransaction(Option.empty(), Option.empty());
       }
-      writeTableMetadata(metadata);
+      writeTableMetadata(metadata, inflightInstant.getTimestamp());
       table.getActiveTimeline().transitionCleanInflightToComplete(inflightInstant,
           TimelineMetadataUtils.serializeCleanMetadata(metadata));
       LOG.info("Marked clean started on " + inflightInstant.getTimestamp() + " as complete");
@@ -229,6 +241,14 @@ public class CleanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends
     List<HoodieInstant> pendingCleanInstants = table.getCleanTimeline()
         .filterInflightsAndRequested().getInstants().collect(Collectors.toList());
     if (pendingCleanInstants.size() > 0) {
+      // try to clean old history schema.
+      try {
+        FileBasedInternalSchemaStorageManager fss = new FileBasedInternalSchemaStorageManager(table.getMetaClient());
+        fss.cleanOldFiles(pendingCleanInstants.stream().map(is -> is.getTimestamp()).collect(Collectors.toList()));
+      } catch (Exception e) {
+        // we should not affect original clean logic. Swallow exception and log warn.
+        LOG.warn("failed to clean old history schema");
+      }
       pendingCleanInstants.forEach(hoodieInstant -> {
         if (table.getCleanTimeline().isEmpty(hoodieInstant)) {
           table.getActiveTimeline().deleteEmptyInstantIfExists(hoodieInstant);
@@ -240,9 +260,13 @@ public class CleanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends
             LOG.warn("Failed to perform previous clean operation, instant: " + hoodieInstant, e);
           }
         }
+        table.getMetaClient().reloadActiveTimeline();
+        if (config.isMetadataTableEnabled()) {
+          table.getHoodieView().sync();
+        }
       });
-      table.getMetaClient().reloadActiveTimeline();
     }
+
     // return the last clean metadata for now
     // TODO (NA) : Clean only the earliest pending clean just like how we do for other table services
     // This requires the CleanActionExecutor to be refactored as BaseCommitActionExecutor

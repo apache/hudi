@@ -56,6 +56,8 @@ import java.util.zip.Deflater;
 import java.util.zip.DeflaterOutputStream;
 import java.util.zip.InflaterInputStream;
 
+import static org.apache.hudi.common.util.BinaryUtil.generateChecksum;
+
 /**
  * This class provides a disk spillable only map implementation. All of the data is currenly written to one file,
  * without any rollover support. It uses the following : 1) An in-memory map that tracks the key-> latest ValueMetadata.
@@ -223,7 +225,7 @@ public final class BitCaskDiskMap<T extends Serializable, R extends Serializable
           new BitCaskDiskMap.ValueMetadata(this.filePath, valueSize, filePosition.get(), timestamp));
       byte[] serializedKey = SerializationUtils.serialize(key);
       filePosition
-          .set(SpillableMapUtils.spillToDisk(writeOnlyFileHandle, new FileEntry(SpillableMapUtils.generateChecksum(val),
+          .set(SpillableMapUtils.spillToDisk(writeOnlyFileHandle, new FileEntry(generateChecksum(val),
               serializedKey.length, valueSize, serializedKey, val, timestamp)));
       if (flush) {
         flushToDisk();

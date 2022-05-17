@@ -38,7 +38,7 @@ public class DeleteNode extends InsertNode {
   @Override
   protected void generate(DeltaGenerator deltaGenerator) throws Exception {
     if (!config.isDisableGenerate()) {
-      deltaGenerator.writeRecords(deltaGenerator.generateDeletes(config)).count();
+      deltaGenerator.writeRecords(deltaGenerator.generateDeletes(config)).getValue().count();
     }
   }
 

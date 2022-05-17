@@ -19,20 +19,19 @@
 package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.data.HoodieJavaPairRDD;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
-import org.apache.spark.api.java.JavaRDD;
-import org.apache.spark.api.java.JavaSparkContext;
-import scala.Tuple2;
 
-import java.util.HashMap;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -41,21 +40,18 @@ public class SparkInsertOverwriteTableCommitActionExecutor<T extends HoodieRecor
 
   public SparkInsertOverwriteTableCommitActionExecutor(HoodieEngineContext context,
                                                        HoodieWriteConfig config, HoodieTable table,
-                                                       String instantTime, JavaRDD<HoodieRecord<T>> inputRecordsRDD) {
+                                                       String instantTime, HoodieData<HoodieRecord<T>> inputRecordsRDD) {
     super(context, config, table, instantTime, inputRecordsRDD, WriteOperationType.INSERT_OVERWRITE_TABLE);
   }
 
   @Override
-  protected Map<String, List<String>> getPartitionToReplacedFileIds(HoodieWriteMetadata<JavaRDD<WriteStatus>> writeMetadata) {
-    Map<String, List<String>> partitionToExistingFileIds = new HashMap<>();
+  protected Map<String, List<String>> getPartitionToReplacedFileIds(HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata) {
     List<String> partitionPaths = FSUtils.getAllPartitionPaths(context, config.getMetadataConfig(), table.getMetaClient().getBasePath());
-    JavaSparkContext jsc = HoodieSparkEngineContext.getSparkContext(context);
-    if (partitionPaths != null && partitionPaths.size() > 0) {
-      context.setJobStatus(this.getClass().getSimpleName(), "Getting ExistingFileIds of all partitions");
-      JavaRDD<String> partitionPathRdd = jsc.parallelize(partitionPaths, partitionPaths.size());
-      partitionToExistingFileIds = partitionPathRdd.mapToPair(
-          partitionPath -> new Tuple2<>(partitionPath, getAllExistingFileIds(partitionPath))).collectAsMap();
+    if (partitionPaths == null || partitionPaths.isEmpty()) {
+      return Collections.emptyMap();
     }
-    return partitionToExistingFileIds;
+    context.setJobStatus(this.getClass().getSimpleName(), "Getting ExistingFileIds of all partitions");
+    return HoodieJavaPairRDD.getJavaPairRDD(context.parallelize(partitionPaths, partitionPaths.size()).mapToPair(
+        partitionPath -> Pair.of(partitionPath, getAllExistingFileIds(partitionPath)))).collectAsMap();
   }
 }

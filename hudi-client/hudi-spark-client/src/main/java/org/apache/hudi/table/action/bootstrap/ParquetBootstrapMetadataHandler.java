@@ -28,7 +28,6 @@ import org.apache.hudi.common.util.ParquetReaderIterator;
 import org.apache.hudi.common.util.queue.BoundedInMemoryExecutor;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.execution.SparkBoundedInMemoryExecutor;
 import org.apache.hudi.io.HoodieBootstrapHandle;
 import org.apache.hudi.keygen.KeyGeneratorInterface;
 import org.apache.hudi.table.HoodieTable;
@@ -69,10 +68,10 @@ class ParquetBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
   void executeBootstrap(HoodieBootstrapHandle<?, ?, ?, ?> bootstrapHandle,
                         Path sourceFilePath, KeyGeneratorInterface keyGenerator, String partitionPath, Schema avroSchema) throws Exception {
     BoundedInMemoryExecutor<GenericRecord, HoodieRecord, Void> wrapper = null;
+    ParquetReader<IndexedRecord> reader =
+        AvroParquetReader.<IndexedRecord>builder(sourceFilePath).withConf(table.getHadoopConf()).build();
     try {
-      ParquetReader<IndexedRecord> reader =
-          AvroParquetReader.<IndexedRecord>builder(sourceFilePath).withConf(table.getHadoopConf()).build();
-      wrapper = new SparkBoundedInMemoryExecutor<GenericRecord, HoodieRecord, Void>(config,
+      wrapper = new BoundedInMemoryExecutor<GenericRecord, HoodieRecord, Void>(config.getWriteBufferLimitBytes(),
           new ParquetReaderIterator(reader), new BootstrapRecordConsumer(bootstrapHandle), inp -> {
         String recKey = keyGenerator.getKey(inp).getRecordKey();
         GenericRecord gr = new GenericData.Record(HoodieAvroUtils.RECORD_KEY_SCHEMA);
@@ -80,15 +79,17 @@ class ParquetBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
         BootstrapRecordPayload payload = new BootstrapRecordPayload(gr);
         HoodieRecord rec = new HoodieAvroRecord(new HoodieKey(recKey, partitionPath), payload);
         return rec;
-      });
+      }, table.getPreExecuteRunnable());
       wrapper.execute();
     } catch (Exception e) {
       throw new HoodieException(e);
     } finally {
-      bootstrapHandle.close();
+      reader.close();
       if (null != wrapper) {
         wrapper.shutdownNow();
+        wrapper.awaitTermination();
       }
+      bootstrapHandle.close();
     }
   }
 }

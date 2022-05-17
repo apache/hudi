@@ -18,17 +18,15 @@
 
 package org.apache.hudi.common.model;
 
-import com.fasterxml.jackson.annotation.JsonAutoDetect;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.util.JsonUtils;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
+
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.annotation.PropertyAccessor;
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -130,11 +128,25 @@ public class HoodieCommitMetadata implements Serializable {
   public HashMap<String, String> getFileIdAndFullPaths(String basePath) {
     HashMap<String, String> fullPaths = new HashMap<>();
     for (Map.Entry<String, String> entry : getFileIdAndRelativePaths().entrySet()) {
-      String fullPath =
-          (entry.getValue() != null) ? (FSUtils.getPartitionPath(basePath, entry.getValue())).toString() : null;
+      String fullPath = entry.getValue() != null
+          ? FSUtils.getPartitionPath(basePath, entry.getValue()).toString()
+          : null;
       fullPaths.put(entry.getKey(), fullPath);
     }
     return fullPaths;
+  }
+
+  public List<String> getFullPathsByPartitionPath(String basePath, String partitionPath) {
+    HashSet<String> fullPaths = new HashSet<>();
+    if (getPartitionToWriteStats().get(partitionPath) != null) {
+      for (HoodieWriteStat stat : getPartitionToWriteStats().get(partitionPath)) {
+        if ((stat.getFileId() != null)) {
+          String fullPath = FSUtils.getPartitionPath(basePath, stat.getPath()).toString();
+          fullPaths.add(fullPath);
+        }
+      }
+    }
+    return new ArrayList<>(fullPaths);
   }
 
   public Map<HoodieFileGroupId, String> getFileGroupIdAndFullPaths(String basePath) {
@@ -213,7 +225,7 @@ public class HoodieCommitMetadata implements Serializable {
       LOG.info("partition path is null for " + partitionToWriteStats.get(null));
       partitionToWriteStats.remove(null);
     }
-    return getObjectMapper().writerWithDefaultPrettyPrinter().writeValueAsString(this);
+    return JsonUtils.getObjectMapper().writerWithDefaultPrettyPrinter().writeValueAsString(this);
   }
 
   public static <T> T fromJsonString(String jsonStr, Class<T> clazz) throws Exception {
@@ -221,7 +233,7 @@ public class HoodieCommitMetadata implements Serializable {
       // For empty commit file (no data or somethings bad happen).
       return clazz.newInstance();
     }
-    return getObjectMapper().readValue(jsonStr, clazz);
+    return JsonUtils.getObjectMapper().readValue(jsonStr, clazz);
   }
 
   // Here the functions are named "fetch" instead of "get", to get avoid of the json conversion.
@@ -441,13 +453,6 @@ public class HoodieCommitMetadata implements Serializable {
     } catch (Exception e) {
       throw new IOException("unable to read commit metadata", e);
     }
-  }
-
-  protected static ObjectMapper getObjectMapper() {
-    ObjectMapper mapper = new ObjectMapper();
-    mapper.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
-    mapper.setVisibility(PropertyAccessor.FIELD, JsonAutoDetect.Visibility.ANY);
-    return mapper;
   }
 
   @Override

@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.table.action.clean.CleaningTriggerStrategy;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 import org.apache.hudi.table.action.compact.strategy.LogFileSizeBasedCompactionStrategy;
@@ -83,6 +84,12 @@ public class HoodieCompactionConfig extends HoodieConfig {
       .withDocumentation("Number of commits to retain, without cleaning. This will be retained for num_of_commits * time_between_commits "
           + "(scheduled). This also directly translates into how much data retention the table supports for incremental queries.");
 
+  public static final ConfigProperty<String> CLEANER_HOURS_RETAINED = ConfigProperty.key("hoodie.cleaner.hours.retained")
+          .defaultValue("24")
+          .withDocumentation("Number of hours for which commits need to be retained. This config provides a more flexible option as"
+          + "compared to number of commits retained for cleaning service. Setting this property ensures all the files, but the latest in a file group,"
+                  + " corresponding to commits with commit times older than the configured number of hours to be retained are cleaned.");
+
   public static final ConfigProperty<String> CLEANER_POLICY = ConfigProperty
       .key("hoodie.cleaner.policy")
       .defaultValue(HoodieCleaningPolicy.KEEP_LATEST_COMMITS.name())
@@ -122,6 +129,17 @@ public class HoodieCompactionConfig extends HoodieConfig {
       .defaultValue(CompactionTriggerStrategy.NUM_COMMITS.name())
       .withDocumentation("Controls how compaction scheduling is triggered, by time or num delta commits or combination of both. "
           + "Valid options: " + Arrays.stream(CompactionTriggerStrategy.values()).map(Enum::name).collect(Collectors.joining(",")));
+
+  public static final ConfigProperty<String> CLEAN_TRIGGER_STRATEGY = ConfigProperty
+          .key("hoodie.clean.trigger.strategy")
+          .defaultValue(CleaningTriggerStrategy.NUM_COMMITS.name())
+          .withDocumentation("Controls how cleaning is scheduled. Valid options: "
+                  + Arrays.stream(CleaningTriggerStrategy.values()).map(Enum::name).collect(Collectors.joining(",")));
+
+  public static final ConfigProperty<String> CLEAN_MAX_COMMITS = ConfigProperty
+          .key("hoodie.clean.max.commits")
+          .defaultValue("1")
+          .withDocumentation("Number of commits after the last clean operation, before scheduling of a new clean is attempted.");
 
   public static final ConfigProperty<String> CLEANER_FILE_VERSIONS_RETAINED = ConfigProperty
       .key("hoodie.cleaner.fileversions.retained")
@@ -173,7 +191,8 @@ public class HoodieCompactionConfig extends HoodieConfig {
       .defaultValue(String.valueOf(104857600))
       .withDocumentation("During upsert operation, we opportunistically expand existing small files on storage, instead of writing"
           + " new files, to keep number of files to an optimum. This config sets the file size limit below which a file on storage "
-          + " becomes a candidate to be selected as such a `small file`. By default, treat any file <= 100MB as a small file.");
+          + " becomes a candidate to be selected as such a `small file`. By default, treat any file <= 100MB as a small file."
+          + " Also note that if this set <= 0, will not try to get small files and directly write new files");
 
   public static final ConfigProperty<String> RECORD_SIZE_ESTIMATION_THRESHOLD = ConfigProperty
       .key("hoodie.record.size.estimation.threshold")
@@ -243,7 +262,7 @@ public class HoodieCompactionConfig extends HoodieConfig {
 
   public static final ConfigProperty<Boolean> PRESERVE_COMMIT_METADATA = ConfigProperty
       .key("hoodie.compaction.preserve.commit.metadata")
-      .defaultValue(false)
+      .defaultValue(true)
       .sinceVersion("0.11.0")
       .withDocumentation("When rewriting data, preserves existing hoodie_commit_time");
 
@@ -271,6 +290,13 @@ public class HoodieCompactionConfig extends HoodieConfig {
       .withDocumentation("The average record size. If not explicitly specified, hudi will compute the "
           + "record size estimate compute dynamically based on commit metadata. "
           + " This is critical in computing the insert parallelism and bin-packing inserts into small files.");
+  
+  public static final ConfigProperty<Boolean> ALLOW_MULTIPLE_CLEANS = ConfigProperty
+      .key("hoodie.clean.allow.multiple")
+      .defaultValue(true)
+      .sinceVersion("0.11.0")
+      .withDocumentation("Allows scheduling/executing multiple cleans by enabling this config. If users prefer to strictly ensure clean requests should be mutually exclusive, "
+          + ".i.e. a 2nd clean will not be scheduled if another clean is not yet completed to avoid repeat cleaning of same files, they might want to disable this config.");
 
   public static final ConfigProperty<Integer> ARCHIVE_MERGE_FILES_BATCH_SIZE = ConfigProperty
       .key("hoodie.archive.merge.files.batch.size")
@@ -569,6 +595,16 @@ public class HoodieCompactionConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withCleaningTriggerStrategy(String cleaningTriggerStrategy) {
+      compactionConfig.setValue(CLEAN_TRIGGER_STRATEGY, cleaningTriggerStrategy);
+      return this;
+    }
+
+    public Builder withMaxCommitsBeforeCleaning(int maxCommitsBeforeCleaning) {
+      compactionConfig.setValue(CLEAN_MAX_COMMITS, String.valueOf(maxCommitsBeforeCleaning));
+      return this;
+    }
+
     public Builder withCleanerPolicy(HoodieCleaningPolicy policy) {
       compactionConfig.setValue(CLEANER_POLICY, policy.name());
       return this;
@@ -581,6 +617,11 @@ public class HoodieCompactionConfig extends HoodieConfig {
 
     public Builder retainCommits(int commitsRetained) {
       compactionConfig.setValue(CLEANER_COMMITS_RETAINED, String.valueOf(commitsRetained));
+      return this;
+    }
+
+    public Builder cleanerNumHoursRetained(int cleanerHoursRetained) {
+      compactionConfig.setValue(CLEANER_HOURS_RETAINED, String.valueOf(cleanerHoursRetained));
       return this;
     }
 
@@ -627,6 +668,11 @@ public class HoodieCompactionConfig extends HoodieConfig {
 
     public Builder approxRecordSize(int recordSizeEstimate) {
       compactionConfig.setValue(COPY_ON_WRITE_RECORD_SIZE_ESTIMATE, String.valueOf(recordSizeEstimate));
+      return this;
+    }
+
+    public Builder allowMultipleCleans(boolean allowMultipleCleanSchedules) {
+      compactionConfig.setValue(ALLOW_MULTIPLE_CLEANS, String.valueOf(allowMultipleCleanSchedules));
       return this;
     }
 

@@ -18,7 +18,6 @@
 
 package org.apache.hudi.table;
 
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.client.HoodieReadClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
@@ -40,6 +39,7 @@ import org.apache.hudi.common.testutils.Transformations;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.HoodieIndex.IndexType;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
@@ -55,10 +55,12 @@ import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
+import org.apache.spark.storage.StorageLevel;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -555,7 +557,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       // initialize partitioner
       hoodieTable.getHoodieView().sync();
       BaseSparkDeltaCommitActionExecutor actionExecutor = new SparkDeleteDeltaCommitActionExecutor(context(), cfg, hoodieTable,
-          newDeleteTime, deleteRDD);
+          newDeleteTime, HoodieJavaRDD.of(deleteRDD));
       actionExecutor.getUpsertPartitioner(new WorkloadProfile(buildProfile(deleteRDD)));
       final List<List<WriteStatus>> deleteStatus = jsc().parallelize(Arrays.asList(1)).map(x -> {
         return actionExecutor.handleUpdate(partitionPath, fileId, fewRecordsForDelete.iterator());
@@ -566,9 +568,52 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       WriteStatus status = deleteStatus.get(0).get(0);
       assertTrue(status.hasErrors());
       long numRecordsInPartition = fewRecordsForDelete.stream().filter(u ->
-              u.getPartitionPath().equals(partitionPath)).count();
+          u.getPartitionPath().equals(partitionPath)).count();
       assertEquals(fewRecordsForDelete.size() - numRecordsInPartition, status.getTotalErrorRecords());
     }
+  }
+
+  @Test
+  public void testReleaseResource() throws Exception {
+    HoodieWriteConfig.Builder builder = getConfigBuilder(true);
+    builder.withReleaseResourceEnabled(true);
+    builder.withAutoCommit(false);
+    /**
+     * Write 1 (test when RELEASE_RESOURCE_ENABLE is true)
+     */
+    try (SparkRDDWriteClient client = getHoodieWriteClient(builder.build())) {
+
+      String newCommitTime = "001";
+      client.startCommitWithTime(newCommitTime);
+
+      List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 20);
+      JavaRDD<HoodieRecord> writeRecords = jsc().parallelize(records, 1);
+      writeRecords.persist(StorageLevel.MEMORY_AND_DISK());
+      List<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime).collect();
+      assertNoWriteErrors(statuses);
+      client.commitStats(newCommitTime, statuses.stream().map(WriteStatus::getStat).collect(Collectors.toList()), Option.empty(), metaClient.getCommitActionType());
+      assertEquals(spark().sparkContext().persistentRdds().size(), 0);
+    }
+
+    builder.withReleaseResourceEnabled(false);
+
+    /**
+     * Write 2 (test when RELEASE_RESOURCE_ENABLE is false)
+     */
+    try (SparkRDDWriteClient client = getHoodieWriteClient(builder.build())) {
+      String newCommitTime = "002";
+      client.startCommitWithTime(newCommitTime);
+
+      List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 20);
+      JavaRDD<HoodieRecord> writeRecords = jsc().parallelize(records, 1);
+
+      writeRecords.persist(StorageLevel.MEMORY_AND_DISK());
+      List<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime).collect();
+      assertNoWriteErrors(statuses);
+      client.commitStats(newCommitTime, statuses.stream().map(WriteStatus::getStat).collect(Collectors.toList()), Option.empty(), metaClient.getCommitActionType());
+      assertTrue(spark().sparkContext().persistentRdds().size() > 0);
+    }
+
   }
 }
 

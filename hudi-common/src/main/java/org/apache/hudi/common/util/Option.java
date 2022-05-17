@@ -34,7 +34,7 @@ public final class Option<T> implements Serializable {
 
   private static final long serialVersionUID = 0L;
 
-  private static final Option<?> NULL_VAL = new Option<>();
+  private static final Option<?> EMPTY = new Option<>();
 
   private final T val;
 
@@ -67,8 +67,9 @@ public final class Option<T> implements Serializable {
     this.val = val;
   }
 
+  @SuppressWarnings("unchecked")
   public static <T> Option<T> empty() {
-    return (Option<T>) NULL_VAL;
+    return (Option<T>) EMPTY;
   }
 
   public static <T> Option<T> of(T value) {
@@ -105,6 +106,17 @@ public final class Option<T> implements Serializable {
       return empty();
     } else {
       return Option.ofNullable(mapper.apply(val));
+    }
+  }
+
+  public <U> Option<U> flatMap(Function<? super T, Option<U>> mapper) {
+    if (null == mapper) {
+      throw new NullPointerException("mapper should not be null");
+    }
+    if (!isPresent()) {
+      return empty();
+    } else {
+      return Objects.requireNonNull(mapper.apply(val));
     }
   }
 

@@ -18,7 +18,6 @@
 
 package org.apache.hudi.metadata;
 
-import org.apache.avro.specific.SpecificRecordBase;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
@@ -32,7 +31,9 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieMetadataException;
+import org.apache.hudi.exception.HoodieNotSupportedException;
 
+import org.apache.avro.specific.SpecificRecordBase;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -91,7 +92,7 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
                                                            Option<String> inflightInstantTimestamp) {
     try {
       if (enabled) {
-        bootstrapIfNeeded(engineContext, dataMetaClient, actionMetadata, inflightInstantTimestamp);
+        initializeIfNeeded(dataMetaClient, actionMetadata, inflightInstantTimestamp);
       }
     } catch (IOException e) {
       LOG.error("Failed to initialize metadata table. Disabling the writer.", e);
@@ -108,22 +109,40 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
     List<HoodieRecord> preppedRecordList = HoodieList.getList(preppedRecords);
 
     try (HoodieFlinkWriteClient writeClient = new HoodieFlinkWriteClient(engineContext, metadataWriteConfig)) {
-      if (!metadataMetaClient.getActiveTimeline().filterCompletedInstants().containsInstant(instantTime)) {
+      if (canTriggerTableService) {
+        // trigger compaction before doing the delta commit. this is to ensure, if this delta commit succeeds in metadata table, but failed in data table,
+        // we would have compacted metadata table and so could have included uncommitted data which will never be ignored while reading from metadata
+        // table (since reader will filter out only from delta commits)
+        compactIfNecessary(writeClient, instantTime);
+      }
+
+      if (!metadataMetaClient.getActiveTimeline().containsInstant(instantTime)) {
         // if this is a new commit being applied to metadata for the first time
         writeClient.startCommitWithTime(instantTime);
         metadataMetaClient.getActiveTimeline().transitionRequestedToInflight(HoodieActiveTimeline.DELTA_COMMIT_ACTION, instantTime);
       } else {
-        // this code path refers to a re-attempted commit that got committed to metadata table, but failed in datatable.
-        // for eg, lets say compaction c1 on 1st attempt succeeded in metadata table and failed before committing to datatable.
-        // when retried again, data table will first rollback pending compaction. these will be applied to metadata table, but all changes
-        // are upserts to metadata table and so only a new delta commit will be created.
-        // once rollback is complete, compaction will be retried again, which will eventually hit this code block where the respective commit is
-        // already part of completed commit. So, we have to manually remove the completed instant and proceed.
-        // and it is for the same reason we enabled withAllowMultiWriteOnSameInstant for metadata table.
-        HoodieInstant alreadyCompletedInstant =
-            metadataMetaClient.getActiveTimeline().filterCompletedInstants().filter(entry -> entry.getTimestamp().equals(instantTime)).lastInstant().get();
-        HoodieActiveTimeline.deleteInstantFile(metadataMetaClient.getFs(), metadataMetaClient.getMetaPath(), alreadyCompletedInstant);
-        metadataMetaClient.reloadActiveTimeline();
+        Option<HoodieInstant> alreadyCompletedInstant = metadataMetaClient.getActiveTimeline().filterCompletedInstants().filter(entry -> entry.getTimestamp().equals(instantTime)).lastInstant();
+        if (alreadyCompletedInstant.isPresent()) {
+          // this code path refers to a re-attempted commit that got committed to metadata table, but failed in datatable.
+          // for eg, lets say compaction c1 on 1st attempt succeeded in metadata table and failed before committing to datatable.
+          // when retried again, data table will first rollback pending compaction. these will be applied to metadata table, but all changes
+          // are upserts to metadata table and so only a new delta commit will be created.
+          // once rollback is complete, compaction will be retried again, which will eventually hit this code block where the respective commit is
+          // already part of completed commit. So, we have to manually remove the completed instant and proceed.
+          // and it is for the same reason we enabled withAllowMultiWriteOnSameInstant for metadata table.
+          HoodieActiveTimeline.deleteInstantFile(metadataMetaClient.getFs(), metadataMetaClient.getMetaPath(), alreadyCompletedInstant.get());
+          metadataMetaClient.reloadActiveTimeline();
+        }
+        // If the alreadyCompletedInstant is empty, that means there is a requested or inflight
+        // instant with the same instant time.  This happens for data table clean action which
+        // reuses the same instant time without rollback first.  It is a no-op here as the
+        // clean plan is the same, so we don't need to delete the requested and inflight instant
+        // files in the active timeline.
+
+        // The metadata writer uses LAZY cleaning strategy without auto commit,
+        // write client then checks the heartbeat expiration when committing the instant,
+        // sets up the heartbeat explicitly to make the check pass.
+        writeClient.getHeartbeatClient().start(instantTime);
       }
 
       List<WriteStatus> statuses = preppedRecordList.size() > 0
@@ -140,7 +159,6 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
       // reload timeline
       metadataMetaClient.reloadActiveTimeline();
       if (canTriggerTableService) {
-        compactIfNecessary(writeClient, instantTime);
         cleanIfNecessary(writeClient, instantTime);
         writeClient.archive();
       }
@@ -148,5 +166,10 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
 
     // Update total size of the metadata and count of base/log files
     metrics.ifPresent(m -> m.updateSizeMetrics(metadataMetaClient, metadata));
+  }
+
+  @Override
+  public void deletePartitions(String instantTime, List<MetadataPartitionType> partitions) {
+    throw new HoodieNotSupportedException("Dropping metadata index not supported for Flink metadata table yet.");
   }
 }

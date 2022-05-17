@@ -78,6 +78,15 @@ public abstract class HoodieData<T> implements Serializable {
       SerializableFunction<Iterator<T>, Iterator<O>> func, boolean preservesPartitioning);
 
   /**
+   * @param func                  serializable map function by taking a partition of objects
+   *                              and generating an iterator.
+   * @param <O>                   output object type.
+   * @return {@link HoodieData<O>} containing the result. Actual execution may be deferred.
+   */
+  public abstract <O> HoodieData<O> mapPartitions(
+      SerializableFunction<Iterator<T>, Iterator<O>> func);
+
+  /**
    * @param func serializable flatmap function.
    * @param <O>  output object type.
    * @return {@link HoodieData<O>} containing the result. Actual execution may be deferred.
@@ -97,6 +106,12 @@ public abstract class HoodieData<T> implements Serializable {
    */
   public abstract HoodieData<T> distinct();
 
+  public abstract HoodieData<T> distinct(int parallelism);
+
+  public abstract <O> HoodieData<T> distinctWithKey(SerializableFunction<T, O> keyGetter, int parallelism);
+
+  public abstract HoodieData<T> filter(SerializableFunction<T, Boolean> filterFunc);
+
   /**
    * Unions this {@link HoodieData} with other {@link HoodieData}.
    * @param other {@link HoodieData} of interest.
@@ -108,4 +123,6 @@ public abstract class HoodieData<T> implements Serializable {
    * @return collected results in {@link List<T>}.
    */
   public abstract List<T> collectAsList();
+
+  public abstract HoodieData<T> repartition(int parallelism);
 }

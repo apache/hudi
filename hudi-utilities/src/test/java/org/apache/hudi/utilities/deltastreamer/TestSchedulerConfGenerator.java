@@ -18,7 +18,7 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
-import org.apache.hudi.DataSourceWriteOptions;
+import org.apache.hudi.SparkConfigs;
 import org.apache.hudi.common.model.HoodieTableType;
 
 import org.junit.jupiter.api.Test;
@@ -34,21 +34,21 @@ public class TestSchedulerConfGenerator {
   public void testGenerateSparkSchedulingConf() throws Exception {
     HoodieDeltaStreamer.Config cfg = new HoodieDeltaStreamer.Config();
     Map<String, String> configs = SchedulerConfGenerator.getSparkSchedulingConfigs(cfg);
-    assertNull(configs.get(DataSourceWriteOptions.SPARK_SCHEDULER_ALLOCATION_FILE_KEY()), "spark.scheduler.mode not set");
+    assertNull(configs.get(SparkConfigs.SPARK_SCHEDULER_ALLOCATION_FILE_KEY()), "spark.scheduler.mode not set");
 
     System.setProperty(SchedulerConfGenerator.SPARK_SCHEDULER_MODE_KEY, "FAIR");
     cfg.continuousMode = false;
     configs = SchedulerConfGenerator.getSparkSchedulingConfigs(cfg);
-    assertNull(configs.get(DataSourceWriteOptions.SPARK_SCHEDULER_ALLOCATION_FILE_KEY()), "continuousMode is false");
+    assertNull(configs.get(SparkConfigs.SPARK_SCHEDULER_ALLOCATION_FILE_KEY()), "continuousMode is false");
 
     cfg.continuousMode = true;
     cfg.tableType = HoodieTableType.COPY_ON_WRITE.name();
     configs = SchedulerConfGenerator.getSparkSchedulingConfigs(cfg);
-    assertNull(configs.get(DataSourceWriteOptions.SPARK_SCHEDULER_ALLOCATION_FILE_KEY()),
+    assertNull(configs.get(SparkConfigs.SPARK_SCHEDULER_ALLOCATION_FILE_KEY()),
         "table type is not MERGE_ON_READ");
 
     cfg.tableType = HoodieTableType.MERGE_ON_READ.name();
     configs = SchedulerConfGenerator.getSparkSchedulingConfigs(cfg);
-    assertNotNull(configs.get(DataSourceWriteOptions.SPARK_SCHEDULER_ALLOCATION_FILE_KEY()), "all satisfies");
+    assertNotNull(configs.get(SparkConfigs.SPARK_SCHEDULER_ALLOCATION_FILE_KEY()), "all satisfies");
   }
 }

@@ -38,6 +38,8 @@ public class HoodieConfig implements Serializable {
 
   private static final Logger LOG = LogManager.getLogger(HoodieConfig.class);
 
+  protected static final String CONFIG_VALUES_DELIMITER = ",";
+
   public static HoodieConfig create(FSDataInputStream inputStream) throws IOException {
     HoodieConfig config = new HoodieConfig();
     config.props.load(inputStream);

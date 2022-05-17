@@ -20,73 +20,38 @@ package org.apache.hudi
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.FileStatus
-
+import org.apache.hudi.client.utils.SparkInternalSchemaConverter
+import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
+import org.apache.hudi.internal.schema.InternalSchema
+import org.apache.hudi.internal.schema.utils.SerDeHelper
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.expressions.{Expression, PredicateHelper, SpecificInternalRow, SubqueryExpression, UnsafeProjection}
+import org.apache.spark.sql.catalyst.expressions.{PredicateHelper, SpecificInternalRow, UnsafeProjection}
+import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
-import org.apache.spark.sql.execution.datasources.{FilePartition, PartitionedFile}
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.vectorized.ColumnarBatch
 
 import scala.collection.JavaConverters._
-import scala.collection.mutable.ArrayBuffer
 
-object HoodieDataSourceHelper extends PredicateHelper {
+object HoodieDataSourceHelper extends PredicateHelper with SparkAdapterSupport {
 
-  /**
-   * Partition the given condition into two sequence of conjunctive predicates:
-   * - predicates that can be evaluated using metadata only.
-   * - other predicates.
-   */
-  def splitPartitionAndDataPredicates(
-      spark: SparkSession,
-      condition: Expression,
-      partitionColumns: Seq[String]): (Seq[Expression], Seq[Expression]) = {
-    splitConjunctivePredicates(condition).partition(
-      isPredicateMetadataOnly(spark, _, partitionColumns))
-  }
 
   /**
-   * Check if condition can be evaluated using only metadata. In Delta, this means the condition
-   * only references partition columns and involves no subquery.
+   * Wrapper for `buildReaderWithPartitionValues` of [[ParquetFileFormat]] handling [[ColumnarBatch]],
+   * when Parquet's Vectorized Reader is used
    */
-  def isPredicateMetadataOnly(
-      spark: SparkSession,
-      condition: Expression,
-      partitionColumns: Seq[String]): Boolean = {
-    isPredicatePartitionColumnsOnly(spark, condition, partitionColumns) &&
-        !SubqueryExpression.hasSubquery(condition)
-  }
-
-  /**
-   * Does the predicate only contains partition columns?
-   */
-  def isPredicatePartitionColumnsOnly(
-      spark: SparkSession,
-      condition: Expression,
-      partitionColumns: Seq[String]): Boolean = {
-    val nameEquality = spark.sessionState.analyzer.resolver
-    condition.references.forall { r =>
-      partitionColumns.exists(nameEquality(r.name, _))
-    }
-  }
-
-  /**
-   * Wrapper `buildReaderWithPartitionValues` of [[ParquetFileFormat]]
-   * to deal with [[ColumnarBatch]] when enable parquet vectorized reader if necessary.
-   */
-  def buildHoodieParquetReader(
-      sparkSession: SparkSession,
-      dataSchema: StructType,
-      partitionSchema: StructType,
-      requiredSchema: StructType,
-      filters: Seq[Filter],
-      options: Map[String, String],
-      hadoopConf: Configuration): (PartitionedFile) => Iterator[InternalRow] = {
-
-    val readParquetFile: PartitionedFile => Iterator[Any] = new ParquetFileFormat().buildReaderWithPartitionValues(
+  def buildHoodieParquetReader(sparkSession: SparkSession,
+                               dataSchema: StructType,
+                               partitionSchema: StructType,
+                               requiredSchema: StructType,
+                               filters: Seq[Filter],
+                               options: Map[String, String],
+                               hadoopConf: Configuration,
+                               appendPartitionValues: Boolean = false): PartitionedFile => Iterator[InternalRow] = {
+    val parquetFileFormat: ParquetFileFormat = sparkAdapter.createHoodieParquetFileFormat(appendPartitionValues).get
+    val readParquetFile: PartitionedFile => Iterator[Any] = parquetFileFormat.buildReaderWithPartitionValues(
       sparkSession = sparkSession,
       dataSchema = dataSchema,
       partitionSchema = partitionSchema,
@@ -98,49 +63,12 @@ object HoodieDataSourceHelper extends PredicateHelper {
 
     file: PartitionedFile => {
       val iter = readParquetFile(file)
-      val rows = iter.flatMap(_ match {
+      iter.flatMap {
         case r: InternalRow => Seq(r)
         case b: ColumnarBatch => b.rowIterator().asScala
-      })
-      rows
-    }
-  }
-
-  /**
-   * Extract the required schema from [[InternalRow]]
-   */
-  def extractRequiredSchema(
-      iter: Iterator[InternalRow],
-      requiredSchema: StructType,
-      requiredFieldPos: Seq[Int]): Iterator[InternalRow] = {
-    val unsafeProjection = UnsafeProjection.create(requiredSchema)
-    val rows = iter.map { row =>
-      unsafeProjection(createInternalRowWithSchema(row, requiredSchema, requiredFieldPos))
-    }
-    rows
-  }
-
-  /**
-   * Convert [[InternalRow]] to [[SpecificInternalRow]].
-   */
-  def createInternalRowWithSchema(
-      row: InternalRow,
-      schema: StructType,
-      positions: Seq[Int]): InternalRow = {
-    val rowToReturn = new SpecificInternalRow(schema)
-    var curIndex = 0
-    schema.zip(positions).foreach { case (field, pos) =>
-      val curField = if (row.isNullAt(pos)) {
-        null
-      } else {
-        row.get(pos, field.dataType)
       }
-      rowToReturn.update(curIndex, curField)
-      curIndex += 1
     }
-    rowToReturn
   }
-
 
   def splitFiles(
       sparkSession: SparkSession,
@@ -155,4 +83,22 @@ object HoodieDataSourceHelper extends PredicateHelper {
     }
   }
 
+  /**
+    * Set internalSchema evolution parameters to configuration.
+    * spark will broadcast them to each executor, we use those parameters to do schema evolution.
+    *
+    * @param conf hadoop conf.
+    * @param internalSchema internalschema for query.
+    * @param tablePath hoodie table base path.
+    * @param validCommits valid commits, using give validCommits to validate all legal histroy Schema files, and return the latest one.
+    */
+  def getConfigurationWithInternalSchema(conf: Configuration, internalSchema: InternalSchema, tablePath: String, validCommits: String): Configuration = {
+    val querySchemaString = SerDeHelper.toJson(internalSchema)
+    if (!isNullOrEmpty(querySchemaString)) {
+      conf.set(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA, SerDeHelper.toJson(internalSchema))
+      conf.set(SparkInternalSchemaConverter.HOODIE_TABLE_PATH, tablePath)
+      conf.set(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST, validCommits)
+    }
+    conf
+  }
 }

@@ -18,15 +18,24 @@
 
 package org.apache.hudi.hive.replication;
 
-import com.beust.jcommander.Parameter;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.hive.HiveSyncConfig;
+
+import com.beust.jcommander.Parameter;
 
 public class GlobalHiveSyncConfig extends HiveSyncConfig {
   @Parameter(names = {"--replicated-timestamp"}, description = "Add globally replicated timestamp to enable consistent reads across clusters")
   public String globallyReplicatedTimeStamp;
 
+  public GlobalHiveSyncConfig() {
+  }
+
+  public GlobalHiveSyncConfig(TypedProperties props) {
+    super(props);
+  }
+
   public static GlobalHiveSyncConfig copy(GlobalHiveSyncConfig cfg) {
-    GlobalHiveSyncConfig newConfig = new GlobalHiveSyncConfig();
+    GlobalHiveSyncConfig newConfig = new GlobalHiveSyncConfig(cfg.getProps());
     newConfig.basePath = cfg.basePath;
     newConfig.assumeDatePartitioning = cfg.assumeDatePartitioning;
     newConfig.databaseName = cfg.databaseName;

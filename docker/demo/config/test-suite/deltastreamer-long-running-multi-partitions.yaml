@@ -20,7 +20,7 @@ dag_content:
   first_insert:
     config:
       record_size: 1000
-      num_partitions_insert: 5
+      num_partitions_insert: 10
       repeat_count: 1
       num_records_insert: 1000
     type: InsertNode
@@ -28,7 +28,7 @@ dag_content:
   second_insert:
     config:
       record_size: 1000
-      num_partitions_insert: 50
+      num_partitions_insert: 10
       repeat_count: 1
       num_records_insert: 10000
     deps: first_insert
@@ -36,54 +36,36 @@ dag_content:
   third_insert:
     config:
       record_size: 1000
-      num_partitions_insert: 2
+      num_partitions_insert: 10
       repeat_count: 1
       num_records_insert: 300
     deps: second_insert
     type: InsertNode
-  first_hive_sync:
-    config:
-      queue_name: "adhoc"
-      engine: "mr"
-    type: HiveSyncNode
-    deps: third_insert
-  first_validate:
-    config:
-      validate_hive: false
-    type: ValidateDatasetNode
-    deps: first_hive_sync
   first_upsert:
     config:
       record_size: 1000
-      num_partitions_insert: 2
+      num_partitions_insert: 10
       num_records_insert: 300
       repeat_count: 1
       num_records_upsert: 100
-      num_partitions_upsert: 1
+      num_partitions_upsert: 10
     type: UpsertNode
-    deps: first_validate
+    deps: third_insert
   first_delete:
     config:
-      num_partitions_delete: 50
-      num_records_delete: 8000
+      num_partitions_delete: 10
+      num_records_delete: 4000
     type: DeleteNode
     deps: first_upsert
-  second_hive_sync:
-    config:
-      queue_name: "adhoc"
-      engine: "mr"
-    type: HiveSyncNode
-    deps: first_delete
   second_validate:
     config:
+      validate_once_every_itr : 5
       validate_hive: false
       delete_input_data: true
     type: ValidateDatasetNode
-    deps: second_hive_sync
+    deps: first_delete
   last_validate:
     config:
       execute_itr_count: 50
-      validate_clean: true
-      validate_archival: true
     type: ValidateAsyncOperations
     deps: second_validate

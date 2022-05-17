@@ -30,7 +30,14 @@ public final class HoodieLayoutFactory {
       case DEFAULT:
         return new HoodieDefaultLayout(config);
       case BUCKET:
-        return new HoodieBucketLayout(config);
+        switch (config.getBucketIndexEngineType()) {
+          case SIMPLE:
+            return new HoodieSimpleBucketLayout(config);
+          case CONSISTENT_HASHING:
+            return new HoodieConsistentBucketLayout(config);
+          default:
+            throw new HoodieNotSupportedException("Unknown bucket index engine type: " + config.getBucketIndexEngineType());
+        }
       default:
         throw new HoodieNotSupportedException("Unknown layout type, set " + config.getLayoutType());
     }

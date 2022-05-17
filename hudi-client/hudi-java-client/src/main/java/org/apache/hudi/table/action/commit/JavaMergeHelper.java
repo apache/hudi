@@ -91,7 +91,7 @@ public class JavaMergeHelper<T extends HoodieRecordPayload> extends BaseMergeHel
 
       ThreadLocal<BinaryEncoder> encoderCache = new ThreadLocal<>();
       ThreadLocal<BinaryDecoder> decoderCache = new ThreadLocal<>();
-      wrapper = new BoundedInMemoryExecutor(table.getConfig().getWriteBufferLimitBytes(), new IteratorBasedQueueProducer<>(readerIterator),
+      wrapper = new BoundedInMemoryExecutor<>(table.getConfig().getWriteBufferLimitBytes(), new IteratorBasedQueueProducer<>(readerIterator),
           Option.of(new UpdateHandler(mergeHandle)), record -> {
         if (!externalSchemaTransformation) {
           return record;
@@ -102,13 +102,16 @@ public class JavaMergeHelper<T extends HoodieRecordPayload> extends BaseMergeHel
     } catch (Exception e) {
       throw new HoodieException(e);
     } finally {
+      // HUDI-2875: mergeHandle is not thread safe, we should totally terminate record inputting
+      // and executor firstly and then close mergeHandle.
       if (reader != null) {
         reader.close();
       }
-      mergeHandle.close();
       if (null != wrapper) {
         wrapper.shutdownNow();
+        wrapper.awaitTermination();
       }
+      mergeHandle.close();
     }
   }
 

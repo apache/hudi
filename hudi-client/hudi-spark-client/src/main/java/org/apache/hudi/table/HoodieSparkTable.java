@@ -18,8 +18,6 @@
 
 package org.apache.hudi.table;
 
-import org.apache.avro.specific.SpecificRecordBase;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.data.HoodieData;
@@ -38,15 +36,16 @@ import org.apache.hudi.index.SparkHoodieIndexFactory;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
-import org.apache.hudi.table.action.HoodieWriteMetadata;
-import org.apache.spark.api.java.JavaRDD;
+
+import org.apache.avro.specific.SpecificRecordBase;
+import org.apache.hadoop.fs.Path;
+import org.apache.spark.TaskContext;
+import org.apache.spark.TaskContext$;
 
 import java.io.IOException;
 
-import static org.apache.hudi.data.HoodieJavaRDD.getJavaRDD;
-
 public abstract class HoodieSparkTable<T extends HoodieRecordPayload>
-    extends HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {
+    extends HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> {
 
   private volatile boolean isMetadataTableExists = false;
 
@@ -63,7 +62,9 @@ public abstract class HoodieSparkTable<T extends HoodieRecordPayload>
     HoodieTableMetaClient metaClient =
         HoodieTableMetaClient.builder().setConf(context.getHadoopConf().get()).setBasePath(config.getBasePath())
             .setLoadActiveTimelineOnLoad(true).setConsistencyGuardConfig(config.getConsistencyGuardConfig())
-            .setLayoutVersion(Option.of(new TimelineLayoutVersion(config.getTimelineLayoutVersion()))).build();
+            .setLayoutVersion(Option.of(new TimelineLayoutVersion(config.getTimelineLayoutVersion())))
+            .setFileSystemRetryConfig(config.getFileSystemRetryConfig())
+            .setProperties(config.getProps()).build();
     return HoodieSparkTable.create(config, (HoodieSparkEngineContext) context, metaClient, refreshTimeline);
   }
 
@@ -77,7 +78,7 @@ public abstract class HoodieSparkTable<T extends HoodieRecordPayload>
                                                                            HoodieSparkEngineContext context,
                                                                            HoodieTableMetaClient metaClient,
                                                                            boolean refreshTimeline) {
-    HoodieSparkTable hoodieSparkTable;
+    HoodieSparkTable<T> hoodieSparkTable;
     switch (metaClient.getTableType()) {
       case COPY_ON_WRITE:
         hoodieSparkTable = new HoodieSparkCopyOnWriteTable<>(config, context, metaClient);
@@ -94,11 +95,6 @@ public abstract class HoodieSparkTable<T extends HoodieRecordPayload>
     return hoodieSparkTable;
   }
 
-  public static HoodieWriteMetadata<JavaRDD<WriteStatus>> convertMetadata(
-      HoodieWriteMetadata<HoodieData<WriteStatus>> metadata) {
-    return metadata.clone(getJavaRDD(metadata.getWriteStatuses()));
-  }
-
   @Override
   protected HoodieIndex getIndex(HoodieWriteConfig config, HoodieEngineContext context) {
     return SparkHoodieIndexFactory.createIndex(config);
@@ -110,14 +106,17 @@ public abstract class HoodieSparkTable<T extends HoodieRecordPayload>
    * @return instance of {@link HoodieTableMetadataWriter}
    */
   @Override
-  public <T extends SpecificRecordBase> Option<HoodieTableMetadataWriter> getMetadataWriter(String triggeringInstantTimestamp,
-                                                                                            Option<T> actionMetadata) {
+  public <R extends SpecificRecordBase> Option<HoodieTableMetadataWriter> getMetadataWriter(String triggeringInstantTimestamp,
+                                                                                            Option<R> actionMetadata) {
     if (config.isMetadataTableEnabled()) {
       // Create the metadata table writer. First time after the upgrade this creation might trigger
       // metadata table bootstrapping. Bootstrapping process could fail and checking the table
       // existence after the creation is needed.
       final HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(
           context.getHadoopConf().get(), config, context, actionMetadata, Option.of(triggeringInstantTimestamp));
+      // even with metadata enabled, some index could have been disabled
+      // delete metadata partitions corresponding to such indexes
+      deleteMetadataIndexIfNecessary();
       try {
         if (isMetadataTableExists || metaClient.getFs().exists(new Path(
             HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath())))) {
@@ -127,8 +126,16 @@ public abstract class HoodieSparkTable<T extends HoodieRecordPayload>
       } catch (IOException e) {
         throw new HoodieMetadataException("Checking existence of metadata table failed", e);
       }
+    } else {
+      maybeDeleteMetadataTable();
     }
 
     return Option.empty();
+  }
+
+  @Override
+  public Runnable getPreExecuteRunnable() {
+    final TaskContext taskContext = TaskContext.get();
+    return () -> TaskContext$.MODULE$.setTaskContext(taskContext);
   }
 }

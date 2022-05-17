@@ -136,6 +136,9 @@ public abstract class BaseRestoreActionExecutor<T extends HoodieRecordPayload, I
         .filter(instant -> HoodieActiveTimeline.GREATER_THAN.test(instant.getTimestamp(), restoreInstantTime))
         .collect(Collectors.toList());
     instantsToRollback.forEach(entry -> {
+      if (entry.isCompleted()) {
+        table.getActiveTimeline().deleteCompletedRollback(entry);
+      }
       table.getActiveTimeline().deletePending(new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.ROLLBACK_ACTION, entry.getTimestamp()));
       table.getActiveTimeline().deletePending(new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.ROLLBACK_ACTION, entry.getTimestamp()));
     });

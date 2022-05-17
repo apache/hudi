@@ -21,6 +21,7 @@ package org.apache.hudi.client;
 
 import org.apache.hudi.avro.model.HoodieArchivedMetaEntry;
 import org.apache.hudi.avro.model.HoodieMergeArchiveFilePlan;
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.client.utils.MetadataConversionUtils;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
@@ -30,6 +31,7 @@ import org.apache.hudi.common.model.HoodieArchivedLogFile;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.HoodieLogFormat.Writer;
@@ -43,6 +45,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -52,6 +55,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 
@@ -68,6 +72,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -76,6 +81,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN_OR_EQUALS;
 
 /**
@@ -92,6 +98,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
   private final int minInstantsToKeep;
   private final HoodieTable<T, I, K, O> table;
   private final HoodieTableMetaClient metaClient;
+  private final TransactionManager txnManager;
 
   public HoodieTimelineArchiver(HoodieWriteConfig config, HoodieTable<T, I, K, O> table) {
     this.config = config;
@@ -100,6 +107,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
     this.archiveFilePath = HoodieArchivedTimeline.getArchiveLogPath(metaClient.getArchivePath());
     this.maxInstantsToKeep = config.getMaxCommitsToKeep();
     this.minInstantsToKeep = config.getMinCommitsToKeep();
+    this.txnManager = new TransactionManager(config, table.getMetaClient().getFs());
   }
 
   private Writer openWriter() {
@@ -139,11 +147,19 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
     }
   }
 
+  public boolean archiveIfRequired(HoodieEngineContext context) throws IOException {
+    return archiveIfRequired(context, false);
+  }
+
   /**
    * Check if commits need to be archived. If yes, archive commits.
    */
-  public boolean archiveIfRequired(HoodieEngineContext context) throws IOException {
+  public boolean archiveIfRequired(HoodieEngineContext context, boolean acquireLock) throws IOException {
     try {
+      if (acquireLock) {
+        // there is no owner or instant time per se for archival.
+        txnManager.beginTransaction(Option.empty(), Option.empty());
+      }
       List<HoodieInstant> instantsToArchive = getInstantsToArchive().collect(Collectors.toList());
       verifyLastMergeArchiveFilesIfNecessary(context);
       boolean success = true;
@@ -163,6 +179,9 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
       return success;
     } finally {
       close();
+      if (acquireLock) {
+        txnManager.endTransaction(Option.empty());
+      }
     }
   }
 
@@ -321,8 +340,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
           // Read the avro blocks
           while (reader.hasNext()) {
             HoodieAvroDataBlock blk = (HoodieAvroDataBlock) reader.next();
-            List<IndexedRecord> recordsPerFile = blk.getRecords();
-            records.addAll(recordsPerFile);
+            blk.getRecordIterator().forEachRemaining(records::add);
             if (records.size() >= this.config.getCommitArchivalBatchSize()) {
               writeToFile(wrapperSchema, records);
             }
@@ -396,6 +414,18 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
     // made after the first savepoint present.
     Option<HoodieInstant> firstSavepoint = table.getCompletedSavepointTimeline().firstInstant();
     if (!commitTimeline.empty() && commitTimeline.countInstants() > maxInstantsToKeep) {
+      // For Merge-On-Read table, inline or async compaction is enabled
+      // We need to make sure that there are enough delta commits in the active timeline
+      // to trigger compaction scheduling, when the trigger strategy of compaction is
+      // NUM_COMMITS or NUM_AND_TIME.
+      Option<HoodieInstant> oldestInstantToRetainForCompaction =
+          (metaClient.getTableType() == HoodieTableType.MERGE_ON_READ
+              && (config.getInlineCompactTriggerStrategy() == CompactionTriggerStrategy.NUM_COMMITS
+              || config.getInlineCompactTriggerStrategy() == CompactionTriggerStrategy.NUM_AND_TIME))
+              ? CompactionUtils.getOldestInstantToRetainForCompaction(
+              table.getActiveTimeline(), config.getInlineCompactDeltaCommitMax())
+              : Option.empty();
+
       // Actually do the commits
       Stream<HoodieInstant> instantToArchiveStream = commitTimeline.getInstants()
           .filter(s -> {
@@ -406,14 +436,21 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
             return oldestPendingCompactionAndReplaceInstant
                 .map(instant -> HoodieTimeline.compareTimestamps(instant.getTimestamp(), GREATER_THAN, s.getTimestamp()))
                 .orElse(true);
-          });
-      // We need this to ensure that when multiple writers are performing conflict resolution, eligible instants don't
-      // get archived, i.e, instants after the oldestInflight are retained on the timeline
-      if (config.getFailedWritesCleanPolicy() == HoodieFailedWritesCleaningPolicy.LAZY) {
-        instantToArchiveStream = instantToArchiveStream.filter(s -> oldestInflightCommitInstant.map(instant ->
-            HoodieTimeline.compareTimestamps(instant.getTimestamp(), GREATER_THAN, s.getTimestamp()))
-            .orElse(true));
-      }
+          }).filter(s -> {
+            // We need this to ensure that when multiple writers are performing conflict resolution, eligible instants don't
+            // get archived, i.e, instants after the oldestInflight are retained on the timeline
+            if (config.getFailedWritesCleanPolicy() == HoodieFailedWritesCleaningPolicy.LAZY) {
+              return oldestInflightCommitInstant.map(instant ->
+                      HoodieTimeline.compareTimestamps(instant.getTimestamp(), GREATER_THAN, s.getTimestamp()))
+                  .orElse(true);
+            }
+            return true;
+          }).filter(s ->
+              oldestInstantToRetainForCompaction.map(instantToRetain ->
+                      HoodieTimeline.compareTimestamps(s.getTimestamp(), LESSER_THAN, instantToRetain.getTimestamp()))
+                  .orElse(true)
+          );
+
       return instantToArchiveStream.limit(commitTimeline.countInstants() - minInstantsToKeep);
     } else {
       return Stream.empty();
@@ -422,6 +459,9 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
 
   private Stream<HoodieInstant> getInstantsToArchive() {
     Stream<HoodieInstant> instants = Stream.concat(getCleanInstantsToArchive(), getCommitInstantsToArchive());
+    if (config.isMetastoreEnabled()) {
+      return Stream.empty();
+    }
 
     // For archiving and cleaning instants, we need to include intermediate state files if they exist
     HoodieActiveTimeline rawActiveTimeline = new HoodieActiveTimeline(metaClient, false);
@@ -447,10 +487,32 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
         throw new HoodieException("Error limiting instant archival based on metadata table", e);
       }
     }
-    
-    return instants.flatMap(hoodieInstant ->
-        groupByTsAction.get(Pair.of(hoodieInstant.getTimestamp(),
-            HoodieInstant.getComparableAction(hoodieInstant.getAction()))).stream());
+
+    // If this is a metadata table, do not archive the commits that live in data set
+    // active timeline. This is required by metadata table,
+    // see HoodieTableMetadataUtil#processRollbackMetadata for details.
+    if (HoodieTableMetadata.isMetadataTable(config.getBasePath())) {
+      HoodieTableMetaClient dataMetaClient = HoodieTableMetaClient.builder()
+          .setBasePath(HoodieTableMetadata.getDatasetBasePath(config.getBasePath()))
+          .setConf(metaClient.getHadoopConf())
+          .build();
+      Option<String> earliestActiveDatasetCommit = dataMetaClient.getActiveTimeline().firstInstant().map(HoodieInstant::getTimestamp);
+      if (earliestActiveDatasetCommit.isPresent()) {
+        instants = instants.filter(instant ->
+            HoodieTimeline.compareTimestamps(instant.getTimestamp(), HoodieTimeline.LESSER_THAN, earliestActiveDatasetCommit.get()));
+      }
+    }
+
+    return instants.flatMap(hoodieInstant -> {
+      List<HoodieInstant> instantsToStream = groupByTsAction.get(Pair.of(hoodieInstant.getTimestamp(),
+                HoodieInstant.getComparableAction(hoodieInstant.getAction())));
+      if (instantsToStream != null) {
+        return instantsToStream.stream();
+      } else {
+        // if a concurrent writer archived the instant
+        return Collections.EMPTY_LIST.stream();
+      }
+    });
   }
 
   private boolean deleteArchivedInstants(List<HoodieInstant> archivedInstants, HoodieEngineContext context) throws IOException {
@@ -460,7 +522,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
         new Path(metaClient.getMetaPath(), archivedInstant.getFileName())
     ).map(Path::toString).collect(Collectors.toList());
 
-    context.setJobStatus(this.getClass().getSimpleName(), "Delete archived instants");
+    context.setJobStatus(this.getClass().getSimpleName(), "Delete archived instants: " + config.getTableName());
     Map<String, Boolean> resultDeleteInstantFiles = deleteFilesParallelize(metaClient, instantFiles, context, false);
 
     for (Map.Entry<String, Boolean> result : resultDeleteInstantFiles.entrySet()) {
@@ -529,19 +591,16 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
       List<IndexedRecord> records = new ArrayList<>();
       for (HoodieInstant hoodieInstant : instants) {
         try {
-          if (table.getActiveTimeline().isEmpty(hoodieInstant)
-                  && (
-                          hoodieInstant.getAction().equals(HoodieTimeline.CLEAN_ACTION)
-                          || (hoodieInstant.getAction().equals(HoodieTimeline.ROLLBACK_ACTION) && hoodieInstant.isCompleted())
-                     )
-          ) {
-            table.getActiveTimeline().deleteEmptyInstantIfExists(hoodieInstant);
+          deleteAnyLeftOverMarkers(context, hoodieInstant);
+          // in local FS and HDFS, there could be empty completed instants due to crash.
+          if (table.getActiveTimeline().isEmpty(hoodieInstant) && hoodieInstant.isCompleted()) {
+            // lets add an entry to the archival, even if not for the plan.
+            records.add(createAvroRecordFromEmptyInstant(hoodieInstant));
           } else {
-            deleteAnyLeftOverMarkers(context, hoodieInstant);
             records.add(convertToAvroRecord(hoodieInstant));
-            if (records.size() >= this.config.getCommitArchivalBatchSize()) {
-              writeToFile(wrapperSchema, records);
-            }
+          }
+          if (records.size() >= this.config.getCommitArchivalBatchSize()) {
+            writeToFile(wrapperSchema, records);
           }
         } catch (Exception e) {
           LOG.error("Failed to archive commits, .commit file: " + hoodieInstant.getFileName(), e);
@@ -577,5 +636,9 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
   private IndexedRecord convertToAvroRecord(HoodieInstant hoodieInstant)
       throws IOException {
     return MetadataConversionUtils.createMetaWrapper(hoodieInstant, metaClient);
+  }
+
+  private IndexedRecord createAvroRecordFromEmptyInstant(HoodieInstant hoodieInstant) throws IOException {
+    return MetadataConversionUtils.createMetaWrapperForEmptyInstant(hoodieInstant);
   }
 }

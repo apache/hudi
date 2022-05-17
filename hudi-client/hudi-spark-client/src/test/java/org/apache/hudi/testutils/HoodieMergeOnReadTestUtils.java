@@ -62,10 +62,10 @@ public class HoodieMergeOnReadTestUtils {
   }
 
   public static List<GenericRecord> getRecordsUsingInputFormat(Configuration conf, List<String> inputPaths,
-                                                               String basePath, JobConf jobConf, boolean realtime, boolean populateMetaFieldsConfigValue) {
+                                                               String basePath, JobConf jobConf, boolean realtime, boolean populateMetaFields) {
     Schema schema = new Schema.Parser().parse(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA);
     return getRecordsUsingInputFormat(conf, inputPaths, basePath, jobConf, realtime, schema,
-        HoodieTestDataGenerator.TRIP_HIVE_COLUMN_TYPES, false, new ArrayList<>(), populateMetaFieldsConfigValue);
+        HoodieTestDataGenerator.TRIP_HIVE_COLUMN_TYPES, false, new ArrayList<>(), populateMetaFields);
   }
 
   public static List<GenericRecord> getRecordsUsingInputFormat(Configuration conf, List<String> inputPaths, String basePath, JobConf jobConf, boolean realtime, Schema rawSchema,
@@ -74,14 +74,23 @@ public class HoodieMergeOnReadTestUtils {
   }
 
   public static List<GenericRecord> getRecordsUsingInputFormat(Configuration conf, List<String> inputPaths, String basePath, JobConf jobConf, boolean realtime, Schema rawSchema,
-                                                               String rawHiveColumnTypes, boolean projectCols, List<String> projectedColumns, boolean populateMetaFieldsConfigValue) {
+                                                               String rawHiveColumnTypes, boolean projectCols, List<String> projectedColumns, boolean populateMetaFields) {
 
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(conf).setBasePath(basePath).build();
     FileInputFormat inputFormat = HoodieInputFormatUtils.getInputFormat(metaClient.getTableConfig().getBaseFileFormat(), realtime, jobConf);
 
-    Schema schema = HoodieAvroUtils.addMetadataFields(rawSchema);
-    String hiveColumnTypes = HoodieAvroUtils.addMetadataColumnTypes(rawHiveColumnTypes);
-    setPropsForInputFormat(inputFormat, jobConf, schema, hiveColumnTypes, projectCols, projectedColumns, populateMetaFieldsConfigValue);
+    Schema schema;
+    String hiveColumnTypes;
+
+    if (populateMetaFields) {
+      schema = HoodieAvroUtils.addMetadataFields(rawSchema);
+      hiveColumnTypes = HoodieAvroUtils.addMetadataColumnTypes(rawHiveColumnTypes);
+    } else {
+      schema = rawSchema;
+      hiveColumnTypes = rawHiveColumnTypes;
+    }
+
+    setPropsForInputFormat(inputFormat, jobConf, schema, hiveColumnTypes, projectCols, projectedColumns, populateMetaFields);
     final List<Field> fields;
     if (projectCols) {
       fields = schema.getFields().stream().filter(f -> projectedColumns.contains(f.name()))

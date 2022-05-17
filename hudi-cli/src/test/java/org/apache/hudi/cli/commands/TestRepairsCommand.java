@@ -39,7 +39,6 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.shell.core.CommandResult;
 
-import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.net.URL;
@@ -51,6 +50,15 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
+import static org.apache.hudi.common.table.HoodieTableConfig.DROP_PARTITION_COLUMNS;
+import static org.apache.hudi.common.table.HoodieTableConfig.NAME;
+import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_CHECKSUM;
+import static org.apache.hudi.common.table.HoodieTableConfig.TIMELINE_LAYOUT_VERSION;
+import static org.apache.hudi.common.table.HoodieTableConfig.TYPE;
+import static org.apache.hudi.common.table.HoodieTableConfig.VERSION;
+import static org.apache.hudi.common.table.HoodieTableConfig.generateChecksum;
+import static org.apache.hudi.common.table.HoodieTableConfig.validateChecksum;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -104,7 +112,7 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
     // expected all 'No'.
     String[][] rows = FSUtils.getAllPartitionFoldersThreeLevelsDown(fs, tablePath)
         .stream()
-        .map(partition -> new String[]{partition, "No", "None"})
+        .map(partition -> new String[] {partition, "No", "None"})
         .toArray(String[][]::new);
     String expected = HoodiePrintHelper.print(new String[] {HoodieTableHeaderFields.HEADER_PARTITION_PATH,
         HoodieTableHeaderFields.HEADER_METADATA_PRESENT, HoodieTableHeaderFields.HEADER_ACTION}, rows);
@@ -135,7 +143,7 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
     List<String> paths = FSUtils.getAllPartitionFoldersThreeLevelsDown(fs, tablePath);
     // after dry run, the action will be 'Repaired'
     String[][] rows = paths.stream()
-        .map(partition -> new String[]{partition, "No", "Repaired"})
+        .map(partition -> new String[] {partition, "No", "Repaired"})
         .toArray(String[][]::new);
     String expected = HoodiePrintHelper.print(new String[] {HoodieTableHeaderFields.HEADER_PARTITION_PATH,
         HoodieTableHeaderFields.HEADER_METADATA_PRESENT, HoodieTableHeaderFields.HEADER_ACTION}, rows);
@@ -147,7 +155,7 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
 
     // after real run, Metadata is present now.
     rows = paths.stream()
-        .map(partition -> new String[]{partition, "Yes", "None"})
+        .map(partition -> new String[] {partition, "Yes", "None"})
         .toArray(String[][]::new);
     expected = HoodiePrintHelper.print(new String[] {HoodieTableHeaderFields.HEADER_PARTITION_PATH,
         HoodieTableHeaderFields.HEADER_METADATA_PRESENT, HoodieTableHeaderFields.HEADER_ACTION}, rows);
@@ -170,19 +178,25 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
     Map<String, String> oldProps = HoodieCLI.getTableMetaClient().getTableConfig().propsMap();
 
     // after overwrite, the stored value in .hoodie is equals to which read from properties.
-    Map<String, String> result = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient()).getTableConfig().propsMap();
+    HoodieTableConfig tableConfig = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient()).getTableConfig();
+    Map<String, String> result = tableConfig.propsMap();
+    // validate table checksum
+    assertTrue(result.containsKey(TABLE_CHECKSUM.key()));
+    assertTrue(validateChecksum(tableConfig.getProps()));
     Properties expectProps = new Properties();
-    expectProps.load(new FileInputStream(new File(newProps.getPath())));
+    expectProps.load(new FileInputStream(newProps.getPath()));
 
     Map<String, String> expected = expectProps.entrySet().stream()
         .collect(Collectors.toMap(e -> String.valueOf(e.getKey()), e -> String.valueOf(e.getValue())));
+    expected.putIfAbsent(TABLE_CHECKSUM.key(), String.valueOf(generateChecksum(tableConfig.getProps())));
+    expected.putIfAbsent(DROP_PARTITION_COLUMNS.key(), String.valueOf(DROP_PARTITION_COLUMNS.defaultValue()));
     assertEquals(expected, result);
 
     // check result
-    List<String> allPropsStr = Arrays.asList("hoodie.table.name", "hoodie.table.type", "hoodie.table.version",
-        "hoodie.archivelog.folder", "hoodie.timeline.layout.version");
-    String[][] rows = allPropsStr.stream().sorted().map(key -> new String[]{key,
-        oldProps.getOrDefault(key, "null"), result.getOrDefault(key, "null")})
+    List<String> allPropsStr = Arrays.asList(NAME.key(), TYPE.key(), VERSION.key(),
+        ARCHIVELOG_FOLDER.key(), TIMELINE_LAYOUT_VERSION.key(), TABLE_CHECKSUM.key(), DROP_PARTITION_COLUMNS.key());
+    String[][] rows = allPropsStr.stream().sorted().map(key -> new String[] {key,
+            oldProps.getOrDefault(key, "null"), result.getOrDefault(key, "null")})
         .toArray(String[][]::new);
     String expect = HoodiePrintHelper.print(new String[] {HoodieTableHeaderFields.HEADER_HOODIE_PROPERTY,
         HoodieTableHeaderFields.HEADER_OLD_VALUE, HoodieTableHeaderFields.HEADER_NEW_VALUE}, rows);

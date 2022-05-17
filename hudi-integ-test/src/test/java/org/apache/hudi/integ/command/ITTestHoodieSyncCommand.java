@@ -60,7 +60,7 @@ public class ITTestHoodieSyncCommand extends HoodieTestHiveBase {
   }
 
   private void syncHoodieTable(String hiveTableName, String op) throws Exception {
-    StringBuilder cmdBuilder = new StringBuilder("spark-submit --packages org.apache.spark:spark-avro_2.11:2.4.4 ")
+    StringBuilder cmdBuilder = new StringBuilder("spark-submit")
         .append(" --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer ").append(HUDI_UTILITIES_BUNDLE)
         .append(" --table-type COPY_ON_WRITE ")
         .append(" --base-file-format ").append(HoodieFileFormat.PARQUET.toString())

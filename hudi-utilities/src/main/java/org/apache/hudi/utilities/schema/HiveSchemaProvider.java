@@ -19,12 +19,12 @@
 
 package org.apache.hudi.utilities.schema;
 
-import org.apache.avro.Schema;
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.apache.hudi.utilities.exception.HoodieSchemaProviderException;
+
+import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.catalyst.TableIdentifier;
@@ -34,6 +34,9 @@ import org.apache.spark.sql.types.StructType;
 
 import java.util.Collections;
 
+/**
+ * A schema provider to get data schema through user specified hive table.
+ */
 public class HiveSchemaProvider extends SchemaProvider {
 
   /**
@@ -46,40 +49,42 @@ public class HiveSchemaProvider extends SchemaProvider {
     private static final String TARGET_SCHEMA_TABLE_PROP = "hoodie.deltastreamer.schemaprovider.target.schema.hive.table";
   }
 
-  private static final Logger LOG = LogManager.getLogger(HiveSchemaProvider.class);
-
   private final Schema sourceSchema;
-
   private Schema targetSchema;
 
   public HiveSchemaProvider(TypedProperties props, JavaSparkContext jssc) {
     super(props, jssc);
     DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(Config.SOURCE_SCHEMA_TABLE_PROP));
-    String sourceSchemaDBName = props.getString(Config.SOURCE_SCHEMA_DATABASE_PROP, "default");
+    String sourceSchemaDatabaseName = props.getString(Config.SOURCE_SCHEMA_DATABASE_PROP, "default");
     String sourceSchemaTableName = props.getString(Config.SOURCE_SCHEMA_TABLE_PROP);
     SparkSession spark = SparkSession.builder().config(jssc.getConf()).enableHiveSupport().getOrCreate();
+
+    // source schema
     try {
-      TableIdentifier sourceSchemaTable = new TableIdentifier(sourceSchemaTableName, scala.Option.apply(sourceSchemaDBName));
+      TableIdentifier sourceSchemaTable = new TableIdentifier(sourceSchemaTableName, scala.Option.apply(sourceSchemaDatabaseName));
       StructType sourceSchema = spark.sessionState().catalog().getTableMetadata(sourceSchemaTable).schema();
-
       this.sourceSchema = AvroConversionUtils.convertStructTypeToAvroSchema(
-              sourceSchema,
-              sourceSchemaTableName,
-              "hoodie." + sourceSchemaDBName);
+          sourceSchema,
+          sourceSchemaTableName,
+          "hoodie." + sourceSchemaDatabaseName);
+    } catch (NoSuchTableException | NoSuchDatabaseException e) {
+      throw new HoodieSchemaProviderException(String.format("Can't find Hive table: %s.%s", sourceSchemaDatabaseName, sourceSchemaTableName), e);
+    }
 
-      if (props.containsKey(Config.TARGET_SCHEMA_TABLE_PROP)) {
-        String targetSchemaDBName = props.getString(Config.TARGET_SCHEMA_DATABASE_PROP, "default");
-        String targetSchemaTableName = props.getString(Config.TARGET_SCHEMA_TABLE_PROP);
-        TableIdentifier targetSchemaTable = new TableIdentifier(targetSchemaTableName, scala.Option.apply(targetSchemaDBName));
+    // target schema
+    if (props.containsKey(Config.TARGET_SCHEMA_TABLE_PROP)) {
+      String targetSchemaDatabaseName = props.getString(Config.TARGET_SCHEMA_DATABASE_PROP, "default");
+      String targetSchemaTableName = props.getString(Config.TARGET_SCHEMA_TABLE_PROP);
+      try {
+        TableIdentifier targetSchemaTable = new TableIdentifier(targetSchemaTableName, scala.Option.apply(targetSchemaDatabaseName));
         StructType targetSchema = spark.sessionState().catalog().getTableMetadata(targetSchemaTable).schema();
         this.targetSchema = AvroConversionUtils.convertStructTypeToAvroSchema(
-                targetSchema,
-                targetSchemaTableName,
-                "hoodie." + targetSchemaDBName);
+            targetSchema,
+            targetSchemaTableName,
+            "hoodie." + targetSchemaDatabaseName);
+      } catch (NoSuchDatabaseException | NoSuchTableException e) {
+        throw new HoodieSchemaProviderException(String.format("Can't find Hive table: %s.%s", targetSchemaDatabaseName, targetSchemaTableName), e);
       }
-    } catch (NoSuchTableException | NoSuchDatabaseException e) {
-      String message = String.format("Can't find Hive table(s): %s", sourceSchemaTableName + "," + props.getString(Config.TARGET_SCHEMA_TABLE_PROP));
-      throw new IllegalArgumentException(message, e);
     }
   }
 

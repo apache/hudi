@@ -36,6 +36,8 @@ import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.data.HoodieSparkLongAccumulator;
 import org.apache.hudi.exception.HoodieException;
 
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.PairFlatMapFunction;
 import org.apache.spark.sql.SQLContext;
@@ -53,6 +55,7 @@ import java.util.stream.Stream;
  */
 public class HoodieSparkEngineContext extends HoodieEngineContext {
 
+  private static final Logger LOG = LogManager.getLogger(HoodieSparkEngineContext.class);
   private final JavaSparkContext javaSparkContext;
   private SQLContext sqlContext;
 
@@ -157,6 +160,8 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
   @Override
   public void setProperty(EngineProperty key, String value) {
     if (key == EngineProperty.COMPACTION_POOL_NAME) {
+      javaSparkContext.setLocalProperty("spark.scheduler.pool", value);
+    } else if (key == EngineProperty.CLUSTERING_POOL_NAME) {
       javaSparkContext.setLocalProperty("spark.scheduler.pool", value);
     } else {
       throw new HoodieException("Unknown engine property :" + key);

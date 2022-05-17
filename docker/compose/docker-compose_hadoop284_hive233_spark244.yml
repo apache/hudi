@@ -26,6 +26,8 @@ services:
     ports:
       - "50070:50070"
       - "8020:8020"
+      # JVM debugging port (will be mapped to a random port on host)
+      - "5005"
     env_file:
       - ./hadoop.env
     healthcheck:
@@ -45,6 +47,8 @@ services:
     ports:
       - "50075:50075"
       - "50010:50010"
+      # JVM debugging port (will be mapped to a random port on host)
+      - "5005"
     links:
       - "namenode"
       - "historyserver"
@@ -99,6 +103,8 @@ services:
       SERVICE_PRECONDITION: "namenode:50070 hive-metastore-postgresql:5432"
     ports:
       - "9083:9083"
+      # JVM debugging port (will be mapped to a random port on host)
+      - "5005"
     healthcheck:
       test: ["CMD", "nc", "-z", "hivemetastore", "9083"]
       interval: 30s
@@ -118,6 +124,8 @@ services:
       SERVICE_PRECONDITION: "hivemetastore:9083"
     ports:
       - "10000:10000"
+      # JVM debugging port (will be mapped to a random port on host)
+      - "5005"
     depends_on:
       - "hivemetastore"
     links:
@@ -136,6 +144,8 @@ services:
     ports:
       - "8080:8080"
       - "7077:7077"
+      # JVM debugging port (will be mapped to a random port on host)
+      - "5005"
     environment:
       - INIT_DAEMON_STEP=setup_spark
     links:
@@ -154,6 +164,8 @@ services:
       - sparkmaster
     ports:
       - "8081:8081"
+      # JVM debugging port (will be mapped to a random port on host)
+      - "5005"
     environment:
       - "SPARK_MASTER=spark://sparkmaster:7077"
     links:
@@ -167,7 +179,7 @@ services:
     hostname: zookeeper
     container_name: zookeeper
     ports:
-      - '2181:2181'
+      - "2181:2181"
     environment:
       - ALLOW_ANONYMOUS_LOGIN=yes
 
@@ -176,7 +188,7 @@ services:
     hostname: kafkabroker
     container_name: kafkabroker
     ports:
-      - '9092:9092'
+      - "9092:9092"
     environment:
       - KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181
       - ALLOW_PLAINTEXT_LISTENER=yes
@@ -184,9 +196,11 @@ services:
   presto-coordinator-1:
     container_name: presto-coordinator-1
     hostname: presto-coordinator-1
-    image: apachehudi/hudi-hadoop_2.8.4-prestobase_0.268:latest
+    image: apachehudi/hudi-hadoop_2.8.4-prestobase_0.271:latest
     ports:
-      - '8090:8090'
+      - "8090:8090"
+      # JVM debugging port (will be mapped to a random port on host)
+      - "5005"
     environment:
       - PRESTO_JVM_MAX_HEAP=512M
       - PRESTO_QUERY_MAX_MEMORY=1GB
@@ -201,32 +215,34 @@ services:
     command: coordinator
 
   presto-worker-1:
-      container_name: presto-worker-1
-      hostname: presto-worker-1
-      image: apachehudi/hudi-hadoop_2.8.4-prestobase_0.268:latest
-      depends_on: ["presto-coordinator-1"]
-      environment:
-        - PRESTO_JVM_MAX_HEAP=512M
-        - PRESTO_QUERY_MAX_MEMORY=1GB
-        - PRESTO_QUERY_MAX_MEMORY_PER_NODE=256MB
-        - PRESTO_QUERY_MAX_TOTAL_MEMORY_PER_NODE=384MB
-        - PRESTO_MEMORY_HEAP_HEADROOM_PER_NODE=100MB
-        - TERM=xterm
-      links:
-        - "hivemetastore"
-        - "hiveserver"
-        - "hive-metastore-postgresql"
-        - "namenode"
-      volumes:
-        - ${HUDI_WS}:/var/hoodie/ws
-      command: worker
+    container_name: presto-worker-1
+    hostname: presto-worker-1
+    image: apachehudi/hudi-hadoop_2.8.4-prestobase_0.271:latest
+    depends_on: [ "presto-coordinator-1" ]
+    environment:
+      - PRESTO_JVM_MAX_HEAP=512M
+      - PRESTO_QUERY_MAX_MEMORY=1GB
+      - PRESTO_QUERY_MAX_MEMORY_PER_NODE=256MB
+      - PRESTO_QUERY_MAX_TOTAL_MEMORY_PER_NODE=384MB
+      - PRESTO_MEMORY_HEAP_HEADROOM_PER_NODE=100MB
+      - TERM=xterm
+    links:
+      - "hivemetastore"
+      - "hiveserver"
+      - "hive-metastore-postgresql"
+      - "namenode"
+    volumes:
+      - ${HUDI_WS}:/var/hoodie/ws
+    command: worker
 
   trino-coordinator-1:
     container_name: trino-coordinator-1
     hostname: trino-coordinator-1
     image: apachehudi/hudi-hadoop_2.8.4-trinocoordinator_368:latest
     ports:
-      - '8091:8091'
+      - "8091:8091"
+      # JVM debugging port (will be mapped to a random port on host)
+      - "5005"
     links:
       - "hivemetastore"
     volumes:
@@ -239,7 +255,9 @@ services:
     image: apachehudi/hudi-hadoop_2.8.4-trinoworker_368:latest
     depends_on: [ "trino-coordinator-1" ]
     ports:
-      - '8092:8092'
+      - "8092:8092"
+      # JVM debugging port (will be mapped to a random port on host)
+      - "5005"
     links:
       - "hivemetastore"
       - "hiveserver"
@@ -268,6 +286,8 @@ services:
       - sparkmaster
     ports:
       - '4040:4040'
+      # JVM debugging port (mapped to 5006 on the host)
+      - "5006:5005"
     environment:
       - "SPARK_MASTER=spark://sparkmaster:7077"
     links:
@@ -286,6 +306,9 @@ services:
     container_name: adhoc-2
     env_file:
       - ./hadoop.env
+    ports:
+      # JVM debugging port (mapped to 5005 on the host)
+      - "5005:5005"
     depends_on:
       - sparkmaster
     environment:

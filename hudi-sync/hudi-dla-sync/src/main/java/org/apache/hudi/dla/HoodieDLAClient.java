@@ -18,8 +18,6 @@
 
 package org.apache.hudi.dla;
 
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -31,14 +29,17 @@ import org.apache.hudi.hive.PartitionValueExtractor;
 import org.apache.hudi.hive.SchemaDifference;
 import org.apache.hudi.hive.util.HiveSchemaUtil;
 import org.apache.hudi.sync.common.AbstractSyncHoodieClient;
+
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.parquet.schema.MessageType;
 
 import java.io.IOException;
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.DatabaseMetaData;
+import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -115,7 +116,7 @@ public class HoodieDLAClient extends AbstractSyncHoodieClient {
   }
 
   public Map<String, String> getTableSchema(String tableName) {
-    if (!doesTableExist(tableName)) {
+    if (!tableExists(tableName)) {
       throw new IllegalArgumentException(
           "Failed to get schema for table " + tableName + " does not exist");
     }
@@ -222,6 +223,11 @@ public class HoodieDLAClient extends AbstractSyncHoodieClient {
 
   @Override
   public boolean doesTableExist(String tableName) {
+    return tableExists(tableName);
+  }
+
+  @Override
+  public boolean tableExists(String tableName) {
     String sql = consutructShowCreateTableSQL(tableName);
     Statement stmt = null;
     ResultSet rs = null;
@@ -275,6 +281,22 @@ public class HoodieDLAClient extends AbstractSyncHoodieClient {
   }
 
   @Override
+  public Option<String> getLastReplicatedTime(String tableName) {
+    // no op; unsupported
+    return Option.empty();
+  }
+
+  @Override
+  public void updateLastReplicatedTimeStamp(String tableName, String timeStamp) {
+    // no op; unsupported
+  }
+
+  @Override
+  public void deleteLastReplicatedTimeStamp(String tableName) {
+    // no op; unsupported
+  }
+
+  @Override
   public void updatePartitionsToTable(String tableName, List<String> changedPartitions) {
     if (changedPartitions.isEmpty()) {
       LOG.info("No partitions to change for " + tableName);
@@ -288,8 +310,8 @@ public class HoodieDLAClient extends AbstractSyncHoodieClient {
   }
 
   @Override
-  public void dropPartitionsToTable(String tableName, List<String> partitionsToDrop) {
-    throw new UnsupportedOperationException("Not support dropPartitionsToTable yet.");
+  public void dropPartitions(String tableName, List<String> partitionsToDrop) {
+    throw new UnsupportedOperationException("Not support dropPartitions yet.");
   }
 
   public Map<List<String>, String> scanTablePartitions(String tableName) {
@@ -370,6 +392,7 @@ public class HoodieDLAClient extends AbstractSyncHoodieClient {
     }
   }
 
+  @Override
   public void close() {
     try {
       if (connection != null) {

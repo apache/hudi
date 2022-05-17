@@ -18,7 +18,7 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
-import org.apache.hudi.DataSourceWriteOptions;
+import org.apache.hudi.SparkConfigs;
 import org.apache.hudi.async.AsyncCompactService;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.util.Option;
@@ -34,6 +34,8 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+
+import static org.apache.hudi.async.AsyncClusteringService.CLUSTERING_POOL_NAME;
 
 /**
  * Utility Class to generate Spark Scheduling allocation file. This kicks in only when user sets
@@ -61,13 +63,16 @@ public class SchedulerConfGenerator {
    * @param compactionWeight Scheduling weight for compaction
    * @param deltaSyncMinShare Minshare for delta sync
    * @param compactionMinShare Minshare for compaction
+   * @param clusteringMinShare Scheduling weight for clustering
+   * @param clusteringWeight Minshare for clustering
    * @return Spark scheduling configs
    */
   private static String generateConfig(Integer deltaSyncWeight, Integer compactionWeight, Integer deltaSyncMinShare,
-      Integer compactionMinShare) {
+      Integer compactionMinShare, Integer clusteringWeight, Integer clusteringMinShare) {
     return String.format(SPARK_SCHEDULING_PATTERN, DELTASYNC_POOL_NAME, SPARK_SCHEDULER_FAIR_MODE,
         deltaSyncWeight.toString(), deltaSyncMinShare.toString(), COMPACT_POOL_NAME, SPARK_SCHEDULER_FAIR_MODE,
-        compactionWeight.toString(), compactionMinShare.toString());
+        compactionWeight.toString(), compactionMinShare.toString(), CLUSTERING_POOL_NAME, SPARK_SCHEDULER_FAIR_MODE,
+        clusteringWeight.toString(), clusteringMinShare.toString());
   }
 
   /**
@@ -84,8 +89,10 @@ public class SchedulerConfGenerator {
     if (sparkSchedulerMode.isPresent() && SPARK_SCHEDULER_FAIR_MODE.equals(sparkSchedulerMode.get())
         && cfg.continuousMode && cfg.tableType.equals(HoodieTableType.MERGE_ON_READ.name())) {
       String sparkSchedulingConfFile = generateAndStoreConfig(cfg.deltaSyncSchedulingWeight,
-          cfg.compactSchedulingWeight, cfg.deltaSyncSchedulingMinShare, cfg.compactSchedulingMinShare);
-      additionalSparkConfigs.put(DataSourceWriteOptions.SPARK_SCHEDULER_ALLOCATION_FILE_KEY(), sparkSchedulingConfFile);
+          cfg.compactSchedulingWeight, cfg.deltaSyncSchedulingMinShare, cfg.compactSchedulingMinShare,
+          cfg.clusterSchedulingWeight, cfg.clusterSchedulingMinShare);
+      LOG.warn("Spark scheduling config file " + sparkSchedulingConfFile);
+      additionalSparkConfigs.put(SparkConfigs.SPARK_SCHEDULER_ALLOCATION_FILE_KEY(), sparkSchedulingConfFile);
     } else {
       LOG.warn("Job Scheduling Configs will not be in effect as spark.scheduler.mode "
           + "is not set to FAIR at instantiation time. Continuing without scheduling configs");
@@ -100,14 +107,16 @@ public class SchedulerConfGenerator {
    * @param compactionWeight Scheduling weight for compaction
    * @param deltaSyncMinShare Minshare for delta sync
    * @param compactionMinShare Minshare for compaction
+   * @param clusteringMinShare Scheduling weight for clustering
+   * @param clusteringWeight Minshare for clustering
    * @return Return the absolute path of the tmp file which stores the spark schedule configs
    * @throws IOException Throws an IOException when write configs to file failed
    */
   private static String generateAndStoreConfig(Integer deltaSyncWeight, Integer compactionWeight,
-      Integer deltaSyncMinShare, Integer compactionMinShare) throws IOException {
+      Integer deltaSyncMinShare, Integer compactionMinShare, Integer clusteringWeight, Integer clusteringMinShare) throws IOException {
     File tempConfigFile = File.createTempFile(UUID.randomUUID().toString(), ".xml");
     BufferedWriter bw = new BufferedWriter(new FileWriter(tempConfigFile));
-    bw.write(generateConfig(deltaSyncWeight, compactionWeight, deltaSyncMinShare, compactionMinShare));
+    bw.write(generateConfig(deltaSyncWeight, compactionWeight, deltaSyncMinShare, compactionMinShare, clusteringWeight, clusteringMinShare));
     bw.close();
     LOG.info("Configs written to file" + tempConfigFile.getAbsolutePath());
     return tempConfigFile.getAbsolutePath();

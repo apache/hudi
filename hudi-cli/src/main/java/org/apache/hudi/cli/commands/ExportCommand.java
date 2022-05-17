@@ -34,6 +34,7 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
+import org.apache.hudi.common.util.ClosableIterator;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.avro.generic.GenericRecord;
@@ -123,44 +124,46 @@ public class ExportCommand implements CommandMarker {
       // read the avro blocks
       while (reader.hasNext() && copyCount < limit) {
         HoodieAvroDataBlock blk = (HoodieAvroDataBlock) reader.next();
-        for (IndexedRecord ir : blk.getRecords()) {
-          // Archived instants are saved as arvo encoded HoodieArchivedMetaEntry records. We need to get the
-          // metadata record from the entry and convert it to json.
-          HoodieArchivedMetaEntry archiveEntryRecord = (HoodieArchivedMetaEntry) SpecificData.get()
-              .deepCopy(HoodieArchivedMetaEntry.SCHEMA$, ir);
+        try (ClosableIterator<IndexedRecord> recordItr = blk.getRecordIterator()) {
+          while (recordItr.hasNext()) {
+            IndexedRecord ir = recordItr.next();
+            // Archived instants are saved as arvo encoded HoodieArchivedMetaEntry records. We need to get the
+            // metadata record from the entry and convert it to json.
+            HoodieArchivedMetaEntry archiveEntryRecord = (HoodieArchivedMetaEntry) SpecificData.get()
+                    .deepCopy(HoodieArchivedMetaEntry.SCHEMA$, ir);
+            final String action = archiveEntryRecord.get("actionType").toString();
+            if (!actionSet.contains(action)) {
+              continue;
+            }
 
-          final String action = archiveEntryRecord.get("actionType").toString();
-          if (!actionSet.contains(action)) {
-            continue;
-          }
-
-          GenericRecord metadata = null;
-          switch (action) {
-            case HoodieTimeline.CLEAN_ACTION:
-              metadata = archiveEntryRecord.getHoodieCleanMetadata();
+            GenericRecord metadata = null;
+            switch (action) {
+              case HoodieTimeline.CLEAN_ACTION:
+                metadata = archiveEntryRecord.getHoodieCleanMetadata();
+                break;
+              case HoodieTimeline.COMMIT_ACTION:
+              case HoodieTimeline.DELTA_COMMIT_ACTION:
+                metadata = archiveEntryRecord.getHoodieCommitMetadata();
+                break;
+              case HoodieTimeline.ROLLBACK_ACTION:
+                metadata = archiveEntryRecord.getHoodieRollbackMetadata();
+                break;
+              case HoodieTimeline.SAVEPOINT_ACTION:
+                metadata = archiveEntryRecord.getHoodieSavePointMetadata();
+                break;
+              case HoodieTimeline.COMPACTION_ACTION:
+                metadata = archiveEntryRecord.getHoodieCompactionMetadata();
+                break;
+              default:
+                throw new HoodieException("Unknown type of action " + action);
+            }
+            
+            final String instantTime = archiveEntryRecord.get("commitTime").toString();
+            final String outPath = localFolder + Path.SEPARATOR + instantTime + "." + action;
+            writeToFile(outPath, HoodieAvroUtils.avroToJson(metadata, true));
+            if (++copyCount == limit) {
               break;
-            case HoodieTimeline.COMMIT_ACTION:
-            case HoodieTimeline.DELTA_COMMIT_ACTION:
-              metadata = archiveEntryRecord.getHoodieCommitMetadata();
-              break;
-            case HoodieTimeline.ROLLBACK_ACTION:
-              metadata = archiveEntryRecord.getHoodieRollbackMetadata();
-              break;
-            case HoodieTimeline.SAVEPOINT_ACTION:
-              metadata = archiveEntryRecord.getHoodieSavePointMetadata();
-              break;
-            case HoodieTimeline.COMPACTION_ACTION:
-              metadata = archiveEntryRecord.getHoodieCompactionMetadata();
-              break;
-            default:
-              throw new HoodieException("Unknown type of action " + action);
-          }
-
-          final String instantTime = archiveEntryRecord.get("commitTime").toString();
-          final String outPath = localFolder + Path.SEPARATOR + instantTime + "." + action;
-          writeToFile(outPath, HoodieAvroUtils.avroToJson(metadata, true));
-          if (++copyCount == limit) {
-            break;
+            }
           }
         }
       }

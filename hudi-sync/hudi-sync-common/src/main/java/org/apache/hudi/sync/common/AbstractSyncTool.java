@@ -17,17 +17,31 @@
 
 package org.apache.hudi.sync.common;
 
+import org.apache.hudi.common.config.TypedProperties;
+
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 
 import java.util.Properties;
 
+/**
+ * Base class to sync Hudi meta data with Metastores to make
+ * Hudi table queryable through external systems.
+ */
 public abstract class AbstractSyncTool {
-  protected Properties props;
-  protected FileSystem fileSystem;
+  protected final Configuration conf;
+  protected final FileSystem fs;
+  protected TypedProperties props;
 
-  public AbstractSyncTool(Properties props, FileSystem fileSystem) {
+  public AbstractSyncTool(TypedProperties props, Configuration conf, FileSystem fs) {
     this.props = props;
-    this.fileSystem = fileSystem;
+    this.conf = conf;
+    this.fs = fs;
+  }
+
+  @Deprecated
+  public AbstractSyncTool(Properties props, FileSystem fileSystem) {
+    this(new TypedProperties(props), fileSystem.getConf(), fileSystem);
   }
 
   public abstract void syncHoodieTable();
