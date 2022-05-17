@@ -10,7 +10,7 @@ Compaction is executed asynchronously with Hudi by default. Async Compaction is 
 
 1. ***Compaction Scheduling***: This is done by the ingestion job. In this step, Hudi scans the partitions and selects **file
    slices** to be compacted. A compaction plan is finally written to Hudi timeline.
-1. ***Compaction Execution***: A separate process reads the compaction plan and performs compaction of file slices.
+1. ***Compaction Execution***: In this step the compaction plan is read and file slices are compacted.
 
 There are few ways by which we can execute compactions asynchronously.
 
@@ -135,3 +135,8 @@ Offline compaction needs to submit the Flink task on the command line. The progr
 | `--path` | `frue` | `--` | The path where the target table is stored on Hudi |
 | `--compaction-max-memory` | `false` | `100` | The index map size of log data during compaction, 100 MB by default. If you have enough memory, you can turn up this parameter |
 | `--schedule` | `false` | `false` | whether to execute the operation of scheduling compaction plan. When the write process is still writing， turning on this parameter have a risk of losing data. Therefore, it must be ensured that there are no write tasks currently writing data to this table when this parameter is turned on |
+
+| `--seq` | `false` | `LIFO` | The order in which compaction tasks are executed. Executing from the latest compaction plan by default. `LIFO`: executing from the latest plan. `FIFO`: executing from the oldest plan. |
+| `--service` | `false` | `false` | Whether to start a monitoring service that checks and schedules new compaction task in configured interval. |
+| `--min-compaction-interval-seconds` | `false` | `600(s)` | The checking interval for service mode, by default 10 minutes. |
+

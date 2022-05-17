@@ -2,11 +2,186 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <id>https://hudi.apache.org/blog</id>
     <title>Apache Hudi: User-Facing Analytics</title>
-    <updated>2022-01-14T00:00:00.000Z</updated>
+    <updated>2022-04-04T00:00:00.000Z</updated>
     <generator>https://github.com/jpmonette/feed</generator>
     <link rel="alternate" href="https://hudi.apache.org/blog"/>
     <subtitle>Apache Hudi Blog</subtitle>
     <icon>https://hudi.apache.org/assets/images/favicon.ico</icon>
+    <entry>
+        <title type="html"><![CDATA[Key Learnings on Using Apache HUDI in building Lakehouse Architecture @ Halodoc]]></title>
+        <id>/2022/04/04/Key-Learnings-on-Using-Apache-HUDI-in-building-Lakehouse-Architecture-at-Halodoc</id>
+        <link href="https://hudi.apache.org/blog/2022/04/04/Key-Learnings-on-Using-Apache-HUDI-in-building-Lakehouse-Architecture-at-Halodoc"/>
+        <updated>2022-04-04T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://blogs.halodoc.io/key-learnings-on-using-apache-hudi-in-building-lakehouse-architecture-halodoc/">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Jitendra Shah</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[New features from Apache Hudi 0.9.0 on Amazon EMR]]></title>
+        <id>/2022/04/04/New-features-from-Apache-Hudi-0.9.0-on-Amazon-EMR</id>
+        <link href="https://hudi.apache.org/blog/2022/04/04/New-features-from-Apache-Hudi-0.9.0-on-Amazon-EMR"/>
+        <updated>2022-04-04T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://aws.amazon.com/blogs/big-data/new-features-from-apache-hudi-0-9-0-on-amazon-emr/">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Kunal Gautam</name>
+        </author>
+        <author>
+            <name>Gabriele Cacciola</name>
+        </author>
+        <author>
+            <name>Udit Mehrotra</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Zendesk - Insights for CTOs: Part 3 – Growing your business with modern data capabilities]]></title>
+        <id>/2022/03/24/Zendesk-Insights-for-CTOs-Part-3-Growing-your-business-with-modern-data-capabilities</id>
+        <link href="https://hudi.apache.org/blog/2022/03/24/Zendesk-Insights-for-CTOs-Part-3-Growing-your-business-with-modern-data-capabilities"/>
+        <updated>2022-03-24T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://aws.amazon.com/blogs/architecture/insights-for-ctos-part-3-growing-your-business-with-modern-data-capabilities/">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Syed Jaffry</name>
+        </author>
+        <author>
+            <name>Johnathan Hwang</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Build a serverless pipeline to analyze streaming data using AWS Glue, Apache Hudi, and Amazon S3]]></title>
+        <id>/2022/03/09/Build-a-serverless-pipeline-to-analyze-streaming-data-using-AWS-Glue-Apache-Hudi-and-Amazon-S3</id>
+        <link href="https://hudi.apache.org/blog/2022/03/09/Build-a-serverless-pipeline-to-analyze-streaming-data-using-AWS-Glue-Apache-Hudi-and-Amazon-S3"/>
+        <updated>2022-03-09T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://aws.amazon.com/blogs/big-data/build-a-serverless-pipeline-to-analyze-streaming-data-using-aws-glue-apache-hudi-and-amazon-s3/">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Nikhil Khokhar</name>
+        </author>
+        <author>
+            <name>Dipta Bhattacharya</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Create a low-latency source-to-data lake pipeline using Amazon MSK Connect, Apache Flink, and Apache Hudi]]></title>
+        <id>/2022/03/01/Create-a-low-latency-source-to-data-lake-pipeline-using-Amazon-MSK-Connect-Apache-Flink-and-Apache-Hudi</id>
+        <link href="https://hudi.apache.org/blog/2022/03/01/Create-a-low-latency-source-to-data-lake-pipeline-using-Amazon-MSK-Connect-Apache-Flink-and-Apache-Hudi"/>
+        <updated>2022-03-01T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://aws.amazon.com/blogs/big-data/create-a-low-latency-source-to-data-lake-pipeline-using-amazon-msk-connect-apache-flink-and-apache-hudi/">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Ali Alemi</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Understanding its core concepts from hudi persistence files]]></title>
+        <id>/2022/02/20/Understanding-its-core-concepts-from-hudi-persistence-files</id>
+        <link href="https://hudi.apache.org/blog/2022/02/20/Understanding-its-core-concepts-from-hudi-persistence-files"/>
+        <updated>2022-02-20T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://programmer.ink/think/understanding-its-core-concepts-from-hudi-persistence-files.html">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>QbertsBrother</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Fresher Data Lake on AWS S3]]></title>
+        <id>/2022/02/17/Fresher-Data-Lake-on-AWS-S3</id>
+        <link href="https://hudi.apache.org/blog/2022/02/17/Fresher-Data-Lake-on-AWS-S3"/>
+        <updated>2022-02-17T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://robinhood.engineering/author-balaji-varadarajan-e3f496815ebf">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Balaji Varadarajan</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Open Source Data Lake Table Formats: Evaluating Current Interest and Rate of Adoption]]></title>
+        <id>/2022/02/12/Open-Source-Data-Lake-Table-Formats-Evaluating-Current-Interest-and-Rate-of-Adoption</id>
+        <link href="https://hudi.apache.org/blog/2022/02/12/Open-Source-Data-Lake-Table-Formats-Evaluating-Current-Interest-and-Rate-of-Adoption"/>
+        <updated>2022-02-12T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://garystafford.medium.com/data-lake-table-formats-interest-and-adoption-rate-40817b87be9e">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Gary Stafford</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[ACID transformations on Distributed file system]]></title>
+        <id>/2022/02/09/ACID-transformations-on-Distributed-file-system</id>
+        <link href="https://hudi.apache.org/blog/2022/02/09/ACID-transformations-on-Distributed-file-system"/>
+        <updated>2022-02-09T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://medium.com/walmartglobaltech/acid-transformations-on-distributed-file-system-fdec5301c1b1">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Rajasekhar</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Onehouse brings a fully-managed lakehouse to Apache Hudi]]></title>
+        <id>/2022/02/03/Onehouse-brings-a-fully-managed-lakehouse-to-Apache-Hudi</id>
+        <link href="https://hudi.apache.org/blog/2022/02/03/Onehouse-brings-a-fully-managed-lakehouse-to-Apache-Hudi"/>
+        <updated>2022-02-03T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://venturebeat.com/2022/02/03/onehouse-brings-a-fully-managed-lakehouse-to-apache-hudi/">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Paul Sawers</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Onehouse Commitment to Openness]]></title>
+        <id>/2022/02/02/Onehouse-Commitment-to-Openness</id>
+        <link href="https://hudi.apache.org/blog/2022/02/02/Onehouse-Commitment-to-Openness"/>
+        <updated>2022-02-02T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://www.onehouse.ai/blog/onehouse-commitment-to-openness">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Vinoth Chandar</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Cost Efficiency @ Scale in Big Data File Format]]></title>
+        <id>/2022/01/25/Cost-Efficiency-Scale-in-Big-Data-File-Format</id>
+        <link href="https://hudi.apache.org/blog/2022/01/25/Cost-Efficiency-Scale-in-Big-Data-File-Format"/>
+        <updated>2022-01-25T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://eng.uber.com/cost-efficiency-big-data/">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Xinli Shang</name>
+        </author>
+        <author>
+            <name>Kai Jiang</name>
+        </author>
+        <author>
+            <name>Zheng Shao</name>
+        </author>
+        <author>
+            <name>Mohammad Islam</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Hudi powering data lake efforts at Walmart and Disney+ Hotstar]]></title>
+        <id>/2022/01/20/Hudi-powering-data-lake-efforts-at-Walmart-and-Disney-Hotstar</id>
+        <link href="https://hudi.apache.org/blog/2022/01/20/Hudi-powering-data-lake-efforts-at-Walmart-and-Disney-Hotstar"/>
+        <updated>2022-01-20T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://www.techtarget.com/searchdatamanagement/feature/Hudi-powering-data-lake-efforts-at-Walmart-and-Disney-Hotstar">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Sean Michael Kerner</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Why and How I Integrated Airbyte and Apache Hudi]]></title>
+        <id>/2022/01/18/Why-and-How-I-Integrated-Airbyte-and-Apache-Hudi</id>
+        <link href="https://hudi.apache.org/blog/2022/01/18/Why-and-How-I-Integrated-Airbyte-and-Apache-Hudi"/>
+        <updated>2022-01-18T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://selectfrom.dev/why-and-how-i-integrated-airbyte-and-apache-hudi-c18aff3af21a">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Harsha Teja Kanna</name>
+        </author>
+    </entry>
     <entry>
         <title type="html"><![CDATA[Change Data Capture with Debezium and Apache Hudi]]></title>
         <id>/2022/01/14/change-data-capture-with-debezium-and-apache-hudi</id>
@@ -112,6 +287,17 @@ USER 1001
         <content type="html"><![CDATA[<p>As the year came to end, I took some time to reflect on where we are and what we accomplished in 2021. I am humbled by how strong our community is and how regardless of it being another tough pandemic year, that people from around the globe leaned in together and made this the best year yet for Apache Hudi. In this blog I want to recap some of the 2021 highlights.</p><img src="/assets/images/Hudi_community.png" alt="drawing" width="600"/><p><strong><em>Community</em></strong></p><p>I want to call out how amazing it is to see such a diverse group of people step up and contribute to this project. There were over 30,000 interactions with the <a href="https://github.com/apache/hudi/">project on github</a>, up 2x from last year. Over the last year 300 people have contributed to the project, with over 3,000 PRs over 5 releases. We moved Apache Hudi from release 0.5.X all the way to our feature packed 0.10.0 release. Come and join us on our <a href="https://join.slack.com/t/apache-hudi/shared_invite/enQtODYyNDAxNzc5MTg2LTE5OTBlYmVhYjM0N2ZhOTJjOWM4YzBmMWU2MjZjMGE4NDc5ZDFiOGQ2N2VkYTVkNzU3ZDQ4OTI1NmFmYWQ0NzE">active slack channel</a>! Over 850 community members engaged on our slack, up about 100% from the year before. I want to add a special shout out to our top slack participants who have helped answer so many questions and drive rich discussions on our channel. Sivabalan Narayanan, Nishith Agarwal, Bhavani Sudha Saktheeswaran, Vinay Patil, Rubens Soto, Dave Hagman, Raghav Tandon, Sagar Sumit, Joyan Sil, Jake D, Felix Jose, Nick Vintila, KimL, Andrew Sukhan, Danny Chan, Biswajit Mohapatra, and Pratyaksh Sharma! I know I am missing plenty of other important callouts, every PR that landed this year has helped shape Hudi into what it is today. Thank you!</p><img src="/assets/images/powers/logo-wall.png" alt="drawing" width="600"/><p><strong><em>Impact</em></strong></p><p>In 2021, I personally developed a deeper gratitude and understanding of the magnitude of the impact we are making in the industry. Throughout the year I met more and more people that told me about how Hudi transformed their business and I was impressed by the large variety of use cases and applications that Hudi was able to serve. Some from the community who publicly shared their story include: <a href="https://aws.amazon.com/blogs/big-data/how-amazon-transportation-service-enabled-near-real-time-event-analytics-at-petabyte-scale-using-aws-glue-with-apache-hudi/">Amazon</a>, <a href="https://aws.amazon.com/blogs/big-data/how-ge-aviation-built-cloud-native-data-pipelines-at-enterprise-scale-using-the-aws-platform/">GE</a>, <a href="https://s.apache.org/hudi-robinhood-talk">Robinhood</a>, <a href="http://hudi.apache.org/blog/2021/09/01/building-eb-level-data-lake-using-hudi-at-bytedance">ByteDance</a>, <a href="https://blogs.halodoc.io/data-platform-2-0-part-1/">Halodoc</a>, <a href="https://developpaper.com/baixin-banks-real-time-data-lake-evolution-scheme-based-on-apache-hudi/">Baixin Bank</a>, <a href="https://developpaper.com/practice-of-apache-hudi-in-building-real-time-data-lake-at-station-b/">BiliBili</a>, and so many more that haven’t even shared yet. One particular highlight from 2021 was attending <a href="https://youtu.be/lGm8qe4tBrg?t=2115">AWS Re:Invent</a> and meeting an overwhelmingly large number of users who expressed joy with using Apache Hudi. This raises my sense of responsibility even more to be aware of just how many people depend on Apache Hudi.</p><p><strong><em>New Features</em></strong></p><p>Apache Hudi has come a long way in 2021 from v0.5.X to 0.10.0. Throughout this year we have developed innovative and leading edge features that make it easier and easier to build streaming data lakes. Some of these features include <a href="https://hudi.apache.org/docs/table_management">Spark SQL DML Support</a>, <a href="https://hudi.apache.org/docs/clustering">Clustering</a>, <a href="https://hudi.apache.org/blog/2021/12/29/hudi-zorder-and-hilbert-space-filling-curves">Z-Order/Hilbert curves</a>, <a href="https://hudi.apache.org/docs/metadata">Metadata Table file listing elimination</a>, <a href="https://hudi.apache.org/docs/markers">Timeline Server Markers</a>, <a href="https://hudi.apache.org/docs/precommit_validator">Precommit Validators</a>, <a href="https://hudi.apache.org/docs/writing_data#flink-sql-writer">Flink MOR write/read</a>, <a href="https://hudi.apache.org/docs/concurrency_control">Parallel Write support with OCC</a>, <a href="https://hudi.apache.org/docs/clustering">Clustering</a>, <a href="https://hudi.apache.org/docs/querying_data#spark-incr-query">Incremental Queries for MOR</a>, <a href="https://github.com/apache/hudi/tree/master/hudi-kafka-connect">Kafka Connect Sink</a>, Delta Streamer sources for <a href="https://hudi.apache.org/docs/hoodie_deltastreamer/#s3-events">S3</a> and <a href="https://hudi.apache.org/releases/release-0.10.0/#debezium-deltastreamer-sources">Debezium</a>, <a href="https://hudi.apache.org/releases/release-0.10.0/#dbt-support">DBT Support</a> all of which are were added in 2021. To top it all, we put together <a href="https://hudi.apache.org/blog/2021/07/21/streaming-data-lake-platform">a manifesto</a> to realize our vision for streaming data lakes.</p><p><strong><em>The Road Ahead</em></strong></p><p>2021 may have been our best year so far, but it still feels like we are just getting started when we look at our new year&#x27;s resolutions for 2022. In the year ahead we have bold plans to realize the first cut of our entire vision and take Hudi 1.0, that includes full-featured multi-modal indexing for faster writes/queries, pathbreaking lock free concurrency, new server components for caching/metadata and finally Flink based incremental materialized views!  <em>You can find our</em> <a href="https://hudi.apache.org/roadmap"><em>detailed roadmap here</em></a><em>.</em></p><p>I look forward to continued collaboration with the growing Hudi community! Come join our <a href="https://hudi.apache.org/community/syncs"><em>community events</em></a> <em>and discussions in our</em> <a href="https://join.slack.com/t/apache-hudi/shared_invite/enQtODYyNDAxNzc5MTg2LTE5OTBlYmVhYjM0N2ZhOTJjOWM4YzBmMWU2MjZjMGE4NDc5ZDFiOGQ2N2VkYTVkNzU3ZDQ4OTI1NmFmYWQ0NzE"><em>slack channel</em></a><em>! Happy new year 2022!</em></p>]]></content>
         <author>
             <name>vinoth</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[The Art of Building Open Data Lakes with Apache Hudi, Kafka, Hive, and Debezium]]></title>
+        <id>/2021/12/31/The-Art-of-Building-Open-Data-Lakes-with-Apache-Hudi-Kafka-Hive-and-Debezium</id>
+        <link href="https://hudi.apache.org/blog/2021/12/31/The-Art-of-Building-Open-Data-Lakes-with-Apache-Hudi-Kafka-Hive-and-Debezium"/>
+        <updated>2021-12-31T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://garystafford.medium.com/the-art-of-building-open-data-lakes-with-apache-hudi-kafka-hive-and-debezium-3d2f71c5981f">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Gary Stafford</name>
         </author>
     </entry>
     <entry>
@@ -333,6 +519,20 @@ scala&gt; runQuery3(dataSkippingSnapshotTableName)
         </author>
     </entry>
     <entry>
+        <title type="html"><![CDATA[New features from Apache Hudi 0.7.0 and 0.8.0 available on Amazon EMR]]></title>
+        <id>/2021/12/20/New-features-from-Apache-Hudi-0.7.0-and-0.8.0-available-on-Amazon-EMR</id>
+        <link href="https://hudi.apache.org/blog/2021/12/20/New-features-from-Apache-Hudi-0.7.0-and-0.8.0-available-on-Amazon-EMR"/>
+        <updated>2021-12-20T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://aws.amazon.com/blogs/big-data/new-features-from-apache-hudi-0-7-0-and-0-8-0-available-on-amazon-emr/">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Udit Mehrotra</name>
+        </author>
+        <author>
+            <name>Gagan Brahmi</name>
+        </author>
+    </entry>
+    <entry>
         <title type="html"><![CDATA[Lakehouse Concurrency Control: Are we too optimistic?]]></title>
         <id>/2021/12/16/lakehouse-concurrency-control-are-we-too-optimistic</id>
         <link href="https://hudi.apache.org/blog/2021/12/16/lakehouse-concurrency-control-are-we-too-optimistic"/>
@@ -342,6 +542,73 @@ scala&gt; runQuery3(dataSkippingSnapshotTableName)
 static/assets/images/blog/concurrency/ConcurrencyControlConflicts.png</p><p>So, what&#x27;s the alternative? Locking? Wikipedia also says - &quot;<em>However, locking-based (&quot;pessimistic&quot;) methods also can deliver poor performance because locking can drastically limit effective concurrency even when deadlocks are avoided.&quot;.</em> Here is where Hudi takes a different approach, that we believe is more apt for modern lake transactions which are typically long-running and even continuous. Data lake workloads share more characteristics with high throughput stream processing jobs, than they do to standard reads/writes from a database and this is where we borrow from. In stream processing events are serialized into a single ordered log, avoiding any locks/concurrency bottlenecks and you can continuously process millions of events/sec. Hudi implements a file level, log based concurrency control protocol on the Hudi <a href="https://hudi.apache.org/docs/timeline">timeline</a>, which in-turn relies on bare minimum atomic puts to cloud storage. By building on an event log as the central piece for inter process coordination, Hudi is able to offer a few flexible deployment models that offer greater concurrency over pure OCC approaches that just track table snapshots.</p><h1>Model 1 : Single Writer, Inline Table Services</h1><p>The simplest form of concurrency control is just no concurrency at all. A data lake table often has common services operating on it to ensure efficiency. Reclaiming storage space from older versions and logs, coalescing files (clustering in Hudi), merging deltas (compactions in Hudi), and more. Hudi can simply eliminate the need for concurrency control and maximizes throughput by supporting these table services out-of-box and running inline after every write to the table.</p><p>Execution plans are idempotent, persisted to the timeline and auto-recover from failures. For most simple use-cases, this means just writing is sufficient to get a well-managed table that needs no concurrency control.</p><p><img src="/assets/images/blog/concurrency/SingleWriterInline.gif" alt="concurrency-single-writer"/></p><h1>Model 2 : Single Writer, Async Table Services</h1><p>Our delete/ingest example above is n&#x27;t really that simple. While ingest/writer may just be updating the last N partitions on the table, delete may span across the entire table even. Mixing them in the same job, could slow down ingest latency by a lot. But, Hudi provides the option of running the table services in an async fashion, where most of the heavy lifting (e.g actually rewriting the columnar data by compaction service) is done asynchronously, eliminating any repeated wasteful retries whatsoever, while also optimizing the table using clustering techniques. Thus a single writer could consumes both regular updates and GDPR deletes and serialize them into a log. Given Hudi has record level indexing and avro log writes are much cheaper (as opposed to writing parquet, which can be 10x or more expensive), ingest latency can be sustained while enjoying great replayability. In fact, we were able to scale this model at <a href="https://eng.uber.com/uber-big-data-platform/">Uber</a>, across 100s of petabytes, by sequencing all deletes &amp; updates into the same source Apache Kafka topic. There&#x27;s more to concurrency control than locking and Hudi accomplishes all this without needing any external locking.</p><p><img src="/assets/images/blog/concurrency/SingleWriterAsync.gif" alt="concurrency-async"/></p><h1>Model 3 : Multiple Writers</h1><p>But it&#x27;s not always possible to serialize the deletes into the same write stream or sql based deletes are required. With multiple distributed processes, some form of locking is inevitable, but like real databases Hudi&#x27;s concurrency model is intelligent enough to differentiate actual writing to the table, from table services that manage or optimize the table. Hudi offers similar optimistic concurrency control across multiple writers, but table services can still execute completely lock-free and async. This means the delete job can merely encode deletes and the ingest job can log updates, while the compaction service again applies the updates/deletes to base files. Even though the delete job and ingest job can contend and starve each other like like we mentioned above, their run-times are much lower and the wastage is drastically lower, since the compaction does the heavy-lifting of parquet/columnar data writing.</p><p><img src="/assets/images/blog/concurrency/MultiWriter.gif" alt="concurrency-multi"/></p><p>All this said, there are still many ways we can improve upon this foundation.</p><ul><li>For starters, Hudi has already implemented a <a href="https://hudi.apache.org/blog/2021/08/18/improving-marker-mechanism/">marker mechanism</a> that tracks all the files that are part of an active write transaction and a heartbeat mechanism that can track active writers to a table. This can be directly used by other active transactions/writers to detect what other writers are doing and <a href="https://issues.apache.org/jira/browse/HUDI-1575">abort early</a> if conflicts are detected, yielding the cluster resources back to other jobs sooner.</li><li>While optimistic concurrency control is attractive when serializable snapshot isolation is desired, it&#x27;s neither optimal nor the only method for dealing with concurrency between writers. We plan to implement a fully lock-free concurrency control using CRDTs and widely adopted stream processing concepts, over our log <a href="https://github.com/apache/hudi/blob/bc8bf043d5512f7afbb9d94882c4e43ee61d6f06/hudi-common/src/main/java/org/apache/hudi/common/model/HoodieRecordPayload.java#L38">merge API</a>, that has already been <a href="https://hudi.apache.org/blog/2021/09/01/building-eb-level-data-lake-using-hudi-at-bytedance/#functionality-support">proven</a> to sustain enormous continuous write volumes for the data lake.</li><li>Touching upon key constraints, Hudi is the only lake transactional layer that ensures unique <a href="https://hudi.apache.org/docs/key_generation">key</a> constraints today, but limited to the record key of the table. We will be looking to expand this capability in a more general form to non-primary key fields, with the said newer concurrency models.</li></ul><p>Finally, for data lakes to transform successfully into lakehouses, we must learn from the failing of the &quot;hadoop warehouse&quot; vision, which shared similar goals with the new &quot;lakehouse&quot; vision. Designers did not pay closer attention to the missing technology gaps against warehouses and created unrealistic expectations from the actual software. As transactions and database functionality finally goes mainstream on data lakes, we must apply these lessons and remain candid about the current shortcomings. If you are building a lakehouse, I hope this post encourages you to closely consider various operational and efficiency aspects around concurrency control. Join our fast growing community by trying out <a href="https://hudi.apache.org/docs/overview">Apache Hudi</a> or join us in conversations on <a href="https://join.slack.com/t/apache-hudi/shared_invite/enQtODYyNDAxNzc5MTg2LTE5OTBlYmVhYjM0N2ZhOTJjOWM4YzBmMWU2MjZjMGE4NDc5ZDFiOGQ2N2VkYTVkNzU3ZDQ4OTI1NmFmYWQ0NzE">Slack</a>.</p>]]></content>
         <author>
             <name>vinoth</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Apache Hudi Architecture Tools and Best Practices]]></title>
+        <id>/2021/11/22/Apache-Hudi-Architecture-Tools-and-Best-Practices</id>
+        <link href="https://hudi.apache.org/blog/2021/11/22/Apache-Hudi-Architecture-Tools-and-Best-Practices"/>
+        <updated>2021-11-22T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://www.xenonstack.com/insights/what-is-hudi">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Chandan Gaur</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[How GE Aviation built cloud-native data pipelines at enterprise scale using the AWS platform]]></title>
+        <id>/2021/11/16/How-GE-Aviation-built-cloud-native-data-pipelines-at-enterprise-scale-using-the-AWS-platform</id>
+        <link href="https://hudi.apache.org/blog/2021/11/16/How-GE-Aviation-built-cloud-native-data-pipelines-at-enterprise-scale-using-the-AWS-platform"/>
+        <updated>2021-11-16T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://aws.amazon.com/blogs/big-data/how-ge-aviation-built-cloud-native-data-pipelines-at-enterprise-scale-using-the-aws-platform/">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Alcuin Weidus</name>
+        </author>
+        <author>
+            <name>Suresh Patnam</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Practice of Apache Hudi in building real-time data lake at station B]]></title>
+        <id>/2021/10/21/Practice-of-Apache-Hudi-in-building-real-time-data-lake-at-station-B</id>
+        <link href="https://hudi.apache.org/blog/2021/10/21/Practice-of-Apache-Hudi-in-building-real-time-data-lake-at-station-B"/>
+        <updated>2021-10-21T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://developpaper.com/practice-of-apache-hudi-in-building-real-time-data-lake-at-station-b/">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Yu Zhaojing</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[How Amazon Transportation Service enabled near-real-time event analytics at petabyte scale using AWS Glue with Apache Hudi]]></title>
+        <id>/2021/10/14/How-Amazon-Transportation-Service-enabled-near-real-time-event-analytics-at-petabyte-scale-using-AWS-Glue-with-Apache-Hudi</id>
+        <link href="https://hudi.apache.org/blog/2021/10/14/How-Amazon-Transportation-Service-enabled-near-real-time-event-analytics-at-petabyte-scale-using-AWS-Glue-with-Apache-Hudi"/>
+        <updated>2021-10-14T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://aws.amazon.com/blogs/big-data/how-amazon-transportation-service-enabled-near-real-time-event-analytics-at-petabyte-scale-using-aws-glue-with-apache-hudi/">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Madhavan Sriram</name>
+        </author>
+        <author>
+            <name>Diego Menin</name>
+        </author>
+        <author>
+            <name>Gabriele Cacciola</name>
+        </author>
+        <author>
+            <name>Kunal Gautam</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Data Platform 2.0 - Part I]]></title>
+        <id>/2021/10/05/Data-Platform-2.0-Part-I</id>
+        <link href="https://hudi.apache.org/blog/2021/10/05/Data-Platform-2.0-Part-I"/>
+        <updated>2021-10-05T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://blogs.halodoc.io/data-platform-2-0-part-1/">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Jitendra Shah</name>
         </author>
     </entry>
     <entry>
@@ -678,6 +945,42 @@ Please check out <a href="https://hudi.apache.org/contribute/get-involved">this<
         </author>
     </entry>
     <entry>
+        <title type="html"><![CDATA[Cost-Efficient Open Source Big Data Platform at Uber]]></title>
+        <id>/2021/08/11/Cost-Efficient-Open-Source-Big-Data-Platform-at-Uber</id>
+        <link href="https://hudi.apache.org/blog/2021/08/11/Cost-Efficient-Open-Source-Big-Data-Platform-at-Uber"/>
+        <updated>2021-08-11T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://eng.uber.com/cost-efficient-big-data-platform/">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Zheng Shao</name>
+        </author>
+        <author>
+            <name>Mohammad Islam</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[MLOps Wars: Versioned Feature Data with a Lakehouse]]></title>
+        <id>/2021/08/03/MLOps-Wars-Versioned-Feature-Data-with-a-Lakehouse</id>
+        <link href="https://hudi.apache.org/blog/2021/08/03/MLOps-Wars-Versioned-Feature-Data-with-a-Lakehouse"/>
+        <updated>2021-08-03T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://www.logicalclocks.com/blog/mlops-wars-versioned-feature-data-with-a-lakehouse">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>David Bzhalava</name>
+        </author>
+        <author>
+            <name>Jim Dowling</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Baixin bank’s real-time data lake evolution scheme based on Apache Hudi]]></title>
+        <id>/2021/07/26/Baixin-banksreal-time-data-lake-evolution-scheme-based-on-Apache-Hudi</id>
+        <link href="https://hudi.apache.org/blog/2021/07/26/Baixin-banksreal-time-data-lake-evolution-scheme-based-on-Apache-Hudi"/>
+        <updated>2021-07-26T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://developpaper.com/baixin-banks-real-time-data-lake-evolution-scheme-based-on-apache-hudi/">Redirecting... please wait!! </div>]]></content>
+    </entry>
+    <entry>
         <title type="html"><![CDATA[Apache Hudi - The Data Lake Platform]]></title>
         <id>/2021/07/21/streaming-data-lake-platform</id>
         <link href="https://hudi.apache.org/blog/2021/07/21/streaming-data-lake-platform"/>
@@ -694,6 +997,31 @@ While we have strawman designs outlined for the newer components in the blog, we
 Rest of the blog will delve into each layer in our stack - explaining what it does, how it&#x27;s designed for incremental processing and how it will evolve in the future.</p><h2>Lake Storage</h2><p>Hudi interacts with lake storage using the <a href="https://hadoop.apache.org/docs/stable/api/org/apache/hadoop/fs/FileSystem.html">Hadoop FileSystem API</a>, which makes it compatible with all of its implementations ranging from HDFS to Cloud Stores to even in-memory filesystems like <a href="https://www.alluxio.io/blog/building-high-performance-data-lake-using-apache-hudi-and-alluxio-at-t3go/">Alluxio</a>/Ignite. Hudi internally implements its own <a href="https://github.com/apache/hudi/blob/9d2a65a6a6ff9add81411147f1cddd03f7c08e6c/hudi-common/src/main/java/org/apache/hudi/common/fs/HoodieWrapperFileSystem.java">wrapper filesystem</a> on top to provide additional storage optimizations (e.g: file sizing), performance optimizations (e.g: buffering), and metrics. Uniquely, Hudi takes full advantage of append support, for storage schemes that support it, like HDFS. This helps Hudi deliver streaming writes without causing an explosion in file counts/table metadata. Unfortunately, most cloud/object storages do not offer append capability today (except maybe <a href="https://azure.microsoft.com/en-us/updates/append-blob-support-in-azure-data-lake-storage-is-now-generally-available/">Azure</a>). In the future, we plan to leverage the lower-level APIs of major cloud object stores, to provide similar controls over file counts at streaming ingest latencies.</p><h2>File Format</h2><p>Hudi is designed around the notion of base file and delta log files that store updates/deltas to a given base file (called a file slice). Their formats are pluggable, with Parquet (columnar access) and HFile (indexed access) being the supported base file formats today. The delta logs encode data in <a href="http://avro.apache.org/">Avro</a> (row oriented) format for speedier logging (just like Kafka topics for e.g). Going forward, we plan to <a href="https://github.com/apache/hudi/pull/3228">inline any base file format</a> into log blocks in the coming releases, providing columnar access to delta logs depending on block sizes. Future plans also include Orc base/log file formats, unstructured data formats (free form json, images), and even tiered storage layers in event-streaming systems/OLAP engines/warehouses, work with their native file formats.</p><p>Zooming one level up, Hudi&#x27;s unique file layout scheme encodes all changes to a given base file, as a sequence of blocks (data blocks, delete blocks, rollback blocks) that are merged in order to derive newer base files. In essence, this makes up a self contained redo log that the lets us implement interesting features on top. For e.g, most of today&#x27;s data privacy enforcement happens by masking data read off the lake storage on-the-fly, invoking hashing/encryption algorithms over and over on the same set of records and incurring significant compute overhead/cost. Users would be able to keep multiple pre-masked/encrypted copies of the same key in the logs and hand out the correct one based on a policy, avoiding all the overhead.</p><p><img src="/assets/images/blog/datalake-platform/hudi-design-diagrams_-_Page_2_1.png" alt="Hudi base and delta logs"/></p><h2>Table Format</h2><p>The term “table format” is new and still means many things to many people. Drawing an analogy to file formats, a table format simply consists of : the file layout of the table, table’s schema and metadata tracking changes to the table. Hudi is not a table format, it implements one internally. Hudi uses Avro schemas to store, manage and evolve a table’s schema. Currently, Hudi enforces schema-on-write, which although stricter than schema-on-read, is adopted <a href="https://docs.confluent.io/platform/current/schema-registry/avro.html">widely</a> in the stream processing world to ensure pipelines don&#x27;t break from non backwards compatible changes.</p><p>Hudi consciously lays out files within a table/partition into groups and maintains a mapping between an incoming record’s key to an existing file group. All updates are recorded into delta log files specific to a given file group and this design ensures low merge overhead compared to approaches like Hive ACID, which have to merge all delta records against all base files to satisfy queries. For e.g, with uuid keys (used very widely) all base files are very likely to overlap with all delta logs, rendering any range based pruning useless. Much like state stores, Hudi’s design anticipates fast key based upserts/deletes and only requires merging delta logs within each file group. This design choice also lets Hudi provide more capabilities for writing/querying as we will explain below. </p><p><img src="/assets/images/blog/datalake-platform/hudi-design-diagrams-table-format.png" alt="Shows the Hudi table format components"/></p><p>The <em>timeline</em> is the source-of-truth event log for all Hudi’s table metadata, stored under the <code>.hoodie</code> folder, that provides an ordered log of all actions performed on the table. Events are retained on the timeline up to a configured interval of time/activity. Each file group is also designed as it’s own self-contained log, which means that even if an action that affected a file group is archived from the timeline, the right state of the records in each file group can be reconstructed by simply locally applying the delta logs to the base file. This design bounds the metadata size, proportional to how often the table is being written to/operated on, independent of how large the entire table is. This is a critical design element needs for supporting frequent writes/commits to tables.</p><p>Lastly, new events on the timeline are then consumed and reflected onto an internal metadata table, implemented as another merge-on-read table offering low write amplification. Hudi is able to absorb quick/rapid changes to table’s metadata, unlike table formats designed for slow-moving data. Additionally, the metadata table uses the <a href="https://hbase.apache.org/2.0/devapidocs/org/apache/hadoop/hbase/io/hfile/HFile.html">HFile</a> base file format, which provides indexed lookups of keys avoiding the need for reading the entire metadata table to satisfy metadata reads. It currently stores all the physical file paths that are part of the table, to avoid expensive cloud file listings.</p><p>A key challenge faced by all the table formats out there today, is the need for expiring snapshots/controlling retention for time travel queries such that it does not interfere with query planning/performance. In the future, we plan to build an indexed timeline in Hudi, which can span the entire history of the table, supporting a time travel look back window of several months/years.</p><h2>Indexes</h2><p>Indexes help databases plan better queries, that reduce the overall amount of I/O and deliver faster response times. Table metadata about file listings and column statistics are often enough for lake query engines to generate optimized, engine specific query plans quickly. This is however not sufficient for Hudi to realize fast upserts. Hudi already supports different key based indexing schemes to quickly map incoming record keys into the file group they reside in. For this purpose, Hudi exposes a pluggable indexing layer to the writer implementations, with built-in support for range pruning (when keys are ordered and largely arrive in order) using interval trees and bloom filters (e.g: for uuid based keys where ordering is of very little help). Hudi also implements a HBase backed external index which is much more performant although more expensive to operate. Hudi also consciously exploits the partitioning scheme of the table to implement global and non-global indexing schemes. Users can choose to enforce key constraints only within a partition, in return for <em><code>O(num_affected_partitions)</code></em> upsert performance as opposed to <em><code>O(total_partitions)</code></em> in the global indexing scenarios. We refer you to this <a href="http://hudi.apache.org/blog/2020/11/11/hudi-indexing-mechanisms">blog</a>, that goes over indexing in detail. Ultimately, Hudi&#x27;s writer path ensures the index is always kept in sync with the timeline and data, which is cumbersome and error prone to implement on top of a table format by hand.</p><p><img src="/assets/images/blog/datalake-platform/hudi-design-diagrams_-_Page_5.png" alt="/assets/images/blog/datalake-platform/hudi-design-diagrams_-_Page_5.png"/></p><p>In the future, we intend to add additional forms of indexing as new partitions on the metadata table. Let’s discuss the role  each one has to play briefly. Query engines typically rely on partitioning to cut down the number of files read for a given query. In database terms, a Hive partition is nothing but a coarse range index, that maps a set of columns to a list of files. Table formats born in the cloud like Iceberg/Delta Lake, have built-in tracking of column ranges per file in a single flat file (json/avro), that helps avoid planning costs for large/poorly sized tables. This need has been largely reduced for Hudi tables thus far, given Hudi automatically enforces file sizes which help bound time taken to read out stats from parquet footers for e.g. However, with the advent of features like clustering, there is a need for writing smaller files first and then reclustering in a query optimized way. We plan to add indexed column ranges, that can scale to lots of small files and support faster mutations . See <a href="https://cwiki.apache.org/confluence/display/HUDI/RFC-27+Data+skipping+index+to+improve+query+performance">RFC-27</a> to track the design process and get involved.</p><p>While Hudi already supports external indexes for random write workloads, we would like to support <a href="https://github.com/apache/hudi/pull/2487">point-lookup-ish queries</a> right on top of lake storage, which helps avoid the overhead of an additional database for many classes of data applications. We also anticipate that uuid/key based joins will be sped up a lot, by leveraging record level indexing schemes, we build out for fast upsert performance. We also plan to move our tracking of bloom filters out of the file footers and into its <a href="https://issues.apache.org/jira/browse/HUDI-1295">own partition</a> on the metadata table. Ultimately, we look to exposing all of this to the queries as well in the coming releases.</p><h2>Concurrency Control</h2><p>Concurrency control defines how different writers/readers coordinate access to the table. Hudi ensures atomic writes, by way of publishing commits atomically to the timeline, stamped with an instant time that denotes the time at which the action is deemed to have occurred. Unlike general purpose file version control, Hudi draws clear distinction between writer processes (that issue user’s upserts/deletes), table services (that write data/metadata to optimize/perform bookkeeping) and readers (that execute queries and read data). Hudi provides snapshot isolation between all three types of processes, meaning they all operate on a consistent snapshot of the table. Hudi provides <a href="https://cwiki.apache.org/confluence/display/HUDI/RFC+-+22+%3A+Snapshot+Isolation+using+Optimistic+Concurrency+Control+for+multi-writers">optimistic concurrency control</a> (OCC) between writers, while providing lock-free, non-blocking MVCC  based concurrency control between writers and table-services and between different table services.</p><p>Projects that solely rely on OCC deal with competing operations, by either implementing a lock or relying on atomic renames. Such approaches are optimistic that real contention never happens and resort to failing one of the writer operations if conflicts occur, which can cause significant resource wastage or operational overhead. Imagine a scenario of two writer processes : an ingest writer job producing new data every 30 minutes and a deletion writer job that is enforcing GDPR taking 2 hours to issue deletes. If there were to overlap on the same files (very likely to happen in real situations with random deletes), the deletion job is almost guaranteed to starve and fail to commit each time, wasting tons of cluster resources. Hudi takes a very different approach that we believe is more apt for lake transactions, which are typically long-running. For e.g async compaction that can keep deleting records in the background without blocking the ingest job. This is implemented via a file level, log based concurrency control protocol which orders actions based on their start instant times on the timeline.</p><p><img src="/assets/images/blog/datalake-platform/Hudi_design_diagram_-_Page_2_1.png" alt="Figure showing competing transactions leading to starvation with just OCC"/></p><p>We are hard at work, improving our OCC based implementation around early detection of conflicts for concurrent writers and terminate early without burning up CPU resources. We are also working on <a href="https://cwiki.apache.org/confluence/display/HUDI/RFC+-+22+%3A+Snapshot+Isolation+using+Optimistic+Concurrency+Control+for+multi-writers#RFC22:SnapshotIsolationusingOptimisticConcurrencyControlformultiwriters-FutureWork(LockFree-ishConcurrencyControl)">adding fully log based</a>, non-blocking concurrency control between writers, where writers proceed to write deltas and conflicts are resolved later in some deterministic timeline order - again much like how stream processing programs are written. This is possible only due to Hudi’s unique design that sequences actions into an ordered event log and the transaction handling code is aware of the relationship/interdependence of actions to each other.</p><h2>Writers</h2><p>Hudi tables can be used as sinks for Spark/Flink pipelines and the Hudi writing path provides several enhanced capabilities over file writing done by vanilla parquet/avro sinks. Hudi classifies write operations carefully into incremental (<code>insert</code>, <code>upsert</code>, <code>delete</code>) and batch/bulk operations (<code>insert_overwrite</code>, <code>insert_overwrite_table</code>, <code>delete_partition</code>, <code>bulk_insert</code>) and provides relevant functionality for each operation in a performant and cohesive way. Both upsert and delete operations automatically handle merging of records with the same key in the input stream (say, a CDC stream obtained from upstream table) and then lookup the index, finally invoke a bin packing algorithm to pack data into files, while <a href="http://hudi.apache.org/blog/2021/03/01/hudi-file-sizing">respecting a pre-configured target file size</a>. An insert operation on the other hand, is intelligent enough to avoid the precombining and index lookup, while retaining the benefits of the rest of the pipeline. Similarly, bulk_insert operation provides several sort modes for controlling initial file sizes and file counts, when importing data from an external table to Hudi. The other batch write operations provide MVCC based implementations of typical overwrite semantics used in batch data pipelines, while retaining all the transactional and incremental processing capabilities, making it seamless to switch between incremental pipelines for regular runs and batch pipelines for backfilling/dropping older partitions. The write pipeline also contains lower layers optimizations around handling large merges by spilling to <a href="https://rocksdb.org/">rocksDB</a> or an external spillable map, multi-threaded/concurrent I/O to improve write performance.</p><p>Keys are first class citizens inside Hudi and the pre-combining/index lookups done before upsert/deletes ensure a key is unique across partitions or within partitions, as desired. In contrast with other approaches where this is left to data engineer to co-ordinate using <code>MERGE INTO</code> statements, this approach ensures quality data especially for critical use-cases. Hudi also ships with several <a href="http://hudi.apache.org/blog/2021/02/13/hudi-key-generators/">built-in key generators</a> that can parse all common date/timestamps, handle malformed data with an extensible framework for defining custom key generators. Keys are also materialized with the records using the <code>_hoodie_record_key</code> meta column, which makes it possible to change the key fields and perform repairs on older data with incorrect keys for e.g. Finally, Hudi provides a <code>HoodieRecordPayload</code> interface is very similar to processor APIs in Flink or Kafka Streams, and allows for expressing arbitrary merge conditions, between the base and delta log records. This allows users to express partial merges (e.g log only updated columns to the delta log for efficiency) and avoid reading all the base records before every merge. Routinely, we find users leverage such custom merge logic during replaying/backfilling older data onto a table, while ensuring newer updates are not overwritten causing the table&#x27;s snapshot to go back in time. This is achieved by simply using the  <code>HoodieDefaultPayload</code> where latest value for a given key is picked based a configured precombine field value in the data.</p><p>Hudi writers add metadata to each record, that codify the commit time and a sequence number for each record within that commit (comparable to a Kafka offset), which make it possible to derive record level change streams. Hudi also provides users the ability to specify event time fields in incoming data streams and track them in the timeline.Mapping these to stream processing concepts, Hudi contains both <a href="https://www.oreilly.com/radar/the-world-beyond-batch-streaming-101/">arrival and event time</a> for records for each commit, that can help us build good <a href="https://ci.apache.org/projects/flink/flink-docs-release-1.13/docs/dev/datastream/event-time/generating_watermarks/">watermarks</a> that inform complex incremental processing pipelines. In the near future, we are looking to add new metadata columns, that encode the source operation (insert, update, delete) for each record, before we embark on this grand goal of full end-end incremental ETL pipelines. All said, we realized many users may simply want to use Hudi as an efficient write layer that supports transactions, fast updates/deletes. We are looking into adding support for <a href="https://github.com/apache/hudi/pull/3306">virtual keys</a> and making the <a href="https://github.com/apache/hudi/pull/3247">meta columns optional</a>, to lower storage overhead, while still making rest of Hudi&#x27;s capabilities (metadata table, table services, ..) available.</p><h2>Readers</h2><p>Hudi provides snapshot isolation between writers and readers and allows for any table snapshot to be queries consistently from all major lake query engines (Spark, Hive, Flink, Presto, Trino, Impala) and even cloud warehouses like Redshift. In fact, we would love to bring Hudi tables as external tables with BigQuery/Snowflake as well, once they also embrace the lake table formats more natively. Our design philosophy around query performance has been to make Hudi as lightweight as possible whenever only base columnar files are read (CoW  snapshot, MOR read-optimized queries),  employing the engine specific vectorized readers in Presto, Trino, Spark for e.g to be employed. This model is far more scalable than maintaining our own readers and users to benefit from engine specific optimizations. For e.g <a href="https://prestodb.io/blog/2021/02/04/raptorx">Presto</a>, <a href="https://trino.io/docs/current/connector/hive-caching.html">Trino</a> all have their own data/metadata caches. Whenever, Hudi has to merge base and log files for a query, Hudi takes control and employs several mechanisms (spillable maps, lazy reading) to improve merge performance, while also providing a read-optimized query on the data that trades off data freshness for query performance. In the near future, we are investing deeply into improving MoR snapshot query performance in many ways such as inlining parquet data, special handling of overwrite payloads/merges. </p><p><img src="/assets/images/blog/datalake-platform/hudi-design-diagram_-incr-read.png" alt="Log merging done for incremental queries"/></p><p>True to its design goals, Hudi provides some very powerful incremental querying capabilities that tied together the meta fields added during writing and the file group based storage layout. While table formats that merely track files, are only able to provide information about files that changed during each snapshot or commits, Hudi generates the exact set of records that changed given a point in the timeline, due to tracking of record level event and arrival times. Further more, this design allows large commits to be consumed in smaller chunks by an incremental query, fully decoupling the writing and incremental querying of data. Time travel is merely implemented as an incremental query that starts and stops at an older portion of the timeline. Since Hudi ensures that a key is atomically mapped to a single file group at any point in time, it makes it possible to support full CDC capabilities on Hudi tables, such as providing all possible values for a given record since time <code>t</code>, CDC streams with both before and after images. All of these functionalities can be built local to each file group, given each file group is a self-contained log. Much of our future work in this area will be around bringing such a powerful set of <a href="https://debezium.io/">debezium</a> like capabilities to life in the coming months. </p><h2>Table Services</h2><p>What defines and sustains a project’s value over years are its fundamental design principles and the subtle trade offs. Databases often consist of several internal components, working in tandem to deliver efficiency, performance and great operability to its users. True to intent to act as state store for incremental data pipelines, we designed Hudi with built-in table services and self-managing runtime that can orchestrate/trigger these services to optimize everything internally. In fact, if we compare rocksDB (a very popular stream processing state-store) and Hudi’s components, the similarities become obvious.</p><p><img src="/assets/images/blog/datalake-platform/hudi-design-diagrams_-_Page_4.png" alt="/assets/images/blog/datalake-platform/hudi-design-diagrams_-_Page_4.png"/></p><p>There are several built-in table services, all with the goal of ensuring performant table storage layout and metadata management, which are automatically invoked either synchronously after each write operation, or asynchronously as a separate background job. Furthermore, Spark (and Flink) streaming writers can run in continuous mode, and invoke table services asynchronously sharing the underlying executors intelligently with writers. Archival service ensures that the timeline holds sufficient history for inter service co-ordination (e.g compactions wait for other compactions to complete on the same file group), incremental queries. Once events expire from the timeline, the archival service cleans up any side-effects from lake storage (e.g. rolling back of failing concurrent transactions). Hudi&#x27;s transaction management implementation allows all of these services to be idempotent and thus resilient to failure via just simple retries.  <a href="http://hudi.apache.org/blog/2021/06/10/employing-right-configurations-for-hudi-cleaner">Cleaner</a> service works off the timeline incrementally (eating our own incremental design dog food), removing file slices that are past the configured retention period for incremental queries, while also allowing sufficient time for long running batch jobs (e.g Hive ETLs) to finish running. Compaction service comes with built-in strategies (date partitioning based, I/O bounded), that merges a base file with a set of delta log files to produce new base file, all while allowing writes to happen concurrently to the file group. This is only possible due to Hudi&#x27;s grouping of files into groups and support for flexible log merging, and unlocks non-blocking execution of deletes while concurrent updates are being issues to the same set of records. <a href="http://hudi.apache.org/blog/2021/01/27/hudi-clustering-intro/">Clustering</a> service functions similar to what users find in BigQuery or Snowflake, where users can group records that are often queried together by sort keys or control file sizes by coalescing smaller base files into larger ones. Clustering is fully aware of other actions on the timeline such as cleaning, compaction, and it helps Hudi implement intelligent optimizations like avoiding compaction on file groups that are already being clustered, to save on I/O. Hudi also performs rollback of partial writes and cleans up any uncommitted data from lake storage, by use of marker files that track any files created as a part of write operations. Finally, the bootstrap service performs one time zero copy migration of plain parquet tables to Hudi, while allowing both pipelines to operate in parallel, for data validation purposes. Cleaner service is once again aware of these bootstrapped base files and can optionally clean them up, to ensure use-cases like GDPR compliance are met.</p><p>We are always looking for ways to improve and enhance our table services in meaningful ways. In the coming releases, we are working towards a much more <a href="https://github.com/apache/hudi/pull/3233">scalable model</a> of cleaning up partial writes, by consolidating marker file creation using our timeline metaserver, which avoids expensive full table scans to seek out and remove uncommitted files. We also have <a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=181307144">various proposals</a> to add more clustering schemes, unlock clustering with concurrent updates using fully log based concurrency control. </p><h2>Data Services</h2><p>As noted at the start, we wanted to make Hudi immediately usable for common end-end use-cases and thus invested deeply into a set of data services, that provide functionality that is data/workload specific, sitting on top of the table services, writers/readers directly. Foremost in that list, is the Hudi DeltaStreamer utility, which has been an extremely popular choice for painlessly building a data lake out of  Kafka streams and files landing in different formats on top of lake storage. Over time, we have also built out sources that cover all major systems like a JDBC source for RDBMS/other warehouses, Hive source and even incrementally pulling data from other Hudi tables. The utility supports automatic checkpoint management tracking source checkpoints as a part of target Hudi table metadata, with support for backfills/one-off runs. DeltaStreamer also integrates with major schema registries such as Confluent&#x27;s and also provides checkpoint translation from other popular mechanisms like Kafka connect. It also supports de-duplication of data, multi-level configuration management system, built in transformers that take arbitrary SQL or coerce <a href="http://hudi.apache.org/blog/2020/10/19/hudi-meets-aws-emr-and-aws-dms/">CDC log changes</a> into writable forms, that combined with other aforementioned features can be used for deploying production grade incremental pipelines. Finally, just like the Spark/Flink streaming writers, DeltaStreamer is able to run in a continuous mode, with automatic management of table services. Hudi also provides several other tools for snapshotting and incrementally exporting Hudi tables, also importing/<a href="http://hudi.apache.org/blog/2020/03/22/exporting-hudi-datasets/">exporting</a>/bootstrapping new tables into Hudi. Hudi also provides commit notifications into Http endpoints or Kafka topics, about table commit activity, which can be used for analytics or building data sensors in workflow managers like Airflow to trigger pipelines.</p><p><img src="/assets/images/blog/datalake-platform/hudi-design-diagrams_-_Page_8.png" alt="/assets/images/blog/datalake-platform/hudi-design-diagrams_-_Page_8.png"/></p><p>Going forward, we would love contributions to enhance our <a href="http://hudi.apache.org/blog/2020/08/22/ingest-multiple-tables-using-hudi/">multi delta streamer utility</a>, which can ingest entire Kafka clusters in a single large Spark application, to be on par and hardened. To further our progress towards end-end complex incremental pipelines, we plan to work towards enhancing the delta streamer utility and its SQL transformers to be triggered by multiple source streams (as opposed to just the one today) and unlock materialized views at scale. We would like to bring an array of useful transformers that perform masking or data monitoring, and extend support for egress of data off Hudi tables into other external sinks as well. Finally, we would love to merge the FlinkStreamer and the DeltaStreamer utilities into one cohesive utility, that can be used across engines. We are constantly improving existing sources (e.g support for parallelized listings of DFS sources) and adding new ones (e.g S3 event based DFS source)</p><h2>Timeline Metaserver</h2><p>Storing and serving table metadata right on the lake storage is scalable, but can be much less performant compared to RPCs against a scalable meta server. Most cloud warehouses internally are built on a metadata layer that leverages an external database (e.g <a href="https://www.snowflake.com/blog/how-foundationdb-powers-snowflake-metadata-forward/">Snowflake uses foundationDB</a>). Hudi also provides a metadata server, called the “Timeline server”, which offers an alternative backing store for Hudi’s table metadata. Currently, the timeline server runs embedded in the Hudi writer processes, serving file listings out of a local rocksDB store/<a href="https://javalin.io/">Javalin</a> REST API during the write process, without needing to repeatedly list the cloud storage. Given we have hardened this as the default option since our 0.6.0 release, we are considering standalone timeline server installations, with support for horizontal scaling, database/table mappings, security and all the features necessary to turn it into a highly performant next generation lake metastore.</p><p><img src="/assets/images/blog/datalake-platform/hudi-design-diagrams_-_Page_6.png" alt="/assets/images/blog/datalake-platform/hudi-design-diagrams_-_Page_6.png"/></p><h2>Lake Cache</h2><p>There is a fundamental tradeoff today in data lakes between faster writing and great query performance. Faster writing typically involves writing smaller files (and later clustering them) or logging deltas (and later merging on read). While this provides good performance already, the pursuit of great query performance often warrants opening fewer number of files/objects on lake storage and may be pre-materializing the merges between base and delta logs. After all, most databases employ a <a href="https://dev.mysql.com/doc/refman/8.0/en/innodb-buffer-pool.html">buffer pool</a> or <a href="https://github.com/facebook/rocksdb/wiki/Block-Cache">block cache</a>, to amortize the cost of accessing storage. Hudi already contains several design elements that are conducive for building a caching tier (write-through or even just populated by an incremental query), that will be multi-tenant and can cache pre-merged images of the latest file slices, consistent with the timeline. Hudi timeline can be used to simply communicate caching policies, just like how we perform inter table service co-ordination. Historically, caching has been done closer to the query engines or via intermediate in-memory file systems. By placing a caching tier closer and more tightly integrated with a transactional lake storage like Hudi, all query engines would be able to share and amortize the cost of the cache, while supporting updates/deletes as well. We look forward to building a buffer pool for the lake that works across all major engines, with the contributions from the rest of the community. </p><p><img src="/assets/images/blog/datalake-platform/hudi-design-diagrams_-_Page_7.png" alt="/assets/images/blog/datalake-platform/hudi-design-diagrams_-_Page_7.png"/></p><h2>Onwards</h2><p>We hope that this blog painted a complete picture of Apache Hudi, staying true to its founding principles. Interested users and readers can expect blogs delving into each layer of the stack and an overhaul of our docs along these lines in the coming weeks/months. We view the current efforts around table formats as merely removing decade-old bottlenecks in data lake storage/query planes, problems which have been already solved very well in cloud warehouses like Big Query/Snowflake. We would like to underscore that our vision here is much greater, much more technically challenging. We as an industry are just wrapping our heads around many of these deep, open-ended problems, that need to be solved to marry stream processing and data lakes, with scale and simplicity. We hope to continue to put community first and build/solve these hard problems together. If these challenges excite you and you would like to build for that exciting future, please come join our <a href="http://hudi.apache.org/contribute/get-involved">community</a>.</p>]]></content>
         <author>
             <name>vinoth</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Amazon Athena expands Apache Hudi support]]></title>
+        <id>/2021/07/16/Amazon-Athena-expands-Apache-Hudi-support</id>
+        <link href="https://hudi.apache.org/blog/2021/07/16/Amazon-Athena-expands-Apache-Hudi-support"/>
+        <updated>2021-07-16T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://aws.amazon.com/about-aws/whats-new/2021/07/amazon-athena-expands-apache-hudi-support/">Redirecting... please wait!! </div>]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Part1: Query apache hudi dataset in an amazon S3 data lake with amazon athena : Read optimized queries]]></title>
+        <id>/2021/07/16/Query-apache-hudi-dataset-in-an-amazon-S3-data-lake-with-amazon-athena-Read-optimized-queries</id>
+        <link href="https://hudi.apache.org/blog/2021/07/16/Query-apache-hudi-dataset-in-an-amazon-S3-data-lake-with-amazon-athena-Read-optimized-queries"/>
+        <updated>2021-07-16T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://aws.amazon.com/blogs/big-data/part-1-query-an-apache-hudi-dataset-in-an-amazon-s3-data-lake-with-amazon-athena-part-1-read-optimized-queries/">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Dhiraj Thakur</name>
+        </author>
+        <author>
+            <name>Sameer Goel</name>
+        </author>
+        <author>
+            <name>Imtiaz Sayed</name>
         </author>
     </entry>
     <entry>
@@ -718,6 +1046,67 @@ hoodie.clean.async=true
 </code></pre><p>Further you can use <a href="https://hudi.apache.org/docs/deployment#cli">Hudi CLI</a> for managing your Hudi dataset. CLI provides the below commands for cleaner service:</p><ul><li><code>cleans show</code></li><li><code>clean showpartitions</code></li><li><code>cleans run</code></li></ul><p>You can find more details and the relevant code for these commands in <a href="https://github.com/apache/hudi/blob/master/hudi-cli/src/main/java/org/apache/hudi/cli/commands/CleansCommand.java"><code>org.apache.hudi.cli.commands.CleansCommand</code> class</a>. </p><h3>Future Scope</h3><p>Work is currently going on for introducing a new cleaning policy based on time elapsed. This will help in achieving a consistent retention throughout regardless of how frequently ingestion happens. You may track the progress <a href="https://issues.apache.org/jira/browse/HUDI-349">here</a>.</p><p>We hope this blog gives you an idea about how to configure the Hudi cleaner and the supported cleaning policies. Please visit the <a href="https://hudi.apache.org/blog">blog section</a> for a deeper understanding of various Hudi concepts. Cheers!</p>]]></content>
         <author>
             <name>pratyakshsharma</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Apache Hudi: How Uber gets data a ride to its destination]]></title>
+        <id>/2021/06/04/Apache-Hudi-How-Uber-gets-data-a-ride-to-its-destination</id>
+        <link href="https://hudi.apache.org/blog/2021/06/04/Apache-Hudi-How-Uber-gets-data-a-ride-to-its-destination"/>
+        <updated>2021-06-04T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://www.rtinsights.com/apache-hudi-how-uber-gets-data-a-ride-to-its-destination/">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Joe McKendrick</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Experts primer on Apache Hudi]]></title>
+        <id>/2021/05/12/Experts-primer-on-Apache-Hudi</id>
+        <link href="https://hudi.apache.org/blog/2021/05/12/Experts-primer-on-Apache-Hudi"/>
+        <updated>2021-05-12T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://www.dbta.com/Editorial/News-Flashes/Experts-Present-a-Primer-on-Apache-Hudi-at-Data-Summit-Connect-2021-146834.aspx">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Stephanie Simone</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Build Slowly Changing Dimensions Type 2 (SCD2) with Apache Spark and Apache Hudi on Amazon EMR]]></title>
+        <id>/2021/04/12/Build-Slowly-Changing-Dimensions-Type-2-SCD2-with-Apache-Spark-and-Apache-Hudi-on-Amazon-EMR</id>
+        <link href="https://hudi.apache.org/blog/2021/04/12/Build-Slowly-Changing-Dimensions-Type-2-SCD2-with-Apache-Spark-and-Apache-Hudi-on-Amazon-EMR"/>
+        <updated>2021-04-12T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://aws.amazon.com/blogs/big-data/build-slowly-changing-dimensions-type-2-scd2-with-apache-spark-and-apache-hudi-on-amazon-emr/">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>David Greenshtein</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[New features from Apache hudi in Amazon EMR]]></title>
+        <id>/2021/03/11/New-features-from-Apache-hudi-in-Amazon-EMR</id>
+        <link href="https://hudi.apache.org/blog/2021/03/11/New-features-from-Apache-hudi-in-Amazon-EMR"/>
+        <updated>2021-03-11T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://aws.amazon.com/blogs/big-data/new-features-from-apache-hudi-available-in-amazon-emr/">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Udit Mehrotra</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Build a data lake using amazon kinesis data stream for amazon dynamodb and apache hudi]]></title>
+        <id>/2021/03/04/Build-a-data-lake-using-amazon-kinesis-data-stream-for-amazon-dynamodb-and-apache-hudi</id>
+        <link href="https://hudi.apache.org/blog/2021/03/04/Build-a-data-lake-using-amazon-kinesis-data-stream-for-amazon-dynamodb-and-apache-hudi"/>
+        <updated>2021-03-04T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://aws.amazon.com/blogs/big-data/build-a-data-lake-using-amazon-kinesis-data-streams-for-amazon-dynamodb-and-apache-hudi/">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Dhiraj Thakur</name>
+        </author>
+        <author>
+            <name>Dylan Qu</name>
+        </author>
+        <author>
+            <name>Saurabh Shrivastava</name>
         </author>
     </entry>
     <entry>
@@ -761,6 +1150,28 @@ This process is followed during every ingestion to ensure there are no small fil
         <author>
             <name>shivnarayan</name>
         </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Data Lakehouse: Building the Next Generation of Data Lakes using Apache Hudi]]></title>
+        <id>/2021/03/01/Data-Lakehouse-Building-the-Next-Generation-of-Data-Lakes-using-Apache-Hudi</id>
+        <link href="https://hudi.apache.org/blog/2021/03/01/Data-Lakehouse-Building-the-Next-Generation-of-Data-Lakes-using-Apache-Hudi"/>
+        <updated>2021-03-01T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://medium.com/slalom-build/data-lakehouse-building-the-next-generation-of-data-lakes-using-apache-hudi-41550f62f5f">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Ryan D'Souza</name>
+        </author>
+        <author>
+            <name>Brandon Stanley</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Time travel operations in Hopsworks Feature Store]]></title>
+        <id>/2021/02/24/Time-travel-operations-in-Hopsworks-Feature-Store</id>
+        <link href="https://hudi.apache.org/blog/2021/02/24/Time-travel-operations-in-Hopsworks-Feature-Store"/>
+        <updated>2021-02-24T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://examples.hopsworks.ai/master/featurestore/hsfs/time_travel/time_travel_scala/">Redirecting... please wait!! </div>]]></content>
     </entry>
     <entry>
         <title type="html"><![CDATA[Apache Hudi Key Generators]]></title>
@@ -855,6 +1266,14 @@ df.write.format(&quot;org.apache.hudi&quot;).
         </author>
     </entry>
     <entry>
+        <title type="html"><![CDATA[Can Big Data Solutions Be Affordable?]]></title>
+        <id>/2020/11/29/Can-Big-Data-Solutions-Be-Affordable</id>
+        <link href="https://hudi.apache.org/blog/2020/11/29/Can-Big-Data-Solutions-Be-Affordable"/>
+        <updated>2020-11-29T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://www.analyticsinsight.net/can-big-data-solutions-be-affordable/">Redirecting... please wait!! </div>]]></content>
+    </entry>
+    <entry>
         <title type="html"><![CDATA[Employing the right indexes for fast updates, deletes in Apache Hudi]]></title>
         <id>/2020/11/11/hudi-indexing-mechanisms</id>
         <link href="https://hudi.apache.org/blog/2020/11/11/hudi-indexing-mechanisms"/>
@@ -911,6 +1330,28 @@ Please <a href="/contribute/get-involved">engage</a> with our community if you w
         </author>
     </entry>
     <entry>
+        <title type="html"><![CDATA[Architecting Data Lakes for the Modern Enterprise at Data Summit Connect Fall 2020]]></title>
+        <id>/2020/10/21/Architecting-Data-Lakes-for-the-Modern-Enterprise-at-Data-Summit-Connect-Fall-2020</id>
+        <link href="https://hudi.apache.org/blog/2020/10/21/Architecting-Data-Lakes-for-the-Modern-Enterprise-at-Data-Summit-Connect-Fall-2020"/>
+        <updated>2020-10-21T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://www.dbta.com/Editorial/News-Flashes/Architecting-Data-Lakes-for-the-Modern-Enterprise-at-Data-Summit-Connect-Fall-2020-143512.aspx">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Stephanie Simone</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Data Lake Change Capture using Apache Hudi & Amazon AMS/EMR]]></title>
+        <id>/2020/10/21/Data-Lake-Change-Capture-using-Apache-Hudi-and-Amazon-AMS-EMR</id>
+        <link href="https://hudi.apache.org/blog/2020/10/21/Data-Lake-Change-Capture-using-Apache-Hudi-and-Amazon-AMS-EMR"/>
+        <updated>2020-10-21T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://towardsdatascience.com/data-lake-change-data-capture-cdc-using-apache-hudi-on-amazon-emr-part-2-process-65e4662d7b4b">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Manoj Kukreja</name>
+        </author>
+    </entry>
+    <entry>
         <title type="html"><![CDATA[Apply record level changes from relational databases to Amazon S3 data lake using Apache Hudi on Amazon EMR and AWS Database Migration Service]]></title>
         <id>/2020/10/19/hudi-meets-aws-emr-and-aws-dms</id>
         <link href="https://hudi.apache.org/blog/2020/10/19/hudi-meets-aws-emr-and-aws-dms"/>
@@ -919,6 +1360,17 @@ Please <a href="/contribute/get-involved">engage</a> with our community if you w
         <content type="html"><![CDATA[<p>This <a href="https://aws.amazon.com/blogs/big-data/apply-record-level-changes-from-relational-databases-to-amazon-s3-data-lake-using-apache-hudi-on-amazon-emr-and-aws-database-migration-service/">blog</a> published by AWS shows how to build a CDC pipeline that captures data from an Amazon Relational Database Service (Amazon RDS) for MySQL database using AWS Database Migration Service (AWS DMS) and applies those changes to a dataset in Amazon S3 using Apache Hudi on Amazon EMR.</p>]]></content>
         <author>
             <name>aws</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Origins of Data Lake at Grofers]]></title>
+        <id>/2020/10/19/Origins-of-Data-Lake-at-Grofers</id>
+        <link href="https://hudi.apache.org/blog/2020/10/19/Origins-of-Data-Lake-at-Grofers"/>
+        <updated>2020-10-19T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://lambda.grofers.com/origins-of-data-lake-at-grofers-6c011f94b86c">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Akshay Agarwal</name>
         </author>
     </entry>
     <entry>
@@ -1336,6 +1788,50 @@ aspects: incremental processing of semantics of natural fit flow, the need for a
         </author>
     </entry>
     <entry>
+        <title type="html"><![CDATA[PrestoDB and Apache Hudi]]></title>
+        <id>/2020/08/04/PrestoDB-and-Apache-Hudi</id>
+        <link href="https://hudi.apache.org/blog/2020/08/04/PrestoDB-and-Apache-Hudi"/>
+        <updated>2020-08-04T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://prestodb.io/blog/2020/08/04/prestodb-and-hudi">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Bhavani Sudha Saktheeswaran</name>
+        </author>
+        <author>
+            <name>Brandon Scheller</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Apache Hudi grows cloud data lake maturity]]></title>
+        <id>/2020/06/16/Apache-Hudi-grows-cloud-data-lake-maturity</id>
+        <link href="https://hudi.apache.org/blog/2020/06/16/Apache-Hudi-grows-cloud-data-lake-maturity"/>
+        <updated>2020-06-16T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://searchdatamanagement.techtarget.com/news/252484740/Apache-Hudi-grows-cloud-data-lake-maturity">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Sean Michael Kerner</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Building a Large-scale Transactional Data Lake at Uber Using Apache Hudi]]></title>
+        <id>/2020/06/09/Building-a-Large-scale-Transactional-Data-Lake-at-Uber-Using-Apache-Hudi</id>
+        <link href="https://hudi.apache.org/blog/2020/06/09/Building-a-Large-scale-Transactional-Data-Lake-at-Uber-Using-Apache-Hudi"/>
+        <updated>2020-06-09T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://eng.uber.com/apache-hudi-graduation/">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Nishith Agarwal</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[The Apache Software Foundation Announces Apache® Hudi™ as a Top-Level Project]]></title>
+        <id>/2020/06/04/The-Apache-Software-Foundation-Announces-Apache-Hudi-as-a-Top-Level-Project</id>
+        <link href="https://hudi.apache.org/blog/2020/06/04/The-Apache-Software-Foundation-Announces-Apache-Hudi-as-a-Top-Level-Project"/>
+        <updated>2020-06-04T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://blogs.apache.org/foundation/entry/the-apache-software-foundation-announces64">Redirecting... please wait!! </div>]]></content>
+    </entry>
+    <entry>
         <title type="html"><![CDATA[Monitor Hudi metrics with Datadog]]></title>
         <id>/2020/05/28/monitoring-hudi-metrics-with-datadog</id>
         <link href="https://hudi.apache.org/blog/2020/05/28/monitoring-hudi-metrics-with-datadog"/>
@@ -1643,6 +2139,28 @@ spark.sql(&quot;select uuid, partitionPath from hudi_ro_table where rider = &#x2
         </author>
     </entry>
     <entry>
+        <title type="html"><![CDATA[New – Insert, Update, Delete Data on S3 with Amazon EMR and Apache Hudi]]></title>
+        <id>/2019/11/15/New-Insert-Update-Delete-Data-on-S3-with-Amazon-EMR-and-Apache-Hudi</id>
+        <link href="https://hudi.apache.org/blog/2019/11/15/New-Insert-Update-Delete-Data-on-S3-with-Amazon-EMR-and-Apache-Hudi"/>
+        <updated>2019-11-15T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://aws.amazon.com/blogs/aws/new-insert-update-delete-data-on-s3-with-amazon-emr-and-apache-hudi/">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Danilo Poccia</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Hudi On Hops]]></title>
+        <id>/2019/10/22/Hudi-On-Hops</id>
+        <link href="https://hudi.apache.org/blog/2019/10/22/Hudi-On-Hops"/>
+        <updated>2019-10-22T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://www.diva-portal.org/smash/get/diva2:1413103/FULLTEXT01.pdf">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>NETSANET GEBRETSADKAN KIDANE</name>
+        </author>
+    </entry>
+    <entry>
         <title type="html"><![CDATA[Ingesting Database changes via Sqoop/Hudi]]></title>
         <id>/2019/09/09/ingesting-database-changes</id>
         <link href="https://hudi.apache.org/blog/2019/09/09/ingesting-database-changes"/>
@@ -1770,6 +2288,20 @@ ALTER TABLE `hoodie_rt` ADD IF NOT EXISTS PARTITION (datestr=&#x27;2015-03-17&#x
         </author>
     </entry>
     <entry>
+        <title type="html"><![CDATA[Hoodie: Uber Engineering's Incremental Processing Framework on Hadoop]]></title>
+        <id>/2017/03/12/Hoodie-Uber-Engineerings-Incremental-Processing-Framework-on-Hadoop</id>
+        <link href="https://hudi.apache.org/blog/2017/03/12/Hoodie-Uber-Engineerings-Incremental-Processing-Framework-on-Hadoop"/>
+        <updated>2017-03-12T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://eng.uber.com/hoodie/">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Prasanna Rajaperumal</name>
+        </author>
+        <author>
+            <name>Vinoth Chandar</name>
+        </author>
+    </entry>
+    <entry>
         <title type="html"><![CDATA[Connect with us at Strata San Jose March 2017]]></title>
         <id>/2016/12/30/strata-talk-2017</id>
         <link href="https://hudi.apache.org/blog/2016/12/30/strata-talk-2017"/>
@@ -1779,6 +2311,17 @@ ALTER TABLE `hoodie_rt` ADD IF NOT EXISTS PARTITION (datestr=&#x27;2015-03-17&#x
 Catch our talk <strong>&quot;Incremental Processing on Hadoop At Uber&quot;</strong></p>]]></content>
         <author>
             <name>admin</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[The Case for incremental processing on Hadoop]]></title>
+        <id>/2016/08/04/The-Case-for-incremental-processing-on-Hadoop</id>
+        <link href="https://hudi.apache.org/blog/2016/08/04/The-Case-for-incremental-processing-on-Hadoop"/>
+        <updated>2016-08-04T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://www.oreilly.com/ideas/ubers-case-for-incremental-processing-on-hadoop">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Vinoth Chandar</name>
         </author>
     </entry>
 </feed>

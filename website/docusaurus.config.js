@@ -98,11 +98,11 @@ module.exports = {
           },
           {
             from: ['/docs/releases', '/docs/next/releases'],
-            to: '/releases/release-0.10.1',
+            to: '/releases/release-0.11.0',
           },
           {
             from: ['/releases'],
-            to: '/releases/release-0.10.1',
+            to: '/releases/release-0.11.0',
           },
           {
             from: ['/docs/learn'],
@@ -133,12 +133,8 @@ module.exports = {
           position: 'left',
           items: [
             {
-              label: 'Blog',
-              to: '/blog',
-            },
-            {
-              label: 'Talks & Articles',
-              to: 'talks-articles',
+              label: 'Talks',
+              to: 'talks',
             },
             {
               label: 'FAQ',
@@ -194,6 +190,7 @@ module.exports = {
             }
           ],
         },
+        {to: '/blog', label: "Blog", position: 'left'},
         {to: '/powered-by', label: "Who's Using", position: 'left'},
         {to: '/roadmap', label: "Roadmap", position: 'left'},
         {to: '/releases/download', label: 'Download', position: 'left'},
@@ -255,7 +252,7 @@ module.exports = {
             },
             {
               label: 'Releases',
-              to: '/releases/release-0.10.1',
+              to: '/releases/release-0.11.0',
             },
             {
               label: 'Download',
@@ -283,8 +280,8 @@ module.exports = {
               to: '/blog',
             },
             {
-              label: 'Talks & Articles',
-              to: 'talks-articles',
+              label: 'Talks',
+              to: 'talks',
             },
             {
               label: 'FAQ',
@@ -423,8 +420,8 @@ module.exports = {
               path: 'next',
               banner: 'unreleased',
             },
-            '0.10.1': {
-              label: '0.10.1',
+            '0.11.0': {
+              label: '0.11.0',
               path: '',
             }
           },
