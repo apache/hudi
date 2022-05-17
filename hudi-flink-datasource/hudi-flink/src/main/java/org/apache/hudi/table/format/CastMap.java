@@ -34,10 +34,12 @@ import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
 import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 import org.apache.hudi.util.AvroSchemaConverter;
 
+import java.io.Serializable;
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -48,12 +50,11 @@ import static org.apache.flink.table.types.logical.LogicalTypeRoot.DOUBLE;
 import static org.apache.flink.table.types.logical.LogicalTypeRoot.FLOAT;
 import static org.apache.flink.table.types.logical.LogicalTypeRoot.INTEGER;
 import static org.apache.flink.table.types.logical.LogicalTypeRoot.VARCHAR;
-import static org.apache.hudi.common.model.HoodieRecord.HOODIE_META_COLUMNS;
 
 /**
  * CastMap is responsible for type conversion when full schema evolution enabled.
  */
-public final class CastMap {
+public final class CastMap implements Serializable {
   // Maps position (column number) to corresponding cast
   private final Map<Integer, Cast> castMap = new HashMap<>();
 
@@ -63,17 +64,15 @@ public final class CastMap {
   public static CastMap of(String tableName, InternalSchema querySchema, InternalSchema actualSchema) {
     DataType queryType = internalSchemaToDataType(tableName, querySchema);
     DataType actualType = internalSchemaToDataType(tableName, actualSchema);
-    int metaColumnsSize = HOODIE_META_COLUMNS.size();
     CastMap castMap = new CastMap();
     InternalSchemaUtils.collectTypeChangedCols(querySchema, actualSchema).entrySet()
             .stream()
-            .filter(e -> e.getKey() >= metaColumnsSize)
             .filter(e -> !isSameType(e.getValue().getLeft(), e.getValue().getRight()))
             .forEach(e -> {
               int pos = e.getKey();
               LogicalType target = queryType.getChildren().get(pos).getLogicalType();
               LogicalType actual = actualType.getChildren().get(pos).getLogicalType();
-              castMap.add(pos - metaColumnsSize, actual, target);
+              castMap.add(pos, actual, target);
             });
     return castMap;
   }
@@ -169,17 +168,17 @@ public final class CastMap {
     return val;
   }
 
-  public boolean containsAnyPos(int... positions) {
-    return Arrays.stream(positions).anyMatch(castMap.keySet()::contains);
+  public boolean containsAnyPos(Collection<Integer> positions) {
+    return positions.stream().anyMatch(castMap.keySet()::contains);
   }
 
-  public CastMap rearrange(int[] oldIndexes, int[] newIndexes) {
-    Preconditions.checkArgument(oldIndexes.length == newIndexes.length);
+  public CastMap rearrange(List<Integer> oldIndexes, List<Integer> newIndexes) {
+    Preconditions.checkArgument(oldIndexes.size() == newIndexes.size());
     CastMap newCastMap = new CastMap();
-    for (int i = 0; i < oldIndexes.length; i++) {
-      Cast cast = castMap.get(oldIndexes[i]);
+    for (int i = 0; i < oldIndexes.size(); i++) {
+      Cast cast = castMap.get(oldIndexes.get(i));
       if (cast != null) {
-        newCastMap.add(newIndexes[i], cast.from(), cast.to());
+        newCastMap.add(newIndexes.get(i), cast.from(), cast.to());
       }
     }
     return newCastMap;
@@ -214,7 +213,7 @@ public final class CastMap {
     return AvroSchemaConverter.convertToDataType(schema);
   }
 
-  private static final class Cast {
+  private static final class Cast implements Serializable {
     private final LogicalType from;
     private final LogicalType to;
 

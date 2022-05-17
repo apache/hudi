@@ -19,7 +19,6 @@
 package org.apache.hudi.util;
 
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.table.format.CastMap;
 
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
@@ -35,12 +34,10 @@ public class RowDataProjection implements Serializable {
   private static final long serialVersionUID = 1L;
 
   private final RowData.FieldGetter[] fieldGetters;
-  private final CastMap castMap;
 
-  private RowDataProjection(LogicalType[] types, int[] positions, CastMap castMap) {
+  protected RowDataProjection(LogicalType[] types, int[] positions) {
     ValidationUtils.checkArgument(types.length == positions.length,
         "types and positions should have the equal number");
-    this.castMap = castMap;
     this.fieldGetters = new RowData.FieldGetter[types.length];
     for (int i = 0; i < types.length; i++) {
       final LogicalType type = types[i];
@@ -50,16 +47,12 @@ public class RowDataProjection implements Serializable {
   }
 
   public static RowDataProjection instance(RowType rowType, int[] positions) {
-    return instance(rowType, positions, null);
-  }
-
-  public static RowDataProjection instance(RowType rowType, int[] positions, CastMap castMap) {
     final LogicalType[] types = rowType.getChildren().toArray(new LogicalType[0]);
-    return new RowDataProjection(types, positions, castMap);
+    return new RowDataProjection(types, positions);
   }
 
   public static RowDataProjection instance(LogicalType[] types, int[] positions) {
-    return new RowDataProjection(types, positions, null);
+    return new RowDataProjection(types, positions);
   }
 
   /**
@@ -68,10 +61,7 @@ public class RowDataProjection implements Serializable {
   public RowData project(RowData rowData) {
     GenericRowData genericRowData = new GenericRowData(this.fieldGetters.length);
     for (int i = 0; i < this.fieldGetters.length; i++) {
-      Object val = this.fieldGetters[i].getFieldOrNull(rowData);
-      if (castMap != null && val != null) {
-        val = castMap.castIfNeed(i, val);
-      }
+      final Object val = this.fieldGetters[i].getFieldOrNull(rowData);
       genericRowData.setField(i, val);
     }
     return genericRowData;
@@ -87,5 +77,9 @@ public class RowDataProjection implements Serializable {
       values[i] = val;
     }
     return values;
+  }
+
+  protected RowData.FieldGetter[] fieldGetters() {
+    return fieldGetters;
   }
 }

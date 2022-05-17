@@ -453,15 +453,15 @@ public class HoodieTableSource implements
     return HoodieAvroUtils.addMetadataFields(schema, conf.getBoolean(FlinkOptions.CHANGELOG_ENABLED));
   }
 
-  private SchemaEvoContext getSchemaEvoContext() {
-    if (!conf.getBoolean(FlinkOptions.SCHEMA_EVOLUTION_ENABLED)) {
-      return new SchemaEvoContext(false, null, null);
+  private Option<SchemaEvoContext> getSchemaEvoContext() {
+    if (!conf.getBoolean(FlinkOptions.SCHEMA_EVOLUTION_ENABLED) || metaClient == null) {
+      return Option.empty();
     }
     TreeMap<Long, InternalSchema> schemas = InternalSchemaCache.getHistoricalSchemas(metaClient);
     InternalSchema querySchema = schemas.isEmpty()
         ? AvroInternalSchemaConverter.convert(getTableAvroSchema())
         : schemas.lastEntry().getValue();
-    return new SchemaEvoContext(true, querySchema, metaClient);
+    return Option.of(new SchemaEvoContext(querySchema, metaClient));
   }
 
   @VisibleForTesting
