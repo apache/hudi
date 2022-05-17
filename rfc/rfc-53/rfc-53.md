@@ -42,7 +42,8 @@ Currently, hoodie uses `LinkedBlockingQueue` as a inner message queue between Pr
 However, this lock model may become the bottleneck of application throughput when data volume is much larger. 
 What's worse is that even if we increase the number of the executors, it is still difficult to improve the throughput.
 
-In other words, users may encounter throughput bottlenecks when writing data into hudi in some scenarios, and increasing the physical hardware scale and parameter tuning cannot solve this problem.
+In other words, users may encounter throughput bottlenecks when writing data into hudi in some scenarios, 
+for example the schema is relatively simple, but the volume of data is pretty large or users observed insufficient data throughput and low cpu usage, etc.
 
 This RFC is to solve the performance bottleneck problem caused by locking in some large data volume scenarios
 
@@ -89,7 +90,8 @@ The Disruptor is a library that provides a concurrent ring buffer data structure
 
 We use the Disruptor multi-producer single-consumer working model:
 - Define `DisruptorPublisher` to register producers into Disruptor and control the produce behaviors including life cycle.
-- Define `DisruptorMessageHandler` to register consumers into Disruptor and write consumption data from disruptor to hudi data file
+- Define `DisruptorMessageHandler` to register consumers into Disruptor and write consumption data from disruptor to hudi data file. 
+For example we will clear clear out the event after processing it to avoid to avoid unnecessary memory and GC pressure
 - Define `HoodieDisruptorEvent` as the carrier of the hoodie message
 - Define `HoodieDisruptorEventFactory`: Pre-populate all the hoodie events to fill the RingBuffer. 
 We can use `HoodieDisruptorEventFactory` to create `HoodieDisruptorEvent` storing the data for sharing during exchange or parallel coordination of an event.
@@ -100,11 +102,43 @@ Finally, let me introduce the new parameters:
   Default value is `BOUNDED_IN_MEMORY_EXECUTOR` which used a bounded in-memory queue `LinkedBlockingQueue`. 
   Also users could use `DISRUPTOR_EXECUTOR`, which use disruptor as a lock free message queue to gain better writing performance. 
   Although `DISRUPTOR_EXECUTOR` is still an experimental feature.
-  - `hoodie.write.buffer.size`: The size of the Disruptor Executor ring buffer, must be power of 2.
-  - `hoodie.write.wait.strategy`: Strategy employed for making DisruptorExecutor wait for a cursor.
+  - `hoodie.write.buffer.size`: The size of the Disruptor Executor ring buffer, must be power of 2. Also the default/recommended value is 1024.
+  - `hoodie.write.wait.strategy`: Used for disruptor wait strategy. The Wait Strategy determines how a consumer will wait for events to be placed into the Disruptor by a producer. 
+  More details are available in followed table about being optionally lock-free.
+  
+  Alternative Wait Strategies
+  
+  The default WaitStrategy used by the Disruptor is the `BlockingWaitStrategy`. Internally the `BlockingWaitStrategy` uses a typical lock and condition variable to handle thread wake-up. 
+  The BlockingWaitStrategy is the slowest of the available wait strategies, but is the most conservative with the respect to CPU usage and will give the most consistent behaviour across the widest variety of deployment options.
+  
+  Knowledge of the deployed system can allow for additional performance by choosing a more appropriate wait strategy:
+  
+  `SleepingWaitStrategy`:
+  
+  Like the `BlockingWaitStrategy` the `SleepingWaitStrategy` it attempts to be conservative with CPU usage by using a simple busy wait loop. 
+  The difference is that the `SleepingWaitStrategy` uses a call to `LockSupport.parkNanos(1)` in the middle of the loop. On a typical Linux system this will pause the thread for around 60µs.
+  
+  This has the benefits that the producing thread does not need to take any action other increment the appropriate counter and that it does not require the cost of signalling a condition variable. 
+  However, the mean latency of moving the event between the producer and consumer threads will be higher.
+  
+  It works best in situations where low latency is not required, but a low impact on the producing thread is desired. A common use case is for asynchronous logging.
+  
+  `YieldingWaitStrategy`
+  
+  The `YieldingWaitStrategy` is one of two WaitStrategies that can be use in low-latency systems. It is designed for cases where there is the option to burn CPU cycles with the goal of improving latency.
+  
+  The `YieldingWaitStrategy` will busy spin, waiting for the sequence to increment to the appropriate value. Inside the body of the loop `Thread#yield()` will be called allowing other queued threads to run.
+  
+  This is the recommended wait strategy when you need very high performance, and the number of `EventHandler` threads is lower than the total number of logical cores, e.g. you have hyper-threading enabled.
+  
+  `BusySpinWaitStrategy`
+  
+  The `BusySpinWaitStrategy` is the highest performing WaitStrategy. Like the `YieldingWaitStrategy`, it can be used in low-latency systems, but puts the highest constraints on the deployment environment.
+  
+  This wait strategy should only be used if the number of `EventHandler` threads is lower than the number of physical cores on the box, e.g. hyper-threading should be disabled.
 
 4. limitation
-  For now, this disruptor executor is only supported for spark insert and spark bulk insert operation. Other operations like spark upsert is still on going.
+  For now, this disruptor executor is only supported for spark insert and spark bulk insert operation. Other operations like spark upsert, flink related is still on going.
 
 
 ## Rollout/Adoption Plan
