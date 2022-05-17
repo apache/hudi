@@ -10,7 +10,7 @@ As of Hudi v0.10.0, we are excited to introduce support for an advanced Data Lay
 
 <!--truncate-->
 
-# Background
+## Background
 
 Amazon EMR team recently published a [great article](https://aws.amazon.com/blogs/big-data/new-features-from-apache-hudi-0-7-0-and-0-8-0-available-on-amazon-emr/) show-casing how [clustering](https://hudi.apache.org/docs/clustering) your data can improve your _query performance_.
 
