@@ -43,6 +43,7 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -554,7 +555,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
 
       // trigger clean. creating a new client with aggresive cleaner configs so that clean will kick in immediately.
       cfgBuilder = getConfigBuilder(false)
-          .withCompactionConfig(HoodieCompactionConfig.newBuilder().retainCommits(1).build())
+          .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(1).build())
           // Timeline-server-based markers are not used for multi-rollback tests
           .withMarkersType(MarkerType.DIRECT.name());
       addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
@@ -975,10 +976,13 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
 
   private HoodieWriteConfig getWriteConfig(boolean autoCommit, boolean rollbackUsingMarkers) {
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(autoCommit).withRollbackUsingMarkers(rollbackUsingMarkers)
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .withAutoClean(false)
+            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
+            .build())
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024 * 1024L)
             .withInlineCompaction(false).withMaxNumDeltaCommitsBeforeCompaction(3)
-            .withAutoClean(false)
-            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY).build());
+            .build());
     return cfgBuilder.build();
   }
 

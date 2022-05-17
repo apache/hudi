@@ -783,12 +783,12 @@ public class DeltaSync implements Serializable {
             .combineInput(cfg.filterDupes, combineBeforeUpsert)
             .withCompactionConfig(
                 HoodieCompactionConfig.newBuilder()
-                    .withPayloadClass(cfg.payloadClassName)
                     .withInlineCompaction(cfg.isInlineCompactionEnabled())
                     .build()
             )
             .withPayloadConfig(
                 HoodiePayloadConfig.newBuilder()
+                    .withPayloadClass(cfg.payloadClassName)
                     .withPayloadOrderingField(cfg.sourceOrderingField)
                     .build())
             .forTable(cfg.targetTableName)

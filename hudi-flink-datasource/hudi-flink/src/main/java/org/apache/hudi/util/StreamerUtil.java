@@ -37,11 +37,13 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.config.HoodieArchivalConfig;
+import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
-import org.apache.hudi.config.HoodieMemoryConfig;
-import org.apache.hudi.config.HoodiePayloadConfig;
-import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.config.HoodieMemoryConfig;
+import org.apache.hudi.config.HoodieStorageConfig;
+import org.apache.hudi.config.HoodiePayloadConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.configuration.OptionsResolver;
@@ -162,29 +164,30 @@ public class StreamerUtil {
             .withPath(conf.getString(FlinkOptions.PATH))
             .combineInput(conf.getBoolean(FlinkOptions.PRE_COMBINE), true)
             .withMergeAllowDuplicateOnInserts(OptionsResolver.insertClustering(conf))
-            .withCompactionConfig(
-                HoodieCompactionConfig.newBuilder()
-                    .withPayloadClass(conf.getString(FlinkOptions.PAYLOAD_CLASS_NAME))
-                    .withTargetIOPerCompactionInMB(conf.getLong(FlinkOptions.COMPACTION_TARGET_IO))
-                    .withInlineCompactionTriggerStrategy(
-                        CompactionTriggerStrategy.valueOf(conf.getString(FlinkOptions.COMPACTION_TRIGGER_STRATEGY).toUpperCase(Locale.ROOT)))
-                    .withMaxNumDeltaCommitsBeforeCompaction(conf.getInteger(FlinkOptions.COMPACTION_DELTA_COMMITS))
-                    .withMaxDeltaSecondsBeforeCompaction(conf.getInteger(FlinkOptions.COMPACTION_DELTA_SECONDS))
-                    .withAsyncClean(conf.getBoolean(FlinkOptions.CLEAN_ASYNC_ENABLED))
-                    .retainCommits(conf.getInteger(FlinkOptions.CLEAN_RETAIN_COMMITS))
-                    .retainFileVersions(conf.getInteger(FlinkOptions.CLEAN_RETAIN_FILE_VERSIONS))
-                    // override and hardcode to 20,
-                    // actually Flink cleaning is always with parallelism 1 now
-                    .withCleanerParallelism(20)
-                    .archiveCommitsWith(conf.getInteger(FlinkOptions.ARCHIVE_MIN_COMMITS), conf.getInteger(FlinkOptions.ARCHIVE_MAX_COMMITS))
-                    .withCleanerPolicy(HoodieCleaningPolicy.valueOf(conf.getString(FlinkOptions.CLEAN_POLICY)))
-                    .build())
-            .withMemoryConfig(
-                HoodieMemoryConfig.newBuilder()
-                    .withMaxMemoryMaxSize(
-                        conf.getInteger(FlinkOptions.WRITE_MERGE_MAX_MEMORY) * 1024 * 1024L,
-                        conf.getInteger(FlinkOptions.COMPACTION_MAX_MEMORY) * 1024 * 1024L
-                    ).build())
+            .withCleanConfig(HoodieCleanConfig.newBuilder()
+                .withAsyncClean(conf.getBoolean(FlinkOptions.CLEAN_ASYNC_ENABLED))
+                .retainCommits(conf.getInteger(FlinkOptions.CLEAN_RETAIN_COMMITS))
+                .retainFileVersions(conf.getInteger(FlinkOptions.CLEAN_RETAIN_FILE_VERSIONS))
+                // override and hardcode to 20,
+                // actually Flink cleaning is always with parallelism 1 now
+                .withCleanerParallelism(20)
+                .withCleanerPolicy(HoodieCleaningPolicy.valueOf(conf.getString(FlinkOptions.CLEAN_POLICY)))
+                .build())
+            .withArchivalConfig(HoodieArchivalConfig.newBuilder()
+                .archiveCommitsWith(conf.getInteger(FlinkOptions.ARCHIVE_MIN_COMMITS), conf.getInteger(FlinkOptions.ARCHIVE_MAX_COMMITS))
+                .build())
+            .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+                .withTargetIOPerCompactionInMB(conf.getLong(FlinkOptions.COMPACTION_TARGET_IO))
+                .withInlineCompactionTriggerStrategy(
+                    CompactionTriggerStrategy.valueOf(conf.getString(FlinkOptions.COMPACTION_TRIGGER_STRATEGY).toUpperCase(Locale.ROOT)))
+                .withMaxNumDeltaCommitsBeforeCompaction(conf.getInteger(FlinkOptions.COMPACTION_DELTA_COMMITS))
+                .withMaxDeltaSecondsBeforeCompaction(conf.getInteger(FlinkOptions.COMPACTION_DELTA_SECONDS))
+                .build())
+            .withMemoryConfig(HoodieMemoryConfig.newBuilder()
+                .withMaxMemoryMaxSize(
+                    conf.getInteger(FlinkOptions.WRITE_MERGE_MAX_MEMORY) * 1024 * 1024L,
+                    conf.getInteger(FlinkOptions.COMPACTION_MAX_MEMORY) * 1024 * 1024L
+                ).build())
             .forTable(conf.getString(FlinkOptions.TABLE_NAME))
             .withStorageConfig(HoodieStorageConfig.newBuilder()
                 .logFileDataBlockMaxSize(conf.getInteger(FlinkOptions.WRITE_LOG_BLOCK_SIZE) * 1024 * 1024)
@@ -200,6 +203,7 @@ public class StreamerUtil {
             .withPayloadConfig(HoodiePayloadConfig.newBuilder()
                 .withPayloadOrderingField(conf.getString(FlinkOptions.PRECOMBINE_FIELD))
                 .withPayloadEventTimeField(conf.getString(FlinkOptions.PRECOMBINE_FIELD))
+                .withPayloadClass(conf.getString(FlinkOptions.PAYLOAD_CLASS_NAME))
                 .build())
             .withEmbeddedTimelineServerEnabled(enableEmbeddedTimelineService)
             .withEmbeddedTimelineServerReuseEnabled(true) // make write client embedded timeline service singleton
