@@ -17,6 +17,9 @@
 
 package org.apache.spark.sql.hudi
 
+import org.apache.spark.sql.catalyst.TableIdentifier
+import org.apache.spark.sql.catalyst.catalog.SessionCatalog
+
 class TestDropTable extends HoodieSparkSqlTestBase {
 
   test("Test Drop Table") {
@@ -71,5 +74,168 @@ class TestDropTable extends HoodieSparkSqlTestBase {
         assertResult(false)(existsPath(s"${tmp.getCanonicalPath}/$tableName"))
       }
     }
+  }
+
+  test("Test Drop RO & RT table by purging base table.") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  ts long
+           |) using hudi
+           | location '${tmp.getCanonicalPath}/$tableName'
+           | tblproperties (
+           |  type = 'mor',
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts'
+           | )
+       """.stripMargin)
+
+      spark.sql(
+        s"""
+           |create table ${tableName}_ro using hudi
+           | location '${tmp.getCanonicalPath}/$tableName'
+           | tblproperties (
+           |  type = 'mor',
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts'
+           | )
+       """.stripMargin)
+      alterSerdeProperties(spark.sessionState.catalog, TableIdentifier(s"${tableName}_ro"),
+        Map("hoodie.query.as.ro.table" -> "true"))
+
+      spark.sql(
+        s"""
+           |create table ${tableName}_rt using hudi
+           | location '${tmp.getCanonicalPath}/$tableName'
+           | tblproperties (
+           |  type = 'mor',
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts'
+           | )
+       """.stripMargin)
+      alterSerdeProperties(spark.sessionState.catalog, TableIdentifier(s"${tableName}_rt"),
+        Map("hoodie.query.as.ro.table" -> "false"))
+
+      spark.sql(s"drop table ${tableName} purge")
+      checkAnswer("show tables")()
+    }
+  }
+
+  test("Test Drop RO & RT table by one by one.") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  ts long
+           |) using hudi
+           | location '${tmp.getCanonicalPath}/$tableName'
+           | tblproperties (
+           |  type = 'mor',
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts'
+           | )
+       """.stripMargin)
+
+      spark.sql(
+        s"""
+           |create table ${tableName}_ro using hudi
+           | location '${tmp.getCanonicalPath}/$tableName'
+           | tblproperties (
+           |  type = 'mor',
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts'
+           | )
+       """.stripMargin)
+      alterSerdeProperties(spark.sessionState.catalog, TableIdentifier(s"${tableName}_ro"),
+        Map("hoodie.query.as.ro.table" -> "true"))
+
+      spark.sql(
+        s"""
+           |create table ${tableName}_rt using hudi
+           | location '${tmp.getCanonicalPath}/$tableName'
+           | tblproperties (
+           |  type = 'mor',
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts'
+           | )
+       """.stripMargin)
+      alterSerdeProperties(spark.sessionState.catalog, TableIdentifier(s"${tableName}_rt"),
+        Map("hoodie.query.as.ro.table" -> "false"))
+
+      spark.sql(s"drop table ${tableName}_ro")
+      checkAnswer("show tables")(
+        Seq("default", tableName, false), Seq("default", s"${tableName}_rt", false))
+
+      spark.sql(s"drop table ${tableName}_rt")
+      checkAnswer("show tables")(Seq("default", tableName, false))
+
+      spark.sql(s"drop table ${tableName}")
+      checkAnswer("show tables")()
+    }
+  }
+
+  test("Test Drop RO table with purge") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  ts long
+           |) using hudi
+           | location '${tmp.getCanonicalPath}/$tableName'
+           | tblproperties (
+           |  type = 'mor',
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts'
+           | )
+       """.stripMargin)
+
+      spark.sql(
+        s"""
+           |create table ${tableName}_ro using hudi
+           | location '${tmp.getCanonicalPath}/$tableName'
+           | tblproperties (
+           |  type = 'mor',
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts'
+           | )
+       """.stripMargin)
+      alterSerdeProperties(spark.sessionState.catalog, TableIdentifier(s"${tableName}_ro"),
+        Map("hoodie.query.as.ro.table" -> "true"))
+
+      spark.sql(
+        s"""
+           |create table ${tableName}_rt using hudi
+           | location '${tmp.getCanonicalPath}/$tableName'
+           | tblproperties (
+           |  type = 'mor',
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts'
+           | )
+       """.stripMargin)
+      alterSerdeProperties(spark.sessionState.catalog, TableIdentifier(s"${tableName}_rt"),
+        Map("hoodie.query.as.ro.table" -> "false"))
+
+      spark.sql(s"drop table ${tableName}_ro purge")
+      checkAnswer("show tables")()
+    }
+  }
+
+  private def alterSerdeProperties(sessionCatalog: SessionCatalog, tableIdt: TableIdentifier,
+    newProperties: Map[String, String]): Unit = {
+    val catalogTable = spark.sessionState.catalog.getTableMetadata(tableIdt)
+    val storage = catalogTable.storage
+    val storageProperties = storage.properties ++ newProperties
+    val newCatalogTable = catalogTable.copy(storage = storage.copy(properties = storageProperties))
+    sessionCatalog.alterTable(newCatalogTable)
   }
 }
