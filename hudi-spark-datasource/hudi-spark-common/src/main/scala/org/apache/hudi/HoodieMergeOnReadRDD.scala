@@ -28,8 +28,9 @@ import org.apache.hudi.HoodieMergeOnReadRDD.{AvroDeserializerSupport, collectFie
 import org.apache.hudi.common.engine.HoodieLocalEngineContext
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath
-import org.apache.hudi.common.model.{HoodieLogFile, HoodieRecord, HoodieRecordPayload, OverwriteWithLatestAvroPayload}
+import org.apache.hudi.common.model.{HoodieAvroIndexedRecord, HoodieAvroRecord, HoodieLogFile, HoodieRecord, HoodieRecordPayload, OverwriteWithLatestAvroPayload}
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner
+import org.apache.hudi.common.util.ReflectionUtils
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.HoodiePayloadConfig
 import org.apache.hudi.exception.HoodieException
@@ -260,6 +261,7 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
       baseFileReaderAvroSchema, resolveAvroSchemaNullability(baseFileReaderAvroSchema))
 
     private val recordKeyOrdinal = baseFileReaderSchema.structTypeSchema.fieldIndex(tableState.recordKeyField)
+    private val combiningEngine = ReflectionUtils.loadCombiningEngine(tableState.combiningEngineClass)
 
     override def hasNext: Boolean = hasNextInternal
 
@@ -302,7 +304,13 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
     private def merge(curAvroRecord: GenericRecord, newRecord: HoodieRecord[_ <: HoodieRecordPayload[_]]): Option[IndexedRecord] = {
       // NOTE: We have to pass in Avro Schema used to read from Delta Log file since we invoke combining API
       //       on the record from the Delta Log
-      toScalaOption(newRecord.getData.combineAndGetUpdateValue(curAvroRecord, logFileReaderAvroSchema, payloadProps))
+      // TODO IndexedRecord to HoodieRecord
+      if (combiningEngine.combineAndGetUpdateValue(new HoodieAvroIndexedRecord(curAvroRecord), newRecord, logFileReaderAvroSchema, payloadProps).isPresent) {
+        toScalaOption(combiningEngine.combineAndGetUpdateValue(new HoodieAvroIndexedRecord(curAvroRecord), newRecord, logFileReaderAvroSchema, payloadProps)
+          .get.asInstanceOf[HoodieAvroIndexedRecord].toIndexedRecord)
+      } else {
+        Option.empty
+      }
     }
   }
 }

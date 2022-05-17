@@ -48,7 +48,7 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
   }
 
   public HoodieAvroIndexedRecord(HoodieKey key, IndexedRecord data, HoodieOperation operation) {
-    super(key, data, operation);
+    super(key, data, operation, null);
   }
 
   public HoodieAvroIndexedRecord(HoodieRecord<IndexedRecord> record) {
@@ -65,11 +65,6 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
 
   public Option<IndexedRecord> toIndexedRecord() {
     return Option.of(data);
-  }
-
-  @Override
-  public Comparable<?> getOrderingValue() {
-    throw new UnsupportedOperationException();
   }
 
   @Override
@@ -97,16 +92,6 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
     return Option.ofNullable(data.getSchema().getField(keyFieldName))
         .map(keyField -> data.get(keyField.pos()))
         .map(Object::toString).orElse(null);
-  }
-
-  @Override
-  public HoodieRecord preCombine(HoodieRecord<IndexedRecord> previousRecord) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public Option<HoodieRecord> combineAndGetUpdateValue(HoodieRecord previousRecord, Schema schema, Properties props) throws IOException {
-    return Option.empty();
   }
 
   @Override

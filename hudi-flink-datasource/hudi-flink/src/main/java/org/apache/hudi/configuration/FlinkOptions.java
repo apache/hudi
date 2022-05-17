@@ -22,6 +22,7 @@ import org.apache.hudi.client.clustering.plan.strategy.FlinkRecentDaysClustering
 import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.model.HoodieAvroRecordCombiningEngine;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
@@ -277,6 +278,13 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(OverwriteWithLatestAvroPayload.class.getName())
       .withDescription("Payload class used. Override this, if you like to roll your own merge logic, when upserting/inserting.\n"
           + "This will render any value set for the option in-effective");
+
+  public static final ConfigOption<String> COMBINE_ENGINE_CLASS_NAME = ConfigOptions
+      .key("write.combine.engine.class")
+      .stringType()
+      .defaultValue(HoodieAvroRecordCombiningEngine.class.getName())
+      .withDescription("combine engine will replace the payload to process the merge of data and provide the same \n"
+          + "capabilities as the payload");
 
   /**
    * Flag to indicate whether to drop duplicates before insert/upsert.
