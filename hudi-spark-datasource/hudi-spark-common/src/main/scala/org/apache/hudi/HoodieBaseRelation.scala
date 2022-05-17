@@ -66,7 +66,8 @@ case class HoodieTableState(tablePath: String,
                             preCombineFieldOpt: Option[String],
                             usesVirtualKeys: Boolean,
                             recordPayloadClassName: String,
-                            metadataConfig: HoodieMetadataConfig)
+                            metadataConfig: HoodieMetadataConfig,
+                            combiningEngineClass: String)
 
 /**
  * Hoodie BaseRelation which extends [[PrunedFilteredScan]].
@@ -381,7 +382,8 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
       preCombineFieldOpt = preCombineFieldOpt,
       usesVirtualKeys = !tableConfig.populateMetaFields(),
       recordPayloadClassName = tableConfig.getPayloadClass,
-      metadataConfig = fileIndex.metadataConfig
+      metadataConfig = fileIndex.metadataConfig,
+      combiningEngineClass = tableConfig.getCombiningEngineClass
     )
   }
 

@@ -327,10 +327,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
       // writing the first record. So make a copy of the record to be merged
       HoodieRecord<T> hoodieRecord = keyToNewRecords.get(key).newInstance();
       try {
-        Option<HoodieRecord> combinedRecord =
-            hoodieRecord.combineAndGetUpdateValue(oldRecord,
-                schema,
-                props);
+        Option<HoodieRecord> combinedRecord = combiningEngine.combineAndGetUpdateValue(oldRecord, hoodieRecord, schema, props);
 
         if (combinedRecord.isPresent() && combinedRecord.get().shouldIgnore(schema, props)) {
           // If it is an IGNORE_RECORD, just copy the old record, and do not update the new record.
