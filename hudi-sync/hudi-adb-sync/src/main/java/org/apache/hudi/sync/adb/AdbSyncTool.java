@@ -65,7 +65,6 @@ public class AdbSyncTool extends AbstractSyncTool {
   private final AbstractAdbSyncHoodieClient hoodieAdbClient;
   private final String snapshotTableName;
   private final Option<String> roTableTableName;
-  private static final byte[] LOCK = new byte[1];
 
   public AdbSyncTool(TypedProperties props, Configuration conf, FileSystem fs) {
     super(props, conf, fs);
@@ -93,10 +92,6 @@ public class AdbSyncTool extends AbstractSyncTool {
 
   @Override
   public void syncHoodieTable() {
-    syncHoodieTable(true);
-  }
-
-  public void syncHoodieTable(boolean closeClient) {
     try {
       switch (hoodieAdbClient.getTableType()) {
         case COPY_ON_WRITE:
@@ -117,9 +112,7 @@ public class AdbSyncTool extends AbstractSyncTool {
     } catch (Exception re) {
       throw new HoodieAdbSyncException("Sync hoodie table to ADB failed, tableName:" + adbSyncConfig.tableName, re);
     } finally {
-      if (closeClient) {
-        hoodieAdbClient.close();
-      }
+      hoodieAdbClient.close();
     }
   }
 
@@ -130,7 +123,7 @@ public class AdbSyncTool extends AbstractSyncTool {
 
     if (adbSyncConfig.autoCreateDatabase) {
       try {
-        synchronized (LOCK) {
+        synchronized (AdbSyncTool.class) {
           if (!hoodieAdbClient.databaseExists(adbSyncConfig.databaseName)) {
             hoodieAdbClient.createDatabase(adbSyncConfig.databaseName);
           }
