@@ -2,11 +2,25 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <id>https://hudi.apache.org/blog</id>
     <title>Apache Hudi: User-Facing Analytics</title>
-    <updated>2022-04-04T00:00:00.000Z</updated>
+    <updated>2022-05-17T00:00:00.000Z</updated>
     <generator>https://github.com/jpmonette/feed</generator>
     <link rel="alternate" href="https://hudi.apache.org/blog"/>
     <subtitle>Apache Hudi Blog</subtitle>
     <icon>https://hudi.apache.org/assets/images/favicon.ico</icon>
+    <entry>
+        <title type="html"><![CDATA[Multi-Modal Index for the Lakehouse in Apache Hudi]]></title>
+        <id>/2022/05/17/Introducing-Multi-Modal-Index-for-the-Lakehouse-in-Apache-Hudi</id>
+        <link href="https://hudi.apache.org/blog/2022/05/17/Introducing-Multi-Modal-Index-for-the-Lakehouse-in-Apache-Hudi"/>
+        <updated>2022-05-17T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://www.onehouse.ai/blog/introducing-multi-modal-index-for-the-lakehouse-in-apache-hudi">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Sivabalan Narayanan</name>
+        </author>
+        <author>
+            <name>Ethan Guo</name>
+        </author>
+    </entry>
     <entry>
         <title type="html"><![CDATA[Key Learnings on Using Apache HUDI in building Lakehouse Architecture @ Halodoc]]></title>
         <id>/2022/04/04/Key-Learnings-on-Using-Apache-HUDI-in-building-Lakehouse-Architecture-at-Halodoc</id>

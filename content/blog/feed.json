@@ -5,6 +5,17 @@
     "description": "Apache Hudi Blog",
     "items": [
         {
+            "id": "/2022/05/17/Introducing-Multi-Modal-Index-for-the-Lakehouse-in-Apache-Hudi",
+            "content_html": "<div url=\"https://www.onehouse.ai/blog/introducing-multi-modal-index-for-the-lakehouse-in-apache-hudi\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/blog/2022/05/17/Introducing-Multi-Modal-Index-for-the-Lakehouse-in-Apache-Hudi",
+            "title": "Multi-Modal Index for the Lakehouse in Apache Hudi",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2022-05-17T00:00:00.000Z",
+            "author": {
+                "name": "Sivabalan Narayanan"
+            }
+        },
+        {
             "id": "/2022/04/04/Key-Learnings-on-Using-Apache-HUDI-in-building-Lakehouse-Architecture-at-Halodoc",
             "content_html": "<div url=\"https://blogs.halodoc.io/key-learnings-on-using-apache-hudi-in-building-lakehouse-architecture-halodoc/\">Redirecting... please wait!! </div>",
             "url": "https://hudi.apache.org/blog/2022/04/04/Key-Learnings-on-Using-Apache-HUDI-in-building-Lakehouse-Architecture-at-Halodoc",
