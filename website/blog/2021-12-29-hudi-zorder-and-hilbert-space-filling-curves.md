@@ -10,7 +10,7 @@ As of Hudi v0.10.0, we are excited to introduce support for an advanced Data Lay
 
 <!--truncate-->
 
-## Background
+### Background
 
 Amazon EMR team recently published a [great article](https://aws.amazon.com/blogs/big-data/new-features-from-apache-hudi-0-7-0-and-0-8-0-available-on-amazon-emr/) show-casing how [clustering](https://hudi.apache.org/docs/clustering) your data can improve your _query performance_.
 
@@ -71,7 +71,7 @@ In a similar fashion, Hilbert curves also allow you to map points in a N-dimensi
 
 Now, let's check it out in action!
 
-# Setup
+### Setup
 We will use the [Amazon Reviews](https://s3.amazonaws.com/amazon-reviews-pds/readme.html) dataset again, but this time we will use Hudi to Z-Order by `product_id`, `customer_id` columns tuple instead of Clustering or _linear ordering_.
 
 No special preparations are required for the dataset, you can simply download it from [S3](https://s3.amazonaws.com/amazon-reviews-pds/readme.html) in Parquet format and use it directly as an input for Spark ingesting it into Hudi table.
@@ -150,7 +150,7 @@ df.write.format("hudi")
 
 
 
-# Testing
+### Testing
 Please keep in mind, that each individual test is run in a separate spark-shell to avoid caching getting in the way of our measurements.
 
 ```scala
@@ -300,7 +300,7 @@ scala> runQuery3(dataSkippingSnapshotTableName)
 +-----------+-----------+
 ```
 
-# Results
+### Results
 We've summarized the measured performance metrics below:
 
 | **Query** | **Baseline (B)** duration (files scanned / size) | **Linear Sorting (S)** | **Z-order (Z)** duration (scanned) | **Hilbert (H)** duration (scanned) |
@@ -315,6 +315,6 @@ Which is a very clear contrast with space-filling curves (both Z-order and Hilbe
 
 It's worth noting that the performance gains are heavily dependent on your underlying data and queries. In benchmarks on our internal data we were able to achieve queries performance improvements of more than **11x!**
 
-# Epilogue
+### Epilogue
 
 Apache Hudi v0.10 brings new layout optimization capabilities Z-order and Hilbert to open source. Using these industry leading layout optimization techniques can bring substantial performance improvement and cost savings to your queries!

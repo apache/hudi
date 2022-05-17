@@ -13,13 +13,13 @@ In addition, it ensures data quality by ensuring unique key constraints are enfo
 But one of the repeated asks from the community is to leverage existing fields and not to add additional meta fields, for simple use-cases where such benefits are not desired or key changes are very rare.  
 <!--truncate-->
 
-# Virtual Key support
+## Virtual Key support
 Hudi now supports virtual keys, where Hudi meta fields can be computed on demand from the data fields. Currently, the meta fields are 
 computed once and stored as per record metadata and re-used across various operations. If one does not need incremental query support, 
 they can start leveraging Hudi's Virtual key support and still go about using Hudi to build and manage their data lake to reduce the storage 
 overhead due to per record metadata. 
 
-## Configurations
+### Configurations
 Virtual keys can be enabled for a given table using the below config. When set to `hoodie.populate.meta.fields=false`, 
 Hudi will use virtual keys for the corresponding table. Default value for this config is `true`, which means, all  meta fields will be added by default.
 
@@ -36,24 +36,24 @@ would entail reading all fields out of base and delta logs, sacrificing core col
 for users. Thus, we support only simple key generators (the default key generator, where both record key and partition path refer
 to an existing field ) for now.
 
-### Supported Key Generators with CopyOnWrite(COW) table:
+#### Supported Key Generators with CopyOnWrite(COW) table:
 SimpleKeyGenerator, ComplexKeyGenerator, CustomKeyGenerator, TimestampBasedKeyGenerator and NonPartitionedKeyGenerator. 
 
-### Supported Key Generators with MergeOnRead(MOR) table:
+#### Supported Key Generators with MergeOnRead(MOR) table:
 SimpleKeyGenerator
 
-### Supported Index types: 
+#### Supported Index types: 
 Only "SIMPLE" and "GLOBAL_SIMPLE" index types are supported in the first cut. We plan to add support for other index 
 (BLOOM, etc) in future releases. 
 
-## Supported Operations
+### Supported Operations
 All existing features are supported for a hudi table with virtual keys, except the incremental 
 queries. Which means, cleaning, archiving, metadata table, clustering, etc can be enabled for a hudi table with 
 virtual keys enabled. So, you are able to merely use Hudi as a transactional table format with all the awesome 
 table service runtimes and platform services, if you wish to do so, without incurring any overheads associated with 
 support for incremental data processing.
 
-## Sample Output
+### Sample Output
 As called out earlier, one has to set `hoodie.populate.meta.fields=false` to enable virtual keys. Let's see the 
 difference between records of a hudi table with and without virtual keys.
 
@@ -99,7 +99,7 @@ And here are some sample records for a hudi table with virtual keys enabled.
 As you could see, all meta fields are null in storage, but all users fields remain intact similar to a regular table.
 :::
 
-## Incremental Queries
+### Incremental Queries
 Since hudi does not maintain any metadata (like commit time at a record level) for a table with virtual keys enabled,  
 incremental queries are not supported. An exception will be thrown as below when an incremental query is triggered for such
 a table.
@@ -121,7 +121,7 @@ org.apache.hudi.exception.HoodieException: Incremental queries are not supported
   ... 61 elided
 ```
 
-## Conclusion 
+### Conclusion 
 Hope this blog was useful for you to learn yet another feature in Apache Hudi. If you are interested in 
 Hudi and looking to contribute, do check out [here](https://hudi.apache.org/contribute/get-involved). 
 

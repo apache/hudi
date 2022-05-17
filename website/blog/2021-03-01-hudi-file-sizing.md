@@ -11,7 +11,7 @@ manual table maintenance. Having a lot of small files will make it harder to ach
 having to open/read/close files way too many times, to plan and execute queries. But for streaming data lake use-cases, 
 inherently ingests are going to end up having smaller volume of writes, which might result in lot of small files if no special handling is done.
 <!--truncate-->
-# During Write vs After Write
+## During Write vs After Write
 
 Common approaches to writing very small files and then later stitching them together solve for system scalability issues posed 
 by small files but might violate query SLA's by exposing small files to them. In fact, you can easily do so on a Hudi table, 
@@ -25,7 +25,7 @@ Hudi has the ability to maintain a configured target file size, when performing 
 (Note: bulk_insert operation does not provide this functionality and is designed as a simpler replacement for 
 normal `spark.write.parquet`).
 
-## Configs
+### Configs
 
 For illustration purposes, we are going to consider only COPY_ON_WRITE table.
 
@@ -41,7 +41,7 @@ would be considered a small file.
 
 If you wish to turn off this feature, set the config value for soft file limit to 0.
 
-## Example
+### Example
 
 Let’s say this is the layout of data files for a given partition.
 
