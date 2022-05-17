@@ -78,15 +78,19 @@ function BlogPostItem(props) {
              </Link>
             </div>
        )}
-        <TitleHeading className={styles.blogPostTitle} itemProp="headline">
+        
           {isBlogPostPage ? (
-            title
+            <TitleHeading className={styles.blogPostPageTitle} itemProp="headline">
+            {title}
+            </TitleHeading>
           ) : (
             <Link itemProp="url" to={permalink}>
+            <TitleHeading className={styles.blogPostTitle} itemProp="headline">
               {title}
+              </TitleHeading>
             </Link>
           )}
-        </TitleHeading>
+       
         <div className={clsx(styles.blogPostData, 'margin-vert--md')}>
           <time dateTime={date} itemProp="datePublished">
             {formattedDate}
