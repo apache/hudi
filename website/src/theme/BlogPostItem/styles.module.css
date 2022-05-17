@@ -5,8 +5,11 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-.blogPostTitle {
+ .blogPostTitle {
   font-size: 1rem;
+}
+.blogPostPageTile{
+  font-size:3rem;
 }
 
 .blogPostData {
