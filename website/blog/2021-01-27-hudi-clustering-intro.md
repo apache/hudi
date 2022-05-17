@@ -5,12 +5,12 @@ author: satish.kotha
 category: blog
 ---
 
-# Background
+## Background
 
 Apache Hudi brings stream processing to big data, providing fresh data while being an order of magnitude efficient over traditional batch processing. In a data lake/warehouse, one of the key trade-offs is between ingestion speed and query performance. Data ingestion typically prefers small files to improve parallelism and make data available to queries as soon as possible. However, query performance degrades poorly with a lot of small files. Also, during ingestion, data is typically co-located based on arrival time. However, the query engines perform better when the data frequently queried is co-located together. In most architectures each of these systems tend to add optimizations independently to improve performance which hits limitations due to un-optimized data layouts. This blog introduces a new kind of table service called clustering [[RFC-19]](https://cwiki.apache.org/confluence/display/HUDI/RFC+-+19+Clustering+data+for+freshness+and+query+performance) to reorganize data for improved query performance without compromising on ingestion speed.
 <!--truncate-->
 
-# Clustering Architecture
+## Clustering Architecture
 
 At a high level, Hudi provides different operations such as insert/upsert/bulk_insert through it’s write client API to be able to write data to a Hudi table. To be able to choose a trade-off between file size and ingestion speed, Hudi provides a knob `hoodie.parquet.small.file.limit` to be able to configure the smallest allowable file size. Users are able to configure the small file [soft limit](https://hudi.apache.org/docs/configurations#compactionSmallFileSize) to `0` to force new data to go into a new set of filegroups or set it to a higher value to ensure new data gets “padded” to existing files until it meets that limit that adds to ingestion latencies.
 
@@ -22,13 +22,13 @@ Clustering table service can run asynchronously or synchronously adding a new ac
 
   
 
-### Overall, there are 2 parts to clustering
+#### Overall, there are 2 parts to clustering
 
 1.  Scheduling clustering: Create a clustering plan using a pluggable clustering strategy.
 2.  Execute clustering: Process the plan using an execution strategy to create new files and replace old files.
     
 
-### Scheduling clustering
+#### Scheduling clustering
 
 Following steps are followed to schedule clustering.
 
@@ -37,7 +37,7 @@ Following steps are followed to schedule clustering.
 3.  Finally, the clustering plan is saved to the timeline in an avro [metadata format](https://github.com/apache/hudi/blob/master/hudi-common/src/main/avro/HoodieClusteringPlan.avsc).
     
 
-### Running clustering
+#### Running clustering
 
 1.  Read the clustering plan and get the ‘clusteringGroups’ that mark the file groups that need to be clustered.
 2.  For each group, we instantiate appropriate strategy class with strategyParams (example: sortColumns) and apply that strategy to rewrite the data.
@@ -51,7 +51,7 @@ NOTE: Clustering can only be scheduled for tables / partitions not receiving any
 ![Clustering example](/assets/images/blog/clustering/example_perf_improvement.png)
 _Figure: Illustrating query performance improvements by clustering_
 
-### Setting up clustering
+#### Setting up clustering
 Inline clustering can be setup easily using spark dataframe options. See sample below
 
 ```scala
@@ -83,7 +83,7 @@ df.write.format("org.apache.hudi").
 For more advanced usecases, async clustering pipeline can also be setup. See an example [here](https://cwiki.apache.org/confluence/display/HUDI/RFC+-+19+Clustering+data+for+freshness+and+query+performance#RFC19Clusteringdataforfreshnessandqueryperformance-SetupforAsyncclusteringJob).
 
 
-# Table Query Performance
+## Table Query Performance
 
 We created a dataset from one partition of a known production style table with ~20M records and on-disk size of ~200GB. The dataset has rows for multiple “sessions”. Users always query this data using a predicate on session. Data for a single session is spread across multiple data files because ingestion groups data based on arrival time. The below experiment shows that by clustering on session, we are able to improve the data locality and reduce query execution time by more than 50%.
 
@@ -92,14 +92,14 @@ Query:
 spark.sql("select  *  from table where session_id=123")
 ```
 
-## Before Clustering
+### Before Clustering
 
 Query took 2.2 minutes to complete. Note that the number of output rows in the “scan parquet” part of the query plan includes all 20M rows in the table.
 
 ![Query Plan Before Clustering](/assets/images/blog/clustering/Query_Plan_Before_Clustering.png)
 _Figure: Spark SQL query details before clustering_
 
-## After Clustering
+### After Clustering
 
 The query plan is similar to above. But, because of improved data locality and predicate push down, spark is able to prune a lot of rows. After clustering, the same query only outputs 110K rows (out of 20M rows) while scanning parquet files. This cuts query time to less than a minute from 2.2 minutes.
 
@@ -118,7 +118,7 @@ Query runtime is reduced by 60% after clustering. Similar results were observed 
 
 We expect dramatic speedup for large tables, where the query runtime is almost entirely dominated by actual I/O and not query planning, unlike the example above.
 
-# Summary
+## Summary
 
 Using clustering, we can improve query performance by
 1.  Leveraging concepts such as [space filling curves](https://en.wikipedia.org/wiki/Z-order_curve) to adapt data lake layout and reduce the amount of data read during queries.

@@ -7,7 +7,7 @@ category: blog
 
 We will look at different deployment models for executing compactions asynchronously.
 <!--truncate-->
-# Compaction
+## Compaction
 
 For Merge-On-Read table, data is stored using a combination of columnar (e.g parquet) + row based (e.g avro) file formats. 
 Updates are logged to delta files & later compacted to produce new versions of columnar files synchronously or 
@@ -15,7 +15,7 @@ asynchronously. One of th main motivations behind Merge-On-Read is to reduce dat
 Hence, it makes sense to run compaction asynchronously without blocking ingestion.
 
 
-# Async Compaction
+## Async Compaction
 
 Async Compaction is performed in 2 steps:
 
@@ -24,11 +24,11 @@ slices** to be compacted. A compaction plan is finally written to Hudi timeline.
 1. ***Compaction Execution***: A separate process reads the compaction plan and performs compaction of file slices.
 
   
-# Deployment Models
+## Deployment Models
 
 There are few ways by which we can execute compactions asynchronously. 
 
-## Spark Structured Streaming
+### Spark Structured Streaming
 
 With 0.6.0, we now have support for running async compactions in Spark 
 Structured Streaming jobs. Compactions are scheduled and executed asynchronously inside the 
@@ -60,7 +60,7 @@ import org.apache.spark.sql.streaming.ProcessingTime;
  writer.trigger(new ProcessingTime(30000)).start(tablePath);
 ```
 
-## DeltaStreamer Continuous Mode
+### DeltaStreamer Continuous Mode
 Hudi DeltaStreamer provides continuous ingestion mode where a single long running spark application  
 ingests data to Hudi table continuously from upstream sources. In this mode, Hudi supports managing asynchronous 
 compactions. Here is an example snippet for running in continuous mode with async compactions
@@ -78,7 +78,7 @@ spark-submit --packages org.apache.hudi:hudi-utilities-bundle_2.11:0.6.0 \
 --continous
 ```
 
-## Hudi CLI
+### Hudi CLI
 Hudi CLI is yet another way to execute specific compactions asynchronously. Here is an example 
 
 ```properties
@@ -86,7 +86,7 @@ hudi:trips->compaction run --tableName <table_name> --parallelism <parallelism> 
 ...
 ```
 
-## Hudi Compactor Script
+### Hudi Compactor Script
 Hudi provides a standalone tool to also execute specific compactions asynchronously. Here is an example
 
 ```properties

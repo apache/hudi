@@ -8,14 +8,14 @@ category: blog
 We will look at how to migrate a large parquet table to Hudi without having to rewrite the entire dataset. 
 
 <!--truncate-->
-# Motivation:
+## Motivation:
 
 Apache Hudi maintains per record metadata to perform core operations such as upserts and incremental pull. To take advantage of Hudi’s upsert and incremental processing support, users would need to rewrite their whole dataset to make it an Apache Hudi table.  Hudi 0.6.0 comes with an ***experimental feature*** to support efficient migration of large Parquet tables to Hudi without the need to rewrite the entire dataset.
 
 
-# High Level Idea:
+## High Level Idea:
 
-## Per Record Metadata:
+### Per Record Metadata:
 
 Apache Hudi maintains record level metadata for perform efficient upserts and incremental pull.
 
@@ -31,11 +31,11 @@ The parts (1) and (3) constitute what we term as  “Hudi skeleton”. Hudi skel
 
 ![skeleton](/assets/images/blog/2020-08-20-skeleton.png)
 
-# Design Deep Dive:
+## Design Deep Dive:
 
  For a deep dive on the internals, please take a look at the [RFC document](https://cwiki.apache.org/confluence/display/HUDI/RFC+-+12+%3A+Efficient+Migration+of+Large+Parquet+Tables+to+Apache+Hudi) 
 
-# Migration:
+## Migration:
 
 Hudi supports 2 modes when migrating parquet tables.  We will use the term bootstrap and migration interchangeably in this document.  
 
@@ -45,10 +45,10 @@ Hudi supports 2 modes when migrating parquet tables.  We will use the term boots
 You can pick and choose these modes at partition level. One of the common strategy would be to use FULL_RECORD mode for a small set of "hot" partitions which are accessed more frequently and METADATA_ONLY for a larger set of "warm" partitions. 
 
 
-## Query Engine Support:
+### Query Engine Support:
 For a METADATA_ONLY bootstrapped table, Spark - data source, Spark-Hive and native Hive query engines are supported. Presto support is in the works.
 
-## Ways To Migrate :
+### Ways To Migrate :
 
 There are 2 ways to migrate a large parquet table to Hudi. 
 
@@ -57,7 +57,7 @@ There are 2 ways to migrate a large parquet table to Hudi.
 
 We will look at how to migrate using both these approaches.
 
-## Configurations:
+### Configurations:
 
 These are bootstrap specific configurations that needs to be set in addition to regular hudi write configurations.
 
@@ -73,7 +73,7 @@ These are bootstrap specific configurations that needs to be set in addition to 
 | hoodie.bootstrap.mode.selector.regex.mode |METADATA_ONLY |No |Bootstrap Mode used when the partition matches the regex pattern in hoodie.bootstrap.mode.selector.regex . Used only when hoodie.bootstrap.mode.selector set to BootstrapRegexModeSelector. |
 | hoodie.bootstrap.mode.selector.regex |\.\* |No |Partition Regex used when  hoodie.bootstrap.mode.selector set to BootstrapRegexModeSelector. |
 
-## Spark Data Source:
+### Spark Data Source:
 
 Here, we use a Spark Datasource Write to perform bootstrap. 
 Here is an example code snippet to perform METADATA_ONLY bootstrap.
@@ -127,7 +127,7 @@ bootstrapDF.write
       .save(basePath)
 ```
 
-## Hoodie DeltaStreamer:
+### Hoodie DeltaStreamer:
 
 Hoodie Deltastreamer allows bootstrap to be performed using --run-bootstrap command line option.
 
@@ -170,6 +170,6 @@ spark-submit --package org.apache.hudi:hudi-spark-bundle_2.11:0.6.0
 --hoodie-conf hoodie.bootstrap.mode.selector.regex.mode=METADATA_ONLY
 ```
 
-## Known Caveats
+### Known Caveats
 1. Need proper defaults for the bootstrap config : hoodie.bootstrap.full.input.provider. Here is the [ticket](https://issues.apache.org/jira/browse/HUDI-1213)
 1. DeltaStreamer manages checkpoints inside hoodie commit files and expects checkpoints in previously committed metadata. Users are expected to pass checkpoint or initial checkpoint provider when performing bootstrap through deltastreamer. Such support is not present when doing bootstrap using Spark Datasource. Here is the [ticket](https://issues.apache.org/jira/browse/HUDI-1214).
