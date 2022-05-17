@@ -135,7 +135,8 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
     return HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(config.getBasePath())
         .setLoadActiveTimelineOnLoad(loadActiveTimelineOnLoad).setConsistencyGuardConfig(config.getConsistencyGuardConfig())
         .setLayoutVersion(Option.of(new TimelineLayoutVersion(config.getTimelineLayoutVersion())))
-        .setFileSystemRetryConfig(config.getFileSystemRetryConfig()).build();
+        .setFileSystemRetryConfig(config.getFileSystemRetryConfig())
+        .setProperties(config.getProps()).build();
   }
 
   public Option<EmbeddedTimelineService> getTimelineServer() {
