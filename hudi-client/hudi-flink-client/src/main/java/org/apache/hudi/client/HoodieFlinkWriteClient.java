@@ -372,6 +372,9 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
     } finally {
       this.txnManager.endTransaction(Option.of(compactionInstant));
     }
+    WriteMarkersFactory
+        .get(config.getMarkersType(), table, compactionCommitTime)
+        .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
     if (compactionTimer != null) {
       long durationInMs = metrics.getDurationInMs(compactionTimer.stop());
       try {
