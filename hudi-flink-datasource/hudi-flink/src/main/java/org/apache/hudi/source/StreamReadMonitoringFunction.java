@@ -158,7 +158,7 @@ public class StreamReadMonitoringFunction
   @Override
   public void open(Configuration parameters) throws Exception {
     super.open(parameters);
-    this.hadoopConf = HadoopConfigurations.getHadoopConf(parameters);
+    this.hadoopConf = HadoopConfigurations.getHadoopConf(conf);
   }
 
   @Override

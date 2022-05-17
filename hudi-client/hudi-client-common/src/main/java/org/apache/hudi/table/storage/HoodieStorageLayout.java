@@ -48,7 +48,7 @@ public abstract class HoodieStorageLayout implements Serializable {
   /**
    * Determines if the operation is supported by the layout.
    */
-  public abstract boolean doesNotSupport(WriteOperationType operationType);
+  public abstract boolean writeOperationSupported(WriteOperationType operationType);
 
   public enum LayoutType {
     DEFAULT, BUCKET

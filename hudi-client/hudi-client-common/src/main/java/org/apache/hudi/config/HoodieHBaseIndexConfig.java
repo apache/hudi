@@ -157,6 +157,33 @@ public class HoodieHBaseIndexConfig extends HoodieConfig {
       .withDocumentation("When set to true, the rollback method will delete the last failed task index. "
           + "The default value is false. Because deleting the index will add extra load on the Hbase cluster for each rollback");
 
+  public static final ConfigProperty<String> SECURITY_AUTHENTICATION = ConfigProperty
+      .key("hoodie.index.hbase.security.authentication")
+      .defaultValue("simple")
+      .withDocumentation("Property to decide if the hbase cluster secure authentication is enabled or not. "
+          + "Possible values are 'simple' (no authentication), and 'kerberos'.");
+
+  public static final ConfigProperty<String> KERBEROS_USER_KEYTAB = ConfigProperty
+      .key("hoodie.index.hbase.kerberos.user.keytab")
+      .noDefaultValue()
+      .withDocumentation("File name of the kerberos keytab file for connecting to the hbase cluster.");
+
+  public static final ConfigProperty<String> KERBEROS_USER_PRINCIPAL = ConfigProperty
+      .key("hoodie.index.hbase.kerberos.user.principal")
+      .noDefaultValue()
+      .withDocumentation("The kerberos principal name for connecting to the hbase cluster.");
+
+  public static final ConfigProperty<String> REGIONSERVER_PRINCIPAL = ConfigProperty
+      .key("hoodie.index.hbase.regionserver.kerberos.principal")
+      .noDefaultValue()
+      .withDocumentation("The value of hbase.regionserver.kerberos.principal in hbase cluster.");
+
+  public static final ConfigProperty<String> MASTER_PRINCIPAL = ConfigProperty
+      .key("hoodie.index.hbase.master.kerberos.principal")
+      .noDefaultValue()
+      .withDocumentation("The value of hbase.master.kerberos.principal in hbase cluster.");
+
+
   /**
    * @deprecated Use {@link #ZKQUORUM} and its methods instead
    */
@@ -441,6 +468,31 @@ public class HoodieHBaseIndexConfig extends HoodieConfig {
 
     public Builder hbaseZkZnodeParent(String zkZnodeParent) {
       hBaseIndexConfig.setValue(ZK_NODE_PATH, zkZnodeParent);
+      return this;
+    }
+
+    public Builder hbaseSecurityAuthentication(String authentication) {
+      hBaseIndexConfig.setValue(SECURITY_AUTHENTICATION, authentication);
+      return this;
+    }
+
+    public Builder hbaseKerberosUserKeytab(String keytab) {
+      hBaseIndexConfig.setValue(KERBEROS_USER_KEYTAB, keytab);
+      return this;
+    }
+
+    public Builder hbaseKerberosUserPrincipal(String principal) {
+      hBaseIndexConfig.setValue(KERBEROS_USER_PRINCIPAL, principal);
+      return this;
+    }
+
+    public Builder hbaseKerberosRegionserverPrincipal(String principal) {
+      hBaseIndexConfig.setValue(REGIONSERVER_PRINCIPAL, principal);
+      return this;
+    }
+
+    public Builder hbaseKerberosMasterPrincipal(String principal) {
+      hBaseIndexConfig.setValue(MASTER_PRINCIPAL, principal);
       return this;
     }
 
