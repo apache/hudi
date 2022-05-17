@@ -120,6 +120,8 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
       actualFieldNames = schemaEvoContext.get().fieldNames();
       actualFieldTypes = schemaEvoContext.get().fieldTypes();
       projection = schemaEvoContext.get().projection();
+    } else {
+      projection = Option.empty();
     }
 
     // generate partition specs.
