@@ -35,7 +35,6 @@ import org.apache.hudi.common.util.TablePathUtils;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodiePayloadConfig;
-import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
@@ -329,12 +328,12 @@ public class DataSourceUtils {
 
   // Now by default ParquetWriteSupport will write DecimalType to parquet as int32/int64 when the scale of decimalType < Decimal.MAX_LONG_DIGITS(),
   // but AvroParquetReader which used by HoodieParquetReader cannot support read int32/int64 as DecimalType.
-  // try to find current schema whether contains that DecimalType, and auto set the value of "hoodie.parquet.writelegacyformat.enabled"
+  // try to find current schema whether contains that DecimalType, and auto set the value of "spark.sql.parquet.writeLegacyFormat"
   public static void mayBeOverwriteParquetWriteLegacyFormatProp(Map<String, String> properties, StructType schema) {
     if (DataTypeUtils.foundSmallPrecisionDecimalType(schema)
-        && !Boolean.parseBoolean(properties.getOrDefault(HoodieStorageConfig.PARQUET_WRITE_LEGACY_FORMAT_ENABLED.key(), "false"))) {
-      properties.put(HoodieStorageConfig.PARQUET_WRITE_LEGACY_FORMAT_ENABLED.key(), "true");
-      LOG.warn("Small Decimal Type found in current schema, auto set the value of hoodie.parquet.writelegacyformat.enabled to true");
+        && !Boolean.parseBoolean(properties.getOrDefault("spark.sql.parquet.writeLegacyFormat", "false"))) {
+      properties.put("spark.sql.parquet.writeLegacyFormat", "true");
+      LOG.warn("Small Decimal Type found in current schema, auto set the value of spark.sql.parquet.writeLegacyFormat to true");
     }
   }
 }

@@ -21,6 +21,7 @@ package org.apache.hudi.io.storage.row;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.HoodieDynamicBoundedBloomFilter;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.parquet.hadoop.api.WriteSupport;
 import org.apache.spark.sql.execution.datasources.parquet.ParquetWriteSupport;
@@ -46,8 +47,23 @@ public class HoodieRowParquetWriteSupport extends ParquetWriteSupport {
   public HoodieRowParquetWriteSupport(Configuration conf, StructType structType, BloomFilter bloomFilter, HoodieWriteConfig writeConfig) {
     super();
     Configuration hadoopConf = new Configuration(conf);
-    hadoopConf.set("spark.sql.parquet.writeLegacyFormat", writeConfig.parquetWriteLegacyFormatEnabled());
-    hadoopConf.set("spark.sql.parquet.outputTimestampType", writeConfig.parquetOutputTimestampType());
+
+    //Sets spark.sql.parquet.writeLegacyFormat. If true, data will be written in a way of Spark 1.4 and earlier.
+    //For example, decimal values will be written in Parquet's fixed-length byte array format which other systems such as Apache Hive and Apache Impala use.
+    //If false, the newer format in Parquet will be used. For example, decimals will be written in int-based format.
+    String legacyFormatEnabled = hadoopConf.get("spark.sql.parquet.writeLegacyFormat");
+
+    //spark.sql.parquet.outputTimestampType. Parquet timestamp type to use when Spark writes data to Parquet files. Default, TIMESTAMP_MICROS
+    String timestampType = hadoopConf.get("spark.sql.parquet.outputTimestampType");
+
+    if (StringUtils.isNullOrEmpty(legacyFormatEnabled)) {
+      hadoopConf.set("spark.sql.parquet.writeLegacyFormat", "false");
+    }
+
+    if (StringUtils.isNullOrEmpty(timestampType)) {
+      hadoopConf.set("spark.sql.parquet.outputTimestampType", "TIMESTAMP_MICROS");
+    }
+
     this.hadoopConf = hadoopConf;
     setSchema(structType, hadoopConf);
     this.bloomFilter = bloomFilter;
