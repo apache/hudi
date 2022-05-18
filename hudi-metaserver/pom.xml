@@ -32,14 +32,15 @@
 
     <properties>
         <mybatis.version>3.4.6</mybatis.version>
+        <HikariCP.version>4.0.3</HikariCP.version>
+        <mysql-connector-java.version>8.0.22</mysql-connector-java.version>
+        <h2.version>1.4.200</h2.version>
+        <!-- Thrift related properties -->
+        <thrift.home>/usr/local</thrift.home>
+        <maven-thrift-plugin.version>0.1.11</maven-thrift-plugin.version>
     </properties>
 
     <dependencies>
-        <dependency>
-            <groupId>org.apache.thrift</groupId>
-            <artifactId>libthrift</artifactId>
-            <version>${thrift.version}</version>
-        </dependency>
         <dependency>
             <groupId>org.apache.hudi</groupId>
             <artifactId>hudi-common</artifactId>
@@ -50,28 +51,37 @@
             <artifactId>hudi-client-common</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <!-- Apache License 2.0 https://github.com/apache/thrift/blob/master/LICENSE-->
+        <dependency>
+            <groupId>org.apache.thrift</groupId>
+            <artifactId>libthrift</artifactId>
+            <version>${thrift.version}</version>
+        </dependency>
+        <!-- Apache License 2.0 https://github.com/mybatis/mybatis-3/blob/master/LICENSE-->
         <dependency>
             <groupId>org.mybatis</groupId>
             <artifactId>mybatis</artifactId>
             <version>${mybatis.version}</version>
         </dependency>
-
+        <!-- Apache License 2.0 https://github.com/brettwooldridge/HikariCP/blob/dev/LICENSE-->
         <dependency>
             <groupId>com.zaxxer</groupId>
             <artifactId>HikariCP</artifactId>
-            <version>4.0.3</version>
+            <version>${HikariCP.version}</version>
         </dependency>
+        <!-- The GNU General Public License, Version 2 https://github.com/mysql/mysql-connector-j/blob/release/8.0/LICENSE-->
         <dependency>
             <groupId>mysql</groupId>
             <artifactId>mysql-connector-java</artifactId>
-            <version>8.0.22</version>
+            <version>${mysql-connector-java.version}</version>
         </dependency>
 
         <!-- Test -->
+        <!-- Mozilla Public License Version 2.0 http://www.h2database.com/html/license.html-->
         <dependency>
             <groupId>com.h2database</groupId>
             <artifactId>h2</artifactId>
-            <version>1.4.200</version>
+            <version>${h2.version}</version>
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
@@ -95,6 +105,36 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
+
+    <profiles>
+        <profile>
+            <id>thrift</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.thrift.tools</groupId>
+                        <artifactId>maven-thrift-plugin</artifactId>
+                        <version>${maven-thrift-plugin.version}</version>
+                        <configuration>
+                            <thriftExecutable>${thrift.home}/bin/thrift</thriftExecutable>
+                            <thriftSourceRoot>src/main/thrift</thriftSourceRoot>
+                            <outputDirectory>src/main/thrift/gen-java</outputDirectory>
+                            <generator>java</generator>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <id>thrift-sources</id>
+                                <phase>generate-sources</phase>
+                                <goals>
+                                    <goal>compile</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 
     <build>
         <plugins>
@@ -123,63 +163,43 @@
                 <artifactId>apache-rat-plugin</artifactId>
             </plugin>
             <plugin>
-                <groupId>org.apache.thrift.tools</groupId>
-                <artifactId>maven-thrift-plugin</artifactId>
-                <version>0.1.11</version>
-                <configuration>
-                    <thriftExecutable>/usr/local/bin/thrift</thriftExecutable>
-                    <thriftSourceRoot>src/main/thrift</thriftSourceRoot>
-                    <outputDirectory>src/main/thrift/gen-java</outputDirectory>
-                    <generator>java</generator>
-                </configuration>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>build-helper-maven-plugin</artifactId>
+                <version>${build-helper-maven-plugin.version}</version>
                 <executions>
                     <execution>
-                        <id>thrift-sources</id>
+                        <id>add-source</id>
                         <phase>generate-sources</phase>
                         <goals>
-                            <goal>compile</goal>
+                            <goal>add-source</goal>
                         </goals>
+                        <configuration>
+                            <sources>
+                                <source>src/main/java</source>
+                                <source>src/main/thrift/gen-java</source>
+                            </sources>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>add-test-source</id>
+                        <phase>generate-sources</phase>
+                        <goals>
+                            <goal>add-test-source</goal>
+                        </goals>
+                        <configuration>
+                            <sources>
+                                <source>src/test/java</source>
+                                <source>src/main/java</source>
+                                <source>src/main/thrift/gen-java</source>
+                            </sources>
+                        </configuration>
                     </execution>
                 </executions>
             </plugin>
-<!--            <plugin>-->
-<!--                <groupId>org.codehaus.mojo</groupId>-->
-<!--                <artifactId>build-helper-maven-plugin</artifactId>-->
-<!--                <version>1.8</version>-->
-<!--                <executions>-->
-<!--                    <execution>-->
-<!--                        <id>add-source</id>-->
-<!--                        <phase>generate-sources</phase>-->
-<!--                        <goals>-->
-<!--                            <goal>add-source</goal>-->
-<!--                        </goals>-->
-<!--                        <configuration>-->
-<!--                            <sources>-->
-<!--                                <source>src/main/java</source>-->
-<!--                                <source>src/main/thrift/gen-java</source>-->
-<!--                            </sources>-->
-<!--                        </configuration>-->
-<!--                    </execution>-->
-<!--                    <execution>-->
-<!--                        <id>add-test-source</id>-->
-<!--                        <phase>generate-sources</phase>-->
-<!--                        <goals>-->
-<!--                            <goal>add-test-source</goal>-->
-<!--                        </goals>-->
-<!--                        <configuration>-->
-<!--                            <sources>-->
-<!--                                <source>src/test/java</source>-->
-<!--                                <source>src/main/java</source>-->
-<!--                                <source>src/main/thrift/gen-java</source>-->
-<!--                            </sources>-->
-<!--                        </configuration>-->
-<!--                    </execution>-->
-<!--                </executions>-->
-<!--            </plugin>-->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-shade-plugin</artifactId>
-                <version>3.2.4</version>
+                <version>${maven-shade-plugin.version}</version>
                 <executions>
                     <execution>
                         <phase>package</phase>
@@ -187,9 +207,18 @@
                             <goal>shade</goal>
                         </goals>
                         <configuration>
+                            <createSourcesJar>${shadeSources}</createSourcesJar>
                             <transformers>
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-                                    <mainClass>org.apache.hudi.metastore.HoodieMetastoreServer</mainClass>
+                                    <mainClass>org.apache.hudi.metaserver.HoodieMetaServer</mainClass>
+                                </transformer>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ApacheLicenseResourceTransformer" />
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ApacheNoticeResourceTransformer">
+                                    <addHeader>true</addHeader>
+                                </transformer>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.IncludeResourceTransformer">
+                                    <resource>META-INF/LICENSE</resource>
+                                    <file>target/classes/META-INF/LICENSE</file>
                                 </transformer>
                             </transformers>
                             <filters>
@@ -203,8 +232,7 @@
                                     </excludes>
                                 </filter>
                             </filters>
-                            <shadedArtifactAttached>true</shadedArtifactAttached>
-                            <shadedClassifierName>jar-with-dependencies</shadedClassifierName>
+                            <finalName>${project.artifactId}-${project.version}</finalName>
                         </configuration>
                     </execution>
                 </executions>
