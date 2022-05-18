@@ -23,4 +23,4 @@
 # using the convention "pull/<PR_NUMBER>", to enable pr_push_command.sh to work
 # in tandem.
 #
-java -jar hudi-metaserver-*-jar-with-dependencies.jar
+java -jar hudi-metaserver-*.jar

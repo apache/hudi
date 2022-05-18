@@ -15,10 +15,11 @@
   limitations under the License.
 -->
 
-# How to Compile
+# How to compile
+If you update the `hudi-metaserver.thrift`, you have to recompile it to bring the new thrift file into effect. 
 
 Firstly, make sure `/usr/local/bin/thrift` exists.
-Then compile the module with maven.
+Then compile the module with maven options `-Pthrift`.
 Finally, the source code of thrift file generates and it is under the `src/main/thrift/gen-java`.
 ```shell
 ├── gen-java
@@ -34,7 +35,7 @@ Finally, the source code of thrift file generates and it is under the `src/main/
 
 ```
 
-# How to Run a job with Hudi meta server
+# How to run a job with Hudi meta server
 
 ### Start Hudi meta server
 1. modify the `hikariPool.properties` and config the mysql address. For example,
@@ -44,6 +45,8 @@ dataSource.user=root
 dataSource.password=password
 ```
 2. start the server
+
+   make sure `hudi-metaserver-${project.version}.jar` is under the directory,
 ```shell
 sh start-hudi-metaserver.sh
 ```
