@@ -105,7 +105,7 @@ public class HoodieFileWriterFactory {
     return new HoodieAvroOrcWriter(instantTime, path, orcConfig, schema, taskContextSupplier);
   }
 
-  private static BloomFilter createBloomFilter(HoodieWriteConfig config) {
+  protected static BloomFilter createBloomFilter(HoodieWriteConfig config) {
     return BloomFilterFactory.createBloomFilter(config.getBloomFilterNumEntries(), config.getBloomFilterFPP(),
         config.getDynamicBloomFilterMaxNumEntries(),
         config.getBloomFilterType());

@@ -20,43 +20,27 @@ package org.apache.hudi.io.storage;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hbase.io.hfile.CacheConfig;
 import org.apache.hudi.common.fs.FSUtils;
 
 import java.io.IOException;
 
+import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
 import static org.apache.hudi.common.model.HoodieFileFormat.HFILE;
 import static org.apache.hudi.common.model.HoodieFileFormat.ORC;
-import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
 
-public class HoodieFileReaderFactory {
-
-  // todo: HoodieFileReader
-  public static HoodieAvroFileReader getFileReader(Configuration conf, Path path) throws IOException {
+public class HoodieSparkFileReaderFactory {
+  public static HoodieFileReader getFileReader(Configuration conf, Path path) throws IOException {
     final String extension = FSUtils.getFileExtension(path.toString());
     if (PARQUET.getFileExtension().equals(extension)) {
-      return newParquetFileReader(conf, path);
+      return null;
     }
     if (HFILE.getFileExtension().equals(extension)) {
-      return newHFileFileReader(conf, path);
+      return null;
     }
     if (ORC.getFileExtension().equals(extension)) {
-      return newOrcFileReader(conf, path);
+      return null;
     }
 
     throw new UnsupportedOperationException(extension + " format not supported yet.");
-  }
-
-  private static HoodieAvroFileReader newParquetFileReader(Configuration conf, Path path) {
-    return new HoodieAvroParquetReader(conf, path);
-  }
-
-  private static HoodieAvroFileReader newHFileFileReader(Configuration conf, Path path) throws IOException {
-    CacheConfig cacheConfig = new CacheConfig(conf);
-    return new HoodieAvroHFileReader(conf, path, cacheConfig);
-  }
-
-  private static HoodieAvroFileReader newOrcFileReader(Configuration conf, Path path) {
-    return new HoodieAvroOrcReader(conf, path);
   }
 }
