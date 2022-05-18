@@ -265,6 +265,9 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
       if (oldRecord != record) {
         // the incoming record is chosen
         isDelete = HoodieOperation.isDelete(hoodieRecord.getOperation());
+      } else {
+        // the incoming record is dropped
+        return false;
       }
     }
     return writeRecord(hoodieRecord, indexedRecord, isDelete);
