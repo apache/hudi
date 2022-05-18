@@ -20,10 +20,9 @@
 package org.apache.spark.sql.hudi.procedure
 
 import org.apache.hadoop.fs.Path
-import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieTimeline}
+import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.{HoodieCLIUtils, HoodieDataSourceHelpers}
-
 import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase
 
 import scala.collection.JavaConverters.asScalaIteratorConverter
@@ -64,27 +63,21 @@ class TestClusteringProcedure extends HoodieSparkSqlTestBase {
         val secondScheduleInstant = HoodieActiveTimeline.createNewInstantTime
         client.scheduleClusteringAtInstant(secondScheduleInstant, HOption.empty())
         checkAnswer(s"call show_clustering('$tableName')")(
-          Seq(firstScheduleInstant, 3),
-          Seq(secondScheduleInstant, 1)
+          Seq(secondScheduleInstant, 1, HoodieInstant.State.REQUESTED.name(), "*"),
+          Seq(firstScheduleInstant, 3, HoodieInstant.State.REQUESTED.name(), "*")
         )
 
         // Do clustering for all clustering plan generated above, and no new clustering
         // instant will be generated because of there is no commit after the second
         // clustering plan generated
-        spark.sql(s"call run_clustering(table => '$tableName', order => 'ts')")
+        checkAnswer(s"call run_clustering(table => '$tableName', order => 'ts', show_involved_partition => true)")(
+          Seq(secondScheduleInstant, 1, HoodieInstant.State.COMPLETED.name(), "ts=1003"),
+          Seq(firstScheduleInstant, 3, HoodieInstant.State.COMPLETED.name(), "ts=1000,ts=1001,ts=1002")
+        )
 
         // No new commits
         val fs = new Path(basePath).getFileSystem(spark.sessionState.newHadoopConf())
         assertResult(false)(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, secondScheduleInstant))
-
-        checkAnswer(s"select id, name, price, ts from $tableName order by id")(
-          Seq(1, "a1", 10.0, 1000),
-          Seq(2, "a2", 10.0, 1001),
-          Seq(3, "a3", 10.0, 1002),
-          Seq(4, "a4", 10.0, 1003)
-        )
-        // After clustering there should be no pending clustering.
-        checkAnswer(s"call show_clustering(table => '$tableName')")()
 
         // Check the number of finished clustering instants
         val finishedClustering = HoodieDataSourceHelpers.allCompletedCommitsCompactions(fs, basePath)
@@ -94,10 +87,23 @@ class TestClusteringProcedure extends HoodieSparkSqlTestBase {
           .toSeq
         assertResult(2)(finishedClustering.size)
 
+        checkAnswer(s"select id, name, price, ts from $tableName order by id")(
+          Seq(1, "a1", 10.0, 1000),
+          Seq(2, "a2", 10.0, 1001),
+          Seq(3, "a3", 10.0, 1002),
+          Seq(4, "a4", 10.0, 1003)
+        )
+
+        // After clustering there should be no pending clustering and all clustering instants should be completed
+        checkAnswer(s"call show_clustering(table => '$tableName')")(
+          Seq(secondScheduleInstant, 1, HoodieInstant.State.COMPLETED.name(), "*"),
+          Seq(firstScheduleInstant, 3, HoodieInstant.State.COMPLETED.name(), "*")
+        )
+
         // Do clustering without manual schedule(which will do the schedule if no pending clustering exists)
         spark.sql(s"insert into $tableName values(5, 'a5', 10, 1004)")
         spark.sql(s"insert into $tableName values(6, 'a6', 10, 1005)")
-        spark.sql(s"call run_clustering(table => '$tableName', order => 'ts')")
+        spark.sql(s"call run_clustering(table => '$tableName', order => 'ts', show_involved_partition => true)").show()
 
         val thirdClusteringInstant = HoodieDataSourceHelpers.allCompletedCommitsCompactions(fs, basePath)
           .findInstantsAfter(secondScheduleInstant)
@@ -142,7 +148,7 @@ class TestClusteringProcedure extends HoodieSparkSqlTestBase {
              | location '$basePath'
        """.stripMargin)
 
-        spark.sql(s"call run_clustering(path => '$basePath')")
+        spark.sql(s"call run_clustering(path => '$basePath')").show()
         checkAnswer(s"call show_clustering(path => '$basePath')")()
 
         spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
@@ -152,18 +158,22 @@ class TestClusteringProcedure extends HoodieSparkSqlTestBase {
         // Generate the first clustering plan
         val firstScheduleInstant = HoodieActiveTimeline.createNewInstantTime
         client.scheduleClusteringAtInstant(firstScheduleInstant, HOption.empty())
-        checkAnswer(s"call show_clustering(path => '$basePath')")(
-          Seq(firstScheduleInstant, 3)
+        checkAnswer(s"call show_clustering(path => '$basePath', show_involved_partition => true)")(
+          Seq(firstScheduleInstant, 3, HoodieInstant.State.REQUESTED.name(), "ts=1000,ts=1001,ts=1002")
         )
         // Do clustering for all the clustering plan
-        spark.sql(s"call run_clustering(path => '$basePath', order => 'ts')")
+        checkAnswer(s"call run_clustering(path => '$basePath', order => 'ts')")(
+          Seq(firstScheduleInstant, 3, HoodieInstant.State.COMPLETED.name(), "*")
+        )
+
         checkAnswer(s"select id, name, price, ts from $tableName order by id")(
           Seq(1, "a1", 10.0, 1000),
           Seq(2, "a2", 10.0, 1001),
           Seq(3, "a3", 10.0, 1002)
         )
+
         val fs = new Path(basePath).getFileSystem(spark.sessionState.newHadoopConf())
-        HoodieDataSourceHelpers.hasNewCommits(fs, basePath, firstScheduleInstant)
+        assertResult(false)(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, firstScheduleInstant))
 
         // Check the number of finished clustering instants
         var finishedClustering = HoodieDataSourceHelpers.allCompletedCommitsCompactions(fs, basePath)
@@ -176,7 +186,7 @@ class TestClusteringProcedure extends HoodieSparkSqlTestBase {
         // Do clustering without manual schedule(which will do the schedule if no pending clustering exists)
         spark.sql(s"insert into $tableName values(4, 'a4', 10, 1003)")
         spark.sql(s"insert into $tableName values(5, 'a5', 10, 1004)")
-        spark.sql(s"call run_clustering(table => '$tableName', predicate => 'ts >= 1003L')")
+        spark.sql(s"call run_clustering(table => '$tableName', predicate => 'ts >= 1003L')").show()
         checkAnswer(s"select id, name, price, ts from $tableName order by id")(
           Seq(1, "a1", 10.0, 1000),
           Seq(2, "a2", 10.0, 1001),
@@ -230,7 +240,7 @@ class TestClusteringProcedure extends HoodieSparkSqlTestBase {
           )("Only partition predicates are allowed")
 
           // Do clustering table with partition predicate
-          spark.sql(s"call run_clustering(table => '$tableName', predicate => 'ts <= 1001L', order => 'ts')")
+          spark.sql(s"call run_clustering(table => '$tableName', predicate => 'ts <= 1001L', order => 'ts')").show()
 
           // There is 1 completed clustering instant
           val clusteringInstants = HoodieDataSourceHelpers.allCompletedCommitsCompactions(fs, basePath)
@@ -247,7 +257,7 @@ class TestClusteringProcedure extends HoodieSparkSqlTestBase {
           assertResult(2)(clusteringPlan.get().getInputGroups.size())
 
           // No pending clustering instant
-          checkAnswer(s"call show_clustering(table => '$tableName')")()
+          spark.sql(s"call show_clustering(table => '$tableName')").show()
 
           checkAnswer(s"select id, name, price, ts from $tableName order by id")(
             Seq(1, "a1", 10.0, 1000),
@@ -267,7 +277,7 @@ class TestClusteringProcedure extends HoodieSparkSqlTestBase {
           )("Only partition predicates are allowed")
 
           // Do clustering table with partition predicate
-          spark.sql(s"call run_clustering(table => '$tableName', predicate => 'ts > 1001L and ts <= 1005L', order => 'ts')")
+          spark.sql(s"call run_clustering(table => '$tableName', predicate => 'ts > 1001L and ts <= 1005L', order => 'ts')").show()
 
           // There are 2 completed clustering instants
           val clusteringInstants = HoodieDataSourceHelpers.allCompletedCommitsCompactions(fs, basePath)
@@ -284,7 +294,7 @@ class TestClusteringProcedure extends HoodieSparkSqlTestBase {
           assertResult(4)(clusteringPlan.get().getInputGroups.size())
 
           // No pending clustering instant
-          checkAnswer(s"call show_clustering(table => '$tableName')")()
+          spark.sql(s"call show_clustering(table => '$tableName')").show()
 
           checkAnswer(s"select id, name, price, ts from $tableName order by id")(
             Seq(1, "a1", 10.0, 1000),
@@ -308,7 +318,7 @@ class TestClusteringProcedure extends HoodieSparkSqlTestBase {
           )("Only partition predicates are allowed")
 
           // Do clustering table with partition predicate
-          spark.sql(s"call run_clustering(table => '$tableName', predicate => '(ts >= 1006L and ts < 1008L) or ts >= 1009L', order => 'ts')")
+          spark.sql(s"call run_clustering(table => '$tableName', predicate => '(ts >= 1006L and ts < 1008L) or ts >= 1009L', order => 'ts')").show()
 
           // There are 3 completed clustering instants
           val clusteringInstants = HoodieDataSourceHelpers.allCompletedCommitsCompactions(fs, basePath)
@@ -325,7 +335,7 @@ class TestClusteringProcedure extends HoodieSparkSqlTestBase {
           assertResult(3)(clusteringPlan.get().getInputGroups.size())
 
           // No pending clustering instant
-          checkAnswer(s"call show_clustering(table => '$tableName')")()
+          spark.sql(s"call show_clustering(table => '$tableName')").show()
 
           checkAnswer(s"select id, name, price, ts from $tableName order by id")(
             Seq(1, "a1", 10.0, 1000),
