@@ -289,6 +289,10 @@
                   <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.util.MetricSampleQuantiles
                   </shadedPattern>
                 </relocation>
+                <relocation>
+                  <pattern>org.apache.hadoop.hive.serde2.</pattern>
+                  <shadedPattern>${flink.bundle.shade.prefix}org.apache.hadoop.hive.serde2.</shadedPattern>
+                </relocation>
               </relocations>
               <filters>
                 <filter>
