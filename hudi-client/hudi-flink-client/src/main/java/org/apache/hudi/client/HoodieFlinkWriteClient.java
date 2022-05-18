@@ -356,9 +356,9 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
       HoodieCommitMetadata metadata,
       HoodieTable table,
       String compactionCommitTime) {
-    this.context.setJobStatus(this.getClass().getSimpleName(), "Collect compaction write status and commit compaction");
+    this.context.setJobStatus(this.getClass().getSimpleName(), "Collect compaction write status and commit compaction: " + config.getTableName());
     List<HoodieWriteStat> writeStats = metadata.getWriteStats();
-    final HoodieInstant compactionInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, compactionCommitTime);
+    final HoodieInstant compactionInstant = HoodieTimeline.getCompactionInflightInstant(compactionCommitTime);
     try {
       this.txnManager.beginTransaction(Option.of(compactionInstant), Option.empty());
       finalizeWrite(table, compactionCommitTime, writeStats);
@@ -372,6 +372,9 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
     } finally {
       this.txnManager.endTransaction(Option.of(compactionInstant));
     }
+    WriteMarkersFactory
+        .get(config.getMarkersType(), table, compactionCommitTime)
+        .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
     if (compactionTimer != null) {
       long durationInMs = metrics.getDurationInMs(compactionTimer.stop());
       try {
@@ -508,7 +511,7 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
         List<String> partitionPaths =
             FSUtils.getAllPartitionPaths(context, config.getMetadataConfig(), table.getMetaClient().getBasePath());
         if (partitionPaths != null && partitionPaths.size() > 0) {
-          context.setJobStatus(this.getClass().getSimpleName(), "Getting ExistingFileIds of all partitions");
+          context.setJobStatus(this.getClass().getSimpleName(), "Getting ExistingFileIds of all partitions: " + config.getTableName());
           partitionToExistingFileIds = partitionPaths.stream().parallel()
               .collect(
                   Collectors.toMap(

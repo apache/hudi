@@ -49,7 +49,7 @@ public class TestHoodieFileWriterFactory extends HoodieClientTestBase {
     SparkTaskContextSupplier supplier = new SparkTaskContextSupplier();
     HoodieFileWriter<IndexedRecord> parquetWriter = HoodieFileWriterFactory.getFileWriter(instantTime,
         parquetPath, table, cfg, HoodieTestDataGenerator.AVRO_SCHEMA, supplier);
-    assertTrue(parquetWriter instanceof HoodieParquetWriter);
+    assertTrue(parquetWriter instanceof HoodieAvroParquetWriter);
 
     // hfile format.
     final Path hfilePath = new Path(basePath + "/partition/path/f1_1-0-1_000.hfile");

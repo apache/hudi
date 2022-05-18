@@ -245,7 +245,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     }
   }
 
-  private void deleteInstantFile(HoodieInstant instant) {
+  protected void deleteInstantFile(HoodieInstant instant) {
     LOG.info("Deleting instant " + instant);
     Path inFlightCommitFilePath = getInstantFileNamePath(instant.getFileName());
     try {
@@ -536,7 +536,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     transitionState(fromInstant, toInstant, data, false);
   }
 
-  private void transitionState(HoodieInstant fromInstant, HoodieInstant toInstant, Option<byte[]> data,
+  protected void transitionState(HoodieInstant fromInstant, HoodieInstant toInstant, Option<byte[]> data,
        boolean allowRedundantTransitions) {
     ValidationUtils.checkArgument(fromInstant.getTimestamp().equals(toInstant.getTimestamp()));
     try {
@@ -566,7 +566,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     }
   }
 
-  private void revertCompleteToInflight(HoodieInstant completed, HoodieInstant inflight) {
+  protected void revertCompleteToInflight(HoodieInstant completed, HoodieInstant inflight) {
     ValidationUtils.checkArgument(completed.getTimestamp().equals(inflight.getTimestamp()));
     Path inFlightCommitFilePath = getInstantFileNamePath(inflight.getFileName());
     Path commitFilePath = getInstantFileNamePath(completed.getFileName());
@@ -632,7 +632,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   }
 
   /**
-   * Saves content for inflight/requested REPLACE instant.
+   * Saves content for requested REPLACE instant.
    */
   public void saveToPendingReplaceCommit(HoodieInstant instant, Option<byte[]> content) {
     ValidationUtils.checkArgument(instant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION));
@@ -719,7 +719,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     createFileInMetaPath(instant.getFileName(), content, false);
   }
 
-  private void createFileInMetaPath(String filename, Option<byte[]> content, boolean allowOverwrite) {
+  protected void createFileInMetaPath(String filename, Option<byte[]> content, boolean allowOverwrite) {
     Path fullPath = getInstantFileNamePath(filename);
     if (allowOverwrite || metaClient.getTimelineLayoutVersion().isNullVersion()) {
       FileIOUtils.createFileInPath(metaClient.getFs(), fullPath, content);

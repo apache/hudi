@@ -85,7 +85,7 @@ public class CompactionAdminClient extends BaseHoodieClient {
     if (plan.getOperations() != null) {
       List<CompactionOperation> ops = plan.getOperations().stream()
           .map(CompactionOperation::convertFromAvroRecordInstance).collect(Collectors.toList());
-      context.setJobStatus(this.getClass().getSimpleName(), "Validate compaction operations");
+      context.setJobStatus(this.getClass().getSimpleName(), "Validate compaction operations: " + config.getTableName());
       return context.map(ops, op -> {
         try {
           return validateCompactionOperation(metaClient, compactionInstant, op, Option.of(fsView));
@@ -351,7 +351,7 @@ public class CompactionAdminClient extends BaseHoodieClient {
     } else {
       LOG.info("The following compaction renaming operations needs to be performed to un-schedule");
       if (!dryRun) {
-        context.setJobStatus(this.getClass().getSimpleName(), "Execute unschedule operations");
+        context.setJobStatus(this.getClass().getSimpleName(), "Execute unschedule operations: " + config.getTableName());
         return context.map(renameActions, lfPair -> {
           try {
             LOG.info("RENAME " + lfPair.getLeft().getPath() + " => " + lfPair.getRight().getPath());
@@ -394,7 +394,7 @@ public class CompactionAdminClient extends BaseHoodieClient {
           "Number of Compaction Operations :" + plan.getOperations().size() + " for instant :" + compactionInstant);
       List<CompactionOperation> ops = plan.getOperations().stream()
           .map(CompactionOperation::convertFromAvroRecordInstance).collect(Collectors.toList());
-      context.setJobStatus(this.getClass().getSimpleName(), "Generate compaction unscheduling operations");
+      context.setJobStatus(this.getClass().getSimpleName(), "Generate compaction unscheduling operations: " + config.getTableName());
       return context.flatMap(ops, op -> {
         try {
           return getRenamingActionsForUnschedulingCompactionOperation(metaClient, compactionInstant, op,

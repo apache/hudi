@@ -54,6 +54,8 @@ import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import javax.annotation.concurrent.NotThreadSafe;
+
 import java.io.IOException;
 import java.util.Collections;
 import java.util.HashSet;
@@ -91,6 +93,7 @@ import java.util.Set;
  *
  * </p>
  */
+@NotThreadSafe
 public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends HoodieWriteHandle<T, I, K, O> {
 
   private static final Logger LOG = LogManager.getLogger(HoodieMergeHandle.class);
@@ -262,6 +265,9 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
       if (oldRecord != record) {
         // the incoming record is chosen
         isDelete = HoodieOperation.isDelete(hoodieRecord.getOperation());
+      } else {
+        // the incoming record is dropped
+        return false;
       }
     }
     return writeRecord(hoodieRecord, indexedRecord, isDelete);

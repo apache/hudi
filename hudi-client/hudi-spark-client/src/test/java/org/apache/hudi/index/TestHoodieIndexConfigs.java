@@ -26,7 +26,8 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex.IndexType;
 import org.apache.hudi.index.bloom.HoodieBloomIndex;
 import org.apache.hudi.index.bloom.HoodieGlobalBloomIndex;
-import org.apache.hudi.index.bucket.HoodieBucketIndex;
+import org.apache.hudi.index.bucket.HoodieSimpleBucketIndex;
+import org.apache.hudi.index.bucket.HoodieSparkConsistentBucketIndex;
 import org.apache.hudi.index.hbase.SparkHoodieHBaseIndex;
 import org.apache.hudi.index.inmemory.HoodieInMemoryHashIndex;
 import org.apache.hudi.index.simple.HoodieSimpleIndex;
@@ -88,8 +89,15 @@ public class TestHoodieIndexConfigs {
         break;
       case BUCKET:
         config = clientConfigBuilder.withPath(basePath)
-            .withIndexConfig(indexConfigBuilder.withIndexType(IndexType.BUCKET).build()).build();
-        assertTrue(SparkHoodieIndexFactory.createIndex(config) instanceof HoodieBucketIndex);
+            .withIndexConfig(indexConfigBuilder.withIndexType(IndexType.BUCKET)
+                .withBucketIndexEngineType(HoodieIndex.BucketIndexEngineType.SIMPLE).build()).build();
+        assertTrue(SparkHoodieIndexFactory.createIndex(config) instanceof HoodieSimpleBucketIndex);
+
+        config = clientConfigBuilder.withPath(basePath)
+            .withIndexConfig(indexConfigBuilder.withIndexType(IndexType.BUCKET)
+              .withBucketIndexEngineType(HoodieIndex.BucketIndexEngineType.CONSISTENT_HASHING).build())
+            .build();
+        assertTrue(SparkHoodieIndexFactory.createIndex(config) instanceof HoodieSparkConsistentBucketIndex);
         break;
       default:
         // no -op. just for checkstyle errors

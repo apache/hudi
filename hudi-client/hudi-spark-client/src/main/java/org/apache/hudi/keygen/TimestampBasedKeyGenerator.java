@@ -29,8 +29,8 @@ import org.apache.spark.sql.types.StructType;
 
 import java.io.IOException;
 
-import static org.apache.hudi.keygen.KeyGenUtils.HUDI_DEFAULT_PARTITION_PATH;
 import static org.apache.hudi.keygen.KeyGenUtils.EMPTY_RECORDKEY_PLACEHOLDER;
+import static org.apache.hudi.keygen.KeyGenUtils.HUDI_DEFAULT_PARTITION_PATH;
 import static org.apache.hudi.keygen.KeyGenUtils.NULL_RECORDKEY_PLACEHOLDER;
 
 /**
@@ -61,24 +61,24 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
 
   @Override
   public String getRecordKey(Row row) {
-    buildFieldPositionMapIfNeeded(row.schema());
-    return RowKeyGeneratorHelper.getRecordKeyFromRow(row, getRecordKeyFields(), recordKeyPositions, false);
+    buildFieldSchemaInfoIfNeeded(row.schema());
+    return RowKeyGeneratorHelper.getRecordKeyFromRow(row, getRecordKeyFields(), recordKeySchemaInfo, false);
   }
 
   @Override
   public String getPartitionPath(Row row) {
-    buildFieldPositionMapIfNeeded(row.schema());
-    Object partitionPathFieldVal = RowKeyGeneratorHelper.getNestedFieldVal(row, partitionPathPositions.get(getPartitionPathFields().get(0)));
+    buildFieldSchemaInfoIfNeeded(row.schema());
+    Object partitionPathFieldVal = RowKeyGeneratorHelper.getNestedFieldVal(row, partitionPathSchemaInfo.get(getPartitionPathFields().get(0)).getKey());
     return getTimestampBasedPartitionPath(partitionPathFieldVal);
   }
 
   @Override
   public String getPartitionPath(InternalRow internalRow, StructType structType) {
-    buildFieldDataTypesMapIfNeeded(structType);
+    buildFieldSchemaInfoIfNeeded(structType);
     validatePartitionFieldsForInternalRow();
     Object partitionPathFieldVal = RowKeyGeneratorHelper.getFieldValFromInternalRow(internalRow,
-        partitionPathPositions.get(getPartitionPathFields().get(0)).get(0),
-        partitionPathDataTypes.get(getPartitionPathFields().get(0)).get(0));
+        partitionPathSchemaInfo.get(getPartitionPathFields().get(0)).getKey().get(0),
+        partitionPathSchemaInfo.get(getPartitionPathFields().get(0)).getValue());
     return getTimestampBasedPartitionPath(partitionPathFieldVal);
   }
 

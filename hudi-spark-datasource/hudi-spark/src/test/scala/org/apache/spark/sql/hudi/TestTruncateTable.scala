@@ -23,7 +23,7 @@ import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.keygen.{ComplexKeyGenerator, SimpleKeyGenerator}
 import org.apache.spark.sql.SaveMode
 
-class TestTruncateTable extends TestHoodieSqlBase {
+class TestTruncateTable extends HoodieSparkSqlTestBase {
 
   test("Test Truncate non-partitioned Table") {
     Seq("cow", "mor").foreach { tableType =>

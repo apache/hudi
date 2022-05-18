@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 dag_name: simple-deltastreamer.yaml
-dag_rounds: 3
+dag_rounds: 6
 dag_intermittent_delay_mins: 0
 dag_content:
   first_insert:
