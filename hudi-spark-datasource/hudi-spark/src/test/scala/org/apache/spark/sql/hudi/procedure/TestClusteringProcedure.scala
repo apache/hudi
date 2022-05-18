@@ -186,7 +186,12 @@ class TestClusteringProcedure extends HoodieSparkSqlTestBase {
         // Do clustering without manual schedule(which will do the schedule if no pending clustering exists)
         spark.sql(s"insert into $tableName values(4, 'a4', 10, 1003)")
         spark.sql(s"insert into $tableName values(5, 'a5', 10, 1004)")
-        spark.sql(s"call run_clustering(table => '$tableName', predicate => 'ts >= 1003L')").show()
+        val resultA = spark.sql(s"call run_clustering(table => '$tableName', predicate => 'ts >= 1003L', show_involved_partition => true)")
+          .collect()
+          .map(row => Seq(row.getString(0), row.getInt(1), row.getString(2), row.getString(3)))
+        assertResult(1)(resultA.length)
+        assertResult("ts=1003,ts=1004")(resultA(0)(3))
+
         checkAnswer(s"select id, name, price, ts from $tableName order by id")(
           Seq(1, "a1", 10.0, 1000),
           Seq(2, "a2", 10.0, 1001),
@@ -230,6 +235,8 @@ class TestClusteringProcedure extends HoodieSparkSqlTestBase {
         val fs = new Path(basePath).getFileSystem(spark.sessionState.newHadoopConf())
 
         // Test partition pruning with single predicate
+        var resultA: Array[Seq[Any]] = Array.empty
+
         {
           spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
           spark.sql(s"insert into $tableName values(2, 'a2', 10, 1001)")
@@ -240,7 +247,11 @@ class TestClusteringProcedure extends HoodieSparkSqlTestBase {
           )("Only partition predicates are allowed")
 
           // Do clustering table with partition predicate
-          spark.sql(s"call run_clustering(table => '$tableName', predicate => 'ts <= 1001L', order => 'ts')").show()
+          resultA = spark.sql(s"call run_clustering(table => '$tableName', predicate => 'ts <= 1001L', order => 'ts', show_involved_partition => true)")
+            .collect()
+            .map(row => Seq(row.getString(0), row.getInt(1), row.getString(2), row.getString(3)))
+          assertResult(1)(resultA.length)
+          assertResult("ts=1000,ts=1001")(resultA(0)(3))
 
           // There is 1 completed clustering instant
           val clusteringInstants = HoodieDataSourceHelpers.allCompletedCommitsCompactions(fs, basePath)
@@ -255,9 +266,12 @@ class TestClusteringProcedure extends HoodieSparkSqlTestBase {
           val clusteringPlan = HoodieDataSourceHelpers.getClusteringPlan(fs, basePath, clusteringInstant.getTimestamp)
           assertResult(true)(clusteringPlan.isPresent)
           assertResult(2)(clusteringPlan.get().getInputGroups.size())
+          assertResult(resultA(0)(1))(clusteringPlan.get().getInputGroups.size())
 
-          // No pending clustering instant
-          spark.sql(s"call show_clustering(table => '$tableName')").show()
+          // All clustering instants are completed
+          checkAnswer(s"call show_clustering(table => '$tableName', show_involved_partition => true)")(
+            Seq(resultA(0).head, resultA(0)(1), HoodieInstant.State.COMPLETED.name(), "ts=1000,ts=1001")
+          )
 
           checkAnswer(s"select id, name, price, ts from $tableName order by id")(
             Seq(1, "a1", 10.0, 1000),
@@ -267,6 +281,8 @@ class TestClusteringProcedure extends HoodieSparkSqlTestBase {
         }
 
         // Test partition pruning with {@code And} predicates
+        var resultB: Array[Seq[Any]] = Array.empty
+
         {
           spark.sql(s"insert into $tableName values(4, 'a4', 10, 1003)")
           spark.sql(s"insert into $tableName values(5, 'a5', 10, 1004)")
@@ -277,7 +293,11 @@ class TestClusteringProcedure extends HoodieSparkSqlTestBase {
           )("Only partition predicates are allowed")
 
           // Do clustering table with partition predicate
-          spark.sql(s"call run_clustering(table => '$tableName', predicate => 'ts > 1001L and ts <= 1005L', order => 'ts')").show()
+          resultB = spark.sql(s"call run_clustering(table => '$tableName', predicate => 'ts > 1001L and ts <= 1005L', order => 'ts', show_involved_partition => true)")
+            .collect()
+            .map(row => Seq(row.getString(0), row.getInt(1), row.getString(2), row.getString(3)))
+          assertResult(1)(resultB.length)
+          assertResult("ts=1002,ts=1003,ts=1004,ts=1005")(resultB(0)(3))
 
           // There are 2 completed clustering instants
           val clusteringInstants = HoodieDataSourceHelpers.allCompletedCommitsCompactions(fs, basePath)
@@ -293,8 +313,11 @@ class TestClusteringProcedure extends HoodieSparkSqlTestBase {
           assertResult(true)(clusteringPlan.isPresent)
           assertResult(4)(clusteringPlan.get().getInputGroups.size())
 
-          // No pending clustering instant
-          spark.sql(s"call show_clustering(table => '$tableName')").show()
+          // All clustering instants are completed
+          checkAnswer(s"call show_clustering(table => '$tableName', show_involved_partition => true)")(
+            Seq(resultA(0).head, resultA(0)(1), HoodieInstant.State.COMPLETED.name(), "ts=1000,ts=1001"),
+            Seq(resultB(0).head, resultB(0)(1), HoodieInstant.State.COMPLETED.name(), "ts=1002,ts=1003,ts=1004,ts=1005")
+          )
 
           checkAnswer(s"select id, name, price, ts from $tableName order by id")(
             Seq(1, "a1", 10.0, 1000),
@@ -307,6 +330,8 @@ class TestClusteringProcedure extends HoodieSparkSqlTestBase {
         }
 
         // Test partition pruning with {@code And}-{@code Or} predicates
+        var resultC: Array[Seq[Any]] = Array.empty
+
         {
           spark.sql(s"insert into $tableName values(7, 'a7', 10, 1006)")
           spark.sql(s"insert into $tableName values(8, 'a8', 10, 1007)")
@@ -318,7 +343,11 @@ class TestClusteringProcedure extends HoodieSparkSqlTestBase {
           )("Only partition predicates are allowed")
 
           // Do clustering table with partition predicate
-          spark.sql(s"call run_clustering(table => '$tableName', predicate => '(ts >= 1006L and ts < 1008L) or ts >= 1009L', order => 'ts')").show()
+          resultC = spark.sql(s"call run_clustering(table => '$tableName', predicate => '(ts >= 1006L and ts < 1008L) or ts >= 1009L', order => 'ts', show_involved_partition => true)")
+            .collect()
+            .map(row => Seq(row.getString(0), row.getInt(1), row.getString(2), row.getString(3)))
+          assertResult(1)(resultC.length)
+          assertResult("ts=1006,ts=1007,ts=1009")(resultC(0)(3))
 
           // There are 3 completed clustering instants
           val clusteringInstants = HoodieDataSourceHelpers.allCompletedCommitsCompactions(fs, basePath)
@@ -334,8 +363,12 @@ class TestClusteringProcedure extends HoodieSparkSqlTestBase {
           assertResult(true)(clusteringPlan.isPresent)
           assertResult(3)(clusteringPlan.get().getInputGroups.size())
 
-          // No pending clustering instant
-          spark.sql(s"call show_clustering(table => '$tableName')").show()
+          // All clustering instants are completed
+          checkAnswer(s"call show_clustering(table => '$tableName', show_involved_partition => true)")(
+            Seq(resultA(0).head, resultA(0)(1), HoodieInstant.State.COMPLETED.name(), "ts=1000,ts=1001"),
+            Seq(resultB(0).head, resultB(0)(1), HoodieInstant.State.COMPLETED.name(), "ts=1002,ts=1003,ts=1004,ts=1005"),
+            Seq(resultC(0).head, resultC(0)(1), HoodieInstant.State.COMPLETED.name(), "ts=1006,ts=1007,ts=1009")
+          )
 
           checkAnswer(s"select id, name, price, ts from $tableName order by id")(
             Seq(1, "a1", 10.0, 1000),
