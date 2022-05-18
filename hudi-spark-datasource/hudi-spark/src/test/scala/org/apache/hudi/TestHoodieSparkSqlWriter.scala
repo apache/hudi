@@ -273,6 +273,30 @@ class TestHoodieSparkSqlWriter {
   }
 
   /**
+    * Test case for throw hoodie exception when there already exist a table
+    * with different name with Append Save mode
+    */
+  @Test
+  def testValidateTableConfigWithOverwriteSaveMode(): Unit = {
+    //create a new table
+    val tableModifier1 = Map("path" -> tempBasePath, HoodieWriteConfig.TBL_NAME.key -> hoodieFooTableName,
+      "hoodie.datasource.write.recordkey.field" -> "uuid")
+    val dataFrame = spark.createDataFrame(Seq(StringLongTest(UUID.randomUUID().toString, new Date().getTime)))
+    HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, tableModifier1, dataFrame)
+
+    //on same path try write with different RECORDKEY_FIELD_NAME which and Append SaveMode should throw an exception
+    val tableModifier2 = Map("path" -> tempBasePath, HoodieWriteConfig.TBL_NAME.key -> hoodieFooTableName,
+      "hoodie.datasource.write.recordkey.field" -> "ts")
+    val dataFrame2 = spark.createDataFrame(Seq(StringLongTest(UUID.randomUUID().toString, new Date().getTime)))
+    val hoodieException = intercept[HoodieException](HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, tableModifier2, dataFrame2))
+    assert(hoodieException.getMessage.contains("Config conflict"))
+    assert(hoodieException.getMessage.contains(s"RecordKey:\tts\tuuid"))
+
+    //on same path try write with different RECORDKEY_FIELD_NAME which and Overwrite SaveMode should be successful.
+    assert(HoodieSparkSqlWriter.write(sqlContext, SaveMode.Overwrite, tableModifier2, dataFrame2)._1)
+  }
+
+  /**
    * Test case for each bulk insert sort mode
    *
    * @param sortMode Bulk insert sort mode
