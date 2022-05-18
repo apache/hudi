@@ -22,6 +22,8 @@ import org.apache.hudi.AvroConversionUtils.convertAvroSchemaToStructType
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 
+import scala.collection.JavaConverters.asScalaBufferConverter
+
 class TestHoodieRelations {
 
   @Test
@@ -43,7 +45,7 @@ class TestHoodieRelations {
     val (requiredAvroSchema, requiredStructSchema, _) =
       HoodieBaseRelation.pruneSchema(tableAvroSchema, Array("ts"))
 
-    assertEquals(Seq(tableAvroSchema.getField("ts")), requiredAvroSchema.getFields)
+    assertEquals(Seq(tableAvroSchema.getField("ts")), requiredAvroSchema.getFields.asScala)
     assertEquals(
       Seq(tableStructSchema.fields.apply(tableStructSchema.fieldIndex("ts"))),
       requiredStructSchema.fields.toSeq
