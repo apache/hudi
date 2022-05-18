@@ -815,6 +815,9 @@ object DataSourceOptionsHelper {
     }
   }
 
+  def isHoodieConfigKey(key: String): Boolean =
+    key.startsWith("hoodie.") || key == DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key
+
   implicit def scalaFunctionToJavaFunction[From, To](function: (From) => To): JavaFunction[From, To] = {
     new JavaFunction[From, To] {
       override def apply (input: From): To = function (input)
