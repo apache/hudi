@@ -18,6 +18,7 @@
 
 package org.apache.hudi;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.common.config.TypedProperties;
@@ -63,7 +64,6 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 import static org.apache.hudi.DataSourceUtils.mayBeOverwriteParquetWriteLegacyFormatProp;
 import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
@@ -323,20 +323,20 @@ public class TestDataSourceUtils {
       structFields.add(StructField.apply("d1", DecimalType$.MODULE$.apply(38, 10), false, Metadata.empty()));
     }
     StructType structType = StructType$.MODULE$.apply(structFields);
-    // create write options
-    Map<String, String> options = new HashMap<>();
-    options.put("hoodie.parquet.writelegacyformat.enabled", String.valueOf(defaultWriteValue));
+    // create write configuration
+    Configuration configuration = new Configuration();
+    configuration.set("spark.sql.parquet.writeLegacyFormat", String.valueOf(defaultWriteValue));
 
     // start test
-    mayBeOverwriteParquetWriteLegacyFormatProp(options, structType);
+    mayBeOverwriteParquetWriteLegacyFormatProp(configuration, structType);
 
     // check result
-    boolean res = Boolean.parseBoolean(options.get("hoodie.parquet.writelegacyformat.enabled"));
+    boolean res = Boolean.parseBoolean(configuration.get("spark.sql.parquet.writeLegacyFormat"));
     if (smallDecimal) {
-      // should auto modify "hoodie.parquet.writelegacyformat.enabled" = "true".
+      // should auto modify "spark.sql.parquet.writeLegacyFormat" = "true".
       assertEquals(true, res);
     } else {
-      // should not modify the value of "hoodie.parquet.writelegacyformat.enabled".
+      // should not modify the value of "spark.sql.parquet.writeLegacyFormat".
       assertEquals(defaultWriteValue, res);
     }
   }

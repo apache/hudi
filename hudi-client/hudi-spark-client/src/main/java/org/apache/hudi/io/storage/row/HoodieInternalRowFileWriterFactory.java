@@ -65,6 +65,7 @@ public class HoodieInternalRowFileWriterFactory {
             writeConfig.getBloomFilterFPP(),
             writeConfig.getDynamicBloomFilterMaxNumEntries(),
             writeConfig.getBloomFilterType());
+
     HoodieRowParquetWriteSupport writeSupport =
             new HoodieRowParquetWriteSupport(table.getHadoopConf(), structType, filter, writeConfig);
     return new HoodieInternalRowParquetWriter(

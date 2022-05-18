@@ -58,7 +58,7 @@ public class DefaultSource extends BaseDefaultSource implements TableProvider {
         Boolean.toString(HoodieInternalConfig.DEFAULT_BULKINSERT_ARE_PARTITIONER_RECORDS_SORTED)));
     // Create a new map as the properties is an unmodifiableMap on Spark 3.2.0
     Map<String, String> newProps = new HashMap<>(properties);
-    // Auto set the value of "hoodie.parquet.writelegacyformat.enabled"
+    // Auto set the value of "spark.sql.parquet.writeLegacyFormat"
     mayBeOverwriteParquetWriteLegacyFormatProp(newProps, schema);
     // 1st arg to createHoodieConfig is not really required to be set. but passing it anyways.
     HoodieWriteConfig config = DataSourceUtils.createHoodieConfig(newProps.get(HoodieWriteConfig.AVRO_SCHEMA_STRING.key()), path, tblName, newProps);

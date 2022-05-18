@@ -21,7 +21,6 @@ package org.apache.hudi.io.storage.row;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
-import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.testutils.HoodieClientTestHarness;
 import org.apache.hudi.testutils.SparkDatasetTestUtils;
@@ -69,9 +68,12 @@ public class TestHoodieInternalRowParquetWriter extends HoodieClientTestHarness 
   public void endToEndTest(boolean parquetWriteLegacyFormatEnabled) throws Exception {
     HoodieWriteConfig.Builder writeConfigBuilder =
         SparkDatasetTestUtils.getConfigBuilder(basePath, timelineServicePort);
+
+    hadoopConf.setBoolean("spark.sql.parquet.writeLegacyFormat", parquetWriteLegacyFormatEnabled);
+
     for (int i = 0; i < 5; i++) {
       // init write support and parquet config
-      HoodieRowParquetWriteSupport writeSupport = getWriteSupport(writeConfigBuilder, hadoopConf, parquetWriteLegacyFormatEnabled);
+      HoodieRowParquetWriteSupport writeSupport = getWriteSupport(writeConfigBuilder, hadoopConf);
       HoodieWriteConfig cfg = writeConfigBuilder.build();
       HoodieRowParquetConfig parquetConfig = new HoodieRowParquetConfig(writeSupport,
           CompressionCodecName.SNAPPY, cfg.getParquetBlockSize(), cfg.getParquetPageSize(), cfg.getParquetMaxFileSize(),
@@ -106,8 +108,7 @@ public class TestHoodieInternalRowParquetWriter extends HoodieClientTestHarness 
     }
   }
 
-  private HoodieRowParquetWriteSupport getWriteSupport(HoodieWriteConfig.Builder writeConfigBuilder, Configuration hadoopConf, boolean parquetWriteLegacyFormatEnabled) {
-    writeConfigBuilder.withStorageConfig(HoodieStorageConfig.newBuilder().parquetWriteLegacyFormat(String.valueOf(parquetWriteLegacyFormatEnabled)).build());
+  private HoodieRowParquetWriteSupport getWriteSupport(HoodieWriteConfig.Builder writeConfigBuilder, Configuration hadoopConf) {
     HoodieWriteConfig writeConfig = writeConfigBuilder.build();
     BloomFilter filter = BloomFilterFactory.createBloomFilter(
         writeConfig.getBloomFilterNumEntries(),

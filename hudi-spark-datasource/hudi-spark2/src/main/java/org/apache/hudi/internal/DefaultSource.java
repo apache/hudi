@@ -68,14 +68,14 @@ public class DefaultSource extends BaseDefaultSource implements DataSourceV2,
     boolean populateMetaFields = options.getBoolean(HoodieTableConfig.POPULATE_META_FIELDS.key(),
         HoodieTableConfig.POPULATE_META_FIELDS.defaultValue());
     Map<String, String> properties = options.asMap();
-    // Auto set the value of "hoodie.parquet.writelegacyformat.enabled"
-    mayBeOverwriteParquetWriteLegacyFormatProp(properties, schema);
+    // Auto set the value of "spark.sql.parquet.writeLegacyFormat"
+    mayBeOverwriteParquetWriteLegacyFormatProp(getConfiguration(), schema);
     // 1st arg to createHoodieConfig is not really required to be set. but passing it anyways.
     HoodieWriteConfig config = DataSourceUtils.createHoodieConfig(options.get(HoodieWriteConfig.AVRO_SCHEMA_STRING.key()).get(), path, tblName, properties);
     boolean arePartitionRecordsSorted = HoodieInternalConfig.getBulkInsertIsPartitionRecordsSorted(
         options.get(HoodieInternalConfig.BULKINSERT_ARE_PARTITIONER_RECORDS_SORTED).isPresent()
             ? options.get(HoodieInternalConfig.BULKINSERT_ARE_PARTITIONER_RECORDS_SORTED).get() : null);
     return Optional.of(new HoodieDataSourceInternalWriter(instantTime, config, schema, getSparkSession(),
-        getConfiguration(), options, populateMetaFields, arePartitionRecordsSorted));
+        configuration, options, populateMetaFields, arePartitionRecordsSorted));
   }
 }
