@@ -214,8 +214,17 @@ footer .container {
   margin: 1.2em;
   vertical-align: bottom;
 }
+@media(max-width:1145px){
+  .blog-list-page article {
+    display: inline-flex;
+    width: 40%;
+    margin: 1.2em;
+    vertical-align: bottom;
+  }
+}
 
-@media only screen and (max-width: 767px) {
+
+@media only screen and (max-width: 815px) {
   .blog-list-page article {
     display: flex;
     width: 100%;
@@ -231,3 +240,14 @@ footer .container {
   height: 60px;
   overflow: hidden;
 }
+
+h1.blogPostTitle_src-theme-BlogPostItem-styles-module{
+  height:10%;
+  overflow:hidden;
+}
+
+
+
+
+
+
