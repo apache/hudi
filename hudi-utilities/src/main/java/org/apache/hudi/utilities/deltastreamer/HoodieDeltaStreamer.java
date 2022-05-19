@@ -331,8 +331,10 @@ public class HoodieDeltaStreamer implements Serializable {
         description = "the min sync interval of each sync in continuous mode")
     public Integer minSyncIntervalSeconds = 0;
 
-    @Parameter(names = {"--spark-master"}, description = "spark master to use.")
-    public String sparkMaster = "local[2]";
+    @Parameter(names = {"--spark-master"},
+        description = "spark master to use, if not defined inherits from your environment taking into "
+            + "account Spark Configuration priority rules (e.g. not using spark-submit command).")
+    public String sparkMaster = "";
 
     @Parameter(names = {"--commit-on-errors"}, description = "Commit even when some records failed to be written")
     public Boolean commitOnErrors = false;
@@ -553,9 +555,12 @@ public class HoodieDeltaStreamer implements Serializable {
   public static void main(String[] args) throws Exception {
     final Config cfg = getConfig(args);
     Map<String, String> additionalSparkConfigs = SchedulerConfGenerator.getSparkSchedulingConfigs(cfg);
-    JavaSparkContext jssc =
-        UtilHelpers.buildSparkContext("delta-streamer-" + cfg.targetTableName, cfg.sparkMaster, additionalSparkConfigs);
-
+    JavaSparkContext jssc = null;
+    if (StringUtils.isNullOrEmpty(cfg.sparkMaster)) {
+      jssc = UtilHelpers.buildSparkContext("delta-streamer-" + cfg.targetTableName, additionalSparkConfigs);
+    } else {
+      jssc = UtilHelpers.buildSparkContext("delta-streamer-" + cfg.targetTableName, cfg.sparkMaster, additionalSparkConfigs);
+    }
     if (cfg.enableHiveSync) {
       LOG.warn("--enable-hive-sync will be deprecated in a future release; please use --enable-sync instead for Hive syncing");
     }
