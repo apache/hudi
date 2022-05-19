@@ -24,6 +24,7 @@ import org.apache.hudi.exception.HoodieException;
 
 import java.io.Serializable;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.function.Function;
 import java.util.Objects;
@@ -48,19 +49,22 @@ public class ConfigProperty<T> implements Serializable {
 
   private final Option<String> deprecatedVersion;
 
+  private final List<String> validValues;
+
   private final String[] alternatives;
 
   // provide the ability to infer config value based on other configs
   private final Option<Function<HoodieConfig, Option<T>>> inferFunction;
 
   ConfigProperty(String key, T defaultValue, String doc, Option<String> sinceVersion,
-                 Option<String> deprecatedVersion, Option<Function<HoodieConfig, Option<T>>> inferFunc, String... alternatives) {
+                 Option<String> deprecatedVersion, Option<Function<HoodieConfig, Option<T>>> inferFunc, List<String> validValues, String... alternatives) {
     this.key = Objects.requireNonNull(key);
     this.defaultValue = defaultValue;
     this.doc = doc;
     this.sinceVersion = sinceVersion;
     this.deprecatedVersion = deprecatedVersion;
     this.inferFunction = inferFunc;
+    this.validValues = validValues;
     this.alternatives = alternatives;
   }
 
@@ -95,33 +99,46 @@ public class ConfigProperty<T> implements Serializable {
     return inferFunction;
   }
 
+  public void checkValues(String value) {
+    if (validValues != null && !validValues.isEmpty() && !validValues.contains(value)) {
+      throw new IllegalArgumentException(
+          "The value of " + key + " should be one of "
+              + String.join(",", validValues) + ", but was " + value);
+    }
+  }
+
   public List<String> getAlternatives() {
     return Arrays.asList(alternatives);
   }
 
   public ConfigProperty<T> withDocumentation(String doc) {
     Objects.requireNonNull(doc);
-    return new ConfigProperty<>(key, defaultValue, doc, sinceVersion, deprecatedVersion, inferFunction, alternatives);
+    return new ConfigProperty<>(key, defaultValue, doc, sinceVersion, deprecatedVersion, inferFunction, validValues, alternatives);
+  }
+
+  public ConfigProperty<T> withValidValues(List<String> validValues) {
+    Objects.requireNonNull(validValues);
+    return new ConfigProperty<>(key, defaultValue, doc, sinceVersion, deprecatedVersion, inferFunction, validValues, alternatives);
   }
 
   public ConfigProperty<T> withAlternatives(String... alternatives) {
     Objects.requireNonNull(alternatives);
-    return new ConfigProperty<>(key, defaultValue, doc, sinceVersion, deprecatedVersion, inferFunction, alternatives);
+    return new ConfigProperty<>(key, defaultValue, doc, sinceVersion, deprecatedVersion, inferFunction, validValues, alternatives);
   }
 
   public ConfigProperty<T> sinceVersion(String sinceVersion) {
     Objects.requireNonNull(sinceVersion);
-    return new ConfigProperty<>(key, defaultValue, doc, Option.of(sinceVersion), deprecatedVersion, inferFunction, alternatives);
+    return new ConfigProperty<>(key, defaultValue, doc, Option.of(sinceVersion), deprecatedVersion, inferFunction, validValues, alternatives);
   }
 
   public ConfigProperty<T> deprecatedAfter(String deprecatedVersion) {
     Objects.requireNonNull(deprecatedVersion);
-    return new ConfigProperty<>(key, defaultValue, doc, sinceVersion, Option.of(deprecatedVersion), inferFunction, alternatives);
+    return new ConfigProperty<>(key, defaultValue, doc, sinceVersion, Option.of(deprecatedVersion), inferFunction, validValues, alternatives);
   }
 
   public ConfigProperty<T> withInferFunction(Function<HoodieConfig, Option<T>> inferFunction) {
     Objects.requireNonNull(inferFunction);
-    return new ConfigProperty<>(key, defaultValue, doc, sinceVersion, deprecatedVersion, Option.of(inferFunction), alternatives);
+    return new ConfigProperty<>(key, defaultValue, doc, sinceVersion, deprecatedVersion, Option.of(inferFunction), validValues, alternatives);
   }
 
   /**
@@ -156,13 +173,13 @@ public class ConfigProperty<T> implements Serializable {
 
     public <T> ConfigProperty<T> defaultValue(T value) {
       Objects.requireNonNull(value);
-      ConfigProperty<T> configProperty = new ConfigProperty<>(key, value, "", Option.empty(), Option.empty(), Option.empty());
+      ConfigProperty<T> configProperty = new ConfigProperty<>(key, value, "", Option.empty(), Option.empty(), Option.empty(), Collections.emptyList());
       return configProperty;
     }
 
     public ConfigProperty<String> noDefaultValue() {
       ConfigProperty<String> configProperty = new ConfigProperty<>(key, null, "", Option.empty(),
-          Option.empty(), Option.empty());
+          Option.empty(), Option.empty(), Collections.emptyList());
       return configProperty;
     }
   }
