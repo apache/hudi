@@ -347,7 +347,7 @@ public class StreamerUtil {
       HoodieTableMetaClient metaClient = createMetaClient(basePath, hadoopConf);
       if (tableDataExists(metaClient)) {
         return metaClient;
-      }else{
+      } else {
         return null;
       }
     }
