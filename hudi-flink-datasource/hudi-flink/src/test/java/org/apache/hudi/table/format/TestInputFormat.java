@@ -79,7 +79,7 @@ public class TestInputFormat {
     StreamerUtil.initTableIfNotExists(conf);
   }
 
-  void createTableSource(){
+  void createTableSource() {
     this.tableSource = getTableSource(conf);
   }
 
@@ -91,7 +91,6 @@ public class TestInputFormat {
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
 
     createTableSource();
-
     InputFormat<RowData, ?> inputFormat = this.tableSource.getInputFormat();
 
     List<RowData> result = readData(inputFormat);
