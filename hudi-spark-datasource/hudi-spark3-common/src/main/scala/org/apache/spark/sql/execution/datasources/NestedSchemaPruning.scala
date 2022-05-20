@@ -70,7 +70,7 @@ class NestedSchemaPruning extends Rule[LogicalPlan] {
                                    projects: Seq[NamedExpression],
                                    filters: Seq[Expression],
                                    dataSchema: StructType,
-                                   leafNodeBuilder: StructType => LeafNode): Option[LogicalPlan] = {
+                                   outputRelationBuilder: StructType => LogicalRelation): Option[LogicalPlan] = {
     val (normalizedProjects, normalizedFilters) =
       normalizeAttributeRefNames(output, projects, filters)
     val requestedRootFields = identifyRootFields(normalizedProjects, normalizedFilters)
@@ -85,7 +85,7 @@ class NestedSchemaPruning extends Rule[LogicalPlan] {
       // each schemata, assuming the fields in prunedDataSchema are a subset of the fields
       // in dataSchema.
       if (countLeaves(dataSchema) > countLeaves(prunedDataSchema)) {
-        val prunedRelation = leafNodeBuilder(prunedDataSchema)
+        val prunedRelation = outputRelationBuilder(prunedDataSchema)
         val projectionOverSchema = ProjectionOverSchema(prunedDataSchema)
 
         Some(buildNewProjection(projects, normalizedProjects, normalizedFilters,
@@ -99,21 +99,13 @@ class NestedSchemaPruning extends Rule[LogicalPlan] {
   }
 
   /**
-   * Checks to see if the given relation can be pruned. Currently we support Parquet and ORC v1.
-   */
-  private def canPruneRelation(relation: HoodieBaseRelation) =
-    relation.fileFormat.isInstanceOf[ParquetFileFormat] ||
-      relation.fileFormat.isInstanceOf[OrcFileFormat]
-
-  /**
    * Normalizes the names of the attribute references in the given projects and filters to reflect
    * the names in the given logical relation. This makes it possible to compare attributes and
    * fields by name. Returns a tuple with the normalized projects and filters, respectively.
    */
-  private def normalizeAttributeRefNames(
-                                          output: Seq[AttributeReference],
-                                          projects: Seq[NamedExpression],
-                                          filters: Seq[Expression]): (Seq[NamedExpression], Seq[Expression]) = {
+  private def normalizeAttributeRefNames(output: Seq[AttributeReference],
+                                         projects: Seq[NamedExpression],
+                                         filters: Seq[Expression]): (Seq[NamedExpression], Seq[Expression]) = {
     val normalizedAttNameMap = output.map(att => (att.exprId, att.name)).toMap
     val normalizedProjects = projects.map(_.transform {
       case att: AttributeReference if normalizedAttNameMap.contains(att.exprId) =>
@@ -129,24 +121,23 @@ class NestedSchemaPruning extends Rule[LogicalPlan] {
   /**
    * Builds the new output [[Project]] Spark SQL operator that has the `leafNode`.
    */
-  private def buildNewProjection(
-                                  projects: Seq[NamedExpression],
-                                  normalizedProjects: Seq[NamedExpression],
-                                  filters: Seq[Expression],
-                                  leafNode: LeafNode,
-                                  projectionOverSchema: ProjectionOverSchema): Project = {
+  private def buildNewProjection(projects: Seq[NamedExpression],
+                                 normalizedProjects: Seq[NamedExpression],
+                                 filters: Seq[Expression],
+                                 prunedRelation: LogicalRelation,
+                                 projectionOverSchema: ProjectionOverSchema): Project = {
     // Construct a new target for our projection by rewriting and
     // including the original filters where available
     val projectionChild =
-    if (filters.nonEmpty) {
-      val projectedFilters = filters.map(_.transformDown {
-        case projectionOverSchema(expr) => expr
-      })
-      val newFilterCondition = projectedFilters.reduce(And)
-      Filter(newFilterCondition, leafNode)
-    } else {
-      leafNode
-    }
+      if (filters.nonEmpty) {
+        val projectedFilters = filters.map(_.transformDown {
+          case projectionOverSchema(expr) => expr
+        })
+        val newFilterCondition = projectedFilters.reduce(And)
+        Filter(newFilterCondition, prunedRelation)
+      } else {
+        prunedRelation
+      }
 
     // Construct the new projections of our Project by
     // rewriting the original projections
@@ -166,15 +157,14 @@ class NestedSchemaPruning extends Rule[LogicalPlan] {
    * pruned base relation.
    */
   private def buildPrunedRelation(outputRelation: LogicalRelation,
-                                  prunedBaseRelation: BaseRelation) = {
+                                  prunedBaseRelation: BaseRelation): LogicalRelation = {
     val prunedOutput = getPrunedOutput(outputRelation.output, prunedBaseRelation.schema)
     outputRelation.copy(relation = prunedBaseRelation, output = prunedOutput)
   }
 
   // Prune the given output to make it consistent with `requiredSchema`.
-  private def getPrunedOutput(
-                               output: Seq[AttributeReference],
-                               requiredSchema: StructType): Seq[AttributeReference] = {
+  private def getPrunedOutput(output: Seq[AttributeReference],
+                              requiredSchema: StructType): Seq[AttributeReference] = {
     // We need to replace the expression ids of the pruned relation output attributes
     // with the expression ids of the original relation output attributes so that
     // references to the original relation's output are not broken
