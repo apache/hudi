@@ -77,9 +77,6 @@ public class TestInputFormat {
     options.forEach((key, value) -> conf.setString(key, value));
 
     StreamerUtil.initTableIfNotExists(conf);
-  }
-
-  void createTableSource() {
     this.tableSource = getTableSource(conf);
   }
 
@@ -90,7 +87,6 @@ public class TestInputFormat {
 
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
 
-    createTableSource();
     InputFormat<RowData, ?> inputFormat = this.tableSource.getInputFormat();
 
     List<RowData> result = readData(inputFormat);
@@ -132,7 +128,6 @@ public class TestInputFormat {
     conf.setBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED, true);
     conf.setInteger(FlinkOptions.COMPACTION_DELTA_COMMITS, 1);
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
-    createTableSource();
 
     InputFormat<RowData, ?> inputFormat = this.tableSource.getInputFormat();
 
@@ -190,7 +185,7 @@ public class TestInputFormat {
     // write another commit using logs and read again.
     conf.setBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED, false);
     TestData.writeData(TestData.DATA_SET_UPDATE_DELETE, conf);
-    createTableSource();
+
     InputFormat<RowData, ?> inputFormat = this.tableSource.getInputFormat();
     assertThat(inputFormat, instanceOf(MergeOnReadInputFormat.class));
 
@@ -243,7 +238,6 @@ public class TestInputFormat {
     // write another commit using logs and read again.
     conf.setBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED, compact);
     TestData.writeData(TestData.DATA_SET_DISORDER_UPDATE_DELETE, conf);
-    createTableSource();
 
     InputFormat<RowData, ?> inputFormat = this.tableSource.getInputFormat();
     assertThat(inputFormat, instanceOf(MergeOnReadInputFormat.class));
@@ -276,7 +270,7 @@ public class TestInputFormat {
 
     // write another commit to read again
     TestData.writeData(TestData.DATA_SET_UPDATE_DELETE, conf);
-    createTableSource();
+
     InputFormat<RowData, ?> inputFormat = this.tableSource.getInputFormat();
     assertThat(inputFormat, instanceOf(MergeOnReadInputFormat.class));
     ((MergeOnReadInputFormat) inputFormat).isEmitDelete(true);
@@ -299,7 +293,7 @@ public class TestInputFormat {
 
     // write another commit to read again
     TestData.writeData(TestData.DATA_SET_UPDATE_DELETE, conf);
-    createTableSource();
+
     InputFormat<RowData, ?> inputFormat = this.tableSource.getInputFormat();
     assertThat(inputFormat, instanceOf(CopyOnWriteInputFormat.class));
 
@@ -318,7 +312,7 @@ public class TestInputFormat {
     beforeEach(tableType);
 
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
-    createTableSource();
+
     Map<String, String> prunedPartitions = new HashMap<>();
     prunedPartitions.put("partition", "par1");
     // prune to only be with partition 'par1'
@@ -343,7 +337,6 @@ public class TestInputFormat {
     // write another commit to read again
     TestData.writeData(TestData.DATA_SET_INSERT_UPDATE_DELETE, conf);
 
-    createTableSource();
     InputFormat<RowData, ?> inputFormat = this.tableSource.getInputFormat();
     assertThat(inputFormat, instanceOf(MergeOnReadInputFormat.class));
 
@@ -375,7 +368,7 @@ public class TestInputFormat {
 
     // write another commit to read again
     TestData.writeData(TestData.DATA_SET_INSERT_UPDATE_DELETE, conf);
-    createTableSource();
+
     InputFormat<RowData, ?> inputFormat = this.tableSource.getInputFormat();
     assertThat(inputFormat, instanceOf(MergeOnReadInputFormat.class));
 
@@ -466,7 +459,6 @@ public class TestInputFormat {
     beforeEach(tableType, options);
 
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
-    createTableSource();
     InputFormat<RowData, ?> inputFormat = this.tableSource.getInputFormat();
     List<RowData> result = readData(inputFormat);
     TestData.assertRowDataEquals(result, TestData.DATA_SET_INSERT);
@@ -489,7 +481,7 @@ public class TestInputFormat {
       List<RowData> dataset = TestData.dataSetInsert(i + 1, i + 2);
       TestData.writeData(dataset, conf);
     }
-    createTableSource();
+
     InputFormat<RowData, ?> inputFormat1 = this.tableSource.getInputFormat();
     assertThat(inputFormat1, instanceOf(MergeOnReadInputFormat.class));
 

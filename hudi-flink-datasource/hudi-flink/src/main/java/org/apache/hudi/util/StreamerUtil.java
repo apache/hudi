@@ -28,7 +28,6 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
-import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -38,7 +37,6 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieMemoryConfig;
 import org.apache.hudi.config.HoodiePayloadConfig;
@@ -294,15 +292,6 @@ public class StreamerUtil {
   }
 
   /**
-   * Returns whether the hoodie table data exists .
-   */
-  public static boolean tableDataExists(HoodieTableMetaClient metaClient) {
-    HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
-    Option<Pair<HoodieInstant, HoodieCommitMetadata>> instantAndCommitMetadata = activeTimeline.getLastCommitMetadataWithValidData();
-    return instantAndCommitMetadata.isPresent();
-  }
-
-  /**
    * Generates the bucket ID using format {partition path}_{fileID}.
    */
   public static String generateBucketKey(String partitionPath, String fileId) {
@@ -344,12 +333,7 @@ public class StreamerUtil {
     if (conf.getBoolean(FlinkOptions.READ_AS_STREAMING) && !tableExists(basePath, hadoopConf)) {
       return null;
     } else {
-      HoodieTableMetaClient metaClient = createMetaClient(basePath, hadoopConf);
-      if (tableDataExists(metaClient)) {
-        return metaClient;
-      } else {
-        return null;
-      }
+      return createMetaClient(basePath, hadoopConf);
     }
   }
 
