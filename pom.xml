@@ -99,6 +99,7 @@
     <pulsar.version>2.8.1</pulsar.version>
     <confluent.version>5.3.4</confluent.version>
     <glassfish.version>2.17</glassfish.version>
+    <glassfish.el.version>3.0.1-b12</glassfish.el.version>
     <parquet.version>1.10.1</parquet.version>
     <junit.jupiter.version>5.7.0-M1</junit.jupiter.version>
     <junit.vintage.version>5.7.0-M1</junit.vintage.version>
@@ -555,6 +556,11 @@
         <groupId>org.glassfish.jersey.containers</groupId>
         <artifactId>jersey-container-servlet-core</artifactId>
         <version>${glassfish.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.glassfish</groupId>
+        <artifactId>javax.el</artifactId>
+        <version>${glassfish.el.version}</version>
       </dependency>
 
       <!-- Avro -->
