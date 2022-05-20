@@ -64,7 +64,7 @@ public class HoodieIndexConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> INDEX_TYPE = ConfigProperty
       .key("hoodie.index.type")
-      .defaultValue(BLOOM.name())
+      .defaultValue(SIMPLE.name())
       .withValidValues(Arrays.asList(
           HBASE.name(), INMEMORY.name(), BLOOM.name(), GLOBAL_BLOOM.name(),
           SIMPLE.name(), GLOBAL_SIMPLE.name(), BUCKET.name()
