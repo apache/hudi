@@ -46,9 +46,9 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{Expression, SubqueryExpression}
 import org.apache.spark.sql.execution.FileRelation
+import org.apache.spark.sql.execution.datasources.orc.OrcFileFormat
 import org.apache.spark.sql.execution.datasources.parquet.{HoodieParquetFileFormat, ParquetFileFormat}
 import org.apache.spark.sql.execution.datasources.{FileFormat, FileStatusCache, PartitionDirectory, PartitionedFile, PartitioningUtils}
-import org.apache.spark.sql.hive.orc.OrcFileFormat
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.sources.{BaseRelation, Filter, PrunedFilteredScan}
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
@@ -217,6 +217,9 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     HoodieFileIndex(sparkSession, metaClient, Some(tableStructSchema), optParams,
       FileStatusCache.getOrCreate(sparkSession))
 
+  // TODO inline
+  protected val validCommits: String = timeline.getInstants.toArray().map(_.asInstanceOf[HoodieInstant].getFileName).mkString(",")
+
   /**
    * Columns that relation has to read from the storage to properly execute on its semantic: for ex,
    * for Merge-on-Read tables key fields as well and pre-combine field comprise mandatory set of columns,
@@ -230,8 +233,6 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
   protected def timeline: HoodieTimeline =
   // NOTE: We're including compaction here since it's not considering a "commit" operation
     metaClient.getCommitsAndCompactionTimeline.filterCompletedInstants
-
-  protected val validCommits = timeline.getInstants.toArray().map(_.asInstanceOf[HoodieInstant].getFileName).mkString(",")
 
   protected def latestInstant: Option[HoodieInstant] =
     toScalaOption(timeline.lastInstant())
@@ -247,7 +248,18 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
   // TODO scala-doc
   def dataSchema: StructType = prunePartitionColumns(tableStructSchema)
 
-  override def schema: StructType = tableStructSchema
+  // TODO scala-doc
+  def canPruneRelationSchema: Boolean =
+    (fileFormat.isInstanceOf[ParquetFileFormat] || fileFormat.isInstanceOf[OrcFileFormat]) &&
+      // TODO(HUDI-XXX) internal schema doesn't supported nested schema pruning currently
+      internalSchema.isEmptySchema
+
+  override def schema: StructType = {
+    // NOTE: Optimizer could prune the schema (applying for ex, [[NestedSchemaPruning]] rule) setting new updated
+    //       schema in-place (via [[setPrunedDataSchema]] method), therefore we have to make sure that we pick
+    //       pruned data schema (if present) over the standard table's one
+    optimizerPrunedDataSchema.getOrElse(tableStructSchema)
+  }
 
   /**
    * This method controls whether relation will be producing
@@ -281,10 +293,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     // (!!!) IT'S CRITICAL TO AVOID REORDERING OF THE REQUESTED COLUMNS AS THIS WILL BREAK THE UPSTREAM
     //       PROJECTION
     val fetchedColumns: Array[String] = appendMandatoryColumns(requiredColumns)
-
-    // TODO elaborate
-    val sourceSchema = optimizerPrunedDataSchema.map(convertToAvroSchema)
-      .getOrElse(tableAvroSchema)
+    val sourceSchema = convertToAvroSchema(schema)
 
     val (requiredAvroSchema, requiredStructSchema, requiredInternalSchema) =
       pruneSchema(sourceSchema, fetchedColumns, Some(internalSchema))
@@ -499,7 +508,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
   }
 
   // TODO scala-doc
-  def setPrunedDataSchema(prunedSchema: StructType): this.type = {
+  def updatePrunedDataSchema(prunedSchema: StructType): this.type = {
     optimizerPrunedDataSchema = Some(prunedSchema)
     this
   }
@@ -574,7 +583,6 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
       DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.defaultValue.toString).toBoolean ||
     sparkSession.conf.get(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.key,
       DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.defaultValue.toString).toBoolean
-  }
 }
 
 object HoodieBaseRelation extends SparkAdapterSupport {
@@ -588,6 +596,9 @@ object HoodieBaseRelation extends SparkAdapterSupport {
   def getPartitionPath(fileStatus: FileStatus): Path =
     fileStatus.getPath.getParent
 
+  /**
+   * Prunes provided [[tableAvroSchema]] by picking only [[requiredColumns]] top-level columns from it
+   */
   def pruneSchema(tableAvroSchema: Schema,
                   requiredColumns: Array[String],
                   internalSchemaOpt: Option[InternalSchema] = None): (Schema, StructType, InternalSchema) = {

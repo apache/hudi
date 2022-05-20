@@ -52,12 +52,12 @@ class NestedSchemaPruning extends Rule[LogicalPlan] {
       case op @ PhysicalOperation(projects, filters,
       // TODO generalize to any file-based relation
       l @ LogicalRelation(relation: HoodieBaseRelation, _, _, _))
-        if canPruneRelation(relation) =>
+        if relation.canPruneRelationSchema =>
 
         prunePhysicalColumns(l.output, projects, filters, relation.dataSchema,
           prunedDataSchema => {
             val prunedRelation =
-              relation.setPrunedDataSchema(prunedSchema = prunedDataSchema)
+              relation.updatePrunedDataSchema(prunedSchema = prunedDataSchema)
             buildPrunedRelation(l, prunedRelation)
           }).getOrElse(op)
     }
