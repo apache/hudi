@@ -23,7 +23,7 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hadoop.hbase.io.hfile.CacheConfig
 import org.apache.hadoop.mapred.JobConf
-import org.apache.hudi.HoodieBaseRelation.{convertToAvroSchema, createHFileReader, generateUnsafeProjection, getPartitionPath, pruneSchema}
+import org.apache.hudi.HoodieBaseRelation.{convertToAvroSchema, createHFileReader, generateUnsafeProjection, getPartitionPath, projectSchema}
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.config.HoodieMetadataConfig
@@ -162,7 +162,11 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
 
   protected val partitionColumns: Array[String] = tableConfig.getPartitionFields.orElse(Array.empty)
 
-  // TODO scala-doc
+  /**
+   * Data schema optimized (externally) by Spark's Optimizer.
+   *
+   * Please check scala-doc for [[updatePrunedDataSchema]] more details
+   */
   protected var optimizerPrunedDataSchema: Option[StructType] = None
 
   /**
@@ -245,10 +249,24 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
    */
   def hasSchemaOnRead: Boolean = !internalSchema.isEmptySchema
 
-  // TODO scala-doc
-  def dataSchema: StructType = prunePartitionColumns(tableStructSchema)
+  /**
+   * Data schema is determined as the actual schema of the Table's Data Files (for ex, parquet/orc/etc);
+   *
+   * In cases when partition values are not persisted w/in the data files, data-schema is defined as
+   * <pre>table's schema - partition columns</pre>
+   *
+   * Check scala-doc for [[shouldExtractPartitionValuesFromPartitionPath]] for more details
+   */
+  def dataSchema: StructType =
+    if (shouldExtractPartitionValuesFromPartitionPath) {
+      prunePartitionColumns(tableStructSchema)
+    } else {
+      tableStructSchema
+    }
 
-  // TODO scala-doc
+  /**
+   * Determines whether relation's schema could be pruned by Spark's Optimizer
+   */
   def canPruneRelationSchema: Boolean =
     (fileFormat.isInstanceOf[ParquetFileFormat] || fileFormat.isInstanceOf[OrcFileFormat]) &&
       // TODO(HUDI-XXX) internal schema doesn't supported nested schema pruning currently
@@ -292,11 +310,11 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     //
     // (!!!) IT'S CRITICAL TO AVOID REORDERING OF THE REQUESTED COLUMNS AS THIS WILL BREAK THE UPSTREAM
     //       PROJECTION
-    val fetchedColumns: Array[String] = appendMandatoryColumns(requiredColumns)
-    val sourceSchema = convertToAvroSchema(schema)
+    val targetColumns: Array[String] = appendMandatoryColumns(requiredColumns)
 
+    val sourceSchema = convertToAvroSchema(schema)
     val (requiredAvroSchema, requiredStructSchema, requiredInternalSchema) =
-      pruneSchema(sourceSchema, fetchedColumns, Some(internalSchema))
+      projectSchema(sourceSchema, targetColumns, Some(internalSchema))
 
     val filterExpressions = convertToExpressions(filters)
     val (partitionFilters, dataFilters) = filterExpressions.partition(isPartitionPredicate)
@@ -507,7 +525,14 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     }
   }
 
-  // TODO scala-doc
+  /**
+   * Hook for Spark's Optimizer to update expected relation schema after pruning
+   *
+   * NOTE: Only limited number of optimizations in respect to schema pruning could be performed
+   *       internally w/in the relation itself w/o consideration for how the relation output is used.
+   *       Therefore more advanced optimizations (like [[NestedSchemaPruning]]) have to be carried out
+   *       by Spark's Optimizer holistically evaluating Spark's [[LogicalPlan]]
+   */
   def updatePrunedDataSchema(prunedSchema: StructType): this.type = {
     optimizerPrunedDataSchema = Some(prunedSchema)
     this
@@ -581,8 +606,9 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     //       t/h Spark Session configuration (for ex, for Spark SQL)
     optParams.getOrElse(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.key,
       DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.defaultValue.toString).toBoolean ||
-    sparkSession.conf.get(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.key,
-      DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.defaultValue.toString).toBoolean
+      sparkSession.conf.get(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.key,
+        DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.defaultValue.toString).toBoolean
+  }
 }
 
 object HoodieBaseRelation extends SparkAdapterSupport {
@@ -597,11 +623,16 @@ object HoodieBaseRelation extends SparkAdapterSupport {
     fileStatus.getPath.getParent
 
   /**
-   * Prunes provided [[tableAvroSchema]] by picking only [[requiredColumns]] top-level columns from it
+   * Projects provided schema by picking only required (projected) top-level columns from it
+   *
+   * @param tableAvroSchema schema to project
+   * @param requiredColumns required top-level columns to be projected
+   * @param internalSchemaOpt optional internal schema, providing for appropriate handling of schema evolution
    */
-  def pruneSchema(tableAvroSchema: Schema,
-                  requiredColumns: Array[String],
-                  internalSchemaOpt: Option[InternalSchema] = None): (Schema, StructType, InternalSchema) = {
+  // TODO revisit internal schema handling
+  def projectSchema(tableAvroSchema: Schema,
+                    requiredColumns: Array[String],
+                    internalSchemaOpt: Option[InternalSchema] = None): (Schema, StructType, InternalSchema) = {
     internalSchemaOpt match {
       case Some(internalSchema) if !internalSchema.isEmptySchema =>
         // TODO extend pruning to leverage optimizer pruned schema
@@ -648,7 +679,7 @@ object HoodieBaseRelation extends SparkAdapterSupport {
 
       reader.getRecordIterator(requiredAvroSchema).asScala
         .map(record => {
-          avroToRowConverter.apply(record.asInstanceOf[GenericRecord]).get
+          avroToRowConverter.apply(record).get
         })
     }
   }
