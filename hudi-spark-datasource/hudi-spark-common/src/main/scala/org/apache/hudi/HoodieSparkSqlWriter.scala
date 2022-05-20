@@ -80,6 +80,15 @@ object HoodieSparkSqlWriter {
     val path = optParams("path")
     val basePath = new Path(path)
     val sparkContext = sqlContext.sparkContext
+
+    if (sparkContext.getConf.contains("spark.sql.parquet.writeLegacyFormat")) {
+      sparkContext.hadoopConfiguration.set("spark.sql.parquet.writeLegacyFormat", sparkContext.getConf.get("spark.sql.parquet.writeLegacyFormat"))
+    }
+
+    if (sparkContext.getConf.contains("spark.sql.parquet.outputTimestampType")) {
+      sparkContext.hadoopConfiguration.set("spark.sql.parquet.outputTimestampType", sparkContext.getConf.get("spark.sql.parquet.outputTimestampType"))
+    }
+
     val fs = basePath.getFileSystem(sparkContext.hadoopConfiguration)
     tableExists = fs.exists(new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME))
     var tableConfig = getHoodieTableConfig(sparkContext, path, hoodieTableConfigOpt)
