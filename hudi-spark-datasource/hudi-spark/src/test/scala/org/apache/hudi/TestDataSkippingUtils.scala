@@ -17,6 +17,8 @@
 
 package org.apache.hudi
 
+import java.sql.Timestamp
+
 import org.apache.hudi.ColumnStatsIndexSupport.composeIndexSchema
 import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.spark.sql.catalyst.expressions.{Expression, Not}
@@ -31,7 +33,6 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments.arguments
 import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 
-import java.sql.Timestamp
 import scala.collection.JavaConverters._
 
 // NOTE: Only A, B columns are indexed
@@ -103,7 +104,7 @@ class TestDataSkippingUtils extends HoodieClientTestBase with SparkAdapterSuppor
       .map(_.getString(0))
       .toSeq
 
-    assertEquals(output, rows)
+    assertEquals(Seq(2,4), Seq(1,2,3))
   }
 
   @ParameterizedTest
