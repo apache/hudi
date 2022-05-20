@@ -19,6 +19,8 @@ package org.apache.spark.hudi.benchmark
 
 import java.io.{File, FileOutputStream, OutputStream}
 
+import org.apache.spark.util.Utils
+
 /**
  * Reference from spark.
  * A base class for generate benchmark results to a file.
@@ -84,4 +86,11 @@ abstract class HoodieBenchmarkBase {
    * Any shutdown code to ensure a clean shutdown
    */
   def afterAll(): Unit = {}
+
+  protected def withTempDir(f: File => Unit): Unit = {
+    val tempDir = Utils.createTempDir()
+    try f(tempDir) finally {
+      Utils.deleteRecursively(tempDir)
+    }
+  }
 }

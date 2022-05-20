@@ -19,7 +19,7 @@
   <parent>
     <artifactId>hudi</artifactId>
     <groupId>org.apache.hudi</groupId>
-    <version>0.11.0-SNAPSHOT</version>
+    <version>0.12.0-SNAPSHOT</version>
   </parent>
   <modelVersion>4.0.0</modelVersion>
 
@@ -31,8 +31,9 @@
   </properties>
 
   <modules>
-      <module>hudi-sync-common</module>
-      <module>hudi-hive-sync</module>
-      <module>hudi-dla-sync</module>
+    <module>hudi-datahub-sync</module>
+    <module>hudi-dla-sync</module>
+    <module>hudi-hive-sync</module>
+    <module>hudi-sync-common</module>
   </modules>
 </project>

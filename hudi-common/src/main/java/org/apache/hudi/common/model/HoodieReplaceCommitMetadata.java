@@ -18,11 +18,9 @@
 
 package org.apache.hudi.common.model;
 
-import com.fasterxml.jackson.annotation.JsonAutoDetect;
+import org.apache.hudi.common.util.JsonUtils;
+
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.annotation.PropertyAccessor;
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -80,7 +78,7 @@ public class HoodieReplaceCommitMetadata extends HoodieCommitMetadata {
       LOG.info("partition path is null for " + partitionToReplaceFileIds.get(null));
       partitionToReplaceFileIds.remove(null);
     }
-    return getObjectMapper().writerWithDefaultPrettyPrinter().writeValueAsString(this);
+    return JsonUtils.getObjectMapper().writerWithDefaultPrettyPrinter().writeValueAsString(this);
   }
 
   public static <T> T fromJsonString(String jsonStr, Class<T> clazz) throws Exception {
@@ -88,7 +86,7 @@ public class HoodieReplaceCommitMetadata extends HoodieCommitMetadata {
       // For empty commit file (no data or somethings bad happen).
       return clazz.newInstance();
     }
-    return getObjectMapper().readValue(jsonStr, clazz);
+    return JsonUtils.getObjectMapper().readValue(jsonStr, clazz);
   }
 
   @Override
@@ -122,13 +120,6 @@ public class HoodieReplaceCommitMetadata extends HoodieCommitMetadata {
     } catch (Exception e) {
       throw new IOException("unable to read commit metadata", e);
     }
-  }
-
-  protected static ObjectMapper getObjectMapper() {
-    ObjectMapper mapper = new ObjectMapper();
-    mapper.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
-    mapper.setVisibility(PropertyAccessor.FIELD, JsonAutoDetect.Visibility.ANY);
-    return mapper;
   }
 
   @Override

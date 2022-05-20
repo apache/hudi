@@ -22,6 +22,7 @@ import org.apache.hudi.avro.model.HoodieActionInstant;
 import org.apache.hudi.avro.model.HoodieCleanFileInfo;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.CleanFileInfo;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -95,7 +96,7 @@ public class CleanPlanActionExecutor<T extends HoodieRecordPayload, I, K, O> ext
     try {
       CleanPlanner<T, I, K, O> planner = new CleanPlanner<>(context, table, config);
       Option<HoodieInstant> earliestInstant = planner.getEarliestCommitToRetain();
-      context.setJobStatus(this.getClass().getSimpleName(), "Obtaining list of partitions to be cleaned");
+      context.setJobStatus(this.getClass().getSimpleName(), "Obtaining list of partitions to be cleaned: " + config.getTableName());
       List<String> partitionsToClean = planner.getPartitionPathsToClean(earliestInstant);
 
       if (partitionsToClean.isEmpty()) {
@@ -106,17 +107,24 @@ public class CleanPlanActionExecutor<T extends HoodieRecordPayload, I, K, O> ext
       int cleanerParallelism = Math.min(partitionsToClean.size(), config.getCleanerParallelism());
       LOG.info("Using cleanerParallelism: " + cleanerParallelism);
 
-      context.setJobStatus(this.getClass().getSimpleName(), "Generating list of file slices to be cleaned");
+      context.setJobStatus(this.getClass().getSimpleName(), "Generating list of file slices to be cleaned: " + config.getTableName());
 
-      Map<String, List<HoodieCleanFileInfo>> cleanOps = context
+      Map<String, Pair<Boolean, List<CleanFileInfo>>> cleanOpsWithPartitionMeta = context
           .map(partitionsToClean, partitionPathToClean -> Pair.of(partitionPathToClean, planner.getDeletePaths(partitionPathToClean)), cleanerParallelism)
           .stream()
-          .collect(Collectors.toMap(Pair::getKey, y -> CleanerUtils.convertToHoodieCleanFileInfoList(y.getValue())));
+          .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
+
+      Map<String, List<HoodieCleanFileInfo>> cleanOps = cleanOpsWithPartitionMeta.entrySet().stream()
+          .collect(Collectors.toMap(Map.Entry::getKey,
+              e -> CleanerUtils.convertToHoodieCleanFileInfoList(e.getValue().getValue())));
+
+      List<String> partitionsToDelete = cleanOpsWithPartitionMeta.entrySet().stream().filter(entry -> entry.getValue().getKey()).map(Map.Entry::getKey)
+          .collect(Collectors.toList());
 
       return new HoodieCleanerPlan(earliestInstant
           .map(x -> new HoodieActionInstant(x.getTimestamp(), x.getAction(), x.getState().name())).orElse(null),
           config.getCleanerPolicy().name(), CollectionUtils.createImmutableMap(),
-          CleanPlanner.LATEST_CLEAN_PLAN_VERSION, cleanOps);
+          CleanPlanner.LATEST_CLEAN_PLAN_VERSION, cleanOps, partitionsToDelete);
     } catch (IOException e) {
       throw new HoodieIOException("Failed to schedule clean operation", e);
     }

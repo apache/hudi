@@ -18,6 +18,7 @@
 
 package org.apache.hudi.sink.bulk;
 
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.common.util.StringUtils;
@@ -125,6 +126,10 @@ public class RowDataKeyGen implements Serializable {
     return new RowDataKeyGen(conf.getString(FlinkOptions.RECORD_KEY_FIELD), conf.getString(FlinkOptions.PARTITION_PATH_FIELD),
         rowType, conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING), conf.getBoolean(FlinkOptions.URL_ENCODE_PARTITIONING),
         keyGeneratorOpt);
+  }
+
+  public HoodieKey getHoodieKey(RowData rowData) {
+    return new HoodieKey(getRecordKey(rowData), getPartitionPath(rowData));
   }
 
   public String getRecordKey(RowData rowData) {

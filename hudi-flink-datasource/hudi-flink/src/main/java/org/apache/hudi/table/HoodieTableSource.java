@@ -27,6 +27,7 @@ import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.HoodieROTablePathFilter;
@@ -92,7 +93,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import static org.apache.hudi.table.format.FormatUtils.getParquetConf;
+import static org.apache.hudi.configuration.HadoopConfigurations.getParquetConf;
 
 /**
  * Hoodie batch table source that always read the latest snapshot of the underneath table.
@@ -155,7 +156,7 @@ public class HoodieTableSource implements
         : requiredPos;
     this.limit = limit == null ? NO_LIMIT_CONSTANT : limit;
     this.filters = filters == null ? Collections.emptyList() : filters;
-    this.hadoopConf = StreamerUtil.getHadoopConf();
+    this.hadoopConf = HadoopConfigurations.getHadoopConf(conf);
     this.metaClient = StreamerUtil.metaClientForReader(conf, hadoopConf);
     this.maxCompactionMemoryInBytes = StreamerUtil.getMaxCompactionMemoryInBytes(conf);
   }
@@ -181,6 +182,7 @@ public class HoodieTableSource implements
           OneInputStreamOperatorFactory<MergeOnReadInputSplit, RowData> factory = StreamReadOperator.factory((MergeOnReadInputFormat) inputFormat);
           SingleOutputStreamOperator<RowData> source = execEnv.addSource(monitoringFunction, getSourceOperatorName("split_monitor"))
               .setParallelism(1)
+              .keyBy(inputSplit -> inputSplit.getFileId())
               .transform("split_reader", typeInfo, factory)
               .setParallelism(conf.getInteger(FlinkOptions.READ_TASKS));
           return new DataStreamSource<>(source);
@@ -316,7 +318,7 @@ public class HoodieTableSource implements
                   .map(logFile -> logFile.getPath().toString())
                   .collect(Collectors.toList()));
               return new MergeOnReadInputSplit(cnt.getAndAdd(1), basePath, logPaths, latestCommit,
-                  metaClient.getBasePath(), maxCompactionMemoryInBytes, mergeType, null);
+                  metaClient.getBasePath(), maxCompactionMemoryInBytes, mergeType, null, fileSlice.getFileId());
             }).collect(Collectors.toList()))
         .flatMap(Collection::stream)
         .collect(Collectors.toList());

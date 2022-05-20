@@ -23,7 +23,7 @@ dag_content:
   first_insert:
     config:
       record_size: 1000
-      num_partitions_insert: 5
+      num_partitions_insert: 50
       repeat_count: 1
       num_records_insert: 1000
     type: InsertNode
@@ -39,7 +39,7 @@ dag_content:
   third_insert:
     config:
       record_size: 1000
-      num_partitions_insert: 2
+      num_partitions_insert: 50
       repeat_count: 1
       num_records_insert: 300
     deps: second_insert
@@ -47,11 +47,11 @@ dag_content:
   first_upsert:
     config:
       record_size: 1000
-      num_partitions_insert: 2
+      num_partitions_insert: 50
       num_records_insert: 300
       repeat_count: 1
       num_records_upsert: 100
-      num_partitions_upsert: 1
+      num_partitions_upsert: 50
     type: UpsertNode
     deps: third_insert
   first_delete:

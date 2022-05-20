@@ -18,6 +18,7 @@
 
 package org.apache.hudi.sink.utils;
 
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
@@ -96,13 +97,13 @@ public class Pipelines {
       String indexKeys = conf.getString(FlinkOptions.INDEX_KEY_FIELD);
       int numBuckets = conf.getInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS);
 
-      BucketIndexPartitioner<String> partitioner = new BucketIndexPartitioner<>(numBuckets, indexKeys);
+      BucketIndexPartitioner<HoodieKey> partitioner = new BucketIndexPartitioner<>(numBuckets, indexKeys);
       RowDataKeyGen keyGen = RowDataKeyGen.instance(conf, rowType);
       RowType rowTypeWithFileId = BucketBulkInsertWriterHelper.rowTypeWithFileId(rowType);
       InternalTypeInfo<RowData> typeInfo = InternalTypeInfo.of(rowTypeWithFileId);
 
       Map<String, String> bucketIdToFileId = new HashMap<>();
-      dataStream = dataStream.partitionCustom(partitioner, keyGen::getRecordKey)
+      dataStream = dataStream.partitionCustom(partitioner, keyGen::getHoodieKey)
           .map(record -> BucketBulkInsertWriterHelper.rowWithFileId(bucketIdToFileId, keyGen, record, indexKeys, numBuckets), typeInfo)
           .setParallelism(conf.getInteger(FlinkOptions.WRITE_TASKS)); // same parallelism as write task to avoid shuffle
       if (conf.getBoolean(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT)) {
@@ -173,9 +174,19 @@ public class Pipelines {
    * @param conf       The configuration
    * @param rowType    The input row type
    * @param dataStream The input data stream
+   * @param bounded    Whether the input stream is bounded
    * @return the appending data stream sink
    */
-  public static DataStreamSink<Object> append(Configuration conf, RowType rowType, DataStream<RowData> dataStream) {
+  public static DataStreamSink<Object> append(
+      Configuration conf,
+      RowType rowType,
+      DataStream<RowData> dataStream,
+      boolean bounded) {
+    if (!bounded) {
+      // In principle, the config should be immutable, but the boundedness
+      // is only visible when creating the sink pipeline.
+      conf.setBoolean(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT, false);
+    }
     WriteOperatorFactory<RowData> operatorFactory = AppendWriteOperator.getFactory(conf, rowType);
 
     return dataStream
@@ -309,8 +320,8 @@ public class Pipelines {
       WriteOperatorFactory<HoodieRecord> operatorFactory = BucketStreamWriteOperator.getFactory(conf);
       int bucketNum = conf.getInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS);
       String indexKeyFields = conf.getString(FlinkOptions.INDEX_KEY_FIELD);
-      BucketIndexPartitioner<String> partitioner = new BucketIndexPartitioner<>(bucketNum, indexKeyFields);
-      return dataStream.partitionCustom(partitioner, HoodieRecord::getRecordKey)
+      BucketIndexPartitioner<HoodieKey> partitioner = new BucketIndexPartitioner<>(bucketNum, indexKeyFields);
+      return dataStream.partitionCustom(partitioner, HoodieRecord::getKey)
           .transform("bucket_write", TypeInformation.of(Object.class), operatorFactory)
           .uid("uid_bucket_write" + conf.getString(FlinkOptions.TABLE_NAME))
           .setParallelism(conf.getInteger(FlinkOptions.WRITE_TASKS));

@@ -71,7 +71,6 @@ public class HoodieHiveUtils {
   public static final String DEFAULT_SCAN_MODE = SNAPSHOT_SCAN_MODE;
   public static final int DEFAULT_MAX_COMMITS = 1;
   public static final int MAX_COMMIT_ALL = -1;
-  public static final int DEFAULT_LEVELS_TO_BASEPATH = 3;
   public static final Pattern HOODIE_CONSUME_MODE_PATTERN_STRING = Pattern.compile("hoodie\\.(.*)\\.consume\\.mode");
   public static final String GLOBALLY_CONSISTENT_READ_TIMESTAMP = "last_replication_timestamp";
 

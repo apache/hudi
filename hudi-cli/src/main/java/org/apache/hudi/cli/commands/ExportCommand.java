@@ -124,7 +124,7 @@ public class ExportCommand implements CommandMarker {
       // read the avro blocks
       while (reader.hasNext() && copyCount < limit) {
         HoodieAvroDataBlock blk = (HoodieAvroDataBlock) reader.next();
-        try (ClosableIterator<IndexedRecord> recordItr = blk.getRecordItr()) {
+        try (ClosableIterator<IndexedRecord> recordItr = blk.getRecordIterator()) {
           while (recordItr.hasNext()) {
             IndexedRecord ir = recordItr.next();
             // Archived instants are saved as arvo encoded HoodieArchivedMetaEntry records. We need to get the

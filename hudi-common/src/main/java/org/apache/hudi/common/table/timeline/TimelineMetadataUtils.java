@@ -22,6 +22,8 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
+import org.apache.hudi.avro.model.HoodieIndexCommitMetadata;
+import org.apache.hudi.avro.model.HoodieIndexPlan;
 import org.apache.hudi.avro.model.HoodieInstantInfo;
 import org.apache.hudi.avro.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
@@ -137,6 +139,14 @@ public class TimelineMetadataUtils {
     return serializeAvroMetadata(clusteringPlan, HoodieRequestedReplaceMetadata.class);
   }
 
+  public static Option<byte[]> serializeIndexPlan(HoodieIndexPlan indexPlan) throws IOException {
+    return serializeAvroMetadata(indexPlan, HoodieIndexPlan.class);
+  }
+
+  public static Option<byte[]> serializeIndexCommitMetadata(HoodieIndexCommitMetadata indexCommitMetadata) throws IOException {
+    return serializeAvroMetadata(indexCommitMetadata, HoodieIndexCommitMetadata.class);
+  }
+
   public static <T extends SpecificRecordBase> Option<byte[]> serializeAvroMetadata(T metadata, Class<T> clazz)
       throws IOException {
     DatumWriter<T> datumWriter = new SpecificDatumWriter<>(clazz);
@@ -178,6 +188,14 @@ public class TimelineMetadataUtils {
 
   public static HoodieReplaceCommitMetadata deserializeHoodieReplaceMetadata(byte[] bytes) throws IOException {
     return deserializeAvroMetadata(bytes, HoodieReplaceCommitMetadata.class);
+  }
+
+  public static HoodieIndexPlan deserializeIndexPlan(byte[] bytes) throws IOException {
+    return deserializeAvroMetadata(bytes, HoodieIndexPlan.class);
+  }
+
+  public static HoodieIndexCommitMetadata deserializeIndexCommitMetadata(byte[] bytes) throws IOException {
+    return deserializeAvroMetadata(bytes, HoodieIndexCommitMetadata.class);
   }
 
   public static <T extends SpecificRecordBase> T deserializeAvroMetadata(byte[] bytes, Class<T> clazz)

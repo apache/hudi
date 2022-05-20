@@ -21,6 +21,7 @@ package org.apache.hudi.configuration;
 import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.config.HoodieIndexConfig;
@@ -103,7 +104,7 @@ public class FlinkOptions extends HoodieConfig {
       .key("metadata.compaction.delta_commits")
       .intType()
       .defaultValue(10)
-      .withDescription("Max delta commits for metadata table to trigger compaction, default 24");
+      .withDescription("Max delta commits for metadata table to trigger compaction, default 10");
 
   // ------------------------------------------------------------------------
   //  Index Options
@@ -137,7 +138,7 @@ public class FlinkOptions extends HoodieConfig {
       .key("index.partition.regex")
       .stringType()
       .defaultValue(".*")
-      .withDescription("Whether to load partitions in state if partition path matching， default *");
+      .withDescription("Whether to load partitions in state if partition path matching， default `*`");
 
   // ------------------------------------------------------------------------
   //  Read Options
@@ -367,13 +368,14 @@ public class FlinkOptions extends HoodieConfig {
 
   public static final String PARTITION_FORMAT_HOUR = "yyyyMMddHH";
   public static final String PARTITION_FORMAT_DAY = "yyyyMMdd";
+  public static final String PARTITION_FORMAT_DASHED_DAY = "yyyy-MM-dd";
   public static final ConfigOption<String> PARTITION_FORMAT = ConfigOptions
       .key("write.partition.format")
       .stringType()
       .noDefaultValue()
       .withDescription("Partition path format, only valid when 'write.datetime.partitioning' is true, default is:\n"
           + "1) 'yyyyMMddHH' for timestamp(3) WITHOUT TIME ZONE, LONG, FLOAT, DOUBLE, DECIMAL;\n"
-          + "2) 'yyyyMMdd' for DAY and INT.");
+          + "2) 'yyyyMMdd' for DATE and INT.");
 
   public static final ConfigOption<Integer> INDEX_BOOTSTRAP_TASKS = ConfigOptions
       .key("write.index_bootstrap.tasks")
@@ -541,7 +543,7 @@ public class FlinkOptions extends HoodieConfig {
       .key("compaction.target_io")
       .longType()
       .defaultValue(500 * 1024L) // default 500 GB
-      .withDescription("Target IO per compaction (both read and write), default 500 GB");
+      .withDescription("Target IO in MB for per compaction (both read and write), default 500 GB");
 
   public static final ConfigOption<Boolean> CLEAN_ASYNC_ENABLED = ConfigOptions
       .key("clean.async.enabled")
@@ -549,12 +551,25 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(true)
       .withDescription("Whether to cleanup the old commits immediately on new commits, enabled by default");
 
+  public static final ConfigOption<String> CLEAN_POLICY = ConfigOptions
+      .key("clean.policy")
+      .stringType()
+      .defaultValue(HoodieCleaningPolicy.KEEP_LATEST_COMMITS.name())
+      .withDescription("Clean policy to manage the Hudi table. Available option: KEEP_LATEST_COMMITS, KEEP_LATEST_FILE_VERSIONS, KEEP_LATEST_BY_HOURS."
+          +  "Default is KEEP_LATEST_COMMITS.");
+
   public static final ConfigOption<Integer> CLEAN_RETAIN_COMMITS = ConfigOptions
       .key("clean.retain_commits")
       .intType()
       .defaultValue(30)// default 30 commits
       .withDescription("Number of commits to retain. So data will be retained for num_of_commits * time_between_commits (scheduled).\n"
           + "This also directly translates into how much you can incrementally pull on this table, default 30");
+
+  public static final ConfigOption<Integer> CLEAN_RETAIN_FILE_VERSIONS = ConfigOptions
+      .key("clean.retain_file_versions")
+      .intType()
+      .defaultValue(5)// default 5 version
+      .withDescription("Number of file versions to retain. default 5");
 
   public static final ConfigOption<Integer> ARCHIVE_MAX_COMMITS = ConfigOptions
       .key("archive.max_commits")
@@ -671,7 +686,7 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<Boolean> HIVE_SYNC_SUPPORT_TIMESTAMP = ConfigOptions
       .key("hive_sync.support_timestamp")
       .booleanType()
-      .defaultValue(false)
+      .defaultValue(true)
       .withDescription("INT64 with original type TIMESTAMP_MICROS is converted to hive timestamp type.\n"
           + "Disabled by default for backward compatibility.");
 
@@ -695,24 +710,16 @@ public class FlinkOptions extends HoodieConfig {
   private static final String PROPERTIES_PREFIX = "properties.";
 
   /**
-   * Collects the config options that start with 'properties.' into a 'key'='value' list.
-   */
-  public static Map<String, String> getHoodieProperties(Map<String, String> options) {
-    return getHoodiePropertiesWithPrefix(options, PROPERTIES_PREFIX);
-  }
-
-  /**
    * Collects the config options that start with specified prefix {@code prefix} into a 'key'='value' list.
    */
-  public static Map<String, String> getHoodiePropertiesWithPrefix(Map<String, String> options, String prefix) {
+  public static Map<String, String> getPropertiesWithPrefix(Map<String, String> options, String prefix) {
     final Map<String, String> hoodieProperties = new HashMap<>();
-
-    if (hasPropertyOptions(options)) {
+    if (hasPropertyOptions(options, prefix)) {
       options.keySet().stream()
-          .filter(key -> key.startsWith(PROPERTIES_PREFIX))
+          .filter(key -> key.startsWith(prefix))
           .forEach(key -> {
             final String value = options.get(key);
-            final String subKey = key.substring((prefix).length());
+            final String subKey = key.substring(prefix.length());
             hoodieProperties.put(subKey, value);
           });
     }
@@ -734,8 +741,8 @@ public class FlinkOptions extends HoodieConfig {
     return fromMap(propsMap);
   }
 
-  private static boolean hasPropertyOptions(Map<String, String> options) {
-    return options.keySet().stream().anyMatch(k -> k.startsWith(PROPERTIES_PREFIX));
+  private static boolean hasPropertyOptions(Map<String, String> options, String prefix) {
+    return options.keySet().stream().anyMatch(k -> k.startsWith(prefix));
   }
 
   /**

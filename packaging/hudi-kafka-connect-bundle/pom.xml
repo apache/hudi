@@ -20,7 +20,7 @@
     <parent>
         <artifactId>hudi</artifactId>
         <groupId>org.apache.hudi</groupId>
-        <version>0.11.0-SNAPSHOT</version>
+        <version>0.12.0-SNAPSHOT</version>
         <relativePath>../../pom.xml</relativePath>
     </parent>
     <modelVersion>4.0.0</modelVersion>
@@ -85,7 +85,7 @@
                                     <include>org.apache.hudi:hudi-aws</include>
 
                                     <!-- NOTE: This is temp (SchemaProvide dep) until PR3162 lands -->
-                                    <include>org.apache.hudi:hudi-flink_${scala.binary.version}</include>
+                                    <include>org.apache.hudi:hudi-flink</include>
                                     <include>org.apache.hudi:flink-core</include>
                                     <include>org.apache.hudi:hudi-flink-client</include>
                                     <include>org.apache.flink:flink-core</include>

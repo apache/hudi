@@ -78,7 +78,7 @@ public class SimpleBloomFilter implements BloomFilter {
   @Override
   public void add(String key) {
     if (key == null) {
-      throw new NullPointerException("Key cannot by null");
+      throw new NullPointerException("Key cannot be null");
     }
     filter.add(new Key(key.getBytes(StandardCharsets.UTF_8)));
   }
@@ -86,7 +86,7 @@ public class SimpleBloomFilter implements BloomFilter {
   @Override
   public boolean mightContain(String key) {
     if (key == null) {
-      throw new NullPointerException("Key cannot by null");
+      throw new NullPointerException("Key cannot be null");
     }
     return filter.membershipTest(new Key(key.getBytes(StandardCharsets.UTF_8)));
   }

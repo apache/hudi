@@ -18,7 +18,7 @@
 
 package org.apache.spark.sql
 
-import org.apache.spark.HoodieSparkTypeUtils.isCastPreservingOrdering
+import HoodieSparkTypeUtils.isCastPreservingOrdering
 import org.apache.spark.sql.catalyst.expressions.{Add, AttributeReference, BitwiseOr, Cast, DateAdd, DateDiff, DateFormatClass, DateSub, Divide, Exp, Expm1, Expression, FromUTCTimestamp, FromUnixTime, Log, Log10, Log1p, Log2, Lower, Multiply, ParseToDate, ParseToTimestamp, ShiftLeft, ShiftRight, ToUTCTimestamp, ToUnixTimestamp, Upper}
 
 object HoodieSpark3_1CatalystExpressionUtils extends HoodieCatalystExpressionUtils {

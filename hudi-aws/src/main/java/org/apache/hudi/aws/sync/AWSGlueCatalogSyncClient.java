@@ -94,13 +94,19 @@ public class AWSGlueCatalogSyncClient extends AbstractHiveSyncHoodieClient {
   @Override
   public List<Partition> getAllPartitions(String tableName) {
     try {
-      GetPartitionsRequest request = new GetPartitionsRequest();
-      request.withDatabaseName(databaseName).withTableName(tableName);
-      GetPartitionsResult result = awsGlue.getPartitions(request);
-      return result.getPartitions()
-          .stream()
-          .map(p -> new Partition(p.getValues(), p.getStorageDescriptor().getLocation()))
-          .collect(Collectors.toList());
+      List<Partition> partitions = new ArrayList<>();
+      String nextToken = null;
+      do {
+        GetPartitionsResult result = awsGlue.getPartitions(new GetPartitionsRequest()
+            .withDatabaseName(databaseName)
+            .withTableName(tableName)
+            .withNextToken(nextToken));
+        partitions.addAll(result.getPartitions().stream()
+            .map(p -> new Partition(p.getValues(), p.getStorageDescriptor().getLocation()))
+            .collect(Collectors.toList()));
+        nextToken = result.getNextToken();
+      } while (nextToken != null);
+      return partitions;
     } catch (Exception e) {
       throw new HoodieGlueSyncException("Failed to get all partitions for table " + tableId(databaseName, tableName), e);
     }
@@ -176,7 +182,7 @@ public class AWSGlueCatalogSyncClient extends AbstractHiveSyncHoodieClient {
   }
 
   @Override
-  public void dropPartitionsToTable(String tableName, List<String> partitionsToDrop) {
+  public void dropPartitions(String tableName, List<String> partitionsToDrop) {
     throw new UnsupportedOperationException("Not support dropPartitionsToTable yet.");
   }
 
@@ -388,7 +394,7 @@ public class AWSGlueCatalogSyncClient extends AbstractHiveSyncHoodieClient {
   public Option<String> getLastCommitTimeSynced(String tableName) {
     try {
       Table table = getTable(awsGlue, databaseName, tableName);
-      return Option.of(table.getParameters().getOrDefault(HOODIE_LAST_COMMIT_TIME_SYNC, null));
+      return Option.ofNullable(table.getParameters().get(HOODIE_LAST_COMMIT_TIME_SYNC));
     } catch (Exception e) {
       throw new HoodieGlueSyncException("Fail to get last sync commit time for " + tableId(databaseName, tableName), e);
     }

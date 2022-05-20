@@ -110,7 +110,7 @@ public class HoodieHiveClient extends AbstractHiveSyncHoodieClient {
    * Partition path has changed - drop the following partitions.
    */
   @Override
-  public void dropPartitionsToTable(String tableName, List<String> partitionsToDrop) {
+  public void dropPartitions(String tableName, List<String> partitionsToDrop) {
     ddlExecutor.dropPartitionsToTable(tableName, partitionsToDrop);
   }
 

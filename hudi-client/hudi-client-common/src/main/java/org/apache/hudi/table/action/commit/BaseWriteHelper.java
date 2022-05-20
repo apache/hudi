@@ -49,7 +49,7 @@ public abstract class BaseWriteHelper<T extends HoodieRecordPayload, I, K, O, R>
       I taggedRecords = dedupedRecords;
       if (table.getIndex().requiresTagging(operationType)) {
         // perform index loop up to get existing location of records
-        context.setJobStatus(this.getClass().getSimpleName(), "Tagging");
+        context.setJobStatus(this.getClass().getSimpleName(), "Tagging: " + table.getConfig().getTableName());
         taggedRecords = tag(dedupedRecords, context, table);
       }
       Duration indexLookupDuration = Duration.between(lookupBegin, Instant.now());

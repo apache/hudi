@@ -64,13 +64,13 @@ public class CleanerUtils {
     for (HoodieCleanStat stat : cleanStats) {
       HoodieCleanPartitionMetadata metadata =
           new HoodieCleanPartitionMetadata(stat.getPartitionPath(), stat.getPolicy().name(),
-              stat.getDeletePathPatterns(), stat.getSuccessDeleteFiles(), stat.getFailedDeleteFiles());
+              stat.getDeletePathPatterns(), stat.getSuccessDeleteFiles(), stat.getFailedDeleteFiles(), stat.isPartitionDeleted());
       partitionMetadataMap.put(stat.getPartitionPath(), metadata);
       if ((null != stat.getDeleteBootstrapBasePathPatterns())
           && (!stat.getDeleteBootstrapBasePathPatterns().isEmpty())) {
         HoodieCleanPartitionMetadata bootstrapMetadata = new HoodieCleanPartitionMetadata(stat.getPartitionPath(),
             stat.getPolicy().name(), stat.getDeleteBootstrapBasePathPatterns(), stat.getSuccessDeleteBootstrapBaseFiles(),
-            stat.getFailedDeleteBootstrapBaseFiles());
+            stat.getFailedDeleteBootstrapBaseFiles(), stat.isPartitionDeleted());
         partitionBootstrapMetadataMap.put(stat.getPartitionPath(), bootstrapMetadata);
       }
       totalDeleted += stat.getSuccessDeleteFiles().size();

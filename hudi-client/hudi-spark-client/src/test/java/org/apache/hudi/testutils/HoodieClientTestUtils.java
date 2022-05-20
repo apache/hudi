@@ -67,7 +67,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.io.storage.HoodieHFileReader.KEY_SCHEMA;
+import static org.apache.hudi.io.storage.HoodieHFileReader.SCHEMA_KEY;
 
 /**
  * Utility methods to aid testing inside the HoodieClient module.
@@ -247,7 +247,7 @@ public class HoodieClientTestUtils {
         HFile.Reader reader =
             HoodieHFileUtils.createHFileReader(fs, new Path(path), cacheConfig, fs.getConf());
         if (schema == null) {
-          schema = new Schema.Parser().parse(new String(reader.getHFileInfo().get(KEY_SCHEMA.getBytes())));
+          schema = new Schema.Parser().parse(new String(reader.getHFileInfo().get(SCHEMA_KEY.getBytes())));
         }
         HFileScanner scanner = reader.getScanner(false, false);
         if (!scanner.seekTo()) {

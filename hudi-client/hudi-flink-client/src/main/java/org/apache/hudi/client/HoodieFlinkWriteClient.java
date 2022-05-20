@@ -329,12 +329,13 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
   protected void postCommit(HoodieTable table,
                             HoodieCommitMetadata metadata,
                             String instantTime,
-                            Option<Map<String, String>> extraMetadata) {
+                            Option<Map<String, String>> extraMetadata,
+                            boolean acquireLockForArchival) {
     try {
       // Delete the marker directory for the instant.
       WriteMarkersFactory.get(config.getMarkersType(), createTable(config, hadoopConf), instantTime)
           .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
-      autoArchiveOnCommit(table);
+      autoArchiveOnCommit(table, acquireLockForArchival);
     } finally {
       this.heartbeatClient.stop(instantTime);
     }
@@ -355,7 +356,7 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
       HoodieCommitMetadata metadata,
       HoodieTable table,
       String compactionCommitTime) {
-    this.context.setJobStatus(this.getClass().getSimpleName(), "Collect compaction write status and commit compaction");
+    this.context.setJobStatus(this.getClass().getSimpleName(), "Collect compaction write status and commit compaction: " + config.getTableName());
     List<HoodieWriteStat> writeStats = metadata.getWriteStats();
     final HoodieInstant compactionInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, compactionCommitTime);
     try {
@@ -398,7 +399,7 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
   }
 
   @Override
-  protected HoodieTable doInitTable(HoodieTableMetaClient metaClient, Option<String> instantTime) {
+  protected HoodieTable doInitTable(HoodieTableMetaClient metaClient, Option<String> instantTime, boolean initialMetadataTableIfNecessary) {
     // Create a Hoodie table which encapsulated the commits and files visible
     return getHoodieTable();
   }
@@ -507,7 +508,7 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
         List<String> partitionPaths =
             FSUtils.getAllPartitionPaths(context, config.getMetadataConfig(), table.getMetaClient().getBasePath());
         if (partitionPaths != null && partitionPaths.size() > 0) {
-          context.setJobStatus(this.getClass().getSimpleName(), "Getting ExistingFileIds of all partitions");
+          context.setJobStatus(this.getClass().getSimpleName(), "Getting ExistingFileIds of all partitions: " + config.getTableName());
           partitionToExistingFileIds = partitionPaths.stream().parallel()
               .collect(
                   Collectors.toMap(

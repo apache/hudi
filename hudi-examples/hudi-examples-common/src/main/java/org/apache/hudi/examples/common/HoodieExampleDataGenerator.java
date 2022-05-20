@@ -62,7 +62,7 @@ public class HoodieExampleDataGenerator<T extends HoodieRecordPayload<T>> {
           + "{\"name\":\"fare\",\"type\": \"double\"}]}";
   public static Schema avroSchema = new Schema.Parser().parse(TRIP_EXAMPLE_SCHEMA);
 
-  private static final Random rand = new Random(46474747);
+  private static final Random RAND = new Random(46474747);
 
   private final Map<Integer, KeyPartition> existingKeys;
   private final String[] partitionPaths;
@@ -97,11 +97,11 @@ public class HoodieExampleDataGenerator<T extends HoodieRecordPayload<T>> {
     rec.put("ts", timestamp);
     rec.put("rider", riderName);
     rec.put("driver", driverName);
-    rec.put("begin_lat", rand.nextDouble());
-    rec.put("begin_lon", rand.nextDouble());
-    rec.put("end_lat", rand.nextDouble());
-    rec.put("end_lon", rand.nextDouble());
-    rec.put("fare", rand.nextDouble() * 100);
+    rec.put("begin_lat", RAND.nextDouble());
+    rec.put("begin_lon", RAND.nextDouble());
+    rec.put("end_lat", RAND.nextDouble());
+    rec.put("end_lon", RAND.nextDouble());
+    rec.put("fare", RAND.nextDouble() * 100);
     return rec;
   }
 
@@ -119,7 +119,7 @@ public class HoodieExampleDataGenerator<T extends HoodieRecordPayload<T>> {
     int currSize = getNumExistingKeys();
 
     return IntStream.range(0, n).boxed().map(i -> {
-      String partitionPath = partitionPaths[rand.nextInt(partitionPaths.length)];
+      String partitionPath = partitionPaths[RAND.nextInt(partitionPaths.length)];
       HoodieKey key = new HoodieKey(UUID.randomUUID().toString(), partitionPath);
       KeyPartition kp = new KeyPartition();
       kp.key = key;
@@ -141,7 +141,7 @@ public class HoodieExampleDataGenerator<T extends HoodieRecordPayload<T>> {
   public List<HoodieRecord<T>> generateUpdates(String commitTime, Integer n) {
     List<HoodieRecord<T>> updates = new ArrayList<>();
     for (int i = 0; i < n; i++) {
-      KeyPartition kp = existingKeys.get(rand.nextInt(numExistingKeys - 1));
+      KeyPartition kp = existingKeys.get(RAND.nextInt(numExistingKeys - 1));
       HoodieRecord<T> record = generateUpdateRecord(kp.key, commitTime);
       updates.add(record);
     }

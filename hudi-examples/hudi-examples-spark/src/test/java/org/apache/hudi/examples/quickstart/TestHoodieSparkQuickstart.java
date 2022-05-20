@@ -18,8 +18,6 @@
 
 package org.apache.hudi.examples.quickstart;
 
-import java.io.File;
-import java.nio.file.Paths;
 import org.apache.hudi.client.HoodieReadClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
@@ -35,6 +33,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.File;
+import java.nio.file.Paths;
+
 public class TestHoodieSparkQuickstart implements SparkProvider {
   protected static transient HoodieSparkEngineContext context;
 
@@ -49,7 +50,7 @@ public class TestHoodieSparkQuickstart implements SparkProvider {
   @TempDir
   protected java.nio.file.Path tempDir;
 
-  private static final HoodieExampleDataGenerator<HoodieAvroPayload> dataGen = new HoodieExampleDataGenerator<>();
+  private static final HoodieExampleDataGenerator<HoodieAvroPayload> DATA_GEN = new HoodieExampleDataGenerator<>();
 
   @Override
   public SparkSession spark() {
@@ -99,10 +100,10 @@ public class TestHoodieSparkQuickstart implements SparkProvider {
     String tablePath = tablePath(tableName);
 
     try {
-      HoodieSparkQuickstart.insertData(spark, jsc, tablePath, tableName, dataGen);
-      HoodieSparkQuickstart.updateData(spark, jsc, tablePath, tableName, dataGen);
+      HoodieSparkQuickstart.insertData(spark, jsc, tablePath, tableName, DATA_GEN);
+      HoodieSparkQuickstart.updateData(spark, jsc, tablePath, tableName, DATA_GEN);
 
-      HoodieSparkQuickstart.queryData(spark, jsc, tablePath, tableName, dataGen);
+      HoodieSparkQuickstart.queryData(spark, jsc, tablePath, tableName, DATA_GEN);
       HoodieSparkQuickstart.incrementalQuery(spark, tablePath, tableName);
       HoodieSparkQuickstart.pointInTimeQuery(spark, tablePath, tableName);
 

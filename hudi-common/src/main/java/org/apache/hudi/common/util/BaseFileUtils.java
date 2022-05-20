@@ -18,14 +18,6 @@
 
 package org.apache.hudi.common.util;
 
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
@@ -35,6 +27,16 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
+
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
+
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 public abstract class BaseFileUtils {
 
@@ -204,4 +206,9 @@ public abstract class BaseFileUtils {
    * @return The Avro schema of the data file
    */
   public abstract Schema readAvroSchema(Configuration configuration, Path filePath);
+
+  /**
+   * @return The subclass's {@link HoodieFileFormat}.
+   */
+  public abstract HoodieFileFormat getFormat();
 }
