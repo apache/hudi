@@ -20,8 +20,8 @@ package org.apache.spark.sql.hudi.catalog
 
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.exception.HoodieException
-import org.apache.hudi.hive.util.ConfigUtils
 import org.apache.hudi.sql.InsertMode
+import org.apache.hudi.sync.common.util.ConfigUtils
 import org.apache.hudi.{DataSourceWriteOptions, SparkAdapterSupport}
 import org.apache.spark.sql.HoodieSpark3SqlUtils.convertTransforms
 import org.apache.spark.sql.catalyst.TableIdentifier
