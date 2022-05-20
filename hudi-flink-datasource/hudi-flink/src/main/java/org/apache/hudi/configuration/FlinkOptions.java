@@ -831,8 +831,9 @@ public class FlinkOptions extends HoodieConfig {
       .key("hive_sync.support_timestamp")
       .booleanType()
       .defaultValue(true)
-      .withDescription("INT64 with original type TIMESTAMP_MICROS is converted to hive timestamp type.\n"
-          + "Disabled by default for backward compatibility.");
+      .withDescription("'INT64' with original type TIMESTAMP_MICROS is converted to hive 'timestamp' type. "
+          + "From 0.12.0, 'timestamp' type will be supported and also can be disabled by this variable. "
+          + "Previous versions keep being disabled by default.");
 
   public static final ConfigOption<String> HIVE_SYNC_TABLE_PROPERTIES = ConfigOptions
       .key("hive_sync.table_properties")

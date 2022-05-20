@@ -30,6 +30,7 @@ import org.apache.hadoop.mapred.RecordReader;
 import org.apache.hadoop.mapred.Reporter;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.avro.HudiAvroParquetInputFormat;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 import org.apache.log4j.LogManager;
@@ -74,11 +75,15 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
    *  in Hive or Spark3 to get timestamp with correct type.
    */
   private void initAvroInputFormat() {
-    Constructor[] constructors = ParquetRecordReaderWrapper.class.getConstructors();
-    if (Arrays.stream(constructors)
-            .anyMatch(c -> c.getParameterCount() > 0 && c.getParameterTypes()[0]
-                    .getName().equals(ParquetInputFormat.class.getName()))) {
-      supportAvroRead = true;
+    try {
+      Constructor[] constructors = ParquetRecordReaderWrapper.class.getConstructors();
+      if (Arrays.stream(constructors)
+              .anyMatch(c -> c.getParameterCount() > 0 && c.getParameterTypes()[0]
+                      .getName().equals(ParquetInputFormat.class.getName()))) {
+        supportAvroRead = true;
+      }
+    } catch (SecurityException e) {
+      throw new HoodieException("Failed to check if support avro reader: " + e.getMessage(), e);
     }
   }
 
