@@ -18,7 +18,11 @@ Refer to the [Apache Hudi events calendar](https://calendar.google.com/calendar/
 
 **[ZOOM LINK TO JOIN](https://zoom.us/j/96743829685?pwd=S3pxRVVKTDljWVFVWW1IU1UvY0JEUT09)**
 
-Every month on the Last Wed, 07:00 AM Pacific Time (US and Canada)([translate to other time zones](https://www.worldtimebuddy.com/?qm=1&lid=5368361,2643743,1264527,1796236&h=5368361&date=2021-11-24&sln=7-8&hf=1))
+Every month on the Last Wed, 09:00 AM Pacific Time (US and Canada)([translate to other time zones](https://www.worldtimebuddy.com/?qm=1&lid=5368361,2643743,1264527,1796236&h=2643743&date=2022-5-25&sln=17-18&hf=1))
+
+**Recordings of the community calls**
+
+Uploaded to [Apache Hudi youtube channel](https://www.youtube.com/channel/UCs7AhE0BWaEPZSChrBR-Muw) after every call.
 
 **Typical agenda**
 
@@ -31,6 +35,7 @@ If you would like to present in one of the community calls, please fill out a [f
 Here are some upcoming calls for convenience. 
 
 ![Upcoming calls](/assets/images/upcoming-community-calls.png)
+
 
 ## Weekly Office Hours
 
