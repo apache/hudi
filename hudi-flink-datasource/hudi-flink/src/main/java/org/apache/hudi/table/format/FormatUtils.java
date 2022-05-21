@@ -30,7 +30,6 @@ import org.apache.hudi.common.util.queue.BoundedInMemoryExecutor;
 import org.apache.hudi.common.util.queue.BoundedInMemoryQueueProducer;
 import org.apache.hudi.common.util.queue.FunctionBasedQueueProducer;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.hadoop.config.HoodieRealtimeConfig;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 import org.apache.hudi.util.StreamerUtil;
@@ -49,7 +48,6 @@ import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.function.Function;
 
 /**
@@ -252,15 +250,5 @@ public class FormatUtils {
 
   private static Boolean string2Boolean(String s) {
     return "true".equals(s.toLowerCase(Locale.ROOT));
-  }
-
-  public static org.apache.hadoop.conf.Configuration getParquetConf(
-      org.apache.flink.configuration.Configuration options,
-      org.apache.hadoop.conf.Configuration hadoopConf) {
-    final String prefix = "parquet.";
-    org.apache.hadoop.conf.Configuration copy = new org.apache.hadoop.conf.Configuration(hadoopConf);
-    Map<String, String> parquetOptions = FlinkOptions.getHoodiePropertiesWithPrefix(options.toMap(), prefix);
-    parquetOptions.forEach((k, v) -> copy.set(prefix + k, v));
-    return copy;
   }
 }

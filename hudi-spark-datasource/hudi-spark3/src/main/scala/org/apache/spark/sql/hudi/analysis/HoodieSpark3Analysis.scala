@@ -179,21 +179,22 @@ case class HoodieSpark3ResolveReferences(sparkSession: SparkSession) extends Rul
 case class HoodieSpark3PostAnalysisRule(sparkSession: SparkSession) extends Rule[LogicalPlan] {
   override def apply(plan: LogicalPlan): LogicalPlan = {
     plan match {
-      case ShowPartitions(child, specOpt, _)
-        if child.isInstanceOf[ResolvedTable] &&
-          child.asInstanceOf[ResolvedTable].table.isInstanceOf[HoodieInternalV2Table] =>
-        ShowHoodieTablePartitionsCommand(child.asInstanceOf[ResolvedTable].identifier.asTableIdentifier, specOpt.map(s => s.asInstanceOf[UnresolvedPartitionSpec].spec))
+      case ShowPartitions(ResolvedTable(_, idt, _: HoodieInternalV2Table, _), specOpt, _) =>
+        ShowHoodieTablePartitionsCommand(
+          idt.asTableIdentifier, specOpt.map(s => s.asInstanceOf[UnresolvedPartitionSpec].spec))
 
       // Rewrite TruncateTableCommand to TruncateHoodieTableCommand
-      case TruncateTable(child)
-        if child.isInstanceOf[ResolvedTable] &&
-          child.asInstanceOf[ResolvedTable].table.isInstanceOf[HoodieInternalV2Table] =>
-        new TruncateHoodieTableCommand(child.asInstanceOf[ResolvedTable].identifier.asTableIdentifier, None)
+      case TruncateTable(ResolvedTable(_, idt, _: HoodieInternalV2Table, _)) =>
+        TruncateHoodieTableCommand(idt.asTableIdentifier, None)
 
-      case DropPartitions(child, specs, ifExists, purge)
-        if child.resolved && child.isInstanceOf[ResolvedTable] && child.asInstanceOf[ResolvedTable].table.isInstanceOf[HoodieInternalV2Table] =>
+      case TruncatePartition(
+          ResolvedTable(_, idt, _: HoodieInternalV2Table, _),
+          partitionSpec: UnresolvedPartitionSpec) =>
+        TruncateHoodieTableCommand(idt.asTableIdentifier, Some(partitionSpec.spec))
+
+      case DropPartitions(ResolvedTable(_, idt, _: HoodieInternalV2Table, _), specs, ifExists, purge) =>
         AlterHoodieTableDropPartitionCommand(
-          child.asInstanceOf[ResolvedTable].identifier.asTableIdentifier,
+          idt.asTableIdentifier,
           specs.seq.map(f => f.asInstanceOf[UnresolvedPartitionSpec]).map(s => s.spec),
           ifExists,
           purge,

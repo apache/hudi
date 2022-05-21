@@ -31,15 +31,18 @@ public class HoodieDefaultLayout extends HoodieStorageLayout {
     super(config);
   }
 
+  @Override
   public boolean determinesNumFileGroups() {
     return false;
   }
 
+  @Override
   public Option<String> layoutPartitionerClass() {
     return Option.empty();
   }
 
-  public boolean doesNotSupport(WriteOperationType operationType) {
-    return false;
+  @Override
+  public boolean writeOperationSupported(WriteOperationType operationType) {
+    return true;
   }
 }

@@ -18,6 +18,7 @@
 
 package org.apache.hudi.keygen;
 
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieKeyException;
 
 import org.apache.spark.sql.Row;
@@ -52,17 +53,18 @@ public class RowKeyGeneratorHelper {
 
   /**
    * Generates record key for the corresponding {@link Row}.
-   * @param row instance of {@link Row} of interest
-   * @param recordKeyFields record key fields as a list
+   *
+   * @param row                instance of {@link Row} of interest
+   * @param recordKeyFields    record key fields as a list
    * @param recordKeyPositions record key positions for the corresponding record keys in {@code recordKeyFields}
-   * @param prefixFieldName {@code true} if field name need to be prefixed in the returned result. {@code false} otherwise.
+   * @param prefixFieldName    {@code true} if field name need to be prefixed in the returned result. {@code false} otherwise.
    * @return the record key thus generated
    */
-  public static String getRecordKeyFromRow(Row row, List<String> recordKeyFields, Map<String, List<Integer>> recordKeyPositions, boolean prefixFieldName) {
+  public static String getRecordKeyFromRow(Row row, List<String> recordKeyFields, Map<String, Pair<List<Integer>, DataType>> recordKeyPositions, boolean prefixFieldName) {
     AtomicBoolean keyIsNullOrEmpty = new AtomicBoolean(true);
     String toReturn = recordKeyFields.stream().map(field -> {
       String val = null;
-      List<Integer> fieldPositions = recordKeyPositions.get(field);
+      List<Integer> fieldPositions = recordKeyPositions.get(field).getKey();
       if (fieldPositions.size() == 1) { // simple field
         Integer fieldPos = fieldPositions.get(0);
         if (row.isNullAt(fieldPos)) {
@@ -76,7 +78,7 @@ public class RowKeyGeneratorHelper {
           }
         }
       } else { // nested fields
-        val = getNestedFieldVal(row, recordKeyPositions.get(field)).toString();
+        val = getNestedFieldVal(row, recordKeyPositions.get(field).getKey()).toString();
         if (!val.contains(NULL_RECORDKEY_PLACEHOLDER) && !val.contains(EMPTY_RECORDKEY_PLACEHOLDER)) {
           keyIsNullOrEmpty.set(false);
         }
@@ -91,17 +93,18 @@ public class RowKeyGeneratorHelper {
 
   /**
    * Generates partition path for the corresponding {@link Row}.
-   * @param row instance of {@link Row} of interest
-   * @param partitionPathFields partition path fields as a list
-   * @param hiveStylePartitioning {@code true} if hive style partitioning is set. {@code false} otherwise
+   *
+   * @param row                    instance of {@link Row} of interest
+   * @param partitionPathFields    partition path fields as a list
+   * @param hiveStylePartitioning  {@code true} if hive style partitioning is set. {@code false} otherwise
    * @param partitionPathPositions partition path positions for the corresponding fields in {@code partitionPathFields}
    * @return the generated partition path for the row
    */
-  public static String getPartitionPathFromRow(Row row, List<String> partitionPathFields, boolean hiveStylePartitioning, Map<String, List<Integer>> partitionPathPositions) {
+  public static String getPartitionPathFromRow(Row row, List<String> partitionPathFields, boolean hiveStylePartitioning, Map<String, Pair<List<Integer>, DataType>> partitionPathPositions) {
     return IntStream.range(0, partitionPathFields.size()).mapToObj(idx -> {
       String field = partitionPathFields.get(idx);
       String val = null;
-      List<Integer> fieldPositions = partitionPathPositions.get(field);
+      List<Integer> fieldPositions = partitionPathPositions.get(field).getKey();
       if (fieldPositions.size() == 1) { // simple
         Integer fieldPos = fieldPositions.get(0);
         // for partition path, if field is not found, index will be set to -1
@@ -118,7 +121,7 @@ public class RowKeyGeneratorHelper {
           val = field + "=" + val;
         }
       } else { // nested
-        Object data = getNestedFieldVal(row, partitionPathPositions.get(field));
+        Object data = getNestedFieldVal(row, partitionPathPositions.get(field).getKey());
         data = convertToTimestampIfInstant(data);
         if (data.toString().contains(NULL_RECORDKEY_PLACEHOLDER) || data.toString().contains(EMPTY_RECORDKEY_PLACEHOLDER)) {
           val = hiveStylePartitioning ? field + "=" + HUDI_DEFAULT_PARTITION_PATH : HUDI_DEFAULT_PARTITION_PATH;
@@ -130,20 +133,20 @@ public class RowKeyGeneratorHelper {
     }).collect(Collectors.joining(DEFAULT_PARTITION_PATH_SEPARATOR));
   }
 
-  public static String getPartitionPathFromInternalRow(InternalRow row, List<String> partitionPathFields, boolean hiveStylePartitioning,
-                                                       Map<String, List<Integer>> partitionPathPositions,
-                                                       Map<String, List<DataType>> partitionPathDataTypes) {
+  public static String getPartitionPathFromInternalRow(InternalRow internalRow, List<String> partitionPathFields, boolean hiveStylePartitioning,
+                                                       Map<String, Pair<List<Integer>, DataType>> partitionPathPositions) {
     return IntStream.range(0, partitionPathFields.size()).mapToObj(idx -> {
       String field = partitionPathFields.get(idx);
       String val = null;
-      List<Integer> fieldPositions = partitionPathPositions.get(field);
+      List<Integer> fieldPositions = partitionPathPositions.get(field).getKey();
+      DataType dataType = partitionPathPositions.get(field).getValue();
       if (fieldPositions.size() == 1) { // simple
         Integer fieldPos = fieldPositions.get(0);
         // for partition path, if field is not found, index will be set to -1
-        if (fieldPos == -1 || row.isNullAt(fieldPos)) {
+        if (fieldPos == -1 || internalRow.isNullAt(fieldPos)) {
           val = HUDI_DEFAULT_PARTITION_PATH;
         } else {
-          Object value = row.get(fieldPos, partitionPathDataTypes.get(field).get(0));
+          Object value = internalRow.get(fieldPos, dataType);
           if (value == null || value.toString().isEmpty()) {
             val = HUDI_DEFAULT_PARTITION_PATH;
           } else {
@@ -180,22 +183,22 @@ public class RowKeyGeneratorHelper {
 
   /**
    * Fetch the field value located at the positions requested for.
-   *
+   * <p>
    * The fetching logic recursively goes into the nested field based on the position list to get the field value.
    * For example, given the row [4357686,key1,2020-03-21,pi,[val1,10]] with the following schema, which has the fourth
    * field as a nested field, and positions list as [4,0],
-   *
+   * <p>
    * 0 = "StructField(timestamp,LongType,false)"
    * 1 = "StructField(_row_key,StringType,false)"
    * 2 = "StructField(ts_ms,StringType,false)"
    * 3 = "StructField(pii_col,StringType,false)"
    * 4 = "StructField(nested_col,StructType(StructField(prop1,StringType,false), StructField(prop2,LongType,false)),false)"
-   *
+   * <p>
    * the logic fetches the value from field nested_col.prop1.
    * If any level of the nested field is null, {@link KeyGenUtils#NULL_RECORDKEY_PLACEHOLDER} is returned.
    * If the field value is an empty String, {@link KeyGenUtils#EMPTY_RECORDKEY_PLACEHOLDER} is returned.
    *
-   * @param row instance of {@link Row} of interest
+   * @param row       instance of {@link Row} of interest
    * @param positions tree style positions where the leaf node need to be fetched and returned
    * @return the field value as per the positions requested for.
    */
@@ -234,13 +237,14 @@ public class RowKeyGeneratorHelper {
    * @param structType  schema of interest
    * @param field       field of interest for which the positions are requested for
    * @param isRecordKey {@code true} if the field requested for is a record key. {@code false} in case of a partition path.
-   * @return the positions of the field as per the struct type.
+   * @return the positions of the field as per the struct type and the leaf field's datatype.
    */
-  public static List<Integer> getNestedFieldIndices(StructType structType, String field, boolean isRecordKey) {
+  public static Pair<List<Integer>, DataType> getFieldSchemaInfo(StructType structType, String field, boolean isRecordKey) {
     String[] slices = field.split("\\.");
     List<Integer> positions = new ArrayList<>();
     int index = 0;
     int totalCount = slices.length;
+    DataType leafFieldDataType = null;
     while (index < totalCount) {
       String slice = slices[index];
       Option<Object> curIndexOpt = structType.getFieldIndex(slice);
@@ -258,6 +262,9 @@ public class RowKeyGeneratorHelper {
             }
           }
           structType = (StructType) nestedField.dataType();
+        } else {
+          // leaf node.
+          leafFieldDataType = nestedField.dataType();
         }
       } else {
         if (isRecordKey) {
@@ -269,7 +276,7 @@ public class RowKeyGeneratorHelper {
       }
       index++;
     }
-    return positions;
+    return Pair.of(positions, leafFieldDataType);
   }
 
   private static Object convertToTimestampIfInstant(Object data) {

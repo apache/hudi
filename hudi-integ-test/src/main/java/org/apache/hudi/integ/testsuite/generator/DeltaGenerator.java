@@ -123,7 +123,7 @@ public class DeltaGenerator implements Serializable {
     int startPartition = operation.getStartPartition();
 
     // Each spark partition below will generate records for a single partition given by the integer index.
-    List<Integer> partitionIndexes = IntStream.rangeClosed(0 + startPartition, numPartitions + startPartition)
+    List<Integer> partitionIndexes = IntStream.rangeClosed(0 + startPartition, numPartitions + startPartition - 1)
         .boxed().collect(Collectors.toList());
 
     JavaRDD<GenericRecord> inputBatch = jsc.parallelize(partitionIndexes, numPartitions)

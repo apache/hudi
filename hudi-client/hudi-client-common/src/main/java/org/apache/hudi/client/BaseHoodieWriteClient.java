@@ -334,7 +334,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
    * @param metadata instance of {@link HoodieCommitMetadata}.
    */
   protected void writeTableMetadata(HoodieTable table, String instantTime, String actionType, HoodieCommitMetadata metadata) {
-    context.setJobStatus(this.getClass().getSimpleName(), "Committing to metadata table");
+    context.setJobStatus(this.getClass().getSimpleName(), "Committing to metadata table: " + config.getTableName());
     table.getMetadataWriter(instantTime).ifPresent(w -> ((HoodieTableMetadataWriter) w).update(metadata, instantTime,
         table.isTableServiceAction(actionType)));
   }
@@ -1038,7 +1038,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
     HoodieInstant ownerInstant = new HoodieInstant(true, HoodieTimeline.INDEXING_ACTION, dropInstant);
     this.txnManager.beginTransaction(Option.of(ownerInstant), Option.empty());
     try {
-      context.setJobStatus(this.getClass().getSimpleName(), "Dropping partitions from metadata table");
+      context.setJobStatus(this.getClass().getSimpleName(), "Dropping partitions from metadata table: " + config.getTableName());
       table.getMetadataWriter(dropInstant).ifPresent(w -> {
         try {
           ((HoodieTableMetadataWriter) w).dropMetadataPartitions(partitionTypes);
@@ -1466,8 +1466,6 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
 
     // Validate table properties
     metaClient.validateTableProperties(config.getProps());
-    // Make sure that FS View is in sync
-    table.getHoodieView().sync();
 
     switch (operationType) {
       case INSERT:
@@ -1553,7 +1551,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
     }
   }
 
-  private void tryUpgrade(HoodieTableMetaClient metaClient, Option<String> instantTime) {
+  protected void tryUpgrade(HoodieTableMetaClient metaClient, Option<String> instantTime) {
     UpgradeDowngrade upgradeDowngrade =
         new UpgradeDowngrade(metaClient, config, context, upgradeDowngradeHelper);
 

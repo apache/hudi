@@ -20,12 +20,13 @@ package org.apache.spark.sql.hudi.catalog
 
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.exception.HoodieException
-import org.apache.hudi.hive.util.ConfigUtils
 import org.apache.hudi.sql.InsertMode
+import org.apache.hudi.sync.common.util.ConfigUtils
 import org.apache.hudi.{DataSourceWriteOptions, SparkAdapterSupport}
 import org.apache.spark.sql.HoodieSpark3SqlUtils.convertTransforms
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.{NoSuchTableException, TableAlreadyExistsException, UnresolvedAttribute}
+import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable.needFilterProps
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTableType, CatalogUtils, HoodieCatalogTable}
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.IdentifierHelper
 import org.apache.spark.sql.connector.catalog.TableChange.{AddColumn, ColumnChange, UpdateColumnComment, UpdateColumnType}
@@ -89,19 +90,21 @@ class HoodieCatalog extends DelegatingCatalogExtension
   }
 
   override def loadTable(ident: Identifier): Table = {
-    try {
-      super.loadTable(ident) match {
-        case v1: V1Table if sparkAdapter.isHoodieTable(v1.catalogTable) =>
-          HoodieInternalV2Table(
-            spark,
-            v1.catalogTable.location.toString,
-            catalogTable = Some(v1.catalogTable),
-            tableIdentifier = Some(ident.toString))
-        case o => o
-      }
-    } catch {
-      case e: Exception =>
-        throw e
+    super.loadTable(ident) match {
+      case V1Table(catalogTable0) if sparkAdapter.isHoodieTable(catalogTable0) =>
+        val catalogTable = catalogTable0.comment match {
+          case Some(v) =>
+            val newProps = catalogTable0.properties + (TableCatalog.PROP_COMMENT -> v)
+            catalogTable0.copy(properties = newProps)
+          case _ =>
+            catalogTable0
+        }
+        HoodieInternalV2Table(
+          spark = spark,
+          path = catalogTable.location.toString,
+          catalogTable = Some(catalogTable),
+          tableIdentifier = Some(ident.toString))
+      case o => o
     }
   }
 
@@ -213,7 +216,7 @@ class HoodieCatalog extends DelegatingCatalogExtension
     val loc = locUriOpt
       .orElse(existingTableOpt.flatMap(_.storage.locationUri))
       .getOrElse(spark.sessionState.catalog.defaultTablePath(id))
-    val storage = DataSource.buildStorageFormatFromOptions(writeOptions)
+    val storage = DataSource.buildStorageFormatFromOptions(writeOptions.--(needFilterProps))
       .copy(locationUri = Option(loc))
     val tableType =
       if (location.isDefined) CatalogTableType.EXTERNAL else CatalogTableType.MANAGED
@@ -231,7 +234,7 @@ class HoodieCatalog extends DelegatingCatalogExtension
       provider = Option("hudi"),
       partitionColumnNames = newPartitionColumns,
       bucketSpec = newBucketSpec,
-      properties = tablePropertiesNew.asScala.toMap,
+      properties = tablePropertiesNew.asScala.toMap.--(needFilterProps),
       comment = commentOpt)
 
     val hoodieCatalogTable = HoodieCatalogTable(spark, tableDesc)

@@ -106,7 +106,7 @@ public class TestStreamerUtil {
   void testDumpRemoteViewStorageConfig() throws IOException {
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
     StreamerUtil.createWriteClient(conf);
-    FileSystemViewStorageConfig storageConfig = ViewStorageProperties.loadFromProperties(conf.getString(FlinkOptions.PATH));
+    FileSystemViewStorageConfig storageConfig = ViewStorageProperties.loadFromProperties(conf.getString(FlinkOptions.PATH), new Configuration());
     assertThat(storageConfig.getStorageType(), is(FileSystemViewStorageType.REMOTE_FIRST));
   }
 }

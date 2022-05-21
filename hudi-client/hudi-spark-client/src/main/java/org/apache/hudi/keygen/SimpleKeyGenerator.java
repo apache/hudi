@@ -65,15 +65,15 @@ public class SimpleKeyGenerator extends BuiltinKeyGenerator {
 
   @Override
   public String getRecordKey(Row row) {
-    buildFieldPositionMapIfNeeded(row.schema());
-    return RowKeyGeneratorHelper.getRecordKeyFromRow(row, getRecordKeyFields(), recordKeyPositions, false);
+    buildFieldSchemaInfoIfNeeded(row.schema());
+    return RowKeyGeneratorHelper.getRecordKeyFromRow(row, getRecordKeyFields(), recordKeySchemaInfo, false);
   }
 
   @Override
   public String getPartitionPath(Row row) {
-    buildFieldPositionMapIfNeeded(row.schema());
+    buildFieldSchemaInfoIfNeeded(row.schema());
     return RowKeyGeneratorHelper.getPartitionPathFromRow(row, getPartitionPathFields(),
-        hiveStylePartitioning, partitionPathPositions);
+        hiveStylePartitioning, partitionPathSchemaInfo);
   }
 
   @Override
