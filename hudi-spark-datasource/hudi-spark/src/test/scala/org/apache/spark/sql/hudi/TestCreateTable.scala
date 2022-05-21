@@ -27,6 +27,7 @@ import org.apache.hudi.keygen.{ComplexKeyGenerator, NonpartitionedKeyGenerator, 
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.CatalogTableType
+import org.apache.spark.sql.hudi.command.SqlKeyGenerator
 import org.apache.spark.sql.types._
 
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -137,7 +138,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
     assertResult("dt")(tableConfig(HoodieTableConfig.PARTITION_FIELDS.key))
     assertResult("id")(tableConfig(HoodieTableConfig.RECORDKEY_FIELDS.key))
     assertResult("ts")(tableConfig(HoodieTableConfig.PRECOMBINE_FIELD.key))
-    assertResult(classOf[ComplexKeyGenerator].getCanonicalName)(tableConfig(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key))
+    assertResult(classOf[SqlKeyGenerator].getCanonicalName)(tableConfig(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key))
     assertResult("default")(tableConfig(HoodieTableConfig.DATABASE_NAME.key()))
     assertResult(tableName)(tableConfig(HoodieTableConfig.NAME.key()))
     assertFalse(tableConfig.contains(OPERATION.key()))

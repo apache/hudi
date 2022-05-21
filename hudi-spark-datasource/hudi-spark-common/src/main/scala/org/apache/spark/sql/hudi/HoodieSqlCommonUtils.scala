@@ -43,10 +43,8 @@ import org.apache.spark.sql.util.SchemaUtils
 import java.net.URI
 import java.text.SimpleDateFormat
 import java.util.{Locale, Properties}
-
 import scala.collection.JavaConverters._
 import scala.collection.immutable.Map
-
 
 object HoodieSqlCommonUtils extends SparkAdapterSupport {
   // NOTE: {@code SimpleDataFormat} is NOT thread-safe
