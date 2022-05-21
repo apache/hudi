@@ -219,7 +219,15 @@ private[sql] object SchemaConverters {
   }
 
   private def canBeUnion(st: StructType): Boolean = {
-    st.forall { f => f.name.startsWith(unionFieldMemberPrefix) && f.nullable }
+    // We use a heuristic to determine whether a [[StructType]] could potentially have been produced
+    // by converting Avro union to Catalyst's [[StructType]]:
+    //    - It has to have at least 1 field
+    //    - All fields have to be of the following format "memberN" (where N is sequentially increasing integer)
+    //    - All fields are nullable
+    st.fields.length > 0 &&
+    st.forall { f =>
+      f.name.matches(s"$unionFieldMemberPrefix\\d+") && f.nullable
+    }
   }
 }
 
