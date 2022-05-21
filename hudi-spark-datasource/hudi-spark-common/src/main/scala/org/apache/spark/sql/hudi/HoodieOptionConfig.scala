@@ -199,7 +199,7 @@ object HoodieOptionConfig {
       .map(_.split(",").filter(_.length > 0))
     ValidationUtils.checkArgument(primaryKeys.nonEmpty, "No `primaryKey` is specified.")
     primaryKeys.get.foreach { primaryKey =>
-      ValidationUtils.checkArgument(schema.exists(f => resolver(f.name, primaryKey)),
+      ValidationUtils.checkArgument(schema.exists(f => resolver(f.name, getRootLevelFieldName(primaryKey))),
         s"Can't find primaryKey `$primaryKey` in ${schema.treeString}.")
     }
 

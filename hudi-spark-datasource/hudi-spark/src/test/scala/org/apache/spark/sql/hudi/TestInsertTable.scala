@@ -664,7 +664,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
     }
   }
 
-  test("Test nested field as preCombineField") {
+  test("Test nested field as primaryKey and preCombineField") {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
         val tableName = generateTableName
@@ -672,7 +672,6 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         spark.sql(
           s"""
              |create table $tableName (
-             |  id int,
              |  name string,
              |  price double,
              |  ts long,
@@ -681,18 +680,18 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
              | location '${tmp.getCanonicalPath}/$tableName'
              | options (
              |  type = '$tableType',
-             |  primaryKey = 'id',
+             |  primaryKey = 'nestedcol.a1',
              |  preCombineField = 'nestedcol.a2.b2.c2'
              | )
        """.stripMargin)
         // insert data to table
         spark.sql(
           s"""insert into $tableName values
-             |(0, 'name_1', 10, 1000, struct('a', struct('b', struct('c', 999)))),
-             |(0, 'name_2', 20, 2000, struct('a', struct('b', struct('c', 333))))
+             |('name_1', 10, 1000, struct('a', struct('b', struct('c', 999)))),
+             |('name_2', 20, 2000, struct('a', struct('b', struct('c', 333))))
              |""".stripMargin)
-        checkAnswer(s"select id, name, price, ts, nestedcol, nestedcol.a2.b2.c2 from $tableName")(
-          Seq(0, "name_1", 10.0, 1000, "{\"a1\":\"a\",\"a2\":{\"b1\":\"b\",\"b2\":{\"c1\":\"c\",\"c2\":999}}}, 999")
+        checkAnswer(s"select name, price, ts, nestedcol.a1, nestedcol.a2.b2.c2 from $tableName")(
+          Seq("name_1", 10.0, 1000, "a", 999)
         )
       }
     }
