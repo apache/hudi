@@ -79,7 +79,8 @@ case class HoodieTableState(tablePath: String,
 abstract class HoodieBaseRelation(val sqlContext: SQLContext,
                                   val metaClient: HoodieTableMetaClient,
                                   val optParams: Map[String, String],
-                                  schemaSpec: Option[StructType])
+                                  schemaSpec: Option[StructType],
+                                  val canPruneSchema: Boolean = true)
   extends BaseRelation
     with FileRelation
     with PrunedFilteredScan
@@ -269,6 +270,8 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
    */
   def canPruneRelationSchema: Boolean =
     (fileFormat.isInstanceOf[ParquetFileFormat] || fileFormat.isInstanceOf[OrcFileFormat]) &&
+      // NOTE: Some relations might be disabling sophisticated schema pruning techniques (for ex, nested schema pruning)
+      canPruneSchema &&
       // TODO(HUDI-XXX) internal schema doesn't supported nested schema pruning currently
       internalSchema.isEmptySchema
 
