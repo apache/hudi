@@ -1041,13 +1041,6 @@
         </exclusions>
       </dependency>
 
-      <dependency>
-        <groupId>com.google.code.gson</groupId>
-        <artifactId>gson</artifactId>
-        <version>2.3.1</version>
-        <scope>test</scope>
-      </dependency>
-
       <!-- Zookeeper -->
       <dependency>
         <groupId>org.apache.curator</groupId>
