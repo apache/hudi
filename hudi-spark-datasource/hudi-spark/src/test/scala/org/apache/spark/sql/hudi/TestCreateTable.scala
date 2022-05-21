@@ -763,4 +763,22 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
       assertResult(true)(shown.contains("COMMENT 'This is a simple hudi table'"))
     }
   }
+
+  test("Test CTAS using an illegal definition -- a COW table with compaction enabled.") {
+    val tableName = generateTableName
+    checkExceptionContain(
+      s"""
+         | create table $tableName using hudi
+         | tblproperties(
+         |    primaryKey = 'id',
+         |    type = 'cow',
+         |    hoodie.compact.inline='true'
+         | )
+         | AS
+         | select 1 as id, 'a1' as name, 10 as price, 1000 as ts
+         |""".stripMargin)("Compaction is not supported on a CopyOnWrite table")
+    val dbPath = spark.sessionState.catalog.getDatabaseMetadata("default").locationUri.getPath
+    val tablePath = s"${dbPath}/${tableName}"
+    assertResult(false)(existsPath(tablePath))
+  }
 }
