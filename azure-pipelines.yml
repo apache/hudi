@@ -88,6 +88,7 @@ stages:
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
       - job: UT_FT_3
+        condition: false
         displayName: UT FT clients & cli & utilities & sync/hive-sync
         timeoutInMinutes: '120'
         steps:
