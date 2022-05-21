@@ -29,8 +29,10 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -39,6 +41,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.index.FlinkHoodieIndexFactory;
@@ -68,6 +71,8 @@ import org.apache.hadoop.conf.Configuration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.text.ParseException;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -399,6 +404,52 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
     throw new HoodieNotSupportedException("Clustering is not supported yet");
   }
 
+  private void completeClustering(
+      HoodieReplaceCommitMetadata metadata,
+      HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table,
+      String clusteringCommitTime) {
+    this.context.setJobStatus(this.getClass().getSimpleName(), "Collect clustering write status and commit clustering");
+    HoodieInstant clusteringInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.REPLACE_COMMIT_ACTION, clusteringCommitTime);
+    List<HoodieWriteStat> writeStats = metadata.getPartitionToWriteStats().entrySet().stream().flatMap(e ->
+        e.getValue().stream()).collect(Collectors.toList());
+    if (writeStats.stream().mapToLong(HoodieWriteStat::getTotalWriteErrors).sum() > 0) {
+      throw new HoodieClusteringException("Clustering failed to write to files:"
+          + writeStats.stream().filter(s -> s.getTotalWriteErrors() > 0L).map(HoodieWriteStat::getFileId).collect(Collectors.joining(",")));
+    }
+
+    try {
+      this.txnManager.beginTransaction(Option.of(clusteringInstant), Option.empty());
+      finalizeWrite(table, clusteringCommitTime, writeStats);
+      // commit to data table after committing to metadata table.
+      // Do not do any conflict resolution here as we do with regular writes. We take the lock here to ensure all writes to metadata table happens within a
+      // single lock (single writer). Because more than one write to metadata table will result in conflicts since all of them updates the same partition.
+      writeTableMetadata(table, clusteringCommitTime, clusteringInstant.getAction(), metadata);
+      LOG.info("Committing Clustering {} finished with result {}.", clusteringCommitTime, metadata);
+      table.getActiveTimeline().transitionReplaceInflightToComplete(
+          HoodieTimeline.getReplaceCommitInflightInstant(clusteringCommitTime),
+          Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+    } catch (IOException e) {
+      throw new HoodieClusteringException(
+          "Failed to commit " + table.getMetaClient().getBasePath() + " at time " + clusteringCommitTime, e);
+    } finally {
+      this.txnManager.endTransaction(Option.of(clusteringInstant));
+    }
+
+    WriteMarkersFactory.get(config.getMarkersType(), table, clusteringCommitTime)
+        .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
+    if (clusteringTimer != null) {
+      long durationInMs = metrics.getDurationInMs(clusteringTimer.stop());
+      try {
+        metrics.updateCommitMetrics(HoodieActiveTimeline.parseDateFromInstantTime(clusteringCommitTime).getTime(),
+            durationInMs, metadata, HoodieActiveTimeline.REPLACE_COMMIT_ACTION);
+      } catch (ParseException e) {
+        throw new HoodieCommitException("Commit time is not of valid format. Failed to commit compaction "
+            + config.getBasePath() + " at time " + clusteringCommitTime, e);
+      }
+    }
+    LOG.info("Clustering successfully on commit " + clusteringCommitTime);
+  }
+
   @Override
   protected HoodieTable doInitTable(HoodieTableMetaClient metaClient, Option<String> instantTime, boolean initialMetadataTableIfNecessary) {
     // Create a Hoodie table which encapsulated the commits and files visible
@@ -410,6 +461,23 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
     // do nothing.
     // flink executes the upgrade/downgrade once when initializing the first instant on start up,
     // no need to execute the upgrade/downgrade on each write in streaming.
+  }
+
+  public void completeTableService(
+      TableServiceType tableServiceType,
+      HoodieCommitMetadata metadata,
+      HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table,
+      String commitInstant) {
+    switch (tableServiceType) {
+      case CLUSTER:
+        completeClustering((HoodieReplaceCommitMetadata) metadata, table, commitInstant);
+        break;
+      case COMPACT:
+        completeCompaction(metadata, table, commitInstant);
+        break;
+      default:
+        throw new IllegalArgumentException("This table service is not valid " + tableServiceType);
+    }
   }
 
   /**
