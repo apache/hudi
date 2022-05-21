@@ -234,6 +234,12 @@ public class HoodieTableConfig extends HoodieConfig {
       .withDocumentation("Comma-separated list of metadata partitions that have been completely built and in-sync with data table. "
           + "These partitions are ready for use by the readers");
 
+  public static final ConfigProperty<Boolean> TABLE_OPERATION_FIELD_ENABLE = ConfigProperty
+      .key("hoodie.table.operation.field.enable")
+      .defaultValue(true)
+      .sinceVersion("0.11.1")
+      .withDocumentation("Enables show of OPERATION_METADATA_FIELD in Schema.");
+
   private static final String TABLE_CHECKSUM_FORMAT = "%s.%s"; // <database_name>.<table_name>
 
   public HoodieTableConfig(FileSystem fs, String metaPath, String payloadClassName) {
@@ -640,6 +646,13 @@ public class HoodieTableConfig extends HoodieConfig {
       return Option.of(getBaseFileFormat());
     }
     return Option.empty();
+  }
+
+  /**
+   * Returns the OperationFieldEnable.
+   */
+  public boolean getOperationFieldEnable() {
+    return getBooleanOrDefault(TABLE_OPERATION_FIELD_ENABLE);
   }
 
   public Map<String, String> propsMap() {

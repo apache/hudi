@@ -572,6 +572,10 @@ public class TableSchemaResolver {
 
   private boolean hasOperationField() {
     try {
+      if (metaClient.tableConfig.getOperationFieldEnable()) {
+        return true;
+      }
+
       Schema tableAvroSchema = getTableAvroSchemaFromDataFile();
       return tableAvroSchema.getField(HoodieRecord.OPERATION_METADATA_FIELD) != null;
     } catch (Exception e) {
