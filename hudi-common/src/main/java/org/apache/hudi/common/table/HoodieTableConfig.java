@@ -234,11 +234,12 @@ public class HoodieTableConfig extends HoodieConfig {
       .withDocumentation("Comma-separated list of metadata partitions that have been completely built and in-sync with data table. "
           + "These partitions are ready for use by the readers");
 
-  public static final ConfigProperty<Boolean> TABLE_OPERATION_FIELD_ENABLE = ConfigProperty
-      .key("hoodie.table.operation.field.enable")
+  public static final ConfigProperty<Boolean> ALLOW_OPERATION_METADATA_FIELD = ConfigProperty
+      .key("hoodie.allow.operation.metadata.field")
       .defaultValue(false)
       .sinceVersion("0.11.1")
-      .withDocumentation("Enables show of OPERATION_METADATA_FIELD in Schema.");
+      .withDocumentation("Whether to include '_hoodie_operation' in the metadata fields. "
+          + "Once enabled, all the changes of a record are persisted to the delta log directly without merge");
 
   private static final String TABLE_CHECKSUM_FORMAT = "%s.%s"; // <database_name>.<table_name>
 
@@ -651,8 +652,8 @@ public class HoodieTableConfig extends HoodieConfig {
   /**
    * Returns the OperationFieldEnable.
    */
-  public boolean getOperationFieldEnable() {
-    return getBooleanOrDefault(TABLE_OPERATION_FIELD_ENABLE);
+  public boolean allowOperationMetadataField() {
+    return getBooleanOrDefault(ALLOW_OPERATION_METADATA_FIELD);
   }
 
   public Map<String, String> propsMap() {

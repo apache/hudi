@@ -149,7 +149,7 @@ class TestTableSchemaResolverWithSparkSQL {
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
       DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> "org.apache.hudi.keygen.SimpleKeyGenerator",
       "hoodie.metadata.compact.max.delta.commits" -> "2",
-      HoodieTableConfig.TABLE_OPERATION_FIELD_ENABLE.key -> "true"
+      HoodieTableConfig.ALLOW_OPERATION_METADATA_FIELD.key -> "true"
     )
 
     // generate the inserts
@@ -195,7 +195,7 @@ class TestTableSchemaResolverWithSparkSQL {
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
       DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> "org.apache.hudi.keygen.SimpleKeyGenerator",
-      HoodieTableConfig.TABLE_OPERATION_FIELD_ENABLE.key -> "true"
+      HoodieTableConfig.ALLOW_OPERATION_METADATA_FIELD.key -> "true"
     )
 
     // generate the inserts

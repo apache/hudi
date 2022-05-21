@@ -572,7 +572,7 @@ public class TableSchemaResolver {
 
   private boolean hasOperationField() {
     try {
-      if (metaClient.tableConfig.getOperationFieldEnable()) {
+      if (metaClient.tableConfig.allowOperationMetadataField()) {
         return true;
       }
 

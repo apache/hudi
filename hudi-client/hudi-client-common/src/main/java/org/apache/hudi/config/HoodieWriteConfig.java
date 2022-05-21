@@ -2074,7 +2074,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public boolean allowOperationMetadataField() {
-    return getBooleanOrDefault(HoodieTableConfig.TABLE_OPERATION_FIELD_ENABLE);
+    return getBooleanOrDefault(HoodieTableConfig.ALLOW_OPERATION_METADATA_FIELD);
   }
 
   public String getFileIdPrefixProviderClassName() {
@@ -2462,7 +2462,7 @@ public class HoodieWriteConfig extends HoodieConfig {
     }
 
     public Builder withAllowOperationMetadataField(boolean allowOperationMetadataField) {
-      writeConfig.setValue(HoodieTableConfig.TABLE_OPERATION_FIELD_ENABLE, Boolean.toString(allowOperationMetadataField));
+      writeConfig.setValue(HoodieTableConfig.ALLOW_OPERATION_METADATA_FIELD, Boolean.toString(allowOperationMetadataField));
       return this;
     }
 

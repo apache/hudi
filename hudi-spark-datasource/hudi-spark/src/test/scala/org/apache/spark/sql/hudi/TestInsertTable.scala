@@ -606,7 +606,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
           .option(KEYGENERATOR_CLASS_NAME.key, classOf[ComplexKeyGenerator].getName)
           .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
           .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
-          .option(HoodieTableConfig.TABLE_OPERATION_FIELD_ENABLE.key, "true")
+          .option(HoodieTableConfig.ALLOW_OPERATION_METADATA_FIELD.key, "true")
           .mode(SaveMode.Overwrite)
           .save(tablePath)
 
