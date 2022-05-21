@@ -456,13 +456,6 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("Whether to allow generation of empty commits, even if no data was written in the commit. "
           + "It's useful in cases where extra metadata needs to be published regardless e.g tracking source offsets when ingesting data");
 
-  public static final ConfigProperty<Boolean> ALLOW_OPERATION_METADATA_FIELD = ConfigProperty
-      .key("hoodie.allow.operation.metadata.field")
-      .defaultValue(false)
-      .sinceVersion("0.9.0")
-      .withDocumentation("Whether to include '_hoodie_operation' in the metadata fields. "
-          + "Once enabled, all the changes of a record are persisted to the delta log directly without merge");
-
   public static final ConfigProperty<String> FILEID_PREFIX_PROVIDER_CLASS = ConfigProperty
       .key("hoodie.fileid.prefix.provider.class")
       .defaultValue(RandomFileIdPrefixProvider.class.getName())
@@ -2081,7 +2074,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public boolean allowOperationMetadataField() {
-    return getBooleanOrDefault(ALLOW_OPERATION_METADATA_FIELD);
+    return getBooleanOrDefault(HoodieTableConfig.TABLE_OPERATION_FIELD_ENABLE);
   }
 
   public String getFileIdPrefixProviderClassName() {
@@ -2469,7 +2462,7 @@ public class HoodieWriteConfig extends HoodieConfig {
     }
 
     public Builder withAllowOperationMetadataField(boolean allowOperationMetadataField) {
-      writeConfig.setValue(ALLOW_OPERATION_METADATA_FIELD, Boolean.toString(allowOperationMetadataField));
+      writeConfig.setValue(HoodieTableConfig.TABLE_OPERATION_FIELD_ENABLE, Boolean.toString(allowOperationMetadataField));
       return this;
     }
 

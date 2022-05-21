@@ -24,7 +24,7 @@ import org.apache.hadoop.fs.Path
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.avro.model.HoodieMetadataRecord
 import org.apache.hudi.common.model._
-import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.DataSourceTestUtils
 import org.apache.spark.SparkContext
@@ -149,7 +149,7 @@ class TestTableSchemaResolverWithSparkSQL {
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
       DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> "org.apache.hudi.keygen.SimpleKeyGenerator",
       "hoodie.metadata.compact.max.delta.commits" -> "2",
-      HoodieWriteConfig.ALLOW_OPERATION_METADATA_FIELD.key -> "true"
+      HoodieTableConfig.TABLE_OPERATION_FIELD_ENABLE.key -> "true"
     )
 
     // generate the inserts
@@ -195,7 +195,7 @@ class TestTableSchemaResolverWithSparkSQL {
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
       DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> "org.apache.hudi.keygen.SimpleKeyGenerator",
-      HoodieWriteConfig.ALLOW_OPERATION_METADATA_FIELD.key -> "true"
+      HoodieTableConfig.TABLE_OPERATION_FIELD_ENABLE.key -> "true"
     )
 
     // generate the inserts

@@ -236,7 +236,7 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public static final ConfigProperty<Boolean> TABLE_OPERATION_FIELD_ENABLE = ConfigProperty
       .key("hoodie.table.operation.field.enable")
-      .defaultValue(true)
+      .defaultValue(false)
       .sinceVersion("0.11.1")
       .withDocumentation("Enables show of OPERATION_METADATA_FIELD in Schema.");
 
