@@ -29,6 +29,7 @@
   <properties>
     <checkstyle.skip>true</checkstyle.skip>
     <main.basedir>${project.parent.basedir}</main.basedir>
+    <javax.servlet.version>3.1.0</javax.servlet.version>
   </properties>
 
   <build>
@@ -80,6 +81,7 @@
                   <include>org.apache.hudi:hudi-timeline-service</include>
                   <include>org.apache.hudi:hudi-aws</include>
 
+                  <include>javax.servlet:javax.servlet-api</include>
                   <include>com.beust:jcommander</include>
                   <include>io.javalin:javalin</include>
                   <!-- Spark only has mortbay jetty -->
@@ -138,6 +140,10 @@
                 <!-- NOTE: We have to relocate all classes w/in org.apache.spark.sql.avro to avoid
                            potential classpath collisions in case users would like to also use "spark-avro" w/in
                            their runtime, since Hudi carries some of the same classes as "spark-avro" -->
+                <relocation>
+                  <pattern>javax.servlet.</pattern>
+                  <shadedPattern>org.apache.hudi.javax.servlet.</shadedPattern>
+                </relocation>
                 <relocation>
                   <pattern>org.apache.spark.sql.avro.</pattern>
                   <shadedPattern>org.apache.hudi.org.apache.spark.sql.avro.</shadedPattern>
@@ -378,6 +384,12 @@
       <artifactId>hive-service</artifactId>
       <version>${hive.version}</version>
       <scope>${spark.bundle.hive.scope}</scope>
+      <exclusions>
+        <exclusion>
+          <artifactId>servlet-api</artifactId>
+          <groupId>javax.servlet</groupId>
+        </exclusion>
+      </exclusions>
     </dependency>
 
     <dependency>
@@ -426,6 +438,13 @@
       <artifactId>curator-recipes</artifactId>
       <version>${zk-curator.version}</version>
     </dependency>
+
+    <dependency>
+      <groupId>javax.servlet</groupId>
+      <artifactId>javax.servlet-api</artifactId>
+      <version>${javax.servlet.version}</version>
+    </dependency>
+
     <!-- TODO: Reinvestigate PR 633 -->
   </dependencies>
 
