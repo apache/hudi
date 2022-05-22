@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.hive.util;
+package org.apache.hudi.sync.common.util;
 
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.parquet.schema.GroupType;

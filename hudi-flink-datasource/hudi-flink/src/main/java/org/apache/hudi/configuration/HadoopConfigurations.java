@@ -23,10 +23,16 @@ import org.apache.hudi.util.FlinkClientUtil;
 
 import java.util.Map;
 
+/**
+ * Utilities for fetching hadoop configurations.
+ */
 public class HadoopConfigurations {
   private static final String HADOOP_PREFIX = "hadoop.";
   private static final  String PARQUET_PREFIX = "parquet.";
 
+  /**
+   * Creates a merged hadoop configuration with given flink configuration and hadoop configuration.
+   */
   public static org.apache.hadoop.conf.Configuration getParquetConf(
       org.apache.flink.configuration.Configuration options,
       org.apache.hadoop.conf.Configuration hadoopConf) {
@@ -37,12 +43,12 @@ public class HadoopConfigurations {
   }
 
   /**
-   * Create a new hadoop configuration that is initialized with the given flink configuration.
+   * Creates a new hadoop configuration that is initialized with the given flink configuration.
    */
   public static org.apache.hadoop.conf.Configuration getHadoopConf(Configuration conf) {
     org.apache.hadoop.conf.Configuration hadoopConf = FlinkClientUtil.getHadoopConf();
     Map<String, String> options = FlinkOptions.getPropertiesWithPrefix(conf.toMap(), HADOOP_PREFIX);
-    options.forEach((k, v) -> hadoopConf.set(k, v));
+    options.forEach(hadoopConf::set);
     return hadoopConf;
   }
 }

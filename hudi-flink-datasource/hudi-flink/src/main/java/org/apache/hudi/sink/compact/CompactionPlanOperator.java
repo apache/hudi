@@ -25,6 +25,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.table.HoodieFlinkTable;
+import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.util.CompactionUtil;
 import org.apache.hudi.util.FlinkTables;
 
@@ -88,7 +89,8 @@ public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPla
       // when the earliest inflight instant has timed out, assumes it has failed
       // already and just rolls it back.
 
-      CompactionUtil.rollbackEarliestCompaction(table, conf);
+      // comment out: do we really need the timeout rollback ?
+      // CompactionUtil.rollbackEarliestCompaction(table, conf);
       scheduleCompaction(table, checkpointId);
     } catch (Throwable throwable) {
       // make it fail-safe
@@ -98,19 +100,11 @@ public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPla
 
   private void scheduleCompaction(HoodieFlinkTable<?> table, long checkpointId) throws IOException {
     // the first instant takes the highest priority.
-    HoodieTimeline pendingCompactionTimeline = table.getActiveTimeline().filterPendingCompactionTimeline();
-    Option<HoodieInstant> firstRequested = pendingCompactionTimeline
+    Option<HoodieInstant> firstRequested = table.getActiveTimeline().filterPendingCompactionTimeline()
         .filter(instant -> instant.getState() == HoodieInstant.State.REQUESTED).firstInstant();
     if (!firstRequested.isPresent()) {
       // do nothing.
       LOG.info("No compaction plan for checkpoint " + checkpointId);
-      return;
-    }
-
-    Option<HoodieInstant> firstInflight = pendingCompactionTimeline
-        .filter(instant -> instant.getState() == HoodieInstant.State.INFLIGHT).firstInstant();
-    if (firstInflight.isPresent()) {
-      LOG.warn("Waiting for pending compaction instant : " + firstInflight + " to complete, skip scheduling new compaction plans");
       return;
     }
 
@@ -134,6 +128,9 @@ public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPla
       List<CompactionOperation> operations = compactionPlan.getOperations().stream()
           .map(CompactionOperation::convertFromAvroRecordInstance).collect(toList());
       LOG.info("Execute compaction plan for instant {} as {} file groups", compactionInstantTime, operations.size());
+      WriteMarkersFactory
+          .get(table.getConfig().getMarkersType(), table, compactionInstantTime)
+          .deleteMarkerDir(table.getContext(), table.getConfig().getMarkersDeleteParallelism());
       for (CompactionOperation operation : operations) {
         output.collect(new StreamRecord<>(new CompactionPlanEvent(compactionInstantTime, operation)));
       }
