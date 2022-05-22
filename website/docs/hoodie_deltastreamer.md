@@ -305,7 +305,7 @@ other formats and then write data as Hudi format.)
 
 For DFS sources the following behaviors are expected:
 
-- For JSON file format you always need to inform a schema. If the target hudi table follows the same schema from the source file, you just need to inform the schema for source, if don't you need to inform schemas for both. 
+- For JSON DFS source, you always need to set a schema. If the target Hudi table follows the same schema as from the source file, you just need to set the source schema. If not, you need to set schemas for both source and target. 
 - `HoodieDeltaStreamer` reads the files under the source path (`hoodie.deltastreamer.source.dfs.root`) directly, so you should not expect the tool to recognize partitions under this path as fields of the dataset. Detailed examples can be found [here](https://github.com/apache/hudi/issues/5485).
 
 ### Kafka
