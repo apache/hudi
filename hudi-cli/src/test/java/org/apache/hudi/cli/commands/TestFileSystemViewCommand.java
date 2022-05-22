@@ -88,11 +88,11 @@ public class TestFileSystemViewCommand extends CLIFunctionalTestHarness {
     // Write date files and log file
     String testWriteToken = "1-0-1";
     Files.createFile(Paths.get(fullPartitionPath, FSUtils
-        .makeDataFileName(commitTime1, testWriteToken, fileId1)));
+        .makeBaseFileName(commitTime1, testWriteToken, fileId1)));
     Files.createFile(Paths.get(fullPartitionPath, FSUtils
         .makeLogFileName(fileId1, HoodieLogFile.DELTA_EXTENSION, commitTime1, 0, testWriteToken)));
     Files.createFile(Paths.get(fullPartitionPath, FSUtils
-        .makeDataFileName(commitTime2, testWriteToken, fileId1)));
+        .makeBaseFileName(commitTime2, testWriteToken, fileId1)));
     Files.createFile(Paths.get(fullPartitionPath, FSUtils
         .makeLogFileName(fileId1, HoodieLogFile.DELTA_EXTENSION, commitTime2, 0, testWriteToken)));
 
