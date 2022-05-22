@@ -90,7 +90,7 @@ public class FlinkMergeAndReplaceHandle<T extends HoodieRecordPayload, I, K, O>
    */
   private void deleteInvalidDataFile(long lastAttemptId) {
     final String lastWriteToken = FSUtils.makeWriteToken(getPartitionId(), getStageId(), lastAttemptId);
-    final String lastDataFileName = FSUtils.makeDataFileName(instantTime,
+    final String lastDataFileName = FSUtils.makeBaseFileName(instantTime,
         lastWriteToken, this.fileId, hoodieTable.getBaseFileExtension());
     final Path path = makeNewFilePath(partitionPath, lastDataFileName);
     try {
@@ -139,7 +139,7 @@ public class FlinkMergeAndReplaceHandle<T extends HoodieRecordPayload, I, K, O>
   protected String newFileNameWithRollover(int rollNumber) {
     // make the intermediate file as hidden
     final String fileID = "." + this.fileId;
-    return FSUtils.makeDataFileName(instantTime, writeToken + "-" + rollNumber,
+    return FSUtils.makeBaseFileName(instantTime, writeToken + "-" + rollNumber,
         fileID, hoodieTable.getBaseFileExtension());
   }
 
