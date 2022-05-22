@@ -31,6 +31,7 @@ import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -665,18 +666,74 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   @Override
   public final Stream<FileSlice> getLatestMergedFileSlicesBeforeOrOn(String partitionStr, String maxInstantTime) {
     try {
+      boolean isMorTable = metaClient.getTableConfig().getTableType().equals(HoodieTableType.MERGE_ON_READ);
       readLock.lock();
       String partition = formatPartitionKey(partitionStr);
       ensurePartitionLoadedCorrectly(partition);
       return fetchAllStoredFileGroups(partition)
           .filter(fg -> !isFileGroupReplacedBeforeOrOn(fg.getFileGroupId(), maxInstantTime))
           .map(fileGroup -> {
-            Option<FileSlice> fileSlice = fileGroup.getLatestFileSliceBeforeOrOn(maxInstantTime);
-            // if the file-group is under construction, pick the latest before compaction instant time.
-            if (fileSlice.isPresent()) {
-              fileSlice = Option.of(fetchMergedFileSlice(fileGroup, fileSlice.get()));
+            if (isMorTable) {
+              List<FileSlice> fileSlicesBeforeOrOn = fileGroup.getAllFileSlicesBeforeOrOn(maxInstantTime).collect(Collectors.toList());
+              if (fileSlicesBeforeOrOn.isEmpty()) {
+                Option<FileSlice> fileSliceOp = Option.empty();
+                return fileSliceOp;
+              }
+              // find latest base file
+              Option<HoodieBaseFile> latestBaseFile = Option.fromJavaOptional(
+                  fileSlicesBeforeOrOn.stream().filter(fileSlice -> fileSlice.getBaseFile().isPresent()).map(fileSlice -> fileSlice.getBaseFile().get()).findFirst());
+              FileSlice latestFileSlice = fileSlicesBeforeOrOn.get(0);
+              if (latestBaseFile.isPresent()) {
+                // handle latestBaseFile if latestBaseFile instant uncompleted
+                Option<Pair<String, CompactionOperation>> compactionOpWithInstant =
+                    getPendingCompactionOperationWithInstant(fileGroup.getFileGroupId());
+                if (compactionOpWithInstant.isPresent()) {
+                  String compactionInstantTime = compactionOpWithInstant.get().getKey();
+                  // the base file is uncompleted
+                  if (latestBaseFile.get().getCommitTime().equals(compactionInstantTime)) {
+                    Option<FileSlice> prevFileSlice = fileGroup.getLatestFileSliceBefore(compactionInstantTime);
+                    if (prevFileSlice.isPresent()) {
+                      latestBaseFile = prevFileSlice.get().getBaseFile();
+                    } else {
+                      latestBaseFile = Option.empty();
+                    }
+                  }
+                }
+              }
+
+              List<HoodieLogFile> logFiles = new ArrayList<>();
+              if (!latestBaseFile.isPresent()) {
+                for (FileSlice fileSlice : fileSlicesBeforeOrOn) {
+                  logFiles.addAll(fileSlice.getLogFiles().collect(Collectors.toList()));
+                }
+              } else {
+                // add log files after base file
+                for (FileSlice fileSlice : fileSlicesBeforeOrOn) {
+                  if (HoodieTimeline.compareTimestamps(fileSlice.getBaseInstantTime(), GREATER_THAN_OR_EQUALS, latestBaseFile.get().getCommitTime())) {
+                    logFiles.addAll(fileSlice.getLogFiles().collect(Collectors.toList()));
+                  } else {
+                    break;
+                  }
+                }
+              }
+
+              FileSlice fileSlice;
+              if (latestBaseFile.isPresent()) {
+                fileSlice = new FileSlice(latestFileSlice.getPartitionPath(), latestBaseFile.get().getCommitTime(), latestFileSlice.getFileId());
+                fileSlice.setBaseFile(latestBaseFile.get());
+              } else {
+                fileSlice = new FileSlice(latestFileSlice.getPartitionPath(), logFiles.get(logFiles.size() - 1).getBaseCommitTime(), latestFileSlice.getFileId());
+              }
+              logFiles.forEach(fileSlice::addLogFile);
+              return Option.of(fileSlice);
+            } else {
+              Option<FileSlice> fileSlice = fileGroup.getLatestFileSliceBeforeOrOn(maxInstantTime);
+              // if the file-group is under construction, pick the latest before compaction instant time.
+              if (fileSlice.isPresent()) {
+                fileSlice = Option.of(fetchMergedFileSlice(fileGroup, fileSlice.get()));
+              }
+              return fileSlice;
             }
-            return fileSlice;
           }).filter(Option::isPresent).map(Option::get).map(this::addBootstrapBaseFileIfPresent);
     } finally {
       readLock.unlock();
