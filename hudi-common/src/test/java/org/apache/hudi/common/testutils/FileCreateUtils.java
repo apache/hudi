@@ -80,7 +80,7 @@ public class FileCreateUtils {
   }
 
   public static String baseFileName(String instantTime, String fileId, String fileExtension) {
-    return FSUtils.makeDataFileName(instantTime, WRITE_TOKEN, fileId, fileExtension);
+    return FSUtils.makeBaseFileName(instantTime, WRITE_TOKEN, fileId, fileExtension);
   }
 
   public static String logFileName(String instantTime, String fileId, int version) {
