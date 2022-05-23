@@ -14,24 +14,24 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 dag_name: cow-spark-deltastreamer-long-running-multi-partitions.yaml
-dag_rounds: 6
-dag_intermittent_delay_mins: 0
+dag_rounds: 10
+dag_intermittent_delay_mins: 1
 dag_content:
   first_insert:
     config:
       record_size: 200
       num_partitions_insert: 1
       repeat_count: 1
-      num_records_insert: 10000
+      num_records_insert: 1000
     type: SparkInsertNode
     deps: none
   first_upsert:
     config:
       record_size: 200
       num_partitions_insert: 1
-      num_records_insert: 300
+      num_records_insert: 1000
       repeat_count: 1
-      num_records_upsert: 3000
+      num_records_upsert: 1000
       num_partitions_upsert: 1
     type: SparkUpsertNode
     deps: first_insert
@@ -43,7 +43,6 @@ dag_content:
     deps: first_upsert
   second_validate:
     config:
-      validate_once_every_itr : 3
       validate_hive: false
       delete_input_data: true
     type: ValidateDatasetNode

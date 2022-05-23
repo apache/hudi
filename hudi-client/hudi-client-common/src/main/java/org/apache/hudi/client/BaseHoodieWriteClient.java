@@ -1466,8 +1466,6 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
 
     // Validate table properties
     metaClient.validateTableProperties(config.getProps());
-    // Make sure that FS View is in sync
-    table.getHoodieView().sync();
 
     switch (operationType) {
       case INSERT:
@@ -1553,7 +1551,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
     }
   }
 
-  private void tryUpgrade(HoodieTableMetaClient metaClient, Option<String> instantTime) {
+  protected void tryUpgrade(HoodieTableMetaClient metaClient, Option<String> instantTime) {
     UpgradeDowngrade upgradeDowngrade =
         new UpgradeDowngrade(metaClient, config, context, upgradeDowngradeHelper);
 
