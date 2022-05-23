@@ -51,7 +51,7 @@ class TestAvroSerDe extends SparkAdapterSupport {
     val SchemaType(catalystSchema, _) = SchemaConverters.toSqlType(avroSchema)
 
     val deserializer = sparkAdapter.createAvroDeserializer(avroSchema, catalystSchema)
-    val serializer = sparkAdapter.createAvroSerializer(catalystSchema, avroSchema, nullable = true)
+    val serializer = sparkAdapter.createAvroSerializer(catalystSchema, avroSchema, nullable = false)
 
     val row = deserializer.deserialize(originalAvroRecord).get
     val deserializedAvroRecord = serializer.serialize(row)
