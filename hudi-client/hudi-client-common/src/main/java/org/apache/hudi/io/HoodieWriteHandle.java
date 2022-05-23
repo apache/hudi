@@ -22,9 +22,12 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.IOType;
+import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
@@ -271,6 +274,33 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
   protected HoodieFileWriter createNewFileWriter(String instantTime, Path path, HoodieTable<T, I, K, O> hoodieTable,
       HoodieWriteConfig config, Schema schema, TaskContextSupplier taskContextSupplier) throws IOException {
     return HoodieFileWriterFactory.getFileWriter(instantTime, path, hoodieTable, config, schema, taskContextSupplier);
+  }
+
+  protected HoodieLogFormat.Writer createLogWriter(
+      Option<FileSlice> fileSlice, String baseCommitTime) throws IOException {
+    int logVersion = HoodieLogFile.LOGFILE_BASE_VERSION;
+    long logFileSize = 0L;
+    String logWriteToken = writeToken;
+    if (fileSlice.isPresent()) {
+      Option<HoodieLogFile> latestLogFileOpt = fileSlice.get().getLatestLogFile();
+      if (latestLogFileOpt.isPresent()) {
+        HoodieLogFile latestLogFile = latestLogFileOpt.get();
+        logVersion = latestLogFile.getLogVersion();
+        logFileSize = latestLogFile.getFileSize();
+        logWriteToken = FSUtils.getWriteTokenFromLogPath(latestLogFile.getPath());
+      }
+    }
+    return HoodieLogFormat.newWriterBuilder()
+        .onParentPath(FSUtils.getPartitionPath(hoodieTable.getMetaClient().getBasePath(), partitionPath))
+        .withFileId(fileId)
+        .overBaseCommit(baseCommitTime)
+        .withLogVersion(logVersion)
+        .withFileSize(logFileSize)
+        .withSizeThreshold(config.getLogFileMaxSize())
+        .withFs(fs)
+        .withRolloverLogWriteToken(writeToken)
+        .withLogWriteToken(logWriteToken)
+        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();
   }
 
   private static class IgnoreRecord implements GenericRecord {

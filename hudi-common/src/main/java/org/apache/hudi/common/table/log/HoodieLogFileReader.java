@@ -25,6 +25,7 @@ import org.apache.hudi.common.fs.TimedFSDataInputStream;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
+import org.apache.hudi.common.table.log.block.HoodieCDCDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
 import org.apache.hudi.common.table.log.block.HoodieCorruptBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
@@ -232,6 +233,9 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
 
       case COMMAND_BLOCK:
         return new HoodieCommandBlock(content, inputStream, readBlockLazily, Option.of(logBlockContentLoc), header, footer);
+
+      case CDC_DATA_BLOCK:
+        return new HoodieCDCDataBlock(inputStream, content, readBlockLazily, logBlockContentLoc, header, keyField);
 
       default:
         throw new HoodieNotSupportedException("Unsupported Block " + blockType);

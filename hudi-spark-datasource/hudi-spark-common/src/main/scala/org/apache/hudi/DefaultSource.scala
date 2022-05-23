@@ -20,6 +20,7 @@ package org.apache.hudi
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceReadOptions._
 import org.apache.hudi.DataSourceWriteOptions.{BOOTSTRAP_OPERATION_OPT_VAL, OPERATION}
+import org.apache.hudi.cdc.CDCRelation
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
@@ -123,9 +124,11 @@ class DefaultSource extends RelationProvider
     log.info(s"Is bootstrapped table => $isBootstrappedTable, tableType is: $tableType, queryType is: $queryType")
 
     if (metaClient.getCommitsTimeline.filterCompletedInstants.countInstants() == 0) {
-      new EmptyRelation(sqlContext, metaClient)
+      new EmptyRelation(sqlContext, metaClient, queryType == QUERY_TYPE_CDC_OPT_VAL)
     } else {
       (tableType, queryType, isBootstrappedTable) match {
+        case (_, QUERY_TYPE_CDC_OPT_VAL, _) =>
+          CDCRelation.getCDCRelation(sqlContext, metaClient, parameters)
         case (COPY_ON_WRITE, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) |
              (COPY_ON_WRITE, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, false) |
              (MERGE_ON_READ, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, false) =>
@@ -210,17 +213,23 @@ class DefaultSource extends RelationProvider
     }
     val metaClient = HoodieTableMetaClient.builder().setConf(
       sqlContext.sparkSession.sessionState.newHadoopConf()).setBasePath(path.get).build()
-    val schemaResolver = new TableSchemaResolver(metaClient)
-    val sqlSchema =
-      try {
-        val avroSchema = schemaResolver.getTableAvroSchema
-        AvroConversionUtils.convertAvroSchemaToStructType(avroSchema)
-      } catch {
-        case _: Exception =>
-          require(schema.isDefined, "Fail to resolve source schema")
-          schema.get
-      }
-    (shortName(), sqlSchema)
+
+    if (CDCRelation.isCDCTable(metaClient)
+      && parameters.get(DataSourceReadOptions.QUERY_TYPE.key).contains(DataSourceReadOptions.QUERY_TYPE_CDC_OPT_VAL)) {
+      (shortName(), CDCRelation.cdcSchema())
+    } else {
+      val schemaResolver = new TableSchemaResolver(metaClient)
+      val sqlSchema =
+        try {
+          val avroSchema = schemaResolver.getTableAvroSchema
+          AvroConversionUtils.convertAvroSchemaToStructType(avroSchema)
+        } catch {
+          case _: Exception =>
+            require(schema.isDefined, "Fail to resolve source schema")
+            schema.get
+        }
+      (shortName(), sqlSchema)
+    }
   }
 
   override def createSource(sqlContext: SQLContext,
