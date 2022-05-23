@@ -23,6 +23,7 @@ import org.apache.hudi.client.HoodieInternalWriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.storage.row.HoodieRowCreateHandle;
@@ -73,6 +74,7 @@ public class BulkInsertDataInternalWriterHelper {
   private boolean simpleKeyGen = false;
   private int simplePartitionFieldIndex = -1;
   private DataType simplePartitionFieldDataType;
+  private boolean isHiveStylePartitioning = false;
 
   public BulkInsertDataInternalWriterHelper(HoodieTable hoodieTable, HoodieWriteConfig writeConfig,
                                             String instantTime, int taskPartitionId, long taskId, long taskEpochId, StructType structType,
@@ -87,6 +89,9 @@ public class BulkInsertDataInternalWriterHelper {
     this.populateMetaFields = populateMetaFields;
     this.arePartitionRecordsSorted = arePartitionRecordsSorted;
     this.fileIdPrefix = UUID.randomUUID().toString();
+    this.isHiveStylePartitioning = writeConfig.getProps().containsKey(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING().key())
+        ? Boolean.parseBoolean((String) writeConfig.getProps().get(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING().key()))
+        : Boolean.parseBoolean(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING().defaultValue());
     if (!populateMetaFields) {
       this.keyGeneratorOpt = getKeyGenerator(writeConfig.getProps());
       if (keyGeneratorOpt.isPresent() && keyGeneratorOpt.get() instanceof SimpleKeyGenerator) {
@@ -128,7 +133,11 @@ public class BulkInsertDataInternalWriterHelper {
         if (!keyGeneratorOpt.isPresent()) { // NoPartitionerKeyGen
           partitionPath = "";
         } else if (simpleKeyGen) { // SimpleKeyGen
-          partitionPath = (record.get(simplePartitionFieldIndex, simplePartitionFieldDataType)).toString();
+          Object parititionPathValue = record.get(simplePartitionFieldIndex, simplePartitionFieldDataType);
+          partitionPath = parititionPathValue != null ? parititionPathValue.toString() : PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH;
+          if (isHiveStylePartitioning) {
+            partitionPath = (keyGeneratorOpt.get()).getPartitionPathFields().get(0) + "=" + partitionPath;
+          }
         } else {
           // only BuiltIn key generators are supported if meta fields are disabled.
           partitionPath = keyGeneratorOpt.get().getPartitionPath(record, structType);
