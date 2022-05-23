@@ -100,9 +100,9 @@
     <confluent.version>5.3.4</confluent.version>
     <glassfish.version>2.17</glassfish.version>
     <parquet.version>1.10.1</parquet.version>
-    <junit.jupiter.version>5.8.1</junit.jupiter.version>
-    <junit.vintage.version>5.8.1</junit.vintage.version>
-    <junit.platform.version>1.8.1</junit.platform.version>
+    <junit.jupiter.version>5.8.2</junit.jupiter.version>
+    <junit.vintage.version>5.8.2</junit.vintage.version>
+    <junit.platform.version>1.8.2</junit.platform.version>
     <mockito.jupiter.version>3.3.3</mockito.jupiter.version>
     <log4j.version>1.2.17</log4j.version>
     <log4j.test.version>2.17.0</log4j.test.version>
