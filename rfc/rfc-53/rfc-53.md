@@ -21,6 +21,7 @@
 @zhangyue19921010
 
 ## Approvers
+@leesf
 
 ## Status
 
@@ -137,9 +138,6 @@ Finally, let me introduce the new parameters:
   
   This wait strategy should only be used if the number of `EventHandler` threads is lower than the number of physical cores on the box, e.g. hyper-threading should be disabled.
 
-4. limitation
-  For now, this disruptor executor is only supported for spark insert and spark bulk insert operation. Other operations like spark upsert, flink related is still on going.
-
 
 ## Rollout/Adoption Plan
 
@@ -151,4 +149,12 @@ So there is no impact on existing users.
 ## Test Plan
 1. Add UT `TestDisruptorMessageQueue` and `TestDisruptorExecutionInSpark` to guard above logic, also validate data correctness.
 2. Add Benchmark `BoundInMemoryExecutorBenchmark` benchmark with BoundInMemoryExecutor(based-master) and DisruptorExecutior(new option)
+
+## Future Plan
+  For now, this DisruptorExecutor is supported for spark insert and spark bulk insert operations as an experimental feature. So that there're also several further steps need to be done:
+  1. Support DisruptorExecutor for spark upsert operation as multi-producers and single consumer.
+  2. Support DisruptorExecutor for Flink writing operation.
+  3. For some cases like bulk_insert and flink ingestion, we may support `DirectExecutor` which use no inner message queue and read messages from iterator directly 
+  ,writing into hudi(remove the producer/consumer at all).
+
 
