@@ -19,6 +19,7 @@
 package org.apache.hudi.io.storage;
 
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.io.storage.row.HoodieRowParquetConfig;
 import org.apache.hudi.io.storage.row.HoodieRowParquetWriteSupport;
 import org.apache.spark.sql.catalyst.InternalRow;
@@ -26,6 +27,7 @@ import org.apache.spark.sql.catalyst.InternalRow;
 import java.io.IOException;
 
 public class HoodieSparkParquetWriter extends HoodieBaseParquetWriter implements HoodieSparkFileWriter {
+
 
   private final HoodieRowParquetWriteSupport writeSupport;
 
@@ -35,13 +37,14 @@ public class HoodieSparkParquetWriter extends HoodieBaseParquetWriter implements
   }
 
   @Override
-  public void writeRowWithMetadata(String recordKey, InternalRow row) throws IOException {
+  public void writeRowWithMetadata(HoodieKey key, InternalRow row) throws IOException {
 
   }
 
   @Override
   public void writeRow(String recordKey, InternalRow row) throws IOException {
     super.write(row);
+    writeSupport.add(recordKey); // todo: whether to has BF
   }
 
   @Override

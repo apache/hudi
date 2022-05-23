@@ -31,7 +31,7 @@ public interface HoodieSparkFileWriter extends HoodieFileWriter {
 
   void close() throws IOException;
 
-  void writeRowWithMetadata(String recordKey, InternalRow row) throws IOException;
+  void writeRowWithMetadata(HoodieKey recordKey, InternalRow row) throws IOException;
 
   void writeRow(String recordKey, InternalRow row) throws IOException;
 
@@ -42,6 +42,12 @@ public interface HoodieSparkFileWriter extends HoodieFileWriter {
 
   @Override
   default void writeWithMetadata(HoodieKey key, HoodieRecord record, Schema schema, Properties props) throws IOException {
-    // todo: add function here
+    // todo: add logic here
+    writeRowWithMetadata(key, (InternalRow) record.getData());
   }
+
+  default void prepRecordWithMetadata(HoodieKey key, InternalRow row) {
+    // todo: prepare meta field
+  }
+
 }
