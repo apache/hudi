@@ -139,8 +139,11 @@ class BaseFileOnlyRelation(sqlContext: SQLContext,
       val (partitionSchema, dataSchema) = if (shouldExtractPartitionValuesFromPartitionPath) {
         (fileIndex.partitionSchema, fileIndex.dataSchema)
       } else {
-        (StructType(Nil), tableStructSchema)
+        (fileIndex.partitionSchema, tableStructSchema)
       }
+
+      log.warn("Partition schema " + partitionSchema)
+      log.warn("Data schema " + dataSchema)
 
       HadoopFsRelation(
         location = fileIndex,

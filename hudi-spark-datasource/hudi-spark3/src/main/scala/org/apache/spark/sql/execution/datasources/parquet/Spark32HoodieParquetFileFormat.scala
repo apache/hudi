@@ -111,7 +111,12 @@ class Spark32HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
     // TODO: if you move this into the closure it reverts to the default values.
     // If true, enable using the custom RecordReader for parquet. This only works for
     // a subset of the types (no complex types).
-    val resultSchema = StructType(partitionSchema.fields ++ requiredSchema.fields)
+    val allFields = if (shouldAppendPartitionValues) {
+      partitionSchema.fields ++ requiredSchema.fields
+    } else  {
+      requiredSchema.fields
+    }
+    val resultSchema = StructType(allFields)
     val sqlConf = sparkSession.sessionState.conf
     val enableOffHeapColumnVector = sqlConf.offHeapColumnVectorEnabled
     val enableVectorizedReader: Boolean =
@@ -357,16 +362,26 @@ class Spark32HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
         try {
           reader.initialize(split, hadoopAttemptContext)
 
-          val fullSchema = requiredSchema.toAttributes ++ partitionSchema.toAttributes
+          val allAttributes = if (shouldAppendPartitionValues) {
+            requiredSchema.toAttributes ++ partitionSchema.toAttributes
+          } else {
+            requiredSchema.toAttributes
+          }
+          val fullSchema = allAttributes
           val unsafeProjection = if (typeChangeInfos.isEmpty) {
             GenerateUnsafeProjection.generate(fullSchema, fullSchema)
           } else {
             // find type changed.
-            val newFullSchema = new StructType(requiredSchema.fields.zipWithIndex.map { case (f, i) =>
+            val newFullSchemaAttributes = new StructType(requiredSchema.fields.zipWithIndex.map { case (f, i) =>
               if (typeChangeInfos.containsKey(i)) {
                 StructField(f.name, typeChangeInfos.get(i).getRight, f.nullable, f.metadata)
               } else f
-            }).toAttributes ++ partitionSchema.toAttributes
+            }).toAttributes
+            val newFullSchema = if (shouldAppendPartitionValues) {
+              newFullSchemaAttributes ++ partitionSchema.toAttributes
+            } else {
+              newFullSchemaAttributes
+            }
             val castSchema = newFullSchema.zipWithIndex.map { case (attr, i) =>
               if (typeChangeInfos.containsKey(i)) {
                 Cast(attr, typeChangeInfos.get(i).getLeft)

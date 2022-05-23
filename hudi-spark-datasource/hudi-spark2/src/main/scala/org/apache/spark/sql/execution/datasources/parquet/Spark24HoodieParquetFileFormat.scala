@@ -89,7 +89,12 @@ class Spark24HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
     // TODO: if you move this into the closure it reverts to the default values.
     // If true, enable using the custom RecordReader for parquet. This only works for
     // a subset of the types (no complex types).
-    val resultSchema = StructType(partitionSchema.fields ++ requiredSchema.fields)
+    val allFields = if (shouldAppendPartitionValues) {
+      partitionSchema.fields ++ requiredSchema.fields
+    } else  {
+      requiredSchema.fields
+    }
+    val resultSchema = StructType(allFields)
     val sqlConf = sparkSession.sessionState.conf
     val enableOffHeapColumnVector = sqlConf.offHeapColumnVectorEnabled
     val enableVectorizedReader: Boolean =
@@ -205,7 +210,12 @@ class Spark24HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
         taskContext.foreach(_.addTaskCompletionListener[Unit](_ => iter.close()))
         reader.initialize(split, hadoopAttemptContext)
 
-        val fullSchema = requiredSchema.toAttributes ++ partitionSchema.toAttributes
+        val allAttributes = if (shouldAppendPartitionValues) {
+          requiredSchema.toAttributes ++ partitionSchema.toAttributes
+        } else {
+          requiredSchema.toAttributes
+        }
+        val fullSchema = allAttributes
         val joinedRow = new JoinedRow()
         val appendPartitionColumns = GenerateUnsafeProjection.generate(fullSchema, fullSchema)
 
