@@ -115,6 +115,7 @@
     <hadoop.version>3.1.0</hadoop.version>
     <hive.groupid>org.apache.hive</hive.groupid>
     <hive.version>3.1.2</hive.version>
+    <tez.version>0.9.1</tez.version>
     <hive.exec.classifier>core</hive.exec.classifier>
     <metrics.version>4.1.1</metrics.version>
     <orc.version>1.6.12</orc.version>

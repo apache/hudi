@@ -63,7 +63,7 @@ public class HiveTestService {
 
   private static final Logger LOG = LogManager.getLogger(HiveTestService.class);
 
-  private static final int CONNECTION_TIMEOUT = 120000;
+  private static final int CONNECTION_TIMEOUT = 30000;
 
   /**
    * Configuration settings.
@@ -117,7 +117,6 @@ public class HiveTestService {
     executorService = Executors.newSingleThreadExecutor();
     tServer = startMetaStore(bindIP, serverConf);
 
-    serverConf.set("hive.in.test", "true");
     hiveServer = startHiveServer(serverConf);
 
     String serverHostname;
@@ -200,15 +199,10 @@ public class HiveTestService {
     conf.set(HiveConf.ConfVars.METASTOREWAREHOUSE.varname,
         Files.createTempDirectory(System.currentTimeMillis() + "-").toFile().getAbsolutePath());
 
-    conf.set("javax.jdo.option.ConnectionUserName","hive");
-    conf.set("javax.jdo.option.ConnectionPassword","hive");
-    conf.set("datanucleus.schema.autoCreateAll","true");
-    conf.set("hive.metastore.uri.resolver","org.apache.hudi.hadoop.hive.NoOpMetastoreUriResolverHook");
-    conf.set("hive.metastore.event.db.notification.api.auth","false");
+    conf.set("hive.in.test", "true");
+    conf.set("hive.metastore.execute.setugi", "false");
     conf.set("hive.metastore.schema.verification","false");
-    conf.set("hive.metastore.schema.verification.record.version","false");
-    conf.set("hive.execution.engine","mr");
-    conf.set("hive.vectorized.execution.enabled","false");
+    conf.set("datanucleus.schema.autoCreateAll","true");
     setSystemProperty("derby.stream.error.file", derbyLogFile.getPath());
 
     return new HiveConf(conf, this.getClass());
