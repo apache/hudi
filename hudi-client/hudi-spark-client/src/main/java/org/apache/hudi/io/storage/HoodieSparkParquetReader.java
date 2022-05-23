@@ -81,13 +81,12 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
 
   @Override
   public Schema getSchema() {
-
-    return null;
+    return parquetUtils.readAvroSchema(conf, path);
   }
 
   @Override
   public void close() {
-
+    readerIterators.forEach(ParquetReaderIterator::close);
   }
 
   @Override
