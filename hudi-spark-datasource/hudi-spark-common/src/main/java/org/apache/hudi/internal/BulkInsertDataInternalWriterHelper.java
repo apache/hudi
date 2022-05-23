@@ -74,7 +74,7 @@ public class BulkInsertDataInternalWriterHelper {
   private boolean simpleKeyGen = false;
   private int simplePartitionFieldIndex = -1;
   private DataType simplePartitionFieldDataType;
-  private boolean isHiveStylePartitioning = false;
+  private boolean isHiveStylePartitioning;
 
   public BulkInsertDataInternalWriterHelper(HoodieTable hoodieTable, HoodieWriteConfig writeConfig,
                                             String instantTime, int taskPartitionId, long taskId, long taskEpochId, StructType structType,
