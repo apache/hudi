@@ -45,7 +45,7 @@ public class TestHoodieWriteStat {
     Path basePath = new Path(basePathString);
     Path partitionPath = new Path(basePath, partitionPathString);
 
-    Path finalizeFilePath = new Path(partitionPath, FSUtils.makeDataFileName(instantTime, writeToken, fileName));
+    Path finalizeFilePath = new Path(partitionPath, FSUtils.makeBaseFileName(instantTime, writeToken, fileName));
     HoodieWriteStat writeStat = new HoodieWriteStat();
     writeStat.setPath(basePath, finalizeFilePath);
     assertEquals(finalizeFilePath, new Path(basePath, writeStat.getPath()));
