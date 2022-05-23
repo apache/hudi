@@ -355,6 +355,11 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   }
 
   @Override
+  public List<HoodieInstant> getInstantsAsList() {
+    return instants;
+  }
+
+  @Override
   public Stream<HoodieInstant> getReverseOrderedInstants() {
     List<HoodieInstant> instants = getInstants().collect(Collectors.toList());
     reverse(instants);

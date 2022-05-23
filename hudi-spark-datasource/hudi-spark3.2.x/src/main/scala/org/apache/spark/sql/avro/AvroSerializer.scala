@@ -18,7 +18,9 @@
 package org.apache.spark.sql.avro
 
 import java.nio.ByteBuffer
+
 import scala.collection.JavaConverters._
+
 import org.apache.avro.Conversions.DecimalConversion
 import org.apache.avro.LogicalTypes
 import org.apache.avro.LogicalTypes.{TimestampMicros, TimestampMillis}
@@ -28,6 +30,7 @@ import org.apache.avro.Schema.Type._
 import org.apache.avro.generic.GenericData.{EnumSymbol, Fixed}
 import org.apache.avro.generic.GenericData.Record
 import org.apache.avro.util.Utf8
+
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.avro.AvroSerializer.{createDateRebaseFuncInWrite, createTimestampRebaseFuncInWrite}
 import org.apache.spark.sql.avro.AvroUtils.{toFieldDescription, toFieldStr}
@@ -66,17 +69,13 @@ private[sql] class AvroSerializer(rootCatalystType: DataType,
       LegacyBehaviorPolicy.withName(SQLConf.get.getConf(SQLConf.AVRO_REBASE_MODE_IN_WRITE)))
   }
 
-  def serialize(catalystData: Any): Any = {
-    converter.apply(catalystData)
-  }
-
   private val dateRebaseFunc = createDateRebaseFuncInWrite(
     datetimeRebaseMode, "Avro")
 
   private val timestampRebaseFunc = createTimestampRebaseFuncInWrite(
     datetimeRebaseMode, "Avro")
 
-  private val converter: Any => Any = {
+  def serialize(catalystData: Any): Any = {
     val actualAvroType = resolveNullableType(rootAvroType, nullable)
     val baseConverter = try {
       rootCatalystType match {
@@ -94,14 +93,13 @@ private[sql] class AvroSerializer(rootCatalystType: DataType,
         s"Cannot convert SQL type ${rootCatalystType.sql} to Avro type $rootAvroType.", ise)
     }
     if (nullable) {
-      (data: Any) =>
-        if (data == null) {
-          null
-        } else {
-          baseConverter.apply(data)
-        }
+      if (catalystData == null) {
+        null
+      } else {
+        baseConverter.apply(catalystData)
+      }
     } else {
-      baseConverter
+      baseConverter.apply(catalystData)
     }
   }
 

@@ -24,11 +24,9 @@ import scala.collection.JavaConverters._
 import org.apache.avro.{LogicalTypes, Schema}
 import org.apache.avro.Conversions.DecimalConversion
 import org.apache.avro.LogicalTypes.{TimestampMicros, TimestampMillis}
-import org.apache.avro.Schema
 import org.apache.avro.Schema.Type
 import org.apache.avro.Schema.Type._
 import org.apache.avro.generic.GenericData.{EnumSymbol, Fixed, Record}
-import org.apache.avro.generic.GenericData.Record
 import org.apache.avro.util.Utf8
 
 import org.apache.spark.sql.catalyst.InternalRow
@@ -47,10 +45,6 @@ import org.apache.spark.sql.types._
 class AvroSerializer(rootCatalystType: DataType, rootAvroType: Schema, nullable: Boolean) {
 
   def serialize(catalystData: Any): Any = {
-    converter.apply(catalystData)
-  }
-
-  private val converter: Any => Any = {
     val actualAvroType = resolveNullableType(rootAvroType, nullable)
     val baseConverter = rootCatalystType match {
       case st: StructType =>
@@ -63,14 +57,13 @@ class AvroSerializer(rootCatalystType: DataType, rootAvroType: Schema, nullable:
           converter.apply(tmpRow, 0)
     }
     if (nullable) {
-      (data: Any) =>
-        if (data == null) {
-          null
-        } else {
-          baseConverter.apply(data)
-        }
+      if (catalystData == null) {
+        null
+      } else {
+        baseConverter.apply(catalystData)
+      }
     } else {
-      baseConverter
+      baseConverter.apply(catalystData)
     }
   }
 

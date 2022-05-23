@@ -19,6 +19,7 @@
 
 package org.apache.hudi
 
+import org.apache.hudi.cdc.CDCRelation
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.sources.{BaseRelation, TableScan}
@@ -31,17 +32,21 @@ import scala.util.control.NonFatal
  * BaseRelation representing empty RDD.
  * @param sqlContext instance of SqlContext.
  */
-class EmptyRelation(val sqlContext: SQLContext, metaClient: HoodieTableMetaClient) extends BaseRelation with TableScan {
+class EmptyRelation(val sqlContext: SQLContext, metaClient: HoodieTableMetaClient, isCDCQuery: Boolean) extends BaseRelation with TableScan {
 
   override def schema: StructType = {
-    // do the best to find the table schema.
-    val schemaResolver = new TableSchemaResolver(metaClient)
-    try {
-      val avroSchema = schemaResolver.getTableAvroSchema
-      AvroConversionUtils.convertAvroSchemaToStructType(avroSchema)
-    } catch {
-      case NonFatal(e) =>
-        StructType(Nil)
+    if (isCDCQuery) {
+      CDCRelation.cdcSchema()
+    } else {
+      // do the best to find the table schema.
+      val schemaResolver = new TableSchemaResolver(metaClient)
+      try {
+        val avroSchema = schemaResolver.getTableAvroSchema
+        AvroConversionUtils.convertAvroSchemaToStructType(avroSchema)
+      } catch {
+        case NonFatal(e) =>
+          StructType(Nil)
+      }
     }
   }
 

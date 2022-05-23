@@ -24,6 +24,9 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
@@ -37,6 +40,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -234,6 +238,40 @@ public class HoodieCommitMetadata implements Serializable {
       return clazz.newInstance();
     }
     return JsonUtils.getObjectMapper().readValue(jsonStr, clazz);
+  }
+
+  /**
+   * parse the bytes of deltacommit, and get the base file and the log files belonging to this
+   * provided file group.
+   */
+  public static Pair<String, List<String>> getFileSliceForFileGroupFromDeltaCommit(
+      byte[] bytes, HoodieFileGroupId fileGroupId)
+      throws Exception {
+    String jsonStr = new String(bytes, StandardCharsets.UTF_8);
+    if (jsonStr.isEmpty()) {
+      return null;
+    }
+
+    JsonNode ptToWriteStatsMap = JsonUtils.getObjectMapper().readTree(jsonStr).get("partitionToWriteStats");
+    Iterator<Map.Entry<String, JsonNode>> pts = ptToWriteStatsMap.fields();
+    while (pts.hasNext()) {
+      Map.Entry<String, JsonNode> ptToWriteStats = pts.next();
+      if (ptToWriteStats.getValue().isArray()) {
+        for (JsonNode writeStat : ptToWriteStats.getValue()) {
+          HoodieFileGroupId fgId = new HoodieFileGroupId(ptToWriteStats.getKey(), writeStat.get("fileId").asText());
+          if (fgId.equals(fileGroupId)) {
+            String baseFile = writeStat.get("baseFile").asText();
+            ArrayNode logFilesNode = (ArrayNode) writeStat.get("logFiles");
+            List<String> logFiles = new ArrayList<>();
+            for (JsonNode logFile : logFilesNode) {
+              logFiles.add(logFile.asText());
+            }
+            return Pair.of(baseFile, logFiles);
+          }
+        }
+      }
+    }
+    return null;
   }
 
   // Here the functions are named "fetch" instead of "get", to get avoid of the json conversion.

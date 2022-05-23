@@ -138,7 +138,6 @@ object HoodieSparkSqlWriter {
       if (!tableExists) {
         val baseFileFormat = hoodieConfig.getStringOrDefault(HoodieTableConfig.BASE_FILE_FORMAT)
         val archiveLogFolder = hoodieConfig.getStringOrDefault(HoodieTableConfig.ARCHIVELOG_FOLDER)
-        val recordKeyFields = hoodieConfig.getString(DataSourceWriteOptions.RECORDKEY_FIELD)
         val populateMetaFields = hoodieConfig.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS)
         val useBaseFormatMetaFile = hoodieConfig.getBooleanOrDefault(HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT);
 
@@ -146,7 +145,6 @@ object HoodieSparkSqlWriter {
           .setTableType(tableType)
           .setDatabaseName(databaseName)
           .setTableName(tblName)
-          .setRecordKeyFields(recordKeyFields)
           .setBaseFileFormat(baseFileFormat)
           .setArchiveLogFolder(archiveLogFolder)
           .setPayloadClassName(hoodieConfig.getString(PAYLOAD_CLASS_NAME))
@@ -156,6 +154,8 @@ object HoodieSparkSqlWriter {
           .setPartitionFields(partitionColumns)
           .setPopulateMetaFields(populateMetaFields)
           .setRecordKeyFields(hoodieConfig.getString(RECORDKEY_FIELD))
+          .setCDCEnabled(hoodieConfig.getBooleanOrDefault(HoodieTableConfig.CDC_ENABLED))
+          .setCDCSupplementalLoggingEnabled(hoodieConfig.getBooleanOrDefault(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_ENABLED))
           .setKeyGeneratorClassProp(originKeyGeneratorClassName)
           .set(timestampKeyGeneratorConfigs)
           .setHiveStylePartitioningEnable(hoodieConfig.getBoolean(HIVE_STYLE_PARTITIONING))
@@ -489,6 +489,8 @@ object HoodieSparkSqlWriter {
           .setBaseFileFormat(baseFileFormat)
           .setBootstrapBasePath(bootstrapBasePath)
           .setPartitionFields(partitionColumns)
+          .setCDCEnabled(hoodieConfig.getBooleanOrDefault(HoodieTableConfig.CDC_ENABLED))
+          .setCDCSupplementalLoggingEnabled(hoodieConfig.getBooleanOrDefault(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_ENABLED))
           .setPopulateMetaFields(populateMetaFields)
           .setKeyGeneratorClassProp(keyGenProp)
           .setHiveStylePartitioningEnable(hoodieConfig.getBoolean(HIVE_STYLE_PARTITIONING))
