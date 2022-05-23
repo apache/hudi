@@ -156,11 +156,14 @@ public class HoodieHiveUtils {
     return conf.getBoolean(HOODIE_INCREMENTAL_USE_DATABASE, false);
   }
 
+  public static final String HIVE_TIMESTAMP_TYPE_CLASS = "org.apache.hadoop.hive.common.type.Timestamp";
+  public static final String TIMESTAMP_WRITEABLE_V2_CLASS = "org.apache.hadoop.hive.serde2.io.TimestampWritableV2";
   public static final boolean SUPPORT_TIMESTAMP_WRITEABLE_V2;
   private static final Class TIMESTAMP_CLASS;
   private static final Method SET_TIME_IN_MILLIS;
   private static final Constructor TIMESTAMP_WRITEABLE_V2_CONSTRUCTOR;
 
+  public static final String DATE_WRITEABLE_V2_CLASS = "org.apache.hadoop.hive.serde2.io.DateWritableV2";
   public static final boolean SUPPORT_DATE_WRITEABLE_V2;
   private static final Constructor DATE_WRITEABLE_V2_CONSTRUCTOR;
 
@@ -168,9 +171,9 @@ public class HoodieHiveUtils {
     // timestamp
     Option<ImmutableTriple<Class, Method, Constructor>> timestampTriple = Option.ofNullable(() -> {
       try {
-        Class timestampClass = Class.forName("org.apache.hadoop.hive.common.type.Timestamp");
+        Class timestampClass = Class.forName(HIVE_TIMESTAMP_TYPE_CLASS);
         Method setTimeInMillis = timestampClass.getDeclaredMethod("setTimeInMillis", long.class);
-        Class twV2Class = Class.forName("org.apache.hadoop.hive.serde2.io.TimestampWritableV2");
+        Class twV2Class = Class.forName(TIMESTAMP_WRITEABLE_V2_CLASS);
         return ImmutableTriple.of(timestampClass, setTimeInMillis, twV2Class.getConstructor(timestampClass));
       } catch (ClassNotFoundException | NoSuchMethodException e) {
         LOG.trace("can not find hive3 timestampv2 class or method, use hive2 class!", e);
@@ -194,7 +197,7 @@ public class HoodieHiveUtils {
     // date
     Option<Constructor> dateConstructor = Option.ofNullable(() -> {
       try {
-        Class dateV2Class = Class.forName("org.apache.hadoop.hive.serde2.io.DateWritableV2");
+        Class dateV2Class = Class.forName(DATE_WRITEABLE_V2_CLASS);
         return dateV2Class.getConstructor(int.class);
       } catch (ClassNotFoundException | NoSuchMethodException e) {
         LOG.trace("can not find hive3 datev2 class or method, use hive2 class!", e);
