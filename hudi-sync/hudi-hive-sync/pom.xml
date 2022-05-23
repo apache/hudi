@@ -285,6 +285,20 @@
       <scope>test</scope>
     </dependency>
 
+    <!-- Tez - Test -->
+    <dependency>
+      <groupId>org.apache.tez</groupId>
+      <artifactId>tez-common</artifactId>
+      <version>${tez.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.tez</groupId>
+      <artifactId>tez-dag</artifactId>
+      <version>${tez.version}</version>
+      <scope>test</scope>
+    </dependency>
+
   </dependencies>
 
   <build>
