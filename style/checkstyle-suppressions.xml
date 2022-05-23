@@ -29,6 +29,7 @@
   <!-- java.util.Optional part of DataSource V2 API signature -->
   <suppress checks="IllegalImport" files="DefaultSource.java" />
   <suppress checks="IllegalImport" files="HoodieTableSource.java" />
+  <suppress checks="IllegalImport" files="HoodieSnowflakeSyncClient.java" />
   <suppress checks="IllegalTokenText" files="FilePathUtils.java"/>
   <suppress checks="IllegalTokenText" files="PartitionPathEncodeUtils.java"/>
 </suppressions>

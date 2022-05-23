@@ -40,6 +40,7 @@
     <module>hudi-client</module>
     <module>hudi-aws</module>
     <module>hudi-gcp</module>
+    <module>hudi-snowflake</module>
     <module>hudi-hadoop-mr</module>
     <module>hudi-spark-datasource</module>
     <module>hudi-timeline-service</module>
@@ -50,6 +51,7 @@
     <module>packaging/hudi-hive-sync-bundle</module>
     <module>packaging/hudi-aws-bundle</module>
     <module>packaging/hudi-gcp-bundle</module>
+    <module>packaging/hudi-snowflake-bundle</module>
     <module>packaging/hudi-spark-bundle</module>
     <module>packaging/hudi-presto-bundle</module>
     <module>packaging/hudi-utilities-bundle</module>
