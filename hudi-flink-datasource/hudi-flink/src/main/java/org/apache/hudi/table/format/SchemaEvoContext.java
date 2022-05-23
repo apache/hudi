@@ -59,13 +59,13 @@ public final class SchemaEvoContext implements Serializable {
     this.metaClient = metaClient;
   }
 
-  public void getActualFields(String fileName, int[] selectedFields) {
+  public void evalActualFields(String fileName, int[] selectedFields) {
     InternalSchema mergedSchema = getMergedSchema(fileName);
     List<DataType> fieldTypesWithMeta = AvroSchemaConverter.convertToDataType(AvroInternalSchemaConverter.convert(mergedSchema, tableName())).getChildren();
     List<Integer> selectedFieldsList = getSelectedFields(selectedFields);
     RowDataProjection projection = getProjection(mergedSchema, fieldTypesWithMeta, selectedFieldsList);
     List<String> fieldNamesWithMeta = mergedSchema.columns().stream().map(Types.Field::name).collect(Collectors.toList());
-    getActualFields(fieldNamesWithMeta, fieldTypesWithMeta, projection);
+    setActualFields(fieldNamesWithMeta, fieldTypesWithMeta, projection);
   }
 
   public String[] fieldNames() {
@@ -109,7 +109,7 @@ public final class SchemaEvoContext implements Serializable {
     return null;
   }
 
-  private void getActualFields(List<String> fieldNames, List<DataType> fieldTypes, RowDataProjection projection) {
+  private void setActualFields(List<String> fieldNames, List<DataType> fieldTypes, RowDataProjection projection) {
     this.fieldNames = fieldNames.subList(HOODIE_META_COLUMNS.size(), fieldNames.size());
     this.fieldTypes = fieldTypes.subList(HOODIE_META_COLUMNS.size(), fieldTypes.size());
     this.projection = projection;

@@ -116,7 +116,7 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
     String[] actualFieldNames = fullFieldNames;
     DataType[] actualFieldTypes = fullFieldTypes;
     if (schemaEvoContext.isPresent()) {
-      schemaEvoContext.get().getActualFields(fileSplit.getPath().getName(), selectedFields);
+      schemaEvoContext.get().evalActualFields(fileSplit.getPath().getName(), selectedFields);
       actualFieldNames = schemaEvoContext.get().fieldNames();
       actualFieldTypes = schemaEvoContext.get().fieldTypes();
       projection = schemaEvoContext.get().projection();
