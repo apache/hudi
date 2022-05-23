@@ -334,7 +334,7 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
       }
 
       val readColumns = targetColumns ++ relation.mandatoryFields
-      val (_, projectedStructType, _) = projectSchema(tableState.schema, readColumns)
+      val (_, projectedStructType, _) = projectSchema(Left(tableState.schema), readColumns)
 
       val row: InternalRow = rows.take(1).head
 

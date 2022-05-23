@@ -77,7 +77,7 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
       options = optParams,
       // NOTE: We have to fork the Hadoop Config here as Spark will be modifying it
       //       to configure Parquet reader appropriately
-      hadoopConf = HoodieDataSourceHelper.getConfigurationWithInternalSchema(new Configuration(conf), internalSchema, metaClient.getBasePath, validCommits)
+      hadoopConf = embedInternalSchema(new Configuration(conf), internalSchemaOpt)
     )
 
     val requiredSchemaParquetReader = createBaseFileReader(
@@ -89,7 +89,7 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
       options = optParams,
       // NOTE: We have to fork the Hadoop Config here as Spark will be modifying it
       //       to configure Parquet reader appropriately
-      hadoopConf = HoodieDataSourceHelper.getConfigurationWithInternalSchema(new Configuration(conf), requiredSchema.internalSchema, metaClient.getBasePath, validCommits)
+      hadoopConf = embedInternalSchema(new Configuration(conf), requiredSchema.internalSchema)
     )
 
     val tableState = getTableState

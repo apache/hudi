@@ -88,7 +88,7 @@ class BaseFileOnlyRelation(sqlContext: SQLContext,
       options = optParams,
       // NOTE: We have to fork the Hadoop Config here as Spark will be modifying it
       //       to configure Parquet reader appropriately
-      hadoopConf = HoodieDataSourceHelper.getConfigurationWithInternalSchema(new Configuration(conf), requiredSchema.internalSchema, metaClient.getBasePath, validCommits)
+      hadoopConf = embedInternalSchema(new Configuration(conf), requiredSchema.internalSchema)
     )
 
     new HoodieFileScanRDD(sparkSession, baseFileReader, fileSplits)

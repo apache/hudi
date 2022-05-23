@@ -43,7 +43,7 @@ class TestHoodieRelations {
     val tableStructSchema = convertAvroSchemaToStructType(tableAvroSchema)
 
     val (requiredAvroSchema, requiredStructSchema, _) =
-      HoodieBaseRelation.projectSchema(tableAvroSchema, Array("ts"))
+      HoodieBaseRelation.projectSchema(Left(tableAvroSchema), Array("ts"))
 
     assertEquals(Seq(tableAvroSchema.getField("ts")), requiredAvroSchema.getFields.asScala)
     assertEquals(

@@ -166,10 +166,11 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
     //       be stored in non-columnar formats like Avro, HFile, etc)
     private val requiredSchemaFieldOrdinals: List[Int] = collectFieldOrdinals(requiredAvroSchema, logFileReaderAvroSchema)
 
-    // TODO: now logScanner with internalSchema support column project, we may no need projectAvroUnsafe
-    private var logScanner =
+    private var logScanner = {
+      val internalSchema = tableSchema.internalSchema.getOrElse(InternalSchema.getEmptyInternalSchema)
       HoodieMergeOnReadRDD.scanLog(split.logFiles, getPartitionPath(split), logFileReaderAvroSchema, tableState,
-        maxCompactionMemoryInBytes, config, tableSchema.internalSchema)
+        maxCompactionMemoryInBytes, config, internalSchema)
+    }
 
     private val logRecords = logScanner.getRecords.asScala
 
