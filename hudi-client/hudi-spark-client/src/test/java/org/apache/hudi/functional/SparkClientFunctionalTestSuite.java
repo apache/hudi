@@ -22,8 +22,10 @@ package org.apache.hudi.functional;
 import org.junit.platform.suite.api.IncludeTags;
 import org.junit.platform.suite.api.SelectPackages;
 import org.junit.platform.suite.api.Suite;
+import org.junit.platform.suite.api.SuiteDisplayName;
 
 @Suite
+@SuiteDisplayName("JUnit11111 Platform Suite Demo")
 @SelectPackages({
     "org.apache.hudi.client.functional",
     "org.apache.hudi.table.functional",
