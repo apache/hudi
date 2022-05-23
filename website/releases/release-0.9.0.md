@@ -22,6 +22,8 @@ last_modified_at: 2021-08-26T08:40:00-07:00
   support the older configs string variables, users are encouraged to use the new `ConfigProperty` equivalents, as noted
   in the deprecation notices. In most cases, it is as simple as calling `.key()` and `.defaultValue()` on the corresponding
   alternative. e.g `RECORDKEY_FIELD_OPT_KEY` can be replaced by `RECORDKEY_FIELD_NAME.key()`
+- If set `URL_ENCODE_PARTITIONING_OPT_KEY=true` *and* `<` and `>` are present in the URL partition paths, users would
+  need to migrate the table due to encoding logic changed: `<` (encoded as `%3C`) and `>` (encoded as `%3E`) won't be escaped in 0.9.0.
 
 ## Release Highlights
 

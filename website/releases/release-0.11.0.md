@@ -101,7 +101,8 @@ time. Spark SQL DDL support (experimental) was added for Spark 3.1.x and Spark 3
 ### Slim Utilities Bundle
 
 In 0.11.0, a new `hudi-utilities-slim-bundle` is added to exclude dependencies that could cause conflicts and
-compatibility issues with other frameworks such as Spark.
+compatibility issues with other frameworks such as Spark. `hudi-utilities-slim-bundle` is to work with a chosen Spark
+bundle:
 
 - `hudi-utilities-slim-bundle` works with Spark 3.1 and 2.4.
 - `hudi-utilities-bundle` continues to work with Spark 3.1 as it does in Hudi 0.10.x.
@@ -170,7 +171,7 @@ added support for MOR tables.
 ### Pulsar Write Commit Callback
 
 Hudi users can use `org.apache.hudi.callback.HoodieWriteCommitCallback` to invoke callback function upon successful
-commits. In 0.11.0, we add`HoodieWriteCommitPulsarCallback` in addition to the existing HTTP callback and Kafka
+commits. In 0.11.0, we add `HoodieWriteCommitPulsarCallback` in addition to the existing HTTP callback and Kafka
 callback. Please refer to the [configurations page](/docs/configurations#Write-commit-pulsar-callback-configs) for
 detailed settings.
 
@@ -196,7 +197,7 @@ tables. This is useful when tailing Hive tables in `HoodieDeltaStreamer` instead
   with [BigQuery integration](/docs/gcp_bigquery).
 - For Spark readers that rely on extracting physical partition path,
   set `hoodie.datasource.read.extract.partition.values.from.path=true` to stay compatible with existing behaviors.
-- Default index type for Spark was change from `BLOOM`
+- Default index type for Spark was changed from `BLOOM`
   to `SIMPLE` ([HUDI-3091](https://issues.apache.org/jira/browse/HUDI-3091)). If you currently rely on the default `BLOOM`
   index type, please update your configuration accordingly.
 
