@@ -43,6 +43,7 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.hadoop.CachingPath;
 import org.apache.hudi.hadoop.SerializablePath;
@@ -730,6 +731,8 @@ public class HoodieTableMetaClient implements Serializable {
     private String baseFileFormat;
     private String preCombineField;
     private String partitionFields;
+    private Boolean cdcEnabled;
+    private Boolean cdcSupplementalLoggingEnabled;
     private String bootstrapIndexClass;
     private String bootstrapBasePath;
     private Boolean bootstrapIndexEnable;
@@ -813,6 +816,16 @@ public class HoodieTableMetaClient implements Serializable {
 
     public PropertyBuilder setPartitionFields(String partitionFields) {
       this.partitionFields = partitionFields;
+      return this;
+    }
+
+    public PropertyBuilder setCDCEnabled(boolean cdcEnabled) {
+      this.cdcEnabled = cdcEnabled;
+      return this;
+    }
+
+    public PropertyBuilder setCDCSupplementalLoggingEnabled(boolean cdcSupplementalLoggingEnabled) {
+      this.cdcSupplementalLoggingEnabled = cdcSupplementalLoggingEnabled;
       return this;
     }
 
@@ -956,6 +969,12 @@ public class HoodieTableMetaClient implements Serializable {
       if (hoodieConfig.contains(HoodieTableConfig.RECORDKEY_FIELDS)) {
         setRecordKeyFields(hoodieConfig.getString(HoodieTableConfig.RECORDKEY_FIELDS));
       }
+      if (hoodieConfig.contains(HoodieTableConfig.CDC_ENABLED)) {
+        setCDCEnabled(hoodieConfig.getBoolean(HoodieTableConfig.CDC_ENABLED));
+      }
+      if (hoodieConfig.contains(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_ENABLED)) {
+        setCDCSupplementalLoggingEnabled(hoodieConfig.getBoolean(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_ENABLED));
+      }
       if (hoodieConfig.contains(HoodieTableConfig.CREATE_SCHEMA)) {
         setTableCreateSchema(hoodieConfig.getString(HoodieTableConfig.CREATE_SCHEMA));
       }
@@ -1045,6 +1064,18 @@ public class HoodieTableMetaClient implements Serializable {
       }
       if (null != recordKeyFields) {
         tableConfig.setValue(HoodieTableConfig.RECORDKEY_FIELDS, recordKeyFields);
+      }
+      if (null != cdcEnabled) {
+        tableConfig.setValue(HoodieTableConfig.CDC_ENABLED, Boolean.toString(cdcEnabled));
+        if (cdcEnabled && null != cdcSupplementalLoggingEnabled) {
+          if (!cdcSupplementalLoggingEnabled) {
+            //TODO: When this case is supported, remove the judgment.
+            throw new HoodieNotSupportedException(
+                "Hudi don't support to disable 'hoodie.table.cdc.supplemental.logging' for now.");
+          }
+          tableConfig.setValue(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_ENABLED,
+              Boolean.toString(cdcSupplementalLoggingEnabled));
+        }
       }
       if (null != populateMetaFields) {
         tableConfig.setValue(HoodieTableConfig.POPULATE_META_FIELDS, Boolean.toString(populateMetaFields));

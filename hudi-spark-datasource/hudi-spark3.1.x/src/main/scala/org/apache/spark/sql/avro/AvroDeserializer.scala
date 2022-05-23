@@ -23,6 +23,7 @@ import org.apache.avro.Schema.Type._
 import org.apache.avro.generic._
 import org.apache.avro.util.Utf8
 import org.apache.avro.{LogicalTypes, Schema, SchemaBuilder}
+
 import org.apache.spark.sql.avro.AvroDeserializer.{createDateRebaseFuncInRead, createTimestampRebaseFuncInRead}
 import org.apache.spark.sql.catalyst.expressions.{SpecificInternalRow, UnsafeArrayData}
 import org.apache.spark.sql.catalyst.util.DateTimeConstants.MILLIS_PER_DAY
@@ -36,6 +37,7 @@ import org.apache.spark.unsafe.types.UTF8String
 
 import java.math.BigDecimal
 import java.nio.ByteBuffer
+
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
 
@@ -69,33 +71,27 @@ private[sql] class AvroDeserializer(rootAvroType: Schema,
   private val timestampRebaseFunc = createTimestampRebaseFuncInRead(
     datetimeRebaseMode, "Avro")
 
-  private val converter: Any => Option[Any] = rootCatalystType match {
+  def deserialize(data: Any): Option[Any] = rootCatalystType match {
     // A shortcut for empty schema.
     case st: StructType if st.isEmpty =>
-      (data: Any) => Some(InternalRow.empty)
+      Some(InternalRow.empty)
 
     case st: StructType =>
       val resultRow = new SpecificInternalRow(st.map(_.dataType))
       val fieldUpdater = new RowUpdater(resultRow)
       val applyFilters = filters.skipRow(resultRow, _)
       val writer = getRecordWriter(rootAvroType, st, Nil, applyFilters)
-      (data: Any) => {
-        val record = data.asInstanceOf[GenericRecord]
-        val skipRow = writer(fieldUpdater, record)
-        if (skipRow) None else Some(resultRow)
-      }
+      val record = data.asInstanceOf[GenericRecord]
+      val skipRow = writer(fieldUpdater, record)
+      if (skipRow) None else Some(resultRow)
 
     case _ =>
       val tmpRow = new SpecificInternalRow(Seq(rootCatalystType))
       val fieldUpdater = new RowUpdater(tmpRow)
       val writer = newWriter(rootAvroType, rootCatalystType, Nil)
-      (data: Any) => {
-        writer(fieldUpdater, 0, data)
-        Some(tmpRow.get(0, rootCatalystType))
-      }
+      writer(fieldUpdater, 0, data)
+      Some(tmpRow.get(0, rootCatalystType))
   }
-
-  def deserialize(data: Any): Option[Any] = converter(data)
 
   /**
    * Creates a writer to write avro values to Catalyst values at the given ordinal with the given

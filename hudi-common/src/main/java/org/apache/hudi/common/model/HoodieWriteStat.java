@@ -45,6 +45,12 @@ public class HoodieWriteStat implements Serializable {
   private String path;
 
   /**
+   * Relative cdc file path that store the CDC data.
+   */
+  @Nullable
+  private String cdcPath;
+
+  /**
    * The previous version of the file. (null if this is the first version. i.e insert)
    */
   private String prevCommit;
@@ -69,6 +75,11 @@ public class HoodieWriteStat implements Serializable {
    * Total number of insert records or converted to updates (for small file handling).
    */
   private long numInserts;
+
+  /**
+   * Total number of cdc bytes written.
+   */
+  private long cdcWriteBytes;
 
   /**
    * Total number of bytes written.
@@ -195,8 +206,16 @@ public class HoodieWriteStat implements Serializable {
     return totalWriteBytes;
   }
 
+  public long getCdcWriteBytes() {
+    return cdcWriteBytes;
+  }
+
   public void setTotalWriteBytes(long totalWriteBytes) {
     this.totalWriteBytes = totalWriteBytes;
+  }
+
+  public void setCdcWriteBytes(long cdcWriteBytes) {
+    this.cdcWriteBytes = cdcWriteBytes;
   }
 
   public long getTotalWriteErrors() {
@@ -233,6 +252,14 @@ public class HoodieWriteStat implements Serializable {
 
   public String getPath() {
     return path;
+  }
+
+  public String getCdcPath() {
+    return cdcPath;
+  }
+
+  public void setCdcPath(String cdcPath) {
+    this.cdcPath = cdcPath;
   }
 
   public String getPartitionPath() {
@@ -360,6 +387,7 @@ public class HoodieWriteStat implements Serializable {
     return "HoodieWriteStat{fileId='" + fileId + '\'' + ", path='" + path + '\'' + ", prevCommit='" + prevCommit
         + '\'' + ", numWrites=" + numWrites + ", numDeletes=" + numDeletes + ", numUpdateWrites=" + numUpdateWrites
         + ", totalWriteBytes=" + totalWriteBytes + ", totalWriteErrors=" + totalWriteErrors + ", tempPath='" + tempPath
+        + '\'' + ", cdcPath='" + cdcPath + ", cdcWriteBytes=" + cdcWriteBytes
         + '\'' + ", partitionPath='" + partitionPath + '\'' + ", totalLogRecords=" + totalLogRecords
         + ", totalLogFilesCompacted=" + totalLogFilesCompacted + ", totalLogSizeCompacted=" + totalLogSizeCompacted
         + ", totalUpdatedRecordsCompacted=" + totalUpdatedRecordsCompacted + ", totalLogBlocks=" + totalLogBlocks
