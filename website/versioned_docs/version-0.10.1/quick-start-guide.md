@@ -43,7 +43,7 @@ spark-shell \
   --packages org.apache.hudi:hudi-spark3.1.2-bundle_2.12:0.10.1,org.apache.spark:spark-avro_2.12:3.1.2 \
   --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
 
-// spark-shell for spark 3.0
+// spark-shell for spark 3.2
 spark-shell \
   --packages org.apache.hudi:hudi-spark3.0.3-bundle_2.12:0.10.1,org.apache.spark:spark-avro_2.12:3.0.3 \
   --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
