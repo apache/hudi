@@ -102,7 +102,6 @@
                   <include>org.apache.hudi:hudi-sync-common</include>
                   <include>org.apache.hudi:hudi-hadoop-mr</include>
                   <include>org.apache.hudi:hudi-timeline-service</include>
-                  <include>org.apache.hudi:hudi-aws</include>
 
                   <include>com.yammer.metrics:metrics-core</include>
                   <include>com.beust:jcommander</include>
