@@ -32,7 +32,6 @@ stages:
   - stage: test
     jobs:
       - job: UT_FT_1
-        condition: false
         displayName: UT FT common & flink & UT client/spark-client
         timeoutInMinutes: '120'
         steps:
@@ -86,7 +85,6 @@ stages:
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
       - job: UT_FT_3
-        condition: false
         displayName: UT FT clients & cli & utilities & sync/hive-sync
         timeoutInMinutes: '120'
         steps:
@@ -118,7 +116,6 @@ stages:
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
       - job: UT_FT_4
-        condition: false
         displayName: UT FT other modules
         timeoutInMinutes: '120'
         steps:
@@ -150,7 +147,6 @@ stages:
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
       - job: IT
-        condition: false
         displayName: IT modules
         timeoutInMinutes: '120'
         steps:
