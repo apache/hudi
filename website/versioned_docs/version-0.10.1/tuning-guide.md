@@ -13,7 +13,7 @@ Writing data via Hudi happens as a Spark job and thus general rules of spark deb
 
 **Input Parallelism** : By default, Hudi tends to over-partition input (i.e `withParallelism(1500)`), to ensure each Spark partition stays within the 2GB limit for inputs upto 500GB. Bump this up accordingly if you have larger inputs. We recommend having shuffle parallelism `hoodie.[insert|upsert|bulkinsert].shuffle.parallelism` such that its atleast input_data_size/500MB
 
-**Off-heap memory** : Hudi writes parquet files and that needs good amount of off-heap memory proportional to schema width. Consider setting something like `spark.yarn.executor.memoryOverhead` or `spark.yarn.driver.memoryOverhead`, if you are running into such failures.
+**Off-heap memory** : Hudi writes parquet files and that needs good amount of off-heap memory proportional to schema width. Consider setting something like `spark.executor.memoryOverhead` or `spark.driver.memoryOverhead`, if you are running into such failures.
 
 **Spark Memory** : Typically, hudi needs to be able to read a single file into memory to perform merges or compactions and thus the executor memory should be sufficient to accomodate this. In addition, Hoodie caches the input to be able to intelligently place data and thus leaving some `spark.memory.storageFraction` will generally help boost performance.
 
@@ -51,7 +51,7 @@ spark.submit.deployMode cluster
 spark.task.cpus 1
 spark.task.maxFailures 4
  
-spark.yarn.driver.memoryOverhead 1024
-spark.yarn.executor.memoryOverhead 3072
+spark.driver.memoryOverhead 1024
+spark.executor.memoryOverhead 3072
 spark.yarn.max.executor.failures 100
 ```
