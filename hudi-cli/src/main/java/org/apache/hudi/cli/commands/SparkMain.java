@@ -95,7 +95,7 @@ public class SparkMain {
     LOG.info("Invoking SparkMain: " + commandString);
     final SparkCommand cmd = SparkCommand.valueOf(commandString);
 
-    JavaSparkContext jsc = SparkUtil.initJavaSparkConf("hoodie-cli-" + commandString,
+    JavaSparkContext jsc = SparkUtil.initJavaSparkContext("hoodie-cli-" + commandString,
         Option.of(args[1]), Option.of(args[2]));
 
     int returnCode = 0;
