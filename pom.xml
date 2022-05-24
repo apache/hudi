@@ -1332,15 +1332,8 @@
             <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-surefire-plugin</artifactId>
             <version>${maven-surefire-plugin.version}</version>
-            <dependencies>
-              <dependency>
-                <groupId>org.apache.maven.surefire</groupId>
-                <artifactId>surefire-junit47</artifactId>
-                <version>${maven-surefire-plugin.version}</version>
-              </dependency>
-            </dependencies>
             <configuration combine.self="append">
-              <skip>${skipFTs}</skip>
+              <skipTests>${skipFTs}</skipTests>
               <forkCount>1</forkCount>
               <reuseForks>true</reuseForks>
               <includes>
