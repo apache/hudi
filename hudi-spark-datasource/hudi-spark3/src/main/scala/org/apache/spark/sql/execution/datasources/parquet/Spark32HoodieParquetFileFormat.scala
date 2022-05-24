@@ -62,6 +62,24 @@ import java.net.URI
  */
 class Spark32HoodieParquetFileFormat(private val shouldAppendPartitionValues: Boolean) extends ParquetFileFormat {
 
+  override def vectorTypes(
+                            requiredSchema: StructType,
+                            partitionSchema: StructType,
+                            sqlConf: SQLConf): Option[Seq[String]] = {
+    val allFieldsLength = if (shouldAppendPartitionValues) {
+      requiredSchema.fields.length + partitionSchema.fields.length
+    } else {
+      requiredSchema.fields.length
+    }
+    Option(Seq.fill(allFieldsLength)(
+      if (!sqlConf.offHeapColumnVectorEnabled) {
+        classOf[OnHeapColumnVector].getName
+      } else {
+        classOf[OffHeapColumnVector].getName
+      }
+    ))
+  }
+
   override def buildReaderWithPartitionValues(sparkSession: SparkSession,
                                               dataSchema: StructType,
                                               partitionSchema: StructType,

@@ -34,6 +34,7 @@ import org.apache.spark.sql.catalyst.expressions.codegen.GenerateUnsafeProjectio
 import org.apache.spark.sql.catalyst.expressions.{JoinedRow, UnsafeRow}
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.execution.datasources.{PartitionedFile, RecordReaderIterator}
+import org.apache.spark.sql.execution.vectorized.{OffHeapColumnVector, OnHeapColumnVector}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.{AtomicType, StructType}
@@ -51,6 +52,24 @@ import java.net.URI
  * </ol>
  */
 class Spark24HoodieParquetFileFormat(private val shouldAppendPartitionValues: Boolean) extends ParquetFileFormat {
+
+  override def vectorTypes(
+                            requiredSchema: StructType,
+                            partitionSchema: StructType,
+                            sqlConf: SQLConf): Option[Seq[String]] = {
+    val allFieldsLength = if (shouldAppendPartitionValues) {
+      requiredSchema.fields.length + partitionSchema.fields.length
+    } else {
+      requiredSchema.fields.length
+    }
+    Option(Seq.fill(allFieldsLength)(
+      if (!sqlConf.offHeapColumnVectorEnabled) {
+        classOf[OnHeapColumnVector].getName
+      } else {
+        classOf[OffHeapColumnVector].getName
+      }
+    ))
+  }
 
   override def buildReaderWithPartitionValues(sparkSession: SparkSession,
                                               dataSchema: StructType,
@@ -187,7 +206,8 @@ class Spark24HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
         if (shouldAppendPartitionValues) {
           vectorizedReader.initBatch(partitionSchema, file.partitionValues)
         } else {
-          vectorizedReader.initBatch(StructType(Nil), InternalRow.empty)
+          vectorizedReader.initBatch(partitionSchema, InternalRow.empty)
+          //vectorizedReader.initBatch(StructType(Nil), InternalRow.empty)
         }
 
         if (returningBatch) {
