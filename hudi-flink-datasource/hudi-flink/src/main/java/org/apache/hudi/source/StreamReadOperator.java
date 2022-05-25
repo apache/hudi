@@ -22,6 +22,7 @@ import org.apache.hudi.adapter.AbstractStreamOperatorAdapter;
 import org.apache.hudi.adapter.AbstractStreamOperatorFactoryAdapter;
 import org.apache.hudi.adapter.MailboxExecutorAdapter;
 import org.apache.hudi.adapter.Utils;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.format.mor.MergeOnReadInputFormat;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 
@@ -47,6 +48,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Queue;
 import java.util.concurrent.LinkedBlockingDeque;
+import java.util.concurrent.TimeUnit;
 
 /**
  * The operator that reads the {@link MergeOnReadInputSplit splits} received from the preceding {@link
@@ -145,7 +147,7 @@ public class StreamReadOperator extends AbstractStreamOperatorAdapter<RowData>
     }
   }
 
-  private void processSplits() throws IOException {
+  private void processSplits() throws IOException, InterruptedException {
     MergeOnReadInputSplit split = splits.peek();
     if (split == null) {
       currentSplitState = SplitState.IDLE;
@@ -157,11 +159,33 @@ public class StreamReadOperator extends AbstractStreamOperatorAdapter<RowData>
     // 3. if the input split reads to the end, close the format and remove the split from the queue #splits
     // 4. for each runnable, reads at most #MINI_BATCH_SIZE number of records
     if (format.isClosed()) {
-      // This log is important to indicate the consuming process,
-      // there is only one log message for one data bucket.
-      LOG.info("Processing input split : {}", split);
-      format.open(split);
+      try {
+        LOG.info("Processing input split : {}", split);
+        format.setOpening();
+        new Thread(() -> {
+          try {
+            // This log is important to indicate the consuming process,
+            // there is only one log message for one data bucket.
+            format.open(split);
+          } catch (IOException e) {
+            throw new HoodieIOException("Failed to open the split " + split, e);
+          }
+        }).start();
+      } finally {
+        currentSplitState = SplitState.IDLE;
+      }
+      TimeUnit.MICROSECONDS.sleep(100);
+      // Re-schedule to process the next split.
+      enqueueProcessSplits();
+      return;
+    } else if (!format.isOpened()) {
+      TimeUnit.MICROSECONDS.sleep(100);
+      currentSplitState = SplitState.IDLE;
+      // Re-schedule to process the next split.
+      enqueueProcessSplits();
+      return;
     }
+
     try {
       consumeAsMiniBatch(split);
     } finally {
