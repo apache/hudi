@@ -18,7 +18,7 @@
 
 package org.apache.hudi.common.table.timeline;
 
-import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
@@ -31,8 +31,6 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -49,6 +47,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -71,9 +70,8 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     initMetaClient();
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = {"true", "false"})
-  public void testLoadingInstantsFromFiles(String allowTempCommit) throws IOException {
+  @Test
+  public void testLoadingInstantsFromFiles() throws IOException {
     HoodieInstant instant1 = new HoodieInstant(State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "1");
     HoodieInstant instant2 = new HoodieInstant(State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "3");
     HoodieInstant instant3 = new HoodieInstant(State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "5");
@@ -84,8 +82,6 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     HoodieInstant instant4Complete = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "8");
 
     HoodieInstant instant5 = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, "9");
-
-    metaClient.getTableConfig().setValue(HoodieTableConfig.ALLOW_TEMP_COMMIT, allowTempCommit);
 
     timeline = new HoodieActiveTimeline(metaClient);
     timeline.createNewInstant(instant1);
@@ -208,24 +204,24 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
 
   @Test
   public void testAllowTempCommit() {
-    metaClient.getTableConfig().setValue(HoodieTableConfig.ALLOW_TEMP_COMMIT, "true");
-    timeline = new HoodieActiveTimeline(metaClient);
+    shouldAllowTempCommit(true, hoodieMetaClient -> {
+      timeline = new HoodieActiveTimeline(hoodieMetaClient);
 
-    HoodieInstant instant1 = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, "1");
-    timeline.createNewInstant(instant1);
+      HoodieInstant instant1 = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, "1");
+      timeline.createNewInstant(instant1);
 
-    byte[] data = "commit".getBytes(StandardCharsets.UTF_8);
-    timeline.saveAsComplete(new HoodieInstant(true, instant1.getAction(),
-        instant1.getTimestamp()), Option.of(data));
+      byte[] data = "commit".getBytes(StandardCharsets.UTF_8);
+      timeline.saveAsComplete(new HoodieInstant(true, instant1.getAction(),
+          instant1.getTimestamp()), Option.of(data));
 
-    timeline = timeline.reload();
+      timeline = timeline.reload();
 
-    assertTrue(timeline.getContiguousCompletedWriteTimeline().lastInstant().isPresent());
-    assertEquals(instant1.getTimestamp(), timeline.getContiguousCompletedWriteTimeline().lastInstant().get().getTimestamp());
+      assertTrue(timeline.getContiguousCompletedWriteTimeline().lastInstant().isPresent());
+      assertEquals(instant1.getTimestamp(), timeline.getContiguousCompletedWriteTimeline().lastInstant().get().getTimestamp());
+    });
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = {"true", "false"})
+  @Test
   public void testGetContiguousCompletedWriteTimeline(String allowTempCommit) {
     // a mock timeline with holes
     timeline = new MockHoodieTimeline(Stream.of("01", "03", "05", "07", "13", "15", "17"),
@@ -243,7 +239,6 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     HoodieInstant instant7 = new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "7");
     HoodieInstant instant8 = new HoodieInstant(true, HoodieTimeline.RESTORE_ACTION, "8");
 
-    metaClient.getTableConfig().setValue(HoodieTableConfig.ALLOW_TEMP_COMMIT, allowTempCommit);
     timeline = new HoodieActiveTimeline(metaClient);
     timeline.createNewInstant(instant1);
     timeline.createNewInstant(instant2);
@@ -306,11 +301,8 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     checkTimeline.accept(timeline.getTimelineOfActions(randomInstants), randomInstants);
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = {"true", "false"})
-  public void testTimelineInstantOperations(String allowTempCommit) {
-    metaClient.getTableConfig().setValue(HoodieTableConfig.ALLOW_TEMP_COMMIT, allowTempCommit);
-
+  @Test
+  public void testTimelineInstantOperations() {
     timeline = new HoodieActiveTimeline(metaClient, true);
     assertEquals(0, timeline.countInstants(), "No instant present");
 
@@ -493,9 +485,8 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
         .forEach(i -> assertFalse(t2.containsInstant(i)));
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = {"true", "false"})
-  public void testReplaceActionsTimeline(String allowTempCommit) {
+  @Test
+  public void testReplaceActionsTimeline() {
     int instantTime = 1;
     List<HoodieInstant> allInstants = new ArrayList<>();
     HoodieInstant instant = new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, String.format("%03d", instantTime++));
@@ -504,8 +495,6 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     allInstants.add(instant);
     instant = new HoodieInstant(State.COMPLETED, HoodieTimeline.REPLACE_COMMIT_ACTION, String.format("%03d", instantTime++));
     allInstants.add(instant);
-
-    metaClient.getTableConfig().setValue(HoodieTableConfig.ALLOW_TEMP_COMMIT, allowTempCommit);
 
     timeline = new HoodieActiveTimeline(metaClient);
     timeline.setInstants(allInstants);
@@ -627,4 +616,25 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     }
     return allInstants;
   }
+
+  private void shouldAllowTempCommit(boolean allowTempCommit, Consumer<HoodieTableMetaClient> fun) {
+    if (allowTempCommit) {
+      HoodieWrapperFileSystem fs = metaClient.getFs();
+      HoodieWrapperFileSystem newFs = new HoodieWrapperFileSystem(fs.getFileSystem(), fs.getConsistencyGuard()) {
+        @Override
+        protected boolean needCreateTempFile() {
+          return true;
+        }
+      };
+      metaClient.setFs(newFs);
+      try {
+        fun.accept(metaClient);
+      } finally {
+        metaClient.setFs(fs);
+      }
+      return;
+    }
+    fun.accept(metaClient);
+  }
+
 }

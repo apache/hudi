@@ -30,7 +30,6 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.hadoop.fs.FSDataInputStream;
-import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
@@ -76,9 +75,6 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
       REQUESTED_REPLACE_COMMIT_EXTENSION, INFLIGHT_REPLACE_COMMIT_EXTENSION, REPLACE_COMMIT_EXTENSION,
       REQUESTED_INDEX_COMMIT_EXTENSION, INFLIGHT_INDEX_COMMIT_EXTENSION, INDEX_COMMIT_EXTENSION));
   private static final Logger LOG = LogManager.getLogger(HoodieActiveTimeline.class);
-
-  // This is used when enable ALLOW_TEMP_COMMIT
-  private static final String TMP_PATH_POSTFIX = ".tmp";
 
   protected HoodieTableMetaClient metaClient;
 
@@ -561,7 +557,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
         if (allowRedundantTransitions) {
           FileIOUtils.createFileInPath(metaClient.getFs(), new Path(metaClient.getMetaPath(), toInstant.getFileName()), data);
         } else {
-          createImmutableFileInPath(new Path(metaClient.getMetaPath(), toInstant.getFileName()), data);
+          metaClient.getFs().createImmutableFileInPath(new Path(metaClient.getMetaPath(), toInstant.getFileName()), data);
         }
         LOG.info("Create new file for toInstant ?" + new Path(metaClient.getMetaPath(), toInstant.getFileName()));
       }
@@ -724,48 +720,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     if (allowOverwrite || metaClient.getTimelineLayoutVersion().isNullVersion()) {
       FileIOUtils.createFileInPath(metaClient.getFs(), fullPath, content);
     } else {
-      createImmutableFileInPath(fullPath, content);
-    }
-  }
-
-  /**
-   * Creates a new file in timeline with overwrite set to false. This ensures
-   * files are created only once and never rewritten
-   * @param fullPath File Path
-   * @param content Content to be stored
-   */
-  private void createImmutableFileInPath(Path fullPath, Option<byte[]> content) {
-    FSDataOutputStream fsout = null;
-    Path tmpPath = null;
-    try {
-      if (!content.isPresent()) {
-        fsout = metaClient.getFs().create(fullPath, false);
-      }
-
-      if (content.isPresent() && metaClient.getTableConfig().allowTempCommit()) {
-        Path parent = fullPath.getParent();
-        tmpPath = new Path(parent, fullPath.getName() + TMP_PATH_POSTFIX);
-        fsout = metaClient.getFs().create(tmpPath, false);
-        fsout.write(content.get());
-      }
-
-      if (content.isPresent() && !metaClient.getTableConfig().allowTempCommit()) {
-        fsout = metaClient.getFs().create(fullPath, false);
-        fsout.write(content.get());
-      }
-    } catch (IOException e) {
-      throw new HoodieIOException("Failed to create file " + fullPath, e);
-    } finally {
-      try {
-        if (null != fsout) {
-          fsout.close();
-        }
-        if (null != tmpPath) {
-          metaClient.getFs().rename(tmpPath, fullPath);
-        }
-      } catch (IOException e) {
-        throw new HoodieIOException("Failed to close file " + fullPath, e);
-      }
+      metaClient.getFs().createImmutableFileInPath(fullPath, content);
     }
   }
 
