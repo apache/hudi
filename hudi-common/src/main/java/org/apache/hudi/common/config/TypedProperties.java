@@ -18,6 +18,8 @@
 
 package org.apache.hudi.common.config;
 
+import org.apache.hudi.common.util.StringUtils;
+
 import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Enumeration;
@@ -73,7 +75,7 @@ public class TypedProperties extends Properties implements Serializable {
     if (!containsKey(property)) {
       return defaultVal;
     }
-    return Arrays.stream(getProperty(property).split(delimiter)).map(String::trim).collect(Collectors.toList());
+    return Arrays.stream(getProperty(property).split(delimiter)).map(String::trim).filter(s -> !StringUtils.isNullOrEmpty(s)).collect(Collectors.toList());
   }
 
   public int getInteger(String property) {

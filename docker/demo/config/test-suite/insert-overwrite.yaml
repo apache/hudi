@@ -17,7 +17,6 @@ dag_name: simple-deltastreamer.yaml
 dag_rounds: 1
 dag_intermittent_delay_mins: 1
 dag_content:
-
   first_insert:
     config:
       record_size: 1000

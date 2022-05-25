@@ -18,6 +18,7 @@
 package org.apache.spark.sql.catalyst.catalog
 
 import org.apache.hudi.AvroConversionUtils
+import org.apache.hudi.DataSourceWriteOptions.OPERATION
 import org.apache.hudi.HoodieWriterUtils._
 import org.apache.hudi.common.config.DFSPropertiesConfiguration
 import org.apache.hudi.common.model.HoodieTableType
@@ -109,6 +110,11 @@ class HoodieCatalogTable(val spark: SparkSession, val table: CatalogTable) exten
    * Partition Fields
    */
   lazy val partitionFields: Array[String] = tableConfig.getPartitionFields.orElse(Array.empty)
+
+  /**
+   * BaseFileFormat
+   */
+  lazy val baseFileFormat: String = metaClient.getTableConfig.getBaseFileFormat.name()
 
   /**
    * The schema of table.
@@ -316,6 +322,8 @@ class HoodieCatalogTable(val spark: SparkSession, val table: CatalogTable) exten
 }
 
 object HoodieCatalogTable {
+  // The properties should not be used when create table
+  val needFilterProps: List[String] = List(HoodieTableConfig.DATABASE_NAME.key, HoodieTableConfig.NAME.key, OPERATION.key)
 
   def apply(sparkSession: SparkSession, tableIdentifier: TableIdentifier): HoodieCatalogTable = {
     val catalogTable = sparkSession.sessionState.catalog.getTableMetadata(tableIdentifier)

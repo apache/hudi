@@ -27,11 +27,15 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.InternalSchemaCache;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCompactionException;
+import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.table.HoodieCompactionHandler;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseActionExecutor;
@@ -70,18 +74,33 @@ public class RunCompactionActionExecutor<T extends HoodieRecordPayload> extends
       HoodieCompactionPlan compactionPlan =
           CompactionUtils.getCompactionPlan(table.getMetaClient(), instantTime);
 
+      // try to load internalSchema to support schema Evolution
+      HoodieWriteConfig configCopy = config;
+      Pair<Option<String>, Option<String>> schemaPair = InternalSchemaCache
+          .getInternalSchemaAndAvroSchemaForClusteringAndCompaction(table.getMetaClient(), instantTime);
+      if (schemaPair.getLeft().isPresent() && schemaPair.getRight().isPresent()) {
+        // should not influence the original config, just copy it
+        configCopy = HoodieWriteConfig.newBuilder().withProperties(config.getProps()).build();
+        configCopy.setInternalSchemaString(schemaPair.getLeft().get());
+        configCopy.setSchema(schemaPair.getRight().get());
+      }
+
       HoodieData<WriteStatus> statuses = compactor.compact(
-          context, compactionPlan, table, config, instantTime, compactionHandler);
+          context, compactionPlan, table, configCopy, instantTime, compactionHandler);
 
       compactor.maybePersist(statuses, config);
-      context.setJobStatus(this.getClass().getSimpleName(), "Preparing compaction metadata");
+      context.setJobStatus(this.getClass().getSimpleName(), "Preparing compaction metadata: " + config.getTableName());
       List<HoodieWriteStat> updateStatusMap = statuses.map(WriteStatus::getStat).collectAsList();
       HoodieCommitMetadata metadata = new HoodieCommitMetadata(true);
       for (HoodieWriteStat stat : updateStatusMap) {
         metadata.addWriteStat(stat.getPartitionPath(), stat);
       }
       metadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, config.getSchema());
-
+      if (schemaPair.getLeft().isPresent()) {
+        metadata.addMetadata(SerDeHelper.LATEST_SCHEMA, schemaPair.getLeft().get());
+        metadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, schemaPair.getRight().get());
+      }
+      metadata.setOperationType(WriteOperationType.COMPACT);
       compactionMetadata.setWriteStatuses(statuses);
       compactionMetadata.setCommitted(false);
       compactionMetadata.setCommitMetadata(Option.of(metadata));

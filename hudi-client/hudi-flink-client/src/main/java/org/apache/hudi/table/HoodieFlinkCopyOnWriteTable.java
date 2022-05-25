@@ -55,6 +55,7 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.bootstrap.HoodieBootstrapWriteMetadata;
 import org.apache.hudi.table.action.clean.CleanActionExecutor;
 import org.apache.hudi.table.action.clean.CleanPlanActionExecutor;
+import org.apache.hudi.table.action.cluster.ClusteringPlanActionExecutor;
 import org.apache.hudi.table.action.commit.FlinkDeleteCommitActionExecutor;
 import org.apache.hudi.table.action.commit.FlinkInsertCommitActionExecutor;
 import org.apache.hudi.table.action.commit.FlinkInsertOverwriteCommitActionExecutor;
@@ -286,7 +287,7 @@ public class HoodieFlinkCopyOnWriteTable<T extends HoodieRecordPayload>
 
   @Override
   public Option<HoodieClusteringPlan> scheduleClustering(final HoodieEngineContext context, final String instantTime, final Option<Map<String, String>> extraMetadata) {
-    throw new HoodieNotSupportedException("Clustering is not supported on a Flink CopyOnWrite table");
+    return new ClusteringPlanActionExecutor<>(context, config,this, instantTime, extraMetadata).execute();
   }
 
   @Override

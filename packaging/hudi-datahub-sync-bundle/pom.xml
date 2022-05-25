@@ -21,7 +21,7 @@
   <parent>
     <artifactId>hudi</artifactId>
     <groupId>org.apache.hudi</groupId>
-    <version>0.11.0-SNAPSHOT</version>
+    <version>0.12.0-SNAPSHOT</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
   <modelVersion>4.0.0</modelVersion>
@@ -63,6 +63,7 @@
                   <resource>META-INF/LICENSE</resource>
                   <file>target/classes/META-INF/LICENSE</file>
                 </transformer>
+                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
               </transformers>
               <artifactSet>
                 <includes>
@@ -70,9 +71,23 @@
                   <include>org.apache.hudi:hudi-hadoop-mr</include>
                   <include>org.apache.hudi:hudi-sync-common</include>
                   <include>org.apache.hudi:hudi-datahub-sync</include>
+                  <include>org.apache.parquet:parquet-avro</include>
 
                   <include>io.acryl:datahub-client</include>
                   <include>com.beust:jcommander</include>
+                  <include>commons-io:commons-io</include>
+                  <include>org.apache.hbase:hbase-common</include>
+                  <include>org.apache.hbase:hbase-client</include>
+                  <include>org.apache.hbase:hbase-hadoop-compat</include>
+                  <include>org.apache.hbase:hbase-hadoop2-compat</include>
+                  <include>org.apache.hbase:hbase-metrics</include>
+                  <include>org.apache.hbase:hbase-metrics-api</include>
+                  <include>org.apache.hbase:hbase-protocol-shaded</include>
+                  <include>org.apache.hbase:hbase-server</include>
+                  <include>org.apache.hbase.thirdparty:hbase-shaded-miscellaneous</include>
+                  <include>org.apache.hbase.thirdparty:hbase-shaded-netty</include>
+                  <include>org.apache.hbase.thirdparty:hbase-shaded-protobuf</include>
+                  <include>org.apache.htrace:htrace-core4</include>
                   <include>org.apache.httpcomponents:fluent-hc</include>
                   <include>org.apache.httpcomponents:httpcore</include>
                   <include>org.apache.httpcomponents:httpclient</include>
@@ -80,6 +95,107 @@
                   <include>org.apache.httpcomponents:httpcore-nio</include>
                 </includes>
               </artifactSet>
+              <relocations>
+                <relocation>
+                  <pattern>com.esotericsoftware.kryo.</pattern>
+                  <shadedPattern>org.apache.hudi.com.esotericsoftware.kryo.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>com.esotericsoftware.minlog.</pattern>
+                  <shadedPattern>org.apache.hudi.com.esotericsoftware.minlog.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.commons.io.</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.commons.io.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.hadoop.hbase.</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.hadoop.hbase.</shadedPattern>
+                  <excludes>
+                    <exclude>org.apache.hadoop.hbase.KeyValue$KeyComparator</exclude>
+                  </excludes>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.hbase.</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.hbase.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.htrace.</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.htrace.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.objenesis.</pattern>
+                  <shadedPattern>org.apache.hudi.org.objenesis.</shadedPattern>
+                </relocation>
+                <!-- The classes below in org.apache.hadoop.metrics2 package come from
+                hbase-hadoop-compat and hbase-hadoop2-compat, which have to be shaded one by one,
+                instead of shading all classes under org.apache.hadoop.metrics2 including ones
+                from hadoop. -->
+                <relocation>
+                  <pattern>org.apache.hadoop.metrics2.MetricHistogram</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.MetricHistogram
+                  </shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.hadoop.metrics2.MetricsExecutor</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.MetricsExecutor
+                  </shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.hadoop.metrics2.impl.JmxCacheBuster</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.impl.JmxCacheBuster</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.hadoop.metrics2.lib.DefaultMetricsSystemHelper</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.DefaultMetricsSystemHelper
+                  </shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.hadoop.metrics2.lib.DynamicMetricsRegistry</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.DynamicMetricsRegistry
+                  </shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.hadoop.metrics2.lib.MetricsExecutorImpl</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.MetricsExecutorImpl
+                  </shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.hadoop.metrics2.lib.MutableFastCounter</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.MutableFastCounter
+                  </shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.hadoop.metrics2.lib.MutableHistogram</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.MutableHistogram
+                  </shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.hadoop.metrics2.lib.MutableRangeHistogram</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.MutableRangeHistogram
+                  </shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.hadoop.metrics2.lib.MutableSizeHistogram</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.MutableSizeHistogram
+                  </shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.hadoop.metrics2.lib.MutableTimeHistogram</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.MutableTimeHistogram
+                  </shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.hadoop.metrics2.util.MetricQuantile</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.util.MetricQuantile
+                  </shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.hadoop.metrics2.util.MetricSampleQuantiles</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.util.MetricSampleQuantiles
+                  </shadedPattern>
+                </relocation>
+              </relocations>
               <createDependencyReducedPom>false</createDependencyReducedPom>
               <filters>
                 <filter>
@@ -89,6 +205,8 @@
                     <exclude>META-INF/*.DSA</exclude>
                     <exclude>META-INF/*.RSA</exclude>
                     <exclude>META-INF/services/javax.*</exclude>
+                    <exclude>**/*.proto</exclude>
+                    <exclude>hbase-webapps/**</exclude>
                   </excludes>
                 </filter>
               </filters>

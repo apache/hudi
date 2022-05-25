@@ -234,7 +234,7 @@ public class HiveTestUtil {
     fileSystem.mkdirs(partPath);
     List<HoodieWriteStat> writeStats = new ArrayList<>();
     String fileId = UUID.randomUUID().toString();
-    Path filePath = new Path(partPath.toString() + "/" + FSUtils.makeDataFileName(instantTime, "1-0-1", fileId));
+    Path filePath = new Path(partPath.toString() + "/" + FSUtils.makeBaseFileName(instantTime, "1-0-1", fileId));
     Schema schema = SchemaTestUtil.getSchemaFromResource(HiveTestUtil.class, schemaFileName);
     generateParquetDataWithSchema(filePath, schema);
     HoodieWriteStat writeStat = new HoodieWriteStat();
@@ -371,7 +371,7 @@ public class HiveTestUtil {
     for (int i = 0; i < 5; i++) {
       // Create 5 files
       String fileId = UUID.randomUUID().toString();
-      Path filePath = new Path(partPath.toString() + "/" + FSUtils.makeDataFileName(instantTime, "1-0-1", fileId));
+      Path filePath = new Path(partPath.toString() + "/" + FSUtils.makeBaseFileName(instantTime, "1-0-1", fileId));
       generateParquetData(filePath, isParquetSchemaSimple);
       HoodieWriteStat writeStat = new HoodieWriteStat();
       writeStat.setFileId(fileId);

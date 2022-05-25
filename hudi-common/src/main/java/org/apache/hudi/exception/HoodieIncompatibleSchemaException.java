@@ -21,7 +21,7 @@ package org.apache.hudi.exception;
 /**
  * Exception for incompatible schema.
  */
-public class HoodieIncompatibleSchemaException extends Exception {
+public class HoodieIncompatibleSchemaException extends RuntimeException {
 
   public HoodieIncompatibleSchemaException(String msg, Throwable e) {
     super(msg, e);

@@ -88,7 +88,7 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
           FSUtils.getAllPartitionPaths(context, table.getMetaClient().getBasePath(), false, false);
       int numPartitions = Math.max(Math.min(partitionPaths.size(), config.getRollbackParallelism()), 1);
 
-      context.setJobStatus(this.getClass().getSimpleName(), "Creating Listing Rollback Plan");
+      context.setJobStatus(this.getClass().getSimpleName(), "Creating Listing Rollback Plan: " + config.getTableName());
 
       HoodieTableType tableType = table.getMetaClient().getTableType();
       String baseFileExtension = getBaseFileExtension(metaClient);
@@ -239,7 +239,15 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
     SerializablePathFilter pathFilter = getSerializablePathFilter(baseFileExtension, instantToRollback.getTimestamp());
     Path[] filePaths = getFilesFromCommitMetadata(basePath, commitMetadata, partitionPath);
 
-    return fs.listStatus(filePaths, pathFilter);
+    return fs.listStatus(Arrays.stream(filePaths).filter(entry -> {
+      try {
+        return fs.exists(entry);
+      } catch (IOException e) {
+        LOG.error("Exists check failed for " + entry.toString(), e);
+      }
+      // if IOException is thrown, do not ignore. lets try to add the file of interest to be deleted. we can't miss any files to be rolled back.
+      return false;
+    }).toArray(Path[]::new), pathFilter);
   }
 
   private FileStatus[] fetchFilesFromListFiles(HoodieInstant instantToRollback, String partitionPath, String basePath,

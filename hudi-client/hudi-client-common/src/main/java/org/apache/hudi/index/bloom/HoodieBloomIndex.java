@@ -53,7 +53,11 @@ import java.util.stream.Stream;
 import static java.util.stream.Collectors.groupingBy;
 import static java.util.stream.Collectors.mapping;
 import static java.util.stream.Collectors.toList;
+import static org.apache.hudi.common.util.CollectionUtils.isNullOrEmpty;
 import static org.apache.hudi.index.HoodieIndexUtils.getLatestBaseFilesForAllPartitions;
+import static org.apache.hudi.metadata.HoodieMetadataPayload.unwrapStatisticValueWrapper;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getCompletedMetadataPartitions;
+import static org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS;
 
 /**
  * Indexing mechanism based on bloom filter. Each parquet file includes its row_key bloom filter in its metadata.
@@ -118,14 +122,7 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
     List<String> affectedPartitionPathList = new ArrayList<>(recordsPerPartition.keySet());
 
     // Step 2: Load all involved files as <Partition, filename> pairs
-    List<Pair<String, BloomIndexFileInfo>> fileInfoList;
-    if (config.getBloomIndexPruneByRanges()) {
-      fileInfoList = (config.isMetadataColumnStatsIndexEnabled()
-          ? loadColumnRangesFromMetaIndex(affectedPartitionPathList, context, hoodieTable)
-          : loadColumnRangesFromFiles(affectedPartitionPathList, context, hoodieTable));
-    } else {
-      fileInfoList = getFileInfoForLatestBaseFiles(affectedPartitionPathList, context, hoodieTable);
-    }
+    List<Pair<String, BloomIndexFileInfo>> fileInfoList = getBloomIndexFileInfoForPartitions(context, hoodieTable, affectedPartitionPathList);
     final Map<String, List<BloomIndexFileInfo>> partitionToFileInfo =
         fileInfoList.stream().collect(groupingBy(Pair::getLeft, mapping(Pair::getRight, toList())));
 
@@ -138,6 +135,28 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
         partitionRecordKeyPairs, fileComparisonPairs, partitionToFileInfo, recordsPerPartition);
   }
 
+  private List<Pair<String, BloomIndexFileInfo>> getBloomIndexFileInfoForPartitions(HoodieEngineContext context,
+                                                                                    HoodieTable hoodieTable,
+                                                                                    List<String> affectedPartitionPathList) {
+    List<Pair<String, BloomIndexFileInfo>> fileInfoList = new ArrayList<>();
+
+    if (config.getBloomIndexPruneByRanges()) {
+      // load column ranges from metadata index if column stats index is enabled and column_stats metadata partition is available
+      if (config.getBloomIndexUseMetadata()
+          && getCompletedMetadataPartitions(hoodieTable.getMetaClient().getTableConfig()).contains(COLUMN_STATS.getPartitionPath())) {
+        fileInfoList = loadColumnRangesFromMetaIndex(affectedPartitionPathList, context, hoodieTable);
+      }
+      // fallback to loading column ranges from files
+      if (isNullOrEmpty(fileInfoList)) {
+        fileInfoList = loadColumnRangesFromFiles(affectedPartitionPathList, context, hoodieTable);
+      }
+    } else {
+      fileInfoList = getFileInfoForLatestBaseFiles(affectedPartitionPathList, context, hoodieTable);
+    }
+
+    return fileInfoList;
+  }
+
   /**
    * Load all involved files as <Partition, filename> pair List.
    */
@@ -148,7 +167,7 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
         .map(pair -> Pair.of(pair.getKey(), pair.getValue().getFileId()))
         .collect(toList());
 
-    context.setJobStatus(this.getClass().getName(), "Obtain key ranges for file slices (range pruning=on)");
+    context.setJobStatus(this.getClass().getName(), "Obtain key ranges for file slices (range pruning=on): " + config.getTableName());
     return context.map(partitionPathFileIDList, pf -> {
       try {
         HoodieRangeInfoHandle rangeInfoHandle = new HoodieRangeInfoHandle(config, hoodieTable, pf);
@@ -188,9 +207,9 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
    * @return List of partition and file column range info pairs
    */
   protected List<Pair<String, BloomIndexFileInfo>> loadColumnRangesFromMetaIndex(
-      List<String> partitions, final HoodieEngineContext context, final HoodieTable hoodieTable) {
+      List<String> partitions, final HoodieEngineContext context, final HoodieTable<?, ?, ?, ?> hoodieTable) {
     // also obtain file ranges, if range pruning is enabled
-    context.setJobStatus(this.getClass().getName(), "Load meta index key ranges for file slices");
+    context.setJobStatus(this.getClass().getName(), "Load meta index key ranges for file slices: " + config.getTableName());
 
     final String keyField = hoodieTable.getMetaClient().getTableConfig().getRecordKeyFieldProp();
     return context.flatMap(partitions, partitionName -> {
@@ -203,15 +222,16 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
         return Stream.empty();
       }
       try {
-        Map<Pair<String, String>, HoodieMetadataColumnStats> fileToColumnStatsMap = hoodieTable
-            .getMetadataTable().getColumnStats(partitionFileNameList, keyField);
+        Map<Pair<String, String>, HoodieMetadataColumnStats> fileToColumnStatsMap =
+            hoodieTable.getMetadataTable().getColumnStats(partitionFileNameList, keyField);
         List<Pair<String, BloomIndexFileInfo>> result = new ArrayList<>();
         for (Map.Entry<Pair<String, String>, HoodieMetadataColumnStats> entry : fileToColumnStatsMap.entrySet()) {
           result.add(Pair.of(entry.getKey().getLeft(),
               new BloomIndexFileInfo(
                   FSUtils.getFileId(entry.getKey().getRight()),
-                  entry.getValue().getMinValue(),
-                  entry.getValue().getMaxValue()
+                  // NOTE: Here we assume that the type of the primary key field is string
+                  (String) unwrapStatisticValueWrapper(entry.getValue().getMinValue()),
+                  (String) unwrapStatisticValueWrapper(entry.getValue().getMaxValue())
               )));
         }
         return result.stream();

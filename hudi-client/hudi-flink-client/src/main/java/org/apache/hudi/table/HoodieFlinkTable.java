@@ -18,7 +18,6 @@
 
 package org.apache.hudi.table;
 
-import org.apache.avro.specific.SpecificRecordBase;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.data.HoodieData;
@@ -36,6 +35,8 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.metadata.FlinkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
+
+import org.apache.avro.specific.SpecificRecordBase;
 
 import java.util.List;
 

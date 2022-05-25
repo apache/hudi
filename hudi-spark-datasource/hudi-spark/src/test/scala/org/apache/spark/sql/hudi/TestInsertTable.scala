@@ -26,7 +26,7 @@ import org.apache.spark.sql.SaveMode
 
 import java.io.File
 
-class TestInsertTable extends TestHoodieSqlBase {
+class TestInsertTable extends HoodieSparkSqlTestBase {
 
   test("Test Insert Into") {
     withTempDir { tmp =>
@@ -626,6 +626,72 @@ class TestInsertTable extends TestHoodieSqlBase {
         // Note: spark sql batch write currently does not write actual content to the operation field
         checkAnswer(s"select id, _hoodie_operation from $tableName")(
           Seq(1, null)
+        )
+      }
+    }
+  }
+
+  test("Test enable hoodie.datasource.write.drop.partition.columns when write") {
+    spark.sql("set hoodie.sql.bulk.insert.enable = false")
+    Seq("mor", "cow").foreach { tableType =>
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             | create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long,
+             |  dt string
+             | ) using hudi
+             | partitioned by (dt)
+             | location '${tmp.getCanonicalPath}/$tableName'
+             | tblproperties (
+             |  primaryKey = 'id',
+             |  preCombineField = 'ts',
+             |  type = '$tableType',
+             |  hoodie.datasource.write.drop.partition.columns = 'true'
+             | )
+       """.stripMargin)
+        spark.sql(s"insert into $tableName partition(dt='2021-12-25') values (1, 'a1', 10, 1000)")
+        spark.sql(s"insert into $tableName partition(dt='2021-12-25') values (2, 'a2', 20, 1000)")
+        checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+          Seq(1, "a1", 10, 1000, "2021-12-25"),
+          Seq(2, "a2", 20, 1000, "2021-12-25")
+        )
+      }
+    }
+  }
+
+  test("Test nested field as primaryKey and preCombineField") {
+    withTempDir { tmp =>
+      Seq("cow", "mor").foreach { tableType =>
+        val tableName = generateTableName
+        // create table
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  name string,
+             |  price double,
+             |  ts long,
+             |  nestedcol struct<a1:string, a2:struct<b1:string, b2:struct<c1:string, c2:int>>>
+             |) using hudi
+             | location '${tmp.getCanonicalPath}/$tableName'
+             | options (
+             |  type = '$tableType',
+             |  primaryKey = 'nestedcol.a1',
+             |  preCombineField = 'nestedcol.a2.b2.c2'
+             | )
+       """.stripMargin)
+        // insert data to table
+        spark.sql(
+          s"""insert into $tableName values
+             |('name_1', 10, 1000, struct('a', struct('b', struct('c', 999)))),
+             |('name_2', 20, 2000, struct('a', struct('b', struct('c', 333))))
+             |""".stripMargin)
+        checkAnswer(s"select name, price, ts, nestedcol.a1, nestedcol.a2.b2.c2 from $tableName")(
+          Seq("name_1", 10.0, 1000, "a", 999)
         )
       }
     }

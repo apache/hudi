@@ -21,7 +21,6 @@ package org.apache.hudi.common.model;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import org.apache.hudi.common.util.Option;
 
-import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -30,13 +29,14 @@ import java.util.Map;
  * Statistics about a single Hoodie delta log operation.
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
+@SuppressWarnings("rawtypes")
 public class HoodieDeltaWriteStat extends HoodieWriteStat {
 
   private int logVersion;
   private long logOffset;
   private String baseFile;
   private List<String> logFiles = new ArrayList<>();
-  private Option<RecordsStats<? extends Map>> recordsStats = Option.empty();
+  private Option<Map<String, HoodieColumnRangeMetadata<Comparable>>> recordsStats = Option.empty();
 
   public void setLogVersion(int logVersion) {
     this.logVersion = logVersion;
@@ -74,23 +74,11 @@ public class HoodieDeltaWriteStat extends HoodieWriteStat {
     return logFiles;
   }
 
-  public void setRecordsStats(RecordsStats<? extends Map> stats) {
+  public void setRecordsStats(Map<String, HoodieColumnRangeMetadata<Comparable>> stats) {
     recordsStats = Option.of(stats);
   }
 
-  public Option<RecordsStats<? extends Map>> getRecordsStats() {
+  public Option<Map<String, HoodieColumnRangeMetadata<Comparable>>> getColumnStats() {
     return recordsStats;
-  }
-
-  public static class RecordsStats<T> implements Serializable {
-    private final T recordsStats;
-
-    public RecordsStats(T recordsStats) {
-      this.recordsStats = recordsStats;
-    }
-
-    public T getStats() {
-      return recordsStats;
-    }
   }
 }

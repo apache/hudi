@@ -39,6 +39,10 @@ class HoodieSparkSessionExtension extends (SparkSessionExtensions => Unit)
       }
     }
 
+    extensions.injectResolutionRule { session =>
+      sparkAdapter.createResolveHudiAlterTableCommand(session)
+    }
+
     HoodieAnalysis.customPostHocResolutionRules().foreach { rule =>
       extensions.injectPostHocResolutionRule { session =>
         rule(session)

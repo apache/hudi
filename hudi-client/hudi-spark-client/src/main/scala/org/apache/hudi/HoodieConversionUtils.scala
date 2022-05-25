@@ -18,6 +18,8 @@
 
 package org.apache.hudi
 
+import org.apache.hudi.common.config.TypedProperties
+
 object HoodieConversionUtils {
 
   def toJavaOption[T](opt: Option[T]): org.apache.hudi.common.util.Option[T] =
@@ -25,5 +27,11 @@ object HoodieConversionUtils {
 
   def toScalaOption[T](opt: org.apache.hudi.common.util.Option[T]): Option[T] =
     if (opt.isPresent) Some(opt.get) else None
+
+  def toProperties(params: Map[String, String]): TypedProperties = {
+    val props = new TypedProperties()
+    params.foreach(kv => props.setProperty(kv._1, kv._2))
+    props
+  }
 
 }

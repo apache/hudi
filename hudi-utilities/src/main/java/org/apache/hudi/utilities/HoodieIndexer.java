@@ -46,9 +46,14 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE_METADATA_INDEX_BLOOM_FILTER;
+import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS;
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getCompletedMetadataPartitions;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getInflightAndCompletedMetadataPartitions;
 import static org.apache.hudi.utilities.UtilHelpers.EXECUTE;
 import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE;
 import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE_AND_EXECUTE;
@@ -80,7 +85,7 @@ import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE_AND_EXECUTE;
 public class HoodieIndexer {
 
   private static final Logger LOG = LogManager.getLogger(HoodieIndexer.class);
-  private static final String DROP_INDEX = "dropindex";
+  static final String DROP_INDEX = "dropindex";
 
   private final HoodieIndexer.Config cfg;
   private TypedProperties props;
@@ -163,6 +168,19 @@ public class HoodieIndexer {
       LOG.error(String.format("Metadata is not enabled. Please set %s to true.", HoodieMetadataConfig.ENABLE.key()));
       return -1;
     }
+
+    // all inflight or completed metadata partitions have already been initialized
+    // so enable corresponding indexes in the props so that they're not deleted
+    Set<String> initializedMetadataPartitions = getInflightAndCompletedMetadataPartitions(metaClient.getTableConfig());
+    LOG.info("Setting props for: " + initializedMetadataPartitions);
+    initializedMetadataPartitions.forEach(p -> {
+      if (PARTITION_NAME_COLUMN_STATS.equals(p)) {
+        props.setProperty(ENABLE_METADATA_INDEX_COLUMN_STATS.key(), "true");
+      }
+      if (PARTITION_NAME_BLOOM_FILTERS.equals(p)) {
+        props.setProperty(ENABLE_METADATA_INDEX_BLOOM_FILTER.key(), "true");
+      }
+    });
 
     return UtilHelpers.retry(retry, () -> {
       switch (cfg.runningMode.toLowerCase()) {

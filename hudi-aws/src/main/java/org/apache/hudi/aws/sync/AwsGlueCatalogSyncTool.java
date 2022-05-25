@@ -45,7 +45,7 @@ public class AwsGlueCatalogSyncTool extends HiveSyncTool {
     super(props, new HiveConf(conf, HiveConf.class), fs);
   }
 
-  private AwsGlueCatalogSyncTool(HiveSyncConfig hiveSyncConfig, HiveConf hiveConf, FileSystem fs) {
+  public AwsGlueCatalogSyncTool(HiveSyncConfig hiveSyncConfig, HiveConf hiveConf, FileSystem fs) {
     super(hiveSyncConfig, hiveConf, fs);
   }
 

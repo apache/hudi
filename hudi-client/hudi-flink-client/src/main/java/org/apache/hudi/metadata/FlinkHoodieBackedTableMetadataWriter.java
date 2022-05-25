@@ -138,6 +138,11 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
         // reuses the same instant time without rollback first.  It is a no-op here as the
         // clean plan is the same, so we don't need to delete the requested and inflight instant
         // files in the active timeline.
+
+        // The metadata writer uses LAZY cleaning strategy without auto commit,
+        // write client then checks the heartbeat expiration when committing the instant,
+        // sets up the heartbeat explicitly to make the check pass.
+        writeClient.getHeartbeatClient().start(instantTime);
       }
 
       List<WriteStatus> statuses = preppedRecordList.size() > 0

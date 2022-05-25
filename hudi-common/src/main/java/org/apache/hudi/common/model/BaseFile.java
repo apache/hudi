@@ -31,26 +31,35 @@ import java.util.Objects;
 public class BaseFile implements Serializable {
 
   private static final long serialVersionUID = 1L;
+
   private transient FileStatus fileStatus;
   private final String fullPath;
+  private final String fileName;
   private long fileLen;
 
   public BaseFile(BaseFile dataFile) {
-    this.fileStatus = dataFile.fileStatus;
-    this.fullPath = dataFile.fullPath;
-    this.fileLen = dataFile.fileLen;
+    this(dataFile.fileStatus,
+        dataFile.fullPath,
+        dataFile.getFileName(),
+        dataFile.getFileLen());
   }
 
   public BaseFile(FileStatus fileStatus) {
-    this.fileStatus = fileStatus;
-    this.fullPath = fileStatus.getPath().toString();
-    this.fileLen = fileStatus.getLen();
+    this(fileStatus,
+        fileStatus.getPath().toString(),
+        fileStatus.getPath().getName(),
+        fileStatus.getLen());
   }
 
   public BaseFile(String filePath) {
-    this.fileStatus = null;
-    this.fullPath = filePath;
-    this.fileLen = -1;
+    this(null, filePath, getFileName(filePath), -1);
+  }
+
+  private BaseFile(FileStatus fileStatus, String fullPath, String fileName, long fileLen) {
+    this.fileStatus = fileStatus;
+    this.fullPath = fullPath;
+    this.fileLen = fileLen;
+    this.fileName = fileName;
   }
 
   public String getPath() {
@@ -58,7 +67,7 @@ public class BaseFile implements Serializable {
   }
 
   public String getFileName() {
-    return new Path(fullPath).getName();
+    return fileName;
   }
 
   public FileStatus getFileStatus() {
@@ -97,5 +106,9 @@ public class BaseFile implements Serializable {
   @Override
   public String toString() {
     return "BaseFile{fullPath=" + fullPath + ", fileLen=" + fileLen + '}';
+  }
+
+  private static String getFileName(String fullPath) {
+    return new Path(fullPath).getName();
   }
 }

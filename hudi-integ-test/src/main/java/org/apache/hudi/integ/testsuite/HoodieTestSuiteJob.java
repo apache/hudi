@@ -190,11 +190,12 @@ public class HoodieTestSuiteJob {
   }
 
   public void runTestSuite() {
+    WriterContext writerContext = null;
     try {
       WorkflowDag workflowDag = createWorkflowDag();
       log.info("Workflow Dag => " + DagUtils.convertDagToYaml(workflowDag));
       long startTime = System.currentTimeMillis();
-      WriterContext writerContext = new WriterContext(jsc, props, cfg, keyGenerator, sparkSession);
+      writerContext = new WriterContext(jsc, props, cfg, keyGenerator, sparkSession);
       writerContext.initContext(jsc);
       startOtherServicesIfNeeded(writerContext);
       if (this.cfg.saferSchemaEvolution) {
@@ -217,6 +218,9 @@ public class HoodieTestSuiteJob {
       log.error("Failed to run Test Suite ", e);
       throw new HoodieException("Failed to run Test Suite ", e);
     } finally {
+      if (writerContext != null) {
+        writerContext.shutdownResources();
+      }
       if (stopJsc) {
         stopQuietly();
       }
@@ -310,5 +314,8 @@ public class HoodieTestSuiteJob {
 
     @Parameter(names = {"--use-hudi-data-to-generate-updates"}, description = "Use data from hudi to generate updates for new batches ")
     public Boolean useHudiToGenerateUpdates = false;
+
+    @Parameter(names = {"--test-continuous-mode"}, description = "Tests continuous mode in deltastreamer.")
+    public Boolean testContinousMode = false;
   }
 }

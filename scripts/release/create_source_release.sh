@@ -72,6 +72,7 @@ rsync -a \
   --exclude ".idea" --exclude "*.iml" --exclude ".DS_Store" --exclude "build-target" \
   --exclude "docs/content" --exclude ".rubydeps" \
   --exclude "rfc" \
+  --exclude "docker/images" \
   . hudi-$RELEASE_VERSION
 
 tar czf ${RELEASE_DIR}/hudi-${RELEASE_VERSION}.src.tgz hudi-$RELEASE_VERSION

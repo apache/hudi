@@ -39,6 +39,7 @@ import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.internal.schema.io.FileBasedInternalSchemaStorageManager;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseActionExecutor;
 
@@ -131,7 +132,7 @@ public class CleanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends
         config.getCleanerParallelism());
     LOG.info("Using cleanerParallelism: " + cleanerParallelism);
 
-    context.setJobStatus(this.getClass().getSimpleName(), "Perform cleaning of partitions");
+    context.setJobStatus(this.getClass().getSimpleName(), "Perform cleaning of partitions: " + config.getTableName());
 
     Stream<Pair<String, CleanFileInfo>> filesToBeDeletedPerPartition =
         cleanerPlan.getFilePathsToBeDeletedPerPartition().entrySet().stream()
@@ -240,6 +241,14 @@ public class CleanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends
     List<HoodieInstant> pendingCleanInstants = table.getCleanTimeline()
         .filterInflightsAndRequested().getInstants().collect(Collectors.toList());
     if (pendingCleanInstants.size() > 0) {
+      // try to clean old history schema.
+      try {
+        FileBasedInternalSchemaStorageManager fss = new FileBasedInternalSchemaStorageManager(table.getMetaClient());
+        fss.cleanOldFiles(pendingCleanInstants.stream().map(is -> is.getTimestamp()).collect(Collectors.toList()));
+      } catch (Exception e) {
+        // we should not affect original clean logic. Swallow exception and log warn.
+        LOG.warn("failed to clean old history schema");
+      }
       pendingCleanInstants.forEach(hoodieInstant -> {
         if (table.getCleanTimeline().isEmpty(hoodieInstant)) {
           table.getActiveTimeline().deleteEmptyInstantIfExists(hoodieInstant);

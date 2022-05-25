@@ -19,9 +19,7 @@ package org.apache.hudi
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{GlobPattern, Path}
-import org.apache.hudi.HoodieBaseRelation.createBaseFileReader
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
-import org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath
 import org.apache.hudi.common.model.{FileSlice, HoodieRecord}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
@@ -61,14 +59,14 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
 
   protected override def composeRDD(fileSplits: Seq[HoodieMergeOnReadFileSplit],
                                     partitionSchema: StructType,
-                                    tableSchema: HoodieTableSchema,
+                                    dataSchema: HoodieTableSchema,
                                     requiredSchema: HoodieTableSchema,
                                     filters: Array[Filter]): HoodieMergeOnReadRDD = {
     val fullSchemaParquetReader = createBaseFileReader(
       spark = sqlContext.sparkSession,
       partitionSchema = partitionSchema,
-      tableSchema = tableSchema,
-      requiredSchema = tableSchema,
+      dataSchema = dataSchema,
+      requiredSchema = dataSchema,
       // This file-reader is used to read base file records, subsequently merging them with the records
       // stored in delta-log files. As such, we have to read _all_ records from the base file, while avoiding
       // applying any user-defined filtering _before_ we complete combining them w/ delta-log records (to make sure that
@@ -80,26 +78,26 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
       options = optParams,
       // NOTE: We have to fork the Hadoop Config here as Spark will be modifying it
       //       to configure Parquet reader appropriately
-      hadoopConf = new Configuration(conf)
+      hadoopConf = HoodieDataSourceHelper.getConfigurationWithInternalSchema(new Configuration(conf), internalSchema, metaClient.getBasePath, validCommits)
     )
 
     val requiredSchemaParquetReader = createBaseFileReader(
       spark = sqlContext.sparkSession,
       partitionSchema = partitionSchema,
-      tableSchema = tableSchema,
+      dataSchema = dataSchema,
       requiredSchema = requiredSchema,
       filters = filters ++ incrementalSpanRecordFilters,
       options = optParams,
       // NOTE: We have to fork the Hadoop Config here as Spark will be modifying it
       //       to configure Parquet reader appropriately
-      hadoopConf = new Configuration(conf)
+      hadoopConf = HoodieDataSourceHelper.getConfigurationWithInternalSchema(new Configuration(conf), requiredSchema.internalSchema, metaClient.getBasePath, validCommits)
     )
 
     val hoodieTableState = getTableState
     // TODO(HUDI-3639) implement incremental span record filtering w/in RDD to make sure returned iterator is appropriately
     //                 filtered, since file-reader might not be capable to perform filtering
     new HoodieMergeOnReadRDD(sqlContext.sparkContext, jobConf, fullSchemaParquetReader, requiredSchemaParquetReader,
-      tableSchema, requiredSchema, hoodieTableState, mergeType, fileSplits)
+      dataSchema, requiredSchema, hoodieTableState, mergeType, fileSplits)
   }
 
   override protected def collectFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): List[HoodieMergeOnReadFileSplit] = {
@@ -155,7 +153,7 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
     Seq(isNotNullFilter, largerThanFilter, lessThanFilter)
   }
 
-  override lazy val mandatoryColumns: Seq[String] = {
+  override lazy val mandatoryFields: Seq[String] = {
     // NOTE: This columns are required for Incremental flow to be able to handle the rows properly, even in
     //       cases when no columns are requested to be fetched (for ex, when using {@code count()} API)
     Seq(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.COMMIT_TIME_METADATA_FIELD) ++

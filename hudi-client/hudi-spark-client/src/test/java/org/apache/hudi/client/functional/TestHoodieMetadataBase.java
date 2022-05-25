@@ -23,6 +23,7 @@ import org.apache.hudi.client.HoodieTimelineArchiver;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
@@ -91,6 +92,10 @@ public class TestHoodieMetadataBase extends HoodieClientTestHarness {
   }
 
   public void init(HoodieTableType tableType, boolean enableMetadataTable) throws IOException {
+    init(tableType, enableMetadataTable, true, false, false);
+  }
+
+  public void init(HoodieTableType tableType, boolean enableMetadataTable, boolean enableColumnStats) throws IOException {
     init(tableType, enableMetadataTable, true, false, false);
   }
 
@@ -174,6 +179,10 @@ public class TestHoodieMetadataBase extends HoodieClientTestHarness {
 
   protected void doWriteOperation(HoodieTestTable testTable, String commitTime, WriteOperationType operationType) throws Exception {
     testTable.doWriteOperation(commitTime, operationType, emptyList(), asList("p1", "p2"), 3);
+  }
+
+  protected HoodieCommitMetadata doWriteOperationWithMeta(HoodieTestTable testTable, String commitTime, WriteOperationType operationType) throws Exception {
+    return testTable.doWriteOperation(commitTime, operationType, emptyList(), asList("p1", "p2"), 3);
   }
 
   protected void doClean(HoodieTestTable testTable, String commitTime, List<String> commitsToClean) throws IOException {

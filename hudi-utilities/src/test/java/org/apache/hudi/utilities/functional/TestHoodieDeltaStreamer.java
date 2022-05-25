@@ -60,6 +60,7 @@ import org.apache.hudi.utilities.HoodieClusteringJob;
 import org.apache.hudi.utilities.HoodieIndexer;
 import org.apache.hudi.utilities.deltastreamer.DeltaSync;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
+import org.apache.hudi.utilities.deltastreamer.NoNewDataTerminationStrategy;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.schema.SparkAvroPostProcessor;
@@ -104,6 +105,7 @@ import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.StructField;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
@@ -123,6 +125,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
@@ -380,7 +383,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
             ret = false;
           }
         }
-        return true;
+        return ret;
       });
       res.get(timeoutInSecs, TimeUnit.SECONDS);
     }
@@ -737,17 +740,29 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   }
 
   @Test
+  public void testUpsertsCOWContinuousModeShutdownGracefully() throws Exception {
+    testUpsertsContinuousMode(HoodieTableType.COPY_ON_WRITE, "continuous_cow", true);
+  }
+
+  @Test
   public void testUpsertsMORContinuousMode() throws Exception {
     testUpsertsContinuousMode(HoodieTableType.MERGE_ON_READ, "continuous_mor");
   }
 
   private void testUpsertsContinuousMode(HoodieTableType tableType, String tempDir) throws Exception {
+    testUpsertsContinuousMode(tableType, tempDir, false);
+  }
+
+  private void testUpsertsContinuousMode(HoodieTableType tableType, String tempDir, boolean testShutdownGracefully) throws Exception {
     String tableBasePath = dfsBasePath + "/" + tempDir;
     // Keep it higher than batch-size to test continuous mode
     int totalRecords = 3000;
     // Initial bulk insert
     HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT);
     cfg.continuousMode = true;
+    if (testShutdownGracefully) {
+      cfg.postWriteTerminationStrategyClass = NoNewDataTerminationStrategy.class.getName();
+    }
     cfg.tableType = tableType.name();
     cfg.configs.add(String.format("%s=%d", SourceConfigs.MAX_UNIQUE_RECORDS_PROP, totalRecords));
     cfg.configs.add(String.format("%s=false", HoodieCompactionConfig.AUTO_CLEAN.key()));
@@ -761,6 +776,9 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       }
       TestHelpers.assertRecordCount(totalRecords, tableBasePath, sqlContext);
       TestHelpers.assertDistanceCount(totalRecords, tableBasePath, sqlContext);
+      if (testShutdownGracefully) {
+        TestDataSource.returnEmptyBatch = true;
+      }
       return true;
     });
   }
@@ -779,8 +797,35 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       }
     });
     TestHelpers.waitTillCondition(condition, dsFuture, 360);
-    ds.shutdownGracefully();
-    dsFuture.get();
+    if (cfg != null && !cfg.postWriteTerminationStrategyClass.isEmpty()) {
+      awaitDeltaStreamerShutdown(ds);
+    } else {
+      ds.shutdownGracefully();
+      dsFuture.get();
+    }
+  }
+
+  static void awaitDeltaStreamerShutdown(HoodieDeltaStreamer ds) throws InterruptedException {
+    // await until deltastreamer shuts down on its own
+    boolean shutDownRequested = false;
+    int timeSoFar = 0;
+    while (!shutDownRequested) {
+      shutDownRequested = ds.getDeltaSyncService().isShutdownRequested();
+      Thread.sleep(500);
+      timeSoFar += 500;
+      if (timeSoFar > (2 * 60 * 1000)) {
+        Assertions.fail("Deltastreamer should have shutdown by now");
+      }
+    }
+    boolean shutdownComplete = false;
+    while (!shutdownComplete) {
+      shutdownComplete = ds.getDeltaSyncService().isShutdown();
+      Thread.sleep(500);
+      timeSoFar += 500;
+      if (timeSoFar > (2 * 60 * 1000)) {
+        Assertions.fail("Deltastreamer should have shutdown by now");
+      }
+    }
   }
 
   static void deltaStreamerTestRunner(HoodieDeltaStreamer ds, Function<Boolean, Boolean> condition) throws Exception {
@@ -1028,17 +1073,20 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     });
   }
 
-  @Disabled("HUDI-3710 to fix the ConcurrentModificationException")
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testHoodieAsyncClusteringJob(boolean shouldPassInClusteringInstantTime) throws Exception {
     String tableBasePath = dfsBasePath + "/asyncClusteringJob";
-
-    HoodieDeltaStreamer ds = initialHoodieDeltaStreamer(tableBasePath, 3000, "true");
+    HoodieDeltaStreamer ds = initialHoodieDeltaStreamer(tableBasePath, 3000, "false");
+    CountDownLatch countDownLatch = new CountDownLatch(1);
 
     deltaStreamerTestRunner(ds, (r) -> {
       TestHelpers.assertAtLeastNCommits(2, tableBasePath, dfs);
+      countDownLatch.countDown();
+      return true;
+    });
 
+    if (countDownLatch.await(2, TimeUnit.MINUTES)) {
       Option<String> scheduleClusteringInstantTime = Option.empty();
       try {
         HoodieClusteringJob scheduleClusteringJob =
@@ -1046,7 +1094,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         scheduleClusteringInstantTime = scheduleClusteringJob.doSchedule();
       } catch (Exception e) {
         LOG.warn("Schedule clustering failed", e);
-        return false;
+        Assertions.fail("Schedule clustering failed", e);
       }
       if (scheduleClusteringInstantTime.isPresent()) {
         LOG.info("Schedule clustering success, now cluster with instant time " + scheduleClusteringInstantTime.get());
@@ -1054,13 +1102,15 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
             shouldPassInClusteringInstantTime ? scheduleClusteringInstantTime.get() : null, false);
         HoodieClusteringJob clusterClusteringJob = new HoodieClusteringJob(jsc, clusterClusteringConfig);
         clusterClusteringJob.cluster(clusterClusteringConfig.retry);
+        TestHelpers.assertAtLeastNReplaceCommits(1, tableBasePath, dfs);
         LOG.info("Cluster success");
       } else {
-        LOG.warn("Schedule clustering failed");
+        LOG.warn("Clustering execution failed");
+        Assertions.fail("Clustering execution failed");
       }
-      TestHelpers.assertAtLeastNReplaceCommits(2, tableBasePath, dfs);
-      return true;
-    });
+    } else {
+      Assertions.fail("Deltastreamer should have completed 2 commits.");
+    }
   }
 
   @Test
@@ -1459,20 +1509,24 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     testUtils.sendMessages(topicName, Helpers.jsonifyRecords(dataGenerator.generateInsertsAsPerSchema("000", numRecords, HoodieTestDataGenerator.TRIP_SCHEMA)));
   }
 
-  private void prepareParquetDFSSource(boolean useSchemaProvider, boolean hasTransformer) throws IOException {
+  private void prepareParquetDFSSource(boolean useSchemaProvider, boolean hasTransformer, String emptyBatchParam) throws IOException {
     prepareParquetDFSSource(useSchemaProvider, hasTransformer, "source.avsc", "target.avsc",
-        PROPS_FILENAME_TEST_PARQUET, PARQUET_SOURCE_ROOT, false);
+        PROPS_FILENAME_TEST_PARQUET, PARQUET_SOURCE_ROOT, false, "partition_path", emptyBatchParam);
+  }
+
+  private void prepareParquetDFSSource(boolean useSchemaProvider, boolean hasTransformer) throws IOException {
+    prepareParquetDFSSource(useSchemaProvider, hasTransformer, "");
   }
 
   private void prepareParquetDFSSource(boolean useSchemaProvider, boolean hasTransformer, String sourceSchemaFile, String targetSchemaFile,
-                                       String propsFileName, String parquetSourceRoot, boolean addCommonProps) throws IOException {
+                                       String propsFileName, String parquetSourceRoot, boolean addCommonProps, String partitionPath) throws IOException {
     prepareParquetDFSSource(useSchemaProvider, hasTransformer, sourceSchemaFile, targetSchemaFile, propsFileName, parquetSourceRoot, addCommonProps,
-        "partition_path");
+        partitionPath, "");
   }
 
   private void prepareParquetDFSSource(boolean useSchemaProvider, boolean hasTransformer, String sourceSchemaFile, String targetSchemaFile,
                                        String propsFileName, String parquetSourceRoot, boolean addCommonProps,
-                                       String partitionPath) throws IOException {
+                                       String partitionPath, String emptyBatchParam) throws IOException {
     // Properties used for testing delta-streamer with Parquet source
     TypedProperties parquetProps = new TypedProperties();
 
@@ -1491,6 +1545,9 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       }
     }
     parquetProps.setProperty("hoodie.deltastreamer.source.dfs.root", parquetSourceRoot);
+    if (!StringUtils.isNullOrEmpty(emptyBatchParam)) {
+      parquetProps.setProperty(TestParquetDFSSourceEmptyBatch.RETURN_EMPTY_BATCH, emptyBatchParam);
+    }
     UtilitiesTestBase.Helpers.savePropsToDFS(parquetProps, dfs, dfsBasePath + "/" + propsFileName);
   }
 
@@ -1499,7 +1556,13 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   }
 
   private void testParquetDFSSource(boolean useSchemaProvider, List<String> transformerClassNames, boolean testEmptyBatch) throws Exception {
-    prepareParquetDFSSource(useSchemaProvider, transformerClassNames != null);
+    PARQUET_SOURCE_ROOT = dfsBasePath + "/parquetFilesDfs" + testNum;
+    int parquetRecordsCount = 10;
+    boolean hasTransformer = transformerClassNames != null && !transformerClassNames.isEmpty();
+    prepareParquetDFSFiles(parquetRecordsCount, PARQUET_SOURCE_ROOT, FIRST_PARQUET_FILE_NAME, false, null, null);
+    prepareParquetDFSSource(useSchemaProvider, hasTransformer, "source.avsc", "target.avsc", PROPS_FILENAME_TEST_PARQUET,
+        PARQUET_SOURCE_ROOT, false, "partition_path", testEmptyBatch ? "1" : "");
+
     String tableBasePath = dfsBasePath + "/test_parquet_table" + testNum;
     HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(
         TestHelpers.makeConfig(tableBasePath, WriteOperationType.INSERT, testEmptyBatch ? TestParquetDFSSourceEmptyBatch.class.getName()
@@ -1507,21 +1570,37 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
             transformerClassNames, PROPS_FILENAME_TEST_PARQUET, false,
             useSchemaProvider, 100000, false, null, null, "timestamp", null), jsc);
     deltaStreamer.sync();
-    TestHelpers.assertRecordCount(PARQUET_NUM_RECORDS, tableBasePath, sqlContext);
-    testNum++;
+    TestHelpers.assertRecordCount(parquetRecordsCount, tableBasePath, sqlContext);
 
     if (testEmptyBatch) {
       prepareParquetDFSFiles(100, PARQUET_SOURCE_ROOT, "2.parquet", false, null, null);
-      // parquet source to return empty batch
-      TestParquetDFSSourceEmptyBatch.returnEmptyBatch = true;
       deltaStreamer.sync();
       // since we mimic'ed empty batch, total records should be same as first sync().
-      TestHelpers.assertRecordCount(PARQUET_NUM_RECORDS, tableBasePath, sqlContext);
+      TestHelpers.assertRecordCount(parquetRecordsCount, tableBasePath, sqlContext);
       HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(tableBasePath).setConf(jsc.hadoopConfiguration()).build();
 
       // validate table schema fetches valid schema from last but one commit.
       TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
       assertNotEquals(tableSchemaResolver.getTableAvroSchema(), Schema.create(Schema.Type.NULL).toString());
+    }
+
+    // proceed w/ non empty batch.
+    prepareParquetDFSFiles(100, PARQUET_SOURCE_ROOT, "3.parquet", false, null, null);
+    deltaStreamer.sync();
+    TestHelpers.assertRecordCount(parquetRecordsCount + 100, tableBasePath, sqlContext);
+    // validate commit metadata for all completed commits to have valid schema in extra metadata.
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(tableBasePath).setConf(jsc.hadoopConfiguration()).build();
+    metaClient.reloadActiveTimeline().getCommitsTimeline().filterCompletedInstants().getInstants().forEach(entry -> assertValidSchemaInCommitMetadata(entry, metaClient));
+    testNum++;
+  }
+
+  private void assertValidSchemaInCommitMetadata(HoodieInstant instant, HoodieTableMetaClient metaClient) {
+    try {
+      HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
+          .fromBytes(metaClient.getActiveTimeline().getInstantDetails(instant).get(), HoodieCommitMetadata.class);
+      assertFalse(StringUtils.isNullOrEmpty(commitMetadata.getMetadata(HoodieCommitMetadata.SCHEMA_KEY)));
+    } catch (IOException ioException) {
+      throw new HoodieException("Failed to parse commit metadata for " + instant.toString());
     }
   }
 
@@ -1683,7 +1762,6 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     testParquetDFSSource(false, null, true);
   }
 
-  @Disabled("HUDI-3707 To investigate problem with schema provider and transformer")
   @Test
   public void testParquetDFSSourceWithoutSchemaProviderAndTransformer() throws Exception {
     testParquetDFSSource(false, Collections.singletonList(TripsWithDistanceTransformer.class.getName()));
@@ -1694,7 +1772,6 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     testParquetDFSSource(true, null);
   }
 
-  @Disabled("HUDI-3707 To investigate problem with schema provider and transformer")
   @Test
   public void testParquetDFSSourceWithSchemaFilesAndTransformer() throws Exception {
     testParquetDFSSource(true, Collections.singletonList(TripsWithDistanceTransformer.class.getName()));
@@ -1705,7 +1782,6 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     testORCDFSSource(false, null);
   }
 
-  @Disabled("HUDI-3707 To investigate problem with schema provider and transformer")
   @Test
   public void testORCDFSSourceWithSchemaProviderAndWithTransformer() throws Exception {
     testORCDFSSource(true, Collections.singletonList(TripsWithDistanceTransformer.class.getName()));
@@ -1800,7 +1876,6 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     testCsvDFSSource(true, '\t', false, Collections.singletonList(TripsWithDistanceTransformer.class.getName()));
   }
 
-  @Disabled("HUDI-3707 To investigate problem with schema provider and transformer")
   @Test
   public void testCsvDFSSourceWithHeaderAndSepWithSchemaProviderAndTransformer() throws Exception {
     // The CSV files have header, the columns are separated by '\t'
@@ -1843,7 +1918,6 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertTrue(e.getMessage().contains("cannot resolve '`begin_lat`' given input columns:"));
   }
 
-  @Disabled("HUDI-3707 To investigate problem with schema provider and transformer")
   @Test
   public void testCsvDFSSourceNoHeaderWithSchemaProviderAndTransformer() throws Exception {
     // The CSV files do not have header, the columns are separated by '\t'

@@ -34,6 +34,7 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.log.block.HoodieParquetDataBlock;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 
 import org.apache.avro.Schema;
@@ -100,7 +101,7 @@ public class InputFormatTestUtil {
       throws IOException {
     for (int i = 0; i < numberOfFiles; i++) {
       Files.createFile(partitionPath.toPath()
-          .resolve(FSUtils.makeDataFileName(commitNumber, TEST_WRITE_TOKEN, fileId + i, baseFileExtension)));
+          .resolve(FSUtils.makeBaseFileName(commitNumber, TEST_WRITE_TOKEN, fileId + i, baseFileExtension)));
     }
     return partitionPath;
   }
@@ -117,7 +118,7 @@ public class InputFormatTestUtil {
     List<File> toUpdateList = dataFiles.subList(0, Math.min(numberOfFilesUpdated, dataFiles.size()));
     for (File file : toUpdateList) {
       String fileId = FSUtils.getFileId(file.getName());
-      Files.createFile(directory.toPath().resolve(FSUtils.makeDataFileName(newCommit, TEST_WRITE_TOKEN, fileId,
+      Files.createFile(directory.toPath().resolve(FSUtils.makeBaseFileName(newCommit, TEST_WRITE_TOKEN, fileId,
           baseFileExtension)));
     }
   }
@@ -185,7 +186,7 @@ public class InputFormatTestUtil {
   public static void setupSnapshotScanMode(JobConf jobConf) {
     setupSnapshotScanMode(jobConf, false);
   }
-  
+
   private static void setupSnapshotScanMode(JobConf jobConf, boolean includePending) {
     setUpScanMode(jobConf);
     String includePendingCommitsName =
@@ -269,7 +270,7 @@ public class InputFormatTestUtil {
       String commitNumber) throws IOException {
     AvroParquetWriter parquetWriter;
     for (int i = 0; i < numberOfFiles; i++) {
-      String fileId = FSUtils.makeDataFileName(commitNumber, TEST_WRITE_TOKEN, "fileid" + i, HoodieFileFormat.PARQUET.getFileExtension());
+      String fileId = FSUtils.makeBaseFileName(commitNumber, TEST_WRITE_TOKEN, "fileid" + i, HoodieFileFormat.PARQUET.getFileExtension());
       parquetWriter = new AvroParquetWriter(new Path(partitionPath.resolve(fileId).toString()), schema);
       try {
         for (GenericRecord record : generateAvroRecords(schema, numberOfRecords, commitNumber, fileId)) {
@@ -285,7 +286,7 @@ public class InputFormatTestUtil {
       String commitNumber) throws Exception {
     AvroParquetWriter parquetWriter;
     for (int i = 0; i < numberOfFiles; i++) {
-      String fileId = FSUtils.makeDataFileName(commitNumber, "1", "fileid" + i, HoodieFileFormat.PARQUET.getFileExtension());
+      String fileId = FSUtils.makeBaseFileName(commitNumber, "1", "fileid" + i, HoodieFileFormat.PARQUET.getFileExtension());
       parquetWriter = new AvroParquetWriter(new Path(partitionPath.resolve(fileId).toString()), schema);
       try {
         List<IndexedRecord> records = SchemaTestUtil.generateTestRecords(0, numberOfRecords);
@@ -317,7 +318,7 @@ public class InputFormatTestUtil {
     File fileToUpdate = Objects.requireNonNull(directory.listFiles((dir, name) -> name.endsWith("parquet")))[0];
     String fileId = FSUtils.getFileId(fileToUpdate.getName());
     File dataFile = new File(directory,
-        FSUtils.makeDataFileName(newCommit, TEST_WRITE_TOKEN, fileId, HoodieFileFormat.PARQUET.getFileExtension()));
+        FSUtils.makeBaseFileName(newCommit, TEST_WRITE_TOKEN, fileId, HoodieFileFormat.PARQUET.getFileExtension()));
     try (AvroParquetWriter parquetWriter = new AvroParquetWriter(new Path(dataFile.getAbsolutePath()), schema)) {
       for (GenericRecord record : generateAvroRecords(schema, totalNumberOfRecords, originalCommit, fileId)) {
         if (numberOfRecordsToUpdate > 0) {
@@ -467,8 +468,8 @@ public class InputFormatTestUtil {
             new LocalFileSystem(lfs),
             "0",
             new Path(basePath.toAbsolutePath().toString()),
-            new Path(partitionPath.toAbsolutePath().toString())
-        );
+            new Path(partitionPath.toAbsolutePath().toString()),
+            Option.of(HoodieFileFormat.PARQUET));
 
     partitionMetadata.trySave((int) (Math.random() * 1000));
   }

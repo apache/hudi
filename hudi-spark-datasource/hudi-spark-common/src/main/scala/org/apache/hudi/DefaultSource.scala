@@ -23,10 +23,12 @@ import org.apache.hudi.DataSourceWriteOptions.{BOOTSTRAP_OPERATION_OPT_VAL, OPER
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
+import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.config.HoodieWriteConfig.SCHEMA_EVOLUTION_ENABLE
 import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.log4j.LogManager
-import org.apache.spark.sql.execution.datasources.DataSource
 import org.apache.spark.sql.execution.streaming.{Sink, Source}
 import org.apache.spark.sql.hudi.streaming.HoodieStreamSource
 import org.apache.spark.sql.sources._
@@ -46,6 +48,7 @@ class DefaultSource extends RelationProvider
   with DataSourceRegister
   with StreamSinkProvider
   with StreamSourceProvider
+  with SparkAdapterSupport
   with Serializable {
 
   SparkSession.getActiveSession.foreach { spark =>
@@ -107,8 +110,7 @@ class DefaultSource extends RelationProvider
         case (COPY_ON_WRITE, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) |
              (COPY_ON_WRITE, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, false) |
              (MERGE_ON_READ, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, false) =>
-          new BaseFileOnlyRelation(sqlContext, metaClient, parameters, userSchema, globPaths)
-
+          resolveBaseFileOnlyRelation(sqlContext, globPaths, userSchema, metaClient, parameters)
         case (COPY_ON_WRITE, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
           new IncrementalRelation(sqlContext, parameters, userSchema, metaClient)
 
@@ -128,6 +130,11 @@ class DefaultSource extends RelationProvider
     }
   }
 
+  def getValidCommits(metaClient: HoodieTableMetaClient): String = {
+    metaClient
+      .getCommitsAndCompactionTimeline.filterCompletedInstants.getInstants.toArray().map(_.asInstanceOf[HoodieInstant].getFileName).mkString(",")
+  }
+
   /**
     * This DataSource API is used for writing the DataFrame at the destination. For now, we are returning a dummy
     * relation here because Spark does not really make use of the relation returned, and just returns an empty
@@ -136,7 +143,7 @@ class DefaultSource extends RelationProvider
     *
     * TODO: Revisit to return a concrete relation here when we support CREATE TABLE AS for Hudi with DataSource API.
     *       That is the only case where Spark seems to actually need a relation to be returned here
-    *       [[DataSource.writeAndRead()]]
+    *       [[org.apache.spark.sql.execution.datasources.DataSource.writeAndRead()]]
     *
     * @param sqlContext Spark SQL Context
     * @param mode Mode for saving the DataFrame at the destination
@@ -201,4 +208,32 @@ class DefaultSource extends RelationProvider
                             parameters: Map[String, String]): Source = {
     new HoodieStreamSource(sqlContext, metadataPath, schema, parameters)
   }
+
+  private def resolveBaseFileOnlyRelation(sqlContext: SQLContext,
+                                          globPaths: Seq[Path],
+                                          userSchema: Option[StructType],
+                                          metaClient: HoodieTableMetaClient,
+                                          optParams: Map[String, String]) = {
+    val baseRelation = new BaseFileOnlyRelation(sqlContext, metaClient, optParams, userSchema, globPaths)
+    val enableSchemaOnRead: Boolean = !tryFetchInternalSchema(metaClient).isEmptySchema
+
+    // NOTE: We fallback to [[HadoopFsRelation]] in all of the cases except ones requiring usage of
+    //       [[BaseFileOnlyRelation]] to function correctly. This is necessary to maintain performance parity w/
+    //       vanilla Spark, since some of the Spark optimizations are predicated on the using of [[HadoopFsRelation]].
+    //
+    //       You can check out HUDI-3896 for more details
+    if (enableSchemaOnRead) {
+      baseRelation
+    } else {
+      baseRelation.toHadoopFsRelation
+    }
+  }
+
+  private def tryFetchInternalSchema(metaClient: HoodieTableMetaClient) =
+    try {
+      new TableSchemaResolver(metaClient).getTableInternalSchemaFromCommitMetadata
+        .orElse(InternalSchema.getEmptyInternalSchema)
+    } catch {
+      case _: Exception => InternalSchema.getEmptyInternalSchema
+    }
 }

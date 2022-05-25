@@ -50,6 +50,7 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -69,6 +70,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieInsertException;
+import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.metadata.HoodieTableMetadata;
@@ -93,6 +95,13 @@ import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_METADATA_PARTITIONS;
+import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.deleteMetadataPartition;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.deleteMetadataTable;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getCompletedMetadataPartitions;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.metadataPartitionExists;
 
 /**
  * Abstract implementation of a HoodieTable.
@@ -557,7 +566,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
 
   private void deleteInvalidFilesByPartitions(HoodieEngineContext context, Map<String, List<Pair<String, String>>> invalidFilesByPartition) {
     // Now delete partially written files
-    context.setJobStatus(this.getClass().getSimpleName(), "Delete invalid files generated during the write operation");
+    context.setJobStatus(this.getClass().getSimpleName(), "Delete invalid files generated during the write operation: " + config.getTableName());
     context.map(new ArrayList<>(invalidFilesByPartition.values()), partitionWithFileList -> {
       final FileSystem fileSystem = metaClient.getFs();
       LOG.info("Deleting invalid data files=" + partitionWithFileList);
@@ -633,7 +642,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
         }
 
         // Now delete partially written files
-        context.setJobStatus(this.getClass().getSimpleName(), "Delete all partially written files");
+        context.setJobStatus(this.getClass().getSimpleName(), "Delete all partially written files: " + config.getTableName());
         deleteInvalidFilesByPartitions(context, invalidPathsByPartition);
 
         // Now ensure the deleted files disappear
@@ -656,7 +665,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
    */
   private void waitForAllFiles(HoodieEngineContext context, Map<String, List<Pair<String, String>>> groupByPartition, FileVisibility visibility) {
     // This will either ensure all files to be deleted are present.
-    context.setJobStatus(this.getClass().getSimpleName(), "Wait for all files to appear/disappear");
+    context.setJobStatus(this.getClass().getSimpleName(), "Wait for all files to appear/disappear: " + config.getTableName());
     boolean checkPassed =
         context.map(new ArrayList<>(groupByPartition.entrySet()), partitionWithFileList -> waitForCondition(partitionWithFileList.getKey(),
             partitionWithFileList.getValue().stream(), visibility), config.getFinalizeWriteParallelism())
@@ -751,6 +760,10 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
     return metaClient.getTableConfig().getLogFileFormat();
   }
 
+  public Option<HoodieFileFormat> getPartitionMetafileFormat() {
+    return metaClient.getTableConfig().getPartitionMetafileFormat();
+  }
+
   public String getBaseFileExtension() {
     return getBaseFileFormat().getFileExtension();
   }
@@ -800,6 +813,94 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
     // Each engine is expected to override this and
     // provide the actual metadata writer, if enabled.
     return Option.empty();
+  }
+
+  /**
+   * Deletes the metadata table if the writer disables metadata table with hoodie.metadata.enable=false
+   */
+  public void maybeDeleteMetadataTable() {
+    if (shouldExecuteMetadataTableDeletion()) {
+      try {
+        LOG.info("Deleting metadata table because it is disabled in writer.");
+        deleteMetadataTable(config.getBasePath(), context);
+        clearMetadataTablePartitionsConfig(Option.empty(), true);
+      } catch (HoodieMetadataException e) {
+        throw new HoodieException("Failed to delete metadata table.", e);
+      }
+    }
+  }
+
+  /**
+   * Deletes the metadata partition if the writer disables any metadata index.
+   */
+  public void deleteMetadataIndexIfNecessary() {
+    Stream.of(MetadataPartitionType.values()).forEach(partitionType -> {
+      if (shouldDeleteMetadataPartition(partitionType)) {
+        try {
+          LOG.info("Deleting metadata partition because it is disabled in writer: " + partitionType.name());
+          if (metadataPartitionExists(metaClient.getBasePath(), context, partitionType)) {
+            deleteMetadataPartition(metaClient.getBasePath(), context, partitionType);
+          }
+          clearMetadataTablePartitionsConfig(Option.of(partitionType), false);
+        } catch (HoodieMetadataException e) {
+          throw new HoodieException("Failed to delete metadata partition: " + partitionType.name(), e);
+        }
+      }
+    });
+  }
+
+  private boolean shouldDeleteMetadataPartition(MetadataPartitionType partitionType) {
+    // Only delete metadata table partition when all the following conditions are met:
+    // (1) This is data table.
+    // (2) Index corresponding to this metadata partition is disabled in HoodieWriteConfig.
+    // (3) The completed metadata partitions in table config contains this partition.
+    // NOTE: Inflight metadata partitions are not considered as they could have been inflight due to async indexer.
+    if (HoodieTableMetadata.isMetadataTable(metaClient.getBasePath()) || !config.isMetadataTableEnabled()) {
+      return false;
+    }
+    boolean metadataIndexDisabled;
+    switch (partitionType) {
+      // NOTE: FILES partition type is always considered in sync with hoodie.metadata.enable.
+      //       It cannot be the case that metadata is enabled but FILES is disabled.
+      case COLUMN_STATS:
+        metadataIndexDisabled = !config.isMetadataColumnStatsIndexEnabled();
+        break;
+      case BLOOM_FILTERS:
+        metadataIndexDisabled = !config.isMetadataBloomFilterIndexEnabled();
+        break;
+      default:
+        LOG.debug("Not a valid metadata partition type: " + partitionType.name());
+        return false;
+    }
+    return metadataIndexDisabled
+        && getCompletedMetadataPartitions(metaClient.getTableConfig()).contains(partitionType.getPartitionPath());
+  }
+
+  private boolean shouldExecuteMetadataTableDeletion() {
+    // Only execute metadata table deletion when all the following conditions are met
+    // (1) This is data table
+    // (2) Metadata table is disabled in HoodieWriteConfig for the writer
+    // (3) Check `HoodieTableConfig.TABLE_METADATA_PARTITIONS`.  Either the table config
+    // does not exist, or the table config is non-empty indicating that metadata table
+    // partitions are ready to use
+    return !HoodieTableMetadata.isMetadataTable(metaClient.getBasePath())
+        && !config.isMetadataTableEnabled()
+        && !metaClient.getTableConfig().getMetadataPartitions().isEmpty();
+  }
+
+  /**
+   * Clears hoodie.table.metadata.partitions in hoodie.properties
+   */
+  private void clearMetadataTablePartitionsConfig(Option<MetadataPartitionType> partitionType, boolean clearAll) {
+    Set<String> partitions = getCompletedMetadataPartitions(metaClient.getTableConfig());
+    if (clearAll && partitions.size() > 0) {
+      LOG.info("Clear hoodie.table.metadata.partitions in hoodie.properties");
+      metaClient.getTableConfig().setValue(TABLE_METADATA_PARTITIONS.key(), EMPTY_STRING);
+      HoodieTableConfig.update(metaClient.getFs(), new Path(metaClient.getMetaPath()), metaClient.getTableConfig().getProps());
+    } else if (partitions.remove(partitionType.get().getPartitionPath())) {
+      metaClient.getTableConfig().setValue(HoodieTableConfig.TABLE_METADATA_PARTITIONS.key(), String.join(",", partitions));
+      HoodieTableConfig.update(metaClient.getFs(), new Path(metaClient.getMetaPath()), metaClient.getTableConfig().getProps());
+    }
   }
 
   public HoodieTableMetadata getMetadataTable() {

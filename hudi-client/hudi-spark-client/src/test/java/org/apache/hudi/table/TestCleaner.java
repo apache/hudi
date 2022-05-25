@@ -744,7 +744,7 @@ public class TestCleaner extends HoodieClientTestBase {
 
     for (int i = 0; i < cleanCount; i++, startInstant++) {
       String commitTime = makeNewCommitTime(startInstant, "%09d");
-      createCleanMetadata(commitTime + "", false, true);
+      createEmptyCleanMetadata(commitTime + "", false);
     }
 
     int instantClean = startInstant;
@@ -1509,6 +1509,7 @@ public class TestCleaner extends HoodieClientTestBase {
   protected static HoodieCommitMetadata generateCommitMetadata(
       String instantTime, Map<String, List<String>> partitionToFilePaths) {
     HoodieCommitMetadata metadata = new HoodieCommitMetadata();
+    metadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, HoodieTestTable.PHONY_TABLE_SCHEMA);
     partitionToFilePaths.forEach((partitionPath, fileList) -> fileList.forEach(f -> {
       HoodieWriteStat writeStat = new HoodieWriteStat();
       writeStat.setPartitionPath(partitionPath);

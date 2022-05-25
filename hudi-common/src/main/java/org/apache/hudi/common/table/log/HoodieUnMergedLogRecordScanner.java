@@ -18,7 +18,7 @@
 
 package org.apache.hudi.common.table.log;
 
-import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.Option;
@@ -56,7 +56,7 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordReade
   }
 
   @Override
-  protected void processNextDeletedKey(HoodieKey key) {
+  protected void processNextDeletedRecord(DeleteRecord deleteRecord) {
     throw new IllegalStateException("Not expected to see delete records in this log-scan mode. Check Job Config");
   }
 
@@ -64,9 +64,9 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordReade
    * A callback for log record scanner.
    */
   @FunctionalInterface
-  public static interface LogRecordScannerCallback {
+  public interface LogRecordScannerCallback {
 
-    public void apply(HoodieRecord<? extends HoodieRecordPayload> record) throws Exception;
+    void apply(HoodieRecord<? extends HoodieRecordPayload> record) throws Exception;
   }
 
   /**

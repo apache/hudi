@@ -33,6 +33,9 @@ import org.apache.spark.sql.execution.datasources.{FilePartition, LogicalRelatio
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.DataType
 import org.apache.spark.sql.{HoodieCatalystExpressionUtils, Row, SparkSession}
+import org.apache.spark.sql.{Row, SparkSession}
+import org.apache.spark.sql.catalyst.rules.Rule
+import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 
 import java.util.Locale
 
@@ -167,4 +170,14 @@ trait SparkAdapter extends Serializable {
         other
     }
   }
+
+  /**
+    * Create customresolutionRule to deal with alter command for hudi.
+    */
+  def createResolveHudiAlterTableCommand(sparkSession: SparkSession): Rule[LogicalPlan]
+
+  /**
+    * Create instance of [[ParquetFileFormat]]
+    */
+  def createHoodieParquetFileFormat(appendPartitionValues: Boolean): Option[ParquetFileFormat]
 }

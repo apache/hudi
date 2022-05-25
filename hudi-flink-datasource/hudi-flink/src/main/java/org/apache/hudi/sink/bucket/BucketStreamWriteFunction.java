@@ -76,11 +76,6 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
   private Set<String> incBucketIndex;
 
   /**
-   * Returns whether this is an empty table.
-   */
-  private boolean isEmptyTable;
-
-  /**
    * Constructs a BucketStreamWriteFunction.
    *
    * @param config The config options
@@ -99,7 +94,6 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
     this.bucketToLoad = getBucketToLoad();
     this.bucketIndex = new HashMap<>();
     this.incBucketIndex = new HashSet<>();
-    this.isEmptyTable = !this.metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().isPresent();
   }
 
   @Override
@@ -162,7 +156,7 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
    * This is a required operation for each restart to avoid having duplicate file ids for one bucket.
    */
   private void bootstrapIndexIfNeed(String partition) {
-    if (isEmptyTable || bucketIndex.containsKey(partition)) {
+    if (bucketIndex.containsKey(partition)) {
       return;
     }
     LOG.info(String.format("Loading Hoodie Table %s, with path %s", this.metaClient.getTableConfig().getTableName(),
@@ -170,8 +164,8 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
 
     // Load existing fileID belongs to this task
     Map<Integer, String> bucketToFileIDMap = new HashMap<>();
-    this.writeClient.getHoodieTable().getHoodieView().getLatestFileSlices(partition).forEach(fileSlice -> {
-      String fileID = fileSlice.getFileId();
+    this.writeClient.getHoodieTable().getFileSystemView().getAllFileGroups(partition).forEach(fileGroup -> {
+      String fileID = fileGroup.getFileGroupId().getFileId();
       int bucketNumber = BucketIdentifier.bucketIdFromFileId(fileID);
       if (bucketToLoad.contains(bucketNumber)) {
         LOG.info(String.format("Should load this partition bucket %s with fileID %s", bucketNumber, fileID));

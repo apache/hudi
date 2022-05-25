@@ -19,11 +19,11 @@
 package org.apache.spark.sql.execution.benchmark
 
 import org.apache.hadoop.fs.Path
+import org.apache.hudi.ColumnStatsIndexHelper.buildColumnStatsTableFor
 import org.apache.hudi.config.HoodieClusteringConfig.LayoutOptimizationStrategy
-import org.apache.hudi.index.columnstats.ColumnStatsIndexHelper
 import org.apache.hudi.sort.SpaceCurveSortingHelper
 import org.apache.spark.sql.DataFrame
-import org.apache.spark.sql.hudi.TestHoodieSqlBase
+import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase
 import org.apache.spark.sql.types.{IntegerType, StructField}
 import org.junit.jupiter.api.{Disabled, Tag, Test}
 
@@ -31,14 +31,14 @@ import scala.collection.JavaConversions._
 import scala.util.Random
 
 @Tag("functional")
-object SpaceCurveOptimizeBenchmark extends TestHoodieSqlBase {
+object SpaceCurveOptimizeBenchmark extends HoodieSparkSqlTestBase {
 
   def evalSkippingPercent(tableName: String, co1: String, co2: String, value1: Int, value2: Int): Unit= {
     val sourceTableDF = spark.sql(s"select * from ${tableName}")
 
     val orderedColsTypes = Seq(StructField(co1, IntegerType), StructField(co2, IntegerType))
     val colStatsIndexTable =
-      ColumnStatsIndexHelper.buildColumnStatsTableFor(spark, sourceTableDF.inputFiles.toSeq, orderedColsTypes)
+      buildColumnStatsTableFor(spark, sourceTableDF.inputFiles.toSeq, orderedColsTypes)
         .collect()
         .map(f => (f.getInt(1), f.getInt(2), f.getInt(4), f.getInt(5)))
 

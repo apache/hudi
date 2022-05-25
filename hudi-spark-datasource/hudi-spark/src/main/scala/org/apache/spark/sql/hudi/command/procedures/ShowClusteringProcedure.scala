@@ -17,26 +17,31 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
-import org.apache.hudi.SparkAdapterSupport
+import org.apache.hudi.{HoodieCLIUtils, SparkAdapterSupport}
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.common.util.ClusteringUtils
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types._
 
 import java.util.function.Supplier
+
 import scala.collection.JavaConverters._
 
 class ShowClusteringProcedure extends BaseProcedure with ProcedureBuilder with SparkAdapterSupport with Logging {
   private val PARAMETERS = Array[ProcedureParameter](
     ProcedureParameter.optional(0, "table", DataTypes.StringType, None),
     ProcedureParameter.optional(1, "path", DataTypes.StringType, None),
-    ProcedureParameter.optional(2, "limit", DataTypes.IntegerType, 20)
+    ProcedureParameter.optional(2, "limit", DataTypes.IntegerType, 20),
+    ProcedureParameter.optional(3, "show_involved_partition", DataTypes.BooleanType, false)
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
     StructField("timestamp", DataTypes.StringType, nullable = true, Metadata.empty),
-    StructField("groups", DataTypes.IntegerType, nullable = true, Metadata.empty)
+    StructField("input_group_size", DataTypes.IntegerType, nullable = true, Metadata.empty),
+    StructField("state", DataTypes.StringType, nullable = true, Metadata.empty),
+    StructField("involved_partitions", DataTypes.StringType, nullable = true, Metadata.empty)
   ))
 
   def parameters: Array[ProcedureParameter] = PARAMETERS
@@ -49,12 +54,32 @@ class ShowClusteringProcedure extends BaseProcedure with ProcedureBuilder with S
     val tableName = getArgValueOrDefault(args, PARAMETERS(0))
     val tablePath = getArgValueOrDefault(args, PARAMETERS(1))
     val limit = getArgValueOrDefault(args, PARAMETERS(2)).get.asInstanceOf[Int]
+    val showInvolvedPartitions = getArgValueOrDefault(args, PARAMETERS(3)).get.asInstanceOf[Boolean]
 
     val basePath: String = getBasePath(tableName, tablePath)
     val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
-    ClusteringUtils.getAllPendingClusteringPlans(metaClient).iterator().asScala.map { p =>
-      Row(p.getLeft.getTimestamp, p.getRight.getInputGroups.size())
-    }.toSeq.take(limit)
+    val clusteringInstants = metaClient.getActiveTimeline.getInstants.iterator().asScala
+      .filter(p => p.getAction == HoodieTimeline.REPLACE_COMMIT_ACTION)
+      .toSeq
+      .sortBy(f => f.getTimestamp)
+      .reverse
+      .take(limit)
+
+    val clusteringPlans = clusteringInstants.map(instant =>
+      ClusteringUtils.getClusteringPlan(metaClient, instant)
+    )
+
+    if (showInvolvedPartitions) {
+      clusteringPlans.map { p =>
+        Row(p.get().getLeft.getTimestamp, p.get().getRight.getInputGroups.size(),
+          p.get().getLeft.getState.name(), HoodieCLIUtils.extractPartitions(p.get().getRight.getInputGroups.asScala))
+      }
+    } else {
+      clusteringPlans.map { p =>
+        Row(p.get().getLeft.getTimestamp, p.get().getRight.getInputGroups.size(),
+          p.get().getLeft.getState.name(), "*")
+      }
+    }
   }
 
   override def build: Procedure = new ShowClusteringProcedure()

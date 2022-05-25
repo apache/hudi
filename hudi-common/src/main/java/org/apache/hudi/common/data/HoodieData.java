@@ -78,6 +78,15 @@ public abstract class HoodieData<T> implements Serializable {
       SerializableFunction<Iterator<T>, Iterator<O>> func, boolean preservesPartitioning);
 
   /**
+   * @param func                  serializable map function by taking a partition of objects
+   *                              and generating an iterator.
+   * @param <O>                   output object type.
+   * @return {@link HoodieData<O>} containing the result. Actual execution may be deferred.
+   */
+  public abstract <O> HoodieData<O> mapPartitions(
+      SerializableFunction<Iterator<T>, Iterator<O>> func);
+
+  /**
    * @param func serializable flatmap function.
    * @param <O>  output object type.
    * @return {@link HoodieData<O>} containing the result. Actual execution may be deferred.
