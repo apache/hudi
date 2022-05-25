@@ -17,6 +17,8 @@
 
 package org.apache.spark.sql.hudi
 
+import org.apache.hadoop.fs.{LocalFileSystem, Path}
+import org.apache.hudi.common.fs.FSUtils
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.SessionCatalog
 
@@ -228,6 +230,115 @@ class TestDropTable extends HoodieSparkSqlTestBase {
       spark.sql(s"drop table ${tableName}_ro purge")
       checkAnswer("show tables")()
     }
+  }
+
+  test("Drop an EXTERNAL table which path is lost.") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+      val filesystem = FSUtils.getFs(tablePath, spark.sparkContext.hadoopConfiguration);
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |id int,
+           |ts int,
+           |value string
+           |)using hudi
+           | location '$tablePath'
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts'
+           | )
+           |""".stripMargin)
+
+      assert(filesystem.exists(new Path(tablePath)), s"Table path doesn't exists (${tablePath}).")
+
+      filesystem.delete(new Path(tablePath), true)
+      spark.sql(s"drop table ${tableName}")
+      checkAnswer("show tables")()
+    }
+  }
+
+  test("Drop an MOR table and related RT & RO when path is lost.") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+      val filesystem = FSUtils.getFs(tablePath, spark.sparkContext.hadoopConfiguration);
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |id int,
+           |ts int,
+           |value string
+           |)using hudi
+           | location '$tablePath'
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts',
+           |  type = 'mor'
+           | )
+           |""".stripMargin)
+      assert(filesystem.exists(new Path(tablePath)), s"Table path doesn't exist (${tablePath}).")
+
+      spark.sql(
+        s"""
+           |create table ${tableName}_ro using hudi
+           | location '${tmp.getCanonicalPath}/$tableName'
+           | tblproperties (
+           |  type = 'mor',
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts'
+           | )
+       """.stripMargin)
+      alterSerdeProperties(spark.sessionState.catalog, TableIdentifier(s"${tableName}_ro"),
+        Map("hoodie.query.as.ro.table" -> "true"))
+
+      spark.sql(
+        s"""
+           |create table ${tableName}_rt using hudi
+           | location '${tmp.getCanonicalPath}/$tableName'
+           | tblproperties (
+           |  type = 'mor',
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts'
+           | )
+       """.stripMargin)
+      alterSerdeProperties(spark.sessionState.catalog, TableIdentifier(s"${tableName}_rt"),
+        Map("hoodie.query.as.ro.table" -> "false"))
+
+      filesystem.delete(new Path(tablePath), true)
+      spark.sql(s"drop table ${tableName}")
+      spark.sql(s"drop table ${tableName}_ro")
+      spark.sql(s"drop table ${tableName}_rt")
+      checkAnswer("show tables")()
+    }
+  }
+
+
+  test("Drop an MANAGED table which path is lost.") {
+    val tableName = generateTableName
+    spark.sql(
+      s"""
+         |create table $tableName (
+         |id int,
+         |ts int,
+         |value string
+         |)using hudi
+         | tblproperties (
+         |  primaryKey = 'id',
+         |  preCombineField = 'ts'
+         | )
+         |""".stripMargin)
+
+    val tablePath = new Path(
+      spark.sessionState.catalog.getTableMetadata(TableIdentifier(tableName)).location)
+
+    val filesystem = FSUtils.getFs(tablePath, spark.sparkContext.hadoopConfiguration);
+    assert(filesystem.exists(tablePath), s"Table path doesn't exists ($tablePath).")
+
+    filesystem.delete(tablePath, true)
+    spark.sql(s"drop table ${tableName}")
+    checkAnswer("show tables")()
   }
 
   private def alterSerdeProperties(sessionCatalog: SessionCatalog, tableIdt: TableIdentifier,
