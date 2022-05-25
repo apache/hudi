@@ -95,20 +95,20 @@ public class TestBulkInsertInternalPartitionerForRows extends HoodieClientTestHa
     String[] sortColumns = sortColumnString.split(",");
     Comparator<Row> comparator = getCustomColumnComparator(sortColumns);
 
-    testBulkInsertInternalPartitioner(new CustomColumnsSortPartitionerWithRows(sortColumns),
+    testBulkInsertInternalPartitioner(new RowCustomColumnsSortPartitioner(sortColumns),
         records1, false, true, generateExpectedPartitionNumRecords(records1), Option.of(comparator));
-    testBulkInsertInternalPartitioner(new CustomColumnsSortPartitionerWithRows(sortColumns),
+    testBulkInsertInternalPartitioner(new RowCustomColumnsSortPartitioner(sortColumns),
         records2, false, true, generateExpectedPartitionNumRecords(records2), Option.of(comparator));
 
     HoodieWriteConfig config = HoodieWriteConfig
         .newBuilder()
         .withPath("/")
-        .withUserDefinedBulkInsertPartitionerClass(CustomColumnsSortPartitionerWithRows.class.getName())
+        .withUserDefinedBulkInsertPartitionerClass(RowCustomColumnsSortPartitioner.class.getName())
         .withUserDefinedBulkInsertPartitionerSortColumns(sortColumnString)
         .build();
-    testBulkInsertInternalPartitioner(new CustomColumnsSortPartitionerWithRows(config),
+    testBulkInsertInternalPartitioner(new RowCustomColumnsSortPartitioner(config),
         records1, false, true, generateExpectedPartitionNumRecords(records1), Option.of(comparator));
-    testBulkInsertInternalPartitioner(new CustomColumnsSortPartitionerWithRows(config),
+    testBulkInsertInternalPartitioner(new RowCustomColumnsSortPartitioner(config),
         records2, false, true, generateExpectedPartitionNumRecords(records2), Option.of(comparator));
   }
 

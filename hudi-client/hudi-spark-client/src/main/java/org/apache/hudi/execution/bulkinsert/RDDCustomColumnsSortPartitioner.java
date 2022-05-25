@@ -29,6 +29,8 @@ import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaRDD;
 
+import java.util.Arrays;
+
 /**
  * A partitioner that does sorting based on specified column values for each RDD partition.
  *
@@ -78,6 +80,7 @@ public class RDDCustomColumnsSortPartitioner<T extends HoodieRecordPayload>
   }
 
   private String[] getSortColumnName(HoodieWriteConfig config) {
-    return config.getUserDefinedBulkInsertPartitionerSortColumns().split(",");
+    return Arrays.stream(config.getUserDefinedBulkInsertPartitionerSortColumns().split(","))
+        .map(String::trim).toArray(String[]::new);
   }
 }

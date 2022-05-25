@@ -29,15 +29,15 @@ import java.util.Arrays;
 /**
  * A partitioner that does sorting based on specified column values for each spark partitions.
  */
-public class CustomColumnsSortPartitionerWithRows implements BulkInsertPartitioner<Dataset<Row>> {
+public class RowCustomColumnsSortPartitioner implements BulkInsertPartitioner<Dataset<Row>> {
 
   private final String[] sortColumnNames;
 
-  public CustomColumnsSortPartitionerWithRows(HoodieWriteConfig config) {
+  public RowCustomColumnsSortPartitioner(HoodieWriteConfig config) {
     this.sortColumnNames = getSortColumnName(config);
   }
 
-  public CustomColumnsSortPartitionerWithRows(String[] columnNames) {
+  public RowCustomColumnsSortPartitioner(String[] columnNames) {
     this.sortColumnNames = columnNames;
   }
 
