@@ -16,7 +16,8 @@
  import styles from './styles.module.css';
  import TagsListInline from '@theme/TagsListInline';
  import BlogPostAuthors from '@theme/BlogPostAuthors'; // Very simple pluralization: probably good enough for now
- 
+ import Tag from '@theme/Tag';
+
  function useReadingTimePlural() {
    const {selectMessage} = usePluralForm();
    return (readingTimeFloat) => {
@@ -62,6 +63,62 @@
    const image = assets.image ?? frontMatter.image ?? '/assets/images/logo-big.png';
    const truncatedPost = !isBlogPostPage && truncated;
    const tagsExists = tags.length > 0;
+
+   const tagsList = () => {
+    return (
+        <>
+          <ul className={clsx(styles.tags, styles.authorTimeTags, 'padding--none', 'margin-left--sm')}>
+            {tags.map(({label, permalink: tagPermalink}) => (
+              <li key={tagPermalink} className={styles.tag}>
+                <Tag className={clsx(styles.greyLink)} name={label} permalink={tagPermalink} />
+              </li>
+            ))}
+          </ul>
+        </>
+      );
+}
+const AuthorsList = () => {
+
+  const authorsCount = authors.length;
+  if (authorsCount === 0) {
+      return  (
+          <div className={clsx(styles.authorTimeTags, "row margin-top--sm margin-bottom--sm 'margin-vert--md'")}>
+              <time dateTime={date} itemProp="datePublished">
+                  {formattedDate}
+              </time>
+          </div>
+      )
+
+  }
+ 
+  return (
+      <div className={clsx(styles.authorTimeTags, "row margin-top--sm margin-bottom--sm 'margin-vert--md'")}>
+          <time dateTime={date} itemProp="datePublished">
+              {formattedDate}
+          </time>
+           {authors.map((author, idx) => (
+
+            <div  key={idx}>
+                  <div className="avatar margin-bottom--sm">
+                      {author.name && (
+                              <div>
+                              {authorsCount < 3 ? 
+                                <Link href={author.url} itemProp="url">
+                                  <span className={clsx(styles.authorsList)} itemProp="name">{author.name}</span>
+                                </Link> :  <Link href={author.url} itemProp="url">
+                                  <span className={clsx(styles.authorsListLong)} itemProp="name">{author.name}</span>
+                                </Link>
+                              }
+                              </div>
+                          )
+                      }
+                  </div>
+              </div>
+            ))}
+      </div>
+    );
+}
+ 
  
    const renderPostHeader = () => {
      const TitleHeading = isBlogPostPage ? 'h1' : 'h2';
@@ -89,9 +146,11 @@
                {title}
                </TitleHeading>
              </Link>
+             
            )}
          </TitleHeading>
-         <div className={clsx(styles.blogPostData, 'margin-vert--md')}>
+       {AuthorsList()}
+         {/* <div className={clsx(styles.blogPostData, 'margin-vert--md')}>
            <time dateTime={date} itemProp="datePublished">
              {formattedDate}
            </time>
@@ -102,10 +161,13 @@
                {readingTimePlural(readingTime)}
              </>
            )}
-         </div>
-         {isBlogPostPage && (
-             <BlogPostAuthors authors={authors} assets={assets} />
-         )}
+         </div> */}
+
+         
+        
+        {(
+            <TagsListInline tags={tags} />
+        )}
        </header>
      );
    };
@@ -130,14 +192,7 @@
            className={clsx('row docusaurus-mt-lg', {
              [styles.blogPostDetailsFull]: isBlogPostPage,
            })}>
-           {tagsExists && (
-             <div
-               className={clsx('col', {
-                 'col--9': truncatedPost,
-               })}>
-               <TagsListInline tags={tags} />
-             </div>
-           )}
+          
  
            {isBlogPostPage && editUrl && (
              <div className="col margin-top--sm">

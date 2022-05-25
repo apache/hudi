@@ -10,6 +10,7 @@
 }
 .blogPostPageTile{
   font-size:3rem;
+  display: inline-flex;
 }
 
 .blogPostData {
@@ -22,4 +23,65 @@
 
 .blog-list-page .container .row {
   width: max-content;
+}
+
+.authorsList {
+  font-size:0.9rem;
+  white-space: nowrap;
+  text-align:justify;
+  color: rgb(28, 30, 33);
+  column-gap: 5px;
+  margin-top:-10px;
+  margin-right:10px;
+  display:inline-flex;
+  justify-content: space-around;
+  margin-left:5px
+}
+
+.authorsListLong{
+  white-space: nowrap;
+  font-size:0.9rem;
+  color: rgb(28, 30, 33);
+  display:inline-flex;
+  justify-content: space-around;
+  margin-left:5px;
+ 
+}
+
+
+@media(max-width:1820px){
+  .authorsListLong{
+    font-size:0.75rem;
+  }
+}
+@media(max-width:1602px){
+  .authorsListLong{
+    font-size:0.6rem;
+  }
+}
+
+
+
+@media(max-width:1391px){
+  .authorsListLong{
+    font-size:0.9rem;
+  }
+}
+
+.authorTimeTags {
+  font-size: 0.9rem;
+  color: rgb(28, 30, 33);
+  display:flex;
+  margin-left:2px
+ }
+
+.tag {
+  margin: 0 12px 0.5rem -10px;
+  display: inline-block;
+  margin-top:-5px
+}
+
+.greyLink {
+  color: rgb(28, 30, 33);
+  text-decoration-color: rgb(28, 30, 33);
 }

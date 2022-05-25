@@ -210,14 +210,14 @@ footer .container {
 
 .blog-list-page article {
   display: inline-flex;
-  width: 28%;
+  width: 45%;
   margin: 1.2em;
   vertical-align: bottom;
 }
-@media(max-width:1145px){
+@media(max-width:1391px){
   .blog-list-page article {
     display: inline-flex;
-    width: 40%;
+    width: 80%;
     margin: 1.2em;
     vertical-align: bottom;
   }
@@ -239,6 +239,7 @@ footer .container {
 .blogPostTitle_src-theme-BlogPostItem-styles-module{
   height: 60px;
   overflow: hidden;
+  
 }
 
 h1.blogPostTitle_src-theme-BlogPostItem-styles-module{
