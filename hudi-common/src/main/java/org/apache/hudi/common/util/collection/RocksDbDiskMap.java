@@ -33,7 +33,6 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 import java.util.Spliterators;
-import java.util.UUID;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
@@ -42,25 +41,21 @@ import java.util.stream.StreamSupport;
  * All of the data is stored using the RocksDB implementation.
  */
 public final class RocksDbDiskMap<T extends Serializable, R extends Serializable> extends DiskMap<T, R> {
-  private static final Logger LOG = LogManager.getLogger(RocksDbDiskMap.class);
-
   // ColumnFamily allows partitioning data within RockDB, which allows
   // independent configuration and faster deletes across partitions
   // https://github.com/facebook/rocksdb/wiki/Column-Families
   // For this use case, we use a single static column family/ partition
   //
-  private static final String ROCKSDB_BASE_PATH = "rocksdb-diskmap";
+  private static final String ROCKSDB_COL_FAMILY = "rocksdb-diskmap";
 
+  private static final Logger LOG = LogManager.getLogger(RocksDbDiskMap.class);
   // Stores the key and corresponding value's latest metadata spilled to disk
   private final Set<T> keySet;
-  private static RocksDBDAO rocksDb = null;
-  private String rocksdbColFamily;
+  private RocksDBDAO rocksDb;
 
   public RocksDbDiskMap(String rocksDbStoragePath) throws IOException {
     super(rocksDbStoragePath, ExternalSpillableMap.DiskMapType.ROCKS_DB.name());
     this.keySet = new HashSet<>();
-    this.rocksdbColFamily = "rocksdb-diskmap" + UUID.randomUUID().toString();
-    getRocksDb().addColumnFamily(rocksdbColFamily);
   }
 
   @Override
@@ -88,12 +83,12 @@ public final class RocksDbDiskMap<T extends Serializable, R extends Serializable
     if (!containsKey(key)) {
       return null;
     }
-    return getRocksDb().get(rocksdbColFamily, (T) key);
+    return getRocksDb().get(ROCKSDB_COL_FAMILY, (T) key);
   }
 
   @Override
   public R put(T key, R value) {
-    getRocksDb().put(rocksdbColFamily, key, value);
+    getRocksDb().put(ROCKSDB_COL_FAMILY, key, value);
     keySet.add(key);
     return value;
   }
@@ -103,14 +98,14 @@ public final class RocksDbDiskMap<T extends Serializable, R extends Serializable
     R value = get(key);
     if (value != null) {
       keySet.remove((T) key);
-      getRocksDb().delete(rocksdbColFamily, (T) key);
+      getRocksDb().delete(ROCKSDB_COL_FAMILY, (T) key);
     }
     return value;
   }
 
   @Override
   public void putAll(Map<? extends T, ? extends R> keyValues) {
-    getRocksDb().writeBatch(batch -> keyValues.forEach((key, value) -> getRocksDb().putInBatch(batch, rocksdbColFamily, key, value)));
+    getRocksDb().writeBatch(batch -> keyValues.forEach((key, value) -> getRocksDb().putInBatch(batch, ROCKSDB_COL_FAMILY, key, value)));
     keySet.addAll(keyValues.keySet());
   }
 
@@ -143,7 +138,7 @@ public final class RocksDbDiskMap<T extends Serializable, R extends Serializable
    */
   @Override
   public Iterator<R> iterator() {
-    return getRocksDb().iterator(rocksdbColFamily);
+    return getRocksDb().iterator(ROCKSDB_COL_FAMILY);
   }
 
   @Override
@@ -160,30 +155,18 @@ public final class RocksDbDiskMap<T extends Serializable, R extends Serializable
   public void close() {
     keySet.clear();
     if (null != rocksDb) {
-      rocksDb.dropColumnFamily(rocksdbColFamily);
+      rocksDb.close();
     }
+    rocksDb = null;
     super.close();
   }
 
   private RocksDBDAO getRocksDb() {
     if (null == rocksDb) {
-      synchronized (ROCKSDB_BASE_PATH) {
+      synchronized (this) {
         if (null == rocksDb) {
-          rocksDb = new RocksDBDAO(ROCKSDB_BASE_PATH, diskMapPath);
-          Runtime.getRuntime().addShutdownHook(new Thread() {
-            @Override
-            public void run() {
-              if (null != rocksDb) {
-                synchronized (ROCKSDB_BASE_PATH) {
-                  if (null != rocksDb) {
-                    rocksDb.close();
-                    rocksDb = null;
-                    LOG.info("closed " + ROCKSDB_BASE_PATH + " rocksdb");
-                  }
-                }
-              }
-            }
-          });
+          rocksDb = new RocksDBDAO(ROCKSDB_COL_FAMILY, diskMapPath);
+          rocksDb.addColumnFamily(ROCKSDB_COL_FAMILY);
         }
       }
     }
