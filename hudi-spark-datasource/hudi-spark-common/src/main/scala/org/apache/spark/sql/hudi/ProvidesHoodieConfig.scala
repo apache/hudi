@@ -40,6 +40,7 @@ import org.apache.spark.sql.types.StructType
 
 import java.util
 import java.util.Locale
+
 import scala.collection.JavaConverters._
 
 trait ProvidesHoodieConfig extends Logging {
