@@ -72,7 +72,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -459,6 +458,9 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
 
   private Stream<HoodieInstant> getInstantsToArchive() {
     Stream<HoodieInstant> instants = Stream.concat(getCleanInstantsToArchive(), getCommitInstantsToArchive());
+    if (config.isMetastoreEnabled()) {
+      return Stream.empty();
+    }
 
     // For archiving and cleaning instants, we need to include intermediate state files if they exist
     HoodieActiveTimeline rawActiveTimeline = new HoodieActiveTimeline(metaClient, false);
@@ -504,10 +506,16 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
       List<HoodieInstant> instantsToStream = groupByTsAction.get(Pair.of(hoodieInstant.getTimestamp(),
                 HoodieInstant.getComparableAction(hoodieInstant.getAction())));
       if (instantsToStream != null) {
-        return instantsToStream.stream();
+        // sorts the instants in natural order to make sure the metadata files be removed
+        // in HoodieInstant.State sequence: requested -> inflight -> completed,
+        // this is important because when a COMPLETED metadata file is removed first,
+        // other monitors on the timeline(such as the compaction or clustering services) would
+        // mistakenly recognize the pending file as a pending operation,
+        // then all kinds of weird bugs occur.
+        return instantsToStream.stream().sorted();
       } else {
         // if a concurrent writer archived the instant
-        return Collections.EMPTY_LIST.stream();
+        return Stream.empty();
       }
     });
   }
@@ -519,7 +527,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
         new Path(metaClient.getMetaPath(), archivedInstant.getFileName())
     ).map(Path::toString).collect(Collectors.toList());
 
-    context.setJobStatus(this.getClass().getSimpleName(), "Delete archived instants");
+    context.setJobStatus(this.getClass().getSimpleName(), "Delete archived instants: " + config.getTableName());
     Map<String, Boolean> resultDeleteInstantFiles = deleteFilesParallelize(metaClient, instantFiles, context, false);
 
     for (Map.Entry<String, Boolean> result : resultDeleteInstantFiles.entrySet()) {

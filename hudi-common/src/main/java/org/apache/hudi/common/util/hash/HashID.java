@@ -106,6 +106,15 @@ public class HashID implements Serializable {
     }
   }
 
+  public static int getXXHash32(final String message, int hashSeed) {
+    return getXXHash32(message.getBytes(StandardCharsets.UTF_8), hashSeed);
+  }
+
+  public static int getXXHash32(final byte[] message, int hashSeed) {
+    XXHashFactory factory = XXHashFactory.fastestInstance();
+    return factory.hash32().hash(message, 0, message.length, hashSeed);
+  }
+
   private static byte[] getXXHash(final byte[] message, final Size bits) {
     XXHashFactory factory = XXHashFactory.fastestInstance();
     switch (bits) {

@@ -352,6 +352,10 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
 
     // reset the config option
     conf.setBoolean(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, true);
+    validateIndexLoaded();
+  }
+
+  protected void validateIndexLoaded() throws Exception {
     preparePipeline(conf)
         .consume(TestData.DATA_SET_UPDATE_INSERT)
         .checkIndexLoaded(
@@ -418,7 +422,7 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
     return TestHarness.instance().preparePipeline(tempFile, conf);
   }
 
-  private TestHarness preparePipeline(Configuration conf) throws Exception {
+  protected TestHarness preparePipeline(Configuration conf) throws Exception {
     return TestHarness.instance().preparePipeline(tempFile, conf);
   }
 

@@ -159,12 +159,12 @@ public class FSUtils {
   }
 
   // TODO: this should be removed
-  public static String makeDataFileName(String instantTime, String writeToken, String fileId) {
+  public static String makeBaseFileName(String instantTime, String writeToken, String fileId) {
     return String.format("%s_%s_%s%s", fileId, writeToken, instantTime,
         HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension());
   }
 
-  public static String makeDataFileName(String instantTime, String writeToken, String fileId, String fileExtension) {
+  public static String makeBaseFileName(String instantTime, String writeToken, String fileId, String fileExtension) {
     return String.format("%s_%s_%s%s", fileId, writeToken, instantTime, fileExtension);
   }
 
@@ -346,6 +346,10 @@ public class FSUtils {
    */
   public static String createNewFileIdPfx() {
     return UUID.randomUUID().toString();
+  }
+
+  public static String createNewFileId(String idPfx, int id) {
+    return String.format("%s-%d", idPfx, id);
   }
 
   /**

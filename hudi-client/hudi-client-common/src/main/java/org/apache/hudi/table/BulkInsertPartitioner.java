@@ -25,20 +25,20 @@ import org.apache.hudi.io.WriteHandleFactory;
 import java.io.Serializable;
 
 /**
- * Repartition input records into at least expected number of output spark partitions. It should give below guarantees -
- * Output spark partition will have records from only one hoodie partition. - Average records per output spark
- * partitions should be almost equal to (#inputRecords / #outputSparkPartitions) to avoid possible skews.
+ * Repartition input records into at least expected number of output partitions. It should give below guarantees -
+ * Output partition will have records from only one hoodie partition. - Average records per output
+ * partitions should be almost equal to (#inputRecords / #outputPartitions) to avoid possible skews.
  */
 public interface BulkInsertPartitioner<I> extends Serializable {
 
   /**
-   * Repartitions the input records into at least expected number of output spark partitions.
+   * Repartitions the input records into at least expected number of output partitions.
    *
-   * @param records               Input Hoodie records
-   * @param outputSparkPartitions Expected number of output partitions
+   * @param records          Input Hoodie records
+   * @param outputPartitions Expected number of output partitions
    * @return
    */
-  I repartitionRecords(I records, int outputSparkPartitions);
+  I repartitionRecords(I records, int outputPartitions);
 
   /**
    * @return {@code true} if the records within a partition are sorted; {@code false} otherwise.
@@ -48,6 +48,7 @@ public interface BulkInsertPartitioner<I> extends Serializable {
   /**
    * Return file group id prefix for the given data partition.
    * By defauult, return a new file group id prefix, so that incoming records will route to a fresh new file group
+   *
    * @param partitionId data partition
    * @return
    */
@@ -57,6 +58,7 @@ public interface BulkInsertPartitioner<I> extends Serializable {
 
   /**
    * Return write handle factory for the given partition.
+   *
    * @param partitionId data partition
    * @return
    */

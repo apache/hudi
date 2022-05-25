@@ -22,5 +22,5 @@ package org.apache.hudi.common.model;
  * Hoodie cleaning policies.
  */
 public enum HoodieCleaningPolicy {
-  KEEP_LATEST_FILE_VERSIONS, KEEP_LATEST_COMMITS, KEEP_LATEST_BY_HOURS;
+  KEEP_LATEST_FILE_VERSIONS, KEEP_LATEST_COMMITS, KEEP_LATEST_BY_HOURS
 }

@@ -22,6 +22,7 @@ import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.annotation.VisibleForTesting;
@@ -54,7 +55,7 @@ public class FileIndex {
   private FileIndex(Path path, Configuration conf) {
     this.path = path;
     this.metadataConfig = metadataConfig(conf);
-    this.tableExists = StreamerUtil.tableExists(path.toString(), StreamerUtil.getHadoopConf());
+    this.tableExists = StreamerUtil.tableExists(path.toString(), HadoopConfigurations.getHadoopConf(conf));
   }
 
   public static FileIndex instance(Path path, Configuration conf) {

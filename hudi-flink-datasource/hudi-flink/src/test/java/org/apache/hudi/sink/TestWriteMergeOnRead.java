@@ -20,8 +20,10 @@ package org.apache.hudi.sink;
 
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.utils.TestData;
 
 import org.apache.flink.configuration.Configuration;
+import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -34,6 +36,27 @@ public class TestWriteMergeOnRead extends TestWriteCopyOnWrite {
   @Override
   protected void setUp(Configuration conf) {
     conf.setBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED, false);
+  }
+
+  @Test
+  public void testIndexStateBootstrapWithCompactionScheduled() throws Exception {
+    // sets up the delta commits as 1 to generate a new compaction plan.
+    conf.setInteger(FlinkOptions.COMPACTION_DELTA_COMMITS, 1);
+    // open the function and ingest data
+    preparePipeline(conf)
+        .consume(TestData.DATA_SET_INSERT)
+        .assertEmptyDataFiles()
+        .checkpoint(1)
+        .assertNextEvent()
+        .checkpointComplete(1)
+        .checkWrittenData(EXPECTED1, 4)
+        .end();
+
+    // reset config options
+    conf.removeConfig(FlinkOptions.COMPACTION_DELTA_COMMITS);
+    // sets up index bootstrap
+    conf.setBoolean(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, true);
+    validateIndexLoaded();
   }
 
   @Override

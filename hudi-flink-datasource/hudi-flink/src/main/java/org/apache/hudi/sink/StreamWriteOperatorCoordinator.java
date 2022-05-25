@@ -394,7 +394,7 @@ public class StreamWriteOperatorCoordinator
       // starts a new instant
       startInstant();
       // upgrade downgrade
-      this.writeClient.upgradeDowngrade(this.instant);
+      this.writeClient.upgradeDowngrade(this.instant, this.metaClient);
     }, "initialize instant %s", instant);
   }
 

@@ -216,19 +216,40 @@ public class HoodieIndexConfig extends HoodieConfig {
   /**
    * ***** Bucket Index Configs *****
    * Bucket Index is targeted to locate the record fast by hash in big data scenarios.
-   * The current implementation is a basic version, so there are some constraints:
-   * 1. Unsupported operation: bulk insert, cluster and so on.
-   * 2. Bucket num change requires rewriting the partition.
-   * 3. Predict the table size and future data growth well to set a reasonable bucket num.
-   * 4. A bucket size is recommended less than 3GB and avoid bing too small.
-   * more details and progress see [HUDI-3039].
+   * A bucket size is recommended less than 3GB to avoid being too small.
+   * For more details and progress, see [HUDI-3039].
    */
-  // Bucket num equals file groups num in each partition.
-  // Bucket num can be set according to partition size and file group size.
+
+  /**
+   * Bucket Index Engine Type: implementation of bucket index
+   *
+   * SIMPLE:
+   *  0. Check `HoodieSimpleBucketLayout` for its supported operations.
+   *  1. Bucket num is fixed and requires rewriting the partition if we want to change it.
+   *
+   * CONSISTENT_HASHING:
+   *  0. Check `HoodieConsistentBucketLayout` for its supported operations.
+   *  1. Bucket num will auto-adjust by running clustering (still in progress)
+   */
+  public static final ConfigProperty<String> BUCKET_INDEX_ENGINE_TYPE = ConfigProperty
+      .key("hoodie.index.bucket.engine")
+      .defaultValue("SIMPLE")
+      .sinceVersion("0.11.0")
+      .withDocumentation("Type of bucket index engine to use. Default is SIMPLE bucket index, with fixed number of bucket."
+          + "Possible options are [SIMPLE | CONSISTENT_HASHING]."
+          + "Consistent hashing supports dynamic resizing of the number of bucket, solving potential data skew and file size "
+          + "issues of the SIMPLE hashing engine.");
+
+  /**
+   * Bucket num equals file groups num in each partition.
+   * Bucket num can be set according to partition size and file group size.
+   *
+   * In dynamic bucket index cases (e.g., using CONSISTENT_HASHING), this config of number of bucket serves as a initial bucket size
+   */
   public static final ConfigProperty<Integer> BUCKET_INDEX_NUM_BUCKETS = ConfigProperty
       .key("hoodie.bucket.index.num.buckets")
       .defaultValue(256)
-      .withDocumentation("Only applies if index type is BUCKET_INDEX. Determine the number of buckets in the hudi table, "
+      .withDocumentation("Only applies if index type is BUCKET. Determine the number of buckets in the hudi table, "
           + "and each partition is divided to N buckets.");
 
   public static final ConfigProperty<String> BUCKET_INDEX_HASH_FIELD = ConfigProperty
@@ -460,6 +481,11 @@ public class HoodieIndexConfig extends HoodieConfig {
 
     public Builder withIndexType(HoodieIndex.IndexType indexType) {
       hoodieIndexConfig.setValue(INDEX_TYPE, indexType.name());
+      return this;
+    }
+
+    public Builder withBucketIndexEngineType(HoodieIndex.BucketIndexEngineType bucketType) {
+      hoodieIndexConfig.setValue(BUCKET_INDEX_ENGINE_TYPE, bucketType.name());
       return this;
     }
 

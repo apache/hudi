@@ -20,13 +20,18 @@ package org.apache.hudi.table;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.BaseFile;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.HoodieROTablePathFilter;
@@ -92,7 +97,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import static org.apache.hudi.table.format.FormatUtils.getParquetConf;
+import static org.apache.hudi.configuration.HadoopConfigurations.getParquetConf;
 
 /**
  * Hoodie batch table source that always read the latest snapshot of the underneath table.
@@ -155,7 +160,7 @@ public class HoodieTableSource implements
         : requiredPos;
     this.limit = limit == null ? NO_LIMIT_CONSTANT : limit;
     this.filters = filters == null ? Collections.emptyList() : filters;
-    this.hadoopConf = StreamerUtil.getHadoopConf();
+    this.hadoopConf = HadoopConfigurations.getHadoopConf(conf);
     this.metaClient = StreamerUtil.metaClientForReader(conf, hadoopConf);
     this.maxCompactionMemoryInBytes = StreamerUtil.getMaxCompactionMemoryInBytes(conf);
   }
@@ -380,8 +385,8 @@ public class HoodieTableSource implements
   }
 
   private InputFormat<RowData, ?> getStreamInputFormat() {
-    // if table does not exist, use schema from the DDL
-    Schema tableAvroSchema = this.metaClient == null ? inferSchemaFromDdl() : getTableAvroSchema();
+    // if table does not exist or table data does not exist, use schema from the DDL
+    Schema tableAvroSchema = (this.metaClient == null || !tableDataExists()) ? inferSchemaFromDdl() : getTableAvroSchema();
     final DataType rowDataType = AvroSchemaConverter.convertToDataType(tableAvroSchema);
     final RowType rowType = (RowType) rowDataType.getLogicalType();
     final RowType requiredRowType = (RowType) getProducedDataType().notNull().getLogicalType();
@@ -396,6 +401,15 @@ public class HoodieTableSource implements
     String errMsg = String.format("Invalid query type : '%s', options ['%s'] are supported now", queryType,
         FlinkOptions.QUERY_TYPE_SNAPSHOT);
     throw new HoodieException(errMsg);
+  }
+
+  /**
+   * Returns whether the hoodie table data exists .
+   */
+  private  boolean tableDataExists() {
+    HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
+    Option<Pair<HoodieInstant, HoodieCommitMetadata>> instantAndCommitMetadata = activeTimeline.getLastCommitMetadataWithValidData();
+    return instantAndCommitMetadata.isPresent();
   }
 
   private MergeOnReadInputFormat mergeOnReadInputFormat(
