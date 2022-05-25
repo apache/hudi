@@ -93,7 +93,6 @@
                   <include>org.apache.hudi:hudi-common</include>
                   <include>org.apache.hudi:hudi-client-common</include>
                   <include>org.apache.hudi:hudi-utilities_${scala.binary.version}</include>
-                  <include>org.apache.hudi:hudi-sync-common</include>
                   <include>org.apache.hudi:hudi-hadoop-mr</include>
                   <include>org.apache.hudi:hudi-timeline-service</include>
                   <include>org.apache.hudi:hudi-aws</include>
@@ -170,10 +169,6 @@
                   <shadedPattern>org.apache.hudi.com.beust.jcommander.</shadedPattern>
                 </relocation>
                 <relocation>
-                  <pattern>org.apache.hive.jdbc.</pattern>
-                  <shadedPattern>${utilities.bundle.hive.shade.prefix}org.apache.hive.jdbc.</shadedPattern>
-                </relocation>
-                <relocation>
                   <pattern>org.apache.commons.io.</pattern>
                   <shadedPattern>org.apache.hudi.org.apache.commons.io.</shadedPattern>
                 </relocation>
@@ -197,20 +192,12 @@
                   <shadedPattern>${utilities.bundle.hive.shade.prefix}org.apache.hadoop.hive.metastore.</shadedPattern>
                 </relocation>
                 <relocation>
-                  <pattern>org.apache.hive.common.</pattern>
-                  <shadedPattern>${utilities.bundle.hive.shade.prefix}org.apache.hive.common.</shadedPattern>
-                </relocation>
-                <relocation>
                   <pattern>org.apache.hadoop.hive.common.</pattern>
                   <shadedPattern>${utilities.bundle.hive.shade.prefix}org.apache.hadoop.hive.common.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>org.apache.hadoop.hive.conf.</pattern>
                   <shadedPattern>${utilities.bundle.hive.shade.prefix}org.apache.hadoop.hive.conf.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.hive.service.</pattern>
-                  <shadedPattern>${utilities.bundle.hive.shade.prefix}org.apache.hive.service.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>org.apache.hadoop.hive.service.</pattern>
@@ -328,6 +315,11 @@
 
   <dependencies>
     <!-- Hoodie -->
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-common</artifactId>
+      <version>${project.version}</version>
+    </dependency>
     <dependency>
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-utilities_${scala.binary.version}</artifactId>

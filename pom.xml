@@ -561,6 +561,7 @@
         <groupId>org.glassfish</groupId>
         <artifactId>javax.el</artifactId>
         <version>${glassfish.el.version}</version>
+        <scope>provided</scope>
       </dependency>
 
       <!-- Avro -->
