@@ -192,6 +192,7 @@ public class MergeOnReadInputFormat
           getLogFileIterator(split));
     } else if (split.getMergeType().equals(FlinkOptions.REALTIME_PAYLOAD_COMBINE)) {
       this.iterator = new MergeIterator(
+          conf,
           hadoopConf,
           split,
           this.tableState.getRowType(),
@@ -200,7 +201,6 @@ public class MergeOnReadInputFormat
           new Schema.Parser().parse(this.tableState.getRequiredAvroSchema()),
           this.requiredPos,
           this.emitDelete,
-          this.conf.getBoolean(FlinkOptions.CHANGELOG_ENABLED),
           this.tableState.getOperationPos(),
           getFullSchemaReader(split.getBasePath().get()));
     } else {
@@ -323,7 +323,7 @@ public class MergeOnReadInputFormat
     final GenericRecordBuilder recordBuilder = new GenericRecordBuilder(requiredSchema);
     final AvroToRowDataConverters.AvroToRowDataConverter avroToRowDataConverter =
         AvroToRowDataConverters.createRowConverter(tableState.getRequiredRowType());
-    final HoodieMergedLogRecordScanner scanner = FormatUtils.logScanner(split, tableSchema, hadoopConf, conf.getBoolean(FlinkOptions.CHANGELOG_ENABLED));
+    final HoodieMergedLogRecordScanner scanner = FormatUtils.logScanner(split, tableSchema, conf, hadoopConf);
     final Iterator<String> logRecordsKeyIterator = scanner.getRecords().keySet().iterator();
     final int[] pkOffset = tableState.getPkOffsetsInRequired();
     // flag saying whether the pk semantics has been dropped by user specified
@@ -639,6 +639,7 @@ public class MergeOnReadInputFormat
     private RowData currentRecord;
 
     MergeIterator(
+        Configuration conf,
         org.apache.hadoop.conf.Configuration hadoopConf,
         MergeOnReadInputSplit split,
         RowType tableRowType,
@@ -647,12 +648,11 @@ public class MergeOnReadInputFormat
         Schema requiredSchema,
         int[] requiredPos,
         boolean emitDelete,
-        boolean withOperationField,
         int operationPos,
         ParquetColumnarRowSplitReader reader) { // the reader should be with full schema
       this.tableSchema = tableSchema;
       this.reader = reader;
-      this.scanner = FormatUtils.logScanner(split, tableSchema, hadoopConf, withOperationField);
+      this.scanner = FormatUtils.logScanner(split, tableSchema, conf, hadoopConf);
       this.logKeysIterator = scanner.getRecords().keySet().iterator();
       this.requiredSchema = requiredSchema;
       this.requiredPos = requiredPos;
