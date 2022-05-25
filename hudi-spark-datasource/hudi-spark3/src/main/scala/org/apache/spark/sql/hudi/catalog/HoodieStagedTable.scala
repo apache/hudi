@@ -21,16 +21,18 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceWriteOptions.RECORDKEY_FIELD
 import org.apache.spark.sql.DataFrame
+import org.apache.spark.sql.catalyst.catalog.CatalogTableType
 import org.apache.spark.sql.connector.catalog.{Identifier, StagedTable, SupportsWrite, TableCapability}
 import org.apache.spark.sql.connector.expressions.Transform
 import org.apache.spark.sql.connector.write.{LogicalWriteInfo, V1Write, WriteBuilder}
-import org.apache.spark.sql.sources.InsertableRelation
 import org.apache.spark.sql.types.StructType
 
+import java.net.URI
 import java.util
 import scala.collection.JavaConverters.{mapAsScalaMapConverter, setAsJavaSetConverter}
 
 case class HoodieStagedTable(ident: Identifier,
+                             locUriAndTableType: (URI, CatalogTableType),
                              catalog: HoodieCatalog,
                              override val schema: StructType,
                              partitions: Array[Transform],
@@ -59,13 +61,14 @@ case class HoodieStagedTable(ident: Identifier,
     props.putAll(properties)
     props.put("hoodie.table.name", ident.name())
     props.put(RECORDKEY_FIELD.key, properties.get("primaryKey"))
-    catalog.createHoodieTable(ident, schema, partitions, props, writeOptions, sourceQuery, mode)
+    catalog.createHoodieTable(
+      ident, schema, locUriAndTableType, partitions, props, writeOptions, sourceQuery, mode)
   }
 
   override def name(): String = ident.name()
 
   override def abortStagedChanges(): Unit = {
-    clearTablePath(properties.get("location"), catalog.spark.sparkContext.hadoopConfiguration)
+    clearTablePath(locUriAndTableType._1.getPath, catalog.spark.sparkContext.hadoopConfiguration)
   }
 
   private def clearTablePath(tablePath: String, conf: Configuration): Unit = {
@@ -85,13 +88,9 @@ case class HoodieStagedTable(ident: Identifier,
    * WriteBuilder for creating a Hoodie table.
    */
   private class HoodieV1WriteBuilder extends WriteBuilder {
-    override def build(): V1Write = new V1Write {
-      override def toInsertableRelation(): InsertableRelation = {
-        new InsertableRelation {
-          override def insert(data: DataFrame, overwrite: Boolean): Unit = {
-            sourceQuery = Option(data)
-          }
-        }
+    override def build(): V1Write = () => {
+      (data: DataFrame, overwrite: Boolean) => {
+        sourceQuery = Option(data)
       }
     }
   }

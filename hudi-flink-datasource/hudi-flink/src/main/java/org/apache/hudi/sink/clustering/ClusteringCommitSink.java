@@ -1,0 +1,174 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.hudi.sink.clustering;
+
+import org.apache.hudi.avro.model.HoodieClusteringGroup;
+import org.apache.hudi.avro.model.HoodieClusteringPlan;
+import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieFileGroupId;
+import org.apache.hudi.common.model.TableServiceType;
+import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.ClusteringUtils;
+import org.apache.hudi.common.util.CommitUtils;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieClusteringException;
+import org.apache.hudi.sink.CleanFunction;
+import org.apache.hudi.table.HoodieFlinkTable;
+import org.apache.hudi.table.action.HoodieWriteMetadata;
+import org.apache.hudi.util.StreamerUtil;
+
+import org.apache.flink.configuration.Configuration;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+/**
+ * Function to check and commit the clustering action.
+ *
+ * <p> Each time after receiving a clustering commit event {@link ClusteringCommitEvent},
+ * it loads and checks the clustering plan {@link org.apache.hudi.avro.model.HoodieClusteringPlan},
+ * if all the clustering operations {@link org.apache.hudi.common.model.ClusteringOperation}
+ * of the plan are finished, tries to commit the clustering action.
+ *
+ * <p>It also inherits the {@link CleanFunction} cleaning ability. This is needed because
+ * the SQL API does not allow multiple sinks in one table sink provider.
+ */
+public class ClusteringCommitSink extends CleanFunction<ClusteringCommitEvent> {
+  private static final Logger LOG = LoggerFactory.getLogger(ClusteringCommitSink.class);
+
+  /**
+   * Config options.
+   */
+  private final Configuration conf;
+
+  private transient HoodieFlinkTable<?> table;
+
+  /**
+   * Buffer to collect the event from each clustering task {@code ClusteringFunction}.
+   * The key is the instant time.
+   */
+  private transient Map<String, List<ClusteringCommitEvent>> commitBuffer;
+
+  public ClusteringCommitSink(Configuration conf) {
+    super(conf);
+    this.conf = conf;
+  }
+
+  @Override
+  public void open(Configuration parameters) throws Exception {
+    super.open(parameters);
+    if (writeClient == null) {
+      this.writeClient = StreamerUtil.createWriteClient(conf, getRuntimeContext());
+    }
+    this.commitBuffer = new HashMap<>();
+    this.table = writeClient.getHoodieTable();
+  }
+
+  @Override
+  public void invoke(ClusteringCommitEvent event, Context context) throws Exception {
+    final String instant = event.getInstant();
+    commitBuffer.computeIfAbsent(instant, k -> new ArrayList<>())
+        .add(event);
+    commitIfNecessary(instant, commitBuffer.get(instant));
+  }
+
+  /**
+   * Condition to commit: the commit buffer has equal size with the clustering plan operations
+   * and all the clustering commit event {@link ClusteringCommitEvent} has the same clustering instant time.
+   *
+   * @param instant Clustering commit instant time
+   * @param events  Commit events ever received for the instant
+   */
+  private void commitIfNecessary(String instant, List<ClusteringCommitEvent> events) {
+    HoodieInstant clusteringInstant = HoodieTimeline.getReplaceCommitInflightInstant(instant);
+    Option<Pair<HoodieInstant, HoodieClusteringPlan>> clusteringPlanOption = ClusteringUtils.getClusteringPlan(
+        StreamerUtil.createMetaClient(this.conf), clusteringInstant);
+    HoodieClusteringPlan clusteringPlan = clusteringPlanOption.get().getRight();
+    boolean isReady = clusteringPlan.getInputGroups().size() == events.size();
+    if (!isReady) {
+      return;
+    }
+    List<WriteStatus> statuses = events.stream()
+        .map(ClusteringCommitEvent::getWriteStatuses)
+        .flatMap(Collection::stream)
+        .collect(Collectors.toList());
+
+    HoodieWriteMetadata<List<WriteStatus>> writeMetadata = new HoodieWriteMetadata<>();
+    writeMetadata.setWriteStatuses(statuses);
+    writeMetadata.setWriteStats(statuses.stream().map(WriteStatus::getStat).collect(Collectors.toList()));
+    writeMetadata.setPartitionToReplaceFileIds(getPartitionToReplacedFileIds(clusteringPlan, writeMetadata));
+    validateWriteResult(clusteringPlan, instant, writeMetadata);
+    if (!writeMetadata.getCommitMetadata().isPresent()) {
+      HoodieCommitMetadata commitMetadata = CommitUtils.buildMetadata(
+          writeMetadata.getWriteStats().get(),
+          writeMetadata.getPartitionToReplaceFileIds(),
+          Option.empty(),
+          WriteOperationType.CLUSTER,
+          this.writeClient.getConfig().getSchema(),
+          HoodieTimeline.REPLACE_COMMIT_ACTION);
+      writeMetadata.setCommitMetadata(Option.of(commitMetadata));
+    }
+    // commit the clustering
+    this.table.getMetaClient().reloadActiveTimeline();
+    this.writeClient.completeTableService(
+        TableServiceType.CLUSTER, writeMetadata.getCommitMetadata().get(), table, instant);
+
+    // reset the status
+    reset(instant);
+  }
+
+  private void reset(String instant) {
+    this.commitBuffer.remove(instant);
+  }
+
+  /**
+   * Validate actions taken by clustering. In the first implementation, we validate at least one new file is written.
+   * But we can extend this to add more validation. E.g. number of records read = number of records written etc.
+   * We can also make these validations in BaseCommitActionExecutor to reuse pre-commit hooks for multiple actions.
+   */
+  private static void validateWriteResult(HoodieClusteringPlan clusteringPlan, String instantTime, HoodieWriteMetadata<List<WriteStatus>> writeMetadata) {
+    if (writeMetadata.getWriteStatuses().isEmpty()) {
+      throw new HoodieClusteringException("Clustering plan produced 0 WriteStatus for " + instantTime
+          + " #groups: " + clusteringPlan.getInputGroups().size() + " expected at least "
+          + clusteringPlan.getInputGroups().stream().mapToInt(HoodieClusteringGroup::getNumOutputFileGroups).sum()
+          + " write statuses");
+    }
+  }
+
+  private static Map<String, List<String>> getPartitionToReplacedFileIds(
+      HoodieClusteringPlan clusteringPlan,
+      HoodieWriteMetadata<List<WriteStatus>> writeMetadata) {
+    Set<HoodieFileGroupId> newFilesWritten = writeMetadata.getWriteStats().get().stream()
+        .map(s -> new HoodieFileGroupId(s.getPartitionPath(), s.getFileId())).collect(Collectors.toSet());
+    return ClusteringUtils.getFileGroupsFromClusteringPlan(clusteringPlan)
+        .filter(fg -> !newFilesWritten.contains(fg))
+        .collect(Collectors.groupingBy(HoodieFileGroupId::getPartitionPath, Collectors.mapping(HoodieFileGroupId::getFileId, Collectors.toList())));
+  }
+}

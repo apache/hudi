@@ -211,7 +211,7 @@ public class TestCluster implements BeforeAllCallback, AfterAllCallback,
       // Create 5 files
       String fileId = UUID.randomUUID().toString();
       Path filePath = new Path(partPath.toString() + "/" + FSUtils
-          .makeDataFileName(commitTime, "1-0-1", fileId));
+          .makeBaseFileName(commitTime, "1-0-1", fileId));
       generateParquetData(filePath, isParquetSchemaSimple);
       HoodieWriteStat writeStat = new HoodieWriteStat();
       writeStat.setFileId(fileId);
