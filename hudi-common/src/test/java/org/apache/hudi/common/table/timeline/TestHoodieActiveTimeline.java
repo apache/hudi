@@ -222,7 +222,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void testGetContiguousCompletedWriteTimeline(String allowTempCommit) {
+  public void testGetContiguousCompletedWriteTimeline() {
     // a mock timeline with holes
     timeline = new MockHoodieTimeline(Stream.of("01", "03", "05", "07", "13", "15", "17"),
         Stream.of("09", "11", "19"));
