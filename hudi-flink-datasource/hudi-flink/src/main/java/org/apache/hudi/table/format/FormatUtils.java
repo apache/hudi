@@ -123,33 +123,25 @@ public class FormatUtils {
   public static HoodieMergedLogRecordScanner logScanner(
       MergeOnReadInputSplit split,
       Schema logSchema,
-      org.apache.flink.configuration.Configuration flinkConf,
+      HoodieWriteConfig writeConfig,
       Configuration hadoopConf) {
     FileSystem fs = FSUtils.getFs(split.getTablePath(), hadoopConf);
-    final ExternalSpillableMap.DiskMapType diskMapType = ExternalSpillableMap.DiskMapType.valueOf(
-        flinkConf.getString(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.key(),
-            ExternalSpillableMap.DiskMapType.BITCASK.name()).toUpperCase(Locale.ROOT));
+    final ExternalSpillableMap.DiskMapType diskMapType = writeConfig.getCommonConfig().getSpillableDiskMapType();
     return HoodieMergedLogRecordScanner.newBuilder()
         .withFileSystem(fs)
         .withBasePath(split.getTablePath())
         .withLogFilePaths(split.getLogPaths().get())
         .withReaderSchema(logSchema)
         .withLatestInstantTime(split.getLatestCommit())
-        .withReadBlocksLazily(
-            string2Boolean(
-                flinkConf.getString(HoodieRealtimeConfig.COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP,
-                    HoodieRealtimeConfig.DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED)))
+        .withReadBlocksLazily(writeConfig.getCompactionLazyBlockReadEnabled())
         .withReverseReader(false)
-        .withBufferSize(
-            flinkConf.getInteger(HoodieRealtimeConfig.MAX_DFS_STREAM_BUFFER_SIZE_PROP,
-                HoodieRealtimeConfig.DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE))
+        .withBufferSize(writeConfig.getMaxDFSStreamBufferSize())
         .withMaxMemorySizeInBytes(diskMapType == ExternalSpillableMap.DiskMapType.ROCKS_DB ? 0 : split.getMaxCompactionMemoryInBytes())
         .withDiskMapType(diskMapType)
-        .withSpillableMapBasePath(
-            flinkConf.getString(HoodieRealtimeConfig.SPILLABLE_MAP_BASE_PATH_PROP,
-                HoodieRealtimeConfig.DEFAULT_SPILLABLE_MAP_BASE_PATH))
+        .withSpillableMapBasePath(writeConfig.getSpillableMapBasePath())
         .withInstantRange(split.getInstantRange())
-        .withOperationField(flinkConf.getBoolean(FlinkOptions.CHANGELOG_ENABLED))
+        .withOperationField(writeConfig.getProps().getBoolean(FlinkOptions.CHANGELOG_ENABLED.key(),
+            FlinkOptions.CHANGELOG_ENABLED.defaultValue()))
         .build();
   }
 
