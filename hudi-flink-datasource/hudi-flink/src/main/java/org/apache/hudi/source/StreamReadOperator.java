@@ -126,6 +126,10 @@ public class StreamReadOperator extends AbstractStreamOperatorAdapter<RowData>
     enqueueProcessSplits();
   }
 
+  public boolean formatIsOpen() {
+    return format.isOpened();
+  }
+
   @Override
   public void snapshotState(StateSnapshotContext context) throws Exception {
     super.snapshotState(context);

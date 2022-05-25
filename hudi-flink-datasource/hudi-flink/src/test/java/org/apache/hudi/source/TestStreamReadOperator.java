@@ -106,6 +106,10 @@ public class TestStreamReadOperator {
         harness.processElement(split, -1);
 
         // Run the mail-box once to read all records from the given split.
+        assertThat("Should opened 1 split", processor.runMailboxStep());
+        while (!((StreamReadOperator)(harness.getOperator())).formatIsOpen()) {
+          Thread.sleep(100);
+        }
         assertThat("Should process 1 split", processor.runMailboxStep());
       }
       // Assert the output has expected elements.
@@ -119,6 +123,10 @@ public class TestStreamReadOperator {
         harness.processElement(split, -1);
 
         // Run the mail-box once to read all records from the given split.
+        assertThat("Should opened 1 split", processor.runMailboxStep());
+        while (!((StreamReadOperator)(harness.getOperator())).formatIsOpen()) {
+          Thread.sleep(100);
+        }
         assertThat("Should processed 1 split", processor.runMailboxStep());
       }
       // The result sets behaves like append only: DATA_SET_ONE + DATA_SET_TWO
@@ -152,6 +160,10 @@ public class TestStreamReadOperator {
       processor.getMainMailboxExecutor()
           .execute(() -> harness.snapshot(1, 3), "Trigger snapshot");
 
+      assertTrue(processor.runMailboxStep(), "Should have opened the split0");
+      while (!((StreamReadOperator)(harness.getOperator())).formatIsOpen()) {
+        Thread.sleep(100);
+      }
       assertTrue(processor.runMailboxStep(), "Should have processed the split0");
       assertTrue(processor.runMailboxStep(), "Should have processed the snapshot state action");
 
@@ -160,11 +172,23 @@ public class TestStreamReadOperator {
 
       // Read records from split1.
       assertTrue(processor.runMailboxStep(), "Should have processed the split1");
+      while (!((StreamReadOperator)(harness.getOperator())).formatIsOpen()) {
+        Thread.sleep(100);
+      }
+      assertTrue(processor.runMailboxStep(), "Should have processed the split1");
 
       // Read records from split2.
       assertTrue(processor.runMailboxStep(), "Should have processed the split2");
+      while (!((StreamReadOperator)(harness.getOperator())).formatIsOpen()) {
+        Thread.sleep(100);
+      }
+      assertTrue(processor.runMailboxStep(), "Should have processed the split2");
 
       // Read records from split3.
+      assertTrue(processor.runMailboxStep(), "Should have processed the split3");
+      while (!((StreamReadOperator)(harness.getOperator())).formatIsOpen()) {
+        Thread.sleep(100);
+      }
       assertTrue(processor.runMailboxStep(), "Should have processed the split3");
 
       // Assert the output has expected elements.
@@ -195,6 +219,10 @@ public class TestStreamReadOperator {
       // Read all records from the first 2 splits.
       SteppingMailboxProcessor localMailbox = createLocalMailbox(harness);
       for (int i = 0; i < 2; i++) {
+        assertTrue(localMailbox.runMailboxStep(), "Should have opened the split#" + i);
+        while (!((StreamReadOperator)(harness.getOperator())).formatIsOpen()) {
+          Thread.sleep(100);
+        }
         assertTrue(localMailbox.runMailboxStep(), "Should have processed the split#" + i);
       }
 
@@ -214,6 +242,10 @@ public class TestStreamReadOperator {
       SteppingMailboxProcessor localMailbox = createLocalMailbox(harness);
 
       for (int i = 2; i < 4; i++) {
+        assertTrue(localMailbox.runMailboxStep(), "Should have opened one split#" + i);
+        while (!((StreamReadOperator)(harness.getOperator())).formatIsOpen()) {
+          Thread.sleep(100);
+        }
         assertTrue(localMailbox.runMailboxStep(), "Should have processed one split#" + i);
       }
 
