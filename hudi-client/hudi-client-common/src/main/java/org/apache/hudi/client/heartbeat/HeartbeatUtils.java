@@ -38,16 +38,31 @@ public class HeartbeatUtils {
   private static final Logger LOG = LogManager.getLogger(HeartbeatUtils.class);
 
   /**
-   * Deletes the heartbeat file for the specified instant.
-   * @param fs
-   * @param basePath
-   * @param instantTime
-   * @return
+   * Deletes the writer heartbeat file for the specified instant.
    */
-  public static boolean deleteHeartbeatFile(FileSystem fs, String basePath, String instantTime) {
+  public static boolean deleteWriterHeartbeatFile(FileSystem fs, String basePath, String instantTime) {
+    return deleteHeartbeatFile(fs, HoodieTableMetaClient.getWriterHeartbeatFolderPath(basePath), instantTime);
+  }
+
+  /**
+   * Deletes the reader heartbeat file for the specified instant.
+   */
+  public static boolean deleteReaderHeartbeatFile(FileSystem fs, String basePath, String instantTime) {
+    return deleteHeartbeatFile(fs, HoodieTableMetaClient.getReaderHeartbeatFolderPath(basePath), instantTime);
+  }
+
+  /**
+   * Deletes the heartbeat file for the specified instant.
+   *
+   * @param fs                  The filesystem
+   * @param heartbeatFolderPath The heartbeat folder path
+   * @param instantTime         The instant time
+   *
+   * @return true if the deletion success
+   */
+  private static boolean deleteHeartbeatFile(FileSystem fs, String heartbeatFolderPath, String instantTime) {
     boolean deleted = false;
     try {
-      String heartbeatFolderPath = HoodieTableMetaClient.getHeartbeatFolderPath(basePath);
       deleted = fs.delete(new Path(heartbeatFolderPath + Path.SEPARATOR + instantTime), false);
       if (!deleted) {
         LOG.error("Failed to delete heartbeat for instant " + instantTime);
@@ -68,9 +83,9 @@ public class HeartbeatUtils {
    * @param config HoodieWriteConfig instance
    * @return Boolean indicating whether heartbeat file was deleted or not
    */
-  public static boolean deleteHeartbeatFile(FileSystem fs, String basePath, String instantTime, HoodieWriteConfig config) {
+  public static boolean deleteWriterHeartbeatFile(FileSystem fs, String basePath, String instantTime, HoodieWriteConfig config) {
     if (config.getFailedWritesCleanPolicy().isLazy()) {
-      return deleteHeartbeatFile(fs, basePath, instantTime);
+      return deleteWriterHeartbeatFile(fs, basePath, instantTime);
     }
 
     return false;
@@ -80,16 +95,16 @@ public class HeartbeatUtils {
    * Check if the heartbeat corresponding to instantTime has expired. If yes, abort by throwing an exception.
    * @param instantTime
    * @param table
-   * @param heartbeatClient
+   * @param writerHeartbeat
    * @param config
    */
   public static void abortIfHeartbeatExpired(String instantTime, HoodieTable table,
-                                             HoodieHeartbeatClient heartbeatClient, HoodieWriteConfig config) {
-    ValidationUtils.checkArgument(heartbeatClient != null);
+                                             WriterHeartbeat writerHeartbeat, HoodieWriteConfig config) {
+    ValidationUtils.checkArgument(writerHeartbeat != null);
     try {
-      if (config.getFailedWritesCleanPolicy().isLazy() && heartbeatClient.isHeartbeatExpired(instantTime)) {
+      if (config.getFailedWritesCleanPolicy().isLazy() && writerHeartbeat.isHeartbeatExpired(instantTime)) {
         throw new HoodieException("Heartbeat for instant " + instantTime + " has expired, last heartbeat "
-            + HoodieHeartbeatClient.getLastHeartbeatTime(table.getMetaClient().getFs(), config.getBasePath(), instantTime));
+            + writerHeartbeat.getLastHeartbeatTime(table.getMetaClient().getFs(), instantTime));
       }
     } catch (IOException io) {
       throw new HoodieException("Unable to read heartbeat", io);

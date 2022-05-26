@@ -205,7 +205,7 @@ public class TestCleaner extends HoodieClientTestBase {
     // Verify there are no errors
     assertNoWriteErrors(statuses.collect());
     // Don't invoke commit to simulate failed write
-    client.getHeartbeatClient().stop(newCommitTime);
+    client.getWriterHeartbeat().stop(newCommitTime);
     return Pair.of(newCommitTime, statuses);
   }
 
@@ -607,7 +607,7 @@ public class TestCleaner extends HoodieClientTestBase {
         insertFirstFailedBigBatchForClientCleanerTest(cfg, client, recordInsertGenWrappedFunction, insertFn,
         HoodieCleaningPolicy.KEEP_LATEST_COMMITS);
     // Await till enough time passes such that the last failed commits heartbeats are expired
-    await().atMost(10, TimeUnit.SECONDS).until(() -> client.getHeartbeatClient()
+    await().atMost(10, TimeUnit.SECONDS).until(() -> client.getWriterHeartbeat()
         .isHeartbeatExpired(ret.getLeft()));
     List<HoodieCleanStat> cleanStats = runCleaner(cfg);
     assertEquals(0, cleanStats.size(), "Must not clean any files");
@@ -1348,7 +1348,7 @@ public class TestCleaner extends HoodieClientTestBase {
           HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS);
 
       // Await till enough time passes such that the last failed commits heartbeats are expired
-      await().atMost(10, TimeUnit.SECONDS).until(() -> client.getHeartbeatClient()
+      await().atMost(10, TimeUnit.SECONDS).until(() -> client.getWriterHeartbeat()
           .isHeartbeatExpired(ret.getLeft()));
 
       List<HoodieCleanStat> cleanStats = runCleaner(cfg);

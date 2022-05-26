@@ -22,11 +22,17 @@ import org.apache.hudi.adapter.AbstractStreamOperatorAdapter;
 import org.apache.hudi.adapter.AbstractStreamOperatorFactoryAdapter;
 import org.apache.hudi.adapter.MailboxExecutorAdapter;
 import org.apache.hudi.adapter.Utils;
+import org.apache.hudi.client.heartbeat.ReaderHeartbeat;
+import org.apache.hudi.common.table.log.InstantRange;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.table.format.mor.MergeOnReadInputFormat;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
+import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.api.common.state.ListState;
 import org.apache.flink.api.common.state.ListStateDescriptor;
+import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.state.JavaSerializer;
 import org.apache.flink.runtime.state.StateInitializationContext;
 import org.apache.flink.runtime.state.StateSnapshotContext;
@@ -70,6 +76,8 @@ public class StreamReadOperator extends AbstractStreamOperatorAdapter<RowData>
   // for exhausting all scheduled split reading tasks.
   private final MailboxExecutorAdapter executor;
 
+  private final Configuration conf;
+
   private MergeOnReadInputFormat format;
 
   private transient SourceFunction.SourceContext<RowData> sourceContext;
@@ -84,8 +92,15 @@ public class StreamReadOperator extends AbstractStreamOperatorAdapter<RowData>
   // When there are no more files to read, this will be set to IDLE.
   private transient volatile SplitState currentSplitState;
 
-  private StreamReadOperator(MergeOnReadInputFormat format, ProcessingTimeService timeService,
-                             MailboxExecutorAdapter mailboxExecutor) {
+  // Reader heartbeat to avoid the cleaner cleans the files being consumed.
+  private transient ReaderHeartbeat readerHeartbeat;
+
+  // Remembers the current heartbeat for canceling
+  private String curHeartbeat;
+
+  private StreamReadOperator(Configuration conf, MergeOnReadInputFormat format,
+                             ProcessingTimeService timeService, MailboxExecutorAdapter mailboxExecutor) {
+    this.conf = conf;
     this.format = Preconditions.checkNotNull(format, "The InputFormat should not be null.");
     this.processingTimeService = timeService;
     this.executor = Preconditions.checkNotNull(mailboxExecutor, "The mailboxExecutor should not be null.");
@@ -110,6 +125,7 @@ public class StreamReadOperator extends AbstractStreamOperatorAdapter<RowData>
 
       for (MergeOnReadInputSplit split : inputSplitsState.get()) {
         splits.add(split);
+        startHeartbeatForSplit(split);
       }
     }
 
@@ -122,6 +138,8 @@ public class StreamReadOperator extends AbstractStreamOperatorAdapter<RowData>
 
     // Enqueue to process the recovered input splits.
     enqueueProcessSplits();
+    // the reader heartbeat
+    readerHeartbeat = StreamerUtil.createReaderHeartbeat(conf);
   }
 
   @Override
@@ -134,8 +152,32 @@ public class StreamReadOperator extends AbstractStreamOperatorAdapter<RowData>
 
   @Override
   public void processElement(StreamRecord<MergeOnReadInputSplit> element) {
+    startHeartbeatForSplit(element.getValue());
     splits.add(element.getValue());
     enqueueProcessSplits();
+  }
+
+  private void startHeartbeatForSplit(MergeOnReadInputSplit split) {
+    readerHeartbeat.start(getReportingHeartbeat(split));
+  }
+
+  private static String getReportingHeartbeat(MergeOnReadInputSplit split) {
+    Option<InstantRange> instantRange = split.getInstantRange();
+    if (instantRange.isPresent()) {
+      return instantRange.get().getStartInstant();
+    } else {
+      return FlinkOptions.START_COMMIT_EARLIEST;
+    }
+  }
+
+  private void mayStopLastHeartbeat(MergeOnReadInputSplit split) {
+    String reportingHeartbeat = getReportingHeartbeat(split);
+    if (this.curHeartbeat == null) {
+      this.curHeartbeat = reportingHeartbeat;
+    } else if (!this.curHeartbeat.equals(reportingHeartbeat)) {
+      this.readerHeartbeat.stop(this.curHeartbeat);
+      this.curHeartbeat = reportingHeartbeat;
+    }
   }
 
   private void enqueueProcessSplits() {
@@ -149,6 +191,8 @@ public class StreamReadOperator extends AbstractStreamOperatorAdapter<RowData>
     MergeOnReadInputSplit split = splits.peek();
     if (split == null) {
       currentSplitState = SplitState.IDLE;
+      // no input data, remove all the heartbeats
+      readerHeartbeat.stop();
       return;
     }
 
@@ -161,6 +205,7 @@ public class StreamReadOperator extends AbstractStreamOperatorAdapter<RowData>
       // there is only one log message for one data bucket.
       LOG.info("Processing input split : {}", split);
       format.open(split);
+      mayStopLastHeartbeat(split);
     }
     try {
       consumeAsMiniBatch(split);
@@ -211,6 +256,11 @@ public class StreamReadOperator extends AbstractStreamOperatorAdapter<RowData>
       format = null;
     }
 
+    if (readerHeartbeat != null) {
+      readerHeartbeat.close();
+      readerHeartbeat = null;
+    }
+
     sourceContext = null;
   }
 
@@ -225,8 +275,8 @@ public class StreamReadOperator extends AbstractStreamOperatorAdapter<RowData>
     }
   }
 
-  public static OneInputStreamOperatorFactory<MergeOnReadInputSplit, RowData> factory(MergeOnReadInputFormat format) {
-    return new OperatorFactory(format);
+  public static OneInputStreamOperatorFactory<MergeOnReadInputSplit, RowData> factory(Configuration conf, MergeOnReadInputFormat format) {
+    return new OperatorFactory(conf, format);
   }
 
   private enum SplitState {
@@ -236,16 +286,18 @@ public class StreamReadOperator extends AbstractStreamOperatorAdapter<RowData>
   private static class OperatorFactory extends AbstractStreamOperatorFactoryAdapter<RowData>
       implements OneInputStreamOperatorFactory<MergeOnReadInputSplit, RowData> {
 
+    private final Configuration conf;
     private final MergeOnReadInputFormat format;
 
-    private OperatorFactory(MergeOnReadInputFormat format) {
+    private OperatorFactory(Configuration conf, MergeOnReadInputFormat format) {
+      this.conf = conf;
       this.format = format;
     }
 
     @SuppressWarnings("unchecked")
     @Override
     public <O extends StreamOperator<RowData>> O createStreamOperator(StreamOperatorParameters<RowData> parameters) {
-      StreamReadOperator operator = new StreamReadOperator(format, processingTimeService, getMailboxExecutorAdapter());
+      StreamReadOperator operator = new StreamReadOperator(conf, format, processingTimeService, getMailboxExecutorAdapter());
       operator.setup(parameters.getContainingTask(), parameters.getStreamConfig(), parameters.getOutput());
       return (O) operator;
     }

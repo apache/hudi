@@ -86,6 +86,7 @@ public class HoodieTableMetaClient implements Serializable {
   public static final String AUXILIARYFOLDER_NAME = METAFOLDER_NAME + Path.SEPARATOR + ".aux";
   public static final String BOOTSTRAP_INDEX_ROOT_FOLDER_PATH = AUXILIARYFOLDER_NAME + Path.SEPARATOR + ".bootstrap";
   public static final String HEARTBEAT_FOLDER_NAME = METAFOLDER_NAME + Path.SEPARATOR + ".heartbeat";
+  public static final String READER_HEARTBEAT_FOLDER_NAME = HEARTBEAT_FOLDER_NAME + Path.SEPARATOR + ".reader";
   public static final String METADATA_TABLE_FOLDER_PATH = METAFOLDER_NAME + Path.SEPARATOR + "metadata";
   public static final String HASHING_METADATA_FOLDER_NAME = ".bucket_index" + Path.SEPARATOR + "consistent_hashing_metadata";
   public static final String BOOTSTRAP_INDEX_BY_PARTITION_FOLDER_PATH = BOOTSTRAP_INDEX_ROOT_FOLDER_PATH
@@ -247,10 +248,17 @@ public class HoodieTableMetaClient implements Serializable {
   }
 
   /**
-   * @return Heartbeat folder path.
+   * @return Writer heartbeat folder path.
    */
-  public static String getHeartbeatFolderPath(String basePath) {
+  public static String getWriterHeartbeatFolderPath(String basePath) {
     return String.format("%s%s%s", basePath, Path.SEPARATOR, HEARTBEAT_FOLDER_NAME);
+  }
+
+  /**
+   * @return Reader heartbeat folder path.
+   */
+  public static String getReaderHeartbeatFolderPath(String basePath) {
+    return String.format("%s%s%s", basePath, Path.SEPARATOR, READER_HEARTBEAT_FOLDER_NAME);
   }
 
   /**

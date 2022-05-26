@@ -20,6 +20,7 @@ package org.apache.hudi.table.action.clean;
 
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
+import org.apache.hudi.client.heartbeat.ReaderHeartbeat;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.CleanFileInfo;
 import org.apache.hudi.common.model.CompactionOperation;
@@ -303,6 +304,9 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
     boolean toDeletePartition = false;
     if (commitTimeline.countInstants() > commitsRetained) {
       Option<HoodieInstant> earliestCommitToRetainOption = getEarliestCommitToRetain();
+      if (!earliestCommitToRetainOption.isPresent()) {
+        return Pair.of(false, deletePaths);
+      }
       HoodieInstant earliestCommitToRetain = earliestCommitToRetainOption.get();
       // all replaced file groups before earliestCommitToRetain are eligible to clean
       deletePaths.addAll(getReplacedFilesEligibleToClean(savepointedFiles, partitionPath, earliestCommitToRetainOption));
@@ -471,6 +475,18 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
       String earliestTimeToRetain = HoodieActiveTimeline.formatDate(Date.from(currentDateTime.minusHours(hoursRetained).toInstant()));
       earliestCommitToRetain = Option.fromJavaOptional(commitTimeline.getInstants().filter(i -> HoodieTimeline.compareTimestamps(i.getTimestamp(),
               HoodieTimeline.GREATER_THAN_OR_EQUALS, earliestTimeToRetain)).findFirst());
+    }
+    if (earliestCommitToRetain.isPresent()) {
+      ReaderHeartbeat readerHeartbeat = ReaderHeartbeat.create(hoodieTable.getMetaClient().getFs(), config);
+      Option<String> earliestConsumingInstant = readerHeartbeat.getValidReaderHeartbeats().getEarliestConsumingInstant();
+      if (earliestConsumingInstant.isPresent()
+          && HoodieTimeline.compareTimestamps(earliestCommitToRetain.get().getTimestamp(), HoodieTimeline.GREATER_THAN, earliestConsumingInstant.get())) {
+        Option<HoodieInstant> adjustedInstant = commitTimeline.findInstantsBeforeOrEquals(earliestConsumingInstant.get()).lastInstant();
+        String warnMsg = String.format("The earliest retained commit is adjusted from %s to %s because the instant %s is being consumed",
+            earliestCommitToRetain, adjustedInstant, earliestConsumingInstant.get());
+        LOG.warn(warnMsg);
+        return adjustedInstant;
+      }
     }
     return earliestCommitToRetain;
   }

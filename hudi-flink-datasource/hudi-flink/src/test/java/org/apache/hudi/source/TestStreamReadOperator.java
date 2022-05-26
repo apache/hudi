@@ -270,7 +270,7 @@ public class TestStreamReadOperator {
         .emitDelete(true)
         .build();
 
-    OneInputStreamOperatorFactory<MergeOnReadInputSplit, RowData> factory = StreamReadOperator.factory(inputFormat);
+    OneInputStreamOperatorFactory<MergeOnReadInputSplit, RowData> factory = StreamReadOperator.factory(conf, inputFormat);
     OneInputStreamOperatorTestHarness<MergeOnReadInputSplit, RowData> harness = new OneInputStreamOperatorTestHarness<>(
         factory, 1, 1, 0);
     harness.getStreamConfig().setTimeCharacteristic(TimeCharacteristic.ProcessingTime);

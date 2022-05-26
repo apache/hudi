@@ -341,7 +341,7 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
           .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
       autoArchiveOnCommit(table, acquireLockForArchival);
     } finally {
-      this.heartbeatClient.stop(instantTime);
+      this.writerHeartbeat.stop(instantTime);
     }
   }
 

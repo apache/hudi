@@ -20,7 +20,7 @@ package org.apache.hudi.table.action.rollback;
 
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
-import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
+import org.apache.hudi.client.heartbeat.WriterHeartbeat;
 import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.bootstrap.index.BootstrapIndex;
@@ -176,7 +176,7 @@ public abstract class BaseRollbackActionExecutor<T extends HoodieRecordPayload, 
           && !commitTimeline.findInstantsAfter(instantTimeToRollback, Integer.MAX_VALUE).empty()) {
         // check if remnants are from a previous LAZY rollback config, if yes, let out of order rollback continue
         try {
-          if (!HoodieHeartbeatClient.heartbeatExists(table.getMetaClient().getFs(),
+          if (!WriterHeartbeat.heartbeatExists(table.getMetaClient().getFs(),
               config.getBasePath(), instantTimeToRollback)) {
             throw new HoodieRollbackException(
                 "Found commits after time :" + instantTimeToRollback + ", please rollback greater commits first");

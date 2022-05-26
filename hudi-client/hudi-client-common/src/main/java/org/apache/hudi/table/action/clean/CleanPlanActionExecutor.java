@@ -21,6 +21,7 @@ package org.apache.hudi.table.action.clean;
 import org.apache.hudi.avro.model.HoodieActionInstant;
 import org.apache.hudi.avro.model.HoodieCleanFileInfo;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
+import org.apache.hudi.client.heartbeat.ReaderHeartbeat;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.CleanFileInfo;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
@@ -94,6 +95,15 @@ public class CleanPlanActionExecutor<T extends HoodieRecordPayload, I, K, O> ext
    */
   HoodieCleanerPlan requestClean(HoodieEngineContext context) {
     try {
+      // fetch the reader heartbeats first to see whether there are instants being consumed.
+      // if there is a reader consumes from all the history data set, abort the cleaning.
+      // if there is an instant being consumed, all its data files can not be cleaned.
+      ReaderHeartbeat readerHeartbeat = ReaderHeartbeat.create(table.getMetaClient().getFs(), config);
+      ReaderHeartbeat.Heartbeats heartbeats = readerHeartbeat.getValidReaderHeartbeats();
+      if (heartbeats.isConsumingFromEarliest()) {
+        LOG.warn("There is reader consuming all the data sets, abort the cleaning");
+        return HoodieCleanerPlan.newBuilder().setPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS.name()).build();
+      }
       CleanPlanner<T, I, K, O> planner = new CleanPlanner<>(context, table, config);
       Option<HoodieInstant> earliestInstant = planner.getEarliestCommitToRetain();
       context.setJobStatus(this.getClass().getSimpleName(), "Obtaining list of partitions to be cleaned: " + config.getTableName());

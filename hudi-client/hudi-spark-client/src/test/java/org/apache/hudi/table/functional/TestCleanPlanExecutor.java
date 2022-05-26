@@ -19,6 +19,7 @@
 package org.apache.hudi.table.functional;
 
 import org.apache.hudi.avro.model.HoodieFileStatus;
+import org.apache.hudi.client.heartbeat.ReaderHeartbeat;
 import org.apache.hudi.common.HoodieCleanStat;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.BootstrapFileMapping;
@@ -270,6 +271,116 @@ public class TestCleanPlanExecutor extends TestCleaner {
   }
 
   /**
+   * Test HoodieTable.clean() cleaning by commit logic for COW table with reader heartbeats.
+   */
+  @Test
+  public void testKeepLatestCommitsWithReaderHeartbeats() throws Exception {
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
+        .withMetadataConfig(
+            HoodieMetadataConfig.newBuilder()
+                .withAssumeDatePartitioning(true)
+                .build())
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.EAGER)
+            .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS)
+            .retainCommits(2)
+            .withMaxCommitsBeforeCleaning(2).build())
+        .build();
+
+    HoodieTestTable testTable = HoodieTestTable.of(metaClient);
+    String p0 = "2020/01/01";
+    String p1 = "2020/01/02";
+
+    // make 1 commit, with 1 file per partition
+    String file1P0C0 = UUID.randomUUID().toString();
+    String file1P1C0 = UUID.randomUUID().toString();
+    testTable.addInflightCommit("00000000000001").withBaseFilesInPartition(p0, file1P0C0).withBaseFilesInPartition(p1, file1P1C0);
+
+    HoodieCommitMetadata commitMetadata = generateCommitMetadata("00000000000001",
+        Collections.unmodifiableMap(new HashMap<String, List<String>>() {
+          {
+            put(p0, CollectionUtils.createImmutableList(file1P0C0));
+            put(p1, CollectionUtils.createImmutableList(file1P1C0));
+          }
+        })
+    );
+    metaClient.getActiveTimeline().saveAsComplete(
+        new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "00000000000001"),
+        Option.of(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+
+    // make next commit, with 1 insert & 1 update per partition
+    Map<String, String> partitionAndFileId002 = testTable.addInflightCommit("00000000000002").getFileIdsWithBaseFilesInPartitions(p0, p1);
+    String file2P0C1 = partitionAndFileId002.get(p0);
+    String file2P1C1 = partitionAndFileId002.get(p1);
+    testTable.forCommit("00000000000002").withBaseFilesInPartition(p0, file1P0C0).withBaseFilesInPartition(p1, file1P1C0);
+    commitMetadata = generateCommitMetadata("00000000000002", new HashMap<String, List<String>>() {
+      {
+        put(p0, CollectionUtils.createImmutableList(file1P0C0, file2P0C1));
+        put(p1, CollectionUtils.createImmutableList(file1P1C0, file2P1C1));
+      }
+    });
+    metaClient.getActiveTimeline().saveAsComplete(
+        new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "00000000000002"),
+        Option.of(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+
+    // make next commit, with 2 updates to existing files, and 1 insert
+    String file3P0C2 = testTable.addInflightCommit("00000000000003")
+        .withBaseFilesInPartition(p0, file1P0C0)
+        .withBaseFilesInPartition(p0, file2P0C1)
+        .getFileIdsWithBaseFilesInPartitions(p0).get(p0);
+    commitMetadata = generateCommitMetadata("00000000000003",
+        CollectionUtils.createImmutableMap(
+            p0, CollectionUtils.createImmutableList(file1P0C0, file2P0C1, file3P0C2)));
+    metaClient.getActiveTimeline().saveAsComplete(
+        new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "00000000000003"),
+        Option.of(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+
+    // make next commit, with 2 updates to existing files, and 1 insert
+    String file4P0C3 = testTable.addInflightCommit("00000000000004")
+        .withBaseFilesInPartition(p0, file1P0C0)
+        .withBaseFilesInPartition(p0, file2P0C1)
+        .getFileIdsWithBaseFilesInPartitions(p0).get(p0);
+    commitMetadata = generateCommitMetadata("00000000000004",
+        CollectionUtils.createImmutableMap(
+            p0, CollectionUtils.createImmutableList(file1P0C0, file2P0C1, file4P0C3)));
+    metaClient.getActiveTimeline().saveAsComplete(
+        new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "00000000000004"),
+        Option.of(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+
+    // starts the reader heartbeat to simulate reader consumption.
+    ReaderHeartbeat readerHeartbeat = ReaderHeartbeat.create(metaClient.getFs(), config);
+    readerHeartbeat.start("earliest");
+
+    List<HoodieCleanStat> hoodieCleanStatsOne =
+        runCleaner(config, 5, true);
+    assertEquals(0, hoodieCleanStatsOne.size(),
+        "Must not clean any file. The reader starts consuming from earliest instant");
+    readerHeartbeat.stop("earliest");
+
+    readerHeartbeat.start("00000000000002");
+    List<HoodieCleanStat> hoodieCleanStatsTwo =
+        runCleaner(config, 5, true);
+    assertEquals(0, hoodieCleanStatsTwo.size(),
+        "Must not clean any file. The reader starts consuming from instant '00000000000001' which can not be cleaned");
+    readerHeartbeat.stop("00000000000002");
+
+    List<HoodieCleanStat> hoodieCleanStatsThree =
+        runCleaner(config, 5, true);
+    HoodieCleanStat partitionCleanStat = getCleanStat(hoodieCleanStatsThree, p0);
+
+    assertEquals(1, partitionCleanStat.getSuccessDeleteFiles().size(), "Must clean at least one old file");
+    assertFalse(testTable.baseFileExists(p0, "00000000000001", file1P0C0));
+    assertTrue(testTable.baseFileExists(p0, "00000000000002", file1P0C0));
+    assertTrue(testTable.baseFileExists(p0, "00000000000003", file1P0C0));
+    assertTrue(testTable.baseFileExists(p0, "00000000000002", file2P0C1));
+    assertTrue(testTable.baseFileExists(p0, "00000000000003", file2P0C1));
+    assertTrue(testTable.baseFileExists(p0, "00000000000003", file3P0C2));
+    assertTrue(testTable.baseFileExists(p0, "00000000000004", file4P0C3));
+  }
+
+  /**
    * Test Hudi COW Table Cleaner - Keep the latest file versions policy.
    */
   @ParameterizedTest
@@ -472,6 +583,79 @@ public class TestCleanPlanExecutor extends TestCleaner {
     assertTrue(testTable.logFileExists(p0, "001", file1P0, 3));
     assertTrue(testTable.baseFileExists(p0, "002", file1P0));
     assertTrue(testTable.logFileExists(p0, "002", file1P0, 4));
+  }
+
+  /**
+   * Test HoodieTable.clean() cleaning by commit logic for MOR table with Log files and reader heartbeats.
+   */
+  @Test
+  public void testKeepLatestCommitsMORWithReaderHeartbeats() throws Exception {
+
+    HoodieWriteConfig config =
+        HoodieWriteConfig.newBuilder().withPath(basePath)
+            .withMetadataConfig(
+                HoodieMetadataConfig.newBuilder()
+                    .withAssumeDatePartitioning(true)
+                    // Column Stats Index is disabled, since these tests construct tables which are
+                    // not valid (empty commit metadata, invalid parquet files)
+                    .withMetadataIndexColumnStats(false)
+                    .build())
+            .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+                .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS).retainCommits(1).build())
+            .build();
+
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(hadoopConf, basePath, HoodieTableType.MERGE_ON_READ);
+    HoodieTestTable testTable = HoodieTestTable.of(metaClient);
+    String p0 = "2020/01/01";
+
+    // Make 3 files, one base file and 2 log files associated with base file
+    String file1P0 = testTable.addDeltaCommit("000").getFileIdsWithBaseFilesInPartitions(p0).get(p0);
+    testTable.forDeltaCommit("000")
+        .withLogFile(p0, file1P0, 1)
+        .withLogFile(p0, file1P0, 2);
+
+    // Make 2 files, one base file and 1 log files associated with base file
+    testTable.addDeltaCommit("001")
+        .withBaseFilesInPartition(p0, file1P0)
+        .withLogFile(p0, file1P0, 3);
+
+    // Make 2 files, one base file and 1 log files associated with base file
+    testTable.addDeltaCommit("002")
+        .withBaseFilesInPartition(p0, file1P0)
+        .withLogFile(p0, file1P0, 4);
+
+    // starts the reader heartbeat to simulate reader consumption.
+    ReaderHeartbeat readerHeartbeat = ReaderHeartbeat.create(metaClient.getFs(), config);
+
+    // consumes from 'earliest', cleaning is aborted.
+    readerHeartbeat.start("earliest");
+    List<HoodieCleanStat> hoodieCleanStatsOne = runCleaner(config);
+    assertEquals(0, hoodieCleanStatsOne.size(),
+        "Must not clean any file. The reader starts consuming from earliest instant");
+    readerHeartbeat.stop("earliest");
+
+    // '000' is being consumed, so it can not be cleaned.
+    readerHeartbeat.start("000");
+    List<HoodieCleanStat> hoodieCleanStatsTwo = runCleaner(config);
+    assertEquals(0, hoodieCleanStatsTwo.size(),
+        "Must not clean any file. The reader starts consuming from instant '000' which can not be cleaned");
+    readerHeartbeat.stop("000");
+
+    // '001' is being consumed, so '000' can be cleaned.
+    readerHeartbeat.start("002");
+    List<HoodieCleanStat> hoodieCleanStatsThree = runCleaner(config);
+    assertEquals(3,
+        getCleanStat(hoodieCleanStatsThree, p0).getSuccessDeleteFiles()
+            .size(), "Must clean three files, one base and 2 log files");
+    assertFalse(testTable.baseFileExists(p0, "000", file1P0));
+    assertFalse(testTable.logFilesExist(p0, "000", file1P0, 1, 2));
+    assertTrue(testTable.baseFileExists(p0, "001", file1P0));
+    assertTrue(testTable.logFileExists(p0, "001", file1P0, 3));
+    assertTrue(testTable.baseFileExists(p0, "002", file1P0));
+    assertTrue(testTable.logFileExists(p0, "002", file1P0, 4));
+    readerHeartbeat.stop("002");
+
+    readerHeartbeat.stop();
   }
 
   /**

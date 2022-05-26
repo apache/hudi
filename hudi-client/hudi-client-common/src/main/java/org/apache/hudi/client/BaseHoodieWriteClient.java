@@ -226,7 +226,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
     HoodieCommitMetadata metadata = CommitUtils.buildMetadata(stats, partitionToReplaceFileIds,
         extraMetadata, operationType, config.getWriteSchema(), commitActionType);
     HoodieInstant inflightInstant = new HoodieInstant(State.INFLIGHT, table.getMetaClient().getCommitActionType(), instantTime);
-    HeartbeatUtils.abortIfHeartbeatExpired(instantTime, table, heartbeatClient, config);
+    HeartbeatUtils.abortIfHeartbeatExpired(instantTime, table, writerHeartbeat, config);
     this.txnManager.beginTransaction(Option.of(inflightInstant),
         lastCompletedTxnAndMetadata.isPresent() ? Option.of(lastCompletedTxnAndMetadata.get().getLeft()) : Option.empty());
     try {
@@ -533,7 +533,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
       autoCleanOnCommit();
       autoArchiveOnCommit(table, acquireLockForArchival);
     } finally {
-      this.heartbeatClient.stop(instantTime);
+      this.writerHeartbeat.stop(instantTime);
     }
   }
 
@@ -974,7 +974,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
         "Latest pending compaction instant time must be earlier than this instant time. Latest Compaction :"
             + latestPending + ",  Ingesting at " + instantTime));
     if (config.getFailedWritesCleanPolicy().isLazy()) {
-      this.heartbeatClient.start(instantTime);
+      this.writerHeartbeat.start(instantTime);
     }
 
     if (actionType.equals(HoodieTimeline.REPLACE_COMMIT_ACTION)) {
@@ -1187,11 +1187,11 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
           HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS)) {
         // do we need to handle failed rollback of a bootstrap
         rollbackFailedBootstrap();
-        HeartbeatUtils.deleteHeartbeatFile(fs, basePath, entry.getKey(), config);
+        HeartbeatUtils.deleteWriterHeartbeatFile(fs, basePath, entry.getKey(), config);
         break;
       } else {
         rollback(entry.getKey(), entry.getValue(), skipLocking);
-        HeartbeatUtils.deleteHeartbeatFile(fs, basePath, entry.getKey(), config);
+        HeartbeatUtils.deleteWriterHeartbeatFile(fs, basePath, entry.getKey(), config);
       }
     }
   }
@@ -1210,7 +1210,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
     } else if (cleaningPolicy.isLazy()) {
       return inflightInstantsStream.filter(instant -> {
         try {
-          return heartbeatClient.isHeartbeatExpired(instant.getTimestamp());
+          return writerHeartbeat.isHeartbeatExpired(instant.getTimestamp());
         } catch (IOException io) {
           throw new HoodieException("Failed to check heartbeat for instant " + instant, io);
         }
@@ -1538,7 +1538,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
     // Calling this here releases any resources used by your index, so make sure to finish any related operations
     // before this point
     this.index.close();
-    this.heartbeatClient.stop();
+    this.writerHeartbeat.stop();
     this.txnManager.close();
   }
 

@@ -411,6 +411,18 @@ public class HoodieWriteConfig extends HoodieConfig {
       .defaultValue(2)
       .withDocumentation("Number of heartbeat misses, before a writer is deemed not alive and all pending writes are aborted.");
 
+  public static final ConfigProperty<Integer> READER_HEARTBEAT_INTERVAL_IN_MS = ConfigProperty
+      .key("hoodie.reader.heartbeat.interval_in_ms")
+      .defaultValue(60 * 1000)
+      .sinceVersion("0.11.1")
+      .withDocumentation("Readers perform heartbeats to indicate consuming offsets. Controls how often (in ms), such heartbeats are registered to lake storage.");
+
+  public static final ConfigProperty<Integer> READER_HEARTBEAT_NUM_TOLERABLE_MISSES = ConfigProperty
+      .key("hoodie.reader.heartbeat.tolerable.misses")
+      .defaultValue(2)
+      .sinceVersion("0.11.1")
+      .withDocumentation("Number of heartbeat misses, before a reader is deemed not alive and the consuming instant can be safely cleaned.");
+
   public static final ConfigProperty<String> WRITE_CONCURRENCY_MODE = ConfigProperty
       .key("hoodie.write.concurrency.mode")
       .defaultValue(WriteConcurrencyMode.SINGLE_WRITER.name())
@@ -1967,6 +1979,14 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(CLIENT_HEARTBEAT_NUM_TOLERABLE_MISSES);
   }
 
+  public Long getHoodieReaderHeartbeatIntervalInMs() {
+    return getLong(READER_HEARTBEAT_INTERVAL_IN_MS);
+  }
+
+  public Integer getHoodieReaderHeartbeatTolerableMisses() {
+    return getInt(READER_HEARTBEAT_NUM_TOLERABLE_MISSES);
+  }
+
   /**
    * File listing metadata configs.
    */
@@ -2456,6 +2476,16 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withHeartbeatTolerableMisses(Integer heartbeatTolerableMisses) {
       writeConfig.setValue(CLIENT_HEARTBEAT_NUM_TOLERABLE_MISSES, String.valueOf(heartbeatTolerableMisses));
+      return this;
+    }
+
+    public Builder withReaderHeartbeatIntervalInMs(Integer heartbeatIntervalInMs) {
+      writeConfig.setValue(READER_HEARTBEAT_INTERVAL_IN_MS, String.valueOf(heartbeatIntervalInMs));
+      return this;
+    }
+
+    public Builder withReaderHeartbeatTolerableMisses(Integer heartbeatTolerableMisses) {
+      writeConfig.setValue(READER_HEARTBEAT_NUM_TOLERABLE_MISSES, String.valueOf(heartbeatTolerableMisses));
       return this;
     }
 

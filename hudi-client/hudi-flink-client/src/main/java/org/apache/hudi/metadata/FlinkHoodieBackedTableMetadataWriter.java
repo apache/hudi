@@ -142,7 +142,7 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
         // The metadata writer uses LAZY cleaning strategy without auto commit,
         // write client then checks the heartbeat expiration when committing the instant,
         // sets up the heartbeat explicitly to make the check pass.
-        writeClient.getHeartbeatClient().start(instantTime);
+        writeClient.getWriterHeartbeat().start(instantTime);
       }
 
       List<WriteStatus> statuses = preppedRecordList.size() > 0

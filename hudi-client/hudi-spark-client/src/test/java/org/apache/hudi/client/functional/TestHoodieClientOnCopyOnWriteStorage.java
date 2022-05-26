@@ -2305,7 +2305,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     // Await till enough time passes such that the first 2 failed commits heartbeats are expired
     boolean conditionMet = false;
     while (!conditionMet) {
-      conditionMet = client.getHeartbeatClient().isHeartbeatExpired("300");
+      conditionMet = client.getWriterHeartbeat().isHeartbeatExpired("300");
       Thread.sleep(2000);
     }
     client = new SparkRDDWriteClient(context, getParallelWritingWriteConfig(cleaningPolicy, populateMetaFields));
@@ -2376,7 +2376,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     // Await till enough time passes such that the 2 failed commits heartbeats are expired
     boolean conditionMet = false;
     while (!conditionMet) {
-      conditionMet = client.getHeartbeatClient().isHeartbeatExpired("400");
+      conditionMet = client.getWriterHeartbeat().isHeartbeatExpired("400");
       Thread.sleep(2000);
     }
     client.clean();
@@ -2442,7 +2442,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     // Await till enough time passes such that the first 2 failed commits heartbeats are expired
     boolean conditionMet = false;
     while (!conditionMet) {
-      conditionMet = client.getHeartbeatClient().isHeartbeatExpired("300");
+      conditionMet = client.getWriterHeartbeat().isHeartbeatExpired("300");
       Thread.sleep(2000);
     }
     Future<JavaRDD<WriteStatus>> commit4 = service.submit(() -> writeBatch(new SparkRDDWriteClient(context, getParallelWritingWriteConfig(cleaningPolicy, true)),

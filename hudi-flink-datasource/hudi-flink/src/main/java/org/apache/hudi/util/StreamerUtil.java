@@ -21,6 +21,7 @@ package org.apache.hudi.util;
 import org.apache.hudi.client.FlinkTaskContextSupplier;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
+import org.apache.hudi.client.heartbeat.ReaderHeartbeat;
 import org.apache.hudi.common.config.DFSPropertiesConfiguration;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
@@ -524,5 +525,13 @@ public class StreamerUtil {
   public static Schema getTableAvroSchema(HoodieTableMetaClient metaClient, boolean includeMetadataFields) throws Exception {
     TableSchemaResolver schemaUtil = new TableSchemaResolver(metaClient);
     return schemaUtil.getTableAvroSchema(includeMetadataFields);
+  }
+
+  /**
+   * Creates a reader heartbeat client with given configuration.
+   */
+  public static ReaderHeartbeat createReaderHeartbeat(Configuration conf) {
+    FileSystem fs = FSUtils.getFs(conf.getString(FlinkOptions.PATH), HadoopConfigurations.getHadoopConf(conf));
+    return ReaderHeartbeat.create(fs, getHoodieClientConfig(conf, false));
   }
 }
