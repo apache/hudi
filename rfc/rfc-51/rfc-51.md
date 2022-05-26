@@ -83,13 +83,21 @@ Other operations like `Compact`, `Clean`, `Index` do not write/change any data. 
 
 ### Config Definitions
 
-|  | default |  |
+Define a new config:
+
+| key | default | description |
 | --- | --- | --- |
-| hoodie.table.cdf.enabled | false | `true` represents the table to be used for CDC queries and will write cdc data if needed. |
-|  |  |  |
-| hoodie.datasource.read.cdc.enabled | false | if true, return the CDC data. |
-| hoodie.datasource.read.start.timestamp | - | requried. |
-| hoodie.datasource.read.end.timestamp | - | optional. |
+| hoodie.table.cdc.enabled | false | `true` represents the table to be used for CDC queries and will write cdc data if needed. |
+
+Other existing config that can be reused in cdc mode is as following:
+Define another query mode named `cdc`, which is similar to `snapshpt`, `read_optimized` and `incremental`.
+When read in cdc mode, set `hoodie.datasource.query.type` to `cdc`.
+
+| key | default  | description |
+| --- |---| --- |
+| hoodie.datasource.query.type | snapshot | set to cdc, enable the cdc quey mode |
+| hoodie.datasource.read.start.timestamp | -        | requried. |
+| hoodie.datasource.read.end.timestamp | -        | optional. |
 
 
 ### Write
@@ -148,7 +156,7 @@ This part just discuss how to make Spark (including Spark DataFrame, SQL, Stream
 
 Implement `CDCReader` that do these steps to response the CDC request:
 
-- judge whether this is a table that has enabled `hoodie.table.cdf.enabled`, and the query range is valid.
+- judge whether this is a table that has enabled `hoodie.table.cdc.enabled`, and the query range is valid.
 - extract and filter the commits needed from `ActiveTimeline`.
 - For each of commit, get and load (and merge for mor tables) the changing files, union and return `DataFrame`.
 
@@ -194,9 +202,9 @@ Here use an illustration to explain how we can query the CDC on MOR table in kin
 Spark DataFrame Syntax:
 ```scala
 spark.read.format("hudi").
-  option("hoodie.datasource.read.cdc.enabled", "true").
-  option("hoodie.datasource.read.start.timestamp", "20220426103000000").
-  option("hoodie.datasource.read.start.timestamp", "20220426113000000").
+  option("hoodie.datasource.query.type", "cdc").
+  option("hoodie.datasource.read.begin.instanttime", "20220426103000000").
+  option("hoodie.datasource.read.end.instanttime", "20220426113000000").
   load("/path/to/hudi")
 ```
 
@@ -215,7 +223,7 @@ from hudi_table_changes("hudi_cdc_table", "20220426103000000");
 Spark Streaming Sytax:
 ```scala
 val df = spark.readStream.format("hudi").
-  option("hoodie.datasource.read.cdc.enabled", "true").
+  option("hoodie.datasource.query.type", "cdc").
   load("/path/to/hudi")
 
 // launch a streaming which start from the current snapshot of hudi table,
