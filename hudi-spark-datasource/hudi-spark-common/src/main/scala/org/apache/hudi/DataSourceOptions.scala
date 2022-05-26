@@ -34,7 +34,6 @@ import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.log4j.LogManager
 import org.apache.spark.sql.execution.datasources.{DataSourceUtils => SparkDataSourceUtils}
 
-import java.util.Arrays
 import java.util.function.{Function => JavaFunction}
 import scala.collection.JavaConverters._
 import scala.language.implicitConversions
@@ -57,11 +56,7 @@ object DataSourceReadOptions {
     .key("hoodie.datasource.query.type")
     .defaultValue(QUERY_TYPE_SNAPSHOT_OPT_VAL)
     .withAlternatives("hoodie.datasource.view.type")
-    .withValidValues(Arrays.asList(
-      QUERY_TYPE_SNAPSHOT_OPT_VAL,
-      QUERY_TYPE_READ_OPTIMIZED_OPT_VAL,
-      QUERY_TYPE_INCREMENTAL_OPT_VAL
-    ))
+    .withValidValues(QUERY_TYPE_SNAPSHOT_OPT_VAL, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, QUERY_TYPE_INCREMENTAL_OPT_VAL)
     .withDocumentation("Whether data needs to be read, in incremental mode (new data since an instantTime) " +
       "(or) Read Optimized mode (obtain latest view, based on base files) (or) Snapshot mode " +
       "(obtain latest view, by merging base and (if any) log files)")
@@ -71,10 +66,7 @@ object DataSourceReadOptions {
   val REALTIME_MERGE: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.merge.type")
     .defaultValue(REALTIME_PAYLOAD_COMBINE_OPT_VAL)
-    .withValidValues(Arrays.asList(
-      REALTIME_SKIP_MERGE_OPT_VAL,
-      REALTIME_PAYLOAD_COMBINE_OPT_VAL
-    ))
+    .withValidValues(REALTIME_SKIP_MERGE_OPT_VAL, REALTIME_PAYLOAD_COMBINE_OPT_VAL)
     .withDocumentation("For Snapshot query on merge on read table, control whether we invoke the record " +
       s"payload implementation to merge (${REALTIME_PAYLOAD_COMBINE_OPT_VAL}) or skip merging altogether" +
       s"${REALTIME_SKIP_MERGE_OPT_VAL}")
@@ -220,7 +212,7 @@ object DataSourceWriteOptions {
   val OPERATION: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.write.operation")
     .defaultValue(UPSERT_OPERATION_OPT_VAL)
-    .withValidValues(Arrays.asList(
+    .withValidValues(
       WriteOperationType.INSERT.value,
       WriteOperationType.INSERT_PREPPED.value,
       WriteOperationType.UPSERT.value,
@@ -236,7 +228,7 @@ object DataSourceWriteOptions {
       WriteOperationType.COMPACT.value,
       WriteOperationType.INSERT.value,
       WriteOperationType.ALTER_SCHEMA.value
-    ))
+    )
     .withDocumentation("Whether to do upsert, insert or bulkinsert for the write operation. " +
       "Use bulkinsert to load new data into a table, and there on use upsert/insert. " +
       "bulk insert uses a disk based write path to scale to load large inputs without need to cache it.")
@@ -247,7 +239,7 @@ object DataSourceWriteOptions {
   val TABLE_TYPE: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.write.table.type")
     .defaultValue(COW_TABLE_TYPE_OPT_VAL)
-    .withValidValues(Arrays.asList(COW_TABLE_TYPE_OPT_VAL, MOR_TABLE_TYPE_OPT_VAL))
+    .withValidValues(COW_TABLE_TYPE_OPT_VAL, MOR_TABLE_TYPE_OPT_VAL)
     .withAlternatives("hoodie.datasource.write.storage.type")
     .withDocumentation("The table type for the underlying data, for this write. This can’t change between writes.")
 

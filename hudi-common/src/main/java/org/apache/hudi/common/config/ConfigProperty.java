@@ -25,7 +25,9 @@ import org.apache.hudi.exception.HoodieException;
 import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.Objects;
 
@@ -49,7 +51,7 @@ public class ConfigProperty<T> implements Serializable {
 
   private final Option<String> deprecatedVersion;
 
-  private final List<String> validValues;
+  private final Set<String> validValues;
 
   private final String[] alternatives;
 
@@ -57,7 +59,7 @@ public class ConfigProperty<T> implements Serializable {
   private final Option<Function<HoodieConfig, Option<T>>> inferFunction;
 
   ConfigProperty(String key, T defaultValue, String doc, Option<String> sinceVersion,
-                 Option<String> deprecatedVersion, Option<Function<HoodieConfig, Option<T>>> inferFunc, List<String> validValues, String... alternatives) {
+                 Option<String> deprecatedVersion, Option<Function<HoodieConfig, Option<T>>> inferFunc, Set<String> validValues, String... alternatives) {
     this.key = Objects.requireNonNull(key);
     this.defaultValue = defaultValue;
     this.doc = doc;
@@ -116,9 +118,9 @@ public class ConfigProperty<T> implements Serializable {
     return new ConfigProperty<>(key, defaultValue, doc, sinceVersion, deprecatedVersion, inferFunction, validValues, alternatives);
   }
 
-  public ConfigProperty<T> withValidValues(List<String> validValues) {
+  public ConfigProperty<T> withValidValues(String... validValues) {
     Objects.requireNonNull(validValues);
-    return new ConfigProperty<>(key, defaultValue, doc, sinceVersion, deprecatedVersion, inferFunction, validValues, alternatives);
+    return new ConfigProperty<>(key, defaultValue, doc, sinceVersion, deprecatedVersion, inferFunction, new HashSet<>(Arrays.asList(validValues)), alternatives);
   }
 
   public ConfigProperty<T> withAlternatives(String... alternatives) {
@@ -173,13 +175,13 @@ public class ConfigProperty<T> implements Serializable {
 
     public <T> ConfigProperty<T> defaultValue(T value) {
       Objects.requireNonNull(value);
-      ConfigProperty<T> configProperty = new ConfigProperty<>(key, value, "", Option.empty(), Option.empty(), Option.empty(), Collections.emptyList());
+      ConfigProperty<T> configProperty = new ConfigProperty<>(key, value, "", Option.empty(), Option.empty(), Option.empty(), Collections.emptySet());
       return configProperty;
     }
 
     public ConfigProperty<String> noDefaultValue() {
       ConfigProperty<String> configProperty = new ConfigProperty<>(key, null, "", Option.empty(),
-          Option.empty(), Option.empty(), Collections.emptyList());
+          Option.empty(), Option.empty(), Collections.emptySet());
       return configProperty;
     }
   }
