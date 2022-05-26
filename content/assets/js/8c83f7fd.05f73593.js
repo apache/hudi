@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[88029],{5607:function(e){e.exports=JSON.parse('{"allTagsPath":"/blog/tags","slug":"/blog/tags/onehouse","name":"Onehouse","count":1,"permalink":"/blog/tags/onehouse"}')}}]);
