@@ -307,7 +307,7 @@ public class HoodieFlinkCompactor {
         for (Pair<String, HoodieCompactionPlan> pair : compactionPlans.subList(1, compactionPlans.size())) {
           source = source.union(env.addSource(new CompactionPlanSourceFunction(pair.getRight(), pair.getLeft()))
               .name("compaction_source " + pair.getLeft())
-              .uid("uid_compaction_source " + pair.getLeft()));
+              .uid("uid_compaction_source_" + pair.getLeft()));
         }
       }
 
@@ -329,8 +329,8 @@ public class HoodieFlinkCompactor {
       compactionPlans.forEach(pair ->
           operator.getSideOutput(new OutputTag<>(pair.getLeft(), TypeInformation.of(CompactionCommitEvent.class)))
               .addSink(new CompactionCommitSink(conf))
-              .name("clean_commits")
-              .uid("uid_clean_commits")
+              .name("clean_commits " + pair.getLeft())
+              .uid("uid_clean_commits_" + pair.getLeft())
               .setParallelism(1));
 
       env.execute("flink_hudi_compaction_" + String.join(",", compactionInstantTimes));
