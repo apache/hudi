@@ -103,7 +103,7 @@ configuration and new table APIs.
 * Reduce the number of configs needed for Hive sync, e.g. table name once
   provided at the time of first write can be reused for hive sync table name
   config as well.
-* Revisit the class hierarchy and refactor if needed.
+* Revisit the class hierarchy and refactor if needed. Please check [RFC-55](/rfc/rfc-55/rfc-55.md)
 
 #### Configuration Builders
 
@@ -118,18 +118,18 @@ should be able to create or update the tables using static methods.
 
 | Method Name   | Description   |
 | ------------- | ------------- |
-| bootstrap     | Create a Hudi table from the given parquet table  |
-| create        | Create a Hudi table with the given configs if it does not exist.   |
+| bootstrap     | Create a Hudi table from the given table in parquet and other supported formats  |
+| create        | Create a Hudi table with the given configs if it does not exist. Returns an instance of `HudiTable` for the newly created or an existing Hudi table.   |
 | update        | Update rows in a Hudi table that match the given condition with the given update expression   |
 | drop          | Drop the given Hudi table completely  |
 | truncate      | Delete data from the given Hudi table but does not drop it |
-| restoreToTime | Restore Hudi table to the given older commit time  |
+| restoreTo     | Restore Hudi table to the given older commit time or a logical time.  |
 
 Let's look at some examples:
 
 ```java
 // create Hudi table
-HudiTable hudiTable=HudiTable.create(HoodieTableConfig.newBuilder()
+HudiTable hudiTable = HudiTable.create(HoodieTableConfig.newBuilder()
     .withTableName("tableName")
     .withBasePath("basePath")
     .withTableType(TableType.MERGE_ON_READ)
@@ -147,6 +147,10 @@ hudiTable.restoreToTime("0000000" // previous commit time)
 // drop
 hudiTable.drop() // deletes the whole data and the base path as well
 ```
+
+In the first phase of implementation, Spark will be the execution engine behind these APIs. 
+We will use spark sql functions for update expressions.
+In the second phase, other engines such as Flink will be supported too.
 
 ## Rollout/Adoption Plan
 
