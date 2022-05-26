@@ -18,7 +18,6 @@
 
 package org.apache.hudi.table.format;
 
-import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -27,7 +26,6 @@ import org.apache.hudi.common.table.log.HoodieUnMergedLogRecordScanner;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.queue.BoundedInMemoryExecutor;
 import org.apache.hudi.common.util.queue.BoundedInMemoryQueueProducer;
 import org.apache.hudi.common.util.queue.FunctionBasedQueueProducer;
@@ -126,7 +124,6 @@ public class FormatUtils {
       HoodieWriteConfig writeConfig,
       Configuration hadoopConf) {
     FileSystem fs = FSUtils.getFs(split.getTablePath(), hadoopConf);
-    final ExternalSpillableMap.DiskMapType diskMapType = writeConfig.getCommonConfig().getSpillableDiskMapType();
     return HoodieMergedLogRecordScanner.newBuilder()
         .withFileSystem(fs)
         .withBasePath(split.getTablePath())
@@ -136,8 +133,8 @@ public class FormatUtils {
         .withReadBlocksLazily(writeConfig.getCompactionLazyBlockReadEnabled())
         .withReverseReader(false)
         .withBufferSize(writeConfig.getMaxDFSStreamBufferSize())
-        .withMaxMemorySizeInBytes(diskMapType == ExternalSpillableMap.DiskMapType.ROCKS_DB ? 0 : split.getMaxCompactionMemoryInBytes())
-        .withDiskMapType(diskMapType)
+        .withMaxMemorySizeInBytes(split.getMaxCompactionMemoryInBytes())
+        .withDiskMapType(writeConfig.getCommonConfig().getSpillableDiskMapType())
         .withSpillableMapBasePath(writeConfig.getSpillableMapBasePath())
         .withInstantRange(split.getInstantRange())
         .withOperationField(writeConfig.getProps().getBoolean(FlinkOptions.CHANGELOG_ENABLED.key(),
@@ -232,7 +229,6 @@ public class FormatUtils {
       HoodieWriteConfig writeConfig,
       Configuration hadoopConf) {
     String basePath = writeConfig.getBasePath();
-    final ExternalSpillableMap.DiskMapType diskMapType = writeConfig.getCommonConfig().getSpillableDiskMapType();
     return HoodieMergedLogRecordScanner.newBuilder()
         .withFileSystem(FSUtils.getFs(basePath, hadoopConf))
         .withBasePath(basePath)
@@ -242,9 +238,9 @@ public class FormatUtils {
         .withReadBlocksLazily(writeConfig.getCompactionLazyBlockReadEnabled())
         .withReverseReader(false)
         .withBufferSize(writeConfig.getMaxDFSStreamBufferSize())
-        .withMaxMemorySizeInBytes(diskMapType == ExternalSpillableMap.DiskMapType.ROCKS_DB ? 0 : writeConfig.getMaxMemoryPerPartitionMerge())
+        .withMaxMemorySizeInBytes(writeConfig.getMaxMemoryPerPartitionMerge())
         .withSpillableMapBasePath(writeConfig.getSpillableMapBasePath())
-        .withDiskMapType(diskMapType)
+        .withDiskMapType(writeConfig.getCommonConfig().getSpillableDiskMapType())
         .withBitCaskDiskMapCompressionEnabled(writeConfig.getCommonConfig().isBitCaskDiskMapCompressionEnabled())
         .build();
   }
