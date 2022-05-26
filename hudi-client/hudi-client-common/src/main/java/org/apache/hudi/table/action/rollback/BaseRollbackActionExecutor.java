@@ -88,11 +88,11 @@ public abstract class BaseRollbackActionExecutor<T extends HoodieRecordPayload, 
     this.resolvedInstant = instantToRollback;
     this.deleteInstants = deleteInstants;
     this.skipTimelinePublish = skipTimelinePublish;
-    this.useMarkerBasedStrategy = useMarkerBasedStrategy;
-    if (useMarkerBasedStrategy) {
-      ValidationUtils.checkArgument(!instantToRollback.isCompleted(),
-          "Cannot use marker based rollback strategy on completed instant:" + instantToRollback);
+    if (instantToRollback.isCompleted() && useMarkerBasedStrategy) {
+      useMarkerBasedStrategy = false;
+      LOG.warn("Cannot use marker based rollback strategy on completed instant:" + instantToRollback + ", the strategy has been automatically disabled.");
     }
+    this.useMarkerBasedStrategy = useMarkerBasedStrategy;
     this.skipLocking = skipLocking;
     this.txnManager = new TransactionManager(config, table.getMetaClient().getFs());
   }
