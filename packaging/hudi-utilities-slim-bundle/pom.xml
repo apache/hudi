@@ -77,7 +77,7 @@
                 <transformer implementation="org.apache.maven.plugins.shade.resource.ApacheLicenseResourceTransformer">
                 </transformer>
                 <transformer implementation="org.apache.maven.plugins.shade.resource.ApacheNoticeResourceTransformer">
-                    <addHeader>true</addHeader>
+                  <addHeader>true</addHeader>
                 </transformer>
                 <transformer implementation="org.apache.maven.plugins.shade.resource.IncludeResourceTransformer">
                   <resource>META-INF/LICENSE</resource>
@@ -92,10 +92,7 @@
                 <includes>
                   <include>org.apache.hudi:hudi-common</include>
                   <include>org.apache.hudi:hudi-client-common</include>
-                  <include>org.apache.hudi:hudi-spark-client</include>
                   <include>org.apache.hudi:hudi-utilities_${scala.binary.version}</include>
-                  <include>org.apache.hudi:hudi-hive-sync</include>
-                  <include>org.apache.hudi:hudi-sync-common</include>
                   <include>org.apache.hudi:hudi-hadoop-mr</include>
                   <include>org.apache.hudi:hudi-timeline-service</include>
                   <include>org.apache.hudi:hudi-aws</include>
@@ -136,13 +133,6 @@
                   <include>org.apache.kafka:kafka_${scala.binary.version}</include>
                   <include>com.101tec:zkclient</include>
                   <include>org.apache.kafka:kafka-clients</include>
-
-                  <include>org.apache.hive:hive-common</include>
-                  <include>org.apache.hive:hive-service</include>
-                  <include>org.apache.hive:hive-service-rpc</include>
-                  <include>org.apache.hive:hive-metastore</include>
-                  <include>org.apache.hive:hive-jdbc</include>
-
                   <include>org.apache.hbase:hbase-client</include>
                   <include>org.apache.hbase:hbase-common</include>
                   <include>org.apache.hbase:hbase-hadoop-compat</include>
@@ -179,10 +169,6 @@
                   <shadedPattern>org.apache.hudi.com.beust.jcommander.</shadedPattern>
                 </relocation>
                 <relocation>
-                  <pattern>org.apache.hive.jdbc.</pattern>
-                  <shadedPattern>${utilities.bundle.hive.shade.prefix}org.apache.hive.jdbc.</shadedPattern>
-                </relocation>
-                <relocation>
                   <pattern>org.apache.commons.io.</pattern>
                   <shadedPattern>org.apache.hudi.org.apache.commons.io.</shadedPattern>
                 </relocation>
@@ -206,20 +192,12 @@
                   <shadedPattern>${utilities.bundle.hive.shade.prefix}org.apache.hadoop.hive.metastore.</shadedPattern>
                 </relocation>
                 <relocation>
-                  <pattern>org.apache.hive.common.</pattern>
-                  <shadedPattern>${utilities.bundle.hive.shade.prefix}org.apache.hive.common.</shadedPattern>
-                </relocation>
-                <relocation>
                   <pattern>org.apache.hadoop.hive.common.</pattern>
                   <shadedPattern>${utilities.bundle.hive.shade.prefix}org.apache.hadoop.hive.common.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>org.apache.hadoop.hive.conf.</pattern>
                   <shadedPattern>${utilities.bundle.hive.shade.prefix}org.apache.hadoop.hive.conf.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.hive.service.</pattern>
-                  <shadedPattern>${utilities.bundle.hive.shade.prefix}org.apache.hive.service.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>org.apache.hadoop.hive.service.</pattern>
@@ -344,115 +322,26 @@
     </dependency>
     <dependency>
       <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-client-common</artifactId>
-      <version>${project.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-spark-client</artifactId>
-      <version>${project.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-hive-sync</artifactId>
+      <artifactId>hudi-utilities_${scala.binary.version}</artifactId>
       <version>${project.version}</version>
       <exclusions>
         <exclusion>
-          <groupId>javax.servlet</groupId>
-          <artifactId>servlet-api</artifactId>
+          <groupId>org.apache.hudi</groupId>
+          <artifactId>hudi-spark-common_${scala.binary.version}</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.apache.hudi</groupId>
+          <artifactId>hudi-spark_${scala.binary.version}</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.apache.hudi</groupId>
+          <artifactId>${hudi.spark.module}_${scala.binary.version}</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.apache.hudi</groupId>
+          <artifactId>${hudi.spark.common.module}</artifactId>
         </exclusion>
       </exclusions>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-spark-common_${scala.binary.version}</artifactId>
-      <version>${project.version}</version>
-      <scope>provided</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-spark_${scala.binary.version}</artifactId>
-      <version>${project.version}</version>
-      <scope>provided</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hudi</groupId>
-      <artifactId>${hudi.spark.module}_${scala.binary.version}</artifactId>
-      <version>${project.version}</version>
-      <scope>provided</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hudi</groupId>
-      <artifactId>${hudi.spark.common.module}</artifactId>
-      <version>${project.version}</version>
-      <scope>provided</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-utilities_${scala.binary.version}</artifactId>
-      <version>${project.version}</version>
-    </dependency>
-
-    <!-- Hive -->
-    <dependency>
-      <groupId>${hive.groupid}</groupId>
-      <artifactId>hive-service</artifactId>
-      <version>${hive.version}</version>
-      <scope>${utilities.bundle.hive.scope}</scope>
-    </dependency>
-
-    <dependency>
-      <groupId>${hive.groupid}</groupId>
-      <artifactId>hive-service-rpc</artifactId>
-      <version>${hive.version}</version>
-      <scope>${utilities.bundle.hive.scope}</scope>
-    </dependency>
-
-    <dependency>
-      <groupId>${hive.groupid}</groupId>
-      <artifactId>hive-jdbc</artifactId>
-      <version>${hive.version}</version>
-      <scope>${utilities.bundle.hive.scope}</scope>
-    </dependency>
-
-    <dependency>
-      <groupId>${hive.groupid}</groupId>
-      <artifactId>hive-metastore</artifactId>
-      <version>${hive.version}</version>
-      <scope>${utilities.bundle.hive.scope}</scope>
-    </dependency>
-
-    <dependency>
-      <groupId>${hive.groupid}</groupId>
-      <artifactId>hive-common</artifactId>
-      <version>${hive.version}</version>
-      <scope>${utilities.bundle.hive.scope}</scope>
-    </dependency>
-
-    <dependency>
-      <groupId>org.apache.htrace</groupId>
-      <artifactId>htrace-core</artifactId>
-      <version>${htrace.version}</version>
-      <scope>compile</scope>
-    </dependency>
-
-    <!-- zookeeper -->
-    <dependency>
-      <groupId>org.apache.curator</groupId>
-      <artifactId>curator-framework</artifactId>
-      <version>${zk-curator.version}</version>
-    </dependency>
-
-    <dependency>
-      <groupId>org.apache.curator</groupId>
-      <artifactId>curator-client</artifactId>
-      <version>${zk-curator.version}</version>
-    </dependency>
-
-    <dependency>
-      <groupId>org.apache.curator</groupId>
-      <artifactId>curator-recipes</artifactId>
-      <version>${zk-curator.version}</version>
     </dependency>
   </dependencies>
 
