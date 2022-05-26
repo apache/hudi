@@ -37,7 +37,7 @@ We want to introduce the Change-Data-Capture(CDC) capacity that make hudi can pr
 
 ## Background
 
-In some use cases where hudi tables is used as streaing source, We want to be aware every records' changing in one commit exactly. In a certain commit or snapshot, which records are inserted, which records are deleted, and which records are updated. Even for the updated records, both the old value before updated and the new value after updated are needed.
+In some use cases where hudi tables is used as streaming source, We want to be aware every records' changing in one commit exactly. In a certain commit or snapshot, which records are inserted, which records are deleted, and which records are updated. Even for the updated records, both the old value before updated and the new value after updated are needed.
 
 To implement this capacity, we have to upgrade the write and read parts. Let hudi can figure out the changing data when read. And in some cases, writing the extra data to help querying the changing data if necessary.
 
@@ -97,9 +97,8 @@ Other operations like `Compact`, `Clean`, `Index` do not write/change any data. 
 Hoodie writes data by `HoodieWriteHandle`.
 We notice that only `HoodieMergeHandle` and it's subclasses will receive both the old record and the new-coming record at the same time, merge and write.
 So we will add a `LogFormatWriter` in these classes. If there is CDC data need to be written out, then call this writer to write out a log file which consist of, maybe `CDCBlock`.
-The CDC log file will be placed in the same position as the base files and other log files, so that the clean service can clean up them without extra work.
+The CDC log file will be placed in the same position as the base files and other log files, so that the clean service can clean up them without extra work. The file structure is like:
 
-The directory of the CDC file is`tablePath/.cdc/`. The file structure is like:
 ```
 hudi_cdc_table/
     .hoodie/
@@ -107,15 +106,15 @@ hudi_cdc_table/
         00001.commit
         00002.replacecommit
         ...
-    default/
-        year=2021/
-            filegroup1-instant1.parquet
-            .filegroup1-instant1.cdc.log
-        year=2022/
-            filegroup2-instant1.parquet
-            .filegroup1-instant1.cdc.log
-        ...
+    year=2021/
+        filegroup1-instant1.parquet
+        .filegroup1-instant1.log
+    year=2022/
+        filegroup2-instant1.parquet
+        .filegroup2-instant1.log
+    ...
 ```
+Inside of one partition directory, the `.log` file with `CDCBlock` above will keep the changing data we have to materialize.
 
 One Design Idea is that **Write CDC files as little as possible, and reuse data files as much as possible**.
 
