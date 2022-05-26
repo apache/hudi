@@ -117,6 +117,7 @@
                   <include>org.apache.httpcomponents:fluent-hc</include>
                   <include>org.antlr:stringtemplate</include>
                   <include>org.apache.parquet:parquet-avro</include>
+                  <include>org.apache.parquet:parquet-column</include>
 
                   <include>com.github.davidmoten:guava-mini</include>
                   <include>com.github.davidmoten:hilbert-curve</include>
