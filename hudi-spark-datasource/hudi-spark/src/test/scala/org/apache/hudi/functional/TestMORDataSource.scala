@@ -857,15 +857,21 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
     assertEquals(snapshotQueryRes.where(s"_hoodie_commit_time = '$commit2Time'").count, 40)
     assertEquals(snapshotQueryRes.where(s"_hoodie_commit_time = '$commit3Time'").count, 20)
 
-    assertEquals(snapshotQueryRes.where("partition = '2022-01-01'").count, 50)
-    assertEquals(snapshotQueryRes.where("partition = '2022-01-02'").count, 60)
+    // TODO(HUDI-3204) this had to be reverted to existing behavior
+    //assertEquals(snapshotQueryRes.where("partition = '2022-01-01'").count, 50)
+    //assertEquals(snapshotQueryRes.where("partition = '2022-01-02'").count, 60)
+    assertEquals(snapshotQueryRes.where("partition = '2022/01/01'").count, 50)
+    assertEquals(snapshotQueryRes.where("partition = '2022/01/02'").count, 60)
 
     // read_optimized query
     val readOptimizedQueryRes = spark.read.format("hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)
       .load(basePath)
-    assertEquals(readOptimizedQueryRes.where("partition = '2022-01-01'").count, 50)
-    assertEquals(readOptimizedQueryRes.where("partition = '2022-01-02'").count, 60)
+    // TODO(HUDI-3204) this had to be reverted to existing behavior
+    //assertEquals(readOptimizedQueryRes.where("partition = '2022-01-01'").count, 50)
+    //assertEquals(readOptimizedQueryRes.where("partition = '2022-01-02'").count, 60)
+    assertEquals(readOptimizedQueryRes.where("partition = '2022/01/01'").count, 50)
+    assertEquals(readOptimizedQueryRes.where("partition = '2022/01/02'").count, 60)
 
     // incremental query
     val incrementalQueryRes = spark.read.format("hudi")
@@ -873,7 +879,10 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
       .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, commit2Time)
       .option(DataSourceReadOptions.END_INSTANTTIME.key, commit3Time)
       .load(basePath)
-    assertEquals(incrementalQueryRes.where("partition = '2022-01-01'").count, 0)
-    assertEquals(incrementalQueryRes.where("partition = '2022-01-02'").count, 20)
+    // TODO(HUDI-3204) this had to be reverted to existing behavior
+    //assertEquals(incrementalQueryRes.where("partition = '2022-01-01'").count, 0)
+    //assertEquals(incrementalQueryRes.where("partition = '2022-01-02'").count, 20)
+    assertEquals(incrementalQueryRes.where("partition = '2022/01/01'").count, 0)
+    assertEquals(incrementalQueryRes.where("partition = '2022/01/02'").count, 20)
   }
 }
