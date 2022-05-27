@@ -399,9 +399,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
   protected def getPartitionColumnsAsInternalRow(file: FileStatus): InternalRow = {
     try {
       val tableConfig = metaClient.getTableConfig
-      if (partitionColumns.isEmpty) {
-        InternalRow.empty
-      } else {
+      if (shouldExtractPartitionValuesFromPartitionPath) {
         val relativePath = new URI(metaClient.getBasePath).relativize(new URI(file.getPath.getParent.toString)).toString
         val hiveStylePartitioningEnabled = tableConfig.getHiveStylePartitioningEnable.toBoolean
         if (hiveStylePartitioningEnabled) {
@@ -416,6 +414,8 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
             InternalRow.fromSeq(parts.map(UTF8String.fromString))
           }
         }
+      } else {
+        InternalRow.empty
       }
     } catch {
       case NonFatal(e) =>
