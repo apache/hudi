@@ -17,11 +17,10 @@
 
 package org.apache.hudi.functional
 
-import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.HoodieMetadataConfig
-import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieRecord, HoodieRecordPayload, HoodieTableType}
+import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieTableType}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
@@ -30,9 +29,8 @@ import org.apache.hudi.index.HoodieIndex.IndexType
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions.Config
 import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieClientTestBase}
-import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers, HoodieSparkUtils, SparkDatasetMixin}
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers, SparkDatasetMixin}
 import org.apache.log4j.LogManager
-import org.apache.spark.rdd.RDD
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.types.BooleanType
@@ -41,7 +39,6 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
 
-import java.util
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 
@@ -857,11 +854,8 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
     assertEquals(snapshotQueryRes.where(s"_hoodie_commit_time = '$commit2Time'").count, 40)
     assertEquals(snapshotQueryRes.where(s"_hoodie_commit_time = '$commit3Time'").count, 20)
 
-    // TODO(HUDI-3204) this had to be reverted to existing behavior
-    //assertEquals(snapshotQueryRes.where("partition = '2022-01-01'").count, 50)
-    //assertEquals(snapshotQueryRes.where("partition = '2022-01-02'").count, 60)
-    assertEquals(snapshotQueryRes.where("partition = '2022/01/01'").count, 50)
-    assertEquals(snapshotQueryRes.where("partition = '2022/01/02'").count, 60)
+    assertEquals(snapshotQueryRes.where("partition = '2022-01-01'").count, 50)
+    assertEquals(snapshotQueryRes.where("partition = '2022-01-02'").count, 60)
 
     // read_optimized query
     val readOptimizedQueryRes = spark.read.format("hudi")
@@ -879,10 +873,7 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
       .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, commit2Time)
       .option(DataSourceReadOptions.END_INSTANTTIME.key, commit3Time)
       .load(basePath)
-    // TODO(HUDI-3204) this had to be reverted to existing behavior
-    //assertEquals(incrementalQueryRes.where("partition = '2022-01-01'").count, 0)
-    //assertEquals(incrementalQueryRes.where("partition = '2022-01-02'").count, 20)
-    assertEquals(incrementalQueryRes.where("partition = '2022/01/01'").count, 0)
-    assertEquals(incrementalQueryRes.where("partition = '2022/01/02'").count, 20)
+    assertEquals(incrementalQueryRes.where("partition = '2022-01-01'").count, 0)
+    assertEquals(incrementalQueryRes.where("partition = '2022-01-02'").count, 20)
   }
 }
