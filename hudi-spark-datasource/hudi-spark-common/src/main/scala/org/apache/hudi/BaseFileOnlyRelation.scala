@@ -54,6 +54,9 @@ class BaseFileOnlyRelation(sqlContext: SQLContext,
 
   override type FileSplit = HoodieBaseFileSplit
 
+  // TODO(HUDI-3204) this is to override behavior (exclusively) for COW tables to always extract
+  //                 partition values from partition path
+  //                 For more details please check HUDI-4161
   override protected val shouldExtractPartitionValuesFromPartitionPath: Boolean = true
 
   override lazy val mandatoryFields: Seq[String] =
