@@ -54,6 +54,8 @@ class BaseFileOnlyRelation(sqlContext: SQLContext,
 
   override type FileSplit = HoodieBaseFileSplit
 
+  override protected val shouldExtractPartitionValuesFromPartitionPath: Boolean = true
+
   override lazy val mandatoryFields: Seq[String] =
   // TODO reconcile, record's key shouldn't be mandatory for base-file only relation
     Seq(recordKeyField)
