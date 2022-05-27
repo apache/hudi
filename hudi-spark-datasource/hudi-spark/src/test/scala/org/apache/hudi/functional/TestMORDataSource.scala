@@ -861,7 +861,7 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
     val readOptimizedQueryRes = spark.read.format("hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)
       .load(basePath)
-    // TODO(HUDI-3204) this had to be reverted to existing behavior
+    // TODO(HUDI-3204) we have to revert this to pre-existing behavior from 0.10
     //assertEquals(readOptimizedQueryRes.where("partition = '2022-01-01'").count, 50)
     //assertEquals(readOptimizedQueryRes.where("partition = '2022-01-02'").count, 60)
     assertEquals(readOptimizedQueryRes.where("partition = '2022/01/01'").count, 50)

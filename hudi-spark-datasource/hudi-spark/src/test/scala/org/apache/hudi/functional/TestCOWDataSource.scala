@@ -176,7 +176,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
 
     // snapshot query
     val snapshotQueryRes = spark.read.format("hudi").load(basePath)
-    // TODO(HUDI-3204) this had to be reverted to existing behavior
+    // TODO(HUDI-3204) we have to revert this to pre-existing behavior from 0.10
     //assertEquals(snapshotQueryRes.where("partition = '2022-01-01'").count, 20)
     //assertEquals(snapshotQueryRes.where("partition = '2022-01-02'").count, 30)
     assertEquals(snapshotQueryRes.where("partition = '2022/01/01'").count, 20)
@@ -964,12 +964,14 @@ class TestCOWDataSource extends HoodieClientTestBase {
     assert(firstDF.count() == 2)
 
     // data_date is the partition field. Persist to the parquet file using the origin values, and read it.
-    assertEquals(
-      // TODO(HUDI-3204) this had to be reverted to existing behavior
-      //Seq("2018-09-23", "2018-09-24"),
-      Seq("2018/09/23", "2018/09/24"),
-      firstDF.select("data_date").map(_.get(0).toString).collect().sorted.toSeq
-    )
+    // TODO(HUDI-3204) we have to revert this to pre-existing behavior from 0.10
+    val expectedValues = if (useGlobbing) {
+      Seq("2018-09-23", "2018-09-24")
+    } else {
+      Seq("2018/09/23", "2018/09/24")
+    }
+
+    assertEquals(expectedValues, firstDF.select("data_date").map(_.get(0).toString).collect().sorted.toSeq)
     assertEquals(
       Seq("2018/09/23", "2018/09/24"),
       firstDF.select("_hoodie_partition_path").map(_.get(0).toString).collect().sorted.toSeq
