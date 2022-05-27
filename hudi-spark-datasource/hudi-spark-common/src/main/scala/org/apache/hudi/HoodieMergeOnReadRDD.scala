@@ -59,10 +59,22 @@ case class HoodieMergeOnReadBaseFileReaders(fullSchemaFileReader: BaseFileReader
                                             requiredSchemaFileReaderForMerging: BaseFileReader,
                                             requiredSchemaFileReaderForNoMerging: BaseFileReader)
 
+/**
+ * RDD enabling Hudi's Merge-on-Read (MOR) semantic
+ *
+ * @param sc spark's context
+ * @param config hadoop configuration
+ * @param fileReaders suite of base file readers
+ * @param tableSchema table's full schema
+ * @param requiredSchema expected (potentially) projected schema
+ * @param tableState table's state
+ * @param mergeType type of merge performed
+ * @param fileSplits target file-splits this RDD will be iterating over
+ */
 class HoodieMergeOnReadRDD(@transient sc: SparkContext,
                            @transient config: Configuration,
                            fileReaders: HoodieMergeOnReadBaseFileReaders,
-                           dataSchema: HoodieTableSchema,
+                           tableSchema: HoodieTableSchema,
                            requiredSchema: HoodieTableSchema,
                            tableState: HoodieTableState,
                            mergeType: String,
@@ -119,7 +131,7 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
     iter
   }
 
-  private def readBaseFile(split: HoodieMergeOnReadFileSplit): (Iterator[InternalRow], HoodieTableSchema) = {
+  private def readBaseFile(split: HoodieMergeOnReadFileSplit): (Iterator[InternalRow], StructType) = {
     // NOTE: This is an optimization making sure that even for MOR tables we fetch absolute minimum
     //       of the stored data possible, while still properly executing corresponding relation's semantic
     //       and meet the query's requirements.
@@ -128,10 +140,13 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
     //          a) It does use one of the standard (and whitelisted) Record Payload classes
     //       then we can avoid reading and parsing the records w/ _full_ schema, and instead only
     //       rely on projected one, nevertheless being able to perform merging correctly
-    if (!whitelistedPayloadClasses.contains(tableState.recordPayloadClassName))
-      (fileReaders.fullSchemaFileReader(split.dataFile.get), dataSchema)
-    else
-      (fileReaders.requiredSchemaFileReaderForMerging(split.dataFile.get), requiredSchema)
+    val reader = if (!whitelistedPayloadClasses.contains(tableState.recordPayloadClassName)) {
+      fileReaders.fullSchemaFileReader
+    } else {
+      fileReaders.requiredSchemaFileReaderForMerging
+    }
+
+    (reader(split.dataFile.get), reader.schema)
   }
 
   override protected def getPartitions: Array[Partition] =
@@ -155,14 +170,14 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
     protected override val requiredAvroSchema: Schema = new Schema.Parser().parse(requiredSchema.avroSchemaStr)
     protected override val requiredStructTypeSchema: StructType = requiredSchema.structTypeSchema
 
-    protected val logFileReaderAvroSchema: Schema = new Schema.Parser().parse(dataSchema.avroSchemaStr)
+    protected val logFileReaderAvroSchema: Schema = new Schema.Parser().parse(tableSchema.avroSchemaStr)
 
     protected var recordToLoad: InternalRow = _
 
     private val requiredSchemaSafeAvroProjection = SafeAvroProjection.create(logFileReaderAvroSchema, requiredAvroSchema)
 
     private var logScanner = {
-      val internalSchema = dataSchema.internalSchema.getOrElse(InternalSchema.getEmptyInternalSchema)
+      val internalSchema = tableSchema.internalSchema.getOrElse(InternalSchema.getEmptyInternalSchema)
       HoodieMergeOnReadRDD.scanLog(split.logFiles, getPartitionPath(split), logFileReaderAvroSchema, tableState,
         maxCompactionMemoryInBytes, config, internalSchema)
     }
@@ -241,7 +256,7 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
    */
   private class RecordMergingFileIterator(split: HoodieMergeOnReadFileSplit,
                                           baseFileIterator: Iterator[InternalRow],
-                                          baseFileReaderSchema: HoodieTableSchema,
+                                          baseFileReaderSchema: StructType,
                                           config: Configuration)
     extends LogFileIterator(split, config) {
 
@@ -250,17 +265,15 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
     //        - Projected schema
     //       As such, no particular schema could be assumed, and therefore we rely on the caller
     //       to correspondingly set the scheme of the expected output of base-file reader
-    private val baseFileReaderAvroSchema = new Schema.Parser().parse(baseFileReaderSchema.avroSchemaStr)
+    private val baseFileReaderAvroSchema = sparkAdapter.getAvroSchemaConverters.toAvroType(baseFileReaderSchema, nullable = false, "record")
 
-    private val serializer = sparkAdapter.createAvroSerializer(baseFileReaderSchema.structTypeSchema,
-      baseFileReaderAvroSchema, resolveAvroSchemaNullability(baseFileReaderAvroSchema))
+    private val serializer = sparkAdapter.createAvroSerializer(baseFileReaderSchema, baseFileReaderAvroSchema, nullable = false)
 
     private val reusableRecordBuilder: GenericRecordBuilder = new GenericRecordBuilder(requiredAvroSchema)
 
-    private val recordKeyOrdinal = baseFileReaderSchema.structTypeSchema.fieldIndex(tableState.recordKeyField)
+    private val recordKeyOrdinal = baseFileReaderSchema.fieldIndex(tableState.recordKeyField)
 
-    private val requiredSchemaUnsafeProjection =
-      generateUnsafeProjection(baseFileReaderSchema.structTypeSchema, requiredStructTypeSchema)
+    private val requiredSchemaUnsafeProjection = generateUnsafeProjection(baseFileReaderSchema, requiredStructTypeSchema)
 
     override def hasNext: Boolean = hasNextInternal
 
@@ -384,12 +397,6 @@ private object HoodieMergeOnReadRDD {
     split.dataFile.map(baseFile => new Path(baseFile.filePath))
       .getOrElse(split.logFiles.head.getPath)
       .getParent
-  }
-
-  private def resolveAvroSchemaNullability(schema: Schema) = {
-    AvroConversionUtils.resolveAvroTypeNullability(schema) match {
-      case (nullable, _) => nullable
-    }
   }
 
   // TODO extract to HoodieAvroSchemaUtils

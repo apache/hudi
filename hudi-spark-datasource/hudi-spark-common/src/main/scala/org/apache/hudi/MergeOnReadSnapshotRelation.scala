@@ -29,6 +29,7 @@ import org.apache.hudi.common.model.{FileSlice, HoodieLogFile}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.spark.execution.datasources.HoodieInMemoryFileIndex
+import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.Expression
@@ -80,11 +81,13 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
   }
 
   protected override def composeRDD(fileSplits: Seq[HoodieMergeOnReadFileSplit],
-                                    partitionSchema: StructType,
-                                    dataSchema: HoodieTableSchema,
+                                    tableSchema: HoodieTableSchema,
                                     requiredSchema: HoodieTableSchema,
                                     requestedColumns: Array[String],
-                                    filters: Array[Filter]): HoodieMergeOnReadRDD = {
+                                    filters: Array[Filter]): RDD[InternalRow] = {
+    val (partitionSchema, dataSchema, requiredDataSchema) =
+      tryPrunePartitionColumns(tableSchema, requiredSchema)
+
     val fullSchemaBaseFileReader = createBaseFileReader(
       spark = sqlContext.sparkSession,
       partitionSchema = partitionSchema,
@@ -102,7 +105,7 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
     )
 
     val (requiredSchemaBaseFileReaderMerging, requiredSchemaBaseFileReaderNoMerging) =
-      createMergeOnReadBaseFileReaders(partitionSchema, dataSchema, requiredSchema, requestedColumns, filters)
+      createMergeOnReadBaseFileReaders(partitionSchema, dataSchema, requiredDataSchema, requestedColumns, filters)
 
     val tableState = getTableState
     new HoodieMergeOnReadRDD(
@@ -113,7 +116,7 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
         requiredSchemaFileReaderForMerging = requiredSchemaBaseFileReaderMerging,
         requiredSchemaFileReaderForNoMerging = requiredSchemaBaseFileReaderNoMerging
       ),
-      dataSchema = dataSchema,
+      tableSchema = dataSchema,
       requiredSchema = requiredSchema,
       tableState = tableState,
       mergeType = mergeType,
