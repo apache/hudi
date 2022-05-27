@@ -131,7 +131,7 @@ object DataSourceReadOptions {
 
   val EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH: ConfigProperty[Boolean] =
     ConfigProperty.key("hoodie.datasource.read.extract.partition.values.from.path")
-      .defaultValue(false)
+      .defaultValue(true)
       .sinceVersion("0.11.0")
       .withDocumentation("When set to true, values for partition columns (partition values) will be extracted" +
         " from physical partition path (default Spark behavior). When set to false partition values will be" +
