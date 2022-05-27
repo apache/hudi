@@ -78,7 +78,14 @@ module.exports = {
                 'precommit_validator',
             ],
         },
-        'configurations',
+        {
+            type: 'category',
+            label: 'Configurations',
+            items: [
+                'basic_configurations',
+                'configurations',
+            ],
+        },
         {
             type: 'category',
             label: 'Guides',
