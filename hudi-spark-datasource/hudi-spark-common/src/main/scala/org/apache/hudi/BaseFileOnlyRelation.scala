@@ -57,7 +57,12 @@ class BaseFileOnlyRelation(sqlContext: SQLContext,
   // TODO(HUDI-3204) this is to override behavior (exclusively) for COW tables to always extract
   //                 partition values from partition path
   //                 For more details please check HUDI-4161
-  override protected val shouldExtractPartitionValuesFromPartitionPath: Boolean = true
+  // NOTE: This override has to mirror semantic of whenever this Relation is converted into [[HadoopFsRelation]],
+  //       which is currently done for all cases, except when Schema Evolution is enabled
+  override protected val shouldExtractPartitionValuesFromPartitionPath: Boolean = {
+    val enableSchemaOnRead = !internalSchema.isEmptySchema
+    !enableSchemaOnRead
+  }
 
   override lazy val mandatoryFields: Seq[String] =
   // TODO reconcile, record's key shouldn't be mandatory for base-file only relation
