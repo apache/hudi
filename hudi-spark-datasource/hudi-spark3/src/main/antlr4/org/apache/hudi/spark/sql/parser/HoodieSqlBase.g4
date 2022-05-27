@@ -29,5 +29,10 @@ statement
     | createTableHeader ('(' colTypeList ')')? tableProvider?
         createTableClauses
         (AS? query)?                                                   #createTable
+    | CREATE INDEX indexName=identifier
+          ON multipartIdentifier ('(' indexColumn=identifier ')')
+          AS indexType=identifier                                      #createIndex
+    | SHOW INDEXES (FROM | IN) multipartIdentifier                     #showIndex
+    | DROP INDEX indexName=identifier ON multipartIdentifier           #dropIndex
     | .*?                                                              #passThrough
     ;

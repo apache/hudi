@@ -44,14 +44,14 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.TableNotFoundException;
+import org.apache.hudi.hadoop.CachingPath;
+import org.apache.hudi.hadoop.SerializablePath;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.PathFilter;
-import org.apache.hudi.hadoop.CachingPath;
-import org.apache.hudi.hadoop.SerializablePath;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -741,6 +741,7 @@ public class HoodieTableMetaClient implements Serializable {
     private Boolean shouldDropPartitionColumns;
     private String metadataPartitions;
     private String inflightMetadataPartitions;
+    private String secondaryIndexFields;
 
     /**
      * Persist the configs that is written at the first time, and should not be changed.
@@ -875,6 +876,11 @@ public class HoodieTableMetaClient implements Serializable {
       return this;
     }
 
+    public PropertyBuilder setSecondaryIndexFields(String secondaryIndexFields) {
+      this.secondaryIndexFields = secondaryIndexFields;
+      return this;
+    }
+
     public PropertyBuilder set(String key, Object value) {
       if (HoodieTableConfig.PERSISTED_CONFIG_LIST.contains(key)) {
         this.others.put(key, value);
@@ -883,7 +889,7 @@ public class HoodieTableMetaClient implements Serializable {
     }
 
     public PropertyBuilder set(Map<String, Object> props) {
-      for (String key: HoodieTableConfig.PERSISTED_CONFIG_LIST) {
+      for (String key : HoodieTableConfig.PERSISTED_CONFIG_LIST) {
         Object value = props.get(key);
         if (value != null) {
           set(key, value);
@@ -982,6 +988,9 @@ public class HoodieTableMetaClient implements Serializable {
       if (hoodieConfig.contains(HoodieTableConfig.TABLE_METADATA_PARTITIONS_INFLIGHT)) {
         setInflightMetadataPartitions(hoodieConfig.getString(HoodieTableConfig.TABLE_METADATA_PARTITIONS_INFLIGHT));
       }
+      if (hoodieConfig.contains(HoodieTableConfig.SECONDARY_INDEX_FIELDS)) {
+        setSecondaryIndexFields(hoodieConfig.getString(HoodieTableConfig.SECONDARY_INDEX_FIELDS));
+      }
       return this;
     }
 
@@ -1071,6 +1080,9 @@ public class HoodieTableMetaClient implements Serializable {
       }
       if (null != inflightMetadataPartitions) {
         tableConfig.setValue(HoodieTableConfig.TABLE_METADATA_PARTITIONS_INFLIGHT, inflightMetadataPartitions);
+      }
+      if (null != secondaryIndexFields) {
+        tableConfig.setValue(HoodieTableConfig.SECONDARY_INDEX_FIELDS, secondaryIndexFields);
       }
       return tableConfig.getProps();
     }

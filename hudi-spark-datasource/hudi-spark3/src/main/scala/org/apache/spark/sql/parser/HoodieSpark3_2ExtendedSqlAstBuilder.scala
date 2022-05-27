@@ -106,6 +106,41 @@ class HoodieSpark3_2ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
     TimeTravelRelation(plan, timestamp, version)
   }
 
+  /**
+   * Parse create secondary index AST to generate CreateIndex command
+   *
+   * @param ctx the parse tree
+   * */
+  override def visitCreateIndex(ctx: CreateIndexContext): CreateIndex = withOrigin(ctx) {
+    val indexName = ctx.indexName.getText
+    val indexColumn = ctx.indexColumn.getText
+    val indexType = ctx.indexType.getText
+
+    val table = UnresolvedTableOrView(
+      visitMultipartIdentifier(ctx.multipartIdentifier()), "CREATE INDEX", allowTempView = true)
+    CreateIndex(indexName, table, indexColumn, indexType)
+  }
+
+  /**
+   * Parse show secondary indexes AST to generate ShowIndexes command
+   *
+   * @param ctx the parse tree
+   * */
+  override def visitShowIndex(ctx: ShowIndexContext): ShowIndexes = withOrigin(ctx) {
+    ShowIndexes(UnresolvedTableOrView(
+      visitMultipartIdentifier(ctx.multipartIdentifier()), "SHOW INDEXES", allowTempView = true))
+  }
+
+  /**
+   * Parse drop secondary index AST to generate DropIndex command
+   *
+   * @param ctx the parse tree
+   * */
+  override def visitDropIndex(ctx: DropIndexContext): DropIndex = withOrigin(ctx) {
+    DropIndex(ctx.indexName.getText,
+      UnresolvedTableOrView(visitMultipartIdentifier(ctx.multipartIdentifier()), "DROP INDEX", allowTempView = true))
+  }
+
   // ============== The following code is fork from org.apache.spark.sql.catalyst.parser.AstBuilder
   override def visitSingleStatement(ctx: SingleStatementContext): LogicalPlan = withOrigin(ctx) {
     visit(ctx.statement).asInstanceOf[LogicalPlan]

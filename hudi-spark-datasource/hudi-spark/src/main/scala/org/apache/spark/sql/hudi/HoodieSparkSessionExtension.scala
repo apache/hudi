@@ -48,5 +48,11 @@ class HoodieSparkSessionExtension extends (SparkSessionExtensions => Unit)
         rule(session)
       }
     }
+
+    HoodieAnalysis.extraPlanStrategies().foreach { strategy =>
+      extensions.injectPlannerStrategy { session =>
+        strategy(session)
+      }
+    }
   }
 }

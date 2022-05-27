@@ -20,11 +20,11 @@ import org.antlr.v4.runtime.tree.ParseTree
 import org.apache.hudi.spark.sql.parser.HoodieSqlBaseBaseVisitor
 import org.apache.hudi.spark.sql.parser.HoodieSqlBaseParser._
 import org.apache.spark.internal.Logging
+import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis._
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.parser.{ParseException, ParserInterface, ParserUtils}
 import org.apache.spark.sql.catalyst.plans.logical._
-import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.internal.SQLConf
 
 import scala.collection.JavaConverters._
@@ -170,19 +170,54 @@ class HoodieSpark2ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterface
   }
 
   /**
-    * Parse the expression tree to spark sql Expression.
-    * Here we use the SparkSqlParser to do the parse.
-    */
+   * Parse the expression tree to spark sql Expression.
+   * Here we use the SparkSqlParser to do the parse.
+   */
   private def expression(tree: ParseTree): Expression = {
     val expressionText = treeToString(tree)
     delegate.parseExpression(expressionText)
   }
 
-  // ============== The following code is fork from org.apache.spark.sql.catalyst.parser.AstBuilder
   /**
-    * If aliases specified in a FROM clause, create a subquery alias ([[SubqueryAlias]]) and
-    * column aliases for a [[LogicalPlan]].
-    */
+   * Parse create secondary index AST to generate [[CreateIndex]] command
+   *
+   * @param ctx the parse tree
+   * */
+  override def visitCreateIndex(ctx: CreateIndexContext): CreateIndex = withOrigin(ctx) {
+    val indexName = ctx.indexName.getText
+    val indexColumn = ctx.indexColumn.getText
+    val indexType = ctx.indexType.getText
+
+    val table = UnresolvedRelation(visitTableIdentifier(ctx.tableIdentifier())).asInstanceOf[LogicalPlan]
+    CreateIndex(indexName, table, indexColumn, indexType)
+  }
+
+  /**
+   * Parse show secondary indexes AST to generate [[ShowIndexes]] command
+   *
+   * @param ctx the parse tree
+   * */
+  override def visitShowIndex(ctx: ShowIndexContext): ShowIndexes = withOrigin(ctx) {
+    ShowIndexes(
+      UnresolvedRelation(visitTableIdentifier(ctx.tableIdentifier())).asInstanceOf[LogicalPlan])
+  }
+
+  /**
+   * Parse drop secondary index AST to generate [[DropIndex]] command
+   *
+   * @param ctx the parse tree
+   * */
+  override def visitDropIndex(ctx: DropIndexContext): DropIndex = withOrigin(ctx) {
+    DropIndex(ctx.indexName.getText,
+      UnresolvedRelation(visitTableIdentifier(ctx.tableIdentifier())).asInstanceOf[LogicalPlan])
+  }
+
+  // ============== The following code is fork from org.apache.spark.sql.catalyst.parser.AstBuilder
+
+  /**
+   * If aliases specified in a FROM clause, create a subquery alias ([[SubqueryAlias]]) and
+   * column aliases for a [[LogicalPlan]].
+   */
   protected def mayApplyAliasPlan(tableAlias: TableAliasContext, plan: LogicalPlan): LogicalPlan = {
     if (tableAlias.strictIdentifier != null) {
       val alias = tableAlias.strictIdentifier.getText
@@ -220,9 +255,10 @@ class HoodieSpark2ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterface
   /* ********************************************************************************************
    * Table Identifier parsing
    * ******************************************************************************************** */
+
   /**
-    * Create a [[TableIdentifier]] from a 'tableName' or 'databaseName'.'tableName' pattern.
-    */
+   * Create a [[TableIdentifier]] from a 'tableName' or 'databaseName'.'tableName' pattern.
+   */
   override def visitTableIdentifier(ctx: TableIdentifierContext): TableIdentifier = withOrigin(ctx) {
     TableIdentifier(ctx.table.getText, Option(ctx.db).map(_.getText))
   }

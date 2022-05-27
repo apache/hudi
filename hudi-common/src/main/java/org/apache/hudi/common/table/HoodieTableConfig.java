@@ -26,6 +26,7 @@ import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.OrderedProperties;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.index.SecondaryIndexField;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -39,9 +40,14 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieSecondaryIndexException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions.Config;
 
+import com.fasterxml.jackson.annotation.JsonAutoDetect;
+import com.fasterxml.jackson.annotation.PropertyAccessor;
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
@@ -233,6 +239,11 @@ public class HoodieTableConfig extends HoodieConfig {
       .sinceVersion("0.11.0")
       .withDocumentation("Comma-separated list of metadata partitions that have been completely built and in-sync with data table. "
           + "These partitions are ready for use by the readers");
+
+  public static final ConfigProperty<String> SECONDARY_INDEX_FIELDS = ConfigProperty
+      .key("hoodie.table.secondary.index.fields")
+      .noDefaultValue()
+      .withDocumentation("Columns need to build secondary index");
 
   private static final String TABLE_CHECKSUM_FORMAT = "%s.%s"; // <database_name>.<table_name>
 
@@ -498,6 +509,19 @@ public class HoodieTableConfig extends HoodieConfig {
     return Option.empty();
   }
 
+  public Option<SecondaryIndexField[]> getSecondaryIndexFields() {
+    if (contains(SECONDARY_INDEX_FIELDS)) {
+      String indexFiledStr = getString(SECONDARY_INDEX_FIELDS);
+      try {
+        return Option.ofNullable(fromJsonString(indexFiledStr, SecondaryIndexField[].class));
+      } catch (Exception e) {
+        throw new HoodieSecondaryIndexException("Fail to parse secondary index fields", e);
+      }
+    }
+
+    return Option.empty();
+  }
+
   /**
    * @returns the partition field prop.
    */
@@ -638,6 +662,21 @@ public class HoodieTableConfig extends HoodieConfig {
   public Map<String, String> propsMap() {
     return props.entrySet().stream()
         .collect(Collectors.toMap(e -> String.valueOf(e.getKey()), e -> String.valueOf(e.getValue())));
+  }
+
+  private static <T> T fromJsonString(String jsonStr, Class<T> clazz) throws Exception {
+    if (jsonStr == null || jsonStr.isEmpty()) {
+      return clazz.newInstance();
+    }
+
+    return getObjectMapper().readValue(jsonStr, clazz);
+  }
+
+  private static ObjectMapper getObjectMapper() {
+    ObjectMapper mapper = new ObjectMapper();
+    mapper.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
+    mapper.setVisibility(PropertyAccessor.FIELD, JsonAutoDetect.Visibility.ANY);
+    return mapper;
   }
 
   /**

@@ -27,6 +27,11 @@ statement
     : mergeInto                                                        #mergeIntoTable
     | updateTableStmt                                                  #updateTable
     | deleteTableStmt                                                  #deleteTable
+    | CREATE INDEX indexName=identifier
+          ON tableIdentifier ('(' indexColumn=identifier ')')
+          AS indexType=identifier                                      #createIndex
+    | SHOW INDEXES (FROM | IN) tableIdentifier                         #showIndex
+    | DROP INDEX indexName=identifier ON tableIdentifier               #dropIndex
     | .*?                                                              #passThrough
     ;
 

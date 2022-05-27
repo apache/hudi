@@ -80,6 +80,7 @@ case class HoodieInternalV2Table(spark: SparkSession,
     }.toArray
   }
 
+  lazy val getTableIdentifier: TableIdentifier = hoodieCatalogTable.table.identifier
 }
 
 private class HoodieV1WriteBuilder(writeOptions: CaseInsensitiveStringMap,

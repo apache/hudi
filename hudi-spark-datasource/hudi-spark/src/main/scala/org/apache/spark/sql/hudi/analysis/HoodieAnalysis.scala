@@ -32,10 +32,11 @@ import org.apache.spark.sql.execution.datasources.{CreateTable, DataSource, Logi
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{getTableIdentifier, removeMetaFields}
 import org.apache.spark.sql.hudi.HoodieSqlUtils._
 import org.apache.spark.sql.hudi.command._
+import org.apache.spark.sql.hudi.command.index.{CreateIndexCommand, DropIndexCommand, ShowIndexesCommand}
 import org.apache.spark.sql.hudi.command.procedures.{HoodieProcedures, Procedure, ProcedureArgs}
 import org.apache.spark.sql.hudi.{HoodieOptionConfig, HoodieSqlCommonUtils}
 import org.apache.spark.sql.types.StringType
-import org.apache.spark.sql.{AnalysisException, SparkSession}
+import org.apache.spark.sql.{AnalysisException, SparkSession, Strategy}
 
 import java.util
 import scala.collection.JavaConverters._
@@ -75,6 +76,17 @@ object HoodieAnalysis {
         session => ReflectionUtils.loadClass(spark3PostHocResolutionClass, session).asInstanceOf[Rule[LogicalPlan]]
 
       Seq(spark3PostHocResolution)
+    } else {
+      Seq.empty
+    }
+
+  def extraPlanStrategies(): Seq[SparkSession => Strategy] =
+    if (HoodieSparkUtils.gteqSpark3_2) {
+      val spark3PlanStrategyClass = "org.apache.spark.sql.hudi.execution.HoodieSpark3PlanStrategy"
+      val spark3PlanStrategies: SparkSession => Strategy =
+        session => ReflectionUtils.loadClass(spark3PlanStrategyClass, session).asInstanceOf[Strategy]
+
+      Seq(spark3PlanStrategies)
     } else {
       Seq.empty
     }
@@ -147,6 +159,22 @@ case class HoodieAnalysis(sparkSession: SparkSession) extends Rule[LogicalPlan]
         } else {
           c
         }
+
+      // Convert to CreateIndexCommand
+      case CreateIndex(indexName, table, colName, indexType, output)
+        if table.resolved && sparkAdapter.isHoodieTable(table, sparkSession) =>
+        CreateIndexCommand(indexName, getTableIdentifier(table), colName, indexType, output)
+
+      // Convert to ShowIndexesCommand
+      case ShowIndexes(table, output)
+        if table.resolved && sparkAdapter.isHoodieTable(table, sparkSession) =>
+        ShowIndexesCommand(getTableIdentifier(table), output)
+
+      // Convert to DropIndexCommand
+      case DropIndex(indexName, table, output)
+        if table.resolved && sparkAdapter.isHoodieTable(table, sparkSession) =>
+        DropIndexCommand(indexName, getTableIdentifier(table), output)
+
       case _ => plan
     }
   }
