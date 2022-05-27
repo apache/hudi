@@ -121,8 +121,9 @@ public class FormatUtils {
   public static HoodieMergedLogRecordScanner logScanner(
       MergeOnReadInputSplit split,
       Schema logSchema,
-      HoodieWriteConfig writeConfig,
+      org.apache.flink.configuration.Configuration flinkConf,
       Configuration hadoopConf) {
+    HoodieWriteConfig writeConfig = StreamerUtil.getHoodieClientConfig(flinkConf);
     FileSystem fs = FSUtils.getFs(split.getTablePath(), hadoopConf);
     return HoodieMergedLogRecordScanner.newBuilder()
         .withFileSystem(fs)
@@ -137,8 +138,7 @@ public class FormatUtils {
         .withDiskMapType(writeConfig.getCommonConfig().getSpillableDiskMapType())
         .withSpillableMapBasePath(writeConfig.getSpillableMapBasePath())
         .withInstantRange(split.getInstantRange())
-        .withOperationField(writeConfig.getProps().getBoolean(FlinkOptions.CHANGELOG_ENABLED.key(),
-            FlinkOptions.CHANGELOG_ENABLED.defaultValue()))
+        .withOperationField(flinkConf.getBoolean(FlinkOptions.CHANGELOG_ENABLED))
         .build();
   }
 
