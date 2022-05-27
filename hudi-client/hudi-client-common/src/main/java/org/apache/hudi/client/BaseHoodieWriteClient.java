@@ -1118,7 +1118,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
       HoodieRollbackPlan rollbackPlan;
       try {
         rollbackPlan = RollbackUtils.getRollbackPlan(metaClient, rollbackInstant);
-      } catch (IOException e) {
+      } catch (Exception e) {
         if (rollbackInstant.isRequested()) {
           LOG.warn("Fetching rollback plan failed for " + rollbackInstant + ", deleting the plan since it's in REQUESTED state", e);
           try {
