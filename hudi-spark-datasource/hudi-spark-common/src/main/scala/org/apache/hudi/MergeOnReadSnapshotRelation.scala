@@ -161,7 +161,7 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
       options = optParams,
       // NOTE: We have to fork the Hadoop Config here as Spark will be modifying it
       //       to configure Parquet reader appropriately
-      hadoopConf = HoodieDataSourceHelper.getConfigurationWithInternalSchema(new Configuration(conf), requiredDataSchema.internalSchema, metaClient.getBasePath, validCommits)
+      hadoopConf = embedInternalSchema(new Configuration(conf), requiredDataSchema.internalSchema)
     )
 
     // Check whether fields required for merging were also requested to be fetched
@@ -194,7 +194,7 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
         options = optParams,
         // NOTE: We have to fork the Hadoop Config here as Spark will be modifying it
         //       to configure Parquet reader appropriately
-        hadoopConf = HoodieDataSourceHelper.getConfigurationWithInternalSchema(new Configuration(conf), requiredDataSchema.internalSchema, metaClient.getBasePath, validCommits)
+        hadoopConf = embedInternalSchema(new Configuration(conf), requiredDataSchema.internalSchema)
       )
 
       (requiredSchemaFileReaderMerging, requiredSchemaFileReaderNoMerging)
