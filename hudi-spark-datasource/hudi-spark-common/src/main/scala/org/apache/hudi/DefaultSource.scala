@@ -134,7 +134,8 @@ class DefaultSource extends RelationProvider
         case (COPY_ON_WRITE, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) |
              (COPY_ON_WRITE, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, false) |
              (MERGE_ON_READ, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, false) =>
-          new BaseFileOnlyRelation(sqlContext, metaClient, parameters, userSchema, globPaths)
+          resolveBaseFileOnlyRelation(sqlContext, globPaths, userSchema, metaClient, parameters)
+
         case (COPY_ON_WRITE, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
           new IncrementalRelation(sqlContext, parameters, userSchema, metaClient)
 
@@ -231,6 +232,26 @@ class DefaultSource extends RelationProvider
                             providerName: String,
                             parameters: Map[String, String]): Source = {
     new HoodieStreamSource(sqlContext, metadataPath, schema, parameters)
+  }
+
+  private def resolveBaseFileOnlyRelation(sqlContext: SQLContext,
+                                          globPaths: Seq[Path],
+                                          userSchema: Option[StructType],
+                                          metaClient: HoodieTableMetaClient,
+                                          optParams: Map[String, String]): BaseRelation = {
+    val baseRelation = new BaseFileOnlyRelation(sqlContext, metaClient, optParams, userSchema, globPaths)
+    val enableSchemaOnRead: Boolean = !tryFetchInternalSchema(metaClient).isEmptySchema
+
+    // NOTE: We fallback to [[HadoopFsRelation]] in all of the cases except ones requiring usage of
+    //       [[BaseFileOnlyRelation]] to function correctly. This is necessary to maintain performance parity w/
+    //       vanilla Spark, since some of the Spark optimizations are predicated on the using of [[HadoopFsRelation]].
+    //
+    //       You can check out HUDI-3896 for more details
+    if (enableSchemaOnRead) {
+      baseRelation
+    } else {
+      baseRelation.toHadoopFsRelation
+    }
   }
 
   private def resolveBaseFileOnlyRelation(sqlContext: SQLContext,

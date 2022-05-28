@@ -20,14 +20,11 @@ package org.apache.hudi
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
-import org.apache.hudi.common.model.HoodieFileFormat
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.hadoop.HoodieROTablePathFilter
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.execution.datasources._
-import org.apache.spark.sql.execution.datasources.parquet.HoodieParquetFileFormat
-import org.apache.spark.sql.hive.orc.OrcFileFormat
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
 import org.apache.spark.sql.types.StructType
 
@@ -59,10 +56,8 @@ class BaseFileOnlyRelation(sqlContext: SQLContext,
   //                 For more details please check HUDI-4161
   // NOTE: This override has to mirror semantic of whenever this Relation is converted into [[HadoopFsRelation]],
   //       which is currently done for all cases, except when Schema Evolution is enabled
-  override protected val shouldExtractPartitionValuesFromPartitionPath: Boolean = {
-    val enableSchemaOnRead = !internalSchema.isEmptySchema
-    !enableSchemaOnRead
-  }
+  override protected val shouldExtractPartitionValuesFromPartitionPath: Boolean =
+    internalSchemaOpt.isEmpty
 
   override lazy val mandatoryFields: Seq[String] =
   // TODO reconcile, record's key shouldn't be mandatory for base-file only relation
@@ -167,7 +162,8 @@ class BaseFileOnlyRelation(sqlContext: SQLContext,
         // We rely on [[HoodieROTablePathFilter]], to do proper filtering to assure that
         options = optParams ++ Map(
           "mapreduce.input.pathFilter.class" -> classOf[HoodieROTablePathFilter].getName
-        )
+        ),
+        partitionColumns = partitionColumns
       )
         .resolveRelation()
         .asInstanceOf[HadoopFsRelation]
