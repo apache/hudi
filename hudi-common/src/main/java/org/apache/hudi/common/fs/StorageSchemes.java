@@ -18,6 +18,10 @@
 
 package org.apache.hudi.common.fs;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.hudi.exception.HoodieException;
+
+import java.io.IOException;
 import java.util.Arrays;
 
 /**
@@ -69,6 +73,13 @@ public enum StorageSchemes {
   // Baidu Object Storage
   BOS("bos", false);
 
+  private static class UserDefinedScheme {
+    public String scheme;
+    public boolean supportsAppend;
+  }
+
+  private static UserDefinedScheme[] userDefinedSchemes = null;
+
   private String scheme;
   private boolean supportsAppend;
 
@@ -85,14 +96,58 @@ public enum StorageSchemes {
     return supportsAppend;
   }
 
+  public static void registerAdditionalSchemes(
+      String json, boolean enableOverride) {
+    try {
+      ObjectMapper mapper = new ObjectMapper();
+      UserDefinedScheme[] uds = mapper.readValue(json, UserDefinedScheme[].class);
+      if (!enableOverride
+          && Arrays.stream(uds).anyMatch(u ->
+              Arrays.stream(StorageSchemes.values()).anyMatch(
+                  s -> s.getScheme().equals(u.scheme)))) {
+        throw new IllegalArgumentException(
+            "Override schemes by mistake, natively supported schemes: "
+            + mapper.writeValueAsString(values())
+            + ", additional schemes: " + json);
+      }
+      userDefinedSchemes = uds;
+    } catch (IOException e) {
+      throw new HoodieException(e);
+    }
+  }
+
   public static boolean isSchemeSupported(String scheme) {
+    return isSchemeSupported(scheme, true) || isSchemeSupported(scheme, false);
+  }
+
+  private static boolean isSchemeSupported(
+      String scheme, boolean useUserDefinedSchemes) {
+    if (useUserDefinedSchemes) {
+      return userDefinedSchemes != null
+          && Arrays.stream(userDefinedSchemes).anyMatch(
+              s -> s.scheme.equals(scheme));
+    }
     return Arrays.stream(values()).anyMatch(s -> s.getScheme().equals(scheme));
   }
 
   public static boolean isAppendSupported(String scheme) {
-    if (!isSchemeSupported(scheme)) {
-      throw new IllegalArgumentException("Unsupported scheme :" + scheme);
+    if (isSchemeSupported(scheme, true)) {
+      return isAppendSupported(scheme, true);
     }
-    return Arrays.stream(StorageSchemes.values()).anyMatch(s -> s.supportsAppend() && s.scheme.equals(scheme));
+    if (isSchemeSupported(scheme, false)) {
+      return isAppendSupported(scheme, false);
+    }
+    throw new IllegalArgumentException("Unsupported scheme :" + scheme);
+  }
+
+  private static boolean isAppendSupported(
+      String scheme, boolean useUserDefinedSchemes) {
+    if (useUserDefinedSchemes) {
+      return userDefinedSchemes != null
+          && Arrays.stream(userDefinedSchemes).anyMatch(
+              s -> s.supportsAppend && s.scheme.equals(scheme));
+    }
+    return Arrays.stream(StorageSchemes.values()).anyMatch(
+        s -> s.supportsAppend() && s.scheme.equals(scheme));
   }
 }

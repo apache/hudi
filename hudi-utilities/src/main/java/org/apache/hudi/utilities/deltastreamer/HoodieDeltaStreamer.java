@@ -32,6 +32,7 @@ import org.apache.hudi.common.bootstrap.index.HFileBootstrapIndex;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.fs.StorageSchemes;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -141,6 +142,8 @@ public class HoodieDeltaStreamer implements Serializable {
         cfg.runBootstrap ? new BootstrapExecutor(cfg, jssc, fs, conf, this.properties) : null);
     this.deltaSyncService = Option.ofNullable(
         cfg.runBootstrap ? null : new DeltaSyncService(cfg, jssc, fs, conf, Option.ofNullable(this.properties)));
+
+    StorageSchemes.registerAdditionalSchemes(this.cfg.userDefinedSchemes, this.cfg.overridePredefinedSchemes);
   }
 
   private static TypedProperties combineProperties(Config cfg, Option<TypedProperties> propsOverride, Configuration hadoopConf) {
@@ -227,6 +230,18 @@ public class HoodieDeltaStreamer implements Serializable {
   public static class Config implements Serializable {
     public static final String DEFAULT_DFS_SOURCE_PROPERTIES = "file://" + System.getProperty("user.dir")
         + "/src/test/resources/delta-streamer-config/dfs-source.properties";
+
+    @Parameter(names = {"--user-defined-schemes"},
+        description = "Add filesystem schemes which Hoodie doesn't pre-defines(file/hdfs/s3a/...)."
+            + " It is useful when you want to user some vendor specific filesystems,"
+            + " e.g. [{\"name\":\"ufs\",\"supportsAppend\":true}]",
+        required = false)
+    public String userDefinedSchemes = "[]";
+
+    @Parameter(names = {"--override-predefined-schemes"},
+        description = "Should let user defined schems override pre-defined schemes?",
+        required = false)
+    public Boolean overridePredefinedSchemes = false;
 
     @Parameter(names = {"--target-base-path"},
         description = "base path for the target hoodie table. "
@@ -428,6 +443,8 @@ public class HoodieDeltaStreamer implements Serializable {
       }
       Config config = (Config) o;
       return sourceLimit == config.sourceLimit
+              && Objects.equals(userDefinedSchemes, config.userDefinedSchemes)
+              && Objects.equals(overridePredefinedSchemes, config.overridePredefinedSchemes)
               && Objects.equals(targetBasePath, config.targetBasePath)
               && Objects.equals(targetTableName, config.targetTableName)
               && Objects.equals(tableType, config.tableType)
@@ -462,7 +479,8 @@ public class HoodieDeltaStreamer implements Serializable {
 
     @Override
     public int hashCode() {
-      return Objects.hash(targetBasePath, targetTableName, tableType,
+      return Objects.hash(userDefinedSchemes, overridePredefinedSchemes,
+              targetBasePath, targetTableName, tableType,
               baseFileFormat, propsFilePath, configs, sourceClassName,
               sourceOrderingField, payloadClassName, schemaProviderClassName,
               transformerClassNames, sourceLimit, operation, filterDupes,
@@ -476,7 +494,9 @@ public class HoodieDeltaStreamer implements Serializable {
     @Override
     public String toString() {
       return "Config{"
-              + "targetBasePath='" + targetBasePath + '\''
+              + "userDefinedSchemes='" + userDefinedSchemes + '\''
+              + ", overridePredefinedSchemes='" + overridePredefinedSchemes + '\''
+              + ", targetBasePath='" + targetBasePath + '\''
               + ", targetTableName='" + targetTableName + '\''
               + ", tableType='" + tableType + '\''
               + ", baseFileFormat='" + baseFileFormat + '\''

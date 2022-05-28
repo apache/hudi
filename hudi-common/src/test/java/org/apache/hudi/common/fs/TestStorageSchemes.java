@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.fs;
 
+import org.apache.hudi.exception.HoodieException;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -49,6 +50,30 @@ public class TestStorageSchemes {
     assertFalse(StorageSchemes.isAppendSupported("bos"));
     assertFalse(StorageSchemes.isAppendSupported("ks3"));
     assertTrue(StorageSchemes.isAppendSupported("ofs"));
+    assertThrows(IllegalArgumentException.class, () -> {
+      StorageSchemes.isAppendSupported("s2");
+    }, "Should throw exception for unsupported schemes");
+  }
+
+  @Test
+  public void testRegisterAdditionalSchemes() {
+    assertThrows(HoodieException.class, () -> {
+      StorageSchemes.registerAdditionalSchemes("", false);
+    }, "Should throw exception for invalid json");
+
+    StorageSchemes.registerAdditionalSchemes("[]", false);
+
+    StorageSchemes.registerAdditionalSchemes(
+        "[{\"scheme\":\"ufs\",\"supportsAppend\":false}]", false);
+    assertFalse(StorageSchemes.isAppendSupported("ufs"));
+
+    String json = "[{\"scheme\":\"file\",\"supportsAppend\":true}]";
+    assertThrows(IllegalArgumentException.class, () -> {
+      StorageSchemes.registerAdditionalSchemes(json, false);
+    }, "Should thorw exception for overriding scheme by mistake");
+    StorageSchemes.registerAdditionalSchemes(json, true);
+    assertTrue(StorageSchemes.isAppendSupported("file"));
+
     assertThrows(IllegalArgumentException.class, () -> {
       StorageSchemes.isAppendSupported("s2");
     }, "Should throw exception for unsupported schemes");

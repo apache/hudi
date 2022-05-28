@@ -21,6 +21,7 @@ package org.apache.hudi.utilities.deltastreamer;
 import com.beust.jcommander.Parameter;
 import org.apache.hudi.client.utils.OperationConverter;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.fs.StorageSchemes;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.Option;
@@ -83,6 +84,8 @@ public class HoodieMultiTableDeltaStreamer {
     TypedProperties commonProperties = UtilHelpers.readConfig(fs.getConf(), new Path(commonPropsFile), new ArrayList<String>()).getProps();
     //get the tables to be ingested and their corresponding config files from this properties instance
     populateTableExecutionContextList(commonProperties, configFolder, fs, config);
+
+    StorageSchemes.registerAdditionalSchemes(config.userDefinedSchemes, config.overridePredefinedSchemes);
   }
 
   private void checkIfPropsFileAndConfigFolderExist(String commonPropsFile, String configFolder, FileSystem fs) throws IOException {
@@ -251,6 +254,18 @@ public class HoodieMultiTableDeltaStreamer {
   }
 
   public static class Config implements Serializable {
+
+    @Parameter(names = {"--user-defined-schemes"},
+        description = "Add filesystem schemes which Hoodie doesn't pre-defines(file/hdfs/s3a/...)."
+            + " It is useful when you want to user some vendor specific filesystems,"
+            + " e.g. [{\"name\":\"ufs\",\"supportsAppend\":true}]",
+        required = false)
+    public String userDefinedSchemes = "[]";
+
+    @Parameter(names = {"--override-predefined-schemes"},
+        description = "Should let user defined schems override pre-defined schemes?",
+        required = false)
+    public Boolean overridePredefinedSchemes = false;
 
     @Parameter(names = {"--base-path-prefix"},
         description = "base path prefix for multi table support via HoodieMultiTableDeltaStreamer class")
