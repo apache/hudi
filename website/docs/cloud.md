@@ -27,3 +27,5 @@ to cloud stores.
    Configurations required for BOS and Hudi co-operability.
 * [JuiceFS](jfs_hoodie) <br/>
    Configurations required for JuiceFS and Hudi co-operability.
+* [Oracle Cloud Infrastructure](oci_hoodie) <br/>
+   Configurations required for OCI and Hudi co-operability.
