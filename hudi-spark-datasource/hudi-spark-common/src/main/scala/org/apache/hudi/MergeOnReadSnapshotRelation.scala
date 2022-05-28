@@ -20,7 +20,7 @@ package org.apache.hudi
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
-import org.apache.hudi.HoodieBaseRelation.{BaseFileReader, convertToAvroSchema}
+import org.apache.hudi.HoodieBaseRelation.convertToAvroSchema
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.MergeOnReadSnapshotRelation.getFilePath
 import org.apache.hudi.avro.HoodieAvroUtils
@@ -141,7 +141,7 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
       options = optParams,
       // NOTE: We have to fork the Hadoop Config here as Spark will be modifying it
       //       to configure Parquet reader appropriately
-      hadoopConf = HoodieDataSourceHelper.getConfigurationWithInternalSchema(new Configuration(conf), requiredDataSchema.internalSchema, metaClient.getBasePath, validCommits)
+      hadoopConf = embedInternalSchema(new Configuration(conf), requiredDataSchema.internalSchema)
     )
 
     // Check whether fields required for merging were also requested to be fetched
@@ -154,10 +154,10 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
     //           in case query-mode is skipping merging
     val mandatoryColumns = mandatoryFieldsForMerging.map(HoodieAvroUtils.getRootLevelFieldName)
     if (mandatoryColumns.forall(requestedColumns.contains)) {
-      HoodieMergeOnReadBaseFileReaders(
-        fullSchemaFileReader = fullSchemaReader,
-        requiredSchemaFileReaderForMerging = requiredSchemaReader,
-        requiredSchemaFileReaderForNoMerging = requiredSchemaReader
+      new HoodieMergeOnReadBaseFileReaders(
+        fullSchemaReader = fullSchemaReader,
+        requiredSchemaReader = requiredSchemaReader,
+        requiredSchemaReaderSkipMerging = requiredSchemaReader
       )
     } else {
       val prunedRequiredSchema = {
@@ -180,13 +180,13 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
         options = optParams,
         // NOTE: We have to fork the Hadoop Config here as Spark will be modifying it
         //       to configure Parquet reader appropriately
-        hadoopConf = HoodieDataSourceHelper.getConfigurationWithInternalSchema(new Configuration(conf), requiredDataSchema.internalSchema, metaClient.getBasePath, validCommits)
+        hadoopConf = embedInternalSchema(new Configuration(conf), requiredDataSchema.internalSchema)
       )
 
-      HoodieMergeOnReadBaseFileReaders(
-        fullSchemaFileReader = fullSchemaReader,
-        requiredSchemaFileReaderForMerging = requiredSchemaReader,
-        requiredSchemaFileReaderForNoMerging = requiredSchemaReaderSkipMerging
+      new HoodieMergeOnReadBaseFileReaders(
+        fullSchemaReader = fullSchemaReader,
+        requiredSchemaReader = requiredSchemaReader,
+        requiredSchemaReaderSkipMerging = requiredSchemaReaderSkipMerging
       )
     }
   }

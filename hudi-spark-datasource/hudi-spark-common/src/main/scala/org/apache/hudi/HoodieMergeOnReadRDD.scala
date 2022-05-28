@@ -55,9 +55,25 @@ import scala.util.Try
 
 case class HoodieMergeOnReadPartition(index: Int, split: HoodieMergeOnReadFileSplit) extends Partition
 
-case class HoodieMergeOnReadBaseFileReaders(fullSchemaFileReader: BaseFileReader,
-                                            requiredSchemaFileReaderForMerging: BaseFileReader,
-                                            requiredSchemaFileReaderForNoMerging: BaseFileReader)
+/**
+ * Class holding base-file readers for 3 different use-cases:
+ *
+ * <ol>
+ *   <li>Full-schema reader: is used when whole row has to be read to perform merging correctly.
+ *   This could occur, when no optimizations could be applied and we have to fallback to read the whole row from
+ *   the base file and the corresponding delta-log file to merge them correctly</li>
+ *
+ *   <li>Required-schema reader: is used when it's fine to only read row's projected columns.
+ *   This could occur, when row could be merged with corresponding delta-log record leveraging while only having
+ *   projected columns</li>
+ *
+ *   <li>Required-schema reader (skip-merging): is used when when no merging will be performed (skip-merged).
+ *   This could occur, when file-group has no delta-log files</li>
+ * </ol>
+ */
+private[hudi] class HoodieMergeOnReadBaseFileReaders(val fullSchemaReader: BaseFileReader,
+                                                     val requiredSchemaReader: BaseFileReader,
+                                                     val requiredSchemaReaderSkipMerging: BaseFileReader)
 
 /**
  * RDD enabling Hudi's Merge-on-Read (MOR) semantic
@@ -101,13 +117,13 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
     val mergeOnReadPartition = split.asInstanceOf[HoodieMergeOnReadPartition]
     val iter = mergeOnReadPartition.split match {
       case dataFileOnlySplit if dataFileOnlySplit.logFiles.isEmpty =>
-        fileReaders.requiredSchemaFileReaderForNoMerging.apply(dataFileOnlySplit.dataFile.get)
+        fileReaders.requiredSchemaReaderSkipMerging.apply(dataFileOnlySplit.dataFile.get)
 
       case logFileOnlySplit if logFileOnlySplit.dataFile.isEmpty =>
         new LogFileIterator(logFileOnlySplit, getConfig)
 
       case split if mergeType.equals(DataSourceReadOptions.REALTIME_SKIP_MERGE_OPT_VAL) =>
-        val baseFileIterator = fileReaders.requiredSchemaFileReaderForNoMerging.apply(split.dataFile.get)
+        val baseFileIterator = fileReaders.requiredSchemaReaderSkipMerging.apply(split.dataFile.get)
         new SkipMergeIterator(split, baseFileIterator, getConfig)
 
       case split if mergeType.equals(DataSourceReadOptions.REALTIME_PAYLOAD_COMBINE_OPT_VAL) =>
@@ -141,9 +157,9 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
     //       then we can avoid reading and parsing the records w/ _full_ schema, and instead only
     //       rely on projected one, nevertheless being able to perform merging correctly
     val reader = if (!whitelistedPayloadClasses.contains(tableState.recordPayloadClassName)) {
-      fileReaders.fullSchemaFileReader
+      fileReaders.fullSchemaReader
     } else {
-      fileReaders.requiredSchemaFileReaderForMerging
+      fileReaders.requiredSchemaReader
     }
 
     (reader(split.dataFile.get), reader.schema)
