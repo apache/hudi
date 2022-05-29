@@ -82,7 +82,7 @@ Here is an example of creating a COW partitioned table.
 create table if not exists hudi_table_p0 (
 id bigint,
 name string,
-dt string，
+dt string,
 hh string  
 ) using hudi
 options (
