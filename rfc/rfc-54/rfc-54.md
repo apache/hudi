@@ -81,7 +81,7 @@ configuration and new table APIs.
   Hudi should fetch from table configs when options are not provided by the
   user.
 
-#### Good defaults
+#### Better defaults
 
 * Default values for configurations should be optimized for simple bulk load
   scenario e.g. by default if we have NONE sort mode then it's as good as
@@ -90,22 +90,22 @@ configuration and new table APIs.
   hbase) for default. As another example, enable schema reconciliation by
   default instead of failing writes.
 
-#### Reuse and consistency
+#### Consistency across write paths
 
-* Keep spark-sql and spark datasource and deltastreamer configs in sync as much
+* Keep configs for Spark SQL, Spark DataSource and HoodieDeltaStreamer in sync as much
   as possible. Document exceptions, e.g. key generator for sql is
   ComplexKeyGenerator while for datasource it is SimpleKeyGenerator.
-* Rename/reuse existing datasource keys that are meant for same purpose.
+* Rename/reuse existing datasource keys that are meant for the same purpose.
 * In all these changes, we should support backward compatibility.
 
-#### Refactor Hive Sync
+#### Refactor Meta Sync ([RFC-55](/rfc/rfc-55/rfc-55.md))
 
 * Reduce the number of configs needed for Hive sync, e.g. table name once
   provided at the time of first write can be reused for hive sync table name
   config as well.
-* Revisit the class hierarchy and refactor if needed. Please check [RFC-55](/rfc/rfc-55/rfc-55.md)
+* Refactor the class hierarchy and APIs.
 
-#### Configuration Builders
+#### Support `HoodieConfig` API
 
 * Users should be able to use the config builders instead of specifying config
   keys,
@@ -142,15 +142,19 @@ hudiTable.update(
 )
 
 // restore to previous commit
-hudiTable.restoreToTime("0000000" // previous commit time)
+hudiTable.restoreTo("0000000" // previous commit time)
 
 // drop
 hudiTable.drop() // deletes the whole data and the base path as well
 ```
 
-In the first phase of implementation, Spark will be the execution engine behind these APIs. 
-We will use spark sql functions for update expressions.
-In the second phase, other engines such as Flink will be supported too.
+**Phase 1**
+
+Spark will be the execution engine behind these APIs. We will use spark sql functions for update expressions.
+
+**Phase 2**
+
+Support other engines such as Flink.
 
 ## Rollout/Adoption Plan
 
