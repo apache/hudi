@@ -515,7 +515,13 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
     return getConfigBuilder(schema)
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(IndexType.INMEMORY).build())
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().withMaxNumDeltaCommitsBeforeCompaction(1).build())
-        .withAvroSchemaValidate(true);
+        .withAvroSchemaValidate(true)
+        // The test has rollback instants on the timeline,
+        // these rollback instants use real time as instant time, whose instant time is always greater than
+        // the normal commits instant time, this breaks the refresh rule introduced in HUDI-2761:
+        // The last client instant is always the rollback instant but not the normal commit.
+        // Always refresh the timeline when client and server have different timeline.
+        .withRefreshTimelineServerBasedOnLatestCommit(false);
   }
 
   @Override

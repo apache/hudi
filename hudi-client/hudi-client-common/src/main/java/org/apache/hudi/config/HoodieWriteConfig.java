@@ -364,8 +364,8 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final ConfigProperty<Boolean> REFRESH_TIMELINE_SERVER_BASED_ON_LATEST_COMMIT = ConfigProperty
       .key("hoodie.refresh.timeline.server.based.on.latest.commit")
-      .defaultValue(false)
-      .withDocumentation("Refresh timeline in timeline server based on latest commit apart from timeline hash difference. By default (false), ");
+      .defaultValue(true)
+      .withDocumentation("Refresh timeline in timeline server based on latest commit apart from timeline hash difference. By default (true).");
 
   public static final ConfigProperty<Long> INITIAL_CONSISTENCY_CHECK_INTERVAL_MS = ConfigProperty
       .key("hoodie.consistency.check.initial_interval_ms")
@@ -2496,6 +2496,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withAutoAdjustLockConfigs(boolean autoAdjustLockConfigs) {
       writeConfig.setValue(AUTO_ADJUST_LOCK_CONFIGS, String.valueOf(autoAdjustLockConfigs));
+      return this;
+    }
+
+    public Builder withRefreshTimelineServerBasedOnLatestCommit(boolean refreshTimelineServerBasedOnLatestCommit) {
+      writeConfig.setValue(REFRESH_TIMELINE_SERVER_BASED_ON_LATEST_COMMIT, Boolean.toString(refreshTimelineServerBasedOnLatestCommit));
       return this;
     }
 
