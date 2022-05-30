@@ -30,6 +30,10 @@ public class HoodieSparkRecordCombiningEngine implements HoodieRecordCombiningEn
 
   @Override
   public HoodieRecord preCombine(HoodieRecord older, HoodieRecord newer) {
+    if (older.getData() == null) {
+      // use natural order for delete record
+      return older;
+    }
     if (older.getOrderingValue().compareTo(newer.getOrderingValue()) > 0) {
       return older;
     } else {

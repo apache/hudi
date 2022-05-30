@@ -99,7 +99,7 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
     ValidationUtils.checkState(other instanceof HoodieAvroRecord);
     GenericRecord mergedPayload = HoodieAvroUtils.stitchRecords(
         (GenericRecord) toIndexedRecord(readerSchema, new Properties()).get(),
-        (GenericRecord) ((HoodieAvroRecord<?>) other).toIndexedRecord(readerSchema, new Properties()).get(),
+        (GenericRecord) other.toIndexedRecord(readerSchema, new Properties()).get(),
         writerSchema);
     return new HoodieAvroRecord(getKey(), instantiateRecordPayloadWrapper(mergedPayload, getOrderingValue()), getOperation());
   }
