@@ -18,7 +18,9 @@
 
 package org.apache.hudi.io.storage;
 
+import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.io.storage.row.HoodieRowParquetConfig;
 import org.apache.hudi.io.storage.row.HoodieRowParquetWriteSupport;
@@ -28,23 +30,51 @@ import java.io.IOException;
 
 public class HoodieSparkParquetWriter extends HoodieBaseParquetWriter implements HoodieSparkFileWriter {
 
+  // TODO: better code reuse
+  private final String fileName;
+  private final String instantTime;
+  private final TaskContextSupplier taskContextSupplier;
+  private final boolean populateMetaFields;
 
-  private final HoodieRowParquetWriteSupport writeSupport;
-
-  public HoodieSparkParquetWriter(Path file, HoodieRowParquetConfig parquetConfig) throws IOException {
+  public HoodieSparkParquetWriter(Path file,
+                                  HoodieRowParquetConfig parquetConfig,
+                                  String instantTime,
+                                  TaskContextSupplier taskContextSupplier,
+                                  boolean populateMetaFields) throws IOException {
     super(file, parquetConfig);
-    this.writeSupport = parquetConfig.getWriteSupport();
+    this.fileName = file.getName();
+    this.instantTime = instantTime;
+    this.taskContextSupplier = taskContextSupplier;
+    this.populateMetaFields = populateMetaFields;
+  }
+
+  public HoodieSparkParquetWriter(FSDataOutputStream outputStream,
+                                  HoodieRowParquetConfig parquetConfig,
+                                 boolean populateMetaFields) throws IOException {
+    super(outputStream, parquetConfig);
+    this.fileName = null;
+    this.instantTime = null;
+    this.taskContextSupplier = null;
+    this.populateMetaFields = populateMetaFields;
   }
 
   @Override
   public void writeRowWithMetadata(HoodieKey key, InternalRow row) throws IOException {
-
+    if (populateMetaFields) {
+      super.write(prepRecordWithMetadata(key, row, instantTime,
+          taskContextSupplier.getPartitionIdSupplier().get(), getWrittenRecordCount(), fileName));
+      ((HoodieRowParquetWriteSupport) writeSupport).add(key.getRecordKey());
+    } else {
+      super.write(row);
+    }
   }
 
   @Override
   public void writeRow(String recordKey, InternalRow row) throws IOException {
     super.write(row);
-    writeSupport.add(recordKey); // todo: whether to has BF
+    if (populateMetaFields) {
+      ((HoodieRowParquetWriteSupport) writeSupport).add(recordKey);
+    }
   }
 
   @Override

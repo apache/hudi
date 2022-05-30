@@ -151,16 +151,18 @@ public abstract class SingleSparkJobExecutionStrategy<T>
     List<Iterator<HoodieRecord<T>>> iteratorsForPartition = clusteringOps.stream().map(clusteringOp -> {
 
       Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(getWriteConfig().getSchema()));
-      Iterable<IndexedRecord> indexedRecords = () -> {
+      Iterable<HoodieRecord> indexedRecords = () -> {
         try {
-          return HoodieFileReaderFactory.getFileReader(getHoodieTable().getHadoopConf(), new Path(clusteringOp.getDataFilePath())).getRecordIterator(readerSchema);
+          HoodieRecord.Mapper<IndexedRecord> mapper = (indexedRecord) -> transform(indexedRecord);
+          return HoodieFileReaderFactory.getFileReader(getHoodieTable().getHadoopConf(), new Path(clusteringOp.getDataFilePath()))
+              .getRecordIterator(readerSchema, mapper);
         } catch (IOException e) {
           throw new HoodieClusteringException("Error reading input data for " + clusteringOp.getDataFilePath()
               + " and " + clusteringOp.getDeltaFilePaths(), e);
         }
       };
 
-      return StreamSupport.stream(indexedRecords.spliterator(), false).map(record -> transform(record)).iterator();
+      return StreamSupport.stream(indexedRecords.spliterator(), false).iterator();
     }).collect(Collectors.toList());
 
     return new ConcatenatingIterator<>(iteratorsForPartition);

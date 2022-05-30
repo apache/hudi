@@ -138,13 +138,13 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
   /**
    * Returns all the records iterator contained w/in this block.
    */
-  public final ClosableIterator<HoodieRecord> getRecordIterator(HoodieRecord.Mapper mapper) {
+  public final ClosableIterator<HoodieRecord> getRecordIterator() {
     if (records.isPresent()) {
       return list2Iterator(records.get());
     }
     try {
       // in case records are absent, read content lazily and then convert to IndexedRecords
-      return readRecordsFromBlockPayload(mapper);
+      return readRecordsFromBlockPayload();
     } catch (IOException io) {
       throw new HoodieIOException("Unable to convert content bytes to records", io);
     }
@@ -170,7 +170,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
 
     // Otherwise, we fetch all the records and filter out all the records, but the
     // ones requested
-    ClosableIterator<HoodieRecord> allRecords = getRecordIterator(mapper);
+    ClosableIterator<HoodieRecord> allRecords = getRecordIterator();
     if (fullScan) {
       return allRecords;
     }
@@ -179,14 +179,14 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
     return FilteringIterator.getInstance(allRecords, keySet, fullKey, this::getRecordKey);
   }
 
-  protected ClosableIterator<HoodieRecord> readRecordsFromBlockPayload(HoodieRecord.Mapper mapper) throws IOException {
+  protected ClosableIterator<HoodieRecord> readRecordsFromBlockPayload() throws IOException {
     if (readBlockLazily && !getContent().isPresent()) {
       // read log block contents from disk
       inflate();
     }
 
     try {
-      return deserializeRecords(getContent().get(), mapper);
+      return deserializeRecords(getContent().get());
     } finally {
       // Free up content to be GC'd by deflating the block
       deflate();
@@ -201,7 +201,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
 
   protected abstract byte[] serializeRecords(List<HoodieRecord> records) throws IOException;
 
-  protected abstract ClosableIterator<HoodieRecord> deserializeRecords(byte[] content, HoodieRecord.Mapper mapper) throws IOException;
+  protected abstract ClosableIterator<HoodieRecord> deserializeRecords(byte[] content) throws IOException;
 
   public abstract HoodieLogBlockType getBlockType();
 

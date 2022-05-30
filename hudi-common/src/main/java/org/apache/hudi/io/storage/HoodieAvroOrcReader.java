@@ -65,7 +65,7 @@ public class HoodieAvroOrcReader implements HoodieAvroFileReader {
   }
 
   @Override
-  public ClosableIterator<IndexedRecord> getRecordIterator(Schema schema) throws IOException {
+  public ClosableIterator<IndexedRecord> getIndexedRecordIterator(Schema schema) throws IOException {
     try {
       Reader reader = OrcFile.createReader(path, OrcFile.readerOptions(conf));
       TypeDescription orcSchema = AvroOrcUtils.createOrcSchema(schema);

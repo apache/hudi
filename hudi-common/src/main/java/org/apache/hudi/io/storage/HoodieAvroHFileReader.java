@@ -177,7 +177,7 @@ public class HoodieAvroHFileReader implements HoodieAvroFileReader {
     }
   }
 
-  public ClosableIterator<IndexedRecord> getRecordIterator(Schema readerSchema) throws IOException {
+  public ClosableIterator<IndexedRecord> getIndexedRecordIterator(Schema readerSchema) throws IOException {
     // TODO eval whether seeking scanner would be faster than pread
     HFileScanner scanner = getHFileScanner(reader, false);
     return new RecordIterator(scanner, getSchema(), readerSchema);
@@ -372,7 +372,7 @@ public class HoodieAvroHFileReader implements HoodieAvroFileReader {
    */
   public static List<IndexedRecord> readAllRecords(HoodieAvroHFileReader reader) throws IOException {
     Schema schema = reader.getSchema();
-    return toStream(reader.getRecordIterator(schema))
+    return toStream(reader.getIndexedRecordIterator(schema))
         .collect(Collectors.toList());
   }
 

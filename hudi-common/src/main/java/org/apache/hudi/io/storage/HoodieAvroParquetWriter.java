@@ -19,6 +19,7 @@
 package org.apache.hudi.io.storage;
 
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
 import org.apache.hudi.common.engine.TaskContextSupplier;
@@ -43,7 +44,6 @@ public class HoodieAvroParquetWriter
   private final String instantTime;
   private final TaskContextSupplier taskContextSupplier;
   private final boolean populateMetaFields;
-  private final HoodieAvroWriteSupport writeSupport;
 
   @SuppressWarnings({"unchecked", "rawtypes"})
   public HoodieAvroParquetWriter(Path file,
@@ -53,9 +53,18 @@ public class HoodieAvroParquetWriter
                                  boolean populateMetaFields) throws IOException {
     super(file, (HoodieBaseParquetConfig) parquetConfig);
     this.fileName = file.getName();
-    this.writeSupport = parquetConfig.getWriteSupport();
     this.instantTime = instantTime;
     this.taskContextSupplier = taskContextSupplier;
+    this.populateMetaFields = populateMetaFields;
+  }
+
+  public HoodieAvroParquetWriter(FSDataOutputStream outputStream,
+                                 HoodieAvroParquetConfig parquetConfig,
+                                 boolean populateMetaFields) throws IOException {
+    super(outputStream, (HoodieBaseParquetConfig) parquetConfig);
+    this.fileName = null;
+    this.instantTime = null;
+    this.taskContextSupplier = null;
     this.populateMetaFields = populateMetaFields;
   }
 
@@ -65,7 +74,7 @@ public class HoodieAvroParquetWriter
       prepRecordWithMetadata(key, avroRecord, instantTime,
           taskContextSupplier.getPartitionIdSupplier().get(), getWrittenRecordCount(), fileName);
       super.write(avroRecord);
-      writeSupport.add(key.getRecordKey());
+      ((HoodieAvroWriteSupport) writeSupport).add(key.getRecordKey());
     } else {
       super.write(avroRecord);
     }
@@ -75,7 +84,7 @@ public class HoodieAvroParquetWriter
   public void writeAvro(String key, IndexedRecord object) throws IOException {
     super.write(object);
     if (populateMetaFields) {
-      writeSupport.add(key);
+      ((HoodieAvroWriteSupport) writeSupport).add(key);
     }
   }
 

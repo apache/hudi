@@ -109,8 +109,8 @@ public abstract class BaseMergeHelper<T, I, K, O> {
     }
 
     return new MergingIterator<>(
-        reader.getRecordIterator(readerSchema, HoodieAvroIndexedRecord::new),
-        bootstrapReader.getRecordIterator(bootstrapReadSchema, HoodieAvroIndexedRecord::new),
+        reader.getRecordIterator(readerSchema),
+        bootstrapReader.getRecordIterator(bootstrapReadSchema),
         (oneRecord, otherRecord) -> mergeRecords(oneRecord, otherRecord, readerSchema, mergeHandle.getWriterSchemaWithMetaFields()));
   }
 
