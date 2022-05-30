@@ -23,39 +23,44 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.sync.common.util.ConfigUtils
 import org.apache.spark.sql._
-import org.apache.spark.sql.catalyst.TableIdentifier
+import org.apache.spark.sql.catalyst.{QualifiedTableName, TableIdentifier}
 import org.apache.spark.sql.catalyst.catalog._
 
-import scala.util.control.NonFatal
-
+/**
+ * Physical plan node for dropping a table.
+ */
 case class DropHoodieTableCommand(
     tableIdentifier: TableIdentifier,
     ifExists: Boolean,
     isView: Boolean,
-    purge: Boolean)
-extends HoodieLeafRunnableCommand {
+    purge: Boolean) extends HoodieLeafRunnableCommand {
 
-  val MOR_SNAPSHOT_TABLE_SUFFIX = "_rt"
-  val MOR_READ_OPTIMIZED_TABLE_SUFFIX = "_ro"
+  private val MOR_SNAPSHOT_TABLE_SUFFIX = "_rt"
+  private val MOR_READ_OPTIMIZED_TABLE_SUFFIX = "_ro"
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
-    val fullTableName = s"${tableIdentifier.database}.${tableIdentifier.table}"
-    logInfo(s"start execute drop table command for $fullTableName")
-    sparkSession.catalog.refreshTable(tableIdentifier.unquotedString)
-
-    try {
-      // drop catalog table for this hoodie table
-      dropTableInCatalog(sparkSession, tableIdentifier, ifExists, purge)
-    } catch {
-      case NonFatal(e) =>
-        logWarning(s"Failed to drop catalog table in metastore: ${e.getMessage}")
+    logInfo(s"Start executing 'DROP TABLE' on ${tableIdentifier.unquotedString}" +
+      s" (ifExists=${ifExists}, purge=${purge}).")
+    if (!sparkSession.catalog.tableExists(tableIdentifier.unquotedString)) {
+      sparkSession.catalog.refreshTable(tableIdentifier.unquotedString)
     }
+    val qualifiedTableName = QualifiedTableName(
+      tableIdentifier.database.getOrElse(sparkSession.sessionState.catalog.getCurrentDatabase),
+      tableIdentifier.table)
+    sparkSession.sessionState.catalog.invalidateCachedTable(qualifiedTableName)
 
-    logInfo(s"Finish execute drop table command for $fullTableName")
+    dropTableInCatalog(sparkSession, tableIdentifier, ifExists, purge)
+
+    logInfo(s"Finished executing 'DROP TABLE' on ${tableIdentifier.unquotedString}.")
     Seq.empty[Row]
   }
 
-  def dropTableInCatalog(sparkSession: SparkSession,
+  /**
+   * Drops table in Spark catalog. Note that RO & RT table could coexist with a MOR table.
+   * If `purge` enabled, RO & RT table and corresponding data directory on filesystem will
+   * all be removed.
+   */
+  private def dropTableInCatalog(sparkSession: SparkSession,
           tableIdentifier: TableIdentifier,
           ifExists: Boolean,
           purge: Boolean): Unit = {
@@ -67,7 +72,8 @@ extends HoodieLeafRunnableCommand {
     val catalog = sparkSession.sessionState.catalog
 
     // Drop table in the catalog
-    if (HoodieTableType.MERGE_ON_READ == hoodieCatalogTable.tableType && purge) {
+    if (hoodieCatalogTable.hoodieTableExists &&
+        HoodieTableType.MERGE_ON_READ == hoodieCatalogTable.tableType && purge) {
       val (rtTableOpt, roTableOpt) = getTableRTAndRO(catalog, hoodieCatalogTable)
       rtTableOpt.foreach(table => catalog.dropTable(table.identifier, true, false))
       roTableOpt.foreach(table => catalog.dropTable(table.identifier, true, false))
