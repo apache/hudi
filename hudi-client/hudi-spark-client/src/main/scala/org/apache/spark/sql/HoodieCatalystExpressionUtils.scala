@@ -18,8 +18,8 @@
 package org.apache.spark.sql
 
 import org.apache.spark.sql.catalyst.analysis.{UnresolvedAttribute, UnresolvedFunction}
-import org.apache.spark.sql.catalyst.expressions.codegen.GenerateUnsafeProjection
-import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, SubqueryExpression, UnsafeProjection}
+import org.apache.spark.sql.catalyst.expressions.codegen.{GenerateMutableProjection, GenerateUnsafeProjection}
+import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, MutableProjection, SubqueryExpression, UnsafeProjection}
 import org.apache.spark.sql.catalyst.plans.logical.{Filter, LocalRelation, LogicalPlan}
 import org.apache.spark.sql.types.StructType
 
@@ -40,6 +40,23 @@ trait HoodieCatalystExpressionUtils {
     val targetExprs = to.fields.map(f => attrsMap(f.name))
 
     GenerateUnsafeProjection.generate(targetExprs, attrs)
+  }
+
+  /**
+   * Generates instance of [[MutableProjection]] projecting row of one [[StructType]] into another [[StructType]]
+   *
+   * NOTE: No safety checks are executed to validate that this projection is actually feasible,
+   *       it's up to the caller to make sure that such projection is possible.
+   *
+   * NOTE: Projection of the row from [[StructType]] A to [[StructType]] B is only possible, if
+   *       B is a subset of A
+   */
+  def generateMutableProjection(from: StructType, to: StructType): MutableProjection = {
+    val attrs = from.toAttributes
+    val attrsMap = attrs.map(attr => (attr.name, attr)).toMap
+    val targetExprs = to.fields.map(f => attrsMap(f.name))
+
+    GenerateMutableProjection.generate(targetExprs, attrs)
   }
 
   /**

@@ -836,7 +836,7 @@ public class HoodieAvroUtils {
     }
   }
 
-  private static String createFullName(Deque<String> fieldNames) {
+  public static String createFullName(Deque<String> fieldNames) {
     String result = "";
     if (!fieldNames.isEmpty()) {
       List<String> parentNames = new ArrayList<>();
@@ -971,7 +971,7 @@ public class HoodieAvroUtils {
   }
 
   // convert days to Date
-  private static java.sql.Date toJavaDate(int days) {
+  public static java.sql.Date toJavaDate(int days) {
     long localMillis = Math.multiplyExact(days, MILLIS_PER_DAY);
     int timeZoneOffset;
     TimeZone defaultTimeZone = TimeZone.getDefault();
@@ -984,7 +984,7 @@ public class HoodieAvroUtils {
   }
 
   // convert Date to days
-  private static int fromJavaDate(Date date) {
+  public static int fromJavaDate(Date date) {
     long millisUtc = date.getTime();
     long millisLocal = millisUtc + TimeZone.getDefault().getOffset(millisUtc);
     int julianDays = Math.toIntExact(Math.floorDiv(millisLocal, MILLIS_PER_DAY));
