@@ -21,6 +21,7 @@ package org.apache.hudi.io.storage;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.Mapper;
 import org.apache.hudi.common.util.ClosableIterator;
@@ -33,7 +34,7 @@ import java.util.List;
 
 public interface HoodieAvroFileReader extends HoodieFileReader, AutoCloseable {
 
-  ClosableIterator<IndexedRecord> getRecordIterator(Schema readerSchema) throws IOException;
+  ClosableIterator<IndexedRecord> getIndexedRecordIterator(Schema readerSchema) throws IOException;
 
   default Option<IndexedRecord> getRecordByKey(String key, Schema readerSchema) throws IOException {
     throw new UnsupportedOperationException();
@@ -67,7 +68,13 @@ public interface HoodieAvroFileReader extends HoodieFileReader, AutoCloseable {
 
   @Override
   default ClosableIterator<HoodieRecord> getRecordIterator(Schema schema, HoodieRecord.Mapper mapper) throws IOException {
-    return new MappingIterator<>(getRecordIterator(schema), mapper::apply);
+    return new MappingIterator<>(getIndexedRecordIterator(schema), mapper::apply);
+  }
+
+  @Override
+  default ClosableIterator<HoodieRecord> getRecordIterator(Schema schema) throws IOException {
+    HoodieRecord.Mapper<IndexedRecord> mapper = HoodieAvroIndexedRecord::new;
+    return new MappingIterator<>(getIndexedRecordIterator(schema), mapper::apply);
   }
 
   @Override

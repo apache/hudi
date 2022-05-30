@@ -18,7 +18,19 @@
 
 package org.apache.hudi.io.storage;
 
+import org.apache.avro.Schema;
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.ClosableIterator;
+import org.apache.hudi.common.util.MappingIterator;
+import org.apache.spark.sql.catalyst.InternalRow;
+
+import java.io.IOException;
+
 public interface HoodieSparkFileReader extends HoodieFileReader {
 
+  ClosableIterator<InternalRow> getInternalRowIterator(Schema readerSchema) throws IOException;
 
+  default ClosableIterator<HoodieRecord> getRecordIterator(Schema readerSchema, HoodieRecord.Mapper mapper) throws IOException {
+    return new MappingIterator<>(getInternalRowIterator(readerSchema), mapper::apply);
+  }
 }

@@ -66,7 +66,7 @@ public class HoodieInternalRowFileWriterFactory {
             writeConfig.getDynamicBloomFilterMaxNumEntries(),
             writeConfig.getBloomFilterType());
     HoodieRowParquetWriteSupport writeSupport =
-            new HoodieRowParquetWriteSupport(table.getHadoopConf(), structType, filter, writeConfig);
+            new HoodieRowParquetWriteSupport(table.getHadoopConf(), structType, filter, writeConfig.getStorageConfig());
     return new HoodieInternalRowParquetWriter(
         path, new HoodieRowParquetConfig(
             writeSupport,
@@ -91,7 +91,7 @@ public class HoodieInternalRowFileWriterFactory {
       Path path, HoodieWriteConfig writeConfig, StructType structType, HoodieTable table)
       throws IOException {
     HoodieRowParquetWriteSupport writeSupport =
-        new HoodieRowParquetWriteSupport(table.getHadoopConf(), structType, null, writeConfig);
+        new HoodieRowParquetWriteSupport(table.getHadoopConf(), structType, null, writeConfig.getStorageConfig());
     return new HoodieInternalRowParquetWriter(
         path, new HoodieRowParquetConfig(
         writeSupport,

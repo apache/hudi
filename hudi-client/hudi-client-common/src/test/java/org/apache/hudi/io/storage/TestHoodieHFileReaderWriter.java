@@ -33,7 +33,6 @@ import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
-import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.FileIOUtils;
@@ -104,8 +103,8 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
     when(mockTaskContextSupplier.getPartitionIdSupplier()).thenReturn(partitionSupplier);
     when(partitionSupplier.get()).thenReturn(10);
 
-    return (HoodieAvroHFileWriter)HoodieFileWriterFactory.newHFileFileWriter(
-        instantTime, getFilePath(), writeConfig, avroSchema, conf, mockTaskContextSupplier);
+    return (HoodieAvroHFileWriter)HoodieFileWriterFactory.getFileWriter(
+        instantTime, getFilePath(), conf, writeConfig.getStorageConfig(), avroSchema, mockTaskContextSupplier);
   }
 
   @Override
@@ -216,7 +215,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
         new HoodieAvroHFileReader(fs, new Path(DUMMY_BASE_PATH), content, Option.empty());
     Schema avroSchema = getSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchema.avsc");
     assertEquals(NUM_RECORDS, hfileReader.getTotalRecords());
-    verifySimpleRecords(hfileReader.getRecordIterator(avroSchema));
+    verifySimpleRecords(hfileReader.getIndexedRecordIterator(avroSchema));
   }
 
   @Test
@@ -258,7 +257,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
 
     List<GenericRecord> recordsByPrefix = toStream(iterator).map(r -> (GenericRecord)r).collect(Collectors.toList());
 
-    List<GenericRecord> allRecords = toStream(hfileReader.getRecordIterator(HoodieAvroIndexedRecord::new)).map(r -> (GenericRecord)r.getData()).collect(Collectors.toList());
+    List<GenericRecord> allRecords = toStream(hfileReader.getRecordIterator()).map(r -> (GenericRecord)r.getData()).collect(Collectors.toList());
 
     assertEquals(allRecords, recordsByPrefix);
 
@@ -324,7 +323,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
         new HoodieAvroHFileReader(fs, new Path(DUMMY_BASE_PATH), content, Option.empty());
     Schema avroSchema = getSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchema.avsc");
     assertEquals(NUM_RECORDS_FIXTURE, hfileReader.getTotalRecords());
-    verifySimpleRecords(hfileReader.getRecordIterator(avroSchema));
+    verifySimpleRecords(hfileReader.getIndexedRecordIterator(avroSchema));
 
     content = readHFileFromResources(complexHFile);
     verifyHFileReader(HoodieHFileUtils.createHFileReader(fs, new Path(DUMMY_BASE_PATH), content),
@@ -332,7 +331,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
     hfileReader = new HoodieAvroHFileReader(fs, new Path(DUMMY_BASE_PATH), content, Option.empty());
     avroSchema = getSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchemaWithUDT.avsc");
     assertEquals(NUM_RECORDS_FIXTURE, hfileReader.getTotalRecords());
-    verifySimpleRecords(hfileReader.getRecordIterator(avroSchema));
+    verifySimpleRecords(hfileReader.getIndexedRecordIterator(avroSchema));
 
     content = readHFileFromResources(bootstrapIndexFile);
     verifyHFileReader(HoodieHFileUtils.createHFileReader(fs, new Path(DUMMY_BASE_PATH), content),

@@ -20,7 +20,7 @@ package org.apache.hudi.io;
 
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.io.storage.HoodieAvroFileReader;
+import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.table.HoodieTable;
 
 import java.io.IOException;
@@ -36,7 +36,7 @@ public class HoodieRangeInfoHandle<T, I, K, O> extends HoodieReadHandle<T, I, K,
   }
 
   public String[] getMinMaxKeys() throws IOException {
-    try (HoodieAvroFileReader reader = createNewFileReader()) {
+    try (HoodieFileReader reader = createNewFileReader()) {
       return reader.readMinMaxRecordKeys();
     }
   }
