@@ -46,6 +46,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
         spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
         spark.sql(s"insert into $tableName values(2, 'a2', 10, 1001)")
         spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002)")
+        spark.sql(s"select version()").show()
         checkAnswer(s"show indexes from default.$tableName")()
 
         checkAnswer(s"create index idx_name on $tableName (name) as lucene")()
