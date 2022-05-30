@@ -142,9 +142,9 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
 
   // TODO (na) - Break down content into smaller chunks of byte [] to be GC as they are used
   @Override
-  protected ClosableIterator<HoodieRecord> deserializeRecords(byte[] content, HoodieRecord.Mapper mapper) throws IOException {
+  protected ClosableIterator<HoodieRecord> deserializeRecords(byte[] content) throws IOException {
     checkState(this.readerSchema != null, "Reader's schema has to be non-null");
-    return RecordIterator.getInstance(this, content, internalSchema, mapper);
+    return RecordIterator.getInstance(this, content, internalSchema);
   }
 
   public static class RecordIterator implements ClosableIterator<HoodieRecord> {
@@ -158,9 +158,9 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
     private int totalRecords = 0;
     private int readRecords = 0;
 
-    private RecordIterator(Schema readerSchema, Schema writerSchema, byte[] content, InternalSchema internalSchema, HoodieRecord.Mapper mapper) throws IOException {
+    private RecordIterator(Schema readerSchema, Schema writerSchema, byte[] content, InternalSchema internalSchema) throws IOException {
       this.content = content;
-      this.mapper = mapper;
+      this.mapper = (HoodieRecord.Mapper<IndexedRecord>) HoodieAvroIndexedRecord::new;
 
       this.dis = new SizeAwareDataInputStream(new DataInputStream(new ByteArrayInputStream(this.content)));
 
@@ -185,10 +185,10 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
       }
     }
 
-    public static RecordIterator getInstance(HoodieAvroDataBlock dataBlock, byte[] content, InternalSchema internalSchema, HoodieRecord.Mapper mapper) throws IOException {
+    public static RecordIterator getInstance(HoodieAvroDataBlock dataBlock, byte[] content, InternalSchema internalSchema) throws IOException {
       // Get schema from the header
       Schema writerSchema = new Schema.Parser().parse(dataBlock.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
-      return new RecordIterator(dataBlock.readerSchema, writerSchema, content, internalSchema, mapper);
+      return new RecordIterator(dataBlock.readerSchema, writerSchema, content, internalSchema);
     }
 
     public Schema getFinalReadSchema() {
@@ -328,7 +328,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
     output.write(schemaContent);
 
     List<HoodieRecord> records = new ArrayList<>();
-    try (ClosableIterator<HoodieRecord> recordItr = getRecordIterator(HoodieAvroIndexedRecord::new)) {
+    try (ClosableIterator<HoodieRecord> recordItr = getRecordIterator()) {
       recordItr.forEachRemaining(records::add);
     }
 

@@ -19,7 +19,6 @@
 package org.apache.hudi.common.table.log;
 
 import org.apache.hudi.common.model.DeleteRecord;
-import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -380,7 +379,7 @@ public abstract class AbstractHoodieLogRecordReader {
    * handle it.
    */
   private void processDataBlock(HoodieDataBlock dataBlock, Option<KeySpec> keySpecOpt) throws Exception {
-    HoodieRecord.Mapper mapper = (rec) -> createHoodieRecord(rec, this.hoodieTableMetaClient.getTableConfig(),
+    HoodieRecord.Mapper<IndexedRecord> mapper = (rec) -> createHoodieRecord(rec, this.hoodieTableMetaClient.getTableConfig(),
         this.payloadClassFQN, this.preCombineField, this.withOperationField, this.simpleKeyGenFields, this.partitionName);
 
     try (ClosableIterator<HoodieRecord> recordIterator = getRecordsIterator(dataBlock, keySpecOpt, mapper)) {
@@ -435,7 +434,7 @@ public abstract class AbstractHoodieLogRecordReader {
    * @param partitionName      - Partition name
    * @return HoodieRecord created from the IndexedRecord
    */
-  protected HoodieAvroRecord<?> createHoodieRecord(final IndexedRecord rec, final HoodieTableConfig hoodieTableConfig,
+  protected HoodieRecord<?> createHoodieRecord(final IndexedRecord rec, final HoodieTableConfig hoodieTableConfig,
                                                final String payloadClassFQN, final String preCombineField,
                                                final boolean withOperationField,
                                                final Option<Pair<String, String>> simpleKeyGenFields,
@@ -502,7 +501,7 @@ public abstract class AbstractHoodieLogRecordReader {
       return dataBlock.getRecordIterator(keySpec.keys, keySpec.fullKey, mapper);
     }
 
-    return dataBlock.getRecordIterator(mapper);
+    return dataBlock.getRecordIterator();
   }
 
   /**

@@ -23,6 +23,7 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.inline.InLineFSUtils;
 import org.apache.hudi.common.fs.inline.InLineFileSystem;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.util.ClosableIterator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -165,8 +166,9 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
   }
 
   @Override
-  protected ClosableIterator<HoodieRecord> deserializeRecords(byte[] content, HoodieRecord.Mapper mapper) throws IOException {
+  protected ClosableIterator<HoodieRecord> deserializeRecords(byte[] content) throws IOException {
     checkState(readerSchema != null, "Reader's schema has to be non-null");
+    HoodieRecord.Mapper<IndexedRecord> mapper = HoodieAvroIndexedRecord::new;
 
     // Get schema from the header
     Schema writerSchema = new Schema.Parser().parse(super.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
@@ -174,23 +176,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
     FileSystem fs = FSUtils.getFs(pathForReader.toString(), new Configuration());
     // Read the content
     HoodieAvroHFileReader reader = new HoodieAvroHFileReader(fs, pathForReader, content, Option.of(writerSchema));
-    Iterator<IndexedRecord> recordIterator = reader.getRecordIterator(readerSchema);
-    return new ClosableIterator<HoodieRecord>() {
-      @Override
-      public void close() {
-        reader.close();
-      }
-
-      @Override
-      public boolean hasNext() {
-        return recordIterator.hasNext();
-      }
-
-      @Override
-      public HoodieRecord next() {
-        return mapper.apply(recordIterator.next());
-      }
-    };
+    return reader.getRecordIterator(readerSchema);
   }
 
   // TODO abstract this w/in HoodieDataBlock

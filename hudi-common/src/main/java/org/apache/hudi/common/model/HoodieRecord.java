@@ -339,8 +339,8 @@ public abstract class HoodieRecord<T> implements Serializable {
    * TODO remove
    */
   @FunctionalInterface
-  public interface Mapper {
-    HoodieRecord apply(IndexedRecord avroPayload);
+  public interface Mapper<T> {
+    HoodieRecord apply(T hoodieRecordData);
   }
 
   /**
@@ -382,5 +382,9 @@ public abstract class HoodieRecord<T> implements Serializable {
     public Object get(String key) {
       return null;
     }
+  }
+
+  public enum HoodieRecordType {
+    AVRO, SPARK
   }
 }

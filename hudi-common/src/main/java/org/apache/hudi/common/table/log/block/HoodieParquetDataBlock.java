@@ -18,31 +18,23 @@
 
 package org.apache.hudi.common.table.log.block;
 
-import org.apache.hudi.avro.HoodieAvroWriteSupport;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.fs.inline.InLineFSUtils;
 import org.apache.hudi.common.fs.inline.InLineFileSystem;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.util.ClosableIterator;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ParquetReaderIterator;
-import org.apache.hudi.io.storage.HoodieAvroFileReader.HoodieRecordTransformIterator;
-import org.apache.hudi.io.storage.HoodieAvroParquetConfig;
-import org.apache.hudi.io.storage.HoodieParquetStreamWriter;
+import org.apache.hudi.io.storage.HoodieFileReaderFactory;
+import org.apache.hudi.io.storage.HoodieFileWriter;
+import org.apache.hudi.io.storage.HoodieFileWriterFactory;
 
 import org.apache.avro.Schema;
-import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.Path;
-import org.apache.parquet.avro.AvroParquetReader;
-import org.apache.parquet.avro.AvroReadSupport;
-import org.apache.parquet.avro.AvroSchemaConverter;
-import org.apache.parquet.hadoop.ParquetReader;
-import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
-import org.apache.parquet.hadoop.util.HadoopInputFile;
-import org.apache.parquet.io.InputFile;
 
 import javax.annotation.Nonnull;
 
@@ -95,44 +87,29 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
     }
 
     Schema writerSchema = new Schema.Parser().parse(super.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
-
-    HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(
-        new AvroSchemaConverter().convert(writerSchema), writerSchema, Option.empty());
-
-    HoodieAvroParquetConfig avroParquetConfig =
-        new HoodieAvroParquetConfig(
-            writeSupport,
-            compressionCodecName.get(),
-            ParquetWriter.DEFAULT_BLOCK_SIZE,
-            ParquetWriter.DEFAULT_PAGE_SIZE,
-            1024 * 1024 * 1024,
-            new Configuration(),
-            Double.parseDouble(String.valueOf(0.1)));//HoodieStorageConfig.PARQUET_COMPRESSION_RATIO.defaultValue()));
-
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
-
     try (FSDataOutputStream outputStream = new FSDataOutputStream(baos)) {
-      try (HoodieParquetStreamWriter parquetWriter = new HoodieParquetStreamWriter(outputStream, avroParquetConfig)) {
+      HoodieFileWriter parquetWriter = null;
+      try {
+        parquetWriter = HoodieFileWriterFactory.getFileWriter(
+            HoodieFileFormat.PARQUET,
+            outputStream,
+            new Configuration(),
+            HoodieStorageConfig.newBuilder().build(),
+            writerSchema);
         for (HoodieRecord record : records) {
           String recordKey = getRecordKey(record).orElse(null);
           parquetWriter.write(recordKey, record, writerSchema);
         }
         outputStream.flush();
+      } finally {
+        if (parquetWriter != null) {
+          parquetWriter.close();
+        }
       }
     }
 
     return baos.toByteArray();
-  }
-
-  public static ClosableIterator<IndexedRecord> getProjectedParquetRecordsIterator(Configuration conf,
-                                                                                   Schema readerSchema,
-                                                                                   InputFile inputFile) throws IOException {
-    AvroReadSupport.setAvroReadSchema(conf, readerSchema);
-    AvroReadSupport.setRequestedProjection(conf, readerSchema);
-
-    ParquetReader<IndexedRecord> reader =
-        AvroParquetReader.<IndexedRecord>builder(inputFile).withConf(conf).build();
-    return new ParquetReaderIterator<>(reader);
   }
 
   /**
@@ -141,7 +118,7 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
    *       requested by the caller (providing projected Reader's schema)
    */
   @Override
-  protected ClosableIterator<HoodieRecord> readRecordsFromBlockPayload(HoodieRecord.Mapper mapper) throws IOException {
+  protected ClosableIterator<HoodieRecord> readRecordsFromBlockPayload() throws IOException {
     HoodieLogBlockContentLocation blockContentLoc = getBlockContentLocation().get();
 
     // NOTE: It's important to extend Hadoop configuration here to make sure configuration
@@ -155,15 +132,13 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
         blockContentLoc.getContentPositionInLogFile(),
         blockContentLoc.getBlockSize());
 
-    ClosableIterator<IndexedRecord> iterator = getProjectedParquetRecordsIterator(
-        inlineConf,
-        readerSchema,
-        HadoopInputFile.fromPath(inlineLogFilePath, inlineConf));
-    return new HoodieRecordTransformIterator(iterator, mapper);
+    ClosableIterator<HoodieRecord> iterator = HoodieFileReaderFactory.getFileReader(inlineConf, inlineLogFilePath)
+        .getRecordIterator(readerSchema);
+    return iterator;
   }
 
   @Override
-  protected ClosableIterator<HoodieRecord> deserializeRecords(byte[] content, HoodieRecord.Mapper mapper) throws IOException {
+  protected ClosableIterator<HoodieRecord> deserializeRecords(byte[] content) throws IOException {
     throw new UnsupportedOperationException("Should not be invoked");
   }
 }

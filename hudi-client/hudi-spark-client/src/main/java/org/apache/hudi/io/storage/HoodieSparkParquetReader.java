@@ -69,14 +69,12 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
   }
 
   @Override
-  public ClosableIterator<HoodieRecord> getRecordIterator(Schema readerSchema, HoodieRecord.Mapper mapper) throws IOException {
+  public ClosableIterator<InternalRow> getInternalRowIterator(Schema readerSchema) throws IOException {
     ReadSupport readSupport = new ParquetReadSupport();
     ParquetReader reader = ParquetReader.<InternalRow>builder(readSupport, path).withConf(conf).build();
     ParquetReaderIterator<InternalRow> parquetReaderIterator = new ParquetReaderIterator<>(reader);
     readerIterators.add(parquetReaderIterator);
-    // TODO: mapper to support internal row
-    // return new MappingIterator<>(parquetReaderIterator, mapper::apply);
-    return null;
+    return parquetReaderIterator;
   }
 
   @Override

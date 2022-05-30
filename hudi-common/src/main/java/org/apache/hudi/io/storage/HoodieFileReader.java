@@ -39,8 +39,16 @@ public interface HoodieFileReader extends AutoCloseable {
 
   ClosableIterator<HoodieRecord> getRecordIterator(Schema readerSchema, HoodieRecord.Mapper mapper) throws IOException;
 
+  default ClosableIterator<HoodieRecord> getRecordIterator(Schema readerSchema) throws IOException {
+    throw new UnsupportedOperationException();
+  }
+
   default ClosableIterator<HoodieRecord> getRecordIterator(HoodieRecord.Mapper mapper) throws IOException {
     return getRecordIterator(getSchema(), mapper);
+  }
+
+  default ClosableIterator<HoodieRecord> getRecordIterator() throws IOException {
+    return getRecordIterator(getSchema());
   }
 
   default Option<HoodieRecord> getRecordByKey(String key, Schema readerSchema, HoodieRecord.Mapper mapper) throws IOException {

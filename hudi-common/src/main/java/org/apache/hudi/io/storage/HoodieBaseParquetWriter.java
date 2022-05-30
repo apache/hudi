@@ -18,12 +18,16 @@
 
 package org.apache.hudi.io.storage;
 
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
+import org.apache.hudi.parquet.io.OutputStreamBackedOutputFile;
 import org.apache.parquet.hadoop.ParquetFileWriter;
 import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.api.WriteSupport;
+import org.apache.parquet.io.OutputFile;
 
 import java.io.IOException;
 import java.util.concurrent.atomic.AtomicLong;
@@ -34,28 +38,28 @@ import java.util.concurrent.atomic.AtomicLong;
  * @param <R> target type of the object being written into Parquet files (for ex,
  *           {@code IndexedRecord}, {@code InternalRow})
  */
-public abstract class HoodieBaseParquetWriter<R> extends ParquetWriter<R> {
+public abstract class HoodieBaseParquetWriter<R> implements AutoCloseable {
 
   private static final int WRITTEN_RECORDS_THRESHOLD_FOR_FILE_SIZE_CHECK = 1000;
 
+  protected final ParquetWriter<R> writer;
+  protected final WriteSupport<R> writeSupport;
   private final AtomicLong writtenRecordCount = new AtomicLong(0);
   private final long maxFileSize;
   private long lastCachedDataSize = -1;
+  private boolean isStream = false;
 
   public HoodieBaseParquetWriter(Path file,
                                  HoodieBaseParquetConfig<? extends WriteSupport<R>> parquetConfig) throws IOException {
-    super(HoodieWrapperFileSystem.convertToHoodiePath(file, parquetConfig.getHadoopConf()),
-        ParquetFileWriter.Mode.CREATE,
-        parquetConfig.getWriteSupport(),
-        parquetConfig.getCompressionCodecName(),
-        parquetConfig.getBlockSize(),
-        parquetConfig.getPageSize(),
-        parquetConfig.getPageSize(),
-        parquetConfig.dictionaryEnabled(),
-        DEFAULT_IS_VALIDATING_ENABLED,
-        DEFAULT_WRITER_VERSION,
-        FSUtils.registerFileSystem(file, parquetConfig.getHadoopConf()));
-
+    this.writeSupport = parquetConfig.getWriteSupport();
+    this.writer = new Builder<R>(HoodieWrapperFileSystem.convertToHoodiePath(file, parquetConfig.getHadoopConf()), writeSupport)
+        .withWriteMode(ParquetFileWriter.Mode.CREATE)
+        .withCompressionCodec(parquetConfig.getCompressionCodecName())
+        .withRowGroupSize(parquetConfig.getBlockSize())
+        .withPageSize(parquetConfig.getPageSize())
+        .withDictionaryPageSize(parquetConfig.getPageSize())
+        .withDictionaryEncoding(parquetConfig.dictionaryEnabled())
+        .withConf(FSUtils.registerFileSystem(file, parquetConfig.getHadoopConf())).build();
     // We cannot accurately measure the snappy compressed output file size. We are choosing a
     // conservative 10%
     // TODO - compute this compression ratio dynamically by looking at the bytes written to the
@@ -64,24 +68,71 @@ public abstract class HoodieBaseParquetWriter<R> extends ParquetWriter<R> {
         + Math.round(parquetConfig.getMaxFileSize() * parquetConfig.getCompressionRatio());
   }
 
+  public HoodieBaseParquetWriter(FSDataOutputStream outputStream,
+                                 HoodieBaseParquetConfig<? extends WriteSupport<R>> parquetConfig) throws IOException {
+    this.writeSupport = parquetConfig.getWriteSupport();
+    this.writer = new Builder<R>(new OutputStreamBackedOutputFile(outputStream), writeSupport)
+        .withWriteMode(ParquetFileWriter.Mode.CREATE)
+        .withCompressionCodec(parquetConfig.getCompressionCodecName())
+        .withRowGroupSize(parquetConfig.getBlockSize())
+        .withPageSize(parquetConfig.getPageSize())
+        .withDictionaryPageSize(parquetConfig.getPageSize())
+        .withDictionaryEncoding(parquetConfig.dictionaryEnabled())
+        .withWriterVersion(ParquetWriter.DEFAULT_WRITER_VERSION)
+        .withConf(parquetConfig.getHadoopConf())
+        .build();
+    this.maxFileSize = -1;
+  }
+
   public boolean canWrite() {
+    if (maxFileSize == -1) {
+      return true;
+    }
     // TODO we can actually do evaluation more accurately:
     //      if we cache last data size check, since we account for how many records
     //      were written we can accurately project avg record size, and therefore
     //      estimate how many more records we can write before cut off
     if (lastCachedDataSize == -1 || getWrittenRecordCount() % WRITTEN_RECORDS_THRESHOLD_FOR_FILE_SIZE_CHECK == 0) {
-      lastCachedDataSize = getDataSize();
+      lastCachedDataSize = writer.getDataSize();
     }
     return lastCachedDataSize < maxFileSize;
   }
 
-  @Override
   public void write(R object) throws IOException {
-    super.write(object);
+    writer.write(object);
     writtenRecordCount.incrementAndGet();
+  }
+
+  @Override
+  public void close() throws IOException {
+    writer.close();
   }
 
   protected long getWrittenRecordCount() {
     return writtenRecordCount.get();
+  }
+
+  private static class Builder<R> extends ParquetWriter.Builder<R, Builder<R>> {
+    private final WriteSupport<R> writeSupport;
+
+    private Builder(Path file, WriteSupport<R> writeSupport) {
+      super(file);
+      this.writeSupport = writeSupport;
+    }
+
+    private Builder(OutputFile file, WriteSupport<R> writeSupport) {
+      super(file);
+      this.writeSupport = writeSupport;
+    }
+
+    @Override
+    protected Builder<R> self() {
+      return this;
+    }
+
+    @Override
+    protected WriteSupport<R> getWriteSupport(Configuration conf) {
+      return writeSupport;
+    }
   }
 }

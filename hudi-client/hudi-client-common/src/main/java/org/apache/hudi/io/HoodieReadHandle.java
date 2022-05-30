@@ -24,7 +24,7 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.io.storage.HoodieAvroFileReader;
+import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.table.HoodieTable;
 
@@ -61,7 +61,7 @@ public abstract class HoodieReadHandle<T, I, K, O> extends HoodieIOHandle<T, I, 
         .getLatestBaseFile(partitionPathFileIDPair.getLeft(), partitionPathFileIDPair.getRight()).get();
   }
 
-  protected HoodieAvroFileReader createNewFileReader() throws IOException {
+  protected HoodieFileReader createNewFileReader() throws IOException {
     return HoodieFileReaderFactory.getFileReader(hoodieTable.getHadoopConf(),
         new Path(getLatestDataFile().getPath()));
   }
