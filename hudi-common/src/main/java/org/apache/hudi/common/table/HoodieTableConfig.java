@@ -26,7 +26,7 @@ import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.OrderedProperties;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.model.HoodieAvroRecordCombiningEngine;
+import org.apache.hudi.common.model.HoodieAvroRecordMerge;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -155,11 +155,11 @@ public class HoodieTableConfig extends HoodieConfig {
       .withDocumentation("Payload class to use for performing compactions, i.e merge delta logs with current base file and then "
           + " produce a new base file.");
 
-  public static final ConfigProperty<String> COMBINE_ENGINE_CLASS_NAME = ConfigProperty
-      .key("hoodie.compaction.combine.engine.class")
-      .defaultValue(HoodieAvroRecordCombiningEngine.class.getName())
-      .withDocumentation("Combine engine class to use for performing compactions, i.e merge delta logs with current base file and then "
-          + " produce a new base file.");
+  public static final ConfigProperty<String> MERGE_CLASS_NAME = ConfigProperty
+      .key("hoodie.compaction.merge.class")
+      .defaultValue(HoodieAvroRecordMerge.class.getName())
+      .withDocumentation("Merge class provide stateless component interface for merging records, and support various HoodieRecord "
+          + "types, such as Spark records or Flink records.");
 
   public static final ConfigProperty<String> ARCHIVELOG_FOLDER = ConfigProperty
       .key("hoodie.archivelog.folder")
@@ -488,10 +488,10 @@ public class HoodieTableConfig extends HoodieConfig {
   }
 
   /**
-   * Read the combine engine class for HoodieRecords from the table properties.
+   * Read the hoodie merge class for HoodieRecords from the table properties.
    */
-  public String getCombiningEngineClass() {
-    return getStringOrDefault(COMBINE_ENGINE_CLASS_NAME).replace("com.uber.hoodie",
+  public String getMergeClass() {
+    return getStringOrDefault(MERGE_CLASS_NAME).replace("com.uber.hoodie",
         "org.apache.hudi");
   }
 

@@ -16,18 +16,33 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common.model;
+package org.apache.spark.sql.hudi;
 
 import org.apache.avro.Schema;
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieMerge;
 import org.apache.hudi.common.util.Option;
 
 import java.io.IOException;
-import java.io.Serializable;
 import java.util.Properties;
 
-public interface HoodieRecordCombiningEngine extends Serializable {
-  
-  HoodieRecord preCombine(HoodieRecord older, HoodieRecord newer);
+public class HoodieSparkRecordMerge implements HoodieMerge {
 
-  Option<HoodieRecord> combineAndGetUpdateValue(HoodieRecord older, HoodieRecord newer, Schema schema, Properties props) throws IOException;
+  @Override
+  public HoodieRecord preCombine(HoodieRecord older, HoodieRecord newer) {
+    if (older.getData() == null) {
+      // use natural order for delete record
+      return older;
+    }
+    if (older.getOrderingValue().compareTo(newer.getOrderingValue()) > 0) {
+      return older;
+    } else {
+      return newer;
+    }
+  }
+
+  @Override
+  public Option<HoodieRecord> combineAndGetUpdateValue(HoodieRecord older, HoodieRecord newer, Schema schema, Properties props) throws IOException {
+    return Option.of(newer);
+  }
 }

@@ -181,7 +181,7 @@ public class StreamerUtil {
             .withCompactionConfig(
                 HoodieCompactionConfig.newBuilder()
                     .withPayloadClass(conf.getString(FlinkOptions.PAYLOAD_CLASS_NAME))
-                    .withCombineEngineClass(conf.getString(FlinkOptions.COMBINE_ENGINE_CLASS_NAME))
+                    .withMergeClass(conf.getString(FlinkOptions.MERGE_CLASS_NAME))
                     .withTargetIOPerCompactionInMB(conf.getLong(FlinkOptions.COMPACTION_TARGET_IO))
                     .withInlineCompactionTriggerStrategy(
                         CompactionTriggerStrategy.valueOf(conf.getString(FlinkOptions.COMPACTION_TRIGGER_STRATEGY).toUpperCase(Locale.ROOT)))
@@ -276,7 +276,7 @@ public class StreamerUtil {
           .setTableName(conf.getString(FlinkOptions.TABLE_NAME))
           .setRecordKeyFields(conf.getString(FlinkOptions.RECORD_KEY_FIELD, null))
           .setPayloadClassName(conf.getString(FlinkOptions.PAYLOAD_CLASS_NAME))
-          .setCombineEngineClassName(conf.getString(FlinkOptions.COMBINE_ENGINE_CLASS_NAME))
+          .setMergeClassName(conf.getString(FlinkOptions.MERGE_CLASS_NAME))
           .setPreCombineField(OptionsResolver.getPreCombineField(conf))
           .setArchiveLogFolder(ARCHIVELOG_FOLDER.defaultValue())
           .setPartitionFields(conf.getString(FlinkOptions.PARTITION_PATH_FIELD, null))

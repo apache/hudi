@@ -28,7 +28,7 @@ import java.util.Properties;
 
 import static org.apache.hudi.TypeUtils.unsafeCast;
 
-public class HoodieAvroRecordCombiningEngine implements HoodieRecordCombiningEngine {
+public class HoodieAvroRecordMerge implements HoodieMerge {
   @Override
   public HoodieRecord preCombine(HoodieRecord older, HoodieRecord newer) {
     HoodieRecordPayload picked = unsafeCast(((HoodieAvroRecord) newer).getData().preCombine(((HoodieAvroRecord) older).getData()));

@@ -105,34 +105,6 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
   // NOTE: This method duplicates those ones of the HoodieRecordPayload and are placed here
   //       for the duration of RFC-46 implementation, until migration off `HoodieRecordPayload`
   //       is complete
-  //
-  // TODO cleanup
-
-  // NOTE: This method is assuming semantic that `preCombine` operation is bound to pick one or the other
-  //       object, and may not create a new one
-  @Override
-  public HoodieRecord<T> preCombine(HoodieRecord<T> previousRecord) {
-    T picked = unsafeCast(getData().preCombine(previousRecord.getData()));
-    if (picked instanceof HoodieMetadataPayload) {
-      // NOTE: HoodieMetadataPayload return a new payload
-      return new HoodieAvroRecord<>(getKey(), picked, getOperation());
-    }
-    return picked.equals(getData()) ? this : previousRecord;
-  }
-
-  // NOTE: This method is assuming semantic that only records bearing the same (partition, key) could
-  //       be combined
-  @Override
-  public Option<HoodieRecord> combineAndGetUpdateValue(HoodieRecord previousRecord, Schema schema, Properties props) throws IOException {
-    Option<IndexedRecord> previousRecordAvroPayload = previousRecord.toIndexedRecord(schema, props);
-    if (!previousRecordAvroPayload.isPresent()) {
-      return Option.empty();
-    }
-
-    return getData().combineAndGetUpdateValue(previousRecordAvroPayload.get(), schema, props)
-        .map(combinedAvroPayload -> new HoodieAvroIndexedRecord((IndexedRecord) combinedAvroPayload));
-  }
-
   @Override
   public HoodieRecord mergeWith(HoodieRecord other, Schema readerSchema, Schema writerSchema) throws IOException {
     ValidationUtils.checkState(other instanceof HoodieAvroRecord);

@@ -262,7 +262,7 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
       baseFileReaderAvroSchema, resolveAvroSchemaNullability(baseFileReaderAvroSchema))
 
     private val recordKeyOrdinal = baseFileReaderSchema.structTypeSchema.fieldIndex(tableState.recordKeyField)
-    private val combiningEngine = ReflectionUtils.loadCombiningEngine(tableState.combiningEngineClass)
+    private val hoodieMerge = ReflectionUtils.loadHoodieMerge(tableState.mergeClass)
 
     override def hasNext: Boolean = hasNextInternal
 
@@ -306,8 +306,8 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
       // NOTE: We have to pass in Avro Schema used to read from Delta Log file since we invoke combining API
       //       on the record from the Delta Log
       // TODO IndexedRecord to HoodieRecord
-      if (combiningEngine.combineAndGetUpdateValue(new HoodieAvroIndexedRecord(curAvroRecord), newRecord, logFileReaderAvroSchema, payloadProps).isPresent) {
-        toScalaOption(combiningEngine.combineAndGetUpdateValue(new HoodieAvroIndexedRecord(curAvroRecord), newRecord, logFileReaderAvroSchema, payloadProps)
+      if (hoodieMerge.combineAndGetUpdateValue(new HoodieAvroIndexedRecord(curAvroRecord), newRecord, logFileReaderAvroSchema, payloadProps).isPresent) {
+        toScalaOption(hoodieMerge.combineAndGetUpdateValue(new HoodieAvroIndexedRecord(curAvroRecord), newRecord, logFileReaderAvroSchema, payloadProps)
           .get.asInstanceOf[HoodieAvroIndexedRecord].toIndexedRecord)
       } else {
         Option.empty

@@ -24,7 +24,7 @@ import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordCombiningEngine;
+import org.apache.hudi.common.model.HoodieMerge;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
@@ -79,7 +79,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
   // Stores the total time taken to perform reading and merging of log blocks
   private long totalTimeTakenToReadAndMergeBlocks;
 
-  private HoodieRecordCombiningEngine combiningEngine;
+  private HoodieMerge hoodieMerge;
 
   @SuppressWarnings("unchecked")
   protected HoodieMergedLogRecordScanner(FileSystem fs, String basePath, List<String> logFilePaths, Schema readerSchema,
@@ -98,7 +98,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
       this.records = new ExternalSpillableMap<>(maxMemorySizeInBytes, spillableMapBasePath, new DefaultSizeEstimator(),
           new HoodieRecordSizeEstimator(readerSchema), diskMapType, isBitCaskDiskMapCompressionEnabled);
       this.maxMemorySizeInBytes = maxMemorySizeInBytes;
-      this.combiningEngine = ReflectionUtils.loadCombiningEngine(getCombiningEngineClassFQN());
+      this.hoodieMerge = ReflectionUtils.loadHoodieMerge(getMergeClassFQN());
     } catch (IOException e) {
       throw new HoodieIOException("IOException when creating ExternalSpillableMap at " + spillableMapBasePath, e);
     }
@@ -154,7 +154,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
 
       HoodieRecord<? extends HoodieRecordPayload> oldRecord = records.get(key);
       HoodieRecordPayload oldValue = oldRecord.getData();
-      HoodieRecordPayload combinedValue = (HoodieRecordPayload) combiningEngine.preCombine(oldRecord, hoodieRecord).getData();
+      HoodieRecordPayload combinedValue = (HoodieRecordPayload) hoodieMerge.preCombine(oldRecord, hoodieRecord).getData();
       // If combinedValue is oldValue, no need rePut oldRecord
       if (combinedValue != oldValue) {
         HoodieOperation operation = hoodieRecord.getOperation();

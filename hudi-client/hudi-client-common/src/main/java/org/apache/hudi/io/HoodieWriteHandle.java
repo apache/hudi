@@ -27,7 +27,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordCombiningEngine;
+import org.apache.hudi.common.model.HoodieMerge;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
@@ -60,7 +60,7 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
    */
   protected final Schema tableSchema;
   protected final Schema tableSchemaWithMetaFields;
-  protected HoodieRecordCombiningEngine combiningEngine;
+  protected HoodieMerge hoodieMerge;
 
   /**
    * The write schema. In most case the write schema is the same to the
@@ -105,7 +105,7 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
     this.taskContextSupplier = taskContextSupplier;
     this.writeToken = makeWriteToken();
     schemaOnReadEnabled = !isNullOrEmpty(hoodieTable.getConfig().getInternalSchema());
-    combiningEngine = ReflectionUtils.loadCombiningEngine(config.getCombiningEngineClass());
+    hoodieMerge = ReflectionUtils.loadHoodieMerge(config.getMergeClass());
   }
 
   /**

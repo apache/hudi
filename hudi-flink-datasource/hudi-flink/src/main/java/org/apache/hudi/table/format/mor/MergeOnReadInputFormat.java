@@ -22,7 +22,7 @@ import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordCombiningEngine;
+import org.apache.hudi.common.model.HoodieMerge;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.util.ClosableIterator;
@@ -206,7 +206,7 @@ public class MergeOnReadInputFormat
           this.emitDelete,
           this.tableState.getOperationPos(),
           getFullSchemaReader(split.getBasePath().get()),
-          tableState.getCombiningEngineClass());
+          tableState.getMergeClass());
     } else {
       throw new HoodieException("Unable to select an Iterator to read the Hoodie MOR File Split for "
           + "file path: " + split.getBasePath()
@@ -633,7 +633,7 @@ public class MergeOnReadInputFormat
 
     private final InstantRange instantRange;
 
-    private final HoodieRecordCombiningEngine combiningEngine;
+    private final HoodieMerge hoodieMerge;
 
     // add the flag because the flink ParquetColumnarRowSplitReader is buggy:
     // method #reachedEnd() returns false after it returns true.
@@ -656,7 +656,7 @@ public class MergeOnReadInputFormat
         boolean emitDelete,
         int operationPos,
         ParquetColumnarRowSplitReader reader, // the reader should be with full schema
-        String combiningEngineClass) {
+        String mergeClass) {
       this.tableSchema = tableSchema;
       this.reader = reader;
       this.scanner = FormatUtils.logScanner(split, tableSchema, finkConf, hadoopConf);
@@ -670,7 +670,7 @@ public class MergeOnReadInputFormat
       this.avroToRowDataConverter = AvroToRowDataConverters.createRowConverter(requiredRowType);
       this.projection = RowDataProjection.instance(requiredRowType, requiredPos);
       this.instantRange = split.getInstantRange().orElse(null);
-      this.combiningEngine = ReflectionUtils.loadCombiningEngine(combiningEngineClass);
+      this.hoodieMerge = ReflectionUtils.loadHoodieMerge(mergeClass);
     }
 
     @Override
@@ -762,7 +762,7 @@ public class MergeOnReadInputFormat
       final HoodieAvroRecord<?> record = (HoodieAvroRecord) scanner.getRecords().get(curKey);
       GenericRecord historyAvroRecord = (GenericRecord) rowDataToAvroConverter.convert(tableSchema, curRow);
       // TODO IndexedRecord to HoodieRecord
-      Option<HoodieRecord> resultRecord = combiningEngine.combineAndGetUpdateValue(new HoodieAvroIndexedRecord(historyAvroRecord), record, tableSchema, null);
+      Option<HoodieRecord> resultRecord = hoodieMerge.combineAndGetUpdateValue(new HoodieAvroIndexedRecord(historyAvroRecord), record, tableSchema, null);
       return ((HoodieAvroIndexedRecord) resultRecord.get()).toIndexedRecord();
     }
   }

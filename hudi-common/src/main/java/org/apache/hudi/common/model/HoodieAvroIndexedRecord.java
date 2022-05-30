@@ -95,16 +95,6 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
   }
 
   @Override
-  public HoodieRecord preCombine(HoodieRecord<IndexedRecord> previousRecord) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public Option<HoodieRecord> combineAndGetUpdateValue(HoodieRecord previousRecord, Schema schema, Properties props) throws IOException {
-    return Option.empty();
-  }
-
-  @Override
   public HoodieRecord mergeWith(HoodieRecord other, Schema readerSchema, Schema writerSchema) throws IOException {
     ValidationUtils.checkState(other instanceof HoodieAvroIndexedRecord);
     GenericRecord record = HoodieAvroUtils.stitchRecords((GenericRecord) data, (GenericRecord) other.getData(), writerSchema);

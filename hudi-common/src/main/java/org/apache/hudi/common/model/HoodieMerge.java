@@ -16,29 +16,23 @@
  * limitations under the License.
  */
 
-package org.apache.spark.sql.hudi;
+package org.apache.hudi.common.model;
 
 import org.apache.avro.Schema;
-import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordCombiningEngine;
 import org.apache.hudi.common.util.Option;
 
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.Properties;
 
-public class HoodieSparkRecordCombiningEngine implements HoodieRecordCombiningEngine {
+/**
+ * HoodieMerge defines how to merge two records. It is a stateless component.
+ * It can implement the merging logic of HoodieRecord of different engines
+ * and avoid the performance consumption caused by the serialization/deserialization of Avro payload.
+ */
+public interface HoodieMerge extends Serializable {
+  
+  HoodieRecord preCombine(HoodieRecord older, HoodieRecord newer);
 
-  @Override
-  public HoodieRecord preCombine(HoodieRecord older, HoodieRecord newer) {
-    if (older.getOrderingValue().compareTo(newer.getOrderingValue()) > 0) {
-      return older;
-    } else {
-      return newer;
-    }
-  }
-
-  @Override
-  public Option<HoodieRecord> combineAndGetUpdateValue(HoodieRecord older, HoodieRecord newer, Schema schema, Properties props) throws IOException {
-    return Option.of(newer);
-  }
+  Option<HoodieRecord> combineAndGetUpdateValue(HoodieRecord older, HoodieRecord newer, Schema schema, Properties props) throws IOException;
 }

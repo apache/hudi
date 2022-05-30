@@ -18,7 +18,7 @@
 
 package org.apache.hudi.common.util;
 
-import org.apache.hudi.common.model.HoodieRecordCombiningEngine;
+import org.apache.hudi.common.model.HoodieMerge;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.exception.HoodieException;
 
@@ -47,6 +47,7 @@ public class ReflectionUtils {
   private static final Logger LOG = LogManager.getLogger(ReflectionUtils.class);
 
   private static final Map<String, Class<?>> CLAZZ_CACHE = new HashMap<>();
+  private static final Map<String, Object> INSTANCE_CACHE = new HashMap<>();
 
   public static Class<?> getClass(String clazzName) {
     synchronized (CLAZZ_CACHE) {
@@ -60,6 +61,15 @@ public class ReflectionUtils {
       }
     }
     return CLAZZ_CACHE.get(clazzName);
+  }
+
+  public static Object getInstance(String clazzName) {
+    synchronized (INSTANCE_CACHE) {
+      if (!INSTANCE_CACHE.containsKey(clazzName)) {
+        return null;
+      }
+    }
+    return INSTANCE_CACHE.get(clazzName);
   }
 
   public static <T> T loadClass(String fqcn) {
@@ -83,13 +93,18 @@ public class ReflectionUtils {
   }
 
   /**
-   * Instantiate a given class with a generic record payload.
+   * Instantiate a given class with a record merge.
    */
-  public static HoodieRecordCombiningEngine loadCombiningEngine(String recordCombiningEngine) {
+  public static HoodieMerge loadHoodieMerge(String mergeClass) {
     try {
-      return (HoodieRecordCombiningEngine)loadClass(recordCombiningEngine, new Object[]{});
+      HoodieMerge hoodieMerge = (HoodieMerge) getInstance(mergeClass);
+      if (null == hoodieMerge) {
+        hoodieMerge = (HoodieMerge)loadClass(mergeClass, new Object[]{});
+        INSTANCE_CACHE.put(mergeClass, hoodieMerge);
+      }
+      return hoodieMerge;
     } catch (HoodieException e) {
-      throw new HoodieException("Unable to instantiate combiningEngine class ", e);
+      throw new HoodieException("Unable to instantiate hoodie merge class ", e);
     }
   }
 

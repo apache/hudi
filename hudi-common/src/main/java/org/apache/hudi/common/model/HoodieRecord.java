@@ -190,7 +190,7 @@ public abstract class HoodieRecord<T> implements Serializable {
 
   public T getData() {
     if (data == null) {
-      throw new IllegalStateException("Payload already deflated for record.");
+      throw new IllegalStateException("HoodieRecord already deflated for record.");
     }
     return data;
   }

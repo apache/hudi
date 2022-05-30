@@ -22,7 +22,7 @@ import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
-import org.apache.hudi.common.model.HoodieAvroRecordCombiningEngine;
+import org.apache.hudi.common.model.HoodieAvroRecordMerge;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
@@ -235,11 +235,11 @@ public class HoodieCompactionConfig extends HoodieConfig {
           + "the record payload class to merge records in the log against each other, merge again with the base file and "
           + "produce the final record to be written after compaction.");
 
-  public static final ConfigProperty<String> COMBINE_ENGINE_CLASS_NAME = ConfigProperty
-      .key("hoodie.compaction.combine.engine.class")
-      .defaultValue(HoodieAvroRecordCombiningEngine.class.getName())
-      .withDocumentation("Combine engine class to use for performing compactions, i.e merge delta logs with current base file and then "
-          + " produce a new base file.");
+  public static final ConfigProperty<String> MERGE_CLASS_NAME = ConfigProperty
+      .key("hoodie.compaction.merge.class")
+      .defaultValue(HoodieAvroRecordMerge.class.getName())
+      .withDocumentation("Merge class provide stateless component interface for merging records, and support various HoodieRecord "
+          + "types, such as Spark records or Flink records.");
 
   public static final ConfigProperty<String> COMPACTION_LAZY_BLOCK_READ_ENABLE = ConfigProperty
       .key("hoodie.compaction.lazy.block.read")
@@ -698,8 +698,8 @@ public class HoodieCompactionConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder withCombineEngineClass(String payloadClassName) {
-      compactionConfig.setValue(COMBINE_ENGINE_CLASS_NAME, payloadClassName);
+    public Builder withMergeClass(String mergeClass) {
+      compactionConfig.setValue(MERGE_CLASS_NAME, mergeClass);
       return this;
     }
 
