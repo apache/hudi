@@ -68,6 +68,7 @@
     return (
         <>
           <ul className={clsx(styles.tags, styles.authorTimeTags, 'padding--none', 'margin-left--sm')}>
+          <h4>Tags:</h4>
             {tags.map(({label, permalink: tagPermalink}) => (
               <li key={tagPermalink} className={styles.tag}>
                 <Tag className={clsx(styles.greyLink)} name={label} permalink={tagPermalink} />
@@ -135,6 +136,7 @@ const AuthorsList = () => {
               </Link>
              </div>
         )}
+      
          <TitleHeading className={styles.blogPostTitle} itemProp="headline">
          {isBlogPostPage ? (
              <TitleHeading className={styles.blogPostPageTitle} itemProp="headline">
@@ -149,30 +151,32 @@ const AuthorsList = () => {
              
            )}
          </TitleHeading>
+       
        {AuthorsList()}
-         {/* <div className={clsx(styles.blogPostData, 'margin-vert--md')}>
-           <time dateTime={date} itemProp="datePublished">
-             {formattedDate}
-           </time>
+         <div className={clsx(styles.blogPostData, 'margin-vert--md')}>
+           
  
            {typeof readingTime !== 'undefined' && (
              <>
-               {' · '}
                {readingTimePlural(readingTime)}
              </>
            )}
-         </div> */}
+         </div>
 
          
         
-        {(
-            <TagsListInline tags={tags} />
+       
+        {( tags.length > 0)&&(
+           tagsList()
+            
         )}
+       
        </header>
      );
    };
  
    return (
+     
      <article
        className={!isBlogPostPage ? 'blog-list-item' : undefined}
        itemProp="blogPost"

@@ -7,14 +7,18 @@
 
  .blogPostTitle {
   font-size: 1rem;
+  
 }
 .blogPostPageTile{
   font-size:3rem;
   display: inline-flex;
+ 
 }
 
 .blogPostData {
   font-size: 0.9rem;
+  margin-top: 0 !important;
+  margin-left:1px
 }
 
 .blogPostDetailsFull {
@@ -72,16 +76,32 @@
   font-size: 0.9rem;
   color: rgb(28, 30, 33);
   display:flex;
-  margin-left:2px
+  flex-direction: row;
+  
+  margin-left:2px;
+ 
+ 
+ 
+ 
  }
 
 .tag {
-  margin: 0 12px 0.5rem -10px;
-  display: inline-block;
-  margin-top:-5px
+  margin: 0 20px 0px -10px;
+  display: inline-flex;
+  margin-top:-5px;
+  height:35px  !important;
+  vertical-align:bottom;
 }
+
+h4{
+  margin-right:20px;
+  margin-left:-8px;
+
+}
+
 
 .greyLink {
   color: rgb(28, 30, 33);
   text-decoration-color: rgb(28, 30, 33);
+ 
 }
