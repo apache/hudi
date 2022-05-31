@@ -33,7 +33,6 @@ stages:
   - stage: test
     jobs:
       - job: UT_FT_1
-        condition: false
         displayName: UT FT common & flink & UT client/spark-client
         timeoutInMinutes: '120'
         steps:
@@ -65,7 +64,6 @@ stages:
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
       - job: UT_FT_2
-        condition: false
         displayName: FT client/spark-client
         timeoutInMinutes: '120'
         steps:
@@ -105,7 +103,7 @@ stages:
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
-              options: -P $(SPARK_PROFILE),unit-tests -pl hudi-client/hudi-client-common,hudi-client/hudi-flink-client,hudi-client/hudi-java-client,hudi-cli,hudi-utilities,hudi-sync/hudi-hive-sync --fail-never
+              options: -P $(SPARK_PROFILE),unit-tests -pl hudi-client/hudi-client-common,hudi-client/hudi-flink-client,hudi-client/hudi-java-client,hudi-cli,hudi-utilities,hudi-sync/hudi-hive-sync
               publishJUnitResults: false
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
@@ -114,12 +112,11 @@ stages:
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
-              options: -P $(SPARK_PROFILE),functional-tests -pl hudi-client/hudi-client-common,hudi-client/hudi-flink-client,hudi-client/hudi-java-client,hudi-cli,hudi-utilities,hudi-sync/hudi-hive-sync --fail-never
+              options: -P $(SPARK_PROFILE),functional-tests -pl hudi-client/hudi-client-common,hudi-client/hudi-flink-client,hudi-client/hudi-java-client,hudi-cli,hudi-utilities,hudi-sync/hudi-hive-sync
               publishJUnitResults: false
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
       - job: UT_FT_4
-        condition: false
         displayName: UT FT other modules
         timeoutInMinutes: '120'
         steps:
@@ -175,5 +172,5 @@ stages:
                 tar -xvf $(Pipeline.Workspace)/$(SPARK_ARCHIVE).tgz -C $(Pipeline.Workspace)/
                 mkdir /tmp/spark-events/
           - script: |
-              mvn $(MAVEN_OPTS) -P $(SPARK_PROFILE),integration-tests verify --fail-never
+              mvn $(MAVEN_OPTS) -P $(SPARK_PROFILE),integration-tests verify
             displayName: IT
