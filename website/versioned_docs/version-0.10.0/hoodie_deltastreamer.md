@@ -48,7 +48,10 @@ Options:
       Compaction is enabled for MoR table by default. This flag disables it
       Default: false
     --enable-hive-sync
-      Enable syncing to hive
+      Enable syncing to hive (Deprecated in favor of --enable-sync)
+      Default: false
+    --enable-sync
+      Enable syncing meta
       Default: false
     --filter-dupes
       Should duplicate records from source be dropped/filtered out before
