@@ -251,7 +251,7 @@ Here is an example of creating an external COW partitioned table.
 create table if not exists hudi_table_p0 (
 id bigint,
 name string,
-dt string，
+dt string,
 hh string  
 ) using hudi
 location '/tmp/hudi/hudi_table_p0'
