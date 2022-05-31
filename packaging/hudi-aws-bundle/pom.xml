@@ -82,6 +82,7 @@
                                     <include>com.amazonaws:aws-java-sdk-cloudwatch</include>
                                     <include>com.amazonaws:aws-java-sdk-dynamodb</include>
                                     <include>com.amazonaws:aws-java-sdk-core</include>
+                                    <include>com.amazonaws:aws-java-sdk-glue</include>
                                     <include>com.beust:jcommander</include>
                                     <include>commons-io:commons-io</include>
                                     <include>org.apache.hbase:hbase-common</include>
