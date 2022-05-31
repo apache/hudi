@@ -691,7 +691,7 @@ public class DeltaSync implements Serializable {
   }
 
   private void syncMeta(HoodieDeltaStreamerMetrics metrics) {
-    Set<String> syncClientToolClasses = new HashSet<>(Arrays.asList(cfg.syncClientToolClass.split(",")));
+    Set<String> syncClientToolClasses = new HashSet<>(Arrays.asList(cfg.syncClientToolClassNames.split(",")));
     // for backward compatibility
     if (cfg.enableHiveSync) {
       cfg.enableMetaSync = true;

@@ -72,8 +72,17 @@ public class TestHoodieMultiTableDeltaStreamer extends HoodieDeltaStreamerTestBa
       }
       config.enableHiveSync = enableHiveSync;
       config.enableMetaSync = enableMetaSync;
+      config.syncClientToolClassNames = "com.example.DummySyncTool1,com.example.DummySyncTool2";
       return config;
     }
+  }
+
+  @Test
+  public void testMetaSyncConfig() throws IOException {
+    HoodieMultiTableDeltaStreamer.Config cfg = TestHelpers.getConfig(PROPS_FILENAME_TEST_SOURCE1, dfsBasePath + "/config", TestDataSource.class.getName(), true, true, null);
+    HoodieMultiTableDeltaStreamer streamer = new HoodieMultiTableDeltaStreamer(cfg, jsc);
+    TableExecutionContext executionContext = streamer.getTableExecutionContexts().get(1);
+    assertEquals("com.example.DummySyncTool1,com.example.DummySyncTool2", executionContext.getConfig().syncClientToolClassNames);
   }
 
   @Test
