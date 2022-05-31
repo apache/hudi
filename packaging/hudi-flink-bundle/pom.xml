@@ -221,6 +221,22 @@
                   <pattern>com.fasterxml.jackson.</pattern>
                   <shadedPattern>${flink.bundle.shade.prefix}com.fasterxml.jackson.</shadedPattern>
                 </relocation>
+                <relocation>
+                  <pattern>org.apache.flink.table.data.</pattern>
+                  <shadedPattern>${flink.table.dependencies.shade.prefix}data.</shadedPattern>
+                  <includes>
+                    <include>org.apache.flink.table.data.Columnar*</include>
+                  </includes>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.flink.table.data.vector.</pattern>
+                  <shadedPattern>${flink.table.dependencies.shade.prefix}data.vector.</shadedPattern>
+                  <includes>
+                    <include>org.apache.flink.table.data.vector.MapColumnVector</include>
+                    <include>org.apache.flink.table.data.vector.RowColumnVector</include>
+                    <include>org.apache.flink.table.data.vector.VectorizedColumnBatch</include>
+                  </includes>
+                </relocation>
                 <!-- The classes below in org.apache.hadoop.metrics2 package come from
                 hbase-hadoop-compat and hbase-hadoop2-compat, which have to be shaded one by one,
                 instead of shading all classes under org.apache.hadoop.metrics2 including ones
