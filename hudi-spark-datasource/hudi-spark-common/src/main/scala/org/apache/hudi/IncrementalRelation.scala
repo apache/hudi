@@ -98,7 +98,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
 
     val tableSchema = if (useEndInstantSchema && iSchema.isEmptySchema) {
       if (commitsToReturn.isEmpty) schemaResolver.getTableAvroSchemaWithoutMetadataFields() else
-        schemaResolver.getTableAvroSchemaWithoutMetadataFields(commitsToReturn.last)
+        schemaResolver.getTableAvroSchema(commitsToReturn.last, false)
     } else {
       schemaResolver.getTableAvroSchemaWithoutMetadataFields()
     }
