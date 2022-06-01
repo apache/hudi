@@ -77,11 +77,9 @@ public class TableSchemaResolver {
 
   private static final Logger LOG = LogManager.getLogger(TableSchemaResolver.class);
   private final HoodieTableMetaClient metaClient;
-  private final Lazy<Boolean> hasOperationField;
 
   public TableSchemaResolver(HoodieTableMetaClient metaClient) {
     this.metaClient = metaClient;
-    this.hasOperationField = Lazy.lazily(this::hasOperationField);
   }
 
   /**
@@ -170,31 +168,27 @@ public class TableSchemaResolver {
    * @throws Exception
    */
   public Schema getTableAvroSchema(boolean includeMetadataFields) throws Exception {
-    Schema schema;
-    Option<Schema> schemaFromCommitMetadata = getTableSchemaFromCommitMetadata(includeMetadataFields);
-    if (schemaFromCommitMetadata.isPresent()) {
-      schema = schemaFromCommitMetadata.get();
-    } else {
-      Option<Schema> schemaFromTableConfig = metaClient.getTableConfig().getTableCreateSchema();
-      if (schemaFromTableConfig.isPresent()) {
-        if (includeMetadataFields) {
-          schema = HoodieAvroUtils.addMetadataFields(schemaFromTableConfig.get(), hasOperationField.get());
-        } else {
-          schema = schemaFromTableConfig.get();
-        }
-      } else {
-        if (includeMetadataFields) {
-          schema = getTableAvroSchemaFromDataFile();
-        } else {
-          schema = HoodieAvroUtils.removeMetadataFields(getTableAvroSchemaFromDataFile());
-        }
-      }
+    Schema schema =
+        getTableSchemaFromCommitMetadata(includeMetadataFields)
+            .or(() ->
+                metaClient.getTableConfig().getTableCreateSchema()
+                    .map(tableSchema ->
+                        includeMetadataFields
+                            ? HoodieAvroUtils.addMetadataFields(tableSchema, hasOperationField(tableSchema))
+                            : tableSchema)
+            )
+            .orElseGet(() -> {
+              Schema schemaFromDataFile = getTableAvroSchemaFromDataFile();
+              return includeMetadataFields
+                  ? schemaFromDataFile
+                  : HoodieAvroUtils.removeMetadataFields(schemaFromDataFile);
+            });
+
+    if (metaClient.getTableConfig().shouldDropPartitionColumns()) {
+      Option<String[]> partitionFieldsOpt = metaClient.getTableConfig().getPartitionFields();
+      return recreateSchemaWhenDropPartitionColumns(partitionFieldsOpt, schema);
     }
 
-    Option<String[]> partitionFieldsOpt = metaClient.getTableConfig().getPartitionFields();
-    if (metaClient.getTableConfig().shouldDropPartitionColumns()) {
-      schema = recreateSchemaWhenDropPartitionColumns(partitionFieldsOpt, schema);
-    }
     return schema;
   }
 
@@ -237,19 +231,14 @@ public class TableSchemaResolver {
    * Gets full schema (user + metadata) for a hoodie table in Parquet format.
    *
    * @return Parquet schema for the table
-   * @throws Exception
    */
-  public MessageType getTableParquetSchema() throws Exception {
-    Option<Schema> schemaFromCommitMetadata = getTableSchemaFromCommitMetadata(true);
-    if (schemaFromCommitMetadata.isPresent()) {
-      return convertAvroSchemaToParquet(schemaFromCommitMetadata.get());
-    }
-    Option<Schema> schemaFromTableConfig = metaClient.getTableConfig().getTableCreateSchema();
-    if (schemaFromTableConfig.isPresent()) {
-      Schema schema = HoodieAvroUtils.addMetadataFields(schemaFromTableConfig.get(), hasOperationField.get());
-      return convertAvroSchemaToParquet(schema);
-    }
-    return getTableParquetSchemaFromDataFile();
+  public MessageType getTableParquetSchema() {
+    return getTableSchemaFromCommitMetadata(true)
+        .or(() ->
+            metaClient.getTableConfig().getTableCreateSchema()
+                .map(schema -> HoodieAvroUtils.addMetadataFields(schema, hasOperationField(schema))))
+        .map(this::convertAvroSchemaToParquet)
+        .orElseGet(this::getTableParquetSchemaFromDataFile);
   }
 
   /**
@@ -299,7 +288,7 @@ public class TableSchemaResolver {
       String schemaStr = commitMetadata.getMetadata(HoodieCommitMetadata.SCHEMA_KEY);
       Schema schema = new Schema.Parser().parse(schemaStr);
       if (includeMetadataFields) {
-        schema = HoodieAvroUtils.addMetadataFields(schema, hasOperationField.get());
+        schema = HoodieAvroUtils.addMetadataFields(schema, hasOperationField(schema));
       }
       return Option.of(schema);
     } else {
@@ -326,7 +315,7 @@ public class TableSchemaResolver {
 
       Schema schema = new Schema.Parser().parse(existingSchemaStr);
       if (includeMetadataFields) {
-        schema = HoodieAvroUtils.addMetadataFields(schema, hasOperationField.get());
+        schema = HoodieAvroUtils.addMetadataFields(schema, hasOperationField(schema));
       }
       return Option.of(schema);
     } catch (Exception e) {
@@ -560,20 +549,6 @@ public class TableSchemaResolver {
     }
   }
 
-  public boolean isHasOperationField() {
-    return hasOperationField.get();
-  }
-
-  private boolean hasOperationField() {
-    try {
-      Schema tableAvroSchema = getTableAvroSchemaFromDataFile();
-      return tableAvroSchema.getField(HoodieRecord.OPERATION_METADATA_FIELD) != null;
-    } catch (Exception e) {
-      LOG.info(String.format("Failed to read operation field from avro schema (%s)", e.getMessage()));
-      return false;
-    }
-  }
-
   /**
    * Gets the InternalSchema for a hoodie table from the HoodieCommitMetadata of the instant.
    *
@@ -619,5 +594,29 @@ public class TableSchemaResolver {
     FileBasedInternalSchemaStorageManager manager = new FileBasedInternalSchemaStorageManager(metaClient);
     String result = manager.getHistorySchemaStr();
     return result.isEmpty() ? Option.empty() : Option.of(result);
+  }
+
+  /**
+   * NOTE: This method could only be used in tests
+   *
+   * @VisibleForTesting
+   */
+  public boolean hasOperationField() {
+    try {
+      Schema tableAvroSchema = getTableAvroSchemaFromDataFile();
+      return hasOperationField(tableAvroSchema);
+    } catch (Exception e) {
+      LOG.info(String.format("Failed to read operation field from avro schema (%s)", e.getMessage()));
+      return false;
+    }
+  }
+
+  private static boolean hasOperationField(Schema tableSchema) {
+    try {
+      return tableSchema.getField(HoodieRecord.OPERATION_METADATA_FIELD) != null;
+    } catch (Exception e) {
+      LOG.info(String.format("Failed to read operation field from avro schema (%s)", e.getMessage()));
+      return false;
+    }
   }
 }
