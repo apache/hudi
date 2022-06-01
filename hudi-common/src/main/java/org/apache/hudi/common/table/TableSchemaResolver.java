@@ -184,46 +184,13 @@ public class TableSchemaResolver {
                   : HoodieAvroUtils.removeMetadataFields(schemaFromDataFile);
             });
 
+    // TODO partition columns have to be appended in all read-paths
     if (metaClient.getTableConfig().shouldDropPartitionColumns()) {
-      Option<String[]> partitionFieldsOpt = metaClient.getTableConfig().getPartitionFields();
-      return recreateSchemaWhenDropPartitionColumns(partitionFieldsOpt, schema);
+      return metaClient.getTableConfig().getPartitionFields()
+          .map(partitionFields -> appendPartitionColumns(schema, partitionFields))
+          .orElse(schema);
     }
 
-    return schema;
-  }
-
-  public static Schema recreateSchemaWhenDropPartitionColumns(Option<String[]> partitionFieldsOpt, Schema originSchema) {
-    // when hoodie.datasource.write.drop.partition.columns is true, partition columns can't be persisted in data files.
-    // And there are no partition schema if the schema is parsed from data files.
-    // Here we create partition Fields for this case, and use StringType as the data type.
-    Schema schema = originSchema;
-    if (partitionFieldsOpt.isPresent() && partitionFieldsOpt.get().length != 0) {
-      List<String> partitionFields = Arrays.asList(partitionFieldsOpt.get());
-
-      final Schema schema0 = originSchema;
-      boolean hasPartitionColNotInSchema = partitionFields.stream().anyMatch(
-          pt -> !HoodieAvroUtils.containsFieldInSchema(schema0, pt)
-      );
-      boolean hasPartitionColInSchema = partitionFields.stream().anyMatch(
-          pt -> HoodieAvroUtils.containsFieldInSchema(schema0, pt)
-      );
-      if (hasPartitionColNotInSchema && hasPartitionColInSchema) {
-        throw new HoodieIncompatibleSchemaException(
-            "Not support: Partial partition fields are still in the schema "
-                + "when enable hoodie.datasource.write.drop.partition.columns");
-      }
-
-      if (hasPartitionColNotInSchema) {
-        // when hasPartitionColNotInSchema is true and hasPartitionColInSchema is false, all partition columns
-        // are not in originSchema. So we create and add them.
-        List<Field> newFields = new ArrayList<>();
-        for (String partitionField: partitionFields) {
-          newFields.add(new Schema.Field(
-              partitionField, createNullableSchema(Schema.Type.STRING), "", JsonProperties.NULL_VALUE));
-        }
-        schema = appendFieldsToSchema(schema, newFields);
-      }
-    }
     return schema;
   }
 
@@ -609,6 +576,36 @@ public class TableSchemaResolver {
       LOG.info(String.format("Failed to read operation field from avro schema (%s)", e.getMessage()));
       return false;
     }
+  }
+
+  static Schema appendPartitionColumns(Schema dataSchema, String[] partitionFields) {
+    // In cases when {@link DROP_PARTITION_COLUMNS} config is set true, partition columns
+    // won't be persisted w/in the data files, and therefore we need to append such columns
+    // when schema is parsed from data files
+    //
+    // Here we append partition columns with {@code StringType} as the data type
+    if (partitionFields.length == 0) {
+      return dataSchema;
+    }
+
+    boolean hasPartitionColNotInSchema = Arrays.stream(partitionFields).anyMatch(pf -> !containsFieldInSchema(dataSchema, pf));
+    boolean hasPartitionColInSchema = Arrays.stream(partitionFields).anyMatch(pf -> containsFieldInSchema(dataSchema, pf));
+    if (hasPartitionColNotInSchema && hasPartitionColInSchema) {
+      throw new HoodieIncompatibleSchemaException("Partition columns could not be partially contained w/in the data schema");
+    }
+
+    if (hasPartitionColNotInSchema) {
+      // when hasPartitionColNotInSchema is true and hasPartitionColInSchema is false, all partition columns
+      // are not in originSchema. So we create and add them.
+      List<Field> newFields = new ArrayList<>();
+      for (String partitionField: partitionFields) {
+        newFields.add(new Schema.Field(
+            partitionField, createNullableSchema(Schema.Type.STRING), "", JsonProperties.NULL_VALUE));
+      }
+      return appendFieldsToSchema(dataSchema, newFields);
+    }
+
+    return dataSchema;
   }
 
   private static boolean hasOperationField(Schema tableSchema) {

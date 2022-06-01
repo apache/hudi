@@ -37,24 +37,19 @@ public class TestTableSchemaResolver {
   public void testRecreateSchemaWhenDropPartitionColumns() {
     Schema originSchema = new Schema.Parser().parse(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA);
 
-    // case1
-    Option<String[]> emptyPartitionFieldsOpt = Option.empty();
-    Schema s1 = TableSchemaResolver.recreateSchemaWhenDropPartitionColumns(emptyPartitionFieldsOpt, originSchema);
-    assertEquals(originSchema, s1);
-
     // case2
     String[] pts1 = new String[0];
-    Schema s2 = TableSchemaResolver.recreateSchemaWhenDropPartitionColumns(Option.of(pts1), originSchema);
+    Schema s2 = TableSchemaResolver.appendPartitionColumns(originSchema, pts1);
     assertEquals(originSchema, s2);
 
     // case3: partition_path is in originSchema
     String[] pts2 = {"partition_path"};
-    Schema s3 = TableSchemaResolver.recreateSchemaWhenDropPartitionColumns(Option.of(pts2), originSchema);
+    Schema s3 = TableSchemaResolver.appendPartitionColumns(originSchema, pts2);
     assertEquals(originSchema, s3);
 
     // case4: user_partition is not in originSchema
     String[] pts3 = {"user_partition"};
-    Schema s4 = TableSchemaResolver.recreateSchemaWhenDropPartitionColumns(Option.of(pts3), originSchema);
+    Schema s4 = TableSchemaResolver.appendPartitionColumns(originSchema, pts3);
     assertNotEquals(originSchema, s4);
     assertTrue(s4.getFields().stream().anyMatch(f -> f.name().equals("user_partition")));
     Schema.Field f = s4.getField("user_partition");
@@ -63,7 +58,7 @@ public class TestTableSchemaResolver {
     // case5: user_partition is in originSchema, but partition_path is in originSchema
     String[] pts4 = {"user_partition", "partition_path"};
     try {
-      TableSchemaResolver.recreateSchemaWhenDropPartitionColumns(Option.of(pts3), originSchema);
+      TableSchemaResolver.appendPartitionColumns(originSchema, pts3);
     } catch (HoodieIncompatibleSchemaException e) {
       assertTrue(e.getMessage().contains("Partial partition fields are still in the schema"));
     }
