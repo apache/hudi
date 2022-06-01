@@ -214,7 +214,7 @@ public class HiveTestService {
     while (true) {
       try {
         new HiveMetaStoreClient(serverConf);
-        Thread.sleep(5000);
+        Thread.sleep(6000);
         return true;
       } catch (MetaException | InterruptedException e) {
         // ignore as this is expected
@@ -225,7 +225,7 @@ public class HiveTestService {
         break;
       }
       try {
-        Thread.sleep(250);
+        Thread.sleep(1000);
       } catch (InterruptedException e) {
         // ignore
       }
