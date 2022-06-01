@@ -340,6 +340,21 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     latestBaseFiles.groupBy(getPartitionPath)
   }
 
+  protected def getSelectedPartitionPaths(
+      globbedPaths: Seq[Path],
+      partitionFilters: Seq[Expression],
+      dataFilters: Seq[Expression]): Seq[Path] = {
+    val partitionDirs = if (globbedPaths.isEmpty) {
+      fileIndex.listFiles(partitionFilters, dataFilters)
+    } else {
+      val inMemoryFileIndex = HoodieInMemoryFileIndex.create(sparkSession, globbedPaths)
+      inMemoryFileIndex.listFiles(partitionFilters, dataFilters)
+    }
+
+    val fsView = new HoodieTableFileSystemView(metaClient, timeline, partitionDirs.flatMap(_.files).toArray)
+    fsView.getPartitionPaths.asScala
+  }
+
   protected def convertToExpressions(filters: Array[Filter]): Array[Expression] = {
     val catalystExpressions = HoodieSparkUtils.convertToCatalystExpressions(filters, tableStructSchema)
 

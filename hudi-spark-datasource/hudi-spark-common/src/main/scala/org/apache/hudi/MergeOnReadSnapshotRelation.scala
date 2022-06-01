@@ -105,8 +105,8 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
       buildSplits(fileSlices.values.flatten.toSeq)
     } else {
       // TODO refactor to avoid iterating over listed files multiple times
-      val partitions = listLatestBaseFiles(globPaths, convertedPartitionFilters, dataFilters)
-      val partitionPaths = partitions.keys.toSeq
+      val partitionPaths = getSelectedPartitionPaths(globPaths, convertedPartitionFilters, dataFilters)
+
       if (partitionPaths.isEmpty || latestInstant.isEmpty) {
         // If this an empty table OR it has no completed commits yet, return
         List.empty[HoodieMergeOnReadFileSplit]
