@@ -48,6 +48,7 @@
     <module>packaging/hudi-hadoop-mr-bundle</module>
     <module>packaging/hudi-datahub-sync-bundle</module>
     <module>packaging/hudi-hive-sync-bundle</module>
+    <module>packaging/hudi-aws-bundle</module>
     <module>packaging/hudi-gcp-bundle</module>
     <module>packaging/hudi-spark-bundle</module>
     <module>packaging/hudi-presto-bundle</module>
