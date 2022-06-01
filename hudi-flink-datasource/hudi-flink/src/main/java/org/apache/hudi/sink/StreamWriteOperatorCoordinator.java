@@ -20,6 +20,7 @@ package org.apache.hudi.sink;
 
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -28,6 +29,7 @@ import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.event.CommitAckEvent;
@@ -81,6 +83,11 @@ public class StreamWriteOperatorCoordinator
    * Config options.
    */
   private final Configuration conf;
+
+  /**
+   * Hive config options.
+   */
+  private final SerializableConfiguration hiveConf;
 
   /**
    * Coordinator context.
@@ -160,6 +167,7 @@ public class StreamWriteOperatorCoordinator
     this.conf = conf;
     this.context = context;
     this.parallelism = context.currentParallelism();
+    this.hiveConf = new SerializableConfiguration(HadoopConfigurations.getHiveConf(conf));
   }
 
   @Override
@@ -314,7 +322,7 @@ public class StreamWriteOperatorCoordinator
 
   private void initHiveSync() {
     this.hiveSyncExecutor = NonThrownExecutor.builder(LOG).waitForTasksFinish(true).build();
-    this.hiveSyncContext = HiveSyncContext.create(conf);
+    this.hiveSyncContext = HiveSyncContext.create(conf, this.hiveConf);
   }
 
   private void syncHiveAsync() {

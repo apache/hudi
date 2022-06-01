@@ -702,6 +702,12 @@ public class FlinkOptions extends HoodieConfig {
       .noDefaultValue()
       .withDescription("Serde properties to hive table, the data format is k1=v1\nk2=v2");
 
+  public static final ConfigOption<String> HIVE_SYNC_CONF_DIR = ConfigOptions
+      .key("hive_sync.conf.dir")
+      .stringType()
+      .noDefaultValue()
+      .withDescription("The hive configuration directory, where the hive-site.xml lies in, the file should be put on the client machine");
+
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
