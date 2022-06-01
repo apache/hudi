@@ -123,8 +123,8 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
       .map(HoodieSqlCommonUtils.formatQueryInstant)
 
   protected lazy val (tableAvroSchema: Schema, internalSchema: InternalSchema) = {
-    val schemaUtil = new TableSchemaResolver(metaClient)
-    val avroSchema = Try(schemaUtil.getTableAvroSchema) match {
+    val schemaResolver = new TableSchemaResolver(metaClient)
+    val avroSchema = Try(schemaResolver.getTableAvroSchema) match {
       case Success(schema) => schema
       case Failure(e) =>
         logWarning("Failed to fetch schema from the table", e)
@@ -137,14 +137,14 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     }
     // try to find internalSchema
     val internalSchemaFromMeta = try {
-      schemaUtil.getTableInternalSchemaFromCommitMetadata.orElse(InternalSchema.getEmptyInternalSchema)
+      schemaResolver.getTableInternalSchemaFromCommitMetadata.orElse(InternalSchema.getEmptyInternalSchema)
     } catch {
       case _: Exception => InternalSchema.getEmptyInternalSchema
     }
     (avroSchema, internalSchemaFromMeta)
   }
 
-  protected val tableStructSchema: StructType = AvroConversionUtils.convertAvroSchemaToStructType(tableAvroSchema)
+  protected lazy val tableStructSchema: StructType = AvroConversionUtils.convertAvroSchemaToStructType(tableAvroSchema)
 
   protected val partitionColumns: Array[String] = tableConfig.getPartitionFields.orElse(Array.empty)
 
