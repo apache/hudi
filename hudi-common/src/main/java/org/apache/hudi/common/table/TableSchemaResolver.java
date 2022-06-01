@@ -505,7 +505,6 @@ public class TableSchemaResolver {
     }
   }
 
-
   private Option<Pair<HoodieInstant, HoodieCommitMetadata>> getLatestCommitMetadataWithValidSchema() {
     if (latestCommitWithValidSchema == null) {
       Option<Pair<HoodieInstant, HoodieCommitMetadata>> instantAndCommitMetadata =

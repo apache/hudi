@@ -19,11 +19,8 @@
 package org.apache.hudi.common.table;
 
 import org.apache.avro.Schema;
-
 import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
-import org.apache.hudi.common.util.Option;
-
 import org.apache.hudi.exception.HoodieIncompatibleSchemaException;
 import org.junit.jupiter.api.Test;
 
