@@ -18,6 +18,10 @@
 
 package org.apache.hudi.common.table.timeline;
 
+import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -28,11 +32,6 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
-
-import org.apache.hadoop.fs.FSDataInputStream;
-import org.apache.hadoop.fs.FSDataOutputStream;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -45,11 +44,10 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.Date;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
-import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Represents the Active Timeline for the Hoodie table. Instants for the last 12 hours (configurable) is in the
@@ -267,43 +265,47 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   }
 
   /**
-   * Get the last instant with valid schema, and convert this to HoodieCommitMetadata
+   * Returns most recent instant having valid schema in its {@link HoodieCommitMetadata}
    */
   public Option<Pair<HoodieInstant, HoodieCommitMetadata>> getLastCommitMetadataWithValidSchema() {
-    List<HoodieInstant> completed = getCommitsTimeline().filterCompletedInstants().getInstants()
-        .sorted(Comparator.comparing(HoodieInstant::getTimestamp).reversed()).collect(Collectors.toList());
-    for (HoodieInstant instant : completed) {
-      try {
-        HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
-            getInstantDetails(instant).get(), HoodieCommitMetadata.class);
-        if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(HoodieCommitMetadata.SCHEMA_KEY))) {
-          return Option.of(Pair.of(instant, commitMetadata));
-        }
-      } catch (IOException e) {
-        LOG.warn("Failed to convert instant to HoodieCommitMetadata: " + instant.toString());
-      }
-    }
-    return Option.empty();
+    return Option.fromJavaOptional(
+        getCommitMetadataStream()
+            .filter(instantCommitMetadataPair ->
+                !StringUtils.isNullOrEmpty(instantCommitMetadataPair.getValue().getMetadata(HoodieCommitMetadata.SCHEMA_KEY)))
+            .findFirst()
+    );
   }
 
   /**
    * Get the last instant with valid data, and convert this to HoodieCommitMetadata
    */
   public Option<Pair<HoodieInstant, HoodieCommitMetadata>> getLastCommitMetadataWithValidData() {
-    List<HoodieInstant> completed = getCommitsTimeline().filterCompletedInstants().getInstants()
-        .sorted(Comparator.comparing(HoodieInstant::getTimestamp).reversed()).collect(Collectors.toList());
-    for (HoodieInstant instant : completed) {
-      try {
-        HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
-            getInstantDetails(instant).get(), HoodieCommitMetadata.class);
-        if (!commitMetadata.getFileIdAndRelativePaths().isEmpty()) {
-          return Option.of(Pair.of(instant, commitMetadata));
-        }
-      } catch (IOException e) {
-        LOG.warn("Failed to convert instant to HoodieCommitMetadata: " + instant.toString());
-      }
-    }
-    return Option.empty();
+    return Option.fromJavaOptional(
+        getCommitMetadataStream()
+            .filter(instantCommitMetadataPair ->
+                !instantCommitMetadataPair.getValue().getFileIdAndRelativePaths().isEmpty())
+            .findFirst()
+    );
+  }
+
+  /**
+   * Returns stream of {@link HoodieCommitMetadata} in order reverse to chronological (ie most
+   * recent metadata being the first element)
+   */
+  private Stream<Pair<HoodieInstant, HoodieCommitMetadata>> getCommitMetadataStream() {
+    // NOTE: Streams are lazy
+    return getCommitsTimeline().filterCompletedInstants()
+        .getInstants()
+        .sorted(Comparator.comparing(HoodieInstant::getTimestamp).reversed())
+        .map(instant -> {
+          try {
+            HoodieCommitMetadata commitMetadata =
+                HoodieCommitMetadata.fromBytes(getInstantDetails(instant).get(), HoodieCommitMetadata.class);
+            return Pair.of(instant, commitMetadata);
+          } catch (IOException e) {
+            throw new HoodieIOException(String.format("Failed to fetch HoodieCommitMetadata for instant (%s)", instant), e);
+          }
+        });
   }
 
   public Option<byte[]> readCleanerInfoAsBytes(HoodieInstant instant) {
