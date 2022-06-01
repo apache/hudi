@@ -196,7 +196,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
    * meaning that regardless of whether this columns are being requested by the query they will be fetched
    * regardless so that relation is able to combine records properly (if necessary)
    *
-   * @VisibleInTests
+   * @VisibleForTesting
    */
   val mandatoryFields: Seq[String]
 
@@ -214,6 +214,11 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
 
   protected def queryTimestamp: Option[String] =
     specifiedQueryTimestamp.orElse(toScalaOption(timeline.lastInstant()).map(_.getTimestamp))
+
+  /**
+   * Returns true in case table supports Schema on Read (Schema Evolution)
+   */
+  def hasSchemaOnRead: Boolean = !internalSchema.isEmptySchema
 
   override def schema: StructType = tableStructSchema
 
