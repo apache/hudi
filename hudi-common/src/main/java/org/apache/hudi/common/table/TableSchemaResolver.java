@@ -100,7 +100,7 @@ public class TableSchemaResolver {
           // For COW table, the file has data written must be in parquet or orc format currently.
           if (instantAndCommitMetadata.isPresent()) {
             HoodieCommitMetadata commitMetadata = instantAndCommitMetadata.get().getRight();
-            Iterator<String> filePaths = commitMetadata.getFileIdAndFullPaths(metaClient.getBasePath()).values().iterator();
+            Iterator<String> filePaths = commitMetadata.getFileIdAndFullPaths(metaClient.getBasePathV2()).values().iterator();
             return fetchSchemaFromFiles(filePaths);
           } else {
             throw new IllegalArgumentException("Could not find any data file written for commit, "
@@ -111,7 +111,7 @@ public class TableSchemaResolver {
           // Determine the file format based on the file name, and then extract schema from it.
           if (instantAndCommitMetadata.isPresent()) {
             HoodieCommitMetadata commitMetadata = instantAndCommitMetadata.get().getRight();
-            Iterator<String> filePaths = commitMetadata.getFileIdAndFullPaths(metaClient.getBasePath()).values().iterator();
+            Iterator<String> filePaths = commitMetadata.getFileIdAndFullPaths(metaClient.getBasePathV2()).values().iterator();
             return fetchSchemaFromFiles(filePaths);
           } else {
             throw new IllegalArgumentException("Could not find any data file written for commit, "

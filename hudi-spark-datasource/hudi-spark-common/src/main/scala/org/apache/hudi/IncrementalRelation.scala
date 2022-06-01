@@ -58,9 +58,9 @@ class IncrementalRelation(val sqlContext: SQLContext,
   private val log = LogManager.getLogger(classOf[IncrementalRelation])
 
   val skeletonSchema: StructType = HoodieSparkUtils.getMetaSchema
-  private val basePath = metaClient.getBasePath
+  private val basePath = metaClient.getBasePathV2
   // TODO : Figure out a valid HoodieWriteConfig
-  private val hoodieTable = HoodieSparkTable.create(HoodieWriteConfig.newBuilder().withPath(basePath).build(),
+  private val hoodieTable = HoodieSparkTable.create(HoodieWriteConfig.newBuilder().withPath(basePath.toString).build(),
     new HoodieSparkEngineContext(new JavaSparkContext(sqlContext.sparkContext)),
     metaClient)
   private val commitTimeline = hoodieTable.getMetaClient.getCommitTimeline.filterCompletedInstants()
@@ -202,7 +202,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
         var doFullTableScan = false
 
         if (fallbackToFullTableScan) {
-          val fs = new Path(basePath).getFileSystem(sqlContext.sparkContext.hadoopConfiguration);
+          val fs = basePath.getFileSystem(sqlContext.sparkContext.hadoopConfiguration);
           val timer = new HoodieTimer().startTimer();
 
           val allFilesToCheck = filteredMetaBootstrapFullPaths ++ filteredRegularFullPaths
@@ -223,7 +223,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
           val hudiDF = sqlContext.read
             .format("hudi_v1")
             .schema(usedSchema)
-            .load(basePath)
+            .load(basePath.toString)
             .filter(String.format("%s > '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD, //Notice the > in place of >= because we are working with optParam instead of first commit > optParam
               optParams(DataSourceReadOptions.BEGIN_INSTANTTIME.key)))
             .filter(String.format("%s <= '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
