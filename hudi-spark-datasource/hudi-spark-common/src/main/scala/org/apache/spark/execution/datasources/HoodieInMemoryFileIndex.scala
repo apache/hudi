@@ -20,6 +20,7 @@ package org.apache.spark.execution.datasources
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileStatus, Path, PathFilter}
 import org.apache.hadoop.mapred.{FileInputFormat, JobConf}
+import org.apache.hudi.SparkAdapterSupport
 import org.apache.spark.HoodieHadoopFSUtils
 import org.apache.spark.metrics.source.HiveCatalogMetrics
 import org.apache.spark.sql.SparkSession
@@ -36,7 +37,8 @@ class HoodieInMemoryFileIndex(sparkSession: SparkSession,
                               parameters: Map[String, String],
                               userSpecifiedSchema: Option[StructType],
                               fileStatusCache: FileStatusCache = NoopCache)
-  extends InMemoryFileIndex(sparkSession, rootPathsSpecified, parameters, userSpecifiedSchema, fileStatusCache) {
+  extends InMemoryFileIndex(sparkSession, rootPathsSpecified, parameters, userSpecifiedSchema, fileStatusCache)
+  with SparkAdapterSupport {
 
   /**
    * Returns all valid files grouped into partitions when the data is partitioned. If the data is unpartitioned,
@@ -84,7 +86,7 @@ class HoodieInMemoryFileIndex(sparkSession: SparkSession,
     if (partitionPruningPredicates.nonEmpty) {
       val predicate = partitionPruningPredicates.reduce(expressions.And)
 
-      val boundPredicate = InterpretedPredicate.create(predicate.transform {
+      val boundPredicate = sparkAdapter.createInterpretedPredicate(predicate.transform {
         case a: AttributeReference =>
           val index = partitionColumns.indexWhere(a.name == _.name)
           BoundReference(index, partitionColumns(index).dataType, nullable = true)
