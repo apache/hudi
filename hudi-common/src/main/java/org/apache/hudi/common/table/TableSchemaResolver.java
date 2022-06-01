@@ -466,9 +466,7 @@ public class TableSchemaResolver {
    */
   private Option<InternalSchema> getTableInternalSchemaFromCommitMetadata(HoodieInstant instant) {
     try {
-      HoodieTimeline timeline = metaClient.getActiveTimeline().filterCompletedInstants();
-      byte[] data = timeline.getInstantDetails(instant).get();
-      HoodieCommitMetadata metadata = HoodieCommitMetadata.fromBytes(data, HoodieCommitMetadata.class);
+      HoodieCommitMetadata metadata = getCachedCommitMetadata(instant);
       String latestInternalSchemaStr = metadata.getMetadata(SerDeHelper.LATEST_SCHEMA);
       if (latestInternalSchemaStr != null) {
         return SerDeHelper.fromJson(latestInternalSchemaStr);
