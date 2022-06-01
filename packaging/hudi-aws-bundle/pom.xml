@@ -77,7 +77,7 @@
                                     <include>org.apache.hudi:hudi-hive-sync</include>
                                     <include>org.apache.hudi:hudi-aws</include>
                                     <include>org.apache.parquet:parquet-avro</include>
-
+                                    <include>org.apache.avro:avro</include>
                                     <include>com.amazonaws:dynamodb-lock-client</include>
                                     <include>com.amazonaws:aws-java-sdk-cloudwatch</include>
                                     <include>com.amazonaws:aws-java-sdk-dynamodb</include>
@@ -138,6 +138,14 @@
                                 <relocation>
                                     <pattern>com.amazonaws.</pattern>
                                     <shadedPattern>org.apache.hudi.com.amazonaws.</shadedPattern>
+                                </relocation>
+                                <relocation>
+                                    <pattern>org.apache.parquet.avro.</pattern>
+                                    <shadedPattern>org.apache.hudi.org.apache.parquet.avro.</shadedPattern>
+                                </relocation>
+                                <relocation>
+                                    <pattern>org.apache.avro.</pattern>
+                                    <shadedPattern>org.apache.hudi.org.apache.avro.</shadedPattern>
                                 </relocation>
                                 <!-- The classes below in org.apache.hadoop.metrics2 package come from
                                 hbase-hadoop-compat and hbase-hadoop2-compat, which have to be shaded one by one,
@@ -244,6 +252,14 @@
             <groupId>org.apache.hudi</groupId>
             <artifactId>hudi-common</artifactId>
             <version>${project.version}</version>
+            <exclusions>
+                <!--hadoop-common brings its own version of avro which can cause conflict.
+                Moreover hadoop-* artifacts are not needed in this bundle-->
+                <exclusion>
+                    <groupId>org.apache.hadoop</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>org.apache.hudi</groupId>
@@ -260,6 +276,20 @@
             <groupId>org.apache.hudi</groupId>
             <artifactId>hudi-aws</artifactId>
             <version>${project.version}</version>
+        </dependency>
+        <!-- Need parquet and avro to run AwsGlueCatalogSyncTool using run_sync_tool with this bundle.
+        Parquet and avro from other packages have already been shaded above-->
+        <dependency>
+            <groupId>org.apache.parquet</groupId>
+            <artifactId>parquet-avro</artifactId>
+            <version>${parquet.version}</version>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.avro</groupId>
+            <artifactId>avro</artifactId>
+            <version>${avro.version}</version>
+            <scope>compile</scope>
         </dependency>
     </dependencies>
 </project>
