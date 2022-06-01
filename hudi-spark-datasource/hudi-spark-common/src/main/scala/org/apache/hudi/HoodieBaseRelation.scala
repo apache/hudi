@@ -122,6 +122,10 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     optParams.get(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key)
       .map(HoodieSqlCommonUtils.formatQueryInstant)
 
+  /**
+   * NOTE: Initialization of teh following members is coupled on purpose to minimize amount of I/O
+   *       required to fetch table's Avro and Internal schemas
+   */
   protected lazy val (tableAvroSchema: Schema, internalSchema: InternalSchema) = {
     val schemaResolver = new TableSchemaResolver(metaClient)
     val avroSchema = Try(schemaResolver.getTableAvroSchema) match {
