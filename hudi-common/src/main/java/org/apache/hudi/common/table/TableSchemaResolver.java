@@ -50,6 +50,7 @@ import org.apache.hudi.internal.schema.io.FileBasedInternalSchemaStorageManager;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.io.storage.HoodieHFileReader;
 import org.apache.hudi.io.storage.HoodieOrcReader;
+import org.apache.hudi.util.Lazy;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.parquet.avro.AvroSchemaConverter;
@@ -76,11 +77,11 @@ public class TableSchemaResolver {
 
   private static final Logger LOG = LogManager.getLogger(TableSchemaResolver.class);
   private final HoodieTableMetaClient metaClient;
-  private final boolean hasOperationField;
+  private final Lazy<Boolean> hasOperationField;
 
   public TableSchemaResolver(HoodieTableMetaClient metaClient) {
     this.metaClient = metaClient;
-    this.hasOperationField = hasOperationField();
+    this.hasOperationField = Lazy.lazily(this::hasOperationField);
   }
 
   /**
@@ -184,7 +185,7 @@ public class TableSchemaResolver {
       Option<Schema> schemaFromTableConfig = metaClient.getTableConfig().getTableCreateSchema();
       if (schemaFromTableConfig.isPresent()) {
         if (includeMetadataFields) {
-          schema = HoodieAvroUtils.addMetadataFields(schemaFromTableConfig.get(), hasOperationField);
+          schema = HoodieAvroUtils.addMetadataFields(schemaFromTableConfig.get(), hasOperationField.get());
         } else {
           schema = schemaFromTableConfig.get();
         }
@@ -252,7 +253,7 @@ public class TableSchemaResolver {
     }
     Option<Schema> schemaFromTableConfig = metaClient.getTableConfig().getTableCreateSchema();
     if (schemaFromTableConfig.isPresent()) {
-      Schema schema = HoodieAvroUtils.addMetadataFields(schemaFromTableConfig.get(), hasOperationField);
+      Schema schema = HoodieAvroUtils.addMetadataFields(schemaFromTableConfig.get(), hasOperationField.get());
       return convertAvroSchemaToParquet(schema);
     }
     return getTableParquetSchemaFromDataFile();
@@ -305,7 +306,7 @@ public class TableSchemaResolver {
       String schemaStr = commitMetadata.getMetadata(HoodieCommitMetadata.SCHEMA_KEY);
       Schema schema = new Schema.Parser().parse(schemaStr);
       if (includeMetadataFields) {
-        schema = HoodieAvroUtils.addMetadataFields(schema, hasOperationField);
+        schema = HoodieAvroUtils.addMetadataFields(schema, hasOperationField.get());
       }
       return Option.of(schema);
     } else {
@@ -332,7 +333,7 @@ public class TableSchemaResolver {
 
       Schema schema = new Schema.Parser().parse(existingSchemaStr);
       if (includeMetadataFields) {
-        schema = HoodieAvroUtils.addMetadataFields(schema, hasOperationField);
+        schema = HoodieAvroUtils.addMetadataFields(schema, hasOperationField.get());
       }
       return Option.of(schema);
     } catch (Exception e) {
@@ -533,7 +534,7 @@ public class TableSchemaResolver {
     // Read from the compacted file wrote
     HoodieCommitMetadata compactionMetadata = HoodieCommitMetadata
         .fromBytes(activeTimeline.getInstantDetails(lastCompactionCommit).get(), HoodieCommitMetadata.class);
-    String filePath = compactionMetadata.getFileIdAndFullPaths(metaClient.getBasePath()).values().stream().findAny()
+    String filePath = compactionMetadata.getFileIdAndFullPaths(metaClient.getBasePathV2()).values().stream().findAny()
         .orElseThrow(() -> new IllegalArgumentException("Could not find any data file written for compaction "
             + lastCompactionCommit + ", could not get schema for table " + metaClient.getBasePath()));
     return readSchemaFromBaseFile(filePath);
@@ -567,7 +568,7 @@ public class TableSchemaResolver {
   }
 
   public boolean isHasOperationField() {
-    return hasOperationField;
+    return hasOperationField.get();
   }
 
   private boolean hasOperationField() {
