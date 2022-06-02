@@ -1161,10 +1161,6 @@
             <groupId>org.junit.platform</groupId>
           </exclusion>
           <exclusion>
-            <artifactId>junit-vintage-engine</artifactId>
-            <groupId>org.junit.vintage</groupId>
-          </exclusion>
-          <exclusion>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
           </exclusion>
