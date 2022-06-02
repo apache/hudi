@@ -153,6 +153,12 @@
       <artifactId>hive-metastore</artifactId>
       <version>${hive.version}</version>
       <scope>test</scope>
+      <exclusions>
+        <exclusion>
+          <groupId>org.apache.logging.log4j</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
 
     <!-- Test -->
