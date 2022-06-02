@@ -128,7 +128,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
    */
   protected lazy val (tableAvroSchema: Schema, internalSchema: InternalSchema) = {
     val schemaResolver = new TableSchemaResolver(metaClient)
-    val avroSchema = schemaSpec.getOrElse {
+    val avroSchema: Schema = schemaSpec.map(convertToAvroSchema).getOrElse {
       Try(schemaResolver.getTableAvroSchema) match {
         case Success(schema) => schema
         case Failure(e) =>
@@ -139,7 +139,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
 
     val schemaEvolutionEnabled: Boolean = optParams.getOrElse(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLE.key,
       DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLE.defaultValue.toString).toBoolean
-    val internalSchemaFromMeta = if (!schemaEvolutionEnabled) {
+    val internalSchema: InternalSchema = if (!schemaEvolutionEnabled) {
       InternalSchema.getEmptyInternalSchema
     } else {
       Try(schemaResolver.getTableInternalSchemaFromCommitMetadata) match {
@@ -151,7 +151,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
       }
     }
 
-    (avroSchema, internalSchemaFromMeta)
+    (avroSchema, internalSchema)
   }
 
   protected lazy val tableStructSchema: StructType = AvroConversionUtils.convertAvroSchemaToStructType(tableAvroSchema)
