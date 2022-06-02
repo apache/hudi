@@ -199,6 +199,7 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
     LOG.info("Deleting all rocksdb data associated with table filesystem view");
     rocksDB.close();
     rocksDB = new RocksDBDAO(metaClient.getBasePath(), config.getRocksdbBasePath());
+    schemaHelper.getAllColumnFamilies().forEach(rocksDB::addColumnFamily);
   }
 
   @Override
