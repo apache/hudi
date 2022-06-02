@@ -17,6 +17,8 @@
 
 package org.apache.spark.sql.hudi.procedure
 
+import org.apache.hudi.common.model.IOType
+import org.apache.hudi.common.testutils.FileCreateUtils
 import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase
 
 class TestCallProcedure extends HoodieSparkSqlTestBase {
@@ -129,6 +131,44 @@ class TestCallProcedure extends HoodieSparkSqlTestBase {
       // 1 commits are left after rollback
       commits = spark.sql(s"""call show_commits(table => '$tableName', limit => 10)""").collect()
       assertResult(1){commits.length}
+    }
+  }
+
+  test("Test Call delete_marker Procedure") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+      // create table
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | location '$tablePath'
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts'
+           | )
+       """.stripMargin)
+
+      // Check required fields
+      checkExceptionContain(s"""call delete_marker(table => '$tableName')""")(
+        s"Argument: instant_Time is required")
+
+      val instantTime = "101"
+      FileCreateUtils.createMarkerFile(tablePath, "", instantTime, "f0", IOType.APPEND)
+      assertResult(1) {
+        FileCreateUtils.getTotalMarkerFileCount(tablePath, "", instantTime, IOType.APPEND)
+      }
+
+      checkAnswer(s"""call delete_marker(table => '$tableName', instant_Time => '$instantTime')""")(Seq(true))
+
+      assertResult(0) {
+        FileCreateUtils.getTotalMarkerFileCount(tablePath, "", instantTime, IOType.APPEND)
+      }
     }
   }
 }
