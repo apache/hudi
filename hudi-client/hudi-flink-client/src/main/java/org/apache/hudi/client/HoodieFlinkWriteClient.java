@@ -112,8 +112,7 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
   }
 
   @Override
-  protected HoodieTable createTable(HoodieWriteConfig config, Configuration hadoopConf,
-                                    boolean refreshTimeline) {
+  protected HoodieTable createTable(HoodieWriteConfig config, Configuration hadoopConf) {
     return HoodieFlinkTable.create(config, (HoodieFlinkEngineContext) context);
   }
 
