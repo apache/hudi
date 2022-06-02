@@ -17,11 +17,7 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
-import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.engine.HoodieEngineContext
-import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion
-import org.apache.hudi.common.util.Option
 import org.apache.hudi.table.HoodieSparkTable
 import org.apache.hudi.table.marker.WriteMarkersFactory
 import org.apache.spark.internal.Logging
@@ -55,14 +51,8 @@ class DeleteMarkerProcedure extends BaseProcedure with ProcedureBuilder with Log
     val result = Try {
       val client = createHoodieClient(jsc, basePath)
       val config = client.getConfig
-      val context = client.getEngineContext
-      val metaClient = HoodieTableMetaClient.builder()
-        .setConf(context.getHadoopConf.get).setBasePath(config.getBasePath)
-        .setLoadActiveTimelineOnLoad(true).setConsistencyGuardConfig(config.getConsistencyGuardConfig)
-        .setLayoutVersion(Option.of(new TimelineLayoutVersion(config.getTimelineLayoutVersion)))
-        .setFileSystemRetryConfig(config.getFileSystemRetryConfig).setProperties(config.getProps)
-        .build
-      val table = HoodieSparkTable.create(config, context.asInstanceOf[HoodieSparkEngineContext], metaClient, true)
+      val context: HoodieEngineContext = client.getEngineContext
+      val table = HoodieSparkTable.create(config, context, java.lang.Boolean.TRUE)
       WriteMarkersFactory.get(config.getMarkersType, table, instantTime)
         .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism)
     } match {
