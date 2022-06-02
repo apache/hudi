@@ -45,6 +45,7 @@ case class HoodieSpark3Analysis(sparkSession: SparkSession) extends Rule[Logical
   with SparkAdapterSupport with ProvidesHoodieConfig {
 
   override def apply(plan: LogicalPlan): LogicalPlan = plan.resolveOperatorsDown {
+    // NOTE: This step is required since Hudi relations don't currently implement DS V2 Read API
     case dsv2 @ DataSourceV2Relation(d: HoodieInternalV2Table, _, _, _, _) =>
       val output = dsv2.output
       val catalogTable = if (d.catalogTable.isDefined) {
@@ -53,8 +54,9 @@ case class HoodieSpark3Analysis(sparkSession: SparkSession) extends Rule[Logical
         None
       }
       val relation = new DefaultSource().createRelation(new SQLContext(sparkSession),
-        buildHoodieConfig(d.hoodieCatalogTable))
+        buildHoodieConfig(d.hoodieCatalogTable), d.hoodieCatalogTable.tableSchema)
       LogicalRelation(relation, output, catalogTable, isStreaming = false)
+
     case a @ InsertIntoStatement(r: DataSourceV2Relation, partitionSpec, _, _, _, _) if a.query.resolved &&
       r.table.isInstanceOf[HoodieInternalV2Table] &&
       needsSchemaAdjustment(a.query, r.table.asInstanceOf[HoodieInternalV2Table], partitionSpec, r.schema) =>
