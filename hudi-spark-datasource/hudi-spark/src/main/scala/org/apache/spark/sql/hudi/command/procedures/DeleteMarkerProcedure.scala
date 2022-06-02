@@ -17,7 +17,6 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
-import org.apache.hudi.common.engine.HoodieEngineContext
 import org.apache.hudi.table.HoodieSparkTable
 import org.apache.hudi.table.marker.WriteMarkersFactory
 import org.apache.spark.internal.Logging
@@ -51,8 +50,8 @@ class DeleteMarkerProcedure extends BaseProcedure with ProcedureBuilder with Log
     val result = Try {
       val client = createHoodieClient(jsc, basePath)
       val config = client.getConfig
-      val context: HoodieEngineContext = client.getEngineContext
-      val table = HoodieSparkTable.create(config, context, java.lang.Boolean.TRUE)
+      val context = client.getEngineContext
+      val table = HoodieSparkTable.create(config, context)
       WriteMarkersFactory.get(config.getMarkersType, table, instantTime)
         .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism)
     } match {
