@@ -66,7 +66,7 @@ public class RDDCustomColumnsSortPartitioner<T extends HoodieRecordPayload>
           if (recordValue == null) {
             return StringUtils.EMPTY_STRING;
           } else {
-            return StringUtils.objToString(record);
+            return StringUtils.objToString(recordValue);
           }
         },
         true, outputSparkPartitions);
