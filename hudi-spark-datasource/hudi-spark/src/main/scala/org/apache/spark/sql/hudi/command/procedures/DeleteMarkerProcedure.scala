@@ -45,7 +45,7 @@ class DeleteMarkerProcedure extends BaseProcedure with ProcedureBuilder with Log
 
     val tableName = getArgValueOrDefault(args, PARAMETERS(0))
     val instantTime = getArgValueOrDefault(args, PARAMETERS(1)).get.asInstanceOf[String]
-    val basePath: String = getBasePath(tableName)
+    val basePath = getBasePath(tableName)
 
     val result = Try {
       val client = createHoodieClient(jsc, basePath)
