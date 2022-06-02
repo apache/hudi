@@ -56,7 +56,7 @@ import java.util.Properties;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import static junit.framework.TestCase.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -384,10 +384,7 @@ public class TestQuickstartData {
   public static BinaryRowData insertRow(RowType rowType, Object... fields) {
     LogicalType[] types = rowType.getFields().stream().map(RowType.RowField::getType)
         .toArray(LogicalType[]::new);
-    assertEquals(
-        "Filed count inconsistent with type information",
-        fields.length,
-        types.length);
+    assertEquals(fields.length, types.length, "Filed count inconsistent with type information");
     BinaryRowData row = new BinaryRowData(fields.length);
     BinaryRowWriter writer = new BinaryRowWriter(row);
     writer.reset();

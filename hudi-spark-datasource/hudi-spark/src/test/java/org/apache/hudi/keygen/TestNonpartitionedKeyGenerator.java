@@ -29,7 +29,7 @@ import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
-import static junit.framework.TestCase.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class TestNonpartitionedKeyGenerator extends KeyGeneratorTestUtilities {
 
@@ -77,8 +77,8 @@ public class TestNonpartitionedKeyGenerator extends KeyGeneratorTestUtilities {
     NonpartitionedKeyGenerator keyGenerator = new NonpartitionedKeyGenerator(properties);
     GenericRecord record = getRecord();
     Row row = KeyGeneratorTestUtilities.getRow(record);
-    Assertions.assertEquals(properties.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()), "timestamp,ts_ms");
-    Assertions.assertEquals(keyGenerator.getPartitionPath(row), "");
+    assertEquals(properties.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()), "timestamp,ts_ms");
+    assertEquals(keyGenerator.getPartitionPath(row), "");
   }
 
   @Test
@@ -87,7 +87,7 @@ public class TestNonpartitionedKeyGenerator extends KeyGeneratorTestUtilities {
     NonpartitionedKeyGenerator keyGenerator = new NonpartitionedKeyGenerator(properties);
     GenericRecord record = getRecord();
     Row row = KeyGeneratorTestUtilities.getRow(record);
-    Assertions.assertEquals(keyGenerator.getPartitionPath(row), "");
+    assertEquals(keyGenerator.getPartitionPath(row), "");
   }
 
   @Test

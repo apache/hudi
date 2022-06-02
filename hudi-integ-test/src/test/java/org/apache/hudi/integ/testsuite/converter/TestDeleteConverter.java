@@ -33,8 +33,8 @@ import java.util.Map;
 
 import scala.Tuple2;
 
-import static junit.framework.TestCase.assertTrue;
 import static org.apache.hudi.integ.testsuite.generator.GenericRecordFullPayloadGenerator.DEFAULT_HOODIE_IS_DELETED_COL;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Tests DeleteConverter.

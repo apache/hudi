@@ -18,8 +18,6 @@
 
 package org.apache.hudi.integ.testsuite.converter;
 
-import static junit.framework.TestCase.assertTrue;
-
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -34,6 +32,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import scala.Tuple2;
+
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Test Cases for {@link UpdateConverter} APIs.

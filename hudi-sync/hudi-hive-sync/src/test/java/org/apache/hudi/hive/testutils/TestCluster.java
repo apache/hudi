@@ -57,7 +57,6 @@ import org.junit.jupiter.api.extension.AfterEachCallback;
 import org.junit.jupiter.api.extension.BeforeAllCallback;
 import org.junit.jupiter.api.extension.BeforeEachCallback;
 import org.junit.jupiter.api.extension.ExtensionContext;
-import org.junit.runners.model.InitializationError;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -171,7 +170,7 @@ public class TestCluster implements BeforeAllCallback, AfterAllCallback,
         .initTable(conf, path.toString());
     boolean result = dfsCluster.getFileSystem().mkdirs(path);
     if (!result) {
-      throw new InitializationError("cannot initialize table");
+      throw new Exception("cannot initialize table");
     }
     ZonedDateTime dateTime = ZonedDateTime.now();
     HoodieCommitMetadata commitMetadata = createPartitions(numberOfPartitions, true, dateTime, commitTime, path.toString());
