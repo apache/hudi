@@ -19,7 +19,7 @@ package org.apache.spark.sql.hudi.analysis
 
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.{DefaultSource, SparkAdapterSupport}
-import org.apache.spark.sql.catalyst.TableIdentifier
+import org.apache.spark.sql.catalyst.{QualifiedTableName, TableIdentifier}
 import org.apache.spark.sql.catalyst.analysis.{ResolvedTable, UnresolvedPartitionSpec}
 import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute}
 import org.apache.spark.sql.catalyst.plans.logical._
@@ -46,16 +46,20 @@ case class HoodieSpark3Analysis(sparkSession: SparkSession) extends Rule[Logical
 
   override def apply(plan: LogicalPlan): LogicalPlan = plan.resolveOperatorsDown {
     // NOTE: This step is required since Hudi relations don't currently implement DS V2 Read API
-    case dsv2 @ DataSourceV2Relation(d: HoodieInternalV2Table, _, _, _, _) =>
-      val output = dsv2.output
-      val catalogTable = if (d.catalogTable.isDefined) {
-        Some(d.v1Table)
-      } else {
-        None
-      }
-      val relation = new DefaultSource().createRelation(new SQLContext(sparkSession),
-        buildHoodieConfig(d.hoodieCatalogTable), d.hoodieCatalogTable.tableSchema)
-      LogicalRelation(relation, output, catalogTable, isStreaming = false)
+    case dsv2 @ DataSourceV2Relation(tbl: HoodieInternalV2Table, _, _, _, _) =>
+      val qualifiedTableName = QualifiedTableName(tbl.v1Table.database, tbl.v1Table.identifier.table)
+      val catalog = sparkSession.sessionState.catalog
+
+      catalog.getCachedPlan(qualifiedTableName, () => {
+        val opts = buildHoodieConfig(tbl.hoodieCatalogTable)
+        val source = new DefaultSource()
+        val relation = source.createRelation(new SQLContext(sparkSession), opts, tbl.hoodieCatalogTable.tableSchema)
+
+        val output = dsv2.output
+        val catalogTable = tbl.catalogTable.map(_ => tbl.v1Table)
+
+        LogicalRelation(relation, output, catalogTable, isStreaming = false)
+      })
 
     case a @ InsertIntoStatement(r: DataSourceV2Relation, partitionSpec, _, _, _, _) if a.query.resolved &&
       r.table.isInstanceOf[HoodieInternalV2Table] &&
