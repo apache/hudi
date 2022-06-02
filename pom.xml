@@ -1082,13 +1082,6 @@
       </dependency>
 
       <dependency>
-        <groupId>org.junit.vintage</groupId>
-        <artifactId>junit-vintage-engine</artifactId>
-        <version>${junit.vintage.version}</version>
-        <scope>test</scope>
-      </dependency>
-
-      <dependency>
         <groupId>org.junit.jupiter</groupId>
         <artifactId>junit-jupiter-params</artifactId>
         <version>${junit.jupiter.version}</version>
@@ -1326,6 +1319,7 @@
             <artifactId>maven-surefire-plugin</artifactId>
             <version>${maven-surefire-plugin.version}</version>
             <configuration combine.self="append">
+              <skip>${skipFTs}</skip>
               <skipTests>${skipFTs}</skipTests>
               <forkCount>1</forkCount>
               <reuseForks>true</reuseForks>
