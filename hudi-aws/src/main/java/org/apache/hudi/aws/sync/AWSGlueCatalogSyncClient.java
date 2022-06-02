@@ -284,15 +284,10 @@ public class AWSGlueCatalogSyncClient extends AbstractHiveSyncHoodieClient {
       // now create the schema partition
       List<Column> schemaPartitionKeys =
           syncConfig.partitionFields.stream()
-              .map(
-                  partitionKey -> {
-                    String keyType = getPartitionKeyType(mapSchema, partitionKey);
-		    return new Column()
-                            .withName(partitionKey)
-                            .withType(keyType.toLowerCase())
-                            .withComment("");
-                  })
-              .collect(Collectors.toList());
+              .map( partitionKey -> {
+                   String keyType = getPartitionKeyType(mapSchema, partitionKey);
+                   return new Column().withName(partitionKey).withType(keyType.toLowerCase()).withComment("");
+                  }).collect(Collectors.toList());
 
       StorageDescriptor storageDescriptor = new StorageDescriptor();
       serdeProperties.put("serialization.format", "1");
