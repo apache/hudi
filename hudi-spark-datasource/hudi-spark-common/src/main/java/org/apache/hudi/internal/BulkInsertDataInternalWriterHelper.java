@@ -89,9 +89,7 @@ public class BulkInsertDataInternalWriterHelper {
     this.populateMetaFields = populateMetaFields;
     this.arePartitionRecordsSorted = arePartitionRecordsSorted;
     this.fileIdPrefix = UUID.randomUUID().toString();
-    this.isHiveStylePartitioning = writeConfig.getProps().containsKey(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING().key())
-        ? Boolean.parseBoolean((String) writeConfig.getProps().get(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING().key()))
-        : Boolean.parseBoolean(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING().defaultValue());
+    this.isHiveStylePartitioning = writeConfig.isHiveStylePartitioningEnabled();
     if (!populateMetaFields) {
       this.keyGeneratorOpt = getKeyGenerator(writeConfig.getProps());
       if (keyGeneratorOpt.isPresent() && keyGeneratorOpt.get() instanceof SimpleKeyGenerator) {
