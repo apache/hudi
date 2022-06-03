@@ -43,6 +43,6 @@ class Spark3DefaultSource extends DefaultSource with DataSourceRegister with Tab
 
     val v2Table = HoodieInternalV2Table(SparkSession.active, path)
     // TODO elaborate
-    V1Table(v2Table.v1Table)
+    v2Table.v1TableWrapper
   }
 }

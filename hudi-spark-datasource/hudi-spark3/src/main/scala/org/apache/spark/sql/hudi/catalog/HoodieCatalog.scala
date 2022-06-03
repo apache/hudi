@@ -113,7 +113,7 @@ class HoodieCatalog extends DelegatingCatalogExtension
           catalogTable = Some(catalogTable),
           tableIdentifier = Some(ident.toString))
         // TODO elaborate
-        V1Table(v2Table.v1Table)
+        v2Table.v1TableWrapper
 
       case t => t
     }
