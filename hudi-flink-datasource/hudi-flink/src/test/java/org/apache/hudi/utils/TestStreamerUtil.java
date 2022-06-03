@@ -18,11 +18,13 @@
 
 package org.apache.hudi.utils;
 
+import org.apache.flink.api.dag.Pipeline;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.sink.utils.Pipelines;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.util.ViewStorageProperties;
 
@@ -35,11 +37,7 @@ import java.io.IOException;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Test cases for {@link StreamerUtil}.
@@ -108,6 +106,13 @@ public class TestStreamerUtil {
     StreamerUtil.createWriteClient(conf);
     FileSystemViewStorageConfig storageConfig = ViewStorageProperties.loadFromProperties(conf.getString(FlinkOptions.PATH), new Configuration());
     assertThat(storageConfig.getStorageType(), is(FileSystemViewStorageType.REMOTE_FIRST));
+  }
+
+  @Test
+  void testGenerateWriteOpIdentifier(){
+    String operationN = "test_operation";
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    assertNotNull(Pipelines.writeOpIdentifier(operationN, conf));
   }
 }
 
