@@ -83,6 +83,15 @@ public class TableSchemaResolver {
   private final HoodieTableMetaClient metaClient;
 
   /**
+   * Signals whether suite of the meta-fields should have additional field designating
+   * operation particular record was added by. Note, that determining whether this meta-field
+   * should be appended to the schema requires reading out the actual schema of some data file,
+   * since it's ultimately the source of truth whether this field has to be represented in
+   * the schema
+   */
+  private final Lazy<Boolean> hasOperationField;
+
+  /**
    * NOTE: {@link HoodieCommitMetadata} could be of non-trivial size for large tables (in 100s of Mbs)
    *       and therefore we'd want to limit amount of throw-away work being performed while fetching
    *       commits' metadata
@@ -100,6 +109,7 @@ public class TableSchemaResolver {
   public TableSchemaResolver(HoodieTableMetaClient metaClient) {
     this.metaClient = metaClient;
     this.commitMetadataCache = Lazy.lazily(() -> new ConcurrentHashMap<>(2));
+    this.hasOperationField = Lazy.lazily(this::hasOperationField);
   }
 
   public Schema getTableAvroSchemaFromDataFile() {
@@ -167,7 +177,7 @@ public class TableSchemaResolver {
                 metaClient.getTableConfig().getTableCreateSchema()
                     .map(tableSchema ->
                         includeMetadataFields
-                            ? HoodieAvroUtils.addMetadataFields(tableSchema, hasOperationField(tableSchema))
+                            ? HoodieAvroUtils.addMetadataFields(tableSchema, hasOperationField.get())
                             : tableSchema)
             )
             .orElseGet(() -> {
@@ -194,7 +204,7 @@ public class TableSchemaResolver {
       String schemaStr = commitMetadata.getMetadata(HoodieCommitMetadata.SCHEMA_KEY);
       Schema schema = new Schema.Parser().parse(schemaStr);
       if (includeMetadataFields) {
-        schema = HoodieAvroUtils.addMetadataFields(schema, hasOperationField(schema));
+        schema = HoodieAvroUtils.addMetadataFields(schema, hasOperationField.get());
       }
       return Option.of(schema);
     } else {
@@ -213,7 +223,7 @@ public class TableSchemaResolver {
 
       Schema schema = new Schema.Parser().parse(existingSchemaStr);
       if (includeMetadataFields) {
-        schema = HoodieAvroUtils.addMetadataFields(schema, hasOperationField(schema));
+        schema = HoodieAvroUtils.addMetadataFields(schema, hasOperationField.get());
       }
       return Option.of(schema);
     } catch (Exception e) {
@@ -498,7 +508,7 @@ public class TableSchemaResolver {
   public boolean hasOperationField() {
     try {
       Schema tableAvroSchema = getTableAvroSchemaFromDataFile();
-      return hasOperationField(tableAvroSchema);
+      return tableAvroSchema.getField(HoodieRecord.OPERATION_METADATA_FIELD) != null;
     } catch (Exception e) {
       LOG.info(String.format("Failed to read operation field from avro schema (%s)", e.getMessage()));
       return false;
@@ -612,14 +622,5 @@ public class TableSchemaResolver {
     }
 
     return dataSchema;
-  }
-
-  private static boolean hasOperationField(Schema tableSchema) {
-    try {
-      return tableSchema.getField(HoodieRecord.OPERATION_METADATA_FIELD) != null;
-    } catch (Exception e) {
-      LOG.info(String.format("Failed to read operation field from avro schema (%s)", e.getMessage()));
-      return false;
-    }
   }
 }
