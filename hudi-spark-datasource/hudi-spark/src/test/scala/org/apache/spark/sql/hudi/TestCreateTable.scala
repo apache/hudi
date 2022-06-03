@@ -781,4 +781,35 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
     val tablePath = s"${dbPath}/${tableName}"
     assertResult(false)(existsPath(tablePath))
   }
+
+  test("Test Create Non-Hudi Table(Parquet Table)") {
+    val databaseName = "test_database"
+    spark.sql(s"create database if not exists $databaseName")
+    spark.sql(s"use $databaseName")
+
+    val tableName = generateTableName
+    // Create a managed table
+    spark.sql(
+      s"""
+         | create table $tableName (
+         |  id int,
+         |  name string,
+         |  price double,
+         |  ts long
+         | ) using parquet
+       """.stripMargin)
+    val table = spark.sessionState.catalog.getTableMetadata(TableIdentifier(tableName))
+    assertResult(tableName)(table.identifier.table)
+    assertResult("parquet")(table.provider.get)
+    assertResult(CatalogTableType.MANAGED)(table.tableType)
+    assertResult(
+      Seq(
+        StructField("id", IntegerType),
+        StructField("name", StringType),
+        StructField("price", DoubleType),
+        StructField("ts", LongType))
+    )(table.schema.fields)
+
+    spark.sql("use default")
+  }
 }
