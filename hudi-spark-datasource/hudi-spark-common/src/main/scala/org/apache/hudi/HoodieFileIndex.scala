@@ -18,6 +18,7 @@
 package org.apache.hudi
 
 import org.apache.hadoop.fs.{FileStatus, Path}
+import org.apache.hudi.ColumnStatsIndexSupport.{readColumnStatsIndex, transposeColumnStatsIndex}
 import org.apache.hudi.HoodieDatasetUtils.withPersistence
 import org.apache.hudi.HoodieFileIndex.{DataSkippingFailureMode, collectReferencedColumns, getConfigProperties}
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
@@ -80,8 +81,7 @@ case class HoodieFileIndex(spark: SparkSession,
     specifiedQueryInstant = options.get(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key).map(HoodieSqlCommonUtils.formatQueryInstant),
     fileStatusCache = fileStatusCache
   )
-    with FileIndex
-    with ColumnStatsIndexSupport {
+    with FileIndex {
 
   override def rootPaths: Seq[Path] = queryPaths.asScala
 

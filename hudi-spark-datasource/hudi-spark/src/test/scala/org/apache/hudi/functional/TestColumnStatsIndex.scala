@@ -20,7 +20,7 @@ package org.apache.hudi.functional
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{LocatedFileStatus, Path}
-import org.apache.hudi.ColumnStatsIndexSupport.composeIndexSchema
+import org.apache.hudi.ColumnStatsIndexSupport.{composeIndexSchema, readColumnStatsIndex, transposeColumnStatsIndex}
 import org.apache.hudi.DataSourceWriteOptions.{PRECOMBINE_FIELD, RECORDKEY_FIELD}
 import org.apache.hudi.HoodieConversionUtils.toProperties
 import org.apache.hudi.common.config.HoodieMetadataConfig
@@ -44,7 +44,7 @@ import scala.collection.JavaConverters._
 import scala.util.Random
 
 @Tag("functional")
-class TestColumnStatsIndex extends HoodieClientTestBase with ColumnStatsIndexSupport {
+class TestColumnStatsIndex extends HoodieClientTestBase {
   var spark: SparkSession = _
 
   val sourceTableSchema =
