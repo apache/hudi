@@ -149,7 +149,7 @@ public abstract class ITTestBase {
     LOG.info(String.format("Waiting for all the containers and services finishes in %d ms",
         System.currentTimeMillis() - currTs));
     try {
-      Thread.sleep(9000);
+      Thread.sleep(30000);
     } catch (InterruptedException e) {
       e.printStackTrace();
     }
