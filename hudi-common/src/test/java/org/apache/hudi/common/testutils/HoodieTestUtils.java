@@ -103,10 +103,17 @@ public class HoodieTestUtils {
   }
 
   public static HoodieTableMetaClient init(Configuration hadoopConf, String basePath, HoodieTableType tableType,
-                                           HoodieFileFormat baseFileFormat)
+                                           HoodieFileFormat baseFileFormat) throws IOException {
+    return init(hadoopConf, basePath, tableType, baseFileFormat, "org.apache.hudi.keygen.SimpleKeyGenerator", true);
+  }
+
+  public static HoodieTableMetaClient init(Configuration hadoopConf, String basePath, HoodieTableType tableType,
+                                           HoodieFileFormat baseFileFormat, String keyGenerator, boolean populateMetaFields)
       throws IOException {
     Properties properties = new Properties();
     properties.setProperty(HoodieTableConfig.BASE_FILE_FORMAT.key(), baseFileFormat.toString());
+    properties.setProperty("hoodie.datasource.write.keygenerator.class", keyGenerator);
+    properties.setProperty("hoodie.populate.meta.fields", Boolean.toString(populateMetaFields));
     return init(hadoopConf, basePath, tableType, properties);
   }
 

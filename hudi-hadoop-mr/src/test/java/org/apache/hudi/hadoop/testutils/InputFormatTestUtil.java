@@ -71,16 +71,35 @@ public class InputFormatTestUtil {
   private static String TEST_WRITE_TOKEN = "1-0-1";
 
   public static File prepareTable(java.nio.file.Path basePath, HoodieFileFormat baseFileFormat, int numberOfFiles,
-                                  String commitNumber)
+                                  String commitNumber) throws IOException {
+    return prepareCustomizedTable(basePath, baseFileFormat, numberOfFiles, commitNumber, false, true, false, null);
+  }
+
+  public static File prepareCustomizedTable(java.nio.file.Path basePath, HoodieFileFormat baseFileFormat, int numberOfFiles,
+                                  String commitNumber, boolean useNonPartitionedKeyGen, boolean populateMetaFields, boolean injectData, Schema schema)
       throws IOException {
-    HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString(), HoodieTableType.COPY_ON_WRITE,
-        baseFileFormat);
+    if (useNonPartitionedKeyGen) {
+      HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString(), HoodieTableType.COPY_ON_WRITE,
+          baseFileFormat, "org.apache.hudi.keygen.NonpartitionedKeyGenerator", populateMetaFields);
+    } else {
+      HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString(), HoodieTableType.COPY_ON_WRITE,
+          baseFileFormat);
+    }
 
     java.nio.file.Path partitionPath = basePath.resolve(Paths.get("2016", "05", "01"));
     setupPartition(basePath, partitionPath);
 
-    return simulateInserts(partitionPath.toFile(), baseFileFormat.getFileExtension(), "fileId1", numberOfFiles,
-        commitNumber);
+    if (injectData) {
+      try {
+        createSimpleData(schema, partitionPath, numberOfFiles, 100, commitNumber);
+        return partitionPath.toFile();
+      } catch (Exception e) {
+        throw new IOException("Excpetion thrown while writing data ", e);
+      }
+    } else {
+      return simulateInserts(partitionPath.toFile(), baseFileFormat.getFileExtension(), "fileId1", numberOfFiles,
+          commitNumber);
+    }
   }
 
   public static File prepareMultiPartitionTable(java.nio.file.Path basePath, HoodieFileFormat baseFileFormat, int numberOfFiles,

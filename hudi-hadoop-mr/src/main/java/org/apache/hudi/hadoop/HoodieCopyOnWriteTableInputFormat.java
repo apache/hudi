@@ -43,6 +43,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.realtime.HoodieVirtualKeyInfo;
@@ -279,12 +280,13 @@ public class HoodieCopyOnWriteTableInputFormat extends HoodieTableInputFormat {
     TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
     try {
       Schema schema = tableSchemaResolver.getTableAvroSchema();
+      boolean isNonPartitionedKeyGen = StringUtils.isNullOrEmpty(tableConfig.getPartitionFieldProp());
       return Option.of(
           new HoodieVirtualKeyInfo(
               tableConfig.getRecordKeyFieldProp(),
-              tableConfig.getPartitionFieldProp(),
+              isNonPartitionedKeyGen ? Option.empty() : Option.of(tableConfig.getPartitionFieldProp()),
               schema.getField(tableConfig.getRecordKeyFieldProp()).pos(),
-              schema.getField(tableConfig.getPartitionFieldProp()).pos()));
+              isNonPartitionedKeyGen ? Option.empty() : Option.of(schema.getField(tableConfig.getPartitionFieldProp()).pos())));
     } catch (Exception exception) {
       throw new HoodieException("Fetching table schema failed with exception ", exception);
     }
