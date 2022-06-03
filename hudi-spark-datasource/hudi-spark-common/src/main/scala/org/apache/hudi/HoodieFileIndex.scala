@@ -95,8 +95,9 @@ case class HoodieFileIndex(spark: SparkSession,
    */
   def allFiles: Seq[FileStatus] = {
     cachedAllInputFileSlices.values.asScala.flatMap(_.asScala)
-      .filter(_.getBaseFile.isPresent)
-      .map(_.getBaseFile.get().getFileStatus)
+      .map(fs => fs.getBaseFile.orElse(null))
+      .filter(_ != null)
+      .map(_.getFileStatus)
       .toSeq
   }
 
