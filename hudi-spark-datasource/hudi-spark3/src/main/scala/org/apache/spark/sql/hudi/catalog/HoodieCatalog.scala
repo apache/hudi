@@ -118,9 +118,13 @@ class HoodieCatalog extends DelegatingCatalogExtension
                            schema: StructType,
                            partitions: Array[Transform],
                            properties: util.Map[String, String]): Table = {
-    val locUriAndTableType = deduceTableLocationURIAndTableType(ident, properties)
-    createHoodieTable(ident, schema, locUriAndTableType, partitions, properties,
-      Map.empty, Option.empty, TableCreationMode.CREATE)
+    if (sparkAdapter.isHoodieTable(properties)) {
+      val locUriAndTableType = deduceTableLocationURIAndTableType(ident, properties)
+      createHoodieTable(ident, schema, locUriAndTableType, partitions, properties,
+        Map.empty, Option.empty, TableCreationMode.CREATE)
+    } else {
+      super.createTable(ident, schema, partitions, properties)
+    }
   }
 
   override def tableExists(ident: Identifier): Boolean = super.tableExists(ident)
