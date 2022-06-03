@@ -381,8 +381,8 @@ public class Pipelines {
 
   public static DataStreamSink<Object> clean(Configuration conf, DataStream<Object> dataStream) {
     return dataStream.addSink(new CleanFunction<>(conf))
-        .setParallelism(1)
-        .name("clean_commits");
+            .setParallelism(1)
+            .name("clean_commits");
   }
 
   public static String writeOpIdentifier(String operatorN, Configuration conf) {
