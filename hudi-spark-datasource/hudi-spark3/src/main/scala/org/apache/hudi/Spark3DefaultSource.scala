@@ -19,7 +19,7 @@ package org.apache.hudi
 
 import org.apache.hudi.exception.HoodieException
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.connector.catalog.{Table, TableProvider}
+import org.apache.spark.sql.connector.catalog.{Table, TableProvider, V1Table}
 import org.apache.spark.sql.connector.expressions.Transform
 import org.apache.spark.sql.hudi.catalog.HoodieInternalV2Table
 import org.apache.spark.sql.sources.DataSourceRegister
@@ -41,6 +41,8 @@ class Spark3DefaultSource extends DefaultSource with DataSourceRegister with Tab
     val path = options.get("path")
     if (path == null) throw new HoodieException("'path' cannot be null, missing 'path' from table properties")
 
-    HoodieInternalV2Table(SparkSession.active, path)
+    val v2Table = HoodieInternalV2Table(SparkSession.active, path)
+    // TODO elaborate
+    V1Table(v2Table.v1Table)
   }
 }

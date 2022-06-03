@@ -33,6 +33,7 @@ import org.apache.spark.sql.connector.catalog.TableChange.{AddColumn, ColumnChan
 import org.apache.spark.sql.connector.catalog._
 import org.apache.spark.sql.connector.expressions.Transform
 import org.apache.spark.sql.execution.datasources.DataSource
+import org.apache.spark.sql.hudi.analysis.HoodieV1Table
 import org.apache.spark.sql.hudi.command._
 import org.apache.spark.sql.hudi.{HoodieSqlCommonUtils, ProvidesHoodieConfig}
 import org.apache.spark.sql.types.{StructField, StructType}
@@ -105,12 +106,16 @@ class HoodieCatalog extends DelegatingCatalogExtension
           case _ =>
             catalogTable0
         }
-        HoodieInternalV2Table(
+
+        val v2Table = HoodieInternalV2Table(
           spark = spark,
           path = catalogTable.location.toString,
           catalogTable = Some(catalogTable),
           tableIdentifier = Some(ident.toString))
-      case o => o
+        // TODO elaborate
+        V1Table(v2Table.v1Table)
+
+      case t => t
     }
   }
 
