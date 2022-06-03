@@ -113,7 +113,7 @@ case class HoodieFileIndex(spark: SparkSession,
     //    - Col-Stats Index is present
     //    - List of predicates (filters) is present
     val candidateFilesNamesOpt: Option[Set[String]] =
-      lookupCandidateFilesInMetadataTable(dataFilters) match {
+      lookupCandidateFilesInMetadataTable(partitionFilters ++ dataFilters) match {
         case Success(opt) => opt
         case Failure(e) =>
           logError("Failed to lookup candidate files in File Index", e)
