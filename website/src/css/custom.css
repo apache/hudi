@@ -176,6 +176,7 @@ footer .container {
 
 .blog-wrapper .container {
   max-width: 100%;
+  
 }
 
 .who-uses {
@@ -208,16 +209,21 @@ footer .container {
   width: 100%;
 }
 
+
+
 .blog-list-page article {
   display: inline-flex;
-  width: 28%;
+  width: 45%;
   margin: 1.2em;
-  vertical-align: bottom;
+  vertical-align: text-top;
+  
+  
+  
 }
-@media(max-width:1145px){
+@media(max-width:1391px){
   .blog-list-page article {
     display: inline-flex;
-    width: 40%;
+    width: 80%;
     margin: 1.2em;
     vertical-align: bottom;
   }
@@ -237,16 +243,16 @@ footer .container {
 }
 
 .blogPostTitle_src-theme-BlogPostItem-styles-module{
-  height: 60px;
+  display:inline;
   overflow: hidden;
+ 
+  
 }
 
 h1.blogPostTitle_src-theme-BlogPostItem-styles-module{
   height:10%;
   overflow:hidden;
 }
-
-
 
 
 
