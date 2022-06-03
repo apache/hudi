@@ -50,7 +50,7 @@ case class HoodieSpark3Analysis(sparkSession: SparkSession) extends Rule[Logical
       val qualifiedTableName = QualifiedTableName(tbl.v1Table.database, tbl.v1Table.identifier.table)
       val catalog = sparkSession.sessionState.catalog
 
-      catalog.getCachedPlan(qualifiedTableName, () => {
+      val plan1: LogicalRelation = catalog.getCachedPlan(qualifiedTableName, () => {
         val opts = buildHoodieConfig(tbl.hoodieCatalogTable)
         val source = new DefaultSource()
         val relation = source.createRelation(new SQLContext(sparkSession), opts, tbl.hoodieCatalogTable.tableSchema)
@@ -59,7 +59,9 @@ case class HoodieSpark3Analysis(sparkSession: SparkSession) extends Rule[Logical
         val catalogTable = tbl.catalogTable.map(_ => tbl.v1Table)
 
         LogicalRelation(relation, output, catalogTable, isStreaming = false)
-      })
+      }).asInstanceOf[LogicalRelation]
+
+      plan1.copy(output = dsv2.output)
 
     case a @ InsertIntoStatement(r: DataSourceV2Relation, partitionSpec, _, _, _, _) if a.query.resolved &&
       r.table.isInstanceOf[HoodieInternalV2Table] &&
