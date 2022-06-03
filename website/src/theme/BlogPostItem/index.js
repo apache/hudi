@@ -68,7 +68,7 @@
     return (
         <>
           <ul className={clsx(styles.tags, styles.authorTimeTags, 'padding--none', 'margin-left--sm')}>
-          <h4>Tags:</h4>
+         
             {tags.map(({label, permalink: tagPermalink}) => (
               <li key={tagPermalink} className={styles.tag}>
                 <Tag className={clsx(styles.greyLink)} name={label} permalink={tagPermalink} />
@@ -155,12 +155,12 @@ const AuthorsList = () => {
        {AuthorsList()}
          <div className={clsx(styles.blogPostData, 'margin-vert--md')}>
            
- 
+ {isBlogPostPage && <>
            {typeof readingTime !== 'undefined' && (
              <>
                {readingTimePlural(readingTime)}
              </>
-           )}
+           )}</>}
          </div>
 
          

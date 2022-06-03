@@ -205,15 +205,18 @@ footer .container {
 }
 
 .blogThumbnail img {
-  height: auto;
-  width: 100%;
+  height:100%;
+  width: auto;
 }
-
+.tagRegular_node_modules-\@docusaurus-theme-classic-lib-next-theme-Tag-styles-module{
+  color:black
+}
 
 
 .blog-list-page article {
   display: inline-flex;
   width: 45%;
+ 
   margin: 1.2em;
   vertical-align: text-top;
   
