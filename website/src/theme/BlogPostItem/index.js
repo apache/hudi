@@ -59,7 +59,7 @@
      editUrl,
      authors,
    } = metadata;
-   const image = assets.image ?? frontMatter.image ?? '/assets/images/logo-big.png';
+   const image = assets.image ?? frontMatter.image ?? '/assets/images/hudi.png';
    const truncatedPost = !isBlogPostPage && truncated;
    const tagsExists = tags.length > 0;
  

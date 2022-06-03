@@ -3,6 +3,7 @@ title: "Efficient Migration of Large Parquet Tables to Apache Hudi"
 excerpt: "Migrating a large parquet table to Apache Hudi without having to rewrite the entire dataset."
 author: vbalaji
 category: blog
+image: /assets/images/blog/2020-08-20-skeleton.png
 ---
 
 We will look at how to migrate a large parquet table to Hudi without having to rewrite the entire dataset. 

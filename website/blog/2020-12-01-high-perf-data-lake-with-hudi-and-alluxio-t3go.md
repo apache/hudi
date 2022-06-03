@@ -3,6 +3,7 @@ title: "Building High-Performance Data Lake Using Apache Hudi and Alluxio at T3G
 excerpt: "How T3Go’s high-performance data lake using Apache Hudi and Alluxio shortened the time for data ingestion into the lake by up to a factor of 2. Data analysts using Presto, Hudi, and Alluxio in conjunction to query data on the lake saw queries speed up by 10 times faster."
 author: t3go
 category: blog
+image: /assets/images/blog/2020-12-01-t3go-architecture.png
 ---
 
 ## Building High-Performance Data Lake Using Apache Hudi and Alluxio at T3Go

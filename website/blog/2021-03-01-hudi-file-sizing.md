@@ -3,6 +3,7 @@ title: "Streaming Responsibly - How Apache Hudi maintains optimum sized files"
 excerpt: "Maintaining well-sized files can improve query performance significantly"
 author: shivnarayan
 category: blog
+image: /assets/images/blog/2021-03-01-hudi-file-sizing.png
 ---
 
 Apache Hudi is a data lake platform technology that provides several functionalities needed to build and manage data lakes. 
