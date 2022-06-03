@@ -276,7 +276,6 @@ public class HoodieCopyOnWriteTableInputFormat extends HoodieTableInputFormat {
     if (tableConfig.populateMetaFields()) {
       return Option.empty();
     }
-
     TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
     try {
       Schema schema = tableSchemaResolver.getTableAvroSchema();
