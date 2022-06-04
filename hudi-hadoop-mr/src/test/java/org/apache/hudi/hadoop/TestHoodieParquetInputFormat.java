@@ -726,7 +726,7 @@ public class TestHoodieParquetInputFormat {
     HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString(),
             HoodieTableType.COPY_ON_WRITE, HoodieFileFormat.PARQUET);
     java.nio.file.Path partitionPath = basePath.resolve(Paths.get("2016", "06", "28"));
-    String fileId = FSUtils.makeDataFileName(commit, "1-0-1", "fileid1",
+    String fileId = FSUtils.makeBaseFileName(commit, "1-0-1", "fileid1",
             HoodieFileFormat.PARQUET.getFileExtension());
     try (AvroParquetWriter parquetWriter = new AvroParquetWriter(
             new Path(partitionPath.resolve(fileId).toString()), schema)) {
