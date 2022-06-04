@@ -45,6 +45,8 @@ import scala.collection.JavaConverters.mapAsJavaMapConverter
  * Since Hudi relations don't currently implement DS V2 Read API, we have to fallback to V1 here.
  * Such fallback will have considerable performance impact, therefore it's only performed in cases
  * where V2 API have to be used. Currently only such use-case is using of Schema Evolution feature
+ *
+ * Check out HUDI-4178 for more details
  */
 class HoodieDataSourceV2ToV1Fallback(sparkSession: SparkSession) extends Rule[LogicalPlan]
   with ProvidesHoodieConfig {
@@ -129,7 +131,6 @@ class HoodieSpark3Analysis(sparkSession: SparkSession) extends Rule[LogicalPlan]
 
 /**
  * Rule for resolve hoodie's extended syntax or rewrite some logical plan.
- * @param sparkSession
  */
 case class HoodieSpark3ResolveReferences(sparkSession: SparkSession) extends Rule[LogicalPlan]
   with SparkAdapterSupport with ProvidesHoodieConfig {
