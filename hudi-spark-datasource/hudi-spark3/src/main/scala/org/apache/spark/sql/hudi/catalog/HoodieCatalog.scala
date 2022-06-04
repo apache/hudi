@@ -33,7 +33,7 @@ import org.apache.spark.sql.connector.catalog.TableChange.{AddColumn, ColumnChan
 import org.apache.spark.sql.connector.catalog._
 import org.apache.spark.sql.connector.expressions.Transform
 import org.apache.spark.sql.execution.datasources.DataSource
-import org.apache.spark.sql.hudi.analysis.HoodieV1Table
+import org.apache.spark.sql.hudi.analysis.HoodieV1OrV2Table
 import org.apache.spark.sql.hudi.command._
 import org.apache.spark.sql.hudi.{HoodieSqlCommonUtils, ProvidesHoodieConfig}
 import org.apache.spark.sql.types.{StructField, StructType}
@@ -144,7 +144,7 @@ class HoodieCatalog extends DelegatingCatalogExtension
   override def dropTable(ident: Identifier): Boolean = {
     val table = loadTable(ident)
     table match {
-      case HoodieV1Table(_) =>
+      case HoodieV1OrV2Table(_) =>
         DropHoodieTableCommand(ident.asTableIdentifier, ifExists = true, isView = false, purge = false).run(spark)
         true
       case _ => super.dropTable(ident)
@@ -154,7 +154,7 @@ class HoodieCatalog extends DelegatingCatalogExtension
   override def purgeTable(ident: Identifier): Boolean = {
     val table = loadTable(ident)
     table match {
-      case HoodieV1Table(_) =>
+      case HoodieV1OrV2Table(_) =>
         DropHoodieTableCommand(ident.asTableIdentifier, ifExists = true, isView = false, purge = true).run(spark)
         true
       case _ => super.purgeTable(ident)
@@ -165,7 +165,7 @@ class HoodieCatalog extends DelegatingCatalogExtension
   @throws[TableAlreadyExistsException]
   override def renameTable(oldIdent: Identifier, newIdent: Identifier): Unit = {
     loadTable(oldIdent) match {
-      case HoodieV1Table(_) =>
+      case HoodieV1OrV2Table(_) =>
         AlterHoodieTableRenameCommand(oldIdent.asTableIdentifier, newIdent.asTableIdentifier, false).run(spark)
       case _ => super.renameTable(oldIdent, newIdent)
     }
@@ -173,7 +173,7 @@ class HoodieCatalog extends DelegatingCatalogExtension
 
   override def alterTable(ident: Identifier, changes: TableChange*): Table = {
     loadTable(ident) match {
-      case HoodieV1Table(table) => {
+      case HoodieV1OrV2Table(table) => {
         val tableIdent = TableIdentifier(ident.name(), ident.namespace().lastOption)
         changes.groupBy(c => c.getClass).foreach {
           case (t, newColumns) if t == classOf[AddColumn] =>
