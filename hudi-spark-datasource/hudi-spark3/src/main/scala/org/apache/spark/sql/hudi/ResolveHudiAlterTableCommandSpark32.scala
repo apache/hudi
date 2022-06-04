@@ -21,10 +21,9 @@ import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.internal.schema.action.TableChange.ColumnChangeID
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.analysis.ResolvedTable
-import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.rules.Rule
-import org.apache.spark.sql.hudi.analysis.HoodieV1Table
+import org.apache.spark.sql.hudi.catalog.HoodieInternalV2Table
 import org.apache.spark.sql.hudi.command.{AlterTableCommand => HudiAlterTableCommand}
 
 /**
@@ -33,30 +32,36 @@ import org.apache.spark.sql.hudi.command.{AlterTableCommand => HudiAlterTableCom
   */
 class ResolveHudiAlterTableCommandSpark32(sparkSession: SparkSession) extends Rule[LogicalPlan] {
 
-  def apply(plan: LogicalPlan): LogicalPlan = plan.resolveOperatorsUp {
-    case set @ SetTableProperties(ResolvedHoodieV1TablePlan(table), _) if schemaEvolutionEnabled && set.resolved =>
-      HudiAlterTableCommand(table, set.changes, ColumnChangeID.PROPERTY_CHANGE)
-    case unSet @ UnsetTableProperties(ResolvedHoodieV1TablePlan(table), _, _) if schemaEvolutionEnabled && unSet.resolved =>
-      HudiAlterTableCommand(table, unSet.changes, ColumnChangeID.PROPERTY_CHANGE)
-    case drop @ DropColumns(ResolvedHoodieV1TablePlan(table), _) if schemaEvolutionEnabled && drop.resolved =>
-      HudiAlterTableCommand(table, drop.changes, ColumnChangeID.DELETE)
-    case add @ AddColumns(ResolvedHoodieV1TablePlan(table), _) if schemaEvolutionEnabled  && add.resolved =>
-      HudiAlterTableCommand(table, add.changes, ColumnChangeID.ADD)
-    case renameColumn @ RenameColumn(ResolvedHoodieV1TablePlan(table), _, _) if schemaEvolutionEnabled && renameColumn.resolved=>
-      HudiAlterTableCommand(table, renameColumn.changes, ColumnChangeID.UPDATE)
-    case alter @ AlterColumn(ResolvedHoodieV1TablePlan(table), _, _, _, _, _) if schemaEvolutionEnabled && alter.resolved =>
-      HudiAlterTableCommand(table, alter.changes, ColumnChangeID.UPDATE)
-    case replace @ ReplaceColumns(ResolvedHoodieV1TablePlan(table), _) if schemaEvolutionEnabled && replace.resolved =>
-      HudiAlterTableCommand(table, replace.changes, ColumnChangeID.REPLACE)
+  def apply(plan: LogicalPlan): LogicalPlan = {
+    if (schemaEvolutionEnabled) {
+      plan.resolveOperatorsUp {
+        case set@SetTableProperties(ResolvedHoodieV2TablePlan(t), _) if set.resolved =>
+          HudiAlterTableCommand(t.v1Table, set.changes, ColumnChangeID.PROPERTY_CHANGE)
+        case unSet@UnsetTableProperties(ResolvedHoodieV2TablePlan(t), _, _) if unSet.resolved =>
+          HudiAlterTableCommand(t.v1Table, unSet.changes, ColumnChangeID.PROPERTY_CHANGE)
+        case drop@DropColumns(ResolvedHoodieV2TablePlan(t), _) if drop.resolved =>
+          HudiAlterTableCommand(t.v1Table, drop.changes, ColumnChangeID.DELETE)
+        case add@AddColumns(ResolvedHoodieV2TablePlan(t), _) if add.resolved =>
+          HudiAlterTableCommand(t.v1Table, add.changes, ColumnChangeID.ADD)
+        case renameColumn@RenameColumn(ResolvedHoodieV2TablePlan(t), _, _) if renameColumn.resolved =>
+          HudiAlterTableCommand(t.v1Table, renameColumn.changes, ColumnChangeID.UPDATE)
+        case alter@AlterColumn(ResolvedHoodieV2TablePlan(t), _, _, _, _, _) if alter.resolved =>
+          HudiAlterTableCommand(t.v1Table, alter.changes, ColumnChangeID.UPDATE)
+        case replace@ReplaceColumns(ResolvedHoodieV2TablePlan(t), _) if replace.resolved =>
+          HudiAlterTableCommand(t.v1Table, replace.changes, ColumnChangeID.REPLACE)
+      }
+    } else {
+      plan
+    }
   }
 
-  private def schemaEvolutionEnabled(): Boolean = sparkSession
+  private def schemaEvolutionEnabled: Boolean = sparkSession
     .sessionState.conf.getConfString(HoodieWriteConfig.SCHEMA_EVOLUTION_ENABLE.key(), "false").toBoolean
 
-  object ResolvedHoodieV1TablePlan {
-    def unapply(a: LogicalPlan): Option[CatalogTable] = {
-      a match {
-        case ResolvedTable(_, _, HoodieV1Table(table), _) => Some(table)
+  object ResolvedHoodieV2TablePlan {
+    def unapply(plan: LogicalPlan): Option[HoodieInternalV2Table] = {
+      plan match {
+        case ResolvedTable(_, _, v2Table: HoodieInternalV2Table, _) => Some(v2Table)
         case _ => None
       }
     }
