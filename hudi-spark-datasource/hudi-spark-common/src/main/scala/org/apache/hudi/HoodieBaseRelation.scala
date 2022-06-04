@@ -171,7 +171,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
   protected val shouldExtractPartitionValuesFromPartitionPath: Boolean = {
     // Controls whether partition columns (which are the source for the partition path values) should
     // be omitted from persistence in the data files. On the read path it affects whether partition values (values
-    // of partition columns) will be read from the data file ot extracted from partition path
+    // of partition columns) will be read from the data file or extracted from partition path
     val shouldOmitPartitionColumns = metaClient.getTableConfig.shouldDropPartitionColumns && partitionColumns.nonEmpty
     val shouldExtractPartitionValueFromPath =
       optParams.getOrElse(DataSourceReadOptions.EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH.key,
@@ -419,7 +419,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
       }
     } catch {
       case NonFatal(e) =>
-        logWarning(s"Failed to get the right partition InternalRow for file : ${file.toString}")
+        logWarning(s"Failed to get the right partition InternalRow for file: ${file.toString}", e)
         InternalRow.empty
     }
   }

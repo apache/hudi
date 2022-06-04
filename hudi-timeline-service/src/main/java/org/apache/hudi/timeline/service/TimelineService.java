@@ -150,7 +150,7 @@ public class TimelineService {
       private int markerBatchNumThreads = 20;
       private long markerBatchIntervalMs = 50L;
       private int markerParallelism = 100;
-      private boolean refreshTimelineBasedOnLatestCommit = false;
+      private boolean refreshTimelineBasedOnLatestCommit = true;
 
       public Builder() {
       }
@@ -240,6 +240,7 @@ public class TimelineService {
         config.markerBatchNumThreads = this.markerBatchNumThreads;
         config.markerBatchIntervalMs = this.markerBatchIntervalMs;
         config.markerParallelism = this.markerParallelism;
+        config.refreshTimelineBasedOnLatestCommit = this.refreshTimelineBasedOnLatestCommit;
         return config;
       }
     }
