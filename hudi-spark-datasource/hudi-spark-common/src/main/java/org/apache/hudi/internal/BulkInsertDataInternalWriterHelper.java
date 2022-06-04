@@ -74,7 +74,6 @@ public class BulkInsertDataInternalWriterHelper {
   private boolean simpleKeyGen = false;
   private int simplePartitionFieldIndex = -1;
   private DataType simplePartitionFieldDataType;
-  private boolean isHiveStylePartitioning;
 
   public BulkInsertDataInternalWriterHelper(HoodieTable hoodieTable, HoodieWriteConfig writeConfig,
                                             String instantTime, int taskPartitionId, long taskId, long taskEpochId, StructType structType,
@@ -89,7 +88,6 @@ public class BulkInsertDataInternalWriterHelper {
     this.populateMetaFields = populateMetaFields;
     this.arePartitionRecordsSorted = arePartitionRecordsSorted;
     this.fileIdPrefix = UUID.randomUUID().toString();
-    this.isHiveStylePartitioning = writeConfig.isHiveStylePartitioningEnabled();
     if (!populateMetaFields) {
       this.keyGeneratorOpt = getKeyGenerator(writeConfig.getProps());
       if (keyGeneratorOpt.isPresent() && keyGeneratorOpt.get() instanceof SimpleKeyGenerator) {
@@ -133,7 +131,7 @@ public class BulkInsertDataInternalWriterHelper {
         } else if (simpleKeyGen) { // SimpleKeyGen
           Object parititionPathValue = record.get(simplePartitionFieldIndex, simplePartitionFieldDataType);
           partitionPath = parititionPathValue != null ? parititionPathValue.toString() : PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH;
-          if (isHiveStylePartitioning) {
+          if (writeConfig.isHiveStylePartitioningEnabled()) {
             partitionPath = (keyGeneratorOpt.get()).getPartitionPathFields().get(0) + "=" + partitionPath;
           }
         } else {
