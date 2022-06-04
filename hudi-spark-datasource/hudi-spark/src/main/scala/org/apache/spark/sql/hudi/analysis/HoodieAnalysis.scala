@@ -54,15 +54,19 @@ object HoodieAnalysis {
 
   def extraResolutionRules(): Seq[SparkSession => Rule[LogicalPlan]] = {
     if (HoodieSparkUtils.gteqSpark3_2) {
+      val dataSourceV2ToV1FallbackClass = "org.apache.spark.sql.hudi.analysis.HoodieDataSourceV2ToV1Fallback"
+      val dataSourceV2ToV1Fallback: SparkSession => Rule[LogicalPlan] =
+        session => ReflectionUtils.loadClass(dataSourceV2ToV1FallbackClass, session).asInstanceOf[Rule[LogicalPlan]]
+
       val spark3AnalysisClass = "org.apache.spark.sql.hudi.analysis.HoodieSpark3Analysis"
       val spark3Analysis: SparkSession => Rule[LogicalPlan] =
         session => ReflectionUtils.loadClass(spark3AnalysisClass, session).asInstanceOf[Rule[LogicalPlan]]
 
-      val spark3ResolveReferences = "org.apache.spark.sql.hudi.analysis.HoodieSpark3ResolveReferences"
-      val spark3References: SparkSession => Rule[LogicalPlan] =
-        session => ReflectionUtils.loadClass(spark3ResolveReferences, session).asInstanceOf[Rule[LogicalPlan]]
+      val spark3ResolveReferencesClass = "org.apache.spark.sql.hudi.analysis.HoodieSpark3ResolveReferences"
+      val spark3ResolveReferences: SparkSession => Rule[LogicalPlan] =
+        session => ReflectionUtils.loadClass(spark3ResolveReferencesClass, session).asInstanceOf[Rule[LogicalPlan]]
 
-      Seq(spark3Analysis, spark3References)
+      Seq(dataSourceV2ToV1Fallback, spark3Analysis, spark3ResolveReferences)
     } else {
       Seq.empty
     }
