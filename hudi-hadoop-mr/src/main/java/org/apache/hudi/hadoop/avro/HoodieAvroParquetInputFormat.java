@@ -28,13 +28,13 @@ import org.apache.parquet.hadoop.util.ContextUtil;
 
 import java.io.IOException;
 
-public class HudiAvroParquetInputFormat extends ParquetInputFormat<ArrayWritable> {
+public class HoodieAvroParquetInputFormat extends ParquetInputFormat<ArrayWritable> {
 
   @Override
   public RecordReader<Void, ArrayWritable> createRecordReader(
           InputSplit inputSplit,
           TaskAttemptContext taskAttemptContext) throws IOException, InterruptedException {
     Configuration conf = ContextUtil.getConfiguration(taskAttemptContext);
-    return new HudiAvroParquetReader(inputSplit, conf);
+    return new HoodieAvroParquetReader(inputSplit, conf);
   }
 }

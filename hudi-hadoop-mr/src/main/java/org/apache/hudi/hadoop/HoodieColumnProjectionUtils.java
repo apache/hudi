@@ -122,9 +122,6 @@ public class HoodieColumnProjectionUtils {
       return getIOColumnTypes(conf).contains("timestamp");
     }
     List<String> names = getIOColumns(conf);
-    if (names.isEmpty()) {
-      return true;
-    }
     List<String> types = getIOColumnTypes(conf);
     return types.isEmpty() || IntStream.range(0, names.size()).filter(i -> reads.contains(names.get(i)))
             .anyMatch(i -> types.get(i).equals("timestamp"));

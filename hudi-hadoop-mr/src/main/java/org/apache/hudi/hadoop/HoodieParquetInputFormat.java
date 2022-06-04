@@ -31,7 +31,7 @@ import org.apache.hadoop.mapred.Reporter;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.hadoop.avro.HudiAvroParquetInputFormat;
+import org.apache.hudi.hadoop.avro.HoodieAvroParquetInputFormat;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -121,7 +121,7 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
                                                                             Reporter reporter) throws IOException {
     try {
       if (supportAvroRead && HoodieColumnProjectionUtils.supportTimestamp(job)) {
-        return new ParquetRecordReaderWrapper(new HudiAvroParquetInputFormat(), split, job, reporter);
+        return new ParquetRecordReaderWrapper(new HoodieAvroParquetInputFormat(), split, job, reporter);
       } else {
         return super.getRecordReader(split, job, reporter);
       }

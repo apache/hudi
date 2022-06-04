@@ -340,8 +340,9 @@ public class FlinkStreamerConfig extends Configuration {
   public Boolean hiveSyncSkipRoSuffix = false;
 
   @Parameter(names = {"--hive-sync-support-timestamp"}, description = "INT64 with original type TIMESTAMP_MICROS is converted to hive timestamp type.\n"
-      + "Disabled by default for backward compatibility.")
-  public Boolean hiveSyncSupportTimestamp = true;
+      + "From 0.12.0, 'timestamp' type will be supported and also can be disabled by this variable. "
+      + "Previous versions keep being disabled by default.")
+  public Boolean hiveSyncSupportTimestamp = false;
 
 
   /**

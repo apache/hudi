@@ -76,10 +76,6 @@ public final class Option<T> implements Serializable {
     return new Option<>(value);
   }
 
-  public static <T> Option<T> ofNullable(Supplier<? extends T> value) {
-    return null == value ? empty() : ofNullable(value.get());
-  }
-
   public static <T> Option<T> ofNullable(T value) {
     return null == value ? empty() : of(value);
   }

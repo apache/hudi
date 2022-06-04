@@ -41,6 +41,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -169,7 +170,7 @@ public class HoodieHiveUtils {
 
   static {
     // timestamp
-    Option<ImmutableTriple<Class, Method, Constructor>> timestampTriple = Option.ofNullable(() -> {
+    Supplier<ImmutableTriple<Class, Method, Constructor>> timestampSupplier = () -> {
       try {
         Class timestampClass = Class.forName(HIVE_TIMESTAMP_TYPE_CLASS);
         Method setTimeInMillis = timestampClass.getDeclaredMethod("setTimeInMillis", long.class);
@@ -179,7 +180,8 @@ public class HoodieHiveUtils {
         LOG.trace("can not find hive3 timestampv2 class or method, use hive2 class!", e);
         return null;
       }
-    });
+    };
+    Option<ImmutableTriple<Class, Method, Constructor>> timestampTriple = Option.ofNullable(timestampSupplier.get());
     SUPPORT_TIMESTAMP_WRITEABLE_V2 = timestampTriple.isPresent();
     if (SUPPORT_TIMESTAMP_WRITEABLE_V2) {
       LOG.trace("use org.apache.hadoop.hive.serde2.io.TimestampWritableV2 to read hudi timestamp columns");
@@ -195,7 +197,7 @@ public class HoodieHiveUtils {
     }
 
     // date
-    Option<Constructor> dateConstructor = Option.ofNullable(() -> {
+    Supplier<Constructor> dateSupplier = () -> {
       try {
         Class dateV2Class = Class.forName(DATE_WRITEABLE_V2_CLASS);
         return dateV2Class.getConstructor(int.class);
@@ -203,7 +205,8 @@ public class HoodieHiveUtils {
         LOG.trace("can not find hive3 datev2 class or method, use hive2 class!", e);
         return null;
       }
-    });
+    };
+    Option<Constructor> dateConstructor = Option.ofNullable(dateSupplier.get());
     SUPPORT_DATE_WRITEABLE_V2 = dateConstructor.isPresent();
     if (SUPPORT_DATE_WRITEABLE_V2) {
       LOG.trace("use org.apache.hadoop.hive.serde2.io.DateWritableV2 to read hudi date columns");

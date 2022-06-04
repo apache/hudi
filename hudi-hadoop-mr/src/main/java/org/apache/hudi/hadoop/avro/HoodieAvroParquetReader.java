@@ -44,11 +44,11 @@ import java.util.stream.Collectors;
 
 import static org.apache.parquet.hadoop.ParquetInputFormat.getFilter;
 
-public class HudiAvroParquetReader extends RecordReader<Void, ArrayWritable> {
+public class HoodieAvroParquetReader extends RecordReader<Void, ArrayWritable> {
 
   private final ParquetRecordReader<GenericData.Record> parquetRecordReader;
 
-  public HudiAvroParquetReader(InputSplit inputSplit, Configuration conf) throws IOException {
+  public HoodieAvroParquetReader(InputSplit inputSplit, Configuration conf) throws IOException {
     AvroReadSupport avroReadSupport = new AvroReadSupport<>();
     // if exists read columns, we need to filter columns.
     List<String> readColNames = Arrays.asList(HoodieColumnProjectionUtils.getReadColumnNames(conf));
