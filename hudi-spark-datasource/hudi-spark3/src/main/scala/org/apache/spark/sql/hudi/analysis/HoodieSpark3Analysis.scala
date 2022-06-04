@@ -39,7 +39,6 @@ import org.apache.spark.sql.{AnalysisException, SQLContext, SparkSession}
 
 import scala.collection.JavaConverters.mapAsJavaMapConverter
 
-
 /**
  * NOTE: PLEASE READ CAREFULLY
  *
