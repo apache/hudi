@@ -137,8 +137,8 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
       }
     }
 
-    val schemaEvolutionEnabled: Boolean = optParams.getOrElse(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLE.key,
-      DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLE.defaultValue.toString).toBoolean
+    val schemaEvolutionEnabled: Boolean = optParams.getOrElse(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.key,
+      DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.defaultValue.toString).toBoolean
     val internalSchema: InternalSchema = if (!schemaEvolutionEnabled) {
       InternalSchema.getEmptyInternalSchema
     } else {
