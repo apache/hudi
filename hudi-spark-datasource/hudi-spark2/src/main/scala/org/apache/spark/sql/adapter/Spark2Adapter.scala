@@ -159,12 +159,6 @@ class Spark2Adapter extends SparkAdapter {
     throw new IllegalStateException(s"Should not call getRelationTimeTravel for spark2")
   }
 
-  override def createResolveHudiAlterTableCommand(sparkSession: SparkSession): Rule[LogicalPlan] = {
-    new Rule[LogicalPlan] {
-      override def apply(plan: LogicalPlan): LogicalPlan = plan
-    }
-  }
-
   override def createHoodieParquetFileFormat(appendPartitionValues: Boolean): Option[ParquetFileFormat] = {
     Some(new Spark24HoodieParquetFileFormat(appendPartitionValues))
   }

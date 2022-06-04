@@ -67,16 +67,14 @@ class Spark3_2Adapter extends BaseSpark3Adapter {
     )
   }
 
-  override def createResolveHudiAlterTableCommand(sparkSession: SparkSession): Rule[LogicalPlan] = {
+  override def createResolveHudiAlterTableCommand(): Option[SparkSession => Rule[LogicalPlan]] = {
     if (SPARK_VERSION.startsWith("3.2")) {
       val loadClassName = "org.apache.spark.sql.hudi.ResolveHudiAlterTableCommandSpark32"
       val clazz = Class.forName(loadClassName, true, Thread.currentThread().getContextClassLoader)
       val ctor = clazz.getConstructors.head
-      ctor.newInstance(sparkSession).asInstanceOf[Rule[LogicalPlan]]
+      Some(sparkSession => ctor.newInstance(sparkSession).asInstanceOf[Rule[LogicalPlan]])
     } else {
-      new Rule[LogicalPlan] {
-        override def apply(plan: LogicalPlan): LogicalPlan = plan
-      }
+      None
     }
   }
 
