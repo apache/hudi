@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.action.commit;
 
+import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
@@ -86,7 +87,7 @@ public class JavaMergeHelper<T> extends BaseMergeHelper<T, List<HoodieRecord<T>>
       if (baseFile.getBootstrapBaseFile().isPresent()) {
         readerIterator = getMergingIterator(table, mergeHandle, baseFile, reader, readSchema, externalSchemaTransformation);
       } else {
-        readerIterator = reader.getRecordIterator(readSchema, HoodieAvroIndexedRecord::new);
+        readerIterator = reader.getRecordIterator(readSchema, (HoodieRecord.Mapper<IndexedRecord, IndexedRecord>) HoodieAvroIndexedRecord::new);
       }
 
       ThreadLocal<BinaryEncoder> encoderCache = new ThreadLocal<>();

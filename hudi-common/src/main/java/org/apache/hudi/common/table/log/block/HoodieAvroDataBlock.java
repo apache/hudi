@@ -160,7 +160,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
 
     private RecordIterator(Schema readerSchema, Schema writerSchema, byte[] content, InternalSchema internalSchema) throws IOException {
       this.content = content;
-      this.mapper = (HoodieRecord.Mapper<IndexedRecord>) HoodieAvroIndexedRecord::new;
+      this.mapper = (HoodieRecord.Mapper<IndexedRecord, IndexedRecord>) HoodieAvroIndexedRecord::new;
 
       this.dis = new SizeAwareDataInputStream(new DataInputStream(new ByteArrayInputStream(this.content)));
 

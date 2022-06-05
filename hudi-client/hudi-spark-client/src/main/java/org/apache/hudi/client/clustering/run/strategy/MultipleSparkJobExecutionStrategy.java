@@ -255,12 +255,14 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
     //       closure, as this might lead to issues attempting to serialize its nested fields
     return HoodieJavaRDD.of(jsc.parallelize(clusteringOps, clusteringOps.size())
         .mapPartitions(clusteringOpsPartition -> {
-          List<Iterator<IndexedRecord>> iteratorsForPartition = new ArrayList<>();
+          List<Iterator<HoodieRecord<T>>> iteratorsForPartition = new ArrayList<>();
           clusteringOpsPartition.forEachRemaining(clusteringOp -> {
             try {
               Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(writeConfig.getSchema()));
               HoodieFileReader baseFileReader = HoodieFileReaderFactory.getFileReader(hadoopConf.get(), new Path(clusteringOp.getDataFilePath()));
-              iteratorsForPartition.add(baseFileReader.getRecordIterator(readerSchema));
+              HoodieRecord.Mapper<IndexedRecord, T> mapper = (indexRecord) -> transform(indexRecord, writeConfig);
+              // TODO: support sparkRecord transform
+              iteratorsForPartition.add(baseFileReader.getRecordIterator(readerSchema, mapper));
             } catch (IOException e) {
               throw new HoodieClusteringException("Error reading input data for " + clusteringOp.getDataFilePath()
                   + " and " + clusteringOp.getDeltaFilePaths(), e);
@@ -268,8 +270,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
           });
 
           return new ConcatenatingIterator<>(iteratorsForPartition);
-        })
-        .map(record -> transform(record, writeConfig)));
+        }));
   }
 
   /**

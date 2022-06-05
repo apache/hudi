@@ -338,8 +338,9 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
                                                                                       List<String> keys,
                                                                                       boolean fullKeys,
                                                                                       String partitionName) throws IOException {
-    ClosableIterator<HoodieRecord> records = fullKeys ? baseFileReader.getRecordsByKeysIterator(keys, (HoodieRecord.Mapper<IndexedRecord>) HoodieAvroIndexedRecord::new)
-        : baseFileReader.getRecordsByKeyPrefixIterator(keys, (HoodieRecord.Mapper<IndexedRecord>) HoodieAvroIndexedRecord::new);
+    HoodieRecord.Mapper<IndexedRecord, IndexedRecord> mapper = HoodieAvroIndexedRecord::new;
+    ClosableIterator<HoodieRecord> records = fullKeys ? baseFileReader.getRecordsByKeysIterator(keys, mapper)
+        : baseFileReader.getRecordsByKeyPrefixIterator(keys, mapper);
 
     return toStream(records)
         .map(record -> {

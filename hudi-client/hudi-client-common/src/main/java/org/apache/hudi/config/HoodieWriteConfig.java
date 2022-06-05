@@ -146,7 +146,7 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> RECORD_TYPE = ConfigProperty
       .key("hoodie.datasource.write.record.type")
-      .defaultValue(HoodieRecord.HoodieRecordType.AVRO.toString())
+      .defaultValue(HoodieRecord.HoodieRecordType.SPARK.toString()) // TODO: set avro as default
       .withDocumentation("test");
 
   public static final ConfigProperty<String> ROLLBACK_USING_MARKERS_ENABLE = ConfigProperty

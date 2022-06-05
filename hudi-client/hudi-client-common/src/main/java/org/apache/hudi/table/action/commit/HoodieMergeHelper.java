@@ -20,10 +20,12 @@ package org.apache.hudi.table.action.commit;
 
 import org.apache.avro.SchemaCompatibility;
 
+import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.ClosableIterator;
@@ -129,10 +131,11 @@ public class HoodieMergeHelper<T> extends
       if (baseFile.getBootstrapBaseFile().isPresent()) {
         readerIterator = getMergingIterator(table, mergeHandle, baseFile, reader, readSchema, externalSchemaTransformation);
       } else {
+        HoodieRecord.Mapper<IndexedRecord, IndexedRecord>  mapper = HoodieAvroIndexedRecord::new;
         if (needToReWriteRecord) {
-          readerIterator = new RewriteIterator(reader.getRecordIterator(), readSchema, readSchema, table.getConfig().getProps(), renameCols);
+          readerIterator = new RewriteIterator(reader.getRecordIterator(mapper), readSchema, readSchema, table.getConfig().getProps(), renameCols);
         } else {
-          readerIterator = reader.getRecordIterator(readSchema);
+          readerIterator = reader.getRecordIterator(readSchema, mapper);
         }
       }
 
