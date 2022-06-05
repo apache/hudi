@@ -40,7 +40,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
-public class HoodieSparkParquetReader implements HoodieSparkFileReader {
+public class HoodieSparkParquetReader<InternalRow> implements HoodieSparkFileReader<InternalRow> {
 
   private final Path path;
   private final Configuration conf;

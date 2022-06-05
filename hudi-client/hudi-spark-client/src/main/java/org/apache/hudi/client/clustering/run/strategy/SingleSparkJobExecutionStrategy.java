@@ -151,9 +151,9 @@ public abstract class SingleSparkJobExecutionStrategy<T>
     List<Iterator<HoodieRecord<T>>> iteratorsForPartition = clusteringOps.stream().map(clusteringOp -> {
 
       Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(getWriteConfig().getSchema()));
-      Iterable<HoodieRecord> indexedRecords = () -> {
+      Iterable<HoodieRecord<T>> indexedRecords = () -> {
         try {
-          HoodieRecord.Mapper<IndexedRecord> mapper = (indexedRecord) -> transform(indexedRecord);
+          HoodieRecord.Mapper<IndexedRecord, T> mapper = (indexedRecord) -> transform(indexedRecord);
           return HoodieFileReaderFactory.getFileReader(getHoodieTable().getHadoopConf(), new Path(clusteringOp.getDataFilePath()))
               .getRecordIterator(readerSchema, mapper);
         } catch (IOException e) {

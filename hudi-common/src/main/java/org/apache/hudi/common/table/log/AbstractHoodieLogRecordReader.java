@@ -379,7 +379,7 @@ public abstract class AbstractHoodieLogRecordReader {
    * handle it.
    */
   private void processDataBlock(HoodieDataBlock dataBlock, Option<KeySpec> keySpecOpt) throws Exception {
-    HoodieRecord.Mapper<IndexedRecord> mapper = (rec) -> createHoodieRecord(rec, this.hoodieTableMetaClient.getTableConfig(),
+    HoodieRecord.Mapper<IndexedRecord, ?> mapper = (rec) -> createHoodieRecord(rec, this.hoodieTableMetaClient.getTableConfig(),
         this.payloadClassFQN, this.preCombineField, this.withOperationField, this.simpleKeyGenFields, this.partitionName);
 
     try (ClosableIterator<HoodieRecord> recordIterator = getRecordsIterator(dataBlock, keySpecOpt, mapper)) {
@@ -434,7 +434,7 @@ public abstract class AbstractHoodieLogRecordReader {
    * @param partitionName      - Partition name
    * @return HoodieRecord created from the IndexedRecord
    */
-  protected HoodieRecord<?> createHoodieRecord(final IndexedRecord rec, final HoodieTableConfig hoodieTableConfig,
+  protected <R> HoodieRecord<R> createHoodieRecord(final IndexedRecord rec, final HoodieTableConfig hoodieTableConfig,
                                                final String payloadClassFQN, final String preCombineField,
                                                final boolean withOperationField,
                                                final Option<Pair<String, String>> simpleKeyGenFields,

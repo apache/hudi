@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.spark.sql.hudi;
+package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieKey;
@@ -96,11 +96,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
 
   @Override
   public HoodieRecord rewriteRecord(Schema recordSchema, Properties prop, boolean schemaOnReadEnabled, Schema writeSchemaWithMetaFields) throws IOException {
-    StructType readerStructType = HoodieInternalRowUtils.getCacheSchema(recordSchema);
-    StructType writeSchemaWithMetaFieldsStructType = HoodieInternalRowUtils.getCacheSchema(writeSchemaWithMetaFields);
-    InternalRow rewriteRow = schemaOnReadEnabled ? HoodieInternalRowUtils.rewriteRecordWithNewSchema(data, readerStructType, writeSchemaWithMetaFieldsStructType, new HashMap<>())
-        : HoodieInternalRowUtils.rewriteRecord(data, readerStructType, writeSchemaWithMetaFieldsStructType);
-    return new HoodieSparkRecord(getKey(), rewriteRow, getOperation());
+    return this;
   }
 
   @Override

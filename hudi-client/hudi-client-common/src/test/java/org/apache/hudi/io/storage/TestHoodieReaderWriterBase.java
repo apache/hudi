@@ -112,7 +112,7 @@ public abstract class TestHoodieReaderWriterBase {
     Configuration conf = new Configuration();
     verifyMetadata(conf);
     verifySchema(conf, schemaPath);
-    verifySimpleRecords(new TransformIterator(createReader(conf).getRecordIterator()));
+    verifySimpleRecords(new TransformIterator(createReader(conf).getRecordIterator((HoodieRecord.Mapper<IndexedRecord, IndexedRecord>) HoodieAvroIndexedRecord::new)));
   }
 
   @Test
@@ -139,7 +139,7 @@ public abstract class TestHoodieReaderWriterBase {
     Configuration conf = new Configuration();
     verifyMetadata(conf);
     verifySchema(conf, schemaPath);
-    verifyComplexRecords(new TransformIterator(createReader(conf).getRecordIterator()));
+    verifyComplexRecords(new TransformIterator(createReader(conf).getRecordIterator((HoodieRecord.Mapper<IndexedRecord, IndexedRecord>) HoodieAvroIndexedRecord::new)));
   }
 
   @Test
@@ -231,7 +231,7 @@ public abstract class TestHoodieReaderWriterBase {
 
   private void verifyReaderWithSchema(String schemaPath, HoodieAvroFileReader hoodieReader) throws IOException {
     Schema evolvedSchema = getSchemaFromResource(TestHoodieReaderWriterBase.class, schemaPath);
-    Iterator<HoodieRecord> iter = hoodieReader.getRecordIterator(evolvedSchema);
+    Iterator<IndexedRecord> iter = hoodieReader.getRecordIterator(evolvedSchema, (HoodieRecord.Mapper<IndexedRecord, IndexedRecord>) HoodieAvroIndexedRecord::new);
     int index = 0;
     while (iter.hasNext()) {
       verifyRecord(schemaPath, (GenericRecord) iter.next(), index);

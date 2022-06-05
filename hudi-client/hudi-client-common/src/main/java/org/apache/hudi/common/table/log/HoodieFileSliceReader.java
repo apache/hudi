@@ -19,6 +19,8 @@
 
 package org.apache.hudi.common.table.log;
 
+import org.apache.avro.generic.IndexedRecord;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SpillableMapUtils;
@@ -44,7 +46,7 @@ public class HoodieFileSliceReader<T> implements Iterator<HoodieRecord<T>> {
       Option<HoodieFileReader> baseFileReader, HoodieMergedLogRecordScanner scanner, Schema schema, String payloadClass,
       String preCombineField, Option<Pair<String, String>> simpleKeyGenFieldsOpt) throws IOException {
     if (baseFileReader.isPresent()) {
-      Iterator baseIterator = baseFileReader.get().getRecordIterator(schema);
+      Iterator baseIterator = baseFileReader.get().getRecordIterator(schema, (HoodieRecord.Mapper<IndexedRecord, IndexedRecord>) HoodieAvroIndexedRecord::new);
       while (baseIterator.hasNext()) {
         GenericRecord record = (GenericRecord) baseIterator.next();
         HoodieRecord hoodieRecord = transform(
