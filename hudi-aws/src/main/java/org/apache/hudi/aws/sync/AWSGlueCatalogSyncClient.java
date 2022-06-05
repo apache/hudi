@@ -282,7 +282,7 @@ public class AWSGlueCatalogSyncClient extends AbstractHiveSyncHoodieClient {
       }
 
       // now create the schema partition
-      List<Column> schemaPartitionKeys = syncConfig.partitionFields.stream().map(partitionKey -> {
+      List<Column> schemaPartitionKeys = syncConfig.hoodieSyncConfigParams.partitionFields.stream().map(partitionKey -> {
         String keyType = getPartitionKeyType(mapSchema, partitionKey);
         return new Column().withName(partitionKey).withType(keyType.toLowerCase()).withComment("");
       }).collect(Collectors.toList());
