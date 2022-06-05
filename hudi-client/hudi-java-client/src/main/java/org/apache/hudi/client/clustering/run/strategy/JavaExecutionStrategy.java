@@ -219,8 +219,8 @@ public abstract class JavaExecutionStrategy<T>
     clusteringOps.forEach(clusteringOp -> {
       try {
         Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(getWriteConfig().getSchema()));
-        HoodieFileReader baseFileReader = HoodieFileReaderFactory.getFileReader(getHoodieTable().getHadoopConf(), new Path(clusteringOp.getDataFilePath()));
-        Iterator<IndexedRecord> recordIterator = baseFileReader.getRecordIterator(readerSchema);
+        HoodieAvroFileReader baseFileReader = (HoodieAvroFileReader) HoodieFileReaderFactory.getFileReader(getHoodieTable().getHadoopConf(), new Path(clusteringOp.getDataFilePath()));
+        Iterator<IndexedRecord> recordIterator = baseFileReader.getIndexedRecordIterator(readerSchema);
         recordIterator.forEachRemaining(record -> records.add(transform(record)));
       } catch (IOException e) {
         throw new HoodieClusteringException("Error reading input data for " + clusteringOp.getDataFilePath()

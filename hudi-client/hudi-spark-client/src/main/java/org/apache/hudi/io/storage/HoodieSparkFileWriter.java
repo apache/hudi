@@ -19,13 +19,18 @@
 package org.apache.hudi.io.storage;
 
 import org.apache.avro.Schema;
-import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.client.model.HoodieInternalRow;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.spark.sql.catalyst.CatalystTypeConverters;
 import org.apache.spark.sql.catalyst.InternalRow;
+import org.apache.spark.sql.catalyst.expressions.GenericInternalRow;
+import org.apache.spark.sql.catalyst.expressions.JoinedRow;
+import scala.Array;
 
 import java.io.IOException;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.Properties;
 
 public interface HoodieSparkFileWriter extends HoodieFileWriter {
@@ -49,6 +54,9 @@ public interface HoodieSparkFileWriter extends HoodieFileWriter {
 
   default InternalRow prepRecordWithMetadata(HoodieKey key, InternalRow row, String instantTime, Integer partitionId, long recordIndex, String fileName)  {
     String seqId = HoodieRecord.generateSequenceId(instantTime, partitionId, recordIndex);
-    return new HoodieInternalRow(instantTime, seqId, key.getRecordKey(), key.getPartitionPath(), fileName, row);
+    Object[] metadata = {instantTime, seqId, key.getRecordKey(), key.getPartitionPath(), fileName};
+    InternalRow metadataRow = new GenericInternalRow(Arrays.stream(metadata)
+        .map(o -> CatalystTypeConverters.convertToCatalyst(o)).toArray());
+    return new JoinedRow(metadataRow, row);
   }
 }

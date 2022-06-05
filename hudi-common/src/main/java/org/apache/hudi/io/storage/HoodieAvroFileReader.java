@@ -21,7 +21,6 @@ package org.apache.hudi.io.storage;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 
-import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.Mapper;
 import org.apache.hudi.common.util.ClosableIterator;
@@ -32,7 +31,7 @@ import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.util.List;
 
-public interface HoodieAvroFileReader extends HoodieFileReader, AutoCloseable {
+public interface HoodieAvroFileReader<T> extends HoodieFileReader<T>, AutoCloseable {
 
   ClosableIterator<IndexedRecord> getIndexedRecordIterator(Schema readerSchema) throws IOException;
 
@@ -56,37 +55,37 @@ public interface HoodieAvroFileReader extends HoodieFileReader, AutoCloseable {
     return getRecordsByKeyPrefixIterator(keyPrefixes, getSchema());
   }
 
-  default ClosableIterator<HoodieRecord> getRecordsByKeysIterator(List<String> keys, Schema schema, HoodieRecord.Mapper mapper) throws IOException {
+  default ClosableIterator<HoodieRecord<T>> getRecordsByKeysIterator(List<String> keys, Schema schema, HoodieRecord.Mapper mapper) throws IOException {
     ClosableIterator<IndexedRecord> iterator = getRecordsByKeysIterator(keys, schema);
     return new HoodieRecordTransformIterator(iterator, mapper);
   }
 
-  default ClosableIterator<HoodieRecord> getRecordsByKeyPrefixIterator(List<String> keyPrefixes, Schema schema, HoodieRecord.Mapper mapper) throws IOException {
+  default ClosableIterator<HoodieRecord<T>> getRecordsByKeyPrefixIterator(List<String> keyPrefixes, Schema schema, HoodieRecord.Mapper mapper) throws IOException {
     ClosableIterator<IndexedRecord> iterator = getRecordsByKeyPrefixIterator(keyPrefixes, schema);
     return new HoodieRecordTransformIterator(iterator, mapper);
   }
 
   @Override
-  default ClosableIterator<HoodieRecord> getRecordIterator(Schema schema, HoodieRecord.Mapper mapper) throws IOException {
+  default ClosableIterator<HoodieRecord<T>> getRecordIterator(Schema schema, HoodieRecord.Mapper mapper) throws IOException {
     return new MappingIterator<>(getIndexedRecordIterator(schema), mapper::apply);
   }
 
-  @Override
-  default ClosableIterator<HoodieRecord> getRecordIterator(Schema schema) throws IOException {
-    HoodieRecord.Mapper<IndexedRecord> mapper = HoodieAvroIndexedRecord::new;
-    return new MappingIterator<>(getIndexedRecordIterator(schema), mapper::apply);
-  }
+  //@Override
+  //default ClosableIterator<HoodieRecord<T>> getRecordIterator(Schema schema) throws IOException {
+  //  HoodieRecord.Mapper<IndexedRecord, IndexedRecord> mapper = HoodieAvroIndexedRecord::new;
+  //  return new MappingIterator<IndexedRecord, HoodieRecord<IndexedRecord>>(getIndexedRecordIterator(schema), mapper::apply);
+  //}
 
   @Override
-  default Option<HoodieRecord> getRecordByKey(String key, Schema readerSchema, HoodieRecord.Mapper mapper) throws IOException {
+  default Option<HoodieRecord<T>> getRecordByKey(String key, Schema readerSchema, HoodieRecord.Mapper mapper) throws IOException {
     return getRecordByKey(key, readerSchema).map(mapper::apply);
   }
 
-  class HoodieRecordTransformIterator implements ClosableIterator<HoodieRecord> {
+  class HoodieRecordTransformIterator<T> implements ClosableIterator<HoodieRecord<T>> {
     private final ClosableIterator<IndexedRecord> dataIterator;
-    private final HoodieRecord.Mapper mapper;
+    private final HoodieRecord.Mapper<IndexedRecord, T> mapper;
 
-    public HoodieRecordTransformIterator(ClosableIterator<IndexedRecord> dataIterator, Mapper mapper) {
+    public HoodieRecordTransformIterator(ClosableIterator<IndexedRecord> dataIterator, Mapper<IndexedRecord, T> mapper) {
       this.dataIterator = dataIterator;
       this.mapper = mapper;
     }
@@ -97,7 +96,7 @@ public interface HoodieAvroFileReader extends HoodieFileReader, AutoCloseable {
     }
 
     @Override
-    public HoodieRecord next() {
+    public HoodieRecord<T> next() {
       return mapper.apply(dataIterator.next());
     }
 

@@ -26,11 +26,11 @@ import org.apache.spark.sql.catalyst.InternalRow;
 
 import java.io.IOException;
 
-public interface HoodieSparkFileReader extends HoodieFileReader {
+public interface HoodieSparkFileReader<InternalRow> extends HoodieFileReader<InternalRow> {
 
   ClosableIterator<InternalRow> getInternalRowIterator(Schema readerSchema) throws IOException;
 
-  default ClosableIterator<HoodieRecord> getRecordIterator(Schema readerSchema, HoodieRecord.Mapper mapper) throws IOException {
+  default ClosableIterator<HoodieRecord<InternalRow>> getRecordIterator(Schema readerSchema, HoodieRecord.Mapper mapper) throws IOException {
     return new MappingIterator<>(getInternalRowIterator(readerSchema), mapper::apply);
   }
 }

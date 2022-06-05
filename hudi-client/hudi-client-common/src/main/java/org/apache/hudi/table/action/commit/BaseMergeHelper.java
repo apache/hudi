@@ -18,9 +18,16 @@
 
 package org.apache.hudi.table.action.commit;
 
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.utils.MergingIterator;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.queue.BoundedInMemoryQueueConsumer;
 import org.apache.hudi.exception.HoodieException;
@@ -108,9 +115,9 @@ public abstract class BaseMergeHelper<T, I, K, O> {
       bootstrapReadSchema = mergeHandle.getWriterSchema();
     }
 
-    return new MergingIterator<>(
-        reader.getRecordIterator(readerSchema),
-        bootstrapReader.getRecordIterator(bootstrapReadSchema),
+    return new MergingIterator<HoodieRecord>(
+        reader.getRecordIterator(readerSchema, (HoodieRecord.Mapper<IndexedRecord, IndexedRecord>) HoodieAvroIndexedRecord::new),
+        bootstrapReader.getRecordIterator(bootstrapReadSchema, (HoodieRecord.Mapper<IndexedRecord, IndexedRecord>) HoodieAvroIndexedRecord::new),
         (oneRecord, otherRecord) -> mergeRecords(oneRecord, otherRecord, readerSchema, mergeHandle.getWriterSchemaWithMetaFields()));
   }
 

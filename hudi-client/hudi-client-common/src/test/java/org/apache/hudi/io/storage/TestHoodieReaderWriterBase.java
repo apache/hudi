@@ -114,7 +114,7 @@ public abstract class TestHoodieReaderWriterBase {
     Configuration conf = new Configuration();
     verifyMetadata(conf);
     verifySchema(conf, schemaPath);
-    verifySimpleRecords(new TransformIterator(createReader(conf).getRecordIterator()));
+    verifySimpleRecords(new TransformIterator(createReader(conf).getRecordIterator((HoodieRecord.Mapper<IndexedRecord, IndexedRecord>) HoodieAvroIndexedRecord::new)));
   }
 
   @Test
@@ -141,7 +141,7 @@ public abstract class TestHoodieReaderWriterBase {
     Configuration conf = new Configuration();
     verifyMetadata(conf);
     verifySchema(conf, schemaPath);
-    verifyComplexRecords(new TransformIterator(createReader(conf).getRecordIterator()));
+    verifyComplexRecords(new TransformIterator(createReader(conf).getRecordIterator((HoodieRecord.Mapper<IndexedRecord, IndexedRecord>) HoodieAvroIndexedRecord::new)));
   }
 
   @Test

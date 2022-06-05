@@ -18,9 +18,11 @@
 
 package org.apache.hudi.common.table.log.block;
 
+import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.fs.inline.InLineFSUtils;
 import org.apache.hudi.common.fs.inline.InLineFileSystem;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.util.ClosableIterator;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -132,8 +134,9 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
         blockContentLoc.getContentPositionInLogFile(),
         blockContentLoc.getBlockSize());
 
+    HoodieRecord.Mapper<IndexedRecord, IndexedRecord> mapper = HoodieAvroIndexedRecord::new;
     ClosableIterator<HoodieRecord> iterator = HoodieFileReaderFactory.getFileReader(inlineConf, inlineLogFilePath)
-        .getRecordIterator(readerSchema);
+        .getRecordIterator(readerSchema, mapper);
     return iterator;
   }
 

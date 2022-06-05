@@ -340,8 +340,8 @@ public abstract class HoodieRecord<T> implements Serializable {
    * TODO remove
    */
   @FunctionalInterface
-  public interface Mapper<T> {
-    HoodieRecord apply(T hoodieRecordData);
+  public interface Mapper<T, R> {
+    HoodieRecord<R> apply(T hoodieRecordData);
   }
 
   /**
