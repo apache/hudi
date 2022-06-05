@@ -69,7 +69,7 @@ public class HoodieAdbJdbcClient extends AbstractAdbSyncHoodieClient {
   public HoodieAdbJdbcClient(AdbSyncConfig syncConfig, FileSystem fs) {
     super(syncConfig, fs);
     createAdbConnection();
-    LOG.info("Init adb jdbc client success, jdbcUrl:{}", syncConfig.jdbcUrl);
+    LOG.info("Init adb jdbc client success, jdbcUrl:{}", syncConfig.adbSyncConfigParams.hiveSyncConfigParams.jdbcUrl);
   }
 
   private void createAdbConnection() {
@@ -82,7 +82,8 @@ public class HoodieAdbJdbcClient extends AbstractAdbSyncHoodieClient {
       }
       try {
         this.connection = DriverManager.getConnection(
-            adbSyncConfig.jdbcUrl, adbSyncConfig.adbUser, adbSyncConfig.adbPass);
+                adbSyncConfig.adbSyncConfigParams.hiveSyncConfigParams.jdbcUrl,
+            adbSyncConfig.adbSyncConfigParams.hiveSyncConfigParams.dbUser, adbSyncConfig.adbSyncConfigParams.hiveSyncConfigParams.dbPass);
       } catch (SQLException e) {
         throw new HoodieException("Cannot create adb connection ", e);
       }
@@ -106,7 +107,7 @@ public class HoodieAdbJdbcClient extends AbstractAdbSyncHoodieClient {
   @Override
   public void dropTable(String tableName) {
     LOG.info("Dropping table:{}", tableName);
-    String dropTable = "drop table if exists `" + adbSyncConfig.databaseName + "`.`" + tableName + "`";
+    String dropTable = "drop table if exists `" + adbSyncConfig.hoodieSyncConfigParams.databaseName + "`.`" + tableName + "`";
     executeAdbSql(dropTable);
   }
 
@@ -115,8 +116,8 @@ public class HoodieAdbJdbcClient extends AbstractAdbSyncHoodieClient {
     ResultSet result = null;
     try {
       DatabaseMetaData databaseMetaData = connection.getMetaData();
-      result = databaseMetaData.getColumns(adbSyncConfig.databaseName,
-          adbSyncConfig.databaseName, tableName, null);
+      result = databaseMetaData.getColumns(adbSyncConfig.hoodieSyncConfigParams.databaseName,
+              adbSyncConfig.hoodieSyncConfigParams.databaseName, tableName, null);
       while (result.next()) {
         String columnName = result.getString(4);
         String columnType = result.getString(6);
@@ -304,7 +305,7 @@ public class HoodieAdbJdbcClient extends AbstractAdbSyncHoodieClient {
             String str = resultSet.getString(1);
             if (!StringUtils.isNullOrEmpty(str)) {
               List<String> values = partitionValueExtractor.extractPartitionValuesInPath(str);
-              Path storagePartitionPath = FSUtils.getPartitionPath(adbSyncConfig.basePath, String.join("/", values));
+              Path storagePartitionPath = FSUtils.getPartitionPath(adbSyncConfig.hoodieSyncConfigParams.basePath, String.join("/", values));
               String fullStoragePartitionPath = Path.getPathWithoutSchemeAndAuthority(storagePartitionPath).toUri().getPath();
               partitions.put(values, fullStoragePartitionPath);
             }
@@ -332,11 +333,11 @@ public class HoodieAdbJdbcClient extends AbstractAdbSyncHoodieClient {
 
   private String constructAddPartitionsSql(String tableName, List<String> partitions) {
     StringBuilder sqlBuilder = new StringBuilder("alter table `");
-    sqlBuilder.append(adbSyncConfig.databaseName).append("`").append(".`")
+    sqlBuilder.append(adbSyncConfig.hoodieSyncConfigParams.databaseName).append("`").append(".`")
         .append(tableName).append("`").append(" add if not exists ");
     for (String partition : partitions) {
       String partitionClause = getPartitionClause(partition);
-      Path partitionPath = FSUtils.getPartitionPath(adbSyncConfig.basePath, partition);
+      Path partitionPath = FSUtils.getPartitionPath(adbSyncConfig.hoodieSyncConfigParams.basePath, partition);
       String fullPartitionPathStr = generateAbsolutePathStr(partitionPath);
       sqlBuilder.append("  partition (").append(partitionClause).append(") location '")
           .append(fullPartitionPathStr).append("' ");
@@ -347,13 +348,13 @@ public class HoodieAdbJdbcClient extends AbstractAdbSyncHoodieClient {
 
   private List<String> constructChangePartitionsSql(String tableName, List<String> partitions) {
     List<String> changePartitions = new ArrayList<>();
-    String useDatabase = "use `" + adbSyncConfig.databaseName + "`";
+    String useDatabase = "use `" + adbSyncConfig.hoodieSyncConfigParams.databaseName + "`";
     changePartitions.add(useDatabase);
 
     String alterTable = "alter table `" + tableName + "`";
     for (String partition : partitions) {
       String partitionClause = getPartitionClause(partition);
-      Path partitionPath = FSUtils.getPartitionPath(adbSyncConfig.basePath, partition);
+      Path partitionPath = FSUtils.getPartitionPath(adbSyncConfig.hoodieSyncConfigParams.basePath, partition);
       String fullPartitionPathStr = generateAbsolutePathStr(partitionPath);
       String changePartition = alterTable + " add if not exists partition (" + partitionClause
           + ") location '" + fullPartitionPathStr + "'";
@@ -371,32 +372,32 @@ public class HoodieAdbJdbcClient extends AbstractAdbSyncHoodieClient {
    */
   private String getPartitionClause(String partition) {
     List<String> partitionValues = partitionValueExtractor.extractPartitionValuesInPath(partition);
-    ValidationUtils.checkArgument(adbSyncConfig.partitionFields.size() == partitionValues.size(),
-        "Partition key parts " + adbSyncConfig.partitionFields
+    ValidationUtils.checkArgument(adbSyncConfig.hoodieSyncConfigParams.partitionFields.size() == partitionValues.size(),
+        "Partition key parts " + adbSyncConfig.hoodieSyncConfigParams.partitionFields
             + " does not match with partition values " + partitionValues + ". Check partition strategy. ");
     List<String> partBuilder = new ArrayList<>();
-    for (int i = 0; i < adbSyncConfig.partitionFields.size(); i++) {
-      partBuilder.add(adbSyncConfig.partitionFields.get(i) + "='" + partitionValues.get(i) + "'");
+    for (int i = 0; i < adbSyncConfig.hoodieSyncConfigParams.partitionFields.size(); i++) {
+      partBuilder.add(adbSyncConfig.hoodieSyncConfigParams.partitionFields.get(i) + "='" + partitionValues.get(i) + "'");
     }
 
     return String.join(",", partBuilder);
   }
 
   private String constructShowPartitionSql(String tableName) {
-    return String.format("show partitions `%s`.`%s`", adbSyncConfig.databaseName, tableName);
+    return String.format("show partitions `%s`.`%s`", adbSyncConfig.hoodieSyncConfigParams.databaseName, tableName);
   }
 
   private String constructShowCreateTableSql(String tableName) {
-    return String.format("show create table `%s`.`%s`", adbSyncConfig.databaseName, tableName);
+    return String.format("show create table `%s`.`%s`", adbSyncConfig.hoodieSyncConfigParams.databaseName, tableName);
   }
 
   private String constructShowLikeTableSql(String tableName) {
-    return String.format("show tables from `%s` like '%s'", adbSyncConfig.databaseName, tableName);
+    return String.format("show tables from `%s` like '%s'", adbSyncConfig.hoodieSyncConfigParams.databaseName, tableName);
   }
 
   private String constructCreateDatabaseSql(String rootPath) {
     return String.format("create database if not exists `%s` with dbproperties(catalog = 'oss', location = '%s')",
-        adbSyncConfig.databaseName, rootPath);
+            adbSyncConfig.hoodieSyncConfigParams.databaseName, rootPath);
   }
 
   private String constructShowCreateDatabaseSql(String databaseName) {
@@ -405,25 +406,25 @@ public class HoodieAdbJdbcClient extends AbstractAdbSyncHoodieClient {
 
   private String constructUpdateTblPropertiesSql(String tableName, String lastCommitSynced) {
     return String.format("alter table `%s`.`%s` set tblproperties('%s' = '%s')",
-        adbSyncConfig.databaseName, tableName, HOODIE_LAST_COMMIT_TIME_SYNC, lastCommitSynced);
+            adbSyncConfig.hoodieSyncConfigParams.databaseName, tableName, HOODIE_LAST_COMMIT_TIME_SYNC, lastCommitSynced);
   }
 
   private String constructAddColumnSql(String tableName, String columnName, String columnType) {
     return String.format("alter table `%s`.`%s` add columns(`%s` %s)",
-        adbSyncConfig.databaseName, tableName, columnName, columnType);
+            adbSyncConfig.hoodieSyncConfigParams.databaseName, tableName, columnName, columnType);
   }
 
   private String constructChangeColumnSql(String tableName, String columnName, String columnType) {
     return String.format("alter table `%s`.`%s` change `%s` `%s` %s",
-        adbSyncConfig.databaseName, tableName, columnName, columnName, columnType);
+            adbSyncConfig.hoodieSyncConfigParams.databaseName, tableName, columnName, columnName, columnType);
   }
 
   private HiveSyncConfig getHiveSyncConfig() {
     HiveSyncConfig hiveSyncConfig = new HiveSyncConfig();
-    hiveSyncConfig.partitionFields = adbSyncConfig.partitionFields;
-    hiveSyncConfig.databaseName = adbSyncConfig.databaseName;
-    Path basePath = new Path(adbSyncConfig.basePath);
-    hiveSyncConfig.basePath = generateAbsolutePathStr(basePath);
+    hiveSyncConfig.hoodieSyncConfigParams.partitionFields = adbSyncConfig.hoodieSyncConfigParams.partitionFields;
+    hiveSyncConfig.hoodieSyncConfigParams.databaseName = adbSyncConfig.hoodieSyncConfigParams.databaseName;
+    Path basePath = new Path(adbSyncConfig.hoodieSyncConfigParams.basePath);
+    hiveSyncConfig.hoodieSyncConfigParams.basePath = generateAbsolutePathStr(basePath);
     return hiveSyncConfig;
   }
 

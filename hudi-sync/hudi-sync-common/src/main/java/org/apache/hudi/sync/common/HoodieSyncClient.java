@@ -43,9 +43,9 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.parquet.schema.MessageType;
 
-public abstract class AbstractSyncHoodieClient implements AutoCloseable {
+public abstract class HoodieSyncClient implements AutoCloseable {
 
-  private static final Logger LOG = LogManager.getLogger(AbstractSyncHoodieClient.class);
+  private static final Logger LOG = LogManager.getLogger(HoodieSyncClient.class);
 
   public static final String HOODIE_LAST_COMMIT_TIME_SYNC = "last_commit_time_sync";
   public static final TypeConverter TYPE_CONVERTOR = new TypeConverter() {};
@@ -59,13 +59,13 @@ public abstract class AbstractSyncHoodieClient implements AutoCloseable {
   private final boolean withOperationField;
 
   @Deprecated
-  public AbstractSyncHoodieClient(String basePath, boolean assumeDatePartitioning, boolean useFileListingFromMetadata,
-                                  boolean verifyMetadataFileListing, boolean withOperationField, FileSystem fs) {
+  public HoodieSyncClient(String basePath, boolean assumeDatePartitioning, boolean useFileListingFromMetadata,
+                          boolean verifyMetadataFileListing, boolean withOperationField, FileSystem fs) {
     this(basePath, assumeDatePartitioning, useFileListingFromMetadata, withOperationField, fs);
   }
 
-  public AbstractSyncHoodieClient(String basePath, boolean assumeDatePartitioning, boolean useFileListingFromMetadata,
-                                  boolean withOperationField, FileSystem fs) {
+  public HoodieSyncClient(String basePath, boolean assumeDatePartitioning, boolean useFileListingFromMetadata,
+                          boolean withOperationField, FileSystem fs) {
     this.metaClient = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
     this.tableType = metaClient.getTableType();
     this.basePath = basePath;

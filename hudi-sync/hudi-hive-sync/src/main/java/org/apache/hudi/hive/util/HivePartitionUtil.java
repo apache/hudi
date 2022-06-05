@@ -40,18 +40,18 @@ public class HivePartitionUtil {
    */
   public static String getPartitionClauseForDrop(String partition, PartitionValueExtractor partitionValueExtractor, HiveSyncConfig config) {
     List<String> partitionValues = partitionValueExtractor.extractPartitionValuesInPath(partition);
-    ValidationUtils.checkArgument(config.partitionFields.size() == partitionValues.size(),
-        "Partition key parts " + config.partitionFields + " does not match with partition values " + partitionValues
+    ValidationUtils.checkArgument(config.hoodieSyncConfigParams.partitionFields.size() == partitionValues.size(),
+        "Partition key parts " + config.hoodieSyncConfigParams.partitionFields + " does not match with partition values " + partitionValues
             + ". Check partition strategy. ");
     List<String> partBuilder = new ArrayList<>();
-    for (int i = 0; i < config.partitionFields.size(); i++) {
+    for (int i = 0; i < config.hoodieSyncConfigParams.partitionFields.size(); i++) {
       String partitionValue = partitionValues.get(i);
       // decode the partition before sync to hive to prevent multiple escapes of HIVE
-      if (config.decodePartition) {
+      if (config.hoodieSyncConfigParams.decodePartition) {
         // This is a decode operator for encode in KeyGenUtils#getRecordPartitionPath
         partitionValue = PartitionPathEncodeUtils.unescapePathName(partitionValue);
       }
-      partBuilder.add(config.partitionFields.get(i) + "=" + partitionValue);
+      partBuilder.add(config.hoodieSyncConfigParams.partitionFields.get(i) + "=" + partitionValue);
     }
     return String.join("/", partBuilder);
   }
@@ -61,7 +61,7 @@ public class HivePartitionUtil {
     Partition newPartition;
     try {
       List<String> partitionValues = partitionValueExtractor.extractPartitionValuesInPath(partitionPath);
-      newPartition = client.getPartition(config.databaseName, tableName, partitionValues);
+      newPartition = client.getPartition(config.hoodieSyncConfigParams.databaseName, tableName, partitionValues);
     } catch (NoSuchObjectException ignored) {
       newPartition = null;
     } catch (TException e) {

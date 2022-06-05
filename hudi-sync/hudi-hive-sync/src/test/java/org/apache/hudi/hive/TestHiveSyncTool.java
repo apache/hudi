@@ -29,8 +29,8 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.hive.testutils.HiveTestUtil;
 import org.apache.hudi.sync.common.util.ConfigUtils;
-import org.apache.hudi.sync.common.AbstractSyncHoodieClient.PartitionEvent;
-import org.apache.hudi.sync.common.AbstractSyncHoodieClient.PartitionEvent.PartitionEventType;
+import org.apache.hudi.sync.common.HoodieSyncClient.PartitionEvent;
+import org.apache.hudi.sync.common.HoodieSyncClient.PartitionEvent.PartitionEventType;
 
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Field;

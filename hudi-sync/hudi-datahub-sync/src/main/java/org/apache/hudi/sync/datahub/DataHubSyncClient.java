@@ -23,7 +23,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.sync.common.AbstractSyncHoodieClient;
+import org.apache.hudi.sync.common.HoodieSyncClient;
 import org.apache.hudi.sync.common.HoodieSyncException;
 import org.apache.hudi.sync.datahub.config.DataHubSyncConfig;
 
@@ -60,7 +60,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-public class DataHubSyncClient extends AbstractSyncHoodieClient {
+public class DataHubSyncClient extends HoodieSyncClient {
 
   private final HoodieTimeline activeTimeline;
   private final DataHubSyncConfig syncConfig;
@@ -68,7 +68,7 @@ public class DataHubSyncClient extends AbstractSyncHoodieClient {
   private final DatasetUrn datasetUrn;
 
   public DataHubSyncClient(DataHubSyncConfig syncConfig, Configuration hadoopConf, FileSystem fs) {
-    super(syncConfig.basePath, syncConfig.assumeDatePartitioning, syncConfig.useFileListingFromMetadata, false, fs);
+    super(syncConfig.hoodieSyncConfigParams.basePath, syncConfig.hoodieSyncConfigParams.assumeDatePartitioning, syncConfig.hoodieSyncConfigParams.useFileListingFromMetadata, false, fs);
     this.syncConfig = syncConfig;
     this.hadoopConf = hadoopConf;
     this.datasetUrn = syncConfig.datasetIdentifier.getDatasetUrn();

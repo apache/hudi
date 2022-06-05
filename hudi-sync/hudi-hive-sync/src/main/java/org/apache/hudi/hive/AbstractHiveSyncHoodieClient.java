@@ -22,7 +22,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.sync.common.AbstractSyncHoodieClient;
+import org.apache.hudi.sync.common.HoodieSyncClient;
 import org.apache.hudi.sync.common.HoodieSyncException;
 import org.apache.hudi.sync.common.model.Partition;
 
@@ -41,7 +41,7 @@ import java.util.Map;
 /**
  * Base class to sync Hudi tables with Hive based metastores, such as Hive server, HMS or managed Hive services.
  */
-public abstract class AbstractHiveSyncHoodieClient extends AbstractSyncHoodieClient {
+public abstract class AbstractHiveSyncHoodieClient extends HoodieSyncClient {
 
   protected final HoodieTimeline activeTimeline;
   protected final HiveSyncConfig syncConfig;
@@ -49,10 +49,11 @@ public abstract class AbstractHiveSyncHoodieClient extends AbstractSyncHoodieCli
   protected final PartitionValueExtractor partitionValueExtractor;
 
   public AbstractHiveSyncHoodieClient(HiveSyncConfig syncConfig, Configuration hadoopConf, FileSystem fs) {
-    super(syncConfig.basePath, syncConfig.assumeDatePartitioning, syncConfig.useFileListingFromMetadata, syncConfig.withOperationField, fs);
+    super(syncConfig.hoodieSyncConfigParams.basePath, syncConfig.hoodieSyncConfigParams.assumeDatePartitioning,
+        syncConfig.hoodieSyncConfigParams.useFileListingFromMetadata, syncConfig.hiveSyncConfigParams.withOperationField, fs);
     this.syncConfig = syncConfig;
     this.hadoopConf = hadoopConf;
-    this.partitionValueExtractor = ReflectionUtils.loadClass(syncConfig.partitionValueExtractorClass);
+    this.partitionValueExtractor = ReflectionUtils.loadClass(syncConfig.hoodieSyncConfigParams.partitionValueExtractorClass);
     this.activeTimeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
   }
 
@@ -75,7 +76,7 @@ public abstract class AbstractHiveSyncHoodieClient extends AbstractSyncHoodieCli
 
     List<PartitionEvent> events = new ArrayList<>();
     for (String storagePartition : partitionStoragePartitions) {
-      Path storagePartitionPath = FSUtils.getPartitionPath(syncConfig.basePath, storagePartition);
+      Path storagePartitionPath = FSUtils.getPartitionPath(syncConfig.hoodieSyncConfigParams.basePath, storagePartition);
       String fullStoragePartitionPath = Path.getPathWithoutSchemeAndAuthority(storagePartitionPath).toUri().getPath();
       // Check if the partition values or if hdfs path is the same
       List<String> storagePartitionValues = partitionValueExtractor.extractPartitionValuesInPath(storagePartition);

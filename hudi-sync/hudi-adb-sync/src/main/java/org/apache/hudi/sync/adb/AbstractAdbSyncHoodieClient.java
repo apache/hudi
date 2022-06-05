@@ -24,7 +24,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hive.PartitionValueExtractor;
 import org.apache.hudi.hive.SchemaDifference;
-import org.apache.hudi.sync.common.AbstractSyncHoodieClient;
+import org.apache.hudi.sync.common.HoodieSyncClient;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -34,16 +34,16 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public abstract class AbstractAdbSyncHoodieClient extends AbstractSyncHoodieClient {
+public abstract class AbstractAdbSyncHoodieClient extends HoodieSyncClient {
   protected AdbSyncConfig adbSyncConfig;
   protected PartitionValueExtractor partitionValueExtractor;
   protected HoodieTimeline activeTimeline;
 
   public AbstractAdbSyncHoodieClient(AdbSyncConfig syncConfig, FileSystem fs) {
-    super(syncConfig.basePath, syncConfig.assumeDatePartitioning,
-        syncConfig.useFileListingFromMetadata, false, fs);
+    super(syncConfig.hoodieSyncConfigParams.basePath, syncConfig.hoodieSyncConfigParams.assumeDatePartitioning,
+            syncConfig.hoodieSyncConfigParams.useFileListingFromMetadata, false, fs);
     this.adbSyncConfig = syncConfig;
-    final String clazz = adbSyncConfig.partitionValueExtractorClass;
+    final String clazz = adbSyncConfig.hoodieSyncConfigParams.partitionValueExtractorClass;
     try {
       this.partitionValueExtractor = (PartitionValueExtractor) Class.forName(clazz).newInstance();
     } catch (Exception e) {
@@ -64,13 +64,13 @@ public abstract class AbstractAdbSyncHoodieClient extends AbstractSyncHoodieClie
     }
     List<PartitionEvent> events = new ArrayList<>();
     for (String storagePartition : partitionStoragePartitions) {
-      Path storagePartitionPath = FSUtils.getPartitionPath(adbSyncConfig.basePath, storagePartition);
+      Path storagePartitionPath = FSUtils.getPartitionPath(adbSyncConfig.hoodieSyncConfigParams.basePath, storagePartition);
       String fullStoragePartitionPath = Path.getPathWithoutSchemeAndAuthority(storagePartitionPath).toUri().getPath();
       // Check if the partition values or if hdfs path is the same
       List<String> storagePartitionValues = partitionValueExtractor.extractPartitionValuesInPath(storagePartition);
-      if (adbSyncConfig.useHiveStylePartitioning) {
+      if (adbSyncConfig.adbSyncConfigParams.useHiveStylePartitioning) {
         String partition = String.join("/", storagePartitionValues);
-        storagePartitionPath = FSUtils.getPartitionPath(adbSyncConfig.basePath, partition);
+        storagePartitionPath = FSUtils.getPartitionPath(adbSyncConfig.hoodieSyncConfigParams.basePath, partition);
         fullStoragePartitionPath = Path.getPathWithoutSchemeAndAuthority(storagePartitionPath).toUri().getPath();
       }
       if (!storagePartitionValues.isEmpty()) {
@@ -100,13 +100,13 @@ public abstract class AbstractAdbSyncHoodieClient extends AbstractSyncHoodieClie
   public abstract void dropTable(String tableName);
 
   protected String getDatabasePath() {
-    String dbLocation = adbSyncConfig.dbLocation;
+    String dbLocation = adbSyncConfig.adbSyncConfigParams.dbLocation;
     Path dbLocationPath;
     if (StringUtils.isNullOrEmpty(dbLocation)) {
-      if (new Path(adbSyncConfig.basePath).isRoot()) {
-        dbLocationPath = new Path(adbSyncConfig.basePath);
+      if (new Path(adbSyncConfig.hoodieSyncConfigParams.basePath).isRoot()) {
+        dbLocationPath = new Path(adbSyncConfig.hoodieSyncConfigParams.basePath);
       } else {
-        dbLocationPath = new Path(adbSyncConfig.basePath).getParent();
+        dbLocationPath = new Path(adbSyncConfig.hoodieSyncConfigParams.basePath).getParent();
       }
     } else {
       dbLocationPath = new Path(dbLocation);

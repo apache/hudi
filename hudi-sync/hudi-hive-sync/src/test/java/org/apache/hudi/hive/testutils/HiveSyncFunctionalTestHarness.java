@@ -80,32 +80,32 @@ public class HiveSyncFunctionalTestHarness {
 
   public HiveSyncConfig hiveSyncConf() throws IOException {
     HiveSyncConfig conf = new HiveSyncConfig();
-    conf.jdbcUrl = hiveTestService.getJdbcHive2Url();
-    conf.hiveUser = "";
-    conf.hivePass = "";
-    conf.databaseName = "hivesynctestdb";
-    conf.tableName = "hivesynctesttable";
-    conf.basePath = Files.createDirectories(tempDir.resolve("hivesynctestcase-" + Instant.now().toEpochMilli())).toUri().toString();
-    conf.assumeDatePartitioning = true;
-    conf.usePreApacheInputFormat = false;
-    conf.partitionFields = Collections.singletonList("datestr");
+    conf.hiveSyncConfigParams.jdbcUrl = hiveTestService.getJdbcHive2Url();
+    conf.hiveSyncConfigParams.dbUser = "";
+    conf.hiveSyncConfigParams.dbPass = "";
+    conf.hoodieSyncConfigParams.databaseName = "hivesynctestdb";
+    conf.hoodieSyncConfigParams.tableName = "hivesynctesttable";
+    conf.hoodieSyncConfigParams.basePath = Files.createDirectories(tempDir.resolve("hivesynctestcase-" + Instant.now().toEpochMilli())).toUri().toString();
+    conf.hoodieSyncConfigParams.assumeDatePartitioning = true;
+    conf.hiveSyncConfigParams.usePreApacheInputFormat = false;
+    conf.hoodieSyncConfigParams.partitionFields = Collections.singletonList("datestr");
     return conf;
   }
 
   public HoodieHiveClient hiveClient(HiveSyncConfig hiveSyncConfig) throws IOException {
     HoodieTableMetaClient.withPropertyBuilder()
         .setTableType(HoodieTableType.COPY_ON_WRITE)
-        .setTableName(hiveSyncConfig.tableName)
+        .setTableName(hiveSyncConfig.hoodieSyncConfigParams.tableName)
         .setPayloadClass(HoodieAvroPayload.class)
-        .initTable(hadoopConf, hiveSyncConfig.basePath);
+        .initTable(hadoopConf, hiveSyncConfig.hoodieSyncConfigParams.basePath);
     return new HoodieHiveClient(hiveSyncConfig, hiveConf(), fs());
   }
 
   public void dropTables(String database, String... tables) throws IOException, HiveException, MetaException {
     HiveSyncConfig hiveSyncConfig = hiveSyncConf();
-    hiveSyncConfig.databaseName = database;
+    hiveSyncConfig.hoodieSyncConfigParams.databaseName = database;
     for (String table : tables) {
-      hiveSyncConfig.tableName = table;
+      hiveSyncConfig.hoodieSyncConfigParams.tableName = table;
       new HiveQueryDDLExecutor(hiveSyncConfig, fs(), hiveConf()).runSQL("drop table if exists " + table);
     }
   }
@@ -113,7 +113,7 @@ public class HiveSyncFunctionalTestHarness {
   public void dropDatabases(String... databases) throws IOException, HiveException, MetaException {
     HiveSyncConfig hiveSyncConfig = hiveSyncConf();
     for (String database : databases) {
-      hiveSyncConfig.databaseName = database;
+      hiveSyncConfig.hoodieSyncConfigParams.databaseName = database;
       new HiveQueryDDLExecutor(hiveSyncConfig, fs(), hiveConf()).runSQL("drop database if exists " + database);
     }
   }

@@ -36,20 +36,20 @@ public class GlobalHiveSyncConfig extends HiveSyncConfig {
 
   public static GlobalHiveSyncConfig copy(GlobalHiveSyncConfig cfg) {
     GlobalHiveSyncConfig newConfig = new GlobalHiveSyncConfig(cfg.getProps());
-    newConfig.basePath = cfg.basePath;
-    newConfig.assumeDatePartitioning = cfg.assumeDatePartitioning;
-    newConfig.databaseName = cfg.databaseName;
-    newConfig.hivePass = cfg.hivePass;
-    newConfig.hiveUser = cfg.hiveUser;
-    newConfig.partitionFields = cfg.partitionFields;
-    newConfig.partitionValueExtractorClass = cfg.partitionValueExtractorClass;
-    newConfig.jdbcUrl = cfg.jdbcUrl;
-    newConfig.tableName = cfg.tableName;
-    newConfig.usePreApacheInputFormat = cfg.usePreApacheInputFormat;
-    newConfig.useFileListingFromMetadata = cfg.useFileListingFromMetadata;
-    newConfig.supportTimestamp = cfg.supportTimestamp;
-    newConfig.decodePartition = cfg.decodePartition;
-    newConfig.batchSyncNum = cfg.batchSyncNum;
+    newConfig.hoodieSyncConfigParams.basePath = cfg.hoodieSyncConfigParams.basePath;
+    newConfig.hoodieSyncConfigParams.assumeDatePartitioning = cfg.hoodieSyncConfigParams.assumeDatePartitioning;
+    newConfig.hoodieSyncConfigParams.databaseName = cfg.hoodieSyncConfigParams.databaseName;
+    newConfig.hiveSyncConfigParams.dbPass = cfg.hiveSyncConfigParams.dbPass;
+    newConfig.hiveSyncConfigParams.dbUser = cfg.hiveSyncConfigParams.dbUser;
+    newConfig.hoodieSyncConfigParams.partitionFields = cfg.hoodieSyncConfigParams.partitionFields;
+    newConfig.hoodieSyncConfigParams.partitionValueExtractorClass = cfg.hoodieSyncConfigParams.partitionValueExtractorClass;
+    newConfig.hiveSyncConfigParams.jdbcUrl = cfg.hiveSyncConfigParams.jdbcUrl;
+    newConfig.hoodieSyncConfigParams.tableName = cfg.hoodieSyncConfigParams.tableName;
+    newConfig.hiveSyncConfigParams.usePreApacheInputFormat = cfg.hiveSyncConfigParams.usePreApacheInputFormat;
+    newConfig.hoodieSyncConfigParams.useFileListingFromMetadata = cfg.hoodieSyncConfigParams.useFileListingFromMetadata;
+    newConfig.hiveSyncConfigParams.supportTimestamp = cfg.hiveSyncConfigParams.supportTimestamp;
+    newConfig.hoodieSyncConfigParams.decodePartition = cfg.hoodieSyncConfigParams.decodePartition;
+    newConfig.hiveSyncConfigParams.batchSyncNum = cfg.hiveSyncConfigParams.batchSyncNum;
     newConfig.globallyReplicatedTimeStamp = cfg.globallyReplicatedTimeStamp;
     return newConfig;
   }

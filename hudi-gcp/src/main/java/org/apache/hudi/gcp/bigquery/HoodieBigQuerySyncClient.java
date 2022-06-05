@@ -20,7 +20,7 @@
 package org.apache.hudi.gcp.bigquery;
 
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.sync.common.AbstractSyncHoodieClient;
+import org.apache.hudi.sync.common.HoodieSyncClient;
 
 import com.google.cloud.bigquery.BigQuery;
 import com.google.cloud.bigquery.BigQueryException;
@@ -47,7 +47,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
-public class HoodieBigQuerySyncClient extends AbstractSyncHoodieClient {
+public class HoodieBigQuerySyncClient extends HoodieSyncClient {
   private static final Logger LOG = LogManager.getLogger(HoodieBigQuerySyncClient.class);
 
   private final BigQuerySyncConfig syncConfig;

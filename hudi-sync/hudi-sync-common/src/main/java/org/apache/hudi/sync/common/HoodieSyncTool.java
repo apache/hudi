@@ -42,19 +42,19 @@ import static org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName.BINARY;
  * Base class to sync Hudi meta data with Metastores to make
  * Hudi table queryable through external systems.
  */
-public abstract class AbstractSyncTool {
+public abstract class HoodieSyncTool {
   protected final Configuration conf;
   protected final FileSystem fs;
   protected TypedProperties props;
 
-  public AbstractSyncTool(TypedProperties props, Configuration conf, FileSystem fs) {
+  public HoodieSyncTool(TypedProperties props, Configuration conf, FileSystem fs) {
     this.props = props;
     this.conf = conf;
     this.fs = fs;
   }
 
   @Deprecated
-  public AbstractSyncTool(Properties props, FileSystem fileSystem) {
+  public HoodieSyncTool(Properties props, FileSystem fileSystem) {
     this(new TypedProperties(props), fileSystem.getConf(), fileSystem);
   }
 

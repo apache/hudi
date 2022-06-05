@@ -88,7 +88,7 @@ public class AWSGlueCatalogSyncClient extends AbstractHiveSyncHoodieClient {
   public AWSGlueCatalogSyncClient(HiveSyncConfig syncConfig, Configuration hadoopConf, FileSystem fs) {
     super(syncConfig, hadoopConf, fs);
     this.awsGlue = AWSGlueClientBuilder.standard().build();
-    this.databaseName = syncConfig.databaseName;
+    this.databaseName = syncConfig.hoodieSyncConfigParams.databaseName;
   }
 
   @Override
@@ -124,7 +124,7 @@ public class AWSGlueCatalogSyncClient extends AbstractHiveSyncHoodieClient {
       StorageDescriptor sd = table.getStorageDescriptor();
       List<PartitionInput> partitionInputs = partitionsToAdd.stream().map(partition -> {
         StorageDescriptor partitionSd = sd.clone();
-        String fullPartitionPath = FSUtils.getPartitionPath(syncConfig.basePath, partition).toString();
+        String fullPartitionPath = FSUtils.getPartitionPath(syncConfig.hoodieSyncConfigParams.basePath, partition).toString();
         List<String> partitionValues = partitionValueExtractor.extractPartitionValuesInPath(partition);
         partitionSd.setLocation(fullPartitionPath);
         return new PartitionInput().withValues(partitionValues).withStorageDescriptor(partitionSd);
@@ -158,7 +158,7 @@ public class AWSGlueCatalogSyncClient extends AbstractHiveSyncHoodieClient {
       StorageDescriptor sd = table.getStorageDescriptor();
       List<BatchUpdatePartitionRequestEntry> updatePartitionEntries = changedPartitions.stream().map(partition -> {
         StorageDescriptor partitionSd = sd.clone();
-        String fullPartitionPath = FSUtils.getPartitionPath(syncConfig.basePath, partition).toString();
+        String fullPartitionPath = FSUtils.getPartitionPath(syncConfig.hoodieSyncConfigParams.basePath, partition).toString();
         List<String> partitionValues = partitionValueExtractor.extractPartitionValuesInPath(partition);
         sd.setLocation(fullPartitionPath);
         PartitionInput partitionInput = new PartitionInput().withValues(partitionValues).withStorageDescriptor(partitionSd);
@@ -204,10 +204,10 @@ public class AWSGlueCatalogSyncClient extends AbstractHiveSyncHoodieClient {
   @Override
   public void updateTableDefinition(String tableName, MessageType newSchema) {
     // ToDo Cascade is set in Hive meta sync, but need to investigate how to configure it for Glue meta
-    boolean cascade = syncConfig.partitionFields.size() > 0;
+    boolean cascade = syncConfig.hoodieSyncConfigParams.partitionFields.size() > 0;
     try {
       Table table = getTable(awsGlue, databaseName, tableName);
-      Map<String, String> newSchemaMap = parquetSchemaToMapSchema(newSchema, syncConfig.supportTimestamp, false);
+      Map<String, String> newSchemaMap = parquetSchemaToMapSchema(newSchema, syncConfig.hiveSyncConfigParams.supportTimestamp, false);
       List<Column> newColumns = newSchemaMap.keySet().stream().map(key -> {
         String keyType = getPartitionKeyType(newSchemaMap, key);
         return new Column().withName(key).withType(keyType.toLowerCase()).withComment("");
@@ -263,13 +263,13 @@ public class AWSGlueCatalogSyncClient extends AbstractHiveSyncHoodieClient {
     }
     CreateTableRequest request = new CreateTableRequest();
     Map<String, String> params = new HashMap<>();
-    if (!syncConfig.createManagedTable) {
+    if (!syncConfig.hiveSyncConfigParams.createManagedTable) {
       params.put("EXTERNAL", "TRUE");
     }
     params.putAll(tableProperties);
 
     try {
-      Map<String, String> mapSchema = parquetSchemaToMapSchema(storageSchema, syncConfig.supportTimestamp, false);
+      Map<String, String> mapSchema = parquetSchemaToMapSchema(storageSchema, syncConfig.hiveSyncConfigParams.supportTimestamp, false);
 
       List<Column> schemaPartitionKeys = new ArrayList<>();
       List<Column> schemaWithoutPartitionKeys = new ArrayList<>();
@@ -277,7 +277,7 @@ public class AWSGlueCatalogSyncClient extends AbstractHiveSyncHoodieClient {
         String keyType = getPartitionKeyType(mapSchema, key);
         Column column = new Column().withName(key).withType(keyType.toLowerCase()).withComment("");
         // In Glue, the full schema should exclude the partition keys
-        if (syncConfig.partitionFields.contains(key)) {
+        if (syncConfig.hoodieSyncConfigParams.partitionFields.contains(key)) {
           schemaPartitionKeys.add(column);
         } else {
           schemaWithoutPartitionKeys.add(column);
@@ -288,7 +288,7 @@ public class AWSGlueCatalogSyncClient extends AbstractHiveSyncHoodieClient {
       serdeProperties.put("serialization.format", "1");
       storageDescriptor
           .withSerdeInfo(new SerDeInfo().withSerializationLibrary(serdeClass).withParameters(serdeProperties))
-          .withLocation(s3aToS3(syncConfig.basePath))
+          .withLocation(s3aToS3(syncConfig.hoodieSyncConfigParams.basePath))
           .withInputFormat(inputFormatClass)
           .withOutputFormat(outputFormatClass)
           .withColumns(schemaWithoutPartitionKeys);

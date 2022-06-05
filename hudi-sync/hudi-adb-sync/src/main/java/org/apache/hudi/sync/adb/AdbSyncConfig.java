@@ -18,64 +18,22 @@
 
 package org.apache.hudi.sync.adb;
 
+import com.beust.jcommander.ParametersDelegate;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.sync.common.HoodieSyncConfig;
 
 import com.beust.jcommander.Parameter;
+
+import java.io.Serializable;
 
 /**
  * Configs needed to sync data into Alibaba Cloud AnalyticDB(ADB).
  */
 public class AdbSyncConfig extends HoodieSyncConfig {
 
-  @Parameter(names = {"--user"}, description = "Adb username", required = true)
-  public String adbUser;
-
-  @Parameter(names = {"--pass"}, description = "Adb password", required = true)
-  public String adbPass;
-
-  @Parameter(names = {"--jdbc-url"}, description = "Adb jdbc connect url", required = true)
-  public String jdbcUrl;
-
-  @Parameter(names = {"--skip-ro-suffix"}, description = "Whether skip the `_ro` suffix for read optimized table when syncing")
-  public Boolean skipROSuffix;
-
-  @Parameter(names = {"--skip-rt-sync"}, description = "Whether skip the rt table when syncing")
-  public Boolean skipRTSync;
-
-  @Parameter(names = {"--hive-style-partitioning"}, description = "Whether use hive style partitioning, true if like the following style: field1=value1/field2=value2")
-  public Boolean useHiveStylePartitioning;
-
-  @Parameter(names = {"--support-timestamp"}, description = "If true, converts int64(timestamp_micros) to timestamp type")
-  public Boolean supportTimestamp;
-
-  @Parameter(names = {"--spark-datasource"}, description = "Whether sync this table as spark data source table")
-  public Boolean syncAsSparkDataSourceTable;
-
-  @Parameter(names = {"--table-properties"}, description = "Table properties, to support read hoodie table as datasource table", required = true)
-  public String tableProperties;
-
-  @Parameter(names = {"--serde-properties"}, description = "Serde properties, to support read hoodie table as datasource table", required = true)
-  public String serdeProperties;
-
-  @Parameter(names = {"--spark-schema-length-threshold"}, description = "The maximum length allowed in a single cell when storing additional schema information in Hive's metastore")
-  public int sparkSchemaLengthThreshold;
-
-  @Parameter(names = {"--db-location"}, description = "Database location")
-  public String dbLocation;
-
-  @Parameter(names = {"--auto-create-database"}, description = "Whether auto create adb database")
-  public Boolean autoCreateDatabase = true;
-
-  @Parameter(names = {"--skip-last-commit-time-sync"}, description = "Whether skip last commit time syncing")
-  public Boolean skipLastCommitTimeSync = false;
-
-  @Parameter(names = {"--drop-table-before-creation"}, description = "Whether drop table before creation")
-  public Boolean dropTableBeforeCreation = false;
-
-  @Parameter(names = {"--help", "-h"}, help = true)
-  public Boolean help = false;
+  public final AdbSyncConfigParams adbSyncConfigParams = new AdbSyncConfigParams();
 
   public static final ConfigProperty<String> ADB_SYNC_USER = ConfigProperty
       .key("hoodie.datasource.adb.sync.username")
@@ -159,48 +117,48 @@ public class AdbSyncConfig extends HoodieSyncConfig {
   public AdbSyncConfig(TypedProperties props) {
     super(props);
 
-    adbUser = getString(ADB_SYNC_USER);
-    adbPass = getString(ADB_SYNC_PASS);
-    jdbcUrl = getString(ADB_SYNC_JDBC_URL);
-    skipROSuffix = getBooleanOrDefault(ADB_SYNC_SKIP_RO_SUFFIX);
-    skipRTSync = getBooleanOrDefault(ADB_SYNC_SKIP_RT_SYNC);
-    useHiveStylePartitioning = getBooleanOrDefault(ADB_SYNC_USE_HIVE_STYLE_PARTITIONING);
-    supportTimestamp = getBooleanOrDefault(ADB_SYNC_SUPPORT_TIMESTAMP);
-    syncAsSparkDataSourceTable = getBooleanOrDefault(ADB_SYNC_SYNC_AS_SPARK_DATA_SOURCE_TABLE);
-    tableProperties = getString(ADB_SYNC_TABLE_PROPERTIES);
-    serdeProperties = getString(ADB_SYNC_SERDE_PROPERTIES);
-    sparkSchemaLengthThreshold = getIntOrDefault(ADB_SYNC_SCHEMA_STRING_LENGTH_THRESHOLD);
-    dbLocation = getString(ADB_SYNC_DB_LOCATION);
-    autoCreateDatabase = getBooleanOrDefault(ADB_SYNC_AUTO_CREATE_DATABASE);
-    skipLastCommitTimeSync = getBooleanOrDefault(ADB_SYNC_SKIP_LAST_COMMIT_TIME_SYNC);
-    dropTableBeforeCreation = getBooleanOrDefault(ADB_SYNC_DROP_TABLE_BEFORE_CREATION);
+    adbSyncConfigParams.hiveSyncConfigParams.dbUser = getString(ADB_SYNC_USER);
+    adbSyncConfigParams.hiveSyncConfigParams.dbPass = getString(ADB_SYNC_PASS);
+    adbSyncConfigParams.hiveSyncConfigParams.jdbcUrl = getString(ADB_SYNC_JDBC_URL);
+    adbSyncConfigParams.hiveSyncConfigParams.skipROSuffix = getBooleanOrDefault(ADB_SYNC_SKIP_RO_SUFFIX);
+    adbSyncConfigParams.skipRTSync = getBooleanOrDefault(ADB_SYNC_SKIP_RT_SYNC);
+    adbSyncConfigParams.useHiveStylePartitioning = getBooleanOrDefault(ADB_SYNC_USE_HIVE_STYLE_PARTITIONING);
+    adbSyncConfigParams.supportTimestamp = getBooleanOrDefault(ADB_SYNC_SUPPORT_TIMESTAMP);
+    adbSyncConfigParams.syncAsSparkDataSourceTable = getBooleanOrDefault(ADB_SYNC_SYNC_AS_SPARK_DATA_SOURCE_TABLE);
+    adbSyncConfigParams.tableProperties = getString(ADB_SYNC_TABLE_PROPERTIES);
+    adbSyncConfigParams.serdeProperties = getString(ADB_SYNC_SERDE_PROPERTIES);
+    adbSyncConfigParams.sparkSchemaLengthThreshold = getIntOrDefault(ADB_SYNC_SCHEMA_STRING_LENGTH_THRESHOLD);
+    adbSyncConfigParams.dbLocation = getString(ADB_SYNC_DB_LOCATION);
+    adbSyncConfigParams.autoCreateDatabase = getBooleanOrDefault(ADB_SYNC_AUTO_CREATE_DATABASE);
+    adbSyncConfigParams.skipLastCommitTimeSync = getBooleanOrDefault(ADB_SYNC_SKIP_LAST_COMMIT_TIME_SYNC);
+    adbSyncConfigParams.dropTableBeforeCreation = getBooleanOrDefault(ADB_SYNC_DROP_TABLE_BEFORE_CREATION);
   }
 
   public static TypedProperties toProps(AdbSyncConfig cfg) {
     TypedProperties properties = new TypedProperties();
-    properties.put(META_SYNC_DATABASE_NAME.key(), cfg.databaseName);
-    properties.put(META_SYNC_TABLE_NAME.key(), cfg.tableName);
-    properties.put(ADB_SYNC_USER.key(), cfg.adbUser);
-    properties.put(ADB_SYNC_PASS.key(), cfg.adbPass);
-    properties.put(ADB_SYNC_JDBC_URL.key(), cfg.jdbcUrl);
-    properties.put(META_SYNC_BASE_PATH.key(), cfg.basePath);
-    properties.put(META_SYNC_PARTITION_FIELDS.key(), String.join(",", cfg.partitionFields));
-    properties.put(META_SYNC_PARTITION_EXTRACTOR_CLASS.key(), cfg.partitionValueExtractorClass);
-    properties.put(META_SYNC_ASSUME_DATE_PARTITION.key(), String.valueOf(cfg.assumeDatePartitioning));
-    properties.put(ADB_SYNC_SKIP_RO_SUFFIX.key(), String.valueOf(cfg.skipROSuffix));
-    properties.put(ADB_SYNC_SKIP_RT_SYNC.key(), String.valueOf(cfg.skipRTSync));
-    properties.put(ADB_SYNC_USE_HIVE_STYLE_PARTITIONING.key(), String.valueOf(cfg.useHiveStylePartitioning));
-    properties.put(META_SYNC_USE_FILE_LISTING_FROM_METADATA.key(), String.valueOf(cfg.useFileListingFromMetadata));
-    properties.put(ADB_SYNC_SUPPORT_TIMESTAMP.key(), String.valueOf(cfg.supportTimestamp));
-    properties.put(ADB_SYNC_TABLE_PROPERTIES.key(), cfg.tableProperties);
-    properties.put(ADB_SYNC_SERDE_PROPERTIES.key(), cfg.serdeProperties);
-    properties.put(ADB_SYNC_SYNC_AS_SPARK_DATA_SOURCE_TABLE.key(), String.valueOf(cfg.syncAsSparkDataSourceTable));
-    properties.put(ADB_SYNC_SCHEMA_STRING_LENGTH_THRESHOLD.key(), String.valueOf(cfg.sparkSchemaLengthThreshold));
-    properties.put(META_SYNC_SPARK_VERSION.key(), cfg.sparkVersion);
-    properties.put(ADB_SYNC_DB_LOCATION.key(), cfg.dbLocation);
-    properties.put(ADB_SYNC_AUTO_CREATE_DATABASE.key(), String.valueOf(cfg.autoCreateDatabase));
-    properties.put(ADB_SYNC_SKIP_LAST_COMMIT_TIME_SYNC.key(), String.valueOf(cfg.skipLastCommitTimeSync));
-    properties.put(ADB_SYNC_DROP_TABLE_BEFORE_CREATION.key(), String.valueOf(cfg.dropTableBeforeCreation));
+    properties.put(META_SYNC_DATABASE_NAME.key(), cfg.hoodieSyncConfigParams.databaseName);
+    properties.put(META_SYNC_TABLE_NAME.key(), cfg.hoodieSyncConfigParams.tableName);
+    properties.put(ADB_SYNC_USER.key(), cfg.adbSyncConfigParams.hiveSyncConfigParams.dbUser);
+    properties.put(ADB_SYNC_PASS.key(), cfg.adbSyncConfigParams.hiveSyncConfigParams.dbPass);
+    properties.put(ADB_SYNC_JDBC_URL.key(), cfg.adbSyncConfigParams.hiveSyncConfigParams.jdbcUrl);
+    properties.put(META_SYNC_BASE_PATH.key(), cfg.hoodieSyncConfigParams.basePath);
+    properties.put(META_SYNC_PARTITION_FIELDS.key(), String.join(",", cfg.hoodieSyncConfigParams.partitionFields));
+    properties.put(META_SYNC_PARTITION_EXTRACTOR_CLASS.key(), cfg.hoodieSyncConfigParams.partitionValueExtractorClass);
+    properties.put(META_SYNC_ASSUME_DATE_PARTITION.key(), String.valueOf(cfg.hoodieSyncConfigParams.assumeDatePartitioning));
+    properties.put(ADB_SYNC_SKIP_RO_SUFFIX.key(), String.valueOf(cfg.adbSyncConfigParams.hiveSyncConfigParams.skipROSuffix));
+    properties.put(ADB_SYNC_SKIP_RT_SYNC.key(), String.valueOf(cfg.adbSyncConfigParams.skipRTSync));
+    properties.put(ADB_SYNC_USE_HIVE_STYLE_PARTITIONING.key(), String.valueOf(cfg.adbSyncConfigParams.useHiveStylePartitioning));
+    properties.put(META_SYNC_USE_FILE_LISTING_FROM_METADATA.key(), String.valueOf(cfg.hoodieSyncConfigParams.useFileListingFromMetadata));
+    properties.put(ADB_SYNC_SUPPORT_TIMESTAMP.key(), String.valueOf(cfg.adbSyncConfigParams.supportTimestamp));
+    properties.put(ADB_SYNC_TABLE_PROPERTIES.key(), cfg.adbSyncConfigParams.tableProperties);
+    properties.put(ADB_SYNC_SERDE_PROPERTIES.key(), cfg.adbSyncConfigParams.serdeProperties);
+    properties.put(ADB_SYNC_SYNC_AS_SPARK_DATA_SOURCE_TABLE.key(), String.valueOf(cfg.adbSyncConfigParams.syncAsSparkDataSourceTable));
+    properties.put(ADB_SYNC_SCHEMA_STRING_LENGTH_THRESHOLD.key(), String.valueOf(cfg.adbSyncConfigParams.sparkSchemaLengthThreshold));
+    properties.put(META_SYNC_SPARK_VERSION.key(), cfg.hoodieSyncConfigParams.sparkVersion);
+    properties.put(ADB_SYNC_DB_LOCATION.key(), cfg.adbSyncConfigParams.dbLocation);
+    properties.put(ADB_SYNC_AUTO_CREATE_DATABASE.key(), String.valueOf(cfg.adbSyncConfigParams.autoCreateDatabase));
+    properties.put(ADB_SYNC_SKIP_LAST_COMMIT_TIME_SYNC.key(), String.valueOf(cfg.adbSyncConfigParams.skipLastCommitTimeSync));
+    properties.put(ADB_SYNC_DROP_TABLE_BEFORE_CREATION.key(), String.valueOf(cfg.adbSyncConfigParams.dropTableBeforeCreation));
 
     return properties;
   }
@@ -208,33 +166,66 @@ public class AdbSyncConfig extends HoodieSyncConfig {
   @Override
   public String toString() {
     return "AdbSyncConfig{"
-        + "adbUser='" + adbUser + '\''
-        + ", adbPass='" + adbPass + '\''
-        + ", jdbcUrl='" + jdbcUrl + '\''
-        + ", skipROSuffix=" + skipROSuffix
-        + ", skipRTSync=" + skipRTSync
-        + ", useHiveStylePartitioning=" + useHiveStylePartitioning
-        + ", supportTimestamp=" + supportTimestamp
-        + ", syncAsSparkDataSourceTable=" + syncAsSparkDataSourceTable
-        + ", tableProperties='" + tableProperties + '\''
-        + ", serdeProperties='" + serdeProperties + '\''
-        + ", sparkSchemaLengthThreshold=" + sparkSchemaLengthThreshold
-        + ", dbLocation='" + dbLocation + '\''
-        + ", autoCreateDatabase=" + autoCreateDatabase
-        + ", skipLastCommitTimeSync=" + skipLastCommitTimeSync
-        + ", dropTableBeforeCreation=" + dropTableBeforeCreation
-        + ", help=" + help
-        + ", databaseName='" + databaseName + '\''
-        + ", tableName='" + tableName + '\''
-        + ", basePath='" + basePath + '\''
-        + ", baseFileFormat='" + baseFileFormat + '\''
-        + ", partitionFields=" + partitionFields
-        + ", partitionValueExtractorClass='" + partitionValueExtractorClass + '\''
-        + ", assumeDatePartitioning=" + assumeDatePartitioning
-        + ", decodePartition=" + decodePartition
-        + ", useFileListingFromMetadata=" + useFileListingFromMetadata
-        + ", isConditionalSync=" + isConditionalSync
-        + ", sparkVersion='" + sparkVersion + '\''
+        + "adbUser='" + adbSyncConfigParams.hiveSyncConfigParams.dbUser + '\''
+        + ", adbPass='" + adbSyncConfigParams.hiveSyncConfigParams.dbPass + '\''
+        + ", jdbcUrl='" + adbSyncConfigParams.hiveSyncConfigParams.jdbcUrl + '\''
+        + ", skipROSuffix=" + adbSyncConfigParams.hiveSyncConfigParams.skipROSuffix
+        + ", skipRTSync=" + adbSyncConfigParams.skipRTSync
+        + ", useHiveStylePartitioning=" + adbSyncConfigParams.useHiveStylePartitioning
+        + ", supportTimestamp=" + adbSyncConfigParams.supportTimestamp
+        + ", syncAsSparkDataSourceTable=" + adbSyncConfigParams.syncAsSparkDataSourceTable
+        + ", tableProperties='" + adbSyncConfigParams.tableProperties + '\''
+        + ", serdeProperties='" + adbSyncConfigParams.serdeProperties + '\''
+        + ", sparkSchemaLengthThreshold=" + adbSyncConfigParams.sparkSchemaLengthThreshold
+        + ", dbLocation='" + adbSyncConfigParams.dbLocation + '\''
+        + ", autoCreateDatabase=" + adbSyncConfigParams.autoCreateDatabase
+        + ", skipLastCommitTimeSync=" + adbSyncConfigParams.skipLastCommitTimeSync
+        + ", dropTableBeforeCreation=" + adbSyncConfigParams.dropTableBeforeCreation
+        + ", help=" + adbSyncConfigParams.help
+        + ", databaseName='" + hoodieSyncConfigParams.databaseName + '\''
+        + ", tableName='" + hoodieSyncConfigParams.tableName + '\''
+        + ", basePath='" + hoodieSyncConfigParams.basePath + '\''
+        + ", baseFileFormat='" + hoodieSyncConfigParams.baseFileFormat + '\''
+        + ", partitionFields=" + hoodieSyncConfigParams.partitionFields
+        + ", partitionValueExtractorClass='" + hoodieSyncConfigParams.partitionValueExtractorClass + '\''
+        + ", assumeDatePartitioning=" + hoodieSyncConfigParams.assumeDatePartitioning
+        + ", decodePartition=" + hoodieSyncConfigParams.decodePartition
+        + ", useFileListingFromMetadata=" + hoodieSyncConfigParams.useFileListingFromMetadata
+        + ", isConditionalSync=" + hoodieSyncConfigParams.isConditionalSync
+        + ", sparkVersion='" + hoodieSyncConfigParams.sparkVersion + '\''
         + '}';
+  }
+
+  public static class AdbSyncConfigParams implements Serializable {
+    @ParametersDelegate()
+    public HiveSyncConfig.HiveSyncConfigParams hiveSyncConfigParams = new HiveSyncConfig.HiveSyncConfigParams();
+
+    @Parameter(names = {"--support-timestamp"}, description = "If true, converts int64(timestamp_micros) to timestamp type")
+    public Boolean supportTimestamp;
+    @Parameter(names = {"--spark-datasource"}, description = "Whether sync this table as spark data source table")
+    public Boolean syncAsSparkDataSourceTable;
+    @Parameter(names = {"--table-properties"}, description = "Table properties, to support read hoodie table as datasource table", required = true)
+    public String tableProperties;
+    @Parameter(names = {"--serde-properties"}, description = "Serde properties, to support read hoodie table as datasource table", required = true)
+    public String serdeProperties;
+    @Parameter(names = {"--spark-schema-length-threshold"}, description = "The maximum length allowed in a single cell when storing additional schema information in Hive's metastore")
+    public int sparkSchemaLengthThreshold;
+    @Parameter(names = {"--help", "-h"}, help = true)
+    public Boolean help = false;
+    @Parameter(names = {"--hive-style-partitioning"}, description = "Whether use hive style partitioning, true if like the following style: field1=value1/field2=value2")
+    public Boolean useHiveStylePartitioning;
+    @Parameter(names = {"--skip-rt-sync"}, description = "Whether skip the rt table when syncing")
+    public Boolean skipRTSync;
+    @Parameter(names = {"--db-location"}, description = "Database location")
+    public String dbLocation;
+    @Parameter(names = {"--auto-create-database"}, description = "Whether auto create adb database")
+    public Boolean autoCreateDatabase = true;
+    @Parameter(names = {"--skip-last-commit-time-sync"}, description = "Whether skip last commit time syncing")
+    public Boolean skipLastCommitTimeSync = false;
+    @Parameter(names = {"--drop-table-before-creation"}, description = "Whether drop table before creation")
+    public Boolean dropTableBeforeCreation = false;
+
+    public AdbSyncConfigParams() {
+    }
   }
 }
