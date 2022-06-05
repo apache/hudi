@@ -364,7 +364,7 @@ public class MetadataCommand implements CommandMarker {
 
   private void initJavaSparkContext(Option<String> userDefinedMaster) {
     if (jsc == null) {
-      jsc = SparkUtil.initJavaSparkConf(SparkUtil.getDefaultConf("HoodieCLI", userDefinedMaster));
+      jsc = SparkUtil.initJavaSparkContext(SparkUtil.getDefaultConf("HoodieCLI", userDefinedMaster));
     }
   }
 }

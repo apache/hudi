@@ -20,6 +20,7 @@ package org.apache.hudi.sink.utils;
 
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.hudi.aws.sync.AwsGlueCatalogSyncTool;
+import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
@@ -58,7 +59,7 @@ public class HiveSyncContext {
     return new HiveSyncTool(this.syncConfig, this.hiveConf, this.fs);
   }
 
-  public static HiveSyncContext create(Configuration conf) {
+  public static HiveSyncContext create(Configuration conf, SerializableConfiguration serConf) {
     HiveSyncConfig syncConfig = buildSyncConfig(conf);
     org.apache.hadoop.conf.Configuration hadoopConf = HadoopConfigurations.getHadoopConf(conf);
     String path = conf.getString(FlinkOptions.PATH);
@@ -67,6 +68,7 @@ public class HiveSyncContext {
     if (!FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.HIVE_SYNC_METASTORE_URIS)) {
       hadoopConf.set(HiveConf.ConfVars.METASTOREURIS.varname, conf.getString(FlinkOptions.HIVE_SYNC_METASTORE_URIS));
     }
+    hiveConf.addResource(serConf.get());
     hiveConf.addResource(hadoopConf);
     return new HiveSyncContext(syncConfig, hiveConf, fs);
   }

@@ -550,10 +550,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
   @Override
   public void close() {
-    for (Pair<String, String> partitionFileSlicePair : partitionReaders.keySet()) {
-      close(partitionFileSlicePair);
-    }
-    partitionReaders.clear();
+    closePartitionReaders();
   }
 
   /**
@@ -565,6 +562,16 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     Pair<HoodieFileReader, HoodieMetadataMergedLogRecordReader> readers =
         partitionReaders.remove(partitionFileSlicePair);
     closeReader(readers);
+  }
+
+  /**
+   * Close and clear all the partitions readers.
+   */
+  private void closePartitionReaders() {
+    for (Pair<String, String> partitionFileSlicePair : partitionReaders.keySet()) {
+      close(partitionFileSlicePair);
+    }
+    partitionReaders.clear();
   }
 
   private void closeReader(Pair<HoodieFileReader, HoodieMetadataMergedLogRecordReader> readers) {
@@ -624,5 +631,11 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   public void reset() {
     initIfNeeded();
     dataMetaClient.reloadActiveTimeline();
+    if (metadataMetaClient != null) {
+      metadataMetaClient.reloadActiveTimeline();
+    }
+    // the cached reader has max instant time restriction, they should be cleared
+    // because the metadata timeline may have changed.
+    closePartitionReaders();
   }
 }

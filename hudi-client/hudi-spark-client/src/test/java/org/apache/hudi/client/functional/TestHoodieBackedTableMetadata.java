@@ -111,7 +111,7 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
     assertEquals(fsPartitions, metadataPartitions, "Partitions should match");
 
     // Files within each partition should match
-    HoodieTable table = HoodieSparkTable.create(writeConfig, context, true);
+    HoodieTable table = HoodieSparkTable.create(writeConfig, context);
     TableFileSystemView tableView = table.getHoodieView();
     List<String> fullPartitionPaths = fsPartitions.stream().map(partition -> basePath + "/" + partition).collect(Collectors.toList());
     Map<String, FileStatus[]> partitionToFilesMap = tableMetadata.getAllFilesInPartitions(fullPartitionPaths);

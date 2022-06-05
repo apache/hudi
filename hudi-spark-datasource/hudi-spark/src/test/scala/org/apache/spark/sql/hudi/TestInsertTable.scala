@@ -663,4 +663,37 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
       }
     }
   }
+
+  test("Test nested field as primaryKey and preCombineField") {
+    withTempDir { tmp =>
+      Seq("cow", "mor").foreach { tableType =>
+        val tableName = generateTableName
+        // create table
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  name string,
+             |  price double,
+             |  ts long,
+             |  nestedcol struct<a1:string, a2:struct<b1:string, b2:struct<c1:string, c2:int>>>
+             |) using hudi
+             | location '${tmp.getCanonicalPath}/$tableName'
+             | options (
+             |  type = '$tableType',
+             |  primaryKey = 'nestedcol.a1',
+             |  preCombineField = 'nestedcol.a2.b2.c2'
+             | )
+       """.stripMargin)
+        // insert data to table
+        spark.sql(
+          s"""insert into $tableName values
+             |('name_1', 10, 1000, struct('a', struct('b', struct('c', 999)))),
+             |('name_2', 20, 2000, struct('a', struct('b', struct('c', 333))))
+             |""".stripMargin)
+        checkAnswer(s"select name, price, ts, nestedcol.a1, nestedcol.a2.b2.c2 from $tableName")(
+          Seq("name_1", 10.0, 1000, "a", 999)
+        )
+      }
+    }
+  }
 }

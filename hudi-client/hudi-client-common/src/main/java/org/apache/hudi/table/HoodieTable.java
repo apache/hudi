@@ -885,24 +885,22 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
     // partitions are ready to use
     return !HoodieTableMetadata.isMetadataTable(metaClient.getBasePath())
         && !config.isMetadataTableEnabled()
-        && (!metaClient.getTableConfig().contains(TABLE_METADATA_PARTITIONS)
-        || !metaClient.getTableConfig().getMetadataPartitions().isEmpty());
+        && !metaClient.getTableConfig().getMetadataPartitions().isEmpty();
   }
 
   /**
    * Clears hoodie.table.metadata.partitions in hoodie.properties
    */
   private void clearMetadataTablePartitionsConfig(Option<MetadataPartitionType> partitionType, boolean clearAll) {
-    if (clearAll) {
+    Set<String> partitions = getCompletedMetadataPartitions(metaClient.getTableConfig());
+    if (clearAll && partitions.size() > 0) {
       LOG.info("Clear hoodie.table.metadata.partitions in hoodie.properties");
       metaClient.getTableConfig().setValue(TABLE_METADATA_PARTITIONS.key(), EMPTY_STRING);
       HoodieTableConfig.update(metaClient.getFs(), new Path(metaClient.getMetaPath()), metaClient.getTableConfig().getProps());
-      return;
+    } else if (partitions.remove(partitionType.get().getPartitionPath())) {
+      metaClient.getTableConfig().setValue(HoodieTableConfig.TABLE_METADATA_PARTITIONS.key(), String.join(",", partitions));
+      HoodieTableConfig.update(metaClient.getFs(), new Path(metaClient.getMetaPath()), metaClient.getTableConfig().getProps());
     }
-    Set<String> completedPartitions = getCompletedMetadataPartitions(metaClient.getTableConfig());
-    completedPartitions.remove(partitionType.get().getPartitionPath());
-    metaClient.getTableConfig().setValue(HoodieTableConfig.TABLE_METADATA_PARTITIONS.key(), String.join(",", completedPartitions));
-    HoodieTableConfig.update(metaClient.getFs(), new Path(metaClient.getMetaPath()), metaClient.getTableConfig().getProps());
   }
 
   public HoodieTableMetadata getMetadataTable() {
