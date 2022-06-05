@@ -286,8 +286,8 @@ public class DataSourceUtils {
             DataSourceWriteOptions.HIVE_DATABASE().defaultValue());
     hiveSyncConfig.hoodieSyncConfigParams.tableName = props.getString(DataSourceWriteOptions.HIVE_TABLE().key());
     hiveSyncConfig.hoodieSyncConfigParams.baseFileFormat = baseFileFormat;
-    hiveSyncConfig.hiveSyncConfigParams.dbUser = props.getString(DataSourceWriteOptions.HIVE_USER().key(), DataSourceWriteOptions.HIVE_USER().defaultValue());
-    hiveSyncConfig.hiveSyncConfigParams.dbPass = props.getString(DataSourceWriteOptions.HIVE_PASS().key(), DataSourceWriteOptions.HIVE_PASS().defaultValue());
+    hiveSyncConfig.hiveSyncConfigParams.hiveUser = props.getString(DataSourceWriteOptions.HIVE_USER().key(), DataSourceWriteOptions.HIVE_USER().defaultValue());
+    hiveSyncConfig.hiveSyncConfigParams.hivePass = props.getString(DataSourceWriteOptions.HIVE_PASS().key(), DataSourceWriteOptions.HIVE_PASS().defaultValue());
     hiveSyncConfig.hiveSyncConfigParams.jdbcUrl = props.getString(DataSourceWriteOptions.HIVE_URL().key(), DataSourceWriteOptions.HIVE_URL().defaultValue());
     hiveSyncConfig.hiveSyncConfigParams.metastoreUris = props.getString(DataSourceWriteOptions.METASTORE_URIS().key(), DataSourceWriteOptions.METASTORE_URIS().defaultValue());
     hiveSyncConfig.hoodieSyncConfigParams.partitionFields = props.getStringList(DataSourceWriteOptions.HIVE_PARTITION_FIELDS().key(), ",", new ArrayList<>());

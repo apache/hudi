@@ -117,8 +117,8 @@ public class AdbSyncConfig extends HoodieSyncConfig {
   public AdbSyncConfig(TypedProperties props) {
     super(props);
 
-    adbSyncConfigParams.hiveSyncConfigParams.dbUser = getString(ADB_SYNC_USER);
-    adbSyncConfigParams.hiveSyncConfigParams.dbPass = getString(ADB_SYNC_PASS);
+    adbSyncConfigParams.hiveSyncConfigParams.hiveUser = getString(ADB_SYNC_USER);
+    adbSyncConfigParams.hiveSyncConfigParams.hivePass = getString(ADB_SYNC_PASS);
     adbSyncConfigParams.hiveSyncConfigParams.jdbcUrl = getString(ADB_SYNC_JDBC_URL);
     adbSyncConfigParams.hiveSyncConfigParams.skipROSuffix = getBooleanOrDefault(ADB_SYNC_SKIP_RO_SUFFIX);
     adbSyncConfigParams.skipRTSync = getBooleanOrDefault(ADB_SYNC_SKIP_RT_SYNC);
@@ -138,8 +138,8 @@ public class AdbSyncConfig extends HoodieSyncConfig {
     TypedProperties properties = new TypedProperties();
     properties.put(META_SYNC_DATABASE_NAME.key(), cfg.hoodieSyncConfigParams.databaseName);
     properties.put(META_SYNC_TABLE_NAME.key(), cfg.hoodieSyncConfigParams.tableName);
-    properties.put(ADB_SYNC_USER.key(), cfg.adbSyncConfigParams.hiveSyncConfigParams.dbUser);
-    properties.put(ADB_SYNC_PASS.key(), cfg.adbSyncConfigParams.hiveSyncConfigParams.dbPass);
+    properties.put(ADB_SYNC_USER.key(), cfg.adbSyncConfigParams.hiveSyncConfigParams.hiveUser);
+    properties.put(ADB_SYNC_PASS.key(), cfg.adbSyncConfigParams.hiveSyncConfigParams.hivePass);
     properties.put(ADB_SYNC_JDBC_URL.key(), cfg.adbSyncConfigParams.hiveSyncConfigParams.jdbcUrl);
     properties.put(META_SYNC_BASE_PATH.key(), cfg.hoodieSyncConfigParams.basePath);
     properties.put(META_SYNC_PARTITION_FIELDS.key(), String.join(",", cfg.hoodieSyncConfigParams.partitionFields));
@@ -166,8 +166,8 @@ public class AdbSyncConfig extends HoodieSyncConfig {
   @Override
   public String toString() {
     return "AdbSyncConfig{"
-        + "adbUser='" + adbSyncConfigParams.hiveSyncConfigParams.dbUser + '\''
-        + ", adbPass='" + adbSyncConfigParams.hiveSyncConfigParams.dbPass + '\''
+        + "adbUser='" + adbSyncConfigParams.hiveSyncConfigParams.hiveUser + '\''
+        + ", adbPass='" + adbSyncConfigParams.hiveSyncConfigParams.hivePass + '\''
         + ", jdbcUrl='" + adbSyncConfigParams.hiveSyncConfigParams.jdbcUrl + '\''
         + ", skipROSuffix=" + adbSyncConfigParams.hiveSyncConfigParams.skipROSuffix
         + ", skipRTSync=" + adbSyncConfigParams.skipRTSync

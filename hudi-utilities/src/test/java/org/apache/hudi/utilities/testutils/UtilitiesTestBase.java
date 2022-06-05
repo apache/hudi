@@ -185,8 +185,8 @@ public class UtilitiesTestBase {
   protected static HiveSyncConfig getHiveSyncConfig(String basePath, String tableName) {
     HiveSyncConfig hiveSyncConfig = new HiveSyncConfig();
     hiveSyncConfig.hiveSyncConfigParams.jdbcUrl = "jdbc:hive2://127.0.0.1:9999/";
-    hiveSyncConfig.hiveSyncConfigParams.dbUser = "";
-    hiveSyncConfig.hiveSyncConfigParams.dbPass = "";
+    hiveSyncConfig.hiveSyncConfigParams.hiveUser = "";
+    hiveSyncConfig.hiveSyncConfigParams.hivePass = "";
     hiveSyncConfig.hoodieSyncConfigParams.databaseName = "testdb1";
     hiveSyncConfig.hoodieSyncConfigParams.tableName = tableName;
     hiveSyncConfig.hoodieSyncConfigParams.basePath = basePath;

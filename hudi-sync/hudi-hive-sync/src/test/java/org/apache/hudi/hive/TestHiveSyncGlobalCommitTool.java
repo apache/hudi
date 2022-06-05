@@ -57,8 +57,8 @@ public class TestHiveSyncGlobalCommitTool {
     config.properties.setProperty(LOCAL_BASE_PATH, localCluster.tablePath(dbName, tblName));
     config.properties.setProperty(REMOTE_BASE_PATH, remoteCluster.tablePath(dbName, tblName));
     config.globallyReplicatedTimeStamp = commitTime;
-    config.hiveSyncConfigParams.dbUser = System.getProperty("user.name");
-    config.hiveSyncConfigParams.dbPass = "";
+    config.hiveSyncConfigParams.hiveUser = System.getProperty("user.name");
+    config.hiveSyncConfigParams.hivePass = "";
     config.hoodieSyncConfigParams.databaseName = dbName;
     config.hoodieSyncConfigParams.tableName = tblName;
     config.hoodieSyncConfigParams.basePath = localCluster.tablePath(dbName, tblName);

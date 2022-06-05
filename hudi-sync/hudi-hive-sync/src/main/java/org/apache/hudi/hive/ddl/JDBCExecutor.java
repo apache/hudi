@@ -50,10 +50,10 @@ public class JDBCExecutor extends QueryBasedDDLExecutor {
   public JDBCExecutor(HiveSyncConfig config, FileSystem fs) {
     super(config, fs);
     Objects.requireNonNull(config.hiveSyncConfigParams.jdbcUrl, "--jdbc-url option is required for jdbc sync mode");
-    Objects.requireNonNull(config.hiveSyncConfigParams.dbUser, "--user option is required for jdbc sync mode");
-    Objects.requireNonNull(config.hiveSyncConfigParams.dbPass, "--pass option is required for jdbc sync mode");
+    Objects.requireNonNull(config.hiveSyncConfigParams.hiveUser, "--user option is required for jdbc sync mode");
+    Objects.requireNonNull(config.hiveSyncConfigParams.hivePass, "--pass option is required for jdbc sync mode");
     this.config = config;
-    createHiveConnection(config.hiveSyncConfigParams.jdbcUrl, config.hiveSyncConfigParams.dbUser, config.hiveSyncConfigParams.dbPass);
+    createHiveConnection(config.hiveSyncConfigParams.jdbcUrl, config.hiveSyncConfigParams.hiveUser, config.hiveSyncConfigParams.hivePass);
   }
 
   @Override

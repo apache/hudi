@@ -35,8 +35,8 @@ public class TestAdbSyncConfig {
     adbSyncConfig.hoodieSyncConfigParams.assumeDatePartitioning = true;
     adbSyncConfig.hoodieSyncConfigParams.databaseName = "test";
     adbSyncConfig.hoodieSyncConfigParams.tableName = "test";
-    adbSyncConfig.adbSyncConfigParams.hiveSyncConfigParams.dbUser = "adb";
-    adbSyncConfig.adbSyncConfigParams.hiveSyncConfigParams.dbPass = "adb";
+    adbSyncConfig.adbSyncConfigParams.hiveSyncConfigParams.hiveUser = "adb";
+    adbSyncConfig.adbSyncConfigParams.hiveSyncConfigParams.hivePass = "adb";
     adbSyncConfig.adbSyncConfigParams.hiveSyncConfigParams.jdbcUrl = "jdbc:mysql://localhost:3306";
     adbSyncConfig.adbSyncConfigParams.hiveSyncConfigParams.skipROSuffix = false;
     adbSyncConfig.adbSyncConfigParams.tableProperties = "spark.sql.sources.provider= 'hudi'\\n"
@@ -55,8 +55,8 @@ public class TestAdbSyncConfig {
     assertEquals(copied.hoodieSyncConfigParams.assumeDatePartitioning, adbSyncConfig.hoodieSyncConfigParams.assumeDatePartitioning);
     assertEquals(copied.hoodieSyncConfigParams.databaseName, adbSyncConfig.hoodieSyncConfigParams.databaseName);
     assertEquals(copied.hoodieSyncConfigParams.tableName, adbSyncConfig.hoodieSyncConfigParams.tableName);
-    assertEquals(copied.adbSyncConfigParams.hiveSyncConfigParams.dbUser, adbSyncConfig.adbSyncConfigParams.hiveSyncConfigParams.dbUser);
-    assertEquals(copied.adbSyncConfigParams.hiveSyncConfigParams.dbPass, adbSyncConfig.adbSyncConfigParams.hiveSyncConfigParams.dbPass);
+    assertEquals(copied.adbSyncConfigParams.hiveSyncConfigParams.hiveUser, adbSyncConfig.adbSyncConfigParams.hiveSyncConfigParams.hiveUser);
+    assertEquals(copied.adbSyncConfigParams.hiveSyncConfigParams.hivePass, adbSyncConfig.adbSyncConfigParams.hiveSyncConfigParams.hivePass);
     assertEquals(copied.hoodieSyncConfigParams.basePath, adbSyncConfig.hoodieSyncConfigParams.basePath);
     assertEquals(copied.adbSyncConfigParams.hiveSyncConfigParams.jdbcUrl, adbSyncConfig.adbSyncConfigParams.hiveSyncConfigParams.jdbcUrl);
     assertEquals(copied.adbSyncConfigParams.hiveSyncConfigParams.skipROSuffix, adbSyncConfig.adbSyncConfigParams.hiveSyncConfigParams.skipROSuffix);

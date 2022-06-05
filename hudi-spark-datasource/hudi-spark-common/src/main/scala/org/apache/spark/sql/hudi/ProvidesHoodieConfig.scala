@@ -300,8 +300,8 @@ trait ProvidesHoodieConfig extends Logging {
       hiveSyncConfig.hoodieSyncConfigParams.tableName = hoodieCatalogTable.table.identifier.table
     }
     hiveSyncConfig.hiveSyncConfigParams.syncMode = props.getString(HiveSyncConfig.HIVE_SYNC_MODE.key, HiveSyncMode.HMS.name())
-    hiveSyncConfig.hiveSyncConfigParams.dbUser = props.getString(HiveSyncConfig.HIVE_USER.key, HiveSyncConfig.HIVE_USER.defaultValue)
-    hiveSyncConfig.hiveSyncConfigParams.dbPass = props.getString(HiveSyncConfig.HIVE_PASS.key, HiveSyncConfig.HIVE_PASS.defaultValue)
+    hiveSyncConfig.hiveSyncConfigParams.hiveUser = props.getString(HiveSyncConfig.HIVE_USER.key, HiveSyncConfig.HIVE_USER.defaultValue)
+    hiveSyncConfig.hiveSyncConfigParams.hivePass = props.getString(HiveSyncConfig.HIVE_PASS.key, HiveSyncConfig.HIVE_PASS.defaultValue)
     hiveSyncConfig.hiveSyncConfigParams.jdbcUrl = props.getString(HiveSyncConfig.HIVE_URL.key, HiveSyncConfig.HIVE_URL.defaultValue)
     hiveSyncConfig.hiveSyncConfigParams.metastoreUris = props.getString(HiveSyncConfig.METASTORE_URIS.key, HiveSyncConfig.METASTORE_URIS.defaultValue)
     hiveSyncConfig.hoodieSyncConfigParams.partitionFields = props.getStringList(HoodieSyncConfig.META_SYNC_PARTITION_FIELDS.key, ",", new util.ArrayList[String])

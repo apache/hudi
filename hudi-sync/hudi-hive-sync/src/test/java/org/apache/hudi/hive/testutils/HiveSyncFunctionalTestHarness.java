@@ -81,8 +81,8 @@ public class HiveSyncFunctionalTestHarness {
   public HiveSyncConfig hiveSyncConf() throws IOException {
     HiveSyncConfig conf = new HiveSyncConfig();
     conf.hiveSyncConfigParams.jdbcUrl = hiveTestService.getJdbcHive2Url();
-    conf.hiveSyncConfigParams.dbUser = "";
-    conf.hiveSyncConfigParams.dbPass = "";
+    conf.hiveSyncConfigParams.hiveUser = "";
+    conf.hiveSyncConfigParams.hivePass = "";
     conf.hoodieSyncConfigParams.databaseName = "hivesynctestdb";
     conf.hoodieSyncConfigParams.tableName = "hivesynctesttable";
     conf.hoodieSyncConfigParams.basePath = Files.createDirectories(tempDir.resolve("hivesynctestcase-" + Instant.now().toEpochMilli())).toUri().toString();

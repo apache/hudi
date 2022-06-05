@@ -39,8 +39,8 @@ public class GlobalHiveSyncConfig extends HiveSyncConfig {
     newConfig.hoodieSyncConfigParams.basePath = cfg.hoodieSyncConfigParams.basePath;
     newConfig.hoodieSyncConfigParams.assumeDatePartitioning = cfg.hoodieSyncConfigParams.assumeDatePartitioning;
     newConfig.hoodieSyncConfigParams.databaseName = cfg.hoodieSyncConfigParams.databaseName;
-    newConfig.hiveSyncConfigParams.dbPass = cfg.hiveSyncConfigParams.dbPass;
-    newConfig.hiveSyncConfigParams.dbUser = cfg.hiveSyncConfigParams.dbUser;
+    newConfig.hiveSyncConfigParams.hivePass = cfg.hiveSyncConfigParams.hivePass;
+    newConfig.hiveSyncConfigParams.hiveUser = cfg.hiveSyncConfigParams.hiveUser;
     newConfig.hoodieSyncConfigParams.partitionFields = cfg.hoodieSyncConfigParams.partitionFields;
     newConfig.hoodieSyncConfigParams.partitionValueExtractorClass = cfg.hoodieSyncConfigParams.partitionValueExtractorClass;
     newConfig.hiveSyncConfigParams.jdbcUrl = cfg.hiveSyncConfigParams.jdbcUrl;

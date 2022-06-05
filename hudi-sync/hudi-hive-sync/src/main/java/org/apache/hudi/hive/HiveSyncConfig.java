@@ -158,8 +158,8 @@ public class HiveSyncConfig extends HoodieSyncConfig {
 
   public HiveSyncConfig(TypedProperties props) {
     super(props);
-    this.hiveSyncConfigParams.dbUser = getStringOrDefault(HIVE_USER);
-    this.hiveSyncConfigParams.dbPass = getStringOrDefault(HIVE_PASS);
+    this.hiveSyncConfigParams.hiveUser = getStringOrDefault(HIVE_USER);
+    this.hiveSyncConfigParams.hivePass = getStringOrDefault(HIVE_PASS);
     this.hiveSyncConfigParams.jdbcUrl = getStringOrDefault(HIVE_URL);
     this.hiveSyncConfigParams.usePreApacheInputFormat = getBooleanOrDefault(HIVE_USE_PRE_APACHE_INPUT_FORMAT);
     this.hiveSyncConfigParams.useJdbc = getBooleanOrDefault(HIVE_USE_JDBC);
@@ -186,8 +186,8 @@ public class HiveSyncConfig extends HoodieSyncConfig {
       + ", tableName='" + hoodieSyncConfigParams.tableName + '\''
       + ", bucketSpec='" + hiveSyncConfigParams.bucketSpec + '\''
       + ", baseFileFormat='" + hoodieSyncConfigParams.baseFileFormat + '\''
-      + ", hiveUser='" + hiveSyncConfigParams.dbUser + '\''
-      + ", hivePass='" + hiveSyncConfigParams.dbPass + '\''
+      + ", hiveUser='" + hiveSyncConfigParams.hiveUser + '\''
+      + ", hivePass='" + hiveSyncConfigParams.hivePass + '\''
       + ", jdbcUrl='" + hiveSyncConfigParams.jdbcUrl + '\''
       + ", metastoreUris='" + hiveSyncConfigParams.metastoreUris + '\''
       + ", basePath='" + hoodieSyncConfigParams.basePath + '\''
@@ -221,9 +221,9 @@ public class HiveSyncConfig extends HoodieSyncConfig {
 
   public static class HiveSyncConfigParams implements Serializable {
     @Parameter(names = {"--user"}, description = "Hive username")
-    public String dbUser;
+    public String hiveUser;
     @Parameter(names = {"--pass"}, description = "Hive password")
-    public String dbPass;
+    public String hivePass;
     @Parameter(names = {"--jdbc-url"}, description = "Hive jdbc connect url")
     public String jdbcUrl;
     @Parameter(names = {"--metastore-uris"}, description = "Hive metastore uris")

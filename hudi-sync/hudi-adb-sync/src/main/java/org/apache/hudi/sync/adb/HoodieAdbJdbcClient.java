@@ -83,7 +83,7 @@ public class HoodieAdbJdbcClient extends AbstractAdbSyncHoodieClient {
       try {
         this.connection = DriverManager.getConnection(
                 adbSyncConfig.adbSyncConfigParams.hiveSyncConfigParams.jdbcUrl,
-            adbSyncConfig.adbSyncConfigParams.hiveSyncConfigParams.dbUser, adbSyncConfig.adbSyncConfigParams.hiveSyncConfigParams.dbPass);
+            adbSyncConfig.adbSyncConfigParams.hiveSyncConfigParams.hiveUser, adbSyncConfig.adbSyncConfigParams.hiveSyncConfigParams.hivePass);
       } catch (SQLException e) {
         throw new HoodieException("Cannot create adb connection ", e);
       }
