@@ -63,9 +63,7 @@ object HoodieAnalysis {
         session => ReflectionUtils.loadClass(spark3ResolveReferencesClass, session).asInstanceOf[Rule[LogicalPlan]]
 
       rules ++= Seq(spark3Analysis, spark3ResolveReferences)
-    }
 
-    if (HoodieSparkUtils.gteqSpark3_1) {
       val dataSourceV2ToV1FallbackClass = "org.apache.spark.sql.hudi.analysis.HoodieDataSourceV2ToV1Fallback"
       val dataSourceV2ToV1Fallback: RuleBuilder =
         session => ReflectionUtils.loadClass(dataSourceV2ToV1FallbackClass, session).asInstanceOf[Rule[LogicalPlan]]
