@@ -258,12 +258,6 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
       if (!scanner.next()) {
         return Collections.emptyIterator();
       }
-    } else if (val == -1) {
-      // If scanner is aleady on the top of hfile. avoid trigger seekTo again.
-      Option<Cell> headerCell = Option.fromJavaOptional(scanner.getReader().getFirstKey());
-      if (headerCell.isPresent() && !headerCell.get().equals(scanner.getCell())) {
-        scanner.seekTo();
-      }
     }
 
     class KeyPrefixIterator implements Iterator<GenericRecord> {

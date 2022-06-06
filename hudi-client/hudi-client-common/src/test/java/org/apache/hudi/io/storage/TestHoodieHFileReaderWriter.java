@@ -299,7 +299,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
     List<GenericRecord> expectedKey50and1s = allRecords.stream().filter(entry -> (entry.get("_row_key").toString()).contains("key1")
         || (entry.get("_row_key").toString()).contains("key50")).collect(Collectors.toList());
     iterator =
-        hfileReader.getRecordsByKeyPrefixIterator(Arrays.asList("key50", "key1"), avroSchema);
+        hfileReader.getRecordsByKeyPrefixIterator(Arrays.asList("key1", "key50"), avroSchema);
     recordsByPrefix =
         StreamSupport.stream(Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), false)
             .collect(Collectors.toList());
@@ -309,19 +309,18 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
     List<GenericRecord> expectedKey50and0s = allRecords.stream().filter(entry -> (entry.get("_row_key").toString()).contains("key0")
         || (entry.get("_row_key").toString()).contains("key50")).collect(Collectors.toList());
     iterator =
-        hfileReader.getRecordsByKeyPrefixIterator(Arrays.asList("key50", "key0"), avroSchema);
+        hfileReader.getRecordsByKeyPrefixIterator(Arrays.asList("key0", "key50"), avroSchema);
     recordsByPrefix =
         StreamSupport.stream(Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), false)
             .collect(Collectors.toList());
     assertEquals(expectedKey50and0s, recordsByPrefix);
 
     // filter for "key1" and "key0" : entries from 'key10 to key19' and 'key00 to key09' should be matched.
-    List<GenericRecord> expectedKey1sand0s = expectedKey1s;
-    expectedKey1sand0s.addAll(allRecords.stream()
-        .filter(entry -> (entry.get("_row_key").toString()).contains("key0"))
-        .collect(Collectors.toList()));
+    List<GenericRecord> expectedKey1sand0s = allRecords.stream()
+        .filter(entry -> (entry.get("_row_key").toString()).contains("key0") || (entry.get("_row_key").toString()).contains("key1"))
+        .collect(Collectors.toList());
     iterator =
-        hfileReader.getRecordsByKeyPrefixIterator(Arrays.asList("key1", "key0"), avroSchema);
+        hfileReader.getRecordsByKeyPrefixIterator(Arrays.asList("key0", "key1"), avroSchema);
     recordsByPrefix =
         StreamSupport.stream(Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), false)
             .collect(Collectors.toList());

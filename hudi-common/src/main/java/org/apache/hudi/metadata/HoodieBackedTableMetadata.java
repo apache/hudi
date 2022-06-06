@@ -58,6 +58,7 @@ import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -142,8 +143,13 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   }
 
   @Override
-  public HoodieData<HoodieRecord<HoodieMetadataPayload>> getRecordsByKeyPrefixes(List<String> keyPrefixes,
+  public HoodieData<HoodieRecord<HoodieMetadataPayload>> getRecordsByKeyPrefixes(List<String> keyPrefixesUnsorted,
                                                                                  String partitionName) {
+    // Sort the columns so that keys are looked up in order
+    List<String> keyPrefixes = new ArrayList<>();
+    keyPrefixes.addAll(keyPrefixesUnsorted);
+    Collections.sort(keyPrefixes);
+
     // NOTE: Since we partition records to a particular file-group by full key, we will have
     //       to scan all file-groups for all key-prefixes as each of these might contain some
     //       records matching the key-prefix
