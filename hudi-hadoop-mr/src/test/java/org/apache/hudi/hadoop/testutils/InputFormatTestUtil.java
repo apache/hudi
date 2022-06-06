@@ -80,7 +80,7 @@ public class InputFormatTestUtil {
       throws IOException {
     if (useNonPartitionedKeyGen) {
       HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString(), HoodieTableType.COPY_ON_WRITE,
-          baseFileFormat, "org.apache.hudi.keygen.NonpartitionedKeyGenerator", populateMetaFields);
+          baseFileFormat, true, "org.apache.hudi.keygen.NonpartitionedKeyGenerator", populateMetaFields);
     } else {
       HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString(), HoodieTableType.COPY_ON_WRITE,
           baseFileFormat);
