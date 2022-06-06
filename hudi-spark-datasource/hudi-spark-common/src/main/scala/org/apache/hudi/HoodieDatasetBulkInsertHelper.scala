@@ -55,6 +55,7 @@ object HoodieDatasetBulkInsertHelper extends Logging {
     val populateMetaFields = config.populateMetaFields()
     val schema = df.schema
 
+    if (!config.contains(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME)) config.setDefaultValue(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME)
     val keyGeneratorClassName = config.getStringOrThrow(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME,
       "Key-generator class name is required")
 

@@ -118,6 +118,19 @@ object HoodieSparkSqlWriter {
 
       operation = WriteOperationType.INSERT
     }
+    // If no record key field and precombine field is provided, assume it's an append-only workload and do bulk insert
+    if (!hoodieConfig.contains(RECORDKEY_FIELD)
+      && !hoodieConfig.contains(PRECOMBINE_FIELD)) {
+      if (!optParams.contains(OPERATION.key)
+        || optParams(OPERATION.key).equalsIgnoreCase(BULK_INSERT_OPERATION_OPT_VAL)) {
+        log.warn(s"Neither $RECORDKEY_FIELD nor $PRECOMBINE_FIELD is specified; " +
+          s"overriding the $OPERATION to be $BULK_INSERT_OPERATION_OPT_VAL")
+
+        operation = WriteOperationType.BULK_INSERT
+      } else {
+        throw new HoodieException(s"${OPERATION.key} configured but no ${RECORDKEY_FIELD.key} and ${PRECOMBINE_FIELD.key} is set.")
+      }
+    }
 
     val jsc = new JavaSparkContext(sparkContext)
     if (asyncCompactionTriggerFn.isDefined) {
@@ -141,7 +154,8 @@ object HoodieSparkSqlWriter {
         val archiveLogFolder = hoodieConfig.getStringOrDefault(HoodieTableConfig.ARCHIVELOG_FOLDER)
         val recordKeyFields = hoodieConfig.getString(DataSourceWriteOptions.RECORDKEY_FIELD)
         val populateMetaFields = hoodieConfig.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS)
-        val useBaseFormatMetaFile = hoodieConfig.getBooleanOrDefault(HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT);
+        val useBaseFormatMetaFile = hoodieConfig.getBooleanOrDefault(HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT)
+        val appendOnlyTable = hoodieConfig.getBooleanOrDefault(HoodieTableConfig.APPEND_ONLY_TABLE)
 
         val tableMetaClient = HoodieTableMetaClient.withPropertyBuilder()
           .setTableType(tableType)
@@ -156,6 +170,7 @@ object HoodieSparkSqlWriter {
           .setPreCombineField(optParams.getOrElse(PRECOMBINE_FIELD.key(), null))
           .setPartitionFields(partitionColumns)
           .setPopulateMetaFields(populateMetaFields)
+          .setAppendOnlyTable(appendOnlyTable)
           .setRecordKeyFields(hoodieConfig.getString(RECORDKEY_FIELD))
           .setKeyGeneratorClassProp(originKeyGeneratorClassName)
           .set(timestampKeyGeneratorConfigs)
@@ -178,6 +193,9 @@ object HoodieSparkSqlWriter {
         val (success, commitTime: common.util.Option[String]) = bulkInsertAsRow(sqlContext, parameters, df, tblName,
           basePath, path, instantTime, partitionColumns)
         return (success, commitTime, common.util.Option.empty(), common.util.Option.empty(), hoodieWriteClient.orNull, tableConfig)
+      }
+      if (tableExists && tableConfig.isAppendOnlyTable && operation != WriteOperationType.BULK_INSERT) {
+        throw new HoodieException(s"No operation other than $BULK_INSERT_OPERATION_OPT_VAL is allowed for an append-only table")
       }
       // scalastyle:on
 
@@ -280,7 +298,7 @@ object HoodieSparkSqlWriter {
                 HoodieWriteConfig.COMBINE_BEFORE_INSERT.defaultValue()).toBoolean
             val hoodieAllIncomingRecords = genericRecords.map(gr => {
               val processedRecord = getProcessedRecord(partitionColumns, gr, dropPartitionColumns)
-              val hoodieRecord = if (shouldCombine) {
+              val hoodieRecord = if (shouldCombine && hoodieConfig.contains(PRECOMBINE_FIELD)) {
                 val orderingVal = HoodieAvroUtils.getNestedFieldVal(gr, hoodieConfig.getString(PRECOMBINE_FIELD), false, parameters.getOrElse(
                   DataSourceWriteOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
                   DataSourceWriteOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()).toBoolean)
@@ -790,6 +808,13 @@ object HoodieSparkSqlWriter {
     // use preCombineField to fill in PAYLOAD_ORDERING_FIELD_PROP_KEY
     if (mergedParams.contains(PRECOMBINE_FIELD.key())) {
       mergedParams.put(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, mergedParams(PRECOMBINE_FIELD.key()))
+    }
+    // for the first ingest batch, if applicable, disable populate meta fields and enable append-only table config
+    if (tableConfig == null
+      && !mergedParams.contains(RECORDKEY_FIELD.key)
+      && !mergedParams.contains(PRECOMBINE_FIELD.key)) {
+      mergedParams.put(HoodieTableConfig.POPULATE_META_FIELDS.key, (!HoodieTableConfig.POPULATE_META_FIELDS.defaultValue).toString)
+      mergedParams.put(HoodieTableConfig.APPEND_ONLY_TABLE.key, (!HoodieTableConfig.APPEND_ONLY_TABLE.defaultValue).toString)
     }
     val params = mergedParams.toMap
     (params, HoodieWriterUtils.convertMapToHoodieConfig(params))

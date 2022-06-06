@@ -40,8 +40,6 @@ import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.TableNotFoundException;
 
@@ -65,6 +63,11 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
+import static org.apache.hudi.common.util.StringUtils.nonEmpty;
+import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
+import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
 /**
  * <code>HoodieTableMetaClient</code> allows to access meta-data about a hoodie table It returns meta-data about
@@ -131,7 +134,7 @@ public class HoodieTableMetaClient implements Serializable {
     Option<TimelineLayoutVersion> tableConfigVersion = tableConfig.getTimelineLayoutVersion();
     if (layoutVersion.isPresent() && tableConfigVersion.isPresent()) {
       // Ensure layout version passed in config is not lower than the one seen in hoodie.properties
-      ValidationUtils.checkArgument(layoutVersion.get().compareTo(tableConfigVersion.get()) >= 0,
+      checkArgument(layoutVersion.get().compareTo(tableConfigVersion.get()) >= 0,
           "Layout Version defined in hoodie properties has higher version (" + tableConfigVersion.get()
               + ") than the one passed in config (" + layoutVersion.get() + ")");
     }
@@ -300,7 +303,7 @@ public class HoodieTableMetaClient implements Serializable {
             fileSystemRetryConfig.getInitialRetryIntervalMs(),
             fileSystemRetryConfig.getRetryExceptions());
       }
-      ValidationUtils.checkArgument(!(fileSystem instanceof HoodieWrapperFileSystem),
+      checkArgument(!(fileSystem instanceof HoodieWrapperFileSystem),
           "File System not expected to be that of HoodieWrapperFileSystem");
       fs = new HoodieWrapperFileSystem(fileSystem,
           consistencyGuardConfig.isConsistencyCheckEnabled()
@@ -393,18 +396,28 @@ public class HoodieTableMetaClient implements Serializable {
 
   /**
    * Validate table properties.
-   * @param properties Properties from writeConfig.
+   * @param writeConfigProps Properties from writeConfig.
    */
-  public void validateTableProperties(Properties properties) {
+  public void validateTableProperties(Properties writeConfigProps) {
+    // Once table is configured to be append-only, it cannot be mutable or allow setting record key or precombine fields for updates
+    if (getTableConfig().isAppendOnlyTable()) {
+      boolean appendOnlyTable = Boolean.parseBoolean(
+          writeConfigProps.getProperty(HoodieTableConfig.APPEND_ONLY_TABLE.key(), String.valueOf(HoodieTableConfig.APPEND_ONLY_TABLE.defaultValue())));
+      checkArgument(appendOnlyTable, String.format("%s is enabled. Please recreate the table with record key to support mutable tables.", HoodieTableConfig.APPEND_ONLY_TABLE.key()));
+      checkState(isNullOrEmpty(writeConfigProps.getProperty(HoodieTableConfig.RECORDKEY_FIELDS.key())), String.format("%s set for an append-only table", HoodieTableConfig.RECORDKEY_FIELDS.key()));
+      checkState(isNullOrEmpty(writeConfigProps.getProperty("hoodie.datasource.write.recordkey.field")), "hoodie.datasource.write.recordkey.field set for an append-only table");
+      checkState(isNullOrEmpty(writeConfigProps.getProperty(HoodieTableConfig.PRECOMBINE_FIELD.key())), String.format("%s set for an append-only table", HoodieTableConfig.PRECOMBINE_FIELD.key()));
+      checkState(isNullOrEmpty(writeConfigProps.getProperty("hoodie.datasource.write.precombine.field")), "hoodie.datasource.write.precombine.field set for an append-only table");
+    }
     // Once meta fields are disabled, it cant be re-enabled for a given table.
     if (!getTableConfig().populateMetaFields()
-        && Boolean.parseBoolean((String) properties.getOrDefault(HoodieTableConfig.POPULATE_META_FIELDS.key(), HoodieTableConfig.POPULATE_META_FIELDS.defaultValue()))) {
+        && Boolean.parseBoolean((String) writeConfigProps.getOrDefault(HoodieTableConfig.POPULATE_META_FIELDS.key(), HoodieTableConfig.POPULATE_META_FIELDS.defaultValue()))) {
       throw new HoodieException(HoodieTableConfig.POPULATE_META_FIELDS.key() + " already disabled for the table. Can't be re-enabled back");
     }
 
     // Meta fields can be disabled only when either {@code SimpleKeyGenerator}, {@code ComplexKeyGenerator}, {@code NonpartitionedKeyGenerator} is used
     if (!getTableConfig().populateMetaFields()) {
-      String keyGenClass = properties.getProperty(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key(), "org.apache.hudi.keygen.SimpleKeyGenerator");
+      String keyGenClass = writeConfigProps.getProperty(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key(), "org.apache.hudi.keygen.SimpleKeyGenerator");
       if (!keyGenClass.equals("org.apache.hudi.keygen.SimpleKeyGenerator")
           && !keyGenClass.equals("org.apache.hudi.keygen.NonpartitionedKeyGenerator")
           && !keyGenClass.equals("org.apache.hudi.keygen.ComplexKeyGenerator")) {
@@ -438,7 +451,7 @@ public class HoodieTableMetaClient implements Serializable {
 
     // if anything other than default archive log folder is specified, create that too
     String archiveLogPropVal = new HoodieConfig(props).getStringOrDefault(HoodieTableConfig.ARCHIVELOG_FOLDER);
-    if (!StringUtils.isNullOrEmpty(archiveLogPropVal)) {
+    if (nonEmpty(archiveLogPropVal)) {
       Path archiveLogDir = new Path(metaPathDir, archiveLogPropVal);
       if (!fs.exists(archiveLogDir)) {
         fs.mkdirs(archiveLogDir);
@@ -705,8 +718,8 @@ public class HoodieTableMetaClient implements Serializable {
     }
 
     public HoodieTableMetaClient build() {
-      ValidationUtils.checkArgument(conf != null, "Configuration needs to be set to init HoodieTableMetaClient");
-      ValidationUtils.checkArgument(basePath != null, "basePath needs to be set to init HoodieTableMetaClient");
+      checkArgument(conf != null, "Configuration needs to be set to init HoodieTableMetaClient");
+      checkArgument(basePath != null, "basePath needs to be set to init HoodieTableMetaClient");
       return newMetaClient(conf, basePath,
           loadActiveTimelineOnLoad, consistencyGuardConfig, layoutVersion, payloadClassName, fileSystemRetryConfig, props);
     }
@@ -741,6 +754,7 @@ public class HoodieTableMetaClient implements Serializable {
     private Boolean shouldDropPartitionColumns;
     private String metadataPartitions;
     private String inflightMetadataPartitions;
+    private Boolean appendOnlyTable;
 
     /**
      * Persist the configs that is written at the first time, and should not be changed.
@@ -875,6 +889,11 @@ public class HoodieTableMetaClient implements Serializable {
       return this;
     }
 
+    public PropertyBuilder setAppendOnlyTable(boolean appendOnlyTable) {
+      this.appendOnlyTable = appendOnlyTable;
+      return this;
+    }
+
     public PropertyBuilder set(String key, Object value) {
       if (HoodieTableConfig.PERSISTED_CONFIG_LIST.contains(key)) {
         this.others.put(key, value);
@@ -982,12 +1001,15 @@ public class HoodieTableMetaClient implements Serializable {
       if (hoodieConfig.contains(HoodieTableConfig.TABLE_METADATA_PARTITIONS_INFLIGHT)) {
         setInflightMetadataPartitions(hoodieConfig.getString(HoodieTableConfig.TABLE_METADATA_PARTITIONS_INFLIGHT));
       }
+      if (hoodieConfig.contains(HoodieTableConfig.APPEND_ONLY_TABLE)) {
+        setAppendOnlyTable(hoodieConfig.getBoolean(HoodieTableConfig.APPEND_ONLY_TABLE));
+      }
       return this;
     }
 
     public Properties build() {
-      ValidationUtils.checkArgument(tableType != null, "tableType is null");
-      ValidationUtils.checkArgument(tableName != null, "tableName is null");
+      checkArgument(tableType != null, "tableType is null");
+      checkArgument(tableName != null, "tableName is null");
 
       HoodieTableConfig tableConfig = new HoodieTableConfig();
 
@@ -1008,7 +1030,7 @@ public class HoodieTableMetaClient implements Serializable {
         tableConfig.setValue(HoodieTableConfig.CREATE_SCHEMA, tableCreateSchema);
       }
 
-      if (!StringUtils.isNullOrEmpty(archiveLogFolder)) {
+      if (nonEmpty(archiveLogFolder)) {
         tableConfig.setValue(HoodieTableConfig.ARCHIVELOG_FOLDER, archiveLogFolder);
       } else {
         tableConfig.setDefaultValue(HoodieTableConfig.ARCHIVELOG_FOLDER);
@@ -1071,6 +1093,9 @@ public class HoodieTableMetaClient implements Serializable {
       }
       if (null != inflightMetadataPartitions) {
         tableConfig.setValue(HoodieTableConfig.TABLE_METADATA_PARTITIONS_INFLIGHT, inflightMetadataPartitions);
+      }
+      if (null != appendOnlyTable) {
+        tableConfig.setValue(HoodieTableConfig.APPEND_ONLY_TABLE, Boolean.toString(appendOnlyTable));
       }
       return tableConfig.getProps();
     }

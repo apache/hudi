@@ -55,6 +55,10 @@ public class MaxwellJsonKafkaSourcePostProcessor extends JsonKafkaSourcePostProc
 
   public MaxwellJsonKafkaSourcePostProcessor(TypedProperties props) {
     super(props);
+    // PRECOMBINE_FIELD_NAME has no default value, but maxwell json string depends on `ts` field
+    if (!props.containsKey(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key())) {
+      this.props.setProperty(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key(), TS);
+    }
     databaseRegex = Option.ofNullable(props.getString(Config.DATABASE_NAME_REGEX_PROP.key(), null));
     tableRegex = props.getString(Config.TABLE_NAME_REGEX_PROP.key());
   }
@@ -150,8 +154,7 @@ public class MaxwellJsonKafkaSourcePostProcessor extends JsonKafkaSourcePostProc
 
     // we can update the `update_time`(delete time) only when it is in timestamp format.
     if (!preCombineFieldType.equals(NON_TIMESTAMP)) {
-      String preCombineField = this.props.getString(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key(),
-          HoodieWriteConfig.PRECOMBINE_FIELD_NAME.defaultValue());
+      String preCombineField = this.props.getString(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key());
 
       // ts from maxwell
       long ts = inputJson.get(TS).longValue();

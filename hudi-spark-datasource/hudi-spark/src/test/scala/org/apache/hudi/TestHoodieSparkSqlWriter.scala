@@ -606,13 +606,14 @@ class TestHoodieSparkSqlWriter {
         HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().name))
       .setArchiveLogFolder(HoodieTableConfig.ARCHIVELOG_FOLDER.defaultValue())
       .setPayloadClassName(fooTableParams(PAYLOAD_CLASS_NAME.key))
-      .setPreCombineField(fooTableParams(PRECOMBINE_FIELD.key))
       .setPartitionFields(fooTableParams(DataSourceWriteOptions.PARTITIONPATH_FIELD.key))
       .setKeyGeneratorClassProp(fooTableParams(KEYGENERATOR_CLASS_NAME.key))
-      if(addBootstrapPath) {
-        tableMetaClientBuilder
-          .setBootstrapBasePath(fooTableParams(HoodieBootstrapConfig.BASE_PATH.key))
-      }
+    if(fooTableParams.contains(PRECOMBINE_FIELD.key)) {
+      tableMetaClientBuilder.setPreCombineField(fooTableParams(PRECOMBINE_FIELD.key))
+    }
+    if(addBootstrapPath) {
+      tableMetaClientBuilder.setBootstrapBasePath(fooTableParams(HoodieBootstrapConfig.BASE_PATH.key))
+    }
     tableMetaClientBuilder.initTable(sc.hadoopConfiguration, tempBasePath)
   }
 
@@ -1067,5 +1068,177 @@ class TestHoodieSparkSqlWriter {
     )
     val kg2 = HoodieWriterUtils.getOriginKeyGenerator(m2)
     assertTrue(kg2 == classOf[SimpleKeyGenerator].getName)
+  }
+
+  @Test
+  def testSimpleWritesNonPartitioned(): Unit = {
+    val _spark = spark
+    import _spark.implicits._
+    val df = Seq(
+      (1, "a1", 10, 1000, "2021-10-16"),
+      (2, "a2", 11, 1001, "2021-10-16"),
+      (3, "a1", 12, 1002, "2021-10-17"),
+      (4, "a2", 13, 1003, "2021-10-17"),
+      (5, "a2", 14, 1004, "2021-10-17")
+    ).toDF("id", "name", "value", "ts", "dt")
+
+    val tableName = "hudi_simple_table"
+    df.write.format("hudi")
+      .option(HoodieWriteConfig.TBL_NAME.key, tableName)
+      .mode(SaveMode.Overwrite).save(tempBasePath)
+
+    val tableConfig = HoodieTableMetaClient.builder()
+      .setConf(spark.sparkContext.hadoopConfiguration)
+      .setBasePath(tempBasePath).build().getTableConfig
+    assertFalse(tableConfig.populateMetaFields)
+    assertTrue(tableConfig.isAppendOnlyTable)
+
+    val snapshotDF1 = spark.read.format("org.apache.hudi")
+      .load(tempBasePath)
+    assertEquals(5, snapshotDF1.count())
+
+    val df2 = Seq((2, "a2", 20, 1000, "2021-10-16")).toDF("id", "name", "value", "ts", "dt")
+    df2.write.format("hudi")
+      .option(HoodieWriteConfig.TBL_NAME.key, tableName)
+      .mode(SaveMode.Append).save(tempBasePath)
+
+    val snapshotDF2 = spark.read.format("org.apache.hudi")
+      .load(tempBasePath)
+    assertEquals(6, snapshotDF2.count())
+    assertEquals(2, snapshotDF2.where("id=2").count())
+  }
+
+  @Test
+  def testSimpleWritesPartitioned(): Unit = {
+    val _spark = spark
+    import _spark.implicits._
+    val df = Seq(
+      (1, "a1", 10, 1000, "2021-10-16"),
+      (2, "a2", 11, 1001, "2021-10-16"),
+      (3, "a1", 12, 1002, "2021-10-17"),
+      (4, "a2", 13, 1003, "2021-10-17"),
+      (5, "a2", 14, 1004, "2021-10-17")
+    ).toDF("id", "name", "value", "ts", "dt")
+
+    val tableName = "hudi_simple_table"
+    df.write.format("hudi")
+      .option(HoodieWriteConfig.TBL_NAME.key, tableName)
+      .partitionBy("dt")
+      .mode(SaveMode.Overwrite).save(tempBasePath)
+
+    val tableConfig = HoodieTableMetaClient.builder()
+      .setConf(spark.sparkContext.hadoopConfiguration)
+      .setBasePath(tempBasePath).build().getTableConfig
+    assertFalse(tableConfig.populateMetaFields)
+    assertTrue(tableConfig.isAppendOnlyTable)
+
+    val snapshotDF1 = spark.read.format("org.apache.hudi")
+      .load(tempBasePath)
+    assertEquals(5, snapshotDF1.count())
+
+    val df2 = Seq((2, "a2", 20, 1000, "2021-10-16")).toDF("id", "name", "value", "ts", "dt")
+    df2.write.format("hudi")
+      .option(HoodieWriteConfig.TBL_NAME.key, tableName)
+      .partitionBy("dt")
+      .mode(SaveMode.Append).save(tempBasePath)
+
+    val snapshotDF2 = spark.read.format("org.apache.hudi")
+      .load(tempBasePath)
+    assertEquals(6, snapshotDF2.count())
+    assertEquals(2, snapshotDF2.where("id=2").count())
+  }
+
+  @Test
+  def testSimpleWritesValidations(): Unit = {
+    val _spark = spark
+    import _spark.implicits._
+    val df = Seq(
+      (1, "a1", 10, 1000, "2021-10-16"),
+      (2, "a2", 11, 1001, "2021-10-16"),
+      (3, "a1", 12, 1002, "2021-10-17"),
+      (4, "a2", 13, 1003, "2021-10-17"),
+      (5, "a2", 14, 1004, "2021-10-17")
+    ).toDF("id", "name", "value", "ts", "dt")
+
+    val tableName = "hudi_simple_table"
+
+    assertThrows[HoodieException] {
+      // should fail if attempting to do an operation other than bulk_insert if no record key and precombine field is set
+      df.write.format("hudi")
+        .option(HoodieWriteConfig.TBL_NAME.key, tableName)
+        .option(OPERATION.key, UPSERT_OPERATION_OPT_VAL)
+        .partitionBy("dt")
+        .mode(SaveMode.Overwrite).save(tempBasePath)
+    }
+
+    // first write
+    df.write.format("hudi")
+      .option(HoodieWriteConfig.TBL_NAME.key, tableName)
+      .partitionBy("dt")
+      .mode(SaveMode.Overwrite).save(tempBasePath)
+
+    val tableConfig = HoodieTableMetaClient.builder()
+      .setConf(spark.sparkContext.hadoopConfiguration)
+      .setBasePath(tempBasePath).build().getTableConfig
+    assertFalse(tableConfig.populateMetaFields)
+    assertTrue(tableConfig.isAppendOnlyTable)
+
+    val snapshotDF1 = spark.read.format("org.apache.hudi")
+      .load(tempBasePath)
+    assertEquals(5, snapshotDF1.count())
+
+    // prepare dataframe for second write
+    val df2 = Seq((2, "a2", 20, 1000, "2021-10-16")).toDF("id", "name", "value", "ts", "dt")
+
+    assertThrows[HoodieException] {
+      // should fail if record key is being set now
+      df2.write.format("hudi")
+        .option(HoodieWriteConfig.TBL_NAME.key, tableName)
+        .option(RECORDKEY_FIELD.key, "id")
+        .partitionBy("dt")
+        .mode(SaveMode.Append).save(tempBasePath)
+    }
+
+    assertThrows[HoodieException] {
+      // should fail if precombine field is being set now
+      df2.write.format("hudi")
+        .option(HoodieWriteConfig.TBL_NAME.key, tableName)
+        .option(PRECOMBINE_FIELD.key, "dt")
+        .partitionBy("dt")
+        .mode(SaveMode.Append).save(tempBasePath)
+    }
+
+    // second write
+    df2.write.format("hudi")
+      .option(HoodieWriteConfig.TBL_NAME.key, tableName)
+      .partitionBy("dt")
+      .mode(SaveMode.Append).save(tempBasePath)
+
+    val snapshotDF2 = spark.read.format("org.apache.hudi")
+      .load(tempBasePath)
+    assertEquals(6, snapshotDF2.count())
+    assertEquals(2, snapshotDF2.where("id=2").count())
+
+    // insert overwrite
+    df2.write.format("hudi")
+      .option(HoodieWriteConfig.TBL_NAME.key, tableName)
+      .option(OPERATION.key, INSERT_OVERWRITE_OPERATION_OPT_VAL)
+      .option(RECORDKEY_FIELD.key, "id")
+      .option(PRECOMBINE_FIELD.key, "dt")
+      .partitionBy("dt")
+      .mode(SaveMode.Overwrite).save(tempBasePath)
+
+    val tableConfigAfterOverwrite = HoodieTableMetaClient.builder()
+      .setConf(spark.sparkContext.hadoopConfiguration)
+      .setBasePath(tempBasePath).build().getTableConfig
+    assertTrue(tableConfigAfterOverwrite.populateMetaFields)
+    assertFalse(tableConfigAfterOverwrite.isAppendOnlyTable)
+    assertEquals("id", tableConfigAfterOverwrite.getRecordKeyFields.get.head)
+
+    // validate records are intact
+    val snapshotDF = spark.read.format("org.apache.hudi")
+      .load(tempBasePath)
+    assertEquals(1, snapshotDF.count())
+    assertEquals(1, snapshotDF.where("id=2").count())
   }
 }

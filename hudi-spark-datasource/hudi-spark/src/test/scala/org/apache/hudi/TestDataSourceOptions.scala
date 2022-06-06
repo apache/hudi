@@ -19,13 +19,19 @@ package org.apache.hudi
 
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.hive.{HiveStylePartitionValueExtractor, MultiPartKeysValueExtractor}
-import org.apache.hudi.keygen.{ComplexKeyGenerator, SimpleKeyGenerator}
+import org.apache.hudi.keygen.{ComplexKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 
 class TestDataSourceOptions {
   @Test def inferDataSourceOptions(): Unit = {
+    val inputOptions0 = Map(
+      TABLE_NAME.key -> "hudi_table"
+    )
+    val modifiedOptions0 = HoodieWriterUtils.parametersWithWriteDefaults(inputOptions0)
+    assertEquals(classOf[NonpartitionedKeyGenerator].getName, modifiedOptions0(KEYGENERATOR_CLASS_NAME.key))
+
     val inputOptions1 = Map(
       TABLE_NAME.key -> "hudi_table",
       PARTITIONPATH_FIELD.key -> "year,month"

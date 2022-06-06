@@ -235,6 +235,13 @@ public class HoodieTableConfig extends HoodieConfig {
       .withDocumentation("Comma-separated list of metadata partitions that have been completely built and in-sync with data table. "
           + "These partitions are ready for use by the readers");
 
+  public static final ConfigProperty<Boolean> APPEND_ONLY_TABLE = ConfigProperty
+      .key("hoodie.table.append.only")
+      .defaultValue(false)
+      .sinceVersion("0.12.0")
+      .withDocumentation("When enabled, the writer will simply bulk insert without meta fields assuming that workload is append-only and there are no updates."
+          + " This will be auto-enabled when users have not configured any operation type, record key, or precombine field.");
+
   private static final String TABLE_CHECKSUM_FORMAT = "%s.%s"; // <database_name>.<table_name>
 
   public HoodieTableConfig(FileSystem fs, String metaPath, String payloadClassName) {
@@ -603,6 +610,10 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public Boolean shouldDropPartitionColumns() {
     return getBooleanOrDefault(DROP_PARTITION_COLUMNS);
+  }
+
+  public boolean isAppendOnlyTable() {
+    return getBooleanOrDefault(APPEND_ONLY_TABLE);
   }
 
   /**

@@ -18,24 +18,26 @@
 
 package org.apache.hudi.keygen;
 
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.testutils.KeyGeneratorTestUtilities;
+
+import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.unsafe.types.UTF8String;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 import static org.apache.hudi.keygen.KeyGenUtils.HUDI_DEFAULT_PARTITION_PATH;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class TestSimpleKeyGenerator extends KeyGeneratorTestUtilities {
@@ -96,7 +98,9 @@ public class TestSimpleKeyGenerator extends KeyGeneratorTestUtilities {
 
   @Test
   public void testNullRecordKeyFields() {
-    assertThrows(IllegalArgumentException.class, () -> new SimpleKeyGenerator(getPropertiesWithoutRecordKeyProp()));
+    SimpleKeyGenerator keyGenerator = new SimpleKeyGenerator(getPropertiesWithoutRecordKeyProp());
+    GenericRecord record = getRecord();
+    assertEquals(EMPTY_STRING, keyGenerator.getKey(record).getRecordKey());
   }
 
   @Test
@@ -129,15 +133,15 @@ public class TestSimpleKeyGenerator extends KeyGeneratorTestUtilities {
     SimpleKeyGenerator keyGenerator = new SimpleKeyGenerator(getProps());
     GenericRecord record = getRecord();
     HoodieKey key = keyGenerator.getKey(getRecord());
-    Assertions.assertEquals("key1", key.getRecordKey());
-    Assertions.assertEquals("timestamp=4357686", key.getPartitionPath());
+    assertEquals("key1", key.getRecordKey());
+    assertEquals("timestamp=4357686", key.getPartitionPath());
 
     Row row = KeyGeneratorTestUtilities.getRow(record);
-    Assertions.assertEquals("key1", keyGenerator.getRecordKey(row));
-    Assertions.assertEquals("timestamp=4357686", keyGenerator.getPartitionPath(row));
+    assertEquals("key1", keyGenerator.getRecordKey(row));
+    assertEquals("timestamp=4357686", keyGenerator.getPartitionPath(row));
 
     InternalRow internalRow = KeyGeneratorTestUtilities.getInternalRow(row);
-    Assertions.assertEquals(UTF8String.fromString("timestamp=4357686"), keyGenerator.getPartitionPath(internalRow, row.schema()));
+    assertEquals(UTF8String.fromString("timestamp=4357686"), keyGenerator.getPartitionPath(internalRow, row.schema()));
   }
 
   private static Stream<GenericRecord> nestedColTestRecords() {
@@ -157,11 +161,11 @@ public class TestSimpleKeyGenerator extends KeyGeneratorTestUtilities {
     String expectedPartitionPath = "nested_col.prop1="
         + (partitionPathFieldValue != null && !partitionPathFieldValue.isEmpty() ? partitionPathFieldValue : HUDI_DEFAULT_PARTITION_PATH);
     HoodieKey key = keyGenerator.getKey(record);
-    Assertions.assertEquals("key1", key.getRecordKey());
-    Assertions.assertEquals(expectedPartitionPath, key.getPartitionPath());
+    assertEquals("key1", key.getRecordKey());
+    assertEquals(expectedPartitionPath, key.getPartitionPath());
 
     Row row = KeyGeneratorTestUtilities.getRow(record);
-    Assertions.assertEquals("key1", keyGenerator.getRecordKey(row));
-    Assertions.assertEquals(expectedPartitionPath, keyGenerator.getPartitionPath(row));
+    assertEquals("key1", keyGenerator.getRecordKey(row));
+    assertEquals(expectedPartitionPath, keyGenerator.getPartitionPath(row));
   }
 }

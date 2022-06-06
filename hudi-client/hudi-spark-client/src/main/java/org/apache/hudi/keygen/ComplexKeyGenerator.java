@@ -28,6 +28,8 @@ import org.apache.spark.unsafe.types.UTF8String;
 import java.util.Arrays;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
+
 /**
  * Key generator prefixing field names before corresponding record-key parts.
  *
@@ -41,10 +43,7 @@ public class ComplexKeyGenerator extends BuiltinKeyGenerator {
 
   public ComplexKeyGenerator(TypedProperties props) {
     super(props);
-    this.recordKeyFields = Arrays.stream(props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()).split(","))
-        .map(String::trim)
-        .filter(s -> !s.isEmpty())
-        .collect(Collectors.toList());
+    this.recordKeyFields = KeyGenUtils.getRecordKeyFields(props);
     this.partitionPathFields = Arrays.stream(props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()).split(","))
         .map(String::trim)
         .filter(s -> !s.isEmpty())
@@ -64,6 +63,9 @@ public class ComplexKeyGenerator extends BuiltinKeyGenerator {
 
   @Override
   public String getRecordKey(Row row) {
+    if (recordKeyFields.isEmpty()) {
+      return EMPTY_STRING;
+    }
     tryInitRowAccessor(row.schema());
     return combineCompositeRecordKey(rowAccessor.getRecordKeyParts(row));
   }

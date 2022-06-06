@@ -47,7 +47,6 @@ object HoodieOptionConfig {
     .withSqlKey("primaryKey")
     .withHoodieKey(DataSourceWriteOptions.RECORDKEY_FIELD.key)
     .withTableConfigKey(HoodieTableConfig.RECORDKEY_FIELDS.key)
-    .defaultValue(DataSourceWriteOptions.RECORDKEY_FIELD.defaultValue())
     .build()
 
   val SQL_KEY_TABLE_TYPE: HoodieSQLOption[String] = buildConf()

@@ -115,7 +115,7 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> PRECOMBINE_FIELD_NAME = ConfigProperty
       .key("hoodie.datasource.write.precombine.field")
-      .defaultValue("ts")
+      .noDefaultValue()
       .withDocumentation("Field used in preCombining before actual write. When two records have the same key value, "
           + "we will pick the one with the largest value for the precombine field, determined by Object.compareTo(..)");
 

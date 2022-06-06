@@ -17,14 +17,14 @@
 
 package org.apache.hudi.keygen;
 
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
+
+import org.apache.avro.generic.GenericRecord;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
-import java.util.stream.Collectors;
+
+import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 
 /**
  * Avro simple Key generator for unpartitioned Hive Tables.
@@ -36,8 +36,7 @@ public class NonpartitionedAvroKeyGenerator extends BaseKeyGenerator {
 
   public NonpartitionedAvroKeyGenerator(TypedProperties props) {
     super(props);
-    this.recordKeyFields = Arrays.stream(props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key())
-        .split(",")).map(String::trim).filter(s -> !s.isEmpty()).collect(Collectors.toList());
+    this.recordKeyFields = KeyGenUtils.getRecordKeyFields(props);
     this.partitionPathFields = EMPTY_PARTITION_FIELD_LIST;
   }
 
@@ -53,6 +52,9 @@ public class NonpartitionedAvroKeyGenerator extends BaseKeyGenerator {
 
   @Override
   public String getRecordKey(GenericRecord record) {
+    if (getRecordKeyFieldNames().isEmpty()) {
+      return EMPTY_STRING;
+    }
     // for backward compatibility, we need to use the right format according to the number of record key fields
     // 1. if there is only one record key field, the format of record key is just "<value>"
     // 2. if there are multiple record key fields, the format is "<field1>:<value1>,<field2>:<value2>,..."

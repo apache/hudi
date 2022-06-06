@@ -23,7 +23,7 @@ import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.model._
 import org.apache.hudi.common.testutils.SchemaTestUtil
-import org.apache.hudi.common.util.Option
+import org.apache.hudi.common.util.{Option, PartitionPathEncodeUtils}
 import org.apache.hudi.common.util.PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH
 import org.apache.hudi.config.HoodiePayloadConfig
 import org.apache.hudi.exception.{HoodieException, HoodieKeyException}
@@ -93,10 +93,9 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
       // Record's key field not specified
       val props = new TypedProperties()
       props.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD.key(), "partitionField")
-
-      assertThrows(classOf[IllegalArgumentException]) {
-        new SimpleKeyGenerator(props)
-      }
+      val keyGen = new SimpleKeyGenerator(props)
+      assertEquals("", keyGen.getKey(baseRecord).getRecordKey)
+      assertEquals(PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH, keyGen.getPartitionPath(baseRecord))
     }
 
     {
@@ -259,14 +258,12 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
     }
 
     // Record's key field not specified
-    assertThrows(classOf[IllegalArgumentException]) {
+    {
       val props = new TypedProperties()
-      props.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "partitionField")
+      props.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "name")
       val keyGen = new ComplexKeyGenerator(props)
-
-      keyGen.getKey(baseRecord)
-      keyGen.getPartitionPath(baseRow)
-      keyGen.getPartitionPath(internalRow, structType)
+      assertEquals("", keyGen.getRecordKey(baseRow))
+      assertEquals("name1", keyGen.getPartitionPath(baseRow))
     }
 
     {
