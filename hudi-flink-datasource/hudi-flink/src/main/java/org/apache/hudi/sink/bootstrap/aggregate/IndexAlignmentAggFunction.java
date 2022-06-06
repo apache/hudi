@@ -19,32 +19,32 @@
 package org.apache.hudi.sink.bootstrap.aggregate;
 
 import org.apache.flink.api.common.functions.AggregateFunction;
+import org.apache.flink.api.java.tuple.Tuple4;
 
 /**
- * Aggregate function that accumulates the loaded task number of
- * function {@link org.apache.hudi.sink.bootstrap.BootstrapOperator}.
+ * Aggregate function that accumulates loading the index.
  */
-public class BootstrapAggFunction implements AggregateFunction<Integer, BootstrapAccumulator, Integer> {
-  public static final String NAME = BootstrapAggFunction.class.getSimpleName();
+public class IndexAlignmentAggFunction implements AggregateFunction<Tuple4<String, Integer, Integer, Long>, IndexAlignmentAccumulator, Boolean> {
+  public static final String NAME = IndexAlignmentAggFunction.class.getSimpleName();
 
   @Override
-  public BootstrapAccumulator createAccumulator() {
-    return new BootstrapAccumulator();
+  public IndexAlignmentAccumulator createAccumulator() {
+    return new IndexAlignmentAccumulator();
   }
 
   @Override
-  public BootstrapAccumulator add(Integer taskId, BootstrapAccumulator bootstrapAccumulator) {
-    bootstrapAccumulator.update(taskId);
-    return bootstrapAccumulator;
+  public IndexAlignmentAccumulator add(Tuple4<String, Integer, Integer, Long> taskDetails, IndexAlignmentAccumulator indexAlignmentAccumulator) {
+    indexAlignmentAccumulator.update(taskDetails);
+    return indexAlignmentAccumulator;
   }
 
   @Override
-  public Integer getResult(BootstrapAccumulator bootstrapAccumulator) {
-    return bootstrapAccumulator.readyTaskNum();
+  public Boolean getResult(IndexAlignmentAccumulator indexAlignmentAccumulator) {
+    return indexAlignmentAccumulator.isReady();
   }
 
   @Override
-  public BootstrapAccumulator merge(BootstrapAccumulator bootstrapAccumulator, BootstrapAccumulator acc) {
-    return bootstrapAccumulator.merge(acc);
+  public IndexAlignmentAccumulator merge(IndexAlignmentAccumulator indexAlignmentAccumulator, IndexAlignmentAccumulator acc) {
+    return indexAlignmentAccumulator.merge(acc);
   }
 }
