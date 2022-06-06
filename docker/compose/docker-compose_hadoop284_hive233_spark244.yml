@@ -133,7 +133,7 @@ services:
       - "hive-metastore-postgresql"
       - "namenode"
     volumes:
-      - ${HUDI_WS}:/var/hoodie/ws
+      - ${HUDI_WS}/:/var/hoodie/ws
 
   sparkmaster:
     image: apachehudi/hudi-hadoop_2.8.4-hive_2.3.3-sparkmaster_2.4.4:latest
@@ -211,7 +211,7 @@ services:
     links:
       - "hivemetastore"
     volumes:
-      - ${HUDI_WS}:/var/hoodie/ws
+      - ${HUDI_WS}/:/var/hoodie/ws
     command: coordinator
 
   presto-worker-1:
@@ -232,7 +232,7 @@ services:
       - "hive-metastore-postgresql"
       - "namenode"
     volumes:
-      - ${HUDI_WS}:/var/hoodie/ws
+      - ${HUDI_WS}/:/var/hoodie/ws
     command: worker
 
   trino-coordinator-1:
@@ -246,7 +246,7 @@ services:
     links:
       - "hivemetastore"
     volumes:
-      - ${HUDI_WS}:/var/hoodie/ws
+      - ${HUDI_WS}/:/var/hoodie/ws
     command: http://trino-coordinator-1:8091 trino-coordinator-1
 
   trino-worker-1:
@@ -264,7 +264,7 @@ services:
       - "hive-metastore-postgresql"
       - "namenode"
     volumes:
-      - ${HUDI_WS}:/var/hoodie/ws
+      - ${HUDI_WS}/:/var/hoodie/ws
     command: http://trino-coordinator-1:8091 trino-worker-1
 
   graphite:
@@ -298,7 +298,7 @@ services:
       - "presto-coordinator-1"
       - "trino-coordinator-1"
     volumes:
-      - ${HUDI_WS}:/var/hoodie/ws
+      - ${HUDI_WS}/:/var/hoodie/ws
 
   adhoc-2:
     image: apachehudi/hudi-hadoop_2.8.4-hive_2.3.3-sparkadhoc_2.4.4:latest
@@ -321,7 +321,7 @@ services:
       - "presto-coordinator-1"
       - "trino-coordinator-1"
     volumes:
-      - ${HUDI_WS}:/var/hoodie/ws
+      - ${HUDI_WS}/:/var/hoodie/ws
 
 volumes:
   namenode:
