@@ -39,49 +39,59 @@ import org.apache.spark.sql.{AnalysisException, SparkSession}
 
 import java.util
 import scala.collection.JavaConverters._
+import scala.collection.mutable.ListBuffer
 
 object HoodieAnalysis {
-  def customResolutionRules(): Seq[SparkSession => Rule[LogicalPlan]] =
-    Seq(
+  type RuleBuilder = SparkSession => Rule[LogicalPlan]
+
+  def customResolutionRules: Seq[RuleBuilder] = {
+    val rules: ListBuffer[RuleBuilder] = ListBuffer(
+      // Default rules
       session => HoodieResolveReferences(session),
-      session => HoodieAnalysis(session)
-    ) ++ extraResolutionRules()
+      session => HoodieAnalysis(session),
+      sparkAdapter.createResolveHudiAlterTableCommand()
+    )
 
-  def customPostHocResolutionRules(): Seq[SparkSession => Rule[LogicalPlan]] =
-    Seq(
-      session => HoodiePostAnalysisRule(session)
-    ) ++ extraPostHocResolutionRules()
-
-  def extraResolutionRules(): Seq[SparkSession => Rule[LogicalPlan]] = {
     if (HoodieSparkUtils.gteqSpark3_2) {
-      val dataSourceV2ToV1FallbackClass = "org.apache.spark.sql.hudi.analysis.HoodieDataSourceV2ToV1Fallback"
-      val dataSourceV2ToV1Fallback: SparkSession => Rule[LogicalPlan] =
-        session => ReflectionUtils.loadClass(dataSourceV2ToV1FallbackClass, session).asInstanceOf[Rule[LogicalPlan]]
-
       val spark3AnalysisClass = "org.apache.spark.sql.hudi.analysis.HoodieSpark3Analysis"
-      val spark3Analysis: SparkSession => Rule[LogicalPlan] =
+      val spark3Analysis: RuleBuilder =
         session => ReflectionUtils.loadClass(spark3AnalysisClass, session).asInstanceOf[Rule[LogicalPlan]]
 
       val spark3ResolveReferencesClass = "org.apache.spark.sql.hudi.analysis.HoodieSpark3ResolveReferences"
-      val spark3ResolveReferences: SparkSession => Rule[LogicalPlan] =
+      val spark3ResolveReferences: RuleBuilder =
         session => ReflectionUtils.loadClass(spark3ResolveReferencesClass, session).asInstanceOf[Rule[LogicalPlan]]
 
-      Seq(dataSourceV2ToV1Fallback, spark3Analysis, spark3ResolveReferences)
-    } else {
-      Seq.empty
+      rules ++= Seq(spark3Analysis, spark3ResolveReferences)
     }
+
+    if (HoodieSparkUtils.gteqSpark3_1) {
+      val dataSourceV2ToV1FallbackClass = "org.apache.spark.sql.hudi.analysis.HoodieDataSourceV2ToV1Fallback"
+      val dataSourceV2ToV1Fallback: RuleBuilder =
+        session => ReflectionUtils.loadClass(dataSourceV2ToV1FallbackClass, session).asInstanceOf[Rule[LogicalPlan]]
+
+      rules += dataSourceV2ToV1Fallback
+    }
+
+    rules
   }
 
-  def extraPostHocResolutionRules(): Seq[SparkSession => Rule[LogicalPlan]] =
+  def customPostHocResolutionRules: Seq[RuleBuilder] = {
+    val rules: ListBuffer[RuleBuilder] = ListBuffer(
+      // Default rules
+      session => HoodiePostAnalysisRule(session)
+    )
+
     if (HoodieSparkUtils.gteqSpark3_2) {
       val spark3PostHocResolutionClass = "org.apache.spark.sql.hudi.analysis.HoodieSpark3PostAnalysisRule"
-      val spark3PostHocResolution: SparkSession => Rule[LogicalPlan] =
+      val spark3PostHocResolution: RuleBuilder =
         session => ReflectionUtils.loadClass(spark3PostHocResolutionClass, session).asInstanceOf[Rule[LogicalPlan]]
 
-      Seq(spark3PostHocResolution)
-    } else {
-      Seq.empty
+      rules += spark3PostHocResolution
     }
+
+    rules
+  }
+
 }
 
 /**
