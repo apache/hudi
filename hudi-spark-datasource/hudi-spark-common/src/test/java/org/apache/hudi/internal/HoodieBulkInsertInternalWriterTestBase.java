@@ -70,6 +70,10 @@ public class HoodieBulkInsertInternalWriterTestBase extends HoodieClientTestHarn
   }
 
   protected HoodieWriteConfig getWriteConfig(boolean populateMetaFields) {
+    return getWriteConfig(populateMetaFields, DataSourceWriteOptions.HIVE_STYLE_PARTITIONING().defaultValue());
+  }
+
+  protected HoodieWriteConfig getWriteConfig(boolean populateMetaFields, String hiveStylePartitioningValue) {
     Properties properties = new Properties();
     if (!populateMetaFields) {
       properties.setProperty(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME().key(), SimpleKeyGenerator.class.getName());
@@ -77,6 +81,7 @@ public class HoodieBulkInsertInternalWriterTestBase extends HoodieClientTestHarn
       properties.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), SparkDatasetTestUtils.PARTITION_PATH_FIELD_NAME);
       properties.setProperty(HoodieTableConfig.POPULATE_META_FIELDS.key(), "false");
     }
+    properties.setProperty(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING().key(), hiveStylePartitioningValue);
     return getConfigBuilder(basePath, timelineServicePort).withProperties(properties).build();
   }
 
