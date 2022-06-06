@@ -122,9 +122,13 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     optParams.get(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key)
       .map(HoodieSqlCommonUtils.formatQueryInstant)
 
+  /**
+   * NOTE: Initialization of teh following members is coupled on purpose to minimize amount of I/O
+   *       required to fetch table's Avro and Internal schemas
+   */
   protected lazy val (tableAvroSchema: Schema, internalSchema: InternalSchema) = {
-    val schemaUtil = new TableSchemaResolver(metaClient)
-    val avroSchema = Try(schemaUtil.getTableAvroSchema) match {
+    val schemaResolver = new TableSchemaResolver(metaClient)
+    val avroSchema = Try(schemaResolver.getTableAvroSchema) match {
       case Success(schema) => schema
       case Failure(e) =>
         logWarning("Failed to fetch schema from the table", e)
@@ -137,14 +141,14 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     }
     // try to find internalSchema
     val internalSchemaFromMeta = try {
-      schemaUtil.getTableInternalSchemaFromCommitMetadata.orElse(InternalSchema.getEmptyInternalSchema)
+      schemaResolver.getTableInternalSchemaFromCommitMetadata.orElse(InternalSchema.getEmptyInternalSchema)
     } catch {
       case _: Exception => InternalSchema.getEmptyInternalSchema
     }
     (avroSchema, internalSchemaFromMeta)
   }
 
-  protected val tableStructSchema: StructType = AvroConversionUtils.convertAvroSchemaToStructType(tableAvroSchema)
+  protected lazy val tableStructSchema: StructType = AvroConversionUtils.convertAvroSchemaToStructType(tableAvroSchema)
 
   protected val partitionColumns: Array[String] = tableConfig.getPartitionFields.orElse(Array.empty)
 
@@ -196,7 +200,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
    * meaning that regardless of whether this columns are being requested by the query they will be fetched
    * regardless so that relation is able to combine records properly (if necessary)
    *
-   * @VisibleInTests
+   * @VisibleForTesting
    */
   val mandatoryFields: Seq[String]
 
@@ -214,6 +218,11 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
 
   protected def queryTimestamp: Option[String] =
     specifiedQueryTimestamp.orElse(toScalaOption(timeline.lastInstant()).map(_.getTimestamp))
+
+  /**
+   * Returns true in case table supports Schema on Read (Schema Evolution)
+   */
+  def hasSchemaOnRead: Boolean = !internalSchema.isEmptySchema
 
   override def schema: StructType = tableStructSchema
 
