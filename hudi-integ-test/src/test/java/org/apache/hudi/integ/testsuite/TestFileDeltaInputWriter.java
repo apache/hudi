@@ -47,6 +47,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Disabled;
 
 /**
  * Unit test for {@link DeltaInputWriter}.
@@ -79,6 +80,7 @@ public class TestFileDeltaInputWriter extends UtilitiesTestBase {
   }
 
   @Test
+  @Disabled
   public void testAvroFileSinkWriter() throws IOException {
     // 1. Create a Avro File Sink Writer
     DeltaInputWriter<GenericRecord> fileSinkWriter =
@@ -116,6 +118,7 @@ public class TestFileDeltaInputWriter extends UtilitiesTestBase {
   }
 
   @Test
+  @Disabled
   public void testAvroFileSinkCreateNewWriter() throws IOException {
     // 1. Create a Avro File Sink Writer
     DeltaInputWriter<GenericRecord> fileSinkWriter =
