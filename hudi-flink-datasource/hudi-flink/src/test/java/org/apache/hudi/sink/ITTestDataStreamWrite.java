@@ -102,7 +102,7 @@ public class ITTestDataStreamWrite extends TestLogger {
     conf.setString(FlinkOptions.INDEX_KEY_FIELD, "id");
     conf.setBoolean(FlinkOptions.PRE_COMBINE,true);
 
-    testWriteToHoodie(conf, "cow_write", 1, EXPECTED);
+    testWriteToHoodie(conf, "cow_write", 2, EXPECTED);
   }
 
   @Test
