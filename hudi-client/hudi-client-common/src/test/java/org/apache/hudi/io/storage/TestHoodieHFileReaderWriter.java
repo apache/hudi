@@ -294,6 +294,38 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
         StreamSupport.stream(Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), false)
             .collect(Collectors.toList());
     assertEquals(Collections.emptyList(), recordsByPrefix);
+
+    // filter for "key50" and "key1" : entries from key50 and 'key10 to key19' should be matched.
+    List<GenericRecord> expectedKey50and1s = allRecords.stream().filter(entry -> (entry.get("_row_key").toString()).contains("key1")
+        || (entry.get("_row_key").toString()).contains("key50")).collect(Collectors.toList());
+    iterator =
+        hfileReader.getRecordsByKeyPrefixIterator(Arrays.asList("key50", "key1"), avroSchema);
+    recordsByPrefix =
+        StreamSupport.stream(Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), false)
+            .collect(Collectors.toList());
+    assertEquals(expectedKey50and1s, recordsByPrefix);
+
+    // filter for "key50" and "key0" : entries from key50 and 'key00 to key09' should be matched.
+    List<GenericRecord> expectedKey50and0s = allRecords.stream().filter(entry -> (entry.get("_row_key").toString()).contains("key0")
+        || (entry.get("_row_key").toString()).contains("key50")).collect(Collectors.toList());
+    iterator =
+        hfileReader.getRecordsByKeyPrefixIterator(Arrays.asList("key50", "key0"), avroSchema);
+    recordsByPrefix =
+        StreamSupport.stream(Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), false)
+            .collect(Collectors.toList());
+    assertEquals(expectedKey50and0s, recordsByPrefix);
+
+    // filter for "key1" and "key0" : entries from 'key10 to key19' and 'key00 to key09' should be matched.
+    List<GenericRecord> expectedKey1sand0s = expectedKey1s;
+    expectedKey1sand0s.addAll(allRecords.stream()
+        .filter(entry -> (entry.get("_row_key").toString()).contains("key0"))
+        .collect(Collectors.toList()));
+    iterator =
+        hfileReader.getRecordsByKeyPrefixIterator(Arrays.asList("key1", "key0"), avroSchema);
+    recordsByPrefix =
+        StreamSupport.stream(Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), false)
+            .collect(Collectors.toList());
+    assertEquals(expectedKey1sand0s, recordsByPrefix);
   }
 
   @ParameterizedTest
