@@ -48,9 +48,10 @@ object HoodieAnalysis {
     val rules: ListBuffer[RuleBuilder] = ListBuffer(
       // Default rules
       session => HoodieResolveReferences(session),
-      session => HoodieAnalysis(session),
-      sparkAdapter.createResolveHudiAlterTableCommand()
+      session => HoodieAnalysis(session)
     )
+
+    rules ++= sparkAdapter.createResolveHudiAlterTableCommand().toSeq
 
     if (HoodieSparkUtils.gteqSpark3_2) {
       val spark3AnalysisClass = "org.apache.spark.sql.hudi.analysis.HoodieSpark3Analysis"
