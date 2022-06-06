@@ -22,6 +22,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.StreamerUtil;
 
@@ -93,7 +94,7 @@ public class HoodieCatalog extends AbstractCatalog {
   public HoodieCatalog(String name, Configuration options) {
     super(name, options.get(DEFAULT_DATABASE));
     this.catalogPathStr = options.get(CATALOG_PATH);
-    this.hadoopConf = StreamerUtil.getHadoopConf();
+    this.hadoopConf = HadoopConfigurations.getHadoopConf(options);
     this.tableCommonOptions = CatalogOptions.tableCommonOptions(options);
   }
 

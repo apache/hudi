@@ -148,13 +148,16 @@ public class HoodieMergeHelper<T extends HoodieRecordPayload> extends
     } catch (Exception e) {
       throw new HoodieException(e);
     } finally {
+      // HUDI-2875: mergeHandle is not thread safe, we should totally terminate record inputting
+      // and executor firstly and then close mergeHandle.
       if (reader != null) {
         reader.close();
       }
-      mergeHandle.close();
       if (null != wrapper) {
         wrapper.shutdownNow();
+        wrapper.awaitTermination();
       }
+      mergeHandle.close();
     }
   }
 }

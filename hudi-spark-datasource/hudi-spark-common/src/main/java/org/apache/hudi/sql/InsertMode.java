@@ -38,8 +38,7 @@ public enum InsertMode {
    * In non-strict mode for insert into, we use insert operation
    * to write data which allow writing the duplicate record.
    */
-  NON_STRICT("non-strict")
-  ;
+  NON_STRICT("non-strict");
 
   private String value;
 

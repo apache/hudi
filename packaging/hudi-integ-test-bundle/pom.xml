@@ -83,7 +83,6 @@
                   <include>org.apache.hudi:hudi-sync-common</include>
                   <include>org.apache.hudi:hudi-hadoop-mr</include>
                   <include>org.apache.hudi:hudi-timeline-service</include>
-                  <include>org.apache.hudi:hudi-aws</include>
                   <include>org.apache.hudi:hudi-integ-test</include>
 
                   <include>org.apache.hbase:hbase-common</include>
@@ -92,6 +91,7 @@
                   <include>org.apache.hbase:hbase-hadoop2-compat</include>
                   <include>org.apache.hbase:hbase-metrics</include>
                   <include>org.apache.hbase:hbase-metrics-api</include>
+                  <include>org.apache.hbase:hbase-protocol</include>
                   <include>org.apache.hbase:hbase-protocol-shaded</include>
                   <include>org.apache.hbase:hbase-server</include>
                   <include>org.apache.hbase.thirdparty:hbase-shaded-miscellaneous</include>
@@ -174,6 +174,12 @@
                   <include>org.apache.curator:curator-framework</include>
                   <include>org.apache.curator:curator-client</include>
                   <include>org.apache.curator:curator-recipes</include>
+
+                  <include>io.prometheus:simpleclient</include>
+                  <include>io.prometheus:simpleclient_httpserver</include>
+                  <include>io.prometheus:simpleclient_dropwizard</include>
+                  <include>io.prometheus:simpleclient_pushgateway</include>
+                  <include>io.prometheus:simpleclient_common</include>
                 </includes>
               </artifactSet>
               <relocations>

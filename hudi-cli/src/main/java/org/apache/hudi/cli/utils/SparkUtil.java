@@ -32,8 +32,8 @@ import org.apache.spark.launcher.SparkLauncher;
 
 import java.io.File;
 import java.net.URISyntaxException;
+import java.util.Arrays;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Properties;
 
 /**
@@ -56,9 +56,12 @@ public class SparkUtil {
     if (!StringUtils.isNullOrEmpty(propertiesFile)) {
       sparkLauncher.setPropertiesFile(propertiesFile);
     }
+
     File libDirectory = new File(new File(currentJar).getParent(), "lib");
-    for (String library : Objects.requireNonNull(libDirectory.list())) {
-      sparkLauncher.addJar(new File(libDirectory, library).getAbsolutePath());
+    // This lib directory may be not required, such as providing libraries through a bundle jar
+    if (libDirectory.exists()) {
+      Arrays.stream(libDirectory.list()).forEach(library ->
+              sparkLauncher.addJar(new File(libDirectory, library).getAbsolutePath()));
     }
     return sparkLauncher;
   }
@@ -99,20 +102,20 @@ public class SparkUtil {
     return sparkConf;
   }
 
-  public static JavaSparkContext initJavaSparkConf(String name) {
-    return initJavaSparkConf(name, Option.empty(), Option.empty());
+  public static JavaSparkContext initJavaSparkContext(String name) {
+    return initJavaSparkContext(name, Option.empty(), Option.empty());
   }
 
-  public static JavaSparkContext initJavaSparkConf(String name, Option<String> master, Option<String> executorMemory) {
+  public static JavaSparkContext initJavaSparkContext(String name, Option<String> master, Option<String> executorMemory) {
     SparkConf sparkConf = getDefaultConf(name, master);
     if (executorMemory.isPresent()) {
       sparkConf.set(HoodieCliSparkConfig.CLI_EXECUTOR_MEMORY, executorMemory.get());
     }
 
-    return initJavaSparkConf(sparkConf);
+    return initJavaSparkContext(sparkConf);
   }
 
-  public static JavaSparkContext initJavaSparkConf(SparkConf sparkConf) {
+  public static JavaSparkContext initJavaSparkContext(SparkConf sparkConf) {
     SparkRDDWriteClient.registerClasses(sparkConf);
     JavaSparkContext jsc = new JavaSparkContext(sparkConf);
     jsc.hadoopConfiguration().setBoolean(HoodieCliSparkConfig.CLI_PARQUET_ENABLE_SUMMARY_METADATA, false);

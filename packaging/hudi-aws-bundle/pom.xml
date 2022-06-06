@@ -1,0 +1,296 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ~ Licensed to the Apache Software Foundation (ASF) under one
+  ~ or more contributor license agreements.  See the NOTICE file
+  ~ distributed with this work for additional information
+  ~ regarding copyright ownership.  The ASF licenses this file
+  ~ to you under the Apache License, Version 2.0 (the
+  ~ "License"); you may not use this file except in compliance
+  ~ with the License.  You may obtain a copy of the License at
+  ~
+  ~   http://www.apache.org/licenses/LICENSE-2.0
+  ~
+  ~ Unless required by applicable law or agreed to in writing,
+  ~ software distributed under the License is distributed on an
+  ~ "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+  ~ KIND, either express or implied.  See the License for the
+  ~ specific language governing permissions and limitations
+  ~ under the License.
+  -->
+
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <parent>
+        <artifactId>hudi</artifactId>
+        <groupId>org.apache.hudi</groupId>
+        <version>0.12.0-SNAPSHOT</version>
+        <relativePath>../../pom.xml</relativePath>
+    </parent>
+    <modelVersion>4.0.0</modelVersion>
+
+    <artifactId>hudi-aws-bundle</artifactId>
+    <packaging>jar</packaging>
+
+    <properties>
+        <checkstyle.skip>true</checkstyle.skip>
+        <main.basedir>${project.parent.basedir}</main.basedir>
+    </properties>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.rat</groupId>
+                <artifactId>apache-rat-plugin</artifactId>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>${maven-shade-plugin.version}</version>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>shade</goal>
+                        </goals>
+                        <configuration>
+                            <createSourcesJar>${shadeSources}</createSourcesJar>
+                            <dependencyReducedPomLocation>${project.build.directory}/dependency-reduced-pom.xml
+                            </dependencyReducedPomLocation>
+                            <transformers>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ApacheLicenseResourceTransformer">
+                                </transformer>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ApacheNoticeResourceTransformer">
+                                    <addHeader>true</addHeader>
+                                </transformer>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.IncludeResourceTransformer">
+                                    <resource>META-INF/LICENSE</resource>
+                                    <file>target/classes/META-INF/LICENSE</file>
+                                </transformer>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+                            </transformers>
+                            <artifactSet>
+                                <includes>
+                                    <include>org.apache.hudi:hudi-common</include>
+                                    <include>org.apache.hudi:hudi-hadoop-mr</include>
+                                    <include>org.apache.hudi:hudi-sync-common</include>
+                                    <include>org.apache.hudi:hudi-hive-sync</include>
+                                    <include>org.apache.hudi:hudi-aws</include>
+                                    <include>org.apache.parquet:parquet-avro</include>
+                                    <include>org.apache.avro:avro</include>
+                                    <include>com.amazonaws:dynamodb-lock-client</include>
+                                    <include>com.amazonaws:aws-java-sdk-cloudwatch</include>
+                                    <include>com.amazonaws:aws-java-sdk-dynamodb</include>
+                                    <include>com.amazonaws:aws-java-sdk-core</include>
+                                    <include>com.amazonaws:aws-java-sdk-glue</include>
+                                    <include>com.beust:jcommander</include>
+                                    <include>commons-io:commons-io</include>
+                                    <include>org.apache.hbase:hbase-common</include>
+                                    <include>org.apache.hbase:hbase-client</include>
+                                    <include>org.apache.hbase:hbase-hadoop-compat</include>
+                                    <include>org.apache.hbase:hbase-hadoop2-compat</include>
+                                    <include>org.apache.hbase:hbase-metrics</include>
+                                    <include>org.apache.hbase:hbase-metrics-api</include>
+                                    <include>org.apache.hbase:hbase-protocol</include>
+                                    <include>org.apache.hbase:hbase-protocol-shaded</include>
+                                    <include>org.apache.hbase:hbase-server</include>
+                                    <include>org.apache.hbase.thirdparty:hbase-shaded-miscellaneous</include>
+                                    <include>org.apache.hbase.thirdparty:hbase-shaded-netty</include>
+                                    <include>org.apache.hbase.thirdparty:hbase-shaded-protobuf</include>
+                                    <include>org.apache.htrace:htrace-core4</include>
+                                </includes>
+                            </artifactSet>
+                            <relocations>
+                                <relocation>
+                                    <pattern>com.esotericsoftware.kryo.</pattern>
+                                    <shadedPattern>org.apache.hudi.com.esotericsoftware.kryo.</shadedPattern>
+                                </relocation>
+                                <relocation>
+                                    <pattern>com.esotericsoftware.minlog.</pattern>
+                                    <shadedPattern>org.apache.hudi.com.esotericsoftware.minlog.</shadedPattern>
+                                </relocation>
+                                <relocation>
+                                    <pattern>com.beust.jcommander.</pattern>
+                                    <shadedPattern>org.apache.hudi.com.beust.jcommander.</shadedPattern>
+                                </relocation>
+                                <relocation>
+                                    <pattern>org.apache.commons.io.</pattern>
+                                    <shadedPattern>org.apache.hudi.org.apache.commons.io.</shadedPattern>
+                                </relocation>
+                                <relocation>
+                                    <pattern>org.apache.hadoop.hbase.</pattern>
+                                    <shadedPattern>org.apache.hudi.org.apache.hadoop.hbase.</shadedPattern>
+                                    <excludes>
+                                        <exclude>org.apache.hadoop.hbase.KeyValue$KeyComparator</exclude>
+                                    </excludes>
+                                </relocation>
+                                <relocation>
+                                    <pattern>org.apache.hbase.</pattern>
+                                    <shadedPattern>org.apache.hudi.org.apache.hbase.</shadedPattern>
+                                </relocation>
+                                <relocation>
+                                    <pattern>org.apache.htrace.</pattern>
+                                    <shadedPattern>org.apache.hudi.org.apache.htrace.</shadedPattern>
+                                </relocation>
+                                <relocation>
+                                    <pattern>org.objenesis.</pattern>
+                                    <shadedPattern>org.apache.hudi.org.objenesis.</shadedPattern>
+                                </relocation>
+                                <relocation>
+                                    <pattern>com.amazonaws.</pattern>
+                                    <shadedPattern>org.apache.hudi.com.amazonaws.</shadedPattern>
+                                </relocation>
+                                <relocation>
+                                    <pattern>org.apache.parquet.avro.</pattern>
+                                    <shadedPattern>org.apache.hudi.org.apache.parquet.avro.</shadedPattern>
+                                </relocation>
+                                <relocation>
+                                    <pattern>org.apache.avro.</pattern>
+                                    <shadedPattern>org.apache.hudi.org.apache.avro.</shadedPattern>
+                                </relocation>
+                                <!-- The classes below in org.apache.hadoop.metrics2 package come from
+                                hbase-hadoop-compat and hbase-hadoop2-compat, which have to be shaded one by one,
+                                instead of shading all classes under org.apache.hadoop.metrics2 including ones
+                                from hadoop. -->
+                                <relocation>
+                                    <pattern>org.apache.hadoop.metrics2.MetricHistogram</pattern>
+                                    <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.MetricHistogram
+                                    </shadedPattern>
+                                </relocation>
+                                <relocation>
+                                    <pattern>org.apache.hadoop.metrics2.MetricsExecutor</pattern>
+                                    <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.MetricsExecutor
+                                    </shadedPattern>
+                                </relocation>
+                                <relocation>
+                                    <pattern>org.apache.hadoop.metrics2.impl.JmxCacheBuster</pattern>
+                                    <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.impl.JmxCacheBuster</shadedPattern>
+                                </relocation>
+                                <relocation>
+                                    <pattern>org.apache.hadoop.metrics2.lib.DefaultMetricsSystemHelper</pattern>
+                                    <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.DefaultMetricsSystemHelper
+                                    </shadedPattern>
+                                </relocation>
+                                <relocation>
+                                    <pattern>org.apache.hadoop.metrics2.lib.DynamicMetricsRegistry</pattern>
+                                    <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.DynamicMetricsRegistry
+                                    </shadedPattern>
+                                </relocation>
+                                <relocation>
+                                    <pattern>org.apache.hadoop.metrics2.lib.MetricsExecutorImpl</pattern>
+                                    <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.MetricsExecutorImpl
+                                    </shadedPattern>
+                                </relocation>
+                                <relocation>
+                                    <pattern>org.apache.hadoop.metrics2.lib.MutableFastCounter</pattern>
+                                    <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.MutableFastCounter
+                                    </shadedPattern>
+                                </relocation>
+                                <relocation>
+                                    <pattern>org.apache.hadoop.metrics2.lib.MutableHistogram</pattern>
+                                    <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.MutableHistogram
+                                    </shadedPattern>
+                                </relocation>
+                                <relocation>
+                                    <pattern>org.apache.hadoop.metrics2.lib.MutableRangeHistogram</pattern>
+                                    <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.MutableRangeHistogram
+                                    </shadedPattern>
+                                </relocation>
+                                <relocation>
+                                    <pattern>org.apache.hadoop.metrics2.lib.MutableSizeHistogram</pattern>
+                                    <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.MutableSizeHistogram
+                                    </shadedPattern>
+                                </relocation>
+                                <relocation>
+                                    <pattern>org.apache.hadoop.metrics2.lib.MutableTimeHistogram</pattern>
+                                    <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.MutableTimeHistogram
+                                    </shadedPattern>
+                                </relocation>
+                                <relocation>
+                                    <pattern>org.apache.hadoop.metrics2.util.MetricQuantile</pattern>
+                                    <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.util.MetricQuantile
+                                    </shadedPattern>
+                                </relocation>
+                                <relocation>
+                                    <pattern>org.apache.hadoop.metrics2.util.MetricSampleQuantiles</pattern>
+                                    <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.util.MetricSampleQuantiles
+                                    </shadedPattern>
+                                </relocation>
+                            </relocations>
+                            <createDependencyReducedPom>false</createDependencyReducedPom>
+                            <filters>
+                                <filter>
+                                    <artifact>*:*</artifact>
+                                    <excludes>
+                                        <exclude>META-INF/*.SF</exclude>
+                                        <exclude>META-INF/*.DSA</exclude>
+                                        <exclude>META-INF/*.RSA</exclude>
+                                        <exclude>META-INF/services/javax.*</exclude>
+                                        <exclude>**/*.proto</exclude>
+                                        <exclude>hbase-webapps/**</exclude>
+                                    </excludes>
+                                </filter>
+                            </filters>
+                            <finalName>${project.artifactId}-${project.version}</finalName>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+            </resource>
+            <resource>
+                <directory>src/test/resources</directory>
+            </resource>
+        </resources>
+    </build>
+
+    <dependencies>
+        <!-- Hoodie -->
+        <dependency>
+            <groupId>org.apache.hudi</groupId>
+            <artifactId>hudi-common</artifactId>
+            <version>${project.version}</version>
+            <exclusions>
+                <!--hadoop-common brings its own version of avro which can cause conflict.
+                Moreover hadoop-* artifacts are not needed in this bundle-->
+                <exclusion>
+                    <groupId>org.apache.hadoop</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.hudi</groupId>
+            <artifactId>hudi-hive-sync</artifactId>
+            <version>${project.version}</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>javax.servlet</groupId>
+                    <artifactId>servlet-api</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.hudi</groupId>
+            <artifactId>hudi-aws</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!-- Need parquet and avro to run AwsGlueCatalogSyncTool using run_sync_tool with this bundle.
+        Parquet and avro from other packages have already been shaded above-->
+        <dependency>
+            <groupId>org.apache.parquet</groupId>
+            <artifactId>parquet-avro</artifactId>
+            <version>${parquet.version}</version>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.avro</groupId>
+            <artifactId>avro</artifactId>
+            <version>${avro.version}</version>
+            <scope>compile</scope>
+        </dependency>
+    </dependencies>
+</project>

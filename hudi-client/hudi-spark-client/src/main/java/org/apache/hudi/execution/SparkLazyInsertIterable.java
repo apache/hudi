@@ -81,7 +81,7 @@ public class SparkLazyInsertIterable<T extends HoodieRecordPayload> extends Hood
   @Override
   protected List<WriteStatus> computeNext() {
     // Executor service used for launching writer thread.
-    HoodieExecutor<?, ?, List<WriteStatus>> executor = null;
+    HoodieExecutor<?, ?, List<WriteStatus>> bufferedIteratorExecutor = null;
     try {
       Schema schema = new Schema.Parser().parse(hoodieConfig.getSchema());
       if (useWriterSchema) {
@@ -99,25 +99,26 @@ public class SparkLazyInsertIterable<T extends HoodieRecordPayload> extends Hood
 
       switch (executorTypeEnum) {
         case BOUNDED_IN_MEMORY_EXECUTOR:
-          executor = new BoundedInMemoryExecutor<>(hoodieConfig.getWriteBufferLimitBytes(), inputItr, getInsertHandler(),
+          bufferedIteratorExecutor = new BoundedInMemoryExecutor<>(hoodieConfig.getWriteBufferLimitBytes(), inputItr, getInsertHandler(),
               getTransformFunction(schema, hoodieConfig), hoodieTable.getPreExecuteRunnable());
           break;
         case DISRUPTOR_EXECUTOR:
-          executor = new DisruptorExecutor<>(hoodieConfig.getWriteBufferSize(), inputItr, getInsertHandler(),
+          bufferedIteratorExecutor = new DisruptorExecutor<>(hoodieConfig.getWriteBufferSize(), inputItr, getInsertHandler(),
               getTransformFunction(schema, hoodieConfig), hoodieConfig.getWriteWaitStrategy(), hoodieTable.getPreExecuteRunnable());
           break;
         default:
           throw new HoodieException("Unsupported Executor Type " + executorType);
       }
 
-      final List<WriteStatus> result = executor.execute();
-      assert result != null && !result.isEmpty() && !executor.isRemaining();
+      final List<WriteStatus> result = bufferedIteratorExecutor.execute();
+      assert result != null && !result.isEmpty() && !bufferedIteratorExecutor.isRemaining();
       return result;
     } catch (Exception e) {
       throw new HoodieException(e);
     } finally {
-      if (null != executor) {
-        executor.shutdownNow();
+      if (null != bufferedIteratorExecutor) {
+        bufferedIteratorExecutor.shutdownNow();
+        bufferedIteratorExecutor.awaitTermination();
       }
     }
   }

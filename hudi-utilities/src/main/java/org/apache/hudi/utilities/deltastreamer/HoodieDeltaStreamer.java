@@ -43,6 +43,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieClusteringConfig;
@@ -305,7 +306,7 @@ public class HoodieDeltaStreamer implements Serializable {
     public Boolean enableMetaSync = false;
 
     @Parameter(names = {"--sync-tool-classes"}, description = "Meta sync client tool, using comma to separate multi tools")
-    public String syncClientToolClass = HiveSyncTool.class.getName();
+    public String syncClientToolClassNames = HiveSyncTool.class.getName();
 
     @Parameter(names = {"--max-pending-compactions"},
         description = "Maximum number of outstanding inflight/requested compactions. Delta Sync will not happen unless"
@@ -403,6 +404,9 @@ public class HoodieDeltaStreamer implements Serializable {
         + "https://spark.apache.org/docs/latest/job-scheduling.html")
     public Integer clusterSchedulingMinShare = 0;
 
+    @Parameter(names = {"--post-write-termination-strategy-class"}, description = "Post writer termination strategy class to gracefully shutdown deltastreamer in continuous mode")
+    public String postWriteTerminationStrategyClass = "";
+
     public boolean isAsyncCompactionEnabled() {
       return continuousMode && !forceDisableCompaction
           && HoodieTableType.MERGE_ON_READ.equals(HoodieTableType.valueOf(tableType));
@@ -438,6 +442,8 @@ public class HoodieDeltaStreamer implements Serializable {
               && operation == config.operation
               && Objects.equals(filterDupes, config.filterDupes)
               && Objects.equals(enableHiveSync, config.enableHiveSync)
+              && Objects.equals(enableMetaSync, config.enableMetaSync)
+              && Objects.equals(syncClientToolClassNames, config.syncClientToolClassNames)
               && Objects.equals(maxPendingCompactions, config.maxPendingCompactions)
               && Objects.equals(maxPendingClustering, config.maxPendingClustering)
               && Objects.equals(continuousMode, config.continuousMode)
@@ -462,8 +468,8 @@ public class HoodieDeltaStreamer implements Serializable {
               baseFileFormat, propsFilePath, configs, sourceClassName,
               sourceOrderingField, payloadClassName, schemaProviderClassName,
               transformerClassNames, sourceLimit, operation, filterDupes,
-              enableHiveSync, maxPendingCompactions, maxPendingClustering, continuousMode,
-              minSyncIntervalSeconds, sparkMaster, commitOnErrors,
+              enableHiveSync, enableMetaSync, syncClientToolClassNames, maxPendingCompactions, maxPendingClustering,
+              continuousMode, minSyncIntervalSeconds, sparkMaster, commitOnErrors,
               deltaSyncSchedulingWeight, compactSchedulingWeight, clusterSchedulingWeight, deltaSyncSchedulingMinShare,
               compactSchedulingMinShare, clusterSchedulingMinShare, forceDisableCompaction, checkpoint,
               initialCheckpointProvider, help);
@@ -487,6 +493,8 @@ public class HoodieDeltaStreamer implements Serializable {
               + ", operation=" + operation
               + ", filterDupes=" + filterDupes
               + ", enableHiveSync=" + enableHiveSync
+              + ", enableMetaSync=" + enableMetaSync
+              + ", syncClientToolClassNames=" + syncClientToolClassNames
               + ", maxPendingCompactions=" + maxPendingCompactions
               + ", maxPendingClustering=" + maxPendingClustering
               + ", continuousMode=" + continuousMode
@@ -603,6 +611,8 @@ public class HoodieDeltaStreamer implements Serializable {
      */
     private transient DeltaSync deltaSync;
 
+    private final Option<PostWriteTerminationStrategy> postWriteTerminationStrategy;
+
     public DeltaSyncService(Config cfg, JavaSparkContext jssc, FileSystem fs, Configuration conf,
                             Option<TypedProperties> properties) throws IOException {
       this.cfg = cfg;
@@ -610,6 +620,8 @@ public class HoodieDeltaStreamer implements Serializable {
       this.sparkSession = SparkSession.builder().config(jssc.getConf()).getOrCreate();
       this.asyncCompactService = Option.empty();
       this.asyncClusteringService = Option.empty();
+      this.postWriteTerminationStrategy = StringUtils.isNullOrEmpty(cfg.postWriteTerminationStrategyClass) ? Option.empty() :
+          TerminationStrategyUtils.createPostWriteTerminationStrategy(properties.get(), cfg.postWriteTerminationStrategyClass);
 
       if (fs.exists(new Path(cfg.targetBasePath))) {
         HoodieTableMetaClient meta =
@@ -625,8 +637,8 @@ public class HoodieDeltaStreamer implements Serializable {
         ValidationUtils.checkArgument(baseFileFormat.equals(cfg.baseFileFormat) || cfg.baseFileFormat == null,
             "Hoodie table's base file format is of type " + baseFileFormat + " but passed in CLI argument is "
                 + cfg.baseFileFormat);
-        cfg.baseFileFormat = meta.getTableConfig().getBaseFileFormat().toString();
-        this.cfg.baseFileFormat = cfg.baseFileFormat;
+        cfg.baseFileFormat = baseFileFormat;
+        this.cfg.baseFileFormat = baseFileFormat;
       } else {
         tableType = HoodieTableType.valueOf(cfg.tableType);
         if (cfg.baseFileFormat == null) {
@@ -693,6 +705,14 @@ public class HoodieDeltaStreamer implements Serializable {
                     error = true;
                     throw new HoodieException("Async clustering failed.  Shutting down Delta Sync...");
                   }
+                }
+              }
+              // check if deltastreamer need to be shutdown
+              if (postWriteTerminationStrategy.isPresent()) {
+                if (postWriteTerminationStrategy.get().shouldShutdown(scheduledCompactionInstantAndRDD.isPresent() ? Option.of(scheduledCompactionInstantAndRDD.get().getRight()) :
+                    Option.empty())) {
+                  error = true;
+                  shutdown(false);
                 }
               }
               long toSleepMs = cfg.minSyncIntervalSeconds * 1000 - (System.currentTimeMillis() - start);

@@ -42,7 +42,7 @@ public abstract class BaseBulkInsertHelper<T extends HoodieRecordPayload, I, K, 
   public abstract O bulkInsert(I inputRecords, String instantTime,
                                HoodieTable<T, I, K, O> table, HoodieWriteConfig config,
                                boolean performDedupe,
-                               Option<BulkInsertPartitioner> userDefinedBulkInsertPartitioner,
+                               BulkInsertPartitioner partitioner,
                                boolean addMetadataFields,
                                int parallelism,
                                WriteHandleFactory writeHandleFactory);

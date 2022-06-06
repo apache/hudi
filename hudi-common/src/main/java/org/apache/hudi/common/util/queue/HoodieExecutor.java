@@ -31,4 +31,6 @@ public abstract class HoodieExecutor<I, O, E> {
   public abstract void shutdownNow();
 
   public abstract HoodieMessageQueue<I, O> getQueue();
+
+  public abstract boolean awaitTermination();
 }

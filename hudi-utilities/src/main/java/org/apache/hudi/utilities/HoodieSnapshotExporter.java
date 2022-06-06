@@ -177,7 +177,7 @@ public class HoodieSnapshotExporter {
         : ReflectionUtils.loadClass(cfg.outputPartitioner);
 
     HoodieEngineContext context = new HoodieSparkEngineContext(jsc);
-    context.setJobStatus(this.getClass().getSimpleName(), "Exporting as non-HUDI dataset");
+    context.setJobStatus(this.getClass().getSimpleName(), "Exporting as non-HUDI dataset: " + cfg.targetOutputPath);
     final BaseFileOnlyView fsView = getBaseFileOnlyView(jsc, cfg);
     Iterator<String> exportingFilePaths = jsc
         .parallelize(partitions, partitions.size())

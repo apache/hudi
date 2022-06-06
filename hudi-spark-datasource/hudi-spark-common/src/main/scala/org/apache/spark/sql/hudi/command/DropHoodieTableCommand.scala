@@ -21,43 +21,46 @@ import org.apache.hadoop.fs.Path
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieTableType
+import org.apache.hudi.sync.common.util.ConfigUtils
 import org.apache.spark.sql._
-import org.apache.spark.sql.catalyst.TableIdentifier
-import org.apache.spark.sql.catalyst.analysis.NoSuchDatabaseException
-import org.apache.spark.sql.catalyst.catalog.{CatalogTableType, HoodieCatalogTable}
-import org.apache.spark.sql.hive.HiveClientUtils
-import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isEnableHive
+import org.apache.spark.sql.catalyst.{QualifiedTableName, TableIdentifier}
+import org.apache.spark.sql.catalyst.catalog._
 
-import scala.util.control.NonFatal
-
+/**
+ * Physical plan node for dropping a table.
+ */
 case class DropHoodieTableCommand(
     tableIdentifier: TableIdentifier,
     ifExists: Boolean,
     isView: Boolean,
-    purge: Boolean)
-extends HoodieLeafRunnableCommand {
+    purge: Boolean) extends HoodieLeafRunnableCommand {
 
-  val MOR_SNAPSHOT_TABLE_SUFFIX = "_rt"
-  val MOR_READ_OPTIMIZED_TABLE_SUFFIX = "_ro"
+  private val MOR_SNAPSHOT_TABLE_SUFFIX = "_rt"
+  private val MOR_READ_OPTIMIZED_TABLE_SUFFIX = "_ro"
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
-    val fullTableName = s"${tableIdentifier.database}.${tableIdentifier.table}"
-    logInfo(s"start execute drop table command for $fullTableName")
-    sparkSession.catalog.refreshTable(tableIdentifier.unquotedString)
-
-    try {
-      // drop catalog table for this hoodie table
-      dropTableInCatalog(sparkSession, tableIdentifier, ifExists, purge)
-    } catch {
-      case NonFatal(e) =>
-        logWarning(s"Failed to drop catalog table in metastore: ${e.getMessage}")
+    logInfo(s"Start executing 'DROP TABLE' on ${tableIdentifier.unquotedString}" +
+      s" (ifExists=${ifExists}, purge=${purge}).")
+    if (!sparkSession.catalog.tableExists(tableIdentifier.unquotedString)) {
+      sparkSession.catalog.refreshTable(tableIdentifier.unquotedString)
     }
+    val qualifiedTableName = QualifiedTableName(
+      tableIdentifier.database.getOrElse(sparkSession.sessionState.catalog.getCurrentDatabase),
+      tableIdentifier.table)
+    sparkSession.sessionState.catalog.invalidateCachedTable(qualifiedTableName)
 
-    logInfo(s"Finish execute drop table command for $fullTableName")
+    dropTableInCatalog(sparkSession, tableIdentifier, ifExists, purge)
+
+    logInfo(s"Finished executing 'DROP TABLE' on ${tableIdentifier.unquotedString}.")
     Seq.empty[Row]
   }
 
-  def dropTableInCatalog(sparkSession: SparkSession,
+  /**
+   * Drops table in Spark catalog. Note that RO & RT table could coexist with a MOR table.
+   * If `purge` enabled, RO & RT table and corresponding data directory on filesystem will
+   * all be removed.
+   */
+  private def dropTableInCatalog(sparkSession: SparkSession,
           tableIdentifier: TableIdentifier,
           ifExists: Boolean,
           purge: Boolean): Unit = {
@@ -69,13 +72,14 @@ extends HoodieLeafRunnableCommand {
     val catalog = sparkSession.sessionState.catalog
 
     // Drop table in the catalog
-    val enableHive = isEnableHive(sparkSession)
-    if (enableHive) {
-      dropHiveDataSourceTable(sparkSession, hoodieCatalogTable)
+    if (hoodieCatalogTable.hoodieTableExists &&
+        HoodieTableType.MERGE_ON_READ == hoodieCatalogTable.tableType && purge) {
+      val (rtTableOpt, roTableOpt) = getTableRTAndRO(catalog, hoodieCatalogTable)
+      rtTableOpt.foreach(table => catalog.dropTable(table.identifier, true, false))
+      roTableOpt.foreach(table => catalog.dropTable(table.identifier, true, false))
+      catalog.dropTable(table.identifier.copy(table = hoodieCatalogTable.tableName), ifExists, purge)
     } else {
-      if (catalog.tableExists(tableIdentifier)) {
-        catalog.dropTable(tableIdentifier, ifExists, purge)
-      }
+      catalog.dropTable(table.identifier, ifExists, purge)
     }
 
     // Recursively delete table directories
@@ -88,42 +92,33 @@ extends HoodieLeafRunnableCommand {
     }
   }
 
-  private def dropHiveDataSourceTable(
-       sparkSession: SparkSession,
-       hoodieCatalogTable: HoodieCatalogTable): Unit = {
-    val table = hoodieCatalogTable.table
-    val dbName = table.identifier.database.get
-    val tableName = hoodieCatalogTable.tableName
+  private def getTableRTAndRO(catalog: SessionCatalog,
+      hoodieTable: HoodieCatalogTable): (Option[CatalogTable], Option[CatalogTable]) = {
+    val rtIdt = hoodieTable.table.identifier.copy(
+      table = s"${hoodieTable.tableName}${MOR_SNAPSHOT_TABLE_SUFFIX}")
+    val roIdt = hoodieTable.table.identifier.copy(
+      table = s"${hoodieTable.tableName}${MOR_READ_OPTIMIZED_TABLE_SUFFIX}")
 
-    // check database exists
-    val dbExists = sparkSession.sessionState.catalog.databaseExists(dbName)
-    if (!dbExists) {
-      throw new NoSuchDatabaseException(dbName)
+    var rtTableOpt: Option[CatalogTable] = None
+    var roTableOpt: Option[CatalogTable] = None
+    if (catalog.tableExists(rtIdt)) {
+      val rtTable = catalog.getTableMetadata(rtIdt)
+      if (rtTable.storage.locationUri.equals(hoodieTable.table.storage.locationUri)) {
+        rtTable.storage.properties.get(ConfigUtils.IS_QUERY_AS_RO_TABLE) match {
+          case Some(v) if v.equalsIgnoreCase("false") => rtTableOpt = Some(rtTable)
+          case _ => // do-nothing
+        }
+      }
     }
-
-    if (HoodieTableType.MERGE_ON_READ == hoodieCatalogTable.tableType && purge) {
-      val snapshotTableName = tableName + MOR_SNAPSHOT_TABLE_SUFFIX
-      val roTableName = tableName + MOR_READ_OPTIMIZED_TABLE_SUFFIX
-
-      dropHiveTable(sparkSession, dbName, snapshotTableName)
-      dropHiveTable(sparkSession, dbName, roTableName)
+    if (catalog.tableExists(roIdt)) {
+      val roTable = catalog.getTableMetadata(roIdt)
+      if (roTable.storage.locationUri.equals(hoodieTable.table.storage.locationUri)) {
+        roTable.storage.properties.get(ConfigUtils.IS_QUERY_AS_RO_TABLE) match {
+          case Some(v) if v.equalsIgnoreCase("true") => roTableOpt = Some(roTable)
+          case _ => // do-nothing
+        }
+      }
     }
-
-    dropHiveTable(sparkSession, dbName, tableName, purge)
-  }
-
-  private def dropHiveTable(
-       sparkSession: SparkSession,
-       dbName: String,
-       tableName: String,
-       purge: Boolean = false): Unit = {
-    // check table exists
-    if (sparkSession.sessionState.catalog.tableExists(new TableIdentifier(tableName, Option(dbName)))) {
-      val client = HiveClientUtils.newClientForMetadata(sparkSession.sparkContext.conf,
-        sparkSession.sessionState.newHadoopConf())
-
-      // drop hive table.
-      client.dropTable(dbName, tableName, ifExists, purge)
-    }
+    (rtTableOpt, roTableOpt)
   }
 }

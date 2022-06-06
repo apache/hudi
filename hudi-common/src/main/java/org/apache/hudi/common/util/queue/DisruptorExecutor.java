@@ -160,4 +160,9 @@ public class DisruptorExecutor<I, O, E> extends HoodieExecutor<I, O, E> {
   public DisruptorMessageQueue<I, O> getQueue() {
     return queue;
   }
+
+  @Override
+  public boolean awaitTermination() {
+    return true;
+  }
 }

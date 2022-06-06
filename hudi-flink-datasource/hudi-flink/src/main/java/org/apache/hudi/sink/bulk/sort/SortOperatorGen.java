@@ -48,7 +48,7 @@ public class SortOperatorGen {
         codeGen.generateRecordComparator("SortComparator"));
   }
 
-  private SortCodeGenerator createSortCodeGenerator() {
+  public SortCodeGenerator createSortCodeGenerator() {
     SortSpec.SortSpecBuilder builder = SortSpec.builder();
     IntStream.range(0, sortIndices.length).forEach(i -> builder.addField(i, true, true));
     return new SortCodeGenerator(tableConfig, rowType, builder.build());

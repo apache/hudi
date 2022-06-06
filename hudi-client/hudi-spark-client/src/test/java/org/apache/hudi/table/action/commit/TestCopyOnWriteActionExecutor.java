@@ -127,7 +127,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase {
     }).collect().get(0);
 
     assertEquals(newPathWithWriteToken.getKey().toString(), Paths.get(this.basePath, partitionPath,
-        FSUtils.makeDataFileName(instantTime, newPathWithWriteToken.getRight(), fileName)).toString());
+        FSUtils.makeBaseFileName(instantTime, newPathWithWriteToken.getRight(), fileName)).toString());
   }
 
   private HoodieWriteConfig makeHoodieClientConfig() {
@@ -148,7 +148,10 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase {
     props.putAll(indexConfig.build().getProps());
     if (indexType.equals(HoodieIndex.IndexType.BUCKET)) {
       props.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key");
-      indexConfig.fromProperties(props).withIndexKeyField("_row_key").withBucketNum("1");
+      indexConfig.fromProperties(props)
+          .withIndexKeyField("_row_key")
+          .withBucketNum("1")
+          .withBucketIndexEngineType(HoodieIndex.BucketIndexEngineType.SIMPLE);
       props.putAll(indexConfig.build().getProps());
       props.putAll(HoodieLayoutConfig.newBuilder().fromProperties(props)
           .withLayoutType(HoodieStorageLayout.LayoutType.BUCKET.name())
@@ -419,7 +422,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase {
 
     List<HoodieRecord> records = new ArrayList<>();
     // Approx 1150 records are written for block size of 64KB
-    for (int i = 0; i < 2000; i++) {
+    for (int i = 0; i < 2050; i++) {
       String recordStr = "{\"_row_key\":\"" + UUID.randomUUID().toString()
           + "\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":" + i + "}";
       RawTripTestPayload rowChange = new RawTripTestPayload(recordStr);
@@ -441,7 +444,8 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase {
         counts++;
       }
     }
-    assertEquals(5, counts, "If the number of records are more than 1150, then there should be a new file");
+    // we check canWrite only once every 1000 records. and so 2 files with 1000 records and 3rd file with 50 records.
+    assertEquals(3, counts, "If the number of records are more than 1150, then there should be a new file");
   }
 
   @Test

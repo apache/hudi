@@ -271,18 +271,21 @@ public class AWSGlueCatalogSyncClient extends AbstractHiveSyncHoodieClient {
     try {
       Map<String, String> mapSchema = parquetSchemaToMapSchema(storageSchema, syncConfig.supportTimestamp, false);
 
-      List<Column> schemaPartitionKeys = new ArrayList<>();
       List<Column> schemaWithoutPartitionKeys = new ArrayList<>();
       for (String key : mapSchema.keySet()) {
         String keyType = getPartitionKeyType(mapSchema, key);
         Column column = new Column().withName(key).withType(keyType.toLowerCase()).withComment("");
         // In Glue, the full schema should exclude the partition keys
-        if (syncConfig.partitionFields.contains(key)) {
-          schemaPartitionKeys.add(column);
-        } else {
+        if (!syncConfig.partitionFields.contains(key)) {
           schemaWithoutPartitionKeys.add(column);
         }
       }
+
+      // now create the schema partition
+      List<Column> schemaPartitionKeys = syncConfig.partitionFields.stream().map(partitionKey -> {
+        String keyType = getPartitionKeyType(mapSchema, partitionKey);
+        return new Column().withName(partitionKey).withType(keyType.toLowerCase()).withComment("");
+      }).collect(Collectors.toList());
 
       StorageDescriptor storageDescriptor = new StorageDescriptor();
       serdeProperties.put("serialization.format", "1");
@@ -394,7 +397,7 @@ public class AWSGlueCatalogSyncClient extends AbstractHiveSyncHoodieClient {
   public Option<String> getLastCommitTimeSynced(String tableName) {
     try {
       Table table = getTable(awsGlue, databaseName, tableName);
-      return Option.of(table.getParameters().getOrDefault(HOODIE_LAST_COMMIT_TIME_SYNC, null));
+      return Option.ofNullable(table.getParameters().get(HOODIE_LAST_COMMIT_TIME_SYNC));
     } catch (Exception e) {
       throw new HoodieGlueSyncException("Fail to get last sync commit time for " + tableId(databaseName, tableName), e);
     }

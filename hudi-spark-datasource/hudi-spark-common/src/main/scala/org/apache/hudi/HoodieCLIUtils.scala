@@ -19,14 +19,14 @@
 
 package org.apache.hudi
 
+import org.apache.hudi.avro.model.HoodieClusteringGroup
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.withSparkConf
 
-import scala.collection.JavaConverters.mapAsJavaMapConverter
-import scala.collection.immutable.Map
+import scala.collection.JavaConverters.{collectionAsScalaIterableConverter, mapAsJavaMapConverter}
 
 object HoodieCLIUtils {
 
@@ -45,5 +45,16 @@ object HoodieCLIUtils {
     val jsc = new JavaSparkContext(sparkSession.sparkContext)
     DataSourceUtils.createHoodieClient(jsc, schemaStr, basePath,
       metaClient.getTableConfig.getTableName, finalParameters.asJava)
+  }
+
+  def extractPartitions(clusteringGroups: Seq[HoodieClusteringGroup]): String = {
+    var partitionPaths: Seq[String] = Seq.empty
+    clusteringGroups.foreach(g =>
+      g.getSlices.asScala.foreach(slice =>
+        partitionPaths = partitionPaths :+ slice.getPartitionPath
+      )
+    )
+
+    partitionPaths.sorted.mkString(",")
   }
 }

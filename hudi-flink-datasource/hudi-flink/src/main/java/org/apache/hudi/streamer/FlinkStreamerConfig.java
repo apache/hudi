@@ -19,6 +19,7 @@
 package org.apache.hudi.streamer;
 
 import org.apache.hudi.client.utils.OperationConverter;
+import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.StringUtils;
@@ -191,7 +192,7 @@ public class FlinkStreamerConfig extends Configuration {
   public Boolean indexGlobalEnabled = true;
 
   @Parameter(names = {"--index-partition-regex"},
-      description = "Whether to load partitions in state if partition path matching， default *")
+      description = "Whether to load partitions in state if partition path matching, default *")
   public String indexPartitionRegex = ".*";
 
   @Parameter(names = {"--source-avro-schema-path"}, description = "Source avro schema file path, the parsed schema is used for deserialization")
@@ -260,10 +261,19 @@ public class FlinkStreamerConfig extends Configuration {
   @Parameter(names = {"--clean-async-enabled"}, description = "Whether to cleanup the old commits immediately on new commits, enabled by default")
   public Boolean cleanAsyncEnabled = true;
 
+  @Parameter(names = {"--clean-policy"},
+      description = "Clean policy to manage the Hudi table. Available option: KEEP_LATEST_COMMITS, KEEP_LATEST_FILE_VERSIONS, KEEP_LATEST_BY_HOURS."
+          +  "Default is KEEP_LATEST_COMMITS.")
+  public String cleanPolicy = HoodieCleaningPolicy.KEEP_LATEST_COMMITS.name();
+
   @Parameter(names = {"--clean-retain-commits"},
       description = "Number of commits to retain. So data will be retained for num_of_commits * time_between_commits (scheduled).\n"
           + "This also directly translates into how much you can incrementally pull on this table, default 10")
   public Integer cleanRetainCommits = 10;
+
+  @Parameter(names = {"--clean-retain-file-versions"},
+      description = "Number of file versions to retain. Each file group will be retained for this number of version. default 5")
+  public Integer cleanRetainFileVersions = 5;
 
   @Parameter(names = {"--archive-max-commits"},
       description = "Max number of commits to keep before archiving older commits into a sequential log, default 30")
@@ -392,7 +402,9 @@ public class FlinkStreamerConfig extends Configuration {
     conf.setInteger(FlinkOptions.COMPACTION_MAX_MEMORY, config.compactionMaxMemory);
     conf.setLong(FlinkOptions.COMPACTION_TARGET_IO, config.compactionTargetIo);
     conf.setBoolean(FlinkOptions.CLEAN_ASYNC_ENABLED, config.cleanAsyncEnabled);
+    conf.setString(FlinkOptions.CLEAN_POLICY, config.cleanPolicy);
     conf.setInteger(FlinkOptions.CLEAN_RETAIN_COMMITS, config.cleanRetainCommits);
+    conf.setInteger(FlinkOptions.CLEAN_RETAIN_FILE_VERSIONS, config.cleanRetainFileVersions);
     conf.setInteger(FlinkOptions.ARCHIVE_MAX_COMMITS, config.archiveMaxCommits);
     conf.setInteger(FlinkOptions.ARCHIVE_MIN_COMMITS, config.archiveMinCommits);
     conf.setBoolean(FlinkOptions.HIVE_SYNC_ENABLED, config.hiveSyncEnabled);
