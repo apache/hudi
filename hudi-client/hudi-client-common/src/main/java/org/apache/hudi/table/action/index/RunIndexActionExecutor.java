@@ -121,27 +121,25 @@ public class RunIndexActionExecutor<T extends HoodieRecordPayload, I, K, O> exte
       if (indexPartitionInfos == null || indexPartitionInfos.isEmpty()) {
         throw new HoodieIndexException(String.format("No partitions to index for instant: %s", instantTime));
       }
-      boolean onlyFiles = false;
+      boolean firstTimeInitializingMetadataTable = false;
       HoodieIndexPartitionInfo fileIndexPartitionInfo = null;
-      if (indexPartitionInfos != null && indexPartitionInfos.size() == 1 && indexPartitionInfos.get(0).getMetadataPartitionPath().equals(MetadataPartitionType.FILES.getPartitionPath())) {
-        onlyFiles = true;
+      if (indexPartitionInfos.size() == 1 && indexPartitionInfos.get(0).getMetadataPartitionPath().equals(MetadataPartitionType.FILES.getPartitionPath())) {
+        firstTimeInitializingMetadataTable = true;
         fileIndexPartitionInfo = indexPartitionInfos.get(0);
       }
-      // filter out FILES partition if present.
-      indexPartitionInfos = indexPartitionInfos.stream().filter(entry -> !entry.getMetadataPartitionPath().equals(MetadataPartitionType.FILES.getPartitionPath())).collect(Collectors.toList());
       // ensure the metadata partitions for the requested indexes are not already available (or inflight)
       Set<String> indexesInflightOrCompleted = getInflightAndCompletedMetadataPartitions(table.getMetaClient().getTableConfig());
       Set<String> requestedPartitions = indexPartitionInfos.stream()
           .map(HoodieIndexPartitionInfo::getMetadataPartitionPath).collect(Collectors.toSet());
       requestedPartitions.retainAll(indexesInflightOrCompleted);
-      if (!onlyFiles && !requestedPartitions.isEmpty()) {
+      if (!firstTimeInitializingMetadataTable && !requestedPartitions.isEmpty()) {
         throw new HoodieIndexException(String.format("Following partitions already exist or inflight: %s", requestedPartitions));
       }
 
       // transition requested indexInstant to inflight
       table.getActiveTimeline().transitionIndexRequestedToInflight(indexInstant, Option.empty());
       List<HoodieIndexPartitionInfo> finalIndexPartitionInfos = null;
-      if (!onlyFiles) {
+      if (!firstTimeInitializingMetadataTable) {
         // start indexing for each partition
         HoodieTableMetadataWriter metadataWriter = table.getMetadataWriter(instantTime)
             .orElseThrow(() -> new HoodieIndexException(String.format("Could not get metadata writer to run index action for instant: %s", instantTime)));

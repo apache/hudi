@@ -106,6 +106,7 @@ public class ScheduleIndexActionExecutor<T extends HoodieRecordPayload, I, K, O>
         HoodieTableMetadataWriter metadataWriter = table.getMetadataWriter(instantTime)
             .orElseThrow(() -> new HoodieIndexException(String.format("Could not get metadata writer to initialize filegroups for indexing for instant: %s", instantTime)));
         if (!finalPartitionsToIndex.get(0).getPartitionPath().equals(MetadataPartitionType.FILES.getPartitionPath())) {
+          // initialize metadata partition only if not for FILES partition.
           metadataWriter.initializeMetadataPartitions(table.getMetaClient(), finalPartitionsToIndex, indexInstant.getTimestamp());
         }
 
