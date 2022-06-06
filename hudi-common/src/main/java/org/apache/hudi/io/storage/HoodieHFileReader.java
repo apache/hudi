@@ -258,6 +258,9 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
       if (!scanner.next()) {
         return Collections.emptyIterator();
       }
+    } else if (val == -1) {
+      // seek to beginning. anyways, its key prefix search.
+      scanner.seekTo();
     }
 
     class KeyPrefixIterator implements Iterator<GenericRecord> {
