@@ -26,7 +26,10 @@ import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.types.StructType;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.stream.Collectors;
+
+import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 
 /**
  * Complex key generator, which takes names of fields to be used for recordKey and partitionPath as configs.
@@ -37,10 +40,14 @@ public class ComplexKeyGenerator extends BuiltinKeyGenerator {
 
   public ComplexKeyGenerator(TypedProperties props) {
     super(props);
-    this.recordKeyFields = Arrays.stream(props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()).split(","))
-        .map(String::trim)
-        .filter(s -> !s.isEmpty())
-        .collect(Collectors.toList());
+    if (props.containsKey(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key())) {
+      this.recordKeyFields = Arrays.stream(props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()).split(","))
+          .map(String::trim)
+          .filter(s -> !s.isEmpty())
+          .collect(Collectors.toList());
+    } else {
+      this.recordKeyFields = Collections.emptyList();
+    }
     this.partitionPathFields = Arrays.stream(props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()).split(","))
         .map(String::trim)
         .filter(s -> !s.isEmpty())
@@ -60,6 +67,9 @@ public class ComplexKeyGenerator extends BuiltinKeyGenerator {
 
   @Override
   public String getRecordKey(Row row) {
+    if (getRecordKeyFields().isEmpty()) {
+      return EMPTY_STRING;
+    }
     buildFieldSchemaInfoIfNeeded(row.schema());
     return RowKeyGeneratorHelper.getRecordKeyFromRow(row, getRecordKeyFields(), recordKeySchemaInfo, true);
   }

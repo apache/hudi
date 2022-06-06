@@ -72,9 +72,9 @@ class TestDataSourceDefaults {
     assertEquals("field1", keyGen.getRecordKey(baseRow))
     assertEquals("name1", keyGen.getPartitionPath(baseRow))
 
+    var props = new TypedProperties()
     // partition path field not specified
     try {
-      val props = new TypedProperties()
       props.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD.key, "field1")
       new SimpleKeyGenerator(props).getKey(baseRecord)
       fail("Should have errored out")
@@ -96,27 +96,18 @@ class TestDataSourceDefaults {
     }
 
     // recordkey field not specified
-    try {
-      val props = new TypedProperties()
-      props.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD.key(), "partitionField")
-      new SimpleKeyGenerator(props).getKey(baseRecord)
-      fail("Should have errored out")
-    } catch {
-      case e: IllegalArgumentException =>
-      // do nothing
-    }
+    props = new TypedProperties()
+    props.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD.key(), "name")
+    keyGen = new SimpleKeyGenerator(props)
+    assertEquals("", keyGen.getKey(baseRecord).getRecordKey)
+    assertEquals("name1", keyGen.getPartitionPath(baseRecord))
 
     // recordkey field not specified using Row
-    try {
-      val props = new TypedProperties()
-      props.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "partitionField")
-      val keyGen = new SimpleKeyGenerator(props)
-      keyGen.getPartitionPath(baseRow)
-      fail("Should have errored out")
-    } catch {
-      case e: IllegalArgumentException =>
-      // do nothing
-    }
+    props = new TypedProperties()
+    props.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "name")
+    keyGen = new SimpleKeyGenerator(props)
+    assertEquals("", keyGen.getRecordKey(baseRow))
+    assertEquals("name1", keyGen.getPartitionPath(baseRow))
 
     // nested field as record key and partition path
     val hk2 = new SimpleKeyGenerator(getKeyConfig("testNestedRecord.userId", "testNestedRecord.isAdmin", "false"))
@@ -276,9 +267,9 @@ class TestDataSourceDefaults {
     assertEquals("field1:field1,name:name1", keyGen.getRecordKey(baseRow))
     assertEquals("field1/name1", keyGen.getPartitionPath(baseRow))
 
+    var props = new TypedProperties()
     // partition path field not specified
     try {
-      val props = new TypedProperties()
       props.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD.key, "field1")
       new ComplexKeyGenerator(props).getKey(baseRecord)
       fail("Should have errored out")
@@ -300,27 +291,18 @@ class TestDataSourceDefaults {
     }
 
     // recordkey field not specified
-    try {
-      val props = new TypedProperties()
-      props.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "partitionField")
-      new ComplexKeyGenerator(props).getKey(baseRecord)
-      fail("Should have errored out")
-    } catch {
-      case e: IllegalArgumentException =>
-      // do nothing
-    }
+    props = new TypedProperties()
+    props.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "name")
+    keyGen = new ComplexKeyGenerator(props)
+    assertEquals("", keyGen.getRecordKey(baseRecord))
+    assertEquals("name1", keyGen.getPartitionPath(baseRecord))
 
     // recordkey field not specified
-    try {
-      val props = new TypedProperties()
-      props.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "partitionField")
-      val keyGen = new ComplexKeyGenerator(props)
-      keyGen.getPartitionPath(baseRow)
-      fail("Should have errored out")
-    } catch {
-      case e: IllegalArgumentException =>
-      // do nothing
-    }
+    props = new TypedProperties()
+    props.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "name")
+    keyGen = new ComplexKeyGenerator(props)
+    assertEquals("", keyGen.getRecordKey(baseRow))
+    assertEquals("name1", keyGen.getPartitionPath(baseRow))
 
     // nested field as record key and partition path
     keyGen = new ComplexKeyGenerator(getKeyConfig("testNestedRecord.userId,testNestedRecord.isAdmin", "testNestedRecord.userId,testNestedRecord.isAdmin", "false"))

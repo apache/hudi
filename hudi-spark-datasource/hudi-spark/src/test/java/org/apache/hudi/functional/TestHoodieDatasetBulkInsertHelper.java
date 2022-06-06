@@ -295,35 +295,45 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
     HoodieWriteConfig config = getConfigBuilder(schemaStr).build();
     List<Row> rows = DataSourceTestUtils.generateRandomRows(10);
     Dataset<Row> dataset = sqlContext.createDataFrame(rows, structType);
-    try {
-      HoodieDatasetBulkInsertHelper.prepareHoodieDatasetForBulkInsert(sqlContext, config, dataset, "testStructName",
-          "testNamespace", new NonSortPartitionerWithRows(), false, false);
-      fail("Should have thrown exception");
-    } catch (Exception e) {
-      // ignore
+    Dataset<Row> result = HoodieDatasetBulkInsertHelper.prepareHoodieDatasetForBulkInsert(sqlContext, config, dataset, "testStructName",
+        "testNamespace", new NonSortPartitionerWithRows(), false, false);
+    StructType resultSchema = result.schema();
+    assertEquals(10, result.count());
+    assertEquals(resultSchema.fieldNames().length, structType.fieldNames().length + HoodieRecord.HOODIE_META_COLUMNS.size());
+
+    for (Map.Entry<String, Integer> entry : HoodieRecord.HOODIE_META_COLUMNS_NAME_TO_POS.entrySet()) {
+      assertEquals(resultSchema.fieldIndex(entry.getKey()), entry.getValue());
     }
+
+    int metadataRecordKeyIndex = resultSchema.fieldIndex(HoodieRecord.RECORD_KEY_METADATA_FIELD);
+    int metadataPartitionPathIndex = resultSchema.fieldIndex(HoodieRecord.PARTITION_PATH_METADATA_FIELD);
+
+    result.toJavaRDD().foreach(entry -> {
+      assertEquals("", entry.get(metadataRecordKeyIndex));
+      assertEquals("", entry.get(metadataPartitionPathIndex));
+    });
 
     config = getConfigBuilder(schemaStr).withProps(getProps(false, false, true, true)).build();
     rows = DataSourceTestUtils.generateRandomRows(10);
     dataset = sqlContext.createDataFrame(rows, structType);
-    try {
-      HoodieDatasetBulkInsertHelper.prepareHoodieDatasetForBulkInsert(sqlContext, config, dataset, "testStructName",
-          "testNamespace", new NonSortPartitionerWithRows(), false, false);
-      fail("Should have thrown exception");
-    } catch (Exception e) {
-      // ignore
-    }
+    result = HoodieDatasetBulkInsertHelper.prepareHoodieDatasetForBulkInsert(sqlContext, config, dataset, "testStructName",
+        "testNamespace", new NonSortPartitionerWithRows(), false, false);
+    assertEquals(10, result.count());
+    result.toJavaRDD().foreach(entry -> {
+      assertEquals(entry.getAs("_row_key"), entry.get(metadataRecordKeyIndex));
+      assertEquals(entry.getAs("partition"), entry.get(metadataPartitionPathIndex));
+    });
 
     config = getConfigBuilder(schemaStr).withProps(getProps(false, true, false, true)).build();
     rows = DataSourceTestUtils.generateRandomRows(10);
     dataset = sqlContext.createDataFrame(rows, structType);
-    try {
-      HoodieDatasetBulkInsertHelper.prepareHoodieDatasetForBulkInsert(sqlContext, config, dataset, "testStructName",
-          "testNamespace", new NonSortPartitionerWithRows(), false, false);
-      fail("Should have thrown exception");
-    } catch (Exception e) {
-      // ignore
-    }
+    result = HoodieDatasetBulkInsertHelper.prepareHoodieDatasetForBulkInsert(sqlContext, config, dataset, "testStructName",
+        "testNamespace", new NonSortPartitionerWithRows(), false, false);
+    assertEquals(10, result.count());
+    result.toJavaRDD().foreach(entry -> {
+      assertEquals("", entry.get(metadataRecordKeyIndex));
+      assertEquals(entry.getAs("partition"), entry.get(metadataPartitionPathIndex));
+    });
 
     config = getConfigBuilder(schemaStr).withProps(getProps(false, true, true, false)).build();
     rows = DataSourceTestUtils.generateRandomRows(10);
@@ -331,6 +341,7 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
     try {
       HoodieDatasetBulkInsertHelper.prepareHoodieDatasetForBulkInsert(sqlContext, config, dataset, "testStructName",
           "testNamespace", new NonSortPartitionerWithRows(), false, false);
+      // SimpleKeyGenerator without partition field should throw an exception
       fail("Should have thrown exception");
     } catch (Exception e) {
       // ignore

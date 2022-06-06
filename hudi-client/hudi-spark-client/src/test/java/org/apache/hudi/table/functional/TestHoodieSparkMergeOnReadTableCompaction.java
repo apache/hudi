@@ -36,6 +36,7 @@ import org.apache.hudi.config.HoodieLayoutConfig;
 import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.table.action.commit.SparkBucketIndexPartitioner;
 import org.apache.hudi.table.storage.HoodieStorageLayout;
 import org.apache.hudi.testutils.HoodieMergeOnReadTestUtils;
@@ -54,6 +55,7 @@ import java.io.IOException;
 import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Properties;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -85,8 +87,11 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
 
   @Test
   public void testWriteDuringCompaction() throws IOException {
+    Properties props = new Properties();
+    props.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "uuid");
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
         .forTable("test-trip-table")
+        .withProperties(props)
         .withPath(basePath())
         .withSchema(TRIP_EXAMPLE_SCHEMA)
         .withParallelism(2, 2)
@@ -98,7 +103,7 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
         .withLayoutConfig(HoodieLayoutConfig.newBuilder()
             .withLayoutType(HoodieStorageLayout.LayoutType.BUCKET.name())
             .withLayoutPartitioner(SparkBucketIndexPartitioner.class.getName()).build())
-        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BUCKET).withBucketNum("1").build()).build();
+        .withIndexConfig(HoodieIndexConfig.newBuilder().fromProperties(props).withIndexType(HoodieIndex.IndexType.BUCKET).withBucketNum("1").build()).build();
     metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, config.getProps());
     client = getHoodieWriteClient(config);
 
@@ -125,8 +130,11 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
   @ParameterizedTest
   @MethodSource("writeLogTest")
   public void testWriteLogDuringCompaction(boolean enableMetadataTable, boolean enableTimelineServer) throws IOException {
+    Properties props = new Properties();
+    props.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "uuid");
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
         .forTable("test-trip-table")
+        .withProperties(props)
         .withPath(basePath())
         .withSchema(TRIP_EXAMPLE_SCHEMA)
         .withParallelism(2, 2)
@@ -138,7 +146,7 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
         .withLayoutConfig(HoodieLayoutConfig.newBuilder()
             .withLayoutType(HoodieStorageLayout.LayoutType.BUCKET.name())
             .withLayoutPartitioner(SparkBucketIndexPartitioner.class.getName()).build())
-        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BUCKET).withBucketNum("1").build()).build();
+        .withIndexConfig(HoodieIndexConfig.newBuilder().fromProperties(props).withIndexType(HoodieIndex.IndexType.BUCKET).withBucketNum("1").build()).build();
     metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, config.getProps());
     client = getHoodieWriteClient(config);
 

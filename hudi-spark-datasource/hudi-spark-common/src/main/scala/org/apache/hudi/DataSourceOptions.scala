@@ -599,9 +599,10 @@ object DataSourceWriteOptions {
   /** @deprecated Use {@link RECORDKEY_FIELD} and its methods instead */
   @Deprecated
   val RECORDKEY_FIELD_OPT_KEY = KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()
-  /** @deprecated Use {@link RECORDKEY_FIELD} and its methods instead */
+  /** @deprecated Use {@link RECORDKEY_FIELD} and its methods instead.
+   *             This field has no default value since version 0.12.0, `uuid` is for backward compatibility. */
   @Deprecated
-  val DEFAULT_RECORDKEY_FIELD_OPT_VAL = RECORDKEY_FIELD.defaultValue()
+  val DEFAULT_RECORDKEY_FIELD_OPT_VAL = "uuid"
   /** @deprecated Use {@link PARTITIONPATH_FIELD} and its methods instead */
   @Deprecated
   val PARTITIONPATH_FIELD_OPT_KEY = KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()
@@ -615,9 +616,10 @@ object DataSourceWriteOptions {
   /** @deprecated Use {@link PRECOMBINE_FIELD} and its methods instead */
   @Deprecated
   val PRECOMBINE_FIELD_OPT_KEY = HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key()
-  /** @deprecated Use {@link PRECOMBINE_FIELD} and its methods instead */
+  /** @deprecated Use {@link PRECOMBINE_FIELD} and its methods instead.
+   *             This field has no default value since version 0.12.0, `ts` is for backward compatibility. */
   @Deprecated
-  val DEFAULT_PRECOMBINE_FIELD_OPT_VAL = PRECOMBINE_FIELD.defaultValue()
+  val DEFAULT_PRECOMBINE_FIELD_OPT_VAL = "ts"
 
   /** @deprecated Use {@link HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME} and its methods instead */
   @Deprecated
@@ -781,9 +783,10 @@ object DataSourceOptionsHelper {
     val partitionFields = props.getString(DataSourceWriteOptions.PARTITIONPATH_FIELD.key(), null)
     if (partitionFields != null) {
       val numPartFields = partitionFields.split(",").length
-      val recordsKeyFields = props.getString(DataSourceWriteOptions.RECORDKEY_FIELD.key(), DataSourceWriteOptions.RECORDKEY_FIELD.defaultValue())
-      val numRecordKeyFields = recordsKeyFields.split(",").length
-      if (numPartFields == 1 && numRecordKeyFields == 1) {
+      val numRecordKeyFields =
+        if(props.contains(DataSourceWriteOptions.RECORDKEY_FIELD.key)) props.getString(DataSourceWriteOptions.RECORDKEY_FIELD.key).split(",").length
+        else 0
+      if (numPartFields == 1 && numRecordKeyFields <= 1) {
         classOf[SimpleKeyGenerator].getName
       } else {
         classOf[ComplexKeyGenerator].getName

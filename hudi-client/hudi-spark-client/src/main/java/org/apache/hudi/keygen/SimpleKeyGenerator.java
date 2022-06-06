@@ -28,6 +28,8 @@ import org.apache.spark.sql.types.StructType;
 
 import java.util.Collections;
 
+import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
+
 /**
  * Simple key generator, which takes names of fields to be used for recordKey and partitionPath as configs.
  */
@@ -36,7 +38,8 @@ public class SimpleKeyGenerator extends BuiltinKeyGenerator {
   private final SimpleAvroKeyGenerator simpleAvroKeyGenerator;
 
   public SimpleKeyGenerator(TypedProperties props) {
-    this(props, props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()),
+    this(props, props.containsKey(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key())
+            ? props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()) : null,
         props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()));
   }
 
@@ -65,6 +68,9 @@ public class SimpleKeyGenerator extends BuiltinKeyGenerator {
 
   @Override
   public String getRecordKey(Row row) {
+    if (getRecordKeyFields().isEmpty()) {
+      return EMPTY_STRING;
+    }
     buildFieldSchemaInfoIfNeeded(row.schema());
     return RowKeyGeneratorHelper.getRecordKeyFromRow(row, getRecordKeyFields(), recordKeySchemaInfo, false);
   }

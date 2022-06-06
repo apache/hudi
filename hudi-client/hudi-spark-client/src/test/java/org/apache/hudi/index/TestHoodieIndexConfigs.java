@@ -31,6 +31,7 @@ import org.apache.hudi.index.bucket.HoodieSparkConsistentBucketIndex;
 import org.apache.hudi.index.hbase.SparkHoodieHBaseIndex;
 import org.apache.hudi.index.inmemory.HoodieInMemoryHashIndex;
 import org.apache.hudi.index.simple.HoodieSimpleIndex;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -39,6 +40,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
 import java.nio.file.Path;
+import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -88,13 +90,15 @@ public class TestHoodieIndexConfigs {
         assertTrue(SparkHoodieIndexFactory.createIndex(config) instanceof SparkHoodieHBaseIndex);
         break;
       case BUCKET:
+        Properties props = new Properties();
+        props.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "uuid");
         config = clientConfigBuilder.withPath(basePath)
-            .withIndexConfig(indexConfigBuilder.withIndexType(IndexType.BUCKET)
+            .withIndexConfig(indexConfigBuilder.fromProperties(props).withIndexType(IndexType.BUCKET)
                 .withBucketIndexEngineType(HoodieIndex.BucketIndexEngineType.SIMPLE).build()).build();
         assertTrue(SparkHoodieIndexFactory.createIndex(config) instanceof HoodieSimpleBucketIndex);
 
         config = clientConfigBuilder.withPath(basePath)
-            .withIndexConfig(indexConfigBuilder.withIndexType(IndexType.BUCKET)
+            .withIndexConfig(indexConfigBuilder.fromProperties(props).withIndexType(IndexType.BUCKET)
               .withBucketIndexEngineType(HoodieIndex.BucketIndexEngineType.CONSISTENT_HASHING).build())
             .build();
         assertTrue(SparkHoodieIndexFactory.createIndex(config) instanceof HoodieSparkConsistentBucketIndex);

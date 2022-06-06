@@ -118,6 +118,15 @@ object HoodieSparkSqlWriter {
 
       operation = WriteOperationType.INSERT
     }
+    // If no record key field and precombine field is provided, assume it's an append-only workload and do bulk insert
+    if (!hoodieConfig.contains(RECORDKEY_FIELD) && !hoodieConfig.contains(PRECOMBINE_FIELD) &&
+      operation == WriteOperationType.UPSERT) {
+
+      log.warn(s"$RECORDKEY_FIELD and $PRECOMBINE_FIELD is not specified " +
+        s"overriding the $OPERATION to be $BULK_INSERT_OPERATION_OPT_VAL")
+
+      operation = WriteOperationType.BULK_INSERT
+    }
 
     val jsc = new JavaSparkContext(sparkContext)
     if (asyncCompactionTriggerFn.isDefined) {
@@ -280,7 +289,7 @@ object HoodieSparkSqlWriter {
                 HoodieWriteConfig.COMBINE_BEFORE_INSERT.defaultValue()).toBoolean
             val hoodieAllIncomingRecords = genericRecords.map(gr => {
               val processedRecord = getProcessedRecord(partitionColumns, gr, dropPartitionColumns)
-              val hoodieRecord = if (shouldCombine) {
+              val hoodieRecord = if (shouldCombine && hoodieConfig.contains(PRECOMBINE_FIELD)) {
                 val orderingVal = HoodieAvroUtils.getNestedFieldVal(gr, hoodieConfig.getString(PRECOMBINE_FIELD), false, parameters.getOrElse(
                   DataSourceWriteOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
                   DataSourceWriteOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()).toBoolean)

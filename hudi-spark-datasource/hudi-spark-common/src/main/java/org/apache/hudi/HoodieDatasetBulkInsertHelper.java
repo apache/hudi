@@ -47,6 +47,8 @@ import java.util.stream.Stream;
 
 import scala.collection.JavaConverters;
 
+import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
+import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 import static org.apache.spark.sql.functions.callUDF;
 
 /**
@@ -79,9 +81,13 @@ public class HoodieDatasetBulkInsertHelper {
         Arrays.stream(rows.schema().fields()).map(f -> new Column(f.name())).collect(Collectors.toList());
 
     TypedProperties properties = new TypedProperties();
+    if (!config.contains(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME())) {
+      config.setDefaultValue(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME());
+    }
     properties.putAll(config.getProps());
     String keyGeneratorClass = properties.getString(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME().key());
-    String recordKeyFields = properties.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key());
+    String recordKeyFields = properties.containsKey(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key())
+        ? properties.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()) : "";
     String partitionPathFields = properties.containsKey(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key())
         ? properties.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()) : "";
     BuiltinKeyGenerator keyGenerator = (BuiltinKeyGenerator) ReflectionUtils.loadClass(keyGeneratorClass, properties);
@@ -89,7 +95,9 @@ public class HoodieDatasetBulkInsertHelper {
     Dataset<Row> rowDatasetWithRecordKeysAndPartitionPath;
     if (keyGeneratorClass.equals(NonpartitionedKeyGenerator.class.getName())) {
       // for non partitioned, set partition path to empty.
-      rowDatasetWithRecordKeysAndPartitionPath = rows.withColumn(HoodieRecord.RECORD_KEY_METADATA_FIELD, functions.col(recordKeyFields))
+      rowDatasetWithRecordKeysAndPartitionPath = rows.withColumn(HoodieRecord.RECORD_KEY_METADATA_FIELD,
+              isNullOrEmpty(recordKeyFields)
+                  ? functions.lit(EMPTY_STRING).cast(DataTypes.StringType) : functions.col(recordKeyFields).cast(DataTypes.StringType))
           .withColumn(HoodieRecord.PARTITION_PATH_METADATA_FIELD, functions.lit("").cast(DataTypes.StringType));
     } else if (keyGeneratorClass.equals(SimpleKeyGenerator.class.getName())
         || (keyGeneratorClass.equals(ComplexKeyGenerator.class.getName()) && !recordKeyFields.contains(",") && !partitionPathFields.contains(",")
@@ -97,7 +105,9 @@ public class HoodieDatasetBulkInsertHelper {
       // simple fields for both record key and partition path: can directly use withColumn
       String partitionPathField = keyGeneratorClass.equals(SimpleKeyGenerator.class.getName()) ? partitionPathFields :
           partitionPathFields.substring(partitionPathFields.indexOf(":") + 1);
-      rowDatasetWithRecordKeysAndPartitionPath = rows.withColumn(HoodieRecord.RECORD_KEY_METADATA_FIELD, functions.col(recordKeyFields).cast(DataTypes.StringType))
+      rowDatasetWithRecordKeysAndPartitionPath = rows.withColumn(HoodieRecord.RECORD_KEY_METADATA_FIELD,
+              isNullOrEmpty(recordKeyFields)
+                  ? functions.lit(EMPTY_STRING).cast(DataTypes.StringType) : functions.col(recordKeyFields).cast(DataTypes.StringType))
           .withColumn(HoodieRecord.PARTITION_PATH_METADATA_FIELD, functions.col(partitionPathField).cast(DataTypes.StringType));
     } else {
       // use udf

@@ -31,6 +31,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
+
 /**
  * Simple Key generator for non-partitioned Hive Tables.
  */
@@ -40,8 +42,12 @@ public class NonpartitionedKeyGenerator extends BuiltinKeyGenerator {
 
   public NonpartitionedKeyGenerator(TypedProperties props) {
     super(props);
-    this.recordKeyFields = Arrays.stream(props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key())
-        .split(",")).map(String::trim).collect(Collectors.toList());
+    if (props.containsKey(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key())) {
+      this.recordKeyFields = Arrays.stream(props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key())
+          .split(",")).map(String::trim).collect(Collectors.toList());
+    } else {
+      this.recordKeyFields = Collections.emptyList();
+    }
     this.partitionPathFields = Collections.emptyList();
     nonpartitionedAvroKeyGenerator = new NonpartitionedAvroKeyGenerator(props);
   }
@@ -63,6 +69,9 @@ public class NonpartitionedKeyGenerator extends BuiltinKeyGenerator {
 
   @Override
   public String getRecordKey(Row row) {
+    if (getRecordKeyFields().isEmpty()) {
+      return EMPTY_STRING;
+    }
     buildFieldSchemaInfoIfNeeded(row.schema());
     return RowKeyGeneratorHelper.getRecordKeyFromRow(row, getRecordKeyFields(), recordKeySchemaInfo, false);
   }

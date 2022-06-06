@@ -17,12 +17,16 @@
 
 package org.apache.hudi.keygen;
 
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
+import org.apache.avro.generic.GenericRecord;
+
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.stream.Collectors;
+
+import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 
 /**
  * Avro complex key generator, which takes names of fields to be used for recordKey and partitionPath as configs.
@@ -32,10 +36,14 @@ public class ComplexAvroKeyGenerator extends BaseKeyGenerator {
 
   public ComplexAvroKeyGenerator(TypedProperties props) {
     super(props);
-    this.recordKeyFields = Arrays.stream(props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()).split(","))
-        .map(String::trim)
-        .filter(s -> !s.isEmpty())
-        .collect(Collectors.toList());
+    if (props.containsKey(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key())) {
+      this.recordKeyFields = Arrays.stream(props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()).split(","))
+          .map(String::trim)
+          .filter(s -> !s.isEmpty())
+          .collect(Collectors.toList());
+    } else {
+      this.recordKeyFields = Collections.emptyList();
+    }
     this.partitionPathFields = Arrays.stream(props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()).split(","))
         .map(String::trim)
         .filter(s -> !s.isEmpty())
@@ -44,6 +52,9 @@ public class ComplexAvroKeyGenerator extends BaseKeyGenerator {
 
   @Override
   public String getRecordKey(GenericRecord record) {
+    if (getRecordKeyFields().isEmpty()) {
+      return EMPTY_STRING;
+    }
     return KeyGenUtils.getRecordKey(record, getRecordKeyFields(), isConsistentLogicalTimestampEnabled());
   }
 

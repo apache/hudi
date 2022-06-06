@@ -82,6 +82,7 @@ public class TestHoodieSimpleBucketIndex extends HoodieClientTestHarness {
           .withBucketIndexEngineType(HoodieIndex.BucketIndexEngineType.SIMPLE)
           .withBucketNum("8").build();
     });
+    props.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "uuid");
     props.setProperty(HoodieIndexConfig.BUCKET_INDEX_HASH_FIELD.key(), "uuid");
     HoodieIndexConfig.newBuilder().fromProperties(props)
         .withIndexType(HoodieIndex.IndexType.BUCKET)

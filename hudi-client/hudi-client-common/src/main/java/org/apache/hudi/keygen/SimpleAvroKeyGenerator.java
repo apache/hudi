@@ -17,11 +17,14 @@
 
 package org.apache.hudi.keygen;
 
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
+import org.apache.avro.generic.GenericRecord;
+
 import java.util.Collections;
+
+import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 
 /**
  * Avro simple key generator, which takes names of fields to be used for recordKey and partitionPath as configs.
@@ -47,6 +50,9 @@ public class SimpleAvroKeyGenerator extends BaseKeyGenerator {
 
   @Override
   public String getRecordKey(GenericRecord record) {
+    if (getRecordKeyFields().isEmpty()) {
+      return EMPTY_STRING;
+    }
     return KeyGenUtils.getRecordKey(record, getRecordKeyFields().get(0), isConsistentLogicalTimestampEnabled());
   }
 
