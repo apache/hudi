@@ -318,8 +318,6 @@ public class HoodieIndexer {
     List<String> requestedIndexTypes = Arrays.asList(indexTypes.split(","));
     return requestedIndexTypes.stream()
         .map(p -> MetadataPartitionType.valueOf(p.toUpperCase(Locale.ROOT)))
-        // FILES partition is initialized synchronously while getting metadata writer
-        .filter(p -> !MetadataPartitionType.FILES.equals(p))
         .collect(Collectors.toList());
   }
 }

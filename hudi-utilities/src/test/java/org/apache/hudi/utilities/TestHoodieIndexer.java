@@ -175,6 +175,44 @@ public class TestHoodieIndexer extends HoodieCommonTestHarness implements SparkP
   }
 
   @Test
+  public void testIndexerWithNotAllIndexesEnabled1() {
+    initTestDataGenerator();
+    String tableName = "indexer_test";
+    HoodieWriteConfig.Builder writeConfigBuilder = getWriteConfigBuilder(basePath, tableName);
+    // enable files and bloom_filters on the regular write client
+    HoodieMetadataConfig.Builder metadataConfigBuilder = getMetadataConfigBuilder(false, false).withMetadataIndexBloomFilter(true);
+    HoodieWriteConfig writeConfig = writeConfigBuilder.withMetadataConfig(metadataConfigBuilder.build()).build();
+    // do one upsert with synchronous metadata update
+    SparkRDDWriteClient writeClient = new SparkRDDWriteClient(context, writeConfig);
+    String instant = "0001";
+    writeClient.startCommitWithTime(instant);
+    List<HoodieRecord> records = dataGen.generateInserts(instant, 100);
+    JavaRDD<WriteStatus> result = writeClient.upsert(jsc.parallelize(records, 1), instant);
+    List<WriteStatus> statuses = result.collect();
+    assertNoWriteErrors(statuses);
+
+    // validate table config
+    assertFalse(getCompletedMetadataPartitions(reload(metaClient).getTableConfig()).contains(FILES.getPartitionPath()));
+
+    // build indexer config which has only files enabled
+    HoodieIndexer.Config config = new HoodieIndexer.Config();
+    String propsPath = Objects.requireNonNull(getClass().getClassLoader().getResource("delta-streamer-config/indexer.properties")).getPath();
+    config.basePath = basePath;
+    config.tableName = tableName;
+    config.indexTypes = FILES.name();
+    config.runningMode = SCHEDULE_AND_EXECUTE;
+    config.propsFilePath = propsPath;
+    // start the indexer and validate files index is completely built out
+    HoodieIndexer indexer = new HoodieIndexer(jsc, config);
+    assertEquals(0, indexer.start(0));
+
+    // validate table config
+    assertTrue(getCompletedMetadataPartitions(reload(metaClient).getTableConfig()).contains(FILES.getPartitionPath()));
+    // validate metadata partitions actually exist
+    assertTrue(metadataPartitionExists(basePath, context, FILES));
+  }
+
+  @Test
   public void testIndexerDropPartitionDeletesInstantFromTimeline() {
     initTestDataGenerator();
     String tableName = "indexer_test";
