@@ -142,12 +142,11 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   }
 
   @Override
-  public HoodieData<HoodieRecord<HoodieMetadataPayload>> getRecordsByKeyPrefixes(List<String> keyPrefixesUnsorted,
+  public HoodieData<HoodieRecord<HoodieMetadataPayload>> getRecordsByKeyPrefixes(List<String> keyPrefixes,
                                                                                  String partitionName) {
     // Sort the columns so that keys are looked up in order
-    List<String> keyPrefixes = new ArrayList<>();
-    keyPrefixes.addAll(keyPrefixesUnsorted);
-    Collections.sort(keyPrefixes);
+    List<String> sortedkeyPrefixes = new ArrayList<>(keyPrefixes);
+    Collections.sort(sortedkeyPrefixes);
 
     // NOTE: Since we partition records to a particular file-group by full key, we will have
     //       to scan all file-groups for all key-prefixes as each of these might contain some
@@ -176,17 +175,17 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
                 boolean fullKeys = false;
 
                 Map<String, Option<HoodieRecord<HoodieMetadataPayload>>> logRecords =
-                    readLogRecords(logRecordScanner, keyPrefixes, fullKeys, timings);
+                    readLogRecords(logRecordScanner, sortedkeyPrefixes, fullKeys, timings);
 
                 List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> mergedRecords =
-                    readFromBaseAndMergeWithLogRecords(baseFileReader, keyPrefixes, fullKeys, logRecords, timings, partitionName);
+                    readFromBaseAndMergeWithLogRecords(baseFileReader, sortedkeyPrefixes, fullKeys, logRecords, timings, partitionName);
 
                 LOG.debug(String.format("Metadata read for %s keys took [baseFileRead, logMerge] %s ms",
-                    keyPrefixes.size(), timings));
+                    sortedkeyPrefixes.size(), timings));
 
                 return mergedRecords.iterator();
               } catch (IOException ioe) {
-                throw new HoodieIOException("Error merging records from metadata table for  " + keyPrefixes.size() + " key : ", ioe);
+                throw new HoodieIOException("Error merging records from metadata table for  " + sortedkeyPrefixes.size() + " key : ", ioe);
               } finally {
                 closeReader(readers);
               }
@@ -197,13 +196,12 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   }
 
   @Override
-  public List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> getRecordsByKeys(List<String> keysUnsorted,
+  public List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> getRecordsByKeys(List<String> keys,
                                                                                           String partitionName) {
     // Sort the columns so that keys are looked up in order
-    List<String> keys = new ArrayList<>();
-    keys.addAll(keysUnsorted);
-    Collections.sort(keys);
-    Map<Pair<String, FileSlice>, List<String>> partitionFileSliceToKeysMap = getPartitionFileSliceToKeysMapping(partitionName, keys);
+    List<String> sortedKeys = new ArrayList<>(keys);
+    Collections.sort(sortedKeys);
+    Map<Pair<String, FileSlice>, List<String>> partitionFileSliceToKeysMap = getPartitionFileSliceToKeysMapping(partitionName, sortedKeys);
     List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> result = new ArrayList<>();
     AtomicInteger fileSlicesKeysCount = new AtomicInteger();
     partitionFileSliceToKeysMap.forEach((partitionFileSlicePair, fileSliceKeys) -> {
@@ -228,7 +226,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
             fileSliceKeys.size(), timings));
         fileSlicesKeysCount.addAndGet(fileSliceKeys.size());
       } catch (IOException ioe) {
-        throw new HoodieIOException("Error merging records from metadata table for  " + keys.size() + " key : ", ioe);
+        throw new HoodieIOException("Error merging records from metadata table for  " + sortedKeys.size() + " key : ", ioe);
       } finally {
         if (!reuse) {
           close(Pair.of(partitionFileSlicePair.getLeft(), partitionFileSlicePair.getRight().getFileId()));
