@@ -213,27 +213,18 @@ class DefaultSource extends RelationProvider
                                           globPaths: Seq[Path],
                                           userSchema: Option[StructType],
                                           metaClient: HoodieTableMetaClient,
-                                          optParams: Map[String, String]) = {
+                                          optParams: Map[String, String]): BaseRelation = {
     val baseRelation = new BaseFileOnlyRelation(sqlContext, metaClient, optParams, userSchema, globPaths)
-    val enableSchemaOnRead: Boolean = !tryFetchInternalSchema(metaClient).isEmptySchema
 
     // NOTE: We fallback to [[HadoopFsRelation]] in all of the cases except ones requiring usage of
     //       [[BaseFileOnlyRelation]] to function correctly. This is necessary to maintain performance parity w/
     //       vanilla Spark, since some of the Spark optimizations are predicated on the using of [[HadoopFsRelation]].
     //
     //       You can check out HUDI-3896 for more details
-    if (enableSchemaOnRead) {
+    if (baseRelation.hasSchemaOnRead) {
       baseRelation
     } else {
       baseRelation.toHadoopFsRelation
     }
   }
-
-  private def tryFetchInternalSchema(metaClient: HoodieTableMetaClient) =
-    try {
-      new TableSchemaResolver(metaClient).getTableInternalSchemaFromCommitMetadata
-        .orElse(InternalSchema.getEmptyInternalSchema)
-    } catch {
-      case _: Exception => InternalSchema.getEmptyInternalSchema
-    }
 }

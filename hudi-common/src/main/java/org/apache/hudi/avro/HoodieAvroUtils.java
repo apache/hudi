@@ -166,18 +166,6 @@ public class HoodieAvroUtils {
     return reader.read(null, jsonDecoder);
   }
 
-  /**
-   * True if the schema contains this name of field
-   */
-  public static boolean containsFieldInSchema(Schema schema, String fieldName) {
-    try {
-      Field field = schema.getField(fieldName);
-      return field != null;
-    } catch (Exception e) {
-      return false;
-    }
-  }
-
   public static boolean isMetadataField(String fieldName) {
     return HoodieRecord.COMMIT_TIME_METADATA_FIELD.equals(fieldName)
         || HoodieRecord.COMMIT_SEQNO_METADATA_FIELD.equals(fieldName)

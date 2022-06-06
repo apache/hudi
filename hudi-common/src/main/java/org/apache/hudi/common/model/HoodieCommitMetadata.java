@@ -127,7 +127,7 @@ public class HoodieCommitMetadata implements Serializable {
     return this.operationType;
   }
 
-  public HashMap<String, String> getFileIdAndFullPaths(String basePath) {
+  public HashMap<String, String> getFileIdAndFullPaths(Path basePath) {
     HashMap<String, String> fullPaths = new HashMap<>();
     for (Map.Entry<String, String> entry : getFileIdAndRelativePaths().entrySet()) {
       String fullPath = entry.getValue() != null

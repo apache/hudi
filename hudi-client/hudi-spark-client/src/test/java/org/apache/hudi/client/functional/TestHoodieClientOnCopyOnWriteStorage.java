@@ -2094,13 +2094,13 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
       HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
           .fromBytes(commitTimeline.getInstantDetails(commitInstant).get(), HoodieCommitMetadata.class);
       String basePath = table.getMetaClient().getBasePath();
-      Collection<String> commitPathNames = commitMetadata.getFileIdAndFullPaths(basePath).values();
+      Collection<String> commitPathNames = commitMetadata.getFileIdAndFullPaths(new Path(basePath)).values();
 
       // Read from commit file
       try (FSDataInputStream inputStream = fs.open(testTable.getCommitFilePath(instantTime))) {
         String everything = FileIOUtils.readAsUTFString(inputStream);
         HoodieCommitMetadata metadata = HoodieCommitMetadata.fromJsonString(everything, HoodieCommitMetadata.class);
-        HashMap<String, String> paths = metadata.getFileIdAndFullPaths(basePath);
+        HashMap<String, String> paths = metadata.getFileIdAndFullPaths(new Path(basePath));
         // Compare values in both to make sure they are equal.
         for (String pathName : paths.values()) {
           assertTrue(commitPathNames.contains(pathName));
