@@ -4,9 +4,17 @@
         <title>Apache Hudi: User-Facing Analytics</title>
         <link>https://hudi.apache.org/cn/blog</link>
         <description>Apache Hudi Blog</description>
-        <lastBuildDate>Tue, 17 May 2022 00:00:00 GMT</lastBuildDate>
+        <lastBuildDate>Sat, 04 Jun 2022 00:00:00 GMT</lastBuildDate>
         <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
         <generator>https://github.com/jpmonette/feed</generator>
+        <item>
+            <title><![CDATA[Asynchronous Indexing using Hudi]]></title>
+            <link>https://hudi.apache.org/cn/blog/2022/06/04/Asynchronous-Indexing-Using-Hudi</link>
+            <guid>/2022/06/04/Asynchronous-Indexing-Using-Hudi</guid>
+            <pubDate>Sat, 04 Jun 2022 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://www.onehouse.ai/blog/asynchronous-indexing-using-hudi">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
         <item>
             <title><![CDATA[Multi-Modal Index for the Lakehouse in Apache Hudi]]></title>
             <link>https://hudi.apache.org/cn/blog/2022/05/17/Introducing-Multi-Modal-Index-for-the-Lakehouse-in-Apache-Hudi</link>

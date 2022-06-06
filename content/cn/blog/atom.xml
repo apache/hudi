@@ -2,11 +2,22 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <id>https://hudi.apache.org/cn/blog</id>
     <title>Apache Hudi: User-Facing Analytics</title>
-    <updated>2022-05-17T00:00:00.000Z</updated>
+    <updated>2022-06-04T00:00:00.000Z</updated>
     <generator>https://github.com/jpmonette/feed</generator>
     <link rel="alternate" href="https://hudi.apache.org/cn/blog"/>
     <subtitle>Apache Hudi Blog</subtitle>
     <icon>https://hudi.apache.org/cn/assets/images/favicon.ico</icon>
+    <entry>
+        <title type="html"><![CDATA[Asynchronous Indexing using Hudi]]></title>
+        <id>/2022/06/04/Asynchronous-Indexing-Using-Hudi</id>
+        <link href="https://hudi.apache.org/cn/blog/2022/06/04/Asynchronous-Indexing-Using-Hudi"/>
+        <updated>2022-06-04T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://www.onehouse.ai/blog/asynchronous-indexing-using-hudi">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Sagar Sumit</name>
+        </author>
+    </entry>
     <entry>
         <title type="html"><![CDATA[Multi-Modal Index for the Lakehouse in Apache Hudi]]></title>
         <id>/2022/05/17/Introducing-Multi-Modal-Index-for-the-Lakehouse-in-Apache-Hudi</id>
