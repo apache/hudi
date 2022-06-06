@@ -17,6 +17,7 @@
 
 package org.apache.spark.sql.hudi
 
+import org.apache.hudi.common.config.HoodieCommonConfig
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.internal.schema.action.TableChange.ColumnChangeID
 import org.apache.spark.sql.SparkSession
@@ -55,8 +56,9 @@ class ResolveHudiAlterTableCommandSpark32(sparkSession: SparkSession) extends Ru
     }
   }
 
-  private def schemaEvolutionEnabled: Boolean = sparkSession
-    .sessionState.conf.getConfString(HoodieWriteConfig.SCHEMA_EVOLUTION_ENABLE.key(), "false").toBoolean
+  private def schemaEvolutionEnabled: Boolean =
+    sparkSession.sessionState.conf.getConfString(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key,
+      HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.defaultValue.toString).toBoolean
 
   object ResolvedHoodieV2TablePlan {
     def unapply(plan: LogicalPlan): Option[HoodieInternalV2Table] = {
