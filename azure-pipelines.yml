@@ -149,7 +149,7 @@ stages:
               mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
       - job: IT
         displayName: IT modules
-        timeoutInMinutes: '120'
+        timeoutInMinutes: '180'
         steps:
           - task: Maven@3
             displayName: maven install
