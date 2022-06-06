@@ -57,7 +57,6 @@ public class KafkaAvroSchemaDeserializer extends KafkaAvroDeserializer {
   /**
    * We need to inject sourceSchema instead of reader schema during deserialization or later stages of the pipeline.
    *
-   * @param includeSchemaAndVersion
    * @param topic
    * @param isKey
    * @param payload
@@ -67,13 +66,12 @@ public class KafkaAvroSchemaDeserializer extends KafkaAvroDeserializer {
    */
   @Override
   protected Object deserialize(
-      boolean includeSchemaAndVersion,
       String topic,
       Boolean isKey,
       byte[] payload,
       Schema readerSchema)
       throws SerializationException {
-    return super.deserialize(includeSchemaAndVersion, topic, isKey, payload, sourceSchema);
+    return super.deserialize(topic, isKey, payload, sourceSchema);
   }
 
   protected TypedProperties getConvertToTypedProperties(Map<String, ?> configs) {
