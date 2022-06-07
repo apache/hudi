@@ -48,6 +48,7 @@ import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.common.state.ListState;
 import org.apache.flink.api.common.state.ListStateDescriptor;
 import org.apache.flink.api.common.typeinfo.Types;
+import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.api.java.tuple.Tuple4;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.state.KeyGroupRangeAssignment;
@@ -81,8 +82,8 @@ import static org.apache.hudi.util.StreamerUtil.isValidFile;
  */
 public class BootstrapOperator<I, O extends HoodieRecord<?>>
     extends AbstractStreamOperator<O> implements OneInputStreamOperator<I, O> {
-
   private static final Logger LOG = LoggerFactory.getLogger(BootstrapOperator.class);
+  public static final String BOOTSTRAP_NAME = "index_bootstrap";
 
   protected HoodieTable<?, ?, ?, ?> hoodieTable;
 
@@ -100,6 +101,7 @@ public class BootstrapOperator<I, O extends HoodieRecord<?>>
   private String lastInstantTime;
 
   private transient AtomicLong loadIndexCount;
+  private transient boolean indexAlignment;
 
   public BootstrapOperator(Configuration conf) {
     this.conf = conf;
@@ -133,6 +135,7 @@ public class BootstrapOperator<I, O extends HoodieRecord<?>>
     this.ckpMetadata = CkpMetadata.getInstance(hoodieTable.getMetaClient().getFs(), this.writeConfig.getBasePath());
     this.aggregateManager = getRuntimeContext().getGlobalAggregateManager();
     this.loadIndexCount = new AtomicLong(0);
+    this.indexAlignment = conf.get(FlinkOptions.INDEX_ALIGNMENT);
 
     preLoadIndexRecords();
   }
@@ -161,11 +164,13 @@ public class BootstrapOperator<I, O extends HoodieRecord<?>>
    */
   private void waitForBootstrapReady(int taskID) {
     int taskNum = getRuntimeContext().getNumberOfParallelSubtasks();
-    Tuple4 taskDetail = new Tuple4(getRuntimeContext().getTaskName(), taskNum, taskID, loadIndexCount.get());
-    boolean isReady = false;
-    while (!isReady) {
+    Tuple4<String, Integer, Integer, Long> taskDetail = new Tuple4<>(BOOTSTRAP_NAME, taskNum, taskID, loadIndexCount.get());
+    while (true) {
       try {
-        isReady = aggregateManager.updateGlobalAggregate(IndexAlignmentAggFunction.NAME, taskDetail, new IndexAlignmentAggFunction());
+        Tuple2<Integer, Boolean> result = aggregateManager.updateGlobalAggregate(IndexAlignmentAggFunction.NAME, taskDetail, new IndexAlignmentAggFunction());
+        if (result.f1 || result.f0.equals(taskNum) && !indexAlignment) {
+          break;
+        }
         LOG.info("Waiting for other bootstrap tasks to complete, taskId = {}.", taskID);
 
         TimeUnit.SECONDS.sleep(5);

@@ -378,6 +378,12 @@ public class FlinkOptions extends HoodieConfig {
           + "1) 'yyyyMMddHH' for timestamp(3) WITHOUT TIME ZONE, LONG, FLOAT, DOUBLE, DECIMAL;\n"
           + "2) 'yyyyMMdd' for DATE and INT.");
 
+  public static final ConfigOption<Boolean> INDEX_ALIGNMENT = ConfigOptions
+      .key("write.index.alignment.enable")
+      .booleanType()
+      .defaultValue(false)
+      .withDescription("Ensure that all index data is written to the bucketAssign.");
+
   public static final ConfigOption<Integer> INDEX_BOOTSTRAP_TASKS = ConfigOptions
       .key("write.index_bootstrap.tasks")
       .intType()

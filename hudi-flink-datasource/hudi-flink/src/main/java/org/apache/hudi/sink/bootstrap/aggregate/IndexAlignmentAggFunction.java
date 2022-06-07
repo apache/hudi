@@ -19,12 +19,14 @@
 package org.apache.hudi.sink.bootstrap.aggregate;
 
 import org.apache.flink.api.common.functions.AggregateFunction;
+import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.api.java.tuple.Tuple4;
 
 /**
  * Aggregate function that accumulates loading the index.
  */
-public class IndexAlignmentAggFunction implements AggregateFunction<Tuple4<String, Integer, Integer, Long>, IndexAlignmentAccumulator, Boolean> {
+public class IndexAlignmentAggFunction implements AggregateFunction<Tuple4<String, Integer, Integer, Long>,
+    IndexAlignmentAccumulator, Tuple2<Integer, Boolean>> {
   public static final String NAME = IndexAlignmentAggFunction.class.getSimpleName();
 
   @Override
@@ -39,8 +41,8 @@ public class IndexAlignmentAggFunction implements AggregateFunction<Tuple4<Strin
   }
 
   @Override
-  public Boolean getResult(IndexAlignmentAccumulator indexAlignmentAccumulator) {
-    return indexAlignmentAccumulator.isReady();
+  public Tuple2<Integer, Boolean> getResult(IndexAlignmentAccumulator indexAlignmentAccumulator) {
+    return indexAlignmentAccumulator.getResult();
   }
 
   @Override

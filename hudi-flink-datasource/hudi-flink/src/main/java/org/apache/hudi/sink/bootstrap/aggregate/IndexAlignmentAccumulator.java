@@ -19,7 +19,9 @@
 package org.apache.hudi.sink.bootstrap.aggregate;
 
 import org.apache.hudi.exception.HoodieIndexException;
+import org.apache.hudi.sink.bootstrap.BootstrapOperator;
 
+import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.api.java.tuple.Tuple4;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -52,20 +54,21 @@ public class IndexAlignmentAccumulator implements Serializable {
     readyTaskMap.get(taskDetails.f0).addSubTaskCount(taskDetails.f2, taskDetails.f3);
   }
 
-  public Boolean isReady() {
+  public Tuple2<Integer, Boolean> getResult() {
+    final IndexAlignmentTaskDetails bootstrapDetail = readyTaskMap.get(BootstrapOperator.BOOTSTRAP_NAME);
+    if (bootstrapDetail == null) {
+      return new Tuple2<>(0, false);
+    }
+    Tuple2<Integer, Boolean> result = new Tuple2<>(bootstrapDetail.getSubTaskCount().size(), false);
     if (readyTaskMap.size() != 2) {
-      LOG.info("Now readyTaskMap contains: {}", readyTaskMap);
-      return false;
+      return result;
     }
     List<String> keys = new ArrayList<>(readyTaskMap.keySet());
-    boolean isReady = isReady(readyTaskMap.get(keys.get(0)), readyTaskMap.get(keys.get(1)));
-    if (!isReady) {
-      LOG.info("Now readyTaskMap contains: {}", readyTaskMap);
-    }
-    return isReady;
+    result.setField(alignment(readyTaskMap.get(keys.get(0)), readyTaskMap.get(keys.get(1))), 1);
+    return result;
   }
 
-  public static boolean isReady(IndexAlignmentTaskDetails a, IndexAlignmentTaskDetails b) {
+  public static boolean alignment(IndexAlignmentTaskDetails a, IndexAlignmentTaskDetails b) {
     if (a.getParalleTasks() != a.getSubTaskCount().size()
         || b.getParalleTasks() != b.getSubTaskCount().size()) {
       return false;
