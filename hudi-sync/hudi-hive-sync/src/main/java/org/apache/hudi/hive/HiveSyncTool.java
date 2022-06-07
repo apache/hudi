@@ -74,11 +74,12 @@ public class HiveSyncTool extends AbstractSyncTool implements AutoCloseable {
 
   public HiveSyncTool(HiveSyncConfig hiveSyncConfig, HiveConf hiveConf, FileSystem fs) {
     super(hiveSyncConfig.getProps(), hiveConf, fs);
-    hiveConf.addResource(fs.getConf());
     // TODO: reconcile the way to set METASTOREURIS
     if (StringUtils.isNullOrEmpty(hiveConf.get(HiveConf.ConfVars.METASTOREURIS.varname))) {
       hiveConf.set(HiveConf.ConfVars.METASTOREURIS.varname, hiveSyncConfig.metastoreUris);
     }
+    // HiveConf needs to load fs conf to allow instantiation via AWSGlueClientFactory
+    hiveConf.addResource(fs.getConf());
     initClient(hiveSyncConfig, hiveConf);
     initConfig(hiveSyncConfig);
   }
