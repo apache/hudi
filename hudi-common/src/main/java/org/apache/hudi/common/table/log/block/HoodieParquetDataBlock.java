@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.fs.inline.InLineFSUtils;
 import org.apache.hudi.common.fs.inline.InLineFileSystem;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.util.ClosableIterator;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -37,14 +38,19 @@ import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
+import org.apache.parquet.hadoop.util.HadoopInputFile;
 
 import javax.annotation.Nonnull;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
 
 /**
  * HoodieParquetDataBlock contains a list of records serialized using Parquet.
@@ -92,12 +98,14 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     try (FSDataOutputStream outputStream = new FSDataOutputStream(baos)) {
       HoodieFileWriter parquetWriter = null;
+      HoodieStorageConfig storageConfig =  HoodieStorageConfig.newBuilder().build();
+      storageConfig.setValue("hoodie.datasource.write.record.type", records.iterator().next().getClass().getSimpleName().equals("HoodieSparkRecord") ? "SPARK" : "AVRO");
       try {
         parquetWriter = HoodieFileWriterFactory.getFileWriter(
             HoodieFileFormat.PARQUET,
             outputStream,
             new Configuration(),
-            HoodieStorageConfig.newBuilder().build(),
+            storageConfig,
             writerSchema);
         for (HoodieRecord record : records) {
           String recordKey = getRecordKey(record).orElse(null);
@@ -135,7 +143,7 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
         blockContentLoc.getBlockSize());
 
     HoodieRecord.Mapper<IndexedRecord, IndexedRecord> mapper = HoodieAvroIndexedRecord::new;
-    ClosableIterator<HoodieRecord> iterator = HoodieFileReaderFactory.getFileReader(inlineConf, inlineLogFilePath)
+    ClosableIterator<HoodieRecord> iterator = HoodieFileReaderFactory.getFileReader(inlineConf, inlineLogFilePath, PARQUET)
         .getRecordIterator(readerSchema, mapper);
     return iterator;
   }

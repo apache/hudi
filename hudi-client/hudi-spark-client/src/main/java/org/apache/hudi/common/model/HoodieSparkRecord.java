@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.HoodieInternalRowUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
@@ -27,7 +28,10 @@ import org.apache.hudi.keygen.BaseKeyGenerator;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.spark.sql.catalyst.CatalystTypeConverters;
 import org.apache.spark.sql.catalyst.InternalRow;
+import org.apache.spark.sql.catalyst.expressions.GenericInternalRow;
+import org.apache.spark.sql.catalyst.expressions.JoinedRow;
 import org.apache.spark.sql.types.StructType;
 
 import java.io.IOException;
@@ -42,6 +46,10 @@ import static org.apache.spark.sql.types.DataTypes.BooleanType;
  * Spark Engine-specific Implementations of `HoodieRecord`.
  */
 public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
+
+  public HoodieSparkRecord(InternalRow data) {
+    super(null, data);
+  }
 
   public HoodieSparkRecord(HoodieKey key, InternalRow data, Comparable orderingVal) {
     super(key, data, orderingVal);
@@ -72,6 +80,11 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
   public HoodieRecord<InternalRow> newInstance(HoodieKey key) {
     return new HoodieSparkRecord(key, data, getOrderingValue());
   }
+
+  @Override
+  public void deflate() {
+  }
+
 
   @Override
   public String getRecordKey(Option<BaseKeyGenerator> keyGeneratorOpt) {
@@ -135,18 +148,23 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
 
   @Override
   public HoodieRecord overrideMetadataFieldValue(Schema recordSchema, Properties prop, int pos, String newValue) throws IOException {
-    data.update(pos, newValue);
+    data.update(pos, CatalystTypeConverters.convertToCatalyst(newValue));
     return this;
   }
 
   @Override
   public HoodieRecord addMetadataValues(Schema recordSchema, Properties prop, Map<HoodieMetadataField, String> metadataValues) throws IOException {
-    Arrays.stream(HoodieMetadataField.values()).forEach(metadataField -> {
-      String value = metadataValues.get(metadataField);
-      if (value != null) {
-        data.update(recordSchema.getField(metadataField.getFieldName()).pos(), value);
-      }
-    });
+    // TODO: record schema has metafield ?
+    InternalRow metadataRow = new GenericInternalRow(Arrays.stream(HoodieMetadataField.values())
+        .filter(k -> metadataValues.containsKey(k)).map(k -> metadataValues.get(k))
+        .filter(v -> v != null).map(v -> CatalystTypeConverters.convertToCatalyst(v)).toArray());
+     this.data = new JoinedRow(metadataRow, this.data);
+//    Arrays.stream(HoodieMetadataField.values()).forEach(metadataField -> {
+//      String value = metadataValues.get(metadataField);
+//      if (value != null) {
+//        data.update(recordSchema.getField(metadataField.getFieldName()).pos(), CatalystTypeConverters.convertToCatalyst(value));
+//      }
+//    });
     return this;
   }
 

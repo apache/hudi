@@ -20,6 +20,7 @@ package org.apache.hudi
 
 import java.nio.ByteBuffer
 import java.util.{ArrayList, HashMap, Objects}
+
 import org.apache.avro.generic.GenericData
 import org.apache.avro.{LogicalTypes, Schema}
 import org.apache.hudi.avro.HoodieAvroUtils
@@ -28,11 +29,11 @@ import org.apache.hudi.internal.schema.action.TableChanges
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
 import org.apache.hudi.internal.schema.utils.SchemaChangeUtils
 import org.apache.hudi.testutils.HoodieClientTestUtils
+
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.util.{ArrayData, MapData}
-import org.apache.spark.sql.hudi.HoodieInternalRowUtils
 import org.apache.spark.sql.types._
 import org.scalatest.{BeforeAndAfterAll, FunSuite, Matchers}
 

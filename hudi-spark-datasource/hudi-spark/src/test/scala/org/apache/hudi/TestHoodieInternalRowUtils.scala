@@ -20,8 +20,8 @@ package org.apache.hudi
 
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.testutils.HoodieClientTestUtils
+
 import org.apache.spark.api.java.JavaSparkContext
-import org.apache.spark.sql.hudi.HoodieInternalRowUtils
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{Row, SparkSession}
 import org.scalatest.{BeforeAndAfterAll, FunSuite, Matchers}

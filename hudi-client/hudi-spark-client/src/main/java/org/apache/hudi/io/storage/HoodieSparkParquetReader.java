@@ -22,6 +22,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -32,15 +33,18 @@ import org.apache.hudi.common.util.ParquetReaderIterator;
 import org.apache.parquet.hadoop.ParquetReader;
 import org.apache.parquet.hadoop.ParquetRecordReader;
 import org.apache.parquet.hadoop.api.ReadSupport;
+import org.apache.parquet.hadoop.util.HadoopInputFile;
+import org.apache.parquet.io.InputFile;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.execution.datasources.parquet.ParquetReadSupport;
+import org.apache.spark.sql.internal.SQLConf;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
-public class HoodieSparkParquetReader<InternalRow> implements HoodieSparkFileReader<InternalRow> {
+public class HoodieSparkParquetReader implements HoodieSparkFileReader {
 
   private final Path path;
   private final Configuration conf;
@@ -69,9 +73,18 @@ public class HoodieSparkParquetReader<InternalRow> implements HoodieSparkFileRea
   }
 
   @Override
-  public ClosableIterator<InternalRow> getInternalRowIterator(Schema readerSchema) throws IOException {
-    ReadSupport readSupport = new ParquetReadSupport();
-    ParquetReader reader = ParquetReader.<InternalRow>builder(readSupport, path).withConf(conf).build();
+  public ClosableIterator<InternalRow> getInternalRowIterator(Schema schema) throws IOException {
+    conf.set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA().toString(), AvroConversionUtils.convertAvroSchemaToStructType(schema).json());
+    // todo: get it from spark context
+    conf.setBoolean(SQLConf.PARQUET_BINARY_AS_STRING().key(),false);
+    conf.setBoolean(SQLConf.PARQUET_INT96_AS_TIMESTAMP().key(), true);
+    InputFile inputFile = HadoopInputFile.fromPath(path, conf);
+    ParquetReader reader = new ParquetReader.Builder<InternalRow>(inputFile) {
+      @Override
+      protected ReadSupport getReadSupport() {
+        return new ParquetReadSupport();
+      }
+    }.withConf(conf).build();
     ParquetReaderIterator<InternalRow> parquetReaderIterator = new ParquetReaderIterator<>(reader);
     readerIterators.add(parquetReaderIterator);
     return parquetReaderIterator;
