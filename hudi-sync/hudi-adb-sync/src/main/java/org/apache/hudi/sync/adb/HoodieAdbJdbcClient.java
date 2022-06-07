@@ -267,21 +267,6 @@ public class HoodieAdbJdbcClient extends AbstractAdbSyncHoodieClient {
   }
 
   @Override
-  public Option<String> getLastReplicatedTime(String tableName) {
-    throw new UnsupportedOperationException("Not support getLastReplicatedTime yet");
-  }
-
-  @Override
-  public void updateLastReplicatedTimeStamp(String tableName, String timeStamp) {
-    throw new UnsupportedOperationException("Not support updateLastReplicatedTimeStamp yet");
-  }
-
-  @Override
-  public void deleteLastReplicatedTimeStamp(String tableName) {
-    throw new UnsupportedOperationException("Not support deleteLastReplicatedTimeStamp yet");
-  }
-
-  @Override
   public void updatePartitionsToTable(String tableName, List<String> changedPartitions) {
     if (changedPartitions.isEmpty()) {
       LOG.info("No partitions to change for table:{}", tableName);

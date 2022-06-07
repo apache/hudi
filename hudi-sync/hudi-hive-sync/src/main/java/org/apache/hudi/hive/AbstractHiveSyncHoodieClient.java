@@ -34,6 +34,7 @@ import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.hudi.sync.common.operation.CatalogSync;
 import org.apache.hudi.sync.common.operation.PartitionsSync;
 import org.apache.hudi.sync.common.operation.ReplicatedTimeSync;
+import org.apache.hudi.sync.common.operation.TblPropertiesSync;
 import org.apache.parquet.schema.MessageType;
 
 import java.util.ArrayList;
@@ -44,7 +45,8 @@ import java.util.Map;
 /**
  * Base class to sync Hudi tables with Hive based metastores, such as Hive server, HMS or managed Hive services.
  */
-public abstract class AbstractHiveSyncHoodieClient extends HoodieSyncClient implements ReplicatedTimeSync, PartitionsSync, CatalogSync {
+public abstract class AbstractHiveSyncHoodieClient extends HoodieSyncClient implements ReplicatedTimeSync,
+    PartitionsSync, CatalogSync, TblPropertiesSync {
 
   protected final HoodieTimeline activeTimeline;
   protected final HiveSyncConfig syncConfig;

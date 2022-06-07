@@ -1,6 +1,5 @@
 package org.apache.hudi.sync.common.operation;
 
-import org.apache.hudi.common.util.Option;
 import org.apache.parquet.schema.MessageType;
 
 import java.util.Map;
@@ -29,11 +28,5 @@ public interface CatalogSync {
   boolean doesTableExist(String tableName);
 
   boolean tableExists(String tableName);
-
-  Option<String> getLastCommitTimeSynced(String tableName);
-
-  void updateLastCommitTimeSynced(String tableName);
-
-  void updateTableProperties(String tableName, Map<String, String> tableProperties);
 
 }
