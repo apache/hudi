@@ -54,6 +54,10 @@ object HoodieAnalysis {
     rules ++= sparkAdapter.createResolveHudiAlterTableCommand().toSeq
 
     if (HoodieSparkUtils.gteqSpark3_2) {
+      val dataSourceV2ToV1FallbackClass = "org.apache.spark.sql.hudi.analysis.HoodieDataSourceV2ToV1Fallback"
+      val dataSourceV2ToV1Fallback: RuleBuilder =
+        session => ReflectionUtils.loadClass(dataSourceV2ToV1FallbackClass, session).asInstanceOf[Rule[LogicalPlan]]
+
       val spark3AnalysisClass = "org.apache.spark.sql.hudi.analysis.HoodieSpark3Analysis"
       val spark3Analysis: RuleBuilder =
         session => ReflectionUtils.loadClass(spark3AnalysisClass, session).asInstanceOf[Rule[LogicalPlan]]
@@ -62,13 +66,11 @@ object HoodieAnalysis {
       val spark3ResolveReferences: RuleBuilder =
         session => ReflectionUtils.loadClass(spark3ResolveReferencesClass, session).asInstanceOf[Rule[LogicalPlan]]
 
-      rules ++= Seq(spark3Analysis, spark3ResolveReferences)
-
-      val dataSourceV2ToV1FallbackClass = "org.apache.spark.sql.hudi.analysis.HoodieDataSourceV2ToV1Fallback"
-      val dataSourceV2ToV1Fallback: RuleBuilder =
-        session => ReflectionUtils.loadClass(dataSourceV2ToV1FallbackClass, session).asInstanceOf[Rule[LogicalPlan]]
-
-      rules += dataSourceV2ToV1Fallback
+      // NOTE: PLEASE READ CAREFULLY
+      //
+      // It's critical for this rules to follow in this order, so that DataSource V2 to V1 fallback
+      // is performed prior to other rules being evaluated
+      rules ++= Seq(dataSourceV2ToV1Fallback, spark3Analysis, spark3ResolveReferences)
     }
 
     rules
