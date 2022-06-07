@@ -25,6 +25,9 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.sync.common.HoodieSyncClient;
 import org.apache.hudi.sync.common.HoodieSyncException;
+import org.apache.hudi.sync.common.operation.CatalogSync;
+import org.apache.hudi.sync.common.operation.PartitionsSync;
+import org.apache.hudi.sync.common.operation.ReplicatedTimeSync;
 import org.apache.hudi.sync.datahub.config.DataHubSyncConfig;
 
 import com.linkedin.common.urn.DatasetUrn;
@@ -60,7 +63,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-public class DataHubSyncClient extends HoodieSyncClient {
+public class DataHubSyncClient extends HoodieSyncClient implements ReplicatedTimeSync, PartitionsSync, CatalogSync {
 
   private final HoodieTimeline activeTimeline;
   private final DataHubSyncConfig syncConfig;

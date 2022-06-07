@@ -28,13 +28,16 @@ import org.apache.hudi.sync.common.HoodieSyncClient;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.sync.common.operation.CatalogSync;
+import org.apache.hudi.sync.common.operation.PartitionsSync;
+import org.apache.hudi.sync.common.operation.ReplicatedTimeSync;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public abstract class AbstractAdbSyncHoodieClient extends HoodieSyncClient {
+public abstract class AbstractAdbSyncHoodieClient extends HoodieSyncClient implements ReplicatedTimeSync, PartitionsSync, CatalogSync {
   protected AdbSyncConfig adbSyncConfig;
   protected PartitionValueExtractor partitionValueExtractor;
   protected HoodieTimeline activeTimeline;
