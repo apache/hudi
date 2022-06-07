@@ -33,17 +33,13 @@ class HoodieSparkSessionExtension extends (SparkSessionExtensions => Unit)
       new HoodieCommonSqlParser(session, parser)
     }
 
-    HoodieAnalysis.customResolutionRules().foreach { rule =>
+    HoodieAnalysis.customResolutionRules.foreach { ruleBuilder =>
       extensions.injectResolutionRule { session =>
-        rule(session)
+        ruleBuilder(session)
       }
     }
 
-    extensions.injectResolutionRule { session =>
-      sparkAdapter.createResolveHudiAlterTableCommand(session)
-    }
-
-    HoodieAnalysis.customPostHocResolutionRules().foreach { rule =>
+    HoodieAnalysis.customPostHocResolutionRules.foreach { rule =>
       extensions.injectPostHocResolutionRule { session =>
         rule(session)
       }
