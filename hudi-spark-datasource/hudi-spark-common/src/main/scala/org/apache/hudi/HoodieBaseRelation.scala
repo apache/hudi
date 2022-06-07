@@ -34,7 +34,7 @@ import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.common.util.ValidationUtils.checkState
-import org.apache.hudi.internal.schema.InternalSchema
+import org.apache.hudi.internal.schema.{HoodieSchemaException, InternalSchema}
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
 import org.apache.hudi.io.storage.HoodieHFileReader
 import org.apache.spark.execution.datasources.HoodieInMemoryFileIndex
@@ -74,7 +74,7 @@ case class HoodieTableState(tablePath: String,
 abstract class HoodieBaseRelation(val sqlContext: SQLContext,
                                   val metaClient: HoodieTableMetaClient,
                                   val optParams: Map[String, String],
-                                  userSchema: Option[StructType])
+                                  schemaSpec: Option[StructType])
   extends BaseRelation
     with FileRelation
     with PrunedFilteredScan
@@ -128,24 +128,28 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
    */
   protected lazy val (tableAvroSchema: Schema, internalSchema: InternalSchema) = {
     val schemaResolver = new TableSchemaResolver(metaClient)
-    val avroSchema = Try(schemaResolver.getTableAvroSchema) match {
-      case Success(schema) => schema
-      case Failure(e) =>
-        logWarning("Failed to fetch schema from the table", e)
-        // If there is no commit in the table, we can't get the schema
-        // t/h [[TableSchemaResolver]], fallback to the provided [[userSchema]] instead.
-        userSchema match {
-          case Some(s) => convertToAvroSchema(s)
-          case _ => throw new IllegalArgumentException("User-provided schema is required in case the table is empty")
-        }
+    val avroSchema: Schema = schemaSpec.map(convertToAvroSchema).getOrElse {
+      Try(schemaResolver.getTableAvroSchema) match {
+        case Success(schema) => schema
+        case Failure(e) =>
+          logError("Failed to fetch schema from the table", e)
+          throw new HoodieSchemaException("Failed to fetch schema from the table")
+      }
     }
-    // try to find internalSchema
-    val internalSchemaFromMeta = try {
-      schemaResolver.getTableInternalSchemaFromCommitMetadata.orElse(InternalSchema.getEmptyInternalSchema)
-    } catch {
-      case _: Exception => InternalSchema.getEmptyInternalSchema
+
+    val internalSchema: InternalSchema = if (!isSchemaEvolutionEnabled) {
+      InternalSchema.getEmptyInternalSchema
+    } else {
+      Try(schemaResolver.getTableInternalSchemaFromCommitMetadata) match {
+        case Success(internalSchemaOpt) =>
+          toScalaOption(internalSchemaOpt).getOrElse(InternalSchema.getEmptyInternalSchema)
+        case Failure(e) =>
+          logWarning("Failed to fetch internal-schema from the table", e)
+          InternalSchema.getEmptyInternalSchema
+      }
     }
-    (avroSchema, internalSchemaFromMeta)
+
+    (avroSchema, internalSchema)
   }
 
   protected lazy val tableStructSchema: StructType = AvroConversionUtils.convertAvroSchemaToStructType(tableAvroSchema)
@@ -503,6 +507,15 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
 
   private def prunePartitionColumns(dataStructSchema: StructType): StructType =
     StructType(dataStructSchema.filterNot(f => partitionColumns.contains(f.name)))
+
+  private def isSchemaEvolutionEnabled = {
+    // NOTE: Schema evolution could be configured both t/h optional parameters vehicle as well as
+    //       t/h Spark Session configuration (for ex, for Spark SQL)
+    optParams.getOrElse(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.key,
+      DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.defaultValue.toString).toBoolean ||
+    sparkSession.conf.get(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.key,
+      DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.defaultValue.toString).toBoolean
+  }
 }
 
 object HoodieBaseRelation extends SparkAdapterSupport {

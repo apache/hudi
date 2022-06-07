@@ -33,7 +33,7 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.hive.HiveExternalCatalog
-import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{isEnableHive, withSparkConf}
+import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{isUsingHiveCatalog, withSparkConf}
 import org.apache.spark.sql.hudi.command.{SqlKeyGenerator, ValidateDuplicateKeyPayload}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.StructType
@@ -57,7 +57,7 @@ trait ProvidesHoodieConfig extends Logging {
 
     require(hoodieCatalogTable.primaryKeys.nonEmpty,
       s"There are no primary key in table ${hoodieCatalogTable.table.identifier}, cannot execute update operator")
-    val enableHive = isEnableHive(sparkSession)
+    val enableHive = isUsingHiveCatalog(sparkSession)
 
     val hoodieProps = getHoodieProps(catalogProperties, tableConfig, sparkSession.sqlContext.conf)
 
@@ -174,7 +174,7 @@ trait ProvidesHoodieConfig extends Logging {
 
     logInfo(s"Insert statement use write operation type: $operation, payloadClass: $payloadClassName")
 
-    val enableHive = isEnableHive(sparkSession)
+    val enableHive = isUsingHiveCatalog(sparkSession)
 
     withSparkConf(sparkSession, catalogProperties) {
       Map(
@@ -213,7 +213,7 @@ trait ProvidesHoodieConfig extends Logging {
                                  hoodieCatalogTable: HoodieCatalogTable,
                                  partitionsToDrop: String): Map[String, String] = {
     val partitionFields = hoodieCatalogTable.partitionFields.mkString(",")
-    val enableHive = isEnableHive(sparkSession)
+    val enableHive = isUsingHiveCatalog(sparkSession)
     val catalogProperties = hoodieCatalogTable.catalogProperties
     val tableConfig = hoodieCatalogTable.tableConfig
 
@@ -259,7 +259,7 @@ trait ProvidesHoodieConfig extends Logging {
     val hiveSyncConfig = buildHiveSyncConfig(hoodieProps, hoodieCatalogTable)
 
     val options = hoodieCatalogTable.catalogProperties
-    val enableHive = isEnableHive(sparkSession)
+    val enableHive = isUsingHiveCatalog(sparkSession)
 
     withSparkConf(sparkSession, options) {
       Map(
