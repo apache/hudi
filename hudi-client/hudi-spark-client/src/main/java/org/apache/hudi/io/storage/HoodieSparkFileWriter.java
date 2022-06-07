@@ -54,9 +54,15 @@ public interface HoodieSparkFileWriter extends HoodieFileWriter {
 
   default InternalRow prepRecordWithMetadata(HoodieKey key, InternalRow row, String instantTime, Integer partitionId, long recordIndex, String fileName)  {
     String seqId = HoodieRecord.generateSequenceId(instantTime, partitionId, recordIndex);
-    Object[] metadata = {instantTime, seqId, key.getRecordKey(), key.getPartitionPath(), fileName};
-    InternalRow metadataRow = new GenericInternalRow(Arrays.stream(metadata)
-        .map(o -> CatalystTypeConverters.convertToCatalyst(o)).toArray());
-    return new JoinedRow(metadataRow, row);
+    row.update(HoodieRecord.HoodieMetadataField.COMMIT_TIME_METADATA_FIELD.ordinal(), CatalystTypeConverters.convertToCatalyst(instantTime));
+    row.update(HoodieRecord.HoodieMetadataField.COMMIT_SEQNO_METADATA_FIELD.ordinal(), CatalystTypeConverters.convertToCatalyst(seqId));
+    row.update(HoodieRecord.HoodieMetadataField.RECORD_KEY_METADATA_FIELD.ordinal(), CatalystTypeConverters.convertToCatalyst(key.getRecordKey()));
+    row.update(HoodieRecord.HoodieMetadataField.PARTITION_PATH_METADATA_FIELD.ordinal(), CatalystTypeConverters.convertToCatalyst(key.getPartitionPath()));
+    row.update(HoodieRecord.HoodieMetadataField.FILENAME_METADATA_FIELD.ordinal(), CatalystTypeConverters.convertToCatalyst(fileName));
+    return row;
+    // Object[] metadata = {instantTime, seqId, key.getRecordKey(), key.getPartitionPath(), fileName};
+    // InternalRow metadataRow = new GenericInternalRow(Arrays.stream(metadata)
+    //    .map(o -> CatalystTypeConverters.convertToCatalyst(o)).toArray());
+    // return new JoinedRow(metadataRow, row);
   }
 }

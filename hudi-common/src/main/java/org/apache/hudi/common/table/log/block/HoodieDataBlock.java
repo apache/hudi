@@ -164,10 +164,10 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
    * @return List of IndexedRecords for the keys of interest.
    * @throws IOException in case of failures encountered when reading/parsing records
    */
-  public final ClosableIterator<HoodieRecord> getRecordIterator(List<String> keys, boolean fullKey, HoodieRecord.Mapper mapper) throws IOException {
+  public final ClosableIterator<HoodieRecord> getRecordIterator(List<String> keys, boolean fullKey) throws IOException {
     boolean fullScan = keys.isEmpty();
     if (enablePointLookups && !fullScan) {
-      return lookupRecords(keys, fullKey, mapper);
+      return lookupRecords(keys, fullKey);
     }
 
     // Otherwise, we fetch all the records and filter out all the records, but the
@@ -195,7 +195,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
     }
   }
 
-  protected ClosableIterator<HoodieRecord> lookupRecords(List<String> keys, boolean fullKey, HoodieRecord.Mapper mapper) throws IOException {
+  protected ClosableIterator<HoodieRecord> lookupRecords(List<String> keys, boolean fullKey) throws IOException {
     throw new UnsupportedOperationException(
         String.format("Point lookups are not supported by this Data block type (%s)", getBlockType())
     );

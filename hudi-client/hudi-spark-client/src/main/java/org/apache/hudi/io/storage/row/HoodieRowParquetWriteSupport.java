@@ -75,17 +75,19 @@ public class HoodieRowParquetWriteSupport extends ParquetWriteSupport {
   }
 
   public void add(String recordKey) {
-    this.bloomFilter.add(recordKey);
-    if (minRecordKey != null) {
-      minRecordKey = minRecordKey.compareTo(recordKey) <= 0 ? minRecordKey : recordKey;
-    } else {
-      minRecordKey = recordKey;
-    }
+    if (bloomFilter != null) {
+      this.bloomFilter.add(recordKey);
+      if (minRecordKey != null) {
+        minRecordKey = minRecordKey.compareTo(recordKey) <= 0 ? minRecordKey : recordKey;
+      } else {
+        minRecordKey = recordKey;
+      }
 
-    if (maxRecordKey != null) {
-      maxRecordKey = maxRecordKey.compareTo(recordKey) >= 0 ? maxRecordKey : recordKey;
-    } else {
-      maxRecordKey = recordKey;
+      if (maxRecordKey != null) {
+        maxRecordKey = maxRecordKey.compareTo(recordKey) >= 0 ? maxRecordKey : recordKey;
+      } else {
+        maxRecordKey = recordKey;
+      }
     }
   }
 }

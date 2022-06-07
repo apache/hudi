@@ -189,6 +189,10 @@ public abstract class HoodieRecord<T> implements Serializable {
     return orderingVal;
   }
 
+  public void setData(T data) {
+    this.data = data;
+  }
+
   public T getData() {
     if (data == null) {
       throw new IllegalStateException("Payload already deflated for record.");

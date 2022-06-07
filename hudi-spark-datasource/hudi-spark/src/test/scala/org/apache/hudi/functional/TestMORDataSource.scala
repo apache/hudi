@@ -21,7 +21,7 @@ import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieTableType}
-import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.{HoodieIndexConfig, HoodieWriteConfig}
@@ -31,6 +31,7 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions.Config
 import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieClientTestBase}
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers, SparkDatasetMixin}
 import org.apache.log4j.LogManager
+
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.types.BooleanType
@@ -38,9 +39,10 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
-
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
+
+import org.apache.spark.sql.hudi.HoodieSparkRecordCombiningEngine
 
 /**
  * Tests on Spark DataSource for MOR table.
@@ -80,10 +82,14 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
     // First Operation:
     // Producing parquet files to three default partitions.
     // SNAPSHOT view on MOR table with parquet files only.
-    val records1 = recordsToStrings(dataGen.generateInserts("001", 100)).toList
+    val records1 = recordsToStrings(dataGen.generateInserts("001", 10)).toList
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
+      .filter(r => r.getAs("partition").equals( "2015/03/17"))
+      .withColumn("timestamp", lit("1"))
+      .limit(2)
     inputDF1.write.format("org.apache.hudi")
       .options(commonOpts)
+      .option(HoodieTableConfig.COMBINE_ENGINE_CLASS_NAME.key(), classOf[HoodieSparkRecordCombiningEngine].getName)
       .option("hoodie.compact.inline", "false") // else fails due to compaction & deltacommit instant times being same
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
       .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
@@ -93,26 +99,44 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
     val hudiSnapshotDF1 = spark.read.format("org.apache.hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
       .load(basePath + "/*/*/*/*")
-    assertEquals(100, hudiSnapshotDF1.count()) // still 100, since we only updated
-//    val expected = inputDF1.select("_row_key").distinct().collect().toSet
-//    val actual = hudiSnapshotDF1.select("_row_key").distinct().collect()
-//    actual.filterNot(expected.contains(_)).foreach(println(_))
-//    println("==========")
-//    expected.filterNot(actual.contains(_)).foreach(println(_))
+//    assertEquals(10, hudiSnapshotDF1.count()) // still 100, since we only updated
     // Second Operation:
     // Upsert the update to the default partitions with duplicate records. Produced a log file for each parquet.
     // SNAPSHOT view should read the log files only with the latest commit time.
-    val records2 = recordsToStrings(dataGen.generateUniqueUpdates("002", 100)).toList
-    val inputDF2: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records2, 2))
+    val records2 = recordsToStrings(dataGen.generateUniqueUpdates("002", 10)).toList
+    val inputDF2: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records1, 2))
+      .filter(r => r.getAs("partition").equals( "2015/03/17"))
+      .withColumn("timestamp", lit("2"))
+      .limit(2)
     inputDF2.write.format("org.apache.hudi")
       .options(commonOpts)
+      .option("hoodie.compact.inline", "false")
+      .option(HoodieTableConfig.COMBINE_ENGINE_CLASS_NAME.key(), classOf[HoodieSparkRecordCombiningEngine].getName)
+      .option("hoodie.logfile.data.block.format", "parquet")
       .mode(SaveMode.Append)
       .save(basePath)
-    return;
     val hudiSnapshotDF2 = spark.read.format("org.apache.hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
+      .option(HoodieTableConfig.COMBINE_ENGINE_CLASS_NAME.key(), classOf[HoodieSparkRecordCombiningEngine].getName)
       .load(basePath + "/*/*/*/*")
-    assertEquals(100, hudiSnapshotDF2.count()) // still 100, since we only updated
+//    inputDF1.collect().foreach(println(_))
+//    println("==========")
+//    inputDF2.collect().foreach(println(_))
+//    println("==========")
+//    hudiSnapshotDF1.select("_row_key").collectAsList().map(_.getString(0)).sorted.foreach(println(_))
+//    println("==========")
+//    hudiSnapshotDF2.select("_row_key").collectAsList().map(_.getString(0)).sorted.foreach(println(_))
+//    println("==========")
+//    hudiSnapshotDF2.select("_row_key").groupBy("_row_key").count().collect().foreach(println(_))
+    val correct = inputDF1.filter(r => r.getAs("partition").equals( "2015/03/17")).count()
+    println(correct)
+    assertEquals(correct, hudiSnapshotDF2.count()) // still 100, since we only updated
+//    val expected = inputDF2.select("_row_key").distinct().collect().toSet
+//    val actual = hudiSnapshotDF2.select("_row_key").distinct().collect()
+//    actual.filterNot(expected.contains(_)).foreach(println(_))
+//    println("==========")
+//    expected.filterNot(actual.contains(_)).foreach(println(_))
+    return;
     val commit1Time = hudiSnapshotDF1.select("_hoodie_commit_time").head().get(0).toString
     val commit2Time = hudiSnapshotDF2.select("_hoodie_commit_time").head().get(0).toString
     assertEquals(hudiSnapshotDF2.select("_hoodie_commit_time").distinct().count(), 1)

@@ -19,18 +19,25 @@
 package org.apache.hudi.io.storage;
 
 import org.apache.avro.Schema;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieSparkRecord;
 import org.apache.hudi.common.util.ClosableIterator;
 import org.apache.hudi.common.util.MappingIterator;
 import org.apache.spark.sql.catalyst.InternalRow;
 
 import java.io.IOException;
 
-public interface HoodieSparkFileReader<InternalRow> extends HoodieFileReader<InternalRow> {
+public interface HoodieSparkFileReader extends HoodieFileReader<InternalRow> {
 
   ClosableIterator<InternalRow> getInternalRowIterator(Schema readerSchema) throws IOException;
 
-  default ClosableIterator<HoodieRecord<InternalRow>> getRecordIterator(Schema readerSchema, HoodieRecord.Mapper mapper) throws IOException {
+  default ClosableIterator<HoodieRecord<org.apache.spark.sql.catalyst.InternalRow>> getRecordIterator(Schema readerSchema, HoodieRecord.Mapper mapper) throws IOException {
+    mapper = (HoodieRecord.Mapper<InternalRow, InternalRow>) (internalRow) -> {
+      return new HoodieSparkRecord(new HoodieKey(internalRow.getString(HoodieRecord.HoodieMetadataField.RECORD_KEY_METADATA_FIELD.ordinal()),
+          internalRow.getString(HoodieRecord.HoodieMetadataField.PARTITION_PATH_METADATA_FIELD.ordinal())),
+          internalRow, null);
+    };
     return new MappingIterator<>(getInternalRowIterator(readerSchema), mapper::apply);
   }
 }
