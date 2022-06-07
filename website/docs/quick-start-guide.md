@@ -495,7 +495,14 @@ select id, name, price, ts from hudi_mor_tbl;
 
 
 Checkout https://hudi.apache.org/blog/2021/02/13/hudi-key-generators for various key generator options, like Timestamp based,
-complex, custom, NonPartitioned Key gen, etc. 
+complex, custom, NonPartitioned Key gen, etc.
+
+
+:::tip
+With [externalized config file](/docs/next/configurations#externalized-config-file),
+instead of directly passing configuration settings to every Hudi job, 
+you can also centrally set them in a configuration file `hudi-default.conf`.
+:::
 
 ## Query data 
 
