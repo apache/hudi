@@ -28,6 +28,7 @@ import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.exception.HoodieException
 import org.apache.log4j.LogManager
 import org.apache.spark.sql.execution.streaming.{Sink, Source}
+import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isUsingHiveCatalog
 import org.apache.spark.sql.hudi.streaming.HoodieStreamSource
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.streaming.OutputMode
@@ -98,9 +99,18 @@ class DefaultSource extends RelationProvider
     val isBootstrappedTable = metaClient.getTableConfig.getBootstrapBasePath.isPresent
     val tableType = metaClient.getTableType
     val queryType = parameters(QUERY_TYPE.key)
-    val userSchema = if (schema == null) Option.empty[StructType] else Some(schema)
+    // NOTE: In cases when Hive Metastore is used as catalog and the table is partitioned, schema in the HMS might contain
+    //       Hive-specific partitioning columns created specifically for HMS to handle partitioning appropriately. In that
+    //       case  we opt in to not be providing catalog's schema, and instead force Hudi relations to fetch the schema
+    //       from the table itself
+    val userSchema = if (isUsingHiveCatalog(sqlContext.sparkSession)) {
+      None
+    } else {
+      Option(schema)
+    }
 
     log.info(s"Is bootstrapped table => $isBootstrappedTable, tableType is: $tableType, queryType is: $queryType")
+
     if (metaClient.getCommitsTimeline.filterCompletedInstants.countInstants() == 0) {
       new EmptyRelation(sqlContext, metaClient)
     } else {
