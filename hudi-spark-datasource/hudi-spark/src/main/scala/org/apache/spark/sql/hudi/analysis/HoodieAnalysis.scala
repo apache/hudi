@@ -147,6 +147,28 @@ case class HoodieAnalysis(sparkSession: SparkSession) extends Rule[LogicalPlan]
         } else {
           c
         }
+
+      // Convert to CreateIndexCommand
+      case CreateIndex(table, indexName, indexType, ignoreIfExists, columns, properties, output)
+        if table.resolved && sparkAdapter.isHoodieTable(table, sparkSession) =>
+        CreateIndexCommand(
+          getTableIdentifier(table), indexName, indexType, ignoreIfExists, columns, properties, output)
+
+      // Convert to DropIndexCommand
+      case DropIndex(table, indexName, ignoreIfNotExists, output)
+        if table.resolved && sparkAdapter.isHoodieTable(table, sparkSession) =>
+        DropIndexCommand(getTableIdentifier(table), indexName, ignoreIfNotExists, output)
+
+      // Convert to ShowIndexesCommand
+      case ShowIndexes(table, output)
+        if table.resolved && sparkAdapter.isHoodieTable(table, sparkSession) =>
+        ShowIndexesCommand(getTableIdentifier(table), output)
+
+      // Covert to RefreshCommand
+      case RefreshIndex(table, indexName, output)
+        if table.resolved && sparkAdapter.isHoodieTable(table, sparkSession) =>
+        RefreshIndexCommand(getTableIdentifier(table), indexName, output)
+
       case _ => plan
     }
   }
