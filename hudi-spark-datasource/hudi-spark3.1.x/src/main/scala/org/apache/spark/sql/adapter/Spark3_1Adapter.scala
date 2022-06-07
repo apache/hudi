@@ -41,17 +41,6 @@ class Spark3_1Adapter extends BaseSpark3Adapter {
   override def createAvroDeserializer(rootAvroType: Schema, rootCatalystType: DataType): HoodieAvroDeserializer =
     new HoodieSpark3_1AvroDeserializer(rootAvroType, rootCatalystType)
 
-  override def createResolveHudiAlterTableCommand(): Option[SparkSession => Rule[LogicalPlan]] = {
-    if (SPARK_VERSION.startsWith("3.1")) {
-      val loadClassName = "org.apache.spark.sql.hudi.ResolveHudiAlterTableCommand312"
-      val clazz = Class.forName(loadClassName, true, Thread.currentThread().getContextClassLoader)
-      val ctor = clazz.getConstructors.head
-      Some(sparkSession => ctor.newInstance(sparkSession).asInstanceOf[Rule[LogicalPlan]])
-    } else {
-      None
-    }
-  }
-
   override def createHoodieParquetFileFormat(appendPartitionValues: Boolean): Option[ParquetFileFormat] = {
     Some(new Spark31HoodieParquetFileFormat(appendPartitionValues))
   }

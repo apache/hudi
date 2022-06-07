@@ -171,11 +171,6 @@ trait SparkAdapter extends Serializable {
   }
 
   /**
-    * Create custom Resolution Rule to deal with alter command for hudi.
-    */
-  def createResolveHudiAlterTableCommand(): Option[SparkSession => Rule[LogicalPlan]] = None
-
-  /**
     * Create instance of [[ParquetFileFormat]]
     */
   def createHoodieParquetFileFormat(appendPartitionValues: Boolean): Option[ParquetFileFormat]
