@@ -82,6 +82,7 @@ public abstract class HoodieBaseParquetWriter<R> implements AutoCloseable {
         .withConf(parquetConfig.getHadoopConf())
         .build();
     this.maxFileSize = -1;
+    this.isStream = true;
   }
 
   public boolean canWrite() {

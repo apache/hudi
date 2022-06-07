@@ -22,9 +22,11 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.io.hfile.CacheConfig;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.parquet.io.InputFile;
 
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
@@ -45,21 +47,16 @@ public class HoodieFileReaderFactory {
     return readerFactory;
   }
 
-  public static HoodieFileReader getFileReader(Configuration conf, Path path) throws IOException {
-    final String extension = FSUtils.getFileExtension(path.toString());
-    HoodieFileReaderFactory factory = null;
-    // todo: add type
-    HoodieRecord.HoodieRecordType recordType = HoodieRecord.HoodieRecordType.valueOf(conf.get(""));
-    switch (HoodieRecord.HoodieRecordType.valueOf(conf.get(""))) {
+  public static HoodieFileReaderFactory getReaderFactory(HoodieRecord.HoodieRecordType recordType) {
+    switch (HoodieRecord.HoodieRecordType.valueOf("SPARK")) {
       case AVRO:
-        factory = getFileReaderFactory();
-        break;
+        return getFileReaderFactory();
       case SPARK:
         Exception exception = null;
         try {
           Class<?> clazz = ReflectionUtils.getClass("org.apache.hudi.io.storage.HoodieSparkFileReaderFactory");
           Method method = clazz.getMethod("getFileReaderFactory", null);
-          factory = (HoodieFileReaderFactory) method.invoke(null,null);
+          return (HoodieFileReaderFactory) method.invoke(null,null);
         } catch (NoSuchMethodException e) {
           exception = e;
         } catch (IllegalAccessException e) {
@@ -76,7 +73,22 @@ public class HoodieFileReaderFactory {
       default:
         throw new UnsupportedOperationException(recordType + " record type not supported yet.");
     }
+    return null;
+  }
+
+  public static HoodieFileReader getFileReader(Configuration conf, Path path) throws IOException {
+    final String extension = FSUtils.getFileExtension(path.toString());
+    // todo: add type
+    HoodieRecord.HoodieRecordType recordType = HoodieRecord.HoodieRecordType.valueOf("SPARK");
+    HoodieFileReaderFactory factory = getReaderFactory(recordType);
     return factory.getFileReader(extension, conf, path);
+  }
+
+  public static HoodieFileReader getFileReader(Configuration conf, Path path, HoodieFileFormat format) throws IOException {
+    // todo: add type
+    HoodieRecord.HoodieRecordType recordType = HoodieRecord.HoodieRecordType.valueOf("SPARK");
+    HoodieFileReaderFactory factory = getReaderFactory(recordType);
+    return factory.getFileReader(format.getFileExtension(), conf, path);
   }
 
   public HoodieFileReader getFileReader(String extension, Configuration conf, Path path) throws IOException {

@@ -29,7 +29,7 @@ import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.engine.HoodieLocalEngineContext
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath
-import org.apache.hudi.common.model.{HoodieAvroIndexedRecord, HoodieAvroRecord, HoodieLogFile, HoodieRecord, HoodieRecordPayload, OverwriteWithLatestAvroPayload}
+import org.apache.hudi.common.model.{HoodieAvroIndexedRecord, HoodieAvroRecord, HoodieLogFile, HoodieRecord, HoodieRecordPayload, HoodieSparkRecord, OverwriteWithLatestAvroPayload}
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner
 import org.apache.hudi.common.util.ReflectionUtils
 import org.apache.hudi.common.util.ValidationUtils.checkState
@@ -40,6 +40,8 @@ import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getMaxCompac
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.metadata.HoodieTableMetadata.getDataTableBasePathFromMetadataTable
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadata}
+import org.apache.hudi.internal.schema.InternalSchema
+
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.avro.HoodieAvroDeserializer
 import org.apache.spark.sql.catalyst.InternalRow
@@ -49,8 +51,10 @@ import org.apache.spark.sql.types.StructType
 import org.apache.spark.{Partition, SerializableWritable, SparkContext, TaskContext}
 import java.io.Closeable
 import java.util.Properties
+
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
+import scala.collection.mutable
 import scala.util.Try
 
 case class HoodieMergeOnReadPartition(index: Int, split: HoodieMergeOnReadFileSplit) extends Partition
@@ -176,14 +180,14 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
     // NOTE: This iterator iterates over already projected (in required schema) records
     // NOTE: This have to stay lazy to make sure it's initialized only at the point where it's
     //       going to be used, since we modify `logRecords` before that and therefore can't do it any earlier
-    protected lazy val logRecordsIterator: Iterator[Option[GenericRecord]] =
-      logRecords.iterator.map {
-        case (_, record) =>
-          val avroRecordOpt = toScalaOption(record.toIndexedRecord(logFileReaderAvroSchema, payloadProps))
-          avroRecordOpt.map {
-            avroRecord => projectAvroUnsafe(avroRecord, requiredAvroSchema, requiredSchemaFieldOrdinals, recordBuilder)
-          }
-      }
+    protected lazy val logRecordsIterator: Iterator[Any] = logRecords.iterator.map {
+      case (_, record: HoodieSparkRecord) => record
+      case (_, record) =>
+        val avroRecordOpt = toScalaOption(record.toIndexedRecord(logFileReaderAvroSchema, payloadProps))
+        avroRecordOpt.map {
+          avroRecord => projectAvroUnsafe(avroRecord, requiredAvroSchema, requiredSchemaFieldOrdinals, recordBuilder)
+        }
+    }
 
     protected def removeLogRecord(key: String): Option[HoodieRecord[_]] =
       logRecords.remove(key)
@@ -195,13 +199,14 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
     //       handling records
     @tailrec private def hasNextInternal: Boolean = {
       logRecordsIterator.hasNext && {
-        val avroRecordOpt = logRecordsIterator.next()
-        if (avroRecordOpt.isEmpty) {
-          // Record has been deleted, skipping
-          this.hasNextInternal
-        } else {
-          recordToLoad = unsafeProjection(deserialize(avroRecordOpt.get))
-          true
+        logRecordsIterator.next() match {
+          case Some(r: GenericRecord) =>
+            recordToLoad = unsafeProjection(deserialize(r))
+            true
+          case None => this.hasNextInternal
+          case r: HoodieSparkRecord =>
+            recordToLoad = unsafeProjection(projectRowUnsafe(r.getData, requiredSchema.structTypeSchema, requiredSchemaFieldOrdinals))
+            true
         }
       }
     }
@@ -279,7 +284,7 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
           recordToLoad = unsafeProjection(projectRowUnsafe(curRowRecord, requiredSchema.structTypeSchema, requiredSchemaFieldOrdinals))
           true
         } else {
-          val mergedAvroRecordOpt = merge(serialize(curRowRecord), updatedRecordOpt.get.asInstanceOf[HoodieRecord[_ <: HoodieRecordPayload[_]]])
+          val mergedAvroRecordOpt = merge(curRowRecord, updatedRecordOpt.get)
           if (mergedAvroRecordOpt.isEmpty) {
             // Record has been deleted, skipping
             this.hasNextInternal
@@ -289,8 +294,7 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
             //       might already be read in projected one (as an optimization).
             //       As such we can't use more performant [[projectAvroUnsafe]], and instead have to fallback
             //       to [[projectAvro]]
-            val projectedAvroRecord = projectAvro(mergedAvroRecordOpt.get, requiredAvroSchema, recordBuilder)
-            recordToLoad = unsafeProjection(deserialize(projectedAvroRecord))
+            recordToLoad = unsafeProjection(mergedAvroRecordOpt.get)
             true
           }
         }
@@ -302,15 +306,16 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
     private def serialize(curRowRecord: InternalRow): GenericRecord =
       serializer.serialize(curRowRecord).asInstanceOf[GenericRecord]
 
-    private def merge(curAvroRecord: GenericRecord, newRecord: HoodieRecord[_ <: HoodieRecordPayload[_]]): Option[IndexedRecord] = {
+    private def merge(curAvroRecord: InternalRow, newRecord: HoodieRecord[_]): Option[InternalRow] = {
       // NOTE: We have to pass in Avro Schema used to read from Delta Log file since we invoke combining API
       //       on the record from the Delta Log
-      // TODO IndexedRecord to HoodieRecord
-      if (combiningEngine.combineAndGetUpdateValue(new HoodieAvroIndexedRecord(curAvroRecord), newRecord, logFileReaderAvroSchema, payloadProps).isPresent) {
-        toScalaOption(combiningEngine.combineAndGetUpdateValue(new HoodieAvroIndexedRecord(curAvroRecord), newRecord, logFileReaderAvroSchema, payloadProps)
-          .get.asInstanceOf[HoodieAvroIndexedRecord].toIndexedRecord)
-      } else {
-        Option.empty
+      newRecord match {
+        case _: HoodieSparkRecord =>
+          toScalaOption(combiningEngine.combineAndGetUpdateValue(new HoodieSparkRecord(curAvroRecord), newRecord, logFileReaderAvroSchema, payloadProps))
+            .map(r => projectRowUnsafe(r.getData.asInstanceOf[InternalRow], requiredSchema.structTypeSchema, requiredSchemaFieldOrdinals))
+        case _ =>
+          toScalaOption(combiningEngine.combineAndGetUpdateValue(new HoodieAvroIndexedRecord(serialize(curAvroRecord)), newRecord, logFileReaderAvroSchema, payloadProps))
+          .map(r => deserialize(projectAvro(r.getData.asInstanceOf[IndexedRecord], requiredAvroSchema, recordBuilder)))
       }
     }
   }
