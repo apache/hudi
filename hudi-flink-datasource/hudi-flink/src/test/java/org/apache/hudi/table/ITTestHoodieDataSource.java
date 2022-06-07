@@ -73,6 +73,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * IT cases for Hoodie table source and sink.
  */
+
+@Disabled
 public class ITTestHoodieDataSource extends AbstractTestBase {
   private TableEnvironment streamTableEnv;
   private TableEnvironment batchTableEnv;
