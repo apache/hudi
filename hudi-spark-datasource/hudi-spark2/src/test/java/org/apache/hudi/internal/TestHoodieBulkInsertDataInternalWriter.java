@@ -18,19 +18,14 @@
 
 package org.apache.hudi.internal;
 
-import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.testutils.SparkDatasetTestUtils;
-
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
-import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -50,7 +45,6 @@ import static org.junit.jupiter.api.Assertions.fail;
 /**
  * Unit tests {@link HoodieBulkInsertDataInternalWriter}.
  */
-@Disabled("temp")
 public class TestHoodieBulkInsertDataInternalWriter extends
     HoodieBulkInsertInternalWriterTestBase {
 
@@ -106,7 +100,7 @@ public class TestHoodieBulkInsertDataInternalWriter extends
       Option<List<String>> fileNames = Option.of(new ArrayList<>());
 
       // verify write statuses
-      assertWriteStatuses(commitMetadata.getWriteStatuses(), batches, size, sorted, fileAbsPaths, fileNames);
+      assertWriteStatuses(commitMetadata.getWriteStatuses(), batches, size, sorted, fileAbsPaths, fileNames,false);
 
       // verify rows
       Dataset<Row> result = sqlContext.read().parquet(fileAbsPaths.get().toArray(new String[0]));
@@ -148,14 +142,11 @@ public class TestHoodieBulkInsertDataInternalWriter extends
       Option<List<String>> fileNames = Option.of(new ArrayList<>());
 
       // verify write statuses
-      assertWriteStatuses(commitMetadata.getWriteStatuses(), batches, size, sorted, fileAbsPaths, fileNames);
+      assertWriteStatuses(commitMetadata.getWriteStatuses(), batches, size, sorted, fileAbsPaths, fileNames, true);
 
       // verify rows
       Dataset<Row> result = sqlContext.read().parquet(fileAbsPaths.get().toArray(new String[0]));
       assertOutput(totalInputRows, result, instantTime, fileNames, populateMetaFields);
-
-      result.collectAsList().forEach(entry -> Assertions.assertTrue(entry.getAs(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString()
-          .contains(SparkDatasetTestUtils.PARTITION_PATH_FIELD_NAME + "=")));
     }
   }
 
@@ -204,7 +195,7 @@ public class TestHoodieBulkInsertDataInternalWriter extends
     Option<List<String>> fileAbsPaths = Option.of(new ArrayList<>());
     Option<List<String>> fileNames = Option.of(new ArrayList<>());
     // verify write statuses
-    assertWriteStatuses(commitMetadata.getWriteStatuses(), 1, size / 2, false, fileAbsPaths, fileNames);
+    assertWriteStatuses(commitMetadata.getWriteStatuses(), 1, size / 2, false, fileAbsPaths, fileNames, false);
 
     // verify rows
     Dataset<Row> result = sqlContext.read().parquet(fileAbsPaths.get().toArray(new String[0]));
