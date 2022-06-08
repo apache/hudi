@@ -126,7 +126,14 @@ class ColumnStatsIndexSupport(spark: SparkSession,
     //       of the transposed table
     val sortedTargetColumns = TreeSet(queryColumns.intersect(indexedColumns): _*)
 
-    // TODO rebase on InternalRow
+    // Here we perform complex transformation which requires us to modify the layout of the rows
+    // of the dataset, and therefore we rely on low-level RDD API to avoid incurring encoding/decoding
+    // penalty of the [[Dataset]], since it's required to adhere to its schema at all times, while
+    // RDDs are not;
+    //
+    // NOTE: There's very little value in rebasing this transformation onto lower-level [[InternalRow]] APIs,
+    //       since at the end of the day we will have to deserialize them to JVM native implementation anyway
+    //       (for more details, please check out [[deserialize]] method)
     val transposedRDD = colStatsDF.rdd
       .filter(row => sortedTargetColumns.contains(row.getString(colNameOrdinal)))
       .map { row =>
