@@ -168,8 +168,10 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
 
     metaClient = HoodieTableMetaClient.reload(metaClient)
 
-    val updatedColStatsDF = columnStatsIndex.load(requestedColumns)
-    val transposedUpdatedColStatsDF = columnStatsIndex.transpose(updatedColStatsDF, sourceTableSchema.fieldNames)
+    val updatedColumnStatsIndex = new ColumnStatsIndexSupport(spark, basePath, sourceTableSchema, metadataConfig)
+
+    val updatedColStatsDF = updatedColumnStatsIndex.load(requestedColumns)
+    val transposedUpdatedColStatsDF = updatedColumnStatsIndex.transpose(updatedColStatsDF, sourceTableSchema.fieldNames)
 
     val expectedColStatsIndexUpdatedDF =
       spark.read
