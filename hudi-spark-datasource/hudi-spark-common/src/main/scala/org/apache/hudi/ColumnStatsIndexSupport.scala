@@ -117,10 +117,10 @@ class ColumnStatsIndexSupport(spark: SparkSession,
     //       either due to the Column Stats Index config changes, schema evolution, etc, we have
     //       to make sure that all of the rows w/in transposed data-frame are properly padded (with null
     //       values) for such file-column combinations
-    val indexedColumns: Seq[String] = colStatsDF.queryExecution.toRdd
-        .map(row => row.getString(colNameOrdinal))
+    val indexedColumns: Seq[String] = colStatsDF.select(col(HoodieMetadataPayload.COLUMN_STATS_FIELD_COLUMN_NAME))
         .distinct()
         .collect()
+        .map(_.get(0).asInstanceOf[String])
 
     // NOTE: We're sorting the columns to make sure final index schema matches layout
     //       of the transposed table
@@ -195,7 +195,6 @@ class ColumnStatsIndexSupport(spark: SparkSession,
   }
 
   private def loadColumnStatsIndexForColumnsInternal(targetColumns: Seq[String]): DataFrame = {
-
     // Read Metadata Table's Column Stats Index into Spark's [[DataFrame]] by
     //    - Fetching the records from CSI by key-prefixes (encoded column names)
     //    - Deserializing fetched records into [[InternalRow]]s
