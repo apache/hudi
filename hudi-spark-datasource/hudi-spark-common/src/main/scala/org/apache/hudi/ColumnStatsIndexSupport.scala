@@ -20,6 +20,7 @@ package org.apache.hudi
 import org.apache.avro.generic.GenericRecord
 import org.apache.hudi.ColumnStatsIndexSupport.{composeIndexSchema, deserialize, metadataRecordStructType, tryUnpackNonNullVal}
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
+import org.apache.hudi.HoodieDatasetUtils.withPersistence
 import org.apache.hudi.avro.model.HoodieMetadataRecord
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
@@ -133,82 +134,84 @@ class ColumnStatsIndexSupport(spark: SparkSession,
     val nullCountOrdinal: Int = colStatsSchemaOrdinalsMap(HoodieMetadataPayload.COLUMN_STATS_FIELD_NULL_COUNT)
     val valueCountOrdinal: Int = colStatsSchemaOrdinalsMap(HoodieMetadataPayload.COLUMN_STATS_FIELD_VALUE_COUNT)
 
-    // NOTE: We have to collect list of indexed columns to make sure we properly align the rows
-    //       w/in the transposed dataset: since some files might not have all of the columns indexed
-    //       either due to the Column Stats Index config changes, schema evolution, etc, we have
-    //       to make sure that all of the rows w/in transposed data-frame are properly padded (with null
-    //       values) for such file-column combinations
-    val indexedColumns: Seq[String] = colStatsDF.rdd.map(row => row.getString(colNameOrdinal)).distinct().collect()
+    withPersistence(colStatsDF) {
+      // NOTE: We have to collect list of indexed columns to make sure we properly align the rows
+      //       w/in the transposed dataset: since some files might not have all of the columns indexed
+      //       either due to the Column Stats Index config changes, schema evolution, etc, we have
+      //       to make sure that all of the rows w/in transposed data-frame are properly padded (with null
+      //       values) for such file-column combinations
+      val indexedColumns: Seq[String] = colStatsDF.rdd.map(row => row.getString(colNameOrdinal)).distinct().collect()
 
-    // NOTE: We're sorting the columns to make sure final index schema matches layout
-    //       of the transposed table
-    val sortedTargetColumns = TreeSet(queryColumns.intersect(indexedColumns): _*)
+      // NOTE: We're sorting the columns to make sure final index schema matches layout
+      //       of the transposed table
+      val sortedTargetColumns = TreeSet(queryColumns.intersect(indexedColumns): _*)
 
-    val transposedRDD = colStatsDF.rdd
-      .filter(row => sortedTargetColumns.contains(row.getString(colNameOrdinal)))
-      .map { row =>
-        if (row.isNullAt(minValueOrdinal) && row.isNullAt(maxValueOrdinal)) {
-          // Corresponding row could be null in either of the 2 cases
-          //    - Column contains only null values (in that case both min/max have to be nulls)
-          //    - This is a stubbed Column Stats record (used as a tombstone)
-          row
-        } else {
-          val minValueStruct = row.getAs[Row](minValueOrdinal)
-          val maxValueStruct = row.getAs[Row](maxValueOrdinal)
+      val transposedRDD = colStatsDF.rdd
+        .filter(row => sortedTargetColumns.contains(row.getString(colNameOrdinal)))
+        .map { row =>
+          if (row.isNullAt(minValueOrdinal) && row.isNullAt(maxValueOrdinal)) {
+            // Corresponding row could be null in either of the 2 cases
+            //    - Column contains only null values (in that case both min/max have to be nulls)
+            //    - This is a stubbed Column Stats record (used as a tombstone)
+            row
+          } else {
+            val minValueStruct = row.getAs[Row](minValueOrdinal)
+            val maxValueStruct = row.getAs[Row](maxValueOrdinal)
 
-          checkState(minValueStruct != null && maxValueStruct != null, "Invalid Column Stats record: either both min/max have to be null, or both have to be non-null")
+            checkState(minValueStruct != null && maxValueStruct != null, "Invalid Column Stats record: either both min/max have to be null, or both have to be non-null")
 
-          val colName = row.getString(colNameOrdinal)
-          val colType = tableSchemaFieldMap(colName).dataType
+            val colName = row.getString(colNameOrdinal)
+            val colType = tableSchemaFieldMap(colName).dataType
 
-          val (minValue, _) = tryUnpackNonNullVal(minValueStruct)
-          val (maxValue, _) = tryUnpackNonNullVal(maxValueStruct)
-          val rowValsSeq = row.toSeq.toArray
-          // Update min-/max-value structs w/ unwrapped values in-place
-          rowValsSeq(minValueOrdinal) = deserialize(minValue, colType)
-          rowValsSeq(maxValueOrdinal) = deserialize(maxValue, colType)
+            val (minValue, _) = tryUnpackNonNullVal(minValueStruct)
+            val (maxValue, _) = tryUnpackNonNullVal(maxValueStruct)
+            val rowValsSeq = row.toSeq.toArray
+            // Update min-/max-value structs w/ unwrapped values in-place
+            rowValsSeq(minValueOrdinal) = deserialize(minValue, colType)
+            rowValsSeq(maxValueOrdinal) = deserialize(maxValue, colType)
 
-          Row(rowValsSeq: _*)
+            Row(rowValsSeq: _*)
+          }
         }
-      }
-      .groupBy(r => r.getString(fileNameOrdinal))
-      .foldByKey(Seq[Row]()) {
-        case (_, columnRowsSeq) =>
-          // Rows seq is always non-empty (otherwise it won't be grouped into)
-          val fileName = columnRowsSeq.head.get(fileNameOrdinal)
-          val valueCount = columnRowsSeq.head.get(valueCountOrdinal)
+        .groupBy(r => r.getString(fileNameOrdinal))
+        .foldByKey(Seq[Row]()) {
+          case (_, columnRowsSeq) =>
+            // Rows seq is always non-empty (otherwise it won't be grouped into)
+            val fileName = columnRowsSeq.head.get(fileNameOrdinal)
+            val valueCount = columnRowsSeq.head.get(valueCountOrdinal)
 
-          // To properly align individual rows (corresponding to a file) w/in the transposed projection, we need
-          // to align existing column-stats for individual file with the list of expected ones for the
-          // whole transposed projection (a superset of all files)
-          val columnRowsMap = columnRowsSeq.map(row => (row.getString(colNameOrdinal), row)).toMap
-          val alignedColumnRowsSeq = sortedTargetColumns.toSeq.map(columnRowsMap.get)
+            // To properly align individual rows (corresponding to a file) w/in the transposed projection, we need
+            // to align existing column-stats for individual file with the list of expected ones for the
+            // whole transposed projection (a superset of all files)
+            val columnRowsMap = columnRowsSeq.map(row => (row.getString(colNameOrdinal), row)).toMap
+            val alignedColumnRowsSeq = sortedTargetColumns.toSeq.map(columnRowsMap.get)
 
-          val coalescedRowValuesSeq =
-            alignedColumnRowsSeq.foldLeft(Seq[Any](fileName, valueCount)) {
-              case (acc, opt) =>
-                opt match {
-                  case Some(columnStatsRow) =>
-                    acc ++ Seq(minValueOrdinal, maxValueOrdinal, nullCountOrdinal).map(ord => columnStatsRow.get(ord))
-                  case None =>
-                    // NOTE: Since we're assuming missing column to essentially contain exclusively
-                    //       null values, we set null-count to be equal to value-count (this behavior is
-                    //       consistent with reading non-existent columns from Parquet)
-                    acc ++ Seq(null, null, valueCount)
-                }
-            }
+            val coalescedRowValuesSeq =
+              alignedColumnRowsSeq.foldLeft(Seq[Any](fileName, valueCount)) {
+                case (acc, opt) =>
+                  opt match {
+                    case Some(columnStatsRow) =>
+                      acc ++ Seq(minValueOrdinal, maxValueOrdinal, nullCountOrdinal).map(ord => columnStatsRow.get(ord))
+                    case None =>
+                      // NOTE: Since we're assuming missing column to essentially contain exclusively
+                      //       null values, we set null-count to be equal to value-count (this behavior is
+                      //       consistent with reading non-existent columns from Parquet)
+                      acc ++ Seq(null, null, valueCount)
+                  }
+              }
 
-          Seq(Row(coalescedRowValuesSeq:_*))
-      }
-      .values
-      .flatMap(it => it)
+            Seq(Row(coalescedRowValuesSeq:_*))
+        }
+        .values
+        .flatMap(it => it)
 
-    // NOTE: It's crucial to maintain appropriate ordering of the columns
-    //       matching table layout: hence, we cherry-pick individual columns
-    //       instead of simply filtering in the ones we're interested in the schema
-    val indexSchema = composeIndexSchema(sortedTargetColumns.toSeq, tableSchema)
+      // NOTE: It's crucial to maintain appropriate ordering of the columns
+      //       matching table layout: hence, we cherry-pick individual columns
+      //       instead of simply filtering in the ones we're interested in the schema
+      val indexSchema = composeIndexSchema(sortedTargetColumns.toSeq, tableSchema)
 
-    spark.createDataFrame(transposedRDD, indexSchema)
+      spark.createDataFrame(transposedRDD, indexSchema)
+    }
   }
 
   private def readColumnStatsIndexForColumnsInternal(targetColumns: Seq[String]): DataFrame = {
