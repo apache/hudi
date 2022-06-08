@@ -20,9 +20,6 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.HoodieInternalRowUtils;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.common.model.HoodieOperation;
-import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 
@@ -36,7 +33,6 @@ import org.apache.spark.sql.types.StructType;
 
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 
@@ -84,7 +80,6 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
   @Override
   public void deflate() {
   }
-
 
   @Override
   public String getRecordKey(Option<BaseKeyGenerator> keyGeneratorOpt) {
@@ -158,13 +153,13 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
     InternalRow metadataRow = new GenericInternalRow(Arrays.stream(HoodieMetadataField.values())
         .filter(k -> metadataValues.containsKey(k)).map(k -> metadataValues.get(k))
         .filter(v -> v != null).map(v -> CatalystTypeConverters.convertToCatalyst(v)).toArray());
-     this.data = new JoinedRow(metadataRow, this.data);
-//    Arrays.stream(HoodieMetadataField.values()).forEach(metadataField -> {
-//      String value = metadataValues.get(metadataField);
-//      if (value != null) {
-//        data.update(recordSchema.getField(metadataField.getFieldName()).pos(), CatalystTypeConverters.convertToCatalyst(value));
-//      }
-//    });
+    this.data = new JoinedRow(metadataRow, this.data);
+    //    Arrays.stream(HoodieMetadataField.values()).forEach(metadataField -> {
+    //      String value = metadataValues.get(metadataField);
+    //      if (value != null) {
+    //        data.update(recordSchema.getField(metadataField.getFieldName()).pos(), CatalystTypeConverters.convertToCatalyst(value));
+    //      }
+    //    });
     return this;
   }
 
