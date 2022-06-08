@@ -26,7 +26,6 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.parquet.io.InputFile;
 
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;

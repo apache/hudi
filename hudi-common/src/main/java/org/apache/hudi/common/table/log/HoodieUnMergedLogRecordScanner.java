@@ -20,7 +20,6 @@ package org.apache.hudi.common.table.log;
 
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.Option;
 
 import org.apache.avro.Schema;
