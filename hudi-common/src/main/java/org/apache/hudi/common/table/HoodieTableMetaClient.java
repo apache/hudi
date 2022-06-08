@@ -66,6 +66,8 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.SCHEMA_COMMIT_ACTION;
+
 /**
  * <code>HoodieTableMetaClient</code> allows to access meta-data about a hoodie table It returns meta-data about
  * commits, savepoints, compactions, cleanups as a <code>HoodieTimeline</code> Create an instance of the
@@ -551,6 +553,32 @@ public class HoodieTableMetaClient implements Serializable {
       default:
         throw new HoodieException("Unsupported table type :" + this.getTableType());
     }
+  }
+
+  /**
+   * Return whether an available historySchema file exist in schema folder or not.
+   */
+  public boolean isValidHistorySchemaExist() {
+    try {
+      Path baseSchemaPath = new Path(this.getSchemaFolderName());
+      FileSystem fs = this.getFs();
+      if (fs.exists(baseSchemaPath)) {
+        FileStatus[] allSchemaFileStatus = fs.listStatus(baseSchemaPath);
+        if (allSchemaFileStatus.length == 0) {
+          return false;
+        }
+        List<String> validateCommits = this.getCommitsTimeline()
+            .filterCompletedInstants().getInstants().map(f -> f.getTimestamp()).collect(Collectors.toList());
+        Stream<String> schemaFileStream = Arrays.stream(allSchemaFileStatus)
+            .filter(f -> f.isFile() && f.getPath().getName().endsWith(SCHEMA_COMMIT_ACTION))
+            .map(file -> file.getPath().getName());
+
+        return schemaFileStream.anyMatch(f -> validateCommits.contains(f.split("\\.")[0]));
+      }
+    } catch (IOException io) {
+      throw new HoodieException(io);
+    }
+    return false;
   }
 
   /**

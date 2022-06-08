@@ -511,9 +511,8 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
 
   private def isSchemaEvolutionEnabled = {
     // Auto set schema evolution
-    // Wrapped as a function, this function is triggered only when called, minimize the time cosumption.
     def detectSchemaEvolution(): Boolean = {
-      val result = new FileBasedInternalSchemaStorageManager(metaClient).isValidHistorySchemaExist
+      val result = metaClient.isValidHistorySchemaExist
       if (result) {
         sparkSession.sessionState.conf.setConfString(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.key, result.toString)
       }

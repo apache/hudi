@@ -131,27 +131,6 @@ public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchem
         .filterCompletedInstants().getInstants().map(f -> f.getTimestamp()).collect(Collectors.toList());
   }
 
-  /**
-   * Return whether an available historySchema file exist in schema folder or not.
-   */
-  public boolean isValidHistorySchemaExist() {
-    try {
-      List<String> validateCommits = getValidInstants();
-      FileSystem fs = FSUtils.getFs(baseSchemaPath.toString(), conf);
-      if (fs.exists(baseSchemaPath)) {
-        List<String> validaSchemaFiles = Arrays.stream(fs.listStatus(baseSchemaPath))
-            .filter(f -> f.isFile() && f.getPath().getName().endsWith(SCHEMA_COMMIT_ACTION))
-            .map(file -> file.getPath().getName()).filter(f -> validateCommits.contains(f.split("\\.")[0])).sorted().collect(Collectors.toList());
-        if (!validaSchemaFiles.isEmpty()) {
-          return true;
-        }
-      }
-    } catch (IOException io) {
-      throw new HoodieException(io);
-    }
-    return false;
-  }
-
   @Override
   public String getHistorySchemaStr() {
     return getHistorySchemaStrByGivenValidCommits(Collections.EMPTY_LIST);
