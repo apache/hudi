@@ -119,7 +119,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
                            TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt) {
     super(config, instantTime, partitionPath, fileId, hoodieTable, taskContextSupplier);
     Option<HoodieBaseFile> baseFileOp = hoodieTable.getBaseFileOnlyView().getLatestBaseFile(partitionPath, fileId);
-    if (!baseFileOp.isPresent()){
+    if (!baseFileOp.isPresent()) {
       throw new NoSuchElementException(String.format("FileID %s of partitionPath %s is not exist, But record loc is 'U' ", fileId, partitionPath));
     }
     init(fileId, recordItr);
