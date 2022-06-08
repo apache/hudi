@@ -141,7 +141,6 @@ stages:
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
       - job: IT
-        condition: false
         displayName: IT modules
         timeoutInMinutes: '120'
         steps:
