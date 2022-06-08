@@ -38,6 +38,7 @@
     <parquet.version>${flink.format.parquet.version}</parquet.version>
     <hive.version>2.3.1</hive.version>
     <thrift.version>0.9.3</thrift.version>
+    <skipTests>true</skipTests>
   </properties>
 
   <build>
