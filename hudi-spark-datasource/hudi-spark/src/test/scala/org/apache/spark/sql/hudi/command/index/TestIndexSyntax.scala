@@ -25,8 +25,6 @@ import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase
 import org.apache.spark.sql.hudi.command.{CreateIndexCommand, DropIndexCommand, ShowIndexesCommand}
 
 class TestIndexSyntax extends HoodieSparkSqlTestBase {
-  private val sqlParser: ParserInterface = spark.sessionState.sqlParser
-  private val analyzer: Analyzer = spark.sessionState.analyzer
 
   test("Test Create/Drop/Show/Refresh Index") {
     withTempDir { tmp =>
@@ -52,6 +50,9 @@ class TestIndexSyntax extends HoodieSparkSqlTestBase {
         spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
         spark.sql(s"insert into $tableName values(2, 'a2', 10, 1001)")
         spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002)")
+
+        val sqlParser: ParserInterface = spark.sessionState.sqlParser
+        val analyzer: Analyzer = spark.sessionState.analyzer
 
         var logicalPlan = sqlParser.parsePlan(s"show indexes from default.$tableName")
         var resolvedLogicalPlan = analyzer.execute(logicalPlan)
