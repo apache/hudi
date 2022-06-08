@@ -30,6 +30,7 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -49,6 +50,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 /**
  * Unit tests {@link HoodieBulkInsertDataInternalWriter}.
  */
+@Disabled("temp")
 public class TestHoodieBulkInsertDataInternalWriter extends
     HoodieBulkInsertInternalWriterTestBase {
 
