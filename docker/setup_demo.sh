@@ -19,6 +19,9 @@
 SCRIPT_PATH=$(cd `dirname $0`; pwd)
 HUDI_DEMO_ENV=$1
 WS_ROOT=`dirname $SCRIPT_PATH`
+cd hoodie/hadoop
+mvn clean package -DskipTests
+cd $SCRIPT_PATH
 # restart cluster
 HUDI_WS=${WS_ROOT} docker-compose -f ${SCRIPT_PATH}/compose/docker-compose_hadoop284_hive233_spark244.yml down
 if [ "$HUDI_DEMO_ENV" != "dev" ]; then
