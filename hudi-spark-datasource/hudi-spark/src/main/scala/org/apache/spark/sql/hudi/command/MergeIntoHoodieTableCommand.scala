@@ -181,14 +181,14 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     var sourceDF = Dataset.ofRows(sparkSession, mergeInto.sourceTable)
     targetKey2SourceExpression.foreach {
       case (targetColumn, sourceExpression)
-        if !isEqualToTarget(targetColumn, sourceExpression) =>
+        if !containsPrimaryKeyFieldReference(targetColumn, sourceExpression) =>
           sourceDF = sourceDF.withColumn(targetColumn, new Column(sourceExpression))
           sourceDFOutput = sourceDFOutput :+ AttributeReference(targetColumn, sourceExpression.dataType)()
       case _=>
     }
     target2SourcePreCombineFiled.foreach {
       case (targetPreCombineField, sourceExpression)
-        if !isEqualToTarget(targetPreCombineField, sourceExpression) =>
+        if !containsPreCombineFieldReference(targetPreCombineField, sourceExpression) =>
           sourceDF = sourceDF.withColumn(targetPreCombineField, new Column(sourceExpression))
           sourceDFOutput = sourceDFOutput :+ AttributeReference(targetPreCombineField, sourceExpression.dataType)()
       case _=>
@@ -196,21 +196,49 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     sourceDF
   }
 
-  private def isEqualToTarget(targetColumnName: String, sourceExpression: Expression): Boolean = {
-    val sourceColumnName = sourceDFOutput.map(_.name)
+  /**
+   * Check whether the source expression has the same column name with target column.
+   *
+   * Merge condition cases that return true:
+   * 1) merge into .. on h0.id = s0.id ..
+   * 2) merge into .. on h0.id = cast(s0.id as int) ..
+   * "id" is primaryKey field of h0.
+   */
+  private def containsPrimaryKeyFieldReference(targetColumnName: String, sourceExpression: Expression): Boolean = {
+    val sourceColumnNames = sourceDFOutput.map(_.name)
     val resolver = sparkSession.sessionState.conf.resolver
 
     sourceExpression match {
-      case attr: AttributeReference if sourceColumnName.find(resolver(_, attr.name)).get.equals(targetColumnName) => true
+      case attr: AttributeReference if sourceColumnNames.find(resolver(_, attr.name)).get.equals(targetColumnName) => true
       // SPARK-35857: the definition of Cast has been changed in Spark3.2.
       // Match the class type instead of call the `unapply` method.
       case cast: Cast =>
         cast.child match {
-          case attr: AttributeReference if sourceColumnName.find(resolver(_, attr.name)).get.equals(targetColumnName) => true
+          case attr: AttributeReference if sourceColumnNames.find(resolver(_, attr.name)).get.equals(targetColumnName) => true
           case _ => false
         }
       case _=> false
     }
+  }
+
+  /**
+   * Check whether the source expression on preCombine field contains the same column name with target column.
+   *
+   * Merge expression cases that return true:
+   * 1) merge into .. on .. update set ts = s0.ts
+   * 2) merge into .. on .. update set ts = cast(s0.ts as int)
+   * 3) merge into .. on .. update set ts = s0.ts+1 (expressions like this whose sub node has the same column name with target)
+   * "ts" is preCombine field of h0.
+   */
+  private def containsPreCombineFieldReference(targetColumnName: String, sourceExpression: Expression): Boolean = {
+    val sourceColumnNames = sourceDFOutput.map(_.name)
+    val resolver = sparkSession.sessionState.conf.resolver
+
+    // sub node of the expression may have same column name with target column name
+    sourceExpression.find {
+      case attr: AttributeReference => sourceColumnNames.find(resolver(_, attr.name)).get.equals(targetColumnName)
+      case _ => false
+    }.isDefined
   }
 
   /**
