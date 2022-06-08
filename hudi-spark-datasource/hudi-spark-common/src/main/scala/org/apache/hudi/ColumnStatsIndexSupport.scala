@@ -46,10 +46,9 @@ class ColumnStatsIndexSupport(spark: SparkSession,
                               tableSchema: StructType,
                               metadataConfig: HoodieMetadataConfig) {
 
-  @transient lazy val metadataTable: HoodieTableMetadata = {
-    val ctx = new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext))
-    HoodieTableMetadata.create(ctx, metadataConfig, tableBasePath, FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue)
-  }
+  @transient lazy val engineCtx = new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext))
+  @transient lazy val metadataTable: HoodieTableMetadata =
+    HoodieTableMetadata.create(engineCtx, metadataConfig, tableBasePath, FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue)
 
   def load(targetColumns: Seq[String] = Seq.empty): DataFrame = {
     val targetColStatsIndexColumns = Seq(
@@ -227,9 +226,12 @@ class ColumnStatsIndexSupport(spark: SparkSession,
       val encodedTargetColumnNames = targetColumns.map(colName => new ColumnIndexID(colName).asBase64EncodedString())
 
       val recordsRDD: RDD[HoodieRecord[HoodieMetadataPayload]] =
-        HoodieJavaRDD.getJavaRDD(
+        HoodieJavaRDD.of(
           metadataTable.getRecordsByKeyPrefixes(encodedTargetColumnNames.asJava, HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS)
-        )
+            .collectAsList(),
+          engineCtx,
+          1
+        ).get()
 
       val catalystRowsRDD: RDD[InternalRow] = recordsRDD.mapPartitions { it =>
         val converter = AvroConversionUtils.createAvroToInternalRowConverter(HoodieMetadataRecord.SCHEMA$, metadataRecordStructType)

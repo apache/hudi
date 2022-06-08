@@ -29,8 +29,8 @@ import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.data.HoodieList;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -60,7 +60,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -69,6 +68,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.common.util.CollectionUtils.isNullOrEmpty;
 import static org.apache.hudi.common.util.CollectionUtils.toStream;
@@ -154,45 +154,47 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     List<FileSlice> partitionFileSlices =
         HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(metadataMetaClient, partitionName);
 
-    return engineContext.parallelize(partitionFileSlices)
-        .flatMap(
-            (SerializableFunction<FileSlice, Iterator<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>>>) fileSlice -> {
-              // NOTE: Since this will be executed by executors, we can't access previously cached
-              //       readers, and therefore have to always open new ones
-              Pair<HoodieFileReader, HoodieMetadataMergedLogRecordReader> readers =
-                  openReaders(partitionName, fileSlice);
-              try {
-                List<Long> timings = new ArrayList<>();
+    return HoodieList.of(partitionFileSlices.stream()
+        .flatMap(fileSlice -> {
+            // NOTE: Since this will be executed by executors, we can't access previously cached
+            //       readers, and therefore have to always open new ones
+            Pair<HoodieFileReader, HoodieMetadataMergedLogRecordReader> readers =
+                openReaders(partitionName, fileSlice);
 
-                HoodieFileReader baseFileReader = readers.getKey();
-                HoodieMetadataMergedLogRecordReader logRecordScanner = readers.getRight();
+            try {
+              List<Long> timings = new ArrayList<>();
 
-                if (baseFileReader == null && logRecordScanner == null) {
-                  // TODO: what do we do if both does not exist? should we throw an exception and let caller do the fallback ?
-                  return Collections.emptyIterator();
-                }
+              HoodieFileReader baseFileReader = readers.getKey();
+              HoodieMetadataMergedLogRecordReader logRecordScanner = readers.getRight();
 
-                boolean fullKeys = false;
-
-                Map<String, Option<HoodieRecord<HoodieMetadataPayload>>> logRecords =
-                    readLogRecords(logRecordScanner, sortedkeyPrefixes, fullKeys, timings);
-
-                List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> mergedRecords =
-                    readFromBaseAndMergeWithLogRecords(baseFileReader, sortedkeyPrefixes, fullKeys, logRecords, timings, partitionName);
-
-                LOG.debug(String.format("Metadata read for %s keys took [baseFileRead, logMerge] %s ms",
-                    sortedkeyPrefixes.size(), timings));
-
-                return mergedRecords.iterator();
-              } catch (IOException ioe) {
-                throw new HoodieIOException("Error merging records from metadata table for  " + sortedkeyPrefixes.size() + " key : ", ioe);
-              } finally {
-                closeReader(readers);
+              if (baseFileReader == null && logRecordScanner == null) {
+                // TODO: what do we do if both does not exist? should we throw an exception and let caller do the fallback ?
+                return Stream.empty();
               }
+
+              boolean fullKeys = false;
+
+              Map<String, Option<HoodieRecord<HoodieMetadataPayload>>> logRecords =
+                  readLogRecords(logRecordScanner, sortedkeyPrefixes, fullKeys, timings);
+
+              List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> mergedRecords =
+                  readFromBaseAndMergeWithLogRecords(baseFileReader, sortedkeyPrefixes, fullKeys, logRecords, timings, partitionName);
+
+              LOG.debug(String.format("Metadata read for %s keys took [baseFileRead, logMerge] %s ms",
+                  sortedkeyPrefixes.size(), timings));
+
+              return mergedRecords.stream()
+                  .map(keyRecordPair -> keyRecordPair.getValue().orElse(null));
+            } catch (IOException ioe) {
+              throw new HoodieIOException("Error merging records from metadata table for  " + sortedkeyPrefixes.size() + " key : ", ioe);
+            } finally {
+              closeReader(readers);
             }
+          }
         )
-        .map(keyRecordPair -> keyRecordPair.getValue().orElse(null))
-        .filter(Objects::nonNull);
+        .filter(Objects::nonNull)
+        .collect(Collectors.toList())
+    );
   }
 
   @Override
