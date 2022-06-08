@@ -65,11 +65,11 @@ public class JavaWriteHelper<T,R> extends BaseWriteHelper<T, List<HoodieRecord<T
 
     return keyedRecords.values().stream().map(x -> x.stream().map(Pair::getRight).reduce((rec1, rec2) -> {
       @SuppressWarnings("unchecked")
-      HoodieRecord reducedData = rec2.preCombine(rec1);
+      HoodieRecord reducedRec = rec2.preCombine(rec1);
       // we cannot allow the user to change the key or partitionPath, since that will affect
       // everything
       // so pick it from one of the records.
-      return (HoodieRecord<T>) reducedData.newInstance(rec1.getKey());
+      return (HoodieRecord<T>) reducedRec.newInstance(rec1.getKey());
     }).orElse(null)).filter(Objects::nonNull).collect(Collectors.toList());
   }
 }

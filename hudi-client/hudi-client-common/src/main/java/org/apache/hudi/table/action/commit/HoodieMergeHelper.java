@@ -50,6 +50,8 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.io.BinaryDecoder;
 import org.apache.avro.io.BinaryEncoder;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.util.Iterator;
@@ -61,6 +63,8 @@ import java.util.stream.Collectors;
 
 public class HoodieMergeHelper<T> extends
     BaseMergeHelper<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> {
+
+  private static final Logger LOG = LogManager.getLogger(HoodieMergeHelper.class);
 
   private HoodieMergeHelper() {
   }
@@ -190,8 +194,8 @@ public class HoodieMergeHelper<T> extends
       try {
         return iter.next().rewriteRecordWithNewSchema(recordSchema, prop, newSchema, renameCols);
       } catch (IOException e) {
-        e.printStackTrace();
-        return null;
+        LOG.error("Error rewrite record with new schema", e);
+        throw new HoodieException(e);
       }
     }
 

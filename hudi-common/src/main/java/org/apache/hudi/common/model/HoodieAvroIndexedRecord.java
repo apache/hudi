@@ -93,6 +93,13 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
   }
 
   @Override
+  public String getRecordKey(String keyFieldName) {
+    return Option.ofNullable(data.getSchema().getField(keyFieldName))
+        .map(keyField -> data.get(keyField.pos()))
+        .map(Object::toString).orElse(null);
+  }
+
+  @Override
   public HoodieRecord preCombine(HoodieRecord<IndexedRecord> previousRecord) {
     throw new UnsupportedOperationException();
   }

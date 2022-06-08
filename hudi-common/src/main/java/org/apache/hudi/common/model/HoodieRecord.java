@@ -259,6 +259,8 @@ public abstract class HoodieRecord<T> implements Serializable {
 
   public abstract String getRecordKey(Option<BaseKeyGenerator> keyGeneratorOpt);
 
+  public abstract String getRecordKey(String keyFieldName);
+
   public void seal() {
     this.sealed = true;
   }

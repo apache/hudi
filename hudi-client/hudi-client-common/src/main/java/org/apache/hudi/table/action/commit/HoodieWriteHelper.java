@@ -58,10 +58,10 @@ public class HoodieWriteHelper<T, R> extends BaseWriteHelper<T, HoodieData<Hoodi
       return Pair.of(key, record);
     }).reduceByKey((rec1, rec2) -> {
       @SuppressWarnings("unchecked")
-      HoodieRecord reducedData = rec2.preCombine(rec1);
-      HoodieKey reducedKey = rec1.getData().equals(reducedData) ? rec1.getKey() : rec2.getKey();
+      HoodieRecord reducedRec = rec2.preCombine(rec1);
+      HoodieKey reducedKey = rec1.getData().equals(reducedRec) ? rec1.getKey() : rec2.getKey();
 
-      return (HoodieRecord<T>) reducedData.newInstance(reducedKey);
+      return (HoodieRecord<T>) reducedRec.newInstance(reducedKey);
     }, parallelism).map(Pair::getRight);
   }
 

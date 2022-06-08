@@ -86,6 +86,11 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
   }
 
   @Override
+  public String getRecordKey(String keyFieldName) {
+    return getRecordKey();
+  }
+
+  @Override
   public Comparable<?> getOrderingValue() {
     return data.getOrderingValue();
   }
@@ -120,12 +125,7 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
   //       be combined
   @Override
   public Option<HoodieRecord> combineAndGetUpdateValue(HoodieRecord previousRecord, Schema schema, Properties props) throws IOException {
-    Option<IndexedRecord> previousRecordAvroPayload;
-    if (previousRecord instanceof HoodieAvroIndexedRecord) {
-      previousRecordAvroPayload = Option.of(((HoodieAvroIndexedRecord) previousRecord).getData());
-    } else {
-      previousRecordAvroPayload = ((HoodieRecordPayload)previousRecord.getData()).getInsertValue(schema, props);
-    }
+    Option<IndexedRecord> previousRecordAvroPayload = previousRecord.toIndexedRecord(schema, props);
     if (!previousRecordAvroPayload.isPresent()) {
       return Option.empty();
     }
@@ -139,7 +139,7 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
     ValidationUtils.checkState(other instanceof HoodieAvroRecord);
     GenericRecord mergedPayload = HoodieAvroUtils.stitchRecords(
         (GenericRecord) toIndexedRecord(readerSchema, new Properties()).get(),
-        (GenericRecord) ((HoodieAvroRecord<?>) other).toIndexedRecord(readerSchema, new Properties()).get(),
+        (GenericRecord) other.toIndexedRecord(readerSchema, new Properties()).get(),
         writerSchema);
     return new HoodieAvroRecord(getKey(), instantiateRecordPayloadWrapper(mergedPayload, getPrecombineValue(getData())), getOperation());
   }

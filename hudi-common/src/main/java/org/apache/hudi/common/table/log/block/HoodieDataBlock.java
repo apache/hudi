@@ -18,13 +18,11 @@
 
 package org.apache.hudi.common.table.log.block;
 
-import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.util.ClosableIterator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.avro.Schema;
-import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.internal.schema.InternalSchema;
@@ -212,14 +210,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
   }
 
   protected Option<String> getRecordKey(HoodieRecord record) {
-    if (record instanceof HoodieAvroIndexedRecord) {
-      IndexedRecord data = ((HoodieAvroIndexedRecord) record).getData();
-      return getKeyField(data.getSchema())
-          .map(keyField -> data.get(keyField.pos()))
-          .map(Object::toString);
-    } else {
-      return Option.ofNullable(record.getRecordKey());
-    }
+    return Option.ofNullable(record.getRecordKey(keyFieldName));
   }
 
   /**

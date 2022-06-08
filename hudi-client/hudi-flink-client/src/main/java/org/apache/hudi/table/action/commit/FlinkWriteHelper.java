@@ -93,14 +93,14 @@ public class FlinkWriteHelper<T, R> extends BaseWriteHelper<T, List<HoodieRecord
         .collect(Collectors.groupingBy(record -> record.getKey().getRecordKey()));
 
     return keyedRecords.values().stream().map(x -> x.stream().reduce((rec1, rec2) -> {
-      @SuppressWarnings("unchecked") final HoodieRecord reducedData = rec2.preCombine(rec1);
+      @SuppressWarnings("unchecked") final HoodieRecord reducedRec = rec2.preCombine(rec1);
       // we cannot allow the user to change the key or partitionPath, since that will affect
       // everything
       // so pick it from one of the records.
-      boolean choosePrev = rec1 == reducedData;
+      boolean choosePrev = rec1 == reducedRec;
       HoodieKey reducedKey = choosePrev ? rec1.getKey() : rec2.getKey();
       HoodieOperation operation = choosePrev ? rec1.getOperation() : rec2.getOperation();
-      HoodieRecord<T> hoodieRecord = reducedData.newInstance(reducedKey, operation);
+      HoodieRecord<T> hoodieRecord = reducedRec.newInstance(reducedKey, operation);
       // reuse the location from the first record.
       hoodieRecord.setCurrentLocation(rec1.getCurrentLocation());
       return hoodieRecord;
