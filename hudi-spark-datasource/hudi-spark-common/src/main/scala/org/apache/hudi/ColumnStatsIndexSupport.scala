@@ -39,6 +39,7 @@ import org.apache.spark.sql.{DataFrame, HoodieUnsafeRDDUtils, Row, SparkSession}
 
 import scala.collection.JavaConverters._
 import scala.collection.immutable.TreeSet
+import scala.collection.mutable.ListBuffer
 
 class ColumnStatsIndexSupport(spark: SparkSession,
                               tableBasePath: String,
@@ -138,12 +139,16 @@ class ColumnStatsIndexSupport(spark: SparkSession,
     //       either due to the Column Stats Index config changes, schema evolution, etc, we have
     //       to make sure that all of the rows w/in transposed data-frame are properly padded (with null
     //       values) for such file-column combinations
-    val indexedColumns: Seq[String] = colStatsDF.rdd.map(row => row.getString(colNameOrdinal)).distinct().collect()
+    val indexedColumns: Seq[String] = colStatsDF.queryExecution.toRdd
+        .map(row => row.getString(colNameOrdinal))
+        .distinct()
+        .collect()
 
     // NOTE: We're sorting the columns to make sure final index schema matches layout
     //       of the transposed table
     val sortedTargetColumns = TreeSet(queryColumns.intersect(indexedColumns): _*)
 
+    // TODO rebase on InternalRow
     val transposedRDD = colStatsDF.rdd
       .filter(row => sortedTargetColumns.contains(row.getString(colNameOrdinal)))
       .map { row =>
@@ -185,16 +190,16 @@ class ColumnStatsIndexSupport(spark: SparkSession,
           val alignedColumnRowsSeq = sortedTargetColumns.toSeq.map(columnRowsMap.get)
 
           val coalescedRowValuesSeq =
-            alignedColumnRowsSeq.foldLeft(Seq[Any](fileName, valueCount)) {
+            alignedColumnRowsSeq.foldLeft(ListBuffer[Any](fileName, valueCount)) {
               case (acc, opt) =>
                 opt match {
                   case Some(columnStatsRow) =>
-                    acc ++ Seq(minValueOrdinal, maxValueOrdinal, nullCountOrdinal).map(ord => columnStatsRow.get(ord))
+                    acc ++= Seq(columnStatsRow.get(minValueOrdinal), columnStatsRow.get(maxValueOrdinal), columnStatsRow.get(nullCountOrdinal))
                   case None =>
                     // NOTE: Since we're assuming missing column to essentially contain exclusively
                     //       null values, we set null-count to be equal to value-count (this behavior is
                     //       consistent with reading non-existent columns from Parquet)
-                    acc ++ Seq(null, null, valueCount)
+                    acc ++= Seq(null, null, valueCount)
                 }
             }
 
