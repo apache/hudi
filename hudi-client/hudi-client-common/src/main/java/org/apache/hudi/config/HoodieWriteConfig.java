@@ -1557,6 +1557,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBooleanOrDefault(HoodieHBaseIndexConfig.UPDATE_PARTITION_PATH_ENABLE);
   }
 
+  public int getHBaseIndexRegionCount() {
+    return getInt(HoodieHBaseIndexConfig.BUCKET_NUMBER);
+  }
+
   public int getBloomIndexParallelism() {
     return getInt(HoodieIndexConfig.BLOOM_INDEX_PARALLELISM);
   }
