@@ -172,5 +172,5 @@ stages:
                 tar -xvf $(Pipeline.Workspace)/$(SPARK_ARCHIVE).tgz -C $(Pipeline.Workspace)/
                 mkdir /tmp/spark-events/
           - script: |
-              mvn $(MAVEN_OPTS) -P $(SPARK_PROFILE),integration-tests verify --fail-never
+              mvn $(MAVEN_OPTS) -P $(SPARK_PROFILE),integration-tests verify
             displayName: IT
