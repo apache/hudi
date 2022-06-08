@@ -36,6 +36,7 @@ import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.internal.schema.{HoodieSchemaException, InternalSchema}
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
+import org.apache.hudi.internal.schema.io.FileBasedInternalSchemaStorageManager
 import org.apache.hudi.io.storage.HoodieHFileReader
 import org.apache.spark.execution.datasources.HoodieInMemoryFileIndex
 import org.apache.spark.internal.Logging
@@ -49,9 +50,9 @@ import org.apache.spark.sql.sources.{BaseRelation, Filter, PrunedFilteredScan}
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.apache.spark.sql.{Row, SQLContext, SparkSession}
 import org.apache.spark.unsafe.types.UTF8String
-
 import java.net.URI
 import java.util.Locale
+
 import scala.collection.JavaConverters._
 import scala.util.control.NonFatal
 import scala.util.{Failure, Success, Try}
@@ -509,12 +510,22 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     StructType(dataStructSchema.filterNot(f => partitionColumns.contains(f.name)))
 
   private def isSchemaEvolutionEnabled = {
+    // Auto set schema evolution
+    // Wrapped as a function, this function is triggered only when called, minimize the time cosumption.
+    def detectSchemaEvolution(): Boolean = {
+      val result = new FileBasedInternalSchemaStorageManager(metaClient).isValidHistorySchemaExist
+      if (result) {
+        sparkSession.sessionState.conf.setConfString(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.key, result.toString)
+      }
+      result
+    }
     // NOTE: Schema evolution could be configured both t/h optional parameters vehicle as well as
     //       t/h Spark Session configuration (for ex, for Spark SQL)
     optParams.getOrElse(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.key,
       DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.defaultValue.toString).toBoolean ||
     sparkSession.conf.get(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.key,
-      DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.defaultValue.toString).toBoolean
+      DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.defaultValue.toString).toBoolean ||
+      detectSchemaEvolution()
   }
 }
 
