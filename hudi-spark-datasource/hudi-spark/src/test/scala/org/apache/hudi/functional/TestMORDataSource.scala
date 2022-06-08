@@ -119,122 +119,121 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
       .option(HoodieTableConfig.COMBINE_ENGINE_CLASS_NAME.key(), classOf[HoodieSparkRecordCombiningEngine].getName)
       .load(basePath + "/*/*/*/*")
-//    inputDF1.collect().foreach(println(_))
-//    println("==========")
-//    inputDF2.collect().foreach(println(_))
-//    println("==========")
-//    hudiSnapshotDF1.select("_row_key").collectAsList().map(_.getString(0)).sorted.foreach(println(_))
-//    println("==========")
-//    hudiSnapshotDF2.select("_row_key").collectAsList().map(_.getString(0)).sorted.foreach(println(_))
-//    println("==========")
-//    hudiSnapshotDF2.select("_row_key").groupBy("_row_key").count().collect().foreach(println(_))
+    //    inputDF1.collect().foreach(println(_))
+    //    println("==========")
+    //    inputDF2.collect().foreach(println(_))
+    //    println("==========")
+    //    hudiSnapshotDF1.select("_row_key").collectAsList().map(_.getString(0)).sorted.foreach(println(_))
+    //    println("==========")
+    //    hudiSnapshotDF2.select("_row_key").collectAsList().map(_.getString(0)).sorted.foreach(println(_))
+    //    println("==========")
+    //    hudiSnapshotDF2.select("_row_key").groupBy("_row_key").count().collect().foreach(println(_))
     val correct = inputDF1.filter(r => r.getAs("partition").equals( "2015/03/17")).count()
     println(correct)
     assertEquals(correct, hudiSnapshotDF2.count()) // still 100, since we only updated
-//    val expected = inputDF2.select("_row_key").distinct().collect().toSet
-//    val actual = hudiSnapshotDF2.select("_row_key").distinct().collect()
-//    actual.filterNot(expected.contains(_)).foreach(println(_))
-//    println("==========")
-//    expected.filterNot(actual.contains(_)).foreach(println(_))
-    return;
-    val commit1Time = hudiSnapshotDF1.select("_hoodie_commit_time").head().get(0).toString
-    val commit2Time = hudiSnapshotDF2.select("_hoodie_commit_time").head().get(0).toString
-    assertEquals(hudiSnapshotDF2.select("_hoodie_commit_time").distinct().count(), 1)
-    assertTrue(commit2Time > commit1Time)
-    assertEquals(100, hudiSnapshotDF2.join(hudiSnapshotDF1, Seq("_hoodie_record_key"), "left").count())
-
-    // incremental view
-    // base file only
-    val hudiIncDF1 = spark.read.format("org.apache.hudi")
-      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, "000")
-      .option(DataSourceReadOptions.END_INSTANTTIME.key, commit1Time)
-      .load(basePath)
-    assertEquals(100, hudiIncDF1.count())
-    assertEquals(1, hudiIncDF1.select("_hoodie_commit_time").distinct().count())
-    assertEquals(commit1Time, hudiIncDF1.select("_hoodie_commit_time").head().get(0).toString)
-    hudiIncDF1.show(1)
-    // log file only
-    val hudiIncDF2 = spark.read.format("org.apache.hudi")
-      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, commit1Time)
-      .option(DataSourceReadOptions.END_INSTANTTIME.key, commit2Time)
-      .load(basePath)
-    assertEquals(100, hudiIncDF2.count())
-    assertEquals(1, hudiIncDF2.select("_hoodie_commit_time").distinct().count())
-    assertEquals(commit2Time, hudiIncDF2.select("_hoodie_commit_time").head().get(0).toString)
-    hudiIncDF2.show(1)
-
-    // base file + log file
-    val hudiIncDF3 = spark.read.format("org.apache.hudi")
-      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, "000")
-      .option(DataSourceReadOptions.END_INSTANTTIME.key, commit2Time)
-      .load(basePath)
-    assertEquals(100, hudiIncDF3.count())
-    // log file being load
-    assertEquals(1, hudiIncDF3.select("_hoodie_commit_time").distinct().count())
-    assertEquals(commit2Time, hudiIncDF3.select("_hoodie_commit_time").head().get(0).toString)
-
-    // Test incremental query has no instant in range
-    val emptyIncDF = spark.read.format("org.apache.hudi")
-      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, "000")
-      .option(DataSourceReadOptions.END_INSTANTTIME.key, "001")
-      .load(basePath)
-    assertEquals(0, emptyIncDF.count())
-
-    // Unmerge
-    val hudiSnapshotSkipMergeDF2 = spark.read.format("org.apache.hudi")
-      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
-      .option(DataSourceReadOptions.REALTIME_MERGE.key, DataSourceReadOptions.REALTIME_SKIP_MERGE_OPT_VAL)
-      .load(basePath + "/*/*/*/*")
-    assertEquals(200, hudiSnapshotSkipMergeDF2.count())
-    assertEquals(100, hudiSnapshotSkipMergeDF2.select("_hoodie_record_key").distinct().count())
-    assertEquals(200, hudiSnapshotSkipMergeDF2.join(hudiSnapshotDF2, Seq("_hoodie_record_key"), "left").count())
-
-    // Test Read Optimized Query on MOR table
-    val hudiRODF2 = spark.read.format("org.apache.hudi")
-      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)
-      .load(basePath + "/*/*/*/*")
-    assertEquals(100, hudiRODF2.count())
-
-    // Third Operation:
-    // Upsert another update to the default partitions with 50 duplicate records. Produced the second log file for each parquet.
-    // SNAPSHOT view should read the latest log files.
-    val records3 = recordsToStrings(dataGen.generateUniqueUpdates("003", 50)).toList
-    val inputDF3: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records3, 2))
-    inputDF3.write.format("org.apache.hudi")
-      .options(commonOpts)
-      .mode(SaveMode.Append)
-      .save(basePath)
-    val hudiSnapshotDF3 = spark.read.format("org.apache.hudi")
-      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
-      .load(basePath + "/*/*/*/*")
-    // still 100, because we only updated the existing records
-    assertEquals(100, hudiSnapshotDF3.count())
-
-    // 50 from commit2, 50 from commit3
-    assertEquals(hudiSnapshotDF3.select("_hoodie_commit_time").distinct().count(), 2)
-    assertEquals(50, hudiSnapshotDF3.filter(col("_hoodie_commit_time") > commit2Time).count())
-    assertEquals(50,
-      hudiSnapshotDF3.join(hudiSnapshotDF2, Seq("_hoodie_record_key", "_hoodie_commit_time"), "inner").count())
-
-    // incremental query from commit2Time
-    val hudiIncDF4 = spark.read.format("org.apache.hudi")
-      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, commit2Time)
-      .load(basePath)
-    assertEquals(50, hudiIncDF4.count())
-
-    // skip merge incremental view
-    // including commit 2 and commit 3
-    val hudiIncDF4SkipMerge = spark.read.format("org.apache.hudi")
-      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, "000")
-      .option(DataSourceReadOptions.REALTIME_MERGE.key, DataSourceReadOptions.REALTIME_SKIP_MERGE_OPT_VAL)
-      .load(basePath)
-    assertEquals(200, hudiIncDF4SkipMerge.count())
+    //    val expected = inputDF2.select("_row_key").distinct().collect().toSet
+    //    val actual = hudiSnapshotDF2.select("_row_key").distinct().collect()
+    //    actual.filterNot(expected.contains(_)).foreach(println(_))
+    //    println("==========")
+    //    expected.filterNot(actual.contains(_)).foreach(println(_))
+    //    val commit1Time = hudiSnapshotDF1.select("_hoodie_commit_time").head().get(0).toString
+    //    val commit2Time = hudiSnapshotDF2.select("_hoodie_commit_time").head().get(0).toString
+    //    assertEquals(hudiSnapshotDF2.select("_hoodie_commit_time").distinct().count(), 1)
+    //    assertTrue(commit2Time > commit1Time)
+    //    assertEquals(100, hudiSnapshotDF2.join(hudiSnapshotDF1, Seq("_hoodie_record_key"), "left").count())
+    //
+    //    // incremental view
+    //    // base file only
+    //    val hudiIncDF1 = spark.read.format("org.apache.hudi")
+    //      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
+    //      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, "000")
+    //      .option(DataSourceReadOptions.END_INSTANTTIME.key, commit1Time)
+    //      .load(basePath)
+    //    assertEquals(100, hudiIncDF1.count())
+    //    assertEquals(1, hudiIncDF1.select("_hoodie_commit_time").distinct().count())
+    //    assertEquals(commit1Time, hudiIncDF1.select("_hoodie_commit_time").head().get(0).toString)
+    //    hudiIncDF1.show(1)
+    //    // log file only
+    //    val hudiIncDF2 = spark.read.format("org.apache.hudi")
+    //      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
+    //      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, commit1Time)
+    //      .option(DataSourceReadOptions.END_INSTANTTIME.key, commit2Time)
+    //      .load(basePath)
+    //    assertEquals(100, hudiIncDF2.count())
+    //    assertEquals(1, hudiIncDF2.select("_hoodie_commit_time").distinct().count())
+    //    assertEquals(commit2Time, hudiIncDF2.select("_hoodie_commit_time").head().get(0).toString)
+    //    hudiIncDF2.show(1)
+    //
+    //    // base file + log file
+    //    val hudiIncDF3 = spark.read.format("org.apache.hudi")
+    //      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
+    //      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, "000")
+    //      .option(DataSourceReadOptions.END_INSTANTTIME.key, commit2Time)
+    //      .load(basePath)
+    //    assertEquals(100, hudiIncDF3.count())
+    //    // log file being load
+    //    assertEquals(1, hudiIncDF3.select("_hoodie_commit_time").distinct().count())
+    //    assertEquals(commit2Time, hudiIncDF3.select("_hoodie_commit_time").head().get(0).toString)
+    //
+    //    // Test incremental query has no instant in range
+    //    val emptyIncDF = spark.read.format("org.apache.hudi")
+    //      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
+    //      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, "000")
+    //      .option(DataSourceReadOptions.END_INSTANTTIME.key, "001")
+    //      .load(basePath)
+    //    assertEquals(0, emptyIncDF.count())
+    //
+    //    // Unmerge
+    //    val hudiSnapshotSkipMergeDF2 = spark.read.format("org.apache.hudi")
+    //      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
+    //      .option(DataSourceReadOptions.REALTIME_MERGE.key, DataSourceReadOptions.REALTIME_SKIP_MERGE_OPT_VAL)
+    //      .load(basePath + "/*/*/*/*")
+    //    assertEquals(200, hudiSnapshotSkipMergeDF2.count())
+    //    assertEquals(100, hudiSnapshotSkipMergeDF2.select("_hoodie_record_key").distinct().count())
+    //    assertEquals(200, hudiSnapshotSkipMergeDF2.join(hudiSnapshotDF2, Seq("_hoodie_record_key"), "left").count())
+    //
+    //    // Test Read Optimized Query on MOR table
+    //    val hudiRODF2 = spark.read.format("org.apache.hudi")
+    //      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)
+    //      .load(basePath + "/*/*/*/*")
+    //    assertEquals(100, hudiRODF2.count())
+    //
+    //    // Third Operation:
+    //    // Upsert another update to the default partitions with 50 duplicate records. Produced the second log file for each parquet.
+    //    // SNAPSHOT view should read the latest log files.
+    //    val records3 = recordsToStrings(dataGen.generateUniqueUpdates("003", 50)).toList
+    //    val inputDF3: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records3, 2))
+    //    inputDF3.write.format("org.apache.hudi")
+    //      .options(commonOpts)
+    //      .mode(SaveMode.Append)
+    //      .save(basePath)
+    //    val hudiSnapshotDF3 = spark.read.format("org.apache.hudi")
+    //      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
+    //      .load(basePath + "/*/*/*/*")
+    //    // still 100, because we only updated the existing records
+    //    assertEquals(100, hudiSnapshotDF3.count())
+    //
+    //    // 50 from commit2, 50 from commit3
+    //    assertEquals(hudiSnapshotDF3.select("_hoodie_commit_time").distinct().count(), 2)
+    //    assertEquals(50, hudiSnapshotDF3.filter(col("_hoodie_commit_time") > commit2Time).count())
+    //    assertEquals(50,
+    //      hudiSnapshotDF3.join(hudiSnapshotDF2, Seq("_hoodie_record_key", "_hoodie_commit_time"), "inner").count())
+    //
+    //    // incremental query from commit2Time
+    //    val hudiIncDF4 = spark.read.format("org.apache.hudi")
+    //      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
+    //      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, commit2Time)
+    //      .load(basePath)
+    //    assertEquals(50, hudiIncDF4.count())
+    //
+    //    // skip merge incremental view
+    //    // including commit 2 and commit 3
+    //    val hudiIncDF4SkipMerge = spark.read.format("org.apache.hudi")
+    //      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
+    //      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, "000")
+    //      .option(DataSourceReadOptions.REALTIME_MERGE.key, DataSourceReadOptions.REALTIME_SKIP_MERGE_OPT_VAL)
+    //      .load(basePath)
+    //    assertEquals(200, hudiIncDF4SkipMerge.count())
   }
 
   @Test def testCount() {

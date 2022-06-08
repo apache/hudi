@@ -157,8 +157,7 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> COMBINE_ENGINE_CLASS_NAME = ConfigProperty
       .key("hoodie.compaction.combine.engine.class")
-      .defaultValue("org.apache.spark.sql.hudi.HoodieSparkRecordCombiningEngine")
-//      .defaultValue(HoodieAvroRecordCombiningEngine.class.getName())
+      .defaultValue(HoodieAvroRecordCombiningEngine.class.getName())
       .withDocumentation("Combine engine class to use for performing compactions, i.e merge delta logs with current base file and then "
           + " produce a new base file.");
 
