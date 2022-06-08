@@ -17,9 +17,8 @@
 
 package org.apache.hudi
 
-import org.apache.avro.Schema.Parser
 import org.apache.avro.generic.GenericRecord
-import org.apache.hudi.ColumnStatsIndexSupport.{composeIndexSchema, deserialize, metadataRecordSchemaString, metadataRecordStructType, tryUnpackNonNullVal}
+import org.apache.hudi.ColumnStatsIndexSupport.{composeIndexSchema, deserialize, metadataRecordStructType, tryUnpackNonNullVal}
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.avro.model.HoodieMetadataRecord
 import org.apache.hudi.client.common.HoodieSparkEngineContext
@@ -41,15 +40,17 @@ import org.apache.spark.sql.{DataFrame, HoodieUnsafeRDDUtils, Row, SparkSession}
 import scala.collection.JavaConverters._
 import scala.collection.immutable.TreeSet
 
-object ColumnStatsIndexSupport {
+class ColumnStatsIndexSupport(spark: SparkSession,
+                              tableBasePath: String,
+                              tableSchema: StructType,
+                              metadataConfig: HoodieMetadataConfig) {
 
-  private val metadataRecordSchemaString: String = HoodieMetadataRecord.SCHEMA$.toString
-  private val metadataRecordStructType: StructType = AvroConversionUtils.convertAvroSchemaToStructType(HoodieMetadataRecord.SCHEMA$)
+  @transient lazy val metadataTable: HoodieTableMetadata = {
+    val ctx = new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext))
+    HoodieTableMetadata.create(ctx, metadataConfig, tableBasePath, FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue)
+  }
 
-  def readColumnStatsIndex(spark: SparkSession,
-                           tableBasePath: String,
-                           metadataConfig: HoodieMetadataConfig,
-                           targetColumns: Seq[String] = Seq.empty): DataFrame = {
+  def load(targetColumns: Seq[String] = Seq.empty): DataFrame = {
     val targetColStatsIndexColumns = Seq(
       HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME,
       HoodieMetadataPayload.COLUMN_STATS_FIELD_MIN_VALUE,
@@ -76,50 +77,6 @@ object ColumnStatsIndexSupport {
       .select(requiredMetadataIndexColumns.map(col): _*)
 
     colStatsDF
-  }
-
-  private def readFullColumnStatsIndexInternal(spark: SparkSession, metadataConfig: HoodieMetadataConfig, tableBasePath: String): DataFrame = {
-    val metadataTablePath = HoodieTableMetadata.getMetadataTableBasePath(tableBasePath)
-    // Read Metadata Table's Column Stats Index into Spark's [[DataFrame]]
-    spark.read.format("org.apache.hudi")
-      .options(metadataConfig.getProps.asScala)
-      .load(s"$metadataTablePath/${MetadataPartitionType.COLUMN_STATS.getPartitionPath}")
-  }
-
-  private def readColumnStatsIndexForColumnsInternal(spark: SparkSession, targetColumns: Seq[String], metadataConfig: HoodieMetadataConfig, tableBasePath: String) = {
-    val ctx = new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext))
-
-    // Read Metadata Table's Column Stats Index into Spark's [[DataFrame]] by
-    //    - Fetching the records from CSI by key-prefixes (encoded column names)
-    //    - Deserializing fetched records into [[InternalRow]]s
-    //    - Composing [[DataFrame]]
-    val metadataTableDF = {
-      val metadataTable = HoodieTableMetadata.create(ctx, metadataConfig, tableBasePath, FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue)
-
-      // TODO encoding should be done internally w/in HoodieBackedTableMetadata
-      val encodedTargetColumnNames = targetColumns.map(colName => new ColumnIndexID(colName).asBase64EncodedString())
-
-      val recordsRDD: RDD[HoodieRecord[HoodieMetadataPayload]] =
-        HoodieJavaRDD.getJavaRDD(
-          metadataTable.getRecordsByKeyPrefixes(encodedTargetColumnNames.asJava, HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS)
-        )
-
-      val catalystRowsRDD: RDD[InternalRow] = recordsRDD.mapPartitions { it =>
-        val metadataRecordSchema = new Parser().parse(metadataRecordSchemaString)
-        val converter = AvroConversionUtils.createAvroToInternalRowConverter(metadataRecordSchema, metadataRecordStructType)
-
-        it.map { record =>
-          // schema and props are ignored for generating metadata record from the payload
-          // instead, the underlying file system, or bloom filter, or columns stats metadata (part of payload) are directly used
-          toScalaOption(record.getData.getInsertValue(null, null))
-            .flatMap(avroRecord => converter(avroRecord.asInstanceOf[GenericRecord]))
-            .orNull
-        }
-      }
-
-      HoodieUnsafeRDDUtils.createDataFrame(spark, catalystRowsRDD, metadataRecordStructType)
-    }
-    metadataTableDF
   }
 
   /**
@@ -161,7 +118,7 @@ object ColumnStatsIndexSupport {
    * @param tableSchema schema of the source data table
    * @return reshaped table according to the format outlined above
    */
-  def transposeColumnStatsIndex(spark: SparkSession, colStatsDF: DataFrame, queryColumns: Seq[String], tableSchema: StructType): DataFrame = {
+  def transpose(colStatsDF: DataFrame, queryColumns: Seq[String]): DataFrame = {
     val colStatsSchema = colStatsDF.schema
     val colStatsSchemaOrdinalsMap = colStatsSchema.fields.zipWithIndex.map({
       case (field, ordinal) => (field.name, ordinal)
@@ -253,6 +210,52 @@ object ColumnStatsIndexSupport {
 
     spark.createDataFrame(transposedRDD, indexSchema)
   }
+
+  private def readColumnStatsIndexForColumnsInternal(spark: SparkSession, targetColumns: Seq[String], metadataConfig: HoodieMetadataConfig, tableBasePath: String) = {
+
+    // Read Metadata Table's Column Stats Index into Spark's [[DataFrame]] by
+    //    - Fetching the records from CSI by key-prefixes (encoded column names)
+    //    - Deserializing fetched records into [[InternalRow]]s
+    //    - Composing [[DataFrame]]
+    val metadataTableDF = {
+      // TODO encoding should be done internally w/in HoodieBackedTableMetadata
+      val encodedTargetColumnNames = targetColumns.map(colName => new ColumnIndexID(colName).asBase64EncodedString())
+
+      val recordsRDD: RDD[HoodieRecord[HoodieMetadataPayload]] =
+        HoodieJavaRDD.getJavaRDD(
+          metadataTable.getRecordsByKeyPrefixes(encodedTargetColumnNames.asJava, HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS)
+        )
+
+      val catalystRowsRDD: RDD[InternalRow] = recordsRDD.mapPartitions { it =>
+        val converter = AvroConversionUtils.createAvroToInternalRowConverter(HoodieMetadataRecord.SCHEMA$, metadataRecordStructType)
+
+        it.map { record =>
+          // schema and props are ignored for generating metadata record from the payload
+          // instead, the underlying file system, or bloom filter, or columns stats metadata (part of payload) are directly used
+          toScalaOption(record.getData.getInsertValue(null, null))
+            .flatMap(avroRecord => converter(avroRecord.asInstanceOf[GenericRecord]))
+            .orNull
+        }
+      }
+
+      HoodieUnsafeRDDUtils.createDataFrame(spark, catalystRowsRDD, metadataRecordStructType)
+    }
+
+    metadataTableDF
+  }
+
+  private def readFullColumnStatsIndexInternal(spark: SparkSession, metadataConfig: HoodieMetadataConfig, tableBasePath: String): DataFrame = {
+    val metadataTablePath = HoodieTableMetadata.getMetadataTableBasePath(tableBasePath)
+    // Read Metadata Table's Column Stats Index into Spark's [[DataFrame]]
+    spark.read.format("org.apache.hudi")
+      .options(metadataConfig.getProps.asScala)
+      .load(s"$metadataTablePath/${MetadataPartitionType.COLUMN_STATS.getPartitionPath}")
+  }
+}
+
+object ColumnStatsIndexSupport {
+
+  private val metadataRecordStructType: StructType = AvroConversionUtils.convertAvroSchemaToStructType(HoodieMetadataRecord.SCHEMA$)
 
   /**
    * @VisibleForTesting

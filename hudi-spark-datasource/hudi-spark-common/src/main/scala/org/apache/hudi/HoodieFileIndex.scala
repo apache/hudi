@@ -18,7 +18,6 @@
 package org.apache.hudi
 
 import org.apache.hadoop.fs.{FileStatus, Path}
-import org.apache.hudi.ColumnStatsIndexSupport.{readColumnStatsIndex, transposeColumnStatsIndex}
 import org.apache.hudi.HoodieDatasetUtils.withPersistence
 import org.apache.hudi.HoodieFileIndex.{DataSkippingFailureMode, collectReferencedColumns, getConfigProperties}
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
@@ -82,6 +81,8 @@ case class HoodieFileIndex(spark: SparkSession,
     fileStatusCache = fileStatusCache
   )
     with FileIndex {
+
+  private lazy val columnStatsIndex: ColumnStatsIndexSupport = new ColumnStatsIndexSupport(spark, basePath, schema, metadataConfig)
 
   override def rootPaths: Seq[Path] = queryPaths.asScala
 
@@ -203,11 +204,11 @@ case class HoodieFileIndex(spark: SparkSession,
     } else if (queryFilters.isEmpty || queryReferencedColumns.isEmpty) {
       Option.empty
     } else {
-      val colStatsDF: DataFrame = readColumnStatsIndex(spark, basePath, metadataConfig, queryReferencedColumns)
+      val colStatsDF: DataFrame = columnStatsIndex.load(queryReferencedColumns)
 
       // Persist DF to avoid re-computing column statistics unraveling
       withPersistence(colStatsDF) {
-        val transposedColStatsDF: DataFrame = transposeColumnStatsIndex(spark, colStatsDF, queryReferencedColumns, schema)
+        val transposedColStatsDF: DataFrame = columnStatsIndex.transpose(colStatsDF, queryReferencedColumns)
 
         // Persist DF to avoid re-computing column statistics unraveling
         withPersistence(transposedColStatsDF) {

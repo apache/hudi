@@ -20,7 +20,7 @@ package org.apache.hudi.functional
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{LocatedFileStatus, Path}
-import org.apache.hudi.ColumnStatsIndexSupport.{composeIndexSchema, readColumnStatsIndex, transposeColumnStatsIndex}
+import org.apache.hudi.ColumnStatsIndexSupport.composeIndexSchema
 import org.apache.hudi.DataSourceWriteOptions.{PRECOMBINE_FIELD, RECORDKEY_FIELD}
 import org.apache.hudi.HoodieConversionUtils.toProperties
 import org.apache.hudi.common.config.HoodieMetadataConfig
@@ -126,8 +126,10 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
       else sourceTableSchema.fieldNames
     }
 
-    val colStatsDF = readColumnStatsIndex(spark, basePath, metadataConfig, requestedColumns)
-    val transposedColStatsDF = transposeColumnStatsIndex(spark, colStatsDF, sourceTableSchema.fieldNames, sourceTableSchema)
+    val columnStatsIndex = new ColumnStatsIndexSupport(spark, basePath, sourceTableSchema, metadataConfig)
+
+    val colStatsDF = columnStatsIndex.load(requestedColumns)
+    val transposedColStatsDF = columnStatsIndex.transpose(colStatsDF, sourceTableSchema.fieldNames)
 
     val expectedColStatsSchema = composeIndexSchema(sourceTableSchema.fieldNames, sourceTableSchema)
 
@@ -166,8 +168,8 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
 
     metaClient = HoodieTableMetaClient.reload(metaClient)
 
-    val updatedColStatsDF = readColumnStatsIndex(spark, basePath, metadataConfig, requestedColumns)
-    val transposedUpdatedColStatsDF = transposeColumnStatsIndex(spark, updatedColStatsDF, sourceTableSchema.fieldNames, sourceTableSchema)
+    val updatedColStatsDF = columnStatsIndex.load(requestedColumns)
+    val transposedUpdatedColStatsDF = columnStatsIndex.transpose(updatedColStatsDF, sourceTableSchema.fieldNames)
 
     val expectedColStatsIndexUpdatedDF =
       spark.read
@@ -235,8 +237,10 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
       // These are NOT indexed
       val requestedColumns = Seq("c4")
 
-      val emptyColStatsDF = readColumnStatsIndex(spark, basePath, metadataConfig, requestedColumns)
-      val emptyTransposedColStatsDF = transposeColumnStatsIndex(spark, emptyColStatsDF, requestedColumns, sourceTableSchema)
+      val columnStatsIndex = new ColumnStatsIndexSupport(spark, basePath, sourceTableSchema, metadataConfig)
+
+      val emptyColStatsDF = columnStatsIndex.load(requestedColumns)
+      val emptyTransposedColStatsDF = columnStatsIndex.transpose(emptyColStatsDF, requestedColumns)
 
       assertEquals(0, emptyColStatsDF.collect().length)
       assertEquals(0, emptyTransposedColStatsDF.collect().length)
@@ -252,8 +256,10 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
       // We have to include "c1", since we sort the expected outputs by this column
       val requestedColumns = Seq("c4", "c1")
 
-      val partialColStatsDF = readColumnStatsIndex(spark, basePath, metadataConfig, requestedColumns)
-      val partialTransposedColStatsDF = transposeColumnStatsIndex(spark, partialColStatsDF, requestedColumns, sourceTableSchema)
+      val columnStatsIndex = new ColumnStatsIndexSupport(spark, basePath, sourceTableSchema, metadataConfig)
+
+      val partialColStatsDF = columnStatsIndex.load(requestedColumns)
+      val partialTransposedColStatsDF = columnStatsIndex.transpose(partialColStatsDF, requestedColumns)
 
       val targetIndexedColumns = targetColumnsToIndex.intersect(requestedColumns)
       val expectedColStatsSchema = composeIndexSchema(targetIndexedColumns, sourceTableSchema)
@@ -307,10 +313,12 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
 
       val requestedColumns = sourceTableSchema.fieldNames
 
+      val columnStatsIndex = new ColumnStatsIndexSupport(spark, basePath, sourceTableSchema, metadataConfig)
+
       // Nevertheless, the last update was written with a new schema (that is a subset of the original table schema),
       // we should be able to read CSI, which will be properly padded (with nulls) after transposition
-      val updatedColStatsDF = readColumnStatsIndex(spark, basePath, metadataConfig, requestedColumns)
-      val transposedUpdatedColStatsDF = transposeColumnStatsIndex(spark, updatedColStatsDF, requestedColumns, sourceTableSchema)
+      val updatedColStatsDF = columnStatsIndex.load(requestedColumns)
+      val transposedUpdatedColStatsDF = columnStatsIndex.transpose(updatedColStatsDF, requestedColumns)
 
       val targetIndexedColumns = targetColumnsToIndex.intersect(requestedColumns)
       val expectedColStatsSchema = composeIndexSchema(targetIndexedColumns, sourceTableSchema)
