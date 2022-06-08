@@ -67,9 +67,9 @@ class ColumnStatsIndexSupport(spark: SparkSession,
       //       by only fetching Column Stats Index records pertaining to the requested columns.
       //       Otherwise we fallback to read whole Column Stats Index
       if (targetColumns.nonEmpty) {
-        readColumnStatsIndexForColumnsInternal(spark, targetColumns, metadataConfig, tableBasePath)
+        readColumnStatsIndexForColumnsInternal(targetColumns)
       } else {
-        readFullColumnStatsIndexInternal(spark, metadataConfig, tableBasePath)
+        readFullColumnStatsIndexInternal()
       }
     }
 
@@ -211,7 +211,7 @@ class ColumnStatsIndexSupport(spark: SparkSession,
     spark.createDataFrame(transposedRDD, indexSchema)
   }
 
-  private def readColumnStatsIndexForColumnsInternal(spark: SparkSession, targetColumns: Seq[String], metadataConfig: HoodieMetadataConfig, tableBasePath: String) = {
+  private def readColumnStatsIndexForColumnsInternal(targetColumns: Seq[String]): DataFrame = {
 
     // Read Metadata Table's Column Stats Index into Spark's [[DataFrame]] by
     //    - Fetching the records from CSI by key-prefixes (encoded column names)
@@ -244,7 +244,7 @@ class ColumnStatsIndexSupport(spark: SparkSession,
     metadataTableDF
   }
 
-  private def readFullColumnStatsIndexInternal(spark: SparkSession, metadataConfig: HoodieMetadataConfig, tableBasePath: String): DataFrame = {
+  private def readFullColumnStatsIndexInternal(): DataFrame = {
     val metadataTablePath = HoodieTableMetadata.getMetadataTableBasePath(tableBasePath)
     // Read Metadata Table's Column Stats Index into Spark's [[DataFrame]]
     spark.read.format("org.apache.hudi")
