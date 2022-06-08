@@ -210,19 +210,13 @@ class ColumnStatsIndexSupport(spark: SparkSession,
       // TODO encoding should be done internally w/in HoodieBackedTableMetadata
       val encodedTargetColumnNames = targetColumns.map(colName => new ColumnIndexID(colName).asBase64EncodedString())
 
-      val recordsRDD: RDD[HoodieRecord[HoodieMetadataPayload]] =
-        HoodieJavaRDD.of(
-          metadataTable.getRecordsByKeyPrefixes(encodedTargetColumnNames.asJava, HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS)
-            .collectAsList(),
-          engineCtx,
-          1
-        ).get()
+      val recordsRDD: RDD[HoodieRecord[HoodieMetadataPayload]] = HoodieJavaRDD.getJavaRDD(
+          metadataTable.getRecordsByKeyPrefixes(encodedTargetColumnNames.asJava, HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS))
 
       val catalystRowsRDD: RDD[InternalRow] = recordsRDD.mapPartitions { it =>
         val converter = AvroConversionUtils.createAvroToInternalRowConverter(HoodieMetadataColumnStats.SCHEMA$, columnStatsRecordStructType)
 
         it.map { record =>
-          // TODO avoid unnecessary allocations
           toScalaOption(record.getData.getInsertValue(null, null))
             .flatMap(metadataRecord => converter(metadataRecord.asInstanceOf[HoodieMetadataRecord].getColumnStatsMetadata))
             .orNull
