@@ -22,7 +22,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.commands.TableCommand;
-import org.apache.hudi.cli.testutils.AbstractShellIntegrationTest;
+import org.apache.hudi.cli.testutils.HoodieCLIIntegrationTestBase;
 import org.apache.hudi.functional.TestBootstrap;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
@@ -44,7 +44,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Test class of {@link org.apache.hudi.cli.commands.BootstrapCommand}.
  */
-public class ITTestBootstrapCommand extends AbstractShellIntegrationTest {
+public class ITTestBootstrapCommand extends HoodieCLIIntegrationTestBase {
 
   private static final int NUM_OF_RECORDS = 100;
   private static final String PARTITION_FIELD = "datestr";

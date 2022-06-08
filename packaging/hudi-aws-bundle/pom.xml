@@ -35,6 +35,7 @@
     <properties>
         <checkstyle.skip>true</checkstyle.skip>
         <main.basedir>${project.parent.basedir}</main.basedir>
+        <skipTests>true</skipTests>
     </properties>
 
     <build>
