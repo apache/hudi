@@ -211,6 +211,9 @@ footer .container {
 .tagRegular_node_modules-\@docusaurus-theme-classic-lib-next-theme-Tag-styles-module{
   color:black
 }
+.authorTimeTags_src-theme-BlogPostItem-styles-module {
+  vertical-align:text-top;
+}
 
 
 .blog-list-page article {
@@ -248,7 +251,7 @@ footer .container {
 .blogPostTitle_src-theme-BlogPostItem-styles-module{
   display:inline;
   overflow: hidden;
- 
+  vertical-align: text-top;
   
 }
 

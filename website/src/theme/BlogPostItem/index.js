@@ -64,7 +64,7 @@
    const truncatedPost = !isBlogPostPage && truncated;
    const tagsExists = tags.length > 0;
 
-   const tagsList = () => {
+  const tagsList = () => {
     return (
         <>
           <ul className={clsx(styles.tags, styles.authorTimeTags, 'padding--none', 'margin-left--sm')}>
@@ -79,8 +79,8 @@
       );
 }
 const AuthorsList = () => {
-
-  const authorsCount = authors.length;
+  
+const authorsCount = authors.length;
   if (authorsCount === 0) {
       return  (
           <div className={clsx(styles.authorTimeTags, "row margin-top--sm margin-bottom--sm 'margin-vert--md'")}>
@@ -93,30 +93,62 @@ const AuthorsList = () => {
   }
  
   return (
-      <div className={clsx(styles.authorTimeTags, "row margin-top--sm margin-bottom--sm 'margin-vert--md'")}>
+    <>
+    {isBlogPostPage ? <div className={clsx(styles.blogPostText, "row margin-top--sm margin-bottom--sm 'margin-vert--md'")}>
           <time dateTime={date} itemProp="datePublished">
-              {formattedDate}
+              {formattedDate}  
           </time>
-           {authors.map((author, idx) => (
 
+           {authors.map((author, idx) => (
+            
             <div  key={idx}>
                   <div className="avatar margin-bottom--sm">
+                 
                       {author.name && (
                               <div>
-                              {authorsCount < 3 ? 
+                              <>
+                                {idx!== 0 ? idx!== authors.length - 1 ?   ',' : 'and':''}</>
                                 <Link href={author.url} itemProp="url">
-                                  <span className={clsx(styles.authorsList)} itemProp="name">{author.name}</span>
-                                </Link> :  <Link href={author.url} itemProp="url">
-                                  <span className={clsx(styles.authorsListLong)} itemProp="name">{author.name}</span>
-                                </Link>
-                              }
+
+                                <span className={clsx(styles.blogPostAuthorsList)} itemProp="name">{author.name}</span>
+                                </Link> 
+                                 
                               </div>
                           )
                       }
                   </div>
               </div>
             ))}
-      </div>
+
+      </div> : <div className={clsx(styles.authorTimeTags, "row margin-top--sm margin-bottom--sm 'margin-vert--md'")}>
+          <time dateTime={date} itemProp="datePublished">
+              {formattedDate} by  
+          </time>
+
+           {authors.map((author, idx) => (
+            
+            <div  key={idx}>
+                  <div className="avatar margin-bottom--sm">
+                 
+                      {author.name && (
+                              <div>
+                              <>
+                                {idx!== 0 ? idx!== authors.length - 1 ?  ',' : 'and': '' }</>
+                                <Link href={author.url} itemProp="url">
+
+                                <span className={clsx(styles.authorsList)} itemProp="name">{author.name}</span>
+                                </Link> 
+                                 
+                              </div>
+                          )
+                      }
+                  </div>
+              </div>
+            ))}
+
+      </div>}
+      
+      </>
     );
 }
  
