@@ -30,6 +30,7 @@
     <checkstyle.skip>true</checkstyle.skip>
     <main.basedir>${project.parent.basedir}</main.basedir>
     <javax.servlet.version>3.1.0</javax.servlet.version>
+    <skipTests>true</skipTests>
   </properties>
 
   <build>
