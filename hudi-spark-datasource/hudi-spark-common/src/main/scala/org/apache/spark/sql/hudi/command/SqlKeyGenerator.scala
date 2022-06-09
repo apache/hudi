@@ -18,6 +18,7 @@
 package org.apache.spark.sql.hudi.command
 
 import org.apache.avro.generic.GenericRecord
+import org.apache.hudi.DataSourceOptionsHelper
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.util.PartitionPathEncodeUtils
 import org.apache.hudi.config.HoodieWriteConfig
@@ -113,14 +114,14 @@ class SqlKeyGenerator(props: TypedProperties) extends ComplexKeyGenerator(props)
     } else partitionPath
   }
 
-  override def getPartitionPath(record: GenericRecord) = {
+  override def getPartitionPath(record: GenericRecord): String = {
     val partitionPath = super.getPartitionPath(record)
-    convertPartitionPathToSqlType(partitionPath, false)
+    convertPartitionPathToSqlType(partitionPath, rowType = false)
   }
 
   override def getPartitionPath(row: Row): String = {
     val partitionPath = super.getPartitionPath(row)
-    convertPartitionPathToSqlType(partitionPath, true)
+    convertPartitionPathToSqlType(partitionPath, rowType = true)
   }
 }
 
@@ -135,7 +136,7 @@ object SqlKeyGenerator {
     if (beforeKeyGenClassName != null && beforeKeyGenClassName.nonEmpty) {
       HoodieSparkKeyGeneratorFactory.convertToSparkKeyGenerator(beforeKeyGenClassName)
     } else {
-      classOf[ComplexKeyGenerator].getCanonicalName
+      DataSourceOptionsHelper.inferKeyGenClazz(props)
     }
   }
 }
