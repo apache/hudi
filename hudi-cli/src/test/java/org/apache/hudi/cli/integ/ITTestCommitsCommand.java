@@ -21,7 +21,7 @@ package org.apache.hudi.cli.integ;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.commands.RollbacksCommand;
 import org.apache.hudi.cli.commands.TableCommand;
-import org.apache.hudi.cli.testutils.AbstractShellIntegrationTest;
+import org.apache.hudi.cli.testutils.HoodieCLIIntegrationTestBase;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -50,7 +50,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * A command use SparkLauncher need load jars under lib which generate during mvn package.
  * Use integration test instead of unit test.
  */
-public class ITTestCommitsCommand extends AbstractShellIntegrationTest {
+public class ITTestCommitsCommand extends HoodieCLIIntegrationTestBase {
 
   @BeforeEach
   public void init() throws IOException {
