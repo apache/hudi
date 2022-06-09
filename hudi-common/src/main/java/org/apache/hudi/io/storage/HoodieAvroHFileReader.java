@@ -64,7 +64,7 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  * <p>
  * {@link HoodieFileReader} implementation allowing to read from {@link HFile}.
  */
-public class HoodieAvroHFileReader<T> implements HoodieAvroFileReader<T> {
+public class HoodieAvroHFileReader implements HoodieAvroFileReader {
 
   // TODO HoodieHFileReader right now tightly coupled to MT, we should break that coupling
   public static final String SCHEMA_KEY = "schema";
@@ -171,7 +171,7 @@ public class HoodieAvroHFileReader<T> implements HoodieAvroFileReader<T> {
 
   @SuppressWarnings("unchecked")
   @Override
-  public Option<IndexedRecord> getRecordByKey(String key, Schema readerSchema) throws IOException {
+  public Option<IndexedRecord> getIndexedRecordByKey(String key, Schema readerSchema) throws IOException {
     synchronized (sharedScannerLock) {
       return fetchRecordByKeyInternal(sharedScanner, key, getSchema(), readerSchema);
     }
@@ -185,7 +185,7 @@ public class HoodieAvroHFileReader<T> implements HoodieAvroFileReader<T> {
 
   @SuppressWarnings("unchecked")
   @Override
-  public ClosableIterator<IndexedRecord> getRecordsByKeysIterator(List<String> keys, Schema readerSchema) throws IOException {
+  public ClosableIterator<IndexedRecord> getIndexedRecordsByKeysIterator(List<String> keys, Schema readerSchema) throws IOException {
     // We're caching blocks for this scanner to minimize amount of traffic
     // to the underlying storage as we fetched (potentially) sparsely distributed
     // keys
@@ -195,7 +195,7 @@ public class HoodieAvroHFileReader<T> implements HoodieAvroFileReader<T> {
 
   @SuppressWarnings("unchecked")
   @Override
-  public ClosableIterator<IndexedRecord> getRecordsByKeyPrefixIterator(List<String> keyPrefixes, Schema readerSchema) throws IOException {
+  public ClosableIterator<IndexedRecord> getIndexedRecordsByKeyPrefixIterator(List<String> keyPrefixes, Schema readerSchema) throws IOException {
     // We're caching blocks for this scanner to minimize amount of traffic
     // to the underlying storage as we fetched (potentially) sparsely distributed
     // keys
@@ -366,7 +366,7 @@ public class HoodieAvroHFileReader<T> implements HoodieAvroFileReader<T> {
    * <p>
    * Reads all the records with given schema
    */
-  public static List<IndexedRecord> readAllRecords(HoodieAvroHFileReader<?> reader) throws IOException {
+  public static List<IndexedRecord> readAllRecords(HoodieAvroHFileReader reader) throws IOException {
     Schema schema = reader.getSchema();
     return toStream(reader.getIndexedRecordIterator(schema))
         .collect(Collectors.toList());
@@ -387,11 +387,11 @@ public class HoodieAvroHFileReader<T> implements HoodieAvroFileReader<T> {
    * <p>
    * Reads all the records with given schema and filtering keys.
    */
-  public static List<IndexedRecord> readRecords(HoodieAvroHFileReader<?> reader,
+  public static List<IndexedRecord> readRecords(HoodieAvroHFileReader reader,
                                                               List<String> keys,
                                                               Schema schema) throws IOException {
     Collections.sort(keys);
-    return toStream(reader.getRecordsByKeysIterator(keys, schema))
+    return toStream(reader.getIndexedRecordsByKeysIterator(keys, schema))
         .collect(Collectors.toList());
   }
 

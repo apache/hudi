@@ -18,15 +18,11 @@
 
 package org.apache.hudi.table.action.commit;
 
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.client.utils.MergingIterator;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.util.queue.BoundedInMemoryQueueConsumer;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -41,6 +37,10 @@ import org.apache.avro.io.BinaryDecoder;
 import org.apache.avro.io.BinaryEncoder;
 import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.io.EncoderFactory;
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
 
 import javax.annotation.Nonnull;
 
@@ -100,7 +100,8 @@ public abstract class BaseMergeHelper<T, I, K, O> {
                                                       boolean externalSchemaTransformation) throws IOException {
     Path externalFilePath = new Path(baseFile.getBootstrapBaseFile().get().getPath());
     Configuration bootstrapFileConfig = new Configuration(table.getHadoopConf());
-    HoodieFileReader bootstrapReader = HoodieFileReaderFactory.getFileReader(bootstrapFileConfig, externalFilePath);
+    HoodieRecordType recordType = table.getConfig().getRecordType();
+    HoodieFileReader bootstrapReader = HoodieFileReaderFactory.getReaderFactory(recordType).getFileReader(bootstrapFileConfig, externalFilePath);
 
     Schema bootstrapReadSchema;
     if (externalSchemaTransformation) {
@@ -109,9 +110,9 @@ public abstract class BaseMergeHelper<T, I, K, O> {
       bootstrapReadSchema = mergeHandle.getWriterSchema();
     }
 
-    return new MergingIterator<HoodieRecord>(
-        reader.getRecordIterator(readerSchema, (HoodieRecord.Mapper<IndexedRecord, IndexedRecord>) HoodieAvroIndexedRecord::new),
-        bootstrapReader.getRecordIterator(bootstrapReadSchema, (HoodieRecord.Mapper<IndexedRecord, IndexedRecord>) HoodieAvroIndexedRecord::new),
+    return new MergingIterator<>(
+        (Iterator<HoodieRecord>) reader.getRecordIterator(readerSchema),
+        (Iterator<HoodieRecord>) bootstrapReader.getRecordIterator(bootstrapReadSchema),
         (oneRecord, otherRecord) -> mergeRecords(oneRecord, otherRecord, readerSchema, mergeHandle.getWriterSchemaWithMetaFields()));
   }
 

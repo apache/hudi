@@ -20,17 +20,17 @@ package org.apache.hudi.io.storage;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hadoop.hbase.io.hfile.CacheConfig;
 
 import java.io.IOException;
 
-public class HoodieSparkFileReaderFactory extends HoodieFileReaderFactory  {
+public class HoodieAvroFileReaderFactory extends HoodieFileReaderFactory {
 
   private static class SingletonHolder {
-    private static HoodieSparkFileReaderFactory instance = new HoodieSparkFileReaderFactory();
+    private static HoodieAvroFileReaderFactory instance = new HoodieAvroFileReaderFactory();
   }
 
-  private HoodieSparkFileReaderFactory() {
+  private HoodieAvroFileReaderFactory() {
   }
 
   public static HoodieFileReaderFactory getFileReaderFactory() {
@@ -38,14 +38,11 @@ public class HoodieSparkFileReaderFactory extends HoodieFileReaderFactory  {
   }
 
   protected HoodieFileReader newParquetFileReader(Configuration conf, Path path) {
-    return new HoodieSparkParquetReader(conf, path);
+    return new HoodieAvroParquetReader(conf, path);
   }
 
   protected HoodieFileReader newHFileFileReader(Configuration conf, Path path) throws IOException {
-    throw new HoodieIOException("Not support read HFile");
-  }
-
-  protected static HoodieFileReader newOrcFileReader(Configuration conf, Path path) {
-    throw new HoodieIOException("Not support read orc file");
+    CacheConfig cacheConfig = new CacheConfig(conf);
+    return new HoodieAvroHFileReader(conf, path, cacheConfig);
   }
 }

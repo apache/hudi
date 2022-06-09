@@ -16,11 +16,14 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common.model;
+package org.apache.hudi;
 
-import org.apache.hudi.HoodieInternalRowUtils;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieOperation;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.io.storage.HoodieSparkFileReader;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 
 import org.apache.avro.Schema;
@@ -33,8 +36,10 @@ import org.apache.spark.sql.types.StructType;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
+import java.util.function.Function;
 
 import static org.apache.spark.sql.types.DataTypes.BooleanType;
 
@@ -104,7 +109,11 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
 
   @Override
   public HoodieRecord rewriteRecord(Schema recordSchema, Properties prop, boolean schemaOnReadEnabled, Schema writeSchemaWithMetaFields) throws IOException {
-    return this;
+    StructType readerStructType = HoodieInternalRowUtils.getCacheSchema(recordSchema);
+    StructType writeSchemaWithMetaFieldsStructType = HoodieInternalRowUtils.getCacheSchema(writeSchemaWithMetaFields);
+    InternalRow rewriteRow = schemaOnReadEnabled ? HoodieInternalRowUtils.rewriteRecordWithNewSchema(data, readerStructType, writeSchemaWithMetaFieldsStructType, new HashMap<>())
+        : HoodieInternalRowUtils.rewriteRecord(data, readerStructType, writeSchemaWithMetaFieldsStructType);
+    return new HoodieSparkRecord(getKey(), rewriteRow, getOperation());
   }
 
   @Override
@@ -122,15 +131,6 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
     StructType newStructType = HoodieInternalRowUtils.getCacheSchema(newSchema);
     InternalRow rewriteRow = HoodieInternalRowUtils.rewriteRecordWithNewSchema(data, readerStructType, newStructType, renameCols);
     return new HoodieSparkRecord(getKey(), rewriteRow, getOperation());
-  }
-
-  @Override
-  public HoodieRecord rewriteRecordWithNewSchema(Schema recordSchema, Properties prop, Schema newSchema, Map<String, String> renameCols, Mapper mapper) throws IOException {
-    StructType readerStructType = HoodieInternalRowUtils.getCacheSchema(recordSchema);
-    StructType newStructType = HoodieInternalRowUtils.getCacheSchema(newSchema);
-    InternalRow rewriteRow = HoodieInternalRowUtils.rewriteRecordWithNewSchema(data, readerStructType, newStructType, renameCols);
-    // TODO change mapper type
-    return mapper.apply((IndexedRecord) rewriteRow);
   }
 
   @Override
@@ -161,6 +161,17 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
     //      }
     //    });
     return this;
+  }
+
+  @Override
+  public HoodieRecord addInfo(Schema schema, Properties prop, Map<String, Object> mapperConfig) throws IOException {
+    Function<InternalRow, HoodieRecord<InternalRow>> mapper = HoodieSparkFileReader.createMapper(schema, mapperConfig);
+    return mapper.apply(data);
+  }
+
+  @Override
+  public HoodieRecord transform(Schema schema, Properties prop) {
+    return null;
   }
 
   @Override

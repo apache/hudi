@@ -38,7 +38,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
-public class HoodieAvroParquetReader<T> implements HoodieAvroFileReader<T> {
+public class HoodieAvroParquetReader implements HoodieAvroFileReader {
 
   private final Path path;
   private final Configuration conf;

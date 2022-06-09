@@ -19,13 +19,12 @@
 package org.apache.hudi.common.table.log;
 
 import org.apache.hudi.common.model.DeleteRecord;
-import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
-import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock.RecordIterator;
 import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
@@ -34,8 +33,9 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.log.block.HoodieParquetDataBlock;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ClosableIterator;
+import org.apache.hudi.common.util.MapperUtils;
+import org.apache.hudi.common.util.MappingIterator;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -43,8 +43,6 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.internal.schema.InternalSchema;
@@ -60,11 +58,13 @@ import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.TypeUtils.unsafeCast;
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType.INSTANT_TIME;
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType.COMMAND_BLOCK;
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType.CORRUPT_BLOCK;
@@ -139,21 +139,23 @@ public abstract class AbstractHoodieLogRecordReader {
   private Option<String> partitionName;
   // Populate meta fields for the records
   private boolean populateMetaFields = true;
+  // Record type read from log block
+  private final HoodieRecordType recordType;
 
   protected AbstractHoodieLogRecordReader(FileSystem fs, String basePath, List<String> logFilePaths,
                                           Schema readerSchema,
                                           String latestInstantTime, boolean readBlocksLazily, boolean reverseReader,
                                           int bufferSize, Option<InstantRange> instantRange,
-                                          boolean withOperationField) {
+                                          boolean withOperationField, HoodieRecordType recordType) {
     this(fs, basePath, logFilePaths, readerSchema, latestInstantTime, readBlocksLazily, reverseReader, bufferSize,
-        instantRange, withOperationField, true, Option.empty(), InternalSchema.getEmptyInternalSchema());
+        instantRange, withOperationField, true, Option.empty(), InternalSchema.getEmptyInternalSchema(), recordType);
   }
 
   protected AbstractHoodieLogRecordReader(FileSystem fs, String basePath, List<String> logFilePaths,
                                           Schema readerSchema, String latestInstantTime, boolean readBlocksLazily,
                                           boolean reverseReader, int bufferSize, Option<InstantRange> instantRange,
                                           boolean withOperationField, boolean forceFullScan,
-                                          Option<String> partitionName, InternalSchema internalSchema) {
+                                          Option<String> partitionName, InternalSchema internalSchema, HoodieRecordType recordType) {
     this.readerSchema = readerSchema;
     this.latestInstantTime = latestInstantTime;
     this.hoodieTableMetaClient = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(basePath).build();
@@ -181,6 +183,7 @@ public abstract class AbstractHoodieLogRecordReader {
           Pair.of(tableConfig.getRecordKeyFieldProp(), tableConfig.getPartitionFieldProp()));
     }
     this.partitionName = partitionName;
+    this.recordType = recordType;
   }
 
   protected String getKeyField() {
@@ -379,21 +382,13 @@ public abstract class AbstractHoodieLogRecordReader {
    * handle it.
    */
   private void processDataBlock(HoodieDataBlock dataBlock, Option<KeySpec> keySpecOpt) throws Exception {
-    HoodieRecord.Mapper<HoodieRecord, ?> mapper = (rec) -> createHoodieRecord(rec, this.hoodieTableMetaClient.getTableConfig(),
-        this.payloadClassFQN, this.preCombineField, this.withOperationField, this.simpleKeyGenFields, this.partitionName);
-
-    try (ClosableIterator<HoodieRecord> recordIterator = getRecordsIterator(dataBlock, keySpecOpt)) {
+    Map<String, Object> mapperConfig = MapperUtils.buildMapperConfig(this.payloadClassFQN, this.preCombineField, this.simpleKeyGenFields, this.withOperationField, this.partitionName);
+    try (ClosableIterator<HoodieRecord> recordIterator = getRecordsIterator(dataBlock, keySpecOpt, recordType, mapperConfig)) {
       Option<Schema> schemaOption = getMergedSchema(dataBlock);
-      Schema finalReadSchema;
-      if (recordIterator instanceof RecordIterator) {
-        finalReadSchema = ((RecordIterator) recordIterator).getFinalReadSchema();
-      } else {
-        finalReadSchema = dataBlock.getSchema();
-      }
       while (recordIterator.hasNext()) {
-        HoodieRecord currentRecord = mapper.apply(recordIterator.next());
-        HoodieRecord record = schemaOption.isPresent()
-            ? currentRecord.rewriteRecordWithNewSchema(finalReadSchema, new Properties(), schemaOption.get(), new HashMap<>(), mapper) : currentRecord;
+        HoodieRecord<?> currentRecord = recordIterator.next();
+        HoodieRecord<?> record = schemaOption.isPresent()
+            ? currentRecord.rewriteRecordWithNewSchema(dataBlock.getSchema(), new Properties(), schemaOption.get(), new HashMap<>()) : currentRecord;
         processNextRecord(record);
         totalLogRecords.incrementAndGet();
       }
@@ -420,38 +415,6 @@ public abstract class AbstractHoodieLogRecordReader {
       result = Option.of(mergeSchema);
     }
     return result;
-  }
-
-  /**
-   * Create @{@link HoodieRecord} from the @{@link IndexedRecord}.
-   *
-   * @param rec                - IndexedRecord to create the HoodieRecord from
-   * @param hoodieTableConfig  - Table config
-   * @param payloadClassFQN    - Payload class fully qualified name
-   * @param preCombineField    - PreCombine field
-   * @param withOperationField - Whether operation field is enabled
-   * @param simpleKeyGenFields - Key generator fields when populate meta fields is tuened off
-   * @param partitionName      - Partition name
-   * @return HoodieRecord created from the IndexedRecord
-   */
-  protected <T, R> HoodieRecord<R> createHoodieRecord(final HoodieRecord<T> rec, final HoodieTableConfig hoodieTableConfig,
-                                               final String payloadClassFQN, final String preCombineField,
-                                               final boolean withOperationField,
-                                               final Option<Pair<String, String>> simpleKeyGenFields,
-                                               final Option<String> partitionName) {
-    if (rec instanceof HoodieAvroIndexedRecord) {
-      if (this.populateMetaFields) {
-        return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) ((HoodieAvroIndexedRecord) rec).getData(), payloadClassFQN,
-            preCombineField, withOperationField);
-      } else {
-        return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) ((HoodieAvroIndexedRecord) rec).getData(), payloadClassFQN,
-            preCombineField, simpleKeyGenFields.get(), withOperationField, partitionName);
-      }
-    } else if (rec.getClass().getSimpleName().equals("HoodieSparkRecord")) {
-      return (HoodieRecord<R>) rec;
-    } else {
-      throw new UnsupportedOperationException("unsupported record type");
-    }
   }
 
   /**
@@ -501,13 +464,23 @@ public abstract class AbstractHoodieLogRecordReader {
     progress = numLogFilesSeen - 1 / logFilePaths.size();
   }
 
-  private ClosableIterator<HoodieRecord> getRecordsIterator(HoodieDataBlock dataBlock, Option<KeySpec> keySpecOpt) throws IOException {
+  private ClosableIterator<HoodieRecord> getRecordsIterator(HoodieDataBlock dataBlock, Option<KeySpec> keySpecOpt, HoodieRecordType type, Map<String, Object> mapperConfig) throws IOException {
+    ClosableIterator<HoodieRecord> iter;
     if (keySpecOpt.isPresent()) {
       KeySpec keySpec = keySpecOpt.get();
-      return dataBlock.getRecordIterator(keySpec.keys, keySpec.fullKey);
+      iter =  unsafeCast(dataBlock.getRecordIterator(keySpec.keys, keySpec.fullKey, type));
+    } else {
+      iter = unsafeCast(dataBlock.getRecordIterator(type));
     }
 
-    return dataBlock.getRecordIterator();
+    return new MappingIterator<>(iter, rec -> {
+      try {
+        return rec.expansion(readerSchema, new Properties(), mapperConfig);
+      } catch (IOException e) {
+        LOG.error("Error expanse " + rec, e);
+        throw new HoodieException(e);
+      }
+    });
   }
 
   /**
@@ -593,6 +566,10 @@ public abstract class AbstractHoodieLogRecordReader {
     }
 
     public Builder withOperationField(boolean withOperationField) {
+      throw new UnsupportedOperationException();
+    }
+
+    public Builder withRecordType(HoodieRecordType type) {
       throw new UnsupportedOperationException();
     }
 
