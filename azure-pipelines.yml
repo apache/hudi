@@ -72,7 +72,9 @@ parameters:
       - '!hudi-utilities'
 
 variables:
-  MAVEN_OPTS: '-Dscala-2.11 -Dspark2.4 -Dflink1.14 -Dcheckstyle.skip=true -Drat.skip=true -Djacoco.skip=true'
+  BUILD_PROFILES: '-Dscala-2.11 -Dspark2.4 -Dflink1.14'
+  PLUGIN_OPTIONS: '-Dcheckstyle.skip=true -Drat.skip=true -Djacoco.skip=true'
+  BUILD_OPTIONS: '-T 2.5C -DskipTests $(BUILD_PROFILES) $(PLUGIN_OPTIONS)'
   SPARK_VERSION: '2.4.4'
   HADOOP_VERSION: '2.7'
   SPARK_ARCHIVE: spark-$(SPARK_VERSION)-bin-hadoop$(HADOOP_VERSION)
@@ -93,10 +95,10 @@ stages:
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'clean install'
-              options: -T 2.5C -DskipTests
+              options: $(BUILD_OPTIONS)
               publishJUnitResults: false
               jdkVersionOption: '1.8'
-              mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
+              mavenOptions: '-Xmx4g'
           - task: Maven@3
             displayName: UT common flink client/spark-client
             inputs:
@@ -105,7 +107,7 @@ stages:
               options: -fae -Punit-tests -pl $(JOB1_MODULES),hudi-client/hudi-spark-client
               publishJUnitResults: false
               jdkVersionOption: '1.8'
-              mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
+              mavenOptions: '-Xmx4g'
           - task: Maven@3
             displayName: FT common flink
             inputs:
@@ -114,7 +116,7 @@ stages:
               options: -fae -Pfunctional-tests -pl $(JOB1_MODULES)
               publishJUnitResults: false
               jdkVersionOption: '1.8'
-              mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
+              mavenOptions: '-Xmx4g'
       - job: UT_FT_2
         displayName: FT client/spark-client
         timeoutInMinutes: '120'
@@ -124,10 +126,10 @@ stages:
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'clean install'
-              options: -T 2.5C -DskipTests
+              options: $(BUILD_OPTIONS)
               publishJUnitResults: false
               jdkVersionOption: '1.8'
-              mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
+              mavenOptions: '-Xmx4g'
           - task: Maven@3
             displayName: FT client/spark-client
             inputs:
@@ -136,7 +138,7 @@ stages:
               options: -fae -Pfunctional-tests -pl $(JOB2_MODULES)
               publishJUnitResults: false
               jdkVersionOption: '1.8'
-              mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
+              mavenOptions: '-Xmx4g'
       - job: UT_FT_3
         displayName: UT FT clients & cli & utilities & sync
         timeoutInMinutes: '120'
@@ -146,10 +148,10 @@ stages:
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'clean install'
-              options: -T 2.5C -DskipTests
+              options: $(BUILD_OPTIONS)
               publishJUnitResults: false
               jdkVersionOption: '1.8'
-              mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
+              mavenOptions: '-Xmx4g'
           - task: Maven@3
             displayName: UT clients & cli & utilities & sync
             inputs:
@@ -158,7 +160,7 @@ stages:
               options: -fae -Punit-tests -pl $(JOB3_MODULES)
               publishJUnitResults: false
               jdkVersionOption: '1.8'
-              mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
+              mavenOptions: '-Xmx4g'
           - task: Maven@3
             displayName: FT clients & cli & utilities & sync
             inputs:
@@ -167,7 +169,7 @@ stages:
               options: -fae -Pfunctional-tests -pl $(JOB3_MODULES)
               publishJUnitResults: false
               jdkVersionOption: '1.8'
-              mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
+              mavenOptions: '-Xmx4g'
       - job: UT_FT_4
         displayName: UT FT other modules
         timeoutInMinutes: '120'
@@ -177,10 +179,10 @@ stages:
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'clean install'
-              options: -T 2.5C -DskipTests
+              options: $(BUILD_OPTIONS)
               publishJUnitResults: false
               jdkVersionOption: '1.8'
-              mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
+              mavenOptions: '-Xmx4g'
           - task: Maven@3
             displayName: UT other modules
             inputs:
@@ -189,7 +191,7 @@ stages:
               options: -fae -Punit-tests -pl $(JOB4_MODULES)
               publishJUnitResults: false
               jdkVersionOption: '1.8'
-              mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
+              mavenOptions: '-Xmx4g'
           - task: Maven@3
             displayName: FT other modules
             inputs:
@@ -198,7 +200,7 @@ stages:
               options: -fae -Pfunctional-tests -pl $(JOB4_MODULES)
               publishJUnitResults: false
               jdkVersionOption: '1.8'
-              mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
+              mavenOptions: '-Xmx4g'
       - job: IT
         displayName: IT modules
         timeoutInMinutes: '120'
@@ -208,10 +210,10 @@ stages:
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'clean install'
-              options: -T 2.5C -Pintegration-tests -DskipTests
+              options: -T 2.5C -Pintegration-tests -DskipTests $(BUILD_PROFILES) $(PLUGIN_OPTIONS)
               publishJUnitResults: false
               jdkVersionOption: '1.8'
-              mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
+              mavenOptions: '-Xmx4g'
           - task: Maven@3
             displayName: UT integ-test
             inputs:
@@ -220,7 +222,7 @@ stages:
               options: -Pintegration-tests -DskipUTs=false -DskipITs=true -pl hudi-integ-test test
               publishJUnitResults: false
               jdkVersionOption: '1.8'
-              mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
+              mavenOptions: '-Xmx4g'
           - task: AzureCLI@2
             displayName: Prepare for IT
             inputs:
