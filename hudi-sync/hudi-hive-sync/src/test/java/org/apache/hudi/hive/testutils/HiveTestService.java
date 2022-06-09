@@ -200,6 +200,7 @@ public class HiveTestService {
         Files.createTempDirectory(System.currentTimeMillis() + "-").toFile().getAbsolutePath());
 
     conf.set("hive.in.test", "true");
+    conf.set("hive.metastore.event.db.notification.api.auth","false");
     conf.set("hive.metastore.execute.setugi", "false");
     conf.set("hive.metastore.schema.verification","false");
     conf.set("datanucleus.schema.autoCreateAll","true");
