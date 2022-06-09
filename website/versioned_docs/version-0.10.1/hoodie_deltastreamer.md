@@ -288,6 +288,11 @@ other formats and then write data as Hudi format.)
 - ORC
 - HUDI
 
+For DFS sources the following behaviors are expected:
+
+- For JSON DFS source, you always need to set a schema. If the target Hudi table follows the same schema as from the source file, you just need to set the source schema. If not, you need to set schemas for both source and target.
+- `HoodieDeltaStreamer` reads the files under the source base path (`hoodie.deltastreamer.source.dfs.root`) directly, and it won't use the partition paths under this base path as fields of the dataset. Detailed examples can be found [here](https://github.com/apache/hudi/issues/5485).
+
 ### Kafka
 Hudi can read directly from Kafka clusters. See more details on HoodieDeltaStreamer to learn how to setup streaming 
 ingestion with exactly once semantics, checkpointing, and plugin transformations. The following formats are supported 
