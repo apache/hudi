@@ -235,6 +235,11 @@ public class HoodieTableConfig extends HoodieConfig {
       .withDocumentation("Comma-separated list of metadata partitions that have been completely built and in-sync with data table. "
           + "These partitions are ready for use by the readers");
 
+  public static final ConfigProperty<String> SECONDARY_INDEXES_METADATA = ConfigProperty
+      .key("hoodie.table.secondary.indexes.metadata")
+      .noDefaultValue()
+      .withDocumentation("The metadata of secondary indexes");
+
   private static final String TABLE_CHECKSUM_FORMAT = "%s.%s"; // <database_name>.<table_name>
 
   public HoodieTableConfig(FileSystem fs, String metaPath, String payloadClassName) {
@@ -496,6 +501,14 @@ public class HoodieTableConfig extends HoodieConfig {
       return Option.of(Arrays.stream(getString(PARTITION_FIELDS).split(","))
           .filter(p -> p.length() > 0).collect(Collectors.toList()).toArray(new String[] {}));
     }
+    return Option.empty();
+  }
+
+  public Option<String> getSecondaryIndexesMetadata() {
+    if (contains(SECONDARY_INDEXES_METADATA)) {
+      return Option.of(getString(SECONDARY_INDEXES_METADATA));
+    }
+
     return Option.empty();
   }
 
