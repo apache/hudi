@@ -71,6 +71,11 @@ public class HoodieConfigDocGenerator {
       "At a high level, you can control behaviour at few levels.";
   private static final String FLINK_CONFIG_CLASS_NAME = "org.apache.hudi.configuration.FlinkOptions";
   private static final String CONFIG_PATH = "/tmp/configurations.md";
+  private static final String EXTERNALIZED_CONFIGS = "## Externalized Config File\n" +
+          "Instead of directly passing configuration settings to every Hudi job, you can also centrally set them in a configuration\n" +
+          "file `hudi-default.conf`. By default, Hudi would load the configuration file under `/etc/hudi/conf` directory. You can\n" +
+          "specify a different configuration directory location by setting the `HUDI_CONF_DIR` environment variable. This can be\n" +
+          "useful for uniformly enforcing repeated configs (like Hive sync or write/index tuning), across your entire data lake.";
 
   public static void main(String[] args) {
     Reflections reflections = new Reflections("org.apache.hudi");
@@ -127,6 +132,7 @@ public class HoodieConfigDocGenerator {
     try {
       LOG.info("Generating markdown file");
       mainDocBuilder.append(contentTableBuilder.build()).append(DOUBLE_NEWLINE);
+      mainDocBuilder.append(generateExternalizedConfigs());
       contentMap.forEach((k, v) -> mainDocBuilder.append(v));
       Files.write(Paths.get(CONFIG_PATH), mainDocBuilder.toString().getBytes(StandardCharsets.UTF_8));
     } catch (IOException e) {
@@ -147,7 +153,7 @@ public class HoodieConfigDocGenerator {
      */
     LocalDateTime now = LocalDateTime.now();
     builder.append(new HorizontalRule()).append(NEWLINE)
-        .append("title: ").append("Configurations").append(NEWLINE)
+        .append("title: ").append("All Configurations").append(NEWLINE)
         .append("keywords: [ configurations, default, flink options, spark, configs, parameters ] ").append(NEWLINE)
         .append("permalink: /docs/configurations.html").append(NEWLINE)
         .append("summary: " + SUMMARY).append(NEWLINE)
@@ -176,6 +182,13 @@ public class HoodieConfigDocGenerator {
       contentMap.put(groupName, stringBuilder);
     });
     return contentMap;
+  }
+
+  private static StringBuilder generateExternalizedConfigs() {
+    StringBuilder stringBuilder = new StringBuilder();
+    stringBuilder.append(EXTERNALIZED_CONFIGS);
+    stringBuilder.append(DOUBLE_NEWLINE);
+    return stringBuilder;
   }
 
   private static void populateSparkConfigs(Map<ConfigGroups.Names, StringBuilder> contentMap) {
