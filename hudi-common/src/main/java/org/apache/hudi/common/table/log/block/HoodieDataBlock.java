@@ -18,13 +18,12 @@
 
 package org.apache.hudi.common.table.log.block;
 
-import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.util.ClosableIterator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.avro.Schema;
-import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.internal.schema.InternalSchema;
@@ -37,6 +36,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 
+import static org.apache.hudi.TypeUtils.unsafeCast;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
 /**
@@ -140,13 +140,14 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
   /**
    * Returns all the records iterator contained w/in this block.
    */
-  public final ClosableIterator<HoodieRecord> getRecordIterator() {
+  public final <T> ClosableIterator<HoodieRecord<T>> getRecordIterator(HoodieRecordType type) {
     if (records.isPresent()) {
-      return list2Iterator(records.get());
+      // TODO need convert record type
+      return list2Iterator(unsafeCast(records.get()));
     }
     try {
       // in case records are absent, read content lazily and then convert to IndexedRecords
-      return readRecordsFromBlockPayload();
+      return readRecordsFromBlockPayload(type);
     } catch (IOException io) {
       throw new HoodieIOException("Unable to convert content bytes to records", io);
     }
@@ -164,7 +165,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
    * @return List of IndexedRecords for the keys of interest.
    * @throws IOException in case of failures encountered when reading/parsing records
    */
-  public final ClosableIterator<HoodieRecord> getRecordIterator(List<String> keys, boolean fullKey) throws IOException {
+  public final <T> ClosableIterator<HoodieRecord<T>> getRecordIterator(List<String> keys, boolean fullKey, HoodieRecordType type) throws IOException {
     boolean fullScan = keys.isEmpty();
     if (enablePointLookups && !fullScan) {
       return lookupRecords(keys, fullKey);
@@ -172,7 +173,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
 
     // Otherwise, we fetch all the records and filter out all the records, but the
     // ones requested
-    ClosableIterator<HoodieRecord> allRecords = getRecordIterator();
+    ClosableIterator<HoodieRecord<T>> allRecords = getRecordIterator(type);
     if (fullScan) {
       return allRecords;
     }
@@ -181,21 +182,21 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
     return FilteringIterator.getInstance(allRecords, keySet, fullKey, this::getRecordKey);
   }
 
-  protected ClosableIterator<HoodieRecord> readRecordsFromBlockPayload() throws IOException {
+  protected <T> ClosableIterator<HoodieRecord<T>> readRecordsFromBlockPayload(HoodieRecordType type) throws IOException {
     if (readBlockLazily && !getContent().isPresent()) {
       // read log block contents from disk
       inflate();
     }
 
     try {
-      return deserializeRecords(getContent().get());
+      return deserializeRecords(getContent().get(), type);
     } finally {
       // Free up content to be GC'd by deflating the block
       deflate();
     }
   }
 
-  protected ClosableIterator<HoodieRecord> lookupRecords(List<String> keys, boolean fullKey) throws IOException {
+  protected <T> ClosableIterator<HoodieRecord<T>> lookupRecords(List<String> keys, boolean fullKey) throws IOException {
     throw new UnsupportedOperationException(
         String.format("Point lookups are not supported by this Data block type (%s)", getBlockType())
     );
@@ -203,7 +204,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
 
   protected abstract byte[] serializeRecords(List<HoodieRecord> records) throws IOException;
 
-  protected abstract ClosableIterator<HoodieRecord> deserializeRecords(byte[] content) throws IOException;
+  protected abstract <T> ClosableIterator<HoodieRecord<T>> deserializeRecords(byte[] content, HoodieRecordType type) throws IOException;
 
   public abstract HoodieLogBlockType getBlockType();
 
@@ -211,15 +212,8 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
     return Option.ofNullable(schema.getField(keyFieldName));
   }
 
-  protected Option<String> getRecordKey(HoodieRecord record) {
-    if (record instanceof HoodieAvroIndexedRecord) {
-      IndexedRecord data = ((HoodieAvroIndexedRecord) record).getData();
-      return getKeyField(data.getSchema())
-          .map(keyField -> data.get(keyField.pos()))
-          .map(Object::toString);
-    } else {
-      return Option.ofNullable(record.getRecordKey());
-    }
+  protected Option<String> getRecordKey(HoodieRecord<?> record) {
+    return Option.ofNullable(record.getRecordKey(keyFieldName));
   }
 
   /**
@@ -253,29 +247,29 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
    * A {@link ClosableIterator} that supports filtering strategy with given keys.
    * User should supply the key extraction function for fetching string format keys.
    */
-  private static class FilteringIterator implements ClosableIterator<HoodieRecord> {
-    private final ClosableIterator<HoodieRecord> nested; // nested iterator
+  private static class FilteringIterator<T> implements ClosableIterator<HoodieRecord<T>> {
+    private final ClosableIterator<HoodieRecord<T>> nested; // nested iterator
 
     private final Set<String> keys; // the filtering keys
     private final boolean fullKey;
 
-    private final Function<HoodieRecord, Option<String>> keyExtract; // function to extract the key
+    private final Function<HoodieRecord<T>, Option<String>> keyExtract; // function to extract the key
 
-    private HoodieRecord next;
+    private HoodieRecord<T> next;
 
-    private FilteringIterator(ClosableIterator<HoodieRecord> nested, Set<String> keys, boolean fullKey, Function<HoodieRecord, Option<String>> keyExtract) {
+    private FilteringIterator(ClosableIterator<HoodieRecord<T>> nested, Set<String> keys, boolean fullKey, Function<HoodieRecord<T>, Option<String>> keyExtract) {
       this.nested = nested;
       this.keys = keys;
       this.fullKey = fullKey;
       this.keyExtract = keyExtract;
     }
 
-    public static FilteringIterator getInstance(
-        ClosableIterator<HoodieRecord> nested,
+    public static <T> FilteringIterator<T> getInstance(
+        ClosableIterator<HoodieRecord<T>> nested,
         Set<String> keys,
         boolean fullKey,
-        Function<HoodieRecord, Option<String>> keyExtract) {
-      return new FilteringIterator(nested, keys, fullKey, keyExtract);
+        Function<HoodieRecord<T>, Option<String>> keyExtract) {
+      return new FilteringIterator<>(nested, keys, fullKey, keyExtract);
     }
 
     @Override
@@ -301,7 +295,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
     }
 
     @Override
-    public HoodieRecord next() {
+    public HoodieRecord<T> next() {
       return this.next;
     }
   }

@@ -18,24 +18,43 @@
 
 package org.apache.hudi.io.storage;
 
-import org.apache.avro.Schema;
-import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieSparkRecord;
 import org.apache.hudi.common.util.ClosableIterator;
 import org.apache.hudi.common.util.MappingIterator;
+import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.exception.HoodieException;
+
+import org.apache.avro.Schema;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 import org.apache.spark.sql.catalyst.InternalRow;
 
 import java.io.IOException;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
+
+import static org.apache.hudi.TypeUtils.unsafeCast;
 
 public interface HoodieSparkFileReader extends HoodieFileReader<InternalRow> {
 
+  Logger LOG = LogManager.getLogger(HoodieSparkFileReader.class);
+
   ClosableIterator<InternalRow> getInternalRowIterator(Schema readerSchema) throws IOException;
 
-  default ClosableIterator<HoodieRecord<InternalRow>> getRecordIterator(Schema readerSchema, HoodieRecord.Mapper mapper) throws IOException {
-    mapper = (HoodieRecord.Mapper<InternalRow, InternalRow>) (internalRow) -> new HoodieSparkRecord(new HoodieKey(internalRow.getString(HoodieRecord.HoodieMetadataField.RECORD_KEY_METADATA_FIELD.ordinal()),
-        internalRow.getString(HoodieRecord.HoodieMetadataField.PARTITION_PATH_METADATA_FIELD.ordinal())),
-        internalRow, null);
-    return new MappingIterator<InternalRow, HoodieRecord<InternalRow>>(getInternalRowIterator(readerSchema), mapper::apply);
+  default ClosableIterator<HoodieRecord<InternalRow>> getRecordIterator(Schema readerSchema) throws IOException {
+    ClosableIterator<InternalRow> iterator = getInternalRowIterator(readerSchema);
+    try {
+      Constructor<?> constructor = ReflectionUtils.getClass("org.apache.hudi.HoodieSparkRecord").getConstructor(InternalRow.class);
+      return new MappingIterator<>(iterator, data -> {
+        try {
+          return unsafeCast(constructor.newInstance(data));
+        } catch (InstantiationException | IllegalAccessException | InvocationTargetException e) {
+          LOG.error("Can not init spark record", e);
+          throw new HoodieException(e);
+        }
+      });
+    } catch (NoSuchMethodException e) {
+      throw new IOException(e);
+    }
   }
 }

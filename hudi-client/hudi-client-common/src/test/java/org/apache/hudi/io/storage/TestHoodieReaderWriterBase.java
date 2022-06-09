@@ -112,7 +112,7 @@ public abstract class TestHoodieReaderWriterBase {
     Configuration conf = new Configuration();
     verifyMetadata(conf);
     verifySchema(conf, schemaPath);
-    verifySimpleRecords(new TransformIterator(createReader(conf).getRecordIterator((HoodieRecord.Mapper<IndexedRecord, IndexedRecord>) HoodieAvroIndexedRecord::new)));
+    verifySimpleRecords(createReader(conf).getRecordIterator());
   }
 
   @Test
@@ -139,7 +139,7 @@ public abstract class TestHoodieReaderWriterBase {
     Configuration conf = new Configuration();
     verifyMetadata(conf);
     verifySchema(conf, schemaPath);
-    verifyComplexRecords(new TransformIterator(createReader(conf).getRecordIterator((HoodieRecord.Mapper<IndexedRecord, IndexedRecord>) HoodieAvroIndexedRecord::new)));
+    verifyComplexRecords(createReader(conf).getRecordIterator());
   }
 
   @Test
@@ -181,10 +181,10 @@ public abstract class TestHoodieReaderWriterBase {
     writer.close();
   }
 
-  protected void verifySimpleRecords(Iterator<IndexedRecord> iterator) {
+  protected void verifySimpleRecords(Iterator<HoodieRecord<IndexedRecord>> iterator) {
     int index = 0;
     while (iterator.hasNext()) {
-      GenericRecord record = (GenericRecord) iterator.next();
+      GenericRecord record = (GenericRecord) iterator.next().getData();
       String key = "key" + String.format("%02d", index);
       assertEquals(key, record.get("_row_key").toString());
       assertEquals(Integer.toString(index), record.get("time").toString());
@@ -193,10 +193,10 @@ public abstract class TestHoodieReaderWriterBase {
     }
   }
 
-  protected void verifyComplexRecords(Iterator<IndexedRecord> iterator) {
+  protected void verifyComplexRecords(Iterator<HoodieRecord<IndexedRecord>> iterator) {
     int index = 0;
     while (iterator.hasNext()) {
-      GenericRecord record = (GenericRecord) iterator.next();
+      GenericRecord record = (GenericRecord) iterator.next().getData();
       String key = "key" + String.format("%02d", index);
       assertEquals(key, record.get("_row_key").toString());
       assertEquals(Integer.toString(index), record.get("time").toString());
@@ -231,10 +231,10 @@ public abstract class TestHoodieReaderWriterBase {
 
   private void verifyReaderWithSchema(String schemaPath, HoodieAvroFileReader hoodieReader) throws IOException {
     Schema evolvedSchema = getSchemaFromResource(TestHoodieReaderWriterBase.class, schemaPath);
-    Iterator<IndexedRecord> iter = hoodieReader.getRecordIterator(evolvedSchema, (HoodieRecord.Mapper<IndexedRecord, IndexedRecord>) HoodieAvroIndexedRecord::new);
+    Iterator<HoodieRecord<IndexedRecord>> iter = hoodieReader.getRecordIterator(evolvedSchema);
     int index = 0;
     while (iter.hasNext()) {
-      verifyRecord(schemaPath, (GenericRecord) iter.next(), index);
+      verifyRecord(schemaPath, (GenericRecord) iter.next().getData(), index);
       index++;
     }
   }
@@ -251,25 +251,5 @@ public abstract class TestHoodieReaderWriterBase {
       assertEquals(index, record.get("number"));
     }
     assertNull(record.get("added_field"));
-  }
-
-  class TransformIterator implements Iterator<IndexedRecord> {
-
-    private final Iterator<HoodieRecord> iter;
-
-    public TransformIterator(Iterator<HoodieRecord> iter) {
-      this.iter = iter;
-    }
-
-    @Override
-    public boolean hasNext() {
-      return iter.hasNext();
-    }
-
-    @Override
-    public IndexedRecord next() {
-      return (GenericRecord) iter.next().getData();
-
-    }
   }
 }

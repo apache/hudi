@@ -20,12 +20,10 @@ package org.apache.hudi.table.action.commit;
 
 import org.apache.avro.SchemaCompatibility;
 
-import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
-import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.ClosableIterator;
@@ -51,6 +49,8 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.io.BinaryDecoder;
 import org.apache.avro.io.BinaryEncoder;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.util.Iterator;
@@ -62,6 +62,8 @@ import java.util.stream.Collectors;
 
 public class HoodieMergeHelper<T> extends
     BaseMergeHelper<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> {
+
+  private static final Logger LOG = LogManager.getLogger(HoodieMergeHelper.class);
 
   private HoodieMergeHelper() {
   }
@@ -85,7 +87,7 @@ public class HoodieMergeHelper<T> extends
     final GenericDatumReader<GenericRecord> gReader;
     Schema readSchema;
     if (externalSchemaTransformation || baseFile.getBootstrapBaseFile().isPresent()) {
-      readSchema = HoodieFileReaderFactory.getFileReader(table.getHadoopConf(), mergeHandle.getOldFilePath()).getSchema();
+      readSchema = HoodieFileReaderFactory.getReaderFactory(table.getConfig().getRecordType()).getFileReader(table.getHadoopConf(), mergeHandle.getOldFilePath()).getSchema();
       gWriter = new GenericDatumWriter<>(readSchema);
       gReader = new GenericDatumReader<>(readSchema, mergeHandle.getWriterSchemaWithMetaFields());
     } else {
@@ -95,7 +97,7 @@ public class HoodieMergeHelper<T> extends
     }
 
     BoundedInMemoryExecutor<GenericRecord, GenericRecord, Void> wrapper = null;
-    HoodieFileReader reader = HoodieFileReaderFactory.getFileReader(cfgForHoodieFile, mergeHandle.getOldFilePath());
+    HoodieFileReader reader = HoodieFileReaderFactory.getReaderFactory(table.getConfig().getRecordType()).getFileReader(cfgForHoodieFile, mergeHandle.getOldFilePath());
 
     Option<InternalSchema> querySchemaOpt = SerDeHelper.fromJson(table.getConfig().getInternalSchema());
     boolean needToReWriteRecord = false;
@@ -131,11 +133,10 @@ public class HoodieMergeHelper<T> extends
       if (baseFile.getBootstrapBaseFile().isPresent()) {
         readerIterator = getMergingIterator(table, mergeHandle, baseFile, reader, readSchema, externalSchemaTransformation);
       } else {
-        HoodieRecord.Mapper<IndexedRecord, IndexedRecord>  mapper = HoodieAvroIndexedRecord::new;
         if (needToReWriteRecord) {
-          readerIterator = new RewriteIterator(reader.getRecordIterator(mapper), readSchema, readSchema, table.getConfig().getProps(), renameCols);
+          readerIterator = new RewriteIterator(reader.getRecordIterator(), readSchema, readSchema, table.getConfig().getProps(), renameCols);
         } else {
-          readerIterator = reader.getRecordIterator(readSchema, mapper);
+          readerIterator = reader.getRecordIterator(readSchema);
         }
       }
 
@@ -192,8 +193,8 @@ public class HoodieMergeHelper<T> extends
       try {
         return iter.next().rewriteRecordWithNewSchema(recordSchema, prop, newSchema, renameCols);
       } catch (IOException e) {
-        e.printStackTrace();
-        return null;
+        LOG.error("Error rewrite record with new schema", e);
+        throw new HoodieException(e);
       }
     }
 

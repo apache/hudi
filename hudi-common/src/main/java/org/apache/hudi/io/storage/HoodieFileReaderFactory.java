@@ -20,9 +20,8 @@ package org.apache.hudi.io.storage;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hbase.io.hfile.CacheConfig;
+
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.exception.HoodieException;
@@ -37,60 +36,25 @@ import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
 
 public class HoodieFileReaderFactory {
 
-  private static HoodieFileReaderFactory readerFactory;
-
-  public static HoodieFileReaderFactory getFileReaderFactory() {
-    if (readerFactory == null) {
-      readerFactory = new HoodieFileReaderFactory();
-    }
-    return readerFactory;
-  }
-
   public static HoodieFileReaderFactory getReaderFactory(HoodieRecord.HoodieRecordType recordType) {
     switch (HoodieRecord.HoodieRecordType.valueOf("SPARK")) {
       case AVRO:
-        return getFileReaderFactory();
+        return HoodieAvroFileReaderFactory.getFileReaderFactory();
       case SPARK:
-        Exception exception = null;
         try {
           Class<?> clazz = ReflectionUtils.getClass("org.apache.hudi.io.storage.HoodieSparkFileReaderFactory");
           Method method = clazz.getMethod("getFileReaderFactory", null);
           return (HoodieFileReaderFactory) method.invoke(null,null);
-        } catch (NoSuchMethodException e) {
-          exception = e;
-        } catch (IllegalAccessException e) {
-          exception = e;
-        } catch (IllegalArgumentException e) {
-          exception = e;
-        } catch (InvocationTargetException e) {
-          exception = e;
+        } catch (NoSuchMethodException | IllegalArgumentException | InvocationTargetException | IllegalAccessException e) {
+          throw new HoodieException("Unable to create hoodie spark file writer factory", e);
         }
-        if (exception != null) {
-          throw new HoodieException("Unable to create hoodie spark file writer factory", exception);
-        }
-        break;
       default:
         throw new UnsupportedOperationException(recordType + " record type not supported yet.");
     }
-    return null;
   }
 
-  public static HoodieFileReader getFileReader(Configuration conf, Path path) throws IOException {
+  public HoodieFileReader getFileReader(Configuration conf, Path path) throws IOException {
     final String extension = FSUtils.getFileExtension(path.toString());
-    // todo: add type
-    HoodieRecord.HoodieRecordType recordType = HoodieRecord.HoodieRecordType.valueOf("SPARK");
-    HoodieFileReaderFactory factory = getReaderFactory(recordType);
-    return factory.getFileReader(extension, conf, path);
-  }
-
-  public static HoodieFileReader getFileReader(Configuration conf, Path path, HoodieFileFormat format) throws IOException {
-    // todo: add type
-    HoodieRecord.HoodieRecordType recordType = HoodieRecord.HoodieRecordType.valueOf("SPARK");
-    HoodieFileReaderFactory factory = getReaderFactory(recordType);
-    return factory.getFileReader(format.getFileExtension(), conf, path);
-  }
-
-  public HoodieFileReader getFileReader(String extension, Configuration conf, Path path) throws IOException {
     if (PARQUET.getFileExtension().equals(extension)) {
       return newParquetFileReader(conf, path);
     }
@@ -105,15 +69,14 @@ public class HoodieFileReaderFactory {
   }
 
   protected HoodieFileReader newParquetFileReader(Configuration conf, Path path) {
-    return new HoodieAvroParquetReader(conf, path);
+    throw new UnsupportedOperationException();
   }
 
   protected HoodieFileReader newHFileFileReader(Configuration conf, Path path) throws IOException {
-    CacheConfig cacheConfig = new CacheConfig(conf);
-    return new HoodieAvroHFileReader(conf, path, cacheConfig);
+    throw new UnsupportedOperationException();
   }
 
   protected static HoodieFileReader newOrcFileReader(Configuration conf, Path path) {
-    return new HoodieAvroOrcReader(conf, path);
+    throw new UnsupportedOperationException();
   }
 }

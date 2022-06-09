@@ -314,8 +314,6 @@ public abstract class HoodieRecord<T> implements Serializable {
 
   public abstract HoodieRecord rewriteRecordWithNewSchema(Schema recordSchema, Properties prop, Schema newSchema, Map<String, String> renameCols) throws IOException;
 
-  public abstract HoodieRecord rewriteRecordWithNewSchema(Schema recordSchema, Properties prop, Schema newSchema, Map<String, String> renameCols, Mapper mapper) throws IOException;
-
   public abstract HoodieRecord rewriteRecordWithNewSchema(Schema recordSchema, Properties prop, Schema newSchema) throws IOException;
 
   public abstract HoodieRecord overrideMetadataFieldValue(Schema recordSchema, Properties prop, int pos, String newValue) throws IOException;
@@ -328,23 +326,22 @@ public abstract class HoodieRecord<T> implements Serializable {
 
   public abstract boolean shouldIgnore(Schema schema, Properties prop) throws IOException;
 
+  /**
+   * This method used to add preCombine field, recordKey etc. And may change the Type of HoodieRecord.
+   */
+  public abstract HoodieRecord addInfo(Schema schema, Properties prop, Map<String, Object> mapperConfig) throws IOException;
+
+  /**
+   * This method used in ClusteringExecutionStrategy.
+   */
+  public abstract HoodieRecord transform(Schema schema, Properties prop);
+
   public abstract Option<IndexedRecord> toIndexedRecord(Schema schema, Properties prop) throws IOException;
 
   //////////////////////////////////////////////////////////////////////////////
 
   public static String generateSequenceId(String instantTime, int partitionId, long recordIndex) {
     return instantTime + "_" + partitionId + "_" + recordIndex;
-  }
-
-  /**
-   * NOTE: This is temporary transition construct to be able to construct
-   *       HoodieRecord instances w/o excessive wiring into a lot of components
-   *       a lot of details that are irrelevant for these
-   * TODO remove
-   */
-  @FunctionalInterface
-  public interface Mapper<T, R> {
-    HoodieRecord<R> apply(T hoodieRecordData);
   }
 
   /**

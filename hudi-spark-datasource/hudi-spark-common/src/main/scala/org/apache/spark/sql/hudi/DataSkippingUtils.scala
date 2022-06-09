@@ -323,7 +323,7 @@ object DataSkippingUtils extends Logging {
   }
 }
 
-private object ColumnStatsExpressionUtils {
+object ColumnStatsExpressionUtils {
 
   @inline def genColMinValueExpr(colName: String): Expression = col(getMinColumnNameFor(colName)).expr
   @inline def genColMaxValueExpr(colName: String): Expression = col(getMaxColumnNameFor(colName)).expr

@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.spark.sql.hudi;
+package org.apache.hudi;
 
 import org.apache.avro.Schema;
 import org.apache.hudi.common.model.HoodieRecord;
