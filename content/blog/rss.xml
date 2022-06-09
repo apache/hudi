@@ -16,6 +16,14 @@
             <content:encoded><![CDATA[<div url="https://www.onehouse.ai/blog/asynchronous-indexing-using-hudi">Redirecting... please wait!! </div>]]></content:encoded>
         </item>
         <item>
+            <title><![CDATA[The story of building a data lake that can be deleted on a record-by-record basis using Apache Hudi]]></title>
+            <link>https://hudi.apache.org/blog/2022/05/25/Record-by-record-deletable-data-lake-using-Apache-Hudi</link>
+            <guid>/2022/05/25/Record-by-record-deletable-data-lake-using-Apache-Hudi</guid>
+            <pubDate>Wed, 25 May 2022 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://techblog.yahoo.co.jp/entry/2022052530303179/">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
             <title><![CDATA[Multi-Modal Index for the Lakehouse in Apache Hudi]]></title>
             <link>https://hudi.apache.org/blog/2022/05/17/Introducing-Multi-Modal-Index-for-the-Lakehouse-in-Apache-Hudi</link>
             <guid>/2022/05/17/Introducing-Multi-Modal-Index-for-the-Lakehouse-in-Apache-Hudi</guid>

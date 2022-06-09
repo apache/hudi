@@ -19,6 +19,17 @@
         </author>
     </entry>
     <entry>
+        <title type="html"><![CDATA[The story of building a data lake that can be deleted on a record-by-record basis using Apache Hudi]]></title>
+        <id>/2022/05/25/Record-by-record-deletable-data-lake-using-Apache-Hudi</id>
+        <link href="https://hudi.apache.org/blog/2022/05/25/Record-by-record-deletable-data-lake-using-Apache-Hudi"/>
+        <updated>2022-05-25T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://techblog.yahoo.co.jp/entry/2022052530303179/">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Shota Ejima</name>
+        </author>
+    </entry>
+    <entry>
         <title type="html"><![CDATA[Multi-Modal Index for the Lakehouse in Apache Hudi]]></title>
         <id>/2022/05/17/Introducing-Multi-Modal-Index-for-the-Lakehouse-in-Apache-Hudi</id>
         <link href="https://hudi.apache.org/blog/2022/05/17/Introducing-Multi-Modal-Index-for-the-Lakehouse-in-Apache-Hudi"/>
