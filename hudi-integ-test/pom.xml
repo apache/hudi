@@ -298,6 +298,7 @@
       <groupId>org.apache.hadoop</groupId>
       <artifactId>hadoop-common</artifactId>
       <classifier>tests</classifier>
+      <scope>test</scope>
       <exclusions>
         <exclusion>
           <groupId>org.mortbay.jetty</groupId>
