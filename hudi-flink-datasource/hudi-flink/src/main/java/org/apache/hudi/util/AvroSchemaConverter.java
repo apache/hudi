@@ -71,6 +71,8 @@ public class AvroSchemaConverter {
         }
         return DataTypes.ROW(fields).notNull();
       case ENUM:
+      case STRING:
+        // convert Avro's Utf8/CharSequence to String
         return DataTypes.STRING().notNull();
       case ARRAY:
         return DataTypes.ARRAY(convertToDataType(schema.getElementType())).notNull();
@@ -110,9 +112,6 @@ public class AvroSchemaConverter {
         }
         // convert fixed size binary data to primitive byte arrays
         return DataTypes.VARBINARY(schema.getFixedSize()).notNull();
-      case STRING:
-        // convert Avro's Utf8/CharSequence to String
-        return DataTypes.STRING().notNull();
       case BYTES:
         // logical decimal type
         if (schema.getLogicalType() instanceof LogicalTypes.Decimal) {
