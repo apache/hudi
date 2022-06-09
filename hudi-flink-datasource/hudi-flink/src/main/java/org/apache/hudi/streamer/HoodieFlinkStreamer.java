@@ -98,7 +98,7 @@ public class HoodieFlinkStreamer {
     }
 
     DataStream<HoodieRecord> hoodieRecordDataStream = Pipelines.bootstrap(conf, rowType, parallelism, dataStream);
-    DataStream<Object> pipeline = Pipelines.hoodieStreamWrite(conf, parallelism, hoodieRecordDataStream);
+    DataStream<Object> pipeline = Pipelines.hoodieStreamWrite(conf, parallelism, hoodieRecordDataStream, conf.getString(FlinkOptions.TABLE_NAME));
     if (StreamerUtil.needsAsyncCompaction(conf)) {
       Pipelines.compact(conf, pipeline);
     } else {

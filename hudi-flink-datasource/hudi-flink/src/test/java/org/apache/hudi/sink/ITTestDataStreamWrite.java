@@ -227,7 +227,7 @@ public class ITTestDataStreamWrite extends TestLogger {
 
     int parallelism = execEnv.getParallelism();
     DataStream<HoodieRecord> hoodieRecordDataStream = Pipelines.bootstrap(conf, rowType, parallelism, dataStream);
-    DataStream<Object> pipeline = Pipelines.hoodieStreamWrite(conf, parallelism, hoodieRecordDataStream);
+    DataStream<Object> pipeline = Pipelines.hoodieStreamWrite(conf, parallelism, hoodieRecordDataStream, "default_catalog.default_database.t1");
     execEnv.addOperator(pipeline.getTransformation());
 
     if (isMor) {
