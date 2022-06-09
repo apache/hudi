@@ -94,7 +94,7 @@ stages:
         steps:
           - task: Maven@3
             displayName: maven install
-            ContinueOnError: true
+            continueOnError: true
             retryCountOnTaskFailure: 1
             inputs:
               mavenPomFile: 'pom.xml'
@@ -104,6 +104,8 @@ stages:
               jdkVersionOption: '1.8'
           - task: Maven@3
             displayName: UT common flink client/spark-client
+            continueOnError: true
+            retryCountOnTaskFailure: 1
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
@@ -113,6 +115,8 @@ stages:
               mavenOptions: '-Xmx4g'
           - task: Maven@3
             displayName: FT common flink
+            continueOnError: true
+            retryCountOnTaskFailure: 1
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
@@ -123,12 +127,12 @@ stages:
       - job: UT_FT_2
         condition: false
         displayName: FT client/spark-client
-        ContinueOnError: true
-        retryCountOnTaskFailure: 1
         timeoutInMinutes: '120'
         steps:
           - task: Maven@3
             displayName: maven install
+            continueOnError: true
+            retryCountOnTaskFailure: 1
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'clean install'
@@ -137,6 +141,8 @@ stages:
               jdkVersionOption: '1.8'
           - task: Maven@3
             displayName: FT client/spark-client
+            continueOnError: true
+            retryCountOnTaskFailure: 1
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
@@ -146,12 +152,12 @@ stages:
               mavenOptions: '-Xmx4g'
       - job: UT_FT_3
         displayName: UT FT clients & cli & utilities & sync/hive-sync
-        ContinueOnError: true
-        retryCountOnTaskFailure: 1
         timeoutInMinutes: '120'
         steps:
           - task: Maven@3
             displayName: maven install
+            continueOnError: true
+            retryCountOnTaskFailure: 1
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'clean install'
@@ -159,7 +165,9 @@ stages:
               publishJUnitResults: false
               jdkVersionOption: '1.8'
           - task: Maven@3
-            displayName: UT clients & cli & utilities & sync
+            displayName: UT clients & cli & utilities & sync/hive-sync
+            continueOnError: true
+            retryCountOnTaskFailure: 1
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
@@ -168,7 +176,9 @@ stages:
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g'
           - task: Maven@3
-            displayName: FT clients & cli & utilities & sync
+            displayName: FT clients & cli & utilities & sync/hive-sync
+            continueOnError: true
+            retryCountOnTaskFailure: 1
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
@@ -179,12 +189,12 @@ stages:
       - job: UT_FT_4
         condition: false
         displayName: UT FT other modules
-        ContinueOnError: true
-        retryCountOnTaskFailure: 1
         timeoutInMinutes: '120'
         steps:
           - task: Maven@3
             displayName: maven install
+            continueOnError: true
+            retryCountOnTaskFailure: 1
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'clean install'
@@ -193,6 +203,8 @@ stages:
               jdkVersionOption: '1.8'
           - task: Maven@3
             displayName: UT other modules
+            continueOnError: true
+            retryCountOnTaskFailure: 1
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
@@ -202,6 +214,8 @@ stages:
               mavenOptions: '-Xmx4g'
           - task: Maven@3
             displayName: FT other modules
+            continueOnError: true
+            retryCountOnTaskFailure: 1
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
@@ -211,12 +225,12 @@ stages:
               mavenOptions: '-Xmx4g'
       - job: IT
         displayName: IT modules
-        ContinueOnError: true
-        retryCountOnTaskFailure: 1
         timeoutInMinutes: '120'
         steps:
           - task: Maven@3
             displayName: maven install
+            continueOnError: true
+            retryCountOnTaskFailure: 1
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'clean install'
@@ -234,6 +248,8 @@ stages:
               mavenOptions: '-Xmx4g'
           - task: AzureCLI@2
             displayName: Prepare for IT
+            continueOnError: true
+            retryCountOnTaskFailure: 1
             inputs:
               azureSubscription: apachehudici-service-connection
               scriptType: bash
