@@ -25,17 +25,20 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstantTimeGenerator}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
-import org.apache.hudi.common.util.PartitionPathEncodeUtils
+import org.apache.hudi.common.util.PartitionPathEncodeUtils.escapePartitionValue
 import org.apache.hudi.{AvroConversionUtils, SparkAdapterSupport}
+import org.apache.hudi.DataSourceWriteOptions.{HIVE_STYLE_PARTITIONING, URL_ENCODE_PARTITIONING}
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, HoodieCatalogTable}
 import org.apache.spark.sql.catalyst.expressions.{And, Attribute, Cast, Expression, Literal}
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, SubqueryAlias}
+import org.apache.spark.sql.execution.datasources.PartitioningUtils
 import org.apache.spark.sql.internal.{SQLConf, StaticSQLConf}
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{AnalysisException, Column, DataFrame, SparkSession}
+import org.apache.spark.sql.util.SchemaUtils
 
 import java.net.URI
 import java.text.SimpleDateFormat
@@ -322,56 +325,71 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
     }
   }
 
+  /**
+   * Normalizes partition specifications with partition columns of table.
+   */
   def normalizePartitionSpec[T](
-                                 partitionSpec: Map[String, T],
-                                 partColNames: Seq[String],
-                                 tblName: String,
-                                 resolver: Resolver): Map[String, T] = {
+      partitionSpec: Map[String, T],
+      partColNames: Seq[String],
+      tblName: String,
+      resolver: Resolver): Map[String, T] = {
     val normalizedPartSpec = partitionSpec.toSeq.map { case (key, value) =>
       val normalizedKey = partColNames.find(resolver(_, key)).getOrElse {
         throw new AnalysisException(s"$key is not a valid partition column in table $tblName.")
       }
       normalizedKey -> value
     }
-
-    if (normalizedPartSpec.size < partColNames.size) {
-      throw new AnalysisException(
-        "All partition columns need to be specified for Hoodie's partition")
-    }
-
-    val lowerPartColNames = partColNames.map(_.toLowerCase)
-    if (lowerPartColNames.distinct.length != lowerPartColNames.length) {
-      val duplicateColumns = lowerPartColNames.groupBy(identity).collect {
-        case (x, ys) if ys.length > 1 => s"`$x`"
-      }
-      throw new AnalysisException(
-        s"Found duplicate column(s) in the partition schema: ${duplicateColumns.mkString(", ")}")
-    }
-
+    SchemaUtils.checkColumnNameDuplication(
+      normalizedPartSpec.map(_._1), "in the partition schema", resolver)
     normalizedPartSpec.toMap
   }
 
-  def getPartitionPathToDrop(
-                              hoodieCatalogTable: HoodieCatalogTable,
-                              normalizedSpecs: Seq[Map[String, String]]): String = {
-    val table = hoodieCatalogTable.table
-    val allPartitionPaths = hoodieCatalogTable.getPartitionPaths
-    val enableHiveStylePartitioning = isHiveStyledPartitioning(allPartitionPaths, table)
-    val enableEncodeUrl = isUrlEncodeEnabled(allPartitionPaths, table)
-    val partitionsToDrop = normalizedSpecs.map { spec =>
-      hoodieCatalogTable.partitionFields.map { partitionColumn =>
-        val encodedPartitionValue = if (enableEncodeUrl) {
-          PartitionPathEncodeUtils.escapePathName(spec(partitionColumn))
-        } else {
-          spec(partitionColumn)
+  /**
+   * Returns hudi partition(s) which match at least one of [[specs]]. [[specs]] passed in should
+   * always be normalized by [[normalizePartitionSpec]]. Note that the results respect config of
+   * [[HIVE_STYLE_PARTITIONING]] and [[URL_ENCODE_PARTITIONING]].
+   */
+  def getMatchingPartitions(
+      hoodieCatalogTable: HoodieCatalogTable,
+      specs: Seq[Map[String, String]]): Seq[String] = {
+
+    val isHiveStyledPartitioning = hoodieCatalogTable.tableConfig.getBoolean(HIVE_STYLE_PARTITIONING)
+    val isUrlEncodePartitioning = hoodieCatalogTable.tableConfig.getBoolean(URL_ENCODE_PARTITIONING)
+
+    // All partition candidates.
+    val candidates: Seq[Seq[(String, String)]] = hoodieCatalogTable.getPartitionPaths.map(path => {
+      if (isHiveStyledPartitioning) {
+        PartitioningUtils.parsePathFragmentAsSeq(path)
+      } else {
+        val partitionFields = hoodieCatalogTable.partitionFields
+        val partitionValues = path.split("/")
+        if (partitionValues.length != partitionFields.length) {
+          throw new AnalysisException(s"Table of ${hoodieCatalogTable.table.identifier} has" +
+            s" incompatible partition fields (${partitionFields}) and partition values" +
+            s" (${partitionValues}).")
         }
-        if (enableHiveStylePartitioning) {
-          partitionColumn + "=" + encodedPartitionValue
+        partitionFields.zip(partitionValues).toSeq
+      }
+    })
+
+    val checkIfSatisfied = (candidate: Seq[(String, String)], condition: Map[String, String]) => {
+      candidate.forall(kv => {
+        val expectedValueOpt = if (isUrlEncodePartitioning) {
+          condition.get(kv._1).map(escapePartitionValue)
         } else {
-          encodedPartitionValue
+          condition.get(kv._1)
         }
-      }.mkString("/")
-    }.mkString(",")
-    partitionsToDrop
+        expectedValueOpt.isEmpty || expectedValueOpt.get == kv._2
+      })
+    }
+    candidates.filter(candidate => {
+      specs.exists(checkIfSatisfied(candidate, _))
+    }).map(kvs => {
+      if (isHiveStyledPartitioning) {
+        kvs.map(kv => kv._1 + "=" + kv._2).mkString("/")
+      } else {
+        kvs.map(kv => kv._2).mkString("/")
+      }
+    })
   }
 }

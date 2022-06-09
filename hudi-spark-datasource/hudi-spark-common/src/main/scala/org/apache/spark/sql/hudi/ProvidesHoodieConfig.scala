@@ -125,7 +125,7 @@ trait ProvidesHoodieConfig extends Logging {
     val preCombineField = hoodieCatalogTable.preCombineKey.getOrElse("")
 
     val hiveStylePartitioningEnable = Option(tableConfig.getHiveStylePartitioningEnable).getOrElse("true")
-    val urlEncodePartitioning = Option(tableConfig.getUrlEncodePartitioning).getOrElse("false")
+    val urlEncodePartitioning = Option(tableConfig.getUrlEncodePartitioning).getOrElse("true")
     val keyGeneratorClassName = Option(tableConfig.getKeyGeneratorClassName)
       .getOrElse(classOf[ComplexKeyGenerator].getCanonicalName)
 

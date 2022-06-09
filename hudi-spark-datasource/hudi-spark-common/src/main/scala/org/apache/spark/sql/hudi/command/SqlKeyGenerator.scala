@@ -18,6 +18,8 @@
 package org.apache.spark.sql.hudi.command
 
 import org.apache.avro.generic.GenericRecord
+import org.apache.hudi.DataSourceWriteOptions.URL_ENCODE_PARTITIONING
+import org.apache.hudi.exception.HoodieKeyException
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.util.PartitionPathEncodeUtils
 import org.apache.hudi.config.HoodieWriteConfig
@@ -53,8 +55,17 @@ class SqlKeyGenerator(props: TypedProperties) extends ComplexKeyGenerator(props)
       keyGenProps.remove(SqlKeyGenerator.ORIGIN_KEYGEN_CLASS_NAME)
       val convertedKeyGenClassName = SqlKeyGenerator.getRealKeyGenClassName(props)
       keyGenProps.put(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key, convertedKeyGenClassName)
-      Some(KeyGenUtils.createKeyGeneratorByClassName(keyGenProps))
+      val kg = KeyGenUtils.createKeyGeneratorByClassName(keyGenProps)
+      if (kg.isInstanceOf[SqlKeyGenerator] && !encodePartitionPath) {
+        throw new HoodieKeyException(s"Please enable ${URL_ENCODE_PARTITIONING.key}" +
+          s" when working with ${classOf[SqlKeyGenerator]}.")
+      }
+      Some(kg)
     } else {
+      if (!encodePartitionPath) {
+        throw new HoodieKeyException(s"Please enable ${URL_ENCODE_PARTITIONING.key}" +
+          s" when working with ${classOf[SqlKeyGenerator]}.")
+      }
       None
     }
   }
@@ -90,7 +101,8 @@ class SqlKeyGenerator(props: TypedProperties) extends ComplexKeyGenerator(props)
           case (partitionValue, partitionField) =>
             val hiveStylePrefix = s"${partitionField.name}="
             val isHiveStyle = partitionValue.startsWith(hiveStylePrefix)
-            val _partitionValue = if (isHiveStyle) partitionValue.substring(hiveStylePrefix.length) else partitionValue
+            val _partitionValue = PartitionPathEncodeUtils.unescapePathName(
+              if (isHiveStyle) partitionValue.substring(hiveStylePrefix.length) else partitionValue)
 
             partitionField.dataType match {
               case TimestampType =>

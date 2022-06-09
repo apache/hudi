@@ -27,7 +27,7 @@ import org.apache.hudi.common.model._
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.config.{HoodieBootstrapConfig, HoodieWriteConfig}
-import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.exception.{HoodieException, HoodieUpsertException}
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode
 import org.apache.hudi.functional.TestBootstrap
 import org.apache.hudi.keygen.{ComplexKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator}
@@ -39,7 +39,7 @@ import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.hudi.command.SqlKeyGenerator
 import org.apache.spark.{SparkConf, SparkContext}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue, fail}
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, Assertions, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, EnumSource, ValueSource}
 import org.mockito.ArgumentMatchers.any
@@ -837,8 +837,8 @@ class TestHoodieSparkSqlWriter {
       .setConf(spark.sparkContext.hadoopConfiguration)
       .setBasePath(tablePath1).build().getTableConfig
     assert(tableConfig1.getHiveStylePartitioningEnable == "true")
-    assert(tableConfig1.getUrlEncodePartitioning == "false")
-    assert(tableConfig1.getKeyGeneratorClassName == classOf[ComplexKeyGenerator].getName)
+    assert(tableConfig1.getUrlEncodePartitioning == "true")
+    assert(tableConfig1.getKeyGeneratorClassName == classOf[SqlKeyGenerator].getName)
     df.write.format("hudi")
       .options(options)
       .option(HoodieWriteConfig.TBL_NAME.key, tableName1)
@@ -1032,5 +1032,31 @@ class TestHoodieSparkSqlWriter {
     )
     val kg2 = HoodieWriterUtils.getOriginKeyGenerator(m2)
     assertTrue(kg2 == classOf[SimpleKeyGenerator].getName)
+  }
+
+  @Test
+  def testInvalidPartitionPathOnSqlKeyGenerator(): Unit = {
+    val _spark = spark
+    import _spark.implicits._
+    val options = Map(
+      HoodieWriteConfig.TBL_NAME.key -> "test_table",
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "id",
+      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "ts",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "dt",
+      HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key -> classOf[SqlKeyGenerator].getName
+    )
+
+    val savePath = s"${tempBasePath}/test_table"
+
+    val except = intercept[HoodieUpsertException] {
+      val df = Seq((1, "a1", 10, 1000, "2021/10/16")).toDF("id", "name", "value", "ts", "dt")
+      df.write.format("hudi")
+        .options(options)
+        .option(DataSourceWriteOptions.URL_ENCODE_PARTITIONING.key, "false")
+        .mode(SaveMode.Overwrite).save(savePath)
+    }
+    assertTrue(except.getCause.getMessage.contains(
+      "Please enable hoodie.datasource.write.partitionpath.urlencode when working" +
+        " with class org.apache.spark.sql.hudi.command.SqlKeyGenerator"))
   }
 }

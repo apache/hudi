@@ -57,45 +57,43 @@ class TestTruncateTable extends HoodieSparkSqlTestBase {
     }
   }
 
-  Seq(false, true).foreach { urlencode =>
-    test(s"Test Truncate single-partition table' partitions, urlencode: $urlencode") {
-      withTempDir { tmp =>
-        val tableName = generateTableName
-        val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+  test(s"Test Truncate single-partition table's partitions") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = s"${tmp.getCanonicalPath}/$tableName"
 
-        import spark.implicits._
-        val df = Seq((1, "z3", "v1", "2021/10/01"), (2, "l4", "v1", "2021/10/02"))
-          .toDF("id", "name", "ts", "dt")
+      import spark.implicits._
+      val df = Seq((1, "z3", "v1", "2021/10/01"), (2, "l4", "v1", "2021/10/02"))
+        .toDF("id", "name", "ts", "dt")
 
-        df.write.format("hudi")
-          .option(HoodieWriteConfig.TBL_NAME.key, tableName)
-          .option(TABLE_TYPE.key, MOR_TABLE_TYPE_OPT_VAL)
-          .option(RECORDKEY_FIELD.key, "id")
-          .option(PRECOMBINE_FIELD.key, "ts")
-          .option(PARTITIONPATH_FIELD.key, "dt")
-          .option(URL_ENCODE_PARTITIONING.key(), urlencode)
-          .option(KEYGENERATOR_CLASS_NAME.key, classOf[SimpleKeyGenerator].getName)
-          .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
-          .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
-          .mode(SaveMode.Overwrite)
-          .save(tablePath)
+      df.write.format("hudi")
+        .option(HoodieWriteConfig.TBL_NAME.key, tableName)
+        .option(TABLE_TYPE.key, MOR_TABLE_TYPE_OPT_VAL)
+        .option(RECORDKEY_FIELD.key, "id")
+        .option(PRECOMBINE_FIELD.key, "ts")
+        .option(PARTITIONPATH_FIELD.key, "dt")
+        .option(URL_ENCODE_PARTITIONING.key, "true")
+        .option(KEYGENERATOR_CLASS_NAME.key, classOf[SimpleKeyGenerator].getName)
+        .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
+        .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
+        .mode(SaveMode.Overwrite)
+        .save(tablePath)
 
-        // register meta to spark catalog by creating table
-        spark.sql(
-          s"""
-             |create table $tableName using hudi
-             |location '$tablePath'
-             |""".stripMargin)
+      // register meta to spark catalog by creating table
+      spark.sql(
+        s"""
+           |create table $tableName using hudi
+           |location '$tablePath'
+           |""".stripMargin)
 
-        // truncate 2021-10-01 partition
-        spark.sql(s"truncate table $tableName partition (dt='2021/10/01')")
+      // truncate 2021-10-01 partition
+      spark.sql(s"truncate table $tableName partition (dt='2021/10/01')")
 
-        checkAnswer(s"select dt from $tableName")(Seq(s"2021/10/02"))
+      checkAnswer(s"select dt from $tableName")(Seq(s"2021/10/02"))
 
-        // Truncate table
-        spark.sql(s"truncate table $tableName")
-        checkAnswer(s"select count(1) from $tableName")(Seq(0))
-      }
+      // Truncate table
+      spark.sql(s"truncate table $tableName")
+      checkAnswer(s"select count(1) from $tableName")(Seq(0))
     }
   }
 
@@ -129,11 +127,6 @@ class TestTruncateTable extends HoodieSparkSqlTestBase {
              |location '$tablePath'
              |""".stripMargin)
 
-        // not specified all partition column
-        checkExceptionContain(s"truncate table $tableName partition (year='2021', month='10')")(
-          "All partition columns need to be specified for Hoodie's partition"
-        )
-
         // truncate 2021-10-01 partition
         spark.sql(s"truncate table $tableName partition (year='2021', month='10', day='01')")
 
@@ -146,5 +139,40 @@ class TestTruncateTable extends HoodieSparkSqlTestBase {
         checkAnswer(s"select count(1) from $tableName")(Seq(0))
       }
     }
+  }
+
+  test("Truncate multiple partitions with partition fields partitialy defined.") {
+    val tableName = generateTableName
+    spark.sql(
+      s"""
+         | create table $tableName (
+         |  id bigint,
+         |  name string,
+         |  ts string,
+         |  year string,
+         |  month string,
+         |  day string)
+         | using hudi
+         | partitioned by (year, month, day)
+         | tblproperties (
+         |  primaryKey = 'id',
+         |  preCombineField = 'ts'
+         | )
+         |""".stripMargin)
+
+    spark.sql(
+      s"""
+         | insert into $tableName
+         | values
+         | (1, 'z3', 'v1', '2021', '10', '01'),
+         | (2, 'l4', 'v1', '2021', '10', '02'),
+         | (3, 'w5', 'v1', '2021', '11', '01'),
+         | (4, 'x6', 'v1', '2021', '11', '02')
+         |""".stripMargin)
+
+    spark.sql((s"truncate table $tableName partition (year='2021', month='10')"))
+    checkAnswer(s"select id, name, ts, year, month, day from $tableName")(
+      Seq(3, "w5", "v1", "2021", "11", "01"),
+      Seq(4, "x6", "v1", "2021", "11", "02"))
   }
 }

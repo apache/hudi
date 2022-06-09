@@ -20,8 +20,8 @@ package org.apache.spark.sql.hudi
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.util.PartitionPathEncodeUtils
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.keygen.{ComplexKeyGenerator, SimpleKeyGenerator}
 import org.apache.spark.sql.SaveMode
+import org.apache.spark.sql.hudi.command.SqlKeyGenerator
 
 class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
 
@@ -80,111 +80,92 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
     checkAnswer(s"show partitions $tableName")(Seq.empty: _*)
   }
 
-  Seq(false, true).foreach { urlencode =>
-    test(s"Drop single-partition table' partitions, urlencode: $urlencode") {
-      withTempDir { tmp =>
-        val tableName = generateTableName
-        val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+  test(s"Drop single-partition table's partitions") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = s"${tmp.getCanonicalPath}/$tableName"
 
-        import spark.implicits._
-        val df = Seq((1, "z3", "v1", "2021/10/01"), (2, "l4", "v1", "2021/10/02"))
-          .toDF("id", "name", "ts", "dt")
+      import spark.implicits._
+      val df = Seq((1, "z3", "v1", "2021/10/01"), (2, "l4", "v1", "2021/10/02"))
+        .toDF("id", "name", "ts", "dt")
 
-        df.write.format("hudi")
-          .option(HoodieWriteConfig.TBL_NAME.key, tableName)
-          .option(TABLE_TYPE.key, COW_TABLE_TYPE_OPT_VAL)
-          .option(RECORDKEY_FIELD.key, "id")
-          .option(PRECOMBINE_FIELD.key, "ts")
-          .option(PARTITIONPATH_FIELD.key, "dt")
-          .option(URL_ENCODE_PARTITIONING.key(), urlencode)
-          .option(KEYGENERATOR_CLASS_NAME.key, classOf[SimpleKeyGenerator].getName)
-          .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
-          .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
-          .mode(SaveMode.Overwrite)
-          .save(tablePath)
+      df.write.format("hudi")
+        .option(HoodieWriteConfig.TBL_NAME.key, tableName)
+        .option(TABLE_TYPE.key, COW_TABLE_TYPE_OPT_VAL)
+        .option(RECORDKEY_FIELD.key, "id")
+        .option(PRECOMBINE_FIELD.key, "ts")
+        .option(PARTITIONPATH_FIELD.key, "dt")
+        .option(URL_ENCODE_PARTITIONING.key, "true")
+        .option(KEYGENERATOR_CLASS_NAME.key, classOf[SqlKeyGenerator].getName)
+        .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
+        .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
+        .mode(SaveMode.Overwrite)
+        .save(tablePath)
 
-        // register meta to spark catalog by creating table
-        spark.sql(
-          s"""
-             |create table $tableName using hudi
-             |location '$tablePath'
-             |""".stripMargin)
+      // register meta to spark catalog by creating table
+      spark.sql(
+        s"""
+           |create table $tableName using hudi
+           |location '$tablePath'
+           |""".stripMargin)
 
-        // drop 2021-10-01 partition
-        spark.sql(s"alter table $tableName drop partition (dt='2021/10/01')")
+      // drop 2021-10-01 partition
+      spark.sql(s"alter table $tableName drop partition (dt='2021/10/01')")
 
-        val partitionPath = if (urlencode) {
-          PartitionPathEncodeUtils.escapePathName("2021/10/01")
-        } else {
-          "2021/10/01"
-        }
-        checkAnswer(s"select dt from $tableName")(Seq(s"2021/10/02"))
-        assertResult(true)(existsPath(s"${tmp.getCanonicalPath}/$tableName/$partitionPath"))
+      val partitionPath = PartitionPathEncodeUtils.escapePathName("2021/10/01")
+      checkAnswer(s"select dt from $tableName")(Seq(s"2021/10/02"))
+      assertResult(true)(existsPath(s"${tmp.getCanonicalPath}/$tableName/$partitionPath"))
 
-        // show partitions
-        if (urlencode) {
-          checkAnswer(s"show partitions $tableName")(Seq(PartitionPathEncodeUtils.escapePathName("2021/10/02")))
-        } else {
-          checkAnswer(s"show partitions $tableName")(Seq("2021/10/02"))
-        }
-      }
+      // show partitions
+      checkAnswer(s"show partitions $tableName")(Seq(PartitionPathEncodeUtils.escapePathName("2021/10/02")))
     }
   }
 
-  Seq(false, true).foreach { urlencode =>
-    test(s"Lazy Clean drop single-partition table' partitions, urlencode: $urlencode") {
-      withTempDir { tmp =>
-        val tableName = generateTableName
-        val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+  test(s"Lazy Clean drop single-partition table's partitions") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = s"${tmp.getCanonicalPath}/$tableName"
 
-        import spark.implicits._
-        val df = Seq((1, "z3", "v1", "2021/10/01")).toDF("id", "name", "ts", "dt")
+      import spark.implicits._
+      val df = Seq((1, "z3", "v1", "2021/10/01")).toDF("id", "name", "ts", "dt")
 
-        df.write.format("hudi")
-          .option(HoodieWriteConfig.TBL_NAME.key, tableName)
-          .option(TABLE_TYPE.key, COW_TABLE_TYPE_OPT_VAL)
-          .option(RECORDKEY_FIELD.key, "id")
-          .option(PRECOMBINE_FIELD.key, "ts")
-          .option(PARTITIONPATH_FIELD.key, "dt")
-          .option(URL_ENCODE_PARTITIONING.key(), urlencode)
-          .option(KEYGENERATOR_CLASS_NAME.key, classOf[SimpleKeyGenerator].getName)
-          .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
-          .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
-          .mode(SaveMode.Overwrite)
-          .save(tablePath)
+      df.write.format("hudi")
+        .option(HoodieWriteConfig.TBL_NAME.key, tableName)
+        .option(TABLE_TYPE.key, COW_TABLE_TYPE_OPT_VAL)
+        .option(RECORDKEY_FIELD.key, "id")
+        .option(PRECOMBINE_FIELD.key, "ts")
+        .option(PARTITIONPATH_FIELD.key, "dt")
+        .option(URL_ENCODE_PARTITIONING.key, "true")
+        .option(KEYGENERATOR_CLASS_NAME.key, classOf[SqlKeyGenerator].getName)
+        .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
+        .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
+        .mode(SaveMode.Overwrite)
+        .save(tablePath)
 
-        // register meta to spark catalog by creating table
-        spark.sql(
-          s"""
-             |create table $tableName using hudi
-             |location '$tablePath'
-             | tblproperties (
-             |  primaryKey = 'id',
-             |  preCombineField = 'ts',
-             |  hoodie.cleaner.commits.retained= '1'
-             | )
-             |""".stripMargin)
+      // register meta to spark catalog by creating table
+      spark.sql(
+        s"""
+           |create table $tableName using hudi
+           |location '$tablePath'
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts',
+           |  hoodie.cleaner.commits.retained= '1'
+           | )
+           |""".stripMargin)
 
-        // drop 2021-10-01 partition
-        spark.sql(s"alter table $tableName drop partition (dt='2021/10/01')")
+      // drop 2021-10-01 partition
+      spark.sql(s"alter table $tableName drop partition (dt='2021/10/01')")
 
-        spark.sql(s"""insert into $tableName values (2, "l4", "v1", "2021/10/02")""")
+      spark.sql(s"""insert into $tableName values (2, "l4", "v1", "2021/10/02")""")
 
-        val partitionPath = if (urlencode) {
-          PartitionPathEncodeUtils.escapePathName("2021/10/01")
-        } else {
-          "2021/10/01"
-        }
-        checkAnswer(s"select dt from $tableName")(Seq("2021/10/02"))
-        assertResult(false)(existsPath(s"${tmp.getCanonicalPath}/$tableName/$partitionPath"))
+      val partitionPath = PartitionPathEncodeUtils.escapePathName("2021/10/01")
+      checkAnswer(s"select dt from $tableName")(Seq("2021/10/02"))
+      assertResult(false)(existsPath(s"${tmp.getCanonicalPath}/$tableName/$partitionPath"))
 
-        // show partitions
-        if (urlencode) {
-          checkAnswer(s"show partitions $tableName")(Seq(PartitionPathEncodeUtils.escapePathName("2021/10/02")))
-        } else {
-          checkAnswer(s"show partitions $tableName")(Seq("2021/10/02"))
-        }
-      }
+      // show partitions
+      checkAnswer(s"show partitions $tableName")(
+        Seq(PartitionPathEncodeUtils.escapePathName("2021/10/02")))
     }
   }
 
@@ -239,7 +220,8 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
           .option(PRECOMBINE_FIELD.key, "ts")
           .option(PARTITIONPATH_FIELD.key, "year,month,day")
           .option(HIVE_STYLE_PARTITIONING.key, hiveStyle)
-          .option(KEYGENERATOR_CLASS_NAME.key, classOf[ComplexKeyGenerator].getName)
+          .option(URL_ENCODE_PARTITIONING.key, "true")
+          .option(KEYGENERATOR_CLASS_NAME.key, classOf[SqlKeyGenerator].getName)
           .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
           .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
           .mode(SaveMode.Overwrite)
@@ -252,10 +234,6 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
              |location '$tablePath'
              |""".stripMargin)
 
-        // not specified all partition column
-        checkExceptionContain(s"alter table $tableName drop partition (year='2021', month='10')")(
-          "All partition columns need to be specified for Hoodie's partition"
-        )
         // drop 2021-10-01 partition
         spark.sql(s"alter table $tableName drop partition (year='2021', month='10', day='01')")
 
@@ -289,7 +267,8 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
           .option(PRECOMBINE_FIELD.key, "ts")
           .option(PARTITIONPATH_FIELD.key, "year,month,day")
           .option(HIVE_STYLE_PARTITIONING.key, hiveStyle)
-          .option(KEYGENERATOR_CLASS_NAME.key, classOf[ComplexKeyGenerator].getName)
+          .option(URL_ENCODE_PARTITIONING.key, "true")
+          .option(KEYGENERATOR_CLASS_NAME.key, classOf[SqlKeyGenerator].getName)
           .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
           .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
           .mode(SaveMode.Overwrite)
@@ -328,5 +307,39 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
         }
       }
     }
+  }
+
+  test("Drop multiple partitions with partition fields partitialy defined.") {
+    val tableName = generateTableName
+    spark.sql(
+      s"""
+         | create table $tableName (
+         |  id bigint,
+         |  name string,
+         |  ts string,
+         |  year string,
+         |  month string,
+         |  day string)
+         | using hudi
+         | partitioned by (year, month, day)
+         | tblproperties (
+         |  primaryKey = 'id',
+         |  preCombineField = 'ts'
+         | )
+         |""".stripMargin)
+
+    spark.sql(
+      s"""
+         | insert into $tableName
+         | values
+         | (1, 'z3', 'v1', '2021', '10', '01'),
+         | (2, 'l4', 'v1', '2021', '10', '02'),
+         | (3, 'w5', 'v1', '2021', '11', '01'),
+         | (4, 'x6', 'v1', '2021', '11', '02')
+         |""".stripMargin)
+
+    spark.sql((s"alter table $tableName drop partition (year='2021', month='10')"))
+    checkAnswer(s"show partitions $tableName")(
+      Seq("year=2021/month=11/day=01"), Seq("year=2021/month=11/day=02"))
   }
 }
