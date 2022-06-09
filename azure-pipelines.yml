@@ -21,12 +21,65 @@ trigger:
 pool:
   vmImage: 'ubuntu-18.04'
 
+parameters:
+  - name: job1Modules
+    type: object
+    default:
+      - 'hudi-common'
+      - 'hudi-flink-datasource/hudi-flink'
+      - 'hudi-flink-datasource/hudi-flink1.13.x'
+      - 'hudi-flink-datasource/hudi-flink1.14.x'
+  - name: job2Modules
+    type: object
+    default:
+      - 'hudi-client/hudi-spark-client'
+  - name: job3Modules
+    type: object
+    default:
+      - 'hudi-cli'
+      - 'hudi-client/hudi-client-common'
+      - 'hudi-client/hudi-flink-client'
+      - 'hudi-client/hudi-java-client'
+      - 'hudi-sync/hudi-adb-sync'
+      - 'hudi-sync/hudi-datahub-sync'
+      - 'hudi-sync/hudi-hive-sync'
+      - 'hudi-sync/hudi-sync-common'
+      - 'hudi-utilities'
+  - name: job4Modules
+    type: object
+    default:
+      - '!hudi-cli'
+      - '!hudi-client'
+      - '!hudi-client/hudi-client-common'
+      - '!hudi-client/hudi-flink-client'
+      - '!hudi-client/hudi-java-client'
+      - '!hudi-client/hudi-spark-client'
+      - '!hudi-common'
+      - '!hudi-examples'
+      - '!hudi-examples/hudi-examples-common'
+      - '!hudi-examples/hudi-examples-flink'
+      - '!hudi-examples/hudi-examples-java'
+      - '!hudi-examples/hudi-examples-spark'
+      - '!hudi-flink-datasource'
+      - '!hudi-flink-datasource/hudi-flink'
+      - '!hudi-flink-datasource/hudi-flink1.13.x'
+      - '!hudi-flink-datasource/hudi-flink1.14.x'
+      - '!hudi-sync'
+      - '!hudi-sync/hudi-adb-sync'
+      - '!hudi-sync/hudi-datahub-sync'
+      - '!hudi-sync/hudi-hive-sync'
+      - '!hudi-sync/hudi-sync-common'
+      - '!hudi-utilities'
+
 variables:
-  MAVEN_OPTS: '-Dcheckstyle.skip=true -Drat.skip=true -Djacoco.skip=true'
+  MAVEN_OPTS: '-Dscala-2.11 -Dspark2.4 -Dflink1.14 -Dcheckstyle.skip=true -Drat.skip=true -Djacoco.skip=true'
   SPARK_VERSION: '2.4.4'
   HADOOP_VERSION: '2.7'
   SPARK_ARCHIVE: spark-$(SPARK_VERSION)-bin-hadoop$(HADOOP_VERSION)
-  EXCLUDE_TESTED_MODULES: '!hudi-examples/hudi-examples-common,!hudi-examples/hudi-examples-flink,!hudi-examples/hudi-examples-java,!hudi-examples/hudi-examples-spark,!hudi-common,!hudi-flink-datasource/hudi-flink,!hudi-client/hudi-spark-client,!hudi-client/hudi-client-common,!hudi-client/hudi-flink-client,!hudi-client/hudi-java-client,!hudi-cli,!hudi-utilities,!hudi-sync/hudi-hive-sync'
+  JOB1_MODULES: ${{ join(',',parameters.job1Modules) }}
+  JOB2_MODULES: ${{ join(',',parameters.job2Modules) }}
+  JOB3_MODULES: ${{ join(',',parameters.job3Modules) }}
+  JOB4_MODULES: ${{ join(',',parameters.job4Modules) }}
 
 stages:
   - stage: test
@@ -49,7 +102,7 @@ stages:
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
-              options: -Punit-tests -pl hudi-common,hudi-flink-datasource/hudi-flink,hudi-client/hudi-spark-client
+              options: -fae -Punit-tests -pl $(JOB1_MODULES),hudi-client/hudi-spark-client
               publishJUnitResults: false
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
@@ -58,7 +111,7 @@ stages:
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
-              options: -Pfunctional-tests -pl hudi-common,hudi-flink-datasource/hudi-flink
+              options: -fae -Pfunctional-tests -pl $(JOB1_MODULES)
               publishJUnitResults: false
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
@@ -80,12 +133,12 @@ stages:
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
-              options: -Pfunctional-tests -pl hudi-client/hudi-spark-client
+              options: -fae -Pfunctional-tests -pl $(JOB2_MODULES)
               publishJUnitResults: false
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
       - job: UT_FT_3
-        displayName: UT FT clients & cli & utilities & sync/hive-sync
+        displayName: UT FT clients & cli & utilities & sync
         timeoutInMinutes: '120'
         steps:
           - task: Maven@3
@@ -98,20 +151,20 @@ stages:
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
           - task: Maven@3
-            displayName: UT clients & cli & utilities & sync/hive-sync
+            displayName: UT clients & cli & utilities & sync
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
-              options: -Punit-tests -pl hudi-client/hudi-client-common,hudi-client/hudi-flink-client,hudi-client/hudi-java-client,hudi-cli,hudi-utilities,hudi-sync/hudi-hive-sync
+              options: -fae -Punit-tests -pl $(JOB3_MODULES)
               publishJUnitResults: false
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
           - task: Maven@3
-            displayName: FT clients & cli & utilities & sync/hive-sync
+            displayName: FT clients & cli & utilities & sync
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
-              options: -Pfunctional-tests -pl hudi-client/hudi-client-common,hudi-client/hudi-flink-client,hudi-client/hudi-java-client,hudi-cli,hudi-utilities,hudi-sync/hudi-hive-sync
+              options: -fae -Pfunctional-tests -pl $(JOB3_MODULES)
               publishJUnitResults: false
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
@@ -133,7 +186,7 @@ stages:
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
-              options: -Punit-tests -pl $(EXCLUDE_TESTED_MODULES)
+              options: -fae -Punit-tests -pl $(JOB4_MODULES)
               publishJUnitResults: false
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
@@ -142,7 +195,7 @@ stages:
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
-              options: -Pfunctional-tests -pl $(EXCLUDE_TESTED_MODULES)
+              options: -fae -Pfunctional-tests -pl $(JOB4_MODULES)
               publishJUnitResults: false
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
