@@ -233,5 +233,6 @@ stages:
                 tar -xvf $(Pipeline.Workspace)/$(SPARK_ARCHIVE).tgz -C $(Pipeline.Workspace)/
                 mkdir /tmp/spark-events/
           - script: |
-              mvn $(MAVEN_OPTS) -Pintegration-tests verify
+              export SPARK_HOME=$(Pipeline.Workspace)/$(SPARK_ARCHIVE)
+              mvn -Xmx4g $(PLUGIN_OPTIONS) -Pintegration-tests verify
             displayName: IT
