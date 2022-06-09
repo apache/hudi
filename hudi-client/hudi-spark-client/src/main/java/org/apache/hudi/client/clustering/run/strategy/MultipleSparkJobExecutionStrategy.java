@@ -29,15 +29,14 @@ import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.ClusteringOperation;
-import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.model.RewriteAvroPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
+import org.apache.hudi.common.util.ClosableIterator;
 import org.apache.hudi.common.util.FutureUtils;
+import org.apache.hudi.common.util.MappingIterator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -45,24 +44,18 @@ import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieClusteringException;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.execution.bulkinsert.BulkInsertInternalPartitionerFactory;
 import org.apache.hudi.execution.bulkinsert.RDDCustomColumnsSortPartitioner;
 import org.apache.hudi.execution.bulkinsert.RDDSpatialCurveSortPartitioner;
 import org.apache.hudi.io.IOUtils;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
-import org.apache.hudi.keygen.BaseKeyGenerator;
-import org.apache.hudi.keygen.KeyGenUtils;
-import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.cluster.strategy.ClusteringExecutionStrategy;
 
 import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -225,7 +218,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
 
           Option<HoodieFileReader> baseFileReader = StringUtils.isNullOrEmpty(clusteringOp.getDataFilePath())
               ? Option.empty()
-              : Option.of(HoodieFileReaderFactory.getFileReader(table.getHadoopConf(), new Path(clusteringOp.getDataFilePath())));
+              : Option.of(HoodieFileReaderFactory.getReaderFactory(recordType).getFileReader(table.getHadoopConf(), new Path(clusteringOp.getDataFilePath())));
           HoodieTableConfig tableConfig = table.getMetaClient().getTableConfig();
           recordIterators.add(getFileSliceReader(baseFileReader, scanner, readerSchema,
               tableConfig.getPayloadClass(),
@@ -258,10 +251,10 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
           clusteringOpsPartition.forEachRemaining(clusteringOp -> {
             try {
               Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(writeConfig.getSchema()));
-              HoodieFileReader baseFileReader = HoodieFileReaderFactory.getFileReader(hadoopConf.get(), new Path(clusteringOp.getDataFilePath()));
-              HoodieRecord.Mapper<IndexedRecord, T> mapper = (indexRecord) -> transform(indexRecord, writeConfig);
-              // TODO: support sparkRecord transform
-              iteratorsForPartition.add(baseFileReader.getRecordIterator(readerSchema, mapper));
+              HoodieFileReader baseFileReader = HoodieFileReaderFactory.getReaderFactory(recordType).getFileReader(hadoopConf.get(), new Path(clusteringOp.getDataFilePath()));
+              MappingIterator mappingIterator = new MappingIterator((ClosableIterator<HoodieRecord>) baseFileReader.getRecordIterator(readerSchema),
+                  rec -> ((HoodieRecord) rec).transform(readerSchema, writeConfig.getProps()));
+              iteratorsForPartition.add(mappingIterator);
             } catch (IOException e) {
               throw new HoodieClusteringException("Error reading input data for " + clusteringOp.getDataFilePath()
                   + " and " + clusteringOp.getDeltaFilePaths(), e);
@@ -283,27 +276,5 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
       writeStatusRDDArray[i] = (JavaRDD<WriteStatus>) writeStatusObjects[i];
     }
     return writeStatusRDDArray;
-  }
-
-  /**
-   * Transform IndexedRecord into HoodieRecord.
-   */
-  private static <T> HoodieRecord<T> transform(IndexedRecord indexedRecord, HoodieWriteConfig writeConfig) {
-    GenericRecord record = (GenericRecord) indexedRecord;
-    Option<BaseKeyGenerator> keyGeneratorOpt = Option.empty();
-    if (!writeConfig.populateMetaFields()) {
-      try {
-        keyGeneratorOpt = Option.of((BaseKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(writeConfig.getProps()));
-      } catch (IOException e) {
-        throw new HoodieIOException("Only BaseKeyGenerators are supported when meta columns are disabled ", e);
-      }
-    }
-    String key = KeyGenUtils.getRecordKeyFromGenericRecord(record, keyGeneratorOpt);
-    String partition = KeyGenUtils.getPartitionPathFromGenericRecord(record, keyGeneratorOpt);
-    HoodieKey hoodieKey = new HoodieKey(key, partition);
-
-    HoodieRecordPayload avroPayload = new RewriteAvroPayload(record);
-    HoodieRecord hoodieRecord = new HoodieAvroRecord(hoodieKey, avroPayload);
-    return hoodieRecord;
   }
 }

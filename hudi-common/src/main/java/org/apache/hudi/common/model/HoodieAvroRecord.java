@@ -24,6 +24,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.io.storage.HoodieAvroFileReader;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 
 import org.apache.avro.Schema;
@@ -37,6 +38,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
+import java.util.function.Function;
 
 import static org.apache.hudi.TypeUtils.unsafeCast;
 
@@ -148,13 +150,6 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
   }
 
   @Override
-  public HoodieRecord rewriteRecordWithNewSchema(Schema recordSchema, Properties prop, Schema newSchema, Map<String, String> renameCols, Mapper mapper) throws IOException {
-    GenericRecord oldRecord = (GenericRecord) getData().getInsertValue(recordSchema, prop).get();
-    GenericRecord rewriteRecord = HoodieAvroUtils.rewriteRecordWithNewSchema(oldRecord, newSchema, renameCols);
-    return mapper.apply(rewriteRecord);
-  }
-
-  @Override
   public HoodieRecord overrideMetadataFieldValue(Schema recordSchema, Properties prop, int pos, String newValue) throws IOException {
     IndexedRecord record = (IndexedRecord) data.getInsertValue(recordSchema, prop).get();
     record.put(pos, newValue);
@@ -174,6 +169,17 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
     });
 
     return new HoodieAvroRecord<>(getKey(), new RewriteAvroPayload(avroRecordPayload), getOperation());
+  }
+
+  @Override
+  public HoodieRecord addInfo(Schema schema, Properties prop, Map<String, Object> mapperConfig) throws IOException {
+    Function<IndexedRecord, HoodieRecord<Object>> mapper = HoodieAvroFileReader.createMapper(mapperConfig);
+    return mapper.apply((IndexedRecord) data.getInsertValue(schema, prop).get());
+  }
+
+  @Override
+  public HoodieRecord transform(Schema schema, Properties prop) {
+    throw new UnsupportedOperationException();
   }
 
   public Option<Map<String, String>> getMetadata() {

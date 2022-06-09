@@ -32,7 +32,6 @@ import org.apache.hudi.common.bootstrap.index.HFileBootstrapIndex;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
-import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -217,7 +216,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
         new HoodieAvroHFileReader(fs, new Path(DUMMY_BASE_PATH), content, Option.empty());
     Schema avroSchema = getSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchema.avsc");
     assertEquals(NUM_RECORDS, hfileReader.getTotalRecords());
-    verifySimpleRecords(hfileReader.getIndexedRecordIterator(avroSchema));
+    verifySimpleRecords(hfileReader.getRecordIterator(avroSchema));
   }
 
   @Test
@@ -229,7 +228,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
         IntStream.concat(IntStream.range(40, NUM_RECORDS * 2), IntStream.range(10, 20))
             .mapToObj(i -> "key" + String.format("%02d", i)).collect(Collectors.toList());
     Schema avroSchema = getSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchema.avsc");
-    Iterator<IndexedRecord> iterator = hfileReader.getRecordsByKeysIterator(keys, avroSchema);
+    Iterator<IndexedRecord> iterator = hfileReader.getIndexedRecordsByKeysIterator(keys, avroSchema);
 
     List<Integer> expectedIds =
         IntStream.concat(IntStream.range(40, NUM_RECORDS), IntStream.range(10, 20))
@@ -255,11 +254,11 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
 
     List<String> keyPrefixes = Collections.singletonList("key");
     Iterator<IndexedRecord> iterator =
-        hfileReader.getRecordsByKeyPrefixIterator(keyPrefixes, avroSchema);
+        hfileReader.getIndexedRecordsByKeyPrefixIterator(keyPrefixes, avroSchema);
 
     List<GenericRecord> recordsByPrefix = toStream(iterator).map(r -> (GenericRecord)r).collect(Collectors.toList());
 
-    List<GenericRecord> allRecords = toStream((Iterator<HoodieAvroIndexedRecord>) hfileReader.getRecordIterator((HoodieRecord.Mapper<IndexedRecord, IndexedRecord>) HoodieAvroIndexedRecord::new))
+    List<GenericRecord> allRecords = toStream(hfileReader.getRecordIterator())
         .map(r -> (GenericRecord) r.getData()).collect(Collectors.toList());
 
     assertEquals(allRecords, recordsByPrefix);
@@ -267,7 +266,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
     // filter for "key1" : entries from key10 to key19 should be matched
     List<GenericRecord> expectedKey1s = allRecords.stream().filter(entry -> (entry.get("_row_key").toString()).contains("key1")).collect(Collectors.toList());
     iterator =
-        hfileReader.getRecordsByKeyPrefixIterator(Collections.singletonList("key1"), avroSchema);
+        hfileReader.getIndexedRecordsByKeyPrefixIterator(Collections.singletonList("key1"), avroSchema);
     recordsByPrefix =
         StreamSupport.stream(Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), false)
             .map(r -> (GenericRecord)r)
@@ -277,7 +276,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
     // exact match
     List<GenericRecord> expectedKey25 = allRecords.stream().filter(entry -> (entry.get("_row_key").toString()).contains("key25")).collect(Collectors.toList());
     iterator =
-        hfileReader.getRecordsByKeyPrefixIterator(Collections.singletonList("key25"), avroSchema);
+        hfileReader.getIndexedRecordsByKeyPrefixIterator(Collections.singletonList("key25"), avroSchema);
     recordsByPrefix =
         StreamSupport.stream(Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), false)
             .map(r -> (GenericRecord)r)
@@ -286,7 +285,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
 
     // no match. key prefix is beyond entries in file.
     iterator =
-        hfileReader.getRecordsByKeyPrefixIterator(Collections.singletonList("key99"), avroSchema);
+        hfileReader.getIndexedRecordsByKeyPrefixIterator(Collections.singletonList("key99"), avroSchema);
     recordsByPrefix =
         StreamSupport.stream(Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), false)
             .map(r -> (GenericRecord)r)
@@ -295,7 +294,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
 
     // no match. but keyPrefix is in between the entries found in file.
     iterator =
-        hfileReader.getRecordsByKeyPrefixIterator(Collections.singletonList("key1234"), avroSchema);
+        hfileReader.getIndexedRecordsByKeyPrefixIterator(Collections.singletonList("key1234"), avroSchema);
     recordsByPrefix =
         StreamSupport.stream(Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), false)
             .map(r -> (GenericRecord)r)
@@ -363,7 +362,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
         new HoodieAvroHFileReader(fs, new Path(DUMMY_BASE_PATH), content, Option.empty());
     Schema avroSchema = getSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchema.avsc");
     assertEquals(NUM_RECORDS_FIXTURE, hfileReader.getTotalRecords());
-    verifySimpleRecords(hfileReader.getIndexedRecordIterator(avroSchema));
+    verifySimpleRecords(hfileReader.getRecordIterator(avroSchema));
 
     content = readHFileFromResources(complexHFile);
     verifyHFileReader(HoodieHFileUtils.createHFileReader(fs, new Path(DUMMY_BASE_PATH), content),
@@ -371,7 +370,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
     hfileReader = new HoodieAvroHFileReader(fs, new Path(DUMMY_BASE_PATH), content, Option.empty());
     avroSchema = getSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchemaWithUDT.avsc");
     assertEquals(NUM_RECORDS_FIXTURE, hfileReader.getTotalRecords());
-    verifySimpleRecords(hfileReader.getIndexedRecordIterator(avroSchema));
+    verifySimpleRecords(hfileReader.getRecordIterator(avroSchema));
 
     content = readHFileFromResources(bootstrapIndexFile);
     verifyHFileReader(HoodieHFileUtils.createHFileReader(fs, new Path(DUMMY_BASE_PATH), content),

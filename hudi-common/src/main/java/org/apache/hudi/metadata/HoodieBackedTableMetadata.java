@@ -20,7 +20,6 @@ package org.apache.hudi.metadata;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
@@ -35,9 +34,9 @@ import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieBaseFile;
-import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -345,9 +344,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
                                                                                       List<String> keys,
                                                                                       boolean fullKeys,
                                                                                       String partitionName) throws IOException {
-    HoodieRecord.Mapper<IndexedRecord, IndexedRecord> mapper = HoodieAvroIndexedRecord::new;
-    ClosableIterator<HoodieRecord> records = fullKeys ? baseFileReader.getRecordsByKeysIterator(keys, mapper)
-        : baseFileReader.getRecordsByKeyPrefixIterator(keys, mapper);
+    ClosableIterator<HoodieRecord> records = fullKeys ? baseFileReader.getRecordsByKeysIterator(keys)
+        : baseFileReader.getRecordsByKeyPrefixIterator(keys);
 
     return toStream(records)
         .map(record -> {
@@ -436,7 +434,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     Option<HoodieBaseFile> basefile = slice.getBaseFile();
     if (basefile.isPresent()) {
       String basefilePath = basefile.get().getPath();
-      baseFileReader = HoodieFileReaderFactory.getFileReader(hadoopConf.get(), new Path(basefilePath));
+      baseFileReader = HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO).getFileReader(hadoopConf.get(), new Path(basefilePath));
       baseFileOpenMs = timer.endTimer();
       LOG.info(String.format("Opened metadata base file from %s at instant %s in %d ms", basefilePath,
           basefile.get().getCommitTime(), baseFileOpenMs));

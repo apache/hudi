@@ -21,8 +21,10 @@ package org.apache.hudi.common.table.log;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieRecordCombiningEngine;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.table.log.AbstractHoodieLogRecordReader.Builder;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
@@ -31,6 +33,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.avro.Schema;
@@ -86,10 +89,9 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
                                          ExternalSpillableMap.DiskMapType diskMapType,
                                          boolean isBitCaskDiskMapCompressionEnabled,
                                          boolean withOperationField, boolean forceFullScan,
-                                         Option<String> partitionName, InternalSchema internalSchema) {
+                                         Option<String> partitionName, InternalSchema internalSchema, HoodieRecordType recordType) {
     super(fs, basePath, logFilePaths, readerSchema, latestInstantTime, readBlocksLazily, reverseReader, bufferSize,
-        instantRange, withOperationField,
-        forceFullScan, partitionName, internalSchema);
+        instantRange, withOperationField, forceFullScan, partitionName, internalSchema, recordType);
     try {
       // Store merged records for all versions for this log file, set the in-memory footprint to maxInMemoryMapSize
       this.records = new ExternalSpillableMap<>(maxMemorySizeInBytes, spillableMapBasePath, new DefaultSizeEstimator(),
@@ -222,6 +224,8 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     protected String partitionName;
     // operation field default false
     private boolean withOperationField = false;
+    // Record type read from log block
+    private HoodieRecordType recordType;
 
     @Override
     public Builder withFileSystem(FileSystem fs) {
@@ -314,15 +318,25 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     }
 
     @Override
+    public AbstractHoodieLogRecordReader.Builder withRecordType(HoodieRecordType type) {
+      this.recordType = type;
+      return this;
+    }
+
+    @Override
     public HoodieMergedLogRecordScanner build() {
       if (this.partitionName == null && CollectionUtils.nonEmpty(this.logFilePaths)) {
         this.partitionName = getRelativePartitionPath(new Path(basePath), new Path(this.logFilePaths.get(0)).getParent());
+      }
+      if (recordType == null) {
+        // TODO Remove
+        throw new HoodieException("add todo");
       }
       return new HoodieMergedLogRecordScanner(fs, basePath, logFilePaths, readerSchema,
           latestInstantTime, maxMemorySizeInBytes, readBlocksLazily, reverseReader,
           bufferSize, spillableMapBasePath, instantRange,
           diskMapType, isBitCaskDiskMapCompressionEnabled, withOperationField, true,
-          Option.ofNullable(partitionName), internalSchema);
+          Option.ofNullable(partitionName), internalSchema, recordType);
     }
   }
 }

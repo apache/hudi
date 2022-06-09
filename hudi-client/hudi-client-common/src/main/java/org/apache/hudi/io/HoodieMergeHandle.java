@@ -447,7 +447,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
 
     long oldNumWrites = 0;
     try {
-      HoodieFileReader reader = HoodieFileReaderFactory.getFileReader(hoodieTable.getHadoopConf(), oldFilePath);
+      HoodieFileReader reader = HoodieFileReaderFactory.getReaderFactory(this.config.getRecordType()).getFileReader(hoodieTable.getHadoopConf(), oldFilePath);
       oldNumWrites = reader.getTotalRecords();
     } catch (IOException e) {
       throw new HoodieUpsertException("Failed to check for merge data validation", e);

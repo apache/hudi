@@ -1,12 +1,13 @@
 /*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -19,24 +20,26 @@ package org.apache.hudi
 
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.ConcurrentHashMap
-
 import scala.collection.mutable
-
 import org.apache.avro.Schema
+import org.apache.avro.generic.IndexedRecord
+import org.apache.hudi.HoodieSparkUtils.sparkAdapter
 import org.apache.hudi.avro.HoodieAvroUtils.{createFullName, fromJavaDate, toJavaDate}
 import org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField
 import org.apache.hudi.exception.HoodieException
-
-import org.apache.spark.sql.catalyst.{CatalystTypeConverters, InternalRow}
+import org.apache.spark.sql.avro.HoodieAvroDeserializer
 import org.apache.spark.sql.catalyst.expressions.{GenericInternalRow, JoinedRow, MutableProjection, Projection}
 import org.apache.spark.sql.catalyst.util.{ArrayBasedMapData, ArrayData, GenericArrayData, MapData}
+import org.apache.spark.sql.catalyst.{CatalystTypeConverters, InternalRow}
+import org.apache.spark.sql.hudi.ColumnStatsExpressionUtils.AllowedTransformationExpression.exprUtils.generateMutableProjection
 import org.apache.spark.sql.types._
 
 object HoodieInternalRowUtils {
 
   val projectionMap = new ConcurrentHashMap[(StructType, StructType), MutableProjection]
   val schemaMap = new ConcurrentHashMap[Schema, StructType]
-  val SchemaPosMap = new ConcurrentHashMap[StructType, Map[String, (StructField, Int)]]
+  val schemaPosMap = new ConcurrentHashMap[StructType, Map[String, (StructField, Int)]]
+  val converterMap = new ConcurrentHashMap[Schema, HoodieAvroDeserializer]
 
   /**
    * @see org.apache.hudi.avro.HoodieAvroUtils#stitchRecords(org.apache.avro.generic.GenericRecord, org.apache.avro.generic.GenericRecord, org.apache.avro.Schema)
@@ -209,9 +212,8 @@ object HoodieInternalRowUtils {
     if (!projectionMap.contains(schemaPair)) {
       projectionMap.synchronized {
         if (!projectionMap.contains(schemaPair)) {
-          // TODO: modify here
-          // val projection = HoodieCatalystExpressionUtils.generateMutableProjection(from, to)
-          // projectionMap.put(schemaPair, projection)
+          val projection = generateMutableProjection(from, to)
+          projectionMap.put(schemaPair, projection)
         }
       }
     }
@@ -219,15 +221,32 @@ object HoodieInternalRowUtils {
   }
 
   def getCacheSchemaPosMap(schema: StructType): Map[String, (StructField, Int)] = {
-    if (!SchemaPosMap.contains(schema)) {
-      SchemaPosMap.synchronized {
-        if (!SchemaPosMap.contains(schema)) {
+    if (!schemaPosMap.contains(schema)) {
+      schemaPosMap.synchronized {
+        if (!schemaPosMap.contains(schema)) {
           val fieldMap = schema.fields.zipWithIndex.map { case (field, i) => (field.name, (field, i)) }.toMap
-          SchemaPosMap.put(schema, fieldMap)
+          schemaPosMap.put(schema, fieldMap)
         }
       }
     }
-    SchemaPosMap.get(schema)
+    schemaPosMap.get(schema)
+  }
+
+  private def getCacheConverter(schema: Schema): HoodieAvroDeserializer = {
+    if (!converterMap.contains(schema)) {
+      converterMap.synchronized {
+        if (!converterMap.contains(schema)) {
+          converterMap.put(schema, sparkAdapter.createAvroDeserializer(schema, getCacheSchema(schema)))
+        }
+      }
+    }
+    converterMap.get(schema)
+  }
+
+  def avro2Row(schema: Schema, record: IndexedRecord): InternalRow = {
+    val converter = getCacheConverter(schema)
+
+    converter.deserialize(record).asInstanceOf[InternalRow]
   }
 
   private def rewritePrimaryType(oldValue: Any, oldSchema: DataType, newSchema: DataType): Any = {

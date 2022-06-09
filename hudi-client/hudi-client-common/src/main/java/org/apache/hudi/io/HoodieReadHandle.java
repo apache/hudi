@@ -62,7 +62,7 @@ public abstract class HoodieReadHandle<T, I, K, O> extends HoodieIOHandle<T, I, 
   }
 
   protected HoodieFileReader createNewFileReader() throws IOException {
-    return HoodieFileReaderFactory.getFileReader(hoodieTable.getHadoopConf(),
+    return HoodieFileReaderFactory.getReaderFactory(this.config.getRecordType()).getFileReader(hoodieTable.getHadoopConf(),
         new Path(getLatestDataFile().getPath()));
   }
 }

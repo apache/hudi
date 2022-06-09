@@ -39,6 +39,7 @@ import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
@@ -146,7 +147,7 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> RECORD_TYPE = ConfigProperty
       .key("hoodie.datasource.write.record.type")
-      .defaultValue(HoodieRecord.HoodieRecordType.SPARK.toString()) // TODO: set avro as default
+      .defaultValue(HoodieRecordType.AVRO.toString())
       .withDocumentation("test");
 
   public static final ConfigProperty<String> ROLLBACK_USING_MARKERS_ENABLE = ConfigProperty

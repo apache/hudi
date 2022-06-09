@@ -19,16 +19,13 @@
 package org.apache.hudi.metadata;
 
 import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
-import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.internal.schema.InternalSchema;
@@ -60,24 +57,8 @@ public class HoodieMetadataMergedLogRecordReader extends HoodieMergedLogRecordSc
                                               boolean isBitCaskDiskMapCompressionEnabled,
                                               Option<InstantRange> instantRange, boolean allowFullScan) {
     super(fs, basePath, logFilePaths, readerSchema, latestInstantTime, maxMemorySizeInBytes, true, false, bufferSize,
-        spillableMapBasePath, instantRange, diskMapType, isBitCaskDiskMapCompressionEnabled, false, allowFullScan, Option.of(partitionName), InternalSchema.getEmptyInternalSchema());
-  }
-
-  @Override
-  protected <T, R> HoodieRecord<R> createHoodieRecord(final HoodieRecord<T> rec, final HoodieTableConfig hoodieTableConfig,
-                                               final String payloadClassFQN, final String preCombineField,
-                                               final boolean withOperationField,
-                                               final Option<Pair<String, String>> simpleKeyGenFields,
-                                               final Option<String> partitionName) {
-    if (hoodieTableConfig.populateMetaFields()) {
-      return super.createHoodieRecord(rec, hoodieTableConfig, payloadClassFQN, preCombineField, withOperationField,
-          simpleKeyGenFields, partitionName);
-    }
-
-    // When meta fields are not available, create the record using the
-    // preset key field and the known partition name
-    return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) ((HoodieAvroIndexedRecord) rec).getData(), payloadClassFQN,
-        preCombineField, simpleKeyGenFields.get(), withOperationField, partitionName);
+        spillableMapBasePath, instantRange, diskMapType, isBitCaskDiskMapCompressionEnabled, false, allowFullScan, Option.of(partitionName),
+        InternalSchema.getEmptyInternalSchema(), HoodieRecordType.AVRO);
   }
 
   /**
