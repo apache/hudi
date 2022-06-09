@@ -94,6 +94,8 @@ stages:
         steps:
           - task: Maven@3
             displayName: maven install
+            ContinueOnError: true
+            retryCountOnTaskFailure: 1
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'clean install'
@@ -121,6 +123,8 @@ stages:
       - job: UT_FT_2
         condition: false
         displayName: FT client/spark-client
+        ContinueOnError: true
+        retryCountOnTaskFailure: 1
         timeoutInMinutes: '120'
         steps:
           - task: Maven@3
@@ -141,7 +145,9 @@ stages:
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g'
       - job: UT_FT_3
-        displayName: UT FT clients & cli & utilities & sync
+        displayName: UT FT clients & cli & utilities & sync/hive-sync
+        ContinueOnError: true
+        retryCountOnTaskFailure: 1
         timeoutInMinutes: '120'
         steps:
           - task: Maven@3
@@ -173,6 +179,8 @@ stages:
       - job: UT_FT_4
         condition: false
         displayName: UT FT other modules
+        ContinueOnError: true
+        retryCountOnTaskFailure: 1
         timeoutInMinutes: '120'
         steps:
           - task: Maven@3
@@ -203,7 +211,9 @@ stages:
               mavenOptions: '-Xmx4g'
       - job: IT
         displayName: IT modules
-        timeoutInMinutes: '180'
+        ContinueOnError: true
+        retryCountOnTaskFailure: 1
+        timeoutInMinutes: '120'
         steps:
           - task: Maven@3
             displayName: maven install
