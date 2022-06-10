@@ -21,7 +21,6 @@ package org.apache.hudi.table.action.deltacommit;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -43,7 +42,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
-public abstract class BaseSparkDeltaCommitActionExecutor<T extends HoodieRecordPayload<T>>
+public abstract class BaseSparkDeltaCommitActionExecutor<T>
     extends BaseSparkCommitActionExecutor<T> {
   private static final Logger LOG = LogManager.getLogger(BaseSparkDeltaCommitActionExecutor.class);
 

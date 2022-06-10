@@ -18,14 +18,17 @@
 
 package org.apache.hudi.io;
 
+import org.apache.avro.Schema;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.util.HoodieTimer;
@@ -38,47 +41,21 @@ import org.apache.hudi.io.storage.HoodieFileWriter;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
-
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
-import java.util.HashMap;
 
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 
 /**
  * Base class for all write operations logically performed at the file group level.
  */
-public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> extends HoodieIOHandle<T, I, K, O> {
+public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I, K, O> {
 
   private static final Logger LOG = LogManager.getLogger(HoodieWriteHandle.class);
-
-  /**
-   * A special record returned by {@link HoodieRecordPayload}, which means
-   * {@link HoodieWriteHandle} should just skip this record.
-   * This record is only used for {@link HoodieRecordPayload} currently, so it should not
-   * shuffle though network, we can compare the record locally by the equal method.
-   * The HoodieRecordPayload#combineAndGetUpdateValue and HoodieRecordPayload#getInsertValue
-   * have 3 kind of return:
-   * 1、Option.empty
-   * This means we should delete this record.
-   * 2、IGNORE_RECORD
-   * This means we should not process this record,just skip.
-   * 3、Other non-empty record
-   * This means we should process this record.
-   *
-   * We can see the usage of IGNORE_RECORD in
-   * org.apache.spark.sql.hudi.command.payload.ExpressionPayload
-   */
-  public static IgnoreRecord IGNORE_RECORD = new IgnoreRecord();
 
   /**
    * The specified schema of the table. ("specified" denotes that this is configured by the client,
@@ -212,35 +189,15 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
   /**
    * Perform the actual writing of the given record into the backing file.
    */
-  public void write(HoodieRecord record, Option<IndexedRecord> insertValue) {
+  protected void doWrite(HoodieRecord record, Schema schema, TypedProperties props) {
     // NO_OP
   }
 
   /**
    * Perform the actual writing of the given record into the backing file.
    */
-  public void write(HoodieRecord record, Option<IndexedRecord> avroRecord, Option<Exception> exception) {
-    Option recordMetadata = ((HoodieRecordPayload) record.getData()).getMetadata();
-    if (exception.isPresent() && exception.get() instanceof Throwable) {
-      // Not throwing exception from here, since we don't want to fail the entire job for a single record
-      writeStatus.markFailure(record, exception.get(), recordMetadata);
-      LOG.error("Error writing record " + record, exception.get());
-    } else {
-      write(record, avroRecord);
-    }
-  }
-
-  /**
-   * Rewrite the GenericRecord with the Schema containing the Hoodie Metadata fields.
-   */
-  protected GenericRecord rewriteRecord(GenericRecord record) {
-    return schemaOnReadEnabled ? HoodieAvroUtils.rewriteRecordWithNewSchema(record, writeSchemaWithMetaFields, new HashMap<>())
-        : HoodieAvroUtils.rewriteRecord(record, writeSchemaWithMetaFields);
-  }
-
-  protected GenericRecord rewriteRecordWithMetadata(GenericRecord record, String fileName) {
-    return schemaOnReadEnabled ? HoodieAvroUtils.rewriteEvolutionRecordWithMetadata(record, writeSchemaWithMetaFields, fileName)
-        : HoodieAvroUtils.rewriteRecordWithMetadata(record, writeSchemaWithMetaFields, fileName);
+  public void write(HoodieRecord record, Schema schema, TypedProperties props) {
+    doWrite(record, schema, props);
   }
 
   public abstract List<WriteStatus> close();
@@ -273,7 +230,7 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
   }
 
   protected HoodieFileWriter createNewFileWriter(String instantTime, Path path, HoodieTable<T, I, K, O> hoodieTable,
-      HoodieWriteConfig config, Schema schema, TaskContextSupplier taskContextSupplier) throws IOException {
+                                                 HoodieWriteConfig config, Schema schema, TaskContextSupplier taskContextSupplier) throws IOException {
     return HoodieFileWriterFactory.getFileWriter(instantTime, path, hoodieTable, config, schema, taskContextSupplier);
   }
 
@@ -317,34 +274,6 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
       throw new HoodieException("Creating logger writer with fileId: " + fileId + ", "
           + "base commit time: " + baseCommitTime + ", "
           + "file suffix: " + fileSuffix + " error");
-    }
-  }
-
-  private static class IgnoreRecord implements GenericRecord {
-
-    @Override
-    public void put(int i, Object v) {
-
-    }
-
-    @Override
-    public Object get(int i) {
-      return null;
-    }
-
-    @Override
-    public Schema getSchema() {
-      return null;
-    }
-
-    @Override
-    public void put(String key, Object v) {
-
-    }
-
-    @Override
-    public Object get(String key) {
-      return null;
     }
   }
 }

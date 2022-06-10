@@ -29,7 +29,6 @@ import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.AvroOrcUtils;
 import org.apache.orc.OrcFile;
 import org.apache.orc.TypeDescription;
@@ -48,8 +47,7 @@ import static org.apache.hudi.avro.HoodieAvroWriteSupport.HOODIE_BLOOM_FILTER_TY
 import static org.apache.hudi.avro.HoodieAvroWriteSupport.HOODIE_MAX_RECORD_KEY_FOOTER;
 import static org.apache.hudi.avro.HoodieAvroWriteSupport.HOODIE_MIN_RECORD_KEY_FOOTER;
 
-public class HoodieOrcWriter<T extends HoodieRecordPayload, R extends IndexedRecord>
-    implements HoodieFileWriter<R>, Closeable {
+public class HoodieAvroOrcWriter implements HoodieAvroFileWriter, Closeable {
   private static final AtomicLong RECORD_INDEX = new AtomicLong(1);
 
   private final long maxFileSize;
@@ -68,8 +66,8 @@ public class HoodieOrcWriter<T extends HoodieRecordPayload, R extends IndexedRec
   private String minRecordKey;
   private String maxRecordKey;
 
-  public HoodieOrcWriter(String instantTime, Path file, HoodieOrcConfig config, Schema schema,
-      TaskContextSupplier taskContextSupplier) throws IOException {
+  public HoodieAvroOrcWriter(String instantTime, Path file, HoodieOrcConfig config, Schema schema,
+                             TaskContextSupplier taskContextSupplier) throws IOException {
 
     Configuration conf = FSUtils.registerFileSystem(file, config.getHadoopConf());
     this.file = HoodieWrapperFileSystem.convertToHoodiePath(file, conf);
@@ -95,7 +93,7 @@ public class HoodieOrcWriter<T extends HoodieRecordPayload, R extends IndexedRec
   }
 
   @Override
-  public void writeAvroWithMetadata(HoodieKey key, R avroRecord) throws IOException {
+  public void writeAvroWithMetadata(HoodieKey key, IndexedRecord avroRecord) throws IOException {
     prepRecordWithMetadata(key, avroRecord, instantTime,
         taskContextSupplier.getPartitionIdSupplier().get(), RECORD_INDEX.getAndIncrement(), file.getName());
     writeAvro(key.getRecordKey(), avroRecord);

@@ -20,6 +20,7 @@ package org.apache.hudi.client;
 
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
@@ -133,7 +134,8 @@ public class TestUpdateSchemaEvolution extends HoodieClientTestHarness {
                 new Path(updateTable.getConfig().getBasePath() + "/" + insertResult.getStat().getPath()),
                 mergeHandle.getWriterSchemaWithMetaFields());
         for (GenericRecord rec : oldRecords) {
-          mergeHandle.write(rec);
+          // TODO create hoodie record with rec can getRecordKey
+          mergeHandle.write(new HoodieAvroIndexedRecord(rec));
         }
         mergeHandle.close();
       };

@@ -25,7 +25,6 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieClusteringException;
@@ -46,7 +45,7 @@ import java.util.Map;
  * This strategy is similar to {@link SparkSortAndSizeExecutionStrategy} with the difference being that
  * there should be only one large file group per clustering group.
  */
-public class SparkSingleFileSortExecutionStrategy<T extends HoodieRecordPayload<T>>
+public class SparkSingleFileSortExecutionStrategy<T>
     extends MultipleSparkJobExecutionStrategy<T> {
 
   private static final Logger LOG = LogManager.getLogger(SparkSingleFileSortExecutionStrategy.class);

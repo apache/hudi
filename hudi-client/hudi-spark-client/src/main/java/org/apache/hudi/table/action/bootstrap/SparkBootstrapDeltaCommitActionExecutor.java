@@ -21,7 +21,6 @@ package org.apache.hudi.table.action.bootstrap;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -31,7 +30,7 @@ import org.apache.hudi.table.action.deltacommit.SparkBulkInsertDeltaCommitAction
 
 import java.util.Map;
 
-public class SparkBootstrapDeltaCommitActionExecutor<T extends HoodieRecordPayload<T>>
+public class SparkBootstrapDeltaCommitActionExecutor<T>
     extends SparkBootstrapCommitActionExecutor<T> {
 
   public SparkBootstrapDeltaCommitActionExecutor(HoodieSparkEngineContext context,

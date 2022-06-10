@@ -19,7 +19,6 @@
 package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.index.HoodieIndex;
@@ -30,7 +29,7 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 import java.time.Duration;
 import java.time.Instant;
 
-public abstract class BaseWriteHelper<T extends HoodieRecordPayload, I, K, O, R> {
+public abstract class BaseWriteHelper<T, I, K, O, R> {
 
   public HoodieWriteMetadata<O> write(String instantTime,
                                       I inputRecords,

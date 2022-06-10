@@ -18,20 +18,16 @@
 
 package org.apache.hudi.execution;
 
+import org.apache.avro.Schema;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.utils.LazyIterableIterator;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.CollectionUtils;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.CreateHandleFactory;
 import org.apache.hudi.io.WriteHandleFactory;
 import org.apache.hudi.table.HoodieTable;
-
-import org.apache.avro.Schema;
-import org.apache.avro.generic.IndexedRecord;
 
 import java.util.Iterator;
 import java.util.List;
@@ -41,7 +37,7 @@ import java.util.function.Function;
 /**
  * Lazy Iterable, that writes a stream of HoodieRecords sorted by the partitionPath, into new files.
  */
-public abstract class HoodieLazyInsertIterable<T extends HoodieRecordPayload>
+public abstract class HoodieLazyInsertIterable<T>
     extends LazyIterableIterator<HoodieRecord<T>, List<WriteStatus>> {
 
   protected final HoodieWriteConfig hoodieConfig;
@@ -78,19 +74,19 @@ public abstract class HoodieLazyInsertIterable<T extends HoodieRecordPayload>
   }
 
   // Used for caching HoodieRecord along with insertValue. We need this to offload computation work to buffering thread.
-  public static class HoodieInsertValueGenResult<T extends HoodieRecord> {
-    public T record;
-    public Option<IndexedRecord> insertValue;
-    // It caches the exception seen while fetching insert value.
-    public Option<Exception> exception = Option.empty();
+  public static class HoodieInsertValueGenResult<R extends HoodieRecord> {
+    private final R record;
+    public final Schema schema;
+    public final Properties props;
 
-    public HoodieInsertValueGenResult(T record, Schema schema, Properties properties) {
+    public HoodieInsertValueGenResult(R record, Schema schema, Properties properties) {
       this.record = record;
-      try {
-        this.insertValue = ((HoodieRecordPayload) record.getData()).getInsertValue(schema, properties);
-      } catch (Exception e) {
-        this.exception = Option.of(e);
-      }
+      this.schema = schema;
+      this.props = properties;
+    }
+
+    public R getResult() {
+      return record;
     }
   }
 
@@ -98,12 +94,12 @@ public abstract class HoodieLazyInsertIterable<T extends HoodieRecordPayload>
    * Transformer function to help transform a HoodieRecord. This transformer is used by BufferedIterator to offload some
    * expensive operations of transformation to the reader thread.
    */
-  static <T extends HoodieRecordPayload> Function<HoodieRecord<T>, HoodieInsertValueGenResult<HoodieRecord>> getTransformFunction(
+  static <T> Function<HoodieRecord<T>, HoodieInsertValueGenResult<HoodieRecord>> getTransformFunction(
       Schema schema, HoodieWriteConfig config) {
     return hoodieRecord -> new HoodieInsertValueGenResult(hoodieRecord, schema, config.getProps());
   }
 
-  static <T extends HoodieRecordPayload> Function<HoodieRecord<T>, HoodieInsertValueGenResult<HoodieRecord>> getTransformFunction(
+  static <T> Function<HoodieRecord<T>, HoodieInsertValueGenResult<HoodieRecord>> getTransformFunction(
       Schema schema) {
     return hoodieRecord -> new HoodieInsertValueGenResult(hoodieRecord, schema, CollectionUtils.emptyProps());
   }

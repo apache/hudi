@@ -30,9 +30,9 @@ import org.apache.hudi.cli.HoodieTableHeaderFields;
 import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
@@ -61,6 +61,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Properties;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
@@ -121,7 +122,7 @@ public class HoodieLogFileCommand {
             instantTime = "dummy_instant_time_" + dummyInstantTimeCount;
           }
           if (n instanceof HoodieDataBlock) {
-            try (ClosableIterator<IndexedRecord> recordItr = ((HoodieDataBlock) n).getRecordIterator()) {
+            try (ClosableIterator<HoodieRecord> recordItr = ((HoodieDataBlock) n).getRecordIterator(HoodieAvroIndexedRecord::new)) {
               recordItr.forEachRemaining(r -> recordCount.incrementAndGet());
             }
           }
@@ -218,8 +219,8 @@ public class HoodieLogFileCommand {
               .withDiskMapType(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.defaultValue())
               .withBitCaskDiskMapCompressionEnabled(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue())
               .build();
-      for (HoodieRecord<? extends HoodieRecordPayload> hoodieRecord : scanner) {
-        Option<IndexedRecord> record = hoodieRecord.getData().getInsertValue(readerSchema);
+      for (HoodieRecord hoodieRecord : scanner) {
+        Option<IndexedRecord> record = hoodieRecord.toIndexedRecord(readerSchema, new Properties());
         if (allRecords.size() < limit) {
           allRecords.add(record.get());
         }
@@ -235,10 +236,10 @@ public class HoodieLogFileCommand {
           HoodieLogBlock n = reader.next();
           if (n instanceof HoodieDataBlock) {
             HoodieDataBlock blk = (HoodieDataBlock) n;
-            try (ClosableIterator<IndexedRecord> recordItr = blk.getRecordIterator()) {
+            try (ClosableIterator<HoodieRecord> recordItr = blk.getRecordIterator(HoodieAvroIndexedRecord::new)) {
               recordItr.forEachRemaining(record -> {
                 if (allRecords.size() < limit) {
-                  allRecords.add(record);
+                  allRecords.add((IndexedRecord) record.getData());
                 }
               });
             }

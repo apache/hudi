@@ -45,8 +45,8 @@ public class DeleteSupportSchemaPostProcessor extends SchemaPostProcessor {
   @Override
   public Schema processSchema(Schema schema) {
 
-    if (schema.getField(HoodieRecord.HOODIE_IS_DELETED) != null) {
-      LOG.warn(String.format("column %s already exists!", HoodieRecord.HOODIE_IS_DELETED));
+    if (schema.getField(HoodieRecord.HOODIE_IS_DELETED_FIELD) != null) {
+      LOG.warn(String.format("column %s already exists!", HoodieRecord.HOODIE_IS_DELETED_FIELD));
       return schema;
     }
 
@@ -57,7 +57,7 @@ public class DeleteSupportSchemaPostProcessor extends SchemaPostProcessor {
       targetFields.add(new Schema.Field(sourceField.name(), sourceField.schema(), sourceField.doc(), sourceField.defaultVal()));
     }
     // add _hoodie_is_deleted column
-    targetFields.add(new Schema.Field(HoodieRecord.HOODIE_IS_DELETED, Schema.create(Schema.Type.BOOLEAN), null, false));
+    targetFields.add(new Schema.Field(HoodieRecord.HOODIE_IS_DELETED_FIELD, Schema.create(Schema.Type.BOOLEAN), null, false));
 
     return Schema.createRecord(schema.getName(), schema.getDoc(), schema.getNamespace(), false, targetFields);
   }

@@ -25,7 +25,6 @@ import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.RewriteAvroPayload;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieClusteringConfig;
@@ -36,12 +35,16 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 
+import java.util.Arrays;
+import java.util.List;
+import java.util.Properties;
+
 /**
  * A partitioner that does spatial curve optimization sorting based on specified column values for each RDD partition.
  * support z-curve optimization, hilbert will come soon.
  * @param <T> HoodieRecordPayload type
  */
-public class RDDSpatialCurveSortPartitioner<T extends HoodieRecordPayload>
+public class RDDSpatialCurveSortPartitioner<T>
     extends SpatialCurveSortPartitionerBase<JavaRDD<HoodieRecord<T>>> {
 
   private final transient HoodieSparkEngineContext sparkEngineContext;
@@ -60,7 +63,7 @@ public class RDDSpatialCurveSortPartitioner<T extends HoodieRecordPayload>
   @Override
   public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records, int outputSparkPartitions) {
     JavaRDD<GenericRecord> genericRecordsRDD =
-        records.map(f -> (GenericRecord) f.getData().getInsertValue(schema.get()).get());
+        records.map(f -> (GenericRecord) f.toIndexedRecord(schema.get(), new Properties()).get());
 
     Dataset<Row> sourceDataset =
         AvroConversionUtils.createDataFrame(

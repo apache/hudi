@@ -21,11 +21,9 @@ package org.apache.hudi.table.action.commit;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.exception.HoodieUpsertException;
@@ -51,7 +49,7 @@ import java.util.stream.Collectors;
  * <p>Computing the records batch locations all at a time is a pressure to the engine,
  * we should avoid that in streaming system.
  */
-public class FlinkWriteHelper<T extends HoodieRecordPayload, R> extends BaseWriteHelper<T, List<HoodieRecord<T>>,
+public class FlinkWriteHelper<T, R> extends BaseWriteHelper<T, List<HoodieRecord<T>>,
     List<HoodieKey>, List<WriteStatus>, R> {
 
   private FlinkWriteHelper() {
@@ -99,17 +97,14 @@ public class FlinkWriteHelper<T extends HoodieRecordPayload, R> extends BaseWrit
     // caution that the avro schema is not serializable
     final Schema schema = new Schema.Parser().parse(schemaStr);
     return keyedRecords.values().stream().map(x -> x.stream().reduce((rec1, rec2) -> {
-      final T data1 = rec1.getData();
-      final T data2 = rec2.getData();
-
-      @SuppressWarnings("unchecked") final T reducedData = (T) data2.preCombine(data1, schema, CollectionUtils.emptyProps());
+      @SuppressWarnings("unchecked") final HoodieRecord reducedRec = rec2.preCombine(rec1);
       // we cannot allow the user to change the key or partitionPath, since that will affect
       // everything
       // so pick it from one of the records.
-      boolean choosePrev = data1 == reducedData;
+      boolean choosePrev = rec1 == reducedRec;
       HoodieKey reducedKey = choosePrev ? rec1.getKey() : rec2.getKey();
       HoodieOperation operation = choosePrev ? rec1.getOperation() : rec2.getOperation();
-      HoodieRecord<T> hoodieRecord = new HoodieAvroRecord<>(reducedKey, reducedData, operation);
+      HoodieRecord<T> hoodieRecord = reducedRec.newInstance(reducedKey, operation);
       // reuse the location from the first record.
       hoodieRecord.setCurrentLocation(rec1.getCurrentLocation());
       return hoodieRecord;

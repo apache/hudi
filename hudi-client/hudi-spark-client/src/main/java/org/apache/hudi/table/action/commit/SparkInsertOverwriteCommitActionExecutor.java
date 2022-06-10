@@ -23,7 +23,6 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.collection.Pair;
@@ -39,7 +38,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-public class SparkInsertOverwriteCommitActionExecutor<T extends HoodieRecordPayload<T>>
+public class SparkInsertOverwriteCommitActionExecutor<T>
     extends BaseSparkCommitActionExecutor<T> {
 
   private final HoodieData<HoodieRecord<T>> inputRecordsRDD;
