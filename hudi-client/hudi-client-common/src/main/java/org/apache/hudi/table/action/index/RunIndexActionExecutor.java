@@ -28,7 +28,6 @@ import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -83,7 +82,7 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.metadataPartition
  * Reads the index plan and executes the plan.
  * It also reconciles updates on data timeline while indexing was in progress.
  */
-public class RunIndexActionExecutor<T extends HoodieRecordPayload, I, K, O> extends BaseActionExecutor<T, I, K, O, Option<HoodieIndexCommitMetadata>> {
+public class RunIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K, O, Option<HoodieIndexCommitMetadata>> {
 
   private static final Logger LOG = LogManager.getLogger(RunIndexActionExecutor.class);
   private static final Integer INDEX_COMMIT_METADATA_VERSION_1 = 1;

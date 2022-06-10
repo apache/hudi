@@ -18,15 +18,13 @@
 
 package org.apache.hudi.io.storage;
 
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.client.SparkTaskContextSupplier;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieClientTestBase;
-
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -37,7 +35,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Tests for {@link HoodieFileWriterFactory}.
  */
-public class TestHoodieFileWriterFactory extends HoodieClientTestBase {
+public class TestHoodieAvroFileWriterFactory extends HoodieClientTestBase {
 
   @Test
   public void testGetFileWriter() throws IOException {
@@ -47,26 +45,26 @@ public class TestHoodieFileWriterFactory extends HoodieClientTestBase {
     final HoodieWriteConfig cfg = getConfig();
     HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
     SparkTaskContextSupplier supplier = new SparkTaskContextSupplier();
-    HoodieFileWriter<IndexedRecord> parquetWriter = HoodieFileWriterFactory.getFileWriter(instantTime,
+    HoodieFileWriter parquetWriter = HoodieFileWriterFactory.getFileWriter(instantTime,
         parquetPath, table, cfg, HoodieTestDataGenerator.AVRO_SCHEMA, supplier);
     assertTrue(parquetWriter instanceof HoodieAvroParquetWriter);
 
     // hfile format.
     final Path hfilePath = new Path(basePath + "/partition/path/f1_1-0-1_000.hfile");
-    HoodieFileWriter<IndexedRecord> hfileWriter = HoodieFileWriterFactory.getFileWriter(instantTime,
+    HoodieFileWriter hfileWriter = HoodieFileWriterFactory.getFileWriter(instantTime,
         hfilePath, table, cfg, HoodieTestDataGenerator.AVRO_SCHEMA, supplier);
-    assertTrue(hfileWriter instanceof HoodieHFileWriter);
+    assertTrue(hfileWriter instanceof HoodieAvroHFileWriter);
 
     // orc file format.
     final Path orcPath = new Path(basePath + "/partition/path/f1_1-0-1_000.orc");
-    HoodieFileWriter<IndexedRecord> orcFileWriter = HoodieFileWriterFactory.getFileWriter(instantTime,
+    HoodieFileWriter orcFileWriter = HoodieFileWriterFactory.getFileWriter(instantTime,
         orcPath, table, cfg, HoodieTestDataGenerator.AVRO_SCHEMA, supplier);
-    assertTrue(orcFileWriter instanceof HoodieOrcWriter);
+    assertTrue(orcFileWriter instanceof HoodieAvroOrcWriter);
 
     // other file format exception.
     final Path logPath = new Path(basePath + "/partition/path/f.b51192a8-574b-4a85-b246-bcfec03ac8bf_100.log.2_1-0-1");
     final Throwable thrown = assertThrows(UnsupportedOperationException.class, () -> {
-      HoodieFileWriter<IndexedRecord> logWriter = HoodieFileWriterFactory.getFileWriter(instantTime, logPath,
+      HoodieFileWriter logWriter = HoodieFileWriterFactory.getFileWriter(instantTime, logPath,
           table, cfg, HoodieTestDataGenerator.AVRO_SCHEMA, supplier);
     }, "should fail since log storage writer is not supported yet.");
     assertTrue(thrown.getMessage().contains("format not supported yet."));

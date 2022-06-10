@@ -27,9 +27,7 @@ import org.apache.hadoop.mapred.RecordReader;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.config.HoodieRealtimeConfig;
@@ -50,7 +48,7 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
   private static final Logger LOG = LogManager.getLogger(AbstractRealtimeRecordReader.class);
 
   protected final RecordReader<NullWritable, ArrayWritable> parquetReader;
-  private final Map<String, HoodieRecord<? extends HoodieRecordPayload>> deltaRecordMap;
+  private final Map<String, HoodieRecord> deltaRecordMap;
 
   private final Set<String> deltaRecordKeys;
   private final HoodieMergedLogRecordScanner mergedLogRecordScanner;
@@ -96,9 +94,9 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
 
   private Option<GenericRecord> buildGenericRecordwithCustomPayload(HoodieRecord record) throws IOException {
     if (usesCustomPayload) {
-      return ((HoodieAvroRecord) record).getData().getInsertValue(getWriterSchema(), payloadProps);
+      return record.toIndexedRecord(getWriterSchema(), payloadProps);
     } else {
-      return ((HoodieAvroRecord) record).getData().getInsertValue(getReaderSchema(), payloadProps);
+      return record.toIndexedRecord(getReaderSchema(), payloadProps);
     }
   }
 

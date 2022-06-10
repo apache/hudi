@@ -22,7 +22,6 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.table.action.cluster.strategy.UpdateStrategy;
 
 import java.util.List;
@@ -32,7 +31,7 @@ import java.util.Set;
  * Spark base update strategy, write records to the file groups which are in clustering
  * need to check. Spark relate implementations should extend this base class.
  */
-public abstract class BaseSparkUpdateStrategy<T extends HoodieRecordPayload<T>> extends UpdateStrategy<T, HoodieData<HoodieRecord<T>>> {
+public abstract class BaseSparkUpdateStrategy<T> extends UpdateStrategy<T, HoodieData<HoodieRecord<T>>> {
 
   public BaseSparkUpdateStrategy(HoodieSparkEngineContext engineContext,
                                  Set<HoodieFileGroupId> fileGroupsInPendingClustering) {

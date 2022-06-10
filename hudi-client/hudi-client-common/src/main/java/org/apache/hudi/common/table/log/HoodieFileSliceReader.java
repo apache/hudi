@@ -20,13 +20,12 @@
 package org.apache.hudi.common.table.log;
 
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodiePayloadConfig;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.io.storage.HoodieFileReader;
+import org.apache.hudi.io.storage.HoodieAvroFileReader;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -38,28 +37,28 @@ import java.util.stream.StreamSupport;
 /**
  * Reads records from base file and merges any updates from log files and provides iterable over all records in the file slice.
  */
-public class HoodieFileSliceReader<T extends HoodieRecordPayload> implements Iterator<HoodieRecord<T>> {
+public class HoodieFileSliceReader<T> implements Iterator<HoodieRecord<T>> {
   private final Iterator<HoodieRecord<T>> recordsIterator;
 
   public static HoodieFileSliceReader getFileSliceReader(
-      Option<HoodieFileReader> baseFileReader, HoodieMergedLogRecordScanner scanner, Schema schema, String payloadClass,
+      Option<HoodieAvroFileReader> baseFileReader, HoodieMergedLogRecordScanner scanner, Schema schema, String payloadClass,
       String preCombineField, Option<Pair<String, String>> simpleKeyGenFieldsOpt) throws IOException {
     if (baseFileReader.isPresent()) {
       Iterator baseIterator = baseFileReader.get().getRecordIterator(schema);
       while (baseIterator.hasNext()) {
         GenericRecord record = (GenericRecord) baseIterator.next();
-        HoodieRecord<? extends HoodieRecordPayload> hoodieRecord = transform(
+        HoodieRecord hoodieRecord = transform(
             record, scanner, payloadClass, preCombineField, simpleKeyGenFieldsOpt);
         scanner.processNextRecord(hoodieRecord);
       }
       return new HoodieFileSliceReader(scanner.iterator());
     } else {
-      Iterable<HoodieRecord<? extends HoodieRecordPayload>> iterable = () -> scanner.iterator();
+      Iterable<HoodieRecord> iterable = () -> scanner.iterator();
       HoodiePayloadConfig payloadConfig = HoodiePayloadConfig.newBuilder().withPayloadOrderingField(preCombineField).build();
       return new HoodieFileSliceReader(StreamSupport.stream(iterable.spliterator(), false)
           .map(e -> {
             try {
-              GenericRecord record = (GenericRecord) e.getData().getInsertValue(schema, payloadConfig.getProps()).get();
+              GenericRecord record = (GenericRecord) e.toIndexedRecord(schema, payloadConfig.getProps()).get();
               return transform(record, scanner, payloadClass, preCombineField, simpleKeyGenFieldsOpt);
             } catch (IOException io) {
               throw new HoodieIOException("Error while creating reader for file slice with no base file.", io);
@@ -68,9 +67,11 @@ public class HoodieFileSliceReader<T extends HoodieRecordPayload> implements Ite
     }
   }
 
-  private static HoodieRecord<? extends HoodieRecordPayload> transform(
-      GenericRecord record, HoodieMergedLogRecordScanner scanner, String payloadClass,
-      String preCombineField, Option<Pair<String, String>> simpleKeyGenFieldsOpt) {
+  private static HoodieRecord transform(GenericRecord record,
+      HoodieMergedLogRecordScanner scanner,
+      String payloadClass,
+      String preCombineField,
+      Option<Pair<String, String>> simpleKeyGenFieldsOpt) {
     return simpleKeyGenFieldsOpt.isPresent()
         ? SpillableMapUtils.convertToHoodieRecordPayload(record,
         payloadClass, preCombineField, simpleKeyGenFieldsOpt.get(), scanner.isWithOperationField(), Option.empty())

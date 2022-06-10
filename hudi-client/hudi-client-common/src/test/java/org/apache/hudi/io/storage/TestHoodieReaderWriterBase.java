@@ -21,10 +21,13 @@ package org.apache.hudi.io.storage;
 
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
+import org.apache.hudi.common.model.HoodieRecord;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.AfterEach;
@@ -60,10 +63,10 @@ public abstract class TestHoodieReaderWriterBase {
 
   protected abstract Path getFilePath();
 
-  protected abstract HoodieFileWriter<GenericRecord> createWriter(
+  protected abstract HoodieAvroFileWriter createWriter(
       Schema avroSchema, boolean populateMetaFields) throws Exception;
 
-  protected abstract HoodieFileReader<GenericRecord> createReader(
+  protected abstract HoodieAvroFileReader createReader(
       Configuration conf) throws Exception;
 
   protected abstract void verifyMetadata(Configuration conf) throws IOException;
@@ -87,7 +90,7 @@ public abstract class TestHoodieReaderWriterBase {
     Configuration conf = new Configuration();
     verifyMetadata(conf);
 
-    HoodieFileReader<GenericRecord> hoodieReader = createReader(conf);
+    HoodieAvroFileReader hoodieReader = createReader(conf);
     BloomFilter filter = hoodieReader.readBloomFilter();
     for (int i = 0; i < NUM_RECORDS; i++) {
       String key = "key" + String.format("%02d", i);
@@ -110,7 +113,7 @@ public abstract class TestHoodieReaderWriterBase {
     Configuration conf = new Configuration();
     verifyMetadata(conf);
     verifySchema(conf, schemaPath);
-    verifySimpleRecords(createReader(conf).getRecordIterator());
+    verifySimpleRecords(new TransformIterator(createReader(conf).getRecordIterator(HoodieAvroIndexedRecord::new)));
   }
 
   @Test
@@ -118,7 +121,7 @@ public abstract class TestHoodieReaderWriterBase {
     String schemaPath = "/exampleSchemaWithUDT.avsc";
     Schema avroSchema = getSchemaFromResource(TestHoodieReaderWriterBase.class, schemaPath);
     Schema udtSchema = avroSchema.getField("driver").schema().getTypes().get(1);
-    HoodieFileWriter<GenericRecord> writer = createWriter(avroSchema, true);
+    HoodieAvroFileWriter writer = createWriter(avroSchema, true);
     for (int i = 0; i < NUM_RECORDS; i++) {
       GenericRecord record = new GenericData.Record(avroSchema);
       String key = "key" + String.format("%02d", i);
@@ -137,7 +140,7 @@ public abstract class TestHoodieReaderWriterBase {
     Configuration conf = new Configuration();
     verifyMetadata(conf);
     verifySchema(conf, schemaPath);
-    verifyComplexRecords(createReader(conf).getRecordIterator());
+    verifyComplexRecords(new TransformIterator(createReader(conf).getRecordIterator(HoodieAvroIndexedRecord::new)));
   }
 
   @Test
@@ -145,7 +148,7 @@ public abstract class TestHoodieReaderWriterBase {
     writeFileWithSimpleSchema();
 
     Configuration conf = new Configuration();
-    HoodieFileReader<GenericRecord> hoodieReader = createReader(conf);
+    HoodieAvroFileReader hoodieReader = createReader(conf);
     String[] schemaList = new String[] {
         "/exampleEvolvedSchema.avsc", "/exampleEvolvedSchemaChangeOrder.avsc",
         "/exampleEvolvedSchemaColumnRequire.avsc", "/exampleEvolvedSchemaColumnType.avsc",
@@ -166,21 +169,22 @@ public abstract class TestHoodieReaderWriterBase {
 
   protected void writeFileWithSimpleSchema() throws Exception {
     Schema avroSchema = getSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchema.avsc");
-    HoodieFileWriter<GenericRecord> writer = createWriter(avroSchema, true);
+    HoodieAvroFileWriter writer = createWriter(avroSchema, true);
     for (int i = 0; i < NUM_RECORDS; i++) {
       GenericRecord record = new GenericData.Record(avroSchema);
       String key = "key" + String.format("%02d", i);
       record.put("_row_key", key);
       record.put("time", Integer.toString(i));
       record.put("number", i);
-      writer.writeAvro(key, record);
+      HoodieRecord avroRecord = new HoodieAvroIndexedRecord(record);
+      writer.write(key, avroRecord, avroSchema);
     }
     writer.close();
   }
 
   protected void writeFileWithSchemaWithMeta() throws Exception {
     Schema avroSchema = getSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchemaWithMetaFields.avsc");
-    HoodieFileWriter<GenericRecord> writer = createWriter(avroSchema, true);
+    HoodieAvroFileWriter writer = createWriter(avroSchema, true);
     for (int i = 0; i < NUM_RECORDS; i++) {
       GenericRecord record = new GenericData.Record(avroSchema);
       String key = "key" + String.format("%02d", i);
@@ -193,10 +197,10 @@ public abstract class TestHoodieReaderWriterBase {
     writer.close();
   }
 
-  protected void verifySimpleRecords(Iterator<GenericRecord> iterator) {
+  protected void verifySimpleRecords(Iterator<IndexedRecord> iterator) {
     int index = 0;
     while (iterator.hasNext()) {
-      GenericRecord record = iterator.next();
+      GenericRecord record = (GenericRecord) iterator.next();
       String key = "key" + String.format("%02d", index);
       assertEquals(key, record.get("_row_key").toString());
       assertEquals(Integer.toString(index), record.get("time").toString());
@@ -205,10 +209,10 @@ public abstract class TestHoodieReaderWriterBase {
     }
   }
 
-  protected void verifyComplexRecords(Iterator<GenericRecord> iterator) {
+  protected void verifyComplexRecords(Iterator<IndexedRecord> iterator) {
     int index = 0;
     while (iterator.hasNext()) {
-      GenericRecord record = iterator.next();
+      GenericRecord record = (GenericRecord) iterator.next();
       String key = "key" + String.format("%02d", index);
       assertEquals(key, record.get("_row_key").toString());
       assertEquals(Integer.toString(index), record.get("time").toString());
@@ -232,7 +236,7 @@ public abstract class TestHoodieReaderWriterBase {
     }
   }
 
-  private void verifyFilterRowKeys(HoodieFileReader<GenericRecord> hoodieReader) {
+  private void verifyFilterRowKeys(HoodieAvroFileReader hoodieReader) {
     Set<String> candidateRowKeys = IntStream.range(40, NUM_RECORDS * 2)
         .mapToObj(i -> "key" + String.format("%02d", i)).collect(Collectors.toCollection(TreeSet::new));
     List<String> expectedKeys = IntStream.range(40, NUM_RECORDS)
@@ -241,12 +245,12 @@ public abstract class TestHoodieReaderWriterBase {
         .stream().sorted().collect(Collectors.toList()));
   }
 
-  private void verifyReaderWithSchema(String schemaPath, HoodieFileReader<GenericRecord> hoodieReader) throws IOException {
+  private void verifyReaderWithSchema(String schemaPath, HoodieAvroFileReader hoodieReader) throws IOException {
     Schema evolvedSchema = getSchemaFromResource(TestHoodieReaderWriterBase.class, schemaPath);
-    Iterator<GenericRecord> iter = hoodieReader.getRecordIterator(evolvedSchema);
+    Iterator<IndexedRecord> iter = hoodieReader.getRecordIterator(evolvedSchema);
     int index = 0;
     while (iter.hasNext()) {
-      verifyRecord(schemaPath, iter.next(), index);
+      verifyRecord(schemaPath, (GenericRecord) iter.next(), index);
       index++;
     }
   }
@@ -263,5 +267,25 @@ public abstract class TestHoodieReaderWriterBase {
       assertEquals(index, record.get("number"));
     }
     assertNull(record.get("added_field"));
+  }
+
+  class TransformIterator implements Iterator<IndexedRecord> {
+
+    private final Iterator<HoodieRecord> iter;
+
+    public TransformIterator(Iterator<HoodieRecord> iter) {
+      this.iter = iter;
+    }
+
+    @Override
+    public boolean hasNext() {
+      return iter.hasNext();
+    }
+
+    @Override
+    public IndexedRecord next() {
+      return (GenericRecord) iter.next().getData();
+
+    }
   }
 }

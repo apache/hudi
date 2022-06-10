@@ -18,12 +18,13 @@
 
 package org.apache.hudi.table.action.commit;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.utils.MergingIterator;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieBaseFile;
-import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.queue.BoundedInMemoryQueueConsumer;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
@@ -40,6 +41,8 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 
+import javax.annotation.Nonnull;
+
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.Iterator;
@@ -47,7 +50,7 @@ import java.util.Iterator;
 /**
  * Helper to read records from previous version of base file and run Merge.
  */
-public abstract class BaseMergeHelper<T extends HoodieRecordPayload, I, K, O> {
+public abstract class BaseMergeHelper<T, I, K, O> {
 
   /**
    * Read records from previous version of base file and merge.
@@ -57,7 +60,7 @@ public abstract class BaseMergeHelper<T extends HoodieRecordPayload, I, K, O> {
    */
   public abstract void runMerge(HoodieTable<T, I, K, O> table, HoodieMergeHandle<T, I, K, O> upsertHandle) throws IOException;
 
-  protected GenericRecord transformRecordBasedOnNewSchema(GenericDatumReader<GenericRecord> gReader, GenericDatumWriter<GenericRecord> gWriter,
+  protected HoodieRecord transformRecordBasedOnNewSchema(GenericDatumReader<GenericRecord> gReader, GenericDatumWriter<GenericRecord> gWriter,
                                                                ThreadLocal<BinaryEncoder> encoderCache, ThreadLocal<BinaryDecoder> decoderCache,
                                                                GenericRecord gRec) {
     ByteArrayOutputStream inStream = null;
@@ -71,7 +74,7 @@ public abstract class BaseMergeHelper<T extends HoodieRecordPayload, I, K, O> {
       BinaryDecoder decoder = DecoderFactory.get().binaryDecoder(inStream.toByteArray(), decoderCache.get());
       decoderCache.set(decoder);
       GenericRecord transformedRec = gReader.read(null, decoder);
-      return transformedRec;
+      return new HoodieAvroIndexedRecord(transformedRec);
     } catch (IOException e) {
       throw new HoodieException(e);
     } finally {
@@ -87,14 +90,17 @@ public abstract class BaseMergeHelper<T extends HoodieRecordPayload, I, K, O> {
    * Create Parquet record iterator that provides a stitched view of record read from skeleton and bootstrap file.
    * Skeleton file is a representation of the bootstrap file inside the table, with just the bare bone fields needed
    * for indexing, writing and other functionality.
-   *
    */
-  protected Iterator<GenericRecord> getMergingIterator(HoodieTable<T, I, K, O> table, HoodieMergeHandle<T, I, K, O> mergeHandle,
-                                                                                               HoodieBaseFile baseFile, HoodieFileReader<GenericRecord> reader,
-                                                                                               Schema readSchema, boolean externalSchemaTransformation) throws IOException {
+  protected Iterator<HoodieRecord> getMergingIterator(HoodieTable<T, I, K, O> table,
+                                                      HoodieMergeHandle<T, I, K, O> mergeHandle,
+                                                      HoodieBaseFile baseFile,
+                                                      HoodieFileReader reader,
+                                                      Schema readerSchema,
+                                                      boolean externalSchemaTransformation) throws IOException {
     Path externalFilePath = new Path(baseFile.getBootstrapBaseFile().get().getPath());
     Configuration bootstrapFileConfig = new Configuration(table.getHadoopConf());
-    HoodieFileReader<GenericRecord> bootstrapReader = HoodieFileReaderFactory.<GenericRecord>getFileReader(bootstrapFileConfig, externalFilePath);
+    HoodieFileReader bootstrapReader = HoodieFileReaderFactory.getFileReader(bootstrapFileConfig, externalFilePath);
+
     Schema bootstrapReadSchema;
     if (externalSchemaTransformation) {
       bootstrapReadSchema = bootstrapReader.getSchema();
@@ -102,14 +108,25 @@ public abstract class BaseMergeHelper<T extends HoodieRecordPayload, I, K, O> {
       bootstrapReadSchema = mergeHandle.getWriterSchema();
     }
 
-    return new MergingIterator<>(reader.getRecordIterator(readSchema), bootstrapReader.getRecordIterator(bootstrapReadSchema),
-        (inputRecordPair) -> HoodieAvroUtils.stitchRecords(inputRecordPair.getLeft(), inputRecordPair.getRight(), mergeHandle.getWriterSchemaWithMetaFields()));
+    return new MergingIterator<>(
+        reader.getRecordIterator(readerSchema, HoodieAvroIndexedRecord::new),
+        bootstrapReader.getRecordIterator(bootstrapReadSchema, HoodieAvroIndexedRecord::new),
+        (oneRecord, otherRecord) -> mergeRecords(oneRecord, otherRecord, readerSchema, mergeHandle.getWriterSchemaWithMetaFields()));
+  }
+
+  @Nonnull
+  private static HoodieRecord mergeRecords(HoodieRecord one, HoodieRecord other, Schema readerSchema, Schema writerSchema) {
+    try {
+      return one.mergeWith(other, readerSchema, writerSchema);
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to merge records", e);
+    }
   }
 
   /**
    * Consumer that dequeues records from queue and sends to Merge Handle.
    */
-  protected static class UpdateHandler extends BoundedInMemoryQueueConsumer<GenericRecord, Void> {
+  protected static class UpdateHandler extends BoundedInMemoryQueueConsumer<HoodieRecord, Void> {
 
     private final HoodieMergeHandle upsertHandle;
 
@@ -118,12 +135,13 @@ public abstract class BaseMergeHelper<T extends HoodieRecordPayload, I, K, O> {
     }
 
     @Override
-    protected void consumeOneRecord(GenericRecord record) {
+    protected void consumeOneRecord(HoodieRecord record) {
       upsertHandle.write(record);
     }
 
     @Override
-    protected void finish() {}
+    protected void finish() {
+    }
 
     @Override
     protected Void getResult() {
