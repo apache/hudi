@@ -22,7 +22,6 @@ package org.apache.hudi.table.action.deltacommit;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieJavaEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -41,7 +40,7 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 
-public class JavaUpsertPreppedDeltaCommitActionExecutor<T extends HoodieRecordPayload<T>> extends BaseJavaDeltaCommitActionExecutor<T> {
+public class JavaUpsertPreppedDeltaCommitActionExecutor<T> extends BaseJavaDeltaCommitActionExecutor<T> {
 
   private static final Logger LOG = LogManager.getLogger(JavaUpsertPreppedDeltaCommitActionExecutor.class);
 

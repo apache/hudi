@@ -20,7 +20,6 @@ package org.apache.hudi.table.action.cluster.strategy;
 
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieFileGroupId;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.collection.Pair;
 
 import java.util.Set;
@@ -28,7 +27,7 @@ import java.util.Set;
 /**
  * When file groups in clustering, write records to these file group need to check.
  */
-public abstract class UpdateStrategy<T extends HoodieRecordPayload, I> {
+public abstract class UpdateStrategy<T, I> {
 
   protected final HoodieEngineContext engineContext;
   protected Set<HoodieFileGroupId> fileGroupsInPendingClustering;

@@ -18,11 +18,8 @@
 
 package org.apache.hudi.hadoop;
 
-import java.io.IOException;
-import java.util.Iterator;
-
 import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.io.hfile.CacheConfig;
@@ -34,20 +31,23 @@ import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
-import org.apache.hudi.io.storage.HoodieHFileReader;
+import org.apache.hudi.io.storage.HoodieAvroHFileReader;
+
+import java.io.IOException;
+import java.util.Iterator;
 
 public class HoodieHFileRecordReader implements RecordReader<NullWritable, ArrayWritable> {
 
   private long count = 0;
   private ArrayWritable valueObj;
-  private HoodieHFileReader reader;
-  private Iterator<GenericRecord> recordIterator;
+  private HoodieAvroHFileReader reader;
+  private Iterator<IndexedRecord> recordIterator;
   private Schema schema;
 
   public HoodieHFileRecordReader(Configuration conf, InputSplit split, JobConf job) throws IOException {
     FileSplit fileSplit = (FileSplit) split;
     Path path = fileSplit.getPath();
-    reader = new HoodieHFileReader(conf, path, new CacheConfig(conf));
+    reader = new HoodieAvroHFileReader(conf, path, new CacheConfig(conf));
 
     schema = reader.getSchema();
     valueObj = new ArrayWritable(Writable.class, new Writable[schema.getFields().size()]);
@@ -63,7 +63,7 @@ public class HoodieHFileRecordReader implements RecordReader<NullWritable, Array
       return false;
     }
 
-    GenericRecord record = recordIterator.next();
+    IndexedRecord record = recordIterator.next();
     ArrayWritable aWritable = (ArrayWritable) HoodieRealtimeRecordReaderUtils.avroToArrayWritable(record, schema);
     value.set(aWritable.get());
     count++;

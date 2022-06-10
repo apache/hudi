@@ -19,8 +19,8 @@
 package org.apache.hudi.io.storage;
 
 import org.apache.avro.Schema;
-import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.ClosableIterator;
 import org.apache.hudi.common.util.Option;
 
@@ -29,7 +29,7 @@ import java.io.UnsupportedEncodingException;
 import java.util.List;
 import java.util.Set;
 
-public interface HoodieFileReader<R extends IndexedRecord> extends AutoCloseable {
+public interface HoodieFileReader extends AutoCloseable {
 
   String[] readMinMaxRecordKeys();
 
@@ -37,34 +37,34 @@ public interface HoodieFileReader<R extends IndexedRecord> extends AutoCloseable
 
   Set<String> filterRowKeys(Set<String> candidateRowKeys);
 
-  ClosableIterator<R> getRecordIterator(Schema readerSchema) throws IOException;
+  ClosableIterator<HoodieRecord> getRecordIterator(Schema readerSchema, HoodieRecord.Mapper mapper) throws IOException;
 
-  default ClosableIterator<R> getRecordIterator() throws IOException {
-    return getRecordIterator(getSchema());
+  default ClosableIterator<HoodieRecord> getRecordIterator(HoodieRecord.Mapper mapper) throws IOException {
+    return getRecordIterator(getSchema(), mapper);
   }
 
-  default Option<R> getRecordByKey(String key, Schema readerSchema) throws IOException {
+  default Option<HoodieRecord> getRecordByKey(String key, Schema readerSchema, HoodieRecord.Mapper mapper) throws IOException {
     throw new UnsupportedOperationException();
   }
 
-  default Option<R> getRecordByKey(String key) throws IOException {
-    return getRecordByKey(key, getSchema());
+  default Option<HoodieRecord> getRecordByKey(String key, HoodieRecord.Mapper mapper) throws IOException {
+    return getRecordByKey(key, getSchema(), mapper);
   }
 
-  default ClosableIterator<R> getRecordsByKeysIterator(List<String> keys, Schema schema) throws IOException {
+  default ClosableIterator<HoodieRecord> getRecordsByKeysIterator(List<String> keys, Schema schema, HoodieRecord.Mapper mapper) throws IOException {
     throw new UnsupportedOperationException();
   }
 
-  default ClosableIterator<R> getRecordsByKeysIterator(List<String> keys) throws IOException {
-    return getRecordsByKeysIterator(keys, getSchema());
+  default ClosableIterator<HoodieRecord> getRecordsByKeysIterator(List<String> keys, HoodieRecord.Mapper mapper) throws IOException {
+    return getRecordsByKeysIterator(keys, getSchema(), mapper);
   }
 
-  default ClosableIterator<R> getRecordsByKeyPrefixIterator(List<String> keyPrefixes, Schema schema) throws IOException {
+  default ClosableIterator<HoodieRecord> getRecordsByKeyPrefixIterator(List<String> keyPrefixes, Schema schema, HoodieRecord.Mapper mapper) throws IOException {
     throw new UnsupportedEncodingException();
   }
 
-  default ClosableIterator<R> getRecordsByKeyPrefixIterator(List<String> keyPrefixes) throws IOException {
-    return getRecordsByKeyPrefixIterator(keyPrefixes, getSchema());
+  default ClosableIterator<HoodieRecord> getRecordsByKeyPrefixIterator(List<String> keyPrefixes, HoodieRecord.Mapper mapper) throws IOException {
+    return getRecordsByKeyPrefixIterator(keyPrefixes, getSchema(), mapper);
   }
 
   Schema getSchema();

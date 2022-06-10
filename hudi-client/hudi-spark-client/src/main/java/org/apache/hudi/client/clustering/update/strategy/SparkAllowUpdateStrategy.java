@@ -22,7 +22,6 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.collection.Pair;
 
 import java.util.HashSet;
@@ -33,7 +32,7 @@ import java.util.stream.Collectors;
 /**
  * Allow ingestion commits during clustering job.
  */
-public class SparkAllowUpdateStrategy<T extends HoodieRecordPayload<T>> extends BaseSparkUpdateStrategy<T> {
+public class SparkAllowUpdateStrategy<T> extends BaseSparkUpdateStrategy<T> {
 
   public SparkAllowUpdateStrategy(HoodieSparkEngineContext engineContext,
                                   HashSet<HoodieFileGroupId> fileGroupsInPendingClustering) {

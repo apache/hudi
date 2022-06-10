@@ -24,7 +24,6 @@ import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -45,7 +44,7 @@ import org.apache.hudi.table.action.rollback.MergeOnReadRollbackActionExecutor;
 import java.util.List;
 import java.util.Map;
 
-public class HoodieFlinkMergeOnReadTable<T extends HoodieRecordPayload>
+public class HoodieFlinkMergeOnReadTable<T>
     extends HoodieFlinkCopyOnWriteTable<T> {
 
   HoodieFlinkMergeOnReadTable(
