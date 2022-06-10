@@ -36,7 +36,7 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 
 import java.util.List;
 
-import static org.apache.hudi.common.data.HoodieList.getList;
+import static org.apache.hudi.common.data.HoodieListData.getList;
 
 public abstract class HoodieJavaTable<T extends HoodieRecordPayload>
     extends HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> {

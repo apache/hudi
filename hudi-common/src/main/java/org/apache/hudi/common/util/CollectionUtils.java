@@ -34,6 +34,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.Spliterator;
 import java.util.Spliterators;
+import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -104,6 +105,19 @@ public class CollectionUtils {
     HashMap<K, V> combined = new HashMap<>(one.size() + another.size());
     combined.putAll(one);
     combined.putAll(another);
+    return combined;
+  }
+
+  /**
+   * Combines provided {@link Map}s into one, returning new instance of {@link HashMap}.
+   *
+   * NOTE: That values associated with overlapping keys from the second map, will override
+   *       values from the first one
+   */
+  public static <K, V> HashMap<K, V> combine(Map<K, V> one, Map<K, V> another, BiFunction<V, V, V> merge) {
+    HashMap<K, V> combined = new HashMap<>(one.size() + another.size());
+    combined.putAll(one);
+    another.forEach((k, v) -> combined.merge(k, v, merge));
     return combined;
   }
 

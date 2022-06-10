@@ -31,7 +31,7 @@ import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-class TestHoodieList {
+class TestHoodieListData {
 
   private static Stream<Arguments> distinctWithKey() {
     return Stream.of(
@@ -44,7 +44,7 @@ class TestHoodieList {
   @ParameterizedTest
   @MethodSource
   void distinctWithKey(List<Pair<String, Integer>> expected, List<Pair<String, Integer>> originalList) {
-    List<Pair<String, Integer>> distinctList = HoodieList.of(originalList).distinctWithKey(Pair::getLeft, 1).collectAsList();
+    List<Pair<String, Integer>> distinctList = HoodieListData.of(originalList).distinctWithKey(Pair::getLeft, 1).collectAsList();
     assertEquals(expected, distinctList);
   }
 }

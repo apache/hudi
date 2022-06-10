@@ -26,6 +26,7 @@ import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.function.SerializablePairFunction;
 import org.apache.hudi.common.util.collection.Pair;
 
+import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.storage.StorageLevel;
 
@@ -74,17 +75,16 @@ public class HoodieJavaRDD<T> extends HoodieData<T> {
    * @return the a {@link JavaRDD} of objects in type T.
    */
   public static <T> JavaRDD<T> getJavaRDD(HoodieData<T> hoodieData) {
-    return ((HoodieJavaRDD<T>) hoodieData).get();
+    return ((HoodieJavaRDD<T>) hoodieData).rddData;
+  }
+
+  public static <K, V> JavaPairRDD<K, V> getJavaRDD(HoodiePairData<K, V> hoodieData) {
+    return ((HoodieJavaPairRDD<K, V>) hoodieData).get();
   }
 
   @Override
-  public JavaRDD<T> get() {
-    return rddData;
-  }
-
-  @Override
-  public void persist(String cacheConfig) {
-    rddData.persist(StorageLevel.fromString(cacheConfig));
+  public void persist(String level) {
+    rddData.persist(StorageLevel.fromString(level));
   }
 
   @Override
@@ -113,19 +113,14 @@ public class HoodieJavaRDD<T> extends HoodieData<T> {
   }
 
   @Override
-  public <O> HoodieData<O> mapPartitions(SerializableFunction<Iterator<T>, Iterator<O>> func) {
-    return HoodieJavaRDD.of(rddData.mapPartitions(func::apply));
-  }
-
-  @Override
   public <O> HoodieData<O> flatMap(SerializableFunction<T, Iterator<O>> func) {
     return HoodieJavaRDD.of(rddData.flatMap(e -> func.apply(e)));
   }
 
   @Override
-  public <K, V> HoodiePairData<K, V> mapToPair(SerializablePairFunction<T, K, V> mapToPairFunc) {
+  public <K, V> HoodiePairData<K, V> mapToPair(SerializablePairFunction<T, K, V> func) {
     return HoodieJavaPairRDD.of(rddData.mapToPair(input -> {
-      Pair<K, V> pair = mapToPairFunc.call(input);
+      Pair<K, V> pair = func.call(input);
       return new Tuple2<>(pair.getLeft(), pair.getRight());
     }));
   }
@@ -141,20 +136,13 @@ public class HoodieJavaRDD<T> extends HoodieData<T> {
   }
 
   @Override
-  public <O> HoodieData<T> distinctWithKey(SerializableFunction<T, O> keyGetter, int parallelism) {
-    return mapToPair(i -> Pair.of(keyGetter.apply(i), i))
-        .reduceByKey((value1, value2) -> value1, parallelism)
-        .values();
-  }
-
-  @Override
   public HoodieData<T> filter(SerializableFunction<T, Boolean> filterFunc) {
     return HoodieJavaRDD.of(rddData.filter(filterFunc::apply));
   }
 
   @Override
   public HoodieData<T> union(HoodieData<T> other) {
-    return HoodieJavaRDD.of(rddData.union((JavaRDD<T>) other.get()));
+    return HoodieJavaRDD.of(rddData.union(((HoodieJavaRDD<T>) other).rddData));
   }
 
   @Override
