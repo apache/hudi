@@ -117,12 +117,8 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
   public HoodieMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                            Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
                            TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt) {
-    super(config, instantTime, partitionPath, fileId, hoodieTable, taskContextSupplier);
-    Option<HoodieBaseFile> baseFileOp = hoodieTable.getBaseFileOnlyView().getLatestBaseFile(partitionPath, fileId);
-    if (!baseFileOp.isPresent()) {
-      throw new NoSuchElementException(String.format("FileID %s of partitionPath %s is not exist. ", fileId, partitionPath));
-    }
-    init(recordItr, baseFileOp.get(), keyGeneratorOpt);
+    this(config, instantTime, hoodieTable, recordItr, partitionPath, fileId, taskContextSupplier,
+            getLatestBaseFile(hoodieTable, partitionPath, fileId), keyGeneratorOpt);
   }
 
   public HoodieMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
@@ -156,6 +152,14 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
     }
     init(this.fileId, this.partitionPath, baseFile);
     validateAndSetAndKeyGenProps(keyGeneratorOpt, this.config.populateMetaFields());
+  }
+
+  public static HoodieBaseFile getLatestBaseFile(HoodieTable<?, ?, ?, ?> hoodieTable, String partitionPath, String fileId) {
+    Option<HoodieBaseFile> baseFileOp = hoodieTable.getBaseFileOnlyView().getLatestBaseFile(partitionPath, fileId);
+    if (!baseFileOp.isPresent()) {
+      throw new NoSuchElementException(String.format("FileID %s of partition path %s does not exist.", fileId, partitionPath));
+    }
+    return baseFileOp.get();
   }
 
   @Override
