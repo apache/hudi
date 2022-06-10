@@ -20,7 +20,6 @@ package org.apache.hudi.table.action.commit.delta;
 
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.FlinkAppendHandle;
@@ -30,7 +29,7 @@ import org.apache.hudi.table.action.commit.FlinkWriteHelper;
 
 import java.util.List;
 
-public class FlinkUpsertDeltaCommitActionExecutor<T extends HoodieRecordPayload<T>>
+public class FlinkUpsertDeltaCommitActionExecutor<T>
     extends BaseFlinkDeltaCommitActionExecutor<T> {
   private final List<HoodieRecord<T>> inputRecords;
 

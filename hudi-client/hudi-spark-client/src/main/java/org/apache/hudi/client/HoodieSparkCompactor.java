@@ -21,7 +21,6 @@ package org.apache.hudi.client;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
@@ -34,7 +33,7 @@ import org.apache.spark.api.java.JavaRDD;
 
 import java.util.List;
 
-public class HoodieSparkCompactor<T extends HoodieRecordPayload> extends BaseCompactor<T,
+public class HoodieSparkCompactor<T> extends BaseCompactor<T,
     JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {
   private static final Logger LOG = LogManager.getLogger(HoodieSparkCompactor.class);
   private transient HoodieEngineContext context;
