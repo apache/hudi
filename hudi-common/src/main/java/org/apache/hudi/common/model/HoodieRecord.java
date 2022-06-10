@@ -47,7 +47,7 @@ public abstract class HoodieRecord<T> implements Serializable {
   public static final String PARTITION_PATH_METADATA_FIELD = HoodieMetadataField.PARTITION_PATH_METADATA_FIELD.getFieldName();
   public static final String FILENAME_METADATA_FIELD = HoodieMetadataField.FILENAME_METADATA_FIELD.getFieldName();
   public static final String OPERATION_METADATA_FIELD = HoodieMetadataField.OPERATION_METADATA_FIELD.getFieldName();
-  public static final String HOODIE_IS_DELETED = HoodieMetadataField.DELETED_METADATA_FIELD.getFieldName();
+  public static final String HOODIE_IS_DELETED_FIELD = "_hoodie_is_deleted";
 
   public enum HoodieMetadataField {
     COMMIT_TIME_METADATA_FIELD("_hoodie_commit_time"),
@@ -55,8 +55,7 @@ public abstract class HoodieRecord<T> implements Serializable {
     RECORD_KEY_METADATA_FIELD("_hoodie_record_key"),
     PARTITION_PATH_METADATA_FIELD("_hoodie_partition_path"),
     FILENAME_METADATA_FIELD("_hoodie_file_name"),
-    OPERATION_METADATA_FIELD("_hoodie_operation"),
-    DELETED_METADATA_FIELD("_hoodie_is_deleted");
+    OPERATION_METADATA_FIELD("_hoodie_operation");
 
     private final String fieldName;
 
