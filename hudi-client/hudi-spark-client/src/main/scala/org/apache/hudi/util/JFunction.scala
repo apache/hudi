@@ -17,15 +17,35 @@
 
 package org.apache.hudi.util
 
+import org.apache.hudi.common.function.SerializableFunction
+
 /**
  * Utility allowing for seamless conversion b/w Java/Scala functional primitives
  */
 object JFunction {
 
-  def toScala[T, R](f: java.util.function.Function[T, R]): T => R =
+  ////////////////////////////////////////////////////////////
+  // From Java to Scala
+  ////////////////////////////////////////////////////////////
+
+  implicit def toScala[T, R](f: java.util.function.Function[T, R]): T => R =
     (t: T) => f.apply(t)
 
-  def toJava[T](f: T => Unit): java.util.function.Consumer[T] =
+  ////////////////////////////////////////////////////////////
+  // From Scala to Java
+  ////////////////////////////////////////////////////////////
+
+  implicit def toJavaFunction[T, R](f: Function[T, R]): java.util.function.Function[T, R] =
+    new java.util.function.Function[T, R] {
+      override def apply(t: T): R = f.apply(t)
+    }
+
+  implicit def toJavaSerializableFunction[T, R](f: Function[T, R]): SerializableFunction[T, R] =
+    new SerializableFunction[T, R] {
+      override def apply(t: T): R = f.apply(t)
+    }
+
+  implicit def toJava[T](f: T => Unit): java.util.function.Consumer[T] =
     new java.util.function.Consumer[T] {
       override def accept(t: T): Unit = f.apply(t)
     }
