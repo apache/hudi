@@ -31,6 +31,7 @@ import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieList;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -60,6 +61,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -68,7 +70,6 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import static org.apache.hudi.common.util.CollectionUtils.isNullOrEmpty;
 import static org.apache.hudi.common.util.CollectionUtils.toStream;
@@ -143,10 +144,11 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
   @Override
   public HoodieData<HoodieRecord<HoodieMetadataPayload>> getRecordsByKeyPrefixes(List<String> keyPrefixes,
-                                                                                 String partitionName) {
+                                                                                 String partitionName,
+                                                                                 boolean shouldLoadInMemory) {
     // Sort the columns so that keys are looked up in order
-    List<String> sortedkeyPrefixes = new ArrayList<>(keyPrefixes);
-    Collections.sort(sortedkeyPrefixes);
+    List<String> sortedKeyPrefixes = new ArrayList<>(keyPrefixes);
+    Collections.sort(sortedKeyPrefixes);
 
     // NOTE: Since we partition records to a particular file-group by full key, we will have
     //       to scan all file-groups for all key-prefixes as each of these might contain some
@@ -154,47 +156,45 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     List<FileSlice> partitionFileSlices =
         HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(metadataMetaClient, partitionName);
 
-    return HoodieList.of(partitionFileSlices.stream()
-        .flatMap(fileSlice -> {
-            // NOTE: Since this will be executed by executors, we can't access previously cached
-            //       readers, and therefore have to always open new ones
-            Pair<HoodieFileReader, HoodieMetadataMergedLogRecordReader> readers =
-                openReaders(partitionName, fileSlice);
+    return (shouldLoadInMemory ? HoodieList.of(partitionFileSlices) : engineContext.parallelize(partitionFileSlices))
+        .flatMap((SerializableFunction<FileSlice, Iterator<HoodieRecord<HoodieMetadataPayload>>>) fileSlice -> {
+          // NOTE: Since this will be executed by executors, we can't access previously cached
+          //       readers, and therefore have to always open new ones
+          Pair<HoodieFileReader, HoodieMetadataMergedLogRecordReader> readers =
+              openReaders(partitionName, fileSlice);
 
-            try {
-              List<Long> timings = new ArrayList<>();
+          try {
+            List<Long> timings = new ArrayList<>();
 
-              HoodieFileReader baseFileReader = readers.getKey();
-              HoodieMetadataMergedLogRecordReader logRecordScanner = readers.getRight();
+            HoodieFileReader baseFileReader = readers.getKey();
+            HoodieMetadataMergedLogRecordReader logRecordScanner = readers.getRight();
 
-              if (baseFileReader == null && logRecordScanner == null) {
-                // TODO: what do we do if both does not exist? should we throw an exception and let caller do the fallback ?
-                return Stream.empty();
-              }
-
-              boolean fullKeys = false;
-
-              Map<String, Option<HoodieRecord<HoodieMetadataPayload>>> logRecords =
-                  readLogRecords(logRecordScanner, sortedkeyPrefixes, fullKeys, timings);
-
-              List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> mergedRecords =
-                  readFromBaseAndMergeWithLogRecords(baseFileReader, sortedkeyPrefixes, fullKeys, logRecords, timings, partitionName);
-
-              LOG.debug(String.format("Metadata read for %s keys took [baseFileRead, logMerge] %s ms",
-                  sortedkeyPrefixes.size(), timings));
-
-              return mergedRecords.stream()
-                  .map(keyRecordPair -> keyRecordPair.getValue().orElse(null));
-            } catch (IOException ioe) {
-              throw new HoodieIOException("Error merging records from metadata table for  " + sortedkeyPrefixes.size() + " key : ", ioe);
-            } finally {
-              closeReader(readers);
+            if (baseFileReader == null && logRecordScanner == null) {
+              // TODO: what do we do if both does not exist? should we throw an exception and let caller do the fallback ?
+              return Collections.emptyIterator();
             }
+
+            boolean fullKeys = false;
+
+            Map<String, Option<HoodieRecord<HoodieMetadataPayload>>> logRecords =
+                readLogRecords(logRecordScanner, sortedKeyPrefixes, fullKeys, timings);
+
+            List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> mergedRecords =
+                readFromBaseAndMergeWithLogRecords(baseFileReader, sortedKeyPrefixes, fullKeys, logRecords, timings, partitionName);
+
+            LOG.debug(String.format("Metadata read for %s keys took [baseFileRead, logMerge] %s ms",
+                sortedKeyPrefixes.size(), timings));
+
+            return mergedRecords.stream()
+                .map(keyRecordPair -> keyRecordPair.getValue().orElse(null))
+                .iterator();
+          } catch (IOException ioe) {
+            throw new HoodieIOException("Error merging records from metadata table for  " + sortedKeyPrefixes.size() + " key : ", ioe);
+          } finally {
+            closeReader(readers);
           }
-        )
-        .filter(Objects::nonNull)
-        .collect(Collectors.toList())
-    );
+        })
+        .filter(Objects::nonNull);
   }
 
   @Override
