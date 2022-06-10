@@ -35,7 +35,7 @@ import org.apache.hudi.common.util.hash.ColumnIndexID
 import org.apache.hudi.data.HoodieJavaRDD
 import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadata, HoodieTableMetadataUtil, MetadataPartitionType}
 import org.apache.spark.api.java.JavaSparkContext
-import org.apache.spark.sql.HoodieUnsafeRDDUtils.{createDataFrameFromInternalRows, createDataFrameFromRDD, createDataFrameFromRows}
+import org.apache.spark.sql.HoodieUnsafeUtils.{createDataFrameFromInternalRows, createDataFrameFromRDD, createDataFrameFromRows}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.functions.col
