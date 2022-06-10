@@ -18,18 +18,19 @@
 
 package org.apache.hudi.hadoop;
 
-import java.io.DataInput;
-import java.io.DataOutput;
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.mapred.FileSplit;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
-import org.apache.hudi.io.storage.HoodieFileReader;
+import org.apache.hudi.io.storage.HoodieAvroFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
+
+import java.io.DataInput;
+import java.io.DataOutput;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 
 public class InputSplitUtils {
 
@@ -63,7 +64,7 @@ public class InputSplitUtils {
   public static Schema getBaseFileSchema(FileSplit split, Configuration conf) {
     try {
       if (split instanceof BootstrapBaseFileSplit) {
-        HoodieFileReader storageReader = HoodieFileReaderFactory.getFileReader(conf,
+        HoodieAvroFileReader storageReader = HoodieFileReaderFactory.getFileReader(conf,
             ((BootstrapBaseFileSplit)(split)).getBootstrapFileSplit().getPath());
         return HoodieAvroUtils.addMetadataFields(storageReader.getSchema());
       }

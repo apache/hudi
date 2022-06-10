@@ -131,7 +131,7 @@ class ExpressionPayload(record: GenericRecord,
     if (resultRecordOpt == null) {
       // If there is no condition matched, just filter this record.
       // here we return a IGNORE_RECORD, HoodieMergeHandle will not handle it.
-      HOption.of(HoodieWriteHandle.IGNORE_RECORD)
+      HOption.of(HoodieRecord.SENTINEL)
     } else {
       resultRecordOpt
     }
@@ -169,7 +169,7 @@ class ExpressionPayload(record: GenericRecord,
     } else {
       // If there is no condition matched, just filter this record.
       // Here we return a IGNORE_RECORD, HoodieCreateHandle will not handle it.
-      HOption.of(HoodieWriteHandle.IGNORE_RECORD)
+      HOption.of(HoodieRecord.SENTINEL)
     }
   }
 

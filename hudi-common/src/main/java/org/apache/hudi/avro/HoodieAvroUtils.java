@@ -19,9 +19,10 @@
 package org.apache.hudi.avro;
 
 import org.apache.hudi.common.config.SerializableSchema;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -76,6 +77,7 @@ import java.util.Map;
 import java.util.Deque;
 import java.util.LinkedList;
 import java.util.Set;
+import java.util.Properties;
 import java.util.TimeZone;
 import java.util.stream.Collectors;
 
@@ -106,6 +108,13 @@ public class HoodieAvroUtils {
   public static final Schema METADATA_FIELD_SCHEMA = createNullableSchema(Schema.Type.STRING);
 
   public static final Schema RECORD_KEY_SCHEMA = initRecordKeySchema();
+
+  /**
+   * TODO serialize other type of record.
+   */
+  public static Option<byte[]> recordToBytes(HoodieRecord record, Schema schema) throws IOException {
+    return Option.of(HoodieAvroUtils.indexedRecordToBytes((IndexedRecord) record.toIndexedRecord(schema, new Properties()).get()));
+  }
 
   /**
    * Convert a given avro record to bytes.
@@ -683,11 +692,11 @@ public class HoodieAvroUtils {
    * @param schema  {@link Schema} instance.
    * @return Column value if a single column, or concatenated String values by comma.
    */
-  public static Object getRecordColumnValues(HoodieRecord<? extends HoodieRecordPayload> record,
+  public static Object getRecordColumnValues(HoodieAvroRecord record,
                                              String[] columns,
                                              Schema schema, boolean consistentLogicalTimestampEnabled) {
     try {
-      GenericRecord genericRecord = (GenericRecord) record.getData().getInsertValue(schema).get();
+      GenericRecord genericRecord = (GenericRecord) record.toIndexedRecord(schema, new Properties()).get();
       if (columns.length == 1) {
         return HoodieAvroUtils.getNestedFieldVal(genericRecord, columns[0], true, consistentLogicalTimestampEnabled);
       } else {
@@ -712,7 +721,7 @@ public class HoodieAvroUtils {
    * @param schema  {@link SerializableSchema} instance.
    * @return Column value if a single column, or concatenated String values by comma.
    */
-  public static Object getRecordColumnValues(HoodieRecord<? extends HoodieRecordPayload> record,
+  public static Object getRecordColumnValues(HoodieAvroRecord record,
                                              String[] columns,
                                              SerializableSchema schema, boolean consistentLogicalTimestampEnabled) {
     return getRecordColumnValues(record, columns, schema.get(), consistentLogicalTimestampEnabled);

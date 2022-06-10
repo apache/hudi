@@ -26,7 +26,6 @@ import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieUpsertException;
@@ -45,7 +44,7 @@ import java.util.HashMap;
  * @param <T>
  */
 @SuppressWarnings("checkstyle:LineLength")
-public class HoodieDeleteHelper<T extends HoodieRecordPayload, R> extends
+public class HoodieDeleteHelper<T, R> extends
     BaseDeleteHelper<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>, R> {
   private HoodieDeleteHelper() {
   }

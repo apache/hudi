@@ -19,9 +19,9 @@
 package org.apache.hudi.execution;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.queue.BoundedInMemoryQueueConsumer;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.execution.HoodieLazyInsertIterable.HoodieInsertValueGenResult;
@@ -37,7 +37,7 @@ import java.util.Map;
 /**
  * Consumes stream of hoodie records from in-memory queue and writes to one or more create-handles.
  */
-public class CopyOnWriteInsertHandler<T extends HoodieRecordPayload>
+public class CopyOnWriteInsertHandler<T>
     extends BoundedInMemoryQueueConsumer<HoodieInsertValueGenResult<HoodieRecord>, List<WriteStatus>> {
 
   private HoodieWriteConfig config;
@@ -68,9 +68,9 @@ public class CopyOnWriteInsertHandler<T extends HoodieRecordPayload>
   }
 
   @Override
-  public void consumeOneRecord(HoodieInsertValueGenResult<HoodieRecord> payload) {
-    final HoodieRecord insertPayload = payload.record;
-    String partitionPath = insertPayload.getPartitionPath();
+  public void consumeOneRecord(HoodieInsertValueGenResult<HoodieRecord> genResult) {
+    final HoodieRecord record = genResult.getResult();
+    String partitionPath = record.getPartitionPath();
     HoodieWriteHandle<?,?,?,?> handle = handles.get(partitionPath);
     if (handle == null) {
       // If the records are sorted, this means that we encounter a new partition path
@@ -81,19 +81,19 @@ public class CopyOnWriteInsertHandler<T extends HoodieRecordPayload>
       }
       // Lazily initialize the handle, for the first time
       handle = writeHandleFactory.create(config, instantTime, hoodieTable,
-          insertPayload.getPartitionPath(), idPrefix, taskContextSupplier);
+          record.getPartitionPath(), idPrefix, taskContextSupplier);
       handles.put(partitionPath, handle);
     }
 
-    if (!handle.canWrite(payload.record)) {
+    if (!handle.canWrite(genResult.getResult())) {
       // Handle is full. Close the handle and add the WriteStatus
       statuses.addAll(handle.close());
       // Open new handle
       handle = writeHandleFactory.create(config, instantTime, hoodieTable,
-          insertPayload.getPartitionPath(), idPrefix, taskContextSupplier);
+          record.getPartitionPath(), idPrefix, taskContextSupplier);
       handles.put(partitionPath, handle);
     }
-    handle.write(insertPayload, payload.insertValue, payload.exception);
+    handle.write(record, genResult.schema, new TypedProperties(genResult.props));
   }
 
   @Override

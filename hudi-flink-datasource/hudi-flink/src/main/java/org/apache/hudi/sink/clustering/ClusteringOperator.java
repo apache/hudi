@@ -38,7 +38,7 @@ import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.IOUtils;
-import org.apache.hudi.io.storage.HoodieFileReader;
+import org.apache.hudi.io.storage.HoodieAvroFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.sink.bulk.BulkInsertWriterHelper;
 import org.apache.hudi.sink.bulk.sort.SortOperatorGen;
@@ -80,6 +80,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Properties;
 import java.util.Spliterator;
 import java.util.Spliterators;
 import java.util.stream.Collectors;
@@ -261,7 +262,7 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
 
     for (ClusteringOperation clusteringOp : clusteringOps) {
       try {
-        Option<HoodieFileReader> baseFileReader = StringUtils.isNullOrEmpty(clusteringOp.getDataFilePath())
+        Option<HoodieAvroFileReader> baseFileReader = StringUtils.isNullOrEmpty(clusteringOp.getDataFilePath())
             ? Option.empty()
             : Option.of(HoodieFileReaderFactory.getFileReader(table.getHadoopConf(), new Path(clusteringOp.getDataFilePath())));
         HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
@@ -288,7 +289,7 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
 
         recordIterators.add(StreamSupport.stream(Spliterators.spliteratorUnknownSize(hoodieFileSliceReader, Spliterator.NONNULL), false).map(hoodieRecord -> {
           try {
-            return this.transform((IndexedRecord) hoodieRecord.getData().getInsertValue(readerSchema).get());
+            return this.transform(hoodieRecord.toIndexedRecord(readerSchema, new Properties()).get());
           } catch (IOException e) {
             throw new HoodieIOException("Failed to read next record", e);
           }

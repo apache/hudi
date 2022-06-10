@@ -136,7 +136,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
     // Insert Operation
     val records = recordsToStrings(dataGen.generateInserts("000", 100)).toList
     val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
-    val df = inputDF.withColumn(HoodieRecord.HOODIE_IS_DELETED, lit("abc"))
+    val df = inputDF.withColumn(HoodieRecord.HOODIE_IS_DELETED_FIELD, lit("abc"))
 
     assertThrows(classOf[HoodieException], new Executable {
       override def execute(): Unit = {

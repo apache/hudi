@@ -46,7 +46,6 @@ import org.apache.spark.sql.avro.HoodieAvroDeserializer
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.{Partition, SerializableWritable, SparkContext, TaskContext}
-
 import java.io.Closeable
 import java.util.Properties
 import scala.annotation.tailrec
@@ -204,11 +203,13 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
     protected lazy val logRecordsIterator: Iterator[Option[GenericRecord]] =
       logRecords.iterator.map {
         case (_, record) =>
-          toScalaOption(record.getData.getInsertValue(logFileReaderAvroSchema, payloadProps))
-            .map(_.asInstanceOf[GenericRecord])
+          val avroRecordOpt = toScalaOption(record.toIndexedRecord(logFileReaderAvroSchema, payloadProps))
+          avroRecordOpt.map {
+            avroRecord => projectAvroUnsafe(avroRecord, requiredAvroSchema, requiredSchemaFieldOrdinals, recordBuilder)
+          }
       }
 
-    protected def removeLogRecord(key: String): Option[HoodieRecord[_ <: HoodieRecordPayload[_]]] =
+    protected def removeLogRecord(key: String): Option[HoodieRecord[_]] =
       logRecords.remove(key)
 
     override def hasNext: Boolean = hasNextInternal
@@ -309,7 +310,7 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
           recordToLoad = requiredSchemaUnsafeProjection(curRow)
           true
         } else {
-          val mergedAvroRecordOpt = merge(serialize(curRow), updatedRecordOpt.get)
+          val mergedAvroRecordOpt = merge(serialize(curRowRecord), updatedRecordOpt.get)
           if (mergedAvroRecordOpt.isEmpty) {
             // Record has been deleted, skipping
             this.hasNextInternal

@@ -21,7 +21,6 @@ package org.apache.hudi.table.action.restore;
 
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -30,7 +29,7 @@ import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.rollback.CopyOnWriteRollbackActionExecutor;
 
-public class CopyOnWriteRestoreActionExecutor<T extends HoodieRecordPayload, I, K, O>
+public class CopyOnWriteRestoreActionExecutor<T, I, K, O>
     extends BaseRestoreActionExecutor<T, I, K, O> {
   public CopyOnWriteRestoreActionExecutor(HoodieEngineContext context,
                                           HoodieWriteConfig config,

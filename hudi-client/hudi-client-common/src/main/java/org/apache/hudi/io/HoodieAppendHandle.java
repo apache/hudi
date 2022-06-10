@@ -19,11 +19,10 @@
 package org.apache.hudi.io;
 
 import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BaseFile;
@@ -68,6 +67,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -80,7 +80,7 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.collectColumnRang
 /**
  * IO Operation to append data onto an existing file.
  */
-public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends HoodieWriteHandle<T, I, K, O> {
+public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O> {
 
   private static final Logger LOG = LogManager.getLogger(HoodieAppendHandle.class);
   // This acts as the sequenceID for records written
@@ -88,7 +88,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
 
   protected final String fileId;
   // Buffer for holding records in memory before they are flushed to disk
-  private final List<IndexedRecord> recordList = new ArrayList<>();
+  private final List<HoodieRecord> recordList = new ArrayList<>();
   // Buffer for holding records (to be deleted) in memory before they are flushed to disk
   private final List<DeleteRecord> recordsToDelete = new ArrayList<>();
   // Incoming records to be written to logs.
@@ -127,7 +127,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
     super(config, instantTime, partitionPath, fileId, hoodieTable, taskContextSupplier);
     this.fileId = fileId;
     this.recordItr = recordItr;
-    sizeEstimator = new DefaultSizeEstimator();
+    this.sizeEstimator = new DefaultSizeEstimator();
     this.statuses = new ArrayList<>();
     this.recordProperties.putAll(config.getProps());
   }
@@ -207,8 +207,8 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
     return hoodieRecord.getCurrentLocation() != null;
   }
 
-  private Option<IndexedRecord> getIndexedRecord(HoodieRecord<T> hoodieRecord) {
-    Option<Map<String, String>> recordMetadata = hoodieRecord.getData().getMetadata();
+  private Option<HoodieRecord> prepareRecord(HoodieRecord<T> hoodieRecord) {
+    Option<Map<String, String>> recordMetadata = hoodieRecord.getMetadata();
     try {
       // Pass the isUpdateRecord to the props for HoodieRecordPayload to judge
       // Whether it is an update or insert record.
@@ -216,24 +216,15 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
       // If the format can not record the operation field, nullify the DELETE payload manually.
       boolean nullifyPayload = HoodieOperation.isDelete(hoodieRecord.getOperation()) && !config.allowOperationMetadataField();
       recordProperties.put(HoodiePayloadProps.PAYLOAD_IS_UPDATE_RECORD_FOR_MOR, String.valueOf(isUpdateRecord));
-      Option<IndexedRecord> avroRecord = nullifyPayload ? Option.empty() : hoodieRecord.getData().getInsertValue(tableSchema, recordProperties);
-      if (avroRecord.isPresent()) {
-        if (avroRecord.get().equals(IGNORE_RECORD)) {
-          return avroRecord;
+      Option<HoodieRecord> finalRecord = Option.empty();
+      if (!nullifyPayload && hoodieRecord.isPresent(tableSchema, recordProperties)) {
+        if (hoodieRecord.shouldIgnore(tableSchema, recordProperties)) {
+          return Option.of(hoodieRecord);
         }
         // Convert GenericRecord to GenericRecord with hoodie commit metadata in schema
-        GenericRecord rewriteRecord = rewriteRecord((GenericRecord) avroRecord.get());
-        avroRecord = Option.of(rewriteRecord);
-        String seqId =
-            HoodieRecord.generateSequenceId(instantTime, getPartitionId(), RECORD_COUNTER.getAndIncrement());
-        if (config.populateMetaFields()) {
-          HoodieAvroUtils.addHoodieKeyToRecord(rewriteRecord, hoodieRecord.getRecordKey(),
-              hoodieRecord.getPartitionPath(), fileId);
-          HoodieAvroUtils.addCommitMetadataToRecord(rewriteRecord, instantTime, seqId);
-        }
-        if (config.allowOperationMetadataField()) {
-          HoodieAvroUtils.addOperationToRecord(rewriteRecord, hoodieRecord.getOperation());
-        }
+        HoodieRecord rewrittenRecord = hoodieRecord.rewriteRecord(tableSchema, recordProperties, schemaOnReadEnabled, writeSchemaWithMetaFields);
+        HoodieRecord populatedRecord = populateMetadataFields(rewrittenRecord, tableSchema, recordProperties);
+        finalRecord = Option.of(populatedRecord);
         if (isUpdateRecord) {
           updatedRecordsWritten++;
         } else {
@@ -249,12 +240,30 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
       // part of marking
       // record successful.
       hoodieRecord.deflate();
-      return avroRecord;
+      return finalRecord;
     } catch (Exception e) {
       LOG.error("Error writing record  " + hoodieRecord, e);
       writeStatus.markFailure(hoodieRecord, e, recordMetadata);
     }
     return Option.empty();
+  }
+
+  private HoodieRecord populateMetadataFields(HoodieRecord<T> hoodieRecord, Schema schema, Properties prop) throws IOException {
+    Map<HoodieRecord.HoodieMetadataField, String> metadataValues = new HashMap<>();
+    String seqId =
+        HoodieRecord.generateSequenceId(instantTime, getPartitionId(), RECORD_COUNTER.getAndIncrement());
+    if (config.populateMetaFields()) {
+      metadataValues.put(HoodieRecord.HoodieMetadataField.FILENAME_METADATA_FIELD, fileId);
+      metadataValues.put(HoodieRecord.HoodieMetadataField.PARTITION_PATH_METADATA_FIELD, partitionPath);
+      metadataValues.put(HoodieRecord.HoodieMetadataField.RECORD_KEY_METADATA_FIELD, hoodieRecord.getRecordKey());
+      metadataValues.put(HoodieRecord.HoodieMetadataField.COMMIT_TIME_METADATA_FIELD, instantTime);
+      metadataValues.put(HoodieRecord.HoodieMetadataField.COMMIT_SEQNO_METADATA_FIELD, seqId);
+    }
+    if (config.allowOperationMetadataField()) {
+      metadataValues.put(HoodieRecord.HoodieMetadataField.OPERATION_METADATA_FIELD, hoodieRecord.getOperation().getName());
+    }
+
+    return hoodieRecord.addMetadataValues(schema, prop, metadataValues);
   }
 
   private void initNewStatus() {
@@ -332,7 +341,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
     statuses.add(this.writeStatus);
   }
 
-  private void processAppendResult(AppendResult result, List<IndexedRecord> recordList) {
+  private void processAppendResult(AppendResult result, List<HoodieRecord> recordList) throws IOException {
     HoodieDeltaWriteStat stat = (HoodieDeltaWriteStat) this.writeStatus.getStat();
 
     if (stat.getPath() == null) {
@@ -365,8 +374,13 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
             .collect(Collectors.toList());
       }
 
+      List<IndexedRecord> indexedRecords = new LinkedList<>();
+      for (HoodieRecord hoodieRecord : recordList) {
+        indexedRecords.add((IndexedRecord) hoodieRecord.toIndexedRecord(tableSchema, config.getProps()).get());
+      }
+
       Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangesMetadataMap =
-          collectColumnRangeMetadata(recordList, fieldsToIndex, stat.getPath());
+          collectColumnRangeMetadata(indexedRecords, fieldsToIndex, stat.getPath());
 
       stat.setRecordsStats(columnRangesMetadataMap);
     }
@@ -424,7 +438,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
   }
 
   @Override
-  public void write(HoodieRecord record, Option<IndexedRecord> insertValue) {
+  protected void doWrite(HoodieRecord record, Schema schema, TypedProperties props) {
     Option<Map<String, String>> recordMetadata = ((HoodieRecordPayload) record.getData()).getMetadata();
     try {
       init(record);
@@ -499,7 +513,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
     if (!partitionPath.equals(record.getPartitionPath())) {
       HoodieUpsertException failureEx = new HoodieUpsertException("mismatched partition path, record partition: "
           + record.getPartitionPath() + " but trying to insert into partition: " + partitionPath);
-      writeStatus.markFailure(record, failureEx, record.getData().getMetadata());
+      writeStatus.markFailure(record, failureEx, record.getMetadata());
       return;
     }
 
@@ -510,12 +524,17 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
       record.seal();
     }
     // fetch the ordering val first in case the record was deflated.
-    final Comparable<?> orderingVal = record.getData().getOrderingValue();
-    Option<IndexedRecord> indexedRecord = getIndexedRecord(record);
+    final Comparable<?> orderingVal = record.getOrderingValue();
+    Option<HoodieRecord> indexedRecord = prepareRecord(record);
     if (indexedRecord.isPresent()) {
       // Skip the ignored record.
-      if (!indexedRecord.get().equals(IGNORE_RECORD)) {
-        recordList.add(indexedRecord.get());
+      try {
+        if (!indexedRecord.get().shouldIgnore(tableSchema, recordProperties)) {
+          recordList.add(indexedRecord.get());
+        }
+      } catch (IOException e) {
+        writeStatus.markFailure(record, e, record.getMetadata());
+        LOG.error("Error writing record  " + indexedRecord.get(), e);
       }
     } else {
       recordsToDelete.add(DeleteRecord.create(record.getKey(), orderingVal));
@@ -560,17 +579,17 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
 
   private static HoodieLogBlock getBlock(HoodieWriteConfig writeConfig,
                                          HoodieLogBlock.HoodieLogBlockType logDataBlockFormat,
-                                         List<IndexedRecord> recordList,
+                                         List<HoodieRecord> records,
                                          Map<HeaderMetadataType, String> header,
                                          String keyField) {
     switch (logDataBlockFormat) {
       case AVRO_DATA_BLOCK:
-        return new HoodieAvroDataBlock(recordList, header, keyField);
+        return new HoodieAvroDataBlock(records, header, keyField);
       case HFILE_DATA_BLOCK:
         return new HoodieHFileDataBlock(
-            recordList, header, writeConfig.getHFileCompressionAlgorithm(), new Path(writeConfig.getBasePath()));
+            records, header, writeConfig.getHFileCompressionAlgorithm(), new Path(writeConfig.getBasePath()));
       case PARQUET_DATA_BLOCK:
-        return new HoodieParquetDataBlock(recordList, header, keyField, writeConfig.getParquetCompressionCodec());
+        return new HoodieParquetDataBlock(records, header, keyField, writeConfig.getParquetCompressionCodec());
       default:
         throw new HoodieException("Data block format " + logDataBlockFormat + " not implemented");
     }

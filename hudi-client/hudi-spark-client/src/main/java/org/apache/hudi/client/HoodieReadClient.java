@@ -31,7 +31,7 @@ import org.apache.spark.sql.SQLContext;
  * @deprecated This. Use {@link SparkRDDReadClient instead.}
  */
 @Deprecated
-public class HoodieReadClient<T extends HoodieRecordPayload<T>> extends SparkRDDReadClient<T> {
+public class HoodieReadClient<T> extends SparkRDDReadClient<T> {
 
   public HoodieReadClient(HoodieSparkEngineContext context, String basePath) {
     super(context, basePath);

@@ -24,7 +24,6 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.Option;
@@ -36,13 +35,13 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 
 import java.util.List;
 
-public abstract class HoodieJavaTable<T extends HoodieRecordPayload>
+public abstract class HoodieJavaTable<T>
     extends HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> {
   protected HoodieJavaTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
     super(config, context, metaClient);
   }
 
-  public static <T extends HoodieRecordPayload> HoodieJavaTable<T> create(HoodieWriteConfig config, HoodieEngineContext context) {
+  public static <T> HoodieJavaTable<T> create(HoodieWriteConfig config, HoodieEngineContext context) {
     HoodieTableMetaClient metaClient =
         HoodieTableMetaClient.builder().setConf(context.getHadoopConf().get()).setBasePath(config.getBasePath())
             .setLoadActiveTimelineOnLoad(true).setConsistencyGuardConfig(config.getConsistencyGuardConfig())
@@ -50,7 +49,7 @@ public abstract class HoodieJavaTable<T extends HoodieRecordPayload>
     return HoodieJavaTable.create(config, (HoodieJavaEngineContext) context, metaClient);
   }
 
-  public static <T extends HoodieRecordPayload> HoodieJavaTable<T> create(HoodieWriteConfig config,
+  public static <T> HoodieJavaTable<T> create(HoodieWriteConfig config,
                                                                           HoodieJavaEngineContext context,
                                                                           HoodieTableMetaClient metaClient) {
     switch (metaClient.getTableType()) {

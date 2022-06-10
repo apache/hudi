@@ -30,6 +30,7 @@ import org.apache.avro.io.Encoder;
 import org.apache.avro.io.EncoderFactory;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hudi.common.fs.SizeAwareDataInputStream;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.ClosableIterator;
 import org.apache.hudi.common.util.Option;
@@ -37,6 +38,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.InternalSchema;
 
 import javax.annotation.Nonnull;
+
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
@@ -51,6 +53,8 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
+import java.util.stream.Collectors;
 import java.util.zip.DeflaterOutputStream;
 import java.util.zip.InflaterInputStream;
 
@@ -85,9 +89,10 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
     super(content, inputStream, readBlockLazily, Option.of(logBlockContentLocation), readerSchema, header, footer, keyField, false);
   }
 
-  public HoodieAvroDataBlock(@Nonnull List<IndexedRecord> records,
-                             @Nonnull Map<HeaderMetadataType, String> header,
-                             @Nonnull String keyField) {
+  public HoodieAvroDataBlock(@Nonnull List<HoodieRecord> records,
+      @Nonnull Map<HeaderMetadataType, String> header,
+      @Nonnull String keyField
+  ) {
     super(records, header, new HashMap<>(), keyField);
   }
 
@@ -97,7 +102,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
   }
 
   @Override
-  protected byte[] serializeRecords(List<IndexedRecord> records) throws IOException {
+  protected byte[] serializeRecords(List<HoodieRecord> records) throws IOException {
     Schema schema = new Schema.Parser().parse(super.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
     GenericDatumWriter<IndexedRecord> writer = new GenericDatumWriter<>(schema);
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
@@ -110,13 +115,14 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
     output.writeInt(records.size());
 
     // 3. Write the records
-    for (IndexedRecord s : records) {
+    for (HoodieRecord s : records) {
       ByteArrayOutputStream temp = new ByteArrayOutputStream();
       BinaryEncoder encoder = EncoderFactory.get().binaryEncoder(temp, encoderCache.get());
       encoderCache.set(encoder);
       try {
         // Encode the record into bytes
-        writer.write(s, encoder);
+        IndexedRecord data = (IndexedRecord) s.toIndexedRecord(schema, new Properties()).get();
+        writer.write(data, encoder);
         encoder.flush();
 
         // Get the size of the bytes
@@ -136,22 +142,25 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
 
   // TODO (na) - Break down content into smaller chunks of byte [] to be GC as they are used
   @Override
-  protected ClosableIterator<IndexedRecord> deserializeRecords(byte[] content) throws IOException {
+  protected ClosableIterator<HoodieRecord> deserializeRecords(byte[] content, HoodieRecord.Mapper mapper) throws IOException {
     checkState(this.readerSchema != null, "Reader's schema has to be non-null");
-    return RecordIterator.getInstance(this, content, internalSchema);
+    return RecordIterator.getInstance(this, content, internalSchema, mapper);
   }
 
-  private static class RecordIterator implements ClosableIterator<IndexedRecord> {
+  public static class RecordIterator implements ClosableIterator<HoodieRecord> {
     private byte[] content;
     private final SizeAwareDataInputStream dis;
     private final GenericDatumReader<IndexedRecord> reader;
     private final ThreadLocal<BinaryDecoder> decoderCache = new ThreadLocal<>();
+    private final HoodieRecord.Mapper mapper;
+    private final Schema finalReadSchema;
 
     private int totalRecords = 0;
     private int readRecords = 0;
 
-    private RecordIterator(Schema readerSchema, Schema writerSchema, byte[] content, InternalSchema internalSchema) throws IOException {
+    private RecordIterator(Schema readerSchema, Schema writerSchema, byte[] content, InternalSchema internalSchema, HoodieRecord.Mapper mapper) throws IOException {
       this.content = content;
+      this.mapper = mapper;
 
       this.dis = new SizeAwareDataInputStream(new DataInputStream(new ByteArrayInputStream(this.content)));
 
@@ -168,6 +177,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
         finalReadSchema = writerSchema;
       }
 
+      this.finalReadSchema = finalReadSchema;
       this.reader = new GenericDatumReader<>(writerSchema, finalReadSchema);
 
       if (logBlockVersion.hasRecordCount()) {
@@ -175,10 +185,14 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
       }
     }
 
-    public static RecordIterator getInstance(HoodieAvroDataBlock dataBlock, byte[] content, InternalSchema internalSchema) throws IOException {
+    public static RecordIterator getInstance(HoodieAvroDataBlock dataBlock, byte[] content, InternalSchema internalSchema, HoodieRecord.Mapper mapper) throws IOException {
       // Get schema from the header
       Schema writerSchema = new Schema.Parser().parse(dataBlock.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
-      return new RecordIterator(dataBlock.readerSchema, writerSchema, content, internalSchema);
+      return new RecordIterator(dataBlock.readerSchema, writerSchema, content, internalSchema, mapper);
+    }
+
+    public Schema getFinalReadSchema() {
+      return finalReadSchema;
     }
 
     @Override
@@ -198,7 +212,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
     }
 
     @Override
-    public IndexedRecord next() {
+    public HoodieRecord next() {
       try {
         int recordLength = this.dis.readInt();
         BinaryDecoder decoder = DecoderFactory.get().binaryDecoder(this.content, this.dis.getNumberOfBytesRead(),
@@ -207,7 +221,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
         IndexedRecord record = this.reader.read(null, decoder);
         this.dis.skipBytes(recordLength);
         this.readRecords++;
-        return record;
+        return mapper.apply(record);
       } catch (IOException e) {
         throw new HoodieIOException("Unable to convert bytes to record.", e);
       }
@@ -226,7 +240,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
    * HoodieLogFormat V1.
    */
   @Deprecated
-  public HoodieAvroDataBlock(List<IndexedRecord> records, Schema schema) {
+  public HoodieAvroDataBlock(List<HoodieRecord> records, Schema schema) {
     super(records, Collections.singletonMap(HeaderMetadataType.SCHEMA, schema.toString()), new HashMap<>(), HoodieRecord.RECORD_KEY_METADATA_FIELD);
   }
 
@@ -271,7 +285,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
       dis.skipBytes(recordLength);
     }
     dis.close();
-    return new HoodieAvroDataBlock(records, readerSchema);
+    return new HoodieAvroDataBlock(records.stream().map(HoodieAvroIndexedRecord::new).collect(Collectors.toList()), readerSchema);
   }
 
   private static byte[] compress(String text) {
@@ -313,8 +327,8 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
     output.writeInt(schemaContent.length);
     output.write(schemaContent);
 
-    List<IndexedRecord> records = new ArrayList<>();
-    try (ClosableIterator<IndexedRecord> recordItr = getRecordIterator()) {
+    List<HoodieRecord> records = new ArrayList<>();
+    try (ClosableIterator<HoodieRecord> recordItr = getRecordIterator(HoodieAvroIndexedRecord::new)) {
       recordItr.forEachRemaining(records::add);
     }
 
@@ -322,9 +336,9 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
     output.writeInt(records.size());
 
     // 3. Write the records
-    Iterator<IndexedRecord> itr = records.iterator();
+    Iterator<HoodieRecord> itr = records.iterator();
     while (itr.hasNext()) {
-      IndexedRecord s = itr.next();
+      IndexedRecord s = (IndexedRecord)itr.next().getData();
       ByteArrayOutputStream temp = new ByteArrayOutputStream();
       Encoder encoder = EncoderFactory.get().binaryEncoder(temp, null);
       try {
