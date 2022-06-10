@@ -30,6 +30,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.util.Lazy;
 
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
@@ -343,16 +344,18 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
                                            final byte[] valueBytes,
                                            Schema writerSchema,
                                            Schema readerSchema) throws IOException {
-    GenericRecord record = HoodieAvroUtils.bytesToAvro(valueBytes, writerSchema, readerSchema);
+    GenericRecord wRecord = HoodieAvroUtils.bytesToAvro(valueBytes, writerSchema);
+    GenericData.Record rRecord = new GenericData.Record(readerSchema);
+    rRecord.getSchema().getFields().forEach(field -> rRecord.put(field.name(), wRecord.get(field.name())));
 
     getKeySchema(readerSchema).ifPresent(keyFieldSchema -> {
-      final Object keyObject = record.get(keyFieldSchema.pos());
+      final Object keyObject = wRecord.get(keyFieldSchema.pos());
       if (keyObject != null && keyObject.toString().isEmpty()) {
-        record.put(keyFieldSchema.pos(), new String(keyBytes));
+        rRecord.put(keyFieldSchema.pos(), new String(keyBytes));
       }
     });
 
-    return record;
+    return rRecord;
   }
 
   private static Schema fetchSchema(HFile.Reader reader) {

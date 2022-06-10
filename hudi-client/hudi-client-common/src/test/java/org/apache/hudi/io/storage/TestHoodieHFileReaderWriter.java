@@ -198,13 +198,6 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
     }
   }
 
-  @Override
-  @Test
-  public void testWriteReadWithEvolvedSchema() throws Exception {
-    // Disable the test with evolved schema for HFile since it's not supported
-    // TODO(HUDI-3683): fix the schema evolution for HFile
-  }
-
   @Test
   public void testReadHFileFormatRecords() throws Exception {
     writeFileWithSimpleSchema();
