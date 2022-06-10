@@ -5,6 +5,17 @@
     "description": "Apache Hudi Blog",
     "items": [
         {
+            "id": "/2022/06/09/Singificant-queries-speedup-from-Hudi-Column-Stats-Index-and-Data-Skipping-features",
+            "content_html": "<div url=\"https://www.onehouse.ai/blog/hudis-column-stats-index-and-data-skipping-feature-help-speed-up-queries-by-an-orders-of-magnitude\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/blog/2022/06/09/Singificant-queries-speedup-from-Hudi-Column-Stats-Index-and-Data-Skipping-features",
+            "title": "Hudi’s Column Stats Index and Data Skipping feature help speed up queries by an orders of magnitude!",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2022-06-09T00:00:00.000Z",
+            "author": {
+                "name": "Alexey Kudinkin"
+            }
+        },
+        {
             "id": "/2022/06/04/Asynchronous-Indexing-Using-Hudi",
             "content_html": "<div url=\"https://www.onehouse.ai/blog/asynchronous-indexing-using-hudi\">Redirecting... please wait!! </div>",
             "url": "https://hudi.apache.org/blog/2022/06/04/Asynchronous-Indexing-Using-Hudi",
@@ -35,6 +46,17 @@
             "date_modified": "2022-05-17T00:00:00.000Z",
             "author": {
                 "name": "Sivabalan Narayanan"
+            }
+        },
+        {
+            "id": "/2022/04/19/Corrections-in-data-lakehouse-table-format-comparisons",
+            "content_html": "<div url=\"https://bytearray.io/corrections-in-data-lakehouse-table-format-comparisons-b72eb63ece32\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/blog/2022/04/19/Corrections-in-data-lakehouse-table-format-comparisons",
+            "title": "Corrections in data lakehouse table format comparisons",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2022-04-19T00:00:00.000Z",
+            "author": {
+                "name": "Vinoth Chandar"
             }
         },
         {

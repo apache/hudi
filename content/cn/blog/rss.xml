@@ -4,9 +4,17 @@
         <title>Apache Hudi: User-Facing Analytics</title>
         <link>https://hudi.apache.org/cn/blog</link>
         <description>Apache Hudi Blog</description>
-        <lastBuildDate>Sat, 04 Jun 2022 00:00:00 GMT</lastBuildDate>
+        <lastBuildDate>Thu, 09 Jun 2022 00:00:00 GMT</lastBuildDate>
         <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
         <generator>https://github.com/jpmonette/feed</generator>
+        <item>
+            <title><![CDATA[Hudi’s Column Stats Index and Data Skipping feature help speed up queries by an orders of magnitude!]]></title>
+            <link>https://hudi.apache.org/cn/blog/2022/06/09/Singificant-queries-speedup-from-Hudi-Column-Stats-Index-and-Data-Skipping-features</link>
+            <guid>/2022/06/09/Singificant-queries-speedup-from-Hudi-Column-Stats-Index-and-Data-Skipping-features</guid>
+            <pubDate>Thu, 09 Jun 2022 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://www.onehouse.ai/blog/hudis-column-stats-index-and-data-skipping-feature-help-speed-up-queries-by-an-orders-of-magnitude">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
         <item>
             <title><![CDATA[Asynchronous Indexing using Hudi]]></title>
             <link>https://hudi.apache.org/cn/blog/2022/06/04/Asynchronous-Indexing-Using-Hudi</link>
@@ -30,6 +38,14 @@
             <pubDate>Tue, 17 May 2022 00:00:00 GMT</pubDate>
             <description><![CDATA[Redirecting... please wait!!]]></description>
             <content:encoded><![CDATA[<div url="https://www.onehouse.ai/blog/introducing-multi-modal-index-for-the-lakehouse-in-apache-hudi">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[Corrections in data lakehouse table format comparisons]]></title>
+            <link>https://hudi.apache.org/cn/blog/2022/04/19/Corrections-in-data-lakehouse-table-format-comparisons</link>
+            <guid>/2022/04/19/Corrections-in-data-lakehouse-table-format-comparisons</guid>
+            <pubDate>Tue, 19 Apr 2022 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://bytearray.io/corrections-in-data-lakehouse-table-format-comparisons-b72eb63ece32">Redirecting... please wait!! </div>]]></content:encoded>
         </item>
         <item>
             <title><![CDATA[Key Learnings on Using Apache HUDI in building Lakehouse Architecture @ Halodoc]]></title>
