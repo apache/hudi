@@ -67,6 +67,17 @@ When writing data into Hudi, you model the records like how you would on a key-v
 
 When querying/reading data, Hudi just presents itself as a json-like hierarchical table, everyone is used to querying using Hive/Spark/Presto over Parquet/Json/Avro. 
 
+### Why does Hudi require a key field to be configured?
+Hudi was designed to support fast record level Upserts and thus requires a key to identify whether an incoming record is 
+an insert or update or delete, and process accordingly. Additionally, Hudi automatically maintains indexes on this primary 
+key and for many use-cases like CDC, ensuring such primary key constraints is crucial to ensure data quality. In this context, 
+pre combine key helps reconcile multiple records with same key in a single batch of input records. Even for append-only data 
+streams, Hudi supports key based de-duplication before inserting records. For e-g; you may have atleast once data integration 
+systems like Kafka MirrorMaker that can introduce duplicates during failures. Even for plain old batch pipelines, keys 
+help eliminate duplication that could be caused by backfill pipelines, where commonly it's unclear what set of records 
+need to be re-written. We are actively working on making keys easier by only requiring them for Upsert and/or automatically
+generate the key internally (much like RDBMS row_ids)
+
 ### Does Hudi support cloud storage/object stores?
 
 Yes. Generally speaking, Hudi is able to provide its functionality on any Hadoop FileSystem implementation and thus can read and write datasets on [Cloud stores](https://hudi.apache.org/docs/cloud) (Amazon S3 or Microsoft Azure or Google Cloud Storage). Over time, Hudi has also incorporated specific design aspects that make building Hudi datasets on the cloud easy, such as [consistency checks for s3](https://hudi.apache.org/docs/configurations#hoodieconsistencycheckenabled), Zero moves/renames involved for data files.
