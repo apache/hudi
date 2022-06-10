@@ -17,25 +17,33 @@
 
 package org.apache.hudi
 
+import org.apache.avro.Conversions.DecimalConversion
+import org.apache.avro.LogicalTypes
+import org.apache.avro.generic.GenericData
 import org.apache.hudi.ColumnStatsIndexSupport._
+import org.apache.hudi.HoodieCatalystUtils.{withPersistedData, withPersistedDataset}
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
-import org.apache.hudi.avro.model.{HoodieMetadataColumnStats, HoodieMetadataRecord}
+import org.apache.hudi.avro.model._
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
+import org.apache.hudi.common.data.HoodieData
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig
 import org.apache.hudi.common.util.ValidationUtils.checkState
+import org.apache.hudi.common.util.collection
 import org.apache.hudi.common.util.hash.ColumnIndexID
 import org.apache.hudi.data.HoodieJavaRDD
 import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadata, HoodieTableMetadataUtil, MetadataPartitionType}
 import org.apache.spark.api.java.JavaSparkContext
-import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.HoodieUnsafeRDDUtils.{createDataFrameFromInternalRows, createDataFrameFromRDD, createDataFrameFromRows}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.{DataFrame, HoodieUnsafeRDDUtils, Row, SparkSession}
+import org.apache.spark.sql.{DataFrame, Row, SparkSession}
+import org.apache.spark.storage.StorageLevel
 
+import java.nio.ByteBuffer
 import scala.collection.JavaConverters._
 import scala.collection.immutable.TreeSet
 import scala.collection.mutable.ListBuffer
@@ -43,12 +51,29 @@ import scala.collection.mutable.ListBuffer
 class ColumnStatsIndexSupport(spark: SparkSession,
                               tableBasePath: String,
                               tableSchema: StructType,
-                              metadataConfig: HoodieMetadataConfig) {
+                              metadataConfig: HoodieMetadataConfig,
+                              shouldReadInMemory: Boolean = false) {
 
   @transient lazy val engineCtx = new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext))
   @transient lazy val metadataTable: HoodieTableMetadata =
     HoodieTableMetadata.create(engineCtx, metadataConfig, tableBasePath, FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue)
 
+  /**
+   * TODO scala-doc
+   */
+  def loadTransposed[T](targetColumns: Seq[String] = Seq.empty)(f: DataFrame => T): T = {
+    val colStatsRecords: HoodieData[HoodieMetadataColumnStats] = loadColumnStatsIndexRecords(targetColumns)
+    withPersistedData(colStatsRecords, StorageLevel.MEMORY_ONLY) {
+      val df = transpose(colStatsRecords, targetColumns)
+      withPersistedDataset(df, StorageLevel.MEMORY_ONLY) {
+        f(df)
+      }
+    }
+  }
+
+  /**
+   * TODO scala-doc
+   */
   def load(targetColumns: Seq[String] = Seq.empty): DataFrame = {
     // NOTE: If specific columns have been provided, we can considerably trim down amount of data fetched
     //       by only fetching Column Stats Index records pertaining to the requested columns.
@@ -93,34 +118,15 @@ class ColumnStatsIndexSupport(spark: SparkSession,
    *       column references from the filtering expressions, and only transpose records corresponding to the
    *       columns referenced in those
    *
-   * @param colStatsDF [[DataFrame]] bearing raw Column Stats Index table
+   * @param colStatsRecords [[HoodieData[HoodieMetadataColumnStats]]] bearing raw Column Stats Index records
    * @param queryColumns target columns to be included into the final table
    * @return reshaped table according to the format outlined above
    */
-  def transpose(colStatsDF: DataFrame, queryColumns: Seq[String]): DataFrame = {
-    val colStatsSchema = colStatsDF.schema
-    val colStatsSchemaOrdinalsMap = colStatsSchema.fields.zipWithIndex.map({
-      case (field, ordinal) => (field.name, ordinal)
-    }).toMap
-
+  private def transpose(colStatsRecords: HoodieData[HoodieMetadataColumnStats], queryColumns: Seq[String]): DataFrame = {
     val tableSchemaFieldMap = tableSchema.fields.map(f => (f.name, f)).toMap
 
-    val colNameOrdinal: Int = colStatsSchemaOrdinalsMap(HoodieMetadataPayload.COLUMN_STATS_FIELD_COLUMN_NAME)
-    val minValueOrdinal: Int = colStatsSchemaOrdinalsMap(HoodieMetadataPayload.COLUMN_STATS_FIELD_MIN_VALUE)
-    val maxValueOrdinal: Int = colStatsSchemaOrdinalsMap(HoodieMetadataPayload.COLUMN_STATS_FIELD_MAX_VALUE)
-    val fileNameOrdinal: Int = colStatsSchemaOrdinalsMap(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
-    val nullCountOrdinal: Int = colStatsSchemaOrdinalsMap(HoodieMetadataPayload.COLUMN_STATS_FIELD_NULL_COUNT)
-    val valueCountOrdinal: Int = colStatsSchemaOrdinalsMap(HoodieMetadataPayload.COLUMN_STATS_FIELD_VALUE_COUNT)
-
-    // NOTE: We have to collect list of indexed columns to make sure we properly align the rows
-    //       w/in the transposed dataset: since some files might not have all of the columns indexed
-    //       either due to the Column Stats Index config changes, schema evolution, etc, we have
-    //       to make sure that all of the rows w/in transposed data-frame are properly padded (with null
-    //       values) for such file-column combinations
-    val indexedColumns: Seq[String] = colStatsDF.select(col(HoodieMetadataPayload.COLUMN_STATS_FIELD_COLUMN_NAME))
-        .distinct()
-        .collect()
-        .map(_.get(0).asInstanceOf[String])
+    // TODO elaborate
+    val indexedColumns: Seq[String] = queryColumns
 
     // NOTE: We're sorting the columns to make sure final index schema matches layout
     //       of the transposed table
@@ -130,103 +136,122 @@ class ColumnStatsIndexSupport(spark: SparkSession,
     // of the dataset, and therefore we rely on low-level RDD API to avoid incurring encoding/decoding
     // penalty of the [[Dataset]], since it's required to adhere to its schema at all times, while
     // RDDs are not;
-    //
-    // NOTE: There's very little value in rebasing this transformation onto lower-level [[InternalRow]] APIs,
-    //       since at the end of the day we will have to deserialize them to JVM native implementation anyway
-    //       (for more details, please check out [[deserialize]] method)
-    val transposedRDD = colStatsDF.rdd
-      .filter(row => sortedTargetColumns.contains(row.getString(colNameOrdinal)))
-      .map { row =>
-        if (row.isNullAt(minValueOrdinal) && row.isNullAt(maxValueOrdinal)) {
+    val transposedRows: HoodieData[Row] = colStatsRecords
+      .filter(r => sortedTargetColumns.contains(r.getColumnName))
+      .mapToPair(r => {
+        if (r.getMinValue == null && r.getMaxValue == null) {
           // Corresponding row could be null in either of the 2 cases
           //    - Column contains only null values (in that case both min/max have to be nulls)
           //    - This is a stubbed Column Stats record (used as a tombstone)
-          row
+          collection.Pair.of(r.getFileName, r)
         } else {
-          val minValueStruct = row.getAs[Row](minValueOrdinal)
-          val maxValueStruct = row.getAs[Row](maxValueOrdinal)
+          val minValueWrapper = r.getMinValue
+          val maxValueWrapper = r.getMaxValue
 
-          checkState(minValueStruct != null && maxValueStruct != null, "Invalid Column Stats record: either both min/max have to be null, or both have to be non-null")
+          checkState(minValueWrapper != null && maxValueWrapper != null, "Invalid Column Stats record: either both min/max have to be null, or both have to be non-null")
 
-          val colName = row.getString(colNameOrdinal)
+          val colName = r.getColumnName
           val colType = tableSchemaFieldMap(colName).dataType
 
-          val (minValue, _) = tryUnpackNonNullVal(minValueStruct)
-          val (maxValue, _) = tryUnpackNonNullVal(maxValueStruct)
-          val rowValsSeq = row.toSeq.toArray
+          val minValue = deserialize(tryUnpackValueWrapper(minValueWrapper), colType)
+          val maxValue = deserialize(tryUnpackValueWrapper(maxValueWrapper), colType)
+
           // Update min-/max-value structs w/ unwrapped values in-place
-          rowValsSeq(minValueOrdinal) = deserialize(minValue, colType)
-          rowValsSeq(maxValueOrdinal) = deserialize(maxValue, colType)
+          r.setMinValue(minValue)
+          r.setMaxValue(maxValue)
 
-          Row(rowValsSeq: _*)
+          collection.Pair.of(r.getFileName, r)
         }
-      }
-      .groupBy(r => r.getString(fileNameOrdinal))
-      .foldByKey(Seq[Row]()) {
-        case (_, columnRowsSeq) =>
-          // Rows seq is always non-empty (otherwise it won't be grouped into)
-          val fileName = columnRowsSeq.head.get(fileNameOrdinal)
-          val valueCount = columnRowsSeq.head.get(valueCountOrdinal)
+      })
+      .groupByKey()
+      .map(p => {
+        val columnRecordsSeq: Seq[HoodieMetadataColumnStats] = p.getValue.asScala.toSeq
+        val fileName: String = p.getKey
+        val valueCount: Long = columnRecordsSeq.head.getValueCount
 
-          // To properly align individual rows (corresponding to a file) w/in the transposed projection, we need
-          // to align existing column-stats for individual file with the list of expected ones for the
-          // whole transposed projection (a superset of all files)
-          val columnRowsMap = columnRowsSeq.map(row => (row.getString(colNameOrdinal), row)).toMap
-          val alignedColumnRowsSeq = sortedTargetColumns.toSeq.map(columnRowsMap.get)
+        // To properly align individual rows (corresponding to a file) w/in the transposed projection, we need
+        // to align existing column-stats for individual file with the list of expected ones for the
+        // whole transposed projection (a superset of all files)
+        val columnRecordsMap = columnRecordsSeq.map(r => (r.getColumnName, r)).toMap
+        val alignedColStatRecordsSeq = sortedTargetColumns.toSeq.map(columnRecordsMap.get)
 
-          val coalescedRowValuesSeq =
-            alignedColumnRowsSeq.foldLeft(ListBuffer[Any](fileName, valueCount)) {
-              case (acc, opt) =>
-                opt match {
-                  case Some(columnStatsRow) =>
-                    acc ++= Seq(columnStatsRow.get(minValueOrdinal), columnStatsRow.get(maxValueOrdinal), columnStatsRow.get(nullCountOrdinal))
-                  case None =>
-                    // NOTE: Since we're assuming missing column to essentially contain exclusively
-                    //       null values, we set null-count to be equal to value-count (this behavior is
-                    //       consistent with reading non-existent columns from Parquet)
-                    acc ++= Seq(null, null, valueCount)
-                }
-            }
+        val coalescedRowValuesSeq =
+          alignedColStatRecordsSeq.foldLeft(ListBuffer[Any](fileName, valueCount)) {
+            case (acc, opt) =>
+              opt match {
+                case Some(colStatRecord) =>
+                  acc ++= Seq(colStatRecord.getMinValue, colStatRecord.getMaxValue, colStatRecord.getNullCount)
+                case None =>
+                  // NOTE: Since we're assuming missing column to essentially contain exclusively
+                  //       null values, we set null-count to be equal to value-count (this behavior is
+                  //       consistent with reading non-existent columns from Parquet)
+                  acc ++= Seq(null, null, valueCount)
+              }
+          }
 
-          Seq(Row(coalescedRowValuesSeq:_*))
-      }
-      .values
-      .flatMap(it => it)
+        Row(coalescedRowValuesSeq:_*)
+      })
 
     // NOTE: It's crucial to maintain appropriate ordering of the columns
     //       matching table layout: hence, we cherry-pick individual columns
     //       instead of simply filtering in the ones we're interested in the schema
     val indexSchema = composeIndexSchema(sortedTargetColumns.toSeq, tableSchema)
-
-    spark.createDataFrame(transposedRDD, indexSchema)
+    if (shouldReadInMemory) {
+      // NOTE: This will instantiate a [[Dataset]] backed by [[LocalRelation]] holding all of the rows
+      //       of the transposed table in memory, facilitating execution of the subsequently chained operations
+      //       on it locally (on the driver; all such operations are actually going to be performed by Spark's
+      //       Optimizer)
+      createDataFrameFromRows(spark, transposedRows.collectAsList().asScala, indexSchema)
+    } else {
+      val rdd = HoodieJavaRDD.getJavaRDD(transposedRows)
+      spark.createDataFrame(rdd, indexSchema)
+    }
   }
 
   private def loadColumnStatsIndexForColumnsInternal(targetColumns: Seq[String]): DataFrame = {
-    // Read Metadata Table's Column Stats Index into Spark's [[DataFrame]] by
-    //    - Fetching the records from CSI by key-prefixes (encoded column names)
-    //    - Deserializing fetched records into [[InternalRow]]s
-    //    - Composing [[DataFrame]]
     val colStatsDF = {
-      // TODO encoding should be done internally w/in HoodieBackedTableMetadata
-      val encodedTargetColumnNames = targetColumns.map(colName => new ColumnIndexID(colName).asBase64EncodedString())
-
-      val recordsRDD: RDD[HoodieRecord[HoodieMetadataPayload]] = HoodieJavaRDD.getJavaRDD(
-          metadataTable.getRecordsByKeyPrefixes(encodedTargetColumnNames.asJava, HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS))
-
-      val catalystRowsRDD: RDD[InternalRow] = recordsRDD.mapPartitions { it =>
+      val colStatsRecords: HoodieData[HoodieMetadataColumnStats] = loadColumnStatsIndexRecords(targetColumns)
+      val catalystRows: HoodieData[InternalRow] = colStatsRecords.mapPartitions(it => {
         val converter = AvroConversionUtils.createAvroToInternalRowConverter(HoodieMetadataColumnStats.SCHEMA$, columnStatsRecordStructType)
+        it.asScala.map(r => converter(r).orNull).asJava
+      })
 
-        it.map { record =>
-          toScalaOption(record.getData.getInsertValue(null, null))
-            .flatMap(metadataRecord => converter(metadataRecord.asInstanceOf[HoodieMetadataRecord].getColumnStatsMetadata))
-            .orNull
-        }
+      if (shouldReadInMemory) {
+        // NOTE: This will instantiate a [[Dataset]] backed by [[LocalRelation]] holding all of the rows
+        //       of the transposed table in memory, facilitating execution of the subsequently chained operations
+        //       on it locally (on the driver; all such operations are actually going to be performed by Spark's
+        //       Optimizer)
+        createDataFrameFromInternalRows(spark, catalystRows.collectAsList().asScala, columnStatsRecordStructType)
+      } else {
+        createDataFrameFromRDD(spark, HoodieJavaRDD.getJavaRDD(catalystRows), columnStatsRecordStructType)
       }
-
-      HoodieUnsafeRDDUtils.createDataFrame(spark, catalystRowsRDD, columnStatsRecordStructType)
     }
 
     colStatsDF.select(targetColumnStatsIndexColumns.map(col): _*)
+  }
+
+  private def loadColumnStatsIndexRecords(targetColumns: Seq[String]): HoodieData[HoodieMetadataColumnStats] = {
+    // Read Metadata Table's Column Stats Index records into [[HoodieData]] container by
+    //    - Fetching the records from CSI by key-prefixes (encoded column names)
+    //    - Extracting [[HoodieMetadataColumnStats]] records
+    //    - Filtering out nulls
+    checkState(targetColumns.nonEmpty)
+
+    // TODO encoding should be done internally w/in HoodieBackedTableMetadata
+    val encodedTargetColumnNames = targetColumns.map(colName => new ColumnIndexID(colName).asBase64EncodedString())
+
+    val metadataRecords: HoodieData[HoodieRecord[HoodieMetadataPayload]] =
+      metadataTable.getRecordsByKeyPrefixes(encodedTargetColumnNames.asJava, HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS, shouldReadInMemory)
+
+    val columnStatsRecords: HoodieData[HoodieMetadataColumnStats] =
+      metadataRecords.map(record => {
+        toScalaOption(record.getData.getInsertValue(null, null))
+          .map(metadataRecord => metadataRecord.asInstanceOf[HoodieMetadataRecord].getColumnStatsMetadata)
+          .orNull
+      })
+        .filter(columnStatsRecord => columnStatsRecord != null)
+
+    columnStatsRecords
   }
 
   private def loadFullColumnStatsIndexInternal(): DataFrame = {
@@ -246,6 +271,9 @@ class ColumnStatsIndexSupport(spark: SparkSession,
 }
 
 object ColumnStatsIndexSupport {
+
+  private val expectedAvroSchemaValues = Set("BooleanWrapper", "IntWrapper", "LongWrapper", "FloatWrapper", "DoubleWrapper",
+    "BytesWrapper", "StringWrapper", "DateWrapper", "DecimalWrapper", "TimeMicrosWrapper", "TimestampMicrosWrapper")
 
   /**
    * Target Column Stats Index columns which internally are mapped onto fields of the correspoding
@@ -301,13 +329,28 @@ object ColumnStatsIndexSupport {
   @inline private def composeColumnStatStructType(col: String, statName: String, dataType: DataType) =
     StructField(formatColName(col, statName), dataType, nullable = true, Metadata.empty)
 
-  private def tryUnpackNonNullVal(statStruct: Row): (Any, Int) =
-    statStruct.toSeq.zipWithIndex
-      .find(_._1 != null)
-      // NOTE: First non-null value will be a wrapper (converted into Row), bearing a single
-      //       value
-      .map { case (value, ord) => (value.asInstanceOf[Row].get(0), ord)}
-      .getOrElse((null, -1))
+  private def tryUnpackValueWrapper(valueWrapper: AnyRef): Any = {
+    valueWrapper match {
+      case w: BooleanWrapper => w.getValue
+      case w: IntWrapper => w.getValue
+      case w: LongWrapper => w.getValue
+      case w: FloatWrapper => w.getValue
+      case w: DoubleWrapper => w.getValue
+      case w: BytesWrapper => w.getValue
+      case w: StringWrapper => w.getValue
+      case w: DateWrapper => w.getValue
+      case w: DecimalWrapper => w.getValue
+      case w: TimeMicrosWrapper => w.getValue
+      case w: TimestampMicrosWrapper => w.getValue
+
+      case r: GenericData.Record if expectedAvroSchemaValues.contains(r.getSchema.getName) =>
+        r.get("value")
+
+      case _ => throw new UnsupportedOperationException(s"Not recognized value wrapper type (${valueWrapper.getClass.getSimpleName})")
+    }
+  }
+
+  val decConv = new DecimalConversion()
 
   private def deserialize(value: Any, dataType: DataType): Any = {
     dataType match {
@@ -320,6 +363,22 @@ object ColumnStatsIndexSupport {
       // NOTE: All integral types of size less than Int are encoded as Ints in MT
       case ShortType => value.asInstanceOf[Int].toShort
       case ByteType => value.asInstanceOf[Int].toByte
+
+      // TODO fix
+      case _: DecimalType =>
+        value match {
+          case buffer: ByteBuffer =>
+            Decimal(decConv.fromBytes(buffer, null, LogicalTypes.decimal(30, 15)), 30, 15)
+          case _ => value
+        }
+      case BinaryType =>
+        value match {
+          case b: ByteBuffer =>
+            val bytes = new Array[Byte](b.remaining)
+            b.get(bytes)
+            bytes
+          case other => other
+        }
 
       case _ => value
     }
