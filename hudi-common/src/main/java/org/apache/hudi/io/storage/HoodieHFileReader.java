@@ -349,9 +349,9 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
     rRecord.getSchema().getFields().forEach(field -> rRecord.put(field.name(), wRecord.get(field.name())));
 
     getKeySchema(readerSchema).ifPresent(keyFieldSchema -> {
-      final Object keyObject = wRecord.get(keyFieldSchema.pos());
+      final Object keyObject = wRecord.get(keyFieldSchema.name());
       if (keyObject != null && keyObject.toString().isEmpty()) {
-        rRecord.put(keyFieldSchema.pos(), new String(keyBytes));
+        rRecord.put(keyFieldSchema.name(), new String(keyBytes));
       }
     });
 
