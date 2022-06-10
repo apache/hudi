@@ -77,6 +77,14 @@ public class CustomKeyGenerator extends BuiltinKeyGenerator {
   }
 
   @Override
+  public String getRecordKey(InternalRow row, StructType structType) {
+    validateRecordKeyFields();
+    return getRecordKeyFields().size() == 1
+        ? new SimpleKeyGenerator(config).getRecordKey(row, structType)
+        : new ComplexKeyGenerator(config).getRecordKey(row, structType);
+  }
+
+  @Override
   public String getPartitionPath(Row row) {
     return getPartitionPath(Option.empty(), Option.of(row), Option.empty());
   }

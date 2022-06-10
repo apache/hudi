@@ -25,6 +25,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 
+import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
@@ -46,7 +47,8 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
 
   private static final String STRUCT_NAME = "hoodieRowTopLevelField";
   private static final String NAMESPACE = "hoodieRow";
-  private Function1<Row, GenericRecord> converterFn = null;
+  private Function1<Row, GenericRecord> rowConverterFn = null;
+  private Function1<InternalRow, GenericRecord> internalConverterFn = null;
   private final AtomicBoolean validatePartitionFields = new AtomicBoolean(false);
   protected StructType structType;
 
@@ -66,10 +68,27 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
   @Override
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public String getRecordKey(Row row) {
-    if (null == converterFn) {
-      converterFn = AvroConversionUtils.createConverterToAvro(row.schema(), STRUCT_NAME, NAMESPACE);
+    if (null == rowConverterFn) {
+      rowConverterFn = AvroConversionUtils.createConverterToAvro(row.schema(), STRUCT_NAME, NAMESPACE);
     }
-    return getKey(converterFn.apply(row)).getRecordKey();
+    return getKey(rowConverterFn.apply(row)).getRecordKey();
+  }
+
+  /**
+   * Fetch record key from {@link InternalRow}.
+   *
+   * @param internalRow instance of {@link InternalRow} from which record key is requested.
+   * @param structType schema of {@link InternalRow}
+   * @return the record key of interest from {@link InternalRow}.
+   */
+  @Override
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public String getRecordKey(InternalRow internalRow, StructType structType) {
+    if (null == internalConverterFn) {
+      Schema schema = AvroConversionUtils.convertStructTypeToAvroSchema(structType, STRUCT_NAME, NAMESPACE);
+      internalConverterFn = AvroConversionUtils.createInternalRowToAvroConverter(structType, schema, true);
+    }
+    return getKey(internalConverterFn.apply(internalRow)).getRecordKey();
   }
 
   /**
@@ -81,10 +100,10 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
   @Override
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public String getPartitionPath(Row row) {
-    if (null == converterFn) {
-      converterFn = AvroConversionUtils.createConverterToAvro(row.schema(), STRUCT_NAME, NAMESPACE);
+    if (null == rowConverterFn) {
+      rowConverterFn = AvroConversionUtils.createConverterToAvro(row.schema(), STRUCT_NAME, NAMESPACE);
     }
-    return getKey(converterFn.apply(row)).getPartitionPath();
+    return getKey(rowConverterFn.apply(row)).getPartitionPath();
   }
 
   /**
