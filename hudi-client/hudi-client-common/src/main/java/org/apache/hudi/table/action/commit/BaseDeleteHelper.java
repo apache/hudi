@@ -19,7 +19,6 @@
 package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -29,7 +28,7 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
  *
  * @param <T>
  */
-public abstract class BaseDeleteHelper<T extends HoodieRecordPayload, I, K, O, R> {
+public abstract class BaseDeleteHelper<T, I, K, O, R> {
 
   /**
    * Deduplicate Hoodie records, using the given deduplication function.

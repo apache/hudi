@@ -18,28 +18,42 @@
 
 package org.apache.hudi.io.storage;
 
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
+
 import java.io.IOException;
+import java.util.Properties;
 
-public interface HoodieFileWriter<R extends IndexedRecord> {
-
-  void writeAvroWithMetadata(HoodieKey key, R newRecord) throws IOException;
+public interface HoodieAvroFileWriter extends HoodieFileWriter {
 
   boolean canWrite();
 
   void close() throws IOException;
 
-  void writeAvro(String key, R oldRecord) throws IOException;
+  void writeAvroWithMetadata(HoodieKey key, IndexedRecord avroRecord) throws IOException;
 
-  default void prepRecordWithMetadata(HoodieKey key, R avroRecord, String instantTime, Integer partitionId, long recordIndex, String fileName) {
+  void writeAvro(String recordKey, IndexedRecord record) throws IOException;
+
+  @Override
+  default void writeWithMetadata(HoodieKey key, HoodieRecord record, Schema schema, Properties props) throws IOException {
+    IndexedRecord avroPayload = (IndexedRecord)record.toIndexedRecord(schema, props).get();
+    writeAvroWithMetadata(key, avroPayload);
+  }
+
+  @Override
+  default void write(String recordKey, HoodieRecord record, Schema schema, Properties props) throws IOException {
+    IndexedRecord avroPayload = (IndexedRecord)record.toIndexedRecord(schema, props).get();
+    writeAvro(recordKey, avroPayload);
+  }
+
+  default void prepRecordWithMetadata(HoodieKey key, IndexedRecord avroRecord, String instantTime, Integer partitionId, long recordIndex, String fileName) {
     String seqId = HoodieRecord.generateSequenceId(instantTime, partitionId, recordIndex);
     HoodieAvroUtils.addHoodieKeyToRecord((GenericRecord) avroRecord, key.getRecordKey(), key.getPartitionPath(), fileName);
     HoodieAvroUtils.addCommitMetadataToRecord((GenericRecord) avroRecord, instantTime, seqId);
-    return;
   }
 }

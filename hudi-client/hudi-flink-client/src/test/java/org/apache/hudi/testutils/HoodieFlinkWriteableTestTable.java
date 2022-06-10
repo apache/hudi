@@ -24,6 +24,7 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
@@ -141,7 +142,7 @@ public class HoodieFlinkWriteableTestTable extends HoodieWriteableTestTable {
           LOG.warn("Failed to convert record " + r.toString(), e);
           return null;
         }
-      }).collect(Collectors.toList()), header, HoodieRecord.RECORD_KEY_METADATA_FIELD));
+      }).map(HoodieAvroIndexedRecord::new).collect(Collectors.toList()), header, HoodieRecord.RECORD_KEY_METADATA_FIELD));
       return Pair.of(partitionPath, logWriter.getLogFile());
     }
   }

@@ -7,7 +7,7 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,22 +16,32 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.io;
+package org.apache.hudi.common.util;
 
-import org.apache.hudi.common.engine.TaskContextSupplier;
-import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.table.HoodieTable;
+import java.util.function.Function;
 
-import java.io.Serializable;
+public class MappingIterator<T, R> implements ClosableIterator<R> {
 
-public abstract class WriteHandleFactory<T, I, K, O> implements Serializable {
-  private int numFilesWritten = 0;
+  private final ClosableIterator<T> sourceIterator;
+  private final Function<T, R> mapper;
 
-  public abstract HoodieWriteHandle<T, I, K, O> create(HoodieWriteConfig config, String commitTime, HoodieTable<T, I, K, O> hoodieTable,
-      String partitionPath, String fileIdPrefix, TaskContextSupplier taskContextSupplier);
+  public MappingIterator(ClosableIterator<T> sourceIterator, Function<T, R> mapper) {
+    this.sourceIterator = sourceIterator;
+    this.mapper = mapper;
+  }
 
-  protected String getNextFileId(String idPfx) {
-    return FSUtils.createNewFileId(idPfx, numFilesWritten++);
+  @Override
+  public boolean hasNext() {
+    return sourceIterator.hasNext();
+  }
+
+  @Override
+  public R next() {
+    return mapper.apply(sourceIterator.next());
+  }
+
+  @Override
+  public void close() {
+    sourceIterator.close();
   }
 }

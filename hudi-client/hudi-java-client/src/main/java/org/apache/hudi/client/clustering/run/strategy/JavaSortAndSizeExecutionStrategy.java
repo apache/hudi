@@ -24,7 +24,6 @@ import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.CreateHandleFactory;
@@ -43,7 +42,7 @@ import java.util.Map;
  * 1) Java execution engine.
  * 2) Uses bulk_insert to write data into new files.
  */
-public class JavaSortAndSizeExecutionStrategy<T extends HoodieRecordPayload<T>>
+public class JavaSortAndSizeExecutionStrategy<T>
     extends JavaExecutionStrategy<T> {
   private static final Logger LOG = LogManager.getLogger(JavaSortAndSizeExecutionStrategy.class);
 

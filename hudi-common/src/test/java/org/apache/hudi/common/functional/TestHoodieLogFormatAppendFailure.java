@@ -19,6 +19,7 @@
 package org.apache.hudi.common.functional;
 
 import org.apache.hudi.common.model.HoodieArchivedLogFile;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.HoodieLogFormat.Writer;
@@ -28,7 +29,6 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.testutils.minicluster.MiniClusterUtil;
 
-import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.FileUtil;
@@ -52,6 +52,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeoutException;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSimpleSchema;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -101,7 +102,7 @@ public class TestHoodieLogFormatAppendFailure {
     fs.mkdirs(testPath);
 
     // Some data & append.
-    List<IndexedRecord> records = SchemaTestUtil.generateTestRecords(0, 10);
+    List<HoodieRecord> records = SchemaTestUtil.generateTestRecords(0, 10).stream().map(HoodieAvroIndexedRecord::new).collect(Collectors.toList());
     Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>(2);
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, getSimpleSchema().toString());

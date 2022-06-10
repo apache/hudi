@@ -21,7 +21,7 @@ package org.apache.hudi.internal;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.client.HoodieInternalWriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
@@ -123,7 +123,7 @@ public class BulkInsertDataInternalWriterHelper {
     try {
       String partitionPath = null;
       if (populateMetaFields) { // usual path where meta fields are pre populated in prep step.
-        partitionPath = String.valueOf(record.getUTF8String(HoodieRecord.PARTITION_PATH_META_FIELD_POS));
+        partitionPath = String.valueOf(record.getUTF8String(HoodieMetadataField.PARTITION_PATH_METADATA_FIELD.ordinal()));
       } else { // if meta columns are disabled.
         if (!keyGeneratorOpt.isPresent()) { // NoPartitionerKeyGen
           partitionPath = "";

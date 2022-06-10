@@ -23,6 +23,7 @@ import org.apache.hudi.client.model.HoodieInternalRow;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -113,9 +114,9 @@ public class HoodieRowCreateHandle implements Serializable {
    */
   public void write(InternalRow record) throws IOException {
     try {
-      final String partitionPath = String.valueOf(record.getUTF8String(HoodieRecord.PARTITION_PATH_META_FIELD_POS));
+      final String partitionPath = String.valueOf(record.getUTF8String(HoodieMetadataField.PARTITION_PATH_METADATA_FIELD.ordinal()));
       final String seqId = HoodieRecord.generateSequenceId(instantTime, taskPartitionId, SEQGEN.getAndIncrement());
-      final String recordKey = String.valueOf(record.getUTF8String(HoodieRecord.RECORD_KEY_META_FIELD_POS));
+      final String recordKey = String.valueOf(record.getUTF8String(HoodieMetadataField.RECORD_KEY_METADATA_FIELD.ordinal()));
       HoodieInternalRow internalRow = new HoodieInternalRow(instantTime, seqId, recordKey, partitionPath, path.getName(),
           record);
       try {
