@@ -240,11 +240,9 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
 
       val columnStatsIndex = new ColumnStatsIndexSupport(spark, basePath, sourceTableSchema, metadataConfig, shouldReadInMemory)
 
-      val emptyColStatsDF = columnStatsIndex.load(requestedColumns)
-      val emptyTransposedColStatsDF = columnStatsIndex.transpose(emptyColStatsDF, requestedColumns)
-
-      assertEquals(0, emptyColStatsDF.collect().length)
-      assertEquals(0, emptyTransposedColStatsDF.collect().length)
+      columnStatsIndex.loadTransposed(requestedColumns) { emptyTransposedColStatsDF =>
+        assertEquals(0, emptyTransposedColStatsDF.collect().length)
+      }
     }
 
     ////////////////////////////////////////////////////////////////////////
@@ -257,11 +255,6 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
       // We have to include "c1", since we sort the expected outputs by this column
       val requestedColumns = Seq("c4", "c1")
 
-      val columnStatsIndex = new ColumnStatsIndexSupport(spark, basePath, sourceTableSchema, metadataConfig, shouldReadInMemory)
-
-      val partialColStatsDF = columnStatsIndex.load(requestedColumns)
-      val partialTransposedColStatsDF = columnStatsIndex.transpose(partialColStatsDF, requestedColumns)
-
       val targetIndexedColumns = targetColumnsToIndex.intersect(requestedColumns)
       val expectedColStatsSchema = composeIndexSchema(targetIndexedColumns, sourceTableSchema)
 
@@ -271,17 +264,20 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
           .schema(expectedColStatsSchema)
           .json(getClass.getClassLoader.getResource("index/colstats/partial-column-stats-index-table.json").toString)
 
-      assertEquals(expectedColStatsIndexTableDf.schema, partialTransposedColStatsDF.schema)
-      // NOTE: We have to drop the `fileName` column as it contains semi-random components
-      //       that we can't control in this test. Nevertheless, since we manually verify composition of the
-      //       ColStats Index by reading Parquet footers from individual Parquet files, this is not an issue
-      assertEquals(asJson(sort(expectedColStatsIndexTableDf)), asJson(sort(partialTransposedColStatsDF.drop("fileName"))))
-
       // Collect Column Stats manually (reading individual Parquet files)
       val manualColStatsTableDF =
         buildColumnStatsTableManually(basePath, targetIndexedColumns, expectedColStatsSchema)
 
-      assertEquals(asJson(sort(manualColStatsTableDF)), asJson(sort(partialTransposedColStatsDF)))
+      val columnStatsIndex = new ColumnStatsIndexSupport(spark, basePath, sourceTableSchema, metadataConfig, shouldReadInMemory)
+
+      columnStatsIndex.loadTransposed(requestedColumns) { partialTransposedColStatsDF =>
+        assertEquals(expectedColStatsIndexTableDf.schema, partialTransposedColStatsDF.schema)
+        // NOTE: We have to drop the `fileName` column as it contains semi-random components
+        //       that we can't control in this test. Nevertheless, since we manually verify composition of the
+        //       ColStats Index by reading Parquet footers from individual Parquet files, this is not an issue
+        assertEquals(asJson(sort(expectedColStatsIndexTableDf)), asJson(sort(partialTransposedColStatsDF.drop("fileName"))))
+        assertEquals(asJson(sort(manualColStatsTableDF)), asJson(sort(partialTransposedColStatsDF)))
+      }
     }
 
     ////////////////////////////////////////////////////////////////////////
@@ -314,13 +310,6 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
 
       val requestedColumns = sourceTableSchema.fieldNames
 
-      val columnStatsIndex = new ColumnStatsIndexSupport(spark, basePath, sourceTableSchema, metadataConfig, shouldReadInMemory)
-
-      // Nevertheless, the last update was written with a new schema (that is a subset of the original table schema),
-      // we should be able to read CSI, which will be properly padded (with nulls) after transposition
-      val updatedColStatsDF = columnStatsIndex.load(requestedColumns)
-      val transposedUpdatedColStatsDF = columnStatsIndex.transpose(updatedColStatsDF, requestedColumns)
-
       val targetIndexedColumns = targetColumnsToIndex.intersect(requestedColumns)
       val expectedColStatsSchema = composeIndexSchema(targetIndexedColumns, sourceTableSchema)
 
@@ -329,14 +318,20 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
           .schema(expectedColStatsSchema)
           .json(getClass.getClassLoader.getResource("index/colstats/updated-partial-column-stats-index-table.json").toString)
 
-      assertEquals(expectedColStatsIndexUpdatedDF.schema, transposedUpdatedColStatsDF.schema)
-      assertEquals(asJson(sort(expectedColStatsIndexUpdatedDF)), asJson(sort(transposedUpdatedColStatsDF.drop("fileName"))))
-
       // Collect Column Stats manually (reading individual Parquet files)
       val manualUpdatedColStatsTableDF =
         buildColumnStatsTableManually(basePath, targetIndexedColumns, expectedColStatsSchema)
 
-      assertEquals(asJson(sort(manualUpdatedColStatsTableDF)), asJson(sort(transposedUpdatedColStatsDF)))
+      val columnStatsIndex = new ColumnStatsIndexSupport(spark, basePath, sourceTableSchema, metadataConfig, shouldReadInMemory)
+
+      // Nevertheless, the last update was written with a new schema (that is a subset of the original table schema),
+      // we should be able to read CSI, which will be properly padded (with nulls) after transposition
+      columnStatsIndex.loadTransposed(requestedColumns) { transposedUpdatedColStatsDF =>
+        assertEquals(expectedColStatsIndexUpdatedDF.schema, transposedUpdatedColStatsDF.schema)
+
+        assertEquals(asJson(sort(expectedColStatsIndexUpdatedDF)), asJson(sort(transposedUpdatedColStatsDF.drop("fileName"))))
+        assertEquals(asJson(sort(manualUpdatedColStatsTableDF)), asJson(sort(transposedUpdatedColStatsDF)))
+      }
     }
   }
 
