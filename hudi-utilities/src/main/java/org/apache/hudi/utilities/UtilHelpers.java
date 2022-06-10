@@ -403,7 +403,7 @@ public class UtilHelpers {
       statement.setQueryTimeout(Integer.parseInt(options.get(JDBCOptions.JDBC_QUERY_TIMEOUT())));
       statement.executeQuery();
     } catch (SQLException e) {
-      return false;
+      throw new HoodieException(e);
     }
     return true;
   }
