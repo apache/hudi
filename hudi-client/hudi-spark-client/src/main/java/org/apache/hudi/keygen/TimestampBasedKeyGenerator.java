@@ -66,6 +66,12 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
   }
 
   @Override
+  public String getRecordKey(InternalRow internalRow, StructType structType) {
+    buildFieldSchemaInfoIfNeeded(structType);
+    return RowKeyGeneratorHelper.getRecordKeyFromInternalRow(internalRow, structType, getRecordKeyFields(), recordKeySchemaInfo, false);
+  }
+
+  @Override
   public String getPartitionPath(Row row) {
     buildFieldSchemaInfoIfNeeded(row.schema());
     Object partitionPathFieldVal = RowKeyGeneratorHelper.getNestedFieldVal(row, partitionPathSchemaInfo.get(getPartitionPathFields().get(0)).getKey());

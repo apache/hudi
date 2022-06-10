@@ -70,6 +70,12 @@ public class SimpleKeyGenerator extends BuiltinKeyGenerator {
   }
 
   @Override
+  public String getRecordKey(InternalRow internalRow, StructType structType) {
+    buildFieldSchemaInfoIfNeeded(structType);
+    return RowKeyGeneratorHelper.getRecordKeyFromInternalRow(internalRow, structType, getRecordKeyFields(), recordKeySchemaInfo, false);
+  }
+
+  @Override
   public String getPartitionPath(Row row) {
     buildFieldSchemaInfoIfNeeded(row.schema());
     return RowKeyGeneratorHelper.getPartitionPathFromRow(row, getPartitionPathFields(),
