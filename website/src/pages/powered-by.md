@@ -97,3 +97,6 @@ Using Hudi at Yotpo for several usages. Firstly, integrated Hudi as a writer in 
 
 ### Zendesk 
 At [Zendesk](https://www.zendesk.com/), Apache Hudi is adopted for building Data Lake on AWS.
+
+### DiDi
+[DiDi](https://www.didiglobal.com/) is the World‘s Leading Transportation Platform,  Based on the Hadoop ecosystem, we built a new generation of big data platform based on Apache HUDI, which provides record-level updates/deletes  as well as streaming and batch integrated data processing。
