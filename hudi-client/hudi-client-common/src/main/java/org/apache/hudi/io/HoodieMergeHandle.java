@@ -122,18 +122,14 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
     if (!baseFileOp.isPresent()) {
       throw new NoSuchElementException(String.format("FileID %s of partitionPath %s is not exist, But record loc is 'U' ", fileId, partitionPath));
     }
-    init(fileId, recordItr);
-    init(fileId, partitionPath, baseFileOp.get());
-    validateAndSetAndKeyGenProps(keyGeneratorOpt, config.populateMetaFields());
+    init(recordItr, baseFileOp.get(), keyGeneratorOpt);
   }
 
   public HoodieMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                            Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
                            TaskContextSupplier taskContextSupplier, HoodieBaseFile baseFile, Option<BaseKeyGenerator> keyGeneratorOpt) {
     super(config, instantTime, partitionPath, fileId, hoodieTable, taskContextSupplier);
-    init(fileId, recordItr);
-    init(fileId, partitionPath, baseFile);
-    validateAndSetAndKeyGenProps(keyGeneratorOpt, config.populateMetaFields());
+    init(recordItr, baseFile, keyGeneratorOpt);
   }
 
   /**
@@ -146,13 +142,20 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
     this.keyToNewRecords = keyToNewRecords;
     this.useWriterSchemaForCompaction = true;
     this.preserveMetadata = config.isPreserveHoodieCommitMetadataForCompaction();
-    init(fileId, this.partitionPath, dataFileToBeMerged);
-    validateAndSetAndKeyGenProps(keyGeneratorOpt, config.populateMetaFields());
+    init(null, dataFileToBeMerged, keyGeneratorOpt);
   }
 
   private void validateAndSetAndKeyGenProps(Option<BaseKeyGenerator> keyGeneratorOpt, boolean populateMetaFields) {
     ValidationUtils.checkArgument(populateMetaFields == !keyGeneratorOpt.isPresent());
     this.keyGeneratorOpt = keyGeneratorOpt;
+  }
+
+  private void init(Iterator<HoodieRecord<T>> recordItr, HoodieBaseFile baseFile, Option<BaseKeyGenerator> keyGeneratorOpt) {
+    if (recordItr != null) {
+      init(this.fileId, recordItr);
+    }
+    init(this.fileId, this.partitionPath, baseFile);
+    validateAndSetAndKeyGenProps(keyGeneratorOpt, this.config.populateMetaFields());
   }
 
   @Override
