@@ -61,32 +61,6 @@ public abstract class BaseMergeHelper<T, I, K, O> {
    */
   public abstract void runMerge(HoodieTable<T, I, K, O> table, HoodieMergeHandle<T, I, K, O> upsertHandle) throws IOException;
 
-  protected HoodieRecord transformRecordBasedOnNewSchema(GenericDatumReader<GenericRecord> gReader, GenericDatumWriter<GenericRecord> gWriter,
-                                                               ThreadLocal<BinaryEncoder> encoderCache, ThreadLocal<BinaryDecoder> decoderCache,
-                                                               GenericRecord gRec) {
-    ByteArrayOutputStream inStream = null;
-    try {
-      inStream = new ByteArrayOutputStream();
-      BinaryEncoder encoder = EncoderFactory.get().binaryEncoder(inStream, encoderCache.get());
-      encoderCache.set(encoder);
-      gWriter.write(gRec, encoder);
-      encoder.flush();
-
-      BinaryDecoder decoder = DecoderFactory.get().binaryDecoder(inStream.toByteArray(), decoderCache.get());
-      decoderCache.set(decoder);
-      GenericRecord transformedRec = gReader.read(null, decoder);
-      return new HoodieAvroIndexedRecord(transformedRec);
-    } catch (IOException e) {
-      throw new HoodieException(e);
-    } finally {
-      try {
-        inStream.close();
-      } catch (IOException ioe) {
-        throw new HoodieException(ioe.getMessage(), ioe);
-      }
-    }
-  }
-
   /**
    * Create Parquet record iterator that provides a stitched view of record read from skeleton and bootstrap file.
    * Skeleton file is a representation of the bootstrap file inside the table, with just the bare bone fields needed
