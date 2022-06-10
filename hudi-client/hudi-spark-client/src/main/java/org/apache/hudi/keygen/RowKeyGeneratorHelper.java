@@ -45,6 +45,7 @@ import static org.apache.hudi.keygen.KeyGenUtils.DEFAULT_PARTITION_PATH_SEPARATO
 import static org.apache.hudi.keygen.KeyGenUtils.EMPTY_RECORDKEY_PLACEHOLDER;
 import static org.apache.hudi.keygen.KeyGenUtils.HUDI_DEFAULT_PARTITION_PATH;
 import static org.apache.hudi.keygen.KeyGenUtils.NULL_RECORDKEY_PLACEHOLDER;
+import static org.apache.spark.sql.types.DataTypes.StringType;
 
 /**
  * Helper class to fetch fields from Row.
@@ -79,6 +80,38 @@ public class RowKeyGeneratorHelper {
         }
       } else { // nested fields
         val = getNestedFieldVal(row, recordKeyPositions.get(field).getKey()).toString();
+        if (!val.contains(NULL_RECORDKEY_PLACEHOLDER) && !val.contains(EMPTY_RECORDKEY_PLACEHOLDER)) {
+          keyIsNullOrEmpty.set(false);
+        }
+      }
+      return prefixFieldName ? (field + ":" + val) : val;
+    }).collect(Collectors.joining(","));
+    if (keyIsNullOrEmpty.get()) {
+      throw new HoodieKeyException("recordKey value: \"" + toReturn + "\" for fields: \"" + Arrays.toString(recordKeyFields.toArray()) + "\" cannot be null or empty.");
+    }
+    return toReturn;
+  }
+
+  public static String getRecordKeyFromInternalRow(
+      InternalRow row, StructType structType, List<String> recordKeyFields, Map<String, Pair<List<Integer>, DataType>> recordKeyPositions, boolean prefixFieldName) {
+    AtomicBoolean keyIsNullOrEmpty = new AtomicBoolean(true);
+    String toReturn = recordKeyFields.stream().map(field -> {
+      String val = null;
+      List<Integer> fieldPositions = recordKeyPositions.get(field).getKey();
+      if (fieldPositions.size() == 1) { // simple field
+        Integer fieldPos = fieldPositions.get(0);
+        if (row.isNullAt(fieldPos)) {
+          val = NULL_RECORDKEY_PLACEHOLDER;
+        } else {
+          val = row.get(fieldPos, StringType).toString();
+          if (val.isEmpty()) {
+            val = EMPTY_RECORDKEY_PLACEHOLDER;
+          } else {
+            keyIsNullOrEmpty.set(false);
+          }
+        }
+      } else { // nested fields
+        val = getNestedFieldVal(row, structType, recordKeyPositions.get(field).getKey()).toString();
         if (!val.contains(NULL_RECORDKEY_PLACEHOLDER) && !val.contains(EMPTY_RECORDKEY_PLACEHOLDER)) {
           keyIsNullOrEmpty.set(false);
         }
@@ -225,6 +258,43 @@ public class RowKeyGeneratorHelper {
           break;
         }
         toReturn = valueToProcess.getAs(positions.get(index));
+      }
+      index++;
+    }
+    return toReturn;
+  }
+
+  public static Object getNestedFieldVal(
+      InternalRow row,
+      StructType schema,
+      List<Integer> positions) {
+    if (positions.size() == 1 && positions.get(0) == -1) {
+      return HUDI_DEFAULT_PARTITION_PATH;
+    }
+    int index = 0;
+    int totalCount = positions.size();
+    Object toReturn = null;
+
+    while (index < totalCount) {
+      int fieldIndex = positions.get(index);
+      DataType currentDataType = schema.fields()[fieldIndex].dataType();
+      if (index < totalCount - 1) {
+        if (row.isNullAt(fieldIndex)) {
+          toReturn = NULL_RECORDKEY_PLACEHOLDER;
+          break;
+        }
+        row = (InternalRow) row.get(fieldIndex, currentDataType);
+      } else { // last index
+        Object val = row.get(fieldIndex, currentDataType);
+        if (null != val && val.toString().isEmpty()) {
+          toReturn = EMPTY_RECORDKEY_PLACEHOLDER;
+          break;
+        }
+        if (null != val && currentDataType == DataTypes.StringType) {
+          toReturn = val.toString();
+        } else {
+          toReturn = val;
+        }
       }
       index++;
     }

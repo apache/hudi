@@ -105,7 +105,7 @@ public abstract class HoodieRecord<T> implements Serializable {
   /**
    * Identifies the record across the table.
    */
-  private HoodieKey key;
+  protected HoodieKey key;
 
   /**
    * Actual payload of the record.

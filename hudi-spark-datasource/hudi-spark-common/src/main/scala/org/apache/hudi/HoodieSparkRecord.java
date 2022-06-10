@@ -23,8 +23,11 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.storage.HoodieSparkFileReader;
 import org.apache.hudi.keygen.BaseKeyGenerator;
+import org.apache.hudi.keygen.SparkKeyGeneratorInterface;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
@@ -35,13 +38,17 @@ import org.apache.spark.sql.catalyst.expressions.JoinedRow;
 import org.apache.spark.sql.types.StructType;
 
 import java.io.IOException;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 import java.util.function.Function;
 
+import static org.apache.hudi.common.table.HoodieTableConfig.POPULATE_META_FIELDS;
 import static org.apache.spark.sql.types.DataTypes.BooleanType;
+import static org.apache.spark.sql.types.DataTypes.StringType;
 
 /**
  * Spark Engine-specific Implementations of `HoodieRecord`.
@@ -171,7 +178,22 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
 
   @Override
   public HoodieRecord transform(Schema schema, Properties prop) {
-    return null;
+    StructType structType = HoodieInternalRowUtils.getCacheSchema(schema);
+    Option<SparkKeyGeneratorInterface> keyGeneratorOpt = Option.empty();
+    if (!Boolean.parseBoolean(prop.getOrDefault(POPULATE_META_FIELDS.key(), POPULATE_META_FIELDS.defaultValue().toString()).toString())) {
+      try {
+        Class<?> clazz = ReflectionUtils.getClass("org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory");
+        Method createKeyGenerator = clazz.getMethod("createKeyGenerator", TypedProperties.class);
+        keyGeneratorOpt = Option.of((SparkKeyGeneratorInterface) createKeyGenerator.invoke(null, new TypedProperties(prop)));
+      } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException e) {
+        throw new HoodieException("Only SparkKeyGeneratorInterface are supported when meta columns are disabled ", e);
+      }
+    }
+    String key = keyGeneratorOpt.isPresent() ? keyGeneratorOpt.get().getRecordKey(data, structType) : data.get(HoodieMetadataField.RECORD_KEY_METADATA_FIELD.ordinal(), StringType).toString();
+    String partition = keyGeneratorOpt.isPresent() ? keyGeneratorOpt.get().getPartitionPath(data, structType) : data.get(HoodieMetadataField.PARTITION_PATH_METADATA_FIELD.ordinal(), StringType).toString();
+    this.key = new HoodieKey(key, partition);
+
+    return this;
   }
 
   @Override

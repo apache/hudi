@@ -21,6 +21,8 @@ import java.util.UUID
 import org.apache.avro.generic.GenericRecord
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.spark.sql.Row
+import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.types.StructType
 
 /**
  * A KeyGenerator which use the uuid as the record key.
@@ -30,4 +32,6 @@ class UuidKeyGenerator(props: TypedProperties) extends SqlKeyGenerator(props) {
   override def getRecordKey(record: GenericRecord): String = UUID.randomUUID.toString
 
   override def getRecordKey(row: Row): String = UUID.randomUUID.toString
+
+  override def getRecordKey(internalRow: InternalRow, structType: StructType): String = UUID.randomUUID.toString
 }

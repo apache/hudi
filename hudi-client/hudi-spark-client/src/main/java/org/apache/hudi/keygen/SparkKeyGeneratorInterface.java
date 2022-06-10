@@ -29,6 +29,8 @@ public interface SparkKeyGeneratorInterface extends KeyGeneratorInterface {
 
   String getRecordKey(Row row);
 
+  String getRecordKey(InternalRow internalRow, StructType structType);
+
   String getPartitionPath(Row row);
 
   String getPartitionPath(InternalRow internalRow, StructType structType);
