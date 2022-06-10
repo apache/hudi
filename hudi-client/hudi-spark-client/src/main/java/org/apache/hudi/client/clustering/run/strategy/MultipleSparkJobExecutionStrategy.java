@@ -33,11 +33,12 @@ import org.apache.hudi.common.model.ClusteringOperation;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
+import org.apache.hudi.common.util.ClosableIterator;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.FutureUtils;
+import org.apache.hudi.common.util.MappingIterator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -54,13 +55,14 @@ import org.apache.hudi.execution.bulkinsert.RowSpatialCurveSortPartitioner;
 import org.apache.hudi.io.IOUtils;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
+import org.apache.hudi.keygen.BaseKeyGenerator;
+import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.cluster.strategy.ClusteringExecutionStrategy;
 
 import org.apache.avro.Schema;
-import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -90,7 +92,7 @@ import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SORT_C
 /**
  * Clustering strategy to submit multiple spark jobs and union the results.
  */
-public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPayload<T>>
+public abstract class MultipleSparkJobExecutionStrategy<T>
     extends ClusteringExecutionStrategy<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> {
   private static final Logger LOG = LogManager.getLogger(MultipleSparkJobExecutionStrategy.class);
 
@@ -196,7 +198,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
           return isRowPartitioner
               ? new RowSpatialCurveSortPartitioner(getWriteConfig())
               : new RDDSpatialCurveSortPartitioner((HoodieSparkEngineContext) getEngineContext(), orderByColumns, layoutOptStrategy,
-              getWriteConfig().getLayoutOptimizationCurveBuildMethod(), HoodieAvroUtils.addMetadataFields(schema));
+              getWriteConfig().getLayoutOptimizationCurveBuildMethod(), HoodieAvroUtils.addMetadataFields(schema), recordType);
         case LINEAR:
           return isRowPartitioner
               ? new RowCustomColumnsSortPartitioner(orderByColumns)
@@ -219,6 +221,9 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
       JavaSparkContext jsc = HoodieSparkEngineContext.getSparkContext(getEngineContext());
       HoodieData<HoodieRecord<T>> inputRecords = readRecordsForGroup(jsc, clusteringGroup, instantTime);
       Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(getWriteConfig().getSchema()));
+      // NOTE: Record have to be cloned here to make sure if it holds low-level engine-specific
+      //       payload pointing into a shared, mutable (underlying) buffer we get a clean copy of
+      //       it since these records will be shuffled later.
       List<HoodieFileGroupId> inputFileIds = clusteringGroup.getSlices().stream()
           .map(info -> new HoodieFileGroupId(info.getPartitionPath(), info.getFileId()))
           .collect(Collectors.toList());
@@ -291,15 +296,15 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
               .withUseScanV2(config.useScanV2ForLogRecordReader())
               .withDiskMapType(config.getCommonConfig().getSpillableDiskMapType())
               .withBitCaskDiskMapCompressionEnabled(config.getCommonConfig().isBitCaskDiskMapCompressionEnabled())
+              .withRecordMerger(config.getRecordMerger())
               .build();
 
           Option<HoodieFileReader> baseFileReader = StringUtils.isNullOrEmpty(clusteringOp.getDataFilePath())
               ? Option.empty()
-              : Option.of(HoodieFileReaderFactory.getFileReader(table.getHadoopConf(), new Path(clusteringOp.getDataFilePath())));
+              : Option.of(HoodieFileReaderFactory.getReaderFactory(recordType).getFileReader(table.getHadoopConf(), new Path(clusteringOp.getDataFilePath())));
           HoodieTableConfig tableConfig = table.getMetaClient().getTableConfig();
           recordIterators.add(getFileSliceReader(baseFileReader, scanner, readerSchema,
-              tableConfig.getPayloadClass(),
-              tableConfig.getPreCombineField(),
+              tableConfig.getProps(),
               tableConfig.populateMetaFields() ? Option.empty() : Option.of(Pair.of(tableConfig.getRecordKeyFieldProp(),
                   tableConfig.getPartitionFieldProp()))));
         } catch (IOException e) {
@@ -324,12 +329,20 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
     //       closure, as this might lead to issues attempting to serialize its nested fields
     return HoodieJavaRDD.of(jsc.parallelize(clusteringOps, clusteringOps.size())
         .mapPartitions(clusteringOpsPartition -> {
-          List<Iterator<IndexedRecord>> iteratorsForPartition = new ArrayList<>();
+          List<Iterator<HoodieRecord<T>>> iteratorsForPartition = new ArrayList<>();
           clusteringOpsPartition.forEachRemaining(clusteringOp -> {
             try {
               Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(writeConfig.getSchema()));
-              HoodieFileReader<IndexedRecord> baseFileReader = HoodieFileReaderFactory.getFileReader(hadoopConf.get(), new Path(clusteringOp.getDataFilePath()));
-              iteratorsForPartition.add(baseFileReader.getRecordIterator(readerSchema));
+              HoodieFileReader baseFileReader = HoodieFileReaderFactory.getReaderFactory(recordType).getFileReader(hadoopConf.get(), new Path(clusteringOp.getDataFilePath()));
+              Option<BaseKeyGenerator> keyGeneratorOp =
+                  writeConfig.populateMetaFields() ? Option.empty() : Option.of((BaseKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(writeConfig.getProps()));
+              // NOTE: Record have to be cloned here to make sure if it holds low-level engine-specific
+              //       payload pointing into a shared, mutable (underlying) buffer we get a clean copy of
+              //       it since these records will be shuffled later.
+              MappingIterator mappingIterator = new MappingIterator((ClosableIterator<HoodieRecord>) baseFileReader.getRecordIterator(readerSchema),
+                  rec -> ((HoodieRecord) rec).copy().wrapIntoHoodieRecordPayloadWithKeyGen(readerSchema,
+                      writeConfig.getProps(), keyGeneratorOp));
+              iteratorsForPartition.add(mappingIterator);
             } catch (IOException e) {
               throw new HoodieClusteringException("Error reading input data for " + clusteringOp.getDataFilePath()
                   + " and " + clusteringOp.getDeltaFilePaths(), e);
@@ -337,8 +350,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
           });
 
           return new ConcatenatingIterator<>(iteratorsForPartition);
-        })
-        .map(record -> transform(record, writeConfig)));
+        }));
   }
 
   /**
@@ -412,12 +424,5 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
       writeStatusRDDArray[i] = (JavaRDD<WriteStatus>) writeStatusObjects[i];
     }
     return writeStatusRDDArray;
-  }
-
-  /**
-   * Transform IndexedRecord into HoodieRecord.
-   */
-  private static <T> HoodieRecord<T> transform(IndexedRecord indexedRecord, HoodieWriteConfig writeConfig) {
-    return ExecutionStrategyUtil.transform(indexedRecord, writeConfig);
   }
 }

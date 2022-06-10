@@ -18,28 +18,28 @@
 
 package org.apache.hudi.io.storage;
 
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.avro.Schema;
+
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 
 import java.io.IOException;
+import java.util.Properties;
 
-public interface HoodieFileWriter<R extends IndexedRecord> {
-
-  void writeAvroWithMetadata(HoodieKey key, R newRecord) throws IOException;
-
+public interface HoodieFileWriter {
   boolean canWrite();
+
+  void writeWithMetadata(HoodieKey key, HoodieRecord record, Schema schema, Properties props) throws IOException;
+
+  void write(String recordKey, HoodieRecord record, Schema schema, Properties props) throws IOException;
 
   void close() throws IOException;
 
-  void writeAvro(String key, R oldRecord) throws IOException;
+  default void writeWithMetadata(HoodieKey key, HoodieRecord record, Schema schema) throws IOException {
+    writeWithMetadata(key, record, schema, new Properties());
+  }
 
-  default void prepRecordWithMetadata(HoodieKey key, R avroRecord, String instantTime, Integer partitionId, long recordIndex, String fileName) {
-    String seqId = HoodieRecord.generateSequenceId(instantTime, partitionId, recordIndex);
-    HoodieAvroUtils.addHoodieKeyToRecord((GenericRecord) avroRecord, key.getRecordKey(), key.getPartitionPath(), fileName);
-    HoodieAvroUtils.addCommitMetadataToRecord((GenericRecord) avroRecord, instantTime, seqId);
-    return;
+  default void write(String recordKey, HoodieRecord record, Schema schema) throws IOException {
+    write(recordKey, record, schema, new Properties());
   }
 }

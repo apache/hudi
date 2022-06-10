@@ -29,20 +29,21 @@ import org.apache.hudi.HoodieBaseRelation._
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
-import org.apache.hudi.common.config.{HoodieMetadataConfig, SerializableConfiguration}
+import org.apache.hudi.common.config.{ConfigProperty, HoodieMetadataConfig, SerializableConfiguration}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath
 import org.apache.hudi.common.model.{FileSlice, HoodieFileFormat, HoodieRecord}
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
-import org.apache.hudi.common.util.StringUtils
+import org.apache.hudi.common.util.{ConfigUtils, StringUtils}
 import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
 import org.apache.hudi.common.util.ValidationUtils.checkState
+import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
 import org.apache.hudi.internal.schema.utils.{InternalSchemaUtils, SerDeHelper}
 import org.apache.hudi.internal.schema.{HoodieSchemaException, InternalSchema}
-import org.apache.hudi.io.storage.HoodieHFileReader
+import org.apache.hudi.io.storage.HoodieAvroHFileReader
 
 import org.apache.spark.execution.datasources.HoodieInMemoryFileIndex
 import org.apache.spark.internal.Logging
@@ -59,7 +60,6 @@ import org.apache.spark.sql.sources.{BaseRelation, Filter, PrunedFilteredScan}
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.apache.spark.sql.{HoodieCatalystExpressionUtils, Row, SQLContext, SparkSession}
 import org.apache.spark.unsafe.types.UTF8String
-
 import java.net.URI
 import java.util.Locale
 
@@ -77,7 +77,9 @@ case class HoodieTableState(tablePath: String,
                             preCombineFieldOpt: Option[String],
                             usesVirtualKeys: Boolean,
                             recordPayloadClassName: String,
-                            metadataConfig: HoodieMetadataConfig)
+                            metadataConfig: HoodieMetadataConfig,
+                            mergerImpls: List[String],
+                            mergerStrategy: String)
 
 /**
  * Hoodie BaseRelation which extends [[PrunedFilteredScan]].
@@ -458,6 +460,11 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
   }
 
   protected def getTableState: HoodieTableState = {
+    val mergerImpls = ConfigUtils.split2List(getConfigValue(HoodieWriteConfig.MERGER_IMPLS)).asScala.toList
+
+    val mergerStrategy = getConfigValue(HoodieWriteConfig.MERGER_STRATEGY,
+      Option(metaClient.getTableConfig.getMergerStrategy))
+
     // Subset of the state of table's configuration as of at the time of the query
     HoodieTableState(
       tablePath = basePath,
@@ -466,7 +473,9 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
       preCombineFieldOpt = preCombineFieldOpt,
       usesVirtualKeys = !tableConfig.populateMetaFields(),
       recordPayloadClassName = tableConfig.getPayloadClass,
-      metadataConfig = fileIndex.metadataConfig
+      metadataConfig = fileIndex.metadataConfig,
+      mergerImpls = mergerImpls,
+      mergerStrategy = mergerStrategy
     )
   }
 
@@ -639,6 +648,12 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
 
   private def prunePartitionColumns(dataStructSchema: StructType): StructType =
     StructType(dataStructSchema.filterNot(f => partitionColumns.contains(f.name)))
+
+  private def getConfigValue(config: ConfigProperty[String],
+                             defaultValueOption: Option[String]=Option.empty): String = {
+    optParams.getOrElse(config.key(),
+      sqlContext.getConf(config.key(), defaultValueOption.getOrElse(config.defaultValue())))
+  }
 }
 
 object HoodieBaseRelation extends SparkAdapterSupport {
@@ -725,7 +740,7 @@ object HoodieBaseRelation extends SparkAdapterSupport {
 
     partitionedFile => {
       val hadoopConf = hadoopConfBroadcast.value.get()
-      val reader = new HoodieHFileReader[GenericRecord](hadoopConf, new Path(partitionedFile.filePath),
+      val reader = new HoodieAvroHFileReader(hadoopConf, new Path(partitionedFile.filePath),
         new CacheConfig(hadoopConf))
 
       val requiredRowSchema = requiredDataSchema.structTypeSchema
@@ -736,7 +751,7 @@ object HoodieBaseRelation extends SparkAdapterSupport {
 
       reader.getRecordIterator(requiredAvroSchema).asScala
         .map(record => {
-          avroToRowConverter.apply(record).get
+          avroToRowConverter.apply(record.getData.asInstanceOf[GenericRecord]).get
         })
     }
   }

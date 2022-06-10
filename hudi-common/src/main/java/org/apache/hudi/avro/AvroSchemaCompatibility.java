@@ -220,7 +220,6 @@ public class AvroSchemaCompatibility {
       this.checkNaming = checkNaming;
     }
 
-
     /**
      * Reports the compatibility of a reader/writer schema pair.
      *

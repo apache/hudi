@@ -23,7 +23,6 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecordLocation;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -43,7 +42,7 @@ import java.util.stream.Collectors;
  * UpsertPartitioner for MergeOnRead table type, this allows auto correction of small parquet files to larger ones
  * without the need for an index in the logFile.
  */
-public class SparkUpsertDeltaCommitPartitioner<T extends HoodieRecordPayload<T>> extends UpsertPartitioner<T> {
+public class SparkUpsertDeltaCommitPartitioner<T> extends UpsertPartitioner<T> {
 
   public SparkUpsertDeltaCommitPartitioner(WorkloadProfile profile, HoodieSparkEngineContext context, HoodieTable table,
                                            HoodieWriteConfig config) {

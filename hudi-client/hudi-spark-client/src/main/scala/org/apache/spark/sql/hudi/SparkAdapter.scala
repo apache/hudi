@@ -47,6 +47,11 @@ import java.util.Locale
 trait SparkAdapter extends Serializable {
 
   /**
+   * Checks whether provided instance of [[InternalRow]] is actually an instance of [[ColumnarBatchRow]]
+   */
+  def isColumnarBatchRow(r: InternalRow): Boolean
+
+  /**
    * Inject table-valued functions to SparkSessionExtensions
    */
   def injectTableFunctions(extensions : SparkSessionExtensions): Unit = {}

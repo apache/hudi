@@ -18,8 +18,6 @@
 
 package org.apache.hudi.execution;
 
-import static org.apache.hudi.execution.HoodieLazyInsertIterable.getTransformFunction;
-
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -43,6 +41,7 @@ import java.util.List;
 
 import scala.Tuple2;
 
+import static org.apache.hudi.execution.HoodieLazyInsertIterable.getCloningTransformer;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -85,7 +84,7 @@ public class TestDisruptorExecutionInSpark extends HoodieClientTestHarness {
 
           @Override
           public void consume(HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord> record) {
-            consumedRecords.add(record.record);
+            consumedRecords.add(record.getResult());
             count++;
           }
 
@@ -98,7 +97,7 @@ public class TestDisruptorExecutionInSpark extends HoodieClientTestHarness {
 
     try {
       exec = new DisruptorExecutor(hoodieWriteConfig.getDisruptorWriteBufferSize(), hoodieRecords.iterator(), consumer,
-          getTransformFunction(HoodieTestDataGenerator.AVRO_SCHEMA), Option.of(WaitStrategyFactory.DEFAULT_STRATEGY), getPreExecuteRunnable());
+          getCloningTransformer(HoodieTestDataGenerator.AVRO_SCHEMA), Option.of(WaitStrategyFactory.DEFAULT_STRATEGY), getPreExecuteRunnable());
       int result = exec.execute();
       // It should buffer and write 100 records
       assertEquals(128, result);
@@ -146,7 +145,7 @@ public class TestDisruptorExecutionInSpark extends HoodieClientTestHarness {
 
     DisruptorExecutor<HoodieRecord, Tuple2<HoodieRecord, Option<IndexedRecord>>, Integer>
         executor = new DisruptorExecutor(hoodieWriteConfig.getDisruptorWriteBufferSize(), hoodieRecords.iterator(), consumer,
-        getTransformFunction(HoodieTestDataGenerator.AVRO_SCHEMA), Option.of(WaitStrategyFactory.DEFAULT_STRATEGY), getPreExecuteRunnable());
+        getCloningTransformer(HoodieTestDataGenerator.AVRO_SCHEMA), Option.of(WaitStrategyFactory.DEFAULT_STRATEGY), getPreExecuteRunnable());
 
     try {
       Thread.currentThread().interrupt();

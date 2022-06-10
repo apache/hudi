@@ -19,7 +19,6 @@
 package org.apache.hudi.io;
 
 import org.apache.hudi.common.model.HoodieBaseFile;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.storage.HoodieFileReader;
@@ -30,7 +29,7 @@ import java.io.IOException;
 /**
  * Extract range information for a given file slice.
  */
-public class HoodieRangeInfoHandle<T extends HoodieRecordPayload, I, K, O> extends HoodieReadHandle<T, I, K, O> {
+public class HoodieRangeInfoHandle<T, I, K, O> extends HoodieReadHandle<T, I, K, O> {
 
   public HoodieRangeInfoHandle(HoodieWriteConfig config, HoodieTable<T, I, K, O> hoodieTable,
       Pair<String, String> partitionPathFilePair) {

@@ -71,8 +71,8 @@ public class TestHoodieAvroParquetWriter {
 
     Path filePath = new Path(tmpDir.resolve("test.parquet").toAbsolutePath().toString());
 
-    try (HoodieAvroParquetWriter<GenericRecord> writer =
-        new HoodieAvroParquetWriter<>(filePath, parquetConfig, "001", new DummyTaskContextSupplier(), true)) {
+    try (HoodieAvroParquetWriter writer =
+        new HoodieAvroParquetWriter(filePath, parquetConfig, "001", new DummyTaskContextSupplier(), true)) {
       for (GenericRecord record : records) {
         writer.writeAvro((String) record.get("_row_key"), record);
       }

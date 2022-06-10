@@ -19,7 +19,9 @@
 package org.apache.hudi.streamer;
 
 import org.apache.hudi.client.utils.OperationConverter;
+import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
+import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.StringUtils;
@@ -117,6 +119,14 @@ public class FlinkStreamerConfig extends Configuration {
   @Parameter(names = {"--payload-class"}, description = "Subclass of HoodieRecordPayload, that works off "
       + "a GenericRecord. Implement your own, if you want to do something other than overwriting existing value.")
   public String payloadClassName = OverwriteWithLatestAvroPayload.class.getName();
+
+  @Parameter(names = {"--merger-impls"}, description = "List of HoodieMerger implementations constituting Hudi's merging strategy -- based on the engine used. "
+      + "These merger impls will filter by merger-strategy "
+      + "Hudi will pick most efficient implementation to perform merging/combining of the records (during update, reading MOR table, etc)")
+  public String mergerImpls = HoodieAvroRecordMerger.class.getName();
+
+  @Parameter(names = {"--merger-strategy"}, description = "Id of merger strategy. Hudi will pick HoodieRecordMerger implementations in merger-impls which has the same merger strategy id")
+  public String mergerStrategy = HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID;
 
   @Parameter(names = {"--op"}, description = "Takes one of these values : UPSERT (default), INSERT (use when input "
       + "is purely new data/inserts to gain speed).", converter = OperationConverter.class)
@@ -363,6 +373,8 @@ public class FlinkStreamerConfig extends Configuration {
     conf.setString(FlinkOptions.OPERATION, config.operation.value());
     conf.setString(FlinkOptions.PRECOMBINE_FIELD, config.sourceOrderingField);
     conf.setString(FlinkOptions.PAYLOAD_CLASS_NAME, config.payloadClassName);
+    conf.setString(FlinkOptions.RECORD_MERGER_IMPLS, config.mergerImpls);
+    conf.setString(FlinkOptions.RECORD_MERGER_STRATEGY, config.mergerStrategy);
     conf.setBoolean(FlinkOptions.PRE_COMBINE, config.preCombine);
     conf.setInteger(FlinkOptions.RETRY_TIMES, Integer.parseInt(config.instantRetryTimes));
     conf.setLong(FlinkOptions.RETRY_INTERVAL_MS, Long.parseLong(config.instantRetryInterval));

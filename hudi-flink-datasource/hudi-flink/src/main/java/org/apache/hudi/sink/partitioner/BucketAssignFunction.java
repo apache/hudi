@@ -184,8 +184,11 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
           // then update the index state using location with new partition path.
           HoodieRecord<?> deleteRecord = new HoodieAvroRecord<>(new HoodieKey(recordKey, oldLoc.getPartitionPath()),
               payloadCreation.createDeletePayload((BaseAvroPayload) record.getData()));
+
+          deleteRecord.unseal();
           deleteRecord.setCurrentLocation(oldLoc.toLocal("U"));
           deleteRecord.seal();
+
           out.collect((O) deleteRecord);
         }
         location = getNewRecordLocation(partitionPath);
@@ -200,7 +203,11 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
     if (isChangingRecords) {
       updateIndexState(partitionPath, location);
     }
+
+    record.unseal();
     record.setCurrentLocation(location);
+    record.seal();
+
     out.collect((O) record);
   }
 

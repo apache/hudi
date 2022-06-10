@@ -30,11 +30,14 @@ import org.apache.spark.sql.execution.datasources.{FilePartition, FileScanRDD, P
 import org.apache.spark.sql.hudi.analysis.TableValuedFunctions
 import org.apache.spark.sql.parser.HoodieSpark3_2ExtendedSqlParser
 import org.apache.spark.sql.types.{DataType, StructType}
+import org.apache.spark.sql.vectorized.ColumnarUtils
 
 /**
  * Implementation of [[SparkAdapter]] for Spark 3.2.x branch
  */
 class Spark3_2Adapter extends BaseSpark3Adapter {
+
+  override def isColumnarBatchRow(r: InternalRow): Boolean = ColumnarUtils.isColumnarBatchRow(r)
 
   override def getCatalogUtils: HoodieSpark3CatalogUtils = HoodieSpark32CatalogUtils
 

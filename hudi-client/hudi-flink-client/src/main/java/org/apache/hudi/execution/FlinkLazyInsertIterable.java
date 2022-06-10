@@ -22,7 +22,6 @@ import org.apache.avro.Schema;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.queue.HoodieExecutor;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -41,7 +40,7 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  *
  * @param <T> type of the payload
  */
-public class FlinkLazyInsertIterable<T extends HoodieRecordPayload> extends HoodieLazyInsertIterable<T> {
+public class FlinkLazyInsertIterable<T> extends HoodieLazyInsertIterable<T> {
 
   public FlinkLazyInsertIterable(Iterator<HoodieRecord<T>> recordItr,
                                  boolean areRecordsSorted,
@@ -60,8 +59,7 @@ public class FlinkLazyInsertIterable<T extends HoodieRecordPayload> extends Hood
     HoodieExecutor<HoodieRecord<T>, HoodieInsertValueGenResult<HoodieRecord>, List<WriteStatus>> bufferedIteratorExecutor = null;
     try {
       final Schema schema = new Schema.Parser().parse(hoodieConfig.getSchema());
-      bufferedIteratorExecutor = QueueBasedExecutorFactory.create(hoodieConfig, inputItr, getExplicitInsertHandler(),
-          getTransformFunction(schema, hoodieConfig));
+      bufferedIteratorExecutor = QueueBasedExecutorFactory.create(hoodieConfig.getWriteBufferLimitBytes(), inputItr, getExplicitInsertHandler(), getCloningTransformer(schema, hoodieConfig));
       final List<WriteStatus> result = bufferedIteratorExecutor.execute();
       checkState(result != null && !result.isEmpty());
       return result;

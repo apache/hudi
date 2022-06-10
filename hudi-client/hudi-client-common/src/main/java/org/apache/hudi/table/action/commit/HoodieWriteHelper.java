@@ -20,20 +20,21 @@ package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.SerializableSchema;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
 
-public class HoodieWriteHelper<T extends HoodieRecordPayload, R> extends BaseWriteHelper<T, HoodieData<HoodieRecord<T>>,
-    HoodieData<HoodieKey>, HoodieData<WriteStatus>, R> {
+import java.io.IOException;
 
+public class HoodieWriteHelper<T, R> extends BaseWriteHelper<T, HoodieData<HoodieRecord<T>>,
+    HoodieData<HoodieKey>, HoodieData<WriteStatus>, R> {
   private HoodieWriteHelper() {
   }
 
@@ -52,8 +53,8 @@ public class HoodieWriteHelper<T extends HoodieRecordPayload, R> extends BaseWri
   }
 
   @Override
-  public HoodieData<HoodieRecord<T>> deduplicateRecords(
-      HoodieData<HoodieRecord<T>> records, HoodieIndex<?, ?> index, int parallelism, String schemaStr) {
+  protected HoodieData<HoodieRecord<T>> doDeduplicateRecords(
+      HoodieData<HoodieRecord<T>> records, HoodieIndex<?, ?> index, int parallelism, String schemaStr, TypedProperties props, HoodieRecordMerger merger) {
     boolean isIndexingGlobal = index.isGlobal();
     final SerializableSchema schema = new SerializableSchema(schemaStr);
     // Auto-tunes the parallelism for reduce transformation based on the number of data partitions
@@ -63,13 +64,19 @@ public class HoodieWriteHelper<T extends HoodieRecordPayload, R> extends BaseWri
       HoodieKey hoodieKey = record.getKey();
       // If index used is global, then records are expected to differ in their partitionPath
       Object key = isIndexingGlobal ? hoodieKey.getRecordKey() : hoodieKey;
-      return Pair.of(key, record);
+      // NOTE: PLEASE READ CAREFULLY BEFORE CHANGING
+      //       Here we have to make a copy of the incoming record, since it might be holding
+      //       an instance of [[InternalRow]] pointing into shared, mutable buffer
+      return Pair.of(key, record.copy());
     }).reduceByKey((rec1, rec2) -> {
-      @SuppressWarnings("unchecked")
-      T reducedData = (T) rec2.getData().preCombine(rec1.getData(), schema.get(), CollectionUtils.emptyProps());
-      HoodieKey reducedKey = rec1.getData().equals(reducedData) ? rec1.getKey() : rec2.getKey();
-
-      return new HoodieAvroRecord<>(reducedKey, reducedData);
+      HoodieRecord<T> reducedRecord;
+      try {
+        reducedRecord =  merger.merge(rec1, schema.get(), rec2, schema.get(), props).get().getLeft();
+      } catch (IOException e) {
+        throw new HoodieException(String.format("Error to merge two records, %s, %s", rec1, rec2), e);
+      }
+      HoodieKey reducedKey = rec1.getData().equals(reducedRecord.getData()) ? rec1.getKey() : rec2.getKey();
+      return reducedRecord.newInstance(reducedKey);
     }, reduceParallelism).map(Pair::getRight);
   }
 

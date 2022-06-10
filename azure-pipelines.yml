@@ -179,7 +179,7 @@ stages:
             displayName: Top 100 long-running testcases
       - job: UT_FT_4
         displayName: UT FT other modules
-        timeoutInMinutes: '150'
+        timeoutInMinutes: '180'
         steps:
           - task: Maven@4
             displayName: maven install

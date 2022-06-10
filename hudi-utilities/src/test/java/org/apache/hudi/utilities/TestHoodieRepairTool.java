@@ -21,7 +21,6 @@ package org.apache.hudi.utilities;
 
 import org.apache.hudi.HoodieTestCommitGenerator;
 import org.apache.hudi.client.SparkRDDReadClient;
-import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
@@ -36,6 +35,7 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+import org.apache.spark.HoodieSparkKryoRegistrar$;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SQLContext;
@@ -93,7 +93,7 @@ public class TestHoodieRepairTool extends HoodieCommonTestHarness implements Spa
     boolean initialized = spark != null;
     if (!initialized) {
       SparkConf sparkConf = conf();
-      SparkRDDWriteClient.registerClasses(sparkConf);
+      HoodieSparkKryoRegistrar$.MODULE$.register(sparkConf);
       SparkRDDReadClient.addHoodieSupport(sparkConf);
       spark = SparkSession.builder().config(sparkConf).getOrCreate();
       sqlContext = spark.sqlContext();

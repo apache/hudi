@@ -24,7 +24,6 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
@@ -46,7 +45,7 @@ import java.util.List;
 /**
  * Impl of a flink hoodie table.
  */
-public abstract class HoodieFlinkTable<T extends HoodieRecordPayload>
+public abstract class HoodieFlinkTable<T>
     extends HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>>
     implements ExplicitWriteHandleTable<T> {
 
@@ -54,7 +53,7 @@ public abstract class HoodieFlinkTable<T extends HoodieRecordPayload>
     super(config, context, metaClient);
   }
 
-  public static <T extends HoodieRecordPayload> HoodieFlinkTable<T> create(HoodieWriteConfig config, HoodieFlinkEngineContext context) {
+  public static <T> HoodieFlinkTable<T> create(HoodieWriteConfig config, HoodieFlinkEngineContext context) {
     HoodieTableMetaClient metaClient =
         HoodieTableMetaClient.builder().setConf(context.getHadoopConf().get()).setBasePath(config.getBasePath())
             .setLoadActiveTimelineOnLoad(true).setConsistencyGuardConfig(config.getConsistencyGuardConfig())
@@ -66,9 +65,9 @@ public abstract class HoodieFlinkTable<T extends HoodieRecordPayload>
     return HoodieFlinkTable.create(config, context, metaClient);
   }
 
-  public static <T extends HoodieRecordPayload> HoodieFlinkTable<T> create(HoodieWriteConfig config,
-                                                                           HoodieFlinkEngineContext context,
-                                                                           HoodieTableMetaClient metaClient) {
+  public static <T> HoodieFlinkTable<T> create(HoodieWriteConfig config,
+                                               HoodieFlinkEngineContext context,
+                                               HoodieTableMetaClient metaClient) {
     final HoodieFlinkTable<T> hoodieFlinkTable;
     switch (metaClient.getTableType()) {
       case COPY_ON_WRITE:

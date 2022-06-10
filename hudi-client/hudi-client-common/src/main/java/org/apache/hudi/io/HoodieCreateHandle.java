@@ -19,20 +19,19 @@
 package org.apache.hudi.io;
 
 import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.model.IOType;
+import org.apache.hudi.common.model.MetadataValues;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieInsertException;
@@ -51,11 +50,11 @@ import java.util.List;
 import java.util.Map;
 
 @NotThreadSafe
-public class HoodieCreateHandle<T extends HoodieRecordPayload, I, K, O> extends HoodieWriteHandle<T, I, K, O> {
+public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O> {
 
   private static final Logger LOG = LogManager.getLogger(HoodieCreateHandle.class);
 
-  protected final HoodieFileWriter<IndexedRecord> fileWriter;
+  protected final HoodieFileWriter fileWriter;
   protected final Path path;
   protected long recordsWritten = 0;
   protected long insertRecordsWritten = 0;
@@ -101,8 +100,8 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload, I, K, O> extends 
           hoodieTable.getPartitionMetafileFormat());
       partitionMetadata.trySave(getPartitionId());
       createMarkerFile(partitionPath, FSUtils.makeBaseFileName(this.instantTime, this.writeToken, this.fileId, hoodieTable.getBaseFileExtension()));
-      this.fileWriter = HoodieFileWriterFactory.getFileWriter(instantTime, path, hoodieTable, config,
-        writeSchemaWithMetaFields, this.taskContextSupplier);
+      this.fileWriter = HoodieFileWriterFactory.getFileWriter(instantTime, path, hoodieTable.getHadoopConf(), config,
+        writeSchemaWithMetaFields, this.taskContextSupplier, config.getRecordMerger().getRecordType());
     } catch (IOException e) {
       throw new HoodieInsertException("Failed to initialize HoodieStorageWriter for path " + path, e);
     }
@@ -130,22 +129,26 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload, I, K, O> extends 
    * Perform the actual writing of the given record into the backing file.
    */
   @Override
-  public void write(HoodieRecord record, Option<IndexedRecord> avroRecord) {
-    Option recordMetadata = ((HoodieRecordPayload) record.getData()).getMetadata();
-    if (HoodieOperation.isDelete(record.getOperation())) {
-      avroRecord = Option.empty();
-    }
+  protected void doWrite(HoodieRecord record, Schema schema, TypedProperties props) {
+    Option<Map<String, String>> recordMetadata = record.getMetadata();
     try {
-      if (avroRecord.isPresent()) {
-        if (avroRecord.get().equals(IGNORE_RECORD)) {
+      if (!HoodieOperation.isDelete(record.getOperation()) && !record.isDelete(schema, config.getProps())) {
+        if (record.shouldIgnore(schema, config.getProps())) {
           return;
         }
         // Convert GenericRecord to GenericRecord with hoodie commit metadata in schema
-        if (preserveMetadata) {
-          fileWriter.writeAvro(record.getRecordKey(),
-              rewriteRecordWithMetadata((GenericRecord) avroRecord.get(), path.getName()));
+        HoodieRecord rewriteRecord;
+        if (schemaOnReadEnabled) {
+          rewriteRecord = record.rewriteRecordWithNewSchema(schema, config.getProps(), writeSchemaWithMetaFields);
         } else {
-          fileWriter.writeAvroWithMetadata(record.getKey(), rewriteRecord((GenericRecord) avroRecord.get()));
+          rewriteRecord = record.rewriteRecord(schema, config.getProps(), writeSchemaWithMetaFields);
+        }
+        MetadataValues metadataValues = new MetadataValues().setFileName(path.getName());
+        rewriteRecord = rewriteRecord.updateMetadataValues(writeSchemaWithMetaFields, config.getProps(), metadataValues);
+        if (preserveMetadata) {
+          fileWriter.write(record.getRecordKey(), rewriteRecord, writeSchemaWithMetaFields);
+        } else {
+          fileWriter.writeWithMetadata(record.getKey(), rewriteRecord, writeSchemaWithMetaFields);
         }
         // update the new location of record, so we know where to find it next
         record.unseal();
@@ -180,18 +183,10 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload, I, K, O> extends 
     } else {
       keyIterator = recordMap.keySet().stream().iterator();
     }
-    try {
-      while (keyIterator.hasNext()) {
-        final String key = keyIterator.next();
-        HoodieRecord<T> record = recordMap.get(key);
-        if (useWriterSchema) {
-          write(record, record.getData().getInsertValue(writeSchemaWithMetaFields, config.getProps()));
-        } else {
-          write(record, record.getData().getInsertValue(writeSchema, config.getProps()));
-        }
-      }
-    } catch (IOException io) {
-      throw new HoodieInsertException("Failed to insert records for path " + path, io);
+    while (keyIterator.hasNext()) {
+      final String key = keyIterator.next();
+      HoodieRecord<T> record = recordMap.get(key);
+      write(record, useWriterSchema ? writeSchemaWithMetaFields : writeSchema, config.getProps());
     }
   }
 

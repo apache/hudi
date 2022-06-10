@@ -21,7 +21,6 @@ package org.apache.hudi.table.action.commit;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieJavaEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
@@ -30,7 +29,7 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 
 import java.util.List;
 
-public class JavaInsertPreppedCommitActionExecutor<T extends HoodieRecordPayload<T>>
+public class JavaInsertPreppedCommitActionExecutor<T>
     extends BaseJavaCommitActionExecutor<T> {
 
   private final List<HoodieRecord<T>> preppedRecords;

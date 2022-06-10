@@ -18,13 +18,19 @@
 
 package org.apache.hudi.table.format.mor;
 
+import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.engine.EngineType;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.util.ClosableIterator;
+import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.configuration.OptionsResolver;
@@ -62,6 +68,7 @@ import org.apache.flink.types.RowKind;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.stream.Collectors;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -674,6 +681,8 @@ public class MergeOnReadInputFormat
 
     private final InstantRange instantRange;
 
+    private final HoodieRecordMerger recordMerger;
+
     // add the flag because the flink ParquetColumnarRowSplitReader is buggy:
     // method #reachedEnd() returns false after it returns true.
     // refactor it out once FLINK-22370 is resolved.
@@ -681,7 +690,7 @@ public class MergeOnReadInputFormat
 
     private final Set<String> keyToSkip = new HashSet<>();
 
-    private final Properties payloadProps;
+    private final TypedProperties payloadProps;
 
     private RowData currentRecord;
 
@@ -730,6 +739,11 @@ public class MergeOnReadInputFormat
       this.avroToRowDataConverter = AvroToRowDataConverters.createRowConverter(requiredRowType);
       this.projection = projection;
       this.instantRange = split.getInstantRange().orElse(null);
+      List<String> mergers = Arrays.stream(flinkConf.getString(FlinkOptions.RECORD_MERGER_IMPLS).split(","))
+          .map(String::trim)
+          .distinct()
+          .collect(Collectors.toList());
+      this.recordMerger = HoodieRecordUtils.createRecordMerger(split.getTablePath(), EngineType.FLINK, mergers, flinkConf.getString(FlinkOptions.RECORD_MERGER_STRATEGY));
     }
 
     @Override
@@ -746,19 +760,19 @@ public class MergeOnReadInputFormat
         final String curKey = currentRecord.getString(HOODIE_RECORD_KEY_COL_POS).toString();
         if (scanner.getRecords().containsKey(curKey)) {
           keyToSkip.add(curKey);
-          Option<IndexedRecord> mergedAvroRecord = mergeRowWithLog(currentRecord, curKey);
+          Option<HoodieAvroIndexedRecord> mergedAvroRecord = mergeRowWithLog(currentRecord, curKey);
           if (!mergedAvroRecord.isPresent()) {
             // deleted
             continue;
           } else {
-            final RowKind rowKind = FormatUtils.getRowKindSafely(mergedAvroRecord.get(), this.operationPos);
+            final RowKind rowKind = FormatUtils.getRowKindSafely(mergedAvroRecord.get().getData(), this.operationPos);
             if (!emitDelete && rowKind == RowKind.DELETE) {
               // deleted
               continue;
             }
             IndexedRecord avroRecord = avroProjection.isPresent()
-                ? avroProjection.get().apply(mergedAvroRecord.get())
-                : mergedAvroRecord.get();
+                ? avroProjection.get().apply(mergedAvroRecord.get().getData())
+                : mergedAvroRecord.get().getData();
             this.currentRecord = (RowData) avroToRowDataConverter.convert(avroRecord);
             this.currentRecord.setRowKind(rowKind);
             return true;
@@ -817,11 +831,13 @@ public class MergeOnReadInputFormat
       }
     }
 
-    private Option<IndexedRecord> mergeRowWithLog(RowData curRow, String curKey) {
+    private Option<HoodieAvroIndexedRecord> mergeRowWithLog(RowData curRow, String curKey) {
       final HoodieAvroRecord<?> record = (HoodieAvroRecord) scanner.getRecords().get(curKey);
       GenericRecord historyAvroRecord = (GenericRecord) rowDataToAvroConverter.convert(tableSchema, curRow);
+      HoodieAvroIndexedRecord hoodieAvroIndexedRecord = new HoodieAvroIndexedRecord(historyAvroRecord);
       try {
-        return record.getData().combineAndGetUpdateValue(historyAvroRecord, tableSchema, payloadProps);
+        Option<HoodieRecord> resultRecord = recordMerger.merge(hoodieAvroIndexedRecord, tableSchema, record, tableSchema, payloadProps).map(Pair::getLeft);
+        return resultRecord.get().toIndexedRecord(tableSchema, new Properties());
       } catch (IOException e) {
         throw new HoodieIOException("Merge base and delta payloads exception", e);
       }

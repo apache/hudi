@@ -19,7 +19,6 @@
 package org.apache.hudi.execution.bulkinsert;
 
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.BulkInsertPartitioner;
@@ -41,7 +40,7 @@ import static org.apache.hudi.execution.bulkinsert.BulkInsertSortMode.PARTITION_
  *
  * @param <T> HoodieRecordPayload type
  */
-public class RDDPartitionSortPartitioner<T extends HoodieRecordPayload>
+public class RDDPartitionSortPartitioner<T>
     implements BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
 
   private final boolean shouldPopulateMetaFields;

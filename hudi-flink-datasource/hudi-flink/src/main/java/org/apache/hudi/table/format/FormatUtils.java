@@ -18,13 +18,17 @@
 
 package org.apache.hudi.table.format;
 
+import java.util.stream.Collectors;
+import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.log.HoodieUnMergedLogRecordScanner;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.Functions;
+import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.queue.BoundedInMemoryExecutor;
@@ -164,6 +168,7 @@ public class FormatUtils {
         .withSpillableMapBasePath(writeConfig.getSpillableMapBasePath())
         .withInstantRange(split.getInstantRange())
         .withOperationField(flinkConf.getBoolean(FlinkOptions.CHANGELOG_ENABLED))
+        .withRecordMerger(writeConfig.getRecordMerger())
         .build();
   }
 
@@ -183,6 +188,12 @@ public class FormatUtils {
         InternalSchema internalSchema,
         Configuration hadoopConf,
         org.apache.flink.configuration.Configuration flinkConf) {
+      List<String> mergers = Arrays.stream(flinkConf.getString(FlinkOptions.RECORD_MERGER_IMPLS).split(","))
+          .map(String::trim)
+          .distinct()
+          .collect(Collectors.toList());
+      HoodieRecordMerger merger = HoodieRecordUtils.createRecordMerger(
+          split.getTablePath(), EngineType.FLINK, mergers, flinkConf.getString(FlinkOptions.RECORD_MERGER_STRATEGY));
       HoodieUnMergedLogRecordScanner.Builder scannerBuilder = HoodieUnMergedLogRecordScanner.newBuilder()
           .withFileSystem(FSUtils.getFs(split.getTablePath(), hadoopConf))
           .withBasePath(split.getTablePath())
@@ -198,7 +209,8 @@ public class FormatUtils {
           .withBufferSize(
               flinkConf.getInteger(HoodieRealtimeConfig.MAX_DFS_STREAM_BUFFER_SIZE_PROP,
                   HoodieRealtimeConfig.DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE))
-          .withInstantRange(split.getInstantRange());
+          .withInstantRange(split.getInstantRange())
+          .withRecordMerger(merger);
 
       this.executor = new BoundedInMemoryExecutor<>(
           StreamerUtil.getMaxCompactionMemoryInBytes(flinkConf),
@@ -260,6 +272,7 @@ public class FormatUtils {
         .withSpillableMapBasePath(writeConfig.getSpillableMapBasePath())
         .withDiskMapType(writeConfig.getCommonConfig().getSpillableDiskMapType())
         .withBitCaskDiskMapCompressionEnabled(writeConfig.getCommonConfig().isBitCaskDiskMapCompressionEnabled())
+        .withRecordMerger(writeConfig.getRecordMerger())
         .build();
   }
 

@@ -18,13 +18,10 @@
 
 package org.apache.hudi.table.action.bootstrap;
 
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.queue.HoodieConsumer;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.HoodieBootstrapHandle;
-
-import java.io.IOException;
 
 /**
  * Consumer that dequeues records from queue and sends to Merge Handle for writing.
@@ -39,12 +36,7 @@ public class BootstrapRecordConsumer implements HoodieConsumer<HoodieRecord, Voi
 
   @Override
   public void consume(HoodieRecord record) {
-    try {
-      bootstrapHandle.write(record, ((HoodieRecordPayload) record.getData())
-          .getInsertValue(bootstrapHandle.getWriterSchemaWithMetaFields()));
-    } catch (IOException e) {
-      throw new HoodieIOException(e.getMessage(), e);
-    }
+    bootstrapHandle.write(record, bootstrapHandle.getWriterSchemaWithMetaFields(), new TypedProperties());
   }
 
   @Override

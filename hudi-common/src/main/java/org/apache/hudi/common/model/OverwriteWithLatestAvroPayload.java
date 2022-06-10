@@ -69,31 +69,11 @@ public class OverwriteWithLatestAvroPayload extends BaseAvroPayload
 
   @Override
   public Option<IndexedRecord> getInsertValue(Schema schema) throws IOException {
-    if (recordBytes.length == 0) {
+    if (recordBytes.length == 0 || isDeletedRecord) {
       return Option.empty();
     }
-    IndexedRecord indexedRecord = HoodieAvroUtils.bytesToAvro(recordBytes, schema);
-    if (isDeleteRecord((GenericRecord) indexedRecord)) {
-      return Option.empty();
-    } else {
-      return Option.of(indexedRecord);
-    }
-  }
 
-  /**
-   * @param genericRecord instance of {@link GenericRecord} of interest.
-   * @returns {@code true} if record represents a delete record. {@code false} otherwise.
-   */
-  protected boolean isDeleteRecord(GenericRecord genericRecord) {
-    final String isDeleteKey = HoodieRecord.HOODIE_IS_DELETED;
-    // Modify to be compatible with new version Avro.
-    // The new version Avro throws for GenericRecord.get if the field name
-    // does not exist in the schema.
-    if (genericRecord.getSchema().getField(isDeleteKey) == null) {
-      return false;
-    }
-    Object deleteMarker = genericRecord.get(isDeleteKey);
-    return (deleteMarker instanceof Boolean && (boolean) deleteMarker);
+    return Option.of((IndexedRecord) HoodieAvroUtils.bytesToAvro(recordBytes, schema));
   }
 
   /**

@@ -18,19 +18,16 @@
 
 package org.apache.hudi.io;
 
+import org.apache.avro.Schema;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
-import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.table.HoodieTable;
-
-import org.apache.avro.generic.GenericRecord;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
@@ -48,7 +45,7 @@ import java.util.Queue;
  * keys in newRecordKeys (sorted in-memory).
  */
 @NotThreadSafe
-public class HoodieSortedMergeHandle<T extends HoodieRecordPayload, I, K, O> extends HoodieMergeHandle<T, I, K, O> {
+public class HoodieSortedMergeHandle<T, I, K, O> extends HoodieMergeHandle<T, I, K, O> {
 
   private final Queue<String> newRecordKeysSorted = new PriorityQueue<>();
 
@@ -75,8 +72,10 @@ public class HoodieSortedMergeHandle<T extends HoodieRecordPayload, I, K, O> ext
    * Go through an old record. Here if we detect a newer version shows up, we write the new one to the file.
    */
   @Override
-  public void write(GenericRecord oldRecord) {
-    String key = KeyGenUtils.getRecordKeyFromGenericRecord(oldRecord, keyGeneratorOpt);
+  public void write(HoodieRecord oldRecord) {
+    Schema oldSchema = config.populateMetaFields() ? writeSchemaWithMetaFields : writeSchema;
+    Schema newSchema = useWriterSchemaForCompaction ? writeSchemaWithMetaFields : writeSchema;
+    String key = oldRecord.getRecordKey(oldSchema, keyGeneratorOpt);
 
     // To maintain overall sorted order across updates and inserts, write any new inserts whose keys are less than
     // the oldRecord's key.
@@ -93,11 +92,7 @@ public class HoodieSortedMergeHandle<T extends HoodieRecordPayload, I, K, O> ext
         throw new HoodieUpsertException("Insert/Update not in sorted order");
       }
       try {
-        if (useWriterSchemaForCompaction) {
-          writeRecord(hoodieRecord, hoodieRecord.getData().getInsertValue(writeSchemaWithMetaFields, config.getProps()));
-        } else {
-          writeRecord(hoodieRecord, hoodieRecord.getData().getInsertValue(writeSchema, config.getProps()));
-        }
+        writeRecord(hoodieRecord, Option.of(hoodieRecord), newSchema, config.getProps());
         insertRecordsWritten++;
         writtenRecordKeys.add(keyToPreWrite);
       } catch (IOException e) {
@@ -117,9 +112,9 @@ public class HoodieSortedMergeHandle<T extends HoodieRecordPayload, I, K, O> ext
         HoodieRecord<T> hoodieRecord = keyToNewRecords.get(key);
         if (!writtenRecordKeys.contains(hoodieRecord.getRecordKey())) {
           if (useWriterSchemaForCompaction) {
-            writeRecord(hoodieRecord, hoodieRecord.getData().getInsertValue(writeSchemaWithMetaFields, config.getProps()));
+            writeRecord(hoodieRecord, Option.of(hoodieRecord), writeSchemaWithMetaFields, config.getProps());
           } else {
-            writeRecord(hoodieRecord, hoodieRecord.getData().getInsertValue(writeSchema, config.getProps()));
+            writeRecord(hoodieRecord, Option.of(hoodieRecord), writeSchema, config.getProps());
           }
           insertRecordsWritten++;
         }
