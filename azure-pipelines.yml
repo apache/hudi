@@ -165,7 +165,7 @@ stages:
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
-              options: -P $(SPARK_PROFILE),functional-tests -pl $(EXCLUDE_TESTED_MODULES)
+              options: -P $(SPARK_PROFILE),functional-tests -pl $(EXCLUDE_TESTED_MODULES) --fail-never
               publishJUnitResults: false
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
