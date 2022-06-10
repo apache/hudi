@@ -19,6 +19,7 @@
 package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -32,8 +33,6 @@ import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericDatumReader;
-import org.apache.avro.generic.GenericDatumWriter;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.io.BinaryDecoder;
 import org.apache.avro.io.BinaryEncoder;
@@ -65,16 +64,16 @@ public class JavaMergeHelper<T> extends BaseMergeHelper<T, List<HoodieRecord<T>>
     HoodieMergeHandle<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> mergeHandle = upsertHandle;
     HoodieBaseFile baseFile = mergeHandle.baseFileForMerge();
 
-    final GenericDatumWriter<GenericRecord> gWriter;
-    final GenericDatumReader<GenericRecord> gReader;
+    Schema readerSchema;
+    Schema writerSchema;
     Schema readSchema;
     if (externalSchemaTransformation || baseFile.getBootstrapBaseFile().isPresent()) {
       readSchema = HoodieFileReaderFactory.getReaderFactory(table.getConfig().getRecordType()).getFileReader(table.getHadoopConf(), mergeHandle.getOldFilePath()).getSchema();
-      gWriter = new GenericDatumWriter<>(readSchema);
-      gReader = new GenericDatumReader<>(readSchema, mergeHandle.getWriterSchemaWithMetaFields());
+      writerSchema = readSchema;
+      readerSchema = mergeHandle.getWriterSchemaWithMetaFields();
     } else {
-      gReader = null;
-      gWriter = null;
+      readerSchema = null;
+      writerSchema = null;
       readSchema = mergeHandle.getWriterSchemaWithMetaFields();
     }
 
@@ -95,8 +94,11 @@ public class JavaMergeHelper<T> extends BaseMergeHelper<T, List<HoodieRecord<T>>
         if (!externalSchemaTransformation) {
           return record;
         }
-        // TODO Other type of record need to change
-        return transformRecordBasedOnNewSchema(gReader, gWriter, encoderCache, decoderCache, (GenericRecord) ((HoodieRecord)record).getData());
+        try {
+          return ((HoodieRecord) record).rewriteRecord(writerSchema, readerSchema, new TypedProperties());
+        } catch (IOException e) {
+          throw new HoodieException(e);
+        }
       });
       wrapper.execute();
     } catch (Exception e) {
