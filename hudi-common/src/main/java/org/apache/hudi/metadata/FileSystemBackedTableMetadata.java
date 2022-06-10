@@ -68,13 +68,14 @@ public class FileSystemBackedTableMetadata implements HoodieTableMetadata {
 
   @Override
   public List<String> getAllPartitionPaths() throws IOException {
-    FileSystem fs = new Path(datasetBasePath).getFileSystem(hadoopConf.get());
+    Path basePath = new Path(datasetBasePath);
+    FileSystem fs = basePath.getFileSystem(hadoopConf.get());
     if (assumeDatePartitioning) {
       return FSUtils.getAllPartitionFoldersThreeLevelsDown(fs, datasetBasePath);
     }
 
     List<Path> pathsToList = new CopyOnWriteArrayList<>();
-    pathsToList.add(new Path(datasetBasePath));
+    pathsToList.add(basePath);
     List<String> partitionPaths = new CopyOnWriteArrayList<>();
 
     while (!pathsToList.isEmpty()) {
@@ -97,7 +98,7 @@ public class FileSystemBackedTableMetadata implements HoodieTableMetadata {
 
         if (partitionMetaFile.isPresent()) {
           // Is a partition.
-          String partitionName = FSUtils.getRelativePartitionPath(new Path(datasetBasePath), p.getLeft());
+          String partitionName = FSUtils.getRelativePartitionPath(basePath, p.getLeft());
           partitionPaths.add(partitionName);
         } else {
           // Add sub-dirs to the queue
