@@ -61,10 +61,8 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
   @ParameterizedTest
   @CsvSource(value = Array(
     "true|org.apache.hudi.keygen.SimpleKeyGenerator|_row_key",
-    "true|org.apache.hudi.keygen.ComplexKeyGenerator|_row_key,nation.bytes",
     "true|org.apache.hudi.keygen.TimestampBasedKeyGenerator|_row_key",
     "false|org.apache.hudi.keygen.SimpleKeyGenerator|_row_key",
-    "false|org.apache.hudi.keygen.ComplexKeyGenerator|_row_key,nation.bytes",
     "false|org.apache.hudi.keygen.TimestampBasedKeyGenerator|_row_key"
   ), delimiter = '|')
   def testCopyOnWriteStorage(isMetadataEnabled: Boolean, keyGenClass: String, recordKeys: String): Unit = {
