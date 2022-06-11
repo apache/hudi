@@ -31,7 +31,7 @@ import org.apache.hudi.functional.TestColumnStatsIndex.ColumnStatsTestCase
 import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceWriteOptions}
 import org.apache.spark.sql._
-import org.apache.spark.sql.functions.typedLit
+import org.apache.spark.sql.functions.{col, lit, typedLit}
 import org.apache.spark.sql.types._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertTrue}
 import org.junit.jupiter.api._
@@ -145,7 +145,7 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
 
       // Collect Column Stats manually (reading individual Parquet files)
       val manualColStatsTableDF =
-        buildColumnStatsTableManually(basePath, sourceTableSchema.fieldNames, expectedColStatsSchema)
+        buildColumnStatsTableManually(basePath, sourceTableSchema.fieldNames, sourceTableSchema.fieldNames, expectedColStatsSchema)
 
       assertEquals(asJson(sort(manualColStatsTableDF)), asJson(sort(transposedColStatsDF)))
     }
@@ -180,7 +180,7 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
 
       // Collect Column Stats manually (reading individual Parquet files)
       val manualUpdatedColStatsTableDF =
-        buildColumnStatsTableManually(basePath, sourceTableSchema.fieldNames, expectedColStatsSchema)
+        buildColumnStatsTableManually(basePath, sourceTableSchema.fieldNames, sourceTableSchema.fieldNames, expectedColStatsSchema)
 
       assertEquals(asJson(sort(manualUpdatedColStatsTableDF)), asJson(sort(transposedUpdatedColStatsDF)))
     }
@@ -255,9 +255,7 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
       // We have to include "c1", since we sort the expected outputs by this column
       val requestedColumns = Seq("c4", "c1")
 
-      val targetIndexedColumns = targetColumnsToIndex.intersect(requestedColumns)
-      val expectedColStatsSchema = composeIndexSchema(targetIndexedColumns, sourceTableSchema)
-
+      val expectedColStatsSchema = composeIndexSchema(requestedColumns.sorted, sourceTableSchema)
       // Match against expected column stats table
       val expectedColStatsIndexTableDf =
         spark.read
@@ -266,7 +264,7 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
 
       // Collect Column Stats manually (reading individual Parquet files)
       val manualColStatsTableDF =
-        buildColumnStatsTableManually(basePath, targetIndexedColumns, expectedColStatsSchema)
+        buildColumnStatsTableManually(basePath, requestedColumns, targetColumnsToIndex, expectedColStatsSchema)
 
       val columnStatsIndex = new ColumnStatsIndexSupport(spark, basePath, sourceTableSchema, metadataConfig, shouldReadInMemory)
 
@@ -310,9 +308,7 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
 
       val requestedColumns = sourceTableSchema.fieldNames
 
-      val targetIndexedColumns = targetColumnsToIndex.intersect(requestedColumns)
-      val expectedColStatsSchema = composeIndexSchema(targetIndexedColumns, sourceTableSchema)
-
+      val expectedColStatsSchema = composeIndexSchema(requestedColumns.sorted, sourceTableSchema)
       val expectedColStatsIndexUpdatedDF =
         spark.read
           .schema(expectedColStatsSchema)
@@ -320,7 +316,7 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
 
       // Collect Column Stats manually (reading individual Parquet files)
       val manualUpdatedColStatsTableDF =
-        buildColumnStatsTableManually(basePath, targetIndexedColumns, expectedColStatsSchema)
+        buildColumnStatsTableManually(basePath, requestedColumns, targetColumnsToIndex, expectedColStatsSchema)
 
       val columnStatsIndex = new ColumnStatsIndexSupport(spark, basePath, sourceTableSchema, metadataConfig, shouldReadInMemory)
 
@@ -374,7 +370,10 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
     })
   }
 
-  private def buildColumnStatsTableManually(tablePath: String, indexedCols: Seq[String], indexSchema: StructType) = {
+  private def buildColumnStatsTableManually(tablePath: String,
+                                            includedCols: Seq[String],
+                                            indexedCols: Seq[String],
+                                            indexSchema: StructType): DataFrame = {
     val files = {
       val it = fs.listFiles(new Path(tablePath), true)
       var seq = Seq[LocatedFileStatus]()
@@ -391,15 +390,23 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
           s"'${typedLit(file.getPath.getName)}' AS file" +:
           s"sum(1) AS valueCount" +:
             df.columns
-              .filter(col => indexedCols.contains(col))
+              .filter(col => includedCols.contains(col))
               .flatMap(col => {
                 val minColName = s"${col}_minValue"
                 val maxColName = s"${col}_maxValue"
-                Seq(
-                  s"min($col) AS $minColName",
-                  s"max($col) AS $maxColName",
-                  s"sum(cast(isnull($col) AS long)) AS ${col}_nullCount"
-                )
+                if (indexedCols.contains(col)) {
+                  Seq(
+                    s"min($col) AS $minColName",
+                    s"max($col) AS $maxColName",
+                    s"sum(cast(isnull($col) AS long)) AS ${col}_nullCount"
+                  )
+                } else {
+                  Seq(
+                    s"null AS $minColName",
+                    s"null AS $maxColName",
+                    s"null AS ${col}_nullCount"
+                  )
+                }
               })
 
         df.selectExpr(exprs: _*)

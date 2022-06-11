@@ -139,14 +139,14 @@ class ColumnStatsIndexSupport(spark: SparkSession,
    */
   private def transpose(colStatsRecords: HoodieData[HoodieMetadataColumnStats], queryColumns: Seq[String]): DataFrame = {
     val tableSchemaFieldMap = tableSchema.fields.map(f => (f.name, f)).toMap
-
-    // TODO elaborate
-    val indexedColumns: Seq[String] = queryColumns
-
     // NOTE: We're sorting the columns to make sure final index schema matches layout
     //       of the transposed table
-    val sortedTargetColumnsSet = TreeSet(queryColumns.intersect(indexedColumns): _*)
+    val sortedTargetColumnsSet = TreeSet(queryColumns:_*)
     val sortedTargetColumns = sortedTargetColumnsSet.toSeq
+
+    // NOTE: This is a trick to avoid pulling all of [[ColumnStatsIndexSupport]] object into the lambdas'
+    //       closures below
+    val indexedColumns = this.indexedColumns
 
     // Here we perform complex transformation which requires us to modify the layout of the rows
     // of the dataset, and therefore we rely on low-level RDD API to avoid incurring encoding/decoding
@@ -206,7 +206,7 @@ class ColumnStatsIndexSupport(spark: SparkSession,
                   //       null values, we set min/max values as null and null-count to be equal to value-count (this
                   //       behavior is consistent with reading non-existent columns from Parquet)
                   //
-                  // This is a way to determine current column's index without explicit iterating
+                  // This is a way to determine current column's index without explicit iteration (we're adding 3 stats / column)
                   val idx = acc.length / 3
                   val colName = sortedTargetColumns(idx)
                   val indexed = indexedColumns.contains(colName)
