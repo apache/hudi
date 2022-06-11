@@ -18,7 +18,7 @@
 package org.apache.hudi
 
 import org.apache.hadoop.fs.{FileStatus, Path}
-import org.apache.hudi.HoodieFileIndex.{DataSkippingFailureMode, collectReferencedColumns, columnStatsIndexProjectionSizeInMemoryThreshold, getConfigProperties}
+import org.apache.hudi.HoodieFileIndex.{DataSkippingFailureMode, collectReferencedColumns, getConfigProperties}
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.StringUtils
@@ -80,6 +80,8 @@ case class HoodieFileIndex(spark: SparkSession,
     fileStatusCache = fileStatusCache
   )
     with FileIndex {
+
+  private lazy val columnStatsIndex = new ColumnStatsIndexSupport(spark, basePath, schema, metadataConfig)
 
   override def rootPaths: Seq[Path] = queryPaths.asScala
 
@@ -195,7 +197,7 @@ case class HoodieFileIndex(spark: SparkSession,
     //          nothing CSI in particular could be applied for)
     lazy val queryReferencedColumns = collectReferencedColumns(spark, queryFilters, schema)
 
-    if (!isMetadataTableEnabled || !isColumnStatsIndexAvailable || !isDataSkippingEnabled) {
+    if (!isMetadataTableEnabled || !isColumnStatsIndexEnabled || !isColumnStatsIndexAvailable || !isDataSkippingEnabled) {
       validateConfig()
       Option.empty
     } else if (queryFilters.isEmpty || queryReferencedColumns.isEmpty) {
@@ -207,10 +209,9 @@ case class HoodieFileIndex(spark: SparkSession,
       //       For that we use a simple-heuristic to determine whether we should read and process CSI in-memory or
       //       on-cluster: total number of rows of the expected projected portion of the index has to be below the
       //       threshold (of 100k records)
-      val shouldReadInMemory = this.shouldReadInMemory(queryReferencedColumns)
-      val columnStatsIndex = new ColumnStatsIndexSupport(spark, basePath, schema, metadataConfig, shouldReadInMemory)
+      val shouldReadInMemory = columnStatsIndex.shouldReadInMemory(this, queryReferencedColumns)
 
-      columnStatsIndex.loadTransposed(queryReferencedColumns) { transposedColStatsDF =>
+      columnStatsIndex.loadTransposed(queryReferencedColumns, shouldReadInMemory) { transposedColStatsDF =>
         val indexSchema = transposedColStatsDF.schema
         val indexFilter =
           queryFilters.map(translateIntoColumnStatsIndexFilterExpr(_, indexSchema))
@@ -243,12 +244,6 @@ case class HoodieFileIndex(spark: SparkSession,
     }
   }
 
-  private def shouldReadInMemory(queryReferencedColumns: => Seq[String]): Boolean = {
-    val modeOverride = metadataConfig.getColumnStatsIndexProcessingModeOverride
-    modeOverride != HoodieMetadataConfig.COLUMN_STATS_INDEX_PROCESSING_MODE_SPARK &&
-      getFileSlicesCount * queryReferencedColumns.length < columnStatsIndexProjectionSizeInMemoryThreshold
-  }
-
   override def refresh(): Unit = super.refresh()
 
   override def inputFiles: Array[String] =
@@ -276,8 +271,6 @@ case class HoodieFileIndex(spark: SparkSession,
 }
 
 object HoodieFileIndex extends Logging {
-
-  private val columnStatsIndexProjectionSizeInMemoryThreshold = 100000
 
   object DataSkippingFailureMode extends Enumeration {
     val configName = "hoodie.fileIndex.dataSkippingFailureMode"

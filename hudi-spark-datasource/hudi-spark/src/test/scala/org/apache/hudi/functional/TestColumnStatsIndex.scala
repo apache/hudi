@@ -126,11 +126,11 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
       else sourceTableSchema.fieldNames
     }
 
-    val columnStatsIndex = new ColumnStatsIndexSupport(spark, basePath, sourceTableSchema, metadataConfig, testCase.shouldReadInMemory)
+    val columnStatsIndex = new ColumnStatsIndexSupport(spark, basePath, sourceTableSchema, metadataConfig)
 
     val expectedColStatsSchema = composeIndexSchema(sourceTableSchema.fieldNames, sourceTableSchema)
 
-    columnStatsIndex.loadTransposed(requestedColumns) { transposedColStatsDF =>
+    columnStatsIndex.loadTransposed(requestedColumns, testCase.shouldReadInMemory) { transposedColStatsDF =>
       // Match against expected column stats table
       val expectedColStatsIndexTableDf =
         spark.read
@@ -167,9 +167,9 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
 
     metaClient = HoodieTableMetaClient.reload(metaClient)
 
-    val updatedColumnStatsIndex = new ColumnStatsIndexSupport(spark, basePath, sourceTableSchema, metadataConfig, testCase.shouldReadInMemory)
+    val updatedColumnStatsIndex = new ColumnStatsIndexSupport(spark, basePath, sourceTableSchema, metadataConfig)
 
-    val updatedColStatsDF = updatedColumnStatsIndex.loadTransposed(requestedColumns) { transposedUpdatedColStatsDF =>
+    updatedColumnStatsIndex.loadTransposed(requestedColumns, testCase.shouldReadInMemory) { transposedUpdatedColStatsDF =>
       val expectedColStatsIndexUpdatedDF =
         spark.read
           .schema(expectedColStatsSchema)
@@ -238,9 +238,9 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
       // These are NOT indexed
       val requestedColumns = Seq("c4")
 
-      val columnStatsIndex = new ColumnStatsIndexSupport(spark, basePath, sourceTableSchema, metadataConfig, shouldReadInMemory)
+      val columnStatsIndex = new ColumnStatsIndexSupport(spark, basePath, sourceTableSchema, metadataConfig)
 
-      columnStatsIndex.loadTransposed(requestedColumns) { emptyTransposedColStatsDF =>
+      columnStatsIndex.loadTransposed(requestedColumns, shouldReadInMemory) { emptyTransposedColStatsDF =>
         assertEquals(0, emptyTransposedColStatsDF.collect().length)
       }
     }
@@ -266,9 +266,9 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
       val manualColStatsTableDF =
         buildColumnStatsTableManually(basePath, requestedColumns, targetColumnsToIndex, expectedColStatsSchema)
 
-      val columnStatsIndex = new ColumnStatsIndexSupport(spark, basePath, sourceTableSchema, metadataConfig, shouldReadInMemory)
+      val columnStatsIndex = new ColumnStatsIndexSupport(spark, basePath, sourceTableSchema, metadataConfig)
 
-      columnStatsIndex.loadTransposed(requestedColumns) { partialTransposedColStatsDF =>
+      columnStatsIndex.loadTransposed(requestedColumns, shouldReadInMemory) { partialTransposedColStatsDF =>
         assertEquals(expectedColStatsIndexTableDf.schema, partialTransposedColStatsDF.schema)
         // NOTE: We have to drop the `fileName` column as it contains semi-random components
         //       that we can't control in this test. Nevertheless, since we manually verify composition of the
@@ -318,11 +318,11 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
       val manualUpdatedColStatsTableDF =
         buildColumnStatsTableManually(basePath, requestedColumns, targetColumnsToIndex, expectedColStatsSchema)
 
-      val columnStatsIndex = new ColumnStatsIndexSupport(spark, basePath, sourceTableSchema, metadataConfig, shouldReadInMemory)
+      val columnStatsIndex = new ColumnStatsIndexSupport(spark, basePath, sourceTableSchema, metadataConfig)
 
       // Nevertheless, the last update was written with a new schema (that is a subset of the original table schema),
       // we should be able to read CSI, which will be properly padded (with nulls) after transposition
-      columnStatsIndex.loadTransposed(requestedColumns) { transposedUpdatedColStatsDF =>
+      columnStatsIndex.loadTransposed(requestedColumns, shouldReadInMemory) { transposedUpdatedColStatsDF =>
         assertEquals(expectedColStatsIndexUpdatedDF.schema, transposedUpdatedColStatsDF.schema)
 
         assertEquals(asJson(sort(expectedColStatsIndexUpdatedDF)), asJson(sort(transposedUpdatedColStatsDF.drop("fileName"))))

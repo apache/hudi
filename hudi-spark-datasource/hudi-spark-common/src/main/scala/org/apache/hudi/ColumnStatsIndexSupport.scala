@@ -51,8 +51,7 @@ import scala.collection.mutable.ListBuffer
 class ColumnStatsIndexSupport(spark: SparkSession,
                               tableBasePath: String,
                               tableSchema: StructType,
-                              metadataConfig: HoodieMetadataConfig,
-                              shouldReadInMemory: Boolean = false) {
+                              metadataConfig: HoodieMetadataConfig) {
 
   checkState(metadataConfig.enabled, "Metadata Table support has to be enabled")
   checkState(metadataConfig.isColumnStatsIndexEnabled, "Column Stats Index support has to be enabled")
@@ -76,10 +75,30 @@ class ColumnStatsIndexSupport(spark: SparkSession,
   /**
    * TODO scala-doc
    */
-  def loadTransposed[T](targetColumns: Seq[String] = Seq.empty)(f: DataFrame => T): T = {
-    val colStatsRecords: HoodieData[HoodieMetadataColumnStats] = loadColumnStatsIndexRecords(targetColumns)
+  def shouldReadInMemory(fileIndex: HoodieFileIndex, queryReferencedColumns: Seq[String]): Boolean = {
+    val modeOverride = metadataConfig.getColumnStatsIndexProcessingModeOverride
+    modeOverride != HoodieMetadataConfig.COLUMN_STATS_INDEX_PROCESSING_MODE_SPARK &&
+      fileIndex.getFileSlicesCount * queryReferencedColumns.length < columnStatsIndexProjectionSizeInMemoryThreshold
+  }
+
+  /**
+   * TODO scala-doc
+   */
+  def loadTransposed[T](targetColumns: Seq[String], shouldReadInMemory: Boolean)(f: DataFrame => T): T = {
+    val colStatsRecords: HoodieData[HoodieMetadataColumnStats] = loadColumnStatsIndexRecords(targetColumns, shouldReadInMemory)
     withPersistedData(colStatsRecords, StorageLevel.MEMORY_ONLY) {
-      val df = transpose(colStatsRecords, targetColumns)
+      val (transposedRows, indexSchema) = transpose(colStatsRecords, targetColumns)
+      val df = if (shouldReadInMemory) {
+        // NOTE: This will instantiate a [[Dataset]] backed by [[LocalRelation]] holding all of the rows
+        //       of the transposed table in memory, facilitating execution of the subsequently chained operations
+        //       on it locally (on the driver; all such operations are actually going to be performed by Spark's
+        //       Optimizer)
+        createDataFrameFromRows(spark, transposedRows.collectAsList().asScala, indexSchema)
+      } else {
+        val rdd = HoodieJavaRDD.getJavaRDD(transposedRows)
+        spark.createDataFrame(rdd, indexSchema)
+      }
+
       withPersistedDataset(df, StorageLevel.MEMORY_ONLY) {
         f(df)
       }
@@ -94,7 +113,7 @@ class ColumnStatsIndexSupport(spark: SparkSession,
     //       by only fetching Column Stats Index records pertaining to the requested columns.
     //       Otherwise we fallback to read whole Column Stats Index
     if (targetColumns.nonEmpty) {
-      loadColumnStatsIndexForColumnsInternal(targetColumns)
+      loadColumnStatsIndexForColumnsInternal(targetColumns, shouldReadInMemory = false)
     } else {
       loadFullColumnStatsIndexInternal()
     }
@@ -137,7 +156,7 @@ class ColumnStatsIndexSupport(spark: SparkSession,
    * @param queryColumns target columns to be included into the final table
    * @return reshaped table according to the format outlined above
    */
-  private def transpose(colStatsRecords: HoodieData[HoodieMetadataColumnStats], queryColumns: Seq[String]): DataFrame = {
+  private def transpose(colStatsRecords: HoodieData[HoodieMetadataColumnStats], queryColumns: Seq[String]): (HoodieData[Row], StructType) = {
     val tableSchemaFieldMap = tableSchema.fields.map(f => (f.name, f)).toMap
     // NOTE: We're sorting the columns to make sure final index schema matches layout
     //       of the transposed table
@@ -224,21 +243,12 @@ class ColumnStatsIndexSupport(spark: SparkSession,
     //       matching table layout: hence, we cherry-pick individual columns
     //       instead of simply filtering in the ones we're interested in the schema
     val indexSchema = composeIndexSchema(sortedTargetColumns, tableSchema)
-    if (shouldReadInMemory) {
-      // NOTE: This will instantiate a [[Dataset]] backed by [[LocalRelation]] holding all of the rows
-      //       of the transposed table in memory, facilitating execution of the subsequently chained operations
-      //       on it locally (on the driver; all such operations are actually going to be performed by Spark's
-      //       Optimizer)
-      createDataFrameFromRows(spark, transposedRows.collectAsList().asScala, indexSchema)
-    } else {
-      val rdd = HoodieJavaRDD.getJavaRDD(transposedRows)
-      spark.createDataFrame(rdd, indexSchema)
-    }
+    (transposedRows, indexSchema)
   }
 
-  private def loadColumnStatsIndexForColumnsInternal(targetColumns: Seq[String]): DataFrame = {
+  private def loadColumnStatsIndexForColumnsInternal(targetColumns: Seq[String], shouldReadInMemory: Boolean): DataFrame = {
     val colStatsDF = {
-      val colStatsRecords: HoodieData[HoodieMetadataColumnStats] = loadColumnStatsIndexRecords(targetColumns)
+      val colStatsRecords: HoodieData[HoodieMetadataColumnStats] = loadColumnStatsIndexRecords(targetColumns, shouldReadInMemory)
       val catalystRows: HoodieData[InternalRow] = colStatsRecords.mapPartitions(it => {
         val converter = AvroConversionUtils.createAvroToInternalRowConverter(HoodieMetadataColumnStats.SCHEMA$, columnStatsRecordStructType)
         it.asScala.map(r => converter(r).orNull).asJava
@@ -258,7 +268,7 @@ class ColumnStatsIndexSupport(spark: SparkSession,
     colStatsDF.select(targetColumnStatsIndexColumns.map(col): _*)
   }
 
-  private def loadColumnStatsIndexRecords(targetColumns: Seq[String]): HoodieData[HoodieMetadataColumnStats] = {
+  private def loadColumnStatsIndexRecords(targetColumns: Seq[String], shouldReadInMemory: Boolean): HoodieData[HoodieMetadataColumnStats] = {
     // Read Metadata Table's Column Stats Index records into [[HoodieData]] container by
     //    - Fetching the records from CSI by key-prefixes (encoded column names)
     //    - Extracting [[HoodieMetadataColumnStats]] records
@@ -299,6 +309,8 @@ class ColumnStatsIndexSupport(spark: SparkSession,
 }
 
 object ColumnStatsIndexSupport {
+
+  private val columnStatsIndexProjectionSizeInMemoryThreshold = 100000
 
   private val expectedAvroSchemaValues = Set("BooleanWrapper", "IntWrapper", "LongWrapper", "FloatWrapper", "DoubleWrapper",
     "BytesWrapper", "StringWrapper", "DateWrapper", "DecimalWrapper", "TimeMicrosWrapper", "TimestampMicrosWrapper")
