@@ -50,7 +50,7 @@ class TestHoodieInternalRowUtils extends FunSuite with Matchers with BeforeAndAf
     StructField(HoodieRecord.PARTITION_PATH_METADATA_FIELD, StringType),
     StructField(HoodieRecord.FILENAME_METADATA_FIELD, StringType),
     StructField(HoodieRecord.OPERATION_METADATA_FIELD, StringType),
-    StructField(HoodieRecord.HOODIE_IS_DELETED, BooleanType)
+    StructField(HoodieRecord.HOODIE_IS_DELETED_FIELD, BooleanType)
   ) ++ schema1.fields)
 
   override protected def beforeAll(): Unit = {

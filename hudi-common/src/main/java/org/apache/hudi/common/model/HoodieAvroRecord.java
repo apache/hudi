@@ -24,7 +24,6 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.io.storage.HoodieAvroFileReader;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 
 import org.apache.avro.Schema;
@@ -34,11 +33,11 @@ import org.apache.avro.generic.IndexedRecord;
 import javax.annotation.Nonnull;
 
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
-import java.util.function.Function;
 
 import static org.apache.hudi.TypeUtils.unsafeCast;
 
@@ -172,9 +171,8 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
   }
 
   @Override
-  public HoodieRecord addInfo(Schema schema, Properties prop, Map<String, Object> mapperConfig) throws IOException {
-    Function<IndexedRecord, HoodieRecord<Object>> mapper = HoodieAvroFileReader.createMapper(mapperConfig);
-    return mapper.apply((IndexedRecord) data.getInsertValue(schema, prop).get());
+  public HoodieRecord expansion(Schema schema, Properties prop, Map<String, Object> mapperConfig) throws IOException {
+    throw new UnsupportedEncodingException();
   }
 
   @Override

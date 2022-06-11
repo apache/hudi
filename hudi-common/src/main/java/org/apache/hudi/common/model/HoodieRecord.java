@@ -330,7 +330,7 @@ public abstract class HoodieRecord<T> implements Serializable {
   /**
    * This method used to add preCombine field, recordKey etc. And may change the Type of HoodieRecord.
    */
-  public abstract HoodieRecord addInfo(Schema schema, Properties prop, Map<String, Object> mapperConfig) throws IOException;
+  public abstract HoodieRecord expansion(Schema schema, Properties prop, Map<String, Object> mapperConfig) throws IOException;
 
   /**
    * This method used in ClusteringExecutionStrategy.
