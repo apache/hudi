@@ -244,6 +244,7 @@ class TestDataSourceDefaults {
     val STRUCT_NAME: String = "hoodieRowTopLevelField"
     val NAMESPACE: String = "hoodieRow"
     var converterFn: Function1[Row, GenericRecord] = _
+    var internalConverterFn: Function1[InternalRow, GenericRecord] = _
 
     override def getKey(record: GenericRecord): HoodieKey = {
       new HoodieKey(HoodieAvroUtils.getNestedFieldValAsString(record, recordKeyProp, true, false),
@@ -254,6 +255,14 @@ class TestDataSourceDefaults {
       if (null == converterFn) converterFn = AvroConversionUtils.createConverterToAvro(row.schema, STRUCT_NAME, NAMESPACE)
       val genericRecord = converterFn.apply(row).asInstanceOf[GenericRecord]
       getKey(genericRecord).getRecordKey
+    }
+
+    override def getRecordKey(internalRow: InternalRow, structType: StructType): String = {
+      if (null == internalConverterFn) {
+        val schema = AvroConversionUtils.convertStructTypeToAvroSchema(structType, STRUCT_NAME, NAMESPACE)
+        internalConverterFn = AvroConversionUtils.createInternalRowToAvroConverter(structType, schema, true)
+      }
+      getKey(internalConverterFn.apply(internalRow)).getRecordKey
     }
 
     override def getPartitionPath(row: Row): String = {

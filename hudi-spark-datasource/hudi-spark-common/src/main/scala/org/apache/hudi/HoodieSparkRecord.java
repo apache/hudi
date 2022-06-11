@@ -24,8 +24,8 @@ import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.io.storage.HoodieSparkFileReader;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.SparkKeyGeneratorInterface;
 
@@ -44,9 +44,13 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
-import java.util.function.Function;
 
+import static org.apache.hudi.TypeUtils.unsafeCast;
 import static org.apache.hudi.common.table.HoodieTableConfig.POPULATE_META_FIELDS;
+import static org.apache.hudi.common.table.HoodieTableConfig.PRECOMBINE_FIELD;
+import static org.apache.hudi.common.util.MapperUtils.PARTITION_NAME;
+import static org.apache.hudi.common.util.MapperUtils.SIMPLE_KEY_GEN_FIELDS_OPT;
+import static org.apache.hudi.common.util.MapperUtils.WITH_OPERATION_FIELD;
 import static org.apache.spark.sql.types.DataTypes.BooleanType;
 import static org.apache.spark.sql.types.DataTypes.StringType;
 
@@ -71,9 +75,6 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
     super(record);
   }
 
-  public HoodieSparkRecord() {
-  }
-
   @Override
   public HoodieRecord<InternalRow> newInstance() {
     return new HoodieSparkRecord(this);
@@ -95,6 +96,13 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
 
   @Override
   public String getRecordKey(Option<BaseKeyGenerator> keyGeneratorOpt) {
+    // TODO
+    return getRecordKey();
+  }
+
+  @Override
+  public String getRecordKey(String keyFieldName) {
+    // TODO
     return getRecordKey();
   }
 
@@ -171,9 +179,19 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
   }
 
   @Override
-  public HoodieRecord addInfo(Schema schema, Properties prop, Map<String, Object> mapperConfig) throws IOException {
-    Function<InternalRow, HoodieRecord<InternalRow>> mapper = HoodieSparkFileReader.createMapper(schema, mapperConfig);
-    return mapper.apply(data);
+  public HoodieRecord expansion(Schema schema, Properties prop, Map<String, Object> mapperConfig) {
+    Option<Pair<String, String>> keyGen = unsafeCast(prop.getOrDefault(SIMPLE_KEY_GEN_FIELDS_OPT, Option.empty()));
+    String preCombineField = prop.get(PRECOMBINE_FIELD.key()).toString();
+    boolean withOperationField = Boolean.parseBoolean(prop.get(WITH_OPERATION_FIELD).toString());
+    boolean populateMetaFields = Boolean.parseBoolean(prop.getOrDefault(POPULATE_META_FIELDS, false).toString());
+    Option<String> partitionName = unsafeCast(prop.getOrDefault(PARTITION_NAME, Option.empty()));
+    if (populateMetaFields) {
+      return HoodieSparkRecordUtils.convertToHoodieSparkRecord(schema, data, preCombineField, withOperationField);
+    } else if (keyGen.isPresent()) {
+      return HoodieSparkRecordUtils.convertToHoodieSparkRecord(schema, data, preCombineField, keyGen.get(), withOperationField, Option.empty());
+    } else {
+      return HoodieSparkRecordUtils.convertToHoodieSparkRecord(schema, data, preCombineField, withOperationField, partitionName);
+    }
   }
 
   @Override
@@ -206,7 +224,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
     if (null == data) {
       return false;
     }
-    Object deleteMarker = data.get(schema.getField(HoodieRecord.HOODIE_IS_DELETED).pos(), BooleanType);
+    Object deleteMarker = data.get(schema.getField(HoodieRecord.HOODIE_IS_DELETED_FIELD).pos(), BooleanType);
     return !(deleteMarker instanceof Boolean && (boolean) deleteMarker);
   }
 
