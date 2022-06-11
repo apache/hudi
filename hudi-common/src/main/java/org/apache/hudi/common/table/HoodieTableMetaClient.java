@@ -724,7 +724,6 @@ public class HoodieTableMetaClient implements Serializable {
     private String recordKeyFields;
     private String archiveLogFolder;
     private String payloadClassName;
-    private String combineEngineClassName;
     private Integer timelineLayoutVersion;
     private String baseFileFormat;
     private String preCombineField;
@@ -788,11 +787,6 @@ public class HoodieTableMetaClient implements Serializable {
 
     public PropertyBuilder setPayloadClassName(String payloadClassName) {
       this.payloadClassName = payloadClassName;
-      return this;
-    }
-
-    public PropertyBuilder setCombineEngineClassName(String combineEngineClassName) {
-      this.combineEngineClassName = combineEngineClassName;
       return this;
     }
 
@@ -1007,10 +1001,6 @@ public class HoodieTableMetaClient implements Serializable {
           String.valueOf(HoodieTableVersion.current().versionCode()));
       if (tableType == HoodieTableType.MERGE_ON_READ && payloadClassName != null) {
         tableConfig.setValue(HoodieTableConfig.PAYLOAD_CLASS_NAME, payloadClassName);
-      }
-
-      if (combineEngineClassName != null) {
-        tableConfig.setValue(HoodieTableConfig.COMBINE_ENGINE_CLASS_NAME, combineEngineClassName);
       }
 
       if (null != tableCreateSchema) {

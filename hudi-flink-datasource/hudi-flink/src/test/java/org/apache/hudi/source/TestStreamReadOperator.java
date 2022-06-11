@@ -262,7 +262,7 @@ public class TestStreamReadOperator {
         AvroSchemaConverter.convertToSchema(TestConfigurations.ROW_TYPE).toString(),
         Collections.emptyList(),
         new String[0],
-        metaClient.getTableConfig().getCombiningEngineClass());
+        conf.get(FlinkOptions.COMBINE_ENGINE_CLASS_NAME));
     MergeOnReadInputFormat inputFormat = MergeOnReadInputFormat.builder()
         .config(conf)
         .tableState(hoodieTableState)

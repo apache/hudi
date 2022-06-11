@@ -25,7 +25,7 @@ import org.apache.hudi.common.model.{HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.util.Option
 import org.apache.hudi.common.util.ValidationUtils.checkState
-import org.apache.hudi.config.{HoodieClusteringConfig, HoodieWriteConfig}
+import org.apache.hudi.config.{HoodieClusteringConfig, HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncTool}
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.{ComplexKeyGenerator, CustomKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator}
@@ -33,7 +33,6 @@ import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.sync.common.util.ConfigUtils
 import org.apache.log4j.LogManager
 import org.apache.spark.sql.execution.datasources.{DataSourceUtils => SparkDataSourceUtils}
-
 import java.util.function.{Function => JavaFunction}
 import scala.collection.JavaConverters._
 import scala.language.implicitConversions
@@ -302,7 +301,7 @@ object DataSourceWriteOptions {
    * Combine engine will replace the payload to process the merge of data
    * and provide the same capabilities as the payload
    */
-  val COMBINE_ENGINE_CLASS_NAME = HoodieWriteConfig.COMBINE_ENGINE_CLASS_NAME
+  val COMBINE_ENGINE_CLASS_NAME = HoodieCompactionConfig.COMBINE_ENGINE_CLASS_NAME
 
   /**
    * Record key field. Value to be used as the `recordKey` component of `HoodieKey`. Actual value

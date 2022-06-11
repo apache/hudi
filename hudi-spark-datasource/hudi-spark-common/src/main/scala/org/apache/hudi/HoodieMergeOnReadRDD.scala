@@ -32,14 +32,13 @@ import org.apache.hudi.common.model.{HoodieAvroIndexedRecord, HoodieLogFile, Hoo
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner
 import org.apache.hudi.common.util.ReflectionUtils
 import org.apache.hudi.common.util.ValidationUtils.checkState
-import org.apache.hudi.config.HoodiePayloadConfig
+import org.apache.hudi.config.{HoodiePayloadConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.config.HoodieRealtimeConfig
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes
 import org.apache.hudi.metadata.HoodieTableMetadata.getDataTableBasePathFromMetadataTable
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadata}
 import org.apache.hudi.internal.schema.InternalSchema
-
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.avro.HoodieAvroDeserializer
 import org.apache.spark.sql.catalyst.InternalRow
@@ -49,7 +48,7 @@ import org.apache.spark.sql.types.StructType
 import org.apache.spark.{Partition, SerializableWritable, SparkContext, TaskContext}
 import java.io.Closeable
 import java.util.Properties
-
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 import scala.util.Try
@@ -374,6 +373,9 @@ private object HoodieMergeOnReadRDD {
         logRecordScannerBuilder.withPartition(
           getRelativePartitionPath(new Path(tableState.tablePath), logFiles.head.getPath.getParent))
       }
+
+      logRecordScannerBuilder.withRecordType(tableState.recordType)
+      logRecordScannerBuilder.withCombiningEngineClassFQN(tableState.combiningEngineClass)
 
       logRecordScannerBuilder.build()
     }

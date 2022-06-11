@@ -26,7 +26,6 @@ import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.OrderedProperties;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.model.HoodieAvroRecordCombiningEngine;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -153,12 +152,6 @@ public class HoodieTableConfig extends HoodieConfig {
       .key("hoodie.compaction.payload.class")
       .defaultValue(OverwriteWithLatestAvroPayload.class.getName())
       .withDocumentation("Payload class to use for performing compactions, i.e merge delta logs with current base file and then "
-          + " produce a new base file.");
-
-  public static final ConfigProperty<String> COMBINE_ENGINE_CLASS_NAME = ConfigProperty
-      .key("hoodie.compaction.combine.engine.class")
-      .defaultValue(HoodieAvroRecordCombiningEngine.class.getName())
-      .withDocumentation("Combine engine class to use for performing compactions, i.e merge delta logs with current base file and then "
           + " produce a new base file.");
 
   public static final ConfigProperty<String> ARCHIVELOG_FOLDER = ConfigProperty
@@ -484,14 +477,6 @@ public class HoodieTableConfig extends HoodieConfig {
     // There could be tables written with payload class from com.uber.hoodie. Need to transparently
     // change to org.apache.hudi
     return getStringOrDefault(PAYLOAD_CLASS_NAME).replace("com.uber.hoodie",
-        "org.apache.hudi");
-  }
-
-  /**
-   * Read the combine engine class for HoodieRecords from the table properties.
-   */
-  public String getCombiningEngineClass() {
-    return getStringOrDefault(COMBINE_ENGINE_CLASS_NAME).replace("com.uber.hoodie",
         "org.apache.hudi");
   }
 

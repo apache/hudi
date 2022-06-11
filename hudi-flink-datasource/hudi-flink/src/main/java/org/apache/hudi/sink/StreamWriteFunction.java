@@ -200,7 +200,7 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
   }
 
   private void initCombiningEngine() {
-    String combiningEngineClassName = metaClient.getTableConfig().getCombiningEngineClass();
+    String combiningEngineClassName = config.getString(FlinkOptions.COMBINE_ENGINE_CLASS_NAME);
     LOG.info("init combine engine with class [{}]", combiningEngineClassName);
     combiningEngine = ReflectionUtils.loadCombiningEngine(combiningEngineClassName);
   }
