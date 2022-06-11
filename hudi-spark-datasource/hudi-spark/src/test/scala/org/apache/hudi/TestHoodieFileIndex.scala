@@ -369,8 +369,9 @@ class TestHoodieFileIndex extends HoodieClientTestBase {
     metaClient = HoodieTableMetaClient.reload(metaClient)
 
     case class TestCase(enableMetadata: Boolean,
-                                    enableColumnStats: Boolean,
-                                    enableDataSkipping: Boolean)
+                        enableColumnStats: Boolean,
+                        enableDataSkipping: Boolean,
+                        columnStatsProcessingModeOverride: String = null)
 
     val testCases: Seq[TestCase] =
       TestCase(enableMetadata = false, enableColumnStats = false, enableDataSkipping = false) ::
@@ -378,6 +379,8 @@ class TestHoodieFileIndex extends HoodieClientTestBase {
       TestCase(enableMetadata = true, enableColumnStats = false, enableDataSkipping = true) ::
       TestCase(enableMetadata = false, enableColumnStats = true, enableDataSkipping = true) ::
       TestCase(enableMetadata = true, enableColumnStats = true, enableDataSkipping = true) ::
+      TestCase(enableMetadata = true, enableColumnStats = true, enableDataSkipping = true, columnStatsProcessingModeOverride = HoodieMetadataConfig.COLUMN_STATS_INDEX_PROCESSING_MODE_IN_MEMORY) ::
+      TestCase(enableMetadata = true, enableColumnStats = true, enableDataSkipping = true, columnStatsProcessingModeOverride = HoodieMetadataConfig.COLUMN_STATS_INDEX_PROCESSING_MODE_SPARK) ::
       Nil
 
     for (testCase <- testCases) {

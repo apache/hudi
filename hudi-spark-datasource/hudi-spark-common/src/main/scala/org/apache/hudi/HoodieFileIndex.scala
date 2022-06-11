@@ -201,14 +201,13 @@ case class HoodieFileIndex(spark: SparkSession,
     } else if (queryFilters.isEmpty || queryReferencedColumns.isEmpty) {
       Option.empty
     } else {
-      // NOTE: Since executing on cluster via Spark API has its own non-trivial amount of overhead,
+      // NOTE: Since executing on-cluster via Spark API has its own non-trivial amount of overhead,
       //       it's most often preferential to fetch Column Stats Index w/in the same process (usually driver),
       //       w/o resorting to on-cluster execution.
       //       For that we use a simple-heuristic to determine whether we should read and process CSI in-memory or
       //       on-cluster: total number of rows of the expected projected portion of the index has to be below the
       //       threshold (of 100k records)
-      val shouldReadInMemory = getFileSlicesCount * queryReferencedColumns.length < columnStatsIndexProjectionSizeInMemoryThreshold
-
+      val shouldReadInMemory = this.shouldReadInMemory(queryReferencedColumns)
       val columnStatsIndex = new ColumnStatsIndexSupport(spark, basePath, schema, metadataConfig, shouldReadInMemory)
 
       columnStatsIndex.loadTransposed(queryReferencedColumns) { transposedColStatsDF =>
@@ -242,6 +241,12 @@ case class HoodieFileIndex(spark: SparkSession,
         Some(prunedCandidateFileNames ++ notIndexedFileNames)
       }
     }
+  }
+
+  private def shouldReadInMemory(queryReferencedColumns: => Seq[String]): Boolean = {
+    val modeOverride = metadataConfig.getColumnStatsIndexProcessingModeOverride
+    modeOverride != HoodieMetadataConfig.COLUMN_STATS_INDEX_PROCESSING_MODE_SPARK &&
+      getFileSlicesCount * queryReferencedColumns.length < columnStatsIndexProjectionSizeInMemoryThreshold
   }
 
   override def refresh(): Unit = super.refresh()
