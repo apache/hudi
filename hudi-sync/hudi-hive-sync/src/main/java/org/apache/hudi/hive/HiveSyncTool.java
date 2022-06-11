@@ -40,6 +40,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
+import org.apache.hudi.sync.common.util.SparkDataSourceTableUtils;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.parquet.schema.MessageType;
@@ -240,9 +241,9 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
     Map<String, String> tableProperties = ConfigUtils.toMap(hiveSyncConfig.hiveSyncConfigParams.tableProperties);
     Map<String, String> serdeProperties = ConfigUtils.toMap(hiveSyncConfig.hiveSyncConfigParams.serdeProperties);
     if (hiveSyncConfig.hiveSyncConfigParams.syncAsSparkDataSourceTable) {
-      Map<String, String> sparkTableProperties = getSparkTableProperties(hiveSyncConfig.hoodieSyncConfigParams.partitionFields,
+      Map<String, String> sparkTableProperties = SparkDataSourceTableUtils.getSparkTableProperties(hiveSyncConfig.hoodieSyncConfigParams.partitionFields,
               hiveSyncConfig.hoodieSyncConfigParams.sparkVersion, hiveSyncConfig.hiveSyncConfigParams.sparkSchemaLengthThreshold, schema);
-      Map<String, String> sparkSerdeProperties = getSparkSerdeProperties(readAsOptimized, hiveSyncConfig.hoodieSyncConfigParams.basePath);
+      Map<String, String> sparkSerdeProperties = SparkDataSourceTableUtils.getSparkSerdeProperties(readAsOptimized, hiveSyncConfig.hoodieSyncConfigParams.basePath);
       tableProperties.putAll(sparkTableProperties);
       serdeProperties.putAll(sparkSerdeProperties);
     }

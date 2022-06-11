@@ -36,6 +36,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat;
 import org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe;
+import org.apache.hudi.sync.common.util.SparkDataSourceTableUtils;
 import org.apache.parquet.schema.MessageType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -205,9 +206,9 @@ public class AdbSyncTool extends HoodieSyncTool {
     Map<String, String> tableProperties = ConfigUtils.toMap(adbSyncConfig.adbSyncConfigParams.tableProperties);
     Map<String, String> serdeProperties = ConfigUtils.toMap(adbSyncConfig.adbSyncConfigParams.serdeProperties);
     if (adbSyncConfig.adbSyncConfigParams.syncAsSparkDataSourceTable) {
-      Map<String, String> sparkTableProperties = getSparkTableProperties(adbSyncConfig.hoodieSyncConfigParams.partitionFields,
+      Map<String, String> sparkTableProperties = SparkDataSourceTableUtils.getSparkTableProperties(adbSyncConfig.hoodieSyncConfigParams.partitionFields,
               adbSyncConfig.hoodieSyncConfigParams.sparkVersion, adbSyncConfig.adbSyncConfigParams.sparkSchemaLengthThreshold, schema);
-      Map<String, String> sparkSerdeProperties = getSparkSerdeProperties(readAsOptimized, adbSyncConfig.hoodieSyncConfigParams.basePath);
+      Map<String, String> sparkSerdeProperties = SparkDataSourceTableUtils.getSparkSerdeProperties(readAsOptimized, adbSyncConfig.hoodieSyncConfigParams.basePath);
       tableProperties.putAll(sparkTableProperties);
       serdeProperties.putAll(sparkSerdeProperties);
       LOG.info("Sync as spark datasource table, tableName:{}, tableExists:{}, tableProperties:{}, sederProperties:{}",
