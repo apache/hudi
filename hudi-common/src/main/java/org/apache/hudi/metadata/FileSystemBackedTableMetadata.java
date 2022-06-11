@@ -93,7 +93,7 @@ public class FileSystemBackedTableMetadata implements HoodieTableMetadata {
       // if current dictionary does not contain PartitionMetadata, add it to queue
       dirToFileListing.forEach(p -> {
         Option<FileStatus> partitionMetaFile = Option.fromJavaOptional(Arrays.stream(p.getRight()).parallel()
-            .filter(fileStatus -> fileStatus.getPath().getName().equals(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX))
+            .filter(fileStatus -> fileStatus.getPath().getName().startsWith(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX))
             .findFirst());
 
         if (partitionMetaFile.isPresent()) {
