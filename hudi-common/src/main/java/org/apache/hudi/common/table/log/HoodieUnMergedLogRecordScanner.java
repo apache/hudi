@@ -21,7 +21,6 @@ package org.apache.hudi.common.table.log;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
-import org.apache.hudi.common.table.log.AbstractHoodieLogRecordReader.Builder;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 
@@ -39,8 +38,8 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordReade
 
   private HoodieUnMergedLogRecordScanner(FileSystem fs, String basePath, List<String> logFilePaths, Schema readerSchema,
                                          String latestInstantTime, boolean readBlocksLazily, boolean reverseReader, int bufferSize,
-                                         LogRecordScannerCallback callback, Option<InstantRange> instantRange, HoodieRecordType recordType) {
-    super(fs, basePath, logFilePaths, readerSchema, latestInstantTime, readBlocksLazily, reverseReader, bufferSize, instantRange, false, recordType);
+                                         LogRecordScannerCallback callback, Option<InstantRange> instantRange, HoodieRecordType recordType, String combiningEngineClassFQN) {
+    super(fs, basePath, logFilePaths, readerSchema, latestInstantTime, readBlocksLazily, reverseReader, bufferSize, instantRange, false, recordType, combiningEngineClassFQN);
     this.callback = callback;
   }
 
@@ -88,6 +87,8 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordReade
     private LogRecordScannerCallback callback;
     // Record type read from log block
     private HoodieRecordType recordType;
+    // Combine engine class name
+    private String combiningEngineClassFQN;
 
     public Builder withFileSystem(FileSystem fs) {
       this.fs = fs;
@@ -146,13 +147,23 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordReade
     }
 
     @Override
+    public AbstractHoodieLogRecordReader.Builder withCombiningEngineClassFQN(String combiningEngineClassFQN) {
+      this.combiningEngineClassFQN = combiningEngineClassFQN;
+      return this;
+    }
+
+    @Override
     public HoodieUnMergedLogRecordScanner build() {
       if (recordType == null) {
         // TODO Remove
         throw new HoodieException("add todo");
       }
+      if (combiningEngineClassFQN == null) {
+        // TODO Remove
+        throw new HoodieException("add todo");
+      }
       return new HoodieUnMergedLogRecordScanner(fs, basePath, logFilePaths, readerSchema,
-          latestInstantTime, readBlocksLazily, reverseReader, bufferSize, callback, instantRange, recordType);
+          latestInstantTime, readBlocksLazily, reverseReader, bufferSize, callback, instantRange, recordType, combiningEngineClassFQN);
     }
   }
 }

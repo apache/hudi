@@ -899,9 +899,10 @@ public class HoodieTableMetaClient implements Serializable {
 
     public PropertyBuilder fromMetaClient(HoodieTableMetaClient metaClient) {
       return setTableType(metaClient.getTableType())
-        .setTableName(metaClient.getTableConfig().getTableName())
-        .setArchiveLogFolder(metaClient.getArchivePath())
-        .setPayloadClassName(metaClient.getTableConfig().getPayloadClass());
+          .setTableName(metaClient.getTableConfig().getTableName())
+          .setArchiveLogFolder(metaClient.getArchivePath())
+          .setPayloadClassName(metaClient.getTableConfig().getPayloadClass())
+          .setCombineEngineClassName(metaClient.getTableConfig().getCombiningEngineClass());
     }
 
     public PropertyBuilder fromProperties(Properties properties) {
