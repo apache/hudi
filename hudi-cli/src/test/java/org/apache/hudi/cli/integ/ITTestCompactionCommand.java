@@ -20,7 +20,7 @@ package org.apache.hudi.cli.integ;
 
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.commands.TableCommand;
-import org.apache.hudi.cli.testutils.AbstractShellIntegrationTest;
+import org.apache.hudi.cli.testutils.HoodieCLIIntegrationTestBase;
 import org.apache.hudi.client.CompactionAdminClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.TestCompactionAdminClient;
@@ -69,7 +69,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * A command use SparkLauncher need load jars under lib which generate during mvn package.
  * Use integration test instead of unit test.
  */
-public class ITTestCompactionCommand extends AbstractShellIntegrationTest {
+public class ITTestCompactionCommand extends HoodieCLIIntegrationTestBase {
 
   @BeforeEach
   public void init() throws IOException {
@@ -147,7 +147,8 @@ public class ITTestCompactionCommand extends AbstractShellIntegrationTest {
     writeSchemaToTmpFile(schemaPath);
 
     CommandResult cr2 = getShell().executeCommand(
-        String.format("compaction scheduleAndExecute --parallelism %s --schemaFilePath %s --sparkMaster %s",
+        String.format("compaction scheduleAndExecute --parallelism %s --schemaFilePath %s --sparkMaster %s "
+            + "--hoodieConfigs hoodie.compact.inline.max.delta.commits=1",
             2, schemaPath, "local"));
 
     assertAll("Command run failed",

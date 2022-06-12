@@ -51,7 +51,7 @@ public class TestDFSHoodieDatasetInputReader extends UtilitiesTestBase {
 
   @BeforeAll
   public static void initClass() throws Exception {
-    UtilitiesTestBase.initClass();
+    UtilitiesTestBase.initTestServices(false, false);
   }
 
   @AfterAll

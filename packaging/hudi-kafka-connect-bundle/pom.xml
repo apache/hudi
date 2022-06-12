@@ -30,6 +30,7 @@
     <properties>
         <checkstyle.skip>true</checkstyle.skip>
         <main.basedir>${project.parent.basedir}</main.basedir>
+        <skipTests>true</skipTests>
         <kafka.connect.bundle.shade.prefix>org.apache.hudi.</kafka.connect.bundle.shade.prefix>
     </properties>
 
