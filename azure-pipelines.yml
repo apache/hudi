@@ -95,7 +95,7 @@ stages:
           - task: Maven@3
             displayName: maven install
             continueOnError: true
-            retryCountOnTaskFailure: 1
+            retryCountOnTaskFailure: 2
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'clean install'
@@ -105,7 +105,7 @@ stages:
           - task: Maven@3
             displayName: UT common flink client/spark-client
             continueOnError: true
-            retryCountOnTaskFailure: 1
+            retryCountOnTaskFailure: 2
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
@@ -116,7 +116,7 @@ stages:
           - task: Maven@3
             displayName: FT common flink
             continueOnError: true
-            retryCountOnTaskFailure: 1
+            retryCountOnTaskFailure: 2
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
@@ -132,7 +132,7 @@ stages:
           - task: Maven@3
             displayName: maven install
             continueOnError: true
-            retryCountOnTaskFailure: 1
+            retryCountOnTaskFailure: 2
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'clean install'
@@ -142,7 +142,7 @@ stages:
           - task: Maven@3
             displayName: FT client/spark-client
             continueOnError: true
-            retryCountOnTaskFailure: 1
+            retryCountOnTaskFailure: 2
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
@@ -157,7 +157,7 @@ stages:
           - task: Maven@3
             displayName: maven install
             continueOnError: true
-            retryCountOnTaskFailure: 1
+            retryCountOnTaskFailure: 2
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'clean install'
@@ -167,7 +167,7 @@ stages:
           - task: Maven@3
             displayName: UT clients & cli & utilities & sync/hive-sync
             continueOnError: true
-            retryCountOnTaskFailure: 1
+            retryCountOnTaskFailure: 2
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
@@ -178,7 +178,7 @@ stages:
           - task: Maven@3
             displayName: FT clients & cli & utilities & sync/hive-sync
             continueOnError: true
-            retryCountOnTaskFailure: 1
+            retryCountOnTaskFailure: 2
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
@@ -194,7 +194,7 @@ stages:
           - task: Maven@3
             displayName: maven install
             continueOnError: true
-            retryCountOnTaskFailure: 1
+            retryCountOnTaskFailure: 2
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'clean install'
@@ -204,7 +204,7 @@ stages:
           - task: Maven@3
             displayName: UT other modules
             continueOnError: true
-            retryCountOnTaskFailure: 1
+            retryCountOnTaskFailure: 2
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
@@ -215,7 +215,7 @@ stages:
           - task: Maven@3
             displayName: FT other modules
             continueOnError: true
-            retryCountOnTaskFailure: 1
+            retryCountOnTaskFailure: 2
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
@@ -230,7 +230,7 @@ stages:
           - task: Maven@3
             displayName: maven install
             continueOnError: true
-            retryCountOnTaskFailure: 1
+            retryCountOnTaskFailure: 2
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'clean install'
@@ -249,7 +249,7 @@ stages:
           - task: AzureCLI@2
             displayName: Prepare for IT
             continueOnError: true
-            retryCountOnTaskFailure: 1
+            retryCountOnTaskFailure: 2
             inputs:
               azureSubscription: apachehudici-service-connection
               scriptType: bash
