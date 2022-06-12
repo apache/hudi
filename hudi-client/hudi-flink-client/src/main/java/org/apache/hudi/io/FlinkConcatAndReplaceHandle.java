@@ -56,7 +56,7 @@ public class FlinkConcatAndReplaceHandle<T, I, K, O>
    */
   @Override
   public void write(HoodieRecord oldRecord) {
-    String key = oldRecord.getRecordKey(keyGeneratorOpt);
+    String key = oldRecord.getRecordKey(keyGeneratorOpt, useWriterSchemaForCompaction ? tableSchemaWithMetaFields : tableSchema);
     try {
       fileWriter.write(key, oldRecord, writeSchema);
     } catch (IOException | RuntimeException e) {

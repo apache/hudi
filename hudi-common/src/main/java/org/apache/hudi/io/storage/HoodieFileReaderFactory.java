@@ -22,6 +22,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.exception.HoodieException;
@@ -37,7 +38,7 @@ import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
 public class HoodieFileReaderFactory {
 
   public static HoodieFileReaderFactory getReaderFactory(HoodieRecord.HoodieRecordType recordType) {
-    switch (HoodieRecord.HoodieRecordType.valueOf("SPARK")) {
+    switch (recordType) {
       case AVRO:
         return HoodieAvroFileReaderFactory.getFileReaderFactory();
       case SPARK:
@@ -66,6 +67,10 @@ public class HoodieFileReaderFactory {
     }
 
     throw new UnsupportedOperationException(extension + " format not supported yet.");
+  }
+
+  public HoodieFileReader getFileReader(Configuration conf, Path path, HoodieFileFormat format) throws IOException {
+    return this.newParquetFileReader(conf, path);
   }
 
   protected HoodieFileReader newParquetFileReader(Configuration conf, Path path) {

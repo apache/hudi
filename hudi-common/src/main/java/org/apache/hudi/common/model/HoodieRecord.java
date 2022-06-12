@@ -277,9 +277,9 @@ public abstract class HoodieRecord<T> implements Serializable {
     return key.getRecordKey();
   }
 
-  public abstract String getRecordKey(Option<BaseKeyGenerator> keyGeneratorOpt);
+  public abstract String getRecordKey(Option<BaseKeyGenerator> keyGeneratorOpt, Schema schema);
 
-  public abstract String getRecordKey(String keyFieldName);
+  public abstract String getRecordKey(String keyFieldName, Schema schema);
 
   public void seal() {
     this.sealed = true;

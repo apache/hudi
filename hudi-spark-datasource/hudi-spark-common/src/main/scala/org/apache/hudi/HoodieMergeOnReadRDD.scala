@@ -378,6 +378,9 @@ private object HoodieMergeOnReadRDD {
           getRelativePartitionPath(new Path(tableState.tablePath), logFiles.head.getPath.getParent))
       }
 
+      logRecordScannerBuilder.withRecordType(tableState.recordType)
+      logRecordScannerBuilder.withCombiningEngineClassFQN(tableState.combiningEngineClass)
+
       logRecordScannerBuilder.build()
     }
   }

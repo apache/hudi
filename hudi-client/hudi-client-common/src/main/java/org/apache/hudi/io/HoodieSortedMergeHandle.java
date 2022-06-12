@@ -72,7 +72,7 @@ public class HoodieSortedMergeHandle<T, I, K, O> extends HoodieMergeHandle<T, I,
    */
   @Override
   public void write(HoodieRecord oldRecord) {
-    String key = oldRecord.getRecordKey(keyGeneratorOpt);
+    String key = oldRecord.getRecordKey(keyGeneratorOpt, useWriterSchemaForCompaction ? tableSchemaWithMetaFields : tableSchema);
 
     // To maintain overall sorted order across updates and inserts, write any new inserts whose keys are less than
     // the oldRecord's key.

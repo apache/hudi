@@ -45,6 +45,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
+
 /**
  * HoodieParquetDataBlock contains a list of records serialized using Parquet.
  */
@@ -101,7 +103,7 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
             storageConfig,
             writerSchema);
         for (HoodieRecord<?> record : records) {
-          String recordKey = getRecordKey(record).orElse(null);
+          String recordKey = getRecordKey(record, writerSchema).orElse(null);
           parquetWriter.write(recordKey, record, writerSchema);
         }
         outputStream.flush();
@@ -135,7 +137,7 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
         blockContentLoc.getContentPositionInLogFile(),
         blockContentLoc.getBlockSize());
 
-    ClosableIterator<HoodieRecord<T>> iterator = HoodieFileReaderFactory.getReaderFactory(type).getFileReader(inlineConf, inlineLogFilePath)
+    ClosableIterator<HoodieRecord<T>> iterator = HoodieFileReaderFactory.getReaderFactory(type).getFileReader(inlineConf, inlineLogFilePath, PARQUET)
         .getRecordIterator(readerSchema);
     return iterator;
   }

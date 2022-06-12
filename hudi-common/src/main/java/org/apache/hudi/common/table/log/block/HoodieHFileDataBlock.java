@@ -121,7 +121,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
     FSDataOutputStream ostream = new FSDataOutputStream(baos, null);
 
     // Use simple incrementing counter as a key
-    boolean useIntegerKey = !getRecordKey(records.get(0)).isPresent();
+    boolean useIntegerKey = !getRecordKey(records.get(0), getSchema()).isPresent();
     // This is set here to avoid re-computing this in the loop
     int keyWidth = useIntegerKey ? (int) Math.ceil(Math.log(records.size())) + 1 : -1;
 
@@ -138,7 +138,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
       if (useIntegerKey) {
         recordKey = String.format("%" + keyWidth + "s", id++);
       } else {
-        recordKey = getRecordKey(record).get();
+        recordKey = getRecordKey(record, getSchema()).get();
       }
 
       final byte[] recordBytes = serializeRecord(record, writerSchema);

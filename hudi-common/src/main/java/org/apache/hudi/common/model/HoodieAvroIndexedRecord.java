@@ -98,12 +98,12 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
   }
 
   @Override
-  public String getRecordKey(Option<BaseKeyGenerator> keyGeneratorOpt) {
+  public String getRecordKey(Option<BaseKeyGenerator> keyGeneratorOpt, Schema schema) {
     return keyGeneratorOpt.isPresent() ? keyGeneratorOpt.get().getRecordKey((GenericRecord) data) : ((GenericRecord) data).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
   }
 
   @Override
-  public String getRecordKey(String keyFieldName) {
+  public String getRecordKey(String keyFieldName, Schema schema) {
     return Option.ofNullable(data.getSchema().getField(keyFieldName))
         .map(keyField -> data.get(keyField.pos()))
         .map(Object::toString).orElse(null);
@@ -170,12 +170,12 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
 
   @Override
   public HoodieRecord expansion(Schema schema, Properties prop, Map<String, Object> mapperConfig) {
-    Option<Pair<String, String>> keyGen = unsafeCast(prop.getOrDefault(SIMPLE_KEY_GEN_FIELDS_OPT, Option.empty()));
-    String payloadClass = prop.get(PAYLOAD_CLASS_NAME.key()).toString();
-    String preCombineField = prop.get(PRECOMBINE_FIELD.key()).toString();
-    boolean withOperationField = Boolean.parseBoolean(prop.get(WITH_OPERATION_FIELD).toString());
-    boolean populateMetaFields = Boolean.parseBoolean(prop.getOrDefault(MapperUtils.POPULATE_META_FIELDS, false).toString());
-    Option<String> partitionName = unsafeCast(prop.getOrDefault(PARTITION_NAME, Option.empty()));
+    Option<Pair<String, String>> keyGen = unsafeCast(mapperConfig.getOrDefault(SIMPLE_KEY_GEN_FIELDS_OPT, Option.empty()));
+    String payloadClass = mapperConfig.get(PAYLOAD_CLASS_NAME.key()).toString();
+    String preCombineField = mapperConfig.get(PRECOMBINE_FIELD.key()).toString();
+    boolean withOperationField = Boolean.parseBoolean(mapperConfig.get(WITH_OPERATION_FIELD).toString());
+    boolean populateMetaFields = Boolean.parseBoolean(mapperConfig.getOrDefault(MapperUtils.POPULATE_META_FIELDS, false).toString());
+    Option<String> partitionName = unsafeCast(mapperConfig.getOrDefault(PARTITION_NAME, Option.empty()));
     if (preCombineField == null) {
       // Support JavaExecutionStrategy
       GenericRecord record = (GenericRecord) data;

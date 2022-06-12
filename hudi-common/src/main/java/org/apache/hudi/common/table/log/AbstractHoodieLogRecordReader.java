@@ -146,16 +146,16 @@ public abstract class AbstractHoodieLogRecordReader {
                                           Schema readerSchema,
                                           String latestInstantTime, boolean readBlocksLazily, boolean reverseReader,
                                           int bufferSize, Option<InstantRange> instantRange,
-                                          boolean withOperationField, HoodieRecordType recordType) {
+                                          boolean withOperationField, HoodieRecordType recordType, String combiningEngineClassFQN) {
     this(fs, basePath, logFilePaths, readerSchema, latestInstantTime, readBlocksLazily, reverseReader, bufferSize,
-        instantRange, withOperationField, true, Option.empty(), InternalSchema.getEmptyInternalSchema(), recordType);
+        instantRange, withOperationField, true, Option.empty(), InternalSchema.getEmptyInternalSchema(), recordType, combiningEngineClassFQN);
   }
 
   protected AbstractHoodieLogRecordReader(FileSystem fs, String basePath, List<String> logFilePaths,
                                           Schema readerSchema, String latestInstantTime, boolean readBlocksLazily,
                                           boolean reverseReader, int bufferSize, Option<InstantRange> instantRange,
                                           boolean withOperationField, boolean forceFullScan,
-                                          Option<String> partitionName, InternalSchema internalSchema, HoodieRecordType recordType) {
+                                          Option<String> partitionName, InternalSchema internalSchema, HoodieRecordType recordType, String combiningEngineClassFQN) {
     this.readerSchema = readerSchema;
     this.latestInstantTime = latestInstantTime;
     this.hoodieTableMetaClient = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(basePath).build();
@@ -163,7 +163,7 @@ public abstract class AbstractHoodieLogRecordReader {
     HoodieTableConfig tableConfig = this.hoodieTableMetaClient.getTableConfig();
     this.payloadClassFQN = tableConfig.getPayloadClass();
     this.preCombineField = tableConfig.getPreCombineField();
-    this.combiningEngineClassFQN = tableConfig.getCombiningEngineClass();
+    this.combiningEngineClassFQN = combiningEngineClassFQN;
     this.totalLogFiles.addAndGet(logFilePaths.size());
     this.logFilePaths = logFilePaths;
     this.reverseReader = reverseReader;
@@ -570,6 +570,10 @@ public abstract class AbstractHoodieLogRecordReader {
     }
 
     public Builder withRecordType(HoodieRecordType type) {
+      throw new UnsupportedOperationException();
+    }
+
+    public Builder withCombiningEngineClassFQN(String combiningEngineClassFQN) {
       throw new UnsupportedOperationException();
     }
 

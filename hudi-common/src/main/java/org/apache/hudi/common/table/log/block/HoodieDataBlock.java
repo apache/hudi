@@ -179,7 +179,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
     }
 
     HashSet<String> keySet = new HashSet<>(keys);
-    return FilteringIterator.getInstance(allRecords, keySet, fullKey, this::getRecordKey);
+    return FilteringIterator.getInstance(allRecords, keySet, fullKey, record -> getRecordKey(record, getSchema()));
   }
 
   protected <T> ClosableIterator<HoodieRecord<T>> readRecordsFromBlockPayload(HoodieRecordType type) throws IOException {
@@ -212,8 +212,8 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
     return Option.ofNullable(schema.getField(keyFieldName));
   }
 
-  protected Option<String> getRecordKey(HoodieRecord record) {
-    return Option.ofNullable(record.getRecordKey(keyFieldName));
+  protected Option<String> getRecordKey(HoodieRecord record, Schema schema) {
+    return Option.ofNullable(record.getRecordKey(keyFieldName, schema));
   }
 
   /**

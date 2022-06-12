@@ -20,11 +20,12 @@ package org.apache.hudi.functional
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.HoodieMetadataConfig
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieTableType}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
-import org.apache.hudi.config.{HoodieIndexConfig, HoodieWriteConfig}
+import org.apache.hudi.config.{HoodieCompactionConfig, HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.index.HoodieIndex.IndexType
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions.Config
@@ -86,7 +87,8 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
       .limit(2)
     inputDF1.write.format("org.apache.hudi")
       .options(commonOpts)
-      .option(HoodieTableConfig.COMBINE_ENGINE_CLASS_NAME.key(), classOf[HoodieSparkRecordCombiningEngine].getName)
+      .option(HoodieWriteConfig.COMBINE_ENGINE_CLASS_NAME.key(), classOf[HoodieSparkRecordCombiningEngine].getName)
+      .option(HoodieWriteConfig.RECORD_TYPE.key(), HoodieRecordType.SPARK.name())
       .option("hoodie.compact.inline", "false") // else fails due to compaction & deltacommit instant times being same
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
       .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
@@ -108,13 +110,15 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
     inputDF2.write.format("org.apache.hudi")
       .options(commonOpts)
       .option("hoodie.compact.inline", "false")
-      .option(HoodieTableConfig.COMBINE_ENGINE_CLASS_NAME.key(), classOf[HoodieSparkRecordCombiningEngine].getName)
+      .option(HoodieWriteConfig.COMBINE_ENGINE_CLASS_NAME.key(), classOf[HoodieSparkRecordCombiningEngine].getName)
+      .option(HoodieWriteConfig.RECORD_TYPE.key(), HoodieRecordType.SPARK.name())
       .option("hoodie.logfile.data.block.format", "parquet")
       .mode(SaveMode.Append)
       .save(basePath)
     val hudiSnapshotDF2 = spark.read.format("org.apache.hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
-      .option(HoodieTableConfig.COMBINE_ENGINE_CLASS_NAME.key(), classOf[HoodieSparkRecordCombiningEngine].getName)
+      .option(HoodieWriteConfig.COMBINE_ENGINE_CLASS_NAME.key(), classOf[HoodieSparkRecordCombiningEngine].getName)
+      .option(HoodieWriteConfig.RECORD_TYPE.key(), HoodieRecordType.SPARK.name())
       .load(basePath + "/*/*/*/*")
     //    inputDF1.collect().foreach(println(_))
     //    println("==========")

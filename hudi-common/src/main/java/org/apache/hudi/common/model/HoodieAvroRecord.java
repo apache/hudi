@@ -86,12 +86,12 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
   }
 
   @Override
-  public String getRecordKey(Option<BaseKeyGenerator> keyGeneratorOpt) {
+  public String getRecordKey(Option<BaseKeyGenerator> keyGeneratorOpt, Schema schema) {
     return getRecordKey();
   }
 
   @Override
-  public String getRecordKey(String keyFieldName) {
+  public String getRecordKey(String keyFieldName, Schema schema) {
     return getRecordKey();
   }
 

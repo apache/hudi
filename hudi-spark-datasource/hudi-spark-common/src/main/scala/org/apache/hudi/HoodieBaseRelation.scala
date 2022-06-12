@@ -53,6 +53,8 @@ import org.apache.spark.unsafe.types.UTF8String
 
 import java.net.URI
 import java.util.Locale
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
+import org.apache.hudi.config.HoodieWriteConfig
 import scala.collection.JavaConverters._
 import scala.util.control.NonFatal
 import scala.util.{Failure, Success, Try}
@@ -68,7 +70,8 @@ case class HoodieTableState(tablePath: String,
                             usesVirtualKeys: Boolean,
                             recordPayloadClassName: String,
                             metadataConfig: HoodieMetadataConfig,
-                            combiningEngineClass: String)
+                            combiningEngineClass: String,
+                            recordType: HoodieRecordType)
 
 /**
  * Hoodie BaseRelation which extends [[PrunedFilteredScan]].
@@ -397,7 +400,8 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
       usesVirtualKeys = !tableConfig.populateMetaFields(),
       recordPayloadClassName = tableConfig.getPayloadClass,
       metadataConfig = fileIndex.metadataConfig,
-      combiningEngineClass = tableConfig.getCombiningEngineClass
+      combiningEngineClass = tableConfig.getCombiningEngineClass,
+      recordType = HoodieRecordType.valueOf(optParams(HoodieWriteConfig.RECORD_TYPE.key()))
     )
   }
 
