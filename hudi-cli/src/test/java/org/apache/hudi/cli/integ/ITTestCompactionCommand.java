@@ -147,8 +147,8 @@ public class ITTestCompactionCommand extends HoodieCLIIntegrationTestBase {
     writeSchemaToTmpFile(schemaPath);
 
     CommandResult cr2 = getShell().executeCommand(
-        String.format("compaction scheduleAndExecute --parallelism %s --schemaFilePath %s --sparkMaster %s " +
-            "--hoodieConfigs hoodie.compact.inline.max.delta.commits=1",
+        String.format("compaction scheduleAndExecute --parallelism %s --schemaFilePath %s --sparkMaster %s "
+            + "--hoodieConfigs hoodie.compact.inline.max.delta.commits=1",
             2, schemaPath, "local"));
 
     assertAll("Command run failed",
