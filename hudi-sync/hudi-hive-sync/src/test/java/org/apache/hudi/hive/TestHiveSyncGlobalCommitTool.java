@@ -57,22 +57,22 @@ public class TestHiveSyncGlobalCommitTool {
     config.properties.setProperty(LOCAL_BASE_PATH, localCluster.tablePath(dbName, tblName));
     config.properties.setProperty(REMOTE_BASE_PATH, remoteCluster.tablePath(dbName, tblName));
     config.globallyReplicatedTimeStamp = commitTime;
-    config.hiveUser = System.getProperty("user.name");
-    config.hivePass = "";
-    config.databaseName = dbName;
-    config.tableName = tblName;
-    config.basePath = localCluster.tablePath(dbName, tblName);
-    config.assumeDatePartitioning = true;
-    config.usePreApacheInputFormat = false;
-    config.partitionFields = Collections.singletonList("datestr");
+    config.hiveSyncConfigParams.hiveUser = System.getProperty("user.name");
+    config.hiveSyncConfigParams.hivePass = "";
+    config.hoodieSyncConfigParams.databaseName = dbName;
+    config.hoodieSyncConfigParams.tableName = tblName;
+    config.hoodieSyncConfigParams.basePath = localCluster.tablePath(dbName, tblName);
+    config.hoodieSyncConfigParams.assumeDatePartitioning = true;
+    config.hiveSyncConfigParams.usePreApacheInputFormat = false;
+    config.hoodieSyncConfigParams.partitionFields = Collections.singletonList("datestr");
     return config;
   }
 
   private void compareEqualLastReplicatedTimeStamp(HiveSyncGlobalCommitConfig config) throws Exception {
     Assertions.assertEquals(localCluster.getHMSClient()
-        .getTable(config.databaseName, config.tableName).getParameters()
+        .getTable(config.hoodieSyncConfigParams.databaseName, config.hoodieSyncConfigParams.tableName).getParameters()
         .get(GLOBALLY_CONSISTENT_READ_TIMESTAMP), remoteCluster.getHMSClient()
-        .getTable(config.databaseName, config.tableName).getParameters()
+        .getTable(config.hoodieSyncConfigParams.databaseName, config.hoodieSyncConfigParams.tableName).getParameters()
         .get(GLOBALLY_CONSISTENT_READ_TIMESTAMP), "compare replicated timestamps");
   }
 
@@ -116,11 +116,11 @@ public class TestHiveSyncGlobalCommitTool {
     remoteCluster.stopHiveServer2();
     Assertions.assertFalse(tool.commit());
     Assertions.assertEquals(commitTime, localCluster.getHMSClient()
-        .getTable(config.databaseName, config.tableName).getParameters()
+        .getTable(config.hoodieSyncConfigParams.databaseName, config.hoodieSyncConfigParams.tableName).getParameters()
         .get(GLOBALLY_CONSISTENT_READ_TIMESTAMP));
     Assertions.assertTrue(tool.rollback()); // do a rollback
     Assertions.assertNotEquals(commitTime, localCluster.getHMSClient()
-        .getTable(config.databaseName, config.tableName).getParameters()
+        .getTable(config.hoodieSyncConfigParams.databaseName, config.hoodieSyncConfigParams.tableName).getParameters()
         .get(GLOBALLY_CONSISTENT_READ_TIMESTAMP));
     Assertions.assertFalse(remoteCluster.getHMSClient().tableExists(DB_NAME, TBL_NAME));
     remoteCluster.startHiveServer2();

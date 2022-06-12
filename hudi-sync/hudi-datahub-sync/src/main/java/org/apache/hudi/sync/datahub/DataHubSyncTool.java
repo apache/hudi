@@ -21,7 +21,7 @@ package org.apache.hudi.sync.datahub;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.sync.common.AbstractSyncTool;
+import org.apache.hudi.sync.common.HoodieSyncTool;
 import org.apache.hudi.sync.datahub.config.DataHubSyncConfig;
 
 import com.beust.jcommander.JCommander;
@@ -34,7 +34,7 @@ import org.apache.hadoop.fs.FileSystem;
  * @Experimental
  * @see <a href="https://datahubproject.io/">https://datahubproject.io/</a>
  */
-public class DataHubSyncTool extends AbstractSyncTool {
+public class DataHubSyncTool extends HoodieSyncTool {
 
   private final DataHubSyncConfig config;
 
@@ -56,8 +56,8 @@ public class DataHubSyncTool extends AbstractSyncTool {
   @Override
   public void syncHoodieTable() {
     try (DataHubSyncClient syncClient = new DataHubSyncClient(config, conf, fs)) {
-      syncClient.updateTableDefinition(config.tableName);
-      syncClient.updateLastCommitTimeSynced(config.tableName);
+      syncClient.updateTableDefinition(config.hoodieSyncConfigParams.tableName);
+      syncClient.updateLastCommitTimeSynced(config.hoodieSyncConfigParams.tableName);
     }
   }
 
@@ -68,7 +68,7 @@ public class DataHubSyncTool extends AbstractSyncTool {
       cmd.usage();
       System.exit(1);
     }
-    FileSystem fs = FSUtils.getFs(cfg.basePath, new Configuration());
+    FileSystem fs = FSUtils.getFs(cfg.hoodieSyncConfigParams.basePath, new Configuration());
     new DataHubSyncTool(cfg, fs.getConf(), fs).syncHoodieTable();
   }
 }

@@ -71,10 +71,10 @@ public class HMSDDLExecutor implements DDLExecutor {
     this.fs = fs;
     try {
       this.partitionValueExtractor =
-          (PartitionValueExtractor) Class.forName(syncConfig.partitionValueExtractorClass).newInstance();
+          (PartitionValueExtractor) Class.forName(syncConfig.hoodieSyncConfigParams.partitionValueExtractorClass).newInstance();
     } catch (Exception e) {
       throw new HoodieHiveSyncException(
-          "Failed to initialize PartitionValueExtractor class " + syncConfig.partitionValueExtractorClass, e);
+          "Failed to initialize PartitionValueExtractor class " + syncConfig.hoodieSyncConfigParams.partitionValueExtractorClass, e);
     }
   }
 
@@ -93,16 +93,16 @@ public class HMSDDLExecutor implements DDLExecutor {
   public void createTable(String tableName, MessageType storageSchema, String inputFormatClass, String outputFormatClass, String serdeClass, Map<String, String> serdeProperties,
                           Map<String, String> tableProperties) {
     try {
-      LinkedHashMap<String, String> mapSchema = HiveSchemaUtil.parquetSchemaToMapSchema(storageSchema, syncConfig.supportTimestamp, false);
+      LinkedHashMap<String, String> mapSchema = HiveSchemaUtil.parquetSchemaToMapSchema(storageSchema, syncConfig.hiveSyncConfigParams.supportTimestamp, false);
 
       List<FieldSchema> fieldSchema = HiveSchemaUtil.convertMapSchemaToHiveFieldSchema(mapSchema, syncConfig);
 
-      List<FieldSchema> partitionSchema = syncConfig.partitionFields.stream().map(partitionKey -> {
+      List<FieldSchema> partitionSchema = syncConfig.hoodieSyncConfigParams.partitionFields.stream().map(partitionKey -> {
         String partitionKeyType = HiveSchemaUtil.getPartitionKeyType(mapSchema, partitionKey);
         return new FieldSchema(partitionKey, partitionKeyType.toLowerCase(), "");
       }).collect(Collectors.toList());
       Table newTb = new Table();
-      newTb.setDbName(syncConfig.databaseName);
+      newTb.setDbName(syncConfig.hoodieSyncConfigParams.databaseName);
       newTb.setTableName(tableName);
       newTb.setOwner(UserGroupInformation.getCurrentUser().getShortUserName());
       newTb.setCreateTime((int) System.currentTimeMillis());
@@ -110,13 +110,13 @@ public class HMSDDLExecutor implements DDLExecutor {
       storageDescriptor.setCols(fieldSchema);
       storageDescriptor.setInputFormat(inputFormatClass);
       storageDescriptor.setOutputFormat(outputFormatClass);
-      storageDescriptor.setLocation(syncConfig.basePath);
+      storageDescriptor.setLocation(syncConfig.hoodieSyncConfigParams.basePath);
       serdeProperties.put("serialization.format", "1");
       storageDescriptor.setSerdeInfo(new SerDeInfo(null, serdeClass, serdeProperties));
       newTb.setSd(storageDescriptor);
       newTb.setPartitionKeys(partitionSchema);
 
-      if (!syncConfig.createManagedTable) {
+      if (!syncConfig.hiveSyncConfigParams.createManagedTable) {
         newTb.putToParameters("EXTERNAL", "TRUE");
       }
 
@@ -134,9 +134,9 @@ public class HMSDDLExecutor implements DDLExecutor {
   @Override
   public void updateTableDefinition(String tableName, MessageType newSchema) {
     try {
-      boolean cascade = syncConfig.partitionFields.size() > 0;
+      boolean cascade = syncConfig.hoodieSyncConfigParams.partitionFields.size() > 0;
       List<FieldSchema> fieldSchema = HiveSchemaUtil.convertParquetSchemaToHiveFieldSchema(newSchema, syncConfig);
-      Table table = client.getTable(syncConfig.databaseName, tableName);
+      Table table = client.getTable(syncConfig.hoodieSyncConfigParams.databaseName, tableName);
       StorageDescriptor sd = table.getSd();
       sd.setCols(fieldSchema);
       table.setSd(sd);
@@ -145,7 +145,7 @@ public class HMSDDLExecutor implements DDLExecutor {
         LOG.info("partition table,need cascade");
         environmentContext.putToProperties(StatsSetupConst.CASCADE, StatsSetupConst.TRUE);
       }
-      client.alter_table_with_environmentContext(syncConfig.databaseName, tableName, table, environmentContext);
+      client.alter_table_with_environmentContext(syncConfig.hoodieSyncConfigParams.databaseName, tableName, table, environmentContext);
     } catch (Exception e) {
       LOG.error("Failed to update table for " + tableName, e);
       throw new HoodieHiveSyncException("Failed to update table for " + tableName, e);
@@ -158,7 +158,7 @@ public class HMSDDLExecutor implements DDLExecutor {
       // HiveMetastoreClient returns partition keys separate from Columns, hence get both and merge to
       // get the Schema of the table.
       final long start = System.currentTimeMillis();
-      Table table = this.client.getTable(syncConfig.databaseName, tableName);
+      Table table = this.client.getTable(syncConfig.hoodieSyncConfigParams.databaseName, tableName);
       Map<String, String> partitionKeysMap =
           table.getPartitionKeys().stream().collect(Collectors.toMap(FieldSchema::getName, f -> f.getType().toUpperCase()));
 
@@ -184,22 +184,22 @@ public class HMSDDLExecutor implements DDLExecutor {
     }
     LOG.info("Adding partitions " + partitionsToAdd.size() + " to table " + tableName);
     try {
-      StorageDescriptor sd = client.getTable(syncConfig.databaseName, tableName).getSd();
+      StorageDescriptor sd = client.getTable(syncConfig.hoodieSyncConfigParams.databaseName, tableName).getSd();
       List<Partition> partitionList = partitionsToAdd.stream().map(partition -> {
         StorageDescriptor partitionSd = new StorageDescriptor();
         partitionSd.setCols(sd.getCols());
         partitionSd.setInputFormat(sd.getInputFormat());
         partitionSd.setOutputFormat(sd.getOutputFormat());
         partitionSd.setSerdeInfo(sd.getSerdeInfo());
-        String fullPartitionPath = FSUtils.getPartitionPath(syncConfig.basePath, partition).toString();
+        String fullPartitionPath = FSUtils.getPartitionPath(syncConfig.hoodieSyncConfigParams.basePath, partition).toString();
         List<String> partitionValues = partitionValueExtractor.extractPartitionValuesInPath(partition);
         partitionSd.setLocation(fullPartitionPath);
-        return new Partition(partitionValues, syncConfig.databaseName, tableName, 0, 0, partitionSd, null);
+        return new Partition(partitionValues, syncConfig.hoodieSyncConfigParams.databaseName, tableName, 0, 0, partitionSd, null);
       }).collect(Collectors.toList());
       client.add_partitions(partitionList, true, false);
     } catch (TException e) {
-      LOG.error(syncConfig.databaseName + "." + tableName + " add partition failed", e);
-      throw new HoodieHiveSyncException(syncConfig.databaseName + "." + tableName + " add partition failed", e);
+      LOG.error(syncConfig.hoodieSyncConfigParams.databaseName + "." + tableName + " add partition failed", e);
+      throw new HoodieHiveSyncException(syncConfig.hoodieSyncConfigParams.databaseName + "." + tableName + " add partition failed", e);
     }
   }
 
@@ -211,20 +211,20 @@ public class HMSDDLExecutor implements DDLExecutor {
     }
     LOG.info("Changing partitions " + changedPartitions.size() + " on " + tableName);
     try {
-      StorageDescriptor sd = client.getTable(syncConfig.databaseName, tableName).getSd();
+      StorageDescriptor sd = client.getTable(syncConfig.hoodieSyncConfigParams.databaseName, tableName).getSd();
       List<Partition> partitionList = changedPartitions.stream().map(partition -> {
-        Path partitionPath = FSUtils.getPartitionPath(syncConfig.basePath, partition);
+        Path partitionPath = FSUtils.getPartitionPath(syncConfig.hoodieSyncConfigParams.basePath, partition);
         String partitionScheme = partitionPath.toUri().getScheme();
         String fullPartitionPath = StorageSchemes.HDFS.getScheme().equals(partitionScheme)
             ? FSUtils.getDFSFullPartitionPath(fs, partitionPath) : partitionPath.toString();
         List<String> partitionValues = partitionValueExtractor.extractPartitionValuesInPath(partition);
         sd.setLocation(fullPartitionPath);
-        return new Partition(partitionValues, syncConfig.databaseName, tableName, 0, 0, sd, null);
+        return new Partition(partitionValues, syncConfig.hoodieSyncConfigParams.databaseName, tableName, 0, 0, sd, null);
       }).collect(Collectors.toList());
-      client.alter_partitions(syncConfig.databaseName, tableName, partitionList, null);
+      client.alter_partitions(syncConfig.hoodieSyncConfigParams.databaseName, tableName, partitionList, null);
     } catch (TException e) {
-      LOG.error(syncConfig.databaseName + "." + tableName + " update partition failed", e);
-      throw new HoodieHiveSyncException(syncConfig.databaseName + "." + tableName + " update partition failed", e);
+      LOG.error(syncConfig.hoodieSyncConfigParams.databaseName + "." + tableName + " update partition failed", e);
+      throw new HoodieHiveSyncException(syncConfig.hoodieSyncConfigParams.databaseName + "." + tableName + " update partition failed", e);
     }
   }
 
@@ -241,20 +241,20 @@ public class HMSDDLExecutor implements DDLExecutor {
         if (HivePartitionUtil.partitionExists(client, tableName, dropPartition, partitionValueExtractor, syncConfig)) {
           String partitionClause =
               HivePartitionUtil.getPartitionClauseForDrop(dropPartition, partitionValueExtractor, syncConfig);
-          client.dropPartition(syncConfig.databaseName, tableName, partitionClause, false);
+          client.dropPartition(syncConfig.hoodieSyncConfigParams.databaseName, tableName, partitionClause, false);
         }
         LOG.info("Drop partition " + dropPartition + " on " + tableName);
       }
     } catch (TException e) {
-      LOG.error(syncConfig.databaseName + "." + tableName + " drop partition failed", e);
-      throw new HoodieHiveSyncException(syncConfig.databaseName + "." + tableName + " drop partition failed", e);
+      LOG.error(syncConfig.hoodieSyncConfigParams.databaseName + "." + tableName + " drop partition failed", e);
+      throw new HoodieHiveSyncException(syncConfig.hoodieSyncConfigParams.databaseName + "." + tableName + " drop partition failed", e);
     }
   }
 
   @Override
   public void updateTableComments(String tableName, Map<String, ImmutablePair<String,String>> alterSchema) {
     try {
-      Table table = client.getTable(syncConfig.databaseName, tableName);
+      Table table = client.getTable(syncConfig.hoodieSyncConfigParams.databaseName, tableName);
       StorageDescriptor sd = new StorageDescriptor(table.getSd());
       for (FieldSchema fieldSchema : sd.getCols()) {
         if (alterSchema.containsKey(fieldSchema.getName())) {
@@ -264,7 +264,7 @@ public class HMSDDLExecutor implements DDLExecutor {
       }
       table.setSd(sd);
       EnvironmentContext environmentContext = new EnvironmentContext();
-      client.alter_table_with_environmentContext(syncConfig.databaseName, tableName, table, environmentContext);
+      client.alter_table_with_environmentContext(syncConfig.hoodieSyncConfigParams.databaseName, tableName, table, environmentContext);
       sd.clear();
     } catch (Exception e) {
       LOG.error("Failed to update table comments for " + tableName, e);

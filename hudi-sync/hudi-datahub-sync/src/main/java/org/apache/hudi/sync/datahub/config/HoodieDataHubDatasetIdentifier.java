@@ -43,6 +43,6 @@ public class HoodieDataHubDatasetIdentifier {
   public DatasetUrn getDatasetUrn() {
     DataPlatformUrn dataPlatformUrn = new DataPlatformUrn(DEFAULT_HOODIE_DATAHUB_PLATFORM_NAME);
     DataHubSyncConfig config = new DataHubSyncConfig(props);
-    return new DatasetUrn(dataPlatformUrn, String.format("%s.%s", config.databaseName, config.tableName), FabricType.DEV);
+    return new DatasetUrn(dataPlatformUrn, String.format("%s.%s", config.hoodieSyncConfigParams.databaseName, config.hoodieSyncConfigParams.tableName), FabricType.DEV);
   }
 }

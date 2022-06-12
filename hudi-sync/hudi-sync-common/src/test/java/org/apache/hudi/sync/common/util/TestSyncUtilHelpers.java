@@ -20,7 +20,7 @@ package org.apache.hudi.sync.common.util;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.sync.common.AbstractSyncTool;
+import org.apache.hudi.sync.common.HoodieSyncTool;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -48,7 +48,7 @@ public class TestSyncUtilHelpers {
 
   @Test
   public void testCreateValidSyncClass() {
-    AbstractSyncTool metaSyncTool = SyncUtilHelpers.instantiateMetaSyncTool(
+    HoodieSyncTool metaSyncTool = SyncUtilHelpers.instantiateMetaSyncTool(
         ValidMetaSyncClass.class.getName(),
         new TypedProperties(),
         hadoopConf,
@@ -60,13 +60,13 @@ public class TestSyncUtilHelpers {
   }
 
   /**
-   * Ensure it still works for the deprecated constructor of {@link AbstractSyncTool}
+   * Ensure it still works for the deprecated constructor of {@link HoodieSyncTool}
    * as we implemented the fallback.
    */
   @Test
   public void testCreateDeprecatedSyncClass() {
     Properties properties = new Properties();
-    AbstractSyncTool deprecatedMetaSyncClass = SyncUtilHelpers.instantiateMetaSyncTool(
+    HoodieSyncTool deprecatedMetaSyncClass = SyncUtilHelpers.instantiateMetaSyncTool(
         DeprecatedMetaSyncClass.class.getName(),
         new TypedProperties(properties),
         hadoopConf,
@@ -95,7 +95,7 @@ public class TestSyncUtilHelpers {
 
   }
 
-  public static class ValidMetaSyncClass extends AbstractSyncTool {
+  public static class ValidMetaSyncClass extends HoodieSyncTool {
     public ValidMetaSyncClass(TypedProperties props, Configuration conf, FileSystem fs) {
       super(props, conf, fs);
     }
@@ -106,7 +106,7 @@ public class TestSyncUtilHelpers {
     }
   }
 
-  public static class DeprecatedMetaSyncClass extends AbstractSyncTool {
+  public static class DeprecatedMetaSyncClass extends HoodieSyncTool {
     public DeprecatedMetaSyncClass(Properties props, FileSystem fileSystem) {
       super(props, fileSystem);
     }

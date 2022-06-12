@@ -37,6 +37,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieAvroKeyGeneratorFactory;
 import org.apache.hudi.sync.common.HoodieSyncConfig;
+import org.apache.hudi.sync.common.SupportMetaSync;
 import org.apache.hudi.sync.common.util.SyncUtilHelpers;
 
 import org.apache.hadoop.conf.Configuration;
@@ -56,7 +57,7 @@ import java.util.Set;
  * {@link TransactionCoordinator}
  * using {@link HoodieJavaWriteClient}.
  */
-public class KafkaConnectTransactionServices implements ConnectTransactionServices {
+public class KafkaConnectTransactionServices implements ConnectTransactionServices, SupportMetaSync {
 
   private static final Logger LOG = LogManager.getLogger(KafkaConnectTransactionServices.class);
 

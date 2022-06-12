@@ -80,7 +80,7 @@ public class GlobalHiveSyncTool extends HiveSyncTool {
   }
 
   public static GlobalHiveSyncTool buildGlobalHiveSyncTool(GlobalHiveSyncConfig cfg, HiveConf hiveConf) {
-    FileSystem fs = FSUtils.getFs(cfg.basePath, new Configuration());
+    FileSystem fs = FSUtils.getFs(cfg.hoodieSyncConfigParams.basePath, new Configuration());
     hiveConf.addResource(fs.getConf());
     return new GlobalHiveSyncTool(cfg, hiveConf, fs);
   }

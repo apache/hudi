@@ -58,11 +58,11 @@ public class AwsGlueCatalogSyncTool extends HiveSyncTool {
     // parse the params
     final HiveSyncConfig cfg = new HiveSyncConfig();
     JCommander cmd = new JCommander(cfg, null, args);
-    if (cfg.help || args.length == 0) {
+    if (cfg.hiveSyncConfigParams.help || args.length == 0) {
       cmd.usage();
       System.exit(1);
     }
-    FileSystem fs = FSUtils.getFs(cfg.basePath, new Configuration());
+    FileSystem fs = FSUtils.getFs(cfg.hoodieSyncConfigParams.basePath, new Configuration());
     HiveConf hiveConf = new HiveConf();
     hiveConf.addResource(fs.getConf());
     new AwsGlueCatalogSyncTool(cfg, hiveConf, fs).syncHoodieTable();
