@@ -139,11 +139,7 @@ public class ITTestSavepointsCommand extends HoodieCLIIntegrationTestBase {
     HoodieTestDataGenerator.createSavepointFile(tablePath, savepoint, jsc.hadoopConfiguration());
 
     // re-bootstrap metadata table
-    // delete first
-    String basePath = metaClient.getBasePath();
-    Path metadataTableBasePath = new Path(HoodieTableMetadata.getMetadataTableBasePath(basePath));
-    metaClient.getFs().delete(metadataTableBasePath, true);
-
+    Path metadataTableBasePath = new Path(HoodieTableMetadata.getMetadataTableBasePath(HoodieCLI.basePath));
     // then bootstrap metadata table at instant 104
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath(HoodieCLI.basePath)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).build()).build();

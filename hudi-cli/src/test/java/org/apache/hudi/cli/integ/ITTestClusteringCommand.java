@@ -105,9 +105,10 @@ public class ITTestClusteringCommand extends HoodieCLIIntegrationTestBase {
 
     // get clustering instance
     HoodieActiveTimeline timeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
-    Option<String> instance =
+    Option<String> instanceOpt =
         timeline.filterPendingReplaceTimeline().firstInstant().map(HoodieInstant::getTimestamp);
-    assertTrue(instance.isPresent(), "Must have pending clustering.");
+    assertTrue(instanceOpt.isPresent(), "Must have pending clustering.");
+    final String instance = instanceOpt.get();
 
     CommandResult cr2 = getShell().executeCommand(
         String.format("clustering run --parallelism %s --clusteringInstant %s --sparkMaster %s",
