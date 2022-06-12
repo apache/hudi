@@ -217,7 +217,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
         }
         // Convert GenericRecord to GenericRecord with hoodie commit metadata in schema
         HoodieRecord rewrittenRecord = hoodieRecord.rewriteRecord(tableSchema, recordProperties, schemaOnReadEnabled, writeSchemaWithMetaFields);
-        HoodieRecord populatedRecord = populateMetadataFields(rewrittenRecord, tableSchema, recordProperties);
+        HoodieRecord populatedRecord = populateMetadataFields(rewrittenRecord, writeSchemaWithMetaFields, recordProperties);
         finalRecord = Option.of(populatedRecord);
         if (isUpdateRecord) {
           updatedRecordsWritten++;

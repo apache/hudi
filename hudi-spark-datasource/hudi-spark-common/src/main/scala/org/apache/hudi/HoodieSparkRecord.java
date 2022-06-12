@@ -164,27 +164,22 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
 
   @Override
   public HoodieRecord addMetadataValues(Schema recordSchema, Properties prop, Map<HoodieMetadataField, String> metadataValues) throws IOException {
-    // TODO: record schema has metafield ?
-    InternalRow metadataRow = new GenericInternalRow(Arrays.stream(HoodieMetadataField.values())
-        .filter(k -> metadataValues.containsKey(k)).map(k -> metadataValues.get(k))
-        .filter(v -> v != null).map(v -> CatalystTypeConverters.convertToCatalyst(v)).toArray());
-    this.data = new JoinedRow(metadataRow, this.data);
-    //    Arrays.stream(HoodieMetadataField.values()).forEach(metadataField -> {
-    //      String value = metadataValues.get(metadataField);
-    //      if (value != null) {
-    //        data.update(recordSchema.getField(metadataField.getFieldName()).pos(), CatalystTypeConverters.convertToCatalyst(value));
-    //      }
-    //    });
+    Arrays.stream(HoodieMetadataField.values()).forEach(metadataField -> {
+      String value = metadataValues.get(metadataField);
+      if (value != null) {
+        data.update(recordSchema.getField(metadataField.getFieldName()).pos(), CatalystTypeConverters.convertToCatalyst(value));
+      }
+    });
     return this;
   }
 
   @Override
   public HoodieRecord expansion(Schema schema, Properties prop, Map<String, Object> mapperConfig) {
-    Option<Pair<String, String>> keyGen = unsafeCast(prop.getOrDefault(SIMPLE_KEY_GEN_FIELDS_OPT, Option.empty()));
-    String preCombineField = prop.get(PRECOMBINE_FIELD.key()).toString();
-    boolean withOperationField = Boolean.parseBoolean(prop.get(WITH_OPERATION_FIELD).toString());
-    boolean populateMetaFields = Boolean.parseBoolean(prop.getOrDefault(POPULATE_META_FIELDS, false).toString());
-    Option<String> partitionName = unsafeCast(prop.getOrDefault(PARTITION_NAME, Option.empty()));
+    Option<Pair<String, String>> keyGen = unsafeCast(mapperConfig.getOrDefault(SIMPLE_KEY_GEN_FIELDS_OPT, Option.empty()));
+    String preCombineField = mapperConfig.get(PRECOMBINE_FIELD.key()).toString();
+    boolean withOperationField = Boolean.parseBoolean(mapperConfig.get(WITH_OPERATION_FIELD).toString());
+    boolean populateMetaFields = Boolean.parseBoolean(mapperConfig.getOrDefault(POPULATE_META_FIELDS, false).toString());
+    Option<String> partitionName = unsafeCast(mapperConfig.getOrDefault(PARTITION_NAME, Option.empty()));
     if (populateMetaFields) {
       return HoodieSparkRecordUtils.convertToHoodieSparkRecord(schema, data, preCombineField, withOperationField);
     } else if (keyGen.isPresent()) {
