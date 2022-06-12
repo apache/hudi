@@ -28,6 +28,7 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import com.beust.jcommander.Parameter;
 
+import java.io.Serializable;
 import java.util.Collections;
 import java.util.List;
 import java.util.function.Function;
@@ -37,40 +38,7 @@ import java.util.function.Function;
  */
 public class HoodieSyncConfig extends HoodieConfig {
 
-  @Parameter(names = {"--database"}, description = "name of the target database in meta store", required = true)
-  public String databaseName;
-
-  @Parameter(names = {"--table"}, description = "name of the target table in meta store", required = true)
-  public String tableName;
-
-  @Parameter(names = {"--base-path"}, description = "Base path of the hoodie table to sync", required = true)
-  public String basePath;
-
-  @Parameter(names = {"--base-file-format"}, description = "Format of the base files (PARQUET (or) HFILE)")
-  public String baseFileFormat;
-
-  @Parameter(names = "--partitioned-by", description = "Fields in the schema partitioned by")
-  public List<String> partitionFields;
-
-  @Parameter(names = "--partition-value-extractor", description = "Class which implements PartitionValueExtractor "
-      + "to extract the partition values from HDFS path")
-  public String partitionValueExtractorClass;
-
-  @Parameter(names = {"--assume-date-partitioning"}, description = "Assume standard yyyy/mm/dd partitioning, this"
-      + " exists to support backward compatibility. If you use hoodie 0.3.x, do not set this parameter")
-  public Boolean assumeDatePartitioning;
-
-  @Parameter(names = {"--decode-partition"}, description = "Decode the partition value if the partition has encoded during writing")
-  public Boolean decodePartition;
-
-  @Parameter(names = {"--use-file-listing-from-metadata"}, description = "Fetch file listing from Hudi's metadata")
-  public Boolean useFileListingFromMetadata;
-
-  @Parameter(names = {"--conditional-sync"}, description = "If true, only sync on conditions like schema change or partition change.")
-  public Boolean isConditionalSync;
-
-  @Parameter(names = {"--spark-version"}, description = "The spark version")
-  public String sparkVersion;
+  public final HoodieSyncConfigParams hoodieSyncConfigParams = new HoodieSyncConfigParams();
 
   public static final ConfigProperty<String> META_SYNC_BASE_PATH = ConfigProperty
       .key("hoodie.datasource.meta.sync.base.path")
@@ -169,20 +137,50 @@ public class HoodieSyncConfig extends HoodieConfig {
     super(props);
     setDefaults();
 
-    this.basePath = getStringOrDefault(META_SYNC_BASE_PATH);
-    this.databaseName = getStringOrDefault(META_SYNC_DATABASE_NAME);
-    this.tableName = getStringOrDefault(META_SYNC_TABLE_NAME);
-    this.baseFileFormat = getStringOrDefault(META_SYNC_BASE_FILE_FORMAT);
-    this.partitionFields = props.getStringList(META_SYNC_PARTITION_FIELDS.key(), ",", Collections.emptyList());
-    this.partitionValueExtractorClass = getStringOrDefault(META_SYNC_PARTITION_EXTRACTOR_CLASS);
-    this.assumeDatePartitioning = getBooleanOrDefault(META_SYNC_ASSUME_DATE_PARTITION);
-    this.decodePartition = getBooleanOrDefault(KeyGeneratorOptions.URL_ENCODE_PARTITIONING);
-    this.useFileListingFromMetadata = getBooleanOrDefault(META_SYNC_USE_FILE_LISTING_FROM_METADATA);
-    this.isConditionalSync = getBooleanOrDefault(META_SYNC_CONDITIONAL_SYNC);
-    this.sparkVersion = getStringOrDefault(META_SYNC_SPARK_VERSION);
+    this.hoodieSyncConfigParams.basePath = getStringOrDefault(META_SYNC_BASE_PATH);
+    this.hoodieSyncConfigParams.databaseName = getStringOrDefault(META_SYNC_DATABASE_NAME);
+    this.hoodieSyncConfigParams.tableName = getStringOrDefault(META_SYNC_TABLE_NAME);
+    this.hoodieSyncConfigParams.baseFileFormat = getStringOrDefault(META_SYNC_BASE_FILE_FORMAT);
+    this.hoodieSyncConfigParams.partitionFields = props.getStringList(META_SYNC_PARTITION_FIELDS.key(), ",", Collections.emptyList());
+    this.hoodieSyncConfigParams.partitionValueExtractorClass = getStringOrDefault(META_SYNC_PARTITION_EXTRACTOR_CLASS);
+    this.hoodieSyncConfigParams.assumeDatePartitioning = getBooleanOrDefault(META_SYNC_ASSUME_DATE_PARTITION);
+    this.hoodieSyncConfigParams.decodePartition = getBooleanOrDefault(KeyGeneratorOptions.URL_ENCODE_PARTITIONING);
+    this.hoodieSyncConfigParams.useFileListingFromMetadata = getBooleanOrDefault(META_SYNC_USE_FILE_LISTING_FROM_METADATA);
+    this.hoodieSyncConfigParams.isConditionalSync = getBooleanOrDefault(META_SYNC_CONDITIONAL_SYNC);
+    this.hoodieSyncConfigParams.sparkVersion = getStringOrDefault(META_SYNC_SPARK_VERSION);
   }
 
   protected void setDefaults() {
     this.setDefaultValue(META_SYNC_TABLE_NAME);
+  }
+
+  public static class HoodieSyncConfigParams implements Serializable {
+    @Parameter(names = {"--database"}, description = "name of the target database in meta store", required = true)
+    public String databaseName;
+    @Parameter(names = {"--table"}, description = "name of the target table in meta store", required = true)
+    public String tableName;
+    @Parameter(names = {"--base-path"}, description = "Base path of the hoodie table to sync", required = true)
+    public String basePath;
+    @Parameter(names = {"--base-file-format"}, description = "Format of the base files (PARQUET (or) HFILE)")
+    public String baseFileFormat;
+    @Parameter(names = "--partitioned-by", description = "Fields in the schema partitioned by")
+    public List<String> partitionFields;
+    @Parameter(names = "--partition-value-extractor", description = "Class which implements PartitionValueExtractor "
+            + "to extract the partition values from HDFS path")
+    public String partitionValueExtractorClass;
+    @Parameter(names = {"--assume-date-partitioning"}, description = "Assume standard yyyy/mm/dd partitioning, this"
+            + " exists to support backward compatibility. If you use hoodie 0.3.x, do not set this parameter")
+    public Boolean assumeDatePartitioning;
+    @Parameter(names = {"--decode-partition"}, description = "Decode the partition value if the partition has encoded during writing")
+    public Boolean decodePartition;
+    @Parameter(names = {"--use-file-listing-from-metadata"}, description = "Fetch file listing from Hudi's metadata")
+    public Boolean useFileListingFromMetadata;
+    @Parameter(names = {"--conditional-sync"}, description = "If true, only sync on conditions like schema change or partition change.")
+    public Boolean isConditionalSync;
+    @Parameter(names = {"--spark-version"}, description = "The spark version")
+    public String sparkVersion;
+
+    public HoodieSyncConfigParams() {
+    }
   }
 }

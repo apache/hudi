@@ -57,8 +57,8 @@ public class HiveQueryNode extends DagNode<Boolean> {
         .getDeltaSyncService().getDeltaSync().getCfg().baseFileFormat);
     HiveSyncConfig hiveSyncConfig = new HiveSyncConfig(properties);
     this.hiveServiceProvider.syncToLocalHiveIfNeeded(executionContext.getHoodieTestSuiteWriter());
-    Connection con = DriverManager.getConnection(hiveSyncConfig.jdbcUrl, hiveSyncConfig.hiveUser,
-        hiveSyncConfig.hivePass);
+    Connection con = DriverManager.getConnection(hiveSyncConfig.hiveSyncConfigParams.jdbcUrl, hiveSyncConfig.hiveSyncConfigParams.hiveUser,
+        hiveSyncConfig.hiveSyncConfigParams.hivePass);
     Statement stmt = con.createStatement();
     stmt.execute("set hive.input.format=org.apache.hadoop.hive.ql.io.HiveInputFormat");
     for (String hiveProperty : this.config.getHiveProperties()) {

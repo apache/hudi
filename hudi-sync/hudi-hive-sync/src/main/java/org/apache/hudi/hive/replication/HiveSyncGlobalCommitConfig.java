@@ -74,12 +74,12 @@ public class HiveSyncGlobalCommitConfig extends GlobalHiveSyncConfig {
 
   GlobalHiveSyncConfig mkGlobalHiveSyncConfig(boolean forRemote) {
     GlobalHiveSyncConfig cfg = GlobalHiveSyncConfig.copy(this);
-    cfg.basePath = forRemote ? properties.getProperty(REMOTE_BASE_PATH)
-        : properties.getProperty(LOCAL_BASE_PATH, cfg.basePath);
-    cfg.jdbcUrl = forRemote ? properties.getProperty(REMOTE_HIVE_SERVER_JDBC_URLS)
-        : properties.getProperty(LOCAL_HIVE_SERVER_JDBC_URLS, cfg.jdbcUrl);
-    LOG.info("building hivesync config forRemote: " + forRemote + " " + cfg.jdbcUrl + " "
-        + cfg.basePath);
+    cfg.hoodieSyncConfigParams.basePath = forRemote ? properties.getProperty(REMOTE_BASE_PATH)
+            : properties.getProperty(LOCAL_BASE_PATH, cfg.hoodieSyncConfigParams.basePath);
+    cfg.hiveSyncConfigParams.jdbcUrl = forRemote ? properties.getProperty(REMOTE_HIVE_SERVER_JDBC_URLS)
+            : properties.getProperty(LOCAL_HIVE_SERVER_JDBC_URLS, cfg.hiveSyncConfigParams.jdbcUrl);
+    LOG.info("building hivesync config forRemote: " + forRemote + " " + cfg.hiveSyncConfigParams.jdbcUrl + " "
+        + cfg.hoodieSyncConfigParams.basePath);
     return cfg;
   }
 

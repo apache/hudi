@@ -22,7 +22,7 @@ package org.apache.hudi.sync.common.util;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.sync.common.AbstractSyncTool;
+import org.apache.hudi.sync.common.HoodieSyncTool;
 import org.apache.hudi.sync.common.HoodieSyncConfig;
 
 import org.apache.hadoop.conf.Configuration;
@@ -39,7 +39,7 @@ public class SyncUtilHelpers {
   private static final Logger LOG = LogManager.getLogger(SyncUtilHelpers.class);
 
   /**
-   * Create an instance of an implementation of {@link AbstractSyncTool} that will sync all the relevant meta information
+   * Create an instance of an implementation of {@link HoodieSyncTool} that will sync all the relevant meta information
    * with an external metastore such as Hive etc. to ensure Hoodie tables can be queried or read via external systems.
    *
    * @param metaSyncFQCN  The class that implements the sync of the metadata.
@@ -62,12 +62,12 @@ public class SyncUtilHelpers {
     }
   }
 
-  static AbstractSyncTool instantiateMetaSyncTool(String metaSyncFQCN,
-                                                 TypedProperties props,
-                                                 Configuration hadoopConfig,
-                                                 FileSystem fs,
-                                                 String targetBasePath,
-                                                 String baseFileFormat) {
+  static HoodieSyncTool instantiateMetaSyncTool(String metaSyncFQCN,
+                                                TypedProperties props,
+                                                Configuration hadoopConfig,
+                                                FileSystem fs,
+                                                String targetBasePath,
+                                                String baseFileFormat) {
     TypedProperties properties = new TypedProperties();
     properties.putAll(props);
     properties.put(HoodieSyncConfig.META_SYNC_BASE_PATH.key(), targetBasePath);
@@ -75,13 +75,13 @@ public class SyncUtilHelpers {
 
     if (ReflectionUtils.hasConstructor(metaSyncFQCN,
         new Class<?>[] {TypedProperties.class, Configuration.class, FileSystem.class})) {
-      return ((AbstractSyncTool) ReflectionUtils.loadClass(metaSyncFQCN,
+      return ((HoodieSyncTool) ReflectionUtils.loadClass(metaSyncFQCN,
           new Class<?>[] {TypedProperties.class, Configuration.class, FileSystem.class},
           properties, hadoopConfig, fs));
     } else {
       LOG.warn("Falling back to deprecated constructor for class: " + metaSyncFQCN);
       try {
-        return ((AbstractSyncTool) ReflectionUtils.loadClass(metaSyncFQCN,
+        return ((HoodieSyncTool) ReflectionUtils.loadClass(metaSyncFQCN,
             new Class<?>[] {Properties.class, FileSystem.class}, properties, fs));
       } catch (Throwable t) {
         throw new HoodieException("Could not load meta sync class " + metaSyncFQCN, t);

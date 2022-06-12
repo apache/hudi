@@ -30,36 +30,36 @@ public class TestAdbSyncConfig {
   @Test
   public void testCopy() {
     AdbSyncConfig adbSyncConfig = new AdbSyncConfig();
-    adbSyncConfig.partitionFields = Arrays.asList("a", "b");
-    adbSyncConfig.basePath = "/tmp";
-    adbSyncConfig.assumeDatePartitioning = true;
-    adbSyncConfig.databaseName = "test";
-    adbSyncConfig.tableName = "test";
-    adbSyncConfig.adbUser = "adb";
-    adbSyncConfig.adbPass = "adb";
-    adbSyncConfig.jdbcUrl = "jdbc:mysql://localhost:3306";
-    adbSyncConfig.skipROSuffix = false;
-    adbSyncConfig.tableProperties = "spark.sql.sources.provider= 'hudi'\\n"
-        + "spark.sql.sources.schema.numParts = '1'\\n "
-        + "spark.sql.sources.schema.part.0 ='xx'\\n "
-        + "spark.sql.sources.schema.numPartCols = '1'\\n"
-        + "spark.sql.sources.schema.partCol.0 = 'dt'";
-    adbSyncConfig.serdeProperties = "'path'='/tmp/test_db/tbl'";
-    adbSyncConfig.dbLocation = "file://tmp/test_db";
+    adbSyncConfig.hoodieSyncConfigParams.partitionFields = Arrays.asList("a", "b");
+    adbSyncConfig.hoodieSyncConfigParams.basePath = "/tmp";
+    adbSyncConfig.hoodieSyncConfigParams.assumeDatePartitioning = true;
+    adbSyncConfig.hoodieSyncConfigParams.databaseName = "test";
+    adbSyncConfig.hoodieSyncConfigParams.tableName = "test";
+    adbSyncConfig.adbSyncConfigParams.hiveSyncConfigParams.hiveUser = "adb";
+    adbSyncConfig.adbSyncConfigParams.hiveSyncConfigParams.hivePass = "adb";
+    adbSyncConfig.adbSyncConfigParams.hiveSyncConfigParams.jdbcUrl = "jdbc:mysql://localhost:3306";
+    adbSyncConfig.adbSyncConfigParams.hiveSyncConfigParams.skipROSuffix = false;
+    adbSyncConfig.adbSyncConfigParams.tableProperties = "spark.sql.sources.provider= 'hudi'\\n"
+            + "spark.sql.sources.schema.numParts = '1'\\n "
+            + "spark.sql.sources.schema.part.0 ='xx'\\n "
+            + "spark.sql.sources.schema.numPartCols = '1'\\n"
+            + "spark.sql.sources.schema.partCol.0 = 'dt'";
+    adbSyncConfig.adbSyncConfigParams.serdeProperties = "'path'='/tmp/test_db/tbl'";
+    adbSyncConfig.adbSyncConfigParams.dbLocation = "file://tmp/test_db";
 
     TypedProperties props = AdbSyncConfig.toProps(adbSyncConfig);
     AdbSyncConfig copied = new AdbSyncConfig(props);
 
-    assertEquals(copied.partitionFields, adbSyncConfig.partitionFields);
-    assertEquals(copied.basePath, adbSyncConfig.basePath);
-    assertEquals(copied.assumeDatePartitioning, adbSyncConfig.assumeDatePartitioning);
-    assertEquals(copied.databaseName, adbSyncConfig.databaseName);
-    assertEquals(copied.tableName, adbSyncConfig.tableName);
-    assertEquals(copied.adbUser, adbSyncConfig.adbUser);
-    assertEquals(copied.adbPass, adbSyncConfig.adbPass);
-    assertEquals(copied.basePath, adbSyncConfig.basePath);
-    assertEquals(copied.jdbcUrl, adbSyncConfig.jdbcUrl);
-    assertEquals(copied.skipROSuffix, adbSyncConfig.skipROSuffix);
-    assertEquals(copied.supportTimestamp, adbSyncConfig.supportTimestamp);
+    assertEquals(copied.hoodieSyncConfigParams.partitionFields, adbSyncConfig.hoodieSyncConfigParams.partitionFields);
+    assertEquals(copied.hoodieSyncConfigParams.basePath, adbSyncConfig.hoodieSyncConfigParams.basePath);
+    assertEquals(copied.hoodieSyncConfigParams.assumeDatePartitioning, adbSyncConfig.hoodieSyncConfigParams.assumeDatePartitioning);
+    assertEquals(copied.hoodieSyncConfigParams.databaseName, adbSyncConfig.hoodieSyncConfigParams.databaseName);
+    assertEquals(copied.hoodieSyncConfigParams.tableName, adbSyncConfig.hoodieSyncConfigParams.tableName);
+    assertEquals(copied.adbSyncConfigParams.hiveSyncConfigParams.hiveUser, adbSyncConfig.adbSyncConfigParams.hiveSyncConfigParams.hiveUser);
+    assertEquals(copied.adbSyncConfigParams.hiveSyncConfigParams.hivePass, adbSyncConfig.adbSyncConfigParams.hiveSyncConfigParams.hivePass);
+    assertEquals(copied.hoodieSyncConfigParams.basePath, adbSyncConfig.hoodieSyncConfigParams.basePath);
+    assertEquals(copied.adbSyncConfigParams.hiveSyncConfigParams.jdbcUrl, adbSyncConfig.adbSyncConfigParams.hiveSyncConfigParams.jdbcUrl);
+    assertEquals(copied.adbSyncConfigParams.hiveSyncConfigParams.skipROSuffix, adbSyncConfig.adbSyncConfigParams.hiveSyncConfigParams.skipROSuffix);
+    assertEquals(copied.adbSyncConfigParams.supportTimestamp, adbSyncConfig.adbSyncConfigParams.supportTimestamp);
   }
 }

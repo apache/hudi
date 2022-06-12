@@ -184,15 +184,15 @@ public class UtilitiesTestBase {
    */
   protected static HiveSyncConfig getHiveSyncConfig(String basePath, String tableName) {
     HiveSyncConfig hiveSyncConfig = new HiveSyncConfig();
-    hiveSyncConfig.jdbcUrl = "jdbc:hive2://127.0.0.1:9999/";
-    hiveSyncConfig.hiveUser = "";
-    hiveSyncConfig.hivePass = "";
-    hiveSyncConfig.databaseName = "testdb1";
-    hiveSyncConfig.tableName = tableName;
-    hiveSyncConfig.basePath = basePath;
-    hiveSyncConfig.assumeDatePartitioning = false;
-    hiveSyncConfig.usePreApacheInputFormat = false;
-    hiveSyncConfig.partitionFields = CollectionUtils.createImmutableList("datestr");
+    hiveSyncConfig.hiveSyncConfigParams.jdbcUrl = "jdbc:hive2://127.0.0.1:9999/";
+    hiveSyncConfig.hiveSyncConfigParams.hiveUser = "";
+    hiveSyncConfig.hiveSyncConfigParams.hivePass = "";
+    hiveSyncConfig.hoodieSyncConfigParams.databaseName = "testdb1";
+    hiveSyncConfig.hoodieSyncConfigParams.tableName = tableName;
+    hiveSyncConfig.hoodieSyncConfigParams.basePath = basePath;
+    hiveSyncConfig.hoodieSyncConfigParams.assumeDatePartitioning = false;
+    hiveSyncConfig.hiveSyncConfigParams.usePreApacheInputFormat = false;
+    hiveSyncConfig.hoodieSyncConfigParams.partitionFields = CollectionUtils.createImmutableList("datestr");
     return hiveSyncConfig;
   }
 
@@ -208,12 +208,12 @@ public class UtilitiesTestBase {
     hiveConf.addResource(hiveServer.getHiveConf());
     HoodieTableMetaClient.withPropertyBuilder()
       .setTableType(HoodieTableType.COPY_ON_WRITE)
-      .setTableName(hiveSyncConfig.tableName)
-      .initTable(dfs.getConf(), hiveSyncConfig.basePath);
+      .setTableName(hiveSyncConfig.hoodieSyncConfigParams.tableName)
+      .initTable(dfs.getConf(), hiveSyncConfig.hoodieSyncConfigParams.basePath);
 
     QueryBasedDDLExecutor ddlExecutor = new JDBCExecutor(hiveSyncConfig, dfs);
-    ddlExecutor.runSQL("drop database if exists " + hiveSyncConfig.databaseName);
-    ddlExecutor.runSQL("create database " + hiveSyncConfig.databaseName);
+    ddlExecutor.runSQL("drop database if exists " + hiveSyncConfig.hoodieSyncConfigParams.databaseName);
+    ddlExecutor.runSQL("create database " + hiveSyncConfig.hoodieSyncConfigParams.databaseName);
     ddlExecutor.close();
   }
 

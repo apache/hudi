@@ -104,7 +104,7 @@ public class HiveSyncGlobalCommitTool implements HiveSyncGlobalCommit, AutoClose
       throws IOException {
     HiveSyncGlobalCommitConfig cfg = new HiveSyncGlobalCommitConfig();
     JCommander cmd = new JCommander(cfg, null, args);
-    if (cfg.help || args.length == 0) {
+    if (cfg.hiveSyncConfigParams.help || args.length == 0) {
       cmd.usage();
       System.exit(1);
     }

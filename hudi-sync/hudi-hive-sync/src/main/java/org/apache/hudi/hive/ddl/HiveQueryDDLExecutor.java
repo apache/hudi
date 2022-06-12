@@ -64,7 +64,7 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
       this.sessionState = new SessionState(configuration,
           UserGroupInformation.getCurrentUser().getShortUserName());
       SessionState.start(this.sessionState);
-      this.sessionState.setCurrentDatabase(config.databaseName);
+      this.sessionState.setCurrentDatabase(config.hoodieSyncConfigParams.databaseName);
       hiveDriver = new org.apache.hadoop.hive.ql.Driver(configuration);
     } catch (Exception e) {
       if (sessionState != null) {
@@ -109,7 +109,7 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
       // HiveMetastoreClient returns partition keys separate from Columns, hence get both and merge to
       // get the Schema of the table.
       final long start = System.currentTimeMillis();
-      Table table = metaStoreClient.getTable(config.databaseName, tableName);
+      Table table = metaStoreClient.getTable(config.hoodieSyncConfigParams.databaseName, tableName);
       Map<String, String> partitionKeysMap =
           table.getPartitionKeys().stream().collect(Collectors.toMap(FieldSchema::getName, f -> f.getType().toUpperCase()));
 
@@ -141,13 +141,13 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
             config)) {
           String partitionClause =
               HivePartitionUtil.getPartitionClauseForDrop(dropPartition, partitionValueExtractor, config);
-          metaStoreClient.dropPartition(config.databaseName, tableName, partitionClause, false);
+          metaStoreClient.dropPartition(config.hoodieSyncConfigParams.databaseName, tableName, partitionClause, false);
         }
         LOG.info("Drop partition " + dropPartition + " on " + tableName);
       }
     } catch (Exception e) {
-      LOG.error(config.databaseName + "." + tableName + " drop partition failed", e);
-      throw new HoodieHiveSyncException(config.databaseName + "." + tableName + " drop partition failed", e);
+      LOG.error(config.hoodieSyncConfigParams.databaseName + "." + tableName + " drop partition failed", e);
+      throw new HoodieHiveSyncException(config.hoodieSyncConfigParams.databaseName + "." + tableName + " drop partition failed", e);
     }
   }
 

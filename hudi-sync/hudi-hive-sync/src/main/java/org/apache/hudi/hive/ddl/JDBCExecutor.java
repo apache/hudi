@@ -49,11 +49,11 @@ public class JDBCExecutor extends QueryBasedDDLExecutor {
 
   public JDBCExecutor(HiveSyncConfig config, FileSystem fs) {
     super(config, fs);
-    Objects.requireNonNull(config.jdbcUrl, "--jdbc-url option is required for jdbc sync mode");
-    Objects.requireNonNull(config.hiveUser, "--user option is required for jdbc sync mode");
-    Objects.requireNonNull(config.hivePass, "--pass option is required for jdbc sync mode");
+    Objects.requireNonNull(config.hiveSyncConfigParams.jdbcUrl, "--jdbc-url option is required for jdbc sync mode");
+    Objects.requireNonNull(config.hiveSyncConfigParams.hiveUser, "--user option is required for jdbc sync mode");
+    Objects.requireNonNull(config.hiveSyncConfigParams.hivePass, "--pass option is required for jdbc sync mode");
     this.config = config;
-    createHiveConnection(config.jdbcUrl, config.hiveUser, config.hivePass);
+    createHiveConnection(config.hiveSyncConfigParams.jdbcUrl, config.hiveSyncConfigParams.hiveUser, config.hiveSyncConfigParams.hivePass);
   }
 
   @Override
@@ -126,7 +126,7 @@ public class JDBCExecutor extends QueryBasedDDLExecutor {
     ResultSet result = null;
     try {
       DatabaseMetaData databaseMetaData = connection.getMetaData();
-      result = databaseMetaData.getColumns(null, config.databaseName, tableName, null);
+      result = databaseMetaData.getColumns(null, config.hoodieSyncConfigParams.databaseName, tableName, null);
       while (result.next()) {
         String columnName = result.getString(4);
         String columnType = result.getString(6);
@@ -157,11 +157,11 @@ public class JDBCExecutor extends QueryBasedDDLExecutor {
   }
 
   private List<String> constructDropPartitions(String tableName, List<String> partitions) {
-    if (config.batchSyncNum <= 0) {
+    if (config.hiveSyncConfigParams.batchSyncNum <= 0) {
       throw new HoodieHiveSyncException("batch-sync-num for sync hive table must be greater than 0, pls check your parameter");
     }
     List<String> result = new ArrayList<>();
-    int batchSyncPartitionNum = config.batchSyncNum;
+    int batchSyncPartitionNum = config.hiveSyncConfigParams.batchSyncNum;
     StringBuilder alterSQL = getAlterTableDropPrefix(tableName);
 
     for (int i = 0; i < partitions.size(); i++) {
@@ -186,7 +186,7 @@ public class JDBCExecutor extends QueryBasedDDLExecutor {
 
   public StringBuilder getAlterTableDropPrefix(String tableName) {
     StringBuilder alterSQL = new StringBuilder("ALTER TABLE ");
-    alterSQL.append(HIVE_ESCAPE_CHARACTER).append(config.databaseName)
+    alterSQL.append(HIVE_ESCAPE_CHARACTER).append(config.hoodieSyncConfigParams.databaseName)
         .append(HIVE_ESCAPE_CHARACTER).append(".").append(HIVE_ESCAPE_CHARACTER)
         .append(tableName).append(HIVE_ESCAPE_CHARACTER).append(" DROP IF EXISTS ");
     return alterSQL;

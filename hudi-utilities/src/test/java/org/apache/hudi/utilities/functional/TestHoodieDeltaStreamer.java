@@ -1355,13 +1355,13 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
     // Test Hive integration
     HiveSyncConfig hiveSyncConfig = getHiveSyncConfig(tableBasePath, "hive_trips");
-    hiveSyncConfig.partitionFields = CollectionUtils.createImmutableList("year", "month", "day");
+    hiveSyncConfig.hoodieSyncConfigParams.partitionFields = CollectionUtils.createImmutableList("year", "month", "day");
     HoodieHiveClient hiveClient = new HoodieHiveClient(hiveSyncConfig, hiveServer.getHiveConf(), dfs);
-    assertTrue(hiveClient.tableExists(hiveSyncConfig.tableName), "Table " + hiveSyncConfig.tableName + " should exist");
-    assertEquals(3, hiveClient.getAllPartitions(hiveSyncConfig.tableName).size(),
+    assertTrue(hiveClient.tableExists(hiveSyncConfig.hoodieSyncConfigParams.tableName), "Table " + hiveSyncConfig.hoodieSyncConfigParams.tableName + " should exist");
+    assertEquals(3, hiveClient.getAllPartitions(hiveSyncConfig.hoodieSyncConfigParams.tableName).size(),
         "Table partitions should match the number of partitions we wrote");
     assertEquals(lastInstantForUpstreamTable,
-        hiveClient.getLastCommitTimeSynced(hiveSyncConfig.tableName).get(),
+        hiveClient.getLastCommitTimeSynced(hiveSyncConfig.hoodieSyncConfigParams.tableName).get(),
         "The last commit that was synced should be updated in the TBLPROPERTIES");
   }
 
