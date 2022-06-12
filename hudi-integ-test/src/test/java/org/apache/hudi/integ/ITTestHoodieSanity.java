@@ -95,6 +95,7 @@ public class ITTestHoodieSanity extends ITTestBase {
     dropHiveTables(hiveTableName, HoodieTableType.MERGE_ON_READ.name());
   }
 
+  @Disabled("Disabled due to flakiness with hive drop table timing out")
   @ParameterizedTest
   @ValueSource(strings = { HOODIE_JAVA_APP, HOODIE_JAVA_STREAMING_APP })
   /**
