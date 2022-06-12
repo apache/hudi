@@ -90,7 +90,7 @@ public class TestHoodieTestSuiteJob extends UtilitiesTestBase {
 
   @BeforeAll
   public static void initClass() throws Exception {
-    UtilitiesTestBase.initClass();
+    UtilitiesTestBase.initTestServices(true, true);
     // prepare the configs.
     UtilitiesTestBase.Helpers.copyToDFSFromAbsolutePath(System.getProperty("user.dir") + "/.."
         + BASE_PROPERTIES_DOCKER_DEMO_RELATIVE_PATH, dfs, dfsBasePath + "/base.properties");

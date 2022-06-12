@@ -104,30 +104,30 @@ public class UtilitiesTestBase {
   protected static HiveServer2 hiveServer;
   protected static HiveTestService hiveTestService;
   protected static ZookeeperTestService zookeeperTestService;
-  private static ObjectMapper mapper = new ObjectMapper();
+  private static final ObjectMapper MAPPER = new ObjectMapper();
 
   @BeforeAll
-  public static void initClass() throws Exception {
-    // Set log level to WARN for spark logs to avoid exceeding log limit in travis
+  public static void setLogLevel() {
     Logger rootLogger = Logger.getRootLogger();
     rootLogger.setLevel(Level.ERROR);
     Logger.getLogger("org.apache.spark").setLevel(Level.WARN);
-    initClass(true);
   }
 
-  public static void initClass(boolean startHiveService) throws Exception {
+  public static void initTestServices(boolean needsHive, boolean needsZookeeper) throws Exception {
     hdfsTestService = new HdfsTestService();
-    zookeeperTestService = new ZookeeperTestService(hdfsTestService.getHadoopConf());
     dfsCluster = hdfsTestService.start(true);
     dfs = dfsCluster.getFileSystem();
     dfsBasePath = dfs.getWorkingDirectory().toString();
     dfs.mkdirs(new Path(dfsBasePath));
-    if (startHiveService) {
+    if (needsHive) {
       hiveTestService = new HiveTestService(hdfsTestService.getHadoopConf());
       hiveServer = hiveTestService.start();
       clearHiveDb();
     }
-    zookeeperTestService.start();
+    if (needsZookeeper) {
+      zookeeperTestService = new ZookeeperTestService(hdfsTestService.getHadoopConf());
+      zookeeperTestService.start();
+    }
   }
 
   @AfterAll
@@ -288,11 +288,11 @@ public class UtilitiesTestBase {
         String[] lines, FileSystem fs, String targetPath) throws IOException {
       Builder csvSchemaBuilder = CsvSchema.builder();
 
-      ArrayNode arrayNode = mapper.createArrayNode();
+      ArrayNode arrayNode = MAPPER.createArrayNode();
       Arrays.stream(lines).forEachOrdered(
           line -> {
             try {
-              arrayNode.add(mapper.readValue(line, ObjectNode.class));
+              arrayNode.add(MAPPER.readValue(line, ObjectNode.class));
             } catch (IOException e) {
               throw new HoodieIOException(
                   "Error converting json records into CSV format: " + e.getMessage());
