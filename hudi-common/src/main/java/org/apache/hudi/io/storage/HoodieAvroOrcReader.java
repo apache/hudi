@@ -77,6 +77,11 @@ public class HoodieAvroOrcReader implements HoodieAvroFileReader {
   }
 
   @Override
+  public ClosableIterator<IndexedRecord> getIndexedRecordIterator(Schema readerSchema, Schema requestedSchema) throws IOException {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
   public Schema getSchema() {
     return orcUtils.readAvroSchema(conf, path);
   }

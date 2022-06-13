@@ -183,6 +183,11 @@ public class HoodieAvroHFileReader implements HoodieAvroFileReader {
     return new RecordIterator(scanner, getSchema(), readerSchema);
   }
 
+  @Override
+  public ClosableIterator<IndexedRecord> getIndexedRecordIterator(Schema readerSchema, Schema requestedSchema) throws IOException {
+    throw new UnsupportedOperationException();
+  }
+
   @SuppressWarnings("unchecked")
   @Override
   public ClosableIterator<IndexedRecord> getIndexedRecordsByKeysIterator(List<String> keys, Schema readerSchema) throws IOException {

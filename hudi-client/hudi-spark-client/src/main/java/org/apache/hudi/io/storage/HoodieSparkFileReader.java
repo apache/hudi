@@ -57,4 +57,10 @@ public interface HoodieSparkFileReader extends HoodieFileReader<InternalRow> {
       throw new IOException(e);
     }
   }
+
+  @Override
+  default ClosableIterator<HoodieRecord<InternalRow>> getRecordIterator(Schema readerSchema, Schema requestedSchema) throws IOException {
+    // TODO used in HoodieParquetDataBlock
+    return getRecordIterator(readerSchema);
+  }
 }

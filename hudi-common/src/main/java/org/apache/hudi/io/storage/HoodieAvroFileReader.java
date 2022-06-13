@@ -37,6 +37,8 @@ public interface HoodieAvroFileReader extends HoodieFileReader<IndexedRecord>, A
 
   ClosableIterator<IndexedRecord> getIndexedRecordIterator(Schema readerSchema) throws IOException;
 
+  ClosableIterator<IndexedRecord> getIndexedRecordIterator(Schema readerSchema, Schema requestedSchema) throws IOException;
+
   default Option<IndexedRecord> getIndexedRecordByKey(String key, Schema readerSchema) throws IOException {
     throw new UnsupportedOperationException();
   }
@@ -70,6 +72,12 @@ public interface HoodieAvroFileReader extends HoodieFileReader<IndexedRecord>, A
   @Override
   default ClosableIterator<HoodieRecord<IndexedRecord>> getRecordIterator(Schema schema) throws IOException {
     ClosableIterator<IndexedRecord> iterator = getIndexedRecordIterator(schema);
+    return new MappingIterator<>(iterator, data -> unsafeCast(new HoodieAvroIndexedRecord(data)));
+  }
+
+  @Override
+  default ClosableIterator<HoodieRecord<IndexedRecord>> getRecordIterator(Schema readerSchema, Schema requestedSchema) throws IOException {
+    ClosableIterator<IndexedRecord> iterator = getIndexedRecordIterator(readerSchema, requestedSchema);
     return new MappingIterator<>(iterator, data -> unsafeCast(new HoodieAvroIndexedRecord(data)));
   }
 

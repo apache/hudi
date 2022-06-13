@@ -39,6 +39,8 @@ public interface HoodieFileReader<T> extends AutoCloseable {
 
   ClosableIterator<HoodieRecord<T>> getRecordIterator(Schema readerSchema) throws IOException;
 
+  ClosableIterator<HoodieRecord<T>> getRecordIterator(Schema readerSchema, Schema requestedSchema) throws IOException;
+
   default ClosableIterator<HoodieRecord<T>> getRecordIterator() throws IOException {
     return getRecordIterator(getSchema());
   }
