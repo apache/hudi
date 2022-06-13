@@ -335,7 +335,7 @@ public abstract class HoodieRecord<T> implements Serializable {
   /**
    * This method used in ClusteringExecutionStrategy.
    */
-  public abstract HoodieRecord transform(Schema schema, Properties prop);
+  public abstract HoodieRecord transform(Schema schema, Properties prop, boolean useKeyGen);
 
   public abstract Option<IndexedRecord> toIndexedRecord(Schema schema, Properties prop) throws IOException;
 

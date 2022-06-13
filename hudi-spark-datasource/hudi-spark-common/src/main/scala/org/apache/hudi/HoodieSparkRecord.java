@@ -201,10 +201,10 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
   }
 
   @Override
-  public HoodieRecord transform(Schema schema, Properties prop) {
+  public HoodieRecord transform(Schema schema, Properties prop, boolean useKeygen) {
     StructType structType = HoodieInternalRowUtils.getCacheSchema(schema);
     Option<SparkKeyGeneratorInterface> keyGeneratorOpt = Option.empty();
-    if (!Boolean.parseBoolean(prop.getOrDefault(POPULATE_META_FIELDS.key(), POPULATE_META_FIELDS.defaultValue().toString()).toString())) {
+    if (useKeygen && !Boolean.parseBoolean(prop.getOrDefault(POPULATE_META_FIELDS.key(), POPULATE_META_FIELDS.defaultValue().toString()).toString())) {
       try {
         Class<?> clazz = ReflectionUtils.getClass("org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory");
         Method createKeyGenerator = clazz.getMethod("createKeyGenerator", TypedProperties.class);

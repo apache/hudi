@@ -62,6 +62,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.TypeUtils.unsafeCast;
@@ -90,7 +91,7 @@ public abstract class AbstractHoodieLogRecordReader {
   // Latest valid instant time
   // Log-Blocks belonging to inflight delta-instants are filtered-out using this high-watermark.
   private final String latestInstantTime;
-  private final HoodieTableMetaClient hoodieTableMetaClient;
+  protected final HoodieTableMetaClient hoodieTableMetaClient;
   // Merge strategy to use when combining records from log
   private final String payloadClassFQN;
   // preCombine field
@@ -382,18 +383,34 @@ public abstract class AbstractHoodieLogRecordReader {
    * handle it.
    */
   private void processDataBlock(HoodieDataBlock dataBlock, Option<KeySpec> keySpecOpt) throws Exception {
-    Map<String, Object> mapperConfig = MapperUtils.buildMapperConfig(this.payloadClassFQN, this.preCombineField, this.simpleKeyGenFields, this.withOperationField, this.partitionName);
-    try (ClosableIterator<HoodieRecord> recordIterator = getRecordsIterator(dataBlock, keySpecOpt, recordType, mapperConfig)) {
-      Option<Schema> schemaOption = getMergedSchema(dataBlock);
-      Schema finalReadSchema = ((MappingIterator) recordIterator).getSchema();
-      while (recordIterator.hasNext()) {
-        HoodieRecord<?> currentRecord = recordIterator.next();
-        HoodieRecord<?> record = schemaOption.isPresent()
-            ? currentRecord.rewriteRecordWithNewSchema(finalReadSchema, new Properties(), schemaOption.get(), new HashMap<>()) : currentRecord;
-        processNextRecord(record);
-        totalLogRecords.incrementAndGet();
+    Map<String, Object> mapperConfig = MapperUtils.buildMapperConfig(this.payloadClassFQN, this.preCombineField, this.simpleKeyGenFields, this.withOperationField,
+        this.partitionName, getPopulateMetaFields());
+
+    Option<Schema> schemaOption = getMergedSchema(dataBlock);
+    if (schemaOption.isPresent()) {
+      try (ClosableIterator<HoodieRecord> recordIterator = getRecordsIterator(dataBlock, keySpecOpt, recordType)) {
+        Schema finalReadSchema = ((MappingIterator) recordIterator).getSchema();
+        while (recordIterator.hasNext()) {
+          HoodieRecord currentRecord = recordIterator.next();
+          HoodieRecord record = currentRecord.rewriteRecordWithNewSchema(finalReadSchema, new Properties(), schemaOption.get(), new HashMap<>())
+              .expansion(schemaOption.get(), new Properties(), mapperConfig);
+          processNextRecord(record);
+          totalLogRecords.incrementAndGet();
+        }
+      }
+    } else {
+      try (ClosableIterator<HoodieRecord> recordIterator = getRecordsIterator(dataBlock, keySpecOpt, recordType, mapperConfig)) {
+        while (recordIterator.hasNext()) {
+          HoodieRecord currentRecord = recordIterator.next();
+          processNextRecord(currentRecord);
+          totalLogRecords.incrementAndGet();
+        }
       }
     }
+  }
+
+  protected boolean getPopulateMetaFields() {
+    return this.populateMetaFields;
   }
 
   /**
@@ -486,14 +503,22 @@ public abstract class AbstractHoodieLogRecordReader {
       finalReadSchema = dataBlock.getSchema();
     }
 
-    return new MappingIterator<>(iter, rec -> {
-      try {
-        return rec.expansion(readerSchema, new Properties(), mapperConfig);
-      } catch (IOException e) {
-        LOG.error("Error expanse " + rec, e);
-        throw new HoodieException(e);
-      }
-    }, finalReadSchema);
+    if (mapperConfig == null) {
+      return new MappingIterator<>(iter, Function.identity(), finalReadSchema);
+    } else {
+      return new MappingIterator<>(iter, rec -> {
+        try {
+          return rec.expansion(readerSchema, new Properties(), mapperConfig);
+        } catch (IOException e) {
+          LOG.error("Error expanse " + rec, e);
+          throw new HoodieException(e);
+        }
+      }, finalReadSchema);
+    }
+  }
+
+  private ClosableIterator<HoodieRecord> getRecordsIterator(HoodieDataBlock dataBlock, Option<KeySpec> keySpecOpt, HoodieRecordType type) throws IOException {
+    return getRecordsIterator(dataBlock, keySpecOpt, type, null);
   }
 
   /**

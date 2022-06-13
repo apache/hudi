@@ -149,7 +149,7 @@ public abstract class SingleSparkJobExecutionStrategy<T>
 
           HoodieFileReader baseFileReader = HoodieFileReaderFactory.getReaderFactory(recordType).getFileReader(getHoodieTable().getHadoopConf(), new Path(clusteringOp.getDataFilePath()));
           MappingIterator mappingIterator = new MappingIterator((ClosableIterator<HoodieRecord>) baseFileReader.getRecordIterator(readerSchema),
-              rec -> ((HoodieRecord) rec).transform(readerSchema, getWriteConfig().getProps()));
+              rec -> ((HoodieRecord) rec).transform(readerSchema, getWriteConfig().getProps(), true));
           return mappingIterator;
         } catch (IOException e) {
           throw new HoodieClusteringException("Error reading input data for " + clusteringOp.getDataFilePath()

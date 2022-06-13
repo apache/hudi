@@ -48,7 +48,6 @@ public class MapperUtils {
   public static final String WITH_OPERATION_FIELD = "WITH_OPERATION_FIELD";
   public static final String PARTITION_NAME = "PARTITION_NAME";
   public static final String POPULATE_META_FIELDS = "POPULATE_META_FIELDS";
-  public static final String RECORD_TYPE = "RECORD_TYPE";
 
   public static Map<String, Object> buildMapperConfig(String payloadClass, String preCombineField, Option<Pair<String, String>> simpleKeyGenFieldsOpt, boolean withOperation,
       Option<String> partitionName) {

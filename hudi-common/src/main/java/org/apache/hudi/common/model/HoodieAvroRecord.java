@@ -176,7 +176,7 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
   }
 
   @Override
-  public HoodieRecord transform(Schema schema, Properties prop) {
+  public HoodieRecord transform(Schema schema, Properties prop, boolean useKeygen) {
     throw new UnsupportedOperationException();
   }
 

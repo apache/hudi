@@ -110,6 +110,11 @@ public class HoodieMetadataMergedLogRecordReader extends HoodieMergedLogRecordSc
   }
 
   @Override
+  protected boolean getPopulateMetaFields() {
+    return this.hoodieTableMetaClient.getTableConfig().populateMetaFields() && super.getPopulateMetaFields();
+  }
+
+  @Override
   protected String getKeyField() {
     return HoodieMetadataPayload.KEY_FIELD_NAME;
   }

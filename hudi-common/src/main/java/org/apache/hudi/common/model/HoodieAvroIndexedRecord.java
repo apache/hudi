@@ -176,21 +176,12 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
     boolean withOperationField = Boolean.parseBoolean(mapperConfig.get(WITH_OPERATION_FIELD).toString());
     boolean populateMetaFields = Boolean.parseBoolean(mapperConfig.getOrDefault(MapperUtils.POPULATE_META_FIELDS, false).toString());
     Option<String> partitionName = unsafeCast(mapperConfig.getOrDefault(PARTITION_NAME, Option.empty()));
-    if (payloadClass == null && preCombineField == null && !keyGen.isPresent()) {
-      // Support JavaExecutionStrategy
-      GenericRecord record = (GenericRecord) data;
-      String key = record.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
-      String partition = record.get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
-      HoodieKey hoodieKey = new HoodieKey(key, partition);
-
-      HoodieRecordPayload avroPayload = new RewriteAvroPayload(record);
-      HoodieRecord hoodieRecord = new HoodieAvroRecord(hoodieKey, avroPayload);
-      return hoodieRecord;
-    } else if (populateMetaFields) {
+    if (populateMetaFields) {
       return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) data,
               payloadClass, preCombineField, withOperationField);
       // Support HoodieFileSliceReader
     } else if (keyGen.isPresent()) {
+      // TODO in HoodieFileSliceReader may partitionName=option#empty
       return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) data,
               payloadClass, preCombineField, keyGen.get(), withOperationField, partitionName);
     } else {
@@ -200,10 +191,10 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
   }
 
   @Override
-  public HoodieRecord transform(Schema schema, Properties prop) {
+  public HoodieRecord transform(Schema schema, Properties prop, boolean useKeyGen) {
     GenericRecord record = (GenericRecord) data;
     Option<BaseKeyGenerator> keyGeneratorOpt = Option.empty();
-    if (!Boolean.parseBoolean(prop.getOrDefault(POPULATE_META_FIELDS.key(), POPULATE_META_FIELDS.defaultValue().toString()).toString())) {
+    if (useKeyGen && !Boolean.parseBoolean(prop.getOrDefault(POPULATE_META_FIELDS.key(), POPULATE_META_FIELDS.defaultValue().toString()).toString())) {
       try {
         Class<?> clazz = ReflectionUtils.getClass("org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory");
         Method createKeyGenerator = clazz.getMethod("createKeyGenerator", TypedProperties.class);
