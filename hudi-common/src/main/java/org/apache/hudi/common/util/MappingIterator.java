@@ -18,16 +18,29 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.avro.Schema;
+
 import java.util.function.Function;
 
 public class MappingIterator<T, R> implements ClosableIterator<R> {
 
   private final ClosableIterator<T> sourceIterator;
   private final Function<T, R> mapper;
+  private Schema schema;
 
   public MappingIterator(ClosableIterator<T> sourceIterator, Function<T, R> mapper) {
     this.sourceIterator = sourceIterator;
     this.mapper = mapper;
+  }
+
+  public MappingIterator(ClosableIterator<T> sourceIterator, Function<T, R> mapper, Schema schema) {
+    this.sourceIterator = sourceIterator;
+    this.mapper = mapper;
+    this.schema = schema;
+  }
+
+  public Schema getSchema() {
+    return schema;
   }
 
   @Override

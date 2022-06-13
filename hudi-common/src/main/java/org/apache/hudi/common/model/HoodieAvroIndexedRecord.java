@@ -176,7 +176,7 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
     boolean withOperationField = Boolean.parseBoolean(mapperConfig.get(WITH_OPERATION_FIELD).toString());
     boolean populateMetaFields = Boolean.parseBoolean(mapperConfig.getOrDefault(MapperUtils.POPULATE_META_FIELDS, false).toString());
     Option<String> partitionName = unsafeCast(mapperConfig.getOrDefault(PARTITION_NAME, Option.empty()));
-    if (preCombineField == null && !keyGen.isPresent()) {
+    if (payloadClass == null && preCombineField == null && !keyGen.isPresent()) {
       // Support JavaExecutionStrategy
       GenericRecord record = (GenericRecord) data;
       String key = record.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();

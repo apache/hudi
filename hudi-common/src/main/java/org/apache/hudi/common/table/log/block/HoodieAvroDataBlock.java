@@ -153,7 +153,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
     RecordIterator iterator = RecordIterator.getInstance(this, content, internalSchema);
     Function<IndexedRecord, ?> converter = unsafeCast(createConverter(IndexedRecord.class.getName(), type, iterator.getFinalReadSchema()));
     Function<IndexedRecord, HoodieRecord<T>> mapper = unsafeCast(createMapper(type, converter));
-    return new MappingIterator<>(iterator, mapper);
+    return new MappingIterator<>(iterator, mapper, iterator.getFinalReadSchema());
   }
 
   private static class RecordIterator implements ClosableIterator<IndexedRecord> {
