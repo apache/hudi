@@ -24,7 +24,7 @@ import scala.collection.mutable
 import org.apache.avro.Schema
 import org.apache.avro.generic.IndexedRecord
 import org.apache.hudi.HoodieSparkUtils.sparkAdapter
-import org.apache.hudi.avro.HoodieAvroUtils.{createFullName, fromJavaDate, toJavaDate}
+import org.apache.hudi.avro.HoodieAvroUtils.{createFullName, toJavaDate}
 import org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField
 import org.apache.hudi.exception.HoodieException
 import org.apache.spark.sql.avro.HoodieAvroDeserializer
@@ -268,35 +268,35 @@ object HoodieInternalRowUtils {
     val value = newSchema match {
       case NullType | BooleanType =>
       case DateType if oldSchema.equals(StringType) =>
-        fromJavaDate(java.sql.Date.valueOf(oldValue.toString))
+        CatalystTypeConverters.convertToCatalyst(java.sql.Date.valueOf(oldValue.toString))
       case LongType =>
         oldSchema match {
-          case IntegerType => oldValue.asInstanceOf[Int].longValue()
+          case IntegerType => CatalystTypeConverters.convertToCatalyst(oldValue.asInstanceOf[Int].longValue())
           case _ =>
         }
       case FloatType =>
         oldSchema match {
-          case IntegerType => oldValue.asInstanceOf[Int].floatValue()
-          case LongType => oldValue.asInstanceOf[Long].floatValue()
+          case IntegerType => CatalystTypeConverters.convertToCatalyst(oldValue.asInstanceOf[Int].floatValue())
+          case LongType => CatalystTypeConverters.convertToCatalyst(oldValue.asInstanceOf[Long].floatValue())
           case _ =>
         }
       case DoubleType =>
         oldSchema match {
-          case IntegerType => oldValue.asInstanceOf[Int].doubleValue()
-          case LongType => oldValue.asInstanceOf[Long].doubleValue()
-          case FloatType => java.lang.Double.valueOf(oldValue.asInstanceOf[Float] + "")
+          case IntegerType => CatalystTypeConverters.convertToCatalyst(oldValue.asInstanceOf[Int].doubleValue())
+          case LongType => CatalystTypeConverters.convertToCatalyst(oldValue.asInstanceOf[Long].doubleValue())
+          case FloatType => CatalystTypeConverters.convertToCatalyst(java.lang.Double.valueOf(oldValue.asInstanceOf[Float] + ""))
           case _ =>
         }
       case BinaryType =>
         oldSchema match {
-          case StringType => oldValue.asInstanceOf[String].getBytes(StandardCharsets.UTF_8)
+          case StringType => CatalystTypeConverters.convertToCatalyst(oldValue.asInstanceOf[String].getBytes(StandardCharsets.UTF_8))
           case _ =>
         }
       case StringType =>
         oldSchema match {
-          case BinaryType => new String(oldValue.asInstanceOf[Array[Byte]])
-          case DateType => toJavaDate(oldValue.asInstanceOf[Integer]).toString
-          case IntegerType | LongType | FloatType | DoubleType | DecimalType() => oldValue.toString
+          case BinaryType => CatalystTypeConverters.convertToCatalyst(new String(oldValue.asInstanceOf[Array[Byte]]))
+          case DateType => CatalystTypeConverters.convertToCatalyst(toJavaDate(oldValue.asInstanceOf[Integer]).toString)
+          case IntegerType | LongType | FloatType | DoubleType | DecimalType() => CatalystTypeConverters.convertToCatalyst(oldValue.toString)
           case _ =>
         }
       case DecimalType() =>
@@ -312,7 +312,7 @@ object HoodieInternalRowUtils {
     if (value == None) {
       throw new HoodieException(String.format("cannot support rewrite value for schema type: %s since the old schema type is: %s", newSchema, oldSchema))
     } else {
-      value
+      CatalystTypeConverters.convertToCatalyst(value)
     }
   }
 }
