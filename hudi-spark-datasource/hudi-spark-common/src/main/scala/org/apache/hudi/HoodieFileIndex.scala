@@ -25,7 +25,7 @@ import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.{TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
-import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadataUtil}
+import org.apache.hudi.metadata.HoodieMetadataPayload
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{And, Expression, Literal}
@@ -81,7 +81,7 @@ case class HoodieFileIndex(spark: SparkSession,
   )
     with FileIndex {
 
-  private lazy val columnStatsIndex = new ColumnStatsIndexSupport(spark, basePath, schema, metadataConfig)
+  private lazy val columnStatsIndex = new ColumnStatsIndexSupport(spark, schema, metadataConfig, metaClient)
 
   override def rootPaths: Seq[Path] = queryPaths.asScala
 
@@ -197,7 +197,7 @@ case class HoodieFileIndex(spark: SparkSession,
     //          nothing CSI in particular could be applied for)
     lazy val queryReferencedColumns = collectReferencedColumns(spark, queryFilters, schema)
 
-    if (!isMetadataTableEnabled || !isColumnStatsIndexEnabled || !isColumnStatsIndexAvailable || !isDataSkippingEnabled) {
+    if (!isMetadataTableEnabled || !isDataSkippingEnabled || !columnStatsIndex.isIndexAvailable) {
       validateConfig()
       Option.empty
     } else if (queryFilters.isEmpty || queryReferencedColumns.isEmpty) {
@@ -250,10 +250,6 @@ case class HoodieFileIndex(spark: SparkSession,
     allFiles.map(_.getPath.toString).toArray
 
   override def sizeInBytes: Long = cachedFileSize
-
-  private def isColumnStatsIndexAvailable =
-    metaClient.getTableConfig.getMetadataPartitions
-      .contains(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS)
 
   private def isDataSkippingEnabled: Boolean =
     options.getOrElse(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key(),

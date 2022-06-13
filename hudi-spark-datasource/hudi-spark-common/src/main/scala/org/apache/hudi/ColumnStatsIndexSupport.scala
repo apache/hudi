@@ -28,6 +28,7 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.data.HoodieData
 import org.apache.hudi.common.model.HoodieRecord
+import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.common.util.collection
@@ -49,18 +50,18 @@ import scala.collection.immutable.TreeSet
 import scala.collection.mutable.ListBuffer
 
 class ColumnStatsIndexSupport(spark: SparkSession,
-                              tableBasePath: String,
                               tableSchema: StructType,
-                              metadataConfig: HoodieMetadataConfig) {
+                              @transient metadataConfig: HoodieMetadataConfig,
+                              @transient metaClient: HoodieTableMetaClient) {
 
   checkState(metadataConfig.enabled, "Metadata Table support has to be enabled")
-  checkState(metadataConfig.isColumnStatsIndexEnabled, "Column Stats Index support has to be enabled")
+  checkState(isIndexAvailable, "Metadata Table support has to be enabled")
 
-  @transient lazy val engineCtx = new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext))
-  @transient lazy val metadataTable: HoodieTableMetadata =
-    HoodieTableMetadata.create(engineCtx, metadataConfig, tableBasePath, FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue)
+  @transient private lazy val engineCtx = new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext))
+  @transient private lazy val metadataTable: HoodieTableMetadata =
+    HoodieTableMetadata.create(engineCtx, metadataConfig, metaClient.getBasePathV2.toString, FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue)
 
-  lazy val indexedColumns: Set[String] = {
+  private val indexedColumns: Set[String] = {
     val customIndexedColumns = metadataConfig.getColumnsEnabledForColumnStatsIndex
     // Column Stats Index could index either
     //    - The whole table
@@ -71,6 +72,14 @@ class ColumnStatsIndexSupport(spark: SparkSession,
       customIndexedColumns.asScala.toSet
     }
   }
+
+  /**
+   * Returns true in cases when Column Stats Index is built and available as standalone partition
+   * w/in the Metadata Table
+   */
+  def isIndexAvailable =
+    HoodieTableMetadataUtil.getCompletedMetadataPartitions(metaClient.getTableConfig)
+      .contains(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS)
 
   /**
    * TODO scala-doc
@@ -293,7 +302,7 @@ class ColumnStatsIndexSupport(spark: SparkSession,
   }
 
   private def loadFullColumnStatsIndexInternal(): DataFrame = {
-    val metadataTablePath = HoodieTableMetadata.getMetadataTableBasePath(tableBasePath)
+    val metadataTablePath = HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePathV2.toString)
     // Read Metadata Table's Column Stats Index into Spark's [[DataFrame]]
     val colStatsDF = spark.read.format("org.apache.hudi")
       .options(metadataConfig.getProps.asScala)
