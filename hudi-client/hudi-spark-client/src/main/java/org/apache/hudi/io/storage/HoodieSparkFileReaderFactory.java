@@ -45,7 +45,7 @@ public class HoodieSparkFileReaderFactory extends HoodieFileReaderFactory  {
     throw new HoodieIOException("Not support read HFile");
   }
 
-  protected static HoodieFileReader newOrcFileReader(Configuration conf, Path path) {
+  protected HoodieFileReader newOrcFileReader(Configuration conf, Path path) {
     throw new HoodieIOException("Not support read orc file");
   }
 }
