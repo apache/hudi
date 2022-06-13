@@ -81,7 +81,7 @@ case class HoodieFileIndex(spark: SparkSession,
   )
     with FileIndex {
 
-  private lazy val columnStatsIndex = new ColumnStatsIndexSupport(spark, schema, metadataConfig, metaClient)
+  @transient private lazy val columnStatsIndex = new ColumnStatsIndexSupport(spark, schema, metadataConfig, metaClient)
 
   override def rootPaths: Seq[Path] = queryPaths.asScala
 
@@ -244,7 +244,10 @@ case class HoodieFileIndex(spark: SparkSession,
     }
   }
 
-  override def refresh(): Unit = super.refresh()
+  override def refresh(): Unit = {
+    super.refresh()
+    columnStatsIndex.invalidateCaches()
+  }
 
   override def inputFiles: Array[String] =
     allFiles.map(_.getPath.toString).toArray

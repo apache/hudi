@@ -48,6 +48,7 @@ import java.nio.ByteBuffer
 import scala.collection.JavaConverters._
 import scala.collection.immutable.TreeSet
 import scala.collection.mutable.ListBuffer
+import scala.collection.parallel.mutable.ParHashMap
 
 class ColumnStatsIndexSupport(spark: SparkSession,
                               tableSchema: StructType,
@@ -60,6 +61,8 @@ class ColumnStatsIndexSupport(spark: SparkSession,
   @transient private lazy val engineCtx = new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext))
   @transient private lazy val metadataTable: HoodieTableMetadata =
     HoodieTableMetadata.create(engineCtx, metadataConfig, metaClient.getBasePathV2.toString, FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue)
+
+  @transient private lazy val cachedColumnStatsIndexViews: ParHashMap[Seq[String], DataFrame] = ParHashMap()
 
   private val indexedColumns: Set[String] = {
     val customIndexedColumns = metadataConfig.getColumnsEnabledForColumnStatsIndex
@@ -97,24 +100,36 @@ class ColumnStatsIndexSupport(spark: SparkSession,
    *
    * Please check out scala-doc of the [[transpose]] method explaining this view in more details
    */
-  def loadTransposed[T](targetColumns: Seq[String], shouldReadInMemory: Boolean)(f: DataFrame => T): T = {
-    val colStatsRecords: HoodieData[HoodieMetadataColumnStats] = loadColumnStatsIndexRecords(targetColumns, shouldReadInMemory)
-    withPersistedData(colStatsRecords, StorageLevel.MEMORY_ONLY) {
-      val (transposedRows, indexSchema) = transpose(colStatsRecords, targetColumns)
-      val df = if (shouldReadInMemory) {
-        // NOTE: This will instantiate a [[Dataset]] backed by [[LocalRelation]] holding all of the rows
-        //       of the transposed table in memory, facilitating execution of the subsequently chained operations
-        //       on it locally (on the driver; all such operations are actually going to be performed by Spark's
-        //       Optimizer)
-        createDataFrameFromRows(spark, transposedRows.collectAsList().asScala, indexSchema)
-      } else {
-        val rdd = HoodieJavaRDD.getJavaRDD(transposedRows)
-        spark.createDataFrame(rdd, indexSchema)
-      }
+  def loadTransposed[T](targetColumns: Seq[String], shouldReadInMemory: Boolean)(block: DataFrame => T): T = {
+    cachedColumnStatsIndexViews.get(targetColumns) match {
+      case Some(cachedDF) =>
+        block(cachedDF)
 
-      withPersistedDataset(df, StorageLevel.MEMORY_ONLY) {
-        f(df)
-      }
+      case None =>
+        val colStatsRecords: HoodieData[HoodieMetadataColumnStats] =
+          loadColumnStatsIndexRecords(targetColumns, shouldReadInMemory)
+
+        withPersistedData(colStatsRecords, StorageLevel.MEMORY_ONLY) {
+          val (transposedRows, indexSchema) = transpose(colStatsRecords, targetColumns)
+          val df = if (shouldReadInMemory) {
+            // NOTE: This will instantiate a [[Dataset]] backed by [[LocalRelation]] holding all of the rows
+            //       of the transposed table in memory, facilitating execution of the subsequently chained operations
+            //       on it locally (on the driver; all such operations are actually going to be performed by Spark's
+            //       Optimizer)
+            createDataFrameFromRows(spark, transposedRows.collectAsList().asScala, indexSchema)
+          } else {
+            val rdd = HoodieJavaRDD.getJavaRDD(transposedRows)
+            spark.createDataFrame(rdd, indexSchema)
+          }
+
+          cachedColumnStatsIndexViews.put(targetColumns, df)
+          // NOTE: Instead of collecting the rows from the index and hold them in memory, we instead rely
+          //       on Spark as (potentially distributed) cache managing data lifecycle, while we simply keep
+          //       the referenced to persisted [[DataFrame]] instance
+          df.persist(StorageLevel.MEMORY_ONLY)
+
+          block(df)
+        }
     }
   }
 
@@ -132,6 +147,11 @@ class ColumnStatsIndexSupport(spark: SparkSession,
     } else {
       loadFullColumnStatsIndexInternal()
     }
+  }
+
+  def invalidateCaches(): Unit = {
+    cachedColumnStatsIndexViews.foreach { case (_, df) => df.unpersist() }
+    cachedColumnStatsIndexViews.clear()
   }
 
   /**
