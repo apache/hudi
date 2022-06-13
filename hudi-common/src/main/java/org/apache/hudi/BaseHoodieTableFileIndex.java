@@ -167,6 +167,11 @@ public abstract class BaseHoodieTableFileIndex {
         .collect(Collectors.toMap(e -> e.getKey().path, Map.Entry::getValue));
   }
 
+  public int getFileSlicesCount() {
+    return cachedAllInputFileSlices.values().stream()
+        .reduce(0, (count, fileSlices) -> count + fileSlices.size(), Integer::sum);
+  }
+
   protected List<PartitionPath> getAllQueryPartitionPaths() {
     List<String> queryRelativePartitionPaths = queryPaths.stream()
         .map(path -> FSUtils.getRelativePartitionPath(new Path(basePath), path))
