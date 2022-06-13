@@ -19,29 +19,32 @@ package org.apache.hudi.sync.common;
 
 import org.apache.hudi.common.config.TypedProperties;
 
+import com.beust.jcommander.JCommander;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 
 import java.util.Properties;
 
 /**
- * Base class to sync Hudi meta data with Metastores to make
+ * Base class to sync metadata with metastores to make
  * Hudi table queryable through external systems.
  */
-public abstract class HoodieSyncTool {
-  protected final Configuration conf;
-  protected final FileSystem fs;
-  protected TypedProperties props;
+public abstract class HoodieSyncTool implements AutoCloseable {
 
+  public final HoodieSyncConfig config;
+
+  public HoodieSyncTool(HoodieSyncConfig config) {
+    this.config = config;
+  }
+
+  @Deprecated
   public HoodieSyncTool(TypedProperties props, Configuration conf, FileSystem fs) {
-    this.props = props;
-    this.conf = conf;
-    this.fs = fs;
+    this(new HoodieSyncConfig(props, conf));
   }
 
   @Deprecated
   public HoodieSyncTool(Properties props, FileSystem fileSystem) {
-    this(new TypedProperties(props), fileSystem.getConf(), fileSystem);
+    this(new HoodieSyncConfig(props, fileSystem.getConf()));
   }
 
   public abstract void syncHoodieTable();

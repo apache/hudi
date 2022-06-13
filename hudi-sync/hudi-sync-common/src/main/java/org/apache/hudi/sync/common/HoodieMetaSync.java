@@ -17,16 +17,11 @@
  * under the License.
  */
 
-package org.apache.hudi.sync.common.operation;
+package org.apache.hudi.sync.common;
 
-import org.apache.hudi.common.util.Option;
+public interface HoodieMetaSync {
 
-import java.util.Map;
+  default void runMetaSync() {
+  }
 
-public interface TblPropertiesSync {
-  Option<String> getLastCommitTimeSynced(String tableName);
-
-  void updateLastCommitTimeSynced(String tableName);
-
-  void updateTableProperties(String tableName, Map<String, String> tableProperties);
 }

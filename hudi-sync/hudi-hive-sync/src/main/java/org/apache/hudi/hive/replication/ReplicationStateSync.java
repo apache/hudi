@@ -22,7 +22,7 @@ import java.util.Map;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hudi.common.util.Option;
 
-public class ReplicationStateSync {
+public class ReplicationStateSync implements AutoCloseable {
 
   private GlobalHiveSyncTool globalHiveSyncTool;
   private final GlobalHiveSyncConfig globalHiveSyncConfig;
@@ -80,6 +80,7 @@ public class ReplicationStateSync {
     return clusterId;
   }
 
+  @Override
   public void close() {
     if (globalHiveSyncTool != null) {
       globalHiveSyncTool.close();

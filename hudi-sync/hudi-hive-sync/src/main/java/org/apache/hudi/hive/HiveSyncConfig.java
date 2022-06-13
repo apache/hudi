@@ -23,15 +23,16 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.sync.common.HoodieSyncConfig;
 
 import com.beust.jcommander.Parameter;
+import com.beust.jcommander.ParametersDelegate;
+import org.apache.hadoop.conf.Configuration;
 
 import java.io.Serializable;
+import java.util.Properties;
 
 /**
  * Configs needed to sync data into the Hive Metastore.
  */
 public class HiveSyncConfig extends HoodieSyncConfig {
-
-  public final HiveSyncConfigParams hiveSyncConfigParams = new HiveSyncConfigParams();
 
   // HIVE SYNC SPECIFIC CONFIGS
   // NOTE: DO NOT USE uppercase for the keys as they are internally lower-cased. Using upper-cases causes
@@ -152,74 +153,23 @@ public class HiveSyncConfig extends HoodieSyncConfig {
       .defaultValue("false")
       .withDocumentation("Whether to sync the table column comments while syncing the table.");
 
-  public HiveSyncConfig() {
-    this(new TypedProperties());
-  }
-
-  public HiveSyncConfig(TypedProperties props) {
-    super(props);
-    this.hiveSyncConfigParams.hiveUser = getStringOrDefault(HIVE_USER);
-    this.hiveSyncConfigParams.hivePass = getStringOrDefault(HIVE_PASS);
-    this.hiveSyncConfigParams.jdbcUrl = getStringOrDefault(HIVE_URL);
-    this.hiveSyncConfigParams.usePreApacheInputFormat = getBooleanOrDefault(HIVE_USE_PRE_APACHE_INPUT_FORMAT);
-    this.hiveSyncConfigParams.useJdbc = getBooleanOrDefault(HIVE_USE_JDBC);
-    this.hiveSyncConfigParams.metastoreUris = getStringOrDefault(METASTORE_URIS);
-    this.hiveSyncConfigParams.syncMode = getString(HIVE_SYNC_MODE);
-    this.hiveSyncConfigParams.autoCreateDatabase = getBooleanOrDefault(HIVE_AUTO_CREATE_DATABASE);
-    this.hiveSyncConfigParams.ignoreExceptions = getBooleanOrDefault(HIVE_IGNORE_EXCEPTIONS);
-    this.hiveSyncConfigParams.skipROSuffix = getBooleanOrDefault(HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE);
-    this.hiveSyncConfigParams.tableProperties = getString(HIVE_TABLE_PROPERTIES);
-    this.hiveSyncConfigParams.serdeProperties = getString(HIVE_TABLE_SERDE_PROPERTIES);
-    this.hiveSyncConfigParams.supportTimestamp = getBooleanOrDefault(HIVE_SUPPORT_TIMESTAMP_TYPE);
-    this.hiveSyncConfigParams.batchSyncNum = getIntOrDefault(HIVE_BATCH_SYNC_PARTITION_NUM);
-    this.hiveSyncConfigParams.syncAsSparkDataSourceTable = getBooleanOrDefault(HIVE_SYNC_AS_DATA_SOURCE_TABLE);
-    this.hiveSyncConfigParams.sparkSchemaLengthThreshold = getIntOrDefault(HIVE_SYNC_SCHEMA_STRING_LENGTH_THRESHOLD);
-    this.hiveSyncConfigParams.createManagedTable = getBooleanOrDefault(HIVE_CREATE_MANAGED_TABLE);
-    this.hiveSyncConfigParams.bucketSpec = getStringOrDefault(HIVE_SYNC_BUCKET_SYNC_SPEC);
-    this.hiveSyncConfigParams.syncComment = getBooleanOrDefault(HIVE_SYNC_COMMENT);
-  }
-
-  @Override
-  public String toString() {
-    return "HiveSyncConfig{"
-      + "databaseName='" + hoodieSyncConfigParams.databaseName + '\''
-      + ", tableName='" + hoodieSyncConfigParams.tableName + '\''
-      + ", bucketSpec='" + hiveSyncConfigParams.bucketSpec + '\''
-      + ", baseFileFormat='" + hoodieSyncConfigParams.baseFileFormat + '\''
-      + ", hiveUser='" + hiveSyncConfigParams.hiveUser + '\''
-      + ", hivePass='" + hiveSyncConfigParams.hivePass + '\''
-      + ", jdbcUrl='" + hiveSyncConfigParams.jdbcUrl + '\''
-      + ", metastoreUris='" + hiveSyncConfigParams.metastoreUris + '\''
-      + ", basePath='" + hoodieSyncConfigParams.basePath + '\''
-      + ", partitionFields=" + hoodieSyncConfigParams.partitionFields
-      + ", partitionValueExtractorClass='" + hoodieSyncConfigParams.partitionValueExtractorClass + '\''
-      + ", assumeDatePartitioning=" + hoodieSyncConfigParams.assumeDatePartitioning
-      + ", usePreApacheInputFormat=" + hiveSyncConfigParams.usePreApacheInputFormat
-      + ", useJdbc=" + hiveSyncConfigParams.useJdbc
-      + ", autoCreateDatabase=" + hiveSyncConfigParams.autoCreateDatabase
-      + ", ignoreExceptions=" + hiveSyncConfigParams.ignoreExceptions
-      + ", skipROSuffix=" + hiveSyncConfigParams.skipROSuffix
-      + ", useFileListingFromMetadata=" + hoodieSyncConfigParams.useFileListingFromMetadata
-      + ", tableProperties='" + hiveSyncConfigParams.tableProperties + '\''
-      + ", serdeProperties='" + hiveSyncConfigParams.serdeProperties + '\''
-      + ", help=" + hiveSyncConfigParams.help
-      + ", supportTimestamp=" + hiveSyncConfigParams.supportTimestamp
-      + ", decodePartition=" + hoodieSyncConfigParams.decodePartition
-      + ", createManagedTable=" + hiveSyncConfigParams.createManagedTable
-      + ", syncAsSparkDataSourceTable=" + hiveSyncConfigParams.syncAsSparkDataSourceTable
-      + ", sparkSchemaLengthThreshold=" + hiveSyncConfigParams.sparkSchemaLengthThreshold
-      + ", withOperationField=" + hiveSyncConfigParams.withOperationField
-      + ", isConditionalSync=" + hoodieSyncConfigParams.isConditionalSync
-      + ", sparkVersion=" + hoodieSyncConfigParams.sparkVersion
-      + ", syncComment=" + hiveSyncConfigParams.syncComment
-      + '}';
-  }
-
   public static String getBucketSpec(String bucketCols, int bucketNum) {
     return "CLUSTERED BY (" + bucketCols + " INTO " + bucketNum + " BUCKETS";
   }
 
-  public static class HiveSyncConfigParams implements Serializable {
+  public HiveSyncConfig(Properties props) {
+    super(props);
+  }
+
+  public HiveSyncConfig(Properties props, Configuration hadoopConf) {
+    super(props, hadoopConf);
+  }
+
+  public static class HiveSyncConfigParams {
+
+    @ParametersDelegate()
+    public final HoodieSyncConfigParams hoodieSyncConfigParams = new HoodieSyncConfigParams();
+
     @Parameter(names = {"--user"}, description = "Hive username")
     public String hiveUser;
     @Parameter(names = {"--pass"}, description = "Hive password")
@@ -251,8 +201,6 @@ public class HiveSyncConfig extends HoodieSyncConfig {
     public String tableProperties;
     @Parameter(names = {"--serde-properties"}, description = "Serde properties to hive table")
     public String serdeProperties;
-    @Parameter(names = {"--help", "-h"}, help = true)
-    public Boolean help = false;
     @Parameter(names = {"--support-timestamp"}, description = "'INT64' with original type TIMESTAMP_MICROS is converted to hive 'timestamp' type."
             + "Disabled by default for backward compatibility.")
     public Boolean supportTimestamp;
@@ -269,7 +217,13 @@ public class HiveSyncConfig extends HoodieSyncConfig {
     @Parameter(names = {"--sync-comment"}, description = "synchronize table comments to hive")
     public boolean syncComment = false;
 
-    public HiveSyncConfigParams() {
+    @Parameter(names = {"--help", "-h"}, help = true)
+    public Boolean help = false;
+
+    public Properties toProps() {
+      final Properties props = hoodieSyncConfigParams.toProps();
+      // TODO add mappings here
+      return props;
     }
   }
 }

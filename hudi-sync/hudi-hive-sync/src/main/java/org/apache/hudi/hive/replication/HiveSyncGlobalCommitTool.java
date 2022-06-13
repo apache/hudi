@@ -100,16 +100,17 @@ public class HiveSyncGlobalCommitTool implements HiveSyncGlobalCommit, AutoClose
     this.replicationStateSyncList.add(getReplicatedState(true));
   }
 
-  private static HiveSyncGlobalCommitConfig getHiveSyncGlobalCommitConfig(String[] args)
+  private static HiveSyncGlobalCommitConfig loadParams(String[] args)
       throws IOException {
-    HiveSyncGlobalCommitConfig cfg = new HiveSyncGlobalCommitConfig();
-    JCommander cmd = new JCommander(cfg, null, args);
-    if (cfg.hiveSyncConfigParams.help || args.length == 0) {
+    final HiveSyncGlobalCommitConfig params = new HiveSyncGlobalCommitConfig();
+    JCommander cmd = JCommander.newBuilder().addObject(params).build();
+    cmd.parse(args);
+    if (params.help) {
       cmd.usage();
-      System.exit(1);
+      System.exit(0);
     }
-    cfg.load();
-    return cfg;
+    params.load();
+    return params;
   }
 
   @Override
@@ -120,7 +121,7 @@ public class HiveSyncGlobalCommitTool implements HiveSyncGlobalCommit, AutoClose
   }
 
   public static void main(String[] args) throws IOException, HoodieHiveSyncException {
-    final HiveSyncGlobalCommitConfig cfg = getHiveSyncGlobalCommitConfig(args);
+    final HiveSyncGlobalCommitConfig cfg = loadParams(args);
     try (final HiveSyncGlobalCommitTool globalCommitTool = new HiveSyncGlobalCommitTool(cfg)) {
       boolean success = globalCommitTool.commit();
       if (!success) {
