@@ -60,7 +60,7 @@ import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.metrics.HoodieMetrics;
-import org.apache.hudi.sync.common.SupportMetaSync;
+import org.apache.hudi.sync.common.HoodieMetaSync;
 import org.apache.hudi.sync.common.util.SyncUtilHelpers;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.callback.kafka.HoodieWriteCommitKafkaCallback;
@@ -123,7 +123,7 @@ import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_REC
 /**
  * Sync's one batch of data to hoodie table.
  */
-public class DeltaSync implements SupportMetaSync, Serializable {
+public class DeltaSync implements HoodieMetaSync, Serializable {
 
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LogManager.getLogger(DeltaSync.class);
