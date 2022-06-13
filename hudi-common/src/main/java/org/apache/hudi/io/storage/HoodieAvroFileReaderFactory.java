@@ -45,4 +45,9 @@ public class HoodieAvroFileReaderFactory extends HoodieFileReaderFactory {
     CacheConfig cacheConfig = new CacheConfig(conf);
     return new HoodieAvroHFileReader(conf, path, cacheConfig);
   }
+
+  @Override
+  protected HoodieFileReader newOrcFileReader(Configuration conf, Path path) {
+    return new HoodieAvroOrcReader(conf, path);
+  }
 }

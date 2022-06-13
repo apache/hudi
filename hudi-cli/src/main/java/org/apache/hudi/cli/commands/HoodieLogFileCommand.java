@@ -24,6 +24,7 @@ import org.apache.hudi.cli.HoodieTableHeaderFields;
 import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieAvroRecordCombiningEngine;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
@@ -221,6 +222,8 @@ public class HoodieLogFileCommand implements CommandMarker {
               .withSpillableMapBasePath(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH.defaultValue())
               .withDiskMapType(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.defaultValue())
               .withBitCaskDiskMapCompressionEnabled(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue())
+              .withRecordType(HoodieRecordType.AVRO)
+              .withCombiningEngineClassFQN(HoodieAvroRecordCombiningEngine.class.getName())
               .build();
       for (HoodieRecord hoodieRecord : scanner) {
         Option<IndexedRecord> record = hoodieRecord.toIndexedRecord(readerSchema, new Properties());

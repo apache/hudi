@@ -25,6 +25,8 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.utils.ConcatenatingIterator;
 import org.apache.hudi.common.model.ClusteringGroupInfo;
 import org.apache.hudi.common.model.ClusteringOperation;
+import org.apache.hudi.common.model.HoodieAvroRecordCombiningEngine;
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.log.HoodieFileSliceReader;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
@@ -246,6 +248,8 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
             .withReverseReader(writeConfig.getCompactionReverseLogReadEnabled())
             .withBufferSize(writeConfig.getMaxDFSStreamBufferSize())
             .withSpillableMapBasePath(writeConfig.getSpillableMapBasePath())
+            .withCombiningEngineClassFQN(writeConfig.getCombiningEngineClass())
+            .withRecordType(writeConfig.getRecordType())
             .build();
 
         HoodieTableConfig tableConfig = table.getMetaClient().getTableConfig();

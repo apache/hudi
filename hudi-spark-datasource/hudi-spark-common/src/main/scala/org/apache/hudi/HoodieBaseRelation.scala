@@ -401,7 +401,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
       recordPayloadClassName = tableConfig.getPayloadClass,
       metadataConfig = fileIndex.metadataConfig,
       combiningEngineClass = tableConfig.getCombiningEngineClass,
-      recordType = HoodieRecordType.valueOf(optParams(HoodieWriteConfig.RECORD_TYPE.key()))
+      recordType = HoodieRecordType.valueOf(optParams.getOrElse(HoodieWriteConfig.RECORD_TYPE.key(), HoodieWriteConfig.RECORD_TYPE.defaultValue()))
     )
   }
 

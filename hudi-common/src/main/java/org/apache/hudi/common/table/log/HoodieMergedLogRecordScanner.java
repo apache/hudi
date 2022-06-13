@@ -24,7 +24,6 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieRecordCombiningEngine;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.table.log.AbstractHoodieLogRecordReader.Builder;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
@@ -320,13 +319,13 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     }
 
     @Override
-    public AbstractHoodieLogRecordReader.Builder withRecordType(HoodieRecordType type) {
+    public Builder withRecordType(HoodieRecordType type) {
       this.recordType = type;
       return this;
     }
 
     @Override
-    public AbstractHoodieLogRecordReader.Builder withCombiningEngineClassFQN(String combiningEngineClassFQN) {
+    public Builder withCombiningEngineClassFQN(String combiningEngineClassFQN) {
       this.combiningEngineClassFQN = combiningEngineClassFQN;
       return this;
     }
@@ -336,14 +335,8 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
       if (this.partitionName == null && CollectionUtils.nonEmpty(this.logFilePaths)) {
         this.partitionName = getRelativePartitionPath(new Path(basePath), new Path(this.logFilePaths.get(0)).getParent());
       }
-      if (recordType == null) {
-        // TODO Remove
-        throw new HoodieException("add todo");
-      }
-      if (combiningEngineClassFQN == null) {
-        // TODO Remove
-        throw new HoodieException("add todo");
-      }
+      assert recordType != null;
+      assert combiningEngineClassFQN != null;
       return new HoodieMergedLogRecordScanner(fs, basePath, logFilePaths, readerSchema,
           latestInstantTime, maxMemorySizeInBytes, readBlocksLazily, reverseReader,
           bufferSize, spillableMapBasePath, instantRange,

@@ -139,6 +139,8 @@ public class FormatUtils {
         .withSpillableMapBasePath(writeConfig.getSpillableMapBasePath())
         .withInstantRange(split.getInstantRange())
         .withOperationField(flinkConf.getBoolean(FlinkOptions.CHANGELOG_ENABLED))
+        .withRecordType(writeConfig.getRecordType())
+        .withCombiningEngineClassFQN(writeConfig.getCombiningEngineClass())
         .build();
   }
 
@@ -242,6 +244,8 @@ public class FormatUtils {
         .withSpillableMapBasePath(writeConfig.getSpillableMapBasePath())
         .withDiskMapType(writeConfig.getCommonConfig().getSpillableDiskMapType())
         .withBitCaskDiskMapCompressionEnabled(writeConfig.getCommonConfig().isBitCaskDiskMapCompressionEnabled())
+        .withCombiningEngineClassFQN(writeConfig.getCombiningEngineClass())
+        .withRecordType(writeConfig.getRecordType())
         .build();
   }
 

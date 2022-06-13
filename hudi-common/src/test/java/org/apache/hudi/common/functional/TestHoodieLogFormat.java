@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieArchivedLogFile;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
+import org.apache.hudi.common.model.HoodieAvroRecordCombiningEngine;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
@@ -592,6 +593,8 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withSpillableMapBasePath(BASE_OUTPUT_PATH)
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
+        .withCombiningEngineClassFQN(HoodieAvroRecordCombiningEngine.class.getName())
+        .withRecordType(HoodieRecordType.AVRO)
         .build();
 
     List<IndexedRecord> scannedRecords = new ArrayList<>();
@@ -806,6 +809,8 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withSpillableMapBasePath(BASE_OUTPUT_PATH)
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
+        .withCombiningEngineClassFQN(HoodieAvroRecordCombiningEngine.class.getName())
+        .withRecordType(HoodieRecordType.AVRO)
         .build();
     assertEquals(200, scanner.getTotalLogRecords());
     Set<String> readKeys = new HashSet<>(200);
@@ -884,6 +889,8 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withSpillableMapBasePath(BASE_OUTPUT_PATH)
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
+        .withCombiningEngineClassFQN(HoodieAvroRecordCombiningEngine.class.getName())
+        .withRecordType(HoodieRecordType.AVRO)
         .build();
     assertEquals(200, scanner.getTotalLogRecords(), "We read 200 records from 2 write batches");
     Set<String> readKeys = new HashSet<>(200);
@@ -971,6 +978,8 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withSpillableMapBasePath(BASE_OUTPUT_PATH)
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
+        .withCombiningEngineClassFQN(HoodieAvroRecordCombiningEngine.class.getName())
+        .withRecordType(HoodieRecordType.AVRO)
         .build();
     assertEquals(200, scanner.getTotalLogRecords(), "We would read 200 records");
     Set<String> readKeys = new HashSet<>(200);
@@ -1049,6 +1058,8 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withSpillableMapBasePath(BASE_OUTPUT_PATH)
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
+        .withCombiningEngineClassFQN(HoodieAvroRecordCombiningEngine.class.getName())
+        .withRecordType(HoodieRecordType.AVRO)
         .build();
 
     assertEquals(200, scanner.getTotalLogRecords(), "We still would read 200 records");
@@ -1095,6 +1106,8 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withSpillableMapBasePath(BASE_OUTPUT_PATH)
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
+        .withCombiningEngineClassFQN(HoodieAvroRecordCombiningEngine.class.getName())
+        .withRecordType(HoodieRecordType.AVRO)
         .build();
     scanner.forEach(s -> readKeys.add(s.getKey().getRecordKey()));
     assertEquals(200, readKeys.size(), "Stream collect should return all 200 records after rollback of delete");
@@ -1190,6 +1203,8 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withSpillableMapBasePath(BASE_OUTPUT_PATH)
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
+        .withCombiningEngineClassFQN(HoodieAvroRecordCombiningEngine.class.getName())
+        .withRecordType(HoodieRecordType.AVRO)
         .build();
 
     assertEquals(200, scanner.getTotalLogRecords(), "We still would read 200 records");
@@ -1293,6 +1308,8 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withSpillableMapBasePath(BASE_OUTPUT_PATH)
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
+        .withRecordType(HoodieRecordType.AVRO)
+        .withCombiningEngineClassFQN(HoodieAvroRecordCombiningEngine.class.getName())
         .build();
     assertEquals(0, scanner.getTotalLogRecords(), "We would have scanned 0 records because of rollback");
 
@@ -1361,6 +1378,8 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withSpillableMapBasePath(BASE_OUTPUT_PATH)
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
+        .withCombiningEngineClassFQN(HoodieAvroRecordCombiningEngine.class.getName())
+        .withRecordType(HoodieRecordType.AVRO)
         .build();
     assertEquals(0, scanner.getTotalLogRecords(), "We would read 0 records");
     FileCreateUtils.deleteDeltaCommit(basePath, "100", fs);
@@ -1412,6 +1431,8 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withSpillableMapBasePath(BASE_OUTPUT_PATH)
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
+        .withCombiningEngineClassFQN(HoodieAvroRecordCombiningEngine.class.getName())
+        .withRecordType(HoodieRecordType.AVRO)
         .build();
     assertEquals(100, scanner.getTotalLogRecords(), "We still would read 100 records");
     final List<String> readKeys = new ArrayList<>(100);
@@ -1482,6 +1503,8 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withSpillableMapBasePath(BASE_OUTPUT_PATH)
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
+        .withCombiningEngineClassFQN(HoodieAvroRecordCombiningEngine.class.getName())
+        .withRecordType(HoodieRecordType.AVRO)
         .build();
     assertEquals(0, scanner.getTotalLogRecords(), "We would read 0 records");
   }
@@ -1588,6 +1611,8 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withSpillableMapBasePath(BASE_OUTPUT_PATH)
         .withDiskMapType(diskMapType)
         .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
+        .withCombiningEngineClassFQN(HoodieAvroRecordCombiningEngine.class.getName())
+        .withRecordType(HoodieRecordType.AVRO)
         .build();
     assertEquals(0, scanner.getTotalLogRecords(), "We would read 0 records");
     FileCreateUtils.deleteDeltaCommit(basePath, "100", fs);
@@ -1662,6 +1687,8 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
           .withSpillableMapBasePath(BASE_OUTPUT_PATH)
           .withDiskMapType(diskMapType)
           .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
+          .withCombiningEngineClassFQN(HoodieAvroRecordCombiningEngine.class.getName())
+          .withRecordType(HoodieRecordType.AVRO)
           .build();
 
       assertEquals(Math.max(numRecordsInLog1, numRecordsInLog2), scanner.getNumMergedRecordsInLog(),

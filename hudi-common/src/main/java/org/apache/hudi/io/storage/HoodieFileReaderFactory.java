@@ -81,7 +81,7 @@ public class HoodieFileReaderFactory {
     throw new UnsupportedOperationException();
   }
 
-  protected static HoodieFileReader newOrcFileReader(Configuration conf, Path path) {
+  protected HoodieFileReader newOrcFileReader(Configuration conf, Path path) {
     throw new UnsupportedOperationException();
   }
 }

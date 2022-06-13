@@ -214,6 +214,8 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
               .withBufferSize(config.getMaxDFSStreamBufferSize())
               .withSpillableMapBasePath(config.getSpillableMapBasePath())
               .withPartition(clusteringOp.getPartitionPath())
+              .withRecordType(config.getRecordType())
+              .withCombiningEngineClassFQN(config.getCombiningEngineClass())
               .build();
 
           Option<HoodieFileReader> baseFileReader = StringUtils.isNullOrEmpty(clusteringOp.getDataFilePath())

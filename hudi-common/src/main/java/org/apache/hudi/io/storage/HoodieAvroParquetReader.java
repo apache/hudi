@@ -69,9 +69,7 @@ public class HoodieAvroParquetReader implements HoodieAvroFileReader {
   @Override
   public ClosableIterator<IndexedRecord> getIndexedRecordIterator(Schema schema) throws IOException {
     AvroReadSupport.setAvroReadSchema(conf, schema);
-    // TODO: AvroReadSupport.setRequestedProjection(conf, readerSchema);
-    InputFile inputFile = HadoopInputFile.fromPath(path, conf);
-    ParquetReader<IndexedRecord> reader = AvroParquetReader.<IndexedRecord>builder(inputFile).withConf(conf).build();
+    ParquetReader<IndexedRecord> reader = AvroParquetReader.<IndexedRecord>builder(path).withConf(conf).build();
     ParquetReaderIterator<IndexedRecord> parquetReaderIterator = new ParquetReaderIterator<>(reader);
     readerIterators.add(parquetReaderIterator);
     return parquetReaderIterator;

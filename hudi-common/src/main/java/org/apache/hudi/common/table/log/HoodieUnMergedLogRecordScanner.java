@@ -141,27 +141,21 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordReade
     }
 
     @Override
-    public AbstractHoodieLogRecordReader.Builder withRecordType(HoodieRecordType type) {
+    public Builder withRecordType(HoodieRecordType type) {
       this.recordType = type;
       return this;
     }
 
     @Override
-    public AbstractHoodieLogRecordReader.Builder withCombiningEngineClassFQN(String combiningEngineClassFQN) {
+    public Builder withCombiningEngineClassFQN(String combiningEngineClassFQN) {
       this.combiningEngineClassFQN = combiningEngineClassFQN;
       return this;
     }
 
     @Override
     public HoodieUnMergedLogRecordScanner build() {
-      if (recordType == null) {
-        // TODO Remove
-        throw new HoodieException("add todo");
-      }
-      if (combiningEngineClassFQN == null) {
-        // TODO Remove
-        throw new HoodieException("add todo");
-      }
+      assert recordType != null;
+      assert combiningEngineClassFQN != null;
       return new HoodieUnMergedLogRecordScanner(fs, basePath, logFilePaths, readerSchema,
           latestInstantTime, readBlocksLazily, reverseReader, bufferSize, callback, instantRange, recordType, combiningEngineClassFQN);
     }

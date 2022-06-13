@@ -171,8 +171,8 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
   @Override
   public HoodieRecord expansion(Schema schema, Properties prop, Map<String, Object> mapperConfig) {
     Option<Pair<String, String>> keyGen = unsafeCast(mapperConfig.getOrDefault(SIMPLE_KEY_GEN_FIELDS_OPT, Option.empty()));
-    String payloadClass = mapperConfig.get(PAYLOAD_CLASS_NAME.key()).toString();
-    String preCombineField = mapperConfig.get(PRECOMBINE_FIELD.key()).toString();
+    String payloadClass = (String) mapperConfig.get(PAYLOAD_CLASS_NAME.key());
+    String preCombineField = (String) mapperConfig.get(PRECOMBINE_FIELD.key());
     boolean withOperationField = Boolean.parseBoolean(mapperConfig.get(WITH_OPERATION_FIELD).toString());
     boolean populateMetaFields = Boolean.parseBoolean(mapperConfig.getOrDefault(MapperUtils.POPULATE_META_FIELDS, false).toString());
     Option<String> partitionName = unsafeCast(mapperConfig.getOrDefault(PARTITION_NAME, Option.empty()));
