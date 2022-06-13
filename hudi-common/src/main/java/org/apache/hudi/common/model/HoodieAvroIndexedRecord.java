@@ -176,7 +176,7 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
     boolean withOperationField = Boolean.parseBoolean(mapperConfig.get(WITH_OPERATION_FIELD).toString());
     boolean populateMetaFields = Boolean.parseBoolean(mapperConfig.getOrDefault(MapperUtils.POPULATE_META_FIELDS, false).toString());
     Option<String> partitionName = unsafeCast(mapperConfig.getOrDefault(PARTITION_NAME, Option.empty()));
-    if (preCombineField == null) {
+    if (preCombineField == null && !keyGen.isPresent()) {
       // Support JavaExecutionStrategy
       GenericRecord record = (GenericRecord) data;
       String key = record.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
@@ -192,7 +192,7 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
       // Support HoodieFileSliceReader
     } else if (keyGen.isPresent()) {
       return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) data,
-              payloadClass, preCombineField, keyGen.get(), withOperationField, Option.empty());
+              payloadClass, preCombineField, keyGen.get(), withOperationField, partitionName);
     } else {
       return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) data,
               payloadClass, preCombineField, withOperationField, partitionName);
