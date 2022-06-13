@@ -484,7 +484,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
    * @param writeOperationType
    * @param metaClient
    */
-  protected void preWrite(String instantTime, WriteOperationType writeOperationType,
+  public void preWrite(String instantTime, WriteOperationType writeOperationType,
       HoodieTableMetaClient metaClient) {
     setOperationType(writeOperationType);
     this.lastCompletedTxnAndMetadata = TransactionUtils.getLastCompletedTxnInstantAndMetadata(metaClient);
