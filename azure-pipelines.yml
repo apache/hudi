@@ -157,7 +157,7 @@ stages:
           - task: Maven@3
             displayName: maven install
             continueOnError: true
-            retryCountOnTaskFailure: 2
+            retryCountOnTaskFailure: 3
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'clean install'
