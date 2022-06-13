@@ -125,5 +125,22 @@ public class ITTestCommitsCommand extends HoodieCLIIntegrationTestBase {
 
     HoodieActiveTimeline timeline2 = metaClient.reloadActiveTimeline();
     assertEquals(1, timeline2.getCommitsTimeline().countInstants(), "There should have 1 instants.");
+
+    // rollback with rollbackUsingMarkers==false
+    CommandResult cr3 = getShell().executeCommand(
+        String.format("commit rollback --commit %s --rollbackUsingMarkers false --sparkMaster %s --sparkMemory %s",
+        "100", "local", "4G"));
+
+    assertAll("Command run failed",
+        () -> assertTrue(cr3.isSuccess()),
+        () -> assertEquals("Commit 100 rolled back", cr3.getResult().toString()));
+
+    metaClient = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient());
+
+    HoodieActiveTimeline rollbackTimeline3 = new RollbacksCommand.RollbackTimeline(metaClient);
+    assertEquals(3, rollbackTimeline3.getRollbackTimeline().countInstants(), "There should have 3 rollback instant.");
+
+    HoodieActiveTimeline timeline3 = metaClient.reloadActiveTimeline();
+    assertEquals(0, timeline3.getCommitsTimeline().countInstants(), "There should have 0 instants.");
   }
 }
