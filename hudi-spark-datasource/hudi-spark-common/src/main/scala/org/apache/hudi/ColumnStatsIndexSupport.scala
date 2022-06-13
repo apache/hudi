@@ -77,12 +77,13 @@ class ColumnStatsIndexSupport(spark: SparkSession,
    * Returns true in cases when Column Stats Index is built and available as standalone partition
    * w/in the Metadata Table
    */
-  def isIndexAvailable =
+  def isIndexAvailable: Boolean =
     HoodieTableMetadataUtil.getCompletedMetadataPartitions(metaClient.getTableConfig)
       .contains(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS)
 
   /**
-   * TODO scala-doc
+   * Determines whether it would be more optimal to read Column Stats Index a) in-memory of the invoking process,
+   * or b) executing it on-cluster via Spark [[Dataset]] and [[RDD]] APIs
    */
   def shouldReadInMemory(fileIndex: HoodieFileIndex, queryReferencedColumns: Seq[String]): Boolean = {
     val modeOverride = metadataConfig.getColumnStatsIndexProcessingModeOverride
@@ -91,7 +92,10 @@ class ColumnStatsIndexSupport(spark: SparkSession,
   }
 
   /**
-   * TODO scala-doc
+   * Loads view of the Column Stats Index in a transposed format where single row coalesces every columns'
+   * statistics for a single file, returning it as [[DataFrame]]
+   *
+   * Please check out scala-doc of the [[transpose]] method explaining this view in more details
    */
   def loadTransposed[T](targetColumns: Seq[String], shouldReadInMemory: Boolean)(f: DataFrame => T): T = {
     val colStatsRecords: HoodieData[HoodieMetadataColumnStats] = loadColumnStatsIndexRecords(targetColumns, shouldReadInMemory)
@@ -115,7 +119,9 @@ class ColumnStatsIndexSupport(spark: SparkSession,
   }
 
   /**
-   * TODO scala-doc
+   * Loads a view of the Column Stats Index in a raw format, returning it as [[DataFrame]]
+   *
+   * Please check out scala-doc of the [[transpose]] method explaining this view in more details
    */
   def load(targetColumns: Seq[String] = Seq.empty): DataFrame = {
     // NOTE: If specific columns have been provided, we can considerably trim down amount of data fetched
