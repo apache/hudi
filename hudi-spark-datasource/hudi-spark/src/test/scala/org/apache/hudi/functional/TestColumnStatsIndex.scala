@@ -126,7 +126,7 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
       else sourceTableSchema.fieldNames
     }
 
-    val columnStatsIndex = new ColumnStatsIndexSupport(spark, basePath, sourceTableSchema, metadataConfig)
+    val columnStatsIndex = new ColumnStatsIndexSupport(spark, sourceTableSchema, metadataConfig, metaClient)
 
     val expectedColStatsSchema = composeIndexSchema(sourceTableSchema.fieldNames, sourceTableSchema)
 
@@ -167,7 +167,7 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
 
     metaClient = HoodieTableMetaClient.reload(metaClient)
 
-    val updatedColumnStatsIndex = new ColumnStatsIndexSupport(spark, basePath, sourceTableSchema, metadataConfig)
+    val updatedColumnStatsIndex = new ColumnStatsIndexSupport(spark, sourceTableSchema, metadataConfig, metaClient)
 
     updatedColumnStatsIndex.loadTransposed(requestedColumns, testCase.shouldReadInMemory) { transposedUpdatedColStatsDF =>
       val expectedColStatsIndexUpdatedDF =
@@ -238,7 +238,7 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
       // These are NOT indexed
       val requestedColumns = Seq("c4")
 
-      val columnStatsIndex = new ColumnStatsIndexSupport(spark, basePath, sourceTableSchema, metadataConfig)
+      val columnStatsIndex = new ColumnStatsIndexSupport(spark, sourceTableSchema, metadataConfig, metaClient)
 
       columnStatsIndex.loadTransposed(requestedColumns, shouldReadInMemory) { emptyTransposedColStatsDF =>
         assertEquals(0, emptyTransposedColStatsDF.collect().length)
@@ -266,7 +266,7 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
       val manualColStatsTableDF =
         buildColumnStatsTableManually(basePath, requestedColumns, targetColumnsToIndex, expectedColStatsSchema)
 
-      val columnStatsIndex = new ColumnStatsIndexSupport(spark, basePath, sourceTableSchema, metadataConfig)
+      val columnStatsIndex = new ColumnStatsIndexSupport(spark, sourceTableSchema, metadataConfig, metaClient)
 
       columnStatsIndex.loadTransposed(requestedColumns, shouldReadInMemory) { partialTransposedColStatsDF =>
         assertEquals(expectedColStatsIndexTableDf.schema, partialTransposedColStatsDF.schema)
@@ -318,7 +318,7 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
       val manualUpdatedColStatsTableDF =
         buildColumnStatsTableManually(basePath, requestedColumns, targetColumnsToIndex, expectedColStatsSchema)
 
-      val columnStatsIndex = new ColumnStatsIndexSupport(spark, basePath, sourceTableSchema, metadataConfig)
+      val columnStatsIndex = new ColumnStatsIndexSupport(spark, sourceTableSchema, metadataConfig, metaClient)
 
       // Nevertheless, the last update was written with a new schema (that is a subset of the original table schema),
       // we should be able to read CSI, which will be properly padded (with nulls) after transposition

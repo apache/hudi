@@ -123,12 +123,12 @@ class ColumnStatsIndexSupport(spark: SparkSession,
    *
    * Please check out scala-doc of the [[transpose]] method explaining this view in more details
    */
-  def load(targetColumns: Seq[String] = Seq.empty): DataFrame = {
+  def load(targetColumns: Seq[String] = Seq.empty, shouldReadInMemory: Boolean = false): DataFrame = {
     // NOTE: If specific columns have been provided, we can considerably trim down amount of data fetched
     //       by only fetching Column Stats Index records pertaining to the requested columns.
     //       Otherwise we fallback to read whole Column Stats Index
     if (targetColumns.nonEmpty) {
-      loadColumnStatsIndexForColumnsInternal(targetColumns, shouldReadInMemory = false)
+      loadColumnStatsIndexForColumnsInternal(targetColumns, shouldReadInMemory)
     } else {
       loadFullColumnStatsIndexInternal()
     }
@@ -414,7 +414,14 @@ object ColumnStatsIndexSupport {
       //       here we have to decode those back into corresponding logical representation.
       case TimestampType => DateTimeUtils.toJavaTimestamp(value.asInstanceOf[Long])
       case DateType => DateTimeUtils.toJavaDate(value.asInstanceOf[Int])
-
+      // Standard types
+      case StringType => value
+      case BooleanType => value
+      // Numeric types
+      case FloatType => value
+      case DoubleType => value
+      case LongType => value
+      case IntegerType => value
       // NOTE: All integral types of size less than Int are encoded as Ints in MT
       case ShortType => value.asInstanceOf[Int].toShort
       case ByteType => value.asInstanceOf[Int].toByte
@@ -423,7 +430,8 @@ object ColumnStatsIndexSupport {
       case _: DecimalType =>
         value match {
           case buffer: ByteBuffer =>
-            Decimal(decConv.fromBytes(buffer, null, LogicalTypes.decimal(30, 15)), 30, 15)
+            val logicalType = DecimalWrapper.SCHEMA$.getField("value").schema().getLogicalType
+            decConv.fromBytes(buffer, null, logicalType)
           case _ => value
         }
       case BinaryType =>
@@ -435,7 +443,8 @@ object ColumnStatsIndexSupport {
           case other => other
         }
 
-      case _ => value
+      case _ =>
+        throw new UnsupportedOperationException(s"Data type for the statistic value is not recognized $dataType")
     }
   }
 }
