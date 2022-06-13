@@ -823,7 +823,9 @@ public class FlinkOptions extends HoodieConfig {
    */
   public static Configuration fromMap(Map<String, String> map) {
     final Configuration configuration = new Configuration();
-    map.forEach(configuration::setString);
+    for (Map.Entry<String, String> entry : map.entrySet()) {
+      configuration.setString(entry.getKey().trim(), entry.getValue());
+    }
     return configuration;
   }
 
