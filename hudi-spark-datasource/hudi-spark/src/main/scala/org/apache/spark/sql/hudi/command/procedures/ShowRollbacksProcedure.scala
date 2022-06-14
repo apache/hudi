@@ -27,14 +27,13 @@ import org.apache.hudi.common.table.timeline.HoodieInstant.State
 import org.apache.hudi.common.table.timeline.HoodieTimeline.ROLLBACK_ACTION
 import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstant, HoodieTimeline, TimelineMetadataUtils}
 import org.apache.hudi.common.util.CollectionUtils
-import org.apache.hudi.common.util.collection.Pair
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import scala.collection.JavaConversions.asScalaBuffer
 import scala.collection.JavaConverters._
 
-class ShowRollbacksProcedure(showRollback: Boolean) extends BaseProcedure with ProcedureBuilder {
+class ShowRollbacksProcedure(showDetails: Boolean) extends BaseProcedure with ProcedureBuilder {
   private val ROLLBACKS_PARAMETERS = Array[ProcedureParameter](
     ProcedureParameter.required(0, "table", DataTypes.StringType, None),
     ProcedureParameter.optional(1, "limit", DataTypes.IntegerType, 10)
@@ -62,9 +61,9 @@ class ShowRollbacksProcedure(showRollback: Boolean) extends BaseProcedure with P
     StructField("succeeded", DataTypes.BooleanType, nullable = true, Metadata.empty)
   ))
 
-  def parameters: Array[ProcedureParameter] = if (showRollback) ROLLBACK_PARAMETERS else ROLLBACKS_PARAMETERS
+  def parameters: Array[ProcedureParameter] = if (showDetails) ROLLBACK_PARAMETERS else ROLLBACKS_PARAMETERS
 
-  def outputType: StructType = if (showRollback) ROLLBACK_OUTPUT_TYPE else ROLLBACKS_OUTPUT_TYPE
+  def outputType: StructType = if (showDetails) ROLLBACK_OUTPUT_TYPE else ROLLBACKS_OUTPUT_TYPE
 
   override def call(args: ProcedureArgs): Seq[Row] = {
     super.checkArgs(parameters, args)
@@ -75,21 +74,21 @@ class ShowRollbacksProcedure(showRollback: Boolean) extends BaseProcedure with P
     val basePath = getBasePath(tableName)
     val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
     val activeTimeline = new RollbackTimeline(metaClient)
-    if (showRollback) {
+    if (showDetails) {
       val instantTime = getArgValueOrDefault(args, parameters(2)).get.asInstanceOf[String]
-      getRollback(activeTimeline, instantTime, limit)
+      getRollbackDetail(activeTimeline, instantTime, limit)
     } else {
       getRollbacks(activeTimeline, limit)
     }
   }
 
-  override def build: Procedure = new ShowRollbacksProcedure(showRollback)
+  override def build: Procedure = new ShowRollbacksProcedure(showDetails)
 
   class RollbackTimeline(metaClient: HoodieTableMetaClient) extends HoodieActiveTimeline(metaClient,
     CollectionUtils.createImmutableSet(HoodieTimeline.ROLLBACK_EXTENSION)) {
   }
 
-  def getRollback(activeTimeline: RollbackTimeline,
+  def getRollbackDetail(activeTimeline: RollbackTimeline,
                   instantTime: String,
                   limit: Int): Seq[Row] = {
     val rows = new util.ArrayList[Row]
@@ -97,11 +96,11 @@ class ShowRollbacksProcedure(showRollback: Boolean) extends BaseProcedure with P
       new HoodieInstant(State.COMPLETED, ROLLBACK_ACTION, instantTime)).get, classOf[HoodieRollbackMetadata])
 
     metadata.getPartitionMetadata.asScala.toMap.iterator.foreach(entry => Stream
-      .concat(entry._2.getSuccessDeleteFiles.map(f => Pair.of(f, true)),
-        entry._2.getFailedDeleteFiles.map(f => Pair.of(f, false)))
-      .foreach((fileWithDeleteStatus: Pair[String, Boolean]) => {
+      .concat(entry._2.getSuccessDeleteFiles.map(f => (f, true)),
+        entry._2.getFailedDeleteFiles.map(f => (f, false)))
+      .iterator.foreach(fileWithDeleteStatus => {
         rows.add(Row(metadata.getStartRollbackTime, metadata.getCommitsRollback.toString,
-          entry._1, fileWithDeleteStatus.getLeft, fileWithDeleteStatus.getRight))
+          entry._1, fileWithDeleteStatus._1, fileWithDeleteStatus._2))
       }))
     rows.stream().limit(limit).toArray().map(r => r.asInstanceOf[Row]).toList
   }
@@ -138,8 +137,8 @@ object ShowRollbacksProcedure {
   }
 }
 
-object ShowRollbackProcedure {
-  val NAME = "show_rollback"
+object ShowRollbackDetailProcedure {
+  val NAME = "show_rollback_detail"
 
   def builder: Supplier[ProcedureBuilder] = new Supplier[ProcedureBuilder] {
     override def get() = new ShowRollbacksProcedure(true)

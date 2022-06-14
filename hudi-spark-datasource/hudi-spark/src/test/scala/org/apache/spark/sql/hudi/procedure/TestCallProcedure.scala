@@ -215,12 +215,12 @@ class TestCallProcedure extends HoodieSparkSqlTestBase {
       assertResult(2) {rollbacks.length}
 
       // Check required fields
-      checkExceptionContain(s"""call show_rollback(table => '$tableName')""")(
+      checkExceptionContain(s"""call show_rollback_detail(table => '$tableName')""")(
         s"Argument: instant_time is required")
 
       // collect rollback for table
       instant_time = rollbacks(1).get(0).toString
-      val rollback = spark.sql(s"""call show_rollback(table => '$tableName', instant_time => '$instant_time')""").collect()
+      val rollback = spark.sql(s"""call show_rollback_detail(table => '$tableName', instant_time => '$instant_time')""").collect()
       assertResult(1) {rollback.length}
     }
   }
