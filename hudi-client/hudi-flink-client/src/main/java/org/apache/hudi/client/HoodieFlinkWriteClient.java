@@ -152,6 +152,17 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
     return postWrite(result, instantTime, table);
   }
 
+  public List<WriteStatus> upsert(HoodieFlinkTable<T> table, List<HoodieRecord<T>> records, String instantTime) {
+    preWrite(instantTime, WriteOperationType.UPSERT, table.getMetaClient());
+    final HoodieWriteHandle<?, ?, ?, ?> writeHandle = getOrCreateWriteHandle(records.get(0), getConfig(),
+        instantTime, table, records.listIterator());
+    HoodieWriteMetadata<List<WriteStatus>> result = table.upsert(context, writeHandle, instantTime, records);
+    if (result.getIndexLookupDuration().isPresent()) {
+      metrics.updateIndexMetrics(LOOKUP_STR, result.getIndexLookupDuration().get().toMillis());
+    }
+    return postWrite(result, instantTime, table);
+  }
+
   @Override
   public List<WriteStatus> upsertPreppedRecords(List<HoodieRecord<T>> preppedRecords, String instantTime) {
     // only used for metadata table, the upsert happens in single thread
@@ -181,6 +192,18 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
     return postWrite(result, instantTime, table);
   }
 
+  public List<WriteStatus> insert(HoodieFlinkTable<T> table, List<HoodieRecord<T>> records, String instantTime) {
+    preWrite(instantTime, WriteOperationType.INSERT, table.getMetaClient());
+    // create the write handle if not exists
+    final HoodieWriteHandle<?, ?, ?, ?> writeHandle = getOrCreateWriteHandle(records.get(0), getConfig(),
+        instantTime, table, records.listIterator());
+    HoodieWriteMetadata<List<WriteStatus>> result = table.insert(context, writeHandle, instantTime, records);
+    if (result.getIndexLookupDuration().isPresent()) {
+      metrics.updateIndexMetrics(LOOKUP_STR, result.getIndexLookupDuration().get().toMillis());
+    }
+    return postWrite(result, instantTime, table);
+  }
+
   /**
    * Removes all existing records from the partitions affected and inserts the given HoodieRecords, into the table.
    *
@@ -201,6 +224,16 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
     return postWrite(result, instantTime, table);
   }
 
+  public List<WriteStatus> insertOverwrite(
+      HoodieFlinkTable<T> table, List<HoodieRecord<T>> records, final String instantTime) {
+    preWrite(instantTime, WriteOperationType.INSERT_OVERWRITE, table.getMetaClient());
+    // create the write handle if not exists
+    final HoodieWriteHandle<?, ?, ?, ?> writeHandle = getOrCreateWriteHandle(records.get(0), getConfig(),
+        instantTime, table, records.listIterator());
+    HoodieWriteMetadata result = table.insertOverwrite(context, writeHandle, instantTime, records);
+    return postWrite(result, instantTime, table);
+  }
+
   /**
    * Removes all existing records of the Hoodie table and inserts the given HoodieRecords, into the table.
    *
@@ -217,6 +250,16 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
     final HoodieWriteHandle<?, ?, ?, ?> writeHandle = getOrCreateWriteHandle(records.get(0), getConfig(),
         instantTime, table, records.listIterator());
     HoodieWriteMetadata result = ((HoodieFlinkTable<T>) table).insertOverwriteTable(context, writeHandle, instantTime, records);
+    return postWrite(result, instantTime, table);
+  }
+
+  public List<WriteStatus> insertOverwriteTable(
+      HoodieFlinkTable<T> table, List<HoodieRecord<T>> records, final String instantTime) {
+    preWrite(instantTime, WriteOperationType.INSERT_OVERWRITE_TABLE, table.getMetaClient());
+    // create the write handle if not exists
+    final HoodieWriteHandle<?, ?, ?, ?> writeHandle = getOrCreateWriteHandle(records.get(0), getConfig(),
+        instantTime, table, records.listIterator());
+    HoodieWriteMetadata result = table.insertOverwriteTable(context, writeHandle, instantTime, records);
     return postWrite(result, instantTime, table);
   }
 

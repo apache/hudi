@@ -18,6 +18,10 @@
 
 package org.apache.hudi.sink;
 
+import org.apache.flink.annotation.VisibleForTesting;
+import org.apache.flink.configuration.Configuration;
+import org.apache.flink.streaming.api.functions.ProcessFunction;
+import org.apache.flink.util.Collector;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
@@ -33,13 +37,9 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.sink.common.AbstractStreamWriteFunction;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
+import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.table.action.commit.FlinkWriteHelper;
 import org.apache.hudi.util.StreamerUtil;
-
-import org.apache.flink.annotation.VisibleForTesting;
-import org.apache.flink.configuration.Configuration;
-import org.apache.flink.streaming.api.functions.ProcessFunction;
-import org.apache.flink.util.Collector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -108,6 +108,11 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
   private transient TotalSizeTracer tracer;
 
   /**
+   * The hoodie table.
+   */
+  private transient HoodieFlinkTable<?> table;
+
+  /**
    * Constructs a StreamingSinkFunction.
    *
    * @param config The config options
@@ -119,6 +124,7 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
   @Override
   public void open(Configuration parameters) throws IOException {
     this.tracer = new TotalSizeTracer(this.config);
+    this.table = this.writeClient.getHoodieTable();
     initBuffer();
     initWriteFunction();
   }
@@ -176,18 +182,19 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
 
   private void initWriteFunction() {
     final String writeOperation = this.config.get(FlinkOptions.OPERATION);
+    this.table.validateUpsertSchema();
     switch (WriteOperationType.fromValue(writeOperation)) {
       case INSERT:
-        this.writeFunction = (records, instantTime) -> this.writeClient.insert(records, instantTime);
+        this.writeFunction = (records, instantTime) -> this.writeClient.insert(this.table, records, instantTime);
         break;
       case UPSERT:
-        this.writeFunction = (records, instantTime) -> this.writeClient.upsert(records, instantTime);
+        this.writeFunction = (records, instantTime) -> this.writeClient.upsert(this.table, records, instantTime);
         break;
       case INSERT_OVERWRITE:
-        this.writeFunction = (records, instantTime) -> this.writeClient.insertOverwrite(records, instantTime);
+        this.writeFunction = (records, instantTime) -> this.writeClient.insertOverwrite(this.table, records, instantTime);
         break;
       case INSERT_OVERWRITE_TABLE:
-        this.writeFunction = (records, instantTime) -> this.writeClient.insertOverwriteTable(records, instantTime);
+        this.writeFunction = (records, instantTime) -> this.writeClient.insertOverwriteTable(this.table, records, instantTime);
         break;
       default:
         throw new RuntimeException("Unsupported write operation : " + writeOperation);
