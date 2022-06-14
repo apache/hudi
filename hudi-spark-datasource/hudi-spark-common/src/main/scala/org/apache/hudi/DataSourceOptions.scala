@@ -302,6 +302,12 @@ object DataSourceWriteOptions {
   val PAYLOAD_CLASS_NAME = HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME
 
   /**
+   * Combine engine will replace the payload to process the merge of data
+   * and provide the same capabilities as the payload
+   */
+  val COMBINE_ENGINE_CLASS_NAME = HoodieWriteConfig.COMBINE_ENGINE_CLASS_NAME
+
+  /**
    * Record key field. Value to be used as the `recordKey` component of `HoodieKey`. Actual value
    * will be obtained by invoking .toString() on the field value. Nested fields can be specified using
    * the dot notation eg: `a.b.c`

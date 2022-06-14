@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.hudi.common.model.HoodieRecordCombiningEngine;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.exception.HoodieException;
 
@@ -78,6 +79,17 @@ public class ReflectionUtils {
       return (T) getClass(recordPayloadClass).getConstructor(constructorArgTypes).newInstance(payloadArgs);
     } catch (InstantiationException | IllegalAccessException | InvocationTargetException | NoSuchMethodException e) {
       throw new HoodieException("Unable to instantiate payload class ", e);
+    }
+  }
+
+  /**
+   * Instantiate a given class with a generic record payload.
+   */
+  public static HoodieRecordCombiningEngine loadCombiningEngine(String recordCombiningEngine) {
+    try {
+      return (HoodieRecordCombiningEngine)loadClass(recordCombiningEngine, new Object[]{});
+    } catch (HoodieException e) {
+      throw new HoodieException("Unable to instantiate combiningEngine class ", e);
     }
   }
 

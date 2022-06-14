@@ -25,7 +25,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.keygen.BaseKeyGenerator;
-import org.apache.hudi.metadata.HoodieMetadataPayload;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -47,7 +46,7 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
   }
 
   public HoodieAvroRecord(HoodieKey key, T data, HoodieOperation operation) {
-    super(key, data, operation);
+    super(key, data, operation, null);
   }
 
   public HoodieAvroRecord(HoodieRecord<T> record) {
@@ -141,7 +140,7 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
         (GenericRecord) toIndexedRecord(readerSchema, new Properties()).get(),
         (GenericRecord) other.toIndexedRecord(readerSchema, new Properties()).get(),
         writerSchema);
-    return new HoodieAvroRecord(getKey(), instantiateRecordPayloadWrapper(mergedPayload, getPrecombineValue(getData())), getOperation());
+    return new HoodieAvroRecord(getKey(), instantiateRecordPayloadWrapper(mergedPayload, getOrderingValue()), getOperation());
   }
 
   @Override
@@ -240,14 +239,4 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
             GenericRecord.class,
             Comparable.class));
   }
-
-  private static <T extends HoodieRecordPayload> Comparable getPrecombineValue(T data) {
-    if (data instanceof BaseAvroPayload) {
-      return ((BaseAvroPayload) data).orderingVal;
-    }
-
-    return -1;
-  }
-
-  //////////////////////////////////////////////////////////////////////////////
 }
