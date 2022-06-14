@@ -37,11 +37,15 @@ import static org.apache.hudi.common.function.FunctionWrapper.throwingMapToPairW
 import static org.apache.hudi.common.function.FunctionWrapper.throwingMapWrapper;
 
 /**
- * Holds a {@link List} of objects.
+ * In-memory implementation of {@link HoodieData} holding internally a {@link Stream} of objects.
+ *
+ * NOTE: This is an in-memory counterpart for {@code HoodieJavaRDD}, and it strives to provide
+ *       similar semantic as RDD container -- all intermediate (non-terminal, not de-referencing
+ *       the stream like "collect", "groupBy", etc) operations are executed *lazily*.
+ *       This allows to make sure that compute/memory churn is minimal since only necessary
+ *       computations will ultimately be performed.
  *
  * @param <T> type of object.
- *
- * TODO rename to HoodieListData
  */
 public class HoodieListData<T> extends HoodieData<T> {
 
@@ -70,16 +74,11 @@ public class HoodieListData<T> extends HoodieData<T> {
    * @return the a {@link List} of objects in type T.
    */
   public static <T> List<T> getList(HoodieData<T> hoodieData) {
-    return ((HoodieListData<T>) hoodieData).get();
+    return ((HoodieListData<T>) hoodieData).collectAsList();
   }
 
   @Override
-  public List<T> get() {
-    return dataStream.collect(Collectors.toList());
-  }
-
-  @Override
-  public void persist(String cacheConfig) {
+  public void persist(String level) {
     // No OP
   }
 
@@ -105,11 +104,6 @@ public class HoodieListData<T> extends HoodieData<T> {
 
   @Override
   public <O> HoodieData<O> mapPartitions(SerializableFunction<Iterator<T>, Iterator<O>> func, boolean preservesPartitioning) {
-    return mapPartitions(func);
-  }
-
-  @Override
-  public <O> HoodieData<O> mapPartitions(SerializableFunction<Iterator<T>, Iterator<O>> func) {
     Function<Iterator<T>, Iterator<O>> mapper = throwingMapWrapper(func);
     return new HoodieListData<>(
         StreamSupport.stream(
@@ -128,8 +122,8 @@ public class HoodieListData<T> extends HoodieData<T> {
   }
 
   @Override
-  public <K, V> HoodiePairData<K, V> mapToPair(SerializablePairFunction<T, K, V> mapToPairFunc) {
-    Function<T, Pair<K, V>> throwableMapToPairFunc = throwingMapToPairWrapper(mapToPairFunc);
+  public <K, V> HoodiePairData<K, V> mapToPair(SerializablePairFunction<T, K, V> func) {
+    Function<T, Pair<K, V>> throwableMapToPairFunc = throwingMapToPairWrapper(func);
     return new HoodieListPairData<>(dataStream.map(throwableMapToPairFunc));
   }
 
