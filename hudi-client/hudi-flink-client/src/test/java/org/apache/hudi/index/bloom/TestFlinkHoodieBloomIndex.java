@@ -23,7 +23,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
-import org.apache.hudi.common.data.HoodieList;
+import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.data.HoodieListPairData;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
@@ -184,7 +184,7 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
           partitionRecordKeyMap.put(t.getLeft(), recordKeyList);
         });
 
-    List<Pair<String, HoodieKey>> comparisonKeyList = HoodieList.getList(
+    List<Pair<String, HoodieKey>> comparisonKeyList = HoodieListData.getList(
         index.explodeRecordsWithFileComparisons(partitionToFileIndexInfo, HoodieListPairData.of(partitionRecordKeyMap)));
 
     assertEquals(10, comparisonKeyList.size());

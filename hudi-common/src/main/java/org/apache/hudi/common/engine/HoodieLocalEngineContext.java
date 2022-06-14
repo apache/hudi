@@ -24,7 +24,7 @@ import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.data.HoodieAccumulator;
 import org.apache.hudi.common.data.HoodieAtomicLongAccumulator;
 import org.apache.hudi.common.data.HoodieData;
-import org.apache.hudi.common.data.HoodieList;
+import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.function.SerializableConsumer;
 import org.apache.hudi.common.function.SerializableFunction;
@@ -71,12 +71,12 @@ public final class HoodieLocalEngineContext extends HoodieEngineContext {
 
   @Override
   public <T> HoodieData<T> emptyHoodieData() {
-    return HoodieList.of(Collections.emptyList());
+    return HoodieListData.of(Collections.emptyList());
   }
 
   @Override
   public <T> HoodieData<T> parallelize(List<T> data, int parallelism) {
-    return HoodieList.of(data);
+    return HoodieListData.of(data);
   }
 
   @Override

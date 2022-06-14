@@ -19,7 +19,7 @@
 package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.data.HoodieList;
+import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
@@ -50,8 +50,8 @@ public class JavaWriteHelper<T extends HoodieRecordPayload,R> extends BaseWriteH
 
   @Override
   protected List<HoodieRecord<T>> tag(List<HoodieRecord<T>> dedupedRecords, HoodieEngineContext context, HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table) {
-    return HoodieList.getList(
-        table.getIndex().tagLocation(HoodieList.of(dedupedRecords), context, table));
+    return HoodieListData.getList(
+        table.getIndex().tagLocation(HoodieListData.of(dedupedRecords), context, table));
   }
 
   @Override

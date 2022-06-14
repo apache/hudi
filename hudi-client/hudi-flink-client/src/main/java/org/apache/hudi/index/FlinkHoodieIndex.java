@@ -23,7 +23,7 @@ import org.apache.hudi.ApiMaturityLevel;
 import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
-import org.apache.hudi.common.data.HoodieList;
+import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -61,8 +61,8 @@ public abstract class FlinkHoodieIndex<T extends HoodieRecordPayload> extends Ho
   public <R> HoodieData<HoodieRecord<R>> tagLocation(
       HoodieData<HoodieRecord<R>> records, HoodieEngineContext context,
       HoodieTable hoodieTable) throws HoodieIndexException {
-    List<HoodieRecord<T>> hoodieRecords = tagLocation(HoodieList.getList(records.map(record -> (HoodieRecord<T>) record)), context, hoodieTable);
-    return HoodieList.of(hoodieRecords.stream().map(r -> (HoodieRecord<R>) r).collect(Collectors.toList()));
+    List<HoodieRecord<T>> hoodieRecords = tagLocation(HoodieListData.getList(records.map(record -> (HoodieRecord<T>) record)), context, hoodieTable);
+    return HoodieListData.of(hoodieRecords.stream().map(r -> (HoodieRecord<R>) r).collect(Collectors.toList()));
   }
 
   @Override
@@ -70,6 +70,6 @@ public abstract class FlinkHoodieIndex<T extends HoodieRecordPayload> extends Ho
   public HoodieData<WriteStatus> updateLocation(
       HoodieData<WriteStatus> writeStatuses, HoodieEngineContext context,
       HoodieTable hoodieTable) throws HoodieIndexException {
-    return HoodieList.of(updateLocation(HoodieList.getList(writeStatuses), context, hoodieTable));
+    return HoodieListData.of(updateLocation(HoodieListData.getList(writeStatuses), context, hoodieTable));
   }
 }

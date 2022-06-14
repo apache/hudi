@@ -91,12 +91,12 @@ public class HoodieMapPair<K, V> extends HoodiePairData<K, V> {
 
   @Override
   public HoodieData<K> keys() {
-    return HoodieList.of(new ArrayList<>(mapPairData.keySet()));
+    return HoodieListData.of(new ArrayList<>(mapPairData.keySet()));
   }
 
   @Override
   public HoodieData<V> values() {
-    return HoodieList.of(
+    return HoodieListData.of(
         mapPairData.values().stream().flatMap(List::stream).collect(Collectors.toList()));
   }
 
@@ -130,7 +130,7 @@ public class HoodieMapPair<K, V> extends HoodiePairData<K, V> {
   @Override
   public <O> HoodieData<O> map(SerializableFunction<Pair<K, V>, O> func) {
     Function<Pair<K, V>, O> throwableFunc = throwingMapWrapper(func);
-    return HoodieList.of(
+    return HoodieListData.of(
         streamAllPairs().map(throwableFunc).collect(Collectors.toList()));
   }
 

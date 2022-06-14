@@ -68,12 +68,12 @@ public class HoodieListPairData<K, V> extends HoodiePairData<K, V> {
 
   @Override
   public HoodieData<K> keys() {
-    return new HoodieList<>(dataStream.map(Pair::getKey));
+    return new HoodieListData<>(dataStream.map(Pair::getKey));
   }
 
   @Override
   public HoodieData<V> values() {
-    return new HoodieList<>(dataStream.map(Pair::getValue));
+    return new HoodieListData<>(dataStream.map(Pair::getValue));
   }
 
   @Override
@@ -120,7 +120,7 @@ public class HoodieListPairData<K, V> extends HoodiePairData<K, V> {
   @Override
   public <O> HoodieData<O> map(SerializableFunction<Pair<K, V>, O> func) {
     Function<Pair<K, V>, O> uncheckedMapper = throwingMapWrapper(func);
-    return new HoodieList<>(dataStream.map(uncheckedMapper));
+    return new HoodieListData<>(dataStream.map(uncheckedMapper));
   }
 
   @Override

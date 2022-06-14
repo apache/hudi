@@ -20,7 +20,7 @@ package org.apache.hudi.sink.compact;
 
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.data.HoodieList;
+import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
@@ -158,7 +158,7 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
         .collect(Collectors.toList());
 
     HoodieCommitMetadata metadata = CompactHelpers.getInstance().createCompactionMetadata(
-        table, instant, HoodieList.of(statuses), writeClient.getConfig().getSchema());
+        table, instant, HoodieListData.of(statuses), writeClient.getConfig().getSchema());
 
     // commit the compaction
     this.writeClient.commitCompaction(instant, metadata, Option.empty());

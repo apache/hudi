@@ -42,7 +42,7 @@ import static org.apache.hudi.common.util.CollectionUtils.createImmutableList;
 import static org.apache.hudi.common.util.CollectionUtils.createImmutableMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class TestHoodieListPairData {
+public class TestHoodieListDataPairData {
 
   private static final String KEY1 = "key1";
   private static final String KEY2 = "key2";

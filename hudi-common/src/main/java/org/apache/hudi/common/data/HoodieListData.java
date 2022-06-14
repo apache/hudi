@@ -43,15 +43,15 @@ import static org.apache.hudi.common.function.FunctionWrapper.throwingMapWrapper
  *
  * TODO rename to HoodieListData
  */
-public class HoodieList<T> extends HoodieData<T> {
+public class HoodieListData<T> extends HoodieData<T> {
 
   private final Stream<T> dataStream;
 
-  private HoodieList(List<T> data) {
+  private HoodieListData(List<T> data) {
     this.dataStream = data.stream().parallel();
   }
 
-  HoodieList(Stream<T> dataStream) {
+  HoodieListData(Stream<T> dataStream) {
     this.dataStream = dataStream;
   }
 
@@ -60,17 +60,17 @@ public class HoodieList<T> extends HoodieData<T> {
    * @param <T>      type of object.
    * @return a new instance containing the {@link List<T>} reference.
    */
-  public static <T> HoodieList<T> of(List<T> listData) {
-    return new HoodieList<>(listData);
+  public static <T> HoodieListData<T> of(List<T> listData) {
+    return new HoodieListData<>(listData);
   }
 
   /**
-   * @param hoodieData {@link HoodieList <T>} instance containing the {@link List} of objects.
+   * @param hoodieData {@link HoodieListData <T>} instance containing the {@link List} of objects.
    * @param <T>        type of object.
    * @return the a {@link List} of objects in type T.
    */
   public static <T> List<T> getList(HoodieData<T> hoodieData) {
-    return ((HoodieList<T>) hoodieData).get();
+    return ((HoodieListData<T>) hoodieData).get();
   }
 
   @Override
@@ -100,7 +100,7 @@ public class HoodieList<T> extends HoodieData<T> {
 
   @Override
   public <O> HoodieData<O> map(SerializableFunction<T, O> func) {
-    return new HoodieList<>(dataStream.map(throwingMapWrapper(func)));
+    return new HoodieListData<>(dataStream.map(throwingMapWrapper(func)));
   }
 
   @Override
@@ -111,7 +111,7 @@ public class HoodieList<T> extends HoodieData<T> {
   @Override
   public <O> HoodieData<O> mapPartitions(SerializableFunction<Iterator<T>, Iterator<O>> func) {
     Function<Iterator<T>, Iterator<O>> mapper = throwingMapWrapper(func);
-    return new HoodieList<>(
+    return new HoodieListData<>(
         StreamSupport.stream(
             Spliterators.spliteratorUnknownSize(
                 mapper.apply(dataStream.iterator()), Spliterator.ORDERED), true)
@@ -124,7 +124,7 @@ public class HoodieList<T> extends HoodieData<T> {
     Stream<O> mappedStream = dataStream.flatMap(e ->
         StreamSupport.stream(
             Spliterators.spliteratorUnknownSize(mapper.apply(e), Spliterator.ORDERED), true));
-    return new HoodieList<>(mappedStream);
+    return new HoodieListData<>(mappedStream);
   }
 
   @Override
@@ -135,7 +135,7 @@ public class HoodieList<T> extends HoodieData<T> {
 
   @Override
   public HoodieData<T> distinct() {
-    return new HoodieList<>(dataStream.distinct());
+    return new HoodieListData<>(dataStream.distinct());
   }
 
   @Override
@@ -152,13 +152,13 @@ public class HoodieList<T> extends HoodieData<T> {
 
   @Override
   public HoodieData<T> filter(SerializableFunction<T, Boolean> filterFunc) {
-    return new HoodieList<>(dataStream.filter(r -> throwingMapWrapper(filterFunc).apply(r)));
+    return new HoodieListData<>(dataStream.filter(r -> throwingMapWrapper(filterFunc).apply(r)));
   }
 
   @Override
   public HoodieData<T> union(HoodieData<T> other) {
-    ValidationUtils.checkArgument(other instanceof HoodieList);
-    return new HoodieList<>(Stream.concat(dataStream, ((HoodieList<T>)other).dataStream));
+    ValidationUtils.checkArgument(other instanceof HoodieListData);
+    return new HoodieListData<>(Stream.concat(dataStream, ((HoodieListData<T>)other).dataStream));
   }
 
   @Override
