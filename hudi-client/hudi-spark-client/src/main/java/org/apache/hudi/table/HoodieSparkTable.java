@@ -24,7 +24,6 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.Option;
@@ -44,7 +43,7 @@ import org.apache.spark.TaskContext$;
 
 import java.io.IOException;
 
-public abstract class HoodieSparkTable<T extends HoodieRecordPayload>
+public abstract class HoodieSparkTable<T>
     extends HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> {
 
   private volatile boolean isMetadataTableExists = false;
@@ -53,7 +52,12 @@ public abstract class HoodieSparkTable<T extends HoodieRecordPayload>
     super(config, context, metaClient);
   }
 
-  public static <T extends HoodieRecordPayload> HoodieSparkTable<T> create(HoodieWriteConfig config, HoodieEngineContext context) {
+  public static <T> HoodieSparkTable<T> create(HoodieWriteConfig config, HoodieEngineContext context) {
+    return create(config, context, false);
+  }
+
+  public static <T> HoodieSparkTable<T> create(HoodieWriteConfig config, HoodieEngineContext context,
+                                                                           boolean refreshTimeline) {
     HoodieTableMetaClient metaClient =
         HoodieTableMetaClient.builder().setConf(context.getHadoopConf().get()).setBasePath(config.getBasePath())
             .setLoadActiveTimelineOnLoad(true).setConsistencyGuardConfig(config.getConsistencyGuardConfig())
@@ -63,9 +67,16 @@ public abstract class HoodieSparkTable<T extends HoodieRecordPayload>
     return HoodieSparkTable.create(config, (HoodieSparkEngineContext) context, metaClient);
   }
 
-  public static <T extends HoodieRecordPayload> HoodieSparkTable<T> create(HoodieWriteConfig config,
+  public static <T> HoodieSparkTable<T> create(HoodieWriteConfig config,
                                                                            HoodieSparkEngineContext context,
                                                                            HoodieTableMetaClient metaClient) {
+    return create(config, context, metaClient, false);
+  }
+
+  public static <T> HoodieSparkTable<T> create(HoodieWriteConfig config,
+                                                                           HoodieSparkEngineContext context,
+                                                                           HoodieTableMetaClient metaClient,
+                                                                           boolean refreshTimeline) {
     HoodieSparkTable<T> hoodieSparkTable;
     switch (metaClient.getTableType()) {
       case COPY_ON_WRITE:

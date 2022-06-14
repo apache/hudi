@@ -27,9 +27,10 @@ import org.apache.hudi.cli.functional.CLIFunctionalTestHarness;
 import org.apache.hudi.cli.testutils.HoodieTestCommitMetadataGenerator;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
@@ -104,7 +105,7 @@ public class TestHoodieLogFileCommand extends CLIFunctionalTestHarness {
         .withFileId("test-log-fileid1").overBaseCommit("100").withFs(fs).build()) {
 
       // write data to file
-      List<IndexedRecord> records = SchemaTestUtil.generateTestRecords(0, 100);
+      List<HoodieRecord> records = SchemaTestUtil.generateTestRecords(0, 100).stream().map(HoodieAvroIndexedRecord::new).collect(Collectors.toList());
       Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
       header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, INSTANT_TIME);
       header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, getSimpleSchema().toString());
@@ -184,7 +185,7 @@ public class TestHoodieLogFileCommand extends CLIFunctionalTestHarness {
               .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
               .withFileId("test-log-fileid1").overBaseCommit(INSTANT_TIME).withFs(fs).withSizeThreshold(500).build();
 
-      List<IndexedRecord> records1 = SchemaTestUtil.generateHoodieTestRecords(0, 100);
+      List<HoodieRecord> records1 = SchemaTestUtil.generateHoodieTestRecords(0, 100).stream().map(HoodieAvroIndexedRecord::new).collect(Collectors.toList());
       Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
       header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, INSTANT_TIME);
       header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
@@ -223,12 +224,12 @@ public class TestHoodieLogFileCommand extends CLIFunctionalTestHarness {
         .withBitCaskDiskMapCompressionEnabled(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue())
         .build();
 
-    Iterator<HoodieRecord<? extends HoodieRecordPayload>> records = scanner.iterator();
+    Iterator<HoodieRecord> records = scanner.iterator();
     int num = 0;
     int maxSize = 10;
     List<IndexedRecord> indexRecords = new ArrayList<>();
     while (records.hasNext() && num < maxSize) {
-      Option<IndexedRecord> hoodieRecord = records.next().getData().getInsertValue(schema);
+      Option<IndexedRecord> hoodieRecord = ((HoodieAvroRecord)records.next()).getData().getInsertValue(schema);
       indexRecords.add(hoodieRecord.get());
       num++;
     }

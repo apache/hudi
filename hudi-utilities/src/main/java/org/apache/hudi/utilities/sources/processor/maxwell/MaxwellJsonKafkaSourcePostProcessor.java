@@ -119,7 +119,7 @@ public class MaxwellJsonKafkaSourcePostProcessor extends JsonKafkaSourcePostProc
         // insert or update
         if (INSERT.equals(type) || UPDATE.equals(type)) {
           // tag this record not delete.
-          result.put(HoodieRecord.HOODIE_IS_DELETED, false);
+          result.put(HoodieRecord.HOODIE_IS_DELETED_FIELD, false);
           return result.toString();
 
           // delete
@@ -138,7 +138,7 @@ public class MaxwellJsonKafkaSourcePostProcessor extends JsonKafkaSourcePostProc
 
   private String processDelete(JsonNode inputJson, ObjectNode result) {
     // tag this record as delete.
-    result.put(HoodieRecord.HOODIE_IS_DELETED, true);
+    result.put(HoodieRecord.HOODIE_IS_DELETED_FIELD, true);
 
     PreCombineFieldType preCombineFieldType =
         valueOf(this.props.getString(Config.PRECOMBINE_FIELD_TYPE_PROP.key(),

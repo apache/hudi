@@ -16,34 +16,30 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.table.action.bootstrap;
+package org.apache.hudi.io.storage;
 
-import org.apache.hudi.common.config.TypedProperties;
+import org.apache.avro.Schema;
+
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.util.queue.BoundedInMemoryQueueConsumer;
-import org.apache.hudi.io.HoodieBootstrapHandle;
 
-/**
- * Consumer that dequeues records from queue and sends to Merge Handle for writing.
- */
-public class BootstrapRecordConsumer extends BoundedInMemoryQueueConsumer<HoodieRecord, Void> {
+import java.io.IOException;
+import java.util.Properties;
 
-  private final HoodieBootstrapHandle bootstrapHandle;
+public interface HoodieFileWriter {
+  boolean canWrite();
 
-  public BootstrapRecordConsumer(HoodieBootstrapHandle bootstrapHandle) {
-    this.bootstrapHandle = bootstrapHandle;
+  void writeWithMetadata(HoodieKey key, HoodieRecord record, Schema schema, Properties props) throws IOException;
+
+  void write(String recordKey, HoodieRecord record, Schema schema, Properties props) throws IOException;
+
+  void close() throws IOException;
+
+  default void writeWithMetadata(HoodieKey key, HoodieRecord record, Schema schema) throws IOException {
+    writeWithMetadata(key, record, schema, new Properties());
   }
 
-  @Override
-  protected void consumeOneRecord(HoodieRecord record) {
-    bootstrapHandle.write(record, bootstrapHandle.getWriterSchemaWithMetaFields(), new TypedProperties());
-  }
-
-  @Override
-  protected void finish() {}
-
-  @Override
-  protected Void getResult() {
-    return null;
+  default void write(String recordKey, HoodieRecord record, Schema schema) throws IOException {
+    write(recordKey, record, schema, new Properties());
   }
 }

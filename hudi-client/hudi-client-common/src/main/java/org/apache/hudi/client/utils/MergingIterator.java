@@ -18,20 +18,18 @@
 
 package org.apache.hudi.client.utils;
 
-import java.util.Iterator;
-import java.util.function.Function;
-import org.apache.avro.generic.GenericRecord;
-
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.common.util.collection.Pair;
 
-public class MergingIterator<T extends GenericRecord> implements Iterator<T> {
+import java.util.Iterator;
+import java.util.function.BiFunction;
+
+public class MergingIterator<T> implements Iterator<T> {
 
   private final Iterator<T> leftIterator;
   private final Iterator<T> rightIterator;
-  private final Function<Pair<T,T>, T> mergeFunction;
+  private final BiFunction<T, T, T> mergeFunction;
 
-  public MergingIterator(Iterator<T> leftIterator, Iterator<T> rightIterator, Function<Pair<T,T>, T> mergeFunction) {
+  public MergingIterator(Iterator<T> leftIterator, Iterator<T> rightIterator, BiFunction<T, T, T> mergeFunction) {
     this.leftIterator = leftIterator;
     this.rightIterator = rightIterator;
     this.mergeFunction = mergeFunction;
@@ -47,6 +45,6 @@ public class MergingIterator<T extends GenericRecord> implements Iterator<T> {
 
   @Override
   public T next() {
-    return mergeFunction.apply(Pair.of(leftIterator.next(), rightIterator.next()));
+    return mergeFunction.apply(leftIterator.next(), rightIterator.next());
   }
 }

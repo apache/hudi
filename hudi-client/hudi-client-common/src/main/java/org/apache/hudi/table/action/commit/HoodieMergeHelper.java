@@ -19,14 +19,15 @@
 package org.apache.hudi.table.action.commit;
 
 import org.apache.avro.SchemaCompatibility;
-import org.apache.hudi.avro.HoodieAvroUtils;
+
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.util.ClosableIterator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.queue.BoundedInMemoryExecutor;
@@ -49,16 +50,21 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.io.BinaryDecoder;
 import org.apache.avro.io.BinaryEncoder;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.util.Iterator;
 import java.util.List;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Properties;
 import java.util.stream.Collectors;
 
-public class HoodieMergeHelper<T extends HoodieRecordPayload> extends
+public class HoodieMergeHelper<T> extends
     BaseMergeHelper<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> {
+
+  private static final Logger LOG = LogManager.getLogger(HoodieMergeHelper.class);
 
   private HoodieMergeHelper() {
   }
@@ -92,7 +98,7 @@ public class HoodieMergeHelper<T extends HoodieRecordPayload> extends
     }
 
     BoundedInMemoryExecutor<GenericRecord, GenericRecord, Void> wrapper = null;
-    HoodieFileReader<GenericRecord> reader = HoodieFileReaderFactory.getFileReader(cfgForHoodieFile, mergeHandle.getOldFilePath());
+    HoodieFileReader reader = HoodieFileReaderFactory.getFileReader(cfgForHoodieFile, mergeHandle.getOldFilePath());
 
     Option<InternalSchema> querySchemaOpt = SerDeHelper.fromJson(table.getConfig().getInternalSchema());
     boolean needToReWriteRecord = false;
@@ -124,14 +130,14 @@ public class HoodieMergeHelper<T extends HoodieRecordPayload> extends
     }
 
     try {
-      final Iterator<GenericRecord> readerIterator;
+      final Iterator<HoodieRecord> readerIterator;
       if (baseFile.getBootstrapBaseFile().isPresent()) {
         readerIterator = getMergingIterator(table, mergeHandle, baseFile, reader, readSchema, externalSchemaTransformation);
       } else {
         if (needToReWriteRecord) {
-          readerIterator = HoodieAvroUtils.rewriteRecordWithNewSchema(reader.getRecordIterator(), readSchema, renameCols);
+          readerIterator = new RewriteIterator(reader.getRecordIterator(HoodieAvroIndexedRecord::new), readSchema, readSchema, table.getConfig().getProps(), renameCols);
         } else {
-          readerIterator = reader.getRecordIterator(readSchema);
+          readerIterator = reader.getRecordIterator(readSchema, HoodieAvroIndexedRecord::new);
         }
       }
 
@@ -142,7 +148,8 @@ public class HoodieMergeHelper<T extends HoodieRecordPayload> extends
         if (!externalSchemaTransformation) {
           return record;
         }
-        return transformRecordBasedOnNewSchema(gReader, gWriter, encoderCache, decoderCache, (GenericRecord) record);
+        // TODO Other type of record need to change
+        return transformRecordBasedOnNewSchema(gReader, gWriter, encoderCache, decoderCache, (GenericRecord) ((HoodieRecord)record).getData());
       }, table.getPreExecuteRunnable());
       wrapper.execute();
     } catch (Exception e) {
@@ -158,6 +165,43 @@ public class HoodieMergeHelper<T extends HoodieRecordPayload> extends
         wrapper.awaitTermination();
       }
       mergeHandle.close();
+    }
+  }
+
+  class RewriteIterator implements ClosableIterator<HoodieRecord> {
+
+    private final ClosableIterator<HoodieRecord> iter;
+    private final Schema newSchema;
+    private final Schema recordSchema;
+    private final Properties prop;
+    private final Map<String, String> renameCols;
+
+    public RewriteIterator(ClosableIterator<HoodieRecord> iter, Schema newSchema, Schema recordSchema, Properties prop, Map<String, String> renameCols) {
+      this.iter = iter;
+      this.newSchema = newSchema;
+      this.recordSchema = recordSchema;
+      this.prop = prop;
+      this.renameCols = renameCols;
+    }
+
+    @Override
+    public boolean hasNext() {
+      return iter.hasNext();
+    }
+
+    @Override
+    public HoodieRecord next() {
+      try {
+        return iter.next().rewriteRecordWithNewSchema(recordSchema, prop, newSchema, renameCols);
+      } catch (IOException e) {
+        LOG.error("Error rewrite record with new schema", e);
+        throw new HoodieException(e);
+      }
+    }
+
+    @Override
+    public void close() {
+      iter.close();
     }
   }
 }

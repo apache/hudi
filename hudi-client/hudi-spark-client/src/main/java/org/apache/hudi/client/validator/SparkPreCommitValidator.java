@@ -21,7 +21,6 @@ package org.apache.hudi.client.validator;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -42,7 +41,7 @@ import java.util.stream.Collectors;
 /**
  * Validator can be configured pre-commit. 
  */
-public abstract class SparkPreCommitValidator<T extends HoodieRecordPayload, I, K, O extends HoodieData<WriteStatus>> {
+public abstract class SparkPreCommitValidator<T, I, K, O extends HoodieData<WriteStatus>> {
   private static final Logger LOG = LogManager.getLogger(SparkPreCommitValidator.class);
 
   private HoodieSparkTable<T> table;

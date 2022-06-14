@@ -24,67 +24,69 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.util.AvroOrcUtils;
 import org.apache.hudi.common.util.BaseFileUtils;
 import org.apache.hudi.common.util.ClosableIterator;
-import org.apache.hudi.common.util.ParquetReaderIterator;
-import org.apache.parquet.avro.AvroParquetReader;
-import org.apache.parquet.avro.AvroReadSupport;
-import org.apache.parquet.hadoop.ParquetReader;
+import org.apache.hudi.common.util.OrcReaderIterator;
+import org.apache.hudi.exception.HoodieIOException;
+import org.apache.orc.OrcFile;
+import org.apache.orc.Reader;
+import org.apache.orc.Reader.Options;
+import org.apache.orc.RecordReader;
+import org.apache.orc.TypeDescription;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Set;
 
-public class HoodieParquetReader<R extends IndexedRecord> implements HoodieFileReader<R> {
-  
-  private final Path path;
-  private final Configuration conf;
-  private final BaseFileUtils parquetUtils;
-  private List<ParquetReaderIterator> readerIterators = new ArrayList<>();
+public class HoodieAvroOrcReader implements HoodieAvroFileReader {
+  private Path path;
+  private Configuration conf;
+  private final BaseFileUtils orcUtils;
 
-  public HoodieParquetReader(Configuration configuration, Path path) {
+  public HoodieAvroOrcReader(Configuration configuration, Path path) {
     this.conf = configuration;
     this.path = path;
-    this.parquetUtils = BaseFileUtils.getInstance(HoodieFileFormat.PARQUET);
+    this.orcUtils = BaseFileUtils.getInstance(HoodieFileFormat.ORC);
   }
 
   @Override
   public String[] readMinMaxRecordKeys() {
-    return parquetUtils.readMinMaxRecordKeys(conf, path);
+    return orcUtils.readMinMaxRecordKeys(conf, path);
   }
 
   @Override
   public BloomFilter readBloomFilter() {
-    return parquetUtils.readBloomFilterFromMetadata(conf, path);
+    return orcUtils.readBloomFilterFromMetadata(conf, path);
   }
 
   @Override
-  public Set<String> filterRowKeys(Set<String> candidateRowKeys) {
-    return parquetUtils.filterRowKeys(conf, path, candidateRowKeys);
+  public Set<String> filterRowKeys(Set candidateRowKeys) {
+    return orcUtils.filterRowKeys(conf, path, candidateRowKeys);
   }
 
   @Override
-  public ClosableIterator<R> getRecordIterator(Schema schema) throws IOException {
-    AvroReadSupport.setAvroReadSchema(conf, schema);
-    ParquetReader<R> reader = AvroParquetReader.<R>builder(path).withConf(conf).build();
-    ParquetReaderIterator<R> parquetReaderIterator = new ParquetReaderIterator<>(reader);
-    readerIterators.add(parquetReaderIterator);
-    return parquetReaderIterator;
+  public ClosableIterator<IndexedRecord> getRecordIterator(Schema schema) throws IOException {
+    try {
+      Reader reader = OrcFile.createReader(path, OrcFile.readerOptions(conf));
+      TypeDescription orcSchema = AvroOrcUtils.createOrcSchema(schema);
+      RecordReader recordReader = reader.rows(new Options(conf).schema(orcSchema));
+      return new OrcReaderIterator<>(recordReader, schema, orcSchema);
+    } catch (IOException io) {
+      throw new HoodieIOException("Unable to create an ORC reader.", io);
+    }
   }
 
   @Override
   public Schema getSchema() {
-    return parquetUtils.readAvroSchema(conf, path);
+    return orcUtils.readAvroSchema(conf, path);
   }
 
   @Override
   public void close() {
-    readerIterators.forEach(ParquetReaderIterator::close);
   }
 
   @Override
   public long getTotalRecords() {
-    return parquetUtils.getRowCount(conf, path);
+    return orcUtils.getRowCount(conf, path);
   }
 }

@@ -20,8 +20,8 @@ package org.apache.hudi.execution.bulkinsert;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.SerializableSchema;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.BulkInsertPartitioner;
@@ -36,7 +36,7 @@ import java.util.Arrays;
  *
  * @param <T> HoodieRecordPayload type
  */
-public class RDDCustomColumnsSortPartitioner<T extends HoodieRecordPayload>
+public class RDDCustomColumnsSortPartitioner<T>
     implements BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
 
   private final String[] sortColumnNames;
@@ -63,7 +63,7 @@ public class RDDCustomColumnsSortPartitioner<T extends HoodieRecordPayload>
     final boolean consistentLogicalTimestampEnabled = this.consistentLogicalTimestampEnabled;
     return records.sortBy(
         record -> {
-          Object recordValue = HoodieAvroUtils.getRecordColumnValues(record, sortColumns, schema, consistentLogicalTimestampEnabled);
+          Object recordValue = HoodieAvroUtils.getRecordColumnValues((HoodieAvroRecord)record, sortColumns, schema, consistentLogicalTimestampEnabled);
           // null values are replaced with empty string for null_first order
           if (recordValue == null) {
             return StringUtils.EMPTY_STRING;

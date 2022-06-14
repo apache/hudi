@@ -244,7 +244,7 @@ trait ColumnStatsIndexSupport extends SparkAdapterSupport {
         it.map { record =>
           // schema and props are ignored for generating metadata record from the payload
           // instead, the underlying file system, or bloom filter, or columns stats metadata (part of payload) are directly used
-          toScalaOption(record.getData.getInsertValue(null, null))
+          toScalaOption(record.toIndexedRecord(null, null))
             .flatMap(avroRecord => converter(avroRecord.asInstanceOf[GenericRecord]))
             .orNull
         }
