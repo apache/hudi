@@ -56,7 +56,7 @@ class ColumnStatsIndexSupport(spark: SparkSession,
                               @transient metaClient: HoodieTableMetaClient) {
 
   checkState(metadataConfig.enabled, "Metadata Table support has to be enabled")
-  checkState(isIndexAvailable, "Metadata Table support has to be enabled")
+  checkState(isIndexAvailable, s"Column Stats Index has to be available for ${metaClient.getTableConfig.getTableName}")
 
   @transient private lazy val engineCtx = new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext))
   @transient private lazy val metadataTable: HoodieTableMetadata =
