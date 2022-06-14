@@ -189,7 +189,11 @@ public class FSUtils {
   }
 
   public static long getFileSize(FileSystem fs, Path path) throws IOException {
-    return fs.getFileStatus(path).getLen();
+    if (fs.exists(path)) {
+      return fs.getFileStatus(path).getLen();
+    } else {
+      return 0L;
+    }
   }
 
   public static String getFileId(String fullFileName) {
