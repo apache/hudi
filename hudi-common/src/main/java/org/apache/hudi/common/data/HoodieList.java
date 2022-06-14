@@ -48,8 +48,7 @@ public class HoodieList<T> extends HoodieData<T> {
   private final Stream<T> dataStream;
 
   private HoodieList(List<T> data) {
-    // TODO handle parallelism properly
-    this.dataStream = data.stream();
+    this.dataStream = data.stream().parallel();
   }
 
   HoodieList(Stream<T> dataStream) {
@@ -124,8 +123,7 @@ public class HoodieList<T> extends HoodieData<T> {
     Function<T, Iterator<O>> mapper = throwingMapWrapper(func);
     Stream<O> mappedStream = dataStream.flatMap(e ->
         StreamSupport.stream(
-            Spliterators.spliteratorUnknownSize(mapper.apply(e), Spliterator.ORDERED), true)
-    );
+            Spliterators.spliteratorUnknownSize(mapper.apply(e), Spliterator.ORDERED), true));
     return new HoodieList<>(mappedStream);
   }
 

@@ -44,7 +44,7 @@ public class HoodieListPairData<K, V> extends HoodiePairData<K, V> {
   private final Stream<Pair<K, V>> dataStream;
 
   public HoodieListPairData(List<Pair<K, V>> data) {
-    this.dataStream = data.stream();
+    this.dataStream = data.stream().parallel();
   }
 
   HoodieListPairData(Stream<Pair<K, V>> dataStream) {
