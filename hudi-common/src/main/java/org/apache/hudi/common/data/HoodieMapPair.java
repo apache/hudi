@@ -113,6 +113,12 @@ public class HoodieMapPair<K, V> extends HoodiePairData<K, V> {
   }
 
   @Override
+  public HoodiePairData<K, Iterable<V>> groupByKey() {
+    // TODO
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
   public HoodiePairData<K, V> reduceByKey(SerializableBiFunction<V, V, V> func, int parallelism) {
     return HoodieMapPair.of(mapPairData.entrySet().stream()
         .collect(Collectors.toMap(Map.Entry::getKey, e -> {
