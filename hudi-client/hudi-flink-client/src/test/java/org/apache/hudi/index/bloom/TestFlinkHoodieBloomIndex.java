@@ -18,11 +18,13 @@
 
 package org.apache.hudi.index.bloom;
 
+import org.apache.avro.Schema;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.data.HoodieList;
-import org.apache.hudi.common.data.HoodieMapPair;
+import org.apache.hudi.common.data.HoodieListPairData;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -37,9 +39,6 @@ import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieFlinkClientTestHarness;
 import org.apache.hudi.testutils.HoodieFlinkWriteableTestTable;
-
-import org.apache.avro.Schema;
-import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -186,7 +185,7 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
         });
 
     List<Pair<String, HoodieKey>> comparisonKeyList = HoodieList.getList(
-        index.explodeRecordsWithFileComparisons(partitionToFileIndexInfo, HoodieMapPair.of(partitionRecordKeyMap)));
+        index.explodeRecordsWithFileComparisons(partitionToFileIndexInfo, HoodieListPairData.of(partitionRecordKeyMap)));
 
     assertEquals(10, comparisonKeyList.size());
     java.util.Map<String, List<String>> recordKeyToFileComps = comparisonKeyList.stream()

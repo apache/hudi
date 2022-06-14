@@ -73,6 +73,11 @@ public abstract class HoodiePairData<K, V> implements Serializable {
    */
   public abstract Map<K, Long> countByKey();
 
+  /**
+   * TODO java-doc
+   */
+  public abstract HoodiePairData<K, Iterable<V>> groupByKey();
+
   public abstract HoodiePairData<K, V> reduceByKey(SerializableBiFunction<V, V, V> func, int parallelism);
 
   /**
