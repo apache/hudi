@@ -72,6 +72,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@Disabled
 public class TestHiveSyncTool {
 
   private static final List<Object> SYNC_MODES = Arrays.asList(
