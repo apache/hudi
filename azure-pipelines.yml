@@ -60,6 +60,7 @@ parameters:
       - '!hudi-examples/hudi-examples-flink'
       - '!hudi-examples/hudi-examples-java'
       - '!hudi-examples/hudi-examples-spark'
+      - '!hudi-spark-datasource/hudi-spark3'
       - '!hudi-flink-datasource'
       - '!hudi-flink-datasource/hudi-flink'
       - '!hudi-flink-datasource/hudi-flink1.13.x'
