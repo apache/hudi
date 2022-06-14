@@ -540,6 +540,7 @@ public class TestHiveSyncTool {
     assertEquals(2, commentCnt, "hive schema field comment numbers should match the avro schema field doc numbers");
   }
 
+  @Disabled
   @ParameterizedTest
   @MethodSource("syncMode")
   public void testSyncWithCommentedSchema(String syncMode) throws Exception {
@@ -572,6 +573,7 @@ public class TestHiveSyncTool {
     assertEquals(2, commentCnt, "hive schema field comment numbers should match the avro schema field doc numbers");
   }
 
+  @Disabled
   @ParameterizedTest
   @MethodSource("syncModeAndSchemaFromCommitMetadata")
   public void testSyncMergeOnRead(boolean useSchemaFromCommitMetadata, String syncMode) throws Exception {
