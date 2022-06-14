@@ -27,6 +27,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant.State
 import org.apache.hudi.common.table.timeline.HoodieTimeline.ROLLBACK_ACTION
 import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstant, HoodieTimeline, TimelineMetadataUtils}
 import org.apache.hudi.common.util.CollectionUtils
+import org.apache.hudi.exception.HoodieException
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
@@ -122,7 +123,7 @@ class ShowRollbacksProcedure(showDetails: Boolean) extends BaseProcedure with Pr
         })
       } catch {
         case e: IOException =>
-          e.printStackTrace()
+          throw new HoodieException(s"Failed to get rollback's info from instant ${instant.getTimestamp}.")
       }
     })
     rows.stream().limit(limit).toArray().map(r => r.asInstanceOf[Row]).toList

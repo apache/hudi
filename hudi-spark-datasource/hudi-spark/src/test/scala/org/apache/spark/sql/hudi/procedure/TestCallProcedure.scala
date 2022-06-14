@@ -213,15 +213,67 @@ class TestCallProcedure extends HoodieSparkSqlTestBase {
       // collect rollbacks for table
       val rollbacks = spark.sql(s"""call show_rollbacks(table => '$tableName', limit => 10)""").collect()
       assertResult(2) {rollbacks.length}
+    }
+  }
+
+  test("Test Call show_rollback_detail Procedure") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      // create table
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | location '${tmp.getCanonicalPath}/$tableName'
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts'
+           | )
+       """.stripMargin)
+      // insert data to table
+      spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000")
+      spark.sql(s"insert into $tableName select 2, 'a2', 20, 1500")
+      spark.sql(s"insert into $tableName select 3, 'a3', 30, 2000")
+
+      // 3 commits are left before rollback
+      var commits = spark.sql(s"""call show_commits(table => '$tableName', limit => 10)""").collect()
+      assertResult(3) {
+        commits.length
+      }
+
+      // Call rollback_to_instant Procedure with Named Arguments
+      var instant_time = commits(0).get(0).toString
+      checkAnswer(s"""call rollback_to_instant(table => '$tableName', instant_time => '$instant_time')""")(Seq(true))
+      // Call rollback_to_instant Procedure with Positional Arguments
+      instant_time = commits(1).get(0).toString
+      checkAnswer(s"""call rollback_to_instant('$tableName', '$instant_time')""")(Seq(true))
+
+      // 1 commits are left after rollback
+      commits = spark.sql(s"""call show_commits(table => '$tableName', limit => 10)""").collect()
+      assertResult(1) {
+        commits.length
+      }
+
+      // collect rollbacks for table
+      val rollbacks = spark.sql(s"""call show_rollbacks(table => '$tableName', limit => 10)""").collect()
+      assertResult(2) {
+        rollbacks.length
+      }
 
       // Check required fields
       checkExceptionContain(s"""call show_rollback_detail(table => '$tableName')""")(
         s"Argument: instant_time is required")
 
-      // collect rollback for table
+      // collect rollback's info for table
       instant_time = rollbacks(1).get(0).toString
       val rollback = spark.sql(s"""call show_rollback_detail(table => '$tableName', instant_time => '$instant_time')""").collect()
-      assertResult(1) {rollback.length}
+      assertResult(1) {
+        rollback.length
+      }
     }
   }
 }
