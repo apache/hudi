@@ -54,7 +54,7 @@ class ColumnStatsIndexSupport(spark: SparkSession,
                               tableSchema: StructType,
                               @transient metadataConfig: HoodieMetadataConfig,
                               @transient metaClient: HoodieTableMetaClient,
-                              allowCaching: Boolean = true) {
+                              allowCaching: Boolean = false) {
 
   checkState(metadataConfig.enabled, "Metadata Table support has to be enabled")
   checkState(isIndexAvailable, s"Column Stats Index has to be available for ${metaClient.getTableConfig.getTableName}")
@@ -90,9 +90,12 @@ class ColumnStatsIndexSupport(spark: SparkSession,
    * or b) executing it on-cluster via Spark [[Dataset]] and [[RDD]] APIs
    */
   def shouldReadInMemory(fileIndex: HoodieFileIndex, queryReferencedColumns: Seq[String]): Boolean = {
-    val modeOverride = metadataConfig.getColumnStatsIndexProcessingModeOverride
-    modeOverride != HoodieMetadataConfig.COLUMN_STATS_INDEX_PROCESSING_MODE_SPARK &&
-      fileIndex.getFileSlicesCount * queryReferencedColumns.length < columnStatsIndexProjectionSizeInMemoryThreshold
+    Option(metadataConfig.getColumnStatsIndexProcessingModeOverride) match {
+      case Some(mode) =>
+        mode == HoodieMetadataConfig.COLUMN_STATS_INDEX_PROCESSING_MODE_IN_MEMORY
+      case None =>
+        fileIndex.getFileSlicesCount * queryReferencedColumns.length < columnStatsIndexProjectionSizeInMemoryThreshold
+    }
   }
 
   /**
