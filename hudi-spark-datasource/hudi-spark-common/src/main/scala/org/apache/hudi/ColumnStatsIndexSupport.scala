@@ -53,7 +53,8 @@ import scala.collection.parallel.mutable.ParHashMap
 class ColumnStatsIndexSupport(spark: SparkSession,
                               tableSchema: StructType,
                               @transient metadataConfig: HoodieMetadataConfig,
-                              @transient metaClient: HoodieTableMetaClient) {
+                              @transient metaClient: HoodieTableMetaClient,
+                              allowCaching: Boolean = true) {
 
   checkState(metadataConfig.enabled, "Metadata Table support has to be enabled")
   checkState(isIndexAvailable, s"Column Stats Index has to be available for ${metaClient.getTableConfig.getTableName}")
@@ -122,13 +123,19 @@ class ColumnStatsIndexSupport(spark: SparkSession,
             spark.createDataFrame(rdd, indexSchema)
           }
 
-          cachedColumnStatsIndexViews.put(targetColumns, df)
-          // NOTE: Instead of collecting the rows from the index and hold them in memory, we instead rely
-          //       on Spark as (potentially distributed) cache managing data lifecycle, while we simply keep
-          //       the referenced to persisted [[DataFrame]] instance
-          df.persist(StorageLevel.MEMORY_ONLY)
+          if (allowCaching) {
+            cachedColumnStatsIndexViews.put(targetColumns, df)
+            // NOTE: Instead of collecting the rows from the index and hold them in memory, we instead rely
+            //       on Spark as (potentially distributed) cache managing data lifecycle, while we simply keep
+            //       the referenced to persisted [[DataFrame]] instance
+            df.persist(StorageLevel.MEMORY_ONLY)
 
-          block(df)
+            block(df)
+          } else {
+            withPersistedDataset(df) {
+              block(df)
+            }
+          }
         }
     }
   }
