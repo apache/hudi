@@ -118,14 +118,16 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
                            Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
                            TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt) {
     this(config, instantTime, hoodieTable, recordItr, partitionPath, fileId, taskContextSupplier,
-            getLatestBaseFile(hoodieTable, partitionPath, fileId), keyGeneratorOpt);
+        getLatestBaseFile(hoodieTable, partitionPath, fileId), keyGeneratorOpt);
   }
 
   public HoodieMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                            Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
                            TaskContextSupplier taskContextSupplier, HoodieBaseFile baseFile, Option<BaseKeyGenerator> keyGeneratorOpt) {
     super(config, instantTime, partitionPath, fileId, hoodieTable, taskContextSupplier);
-    init(recordItr, baseFile, keyGeneratorOpt);
+    init(fileId, recordItr);
+    init(fileId, partitionPath, baseFile);
+    validateAndSetAndKeyGenProps(keyGeneratorOpt, config.populateMetaFields());
   }
 
   /**
@@ -138,20 +140,13 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
     this.keyToNewRecords = keyToNewRecords;
     this.useWriterSchemaForCompaction = true;
     this.preserveMetadata = config.isPreserveHoodieCommitMetadataForCompaction();
-    init(null, dataFileToBeMerged, keyGeneratorOpt);
+    init(fileId, this.partitionPath, dataFileToBeMerged);
+    validateAndSetAndKeyGenProps(keyGeneratorOpt, config.populateMetaFields());
   }
 
   private void validateAndSetAndKeyGenProps(Option<BaseKeyGenerator> keyGeneratorOpt, boolean populateMetaFields) {
     ValidationUtils.checkArgument(populateMetaFields == !keyGeneratorOpt.isPresent());
     this.keyGeneratorOpt = keyGeneratorOpt;
-  }
-
-  private void init(Iterator<HoodieRecord<T>> recordItr, HoodieBaseFile baseFile, Option<BaseKeyGenerator> keyGeneratorOpt) {
-    if (recordItr != null) {
-      init(this.fileId, recordItr);
-    }
-    init(this.fileId, this.partitionPath, baseFile);
-    validateAndSetAndKeyGenProps(keyGeneratorOpt, this.config.populateMetaFields());
   }
 
   public static HoodieBaseFile getLatestBaseFile(HoodieTable<?, ?, ?, ?> hoodieTable, String partitionPath, String fileId) {
