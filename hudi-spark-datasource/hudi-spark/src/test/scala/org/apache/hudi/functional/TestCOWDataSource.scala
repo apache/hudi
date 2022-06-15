@@ -94,12 +94,6 @@ class TestCOWDataSource extends HoodieClientTestBase {
     System.gc()
   }
 
-  override def getSparkSessionExtensionsInjector: util.Option[Consumer[SparkSessionExtensions]] =
-    toJavaOption(
-      Some(
-        JFunction.toJava((receiver: SparkSessionExtensions) => new HoodieSparkSessionExtension().apply(receiver)))
-    )
-
   @Test def testShortNameStorage() {
     // Insert Operation
     val records = recordsToStrings(dataGen.generateInserts("000", 100)).toList

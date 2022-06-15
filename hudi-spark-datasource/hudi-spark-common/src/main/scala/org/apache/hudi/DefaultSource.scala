@@ -26,8 +26,6 @@ import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_REA
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.exception.HoodieException
-import org.apache.hudi.internal.schema.InternalSchema
-import org.apache.hudi.metadata.HoodieTableMetadata
 import org.apache.hudi.metadata.HoodieTableMetadata.isMetadataTable
 import org.apache.log4j.LogManager
 import org.apache.spark.sql.execution.streaming.{Sink, Source}
@@ -232,26 +230,6 @@ class DefaultSource extends RelationProvider
                             providerName: String,
                             parameters: Map[String, String]): Source = {
     new HoodieStreamSource(sqlContext, metadataPath, schema, parameters)
-  }
-
-  private def resolveBaseFileOnlyRelation(sqlContext: SQLContext,
-                                          globPaths: Seq[Path],
-                                          userSchema: Option[StructType],
-                                          metaClient: HoodieTableMetaClient,
-                                          optParams: Map[String, String]): BaseRelation = {
-    val baseRelation = new BaseFileOnlyRelation(sqlContext, metaClient, optParams, userSchema, globPaths)
-    val enableSchemaOnRead: Boolean = !tryFetchInternalSchema(metaClient).isEmptySchema
-
-    // NOTE: We fallback to [[HadoopFsRelation]] in all of the cases except ones requiring usage of
-    //       [[BaseFileOnlyRelation]] to function correctly. This is necessary to maintain performance parity w/
-    //       vanilla Spark, since some of the Spark optimizations are predicated on the using of [[HadoopFsRelation]].
-    //
-    //       You can check out HUDI-3896 for more details
-    if (enableSchemaOnRead) {
-      baseRelation
-    } else {
-      baseRelation.toHadoopFsRelation
-    }
   }
 
   private def resolveBaseFileOnlyRelation(sqlContext: SQLContext,
