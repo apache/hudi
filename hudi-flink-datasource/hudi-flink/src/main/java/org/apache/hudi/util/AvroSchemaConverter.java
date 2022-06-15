@@ -263,7 +263,7 @@ public class AvroSchemaConverter {
           LogicalType fieldType = rowType.getTypeAt(i);
           SchemaBuilder.GenericDefault<Schema> fieldBuilder =
               builder.name(fieldName)
-                  .type(convertToSchema(fieldType, rowName + "_" + fieldName));
+                  .type(convertToSchema(fieldType, rowName + "." + fieldName));
 
           if (fieldType.isNullable()) {
             builder = fieldBuilder.withDefault(null);
