@@ -19,6 +19,8 @@
 package org.apache.hudi.configuration;
 
 import org.apache.flink.configuration.Configuration;
+import org.apache.hadoop.fs.Path;
+
 import org.apache.hudi.util.FlinkClientUtil;
 
 import java.util.Map;
@@ -49,6 +51,18 @@ public class HadoopConfigurations {
     org.apache.hadoop.conf.Configuration hadoopConf = FlinkClientUtil.getHadoopConf();
     Map<String, String> options = FlinkOptions.getPropertiesWithPrefix(conf.toMap(), HADOOP_PREFIX);
     options.forEach(hadoopConf::set);
+    return hadoopConf;
+  }
+
+  /**
+   * Creates a Hive configuration with configured dir path or empty if no Hive conf dir is set.
+   */
+  public static org.apache.hadoop.conf.Configuration getHiveConf(Configuration conf) {
+    String explicitDir = conf.getString(FlinkOptions.HIVE_SYNC_CONF_DIR, System.getenv("HIVE_CONF_DIR"));
+    org.apache.hadoop.conf.Configuration hadoopConf = new org.apache.hadoop.conf.Configuration();
+    if (explicitDir != null) {
+      hadoopConf.addResource(new Path(explicitDir, "hive-site.xml"));
+    }
     return hadoopConf;
   }
 }

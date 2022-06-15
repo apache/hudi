@@ -95,7 +95,7 @@ public class SparkMain {
     LOG.info("Invoking SparkMain: " + commandString);
     final SparkCommand cmd = SparkCommand.valueOf(commandString);
 
-    JavaSparkContext jsc = SparkUtil.initJavaSparkConf("hoodie-cli-" + commandString,
+    JavaSparkContext jsc = SparkUtil.initJavaSparkContext("hoodie-cli-" + commandString,
         Option.of(args[1]), Option.of(args[2]));
 
     int returnCode = 0;
@@ -148,7 +148,7 @@ public class SparkMain {
           }
           configs = new ArrayList<>();
           if (args.length > 9) {
-            configs.addAll(Arrays.asList(args).subList(8, args.length));
+            configs.addAll(Arrays.asList(args).subList(9, args.length));
           }
 
           returnCode = compact(jsc, args[3], args[4], null, Integer.parseInt(args[5]), args[6],
@@ -296,7 +296,7 @@ public class SparkMain {
       SparkRDDWriteClient client = createHoodieClient(jsc, basePath, false);
       HoodieWriteConfig config = client.getConfig();
       HoodieEngineContext context = client.getEngineContext();
-      HoodieSparkTable table = HoodieSparkTable.create(config, context, true);
+      HoodieSparkTable table = HoodieSparkTable.create(config, context);
       WriteMarkersFactory.get(config.getMarkersType(), table, instantTime)
           .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
       return 0;

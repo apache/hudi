@@ -76,6 +76,8 @@ import static org.apache.hudi.sync.common.util.TableUtils.tableId;
 /**
  * This class implements all the AWS APIs to enable syncing of a Hudi Table with the
  * AWS Glue Data Catalog (https://docs.aws.amazon.com/glue/latest/dg/populate-data-catalog.html).
+ *
+ * @Experimental
  */
 public class AWSGlueCatalogSyncClient extends AbstractHiveSyncHoodieClient {
 
@@ -271,18 +273,21 @@ public class AWSGlueCatalogSyncClient extends AbstractHiveSyncHoodieClient {
     try {
       Map<String, String> mapSchema = parquetSchemaToMapSchema(storageSchema, syncConfig.supportTimestamp, false);
 
-      List<Column> schemaPartitionKeys = new ArrayList<>();
       List<Column> schemaWithoutPartitionKeys = new ArrayList<>();
       for (String key : mapSchema.keySet()) {
         String keyType = getPartitionKeyType(mapSchema, key);
         Column column = new Column().withName(key).withType(keyType.toLowerCase()).withComment("");
         // In Glue, the full schema should exclude the partition keys
-        if (syncConfig.partitionFields.contains(key)) {
-          schemaPartitionKeys.add(column);
-        } else {
+        if (!syncConfig.partitionFields.contains(key)) {
           schemaWithoutPartitionKeys.add(column);
         }
       }
+
+      // now create the schema partition
+      List<Column> schemaPartitionKeys = syncConfig.partitionFields.stream().map(partitionKey -> {
+        String keyType = getPartitionKeyType(mapSchema, partitionKey);
+        return new Column().withName(partitionKey).withType(keyType.toLowerCase()).withComment("");
+      }).collect(Collectors.toList());
 
       StorageDescriptor storageDescriptor = new StorageDescriptor();
       serdeProperties.put("serialization.format", "1");

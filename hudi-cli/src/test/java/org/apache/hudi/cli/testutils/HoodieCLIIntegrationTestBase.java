@@ -25,7 +25,7 @@ import org.junit.jupiter.api.BeforeEach;
 /**
  * Class to initial resources for shell.
  */
-public abstract class AbstractShellIntegrationTest extends AbstractShellBaseIntegrationTest {
+public class HoodieCLIIntegrationTestBase extends HoodieCLIIntegrationTestHarness {
 
   @Override
   @BeforeEach

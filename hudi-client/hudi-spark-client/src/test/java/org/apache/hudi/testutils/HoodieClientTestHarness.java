@@ -24,6 +24,7 @@ import org.apache.hadoop.fs.LocalFileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
+import org.apache.hudi.HoodieConversionUtils;
 import org.apache.hudi.avro.model.HoodieActionInstant;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
@@ -73,12 +74,14 @@ import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadStat;
 import org.apache.hudi.timeline.service.TimelineService;
+import org.apache.hudi.util.JFunction;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.SparkSession;
+import org.apache.spark.sql.SparkSessionExtensions;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -98,6 +101,7 @@ import java.util.Properties;
 import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -145,6 +149,10 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
     FileSystem.closeAll();
   }
 
+  protected Option<Consumer<SparkSessionExtensions>> getSparkSessionExtensionsInjector() {
+    return Option.empty();
+  }
+
   @BeforeEach
   public void setTestMethodName(TestInfo testInfo) {
     if (testInfo.getTestMethod().isPresent()) {
@@ -186,16 +194,32 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
    * @param appName The specified application name.
    */
   protected void initSparkContexts(String appName) {
+    Option<Consumer<SparkSessionExtensions>> sparkSessionExtensionsInjector =
+        getSparkSessionExtensionsInjector();
+
+    if (sparkSessionExtensionsInjector.isPresent()) {
+      // In case we need to inject extensions into Spark Session, we have
+      // to stop any session that might still be active and since Spark will try
+      // to re-use it
+      HoodieConversionUtils.toJavaOption(SparkSession.getActiveSession())
+          .ifPresent(SparkSession::stop);
+    }
+
     // Initialize a local spark env
     jsc = new JavaSparkContext(HoodieClientTestUtils.getSparkConfForTest(appName + "#" + testMethodName));
     jsc.setLogLevel("ERROR");
-    hadoopConf = jsc.hadoopConfiguration();
 
-    // SQLContext stuff
-    sqlContext = new SQLContext(jsc);
+    hadoopConf = jsc.hadoopConfiguration();
     context = new HoodieSparkEngineContext(jsc);
-    hadoopConf = context.getHadoopConf().get();
-    sparkSession = SparkSession.builder().config(jsc.getConf()).getOrCreate();
+
+    sparkSession = SparkSession.builder()
+        .withExtensions(JFunction.toScala(sparkSessionExtensions -> {
+          sparkSessionExtensionsInjector.ifPresent(injector -> injector.accept(sparkSessionExtensions));
+          return null;
+        }))
+        .config(jsc.getConf())
+        .getOrCreate();
+    sqlContext = new SQLContext(sparkSession);
   }
 
   /**
@@ -559,7 +583,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
 
     // Files within each partition should match
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    HoodieTable table = HoodieSparkTable.create(writeConfig, engineContext, true);
+    HoodieTable table = HoodieSparkTable.create(writeConfig, engineContext);
     TableFileSystemView tableView = table.getHoodieView();
     List<String> fullPartitionPaths = fsPartitions.stream().map(partition -> basePath + "/" + partition).collect(Collectors.toList());
     Map<String, FileStatus[]> partitionToFilesMap = tableMetadata.getAllFilesInPartitions(fullPartitionPaths);

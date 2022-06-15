@@ -615,7 +615,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
           .setConf(spark.sessionState.newHadoopConf())
           .build()
 
-        assertResult(true)(new TableSchemaResolver(metaClient).isHasOperationField)
+        assertResult(true)(new TableSchemaResolver(metaClient).hasOperationField)
 
         spark.sql(
           s"""

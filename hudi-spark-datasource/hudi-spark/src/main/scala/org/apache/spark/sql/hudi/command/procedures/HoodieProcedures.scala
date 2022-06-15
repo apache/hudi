@@ -44,6 +44,9 @@ object HoodieProcedures {
     mapBuilder.put(ShowCommitsProcedure.NAME, ShowCommitsProcedure.builder)
     mapBuilder.put(ShowCommitsMetadataProcedure.NAME, ShowCommitsMetadataProcedure.builder)
     mapBuilder.put(ShowSavepointsProcedure.NAME, ShowSavepointsProcedure.builder)
+    mapBuilder.put(DeleteMarkerProcedure.NAME, DeleteMarkerProcedure.builder)
+    mapBuilder.put(ShowRollbacksProcedure.NAME, ShowRollbacksProcedure.builder)
+    mapBuilder.put(ShowRollbackDetailProcedure.NAME, ShowRollbackDetailProcedure.builder)
     mapBuilder.build
   }
 }

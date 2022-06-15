@@ -30,7 +30,7 @@ import org.springframework.shell.core.JLineShellComponent;
 /**
  * Class to start Bootstrap and JLineShellComponent.
  */
-public class AbstractShellBaseIntegrationTest extends HoodieClientTestHarness {
+public class HoodieCLIIntegrationTestHarness extends HoodieClientTestHarness {
 
   private static JLineShellComponent shell;
 

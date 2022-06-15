@@ -112,8 +112,8 @@ abstract class BaseSpark3Adapter extends SparkAdapter {
   }
 
   override def isHoodieTable(table: LogicalPlan, spark: SparkSession): Boolean = {
-    tripAlias(table) match {
-      case LogicalRelation(_, _, Some(tbl), _) => isHoodieTable(tbl)
+    unfoldSubqueryAliases(table) match {
+      case LogicalRelation(_, _, Some(table), _) => isHoodieTable(table)
       case relation: UnresolvedRelation =>
         isHoodieTable(toTableIdentifier(relation), spark)
       case DataSourceV2Relation(table: Table, _, _, _, _) => isHoodieTable(table.properties())

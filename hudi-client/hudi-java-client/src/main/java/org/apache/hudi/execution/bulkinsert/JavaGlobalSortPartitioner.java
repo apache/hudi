@@ -37,7 +37,7 @@ public class JavaGlobalSortPartitioner<T extends HoodieRecordPayload>
 
   @Override
   public List<HoodieRecord<T>> repartitionRecords(List<HoodieRecord<T>> records,
-                                                  int outputSparkPartitions) {
+                                                  int outputPartitions) {
     // Now, sort the records and line them up nicely for loading.
     records.sort(new Comparator() {
       @Override

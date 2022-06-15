@@ -137,6 +137,6 @@ public class ZeroToOneUpgradeHandler implements UpgradeHandler {
     String baseInstant = FSUtils.getBaseCommitTimeFromLogPath(logPath);
     String writeToken = FSUtils.getWriteTokenFromLogPath(logPath);
 
-    return FSUtils.makeDataFileName(baseInstant, writeToken, fileId, table.getBaseFileFormat().getFileExtension());
+    return FSUtils.makeBaseFileName(baseInstant, writeToken, fileId, table.getBaseFileFormat().getFileExtension());
   }
 }
