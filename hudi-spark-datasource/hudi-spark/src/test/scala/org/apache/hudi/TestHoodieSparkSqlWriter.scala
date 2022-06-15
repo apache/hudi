@@ -39,7 +39,7 @@ import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.hudi.command.SqlKeyGenerator
 import org.apache.spark.{SparkConf, SparkContext}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue, fail}
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, EnumSource, ValueSource}
 import org.mockito.ArgumentMatchers.any
@@ -472,6 +472,7 @@ class TestHoodieSparkSqlWriter {
    * @param baseFileFormat     File format
    * @param populateMetaFields Flag for populating meta fields
    */
+  @Disabled("Disable due to hive's orc conflict.")
   @ParameterizedTest
   @CsvSource(
     Array("COPY_ON_WRITE,parquet,true", "COPY_ON_WRITE,parquet,false", "MERGE_ON_READ,parquet,true", "MERGE_ON_READ,parquet,false",
@@ -609,6 +610,8 @@ class TestHoodieSparkSqlWriter {
    *
    * @param tableType Type of table
    */
+
+  @Disabled
   @ParameterizedTest
   @ValueSource(strings = Array("COPY_ON_WRITE", "MERGE_ON_READ"))
   def testSchemaEvolutionForTableType(tableType: String): Unit = {

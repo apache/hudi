@@ -39,6 +39,7 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -116,6 +117,7 @@ public class TestCompactionAdminClient extends HoodieClientTestBase {
     validateUnScheduleFileId(client, "006", "007", instantsWithOp.get("007"), 0);
   }
 
+  @Disabled
   @Test
   public void testRepairCompactionPlan() throws Exception {
     int numEntriesPerInstant = 10;

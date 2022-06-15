@@ -48,6 +48,7 @@ import org.apache.hudi.testutils.HoodieClientTestBase;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.shell.core.CommandResult;
 
@@ -166,6 +167,7 @@ public class ITTestCompactionCommand extends HoodieCLIIntegrationTestBase {
   /**
    * Test case for command 'compaction validate'.
    */
+  @Disabled
   @Test
   public void testValidateCompaction() throws IOException {
     // generate commits
@@ -210,6 +212,7 @@ public class ITTestCompactionCommand extends HoodieCLIIntegrationTestBase {
    * The real test of {@link org.apache.hudi.client.CompactionAdminClient#unscheduleCompactionFileId}
    * is {@link TestCompactionAdminClient#testUnscheduleCompactionFileId}.
    */
+  @Disabled
   @Test
   public void testUnscheduleCompactFile() throws IOException {
     int numEntriesPerInstant = 10;
