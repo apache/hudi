@@ -308,6 +308,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
         hfileReader.getRecordsByKeyPrefixIterator(Arrays.asList("key50", "key1"), avroSchema);
     recordsByPrefix =
         StreamSupport.stream(Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), false)
+            .map(r -> (GenericRecord)r)
             .collect(Collectors.toList());
     assertEquals(expectedKey50and1s, recordsByPrefix);
 
@@ -318,6 +319,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
         hfileReader.getRecordsByKeyPrefixIterator(Arrays.asList("key50", "key0"), avroSchema);
     recordsByPrefix =
         StreamSupport.stream(Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), false)
+            .map(r -> (GenericRecord)r)
             .collect(Collectors.toList());
     assertEquals(expectedKey50and0s, recordsByPrefix);
 
@@ -329,6 +331,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
         hfileReader.getRecordsByKeyPrefixIterator(Arrays.asList("key1", "key0"), avroSchema);
     recordsByPrefix =
         StreamSupport.stream(Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), false)
+            .map(r -> (GenericRecord)r)
             .collect(Collectors.toList());
     Collections.sort(recordsByPrefix, new Comparator<GenericRecord>() {
       @Override
