@@ -237,6 +237,7 @@ public class ITTestCompactionCommand extends HoodieCLIIntegrationTestBase {
    * The real test of {@link org.apache.hudi.client.CompactionAdminClient#repairCompaction}
    * is {@link TestCompactionAdminClient#testRepairCompactionPlan}.
    */
+  @Disabled
   @Test
   public void testRepairCompaction() throws Exception {
     int numEntriesPerInstant = 10;
