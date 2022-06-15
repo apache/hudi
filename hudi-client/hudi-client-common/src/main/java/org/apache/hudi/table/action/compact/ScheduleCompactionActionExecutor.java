@@ -114,6 +114,7 @@ public class ScheduleCompactionActionExecutor<T extends HoodieRecordPayload, I, 
       LOG.info("Generating compaction plan for merge on read table " + config.getBasePath());
       try {
         SyncableFileSystemView fileSystemView = (SyncableFileSystemView) table.getSliceView();
+        fileSystemView.sync();
         Set<HoodieFileGroupId> fgInPendingCompactionAndClustering = fileSystemView.getPendingCompactionOperations()
             .map(instantTimeOpPair -> instantTimeOpPair.getValue().getFileGroupId())
             .collect(Collectors.toSet());
