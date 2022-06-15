@@ -76,6 +76,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import scala.Tuple2;
 
 import java.io.BufferedReader;
@@ -92,6 +93,7 @@ import java.util.List;
  * Abstract test that provides a dfs & spark contexts.
  *
  */
+@Disabled
 public class UtilitiesTestBase {
 
   protected static String dfsBasePath;
