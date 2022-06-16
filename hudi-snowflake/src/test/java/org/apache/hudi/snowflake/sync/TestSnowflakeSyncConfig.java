@@ -26,7 +26,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 
-import static org.apache.hudi.snowflake.sync.SnowflakeSyncConfig.SNOWFLAKE_SYNC_ASSUME_DATE_PARTITIONING;
+
 import static org.apache.hudi.snowflake.sync.SnowflakeSyncConfig.SNOWFLAKE_SYNC_PARTITION_EXTRACT_EXPRESSION;
 import static org.apache.hudi.snowflake.sync.SnowflakeSyncConfig.SNOWFLAKE_SYNC_PARTITION_FIELDS;
 import static org.apache.hudi.snowflake.sync.SnowflakeSyncConfig.SNOWFLAKE_SYNC_PROPERTIES_FILE;
@@ -34,9 +34,7 @@ import static org.apache.hudi.snowflake.sync.SnowflakeSyncConfig.SNOWFLAKE_SYNC_
 import static org.apache.hudi.snowflake.sync.SnowflakeSyncConfig.SNOWFLAKE_SYNC_SYNC_BASE_FILE_FORMAT;
 import static org.apache.hudi.snowflake.sync.SnowflakeSyncConfig.SNOWFLAKE_SYNC_SYNC_BASE_PATH;
 import static org.apache.hudi.snowflake.sync.SnowflakeSyncConfig.SNOWFLAKE_SYNC_TABLE_NAME;
-import static org.apache.hudi.snowflake.sync.SnowflakeSyncConfig.SNOWFLAKE_SYNC_USE_FILE_LISTING_FROM_METADATA;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-
 /*
  * Test class to test all the snowflake sync configs.
  */
@@ -56,8 +54,6 @@ public class TestSnowflakeSyncConfig {
     syncConfig.partitionExtractExpr = Arrays.asList(
         "\"date\" date as to_date(substr(metadata$filename, 22, 10), 'YYYY-MM-DD')",
         "\"symbol\" text as to_date(substr(metadata$filename, 32, 10), 'YYYY-MM-DD')");
-    syncConfig.useFileListingFromMetadata = true;
-    syncConfig.assumeDatePartitioning = true;
     syncConfig.help = true;
   }
 
@@ -71,8 +67,6 @@ public class TestSnowflakeSyncConfig {
     assertEquals(copied.baseFileFormat, syncConfig.baseFileFormat);
     assertEquals(copied.partitionFields, syncConfig.partitionFields);
     assertEquals(copied.partitionExtractExpr, syncConfig.partitionExtractExpr);
-    assertEquals(copied.useFileListingFromMetadata, syncConfig.useFileListingFromMetadata);
-    assertEquals(copied.assumeDatePartitioning, syncConfig.assumeDatePartitioning);
     assertEquals(copied.help, syncConfig.help);
   }
 
@@ -88,8 +82,6 @@ public class TestSnowflakeSyncConfig {
     assertEquals("\"date\" date as to_date(substr(metadata$filename, 22, 10), 'YYYY-MM-DD'),"
         + "\"symbol\" text as to_date(substr(metadata$filename, 32, 10), 'YYYY-MM-DD')",
         props.getString(SNOWFLAKE_SYNC_PARTITION_EXTRACT_EXPRESSION));
-    assertEquals("true", props.getString(SNOWFLAKE_SYNC_USE_FILE_LISTING_FROM_METADATA));
-    assertEquals("true", props.getString(SNOWFLAKE_SYNC_ASSUME_DATE_PARTITIONING));
   }
 
   @Test
@@ -103,8 +95,6 @@ public class TestSnowflakeSyncConfig {
     props.put(SNOWFLAKE_SYNC_PARTITION_FIELDS, "date,symbol");
     props.put(SNOWFLAKE_SYNC_PARTITION_EXTRACT_EXPRESSION,
         "\"date\" date as to_date(substr(metadata$filename, 22, 10), 'YYYY-MM-DD'),\"symbol\" text as to_date(substr(metadata$filename, 32, 10), 'YYYY-MM-DD')");
-    props.put(SNOWFLAKE_SYNC_USE_FILE_LISTING_FROM_METADATA, true);
-    props.put(SNOWFLAKE_SYNC_ASSUME_DATE_PARTITIONING, true);
     SnowflakeSyncConfig cfg = SnowflakeSyncConfig.fromProps(props);
 
     assertEquals(syncConfig.propertiesFile, cfg.propertiesFile);
@@ -114,7 +104,5 @@ public class TestSnowflakeSyncConfig {
     assertEquals(syncConfig.baseFileFormat, cfg.baseFileFormat);
     assertEquals(syncConfig.partitionFields.toString(), cfg.partitionFields.toString());
     assertEquals(syncConfig.partitionExtractExpr.toString(), cfg.partitionExtractExpr.toString());
-    assertEquals(syncConfig.useFileListingFromMetadata, cfg.useFileListingFromMetadata);
-    assertEquals(syncConfig.assumeDatePartitioning, cfg.assumeDatePartitioning);
   }
 }

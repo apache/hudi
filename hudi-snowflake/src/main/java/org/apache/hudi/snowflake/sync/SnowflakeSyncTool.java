@@ -37,12 +37,39 @@ import org.apache.log4j.Logger;
  * SnowflakeSyncTool.syncHoodieTable(SnowflakeSyncConfig) or as a command line java -cp hoodie-hive.jar SnowflakeSyncTool [args]
  * <p>
  * This utility will get the schema from the latest commit and will sync snowflake table schema.
+ * <p>
+ * Example:
+ * snoflake_profile.properties file:
+ * URL = https://el48293.us-central1.gcp.snowflakecomputing.com:443
+ * USER = hudidemo
+ * PRIVATE_KEY_FILE = /Users/username/.ssh/rsa_key.p8
+ * ROLE = ACCOUNTADMIN
+ * WAREHOUSE = COMPUTE_WH
+ * DB = hudi
+ * SCHEMA = dwh:113
+ *
+ * command:
+ * java -cp hudi-spark-bundle_2.12-0.12.0-SNAPSHOT.jar:hudi-snowflake-bundle-0.12.0-SNAPSHOT-jar-with-dependencies.jar:gcs-connector-hadoop2-latest.jar
+ *   org.apache.hudi.snowflake.sync.SnowflakeSyncTool
+ *   --properties-file snowflake_profile.properties
+ *   --base-path gs://hudi-demo/stock_ticks_cow
+ *   --table-name stock_ticks_cow
+ *   --storage-integration hudi_demo_int
+ *   --partitioned-by "date"
+ *   --partition-extract-expr "\"date\" date as to_date(substr(metadata\$filename, 22, 10), 'YYYY-MM-DD')
+ * <p>
+ * Use these command line options, to enable along with delta streamer execution:
+ *   --enable-sync
+ *   --sync-tool-classes org.apache.hudi.snowflake.sync.SnowflakeSyncTool
  *
  * @Experimental
  */
 public class SnowflakeSyncTool extends AbstractSyncTool {
 
   private static final Logger LOG = LogManager.getLogger(SnowflakeSyncTool.class);
+  private static final String STAGE_SUFFIX  = "_stage";
+  private static final String VERSIONS_SUFFIX  = "_versions";
+  private static final String MANIFEST_SUFFIX  = "_manifest";
 
   public final SnowflakeSyncConfig cfg;
   public final String stageName;
@@ -53,9 +80,9 @@ public class SnowflakeSyncTool extends AbstractSyncTool {
   public SnowflakeSyncTool(TypedProperties properties, Configuration conf, FileSystem fs) {
     super(properties, conf, fs);
     cfg = SnowflakeSyncConfig.fromProps(properties);
-    stageName = cfg.tableName + "_stage";
-    manifestTableName = cfg.tableName + "_manifest";
-    versionsTableName = cfg.tableName + "_versions";
+    stageName = cfg.tableName + STAGE_SUFFIX;
+    manifestTableName = cfg.tableName + MANIFEST_SUFFIX;
+    versionsTableName = cfg.tableName + VERSIONS_SUFFIX;
     snapshotViewName = cfg.tableName;
   }
 
@@ -82,8 +109,8 @@ public class SnowflakeSyncTool extends AbstractSyncTool {
     ManifestFileWriter manifestFileWriter = ManifestFileWriter.builder()
         .setConf(conf)
         .setBasePath(cfg.basePath)
-        .setUseFileListingFromMetadata(cfg.useFileListingFromMetadata)
-        .setAssumeDatePartitioning(cfg.assumeDatePartitioning)
+        .setUseFileListingFromMetadata(false)
+        .setAssumeDatePartitioning(false)
         .build();
     manifestFileWriter.writeManifestFile();
 

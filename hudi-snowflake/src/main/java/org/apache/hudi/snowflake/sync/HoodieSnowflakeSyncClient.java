@@ -48,8 +48,7 @@ public class HoodieSnowflakeSyncClient extends AbstractSyncHoodieClient {
   private transient Session snowflakeSession;
 
   public HoodieSnowflakeSyncClient(final SnowflakeSyncConfig syncConfig, final FileSystem fs) {
-    super(syncConfig.basePath, syncConfig.assumeDatePartitioning, syncConfig.useFileListingFromMetadata,
-        false, fs);
+    super(syncConfig.basePath, false, false, false, fs);
     this.syncConfig = syncConfig;
     this.createSnowflakeConnection();
   }

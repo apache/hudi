@@ -32,15 +32,13 @@ import java.util.List;
  * Configs needed to sync data into Snowflake.
  */
 public class SnowflakeSyncConfig implements Serializable {
-  public static String SNOWFLAKE_SYNC_PROPERTIES_FILE = "hoodie.snowflake.sync.properties_file";
-  public static String SNOWFLAKE_SYNC_STORAGE_INTEGRATION = "hoodie.snowflake.sync.storage_integration";
-  public static String SNOWFLAKE_SYNC_TABLE_NAME = "hoodie.snowflake.sync.table_name";
-  public static String SNOWFLAKE_SYNC_SYNC_BASE_PATH = "hoodie.snowflake.sync.base_path";
-  public static String SNOWFLAKE_SYNC_SYNC_BASE_FILE_FORMAT = "hoodie.snowflake.sync.base_file_format";
-  public static String SNOWFLAKE_SYNC_PARTITION_FIELDS = "hoodie.snowflake.sync.partition_fields";
-  public static String SNOWFLAKE_SYNC_PARTITION_EXTRACT_EXPRESSION = "hoodie.snowflake.sync.partition_extract_expression";
-  public static String SNOWFLAKE_SYNC_USE_FILE_LISTING_FROM_METADATA = "hoodie.snowflake.sync.use_file_listing_from_metadata";
-  public static String SNOWFLAKE_SYNC_ASSUME_DATE_PARTITIONING = "hoodie.snowflake.sync.assume_date_partitioning";
+  public static final String SNOWFLAKE_SYNC_PROPERTIES_FILE = "hoodie.snowflake.sync.properties_file";
+  public static final String SNOWFLAKE_SYNC_STORAGE_INTEGRATION = "hoodie.snowflake.sync.storage_integration";
+  public static final String SNOWFLAKE_SYNC_TABLE_NAME = "hoodie.snowflake.sync.table_name";
+  public static final String SNOWFLAKE_SYNC_SYNC_BASE_PATH = "hoodie.snowflake.sync.base_path";
+  public static final String SNOWFLAKE_SYNC_SYNC_BASE_FILE_FORMAT = "hoodie.snowflake.sync.base_file_format";
+  public static final String SNOWFLAKE_SYNC_PARTITION_FIELDS = "hoodie.snowflake.sync.partition_fields";
+  public static final String SNOWFLAKE_SYNC_PARTITION_EXTRACT_EXPRESSION = "hoodie.snowflake.sync.partition_extract_expression";
 
   @Parameter(names = {"--properties-file"}, description = "name of the snowflake profile properties file.", required = true)
   public String propertiesFile;
@@ -56,11 +54,6 @@ public class SnowflakeSyncConfig implements Serializable {
   public List<String> partitionFields = new ArrayList<>();
   @Parameter(names = {"--partition-extract-expr"}, description = "Comma-delimited partition extract expression. Default to non-partitioned.")
   public List<String> partitionExtractExpr = new ArrayList<>();
-  @Parameter(names = {"--use-file-listing-from-metadata"}, description = "Fetch file listing from Hudi's metadata")
-  public Boolean useFileListingFromMetadata = false;
-  @Parameter(names = {"--assume-date-partitioning"}, description = "Assume standard yyyy/mm/dd partitioning, this"
-      + " exists to support backward compatibility. If you use hoodie 0.3.x, do not set this parameter")
-  public Boolean assumeDatePartitioning = false;
   @Parameter(names = {"--help", "-h"}, help = true)
   public Boolean help = false;
 
@@ -73,8 +66,6 @@ public class SnowflakeSyncConfig implements Serializable {
     newConfig.baseFileFormat = cfg.baseFileFormat;
     newConfig.partitionFields = cfg.partitionFields;
     newConfig.partitionExtractExpr = cfg.partitionExtractExpr;
-    newConfig.useFileListingFromMetadata = cfg.useFileListingFromMetadata;
-    newConfig.assumeDatePartitioning = cfg.assumeDatePartitioning;
     newConfig.help = cfg.help;
     return newConfig;
   }
@@ -88,8 +79,6 @@ public class SnowflakeSyncConfig implements Serializable {
     properties.put(SNOWFLAKE_SYNC_SYNC_BASE_FILE_FORMAT, baseFileFormat);
     properties.put(SNOWFLAKE_SYNC_PARTITION_FIELDS, String.join(",", partitionFields));
     properties.put(SNOWFLAKE_SYNC_PARTITION_EXTRACT_EXPRESSION, String.join(",", partitionExtractExpr));
-    properties.put(SNOWFLAKE_SYNC_USE_FILE_LISTING_FROM_METADATA, useFileListingFromMetadata);
-    properties.put(SNOWFLAKE_SYNC_ASSUME_DATE_PARTITIONING, assumeDatePartitioning);
     return properties;
   }
 
@@ -102,8 +91,6 @@ public class SnowflakeSyncConfig implements Serializable {
     config.baseFileFormat = props.getString(SNOWFLAKE_SYNC_SYNC_BASE_FILE_FORMAT);
     config.partitionFields = props.getStringList(SNOWFLAKE_SYNC_PARTITION_FIELDS, ",", Collections.emptyList());
     config.partitionExtractExpr = props.getStringList(SNOWFLAKE_SYNC_PARTITION_EXTRACT_EXPRESSION, ",", Collections.emptyList());
-    config.useFileListingFromMetadata = props.getBoolean(SNOWFLAKE_SYNC_USE_FILE_LISTING_FROM_METADATA, false);
-    config.assumeDatePartitioning = props.getBoolean(SNOWFLAKE_SYNC_ASSUME_DATE_PARTITIONING, false);
     return config;
   }
 
@@ -116,8 +103,6 @@ public class SnowflakeSyncConfig implements Serializable {
         + "', baseFileFormat='" + baseFileFormat
         + "', partitionFields='" + partitionFields
         + "', partitionExtractExpr='" + partitionExtractExpr
-        + "', useFileListingFromMetadata='" + useFileListingFromMetadata
-        + "', assumeDataPartitioning='" + assumeDatePartitioning
         + "', help=" + help + "}";
   }
 }
