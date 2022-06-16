@@ -201,7 +201,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
           return isRowPartitioner
               ? new RowCustomColumnsSortPartitioner(orderByColumns)
               : new RDDCustomColumnsSortPartitioner(orderByColumns, HoodieAvroUtils.addMetadataFields(schema),
-                  getWriteConfig().isConsistentLogicalTimestampEnabled());
+                  getWriteConfig().isConsistentLogicalTimestampEnabled(), getHoodieTable().getMetaClient().getTableConfig());
         default:
           throw new UnsupportedOperationException(String.format("Layout optimization strategy '%s' is not supported", layoutOptStrategy));
       }
