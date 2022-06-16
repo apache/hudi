@@ -42,12 +42,10 @@ import java.util.function.Function;
  * @param <T> HoodieRecordPayload type
  */
 public class RDDPartitionSortPartitioner<T extends HoodieRecordPayload>
-    implements BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
-
-  private final boolean isPartitionedTable;
+    extends RepartitioningBulkInsertPartitionerBase<JavaRDD<HoodieRecord<T>>> {
 
   public RDDPartitionSortPartitioner(HoodieTableConfig tableConfig) {
-    this.isPartitionedTable = tableConfig.getPartitionFields().map(pfs -> pfs.length > 0).orElse(false);
+    super(tableConfig);
   }
 
   @Override
@@ -56,7 +54,7 @@ public class RDDPartitionSortPartitioner<T extends HoodieRecordPayload>
 
     // NOTE: Datasets being ingested into partitioned tables are additionally re-partitioned to better
     //       align dataset's logical partitioning with expected table's physical partitioning to
-    //       provide for appropriate file-sizing and better control number of files created.
+    //       provide for appropriate file-sizing and better control of the number of files created.
     //
     //       Please check out {@code GlobalSortPartitioner} java-doc for more details
     if (isPartitionedTable) {

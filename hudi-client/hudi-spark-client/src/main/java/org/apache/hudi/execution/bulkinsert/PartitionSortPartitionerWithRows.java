@@ -19,6 +19,7 @@
 package org.apache.hudi.execution.bulkinsert;
 
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
 import org.apache.spark.sql.Column;
@@ -26,16 +27,31 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 
 /**
- * A built-in partitioner that does local sorting for each spark partitions after coalesce for bulk insert operation, corresponding to the {@code BulkInsertSortMode.PARTITION_SORT} mode.
+ * A built-in partitioner that does local sorting w/in the Spark partition,
+ * corresponding to the {@code BulkInsertSortMode.PARTITION_SORT} mode.
  */
-public class PartitionSortPartitionerWithRows implements BulkInsertPartitioner<Dataset<Row>> {
+public class PartitionSortPartitionerWithRows extends RepartitioningBulkInsertPartitionerBase<Dataset<Row>> {
+
+  public PartitionSortPartitionerWithRows(HoodieTableConfig tableConfig) {
+    super(tableConfig);
+  }
 
   @Override
-  public Dataset<Row> repartitionRecords(Dataset<Row> rows, int outputSparkPartitions) {
-    // TODO handle non-partitioned tables
-    // TODO explain
-    return rows.repartition(outputSparkPartitions, new Column(HoodieRecord.PARTITION_PATH_METADATA_FIELD))
-        .sortWithinPartitions(HoodieRecord.RECORD_KEY_METADATA_FIELD);
+  public Dataset<Row> repartitionRecords(Dataset<Row> dataset, int outputSparkPartitions) {
+    Dataset<Row> repartitionedDataset;
+
+    // NOTE: Datasets being ingested into partitioned tables are additionally re-partitioned to better
+    //       align dataset's logical partitioning with expected table's physical partitioning to
+    //       provide for appropriate file-sizing and better control of the number of files created.
+    //
+    //       Please check out {@code GlobalSortPartitioner} java-doc for more details
+    if (isPartitionedTable) {
+      repartitionedDataset = dataset.repartition(outputSparkPartitions, new Column(HoodieRecord.PARTITION_PATH_METADATA_FIELD));
+    } else {
+      repartitionedDataset = dataset.coalesce(outputSparkPartitions);
+    }
+
+    return repartitionedDataset.sortWithinPartitions(HoodieRecord.RECORD_KEY_METADATA_FIELD);
   }
 
   @Override
