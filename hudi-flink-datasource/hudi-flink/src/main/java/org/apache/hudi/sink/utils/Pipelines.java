@@ -249,6 +249,7 @@ public class Pipelines {
 
     if (conf.getBoolean(FlinkOptions.INDEX_BOOTSTRAP_ENABLED) || bounded) {
       dataStream1 = dataStream1
+          .keyBy(HoodieRecord::getRecordKey)
           .transform(
               "index_bootstrap",
               TypeInformation.of(HoodieRecord.class),
@@ -276,6 +277,7 @@ public class Pipelines {
         .keyBy(rowDataKeyGen::getPartitionPath);
 
     return rowDataToHoodieRecord(conf, rowType, dataStream)
+        .keyBy(HoodieRecord::getRecordKey)
         .transform(
             "batch_index_bootstrap",
             TypeInformation.of(HoodieRecord.class),
