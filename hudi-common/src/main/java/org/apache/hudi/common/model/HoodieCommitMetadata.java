@@ -117,6 +117,19 @@ public class HoodieCommitMetadata implements Serializable {
     return filePaths;
   }
 
+  public List<String> getPrevOverwrittenFilePaths() {
+    List<String> filePaths = new ArrayList<>();
+    // list all partitions paths
+    for (List<HoodieWriteStat> stats : getPartitionToWriteStats().values()) {
+      for (HoodieWriteStat stat : stats) {
+        if (stat.getPrevFilePathOverwritten() != null) {
+          filePaths.add(stat.getPrevFilePathOverwritten());
+        }
+      }
+    }
+    return filePaths;
+  }
+
   public void setOperationType(WriteOperationType type) {
     this.operationType = type;
   }

@@ -510,9 +510,11 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   /**
    * Test Upsert API.
    */
-  @ParameterizedTest
-  @MethodSource("populateMetaFieldsParams")
-  public void testUpserts(boolean populateMetaFields) throws Exception {
+  //@ParameterizedTest
+  //@MethodSource("populateMetaFieldsParams")
+  @Test
+  public void testUpserts() throws Exception {
+    boolean populateMetaFields = true;
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder().withRollbackUsingMarkers(true);
     addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
     testUpsertsInternal(cfgBuilder.build(), SparkRDDWriteClient::upsert, false);

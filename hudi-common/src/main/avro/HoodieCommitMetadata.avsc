@@ -46,6 +46,11 @@
                         "default" : null
                      },
                      {
+                        "name":"prevFilePathOverwritten",
+                        "type":["null","string"],
+                        "default" : null
+                     },
+                     {
                         "name":"numWrites",
                         "type":["null","long"],
                         "default" : null

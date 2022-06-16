@@ -187,6 +187,13 @@
       <version>${scala.version}</version>
     </dependency>
 
+    <!--<dependency>
+      <groupId>io.delta</groupId>
+      <artifactId>delta-core_2.11</artifactId>
+      <version>0.6.1</version>
+      <scope>test</scope>
+    </dependency>-->
+
     <!-- Hoodie -->
     <dependency>
       <groupId>org.apache.hudi</groupId>

@@ -27,6 +27,7 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.{deleteRecordsToStrings, recordsToStrings}
 import org.apache.hudi.common.util
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.delta.sync.DeltaLakeSyncTool
 import org.apache.hudi.exception.{HoodieException, HoodieUpsertException}
 import org.apache.hudi.keygen._
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions.Config
@@ -142,6 +143,44 @@ class TestCOWDataSource extends HoodieClientTestBase {
           .save(basePath)
       }
     }, "Should have failed since _hoodie_is_deleted is not a BOOLEAN data type")
+  }
+
+
+  @Test def testDeltaSync() {
+    // Insert Operation
+    val insertRecords = dataGen.generateInserts("000", 10)
+    val records = recordsToStrings(insertRecords).toList
+    val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
+    inputDF.write.format("hudi")
+      .options(commonOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.META_SYNC_ENABLED.key(),"true")
+      .option(DataSourceWriteOptions.META_SYNC_CLIENT_TOOL_CLASS_NAME.key(), classOf[DeltaLakeSyncTool].getName)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "000"))
+
+    val records1 = recordsToStrings(dataGen.generateUpdates("001", insertRecords)).toList
+    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
+    inputDF1.write.format("hudi")
+      .options(commonOpts)
+      .option(DataSourceWriteOptions.META_SYNC_ENABLED.key(),"true")
+      .option(DataSourceWriteOptions.META_SYNC_CLIENT_TOOL_CLASS_NAME.key(), classOf[DeltaLakeSyncTool].getName)
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "001"))
+
+    println(">>> HUDI <<<")
+    val dfHudi = spark.read.format("hudi").load(basePath)
+    dfHudi.show()
+
+    println(">>> DELTA <<<")
+    val dfDelta = spark.read.format("delta").load(basePath)
+    dfDelta.show()
+
+    assertTrue(dfHudi.count() == dfDelta.count())
   }
 
   /**

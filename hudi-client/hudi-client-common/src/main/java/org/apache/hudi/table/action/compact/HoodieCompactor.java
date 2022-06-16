@@ -238,6 +238,9 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
       s.getStat().setTotalLogFilesCompacted(scanner.getTotalLogFiles());
       s.getStat().setTotalLogRecords(scanner.getTotalLogRecords());
       s.getStat().setPartitionPath(operation.getPartitionPath());
+      if (oldDataFileOpt.isPresent()) {
+        s.getStat().setPrevFilePathOverwritten(operation.getPartitionPath() + "/" + oldDataFileOpt.get().getFileName());
+      }
       s.getStat()
           .setTotalLogSizeCompacted(operation.getMetrics().get(CompactionStrategy.TOTAL_LOG_FILE_SIZE).longValue());
       s.getStat().setTotalLogBlocks(scanner.getTotalLogBlocks());

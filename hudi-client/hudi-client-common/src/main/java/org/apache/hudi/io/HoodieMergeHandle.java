@@ -113,6 +113,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
   protected boolean useWriterSchemaForCompaction;
   protected Option<BaseKeyGenerator> keyGeneratorOpt;
   private HoodieBaseFile baseFileToMerge;
+  private String prevFilePathOverwritten;
 
   public HoodieMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                            Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
@@ -333,6 +334,10 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
    */
   public void write(GenericRecord oldRecord) {
     String key = KeyGenUtils.getRecordKeyFromGenericRecord(oldRecord, keyGeneratorOpt);
+    if (prevFilePathOverwritten == null) {
+      //LOG.warn("Upodating prefilePath to " + String.valueOf(oldRecord.get(HoodieRecord.FILENAME_METADATA_FIELD)));
+      prevFilePathOverwritten = String.valueOf(partitionPath + "/" + oldRecord.get(HoodieRecord.FILENAME_METADATA_FIELD));
+    }
     boolean copyOldRecord = true;
     if (keyToNewRecords.containsKey(key)) {
       // If we have duplicate records that we are updating, then the hoodie record will be deflated after
@@ -429,6 +434,9 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
       RuntimeStats runtimeStats = new RuntimeStats();
       runtimeStats.setTotalUpsertTime(timer.endTimer());
       stat.setRuntimeStats(runtimeStats);
+      if (prevFilePathOverwritten != null) {
+        stat.setPrevFilePathOverwritten(prevFilePathOverwritten);
+      }
 
       performMergeDataValidationCheck(writeStatus);
 

@@ -49,6 +49,8 @@ public class HoodieWriteStat implements Serializable {
    */
   private String prevCommit;
 
+  private String prevFilePathOverwritten;
+
   /**
    * Total number of records written for this file. - for updates, its the entire number of records in the file - for
    * inserts, its the actual number of records inserted.
@@ -175,6 +177,10 @@ public class HoodieWriteStat implements Serializable {
     this.prevCommit = prevCommit;
   }
 
+  public void setPrevFilePathOverwritten(String prevFilePathOverwritten) {
+    this.prevFilePathOverwritten = prevFilePathOverwritten;
+  }
+
   public void setNumWrites(long numWrites) {
     this.numWrites = numWrites;
   }
@@ -233,6 +239,10 @@ public class HoodieWriteStat implements Serializable {
 
   public String getPath() {
     return path;
+  }
+
+  public String getPrevFilePathOverwritten() {
+    return prevFilePathOverwritten;
   }
 
   public String getPartitionPath() {

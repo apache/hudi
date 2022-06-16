@@ -61,6 +61,7 @@
     <module>hudi-kafka-connect</module>
     <module>packaging/hudi-flink-bundle</module>
     <module>packaging/hudi-kafka-connect-bundle</module>
+    <module>hudi-sync/hudi-delta-sync</module>
   </modules>
 
   <licenses>
@@ -123,6 +124,10 @@
     <spark2.version>2.4.4</spark2.version>
     <spark3.version>3.2.1</spark3.version>
     <sparkbundle.version></sparkbundle.version>
+    <delta.version>${delta.spark2.4.version}</delta.version>
+    <delta.spark2.4.version>0.6.1</delta.spark2.4.version>
+    <delta.spark3.1.version>1.0.1</delta.spark3.1.version>
+    <delta.spark3.2.version>1.1.0</delta.spark3.2.version>
     <flink1.14.version>1.14.4</flink1.14.version>
     <flink1.13.version>1.13.6</flink1.13.version>
     <flink.version>${flink1.14.version}</flink.version>
@@ -629,6 +634,14 @@
         <classifier>tests</classifier>
         <version>${spark.version}</version>
         <scope>test</scope>
+      </dependency>
+
+      <!-- Delta -->
+      <dependency>
+        <groupId>io.delta</groupId>
+        <artifactId>delta-core_${scala.binary.version}</artifactId>
+        <version>${delta.version}</version>
+        <scope>provided</scope>
       </dependency>
 
       <!-- Flink -->
@@ -1653,6 +1666,7 @@
         <spark3.version>3.2.1</spark3.version>
         <spark.version>${spark3.version}</spark.version>
         <sparkbundle.version>3</sparkbundle.version>
+        <delta.version>${delta.spark3.2.version}</delta.version>
         <scala.version>${scala12.version}</scala.version>
         <scala.binary.version>2.12</scala.binary.version>
         <hudi.spark.module>hudi-spark3</hudi.spark.module>
@@ -1687,6 +1701,7 @@
       <properties>
         <spark3.version>3.1.3</spark3.version>
         <spark.version>${spark3.version}</spark.version>
+        <delta.version>${delta.spark3.1.version}</delta.version>
         <sparkbundle.version>3.1</sparkbundle.version>
         <scala.version>${scala12.version}</scala.version>
         <scala.binary.version>2.12</scala.binary.version>
@@ -1719,6 +1734,7 @@
       <properties>
         <spark3.version>3.2.1</spark3.version>
         <spark.version>${spark3.version}</spark.version>
+        <delta.version>${delta.spark3.2.version}</delta.version>
         <sparkbundle.version>3.2</sparkbundle.version>
         <scala.version>${scala12.version}</scala.version>
         <scala.binary.version>2.12</scala.binary.version>
