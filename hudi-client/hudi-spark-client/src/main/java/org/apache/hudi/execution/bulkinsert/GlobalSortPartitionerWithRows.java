@@ -36,8 +36,8 @@ import org.apache.spark.sql.functions;
 public class GlobalSortPartitionerWithRows implements BulkInsertPartitioner<Dataset<Row>> {
 
   @Override
-  public Dataset<Row> repartitionRecords(Dataset<Row> rows, int outputSparkPartitions) {
-    return rows.sort(functions.col(HoodieRecord.PARTITION_PATH_METADATA_FIELD), functions.col(HoodieRecord.RECORD_KEY_METADATA_FIELD))
+  public Dataset<Row> repartitionRecords(Dataset<Row> dataset, int outputSparkPartitions) {
+    return dataset.sort(functions.col(HoodieRecord.PARTITION_PATH_METADATA_FIELD), functions.col(HoodieRecord.RECORD_KEY_METADATA_FIELD))
         .coalesce(outputSparkPartitions);
   }
 

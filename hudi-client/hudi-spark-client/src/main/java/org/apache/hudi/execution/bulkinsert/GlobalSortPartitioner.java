@@ -26,7 +26,7 @@ import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.spark.api.java.JavaRDD;
 
 /**
- * A built-in partitioner that does global sorting of the input records across all partitions,
+ * A built-in partitioner that does global sorting of the input records across all Spark partitions,
  * corresponding to the {@link BulkInsertSortMode#GLOBAL_SORT} mode.
  *
  * NOTE: Records are sorted by (partitionPath, key) tuple to make sure that physical
