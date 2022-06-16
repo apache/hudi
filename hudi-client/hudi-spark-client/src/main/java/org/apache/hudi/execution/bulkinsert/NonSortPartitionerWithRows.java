@@ -18,25 +18,21 @@
 
 package org.apache.hudi.execution.bulkinsert;
 
-import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
-import org.apache.spark.sql.Column;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 
 /**
  * A built-in partitioner that only does coalesce for input Rows for bulk insert operation,
- * corresponding to the {@code BulkInsertSortMode.NONE} mode.
+ * corresponding to the {@link BulkInsertSortMode#NONE} mode.
  *
  */
 public class NonSortPartitionerWithRows implements BulkInsertPartitioner<Dataset<Row>> {
 
   @Override
   public Dataset<Row> repartitionRecords(Dataset<Row> rows, int outputSparkPartitions) {
-    // TODO handle non-partitioned tables
-    // TODO explain
-    return rows.repartition(outputSparkPartitions, new Column(HoodieRecord.PARTITION_PATH_METADATA_FIELD));
+    return rows.coalesce(outputSparkPartitions);
   }
 
   @Override

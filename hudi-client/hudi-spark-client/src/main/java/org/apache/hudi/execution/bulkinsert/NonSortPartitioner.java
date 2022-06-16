@@ -31,7 +31,7 @@ import java.util.Objects;
 
 /**
  * A built-in partitioner that only does coalesce for input records for bulk insert operation,
- * corresponding to the {@code BulkInsertSortMode.NONE} mode.
+ * corresponding to the {@link BulkInsertSortMode#NONE} mode.
  *
  * @param <T> HoodieRecordPayload type
  */
@@ -39,35 +39,12 @@ public class NonSortPartitioner<T extends HoodieRecordPayload>
     implements BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
 
   @Override
-  public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records,
-                                                     int outputSparkPartitionsCount) {
-    // TODO handle non-partitioned tables
-    // TODO explain
-    return records.mapToPair(record -> new Tuple2<>(record.getPartitionPath(), record))
-        .partitionBy(new HashingRDDPartitioner(outputSparkPartitionsCount))
-        .values();
+  public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records, int outputSparkPartitionsCount) {
+    return records.coalesce(outputSparkPartitionsCount);
   }
 
   @Override
   public boolean arePartitionRecordsSorted() {
     return false;
-  }
-
-  private static class HashingRDDPartitioner extends Partitioner implements Serializable {
-    private final int numPartitions;
-
-    HashingRDDPartitioner(int numPartitions) {
-      this.numPartitions = numPartitions;
-    }
-
-    @Override
-    public int numPartitions() {
-      return numPartitions;
-    }
-
-    @Override
-    public int getPartition(Object key) {
-      return Math.abs(Objects.hash(key)) % numPartitions;
-    }
   }
 }
