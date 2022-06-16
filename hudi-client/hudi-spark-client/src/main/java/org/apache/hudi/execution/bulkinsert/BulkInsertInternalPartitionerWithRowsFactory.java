@@ -18,6 +18,8 @@
 
 package org.apache.hudi.execution.bulkinsert;
 
+import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
 import org.apache.spark.sql.Dataset;
@@ -29,16 +31,16 @@ import org.apache.spark.sql.Row;
  */
 public abstract class BulkInsertInternalPartitionerWithRowsFactory {
 
-  public static BulkInsertPartitioner<Dataset<Row>> get(BulkInsertSortMode sortMode) {
-    switch (sortMode) {
+  public static BulkInsertPartitioner<Dataset<Row>> get(HoodieTableConfig tableConfig, HoodieWriteConfig writeConfig) {
+    switch (writeConfig.getBulkInsertSortMode()) {
       case NONE:
         return new NonSortPartitionerWithRows();
       case GLOBAL_SORT:
         return new GlobalSortPartitionerWithRows();
       case PARTITION_SORT:
-        return new PartitionSortPartitionerWithRows();
+        return new PartitionSortPartitionerWithRows(tableConfig);
       default:
-        throw new UnsupportedOperationException("The bulk insert sort mode \"" + sortMode.name() + "\" is not supported.");
+        throw new UnsupportedOperationException("The bulk insert sort mode \"" + writeConfig.getBulkInsertSortMode().name() + "\" is not supported.");
     }
   }
 }

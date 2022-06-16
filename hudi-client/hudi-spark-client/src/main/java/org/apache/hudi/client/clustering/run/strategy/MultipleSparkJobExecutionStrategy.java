@@ -206,7 +206,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
           throw new UnsupportedOperationException(String.format("Layout optimization strategy '%s' is not supported", layoutOptStrategy));
       }
     }).orElse(isRowPartitioner ? BulkInsertInternalPartitionerWithRowsFactory.get(getWriteConfig().getBulkInsertSortMode()) :
-        BulkInsertInternalPartitionerFactory.get(getWriteConfig().getBulkInsertSortMode()));
+        BulkInsertInternalPartitionerFactory.get(getHoodieTable().getMetaClient().getTableConfig(), getWriteConfig()));
   }
 
   /**
