@@ -20,6 +20,7 @@
 package org.apache.hudi.io.storage;
 
 import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.common.model.HoodieKey;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
@@ -157,7 +158,7 @@ public abstract class TestHoodieReaderWriterBase {
 
   @Test
   public void testReaderFilterRowKeys() throws Exception {
-    writeFileWithSimpleSchema();
+    writeFileWithSchemaWithMeta();
     Configuration conf = new Configuration();
     verifyMetadata(conf);
     verifyFilterRowKeys(createReader(conf));
@@ -173,6 +174,21 @@ public abstract class TestHoodieReaderWriterBase {
       record.put("time", Integer.toString(i));
       record.put("number", i);
       writer.writeAvro(key, record);
+    }
+    writer.close();
+  }
+
+  protected void writeFileWithSchemaWithMeta() throws Exception {
+    Schema avroSchema = getSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchemaWithMetaFields.avsc");
+    HoodieFileWriter<GenericRecord> writer = createWriter(avroSchema, true);
+    for (int i = 0; i < NUM_RECORDS; i++) {
+      GenericRecord record = new GenericData.Record(avroSchema);
+      String key = "key" + String.format("%02d", i);
+      record.put("_row_key", key);
+      record.put("time", Integer.toString(i));
+      record.put("number", i);
+      writer.writeAvroWithMetadata(new HoodieKey((String) record.get("_row_key"),
+          Integer.toString((Integer) record.get("number"))), record);
     }
     writer.close();
   }

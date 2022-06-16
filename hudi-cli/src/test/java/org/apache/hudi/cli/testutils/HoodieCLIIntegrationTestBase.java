@@ -18,29 +18,28 @@
 
 package org.apache.hudi.cli.testutils;
 
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.cli.utils.SparkUtil;
-import org.apache.spark.SparkConf;
+import org.apache.hudi.common.model.HoodieTableType;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 
-import org.apache.spark.launcher.SparkLauncher;
-import org.junit.jupiter.api.Test;
+/**
+ * Class to initial resources for shell.
+ */
+public class HoodieCLIIntegrationTestBase extends HoodieCLIIntegrationTestHarness {
 
-import java.net.URISyntaxException;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-
-public class SparkUtilTest {
-
-  @Test
-  public void testInitSparkLauncher() throws URISyntaxException {
-    SparkLauncher sparkLauncher = SparkUtil.initLauncher(null);
-    assertNotNull(sparkLauncher);
+  @Override
+  @BeforeEach
+  public void setup() throws Exception {
+    initResources();
   }
 
-  @Test
-  public void testGetDefaultSparkConf() {
-    SparkConf sparkConf = SparkUtil.getDefaultConf("test-spark-app", Option.of(""));
-    assertEquals(SparkUtil.DEFAULT_SPARK_MASTER, sparkConf.get("spark.master"));
+  @Override
+  @AfterEach
+  public void teardown() throws Exception {
+    cleanupResources();
+  }
+
+  protected HoodieTableType getTableType() {
+    return HoodieTableType.MERGE_ON_READ;
   }
 }

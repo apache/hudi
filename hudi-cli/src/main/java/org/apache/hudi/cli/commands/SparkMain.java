@@ -148,7 +148,7 @@ public class SparkMain {
           }
           configs = new ArrayList<>();
           if (args.length > 9) {
-            configs.addAll(Arrays.asList(args).subList(8, args.length));
+            configs.addAll(Arrays.asList(args).subList(9, args.length));
           }
 
           returnCode = compact(jsc, args[3], args[4], null, Integer.parseInt(args[5]), args[6],

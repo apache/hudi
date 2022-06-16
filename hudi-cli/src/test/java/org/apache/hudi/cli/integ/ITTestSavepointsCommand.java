@@ -21,7 +21,7 @@ package org.apache.hudi.cli.integ;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.commands.TableCommand;
-import org.apache.hudi.cli.testutils.AbstractShellIntegrationTest;
+import org.apache.hudi.cli.testutils.HoodieCLIIntegrationTestBase;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -51,7 +51,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * A command use SparkLauncher need load jars under lib which generate during mvn package.
  * Use integration test instead of unit test.
  */
-public class ITTestSavepointsCommand extends AbstractShellIntegrationTest {
+public class ITTestSavepointsCommand extends HoodieCLIIntegrationTestBase {
 
   private String tablePath;
 
@@ -139,11 +139,7 @@ public class ITTestSavepointsCommand extends AbstractShellIntegrationTest {
     HoodieTestDataGenerator.createSavepointFile(tablePath, savepoint, jsc.hadoopConfiguration());
 
     // re-bootstrap metadata table
-    // delete first
-    String basePath = metaClient.getBasePath();
-    Path metadataTableBasePath = new Path(HoodieTableMetadata.getMetadataTableBasePath(basePath));
-    metaClient.getFs().delete(metadataTableBasePath, true);
-
+    Path metadataTableBasePath = new Path(HoodieTableMetadata.getMetadataTableBasePath(HoodieCLI.basePath));
     // then bootstrap metadata table at instant 104
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath(HoodieCLI.basePath)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).build()).build();
