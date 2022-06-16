@@ -48,7 +48,7 @@ public enum MetadataPartitionType {
     return fileIdPrefix;
   }
 
-  void setFileGroupCount(final int fileGroupCount) {
+  public void setFileGroupCount(final int fileGroupCount) {
     this.fileGroupCount = fileGroupCount;
   }
 
