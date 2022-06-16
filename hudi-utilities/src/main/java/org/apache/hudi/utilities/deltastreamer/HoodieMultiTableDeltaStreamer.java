@@ -235,15 +235,21 @@ public class HoodieMultiTableDeltaStreamer {
   public static void main(String[] args) throws IOException {
     final Config config = new Config();
 
-    if (config.enableHiveSync) {
-      logger.warn("--enable-hive-sync will be deprecated in a future release; please use --enable-sync instead for Hive syncing");
-    }
-
     JCommander cmd = new JCommander(config, null, args);
     if (config.help || args.length == 0) {
       cmd.usage();
       System.exit(1);
     }
+
+    if (config.enableHiveSync) {
+      logger.warn("--enable-hive-sync will be deprecated in a future release; please use --enable-sync instead for Hive syncing");
+    }
+
+    if (config.targetTableName != null) {
+      logger.warn(String.format("--target-table is deprecated and will be removed in a future release due to it's useless;"
+              + " please use %s to configure multiple target tables", Constants.TABLES_TO_BE_INGESTED_PROP));
+    }
+
     JavaSparkContext jssc = UtilHelpers.buildSparkContext("multi-table-delta-streamer", Constants.LOCAL_SPARK_MASTER);
     try {
       new HoodieMultiTableDeltaStreamer(config, jssc).sync();
@@ -258,7 +264,8 @@ public class HoodieMultiTableDeltaStreamer {
         description = "base path prefix for multi table support via HoodieMultiTableDeltaStreamer class")
     public String basePathPrefix;
 
-    @Parameter(names = {"--target-table"}, description = "name of the target table", required = true)
+    @Deprecated
+    @Parameter(names = {"--target-table"}, description = "name of the target table")
     public String targetTableName;
 
     @Parameter(names = {"--table-type"}, description = "Type of table. COPY_ON_WRITE (or) MERGE_ON_READ", required = true)
