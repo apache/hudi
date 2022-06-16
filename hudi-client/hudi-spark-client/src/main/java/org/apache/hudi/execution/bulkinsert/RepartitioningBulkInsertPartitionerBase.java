@@ -1,7 +1,12 @@
 package org.apache.hudi.execution.bulkinsert;
 
+import org.apache.hudi.common.function.SerializableFunctionUnchecked;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.table.BulkInsertPartitioner;
+import org.apache.spark.Partitioner;
+
+import java.io.Serializable;
+import java.util.Objects;
 
 /**
  * Base class for any {@link BulkInsertPartitioner} implementation that does re-partitioning,
@@ -16,4 +21,24 @@ public abstract class RepartitioningBulkInsertPartitionerBase<I> implements Bulk
     this.isPartitionedTable = tableConfig.getPartitionFields().map(pfs -> pfs.length > 0).orElse(false);
   }
 
+  protected static class PartitionPathRDDPartitioner extends Partitioner implements Serializable {
+    private final SerializableFunctionUnchecked<Object, String> partitionPathExtractor;
+    private final int numPartitions;
+
+    PartitionPathRDDPartitioner(SerializableFunctionUnchecked<Object, String> partitionPathExtractor, int numPartitions) {
+      this.partitionPathExtractor = partitionPathExtractor;
+      this.numPartitions = numPartitions;
+    }
+
+    @Override
+    public int numPartitions() {
+      return numPartitions;
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public int getPartition(Object o) {
+      return Math.abs(Objects.hash(partitionPathExtractor.apply(o))) % numPartitions;
+    }
+  }
 }

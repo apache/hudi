@@ -22,8 +22,6 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.table.BulkInsertPartitioner;
-import org.apache.spark.Partitioner;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.HoodieJavaRDDUtils;
@@ -31,7 +29,6 @@ import scala.Tuple2;
 
 import java.io.Serializable;
 import java.util.Comparator;
-import java.util.Objects;
 import java.util.function.Function;
 
 /**
@@ -48,6 +45,7 @@ public class RDDPartitionSortPartitioner<T extends HoodieRecordPayload>
     super(tableConfig);
   }
 
+  @SuppressWarnings("unchecked")
   @Override
   public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records,
                                                      int outputSparkPartitions) {
@@ -61,11 +59,14 @@ public class RDDPartitionSortPartitioner<T extends HoodieRecordPayload>
       Comparator<Pair<String, String>> recordKeyComparator =
           Comparator.comparing((Function<Pair<String, String>, String> & Serializable) Pair::getValue);
 
+      PartitionPathRDDPartitioner partitioner =
+          new PartitionPathRDDPartitioner((pair) -> ((Pair<String, String>) pair).getKey(), outputSparkPartitions);
+
       // Both partition-path and record-key are extracted, since
       //    - Partition-path will be used for re-partitioning (as called out above)
       //    - Record-key will be used for sorting the records w/in individual partitions
       return records.mapToPair(record -> new Tuple2<>(Pair.of(record.getPartitionPath(), record.getRecordKey()), record))
-          .repartitionAndSortWithinPartitions(new PartitionPathRDDPartitioner(outputSparkPartitions), recordKeyComparator)
+          .repartitionAndSortWithinPartitions(partitioner, recordKeyComparator)
           .values();
     } else {
       JavaPairRDD<String, HoodieRecord<T>> kvPairsRDD =
@@ -78,25 +79,5 @@ public class RDDPartitionSortPartitioner<T extends HoodieRecordPayload>
   @Override
   public boolean arePartitionRecordsSorted() {
     return true;
-  }
-
-  private static class PartitionPathRDDPartitioner extends Partitioner implements Serializable {
-    private final int numPartitions;
-
-    private PartitionPathRDDPartitioner(int numPartitions) {
-      this.numPartitions = numPartitions;
-    }
-
-    @Override
-    public int numPartitions() {
-      return numPartitions;
-    }
-
-    @SuppressWarnings("unchecked")
-    @Override
-    public int getPartition(Object key) {
-      Pair<String, String> partitionPathRecordKeyPair = (Pair<String, String>) key;
-      return Math.abs(Objects.hash(partitionPathRecordKeyPair.getKey())) % numPartitions;
-    }
   }
 }
