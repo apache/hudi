@@ -30,9 +30,9 @@ public abstract class JavaBulkInsertInternalPartitionerFactory {
   public static BulkInsertPartitioner get(BulkInsertSortMode sortMode) {
     switch (sortMode) {
       case NONE:
-        return new JavaNonSortPartitioner();
+        return new JavaNonSortPartitioner<>();
       case GLOBAL_SORT:
-        return new JavaGlobalSortPartitioner();
+        return new JavaGlobalSortPartitioner<>();
       default:
         throw new HoodieException("The bulk insert sort mode \"" + sortMode.name()
             + "\" is not supported in java client.");

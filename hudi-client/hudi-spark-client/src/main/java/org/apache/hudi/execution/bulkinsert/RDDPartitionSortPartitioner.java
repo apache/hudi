@@ -33,8 +33,8 @@ import java.util.function.Function;
 
 /**
  * A built-in partitioner that does local sorting for each RDD partition
- * after coalesce for bulk insert operation, corresponding to the
- * {@code BulkInsertSortMode.PARTITION_SORT} mode.
+ * after coalescing it to specified number of partitions.
+ * Corresponds to the {@link BulkInsertSortMode#PARTITION_SORT} mode.
  *
  * @param <T> HoodieRecordPayload type
  */
