@@ -42,11 +42,13 @@ public abstract class BulkInsertInternalPartitionerFactory {
   public static BulkInsertPartitioner get(HoodieTableConfig tableConfig, HoodieWriteConfig writeConfig) {
     switch (writeConfig.getBulkInsertSortMode()) {
       case NONE:
-        return new NonSortPartitioner();
+        return new NonSortPartitioner<>();
       case GLOBAL_SORT:
-        return new GlobalSortPartitioner();
+        return new GlobalSortPartitioner<>();
       case PARTITION_SORT:
-        return new RDDPartitionSortPartitioner(tableConfig);
+        return new RDDPartitionSortPartitioner<>(tableConfig);
+      case REPARTITION_NO_SORT:
+        return new RepartitionNoSortPartitioner<>(tableConfig);
       default:
         throw new HoodieException("The bulk insert sort mode \"" + writeConfig.getBulkInsertSortMode().name() + "\" is not supported.");
     }

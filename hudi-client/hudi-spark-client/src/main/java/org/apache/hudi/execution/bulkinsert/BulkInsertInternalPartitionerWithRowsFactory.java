@@ -39,6 +39,8 @@ public abstract class BulkInsertInternalPartitionerWithRowsFactory {
         return new GlobalSortPartitionerWithRows();
       case PARTITION_SORT:
         return new PartitionSortPartitionerWithRows(tableConfig);
+      case REPARTITION_NO_SORT:
+        return new RepartitionNoSortPartitionerWithRows(tableConfig);
       default:
         throw new UnsupportedOperationException("The bulk insert sort mode \"" + writeConfig.getBulkInsertSortMode().name() + "\" is not supported.");
     }
