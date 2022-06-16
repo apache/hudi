@@ -214,7 +214,9 @@ class ExpressionPayload(record: GenericRecord,
    * Init the table schema.
    */
   private def initWriteSchemaIfNeed(properties: Properties): Unit = {
-    writeSchema = setWriteSchema(properties)
+    if (writeSchema == null) {
+      writeSchema = setWriteSchema(properties)
+    }
   }
 
   /**
