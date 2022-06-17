@@ -20,10 +20,10 @@ package org.apache.hudi.hive.ddl;
 
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.StorageSchemes;
-import org.apache.hudi.common.util.collection.ImmutablePair;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncException;
-import org.apache.hudi.hive.PartitionValueExtractor;
+import org.apache.hudi.sync.common.model.PartitionValueExtractor;
 import org.apache.hudi.hive.util.HivePartitionUtil;
 import org.apache.hudi.hive.util.HiveSchemaUtil;
 
@@ -258,7 +258,7 @@ public class HMSDDLExecutor implements DDLExecutor {
   }
 
   @Override
-  public void updateTableComments(String tableName, Map<String, ImmutablePair<String,String>> alterSchema) {
+  public void updateTableComments(String tableName, Map<String, Pair<String, String>> alterSchema) {
     try {
       Table table = client.getTable(syncConfig.getString(META_SYNC_DATABASE_NAME), tableName);
       StorageDescriptor sd = new StorageDescriptor(table.getSd());

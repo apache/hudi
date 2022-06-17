@@ -132,7 +132,7 @@ public class DataHubSyncClient extends HoodieSyncClient implements TblProperties
   }
 
   @Override
-  public Map<String, String> getTableSchema(String tableName) {
+  public Map<String, String> getSchemaFromMetastore(String tableName) {
     throw new UnsupportedOperationException("Not supported: `getTableSchema`");
   }
 

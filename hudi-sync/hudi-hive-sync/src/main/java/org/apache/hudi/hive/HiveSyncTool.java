@@ -25,20 +25,18 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.InvalidTableException;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
-import org.apache.hudi.hive.replication.HiveSyncGlobalCommitConfig;
 import org.apache.hudi.hive.util.HiveSchemaUtil;
-import org.apache.hudi.sync.common.HoodieSyncClient.PartitionEvent;
-import org.apache.hudi.sync.common.HoodieSyncClient.PartitionEvent.PartitionEventType;
 import org.apache.hudi.sync.common.HoodieSyncTool;
+import org.apache.hudi.sync.common.model.FieldSchema;
 import org.apache.hudi.sync.common.model.Partition;
+import org.apache.hudi.sync.common.model.PartitionEvent;
+import org.apache.hudi.sync.common.model.PartitionEvent.PartitionEventType;
 import org.apache.hudi.sync.common.util.ConfigUtils;
 import org.apache.hudi.sync.common.util.SparkDataSourceTableUtils;
 
 import com.beust.jcommander.JCommander;
-import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hive.conf.HiveConf;
-import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.parquet.schema.MessageType;
@@ -80,7 +78,7 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
   public static final String SUFFIX_SNAPSHOT_TABLE = "_rt";
   public static final String SUFFIX_READ_OPTIMIZED_TABLE = "_ro";
 
-  protected AbstractHiveSyncHoodieClient hoodieHiveClient;
+  protected HoodieHiveClient hoodieHiveClient;
   protected String snapshotTableName = null;
   protected Option<String> roTableName = null;
 
@@ -205,7 +203,7 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
     boolean isDropPartition = hoodieHiveClient.isDropPartition();
 
     // Get the parquet schema for this table looking at the latest commit
-    MessageType schema = hoodieHiveClient.getDataSchema();
+    MessageType schema = hoodieHiveClient.getSchemaFromStorage();
 
     // Currently HoodieBootstrapRelation does support reading bootstrap MOR rt table,
     // so we disable the syncAsSparkDataSourceTable here to avoid read such kind table
@@ -283,12 +281,12 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
       schemaChanged = true;
     } else {
       // Check if the table schema has evolved
-      Map<String, String> tableSchema = hoodieHiveClient.getTableSchema(tableName);
+      Map<String, String> tableSchema = hoodieHiveClient.getSchemaFromMetastore(tableName);
       SchemaDifference schemaDiff = HiveSchemaUtil.getSchemaDifference(schema, tableSchema, config.getSplitStrings(META_SYNC_PARTITION_FIELDS),
           config.getBoolean(HIVE_SUPPORT_TIMESTAMP_TYPE));
       if (!schemaDiff.isEmpty()) {
         LOG.info("Schema difference found for " + tableName);
-        hoodieHiveClient.updateTableDefinition(tableName, schema);
+        hoodieHiveClient.updateSchemaFromMetastore(tableName, schema);
         // Sync the table properties if the schema has changed
         if (config.getString(HIVE_TABLE_PROPERTIES) != null || config.getBoolean(HIVE_SYNC_AS_DATA_SOURCE_TABLE)) {
           hoodieHiveClient.updateTableProperties(tableName, tableProperties);
@@ -301,16 +299,9 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
     }
 
     if (config.getBoolean(HIVE_SYNC_COMMENT)) {
-      Schema avroSchemaWithoutMetadataFields = hoodieHiveClient.getAvroSchemaWithoutMetadataFields();
-      Map<String, String> newComments = avroSchemaWithoutMetadataFields.getFields()
-          .stream().collect(Collectors.toMap(Schema.Field::name, field -> StringUtils.isNullOrEmpty(field.doc()) ? "" : field.doc()));
-      boolean allEmpty = newComments.values().stream().allMatch(StringUtils::isNullOrEmpty);
-      if (!allEmpty) {
-        List<FieldSchema> hiveSchema = hoodieHiveClient.getTableCommentUsingMetastoreClient(tableName);
-        hoodieHiveClient.updateTableComments(tableName, hiveSchema, avroSchemaWithoutMetadataFields.getFields());
-      } else {
-        LOG.info(String.format("No comment %s need to add", tableName));
-      }
+      List<FieldSchema> fromMetastore = hoodieHiveClient.getFieldSchemasFromMetastore(tableName);
+      List<FieldSchema> fromStorage = hoodieHiveClient.getFieldSchemasFromStorage();
+      hoodieHiveClient.updateTableComments(tableName, fromMetastore, fromStorage);
     }
     return schemaChanged;
   }

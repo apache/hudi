@@ -18,22 +18,22 @@
 
 package org.apache.hudi.hive;
 
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.common.util.collection.ImmutablePair;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.hive.ddl.DDLExecutor;
 import org.apache.hudi.hive.ddl.HMSDDLExecutor;
 import org.apache.hudi.hive.ddl.HiveQueryDDLExecutor;
 import org.apache.hudi.hive.ddl.HiveSyncMode;
 import org.apache.hudi.hive.ddl.JDBCExecutor;
+import org.apache.hudi.sync.common.HoodieSyncClient;
+import org.apache.hudi.sync.common.HoodieSyncException;
+import org.apache.hudi.sync.common.model.FieldSchema;
 import org.apache.hudi.sync.common.model.Partition;
 
-import org.apache.avro.Schema;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
-import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.hadoop.hive.metastore.api.NoSuchObjectException;
 import org.apache.hadoop.hive.metastore.api.Table;
 import org.apache.hadoop.hive.ql.metadata.Hive;
@@ -57,7 +57,7 @@ import static org.apache.hudi.sync.common.util.TableUtils.tableId;
 /**
  * This class implements logic to sync a Hudi table with either the Hive server or the Hive Metastore.
  */
-public class HoodieHiveClient extends AbstractHiveSyncHoodieClient {
+public class HoodieHiveClient extends HoodieSyncClient {
 
   private static final Logger LOG = LogManager.getLogger(HoodieHiveClient.class);
   DDLExecutor ddlExecutor;
@@ -148,7 +148,7 @@ public class HoodieHiveClient extends AbstractHiveSyncHoodieClient {
   }
 
   @Override
-  public void updateTableDefinition(String tableName, MessageType newSchema) {
+  public void updateSchemaFromMetastore(String tableName, MessageType newSchema) {
     ddlExecutor.updateTableDefinition(tableName, newSchema);
   }
 
@@ -175,7 +175,7 @@ public class HoodieHiveClient extends AbstractHiveSyncHoodieClient {
    * Get the table schema.
    */
   @Override
-  public Map<String, String> getTableSchema(String tableName) {
+  public Map<String, String> getSchemaFromMetastore(String tableName) {
     if (!tableExists(tableName)) {
       throw new IllegalArgumentException(
           "Failed to get schema for table " + tableName + " does not exist");
@@ -183,10 +183,20 @@ public class HoodieHiveClient extends AbstractHiveSyncHoodieClient {
     return ddlExecutor.getTableSchema(tableName);
   }
 
-  @Deprecated
+  /**
+   * Gets the schema for a hoodie table. Depending on the type of table, try to read schema from commit metadata if
+   * present, else fallback to reading from any file written in the latest commit. We will assume that the schema has
+   * not changed within a single atomic write.
+   *
+   * @return Parquet schema for this table
+   */
   @Override
-  public boolean doesTableExist(String tableName) {
-    return tableExists(tableName);
+  public MessageType getSchemaFromStorage() {
+    try {
+      return new TableSchemaResolver(metaClient).getTableParquetSchema();
+    } catch (Exception e) {
+      throw new HoodieSyncException("Failed to read data schema", e);
+    }
   }
 
   @Override
@@ -246,8 +256,7 @@ public class HoodieHiveClient extends AbstractHiveSyncHoodieClient {
   }
 
   public void updateLastReplicatedTimeStamp(String tableName, String timeStamp) {
-    if (activeTimeline.filterCompletedInstants().getInstants()
-            .noneMatch(i -> i.getTimestamp().equals(timeStamp))) {
+    if (getActiveTimeline().getInstants().noneMatch(i -> i.getTimestamp().equals(timeStamp))) {
       throw new HoodieHiveSyncException(
           "Not a valid completed timestamp " + timeStamp + " for table " + tableName);
     }
@@ -293,7 +302,7 @@ public class HoodieHiveClient extends AbstractHiveSyncHoodieClient {
   @Override
   public void updateLastCommitTimeSynced(String tableName) {
     // Set the last commit time from the TBLproperties
-    Option<String> lastCommitSynced = activeTimeline.lastInstant().map(HoodieInstant::getTimestamp);
+    Option<String> lastCommitSynced = getActiveTimeline().lastInstant().map(HoodieInstant::getTimestamp);
     if (lastCommitSynced.isPresent()) {
       try {
         Table table = client.getTable(config.getString(META_SYNC_DATABASE_NAME), tableName);
@@ -306,36 +315,48 @@ public class HoodieHiveClient extends AbstractHiveSyncHoodieClient {
   }
 
   @Override
-  public List<FieldSchema> getTableCommentUsingMetastoreClient(String tableName) {
+  public List<FieldSchema> getFieldSchemasFromMetastore(String tableName) {
     try {
-      return client.getSchema(config.getString(META_SYNC_DATABASE_NAME), tableName);
+      return client.getSchema(config.getString(META_SYNC_DATABASE_NAME), tableName)
+          .stream()
+          .map(f -> new FieldSchema(f.getName(), f.getType(), f.getComment()))
+          .collect(Collectors.toList());
     } catch (Exception e) {
-      throw new HoodieHiveSyncException("Failed to get table comments for : " + tableName, e);
+      throw new HoodieHiveSyncException("Failed to get field schemas from metastore for table : " + tableName, e);
     }
   }
 
   @Override
-  public void updateTableComments(String tableName, List<FieldSchema> oldSchema, List<Schema.Field> newSchema) {
-    Map<String,String> newComments = newSchema.stream().collect(Collectors.toMap(field -> field.name().toLowerCase(Locale.ROOT), field -> StringUtils.isNullOrEmpty(field.doc()) ? "" : field.doc()));
-    updateTableComments(tableName,oldSchema,newComments);
+  public List<FieldSchema> getFieldSchemasFromStorage() {
+    try {
+      return new TableSchemaResolver(metaClient).getTableAvroSchema(false)
+          .getFields()
+          .stream()
+          .map(f -> new FieldSchema(f.name(), f.schema().getType().getName(), f.doc()))
+          .collect(Collectors.toList());
+    } catch (Exception e) {
+      throw new HoodieHiveSyncException("Failed to get field schemas from storage : ", e);
+    }
   }
 
   @Override
-  public void updateTableComments(String tableName, List<FieldSchema> oldSchema, Map<String,String> newComments) {
-    Map<String,String> oldComments = oldSchema.stream().collect(Collectors.toMap(fieldSchema -> fieldSchema.getName().toLowerCase(Locale.ROOT),
-        fieldSchema -> StringUtils.isNullOrEmpty(fieldSchema.getComment()) ? "" : fieldSchema.getComment()));
-    Map<String,String> types = oldSchema.stream().collect(Collectors.toMap(FieldSchema::getName, FieldSchema::getType));
-    Map<String, ImmutablePair<String,String>> alterComments = new HashMap<>();
-    oldComments.forEach((name,comment) -> {
-      String newComment = newComments.getOrDefault(name,"");
-      if (!newComment.equals(comment)) {
-        alterComments.put(name,new ImmutablePair<>(types.get(name),newComment));
+  public void updateTableComments(String tableName, List<FieldSchema> fromMetastore, List<FieldSchema> fromStorage) {
+    Map<String, FieldSchema> metastoreMap = fromMetastore.stream().collect(Collectors.toMap(f -> f.getName().toLowerCase(Locale.ROOT), f -> f));
+    Map<String, FieldSchema> storageMap = fromStorage.stream().collect(Collectors.toMap(f -> f.getName().toLowerCase(Locale.ROOT), f -> f));
+    Map<String, Pair<String,String>> alterComments = new HashMap<>();
+    metastoreMap.forEach((name, metastoreFieldSchema) -> {
+      if (storageMap.containsKey(name)) {
+        boolean updated = metastoreFieldSchema.updateComment(storageMap.get(name));
+        if (updated) {
+          alterComments.put(name, Pair.of(metastoreFieldSchema.getType(), metastoreFieldSchema.getCommentOrEmpty()));
+        }
       }
     });
-    if (alterComments.size() > 0) {
-      ddlExecutor.updateTableComments(tableName, alterComments);
-    } else {
+    if (alterComments.isEmpty()) {
       LOG.info(String.format("No comment difference of %s ",tableName));
+    } else {
+      ddlExecutor.updateTableComments(tableName, alterComments);
     }
   }
+
 }

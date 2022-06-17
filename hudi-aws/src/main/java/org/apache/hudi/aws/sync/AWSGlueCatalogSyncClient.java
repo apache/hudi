@@ -21,8 +21,8 @@ package org.apache.hudi.aws.sync;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.hive.AbstractHiveSyncHoodieClient;
 import org.apache.hudi.hive.HiveSyncConfig;
+import org.apache.hudi.sync.common.HoodieSyncClient;
 import org.apache.hudi.sync.common.model.Partition;
 
 import com.amazonaws.services.glue.AWSGlue;
@@ -79,7 +79,7 @@ import static org.apache.hudi.sync.common.util.TableUtils.tableId;
  *
  * @Experimental
  */
-public class AWSGlueCatalogSyncClient extends AbstractHiveSyncHoodieClient {
+public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
 
   private static final Logger LOG = LogManager.getLogger(AWSGlueCatalogSyncClient.class);
   private static final int MAX_PARTITIONS_PER_REQUEST = 100;
@@ -204,7 +204,7 @@ public class AWSGlueCatalogSyncClient extends AbstractHiveSyncHoodieClient {
   }
 
   @Override
-  public void updateTableDefinition(String tableName, MessageType newSchema) {
+  public void updateSchemaFromMetastore(String tableName, MessageType newSchema) {
     // ToDo Cascade is set in Hive meta sync, but need to investigate how to configure it for Glue meta
     boolean cascade = syncConfig.hoodieSyncConfigParams.partitionFields.size() > 0;
     try {
@@ -320,7 +320,7 @@ public class AWSGlueCatalogSyncClient extends AbstractHiveSyncHoodieClient {
   }
 
   @Override
-  public Map<String, String> getTableSchema(String tableName) {
+  public Map<String, String> getSchemaFromMetastore(String tableName) {
     try {
       // GlueMetastoreClient returns partition keys separate from Columns, hence get both and merge to
       // get the Schema of the table.

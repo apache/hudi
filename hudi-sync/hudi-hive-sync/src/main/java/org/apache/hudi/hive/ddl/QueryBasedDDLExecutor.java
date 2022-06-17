@@ -22,10 +22,10 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.StorageSchemes;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.common.util.collection.ImmutablePair;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncException;
-import org.apache.hudi.hive.PartitionValueExtractor;
+import org.apache.hudi.sync.common.model.PartitionValueExtractor;
 import org.apache.hudi.hive.util.HiveSchemaUtil;
 
 import org.apache.hadoop.fs.FileSystem;
@@ -137,8 +137,8 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
   }
 
   @Override
-  public void updateTableComments(String tableName, Map<String, ImmutablePair<String,String>>  newSchema) {
-    for (Map.Entry<String, ImmutablePair<String,String>> field : newSchema.entrySet()) {
+  public void updateTableComments(String tableName, Map<String, Pair<String, String>> newSchema) {
+    for (Map.Entry<String, Pair<String,String>> field : newSchema.entrySet()) {
       String name = field.getKey();
       StringBuilder sql = new StringBuilder();
       String type = field.getValue().getLeft();

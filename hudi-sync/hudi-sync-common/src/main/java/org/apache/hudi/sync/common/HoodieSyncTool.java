@@ -19,7 +19,6 @@ package org.apache.hudi.sync.common;
 
 import org.apache.hudi.common.config.TypedProperties;
 
-import com.beust.jcommander.JCommander;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 

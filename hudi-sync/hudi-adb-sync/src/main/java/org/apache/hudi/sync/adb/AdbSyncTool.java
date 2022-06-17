@@ -26,8 +26,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.hive.SchemaDifference;
 import org.apache.hudi.hive.util.HiveSchemaUtil;
-import org.apache.hudi.sync.common.HoodieSyncClient.PartitionEvent;
-import org.apache.hudi.sync.common.HoodieSyncClient.PartitionEvent.PartitionEventType;
+import org.apache.hudi.sync.common.model.PartitionEvent;
+import org.apache.hudi.sync.common.model.PartitionEvent.PartitionEventType;
 import org.apache.hudi.sync.common.HoodieSyncTool;
 import org.apache.hudi.sync.common.util.ConfigUtils;
 
@@ -157,7 +157,7 @@ public class AdbSyncTool extends HoodieSyncTool {
     boolean tableExists = hoodieAdbClient.tableExists(tableName);
 
     // Get the parquet schema for this table looking at the latest commit
-    MessageType schema = hoodieAdbClient.getDataSchema();
+    MessageType schema = hoodieAdbClient.getSchemaFromStorage();
 
     // Sync schema if needed
     syncSchema(tableName, tableExists, useRealtimeInputFormat, readAsOptimized, schema);
@@ -227,7 +227,7 @@ public class AdbSyncTool extends HoodieSyncTool {
           ParquetHiveSerDe.class.getName(), serdeProperties, tableProperties);
     } else {
       // Check if the table schema has evolved
-      Map<String, String> tableSchema = hoodieAdbClient.getTableSchema(tableName);
+      Map<String, String> tableSchema = hoodieAdbClient.getSchemaFromMetastore(tableName);
       SchemaDifference schemaDiff = HiveSchemaUtil.getSchemaDifference(schema, tableSchema, adbSyncConfig.hoodieSyncConfigParams.partitionFields,
               adbSyncConfig.adbSyncConfigParams.supportTimestamp);
       if (!schemaDiff.isEmpty()) {

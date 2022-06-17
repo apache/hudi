@@ -36,9 +36,9 @@ public class HiveSyncConfig extends HoodieSyncConfig {
   // HIVE SYNC SPECIFIC CONFIGS
   // NOTE: DO NOT USE uppercase for the keys as they are internally lower-cased. Using upper-cases causes
   // unexpected issues with config getting reset
-  public static final ConfigProperty<String> HIVE_SYNC_ENABLED = ConfigProperty
+  public static final ConfigProperty<Boolean> HIVE_SYNC_ENABLED = ConfigProperty
       .key("hoodie.datasource.hive_sync.enable")
-      .defaultValue("false")
+      .defaultValue(false)
       .withDocumentation("When set to true, register/sync the table to Apache Hive metastore.");
 
   public static final ConfigProperty<String> HIVE_USER = ConfigProperty
@@ -56,9 +56,9 @@ public class HiveSyncConfig extends HoodieSyncConfig {
       .defaultValue("jdbc:hive2://localhost:10000")
       .withDocumentation("Hive metastore url");
 
-  public static final ConfigProperty<String> HIVE_USE_PRE_APACHE_INPUT_FORMAT = ConfigProperty
+  public static final ConfigProperty<Boolean> HIVE_USE_PRE_APACHE_INPUT_FORMAT = ConfigProperty
       .key("hoodie.datasource.hive_sync.use_pre_apache_input_format")
-      .defaultValue("false")
+      .defaultValue(false)
       .withDocumentation("Flag to choose InputFormat under com.uber.hoodie package instead of org.apache.hudi package. "
           + "Use this when you are in the process of migrating from "
           + "com.uber.hoodie to org.apache.hudi. Stop using this after you migrated the table definition to org.apache.hudi input format");
@@ -67,9 +67,9 @@ public class HiveSyncConfig extends HoodieSyncConfig {
    * @deprecated Use {@link #HIVE_SYNC_MODE} instead of this config from 0.9.0
    */
   @Deprecated
-  public static final ConfigProperty<String> HIVE_USE_JDBC = ConfigProperty
+  public static final ConfigProperty<Boolean> HIVE_USE_JDBC = ConfigProperty
       .key("hoodie.datasource.hive_sync.use_jdbc")
-      .defaultValue("true")
+      .defaultValue(true)
       .deprecatedAfter("0.9.0")
       .withDocumentation("Use JDBC when hive synchronization is enabled");
 
@@ -78,24 +78,24 @@ public class HiveSyncConfig extends HoodieSyncConfig {
       .defaultValue("thrift://localhost:9083")
       .withDocumentation("Hive metastore url");
 
-  public static final ConfigProperty<String> HIVE_AUTO_CREATE_DATABASE = ConfigProperty
+  public static final ConfigProperty<Boolean> HIVE_AUTO_CREATE_DATABASE = ConfigProperty
       .key("hoodie.datasource.hive_sync.auto_create_database")
-      .defaultValue("true")
+      .defaultValue(true)
       .withDocumentation("Auto create hive database if does not exists");
 
-  public static final ConfigProperty<String> HIVE_IGNORE_EXCEPTIONS = ConfigProperty
+  public static final ConfigProperty<Boolean> HIVE_IGNORE_EXCEPTIONS = ConfigProperty
       .key("hoodie.datasource.hive_sync.ignore_exceptions")
-      .defaultValue("false")
+      .defaultValue(false)
       .withDocumentation("Ignore exceptions when syncing with Hive.");
 
-  public static final ConfigProperty<String> HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE = ConfigProperty
+  public static final ConfigProperty<Boolean> HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE = ConfigProperty
       .key("hoodie.datasource.hive_sync.skip_ro_suffix")
-      .defaultValue("false")
+      .defaultValue(false)
       .withDocumentation("Skip the _ro suffix for Read optimized table, when registering");
 
-  public static final ConfigProperty<String> HIVE_SUPPORT_TIMESTAMP_TYPE = ConfigProperty
+  public static final ConfigProperty<Boolean> HIVE_SUPPORT_TIMESTAMP_TYPE = ConfigProperty
       .key("hoodie.datasource.hive_sync.support_timestamp")
-      .defaultValue("false")
+      .defaultValue(false)
       .withDocumentation("‘INT64’ with original type TIMESTAMP_MICROS is converted to hive ‘timestamp’ type. "
           + "Disabled by default for backward compatibility.");
 
@@ -109,9 +109,9 @@ public class HiveSyncConfig extends HoodieSyncConfig {
       .noDefaultValue()
       .withDocumentation("Serde properties to hive table.");
 
-  public static final ConfigProperty<String> HIVE_SYNC_AS_DATA_SOURCE_TABLE = ConfigProperty
+  public static final ConfigProperty<Boolean> HIVE_SYNC_AS_DATA_SOURCE_TABLE = ConfigProperty
       .key("hoodie.datasource.hive_sync.sync_as_datasource")
-      .defaultValue("true")
+      .defaultValue(true)
       .withDocumentation("");
 
   public static final ConfigProperty<Integer> HIVE_SYNC_SCHEMA_STRING_LENGTH_THRESHOLD = ConfigProperty
@@ -147,9 +147,9 @@ public class HiveSyncConfig extends HoodieSyncConfig {
       .withDocumentation("The hive metastore bucket specification when using bucket index."
           + "The specification is 'CLUSTERED BY (trace_id) SORTED BY (trace_id ASC) INTO 65536 BUCKETS'");
 
-  public static final ConfigProperty<String> HIVE_SYNC_COMMENT = ConfigProperty
+  public static final ConfigProperty<Boolean> HIVE_SYNC_COMMENT = ConfigProperty
       .key("hoodie.datasource.hive_sync.sync_comment")
-      .defaultValue("false")
+      .defaultValue(false)
       .withDocumentation("Whether to sync the table column comments while syncing the table.");
 
   public static String getBucketSpec(String bucketCols, int bucketNum) {

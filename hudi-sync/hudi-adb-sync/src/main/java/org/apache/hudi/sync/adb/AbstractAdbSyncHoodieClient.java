@@ -22,12 +22,14 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.hive.PartitionValueExtractor;
+import org.apache.hudi.sync.common.model.PartitionValueExtractor;
 import org.apache.hudi.hive.SchemaDifference;
 import org.apache.hudi.sync.common.HoodieSyncClient;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+
+import org.apache.hudi.sync.common.model.PartitionEvent;
 import org.apache.hudi.sync.common.operation.CatalogSync;
 import org.apache.hudi.sync.common.operation.PartitionsSync;
 import org.apache.hudi.sync.common.operation.TblPropertiesSync;

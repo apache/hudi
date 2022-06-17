@@ -111,7 +111,7 @@ public class HoodieAdbJdbcClient extends AbstractAdbSyncHoodieClient {
     executeAdbSql(dropTable);
   }
 
-  public Map<String, String> getTableSchema(String tableName) {
+  public Map<String, String> getSchemaFromMetastore(String tableName) {
     Map<String, String> schema = new HashMap<>();
     ResultSet result = null;
     try {
@@ -428,4 +428,23 @@ public class HoodieAdbJdbcClient extends AbstractAdbSyncHoodieClient {
       LOG.error("Fail to close connection", e);
     }
   }
+
+  public void closeQuietly(ResultSet resultSet, Statement stmt) {
+    try {
+      if (stmt != null) {
+        stmt.close();
+      }
+    } catch (SQLException e) {
+      LOG.warn("Could not close the statement opened ", e);
+    }
+
+    try {
+      if (resultSet != null) {
+        resultSet.close();
+      }
+    } catch (SQLException e) {
+      LOG.warn("Could not close the resultset opened ", e);
+    }
+  }
+
 }

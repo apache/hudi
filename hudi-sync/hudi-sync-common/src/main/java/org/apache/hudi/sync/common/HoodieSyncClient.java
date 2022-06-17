@@ -24,100 +24,62 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.TableSchemaResolver;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
+import org.apache.hudi.sync.common.model.Partition;
+import org.apache.hudi.sync.common.model.PartitionEvent;
+import org.apache.hudi.sync.common.model.PartitionValueExtractor;
 
-import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.apache.parquet.schema.MessageType;
 
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_ASSUME_DATE_PARTITION;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_USE_FILE_LISTING_FROM_METADATA;
 
-public abstract class HoodieSyncClient implements AutoCloseable {
+public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, AutoCloseable {
 
   private static final Logger LOG = LogManager.getLogger(HoodieSyncClient.class);
 
-  public static final String HOODIE_LAST_COMMIT_TIME_SYNC = "last_commit_time_sync";
-
   protected final HoodieSyncConfig config;
+  protected final PartitionValueExtractor partitionValueExtractor;
   protected final HoodieTableMetaClient metaClient;
-  protected final HoodieTableType tableType;
-  protected final FileSystem fs;
-  protected final String basePath;
-  protected final boolean assumeDatePartitioning;
-  protected final boolean useFileListingFromMetadata;
 
   public HoodieSyncClient(HoodieSyncConfig config) {
     this.config = config;
-    this.basePath = config.getString(META_SYNC_BASE_PATH);
-    this.assumeDatePartitioning = config.getBoolean(META_SYNC_ASSUME_DATE_PARTITION);
-    this.useFileListingFromMetadata = config.getBoolean(META_SYNC_USE_FILE_LISTING_FROM_METADATA);
-    this.fs = config.getHadoopFileSystem();
+    this.partitionValueExtractor = ReflectionUtils.loadClass(config.getString(META_SYNC_PARTITION_EXTRACTOR_CLASS));
     this.metaClient = HoodieTableMetaClient.builder()
-        .setConf(fs.getConf()).setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
-    this.tableType = metaClient.getTableType();
+        .setConf(config.getHadoopConf())
+        .setBasePath(config.getString(META_SYNC_BASE_PATH))
+        .setLoadActiveTimelineOnLoad(true)
+        .build();
   }
 
-  public abstract Map<String, String> getTableSchema(String tableName);
+  public HoodieTimeline getActiveTimeline() {
+    return metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
+  }
 
   public HoodieTableType getTableType() {
-    return tableType;
+    return metaClient.getTableType();
   }
 
   public String getBasePath() {
     return metaClient.getBasePath();
   }
 
-  public FileSystem getFs() {
-    return fs;
-  }
-
   public boolean isBootstrap() {
     return metaClient.getTableConfig().getBootstrapBasePath().isPresent();
-  }
-
-  public void closeQuietly(ResultSet resultSet, Statement stmt) {
-    try {
-      if (stmt != null) {
-        stmt.close();
-      }
-    } catch (SQLException e) {
-      LOG.warn("Could not close the statement opened ", e);
-    }
-
-    try {
-      if (resultSet != null) {
-        resultSet.close();
-      }
-    } catch (SQLException e) {
-      LOG.warn("Could not close the resultset opened ", e);
-    }
-  }
-
-  /**
-   * Gets the schema for a hoodie table. Depending on the type of table, try to read schema from commit metadata if
-   * present, else fallback to reading from any file written in the latest commit. We will assume that the schema has
-   * not changed within a single atomic write.
-   *
-   * @return Parquet schema for this table
-   */
-  public MessageType getDataSchema() {
-    try {
-      return new TableSchemaResolver(metaClient).getTableParquetSchema();
-    } catch (Exception e) {
-      throw new HoodieSyncException("Failed to read data schema", e);
-    }
   }
 
   public boolean isDropPartition() {
@@ -134,12 +96,16 @@ public abstract class HoodieSyncClient implements AutoCloseable {
     return false;
   }
 
-  @SuppressWarnings("OptionalUsedAsFieldOrParameterType")
   public List<String> getPartitionsWrittenToSince(Option<String> lastCommitTimeSynced) {
     if (!lastCommitTimeSynced.isPresent()) {
-      LOG.info("Last commit time synced is not known, listing all partitions in " + basePath + ",FS :" + fs);
+      LOG.info("Last commit time synced is not known, listing all partitions in "
+          + config.getString(META_SYNC_BASE_PATH)
+          + ",FS :" + config.getHadoopFileSystem());
       HoodieLocalEngineContext engineContext = new HoodieLocalEngineContext(metaClient.getHadoopConf());
-      return FSUtils.getAllPartitionPaths(engineContext, basePath, useFileListingFromMetadata, assumeDatePartitioning);
+      return FSUtils.getAllPartitionPaths(engineContext,
+          config.getString(META_SYNC_BASE_PATH),
+          config.getBoolean(META_SYNC_USE_FILE_LISTING_FROM_METADATA),
+          config.getBoolean(META_SYNC_ASSUME_DATE_PARTITION));
     } else {
       LOG.info("Last commit time synced is " + lastCommitTimeSynced.get() + ", Getting commits since then");
       return TimelineUtils.getPartitionsWritten(metaClient.getActiveTimeline().getCommitsTimeline()
@@ -148,32 +114,38 @@ public abstract class HoodieSyncClient implements AutoCloseable {
   }
 
   /**
-   * Partition Event captures any partition that needs to be added or updated.
+   * Iterate over the storage partitions and find if there are any new partitions that need to be added or updated.
+   * Generate a list of PartitionEvent based on the changes required.
    */
-  public static class PartitionEvent {
-
-    public enum PartitionEventType {
-      ADD, UPDATE, DROP
+  public List<PartitionEvent> getPartitionEvents(List<Partition> tablePartitions, List<String> partitionStoragePartitions, boolean isDropPartition) {
+    Map<String, String> paths = new HashMap<>();
+    for (Partition tablePartition : tablePartitions) {
+      List<String> hivePartitionValues = tablePartition.getValues();
+      String fullTablePartitionPath =
+          Path.getPathWithoutSchemeAndAuthority(new Path(tablePartition.getStorageLocation())).toUri().getPath();
+      paths.put(String.join(", ", hivePartitionValues), fullTablePartitionPath);
     }
 
-    public PartitionEventType eventType;
-    public String storagePartition;
+    List<PartitionEvent> events = new ArrayList<>();
+    for (String storagePartition : partitionStoragePartitions) {
+      Path storagePartitionPath = FSUtils.getPartitionPath(config.getString(META_SYNC_BASE_PATH), storagePartition);
+      String fullStoragePartitionPath = Path.getPathWithoutSchemeAndAuthority(storagePartitionPath).toUri().getPath();
+      // Check if the partition values or if hdfs path is the same
+      List<String> storagePartitionValues = partitionValueExtractor.extractPartitionValuesInPath(storagePartition);
 
-    PartitionEvent(PartitionEventType eventType, String storagePartition) {
-      this.eventType = eventType;
-      this.storagePartition = storagePartition;
+      if (isDropPartition) {
+        events.add(PartitionEvent.newPartitionDropEvent(storagePartition));
+      } else {
+        if (!storagePartitionValues.isEmpty()) {
+          String storageValue = String.join(", ", storagePartitionValues);
+          if (!paths.containsKey(storageValue)) {
+            events.add(PartitionEvent.newPartitionAddEvent(storagePartition));
+          } else if (!paths.get(storageValue).equals(fullStoragePartitionPath)) {
+            events.add(PartitionEvent.newPartitionUpdateEvent(storagePartition));
+          }
+        }
+      }
     }
-
-    public static PartitionEvent newPartitionAddEvent(String storagePartition) {
-      return new PartitionEvent(PartitionEventType.ADD, storagePartition);
-    }
-
-    public static PartitionEvent newPartitionUpdateEvent(String storagePartition) {
-      return new PartitionEvent(PartitionEventType.UPDATE, storagePartition);
-    }
-
-    public static PartitionEvent newPartitionDropEvent(String storagePartition) {
-      return new PartitionEvent(PartitionEventType.DROP, storagePartition);
-    }
+    return events;
   }
 }

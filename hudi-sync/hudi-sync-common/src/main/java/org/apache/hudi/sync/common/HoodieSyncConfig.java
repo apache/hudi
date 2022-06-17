@@ -31,7 +31,6 @@ import com.beust.jcommander.Parameter;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 
-import java.io.IOException;
 import java.util.List;
 import java.util.Properties;
 import java.util.function.Function;
@@ -46,9 +45,9 @@ public class HoodieSyncConfig extends HoodieConfig {
       .defaultValue("")
       .withDocumentation("Base path of the hoodie table to sync");
 
-  public static final ConfigProperty<String> META_SYNC_ENABLED = ConfigProperty
+  public static final ConfigProperty<Boolean> META_SYNC_ENABLED = ConfigProperty
       .key("hoodie.datasource.meta.sync.enable")
-      .defaultValue("false")
+      .defaultValue(false)
       .withDocumentation("Enable Syncing the Hudi Table with an external meta store or data catalog.");
 
   // ToDo change the prefix of the following configs from hive_sync to meta_sync
@@ -129,9 +128,9 @@ public class HoodieSyncConfig extends HoodieConfig {
       .defaultValue(HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS)
       .withDocumentation("Enable the internal metadata table for file listing for syncing with metastores");
 
-  public static final ConfigProperty<String> META_SYNC_CONDITIONAL_SYNC = ConfigProperty
+  public static final ConfigProperty<Boolean> META_SYNC_CONDITIONAL_SYNC = ConfigProperty
       .key("hoodie.datasource.meta_sync.condition.sync")
-      .defaultValue("false")
+      .defaultValue(false)
       .withDocumentation("If true, only sync on conditions like schema change or partition change.");
 
   public static final ConfigProperty<String> META_SYNC_SPARK_VERSION = ConfigProperty

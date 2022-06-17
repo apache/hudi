@@ -18,6 +18,8 @@
 
 package org.apache.hudi.hive;
 
+import org.apache.hudi.sync.common.model.PartitionValueExtractor;
+
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
