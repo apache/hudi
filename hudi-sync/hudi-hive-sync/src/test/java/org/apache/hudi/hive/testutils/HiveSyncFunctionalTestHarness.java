@@ -24,7 +24,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.minicluster.ZookeeperTestService;
 import org.apache.hudi.hive.HiveSyncConfig;
-import org.apache.hudi.hive.HoodieHiveClient;
+import org.apache.hudi.hive.HoodieHiveSyncClient;
 import org.apache.hudi.hive.ddl.HiveQueryDDLExecutor;
 
 import org.apache.hadoop.conf.Configuration;
@@ -102,13 +102,13 @@ public class HiveSyncFunctionalTestHarness {
     return new HiveSyncConfig(props, hiveConf());
   }
 
-  public HoodieHiveClient hiveClient(HiveSyncConfig hiveSyncConfig) throws IOException {
+  public HoodieHiveSyncClient hiveClient(HiveSyncConfig hiveSyncConfig) throws IOException {
     HoodieTableMetaClient.withPropertyBuilder()
         .setTableType(HoodieTableType.COPY_ON_WRITE)
         .setTableName(hiveSyncConfig.getString(META_SYNC_TABLE_NAME))
         .setPayloadClass(HoodieAvroPayload.class)
         .initTable(hadoopConf, hiveSyncConfig.getString(META_SYNC_BASE_PATH));
-    return new HoodieHiveClient(hiveSyncConfig);
+    return new HoodieHiveSyncClient(hiveSyncConfig);
   }
 
   public void dropTables(String database, String... tables) throws IOException, HiveException, MetaException {

@@ -49,17 +49,17 @@ public class GlobalHiveSyncTool extends HiveSyncTool {
     super.syncHoodieTable(tableName, useRealtimeInputFormat, readAsOptimized);
     Option<String> timestamp = Option.ofNullable(config.getString(META_SYNC_GLOBAL_REPLICATE_TIMESTAMP));
     if (timestamp.isPresent()) {
-      hoodieHiveClient.updateLastReplicatedTimeStamp(tableName, timestamp.get());
+      syncClient.updateLastReplicatedTimeStamp(tableName, timestamp.get());
     }
     LOG.info("Sync complete for " + tableName);
   }
 
   public Map<String, Option<String>> getLastReplicatedTimeStampMap() {
     Map<String, Option<String>> timeStampMap = new HashMap<>();
-    Option<String> timeStamp = hoodieHiveClient.getLastReplicatedTime(snapshotTableName);
+    Option<String> timeStamp = syncClient.getLastReplicatedTime(snapshotTableName);
     timeStampMap.put(snapshotTableName, timeStamp);
-    if (HoodieTableType.MERGE_ON_READ.equals(hoodieHiveClient.getTableType())) {
-      Option<String> roTimeStamp = hoodieHiveClient.getLastReplicatedTime(roTableName.get());
+    if (HoodieTableType.MERGE_ON_READ.equals(syncClient.getTableType())) {
+      Option<String> roTimeStamp = syncClient.getLastReplicatedTime(roTableName.get());
       timeStampMap.put(roTableName.get(), roTimeStamp);
     }
     return timeStampMap;
@@ -69,10 +69,10 @@ public class GlobalHiveSyncTool extends HiveSyncTool {
     for (String tableName : timeStampMap.keySet()) {
       Option<String> timestamp = timeStampMap.get(tableName);
       if (timestamp.isPresent()) {
-        hoodieHiveClient.updateLastReplicatedTimeStamp(tableName, timestamp.get());
+        syncClient.updateLastReplicatedTimeStamp(tableName, timestamp.get());
         LOG.info("updated timestamp for " + tableName + " to: " + timestamp.get());
       } else {
-        hoodieHiveClient.deleteLastReplicatedTimeStamp(tableName);
+        syncClient.deleteLastReplicatedTimeStamp(tableName);
         LOG.info("deleted timestamp for " + tableName);
       }
     }

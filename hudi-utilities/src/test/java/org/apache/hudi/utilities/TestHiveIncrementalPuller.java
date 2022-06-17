@@ -24,7 +24,7 @@ import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
-import org.apache.hudi.hive.HoodieHiveClient;
+import org.apache.hudi.hive.HoodieHiveSyncClient;
 import org.apache.hudi.hive.testutils.HiveTestUtil;
 import org.apache.hudi.sync.common.HoodieSyncConfig;
 import org.apache.hudi.utilities.exception.HoodieIncrementalPullSQLException;
@@ -161,11 +161,11 @@ public class TestHiveIncrementalPuller {
   public void testPuller() throws IOException, URISyntaxException {
     createTables();
     HiveIncrementalPuller.Config cfg = getHivePullerConfig("select name from testdb.test1 where `_hoodie_commit_time` > '%s'");
-    HoodieHiveClient hiveClient = new HoodieHiveClient(new HiveSyncConfig(hiveSyncProps), HiveTestUtil.getHiveConf(), fileSystem);
+    HoodieHiveSyncClient hiveClient = new HoodieHiveSyncClient(new HiveSyncConfig(hiveSyncProps), HiveTestUtil.getHiveConf(), fileSystem);
     hiveClient.createDatabase(cfg.tmpDb);
     HiveIncrementalPuller puller = new HiveIncrementalPuller(cfg);
     puller.saveDelta();
-    HoodieHiveClient assertingClient = new HoodieHiveClient(new HiveSyncConfig(getAssertionSyncConfig(cfg.tmpDb)), HiveTestUtil.getHiveConf(), fileSystem);
+    HoodieHiveSyncClient assertingClient = new HoodieHiveSyncClient(new HiveSyncConfig(getAssertionSyncConfig(cfg.tmpDb)), HiveTestUtil.getHiveConf(), fileSystem);
     String tmpTable = cfg.targetTable + "__" + cfg.sourceTable;
     assertTrue(assertingClient.tableExists(tmpTable));
   }

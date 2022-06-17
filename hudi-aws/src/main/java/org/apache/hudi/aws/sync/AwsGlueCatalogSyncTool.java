@@ -51,7 +51,7 @@ public class AwsGlueCatalogSyncTool extends HiveSyncTool {
 
   @Override
   protected void initClient(HiveSyncConfig hiveSyncConfig, HiveConf hiveConf) {
-    hoodieHiveClient = new AWSGlueCatalogSyncClient(hiveSyncConfig, hiveConf, fs);
+    syncClient = new AWSGlueCatalogSyncClient(hiveSyncConfig, hiveConf, fs);
   }
 
   public static void main(String[] args) {

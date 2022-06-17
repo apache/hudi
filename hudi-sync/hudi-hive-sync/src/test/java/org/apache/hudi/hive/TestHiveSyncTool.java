@@ -92,7 +92,7 @@ public class TestHiveSyncTool {
   }
 
   private HiveSyncTool hiveSyncTool;
-  private HoodieHiveClient hiveClient;
+  private HoodieHiveSyncClient hiveClient;
 
   @AfterAll
   public static void cleanUpClass() {
@@ -726,7 +726,7 @@ public class TestHiveSyncTool {
     assertEquals(instantTime, hiveClient.getLastCommitTimeSynced(HiveTestUtil.TABLE_NAME).get(),
         "The last commit that was synced should be updated in the TBLPROPERTIES");
 
-    // HoodieHiveClient had a bug where partition vals were sorted
+    // HoodieHiveSyncClient had a bug where partition vals were sorted
     // and stored as keys in a map. The following tests this particular case.
     // Now lets create partition "2010/01/02" and followed by "2010/02/01".
     String commitTime2 = "101";
@@ -923,7 +923,7 @@ public class TestHiveSyncTool {
     String instantTime = "100";
     HiveTestUtil.createCOWTable(instantTime, 5, false);
     reinitHiveSyncClient();
-    HoodieHiveClient prevHiveClient = hiveClient;
+    HoodieHiveSyncClient prevHiveClient = hiveClient;
     assertFalse(hiveClient.tableExists(HiveTestUtil.TABLE_NAME),
         "Table " + HiveTestUtil.TABLE_NAME + " should not exist initially");
 
@@ -939,7 +939,7 @@ public class TestHiveSyncTool {
         "Table " + HiveTestUtil.TABLE_NAME + " should not exist initially");
   }
 
-  private void verifyOldParquetFileTest(HoodieHiveClient hiveClient, String emptyCommitTime) throws Exception {
+  private void verifyOldParquetFileTest(HoodieHiveSyncClient hiveClient, String emptyCommitTime) throws Exception {
     assertTrue(hiveClient.tableExists(HiveTestUtil.TABLE_NAME), "Table " + HiveTestUtil.TABLE_NAME + " should exist after sync completes");
     assertEquals(hiveClient.getMetastoreSchema(HiveTestUtil.TABLE_NAME).size(),
         hiveClient.getStorageSchema().getColumns().size() + 1,
@@ -1137,7 +1137,7 @@ public class TestHiveSyncTool {
 
   private void reinitHiveSyncClient() {
     hiveSyncTool = new HiveSyncTool(new HiveSyncConfig(hiveSyncProps, HiveTestUtil.getHiveConf()));
-    hiveClient = (HoodieHiveClient) hiveSyncTool.hoodieHiveClient;
+    hiveClient = (HoodieHiveSyncClient) hiveSyncTool.syncClient;
   }
 
   private int getPartitionFieldSize() {

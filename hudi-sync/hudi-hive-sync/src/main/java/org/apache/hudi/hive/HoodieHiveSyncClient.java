@@ -57,13 +57,13 @@ import static org.apache.hudi.sync.common.util.TableUtils.tableId;
 /**
  * This class implements logic to sync a Hudi table with either the Hive server or the Hive Metastore.
  */
-public class HoodieHiveClient extends HoodieSyncClient {
+public class HoodieHiveSyncClient extends HoodieSyncClient {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieHiveClient.class);
+  private static final Logger LOG = LogManager.getLogger(HoodieHiveSyncClient.class);
   DDLExecutor ddlExecutor;
   private IMetaStoreClient client;
 
-  public HoodieHiveClient(HiveSyncConfig config) {
+  public HoodieHiveSyncClient(HiveSyncConfig config) {
     super(config);
 
     // Support JDBC, HiveQL and metastore based implementations for backwards compatibility. Future users should
