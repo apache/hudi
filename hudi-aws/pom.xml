@@ -19,12 +19,12 @@
     <parent>
         <artifactId>hudi</artifactId>
         <groupId>org.apache.hudi</groupId>
-        <version>0.11.1-rc2</version>
+        <version>0.11.1</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
     <artifactId>hudi-aws</artifactId>
-    <version>0.11.1-rc2</version>
+    <version>0.11.1</version>
 
     <name>hudi-aws</name>
     <packaging>jar</packaging>
