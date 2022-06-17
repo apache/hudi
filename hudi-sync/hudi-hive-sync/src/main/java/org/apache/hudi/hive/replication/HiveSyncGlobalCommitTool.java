@@ -18,8 +18,8 @@
 
 package org.apache.hudi.hive.replication;
 
-import static org.apache.hudi.hive.replication.HiveSyncGlobalCommitConfig.LOCAL_HIVE_SITE_URI;
-import static org.apache.hudi.hive.replication.HiveSyncGlobalCommitConfig.REMOTE_HIVE_SITE_URI;
+import static org.apache.hudi.hive.replication.HiveSyncGlobalCommitParams.LOCAL_HIVE_SITE_URI;
+import static org.apache.hudi.hive.replication.HiveSyncGlobalCommitParams.REMOTE_HIVE_SITE_URI;
 
 import com.beust.jcommander.JCommander;
 import java.io.IOException;
@@ -35,8 +35,8 @@ import org.apache.log4j.Logger;
 public class HiveSyncGlobalCommitTool implements HiveSyncGlobalCommit, AutoCloseable {
 
   private static final Logger LOG = LogManager.getLogger(HiveSyncGlobalCommitTool.class);
-  private final HiveSyncGlobalCommitConfig config;
-  private List<ReplicationStateSync> replicationStateSyncList;
+  private final HiveSyncGlobalCommitParams params;
+  private final List<ReplicationStateSync> replicationStateSyncList;
 
   private ReplicationStateSync getReplicatedState(boolean forRemote) {
     HiveConf hiveConf = new HiveConf();
@@ -44,10 +44,10 @@ public class HiveSyncGlobalCommitTool implements HiveSyncGlobalCommit, AutoClose
     // TODO: figure out how to integrate this in production
     // how to load balance between piper HMS,HS2
     // if we have list of uris, we can do something similar to createHiveConf in reairsync
-    hiveConf.addResource(new Path(config.properties.getProperty(
+    hiveConf.addResource(new Path(params.properties.getProperty(
         forRemote ? REMOTE_HIVE_SITE_URI : LOCAL_HIVE_SITE_URI)));
     // TODO: get clusterId as input parameters
-    ReplicationStateSync state = new ReplicationStateSync(config.mkGlobalHiveSyncConfig(forRemote),
+    ReplicationStateSync state = new ReplicationStateSync(params.mkGlobalHiveSyncConfig(forRemote),
         hiveConf, forRemote ? "REMOTESYNC" : "LOCALSYNC");
     return state;
   }
@@ -93,16 +93,16 @@ public class HiveSyncGlobalCommitTool implements HiveSyncGlobalCommit, AutoClose
     return true;
   }
 
-  public HiveSyncGlobalCommitTool(HiveSyncGlobalCommitConfig config) {
-    this.config = config;
+  public HiveSyncGlobalCommitTool(HiveSyncGlobalCommitParams params) {
+    this.params = params;
     this.replicationStateSyncList = new ArrayList<>(2);
     this.replicationStateSyncList.add(getReplicatedState(false));
     this.replicationStateSyncList.add(getReplicatedState(true));
   }
 
-  private static HiveSyncGlobalCommitConfig loadParams(String[] args)
+  private static HiveSyncGlobalCommitParams loadParams(String[] args)
       throws IOException {
-    final HiveSyncGlobalCommitConfig params = new HiveSyncGlobalCommitConfig();
+    final HiveSyncGlobalCommitParams params = new HiveSyncGlobalCommitParams();
     JCommander cmd = JCommander.newBuilder().addObject(params).build();
     cmd.parse(args);
     if (params.help) {
@@ -121,8 +121,8 @@ public class HiveSyncGlobalCommitTool implements HiveSyncGlobalCommit, AutoClose
   }
 
   public static void main(String[] args) throws IOException, HoodieHiveSyncException {
-    final HiveSyncGlobalCommitConfig cfg = loadParams(args);
-    try (final HiveSyncGlobalCommitTool globalCommitTool = new HiveSyncGlobalCommitTool(cfg)) {
+    final HiveSyncGlobalCommitParams params = loadParams(args);
+    try (final HiveSyncGlobalCommitTool globalCommitTool = new HiveSyncGlobalCommitTool(params)) {
       boolean success = globalCommitTool.commit();
       if (!success) {
         if (!globalCommitTool.rollback()) {

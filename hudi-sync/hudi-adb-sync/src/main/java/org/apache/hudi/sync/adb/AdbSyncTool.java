@@ -157,7 +157,7 @@ public class AdbSyncTool extends HoodieSyncTool {
     boolean tableExists = hoodieAdbClient.tableExists(tableName);
 
     // Get the parquet schema for this table looking at the latest commit
-    MessageType schema = hoodieAdbClient.getSchemaFromStorage();
+    MessageType schema = hoodieAdbClient.getStorageSchema();
 
     // Sync schema if needed
     syncSchema(tableName, tableExists, useRealtimeInputFormat, readAsOptimized, schema);
@@ -227,7 +227,7 @@ public class AdbSyncTool extends HoodieSyncTool {
           ParquetHiveSerDe.class.getName(), serdeProperties, tableProperties);
     } else {
       // Check if the table schema has evolved
-      Map<String, String> tableSchema = hoodieAdbClient.getSchemaFromMetastore(tableName);
+      Map<String, String> tableSchema = hoodieAdbClient.getMetastoreSchema(tableName);
       SchemaDifference schemaDiff = HiveSchemaUtil.getSchemaDifference(schema, tableSchema, adbSyncConfig.hoodieSyncConfigParams.partitionFields,
               adbSyncConfig.adbSyncConfigParams.supportTimestamp);
       if (!schemaDiff.isEmpty()) {

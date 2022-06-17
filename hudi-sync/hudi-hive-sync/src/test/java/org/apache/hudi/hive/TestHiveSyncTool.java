@@ -144,8 +144,8 @@ public class TestHiveSyncTool {
 
     assertTrue(hiveClient.tableExists(HiveTestUtil.TABLE_NAME),
         "Table " + HiveTestUtil.TABLE_NAME + " should exist after sync completes");
-    assertEquals(hiveClient.getSchemaFromMetastore(HiveTestUtil.TABLE_NAME).size(),
-        hiveClient.getSchemaFromStorage().getColumns().size() + 1,
+    assertEquals(hiveClient.getMetastoreSchema(HiveTestUtil.TABLE_NAME).size(),
+        hiveClient.getStorageSchema().getColumns().size() + 1,
         "Hive Schema should match the table schema + partition field");
     assertEquals(5, hiveClient.scanTablePartitions(HiveTestUtil.TABLE_NAME).size(),
         "Table partitions should match the number of partitions we wrote");
@@ -478,7 +478,7 @@ public class TestHiveSyncTool {
     reinitHiveSyncClient();
     reSyncHiveTable();
 
-    int fields = hiveClient.getSchemaFromMetastore(HiveTestUtil.TABLE_NAME).size();
+    int fields = hiveClient.getMetastoreSchema(HiveTestUtil.TABLE_NAME).size();
 
     // Now lets create more partitions and these are the only ones which needs to be synced
     ZonedDateTime dateTime = ZonedDateTime.now().plusDays(6);
@@ -488,11 +488,11 @@ public class TestHiveSyncTool {
     // Lets do the sync
     reinitHiveSyncClient();
     reSyncHiveTable();
-    assertEquals(fields + 3, hiveClient.getSchemaFromMetastore(HiveTestUtil.TABLE_NAME).size(),
+    assertEquals(fields + 3, hiveClient.getMetastoreSchema(HiveTestUtil.TABLE_NAME).size(),
         "Hive Schema has evolved and should not be 3 more field");
-    assertEquals("BIGINT", hiveClient.getSchemaFromMetastore(HiveTestUtil.TABLE_NAME).get("favorite_number"),
+    assertEquals("BIGINT", hiveClient.getMetastoreSchema(HiveTestUtil.TABLE_NAME).get("favorite_number"),
         "Hive Schema has evolved - Field favorite_number has evolved from int to long");
-    assertTrue(hiveClient.getSchemaFromMetastore(HiveTestUtil.TABLE_NAME).containsKey("favorite_movie"),
+    assertTrue(hiveClient.getMetastoreSchema(HiveTestUtil.TABLE_NAME).containsKey("favorite_movie"),
         "Hive Schema has evolved - Field favorite_movie was added");
 
     // Sync should add the one partition
@@ -527,7 +527,7 @@ public class TestHiveSyncTool {
 
     ddlExecutor.updateTableComments(HiveTestUtil.TABLE_NAME, alterCommentSchema);
 
-    List<FieldSchema> fieldSchemas = hiveClient.getFieldSchemasFromMetastore(HiveTestUtil.TABLE_NAME);
+    List<FieldSchema> fieldSchemas = hiveClient.getMetastoreFieldSchemas(HiveTestUtil.TABLE_NAME);
     int commentCnt = 0;
     for (FieldSchema fieldSchema : fieldSchemas) {
       if (fieldSchema.getComment().isPresent()) {
@@ -547,7 +547,7 @@ public class TestHiveSyncTool {
 
     reinitHiveSyncClient();
     reSyncHiveTable();
-    List<FieldSchema> fieldSchemas = hiveClient.getFieldSchemasFromMetastore(HiveTestUtil.TABLE_NAME);
+    List<FieldSchema> fieldSchemas = hiveClient.getMetastoreFieldSchemas(HiveTestUtil.TABLE_NAME);
     int commentCnt = 0;
     for (FieldSchema fieldSchema : fieldSchemas) {
       if (fieldSchema.getComment().isPresent()) {
@@ -559,7 +559,7 @@ public class TestHiveSyncTool {
     hiveSyncProps.setProperty(HiveSyncConfig.HIVE_SYNC_COMMENT.key(), "true");
     reinitHiveSyncClient();
     reSyncHiveTable();
-    fieldSchemas = hiveClient.getFieldSchemasFromMetastore(HiveTestUtil.TABLE_NAME);
+    fieldSchemas = hiveClient.getMetastoreFieldSchemas(HiveTestUtil.TABLE_NAME);
     commentCnt = 0;
     for (FieldSchema fieldSchema : fieldSchemas) {
       if (fieldSchema.getComment().isPresent()) {
@@ -587,13 +587,13 @@ public class TestHiveSyncTool {
     assertTrue(hiveClient.tableExists(roTableName), "Table " + roTableName + " should exist after sync completes");
 
     if (useSchemaFromCommitMetadata) {
-      assertEquals(hiveClient.getSchemaFromMetastore(roTableName).size(),
+      assertEquals(hiveClient.getMetastoreSchema(roTableName).size(),
           SchemaTestUtil.getSimpleSchema().getFields().size() + getPartitionFieldSize()
               + HoodieRecord.HOODIE_META_COLUMNS.size(),
           "Hive Schema should match the table schema + partition field");
     } else {
       // The data generated and schema in the data file do not have metadata columns, so we need a separate check.
-      assertEquals(hiveClient.getSchemaFromMetastore(roTableName).size(),
+      assertEquals(hiveClient.getMetastoreSchema(roTableName).size(),
           SchemaTestUtil.getSimpleSchema().getFields().size() + getPartitionFieldSize(),
           "Hive Schema should match the table schema + partition field");
     }
@@ -616,13 +616,13 @@ public class TestHiveSyncTool {
     reSyncHiveTable();
 
     if (useSchemaFromCommitMetadata) {
-      assertEquals(hiveClient.getSchemaFromMetastore(roTableName).size(),
+      assertEquals(hiveClient.getMetastoreSchema(roTableName).size(),
           SchemaTestUtil.getEvolvedSchema().getFields().size() + getPartitionFieldSize()
               + HoodieRecord.HOODIE_META_COLUMNS.size(),
           "Hive Schema should match the evolved table schema + partition field");
     } else {
       // The data generated and schema in the data file do not have metadata columns, so we need a separate check.
-      assertEquals(hiveClient.getSchemaFromMetastore(roTableName).size(),
+      assertEquals(hiveClient.getMetastoreSchema(roTableName).size(),
           SchemaTestUtil.getEvolvedSchema().getFields().size() + getPartitionFieldSize(),
           "Hive Schema should match the evolved table schema + partition field");
     }
@@ -654,13 +654,13 @@ public class TestHiveSyncTool {
             + " should exist after sync completes");
 
     if (useSchemaFromCommitMetadata) {
-      assertEquals(hiveClient.getSchemaFromMetastore(snapshotTableName).size(),
+      assertEquals(hiveClient.getMetastoreSchema(snapshotTableName).size(),
           SchemaTestUtil.getSimpleSchema().getFields().size() + getPartitionFieldSize()
               + HoodieRecord.HOODIE_META_COLUMNS.size(),
           "Hive Schema should match the table schema + partition field");
     } else {
       // The data generated and schema in the data file do not have metadata columns, so we need a separate check.
-      assertEquals(hiveClient.getSchemaFromMetastore(snapshotTableName).size(),
+      assertEquals(hiveClient.getMetastoreSchema(snapshotTableName).size(),
           SchemaTestUtil.getSimpleSchema().getFields().size() + getPartitionFieldSize(),
           "Hive Schema should match the table schema + partition field");
     }
@@ -682,13 +682,13 @@ public class TestHiveSyncTool {
     reSyncHiveTable();
 
     if (useSchemaFromCommitMetadata) {
-      assertEquals(hiveClient.getSchemaFromMetastore(snapshotTableName).size(),
+      assertEquals(hiveClient.getMetastoreSchema(snapshotTableName).size(),
           SchemaTestUtil.getEvolvedSchema().getFields().size() + getPartitionFieldSize()
               + HoodieRecord.HOODIE_META_COLUMNS.size(),
           "Hive Schema should match the evolved table schema + partition field");
     } else {
       // The data generated and schema in the data file do not have metadata columns, so we need a separate check.
-      assertEquals(hiveClient.getSchemaFromMetastore(snapshotTableName).size(),
+      assertEquals(hiveClient.getMetastoreSchema(snapshotTableName).size(),
           SchemaTestUtil.getEvolvedSchema().getFields().size() + getPartitionFieldSize(),
           "Hive Schema should match the evolved table schema + partition field");
     }
@@ -718,8 +718,8 @@ public class TestHiveSyncTool {
     reSyncHiveTable();
     assertTrue(hiveClient.tableExists(HiveTestUtil.TABLE_NAME),
         "Table " + HiveTestUtil.TABLE_NAME + " should exist after sync completes");
-    assertEquals(hiveClient.getSchemaFromMetastore(HiveTestUtil.TABLE_NAME).size(),
-        hiveClient.getSchemaFromStorage().getColumns().size() + 3,
+    assertEquals(hiveClient.getMetastoreSchema(HiveTestUtil.TABLE_NAME).size(),
+        hiveClient.getStorageSchema().getColumns().size() + 3,
         "Hive Schema should match the table schema + partition fields");
     assertEquals(5, hiveClient.scanTablePartitions(HiveTestUtil.TABLE_NAME).size(),
         "Table partitions should match the number of partitions we wrote");
@@ -756,8 +756,8 @@ public class TestHiveSyncTool {
     reSyncHiveTable();
     assertTrue(hiveClient.tableExists(HiveTestUtil.TABLE_NAME),
         "Table " + HiveTestUtil.TABLE_NAME + " should exist after sync completes");
-    assertEquals(hiveClient.getSchemaFromMetastore(HiveTestUtil.TABLE_NAME).size(),
-        hiveClient.getSchemaFromStorage().getColumns().size() + 3,
+    assertEquals(hiveClient.getMetastoreSchema(HiveTestUtil.TABLE_NAME).size(),
+        hiveClient.getStorageSchema().getColumns().size() + 3,
         "Hive Schema should match the table schema + partition fields");
     assertEquals(7, hiveClient.scanTablePartitions(HiveTestUtil.TABLE_NAME).size(),
         "Table partitions should match the number of partitions we wrote");
@@ -782,8 +782,8 @@ public class TestHiveSyncTool {
 
     assertTrue(hiveClient.tableExists(HiveTestUtil.TABLE_NAME),
         "Table " + HiveTestUtil.TABLE_NAME + " should exist after sync completes");
-    assertEquals(hiveClient.getSchemaFromMetastore(HiveTestUtil.TABLE_NAME).size(),
-        hiveClient.getSchemaFromStorage().getColumns().size() + 1,
+    assertEquals(hiveClient.getMetastoreSchema(HiveTestUtil.TABLE_NAME).size(),
+        hiveClient.getStorageSchema().getColumns().size() + 1,
         "Hive Schema should match the table schema + partition field");
     assertEquals(1, hiveClient.scanTablePartitions(HiveTestUtil.TABLE_NAME).size(),
         "Table partitions should match the number of partitions we wrote");
@@ -825,8 +825,8 @@ public class TestHiveSyncTool {
     reSyncHiveTable();
     assertTrue(hiveClient.tableExists(HiveTestUtil.TABLE_NAME),
         "Table " + HiveTestUtil.TABLE_NAME + " should exist after sync completes");
-    assertEquals(hiveClient.getSchemaFromMetastore(HiveTestUtil.TABLE_NAME).size(),
-        hiveClient.getSchemaFromStorage().getColumns().size() + 1,
+    assertEquals(hiveClient.getMetastoreSchema(HiveTestUtil.TABLE_NAME).size(),
+        hiveClient.getStorageSchema().getColumns().size() + 1,
         "Hive Schema should match the table schema + partition field");
     List<Partition> partitions = hiveClient.scanTablePartitions(HiveTestUtil.TABLE_NAME);
     assertEquals(1, partitions.size(),
@@ -865,8 +865,8 @@ public class TestHiveSyncTool {
     reSyncHiveTable();
     assertTrue(hiveClient.tableExists(HiveTestUtil.TABLE_NAME),
         "Table " + HiveTestUtil.TABLE_NAME + " should exist after sync completes");
-    assertEquals(hiveClient.getSchemaFromMetastore(HiveTestUtil.TABLE_NAME).size(),
-        hiveClient.getSchemaFromStorage().getColumns().size(),
+    assertEquals(hiveClient.getMetastoreSchema(HiveTestUtil.TABLE_NAME).size(),
+        hiveClient.getStorageSchema().getColumns().size(),
         "Hive Schema should match the table schema，ignoring the partition fields");
     assertEquals(0, hiveClient.scanTablePartitions(HiveTestUtil.TABLE_NAME).size(),
         "Table should not have partitions because of the NonPartitionedExtractor");
@@ -891,7 +891,7 @@ public class TestHiveSyncTool {
         + " should exist after sync completes");
 
     // Schema being read from compacted base files
-    assertEquals(hiveClient.getSchemaFromMetastore(snapshotTableName).size(),
+    assertEquals(hiveClient.getMetastoreSchema(snapshotTableName).size(),
         SchemaTestUtil.getSimpleSchema().getFields().size() + getPartitionFieldSize()
             + HoodieRecord.HOODIE_META_COLUMNS.size(),
         "Hive Schema should match the table schema + partition field");
@@ -908,7 +908,7 @@ public class TestHiveSyncTool {
     reSyncHiveTable();
 
     // Schema being read from the log filesTestHiveSyncTool
-    assertEquals(hiveClient.getSchemaFromMetastore(snapshotTableName).size(),
+    assertEquals(hiveClient.getMetastoreSchema(snapshotTableName).size(),
         SchemaTestUtil.getEvolvedSchema().getFields().size() + getPartitionFieldSize()
             + HoodieRecord.HOODIE_META_COLUMNS.size(),
         "Hive Schema should match the evolved table schema + partition field");
@@ -941,8 +941,8 @@ public class TestHiveSyncTool {
 
   private void verifyOldParquetFileTest(HoodieHiveClient hiveClient, String emptyCommitTime) throws Exception {
     assertTrue(hiveClient.tableExists(HiveTestUtil.TABLE_NAME), "Table " + HiveTestUtil.TABLE_NAME + " should exist after sync completes");
-    assertEquals(hiveClient.getSchemaFromMetastore(HiveTestUtil.TABLE_NAME).size(),
-        hiveClient.getSchemaFromStorage().getColumns().size() + 1,
+    assertEquals(hiveClient.getMetastoreSchema(HiveTestUtil.TABLE_NAME).size(),
+        hiveClient.getStorageSchema().getColumns().size() + 1,
         "Hive Schema should match the table schema + partition field");
     assertEquals(1, hiveClient.scanTablePartitions(HiveTestUtil.TABLE_NAME).size(), "Table partitions should match the number of partitions we wrote");
     assertEquals(emptyCommitTime,
@@ -952,13 +952,13 @@ public class TestHiveSyncTool {
     Schema schema = SchemaTestUtil.getSimpleSchema();
     for (Field field : schema.getFields()) {
       assertEquals(field.schema().getType().getName(),
-          hiveClient.getSchemaFromMetastore(HiveTestUtil.TABLE_NAME).get(field.name()).toLowerCase(),
+          hiveClient.getMetastoreSchema(HiveTestUtil.TABLE_NAME).get(field.name()).toLowerCase(),
           String.format("Hive Schema Field %s was added", field));
     }
     assertEquals("string",
-        hiveClient.getSchemaFromMetastore(HiveTestUtil.TABLE_NAME).get("datestr").toLowerCase(), "Hive Schema Field datestr was added");
+        hiveClient.getMetastoreSchema(HiveTestUtil.TABLE_NAME).get("datestr").toLowerCase(), "Hive Schema Field datestr was added");
     assertEquals(schema.getFields().size() + 1 + HoodieRecord.HOODIE_META_COLUMNS.size(),
-        hiveClient.getSchemaFromMetastore(HiveTestUtil.TABLE_NAME).size(), "Hive Schema fields size");
+        hiveClient.getMetastoreSchema(HiveTestUtil.TABLE_NAME).size(), "Hive Schema fields size");
   }
 
   @ParameterizedTest
@@ -1082,24 +1082,24 @@ public class TestHiveSyncTool {
     // test one column in DECIMAL
     String oneTargetColumnSql = createTableSqlPrefix + "(`decimal_col` DECIMAL(9,8), `bigint_col` BIGINT)";
     ddlExecutor.runSQL(oneTargetColumnSql);
-    System.out.println(hiveClient.getSchemaFromMetastore(tableName));
-    assertTrue(hiveClient.getSchemaFromMetastore(tableName).containsValue("DECIMAL(9,8)"), errorMsg);
+    System.out.println(hiveClient.getMetastoreSchema(tableName));
+    assertTrue(hiveClient.getMetastoreSchema(tableName).containsValue("DECIMAL(9,8)"), errorMsg);
     ddlExecutor.runSQL(dropTableSql);
 
     // test multiple columns in DECIMAL
     String multipleTargetColumnSql =
         createTableSqlPrefix + "(`decimal_col1` DECIMAL(9,8), `bigint_col` BIGINT, `decimal_col2` DECIMAL(7,4))";
     ddlExecutor.runSQL(multipleTargetColumnSql);
-    System.out.println(hiveClient.getSchemaFromMetastore(tableName));
-    assertTrue(hiveClient.getSchemaFromMetastore(tableName).containsValue("DECIMAL(9,8)")
-        && hiveClient.getSchemaFromMetastore(tableName).containsValue("DECIMAL(7,4)"), errorMsg);
+    System.out.println(hiveClient.getMetastoreSchema(tableName));
+    assertTrue(hiveClient.getMetastoreSchema(tableName).containsValue("DECIMAL(9,8)")
+        && hiveClient.getMetastoreSchema(tableName).containsValue("DECIMAL(7,4)"), errorMsg);
     ddlExecutor.runSQL(dropTableSql);
 
     // test no columns in DECIMAL
     String noTargetColumnsSql = createTableSqlPrefix + "(`bigint_col` BIGINT)";
     ddlExecutor.runSQL(noTargetColumnsSql);
-    System.out.println(hiveClient.getSchemaFromMetastore(tableName));
-    assertTrue(hiveClient.getSchemaFromMetastore(tableName).size() == 1 && hiveClient.getSchemaFromMetastore(tableName)
+    System.out.println(hiveClient.getMetastoreSchema(tableName));
+    assertTrue(hiveClient.getMetastoreSchema(tableName).size() == 1 && hiveClient.getMetastoreSchema(tableName)
         .containsValue("BIGINT"), errorMsg);
     ddlExecutor.runSQL(dropTableSql);
   }

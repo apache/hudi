@@ -111,7 +111,7 @@ public class HoodieAdbJdbcClient extends AbstractAdbSyncHoodieClient {
     executeAdbSql(dropTable);
   }
 
-  public Map<String, String> getSchemaFromMetastore(String tableName) {
+  public Map<String, String> getMetastoreSchema(String tableName) {
     Map<String, String> schema = new HashMap<>();
     ResultSet result = null;
     try {

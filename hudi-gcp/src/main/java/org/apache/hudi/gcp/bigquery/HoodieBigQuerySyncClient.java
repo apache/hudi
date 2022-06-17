@@ -168,7 +168,7 @@ public class HoodieBigQuerySyncClient extends HoodieSyncClient implements Catalo
   }
 
   @Override
-  public Map<String, String> getSchemaFromMetastore(String tableName) {
+  public Map<String, String> getMetastoreSchema(String tableName) {
     // TODO: Implement automatic schema evolution when you add a new column.
     return Collections.emptyMap();
   }

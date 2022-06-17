@@ -203,7 +203,7 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
     boolean isDropPartition = hoodieHiveClient.isDropPartition();
 
     // Get the parquet schema for this table looking at the latest commit
-    MessageType schema = hoodieHiveClient.getSchemaFromStorage();
+    MessageType schema = hoodieHiveClient.getStorageSchema();
 
     // Currently HoodieBootstrapRelation does support reading bootstrap MOR rt table,
     // so we disable the syncAsSparkDataSourceTable here to avoid read such kind table
@@ -281,12 +281,12 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
       schemaChanged = true;
     } else {
       // Check if the table schema has evolved
-      Map<String, String> tableSchema = hoodieHiveClient.getSchemaFromMetastore(tableName);
+      Map<String, String> tableSchema = hoodieHiveClient.getMetastoreSchema(tableName);
       SchemaDifference schemaDiff = HiveSchemaUtil.getSchemaDifference(schema, tableSchema, config.getSplitStrings(META_SYNC_PARTITION_FIELDS),
           config.getBoolean(HIVE_SUPPORT_TIMESTAMP_TYPE));
       if (!schemaDiff.isEmpty()) {
         LOG.info("Schema difference found for " + tableName);
-        hoodieHiveClient.updateSchemaFromMetastore(tableName, schema);
+        hoodieHiveClient.updateTableSchema(tableName, schema);
         // Sync the table properties if the schema has changed
         if (config.getString(HIVE_TABLE_PROPERTIES) != null || config.getBoolean(HIVE_SYNC_AS_DATA_SOURCE_TABLE)) {
           hoodieHiveClient.updateTableProperties(tableName, tableProperties);
@@ -299,8 +299,8 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
     }
 
     if (config.getBoolean(HIVE_SYNC_COMMENT)) {
-      List<FieldSchema> fromMetastore = hoodieHiveClient.getFieldSchemasFromMetastore(tableName);
-      List<FieldSchema> fromStorage = hoodieHiveClient.getFieldSchemasFromStorage();
+      List<FieldSchema> fromMetastore = hoodieHiveClient.getMetastoreFieldSchemas(tableName);
+      List<FieldSchema> fromStorage = hoodieHiveClient.getStorageFieldSchemas();
       hoodieHiveClient.updateTableComments(tableName, fromMetastore, fromStorage);
     }
     return schemaChanged;

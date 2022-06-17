@@ -204,7 +204,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
   }
 
   @Override
-  public void updateSchemaFromMetastore(String tableName, MessageType newSchema) {
+  public void updateTableSchema(String tableName, MessageType newSchema) {
     // ToDo Cascade is set in Hive meta sync, but need to investigate how to configure it for Glue meta
     boolean cascade = syncConfig.hoodieSyncConfigParams.partitionFields.size() > 0;
     try {
@@ -320,7 +320,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
   }
 
   @Override
-  public Map<String, String> getSchemaFromMetastore(String tableName) {
+  public Map<String, String> getMetastoreSchema(String tableName) {
     try {
       // GlueMetastoreClient returns partition keys separate from Columns, hence get both and merge to
       // get the Schema of the table.

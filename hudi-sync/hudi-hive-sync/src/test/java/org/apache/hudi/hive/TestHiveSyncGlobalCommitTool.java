@@ -18,7 +18,7 @@
 
 package org.apache.hudi.hive;
 
-import org.apache.hudi.hive.replication.HiveSyncGlobalCommitConfig;
+import org.apache.hudi.hive.replication.HiveSyncGlobalCommitParams;
 import org.apache.hudi.hive.replication.HiveSyncGlobalCommitTool;
 import org.apache.hudi.hive.testutils.TestCluster;
 
@@ -34,12 +34,12 @@ import static org.apache.hudi.hive.HiveSyncConfig.HIVE_PASS;
 import static org.apache.hudi.hive.HiveSyncConfig.HIVE_USER;
 import static org.apache.hudi.hive.HiveSyncConfig.HIVE_USE_PRE_APACHE_INPUT_FORMAT;
 import static org.apache.hudi.hive.replication.GlobalHiveSyncConfig.META_SYNC_GLOBAL_REPLICATE_TIMESTAMP;
-import static org.apache.hudi.hive.replication.HiveSyncGlobalCommitConfig.LOCAL_BASE_PATH;
-import static org.apache.hudi.hive.replication.HiveSyncGlobalCommitConfig.LOCAL_HIVE_SERVER_JDBC_URLS;
-import static org.apache.hudi.hive.replication.HiveSyncGlobalCommitConfig.LOCAL_HIVE_SITE_URI;
-import static org.apache.hudi.hive.replication.HiveSyncGlobalCommitConfig.REMOTE_BASE_PATH;
-import static org.apache.hudi.hive.replication.HiveSyncGlobalCommitConfig.REMOTE_HIVE_SERVER_JDBC_URLS;
-import static org.apache.hudi.hive.replication.HiveSyncGlobalCommitConfig.REMOTE_HIVE_SITE_URI;
+import static org.apache.hudi.hive.replication.HiveSyncGlobalCommitParams.LOCAL_BASE_PATH;
+import static org.apache.hudi.hive.replication.HiveSyncGlobalCommitParams.LOCAL_HIVE_SERVER_JDBC_URLS;
+import static org.apache.hudi.hive.replication.HiveSyncGlobalCommitParams.LOCAL_HIVE_SITE_URI;
+import static org.apache.hudi.hive.replication.HiveSyncGlobalCommitParams.REMOTE_BASE_PATH;
+import static org.apache.hudi.hive.replication.HiveSyncGlobalCommitParams.REMOTE_HIVE_SERVER_JDBC_URLS;
+import static org.apache.hudi.hive.replication.HiveSyncGlobalCommitParams.REMOTE_HIVE_SITE_URI;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_ASSUME_DATE_PARTITION;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
@@ -56,27 +56,27 @@ public class TestHiveSyncGlobalCommitTool {
   private static final String DB_NAME = "foo";
   private static final String TBL_NAME = "bar";
 
-  private HiveSyncGlobalCommitConfig getGlobalCommitConfig(String commitTime) throws Exception {
-    HiveSyncGlobalCommitConfig config = new HiveSyncGlobalCommitConfig();
-    config.properties.setProperty(LOCAL_HIVE_SITE_URI, localCluster.getHiveSiteXmlLocation());
-    config.properties.setProperty(REMOTE_HIVE_SITE_URI, remoteCluster.getHiveSiteXmlLocation());
-    config.properties.setProperty(LOCAL_HIVE_SERVER_JDBC_URLS, localCluster.getHiveJdBcUrl());
-    config.properties.setProperty(REMOTE_HIVE_SERVER_JDBC_URLS, remoteCluster.getHiveJdBcUrl());
-    config.properties.setProperty(LOCAL_BASE_PATH, localCluster.tablePath(DB_NAME, TBL_NAME));
-    config.properties.setProperty(REMOTE_BASE_PATH, remoteCluster.tablePath(DB_NAME, TBL_NAME));
-    config.properties.setProperty(META_SYNC_GLOBAL_REPLICATE_TIMESTAMP.key(), commitTime);
-    config.properties.setProperty(HIVE_USER.key(), System.getProperty("user.name"));
-    config.properties.setProperty(HIVE_PASS.key(), "");
-    config.properties.setProperty(META_SYNC_DATABASE_NAME.key(), DB_NAME);
-    config.properties.setProperty(META_SYNC_TABLE_NAME.key(), TBL_NAME);
-    config.properties.setProperty(META_SYNC_BASE_PATH.key(), localCluster.tablePath(DB_NAME, TBL_NAME));
-    config.properties.setProperty(META_SYNC_ASSUME_DATE_PARTITION.key(), "true");
-    config.properties.setProperty(HIVE_USE_PRE_APACHE_INPUT_FORMAT.key(), "false");
-    config.properties.setProperty(META_SYNC_PARTITION_FIELDS.key(), "datestr");
-    return config;
+  private HiveSyncGlobalCommitParams getGlobalCommitConfig(String commitTime) throws Exception {
+    HiveSyncGlobalCommitParams params = new HiveSyncGlobalCommitParams();
+    params.properties.setProperty(LOCAL_HIVE_SITE_URI, localCluster.getHiveSiteXmlLocation());
+    params.properties.setProperty(REMOTE_HIVE_SITE_URI, remoteCluster.getHiveSiteXmlLocation());
+    params.properties.setProperty(LOCAL_HIVE_SERVER_JDBC_URLS, localCluster.getHiveJdBcUrl());
+    params.properties.setProperty(REMOTE_HIVE_SERVER_JDBC_URLS, remoteCluster.getHiveJdBcUrl());
+    params.properties.setProperty(LOCAL_BASE_PATH, localCluster.tablePath(DB_NAME, TBL_NAME));
+    params.properties.setProperty(REMOTE_BASE_PATH, remoteCluster.tablePath(DB_NAME, TBL_NAME));
+    params.properties.setProperty(META_SYNC_GLOBAL_REPLICATE_TIMESTAMP.key(), commitTime);
+    params.properties.setProperty(HIVE_USER.key(), System.getProperty("user.name"));
+    params.properties.setProperty(HIVE_PASS.key(), "");
+    params.properties.setProperty(META_SYNC_DATABASE_NAME.key(), DB_NAME);
+    params.properties.setProperty(META_SYNC_TABLE_NAME.key(), TBL_NAME);
+    params.properties.setProperty(META_SYNC_BASE_PATH.key(), localCluster.tablePath(DB_NAME, TBL_NAME));
+    params.properties.setProperty(META_SYNC_ASSUME_DATE_PARTITION.key(), "true");
+    params.properties.setProperty(HIVE_USE_PRE_APACHE_INPUT_FORMAT.key(), "false");
+    params.properties.setProperty(META_SYNC_PARTITION_FIELDS.key(), "datestr");
+    return params;
   }
 
-  private void compareEqualLastReplicatedTimeStamp(HiveSyncGlobalCommitConfig config) throws Exception {
+  private void compareEqualLastReplicatedTimeStamp(HiveSyncGlobalCommitParams config) throws Exception {
     Assertions.assertEquals(localCluster.getHMSClient()
         .getTable(DB_NAME, TBL_NAME).getParameters()
         .get(GLOBALLY_CONSISTENT_READ_TIMESTAMP), remoteCluster.getHMSClient()
@@ -104,10 +104,10 @@ public class TestHiveSyncGlobalCommitTool {
     localCluster.createCOWTable(commitTime, 5, DB_NAME, TBL_NAME);
     // simulate drs
     remoteCluster.createCOWTable(commitTime, 5, DB_NAME, TBL_NAME);
-    HiveSyncGlobalCommitConfig config = getGlobalCommitConfig(commitTime);
-    HiveSyncGlobalCommitTool tool = new HiveSyncGlobalCommitTool(config);
+    HiveSyncGlobalCommitParams params = getGlobalCommitConfig(commitTime);
+    HiveSyncGlobalCommitTool tool = new HiveSyncGlobalCommitTool(params);
     Assertions.assertTrue(tool.commit());
-    compareEqualLastReplicatedTimeStamp(config);
+    compareEqualLastReplicatedTimeStamp(params);
   }
 
   @Test
@@ -116,8 +116,8 @@ public class TestHiveSyncGlobalCommitTool {
     localCluster.createCOWTable(commitTime, 5, DB_NAME, TBL_NAME);
     // simulate drs
     remoteCluster.createCOWTable(commitTime, 5, DB_NAME, TBL_NAME);
-    HiveSyncGlobalCommitConfig config = getGlobalCommitConfig(commitTime);
-    HiveSyncGlobalCommitTool tool = new HiveSyncGlobalCommitTool(config);
+    HiveSyncGlobalCommitParams params = getGlobalCommitConfig(commitTime);
+    HiveSyncGlobalCommitTool tool = new HiveSyncGlobalCommitTool(params);
     Assertions.assertFalse(localCluster.getHMSClient().tableExists(DB_NAME, TBL_NAME));
     Assertions.assertFalse(remoteCluster.getHMSClient().tableExists(DB_NAME, TBL_NAME));
     // stop the remote cluster hive server to simulate cluster going down

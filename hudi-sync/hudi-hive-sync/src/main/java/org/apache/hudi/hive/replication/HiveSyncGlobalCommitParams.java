@@ -45,9 +45,9 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
     + "  The tool tries to be transactional but does not guarantee it. If the sync fails midway in one cluster it will try to roll back the committed "
     + "  timestamp from already successful sync on other clusters but that can also fail."
     + "  The tool does not roll back any synced partitions but only the timestamp.")
-public class HiveSyncGlobalCommitConfig {
+public class HiveSyncGlobalCommitParams {
 
-  private static final Logger LOG = LogManager.getLogger(HiveSyncGlobalCommitConfig.class);
+  private static final Logger LOG = LogManager.getLogger(HiveSyncGlobalCommitParams.class);
 
   public static String LOCAL_HIVE_SITE_URI = "hivesyncglobal.local_hive_site_uri";
   public static String REMOTE_HIVE_SITE_URI = "hivesyncglobal.remote_hive_site_uri";
@@ -98,12 +98,9 @@ public class HiveSyncGlobalCommitConfig {
 
   @Override
   public String toString() {
-    return "HiveSyncGlobalCommitConfig{ " + "configFile=" + configFile + ", properties="
+    return "HiveSyncGlobalCommitParams{ " + "configFile=" + configFile + ", properties="
         + properties + ", " + super.toString()
         + " }";
   }
 
-  public void storeToXML(OutputStream configStream) throws IOException {
-    this.properties.storeToXML(configStream, "hivesync global config");
-  }
 }

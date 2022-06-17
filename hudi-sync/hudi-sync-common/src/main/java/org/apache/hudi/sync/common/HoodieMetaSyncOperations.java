@@ -91,26 +91,26 @@ public interface HoodieMetaSyncOperations {
 
   }
 
-  default Map<String, String> getSchemaFromMetastore(String tableName) {
+  default Map<String, String> getMetastoreSchema(String tableName) {
     return Collections.emptyMap();
   }
 
-  default MessageType getSchemaFromStorage() {
+  default MessageType getStorageSchema() {
     return null;
   }
 
   /**
    * Update schema for the table in the metastore.
    */
-  default void updateSchemaFromMetastore(String tableName, MessageType newSchema) {
+  default void updateTableSchema(String tableName, MessageType newSchema) {
 
   }
 
-  default List<FieldSchema> getFieldSchemasFromMetastore(String tableName) {
+  default List<FieldSchema> getMetastoreFieldSchemas(String tableName) {
     return Collections.emptyList();
   }
 
-  default List<FieldSchema> getFieldSchemasFromStorage() {
+  default List<FieldSchema> getStorageFieldSchemas() {
     return Collections.emptyList();
   }
 

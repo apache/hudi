@@ -148,7 +148,7 @@ public class HoodieHiveClient extends HoodieSyncClient {
   }
 
   @Override
-  public void updateSchemaFromMetastore(String tableName, MessageType newSchema) {
+  public void updateTableSchema(String tableName, MessageType newSchema) {
     ddlExecutor.updateTableDefinition(tableName, newSchema);
   }
 
@@ -175,7 +175,7 @@ public class HoodieHiveClient extends HoodieSyncClient {
    * Get the table schema.
    */
   @Override
-  public Map<String, String> getSchemaFromMetastore(String tableName) {
+  public Map<String, String> getMetastoreSchema(String tableName) {
     if (!tableExists(tableName)) {
       throw new IllegalArgumentException(
           "Failed to get schema for table " + tableName + " does not exist");
@@ -191,7 +191,7 @@ public class HoodieHiveClient extends HoodieSyncClient {
    * @return Parquet schema for this table
    */
   @Override
-  public MessageType getSchemaFromStorage() {
+  public MessageType getStorageSchema() {
     try {
       return new TableSchemaResolver(metaClient).getTableParquetSchema();
     } catch (Exception e) {
@@ -315,7 +315,7 @@ public class HoodieHiveClient extends HoodieSyncClient {
   }
 
   @Override
-  public List<FieldSchema> getFieldSchemasFromMetastore(String tableName) {
+  public List<FieldSchema> getMetastoreFieldSchemas(String tableName) {
     try {
       return client.getSchema(config.getString(META_SYNC_DATABASE_NAME), tableName)
           .stream()
@@ -327,7 +327,7 @@ public class HoodieHiveClient extends HoodieSyncClient {
   }
 
   @Override
-  public List<FieldSchema> getFieldSchemasFromStorage() {
+  public List<FieldSchema> getStorageFieldSchemas() {
     try {
       return new TableSchemaResolver(metaClient).getTableAvroSchema(false)
           .getFields()
