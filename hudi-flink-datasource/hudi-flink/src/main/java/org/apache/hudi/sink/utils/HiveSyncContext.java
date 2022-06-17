@@ -18,7 +18,7 @@
 
 package org.apache.hudi.sink.utils;
 
-import org.apache.hudi.aws.sync.AwsGlueCatalogSyncTool;
+import org.apache.hudi.aws.sync.AWSGlueCatalogSyncTool;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -35,6 +35,8 @@ import org.apache.hadoop.hive.conf.HiveConf;
 
 import java.util.Arrays;
 
+import static org.apache.hudi.hive.HiveSyncConfig.HIVE_SYNC_MODE;
+
 /**
  * Hive synchronization context.
  *
@@ -42,21 +44,17 @@ import java.util.Arrays;
  */
 public class HiveSyncContext {
   private final HiveSyncConfig syncConfig;
-  private final HiveConf hiveConf;
-  private final FileSystem fs;
 
-  private HiveSyncContext(HiveSyncConfig syncConfig, HiveConf hiveConf, FileSystem fs) {
+  private HiveSyncContext(HiveSyncConfig syncConfig) {
     this.syncConfig = syncConfig;
-    this.hiveConf = hiveConf;
-    this.fs = fs;
   }
 
   public HiveSyncTool hiveSyncTool() {
-    HiveSyncMode syncMode = HiveSyncMode.of(syncConfig.hiveSyncConfigParams.syncMode);
+    HiveSyncMode syncMode = HiveSyncMode.of(syncConfig.getString(HIVE_SYNC_MODE));
     if (syncMode == HiveSyncMode.GLUE) {
-      return new AwsGlueCatalogSyncTool(this.syncConfig, this.hiveConf, this.fs);
+      return new AWSGlueCatalogSyncTool(this.syncConfig);
     }
-    return new HiveSyncTool(this.syncConfig, this.hiveConf, this.fs);
+    return new HiveSyncTool(this.syncConfig);
   }
 
   public static HiveSyncContext create(Configuration conf, SerializableConfiguration serConf) {
@@ -70,7 +68,8 @@ public class HiveSyncContext {
     }
     hiveConf.addResource(serConf.get());
     hiveConf.addResource(hadoopConf);
-    return new HiveSyncContext(syncConfig, hiveConf, fs);
+    syncConfig.setHadoopConf(hiveConf);
+    return new HiveSyncContext(syncConfig);
   }
 
   @VisibleForTesting

@@ -18,9 +18,6 @@
 
 package org.apache.hudi.utilities;
 
-import org.apache.hadoop.hive.metastore.api.MetaException;
-import org.apache.hadoop.hive.ql.metadata.HiveException;
-
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
@@ -28,6 +25,9 @@ import org.apache.hudi.hive.HoodieHiveSyncClient;
 import org.apache.hudi.hive.testutils.HiveTestUtil;
 import org.apache.hudi.sync.common.HoodieSyncConfig;
 import org.apache.hudi.utilities.exception.HoodieIncrementalPullSQLException;
+
+import org.apache.hadoop.hive.metastore.api.MetaException;
+import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -40,7 +40,6 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.time.Instant;
 
-import static org.apache.hudi.hive.testutils.HiveTestUtil.fileSystem;
 import static org.apache.hudi.hive.testutils.HiveTestUtil.hiveSyncProps;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -102,8 +101,7 @@ public class TestHiveIncrementalPuller {
     String instantTime = "101";
     HiveTestUtil.createCOWTable(instantTime, 5, true);
     hiveSyncProps.setProperty(HiveSyncConfig.HIVE_SYNC_MODE.key(), "jdbc");
-
-    HiveSyncTool tool = new HiveSyncTool(hiveSyncProps, HiveTestUtil.getHiveConf(), fileSystem);
+    HiveSyncTool tool = new HiveSyncTool(new HiveSyncConfig(hiveSyncProps, HiveTestUtil.getHiveConf()));
     tool.syncHoodieTable();
   }
 
@@ -112,7 +110,7 @@ public class TestHiveIncrementalPuller {
     targetBasePath = Files.createTempDirectory("hivesynctest1" + Instant.now().toEpochMilli()).toUri().toString();
     HiveTestUtil.createCOWTable(instantTime, 5, true,
             targetBasePath, "tgtdb", "test2");
-    HiveSyncTool tool = new HiveSyncTool(getTargetHiveSyncConfig(targetBasePath), HiveTestUtil.getHiveConf(), fileSystem);
+    HiveSyncTool tool = new HiveSyncTool(new HiveSyncConfig(getTargetHiveSyncConfig(targetBasePath), HiveTestUtil.getHiveConf()));
     tool.syncHoodieTable();
   }
 
@@ -161,11 +159,11 @@ public class TestHiveIncrementalPuller {
   public void testPuller() throws IOException, URISyntaxException {
     createTables();
     HiveIncrementalPuller.Config cfg = getHivePullerConfig("select name from testdb.test1 where `_hoodie_commit_time` > '%s'");
-    HoodieHiveSyncClient hiveClient = new HoodieHiveSyncClient(new HiveSyncConfig(hiveSyncProps), HiveTestUtil.getHiveConf(), fileSystem);
+    HoodieHiveSyncClient hiveClient = new HoodieHiveSyncClient(new HiveSyncConfig(hiveSyncProps, HiveTestUtil.getHiveConf()));
     hiveClient.createDatabase(cfg.tmpDb);
     HiveIncrementalPuller puller = new HiveIncrementalPuller(cfg);
     puller.saveDelta();
-    HoodieHiveSyncClient assertingClient = new HoodieHiveSyncClient(new HiveSyncConfig(getAssertionSyncConfig(cfg.tmpDb)), HiveTestUtil.getHiveConf(), fileSystem);
+    HoodieHiveSyncClient assertingClient = new HoodieHiveSyncClient(new HiveSyncConfig(getAssertionSyncConfig(cfg.tmpDb), HiveTestUtil.getHiveConf()));
     String tmpTable = cfg.targetTable + "__" + cfg.sourceTable;
     assertTrue(assertingClient.tableExists(tmpTable));
   }

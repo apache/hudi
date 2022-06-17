@@ -26,6 +26,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.InvalidTableException;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.hive.util.HiveSchemaUtil;
+import org.apache.hudi.sync.common.HoodieSyncClient;
 import org.apache.hudi.sync.common.HoodieSyncTool;
 import org.apache.hudi.sync.common.model.FieldSchema;
 import org.apache.hudi.sync.common.model.Partition;
@@ -78,7 +79,7 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
   public static final String SUFFIX_SNAPSHOT_TABLE = "_rt";
   public static final String SUFFIX_READ_OPTIMIZED_TABLE = "_ro";
 
-  protected HoodieHiveSyncClient syncClient;
+  protected HoodieSyncClient syncClient;
   protected String snapshotTableName = null;
   protected Option<String> roTableName = null;
 
@@ -347,7 +348,7 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
         .collect(Collectors.toList());
   }
 
-  public static void main(String[] args) {
+  public static HiveSyncConfig parseConfig(String[] args) {
     final HiveSyncConfig.HiveSyncConfigParams params = new HiveSyncConfig.HiveSyncConfigParams();
     JCommander cmd = JCommander.newBuilder().addObject(params).build();
     cmd.parse(args);
@@ -355,7 +356,10 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
       cmd.usage();
       System.exit(0);
     }
-    HiveSyncConfig config = new HiveSyncConfig(params.toProps(), new Configuration());
-    new HiveSyncTool(config).syncHoodieTable();
+    return new HiveSyncConfig(params.toProps(), new Configuration());
+  }
+
+  public static void main(String[] args) {
+    new HiveSyncTool(parseConfig(args)).syncHoodieTable();
   }
 }

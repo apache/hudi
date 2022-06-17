@@ -19,14 +19,12 @@
 
 package org.apache.hudi.sync.datahub;
 
-import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.sync.common.HoodieSyncTool;
 import org.apache.hudi.sync.datahub.config.DataHubSyncConfig;
 
 import com.beust.jcommander.JCommander;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
+
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
 
 /**
  * To sync with DataHub via REST APIs.
@@ -36,14 +34,10 @@ import org.apache.hadoop.fs.FileSystem;
  */
 public class DataHubSyncTool extends HoodieSyncTool {
 
-  private final DataHubSyncConfig config;
+  protected final DataHubSyncConfig config;
 
-  public DataHubSyncTool(TypedProperties props, Configuration conf, FileSystem fs) {
-    this(new DataHubSyncConfig(props), conf, fs);
-  }
-
-  public DataHubSyncTool(DataHubSyncConfig config, Configuration conf, FileSystem fs) {
-    super(config.getProps(), conf, fs);
+  public DataHubSyncTool(DataHubSyncConfig config) {
+    super(config);
     this.config = config;
   }
 
@@ -55,20 +49,25 @@ public class DataHubSyncTool extends HoodieSyncTool {
    */
   @Override
   public void syncHoodieTable() {
-    try (DataHubSyncClient syncClient = new DataHubSyncClient(config, conf, fs)) {
-      syncClient.updateTableDefinition(config.hoodieSyncConfigParams.tableName);
-      syncClient.updateLastCommitTimeSynced(config.hoodieSyncConfigParams.tableName);
+    try (DataHubSyncClient syncClient = new DataHubSyncClient(config)) {
+      syncClient.updateTableDefinition(config.getString(META_SYNC_TABLE_NAME));
+      syncClient.updateLastCommitTimeSynced(config.getString(META_SYNC_TABLE_NAME));
     }
   }
 
+  @Override
+  public void close() {
+  }
+
   public static void main(String[] args) {
-    final DataHubSyncConfig cfg = new DataHubSyncConfig();
-    JCommander cmd = new JCommander(cfg, null, args);
-    if (cfg.help || args.length == 0) {
+    final DataHubSyncConfig.DataHubSyncConfigParams params = new DataHubSyncConfig.DataHubSyncConfigParams();
+    JCommander cmd = JCommander.newBuilder().addObject(params).build();
+    cmd.parse(args);
+    if (params.help) {
       cmd.usage();
-      System.exit(1);
+      System.exit(0);
     }
-    FileSystem fs = FSUtils.getFs(cfg.hoodieSyncConfigParams.basePath, new Configuration());
-    new DataHubSyncTool(cfg, fs.getConf(), fs).syncHoodieTable();
+    DataHubSyncConfig config = new DataHubSyncConfig(params.toProps());
+    new DataHubSyncTool(config).syncHoodieTable();
   }
 }

@@ -21,11 +21,9 @@ package org.apache.hudi.sync.datahub;
 
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.sync.common.HoodieSyncClient;
 import org.apache.hudi.sync.common.HoodieSyncException;
-import org.apache.hudi.sync.common.operation.TblPropertiesSync;
 import org.apache.hudi.sync.datahub.config.DataHubSyncConfig;
 
 import com.linkedin.common.urn.DatasetUrn;
@@ -52,27 +50,21 @@ import datahub.client.rest.RestEmitter;
 import datahub.event.MetadataChangeProposalWrapper;
 import org.apache.avro.AvroTypeException;
 import org.apache.avro.Schema;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
 
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-public class DataHubSyncClient extends HoodieSyncClient implements TblPropertiesSync {
+public class DataHubSyncClient extends HoodieSyncClient {
 
-  private final HoodieTimeline activeTimeline;
-  private final DataHubSyncConfig syncConfig;
-  private final Configuration hadoopConf;
+  protected final DataHubSyncConfig config;
   private final DatasetUrn datasetUrn;
 
-  public DataHubSyncClient(DataHubSyncConfig syncConfig, Configuration hadoopConf, FileSystem fs) {
-    super(syncConfig.hoodieSyncConfigParams.basePath, syncConfig.hoodieSyncConfigParams.assumeDatePartitioning, syncConfig.hoodieSyncConfigParams.useFileListingFromMetadata, false, fs);
-    this.syncConfig = syncConfig;
-    this.hadoopConf = hadoopConf;
-    this.datasetUrn = syncConfig.datasetIdentifier.getDatasetUrn();
-    this.activeTimeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
+  public DataHubSyncClient(DataHubSyncConfig config) {
+    super(config);
+    this.config = config;
+    this.datasetUrn = config.datasetIdentifier.getDatasetUrn();
   }
 
   @Override
@@ -82,7 +74,7 @@ public class DataHubSyncClient extends HoodieSyncClient implements TblProperties
 
   @Override
   public void updateLastCommitTimeSynced(String tableName) {
-    updateTableProperties(tableName, Collections.singletonMap(HOODIE_LAST_COMMIT_TIME_SYNC, activeTimeline.lastInstant().get().getTimestamp()));
+    updateTableProperties(tableName, Collections.singletonMap(HOODIE_LAST_COMMIT_TIME_SYNC, getActiveTimeline().lastInstant().get().getTimestamp()));
   }
 
   @Override
@@ -94,7 +86,7 @@ public class DataHubSyncClient extends HoodieSyncClient implements TblProperties
         .aspect(new DatasetProperties().setCustomProperties(new StringMap(tableProperties)))
         .build();
 
-    try (RestEmitter emitter = syncConfig.getRestEmitter()) {
+    try (RestEmitter emitter = config.getRestEmitter()) {
       emitter.emit(propertiesChangeProposal, null).get();
     } catch (Exception e) {
       throw new HoodieDataHubSyncException("Fail to change properties for Dataset " + datasetUrn + ": " + tableProperties, e);
@@ -124,7 +116,7 @@ public class DataHubSyncClient extends HoodieSyncClient implements TblProperties
             .setFields(new SchemaFieldArray(fields)))
         .build();
 
-    try (RestEmitter emitter = syncConfig.getRestEmitter()) {
+    try (RestEmitter emitter = config.getRestEmitter()) {
       emitter.emit(schemaChangeProposal, null).get();
     } catch (Exception e) {
       throw new HoodieDataHubSyncException("Fail to change schema for Dataset " + datasetUrn, e);
