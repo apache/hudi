@@ -24,10 +24,11 @@ import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
 import org.apache.hudi.config.{HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.hive.ddl.HiveSyncMode
-import org.apache.hudi.hive.{HiveSyncConfig, MultiPartKeysValueExtractor}
+import org.apache.hudi.hive.HiveSyncConfig
 import org.apache.hudi.keygen.ComplexKeyGenerator
 import org.apache.hudi.sql.InsertMode
 import org.apache.hudi.sync.common.HoodieSyncConfig
+import org.apache.hudi.sync.common.model.partextractor.MultiPartKeysValueExtractor
 import org.apache.hudi.{DataSourceWriteOptions, HoodieWriterUtils}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
@@ -40,7 +41,6 @@ import org.apache.spark.sql.types.StructType
 
 import java.util
 import java.util.Locale
-
 import scala.collection.JavaConverters._
 
 trait ProvidesHoodieConfig extends Logging {

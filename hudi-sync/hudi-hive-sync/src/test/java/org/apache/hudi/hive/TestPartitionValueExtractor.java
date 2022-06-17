@@ -18,6 +18,8 @@
 
 package org.apache.hudi.hive;
 
+import org.apache.hudi.sync.common.model.partextractor.SlashEncodedHourPartitionValueExtractor;
+
 import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.List;

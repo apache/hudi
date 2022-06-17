@@ -18,6 +18,8 @@
 
 package org.apache.hudi.hive;
 
+import org.apache.hudi.sync.common.model.partextractor.MultiPartKeysValueExtractor;
+
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;

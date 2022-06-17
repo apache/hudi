@@ -24,7 +24,6 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.Option;
@@ -32,7 +31,7 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.sync.common.model.Partition;
 import org.apache.hudi.sync.common.model.PartitionEvent;
-import org.apache.hudi.sync.common.model.PartitionValueExtractor;
+import org.apache.hudi.sync.common.model.partextractor.PartitionValueExtractor;
 
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;

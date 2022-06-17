@@ -23,7 +23,7 @@ import org.apache.hudi.common.fs.StorageSchemes;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncException;
-import org.apache.hudi.sync.common.model.PartitionValueExtractor;
+import org.apache.hudi.sync.common.model.partextractor.PartitionValueExtractor;
 import org.apache.hudi.hive.util.HivePartitionUtil;
 import org.apache.hudi.hive.util.HiveSchemaUtil;
 
