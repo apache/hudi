@@ -35,6 +35,8 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.function.Function;
 
+import static org.apache.hudi.common.util.ValidationUtils.checkState;
+
 /**
  * A partitioner that does local sorting for each RDD partition based on the tuple of
  * values of the columns configured for ordering.
@@ -53,6 +55,8 @@ public class RDDCustomColumnsSortPartitioner<T extends HoodieRecordPayload>
     this.serializableSchema = new SerializableSchema(new Schema.Parser().parse(config.getSchema()));
     this.orderByColumnNames = getOrderByColumnNames(config);
     this.consistentLogicalTimestampEnabled = config.isConsistentLogicalTimestampEnabled();
+
+    checkState(orderByColumnNames.length > 0);
   }
 
   public RDDCustomColumnsSortPartitioner(String[] columnNames,
@@ -63,6 +67,8 @@ public class RDDCustomColumnsSortPartitioner<T extends HoodieRecordPayload>
     this.orderByColumnNames = columnNames;
     this.serializableSchema = new SerializableSchema(schema);
     this.consistentLogicalTimestampEnabled = consistentLogicalTimestampEnabled;
+
+    checkState(orderByColumnNames.length > 0);
   }
 
   @SuppressWarnings("unchecked")
@@ -110,9 +116,10 @@ public class RDDCustomColumnsSortPartitioner<T extends HoodieRecordPayload>
     return true;
   }
 
-  private static String[] getOrderByColumnNames(HoodieWriteConfig config) {
+  static String[] getOrderByColumnNames(HoodieWriteConfig config) {
     return Arrays.stream(config.getUserDefinedBulkInsertPartitionerSortColumns().split(","))
-        .map(String::trim).toArray(String[]::new);
+        .map(String::trim)
+        .toArray(String[]::new);
   }
 
   private static String getSortingKey(HoodieRecord<? extends HoodieRecordPayload> record,
