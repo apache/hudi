@@ -158,7 +158,7 @@ Create a savepoint to hudi's table.
 
 **Example**
 
-Roll back test_hudi_table to one instant
+Create a savepoint to test_hudi_table
 ```
 call create_savepoints(table => 'test_hudi_table', instant_time => '20220109225319449');
 ```
