@@ -26,6 +26,8 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.MarkerUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
@@ -40,9 +42,11 @@ import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Stream;
 
 /**
  * Marker operations of directly accessing the file system to create and delete
@@ -138,6 +142,49 @@ public class DirectWriteMarkers extends WriteMarkers {
       }, false);
     }
     return markerFiles;
+  }
+
+  /**
+   * We need to do list operation here.
+   * In order to reduce the list pressure as much as possible, first we build path prefix in advance:  '$base_path/.temp/instant_time/partition_path',
+   * and only list these specific partition_paths we need instead of list all the '$base_path/.temp/'
+   * @param config
+   * @param partitionPath
+   * @param fileId
+   * @return true if current fileID is already existed under .temp/instant_time/partition_path/..
+   * @throws IOException
+   */
+  @Override
+  public boolean hasMarkerConflict(HoodieWriteConfig config, String partitionPath, String fileId) throws IOException {
+    String tempFolderPath = getTempFolderPath();
+    long res = Arrays.stream(fs.listStatus(new Path(tempFolderPath)))
+        .parallel()
+        .map(FileStatus::getPath)
+        .flatMap(currentMarkerDirPath -> {
+          try {
+            Path markerPartitionPath;
+            if (StringUtils.isNullOrEmpty(partitionPath)) {
+              markerPartitionPath = currentMarkerDirPath;
+            } else {
+              markerPartitionPath = new Path(currentMarkerDirPath, partitionPath);
+            }
+
+            if (!StringUtils.isNullOrEmpty(partitionPath) && !fs.exists(markerPartitionPath)) {
+              return Stream.empty();
+            } else {
+              return Arrays.stream(fs.listStatus(markerPartitionPath)).parallel()
+                  .filter((path) -> path.toString().contains(fileId));
+            }
+          } catch (IOException e) {
+            throw new HoodieIOException("IOException occurs during checking marker file conflict");
+          }
+        }).count();
+
+    return res != 0L;
+  }
+
+  private String getTempFolderPath() {
+    return basePath + Path.SEPARATOR + HoodieTableMetaClient.TEMPFOLDER_NAME;
   }
 
   /**

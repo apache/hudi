@@ -25,12 +25,14 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.Set;
+import java.util.function.Function;
 
 /**
  * Operates on markers for a given write action (commit, delta commit, compaction).
@@ -165,4 +167,14 @@ public abstract class WriteMarkers implements Serializable {
    * @return the marker path or empty option if already exists and {@code checkIfExists} is true
    */
   abstract Option<Path> create(String partitionPath, String dataFileName, IOType type, boolean checkIfExists);
+
+  /**
+   *
+   * @param config
+   * @param partitionPath
+   * @param fileId
+   * @return
+   * @throws IOException
+   */
+  public abstract boolean hasMarkerConflict(HoodieWriteConfig config, String partitionPath, String fileId) throws IOException;
 }

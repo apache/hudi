@@ -29,9 +29,13 @@ public class MarkerOperation implements Serializable {
 
   public static final String MARKER_DIR_PATH_PARAM = "markerdirpath";
   public static final String MARKER_NAME_PARAM = "markername";
+  public static final String MARKER_CONFLICT_CHECKER_BATCH_INTERVAL = "batchinterval";
+  public static final String MARKER_CONFLICT_CHECKER_PERIOD = "period";
+  public static final String MARKER_BASEPATH_PARAM = "basepath";
 
   // GET requests
   public static final String ALL_MARKERS_URL = String.format("%s/%s", BASE_URL, "all");
+  public static final String CHECK_MARKER_CONFLICT_URL = String.format("%s/%s", BASE_URL, "check-marker-conflict");
   public static final String CREATE_AND_MERGE_MARKERS_URL = String.format("%s/%s", BASE_URL, "create-and-merge");
   public static final String MARKERS_DIR_EXISTS_URL = String.format("%s/%s", BASE_URL, "dir/exists");
 

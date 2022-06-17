@@ -18,14 +18,17 @@
 
 package org.apache.hudi.client.transaction;
 
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hudi.ApiMaturityLevel;
 import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.marker.WriteMarkers;
 
 import java.util.stream.Stream;
 
@@ -43,13 +46,25 @@ public interface ConflictResolutionStrategy {
   Stream<HoodieInstant> getCandidateInstants(HoodieActiveTimeline activeTimeline, HoodieInstant currentInstant, Option<HoodieInstant> lastSuccessfulInstant);
 
   /**
-   * Implementations of this method will determine whether a conflict exists between 2 commits.
+   * Implementations of this method will determine whether a marker conflict exists between multi-writers.
+   * @param writeMarkers
+   * @param config
+   * @param fs
+   * @param partitionPath
+   * @param fileId
+   * @return
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  boolean hasMarkerConflict(WriteMarkers writeMarkers, HoodieWriteConfig config, FileSystem fs, String partitionPath, String fileId);
+
+  /**
+   * Implementations of this method will determine whether a commit conflict exists between 2 commits.
    * @param thisOperation
    * @param otherOperation
    * @return
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
-  boolean hasConflict(ConcurrentOperation thisOperation, ConcurrentOperation otherOperation);
+  boolean hasCommitConflict(ConcurrentOperation thisOperation, ConcurrentOperation otherOperation);
 
   /**
    * Implementations of this method will determine how to resolve a conflict between 2 commits.
@@ -58,7 +73,14 @@ public interface ConflictResolutionStrategy {
    * @return
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
-  Option<HoodieCommitMetadata> resolveConflict(HoodieTable table,
+  Option<HoodieCommitMetadata> resolveCommitConflict(HoodieTable table,
       ConcurrentOperation thisOperation, ConcurrentOperation otherOperation) throws HoodieWriteConflictException;
+
+  /**
+   * Implementations of this method will determine how to resolve a marker/inflight conflict between multi writers.
+   * @return
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  Option<HoodieCommitMetadata> resolveMarkerConflict(WriteMarkers writeMarkers, String partitionPath, String dataFileName) throws HoodieWriteConflictException;
 
 }

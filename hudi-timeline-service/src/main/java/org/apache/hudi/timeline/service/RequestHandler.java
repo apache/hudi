@@ -54,6 +54,7 @@ import org.jetbrains.annotations.NotNull;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
@@ -445,6 +446,16 @@ public class RequestHandler {
       boolean exist = markerHandler.doesMarkerDirExist(
           ctx.queryParam(MarkerOperation.MARKER_DIR_PATH_PARAM, ""));
       writeValueAsString(ctx, exist);
+    }, false));
+
+    app.get(MarkerOperation.CHECK_MARKER_CONFLICT_URL, new ViewHandler(ctx -> {
+      metricsRegistry.add("CHECK_MARKER_CONFLICT", 1);
+      boolean hasConflict = markerHandler.checkMarkerConflict(
+          Long.parseLong(Objects.requireNonNull(ctx.queryParam(MarkerOperation.MARKER_CONFLICT_CHECKER_BATCH_INTERVAL, "30000"))),
+          Long.parseLong(Objects.requireNonNull(ctx.queryParam(MarkerOperation.MARKER_CONFLICT_CHECKER_PERIOD, "30000"))),
+          ctx.queryParam(MarkerOperation.MARKER_DIR_PATH_PARAM, ""),
+          ctx.queryParam(MarkerOperation.MARKER_BASEPATH_PARAM, ""));
+      writeValueAsString(ctx, hasConflict);
     }, false));
 
     app.post(MarkerOperation.CREATE_MARKER_URL, new ViewHandler(ctx -> {

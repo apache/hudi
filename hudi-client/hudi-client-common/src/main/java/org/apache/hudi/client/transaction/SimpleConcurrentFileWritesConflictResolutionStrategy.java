@@ -18,6 +18,7 @@
 
 package org.apache.hudi.client.transaction;
 
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -25,8 +26,10 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -70,7 +73,12 @@ public class SimpleConcurrentFileWritesConflictResolutionStrategy
   }
 
   @Override
-  public boolean hasConflict(ConcurrentOperation thisOperation, ConcurrentOperation otherOperation) {
+  public boolean hasMarkerConflict(WriteMarkers writeMarkers, HoodieWriteConfig config, FileSystem fs, String partitionPath, String dataFileName) {
+    return false;
+  }
+
+  @Override
+  public boolean hasCommitConflict(ConcurrentOperation thisOperation, ConcurrentOperation otherOperation) {
     // TODO : UUID's can clash even for insert/insert, handle that case.
     Set<String> fileIdsSetForFirstInstant = thisOperation.getMutatedFileIds();
     Set<String> fileIdsSetForSecondInstant = otherOperation.getMutatedFileIds();
@@ -85,7 +93,7 @@ public class SimpleConcurrentFileWritesConflictResolutionStrategy
   }
 
   @Override
-  public Option<HoodieCommitMetadata> resolveConflict(HoodieTable table,
+  public Option<HoodieCommitMetadata> resolveCommitConflict(HoodieTable table,
       ConcurrentOperation thisOperation, ConcurrentOperation otherOperation) {
     // A completed COMPACTION action eventually shows up as a COMMIT action on the timeline.
     // We need to ensure we handle this during conflict resolution and not treat the commit from a
@@ -99,6 +107,11 @@ public class SimpleConcurrentFileWritesConflictResolutionStrategy
       return thisOperation.getCommitMetadataOption();
     }
     // just abort the current write if conflicts are found
+    throw new HoodieWriteConflictException(new ConcurrentModificationException("Cannot resolve conflicts for overlapping writes"));
+  }
+
+  @Override
+  public Option<HoodieCommitMetadata> resolveMarkerConflict(WriteMarkers writeMarkers, String partitionPath, String dataFileName) throws HoodieWriteConflictException {
     throw new HoodieWriteConflictException(new ConcurrentModificationException("Cannot resolve conflicts for overlapping writes"));
   }
 

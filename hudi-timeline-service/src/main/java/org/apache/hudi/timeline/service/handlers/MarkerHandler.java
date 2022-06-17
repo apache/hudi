@@ -23,6 +23,7 @@ import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.timeline.service.TimelineService;
+import org.apache.hudi.timeline.service.handlers.marker.MarkerCollectorRunnable;
 import org.apache.hudi.timeline.service.handlers.marker.MarkerCreationDispatchingRunnable;
 import org.apache.hudi.timeline.service.handlers.marker.MarkerCreationFuture;
 import org.apache.hudi.timeline.service.handlers.marker.MarkerDirState;
@@ -30,6 +31,7 @@ import org.apache.hudi.timeline.service.handlers.marker.MarkerDirState;
 import io.javalin.Context;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.hudi.timeline.service.handlers.marker.MarkerInfo;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -38,6 +40,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -71,6 +74,7 @@ public class MarkerHandler extends Handler {
   private final ScheduledExecutorService dispatchingExecutorService;
   // an executor service to schedule the worker threads of batch processing marker creation requests
   private final ExecutorService batchingExecutorService;
+  private ScheduledExecutorService markerCollector;
   // Parallelism for reading and deleting marker files
   private final int parallelism;
   // Marker directory states, {markerDirPath -> MarkerDirState instance}
@@ -81,6 +85,8 @@ public class MarkerHandler extends Handler {
   private transient HoodieEngineContext hoodieEngineContext;
   private ScheduledFuture<?> dispatchingThreadFuture;
   private boolean firstCreationRequestSeen;
+  // Marker directory -> markers under current directory
+  ConcurrentHashMap<String, MarkerInfo> instant2MarkerInfo;
 
   public MarkerHandler(Configuration conf, TimelineService.Config timelineServiceConfig,
                        HoodieEngineContext hoodieEngineContext, FileSystem fileSystem,
@@ -108,6 +114,12 @@ public class MarkerHandler extends Handler {
     }
     dispatchingExecutorService.shutdown();
     batchingExecutorService.shutdown();
+    if (instant2MarkerInfo != null) {
+      instant2MarkerInfo.values().forEach(MarkerInfo::close);
+    }
+    if (markerCollector != null) {
+      markerCollector.shutdown();
+    }
   }
 
   /**
@@ -136,6 +148,25 @@ public class MarkerHandler extends Handler {
   public boolean doesMarkerDirExist(String markerDir) {
     MarkerDirState markerDirState = getMarkerDirState(markerDir);
     return markerDirState.exists();
+  }
+
+  public boolean checkMarkerConflict(long batchInterval, long period, String markerDir, String basePath) {
+    if (markerCollector == null) {
+      instant2MarkerInfo = new ConcurrentHashMap<>();
+      markerCollector = Executors.newSingleThreadScheduledExecutor();
+      markerCollector.scheduleAtFixedRate(new MarkerCollectorRunnable( this, markerDir, basePath,
+          hoodieEngineContext, parallelism, fileSystem, instant2MarkerInfo), batchInterval, period, TimeUnit.MILLISECONDS);
+      return false;
+    } else {
+      MarkerInfo markerInfo = instant2MarkerInfo.get(markerDir);
+      Set<String> currentWriterAllMarkers = markerInfo.getAllMarkers();
+      Set<String> tableMarkers = instant2MarkerInfo.entrySet().stream().filter(entry -> {
+        return !entry.getKey().equalsIgnoreCase(markerDir);
+      }).map(Map.Entry::getValue).flatMap(marker -> marker.getAllMarkers().stream()).collect(Collectors.toSet());
+
+      currentWriterAllMarkers.retainAll(tableMarkers);
+      return !currentWriterAllMarkers.isEmpty();
+    }
   }
 
   /**

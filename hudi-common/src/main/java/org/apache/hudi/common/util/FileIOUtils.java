@@ -90,6 +90,7 @@ public class FileIOUtils {
   public static List<String> readAsUTFStringLines(InputStream input) {
     List<String> lines = new ArrayList<>();
     BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(input, StandardCharsets.UTF_8));
+
     lines = bufferedReader.lines().collect(Collectors.toList());
     closeQuietly(bufferedReader);
     return lines;

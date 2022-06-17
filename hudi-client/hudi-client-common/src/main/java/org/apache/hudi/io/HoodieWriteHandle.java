@@ -20,6 +20,9 @@ package org.apache.hudi.io;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.client.transaction.ConflictResolutionStrategy;
+import org.apache.hudi.client.transaction.TransactionConflictResolutionStrategy;
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -33,6 +36,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.storage.HoodieFileWriter;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 
 import org.apache.avro.Schema;
@@ -182,9 +186,46 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
    *
    * @param partitionPath Partition path
    */
-  protected void createMarkerFile(String partitionPath, String dataFileName) {
-    WriteMarkersFactory.get(config.getMarkersType(), hoodieTable, instantTime)
-        .create(partitionPath, dataFileName, getIOType());
+  protected Option<Path> createMarkerFile(String partitionPath, String dataFileName) {
+    WriteMarkers writeMarkers = WriteMarkersFactory.get(config.getMarkersType(), hoodieTable, instantTime);
+
+    // do early conflict detection before create markers.
+    if (config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()
+        && config.isEarlyConflictDetectionEnable()) {
+
+      ConflictResolutionStrategy resolutionStrategy = config.getWriteConflictResolutionStrategy();
+      if (resolutionStrategy instanceof TransactionConflictResolutionStrategy) {
+        return createMarkerFileWithTransaction(resolutionStrategy, writeMarkers, partitionPath, dataFileName);
+      } else {
+        return createMarkerFileWithEarlyConflictDetection(resolutionStrategy, writeMarkers, partitionPath, dataFileName);
+      }
+    }
+
+    return writeMarkers.create(partitionPath, dataFileName, getIOType());
+  }
+
+  private Option<Path> createMarkerFileWithEarlyConflictDetection(ConflictResolutionStrategy resolutionStrategy, WriteMarkers writeMarkers, String partitionPath, String dataFileName) {
+    if (resolutionStrategy.hasMarkerConflict(writeMarkers, config, fs, partitionPath, fileId)) {
+      resolutionStrategy.resolveMarkerConflict(writeMarkers, partitionPath, fileId);
+    }
+    return writeMarkers.create(partitionPath, dataFileName, getIOType());
+  }
+
+  private Option<Path> createMarkerFileWithTransaction(ConflictResolutionStrategy resolutionStrategy, WriteMarkers writeMarkers, String partitionPath, String dataFileName) {
+    TransactionManager txnManager = new TransactionManager(config, fs, partitionPath, fileId);
+    try {
+      // Need to do transaction before create marker file when using early conflict detection
+      txnManager.beginTransaction(partitionPath, fileId);
+      return createMarkerFileWithEarlyConflictDetection(resolutionStrategy, writeMarkers, partitionPath, dataFileName);
+
+    } catch (Exception e) {
+      LOG.warn("Exception occurs during create marker file in early conflict detection mode.");
+      throw e;
+    } finally {
+      // End transaction after created marker file.
+      txnManager.endTransaction(partitionPath + "/" + fileId);
+      txnManager.close();
+    }
   }
 
   public Schema getWriterSchemaWithMetaFields() {

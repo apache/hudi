@@ -79,10 +79,10 @@ public class TransactionUtils {
       instantStream.forEach(instant -> {
         try {
           ConcurrentOperation otherOperation = new ConcurrentOperation(instant, table.getMetaClient());
-          if (resolutionStrategy.hasConflict(thisOperation, otherOperation)) {
+          if (resolutionStrategy.hasCommitConflict(thisOperation, otherOperation)) {
             LOG.info("Conflict encountered between current instant = " + thisOperation + " and instant = "
                 + otherOperation + ", attempting to resolve it...");
-            resolutionStrategy.resolveConflict(table, thisOperation, otherOperation);
+            resolutionStrategy.resolveCommitConflict(table, thisOperation, otherOperation);
           }
         } catch (IOException io) {
           throw new HoodieWriteConflictException("Unable to resolve conflict, if present", io);

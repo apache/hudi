@@ -2033,6 +2033,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return WriteConcurrencyMode.fromValue(getString(WRITE_CONCURRENCY_MODE));
   }
 
+  public boolean isEarlyConflictDetectionEnable() {
+   return getBoolean(HoodieLockConfig.EARLY_CONFLICT_DETECTION_ENABLE);
+  }
+
   /**
    * Are any table services configured to run inline for both scheduling and execution?
    *

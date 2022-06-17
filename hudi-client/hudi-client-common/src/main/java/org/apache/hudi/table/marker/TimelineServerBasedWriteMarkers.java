@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieRemoteException;
 import org.apache.hudi.table.HoodieTable;
 
@@ -44,10 +45,14 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.marker.MarkerOperation.ALL_MARKERS_URL;
+import static org.apache.hudi.common.table.marker.MarkerOperation.CHECK_MARKER_CONFLICT_URL;
 import static org.apache.hudi.common.table.marker.MarkerOperation.CREATE_AND_MERGE_MARKERS_URL;
 import static org.apache.hudi.common.table.marker.MarkerOperation.CREATE_MARKER_URL;
 import static org.apache.hudi.common.table.marker.MarkerOperation.DELETE_MARKER_DIR_URL;
 import static org.apache.hudi.common.table.marker.MarkerOperation.MARKERS_DIR_EXISTS_URL;
+import static org.apache.hudi.common.table.marker.MarkerOperation.MARKER_BASEPATH_PARAM;
+import static org.apache.hudi.common.table.marker.MarkerOperation.MARKER_CONFLICT_CHECKER_BATCH_INTERVAL;
+import static org.apache.hudi.common.table.marker.MarkerOperation.MARKER_CONFLICT_CHECKER_PERIOD;
 import static org.apache.hudi.common.table.marker.MarkerOperation.MARKER_DIR_PATH_PARAM;
 import static org.apache.hudi.common.table.marker.MarkerOperation.MARKER_NAME_PARAM;
 
@@ -154,6 +159,21 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
       return Option.of(new Path(FSUtils.getPartitionPath(markerDirPath, partitionPath), markerFileName));
     } else {
       return Option.empty();
+    }
+  }
+
+  @Override
+  public boolean hasMarkerConflict(HoodieWriteConfig config, String partitionPath, String fileId) throws IOException {
+    Map<String, String> paramsMap = new HashMap<>();
+    paramsMap.put(MARKER_CONFLICT_CHECKER_BATCH_INTERVAL, "30000");
+    paramsMap.put(MARKER_CONFLICT_CHECKER_PERIOD, "30000");
+    paramsMap.put(MARKER_DIR_PATH_PARAM, markerDirPath.toString());
+    paramsMap.put(MARKER_BASEPATH_PARAM, basePath);
+    try {
+      return executeRequestToTimelineServer(
+          CHECK_MARKER_CONFLICT_URL, paramsMap, new TypeReference<Set<String>>() {}, RequestMethod.GET);
+    } catch (IOException e) {
+      throw new HoodieRemoteException("Failed to check marker file conflict " + fileId, e);
     }
   }
 

@@ -114,9 +114,9 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     Assertions.assertTrue(candidateInstants.size() == 1);
     ConcurrentOperation thatCommitOperation = new ConcurrentOperation(candidateInstants.get(0), metaClient);
     ConcurrentOperation thisCommitOperation = new ConcurrentOperation(currentInstant.get(), currentMetadata);
-    Assertions.assertTrue(strategy.hasConflict(thisCommitOperation, thatCommitOperation));
+    Assertions.assertTrue(strategy.hasCommitConflict(thisCommitOperation, thatCommitOperation));
     try {
-      strategy.resolveConflict(null, thisCommitOperation, thatCommitOperation);
+      strategy.resolveCommitConflict(null, thisCommitOperation, thatCommitOperation);
       Assertions.fail("Cannot reach here, writer 1 and writer 2 should have thrown a conflict");
     } catch (HoodieWriteConflictException e) {
       // expected
@@ -146,9 +146,9 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     Assertions.assertTrue(candidateInstants.size() == 1);
     ConcurrentOperation thatCommitOperation = new ConcurrentOperation(candidateInstants.get(0), metaClient);
     ConcurrentOperation thisCommitOperation = new ConcurrentOperation(currentInstant.get(), currentMetadata);
-    Assertions.assertTrue(strategy.hasConflict(thisCommitOperation, thatCommitOperation));
+    Assertions.assertTrue(strategy.hasCommitConflict(thisCommitOperation, thatCommitOperation));
     try {
-      strategy.resolveConflict(null, thisCommitOperation, thatCommitOperation);
+      strategy.resolveCommitConflict(null, thisCommitOperation, thatCommitOperation);
       Assertions.fail("Cannot reach here, should have thrown a conflict");
     } catch (HoodieWriteConflictException e) {
       // expected
@@ -178,9 +178,9 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     Assertions.assertTrue(candidateInstants.size() == 1);
     ConcurrentOperation thatCommitOperation = new ConcurrentOperation(candidateInstants.get(0), metaClient);
     ConcurrentOperation thisCommitOperation = new ConcurrentOperation(currentInstant.get(), currentMetadata);
-    Assertions.assertTrue(strategy.hasConflict(thisCommitOperation, thatCommitOperation));
+    Assertions.assertTrue(strategy.hasCommitConflict(thisCommitOperation, thatCommitOperation));
     try {
-      strategy.resolveConflict(null, thisCommitOperation, thatCommitOperation);
+      strategy.resolveCommitConflict(null, thisCommitOperation, thatCommitOperation);
       Assertions.fail("Cannot reach here, should have thrown a conflict");
     } catch (HoodieWriteConflictException e) {
       // expected
@@ -233,9 +233,9 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     Assertions.assertTrue(candidateInstants.size() == 1);
     ConcurrentOperation thatCommitOperation = new ConcurrentOperation(candidateInstants.get(0), metaClient);
     ConcurrentOperation thisCommitOperation = new ConcurrentOperation(currentInstant.get(), currentMetadata);
-    Assertions.assertTrue(strategy.hasConflict(thisCommitOperation, thatCommitOperation));
+    Assertions.assertTrue(strategy.hasCommitConflict(thisCommitOperation, thatCommitOperation));
     try {
-      strategy.resolveConflict(null, thisCommitOperation, thatCommitOperation);
+      strategy.resolveCommitConflict(null, thisCommitOperation, thatCommitOperation);
       Assertions.fail("Cannot reach here, should have thrown a conflict");
     } catch (HoodieWriteConflictException e) {
       // expected
@@ -265,9 +265,9 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     Assertions.assertTrue(candidateInstants.size() == 1);
     ConcurrentOperation thatCommitOperation = new ConcurrentOperation(candidateInstants.get(0), metaClient);
     ConcurrentOperation thisCommitOperation = new ConcurrentOperation(currentInstant.get(), currentMetadata);
-    Assertions.assertTrue(strategy.hasConflict(thisCommitOperation, thatCommitOperation));
+    Assertions.assertTrue(strategy.hasCommitConflict(thisCommitOperation, thatCommitOperation));
     try {
-      strategy.resolveConflict(null, thisCommitOperation, thatCommitOperation);
+      strategy.resolveCommitConflict(null, thisCommitOperation, thatCommitOperation);
       Assertions.fail("Cannot reach here, should have thrown a conflict");
     } catch (HoodieWriteConflictException e) {
       // expected
@@ -297,9 +297,9 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     Assertions.assertTrue(candidateInstants.size() == 1);
     ConcurrentOperation thatCommitOperation = new ConcurrentOperation(candidateInstants.get(0), metaClient);
     ConcurrentOperation thisCommitOperation = new ConcurrentOperation(currentInstant.get(), currentMetadata);
-    Assertions.assertTrue(strategy.hasConflict(thisCommitOperation, thatCommitOperation));
+    Assertions.assertTrue(strategy.hasCommitConflict(thisCommitOperation, thatCommitOperation));
     try {
-      strategy.resolveConflict(null, thisCommitOperation, thatCommitOperation);
+      strategy.resolveCommitConflict(null, thisCommitOperation, thatCommitOperation);
       Assertions.fail("Cannot reach here, should have thrown a conflict");
     } catch (HoodieWriteConflictException e) {
       // expected
@@ -472,9 +472,9 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     // check C3 has conflict with C1,C11,C12,C4
     for (HoodieInstant instant : completedInstantsDuringCurrentWriteOperation) {
       ConcurrentOperation thatCommitOperation = new ConcurrentOperation(instant, metaClient);
-      Assertions.assertTrue(strategy.hasConflict(thisCommitOperation, thatCommitOperation));
+      Assertions.assertTrue(strategy.hasCommitConflict(thisCommitOperation, thatCommitOperation));
       try {
-        strategy.resolveConflict(null, thisCommitOperation, thatCommitOperation);
+        strategy.resolveCommitConflict(null, thisCommitOperation, thatCommitOperation);
       } catch (HoodieWriteConflictException e) {
         // expected
       }

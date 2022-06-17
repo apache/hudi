@@ -102,9 +102,9 @@ public class FlinkCreateHandle<T extends HoodieRecordPayload, I, K, O>
   }
 
   @Override
-  protected void createMarkerFile(String partitionPath, String dataFileName) {
+  protected Option<Path> createMarkerFile(String partitionPath, String dataFileName) {
     WriteMarkers writeMarkers = WriteMarkersFactory.get(config.getMarkersType(), hoodieTable, instantTime);
-    writeMarkers.createIfNotExists(partitionPath, dataFileName, getIOType());
+    return writeMarkers.createIfNotExists(partitionPath, dataFileName, getIOType());
   }
 
   @Override
