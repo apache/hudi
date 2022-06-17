@@ -38,9 +38,6 @@ import com.google.cloud.bigquery.Table;
 import com.google.cloud.bigquery.TableId;
 import com.google.cloud.bigquery.TableInfo;
 import com.google.cloud.bigquery.ViewDefinition;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hudi.sync.common.operation.CatalogSync;
-import org.apache.hudi.sync.common.operation.TblPropertiesSync;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.parquet.schema.MessageType;
@@ -49,16 +46,24 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
-public class HoodieBigQuerySyncClient extends HoodieSyncClient implements CatalogSync, TblPropertiesSync {
+import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_DATASET_LOCATION;
+import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_DATASET_NAME;
+import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_PROJECT_ID;
+
+public class HoodieBigQuerySyncClient extends HoodieSyncClient {
+
   private static final Logger LOG = LogManager.getLogger(HoodieBigQuerySyncClient.class);
 
-  private final BigQuerySyncConfig syncConfig;
+  protected final BigQuerySyncConfig config;
+  private final String projectId;
+  private final String datasetName;
   private transient BigQuery bigquery;
 
-  public HoodieBigQuerySyncClient(final BigQuerySyncConfig syncConfig, final FileSystem fs) {
-    super(syncConfig.basePath, syncConfig.assumeDatePartitioning, syncConfig.useFileListingFromMetadata,
-        false, fs);
-    this.syncConfig = syncConfig;
+  public HoodieBigQuerySyncClient(final BigQuerySyncConfig config) {
+    super(config);
+    this.config = config;
+    this.projectId = config.getString(BIGQUERY_SYNC_PROJECT_ID);
+    this.datasetName = config.getString(BIGQUERY_SYNC_DATASET_NAME);
     this.createBigQueryConnection();
   }
 
@@ -67,7 +72,7 @@ public class HoodieBigQuerySyncClient extends HoodieSyncClient implements Catalo
       try {
         // Initialize client that will be used to send requests. This client only needs to be created
         // once, and can be reused for multiple requests.
-        bigquery = BigQueryOptions.newBuilder().setLocation(syncConfig.datasetLocation).build().getService();
+        bigquery = BigQueryOptions.newBuilder().setLocation(config.getString(BIGQUERY_SYNC_DATASET_LOCATION)).build().getService();
         LOG.info("Successfully established BigQuery connection.");
       } catch (BigQueryException e) {
         throw new HoodieBigQuerySyncException("Cannot create bigQuery connection ", e);
@@ -77,14 +82,14 @@ public class HoodieBigQuerySyncClient extends HoodieSyncClient implements Catalo
 
   @Override
   public void createTable(final String tableName, final MessageType storageSchema, final String inputFormatClass,
-                          final String outputFormatClass, final String serdeClass,
-                          final Map<String, String> serdeProperties, final Map<String, String> tableProperties) {
+      final String outputFormatClass, final String serdeClass,
+      final Map<String, String> serdeProperties, final Map<String, String> tableProperties) {
     // bigQuery create table arguments are different, so do nothing.
   }
 
   public void createManifestTable(String tableName, String sourceUri) {
     try {
-      TableId tableId = TableId.of(syncConfig.projectId, syncConfig.datasetName, tableName);
+      TableId tableId = TableId.of(projectId, datasetName, tableName);
       CsvOptions csvOptions = CsvOptions.newBuilder()
           .setFieldDelimiter(",")
           .setAllowJaggedRows(false)
@@ -110,7 +115,7 @@ public class HoodieBigQuerySyncClient extends HoodieSyncClient implements Catalo
   public void createVersionsTable(String tableName, String sourceUri, String sourceUriPrefix, List<String> partitionFields) {
     try {
       ExternalTableDefinition customTable;
-      TableId tableId = TableId.of(syncConfig.projectId, syncConfig.datasetName, tableName);
+      TableId tableId = TableId.of(projectId, datasetName, tableName);
 
       if (partitionFields.isEmpty()) {
         customTable =
@@ -145,16 +150,16 @@ public class HoodieBigQuerySyncClient extends HoodieSyncClient implements Catalo
 
   public void createSnapshotView(String viewName, String versionsTableName, String manifestTableName) {
     try {
-      TableId tableId = TableId.of(syncConfig.projectId, syncConfig.datasetName, viewName);
+      TableId tableId = TableId.of(projectId, datasetName, viewName);
       String query =
           String.format(
               "SELECT * FROM `%s.%s.%s` WHERE _hoodie_file_name IN "
                   + "(SELECT filename FROM `%s.%s.%s`)",
-              syncConfig.projectId,
-              syncConfig.datasetName,
+              projectId,
+              datasetName,
               versionsTableName,
-              syncConfig.projectId,
-              syncConfig.datasetName,
+              projectId,
+              datasetName,
               manifestTableName);
 
       ViewDefinition viewDefinition =
@@ -174,18 +179,13 @@ public class HoodieBigQuerySyncClient extends HoodieSyncClient implements Catalo
   }
 
   public boolean datasetExists() {
-    Dataset dataset = bigquery.getDataset(DatasetId.of(syncConfig.projectId, syncConfig.datasetName));
+    Dataset dataset = bigquery.getDataset(DatasetId.of(projectId, datasetName));
     return dataset != null;
   }
 
   @Override
-  public boolean doesTableExist(final String tableName) {
-    return tableExists(tableName);
-  }
-
-  @Override
   public boolean tableExists(String tableName) {
-    TableId tableId = TableId.of(syncConfig.projectId, syncConfig.datasetName, tableName);
+    TableId tableId = TableId.of(projectId, datasetName, tableName);
     Table table = bigquery.getTable(tableId, BigQuery.TableOption.fields());
     return table != null && table.exists();
   }
