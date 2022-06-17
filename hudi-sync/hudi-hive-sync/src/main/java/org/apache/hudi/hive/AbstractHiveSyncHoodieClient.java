@@ -25,22 +25,23 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.sync.common.HoodieSyncClient;
 import org.apache.hudi.sync.common.HoodieSyncException;
 import org.apache.hudi.sync.common.model.Partition;
-
-import org.apache.avro.Schema;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.hudi.sync.common.operation.CatalogSync;
 import org.apache.hudi.sync.common.operation.PartitionsSync;
 import org.apache.hudi.sync.common.operation.ReplicatedTimeSync;
 import org.apache.hudi.sync.common.operation.TblPropertiesSync;
+
+import org.apache.avro.Schema;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.parquet.schema.MessageType;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS;
 
 /**
  * Base class to sync Hudi tables with Hive based metastores, such as Hive server, HMS or managed Hive services.
@@ -49,16 +50,13 @@ public abstract class AbstractHiveSyncHoodieClient extends HoodieSyncClient impl
     PartitionsSync, CatalogSync, TblPropertiesSync {
 
   protected final HoodieTimeline activeTimeline;
-  protected final HiveSyncConfig syncConfig;
   protected final Configuration hadoopConf;
   protected final PartitionValueExtractor partitionValueExtractor;
 
-  public AbstractHiveSyncHoodieClient(HiveSyncConfig syncConfig, Configuration hadoopConf, FileSystem fs) {
-    super(syncConfig.hoodieSyncConfigParams.basePath, syncConfig.hoodieSyncConfigParams.assumeDatePartitioning,
-        syncConfig.hoodieSyncConfigParams.useFileListingFromMetadata, syncConfig.hiveSyncConfigParams.withOperationField, fs);
-    this.syncConfig = syncConfig;
-    this.hadoopConf = hadoopConf;
-    this.partitionValueExtractor = ReflectionUtils.loadClass(syncConfig.hoodieSyncConfigParams.partitionValueExtractorClass);
+  public AbstractHiveSyncHoodieClient(HiveSyncConfig config) {
+    super(config);
+    this.hadoopConf = config.getHadoopConf();
+    this.partitionValueExtractor = ReflectionUtils.loadClass(config.getString(META_SYNC_PARTITION_EXTRACTOR_CLASS));
     this.activeTimeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
   }
 
@@ -81,7 +79,7 @@ public abstract class AbstractHiveSyncHoodieClient extends HoodieSyncClient impl
 
     List<PartitionEvent> events = new ArrayList<>();
     for (String storagePartition : partitionStoragePartitions) {
-      Path storagePartitionPath = FSUtils.getPartitionPath(syncConfig.hoodieSyncConfigParams.basePath, storagePartition);
+      Path storagePartitionPath = FSUtils.getPartitionPath(basePath, storagePartition);
       String fullStoragePartitionPath = Path.getPathWithoutSchemeAndAuthority(storagePartitionPath).toUri().getPath();
       // Check if the partition values or if hdfs path is the same
       List<String> storagePartitionValues = partitionValueExtractor.extractPartitionValuesInPath(storagePartition);

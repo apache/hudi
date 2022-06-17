@@ -46,6 +46,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
+
 /**
  * This class offers DDL executor backed by the hive.ql Driver This class preserves the old useJDBC = false way of doing things.
  */
@@ -56,16 +58,16 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
   private SessionState sessionState = null;
   private Driver hiveDriver = null;
 
-  public HiveQueryDDLExecutor(HiveSyncConfig config, FileSystem fs, HiveConf configuration) throws HiveException, MetaException {
-    super(config, fs);
+  public HiveQueryDDLExecutor(HiveSyncConfig config) throws HiveException, MetaException {
+    super(config);
     this.config = config;
-    this.metaStoreClient = Hive.get(configuration).getMSC();
+    this.metaStoreClient = Hive.get(config.getHiveConf()).getMSC();
     try {
-      this.sessionState = new SessionState(configuration,
+      this.sessionState = new SessionState(config.getHiveConf(),
           UserGroupInformation.getCurrentUser().getShortUserName());
       SessionState.start(this.sessionState);
-      this.sessionState.setCurrentDatabase(config.hoodieSyncConfigParams.databaseName);
-      hiveDriver = new org.apache.hadoop.hive.ql.Driver(configuration);
+      this.sessionState.setCurrentDatabase(config.getString(META_SYNC_DATABASE_NAME));
+      hiveDriver = new org.apache.hadoop.hive.ql.Driver(config.getHiveConf());
     } catch (Exception e) {
       if (sessionState != null) {
         try {
@@ -109,7 +111,7 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
       // HiveMetastoreClient returns partition keys separate from Columns, hence get both and merge to
       // get the Schema of the table.
       final long start = System.currentTimeMillis();
-      Table table = metaStoreClient.getTable(config.hoodieSyncConfigParams.databaseName, tableName);
+      Table table = metaStoreClient.getTable(config.getString(META_SYNC_DATABASE_NAME), tableName);
       Map<String, String> partitionKeysMap =
           table.getPartitionKeys().stream().collect(Collectors.toMap(FieldSchema::getName, f -> f.getType().toUpperCase()));
 
@@ -141,13 +143,13 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
             config)) {
           String partitionClause =
               HivePartitionUtil.getPartitionClauseForDrop(dropPartition, partitionValueExtractor, config);
-          metaStoreClient.dropPartition(config.hoodieSyncConfigParams.databaseName, tableName, partitionClause, false);
+          metaStoreClient.dropPartition(config.getString(META_SYNC_DATABASE_NAME), tableName, partitionClause, false);
         }
         LOG.info("Drop partition " + dropPartition + " on " + tableName);
       }
     } catch (Exception e) {
-      LOG.error(config.hoodieSyncConfigParams.databaseName + "." + tableName + " drop partition failed", e);
-      throw new HoodieHiveSyncException(config.hoodieSyncConfigParams.databaseName + "." + tableName + " drop partition failed", e);
+      LOG.error(config.getString(META_SYNC_DATABASE_NAME) + "." + tableName + " drop partition failed", e);
+      throw new HoodieHiveSyncException(config.getString(META_SYNC_DATABASE_NAME) + "." + tableName + " drop partition failed", e);
     }
   }
 

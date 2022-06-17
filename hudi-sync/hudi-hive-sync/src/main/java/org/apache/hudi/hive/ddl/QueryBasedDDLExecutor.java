@@ -39,7 +39,14 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.hudi.hive.HiveSyncConfig.HIVE_BATCH_SYNC_PARTITION_NUM;
+import static org.apache.hudi.hive.HiveSyncConfig.HIVE_SUPPORT_TIMESTAMP_TYPE;
 import static org.apache.hudi.hive.util.HiveSchemaUtil.HIVE_ESCAPE_CHARACTER;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DECODE_PARTITION;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_FIELDS;
 
 /**
  * This class adds functionality for all query based DDLExecutors. The classes extending it only have to provide runSQL(sql) functions.
@@ -50,15 +57,15 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
   public final PartitionValueExtractor partitionValueExtractor;
   private final FileSystem fs;
 
-  public QueryBasedDDLExecutor(HiveSyncConfig config, FileSystem fs) {
-    this.fs = fs;
+  public QueryBasedDDLExecutor(HiveSyncConfig config) {
+    this.fs = config.getHadoopFileSystem();
     this.config = config;
     try {
       this.partitionValueExtractor =
-          (PartitionValueExtractor) Class.forName(config.hoodieSyncConfigParams.partitionValueExtractorClass).newInstance();
+          (PartitionValueExtractor) Class.forName(config.getString(META_SYNC_PARTITION_EXTRACTOR_CLASS)).newInstance();
     } catch (Exception e) {
       throw new HoodieHiveSyncException(
-          "Failed to initialize PartitionValueExtractor class " + config.hoodieSyncConfigParams.partitionValueExtractorClass, e);
+          "Failed to initialize PartitionValueExtractor class " + config.getString(META_SYNC_PARTITION_EXTRACTOR_CLASS), e);
     }
   }
 
@@ -90,11 +97,11 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
   @Override
   public void updateTableDefinition(String tableName, MessageType newSchema) {
     try {
-      String newSchemaStr = HiveSchemaUtil.generateSchemaString(newSchema, config.hoodieSyncConfigParams.partitionFields, config.hiveSyncConfigParams.supportTimestamp);
+      String newSchemaStr = HiveSchemaUtil.generateSchemaString(newSchema, config.getSplitStrings(META_SYNC_PARTITION_FIELDS), config.getBoolean(HIVE_SUPPORT_TIMESTAMP_TYPE));
       // Cascade clause should not be present for non-partitioned tables
-      String cascadeClause = config.hoodieSyncConfigParams.partitionFields.size() > 0 ? " cascade" : "";
+      String cascadeClause = config.getSplitStrings(HIVE_SUPPORT_TIMESTAMP_TYPE).size() > 0 ? " cascade" : "";
       StringBuilder sqlBuilder = new StringBuilder("ALTER TABLE ").append(HIVE_ESCAPE_CHARACTER)
-          .append(config.hoodieSyncConfigParams.databaseName).append(HIVE_ESCAPE_CHARACTER).append(".")
+          .append(config.getString(META_SYNC_DATABASE_NAME)).append(HIVE_ESCAPE_CHARACTER).append(".")
           .append(HIVE_ESCAPE_CHARACTER).append(tableName)
           .append(HIVE_ESCAPE_CHARACTER).append(" REPLACE COLUMNS(")
           .append(newSchemaStr).append(" )").append(cascadeClause);
@@ -138,7 +145,7 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
       String comment = field.getValue().getRight();
       comment = comment.replace("'","");
       sql.append("ALTER TABLE ").append(HIVE_ESCAPE_CHARACTER)
-              .append(config.hoodieSyncConfigParams.databaseName).append(HIVE_ESCAPE_CHARACTER).append(".")
+              .append(config.getString(META_SYNC_DATABASE_NAME)).append(HIVE_ESCAPE_CHARACTER).append(".")
               .append(HIVE_ESCAPE_CHARACTER).append(tableName)
               .append(HIVE_ESCAPE_CHARACTER)
               .append(" CHANGE COLUMN `").append(name).append("` `").append(name)
@@ -148,15 +155,15 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
   }
 
   private List<String> constructAddPartitions(String tableName, List<String> partitions) {
-    if (config.hiveSyncConfigParams.batchSyncNum <= 0) {
+    if (config.getInt(HIVE_BATCH_SYNC_PARTITION_NUM) <= 0) {
       throw new HoodieHiveSyncException("batch-sync-num for sync hive table must be greater than 0, pls check your parameter");
     }
     List<String> result = new ArrayList<>();
-    int batchSyncPartitionNum = config.hiveSyncConfigParams.batchSyncNum;
+    int batchSyncPartitionNum = config.getInt(HIVE_BATCH_SYNC_PARTITION_NUM);
     StringBuilder alterSQL = getAlterTablePrefix(tableName);
     for (int i = 0; i < partitions.size(); i++) {
       String partitionClause = getPartitionClause(partitions.get(i));
-      String fullPartitionPath = FSUtils.getPartitionPath(config.hoodieSyncConfigParams.basePath, partitions.get(i)).toString();
+      String fullPartitionPath = FSUtils.getPartitionPath(config.getString(META_SYNC_BASE_PATH), partitions.get(i)).toString();
       alterSQL.append("  PARTITION (").append(partitionClause).append(") LOCATION '").append(fullPartitionPath)
           .append("' ");
       if ((i + 1) % batchSyncPartitionNum == 0) {
@@ -173,7 +180,7 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
 
   private StringBuilder getAlterTablePrefix(String tableName) {
     StringBuilder alterSQL = new StringBuilder("ALTER TABLE ");
-    alterSQL.append(HIVE_ESCAPE_CHARACTER).append(config.hoodieSyncConfigParams.databaseName)
+    alterSQL.append(HIVE_ESCAPE_CHARACTER).append(config.getString(META_SYNC_DATABASE_NAME))
         .append(HIVE_ESCAPE_CHARACTER).append(".").append(HIVE_ESCAPE_CHARACTER)
         .append(tableName).append(HIVE_ESCAPE_CHARACTER).append(" ADD IF NOT EXISTS ");
     return alterSQL;
@@ -181,18 +188,18 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
 
   public String getPartitionClause(String partition) {
     List<String> partitionValues = partitionValueExtractor.extractPartitionValuesInPath(partition);
-    ValidationUtils.checkArgument(config.hoodieSyncConfigParams.partitionFields.size() == partitionValues.size(),
-        "Partition key parts " + config.hoodieSyncConfigParams.partitionFields + " does not match with partition values " + partitionValues
+    ValidationUtils.checkArgument(config.getSplitStrings(META_SYNC_PARTITION_FIELDS).size() == partitionValues.size(),
+        "Partition key parts " + config.getSplitStrings(META_SYNC_PARTITION_FIELDS) + " does not match with partition values " + partitionValues
             + ". Check partition strategy. ");
     List<String> partBuilder = new ArrayList<>();
-    for (int i = 0; i < config.hoodieSyncConfigParams.partitionFields.size(); i++) {
+    for (int i = 0; i < config.getSplitStrings(META_SYNC_PARTITION_FIELDS).size(); i++) {
       String partitionValue = partitionValues.get(i);
       // decode the partition before sync to hive to prevent multiple escapes of HIVE
-      if (config.hoodieSyncConfigParams.decodePartition) {
+      if (config.getBoolean(META_SYNC_DECODE_PARTITION)) {
         // This is a decode operator for encode in KeyGenUtils#getRecordPartitionPath
         partitionValue = PartitionPathEncodeUtils.unescapePathName(partitionValue);
       }
-      partBuilder.add("`" + config.hoodieSyncConfigParams.partitionFields.get(i) + "`='" + partitionValue + "'");
+      partBuilder.add("`" + config.getSplitStrings(META_SYNC_PARTITION_FIELDS).get(i) + "`='" + partitionValue + "'");
     }
     return String.join(",", partBuilder);
   }
@@ -200,12 +207,12 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
   private List<String> constructChangePartitions(String tableName, List<String> partitions) {
     List<String> changePartitions = new ArrayList<>();
     // Hive 2.x doesn't like db.table name for operations, hence we need to change to using the database first
-    String useDatabase = "USE " + HIVE_ESCAPE_CHARACTER + config.hoodieSyncConfigParams.databaseName + HIVE_ESCAPE_CHARACTER;
+    String useDatabase = "USE " + HIVE_ESCAPE_CHARACTER + config.getString(META_SYNC_DATABASE_NAME) + HIVE_ESCAPE_CHARACTER;
     changePartitions.add(useDatabase);
     String alterTable = "ALTER TABLE " + HIVE_ESCAPE_CHARACTER + tableName + HIVE_ESCAPE_CHARACTER;
     for (String partition : partitions) {
       String partitionClause = getPartitionClause(partition);
-      Path partitionPath = FSUtils.getPartitionPath(config.hoodieSyncConfigParams.basePath, partition);
+      Path partitionPath = FSUtils.getPartitionPath(config.getString(META_SYNC_BASE_PATH), partition);
       String partitionScheme = partitionPath.toUri().getScheme();
       String fullPartitionPath = StorageSchemes.HDFS.getScheme().equals(partitionScheme)
           ? FSUtils.getDFSFullPartitionPath(fs, partitionPath) : partitionPath.toString();

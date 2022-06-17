@@ -131,10 +131,10 @@ public class HiveTestUtil {
     hiveSyncProps.setProperty(HiveSyncConfig.META_SYNC_PARTITION_FIELDS.key(), "datestr");
     hiveSyncProps.setProperty(HiveSyncConfig.HIVE_BATCH_SYNC_PARTITION_NUM.key(), "3");
 
-    hiveSyncConfig = new HiveSyncConfig(hiveSyncProps);
+    hiveSyncConfig = new HiveSyncConfig(hiveSyncProps, configuration);
 
     dtfOut = DateTimeFormatter.ofPattern("yyyy/MM/dd");
-    ddlExecutor = new HiveQueryDDLExecutor(hiveSyncConfig, fileSystem, getHiveConf());
+    ddlExecutor = new HiveQueryDDLExecutor(hiveSyncConfig);
 
     clear();
   }

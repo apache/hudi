@@ -18,12 +18,6 @@
 
 package org.apache.hudi.sync.common;
 
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Statement;
-import java.util.List;
-import java.util.Map;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -34,9 +28,21 @@ import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
+
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.parquet.schema.MessageType;
+
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.util.List;
+import java.util.Map;
+
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_ASSUME_DATE_PARTITION;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_USE_FILE_LISTING_FROM_METADATA;
 
 public abstract class HoodieSyncClient implements AutoCloseable {
 
@@ -44,29 +50,23 @@ public abstract class HoodieSyncClient implements AutoCloseable {
 
   public static final String HOODIE_LAST_COMMIT_TIME_SYNC = "last_commit_time_sync";
 
+  protected final HoodieSyncConfig config;
   protected final HoodieTableMetaClient metaClient;
   protected final HoodieTableType tableType;
   protected final FileSystem fs;
-  private final String basePath;
-  private final boolean assumeDatePartitioning;
-  private final boolean useFileListingFromMetadata;
-  private final boolean withOperationField;
+  protected final String basePath;
+  protected final boolean assumeDatePartitioning;
+  protected final boolean useFileListingFromMetadata;
 
-  @Deprecated
-  public HoodieSyncClient(String basePath, boolean assumeDatePartitioning, boolean useFileListingFromMetadata,
-                          boolean verifyMetadataFileListing, boolean withOperationField, FileSystem fs) {
-    this(basePath, assumeDatePartitioning, useFileListingFromMetadata, withOperationField, fs);
-  }
-
-  public HoodieSyncClient(String basePath, boolean assumeDatePartitioning, boolean useFileListingFromMetadata,
-                          boolean withOperationField, FileSystem fs) {
-    this.metaClient = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
+  public HoodieSyncClient(HoodieSyncConfig config) {
+    this.config = config;
+    this.basePath = config.getString(META_SYNC_BASE_PATH);
+    this.assumeDatePartitioning = config.getBoolean(META_SYNC_ASSUME_DATE_PARTITION);
+    this.useFileListingFromMetadata = config.getBoolean(META_SYNC_USE_FILE_LISTING_FROM_METADATA);
+    this.fs = config.getHadoopFileSystem();
+    this.metaClient = HoodieTableMetaClient.builder()
+        .setConf(fs.getConf()).setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
     this.tableType = metaClient.getTableType();
-    this.basePath = basePath;
-    this.assumeDatePartitioning = assumeDatePartitioning;
-    this.useFileListingFromMetadata = useFileListingFromMetadata;
-    this.withOperationField = withOperationField;
-    this.fs = fs;
   }
 
   public abstract Map<String, String> getTableSchema(String tableName);

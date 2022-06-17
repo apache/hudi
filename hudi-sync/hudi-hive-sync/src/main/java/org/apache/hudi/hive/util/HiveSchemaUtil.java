@@ -42,6 +42,13 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.hive.HiveSyncConfig.HIVE_CREATE_MANAGED_TABLE;
+import static org.apache.hudi.hive.HiveSyncConfig.HIVE_SUPPORT_TIMESTAMP_TYPE;
+import static org.apache.hudi.hive.HiveSyncConfig.HIVE_SYNC_BUCKET_SYNC_SPEC;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_FIELDS;
+
 /**
  * Schema Utilities.
  */
@@ -156,7 +163,7 @@ public class HiveSchemaUtil {
    * @return : Hive Table schema read from parquet file List[FieldSchema] without partitionField
    */
   public static List<FieldSchema> convertParquetSchemaToHiveFieldSchema(MessageType messageType, HiveSyncConfig syncConfig) throws IOException {
-    return convertMapSchemaToHiveFieldSchema(parquetSchemaToMapSchema(messageType, syncConfig.hiveSyncConfigParams.supportTimestamp, false), syncConfig);
+    return convertMapSchemaToHiveFieldSchema(parquetSchemaToMapSchema(messageType, syncConfig.getBoolean(HIVE_SUPPORT_TIMESTAMP_TYPE), false), syncConfig);
   }
 
   /**
@@ -202,7 +209,7 @@ public class HiveSchemaUtil {
   public static List<FieldSchema> convertMapSchemaToHiveFieldSchema(LinkedHashMap<String, String> schema, HiveSyncConfig syncConfig) throws IOException {
     return schema.keySet().stream()
         .map(key -> new FieldSchema(key, schema.get(key).toLowerCase(), ""))
-        .filter(field -> !syncConfig.hoodieSyncConfigParams.partitionFields.contains(field.getName()))
+        .filter(field -> !syncConfig.getSplitStrings(META_SYNC_PARTITION_FIELDS).contains(field.getName()))
         .collect(Collectors.toList());
   }
 
@@ -448,11 +455,11 @@ public class HiveSchemaUtil {
   public static String generateCreateDDL(String tableName, MessageType storageSchema, HiveSyncConfig config, String inputFormatClass,
                                          String outputFormatClass, String serdeClass, Map<String, String> serdeProperties,
                                          Map<String, String> tableProperties) throws IOException {
-    Map<String, String> hiveSchema = convertParquetSchemaToHiveSchema(storageSchema, config.hiveSyncConfigParams.supportTimestamp);
-    String columns = generateSchemaString(storageSchema, config.hoodieSyncConfigParams.partitionFields, config.hiveSyncConfigParams.supportTimestamp);
+    Map<String, String> hiveSchema = convertParquetSchemaToHiveSchema(storageSchema, config.getBoolean(HIVE_SUPPORT_TIMESTAMP_TYPE));
+    String columns = generateSchemaString(storageSchema, config.getSplitStrings(META_SYNC_PARTITION_FIELDS), config.getBoolean(HIVE_SUPPORT_TIMESTAMP_TYPE));
 
     List<String> partitionFields = new ArrayList<>();
-    for (String partitionKey : config.hoodieSyncConfigParams.partitionFields) {
+    for (String partitionKey : config.getSplitStrings(META_SYNC_PARTITION_FIELDS)) {
       String partitionKeyWithTicks = tickSurround(partitionKey);
       partitionFields.add(new StringBuilder().append(partitionKeyWithTicks).append(" ")
           .append(getPartitionKeyType(hiveSchema, partitionKeyWithTicks)).toString());
@@ -460,26 +467,26 @@ public class HiveSchemaUtil {
 
     String partitionsStr = String.join(",", partitionFields);
     StringBuilder sb = new StringBuilder();
-    if (config.hiveSyncConfigParams.createManagedTable) {
+    if (config.getBoolean(HIVE_CREATE_MANAGED_TABLE)) {
       sb.append("CREATE TABLE IF NOT EXISTS ");
     } else {
       sb.append("CREATE EXTERNAL TABLE IF NOT EXISTS ");
     }
-    sb.append(HIVE_ESCAPE_CHARACTER).append(config.hoodieSyncConfigParams.databaseName).append(HIVE_ESCAPE_CHARACTER)
+    sb.append(HIVE_ESCAPE_CHARACTER).append(config.getString(META_SYNC_DATABASE_NAME)).append(HIVE_ESCAPE_CHARACTER)
             .append(".").append(HIVE_ESCAPE_CHARACTER).append(tableName).append(HIVE_ESCAPE_CHARACTER);
     sb.append("( ").append(columns).append(")");
-    if (!config.hoodieSyncConfigParams.partitionFields.isEmpty()) {
+    if (!config.getSplitStrings(META_SYNC_PARTITION_FIELDS).isEmpty()) {
       sb.append(" PARTITIONED BY (").append(partitionsStr).append(")");
     }
-    if (config.hiveSyncConfigParams.bucketSpec != null) {
-      sb.append(' ' + config.hiveSyncConfigParams.bucketSpec + ' ');
+    if (config.getString(HIVE_SYNC_BUCKET_SYNC_SPEC) != null) {
+      sb.append(' ' + config.getString(HIVE_SYNC_BUCKET_SYNC_SPEC) + ' ');
     }
     sb.append(" ROW FORMAT SERDE '").append(serdeClass).append("'");
     if (serdeProperties != null && !serdeProperties.isEmpty()) {
       sb.append(" WITH SERDEPROPERTIES (").append(propertyToString(serdeProperties)).append(")");
     }
     sb.append(" STORED AS INPUTFORMAT '").append(inputFormatClass).append("'");
-    sb.append(" OUTPUTFORMAT '").append(outputFormatClass).append("' LOCATION '").append(config.hoodieSyncConfigParams.basePath).append("'");
+    sb.append(" OUTPUTFORMAT '").append(outputFormatClass).append("' LOCATION '").append(config.getString(META_SYNC_BASE_PATH)).append("'");
 
     if (tableProperties != null && !tableProperties.isEmpty()) {
       sb.append(" TBLPROPERTIES(").append(propertyToString(tableProperties)).append(")");

@@ -39,7 +39,17 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.time.Instant;
-import java.util.Collections;
+import java.util.Properties;
+
+import static org.apache.hudi.hive.HiveSyncConfig.HIVE_PASS;
+import static org.apache.hudi.hive.HiveSyncConfig.HIVE_URL;
+import static org.apache.hudi.hive.HiveSyncConfig.HIVE_USER;
+import static org.apache.hudi.hive.HiveSyncConfig.HIVE_USE_PRE_APACHE_INPUT_FORMAT;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_ASSUME_DATE_PARTITION;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_FIELDS;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
 
 public class HiveSyncFunctionalTestHarness {
 
@@ -79,42 +89,42 @@ public class HiveSyncFunctionalTestHarness {
   }
 
   public HiveSyncConfig hiveSyncConf() throws IOException {
-    HiveSyncConfig conf = new HiveSyncConfig();
-    conf.hiveSyncConfigParams.jdbcUrl = hiveTestService.getJdbcHive2Url();
-    conf.hiveSyncConfigParams.hiveUser = "";
-    conf.hiveSyncConfigParams.hivePass = "";
-    conf.hoodieSyncConfigParams.databaseName = "hivesynctestdb";
-    conf.hoodieSyncConfigParams.tableName = "hivesynctesttable";
-    conf.hoodieSyncConfigParams.basePath = Files.createDirectories(tempDir.resolve("hivesynctestcase-" + Instant.now().toEpochMilli())).toUri().toString();
-    conf.hoodieSyncConfigParams.assumeDatePartitioning = true;
-    conf.hiveSyncConfigParams.usePreApacheInputFormat = false;
-    conf.hoodieSyncConfigParams.partitionFields = Collections.singletonList("datestr");
-    return conf;
+    Properties props = new Properties();
+    props.setProperty(HIVE_URL.key(), hiveTestService.getJdbcHive2Url());
+    props.setProperty(HIVE_USER.key(), "");
+    props.setProperty(HIVE_PASS.key(), "");
+    props.setProperty(META_SYNC_DATABASE_NAME.key(), "hivesynctestdb");
+    props.setProperty(META_SYNC_TABLE_NAME.key(), "hivesynctesttable");
+    props.setProperty(META_SYNC_BASE_PATH.key(), Files.createDirectories(tempDir.resolve("hivesynctestcase-" + Instant.now().toEpochMilli())).toUri().toString());
+    props.setProperty(META_SYNC_ASSUME_DATE_PARTITION.key(), "true");
+    props.setProperty(HIVE_USE_PRE_APACHE_INPUT_FORMAT.key(), "false");
+    props.setProperty(META_SYNC_PARTITION_FIELDS.key(), "datestr");
+    return new HiveSyncConfig(props, hiveConf());
   }
 
   public HoodieHiveClient hiveClient(HiveSyncConfig hiveSyncConfig) throws IOException {
     HoodieTableMetaClient.withPropertyBuilder()
         .setTableType(HoodieTableType.COPY_ON_WRITE)
-        .setTableName(hiveSyncConfig.hoodieSyncConfigParams.tableName)
+        .setTableName(hiveSyncConfig.getString(META_SYNC_TABLE_NAME))
         .setPayloadClass(HoodieAvroPayload.class)
-        .initTable(hadoopConf, hiveSyncConfig.hoodieSyncConfigParams.basePath);
-    return new HoodieHiveClient(hiveSyncConfig, hiveConf(), fs());
+        .initTable(hadoopConf, hiveSyncConfig.getString(META_SYNC_BASE_PATH));
+    return new HoodieHiveClient(hiveSyncConfig);
   }
 
   public void dropTables(String database, String... tables) throws IOException, HiveException, MetaException {
     HiveSyncConfig hiveSyncConfig = hiveSyncConf();
-    hiveSyncConfig.hoodieSyncConfigParams.databaseName = database;
+    hiveSyncConfig.setValue(META_SYNC_DATABASE_NAME, database);
     for (String table : tables) {
-      hiveSyncConfig.hoodieSyncConfigParams.tableName = table;
-      new HiveQueryDDLExecutor(hiveSyncConfig, fs(), hiveConf()).runSQL("drop table if exists " + table);
+      hiveSyncConfig.setValue(META_SYNC_TABLE_NAME, table);
+      new HiveQueryDDLExecutor(hiveSyncConfig).runSQL("drop table if exists " + table);
     }
   }
 
   public void dropDatabases(String... databases) throws IOException, HiveException, MetaException {
     HiveSyncConfig hiveSyncConfig = hiveSyncConf();
     for (String database : databases) {
-      hiveSyncConfig.hoodieSyncConfigParams.databaseName = database;
-      new HiveQueryDDLExecutor(hiveSyncConfig, fs(), hiveConf()).runSQL("drop database if exists " + database);
+      hiveSyncConfig.setValue(META_SYNC_DATABASE_NAME, database);
+      new HiveQueryDDLExecutor(hiveSyncConfig).runSQL("drop database if exists " + database);
     }
   }
 

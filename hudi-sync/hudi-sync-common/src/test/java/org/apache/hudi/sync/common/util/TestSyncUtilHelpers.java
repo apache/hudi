@@ -104,6 +104,10 @@ public class TestSyncUtilHelpers {
     public void syncHoodieTable() {
       throw new HoodieException("Method unimplemented as its a test class");
     }
+
+    @Override
+    public void close() throws Exception {
+    }
   }
 
   public static class DeprecatedMetaSyncClass extends HoodieSyncTool {
@@ -114,6 +118,10 @@ public class TestSyncUtilHelpers {
     @Override
     public void syncHoodieTable() {
       throw new HoodieException("Method unimplemented as its a test class");
+    }
+
+    @Override
+    public void close() throws Exception {
     }
   }
 

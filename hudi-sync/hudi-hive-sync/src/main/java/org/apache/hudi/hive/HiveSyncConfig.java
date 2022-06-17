@@ -19,14 +19,13 @@
 package org.apache.hudi.hive;
 
 import org.apache.hudi.common.config.ConfigProperty;
-import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.sync.common.HoodieSyncConfig;
 
 import com.beust.jcommander.Parameter;
 import com.beust.jcommander.ParametersDelegate;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.hive.conf.HiveConf;
 
-import java.io.Serializable;
 import java.util.Properties;
 
 /**
@@ -163,6 +162,10 @@ public class HiveSyncConfig extends HoodieSyncConfig {
 
   public HiveSyncConfig(Properties props, Configuration hadoopConf) {
     super(props, hadoopConf);
+  }
+
+  public HiveConf getHiveConf() {
+    return (HiveConf) getHadoopConf();
   }
 
   public static class HiveSyncConfigParams {

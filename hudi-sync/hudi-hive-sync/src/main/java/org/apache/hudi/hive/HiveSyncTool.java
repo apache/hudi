@@ -94,13 +94,14 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
     // HiveConf needs to load fs conf to allow instantiation via AWSGlueClientFactory
     HiveConf hiveConf = new HiveConf(hadoopConf, HiveConf.class);
     hiveConf.addResource(config.getHadoopFileSystem().getConf());
-    initClient(config, hiveConf);
+    config.setHadoopConf(hiveConf);
+    initClient(config);
     initConfig(config);
   }
 
-  protected void initClient(HiveSyncConfig hiveSyncConfig, HiveConf hiveConf) {
+  protected void initClient(HiveSyncConfig hiveSyncConfig) {
     try {
-      this.hoodieHiveClient = new HoodieHiveClient(hiveSyncConfig, hiveConf, config.getHadoopFileSystem());
+      this.hoodieHiveClient = new HoodieHiveClient(hiveSyncConfig);
     } catch (RuntimeException e) {
       if (hiveSyncConfig.getBoolean(HIVE_IGNORE_EXCEPTIONS)) {
         LOG.error("Got runtime exception when hive syncing, but continuing as ignoreExceptions config is set ", e);

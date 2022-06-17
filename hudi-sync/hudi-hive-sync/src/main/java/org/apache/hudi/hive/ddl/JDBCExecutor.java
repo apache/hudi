@@ -18,12 +18,9 @@
 
 package org.apache.hudi.hive.ddl;
 
-import static org.apache.hudi.hive.util.HiveSchemaUtil.HIVE_ESCAPE_CHARACTER;
-
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncException;
 
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -39,6 +36,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
+import static org.apache.hudi.hive.HiveSyncConfig.HIVE_BATCH_SYNC_PARTITION_NUM;
+import static org.apache.hudi.hive.HiveSyncConfig.HIVE_PASS;
+import static org.apache.hudi.hive.HiveSyncConfig.HIVE_URL;
+import static org.apache.hudi.hive.HiveSyncConfig.HIVE_USER;
+import static org.apache.hudi.hive.util.HiveSchemaUtil.HIVE_ESCAPE_CHARACTER;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
+
 /**
  * This class offers DDL executor backed by the jdbc This class preserves the old useJDBC = true way of doing things.
  */
@@ -47,13 +51,13 @@ public class JDBCExecutor extends QueryBasedDDLExecutor {
   private final HiveSyncConfig config;
   private Connection connection;
 
-  public JDBCExecutor(HiveSyncConfig config, FileSystem fs) {
-    super(config, fs);
-    Objects.requireNonNull(config.hiveSyncConfigParams.jdbcUrl, "--jdbc-url option is required for jdbc sync mode");
-    Objects.requireNonNull(config.hiveSyncConfigParams.hiveUser, "--user option is required for jdbc sync mode");
-    Objects.requireNonNull(config.hiveSyncConfigParams.hivePass, "--pass option is required for jdbc sync mode");
+  public JDBCExecutor(HiveSyncConfig config) {
+    super(config);
+    Objects.requireNonNull(config.getString(HIVE_URL), "--jdbc-url option is required for jdbc sync mode");
+    Objects.requireNonNull(config.getString(HIVE_USER), "--user option is required for jdbc sync mode");
+    Objects.requireNonNull(config.getString(HIVE_PASS), "--pass option is required for jdbc sync mode");
     this.config = config;
-    createHiveConnection(config.hiveSyncConfigParams.jdbcUrl, config.hiveSyncConfigParams.hiveUser, config.hiveSyncConfigParams.hivePass);
+    createHiveConnection(config.getString(HIVE_URL), config.getString(HIVE_USER), config.getString(HIVE_PASS));
   }
 
   @Override
@@ -126,7 +130,7 @@ public class JDBCExecutor extends QueryBasedDDLExecutor {
     ResultSet result = null;
     try {
       DatabaseMetaData databaseMetaData = connection.getMetaData();
-      result = databaseMetaData.getColumns(null, config.hoodieSyncConfigParams.databaseName, tableName, null);
+      result = databaseMetaData.getColumns(null, config.getString(META_SYNC_DATABASE_NAME), tableName, null);
       while (result.next()) {
         String columnName = result.getString(4);
         String columnType = result.getString(6);
@@ -157,11 +161,11 @@ public class JDBCExecutor extends QueryBasedDDLExecutor {
   }
 
   private List<String> constructDropPartitions(String tableName, List<String> partitions) {
-    if (config.hiveSyncConfigParams.batchSyncNum <= 0) {
+    if (config.getInt(HIVE_BATCH_SYNC_PARTITION_NUM) <= 0) {
       throw new HoodieHiveSyncException("batch-sync-num for sync hive table must be greater than 0, pls check your parameter");
     }
     List<String> result = new ArrayList<>();
-    int batchSyncPartitionNum = config.hiveSyncConfigParams.batchSyncNum;
+    int batchSyncPartitionNum = config.getInt(HIVE_BATCH_SYNC_PARTITION_NUM);
     StringBuilder alterSQL = getAlterTableDropPrefix(tableName);
 
     for (int i = 0; i < partitions.size(); i++) {
@@ -186,7 +190,7 @@ public class JDBCExecutor extends QueryBasedDDLExecutor {
 
   public StringBuilder getAlterTableDropPrefix(String tableName) {
     StringBuilder alterSQL = new StringBuilder("ALTER TABLE ");
-    alterSQL.append(HIVE_ESCAPE_CHARACTER).append(config.hoodieSyncConfigParams.databaseName)
+    alterSQL.append(HIVE_ESCAPE_CHARACTER).append(config.getString(META_SYNC_DATABASE_NAME))
         .append(HIVE_ESCAPE_CHARACTER).append(".").append(HIVE_ESCAPE_CHARACTER)
         .append(tableName).append(HIVE_ESCAPE_CHARACTER).append(" DROP IF EXISTS ");
     return alterSQL;

@@ -1001,7 +1001,7 @@ public class TestHiveSyncTool {
     assertFalse(
         hiveClient.tableExists(HiveTestUtil.TABLE_NAME), "Table " + HiveTestUtil.TABLE_NAME + " should not exist initially");
 
-    HiveSyncTool tool = new HiveSyncTool(hiveSyncProps, getHiveConf(), fileSystem);
+    HiveSyncTool tool = new HiveSyncTool(new HiveSyncConfig(hiveSyncProps, getHiveConf()));
     // now delete the evolved commit instant
     Path fullPath = new Path(HiveTestUtil.basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
         + hiveClient.getActiveTimeline().getInstants()
@@ -1136,7 +1136,7 @@ public class TestHiveSyncTool {
   }
 
   private void reinitHiveSyncClient() {
-    hiveSyncTool = new HiveSyncTool(hiveSyncProps, HiveTestUtil.getHiveConf(), fileSystem);
+    hiveSyncTool = new HiveSyncTool(new HiveSyncConfig(hiveSyncProps, HiveTestUtil.getHiveConf()));
     hiveClient = (HoodieHiveClient) hiveSyncTool.hoodieHiveClient;
   }
 
