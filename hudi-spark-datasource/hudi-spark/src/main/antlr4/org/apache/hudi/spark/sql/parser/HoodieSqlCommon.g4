@@ -48,6 +48,13 @@
  statement
     : compactionStatement                                                       #compactionCommand
     | CALL multipartIdentifier '(' (callArgument (',' callArgument)*)? ')'      #call
+    | CREATE INDEX (IF NOT EXISTS)? identifier ON TABLE?
+          tableIdentifier (USING indexType=identifier)?
+          LEFT_PAREN columns=multipartIdentifierPropertyList RIGHT_PAREN
+          (OPTIONS indexOptions=propertyList)?                                  #createIndex
+    | DROP INDEX (IF EXISTS)? identifier ON TABLE? tableIdentifier              #dropIndex
+    | SHOW INDEXES (FROM | IN) TABLE? tableIdentifier                           #showIndexes
+    | REFRESH INDEX identifier ON TABLE? tableIdentifier                        #refreshIndex
     | .*?                                                                       #passThrough
     ;
 
@@ -99,6 +106,14 @@
     | MINUS? BIGDECIMAL_LITERAL       #bigDecimalLiteral
     ;
 
+ multipartIdentifierPropertyList
+     : multipartIdentifierProperty (COMMA multipartIdentifierProperty)*
+     ;
+
+ multipartIdentifierProperty
+     : multipartIdentifier (OPTIONS options=propertyList)?
+     ;
+
  multipartIdentifier
     : parts+=identifier ('.' parts+=identifier)*
     ;
@@ -114,8 +129,52 @@
     ;
 
  nonReserved
-     : CALL | COMPACTION | RUN | SCHEDULE | ON | SHOW | LIMIT
+     : CALL
+     | COMPACTION
+     | CREATE
+     | DROP
+     | EXISTS
+     | FROM
+     | IN
+     | INDEX
+     | INDEXES
+     | IF
+     | LIMIT
+     | NOT
+     | ON
+     | OPTIONS
+     | REFRESH
+     | RUN
+     | SCHEDULE
+     | SHOW
+     | TABLE
+     | USING
      ;
+
+ propertyList
+     : LEFT_PAREN property (COMMA property)* RIGHT_PAREN
+     ;
+
+ property
+     : key=propertyKey (EQ? value=propertyValue)?
+     ;
+
+ propertyKey
+     : identifier (DOT identifier)*
+     | STRING
+     ;
+
+ propertyValue
+     : INTEGER_VALUE
+     | DECIMAL_VALUE
+     | booleanValue
+     | STRING
+     ;
+
+ LEFT_PAREN: '(';
+ RIGHT_PAREN: ')';
+ COMMA: ',';
+ DOT: '.';
 
  ALL: 'ALL';
  AT: 'AT';
@@ -132,6 +191,21 @@
  FALSE: 'FALSE';
  INTERVAL: 'INTERVAL';
  TO: 'TO';
+ CREATE: 'CREATE';
+ INDEX: 'INDEX';
+ INDEXES: 'INDEXES';
+ IF: 'IF';
+ NOT: 'NOT';
+ EXISTS: 'EXISTS';
+ TABLE: 'TABLE';
+ USING: 'USING';
+ OPTIONS: 'OPTIONS';
+ DROP: 'DROP';
+ FROM: 'FROM';
+ IN: 'IN';
+ REFRESH: 'REFRESH';
+
+ EQ: '=' | '==';
 
  PLUS: '+';
  MINUS: '-';
