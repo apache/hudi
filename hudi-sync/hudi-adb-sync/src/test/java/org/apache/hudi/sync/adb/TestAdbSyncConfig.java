@@ -56,13 +56,13 @@ public class TestAdbSyncConfig {
     props.setProperty(ADB_SYNC_PASS.key(), "adb");
     props.setProperty(ADB_SYNC_JDBC_URL.key(), "jdbc:mysql://localhost:3306");
     props.setProperty(ADB_SYNC_SKIP_RO_SUFFIX.key(), "false");
-    String tableProps = "spark.sql.sources.provider= 'hudi'\\n"
-        + "spark.sql.sources.schema.numParts = '1'\\n "
-        + "spark.sql.sources.schema.part.0 ='xx'\\n "
-        + "spark.sql.sources.schema.numPartCols = '1'\\n"
-        + "spark.sql.sources.schema.partCol.0 = 'dt'";
+    String tableProps = "spark.sql.sources.provider=hudi\n"
+        + "spark.sql.sources.schema.numParts=1\n"
+        + "spark.sql.sources.schema.part.0=xx\n"
+        + "spark.sql.sources.schema.numPartCols=1\n"
+        + "spark.sql.sources.schema.partCol.0=dt";
     props.setProperty(ADB_SYNC_TABLE_PROPERTIES.key(), tableProps);
-    props.setProperty(ADB_SYNC_SERDE_PROPERTIES.key(), "'path'='/tmp/test_db/tbl'");
+    props.setProperty(ADB_SYNC_SERDE_PROPERTIES.key(), "path=/tmp/test_db/tbl");
     props.setProperty(ADB_SYNC_DB_LOCATION.key(), "file://tmp/test_db");
 
     AdbSyncConfig config = new AdbSyncConfig(props);
@@ -83,7 +83,7 @@ public class TestAdbSyncConfig {
     tablePropsMap.put("spark.sql.sources.schema.partCol.0", "dt");
     assertEquals(tablePropsMap, ConfigUtils.toMap(config.getString(ADB_SYNC_TABLE_PROPERTIES)));
     Map<String, String> serdePropsMap = new HashMap<>();
-    tablePropsMap.put("path", "/tmp/test_db/tbl");
+    serdePropsMap.put("path", "/tmp/test_db/tbl");
     assertEquals(serdePropsMap, ConfigUtils.toMap(config.getString(ADB_SYNC_SERDE_PROPERTIES)));
     assertEquals("file://tmp/test_db", config.getString(ADB_SYNC_DB_LOCATION));
   }
