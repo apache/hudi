@@ -413,9 +413,9 @@ object DataSourceWriteOptions {
    * @deprecated Hive Specific Configs are moved to {@link HiveSyncConfig}
    */
   @Deprecated
-  val HIVE_SYNC_ENABLED: ConfigProperty[Boolean] = HiveSyncConfig.HIVE_SYNC_ENABLED
+  val HIVE_SYNC_ENABLED: ConfigProperty[java.lang.Boolean] = HiveSyncConfig.HIVE_SYNC_ENABLED
   @Deprecated
-  val META_SYNC_ENABLED: ConfigProperty[Boolean] = HoodieSyncConfig.META_SYNC_ENABLED
+  val META_SYNC_ENABLED: ConfigProperty[java.lang.Boolean] = HoodieSyncConfig.META_SYNC_ENABLED
   @Deprecated
   val HIVE_DATABASE: ConfigProperty[String] = HoodieSyncConfig.META_SYNC_DATABASE_NAME
   @Deprecated
@@ -441,21 +441,21 @@ object DataSourceWriteOptions {
   @Deprecated
   val HIVE_PARTITION_EXTRACTOR_CLASS: ConfigProperty[String] = HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS
   @Deprecated
-  val HIVE_ASSUME_DATE_PARTITION: ConfigProperty[Boolean] = HoodieSyncConfig.META_SYNC_ASSUME_DATE_PARTITION
+  val HIVE_ASSUME_DATE_PARTITION: ConfigProperty[java.lang.Boolean] = HoodieSyncConfig.META_SYNC_ASSUME_DATE_PARTITION
   @Deprecated
-  val HIVE_USE_PRE_APACHE_INPUT_FORMAT: ConfigProperty[Boolean] = HiveSyncConfig.HIVE_USE_PRE_APACHE_INPUT_FORMAT
+  val HIVE_USE_PRE_APACHE_INPUT_FORMAT: ConfigProperty[java.lang.Boolean] = HiveSyncConfig.HIVE_USE_PRE_APACHE_INPUT_FORMAT
 
   /** @deprecated Use {@link HIVE_SYNC_MODE} instead of this config from 0.9.0 */
   @Deprecated
-  val HIVE_USE_JDBC: ConfigProperty[Boolean] = HiveSyncConfig.HIVE_USE_JDBC
+  val HIVE_USE_JDBC: ConfigProperty[java.lang.Boolean] = HiveSyncConfig.HIVE_USE_JDBC
   @Deprecated
-  val HIVE_AUTO_CREATE_DATABASE: ConfigProperty[Boolean] = HiveSyncConfig.HIVE_AUTO_CREATE_DATABASE
+  val HIVE_AUTO_CREATE_DATABASE: ConfigProperty[java.lang.Boolean] = HiveSyncConfig.HIVE_AUTO_CREATE_DATABASE
   @Deprecated
-  val HIVE_IGNORE_EXCEPTIONS: ConfigProperty[Boolean] = HiveSyncConfig.HIVE_IGNORE_EXCEPTIONS
+  val HIVE_IGNORE_EXCEPTIONS: ConfigProperty[java.lang.Boolean] = HiveSyncConfig.HIVE_IGNORE_EXCEPTIONS
   @Deprecated
-  val HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE: ConfigProperty[Boolean] = HiveSyncConfig.HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE
+  val HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE: ConfigProperty[java.lang.Boolean] = HiveSyncConfig.HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE
   @Deprecated
-  val HIVE_SUPPORT_TIMESTAMP_TYPE: ConfigProperty[Boolean] = HiveSyncConfig.HIVE_SUPPORT_TIMESTAMP_TYPE
+  val HIVE_SUPPORT_TIMESTAMP_TYPE: ConfigProperty[java.lang.Boolean] = HiveSyncConfig.HIVE_SUPPORT_TIMESTAMP_TYPE
 
   /**
    * Flag to indicate whether to use conditional syncing in HiveSync.
@@ -463,13 +463,13 @@ object DataSourceWriteOptions {
    * By default true.
    */
   @Deprecated
-  val HIVE_CONDITIONAL_SYNC: ConfigProperty[Boolean] = HoodieSyncConfig.META_SYNC_CONDITIONAL_SYNC
+  val HIVE_CONDITIONAL_SYNC: ConfigProperty[java.lang.Boolean] = HoodieSyncConfig.META_SYNC_CONDITIONAL_SYNC
   @Deprecated
   val HIVE_TABLE_PROPERTIES: ConfigProperty[String] = HiveSyncConfig.HIVE_TABLE_PROPERTIES
   @Deprecated
   val HIVE_TABLE_SERDE_PROPERTIES: ConfigProperty[String] = HiveSyncConfig.HIVE_TABLE_SERDE_PROPERTIES
   @Deprecated
-  val HIVE_SYNC_AS_DATA_SOURCE_TABLE: ConfigProperty[Boolean] = HiveSyncConfig.HIVE_SYNC_AS_DATA_SOURCE_TABLE
+  val HIVE_SYNC_AS_DATA_SOURCE_TABLE: ConfigProperty[java.lang.Boolean] = HiveSyncConfig.HIVE_SYNC_AS_DATA_SOURCE_TABLE
 
   // Create table as managed table
   @Deprecated
@@ -481,7 +481,7 @@ object DataSourceWriteOptions {
   @Deprecated
   val HIVE_SYNC_BUCKET_SYNC: ConfigProperty[java.lang.Boolean] = HiveSyncConfig.HIVE_SYNC_BUCKET_SYNC
   @Deprecated
-  val HIVE_SYNC_COMMENT: ConfigProperty[Boolean] = HiveSyncConfig.HIVE_SYNC_COMMENT;
+  val HIVE_SYNC_COMMENT: ConfigProperty[java.lang.Boolean] = HiveSyncConfig.HIVE_SYNC_COMMENT;
 
   // Async Compaction - Enabled by default for MOR
   val ASYNC_COMPACT_ENABLE: ConfigProperty[String] = ConfigProperty
