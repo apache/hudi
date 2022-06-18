@@ -20,7 +20,6 @@
 package org.apache.hudi.gcp.bigquery;
 
 import org.apache.hudi.common.config.ConfigProperty;
-import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.sync.common.HoodieSyncConfig;
 
 import com.beust.jcommander.Parameter;
@@ -28,7 +27,6 @@ import com.beust.jcommander.ParametersDelegate;
 
 import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
 
