@@ -50,6 +50,7 @@ import datahub.client.rest.RestEmitter;
 import datahub.event.MetadataChangeProposalWrapper;
 import org.apache.avro.AvroTypeException;
 import org.apache.avro.Schema;
+import org.apache.parquet.schema.MessageType;
 
 import java.util.Collections;
 import java.util.List;
@@ -93,7 +94,8 @@ public class DataHubSyncClient extends HoodieSyncClient {
     }
   }
 
-  public void updateTableDefinition(String tableName) {
+  @Override
+  public void updateTableSchema(String tableName, MessageType schema) {
     Schema avroSchema = getAvroSchemaWithoutMetadataFields(metaClient);
     List<SchemaField> fields = avroSchema.getFields().stream().map(f -> new SchemaField()
         .setFieldPath(f.name())

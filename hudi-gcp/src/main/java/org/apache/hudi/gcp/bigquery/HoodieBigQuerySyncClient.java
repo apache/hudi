@@ -19,7 +19,6 @@
 
 package org.apache.hudi.gcp.bigquery;
 
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.sync.common.HoodieSyncClient;
 
 import com.google.cloud.bigquery.BigQuery;
@@ -40,7 +39,6 @@ import com.google.cloud.bigquery.TableInfo;
 import com.google.cloud.bigquery.ViewDefinition;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.apache.parquet.schema.MessageType;
 
 import java.util.Collections;
 import java.util.List;
@@ -78,13 +76,6 @@ public class HoodieBigQuerySyncClient extends HoodieSyncClient {
         throw new HoodieBigQuerySyncException("Cannot create bigQuery connection ", e);
       }
     }
-  }
-
-  @Override
-  public void createTable(final String tableName, final MessageType storageSchema, final String inputFormatClass,
-      final String outputFormatClass, final String serdeClass,
-      final Map<String, String> serdeProperties, final Map<String, String> tableProperties) {
-    // bigQuery create table arguments are different, so do nothing.
   }
 
   public void createManifestTable(String tableName, String sourceUri) {
@@ -188,23 +179,6 @@ public class HoodieBigQuerySyncClient extends HoodieSyncClient {
     TableId tableId = TableId.of(projectId, datasetName, tableName);
     Table table = bigquery.getTable(tableId, BigQuery.TableOption.fields());
     return table != null && table.exists();
-  }
-
-  @Override
-  public Option<String> getLastCommitTimeSynced(final String tableName) {
-    // bigQuery doesn't support tblproperties, so do nothing.
-    throw new UnsupportedOperationException("Not support getLastCommitTimeSynced yet.");
-  }
-
-  @Override
-  public void updateLastCommitTimeSynced(final String tableName) {
-    // bigQuery doesn't support tblproperties, so do nothing.
-    throw new UnsupportedOperationException("No support for updateLastCommitTimeSynced yet.");
-  }
-
-  @Override
-  public void updateTableProperties(String tableName, Map<String, String> tableProperties) {
-    throw new UnsupportedOperationException("No support for updateTableProperties yet.");
   }
 
   @Override

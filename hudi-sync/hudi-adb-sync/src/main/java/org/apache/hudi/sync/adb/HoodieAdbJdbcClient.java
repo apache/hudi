@@ -271,6 +271,21 @@ public class HoodieAdbJdbcClient extends HoodieSyncClient {
   }
 
   @Override
+  public Option<String> getLastReplicatedTime(String tableName) {
+    throw new UnsupportedOperationException("Not support getLastReplicatedTime yet");
+  }
+
+  @Override
+  public void updateLastReplicatedTimeStamp(String tableName, String timeStamp) {
+    throw new UnsupportedOperationException("Not support updateLastReplicatedTimeStamp yet");
+  }
+
+  @Override
+  public void deleteLastReplicatedTimeStamp(String tableName) {
+    throw new UnsupportedOperationException("Not support deleteLastReplicatedTimeStamp yet");
+  }
+
+  @Override
   public void updateTableProperties(String tableName, Map<String, String> tableProperties) {
     throw new UnsupportedOperationException("Not support updateTableProperties yet");
   }
