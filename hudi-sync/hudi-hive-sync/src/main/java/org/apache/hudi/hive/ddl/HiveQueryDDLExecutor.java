@@ -21,9 +21,8 @@ package org.apache.hudi.hive.ddl;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncException;
+import org.apache.hudi.hive.util.HivePartitionUtil;
 
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.hadoop.hive.metastore.api.MetaException;
@@ -34,7 +33,6 @@ import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.apache.hadoop.hive.ql.processors.CommandProcessorResponse;
 import org.apache.hadoop.hive.ql.session.SessionState;
 import org.apache.hadoop.security.UserGroupInformation;
-import org.apache.hudi.hive.util.HivePartitionUtil;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 

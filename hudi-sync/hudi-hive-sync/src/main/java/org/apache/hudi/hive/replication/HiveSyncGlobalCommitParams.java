@@ -18,20 +18,18 @@
 
 package org.apache.hudi.hive.replication;
 
-import com.beust.jcommander.Parameter;
+import org.apache.hudi.common.util.StringUtils;
 
+import com.beust.jcommander.Parameter;
 import com.beust.jcommander.Parameters;
+import com.beust.jcommander.ParametersDelegate;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.util.Properties;
-import org.apache.hudi.common.util.StringUtils;
-
-import com.beust.jcommander.ParametersDelegate;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 
 import static org.apache.hudi.hive.HiveSyncConfig.HIVE_URL;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
