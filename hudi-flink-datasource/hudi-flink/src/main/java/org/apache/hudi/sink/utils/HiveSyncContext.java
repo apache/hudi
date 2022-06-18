@@ -90,7 +90,7 @@ public class HiveSyncContext {
   @VisibleForTesting
   public static Properties buildSyncConfig(Configuration conf) {
     Properties props = new Properties();
-    props.setProperty(META_SYNC_BASE_PATH.key(), conf.getString(FlinkOptions.PATH));
+    props.setProperty(META_SYNC_BASE_PATH.key(), conf.getString(FlinkOptions.PATH, ""));
     props.setProperty(META_SYNC_BASE_FILE_FORMAT.key(), conf.getString(FlinkOptions.HIVE_SYNC_FILE_FORMAT));
     props.setProperty(HIVE_USE_PRE_APACHE_INPUT_FORMAT.key(), "false");
     props.setProperty(META_SYNC_DATABASE_NAME.key(), conf.getString(FlinkOptions.HIVE_SYNC_DB));
@@ -100,8 +100,8 @@ public class HiveSyncContext {
     props.setProperty(HIVE_PASS.key(), conf.getString(FlinkOptions.HIVE_SYNC_PASSWORD));
     props.setProperty(HIVE_URL.key(), conf.getString(FlinkOptions.HIVE_SYNC_JDBC_URL));
     props.setProperty(METASTORE_URIS.key(), conf.getString(FlinkOptions.HIVE_SYNC_METASTORE_URIS));
-    props.setProperty(HIVE_TABLE_PROPERTIES.key(), conf.getString(FlinkOptions.HIVE_SYNC_TABLE_PROPERTIES));
-    props.setProperty(HIVE_TABLE_SERDE_PROPERTIES.key(), conf.getString(FlinkOptions.HIVE_SYNC_TABLE_SERDE_PROPERTIES));
+    props.setProperty(HIVE_TABLE_PROPERTIES.key(), conf.getString(FlinkOptions.HIVE_SYNC_TABLE_PROPERTIES, ""));
+    props.setProperty(HIVE_TABLE_SERDE_PROPERTIES.key(), conf.getString(FlinkOptions.HIVE_SYNC_TABLE_SERDE_PROPERTIES, ""));
     props.setProperty(META_SYNC_PARTITION_FIELDS.key(), String.join(",", FilePathUtils.extractHivePartitionFields(conf)));
     props.setProperty(META_SYNC_PARTITION_EXTRACTOR_CLASS.key(), conf.getString(FlinkOptions.HIVE_SYNC_PARTITION_EXTRACTOR_CLASS_NAME));
     props.setProperty(HIVE_USE_JDBC.key(), String.valueOf(conf.getBoolean(FlinkOptions.HIVE_SYNC_USE_JDBC)));
