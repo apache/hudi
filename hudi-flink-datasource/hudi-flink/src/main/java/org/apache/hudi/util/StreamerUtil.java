@@ -312,26 +312,6 @@ public class StreamerUtil {
   }
 
   /**
-   * Returns whether there is need to schedule the async compaction.
-   *
-   * @param conf The flink configuration.
-   */
-  public static boolean needsAsyncCompaction(Configuration conf) {
-    return OptionsResolver.isMorTable(conf)
-        && conf.getBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED);
-  }
-
-  /**
-   * Returns whether there is need to schedule the compaction plan.
-   *
-   * @param conf The flink configuration.
-   */
-  public static boolean needsScheduleCompaction(Configuration conf) {
-    return OptionsResolver.isMorTable(conf)
-        && conf.getBoolean(FlinkOptions.COMPACTION_SCHEDULE_ENABLED);
-  }
-
-  /**
    * Creates the meta client for reader.
    *
    * <p>The streaming pipeline process is long-running, so empty table path is allowed,

@@ -594,6 +594,12 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(false) // default false for pipeline
       .withDescription("Schedule the cluster plan, default false");
 
+  public static final ConfigOption<Boolean> CLUSTERING_ASYNC_ENABLED = ConfigOptions
+      .key("clustering.async.enabled")
+      .booleanType()
+      .defaultValue(false) // default false for pipeline
+      .withDescription("Async Clustering, default false");
+
   public static final ConfigOption<Integer> CLUSTERING_DELTA_COMMITS = ConfigOptions
       .key("clustering.delta_commits")
       .intType()
@@ -641,7 +647,7 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<String> CLUSTERING_SORT_COLUMNS = ConfigOptions
       .key("clustering.plan.strategy.sort.columns")
       .stringType()
-      .noDefaultValue()
+      .defaultValue("")
       .withDescription("Columns to sort the data by when clustering");
 
   public static final ConfigOption<Integer> CLUSTERING_MAX_NUM_GROUPS = ConfigOptions

@@ -24,7 +24,6 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.sink.utils.Pipelines;
 import org.apache.hudi.util.ChangelogModes;
-import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
@@ -78,7 +77,12 @@ public class HoodieTableSink implements DynamicTableSink, SupportsPartitioning, 
 
       // Append mode
       if (OptionsResolver.isAppendMode(conf)) {
-        return Pipelines.append(conf, rowType, dataStream, context.isBounded());
+        DataStream<Object> pipeline = Pipelines.append(conf, rowType, dataStream, context.isBounded());
+        if (OptionsResolver.needsAsyncClustering(conf)) {
+          return Pipelines.cluster(conf, rowType, pipeline);
+        } else {
+          return Pipelines.dummySink(pipeline);
+        }
       }
 
       // default parallelism
@@ -90,7 +94,7 @@ public class HoodieTableSink implements DynamicTableSink, SupportsPartitioning, 
       // write pipeline
       pipeline = Pipelines.hoodieStreamWrite(conf, parallelism, hoodieRecordDataStream);
       // compaction
-      if (StreamerUtil.needsAsyncCompaction(conf)) {
+      if (OptionsResolver.needsAsyncCompaction(conf)) {
         return Pipelines.compact(conf, pipeline);
       } else {
         return Pipelines.clean(conf, pipeline);

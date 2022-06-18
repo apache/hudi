@@ -50,6 +50,16 @@ public class TestUtils {
     return StreamerUtil.getLastCompletedInstant(metaClient);
   }
 
+  public static String getLastCompleteInstant(String basePath, String commitAction) {
+    final HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
+        .setConf(HadoopConfigurations.getHadoopConf(new Configuration())).setBasePath(basePath).build();
+    return metaClient.getCommitsTimeline().filterCompletedInstants()
+        .filter(instant -> commitAction.equals(instant.getAction()))
+        .lastInstant()
+        .map(HoodieInstant::getTimestamp)
+        .orElse(null);
+  }
+
   public static String getLastDeltaCompleteInstant(String basePath) {
     final HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
         .setConf(HadoopConfigurations.getHadoopConf(new Configuration())).setBasePath(basePath).build();

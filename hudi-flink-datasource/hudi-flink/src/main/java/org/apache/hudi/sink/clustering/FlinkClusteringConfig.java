@@ -18,7 +18,9 @@
 
 package org.apache.hudi.sink.clustering;
 
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.util.StreamerUtil;
 
 import com.beust.jcommander.Parameter;
 import org.apache.flink.configuration.Configuration;
@@ -100,16 +102,15 @@ public class FlinkClusteringConfig extends Configuration {
   public static final String SEQ_LIFO = "LIFO";
   @Parameter(names = {"--seq"}, description = "Clustering plan execution sequence, two options are supported:\n"
       + "1). FIFO: execute the oldest plan first;\n"
-      + "2). LIFO: execute the latest plan first, by default LIFO", required = false)
-  public String clusteringSeq = SEQ_LIFO;
+      + "2). LIFO: execute the latest plan first, by default FIFO", required = false)
+  public String clusteringSeq = SEQ_FIFO;
 
-  @Parameter(names = {"--write-partition-url-encode"}, description = "Whether to encode the partition path url, default false")
-  public Boolean writePartitionUrlEncode = false;
+  @Parameter(names = {"--service"}, description = "Flink Clustering runs in service mode, disable by default")
+  public Boolean serviceMode = false;
 
-  @Parameter(names = {"--hive-style-partitioning"}, description = "Whether to use Hive style partitioning.\n"
-      + "If set true, the names of partition folders follow <partition_column_name>=<partition_value> format.\n"
-      + "By default false (the names of partition folders are only partition values)")
-  public Boolean hiveStylePartitioning = false;
+  @Parameter(names = {"--min-clustering-interval-seconds"},
+      description = "Min clustering interval of async clustering service, default 10 minutes")
+  public Integer minClusteringIntervalSeconds = 600;
 
   /**
    * Transforms a {@code FlinkClusteringConfig.config} into {@code Configuration}.
@@ -137,11 +138,13 @@ public class FlinkClusteringConfig extends Configuration {
     conf.setBoolean(FlinkOptions.CLEAN_ASYNC_ENABLED, config.cleanAsyncEnable);
 
     // use synchronous clustering always
+    conf.setBoolean(FlinkOptions.CLUSTERING_ASYNC_ENABLED, false);
     conf.setBoolean(FlinkOptions.CLUSTERING_SCHEDULE_ENABLED, config.schedule);
 
     // bulk insert conf
-    conf.setBoolean(FlinkOptions.URL_ENCODE_PARTITIONING, config.writePartitionUrlEncode);
-    conf.setBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING, config.hiveStylePartitioning);
+    HoodieTableConfig tableConfig = StreamerUtil.createMetaClient(conf).getTableConfig();
+    conf.setBoolean(FlinkOptions.URL_ENCODE_PARTITIONING, Boolean.parseBoolean(tableConfig.getUrlEncodePartitioning()));
+    conf.setBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING, Boolean.parseBoolean(tableConfig.getHiveStylePartitioningEnable()));
 
     return conf;
   }

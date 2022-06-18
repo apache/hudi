@@ -287,6 +287,29 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   }
 
   @Test
+  public void testInsertAsyncClustering() throws Exception {
+    // reset the config option
+    conf.setString(FlinkOptions.OPERATION, "insert");
+    conf.setBoolean(FlinkOptions.CLUSTERING_SCHEDULE_ENABLED, true);
+    conf.setBoolean(FlinkOptions.CLUSTERING_ASYNC_ENABLED, true);
+    conf.setInteger(FlinkOptions.CLUSTERING_DELTA_COMMITS, 1);
+
+    prepareInsertPipeline(conf)
+        .consume(TestData.DATA_SET_INSERT_SAME_KEY)
+        .checkpoint(1)
+        .handleEvents(1)
+        .checkpointComplete(1)
+        .checkWrittenData(EXPECTED4, 1)
+        // insert duplicates again
+        .consume(TestData.DATA_SET_INSERT_SAME_KEY)
+        .checkpoint(2)
+        .handleEvents(1)
+        .checkpointComplete(2)
+        .checkWrittenFullData(EXPECTED5)
+        .end();
+  }
+
+  @Test
   public void testInsertWithSmallBufferSize() throws Exception {
     // reset the config option
     conf.setDouble(FlinkOptions.WRITE_TASK_MAX_SIZE, 200.0008); // 839 bytes buffer size
@@ -419,7 +442,7 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   // -------------------------------------------------------------------------
 
   private TestHarness preparePipeline() throws Exception {
-    return TestHarness.instance().preparePipeline(tempFile, conf);
+    return preparePipeline(conf);
   }
 
   protected TestHarness preparePipeline(Configuration conf) throws Exception {
@@ -427,6 +450,10 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   }
 
   protected TestHarness prepareInsertPipeline() throws Exception {
+    return prepareInsertPipeline(conf);
+  }
+
+  protected TestHarness prepareInsertPipeline(Configuration conf) throws Exception {
     return TestHarness.instance().preparePipeline(tempFile, conf, true);
   }
 
