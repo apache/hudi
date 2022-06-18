@@ -17,7 +17,9 @@
  * under the License.
  */
 
-package org.apache.hudi.sync.common.model.partextractor;
+package org.apache.hudi.hive;
+
+import org.apache.hudi.sync.common.model.PartitionValueExtractor;
 
 import java.util.ArrayList;
 import java.util.List;

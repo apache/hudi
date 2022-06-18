@@ -28,8 +28,8 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.hive.HiveSyncConfig;
-import org.apache.hudi.sync.common.model.partextractor.MultiPartKeysValueExtractor;
-import org.apache.hudi.sync.common.model.partextractor.SlashEncodedDayPartitionValueExtractor;
+import org.apache.hudi.hive.MultiPartKeysValueExtractor;
+import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;

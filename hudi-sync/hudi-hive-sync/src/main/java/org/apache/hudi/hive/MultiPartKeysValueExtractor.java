@@ -17,10 +17,11 @@
  * under the License.
  */
 
-package org.apache.hudi.sync.common.model.partextractor;
+package org.apache.hudi.hive;
 
 import java.util.Collections;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.sync.common.model.PartitionValueExtractor;
 
 import java.util.Arrays;
 import java.util.List;

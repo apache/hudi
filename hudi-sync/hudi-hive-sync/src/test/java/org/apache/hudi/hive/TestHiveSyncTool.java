@@ -30,8 +30,6 @@ import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.hive.testutils.HiveTestUtil;
 import org.apache.hudi.sync.common.model.FieldSchema;
-import org.apache.hudi.sync.common.model.partextractor.MultiPartKeysValueExtractor;
-import org.apache.hudi.sync.common.model.partextractor.NonPartitionedExtractor;
 import org.apache.hudi.sync.common.util.ConfigUtils;
 import org.apache.hudi.sync.common.model.PartitionEvent;
 import org.apache.hudi.sync.common.model.PartitionEvent.PartitionEventType;

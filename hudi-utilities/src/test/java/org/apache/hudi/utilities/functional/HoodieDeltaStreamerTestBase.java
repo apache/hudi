@@ -28,7 +28,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hive.HiveSyncConfig;
-import org.apache.hudi.sync.common.model.partextractor.MultiPartKeysValueExtractor;
+import org.apache.hudi.hive.MultiPartKeysValueExtractor;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.sources.TestDataSource;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;

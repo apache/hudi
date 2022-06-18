@@ -24,7 +24,7 @@ import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.sync.common.model.partextractor.SlashEncodedDayPartitionValueExtractor;
+import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.util.FlinkStateBackendConverter;
 import org.apache.hudi.util.StreamerUtil;
