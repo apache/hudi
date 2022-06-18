@@ -30,7 +30,6 @@ import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
 import org.apache.hudi.common.testutils.minicluster.ZookeeperTestService;
 import org.apache.hudi.common.util.AvroOrcUtils;
-import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hive.HiveSyncConfig;
@@ -86,6 +85,17 @@ import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Properties;
+
+import static org.apache.hudi.hive.HiveSyncConfig.HIVE_PASS;
+import static org.apache.hudi.hive.HiveSyncConfig.HIVE_URL;
+import static org.apache.hudi.hive.HiveSyncConfig.HIVE_USER;
+import static org.apache.hudi.hive.HiveSyncConfig.HIVE_USE_PRE_APACHE_INPUT_FORMAT;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_ASSUME_DATE_PARTITION;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_FIELDS;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
 
 /**
  * Abstract test that provides a dfs & spark contexts.
@@ -183,17 +193,17 @@ public class UtilitiesTestBase {
    * @return
    */
   protected static HiveSyncConfig getHiveSyncConfig(String basePath, String tableName) {
-    HiveSyncConfig hiveSyncConfig = new HiveSyncConfig();
-    hiveSyncConfig.hiveSyncConfigParams.jdbcUrl = "jdbc:hive2://127.0.0.1:9999/";
-    hiveSyncConfig.hiveSyncConfigParams.hiveUser = "";
-    hiveSyncConfig.hiveSyncConfigParams.hivePass = "";
-    hiveSyncConfig.hoodieSyncConfigParams.databaseName = "testdb1";
-    hiveSyncConfig.hoodieSyncConfigParams.tableName = tableName;
-    hiveSyncConfig.hoodieSyncConfigParams.basePath = basePath;
-    hiveSyncConfig.hoodieSyncConfigParams.assumeDatePartitioning = false;
-    hiveSyncConfig.hiveSyncConfigParams.usePreApacheInputFormat = false;
-    hiveSyncConfig.hoodieSyncConfigParams.partitionFields = CollectionUtils.createImmutableList("datestr");
-    return hiveSyncConfig;
+    Properties props = new Properties();
+    props.setProperty(HIVE_URL.key(),"jdbc:hive2://127.0.0.1:9999/");
+    props.setProperty(HIVE_USER.key(), "");
+    props.setProperty(HIVE_PASS.key(), "");
+    props.setProperty(META_SYNC_DATABASE_NAME.key(), "testdb1");
+    props.setProperty(META_SYNC_TABLE_NAME.key(), tableName);
+    props.setProperty(META_SYNC_BASE_PATH.key(), basePath);
+    props.setProperty(META_SYNC_ASSUME_DATE_PARTITION.key(), "false");
+    props.setProperty(HIVE_USE_PRE_APACHE_INPUT_FORMAT.key(), "false");
+    props.setProperty(META_SYNC_PARTITION_FIELDS.key(), "datestr");
+    return new HiveSyncConfig(props);
   }
 
   /**
@@ -206,14 +216,15 @@ public class UtilitiesTestBase {
     // Create Dummy hive sync config
     HiveSyncConfig hiveSyncConfig = getHiveSyncConfig("/dummy", "dummy");
     hiveConf.addResource(hiveServer.getHiveConf());
+    hiveSyncConfig.setHadoopConf(hiveConf);
     HoodieTableMetaClient.withPropertyBuilder()
       .setTableType(HoodieTableType.COPY_ON_WRITE)
-      .setTableName(hiveSyncConfig.hoodieSyncConfigParams.tableName)
-      .initTable(dfs.getConf(), hiveSyncConfig.hoodieSyncConfigParams.basePath);
+      .setTableName(hiveSyncConfig.getString(META_SYNC_TABLE_NAME))
+      .initTable(dfs.getConf(), hiveSyncConfig.getString(META_SYNC_BASE_PATH));
 
-    QueryBasedDDLExecutor ddlExecutor = new JDBCExecutor(hiveSyncConfig, dfs);
-    ddlExecutor.runSQL("drop database if exists " + hiveSyncConfig.hoodieSyncConfigParams.databaseName);
-    ddlExecutor.runSQL("create database " + hiveSyncConfig.hoodieSyncConfigParams.databaseName);
+    QueryBasedDDLExecutor ddlExecutor = new JDBCExecutor(hiveSyncConfig);
+    ddlExecutor.runSQL("drop database if exists " + hiveSyncConfig.getString(META_SYNC_DATABASE_NAME));
+    ddlExecutor.runSQL("create database " + hiveSyncConfig.getString(META_SYNC_DATABASE_NAME));
     ddlExecutor.close();
   }
 

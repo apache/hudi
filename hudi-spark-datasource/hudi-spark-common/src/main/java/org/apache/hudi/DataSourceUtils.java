@@ -36,7 +36,6 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.TablePathUtils;
 import org.apache.hudi.config.HoodieCompactionConfig;
-import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodiePayloadConfig;
 import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -44,7 +43,6 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.hive.HiveSyncConfig;
-import org.apache.hudi.sync.common.model.partextractor.SlashEncodedDayPartitionValueExtractor;
 import org.apache.hudi.sync.common.HoodieSyncConfig;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.util.DataTypeUtils;
@@ -54,15 +52,16 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
-import org.apache.spark.sql.hive.HiveExternalCatalog;
 import org.apache.spark.sql.types.StructType;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 
 /**
  * Utilities used throughout the data source.
@@ -277,45 +276,9 @@ public class DataSourceUtils {
   @Deprecated
   public static HiveSyncConfig buildHiveSyncConfig(TypedProperties props, String basePath, String baseFileFormat) {
     checkRequiredProperties(props, Collections.singletonList(DataSourceWriteOptions.HIVE_TABLE().key()));
-    HiveSyncConfig hiveSyncConfig = new HiveSyncConfig();
-    hiveSyncConfig.hoodieSyncConfigParams.basePath = basePath;
-    hiveSyncConfig.hiveSyncConfigParams.usePreApacheInputFormat = props.getBoolean(DataSourceWriteOptions.HIVE_USE_PRE_APACHE_INPUT_FORMAT().key(),
-            Boolean.parseBoolean(DataSourceWriteOptions.HIVE_USE_PRE_APACHE_INPUT_FORMAT().defaultValue()));
-    hiveSyncConfig.hoodieSyncConfigParams.databaseName = props.getString(DataSourceWriteOptions.HIVE_DATABASE().key(),
-            DataSourceWriteOptions.HIVE_DATABASE().defaultValue());
-    hiveSyncConfig.hoodieSyncConfigParams.tableName = props.getString(DataSourceWriteOptions.HIVE_TABLE().key());
-    hiveSyncConfig.hoodieSyncConfigParams.baseFileFormat = baseFileFormat;
-    hiveSyncConfig.hiveSyncConfigParams.hiveUser = props.getString(DataSourceWriteOptions.HIVE_USER().key(), DataSourceWriteOptions.HIVE_USER().defaultValue());
-    hiveSyncConfig.hiveSyncConfigParams.hivePass = props.getString(DataSourceWriteOptions.HIVE_PASS().key(), DataSourceWriteOptions.HIVE_PASS().defaultValue());
-    hiveSyncConfig.hiveSyncConfigParams.jdbcUrl = props.getString(DataSourceWriteOptions.HIVE_URL().key(), DataSourceWriteOptions.HIVE_URL().defaultValue());
-    hiveSyncConfig.hiveSyncConfigParams.metastoreUris = props.getString(DataSourceWriteOptions.METASTORE_URIS().key(), DataSourceWriteOptions.METASTORE_URIS().defaultValue());
-    hiveSyncConfig.hoodieSyncConfigParams.partitionFields = props.getStringList(DataSourceWriteOptions.HIVE_PARTITION_FIELDS().key(), ",", new ArrayList<>());
-    hiveSyncConfig.hoodieSyncConfigParams.partitionValueExtractorClass = props.getString(DataSourceWriteOptions.HIVE_PARTITION_EXTRACTOR_CLASS().key(),
-            SlashEncodedDayPartitionValueExtractor.class.getName());
-    hiveSyncConfig.hiveSyncConfigParams.useJdbc = Boolean.valueOf(props.getString(DataSourceWriteOptions.HIVE_USE_JDBC().key(),
-            DataSourceWriteOptions.HIVE_USE_JDBC().defaultValue()));
-    if (props.containsKey(DataSourceWriteOptions.HIVE_SYNC_MODE().key())) {
-      hiveSyncConfig.hiveSyncConfigParams.syncMode = props.getString(DataSourceWriteOptions.HIVE_SYNC_MODE().key());
-    }
-    hiveSyncConfig.hiveSyncConfigParams.autoCreateDatabase = Boolean.valueOf(props.getString(DataSourceWriteOptions.HIVE_AUTO_CREATE_DATABASE().key(),
-            DataSourceWriteOptions.HIVE_AUTO_CREATE_DATABASE().defaultValue()));
-    hiveSyncConfig.hiveSyncConfigParams.ignoreExceptions = Boolean.valueOf(props.getString(DataSourceWriteOptions.HIVE_IGNORE_EXCEPTIONS().key(),
-            DataSourceWriteOptions.HIVE_IGNORE_EXCEPTIONS().defaultValue()));
-    hiveSyncConfig.hiveSyncConfigParams.skipROSuffix = Boolean.valueOf(props.getString(DataSourceWriteOptions.HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE().key(),
-            DataSourceWriteOptions.HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE().defaultValue()));
-    hiveSyncConfig.hiveSyncConfigParams.supportTimestamp = Boolean.valueOf(props.getString(DataSourceWriteOptions.HIVE_SUPPORT_TIMESTAMP_TYPE().key(),
-            DataSourceWriteOptions.HIVE_SUPPORT_TIMESTAMP_TYPE().defaultValue()));
-    hiveSyncConfig.hoodieSyncConfigParams.isConditionalSync = Boolean.valueOf(props.getString(DataSourceWriteOptions.HIVE_CONDITIONAL_SYNC().key(),
-            DataSourceWriteOptions.HIVE_CONDITIONAL_SYNC().defaultValue()));
-    hiveSyncConfig.hiveSyncConfigParams.bucketSpec = props.getBoolean(DataSourceWriteOptions.HIVE_SYNC_BUCKET_SYNC().key(),
-            DataSourceWriteOptions.HIVE_SYNC_BUCKET_SYNC().defaultValue())
-            ? HiveSyncConfig.getBucketSpec(props.getString(HoodieIndexConfig.BUCKET_INDEX_HASH_FIELD.key()),
-            props.getInteger(HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS.key())) : null;
-    if (props.containsKey(HiveExternalCatalog.CREATED_SPARK_VERSION())) {
-      hiveSyncConfig.hoodieSyncConfigParams.sparkVersion = props.getString(HiveExternalCatalog.CREATED_SPARK_VERSION());
-    }
-    hiveSyncConfig.hiveSyncConfigParams.syncComment = Boolean.valueOf(props.getString(DataSourceWriteOptions.HIVE_SYNC_COMMENT().key(),
-            DataSourceWriteOptions.HIVE_SYNC_COMMENT().defaultValue()));
+    HiveSyncConfig hiveSyncConfig = new HiveSyncConfig(props);
+    hiveSyncConfig.setValue(META_SYNC_BASE_PATH, basePath);
+    hiveSyncConfig.setValue(META_SYNC_BASE_FILE_FORMAT, baseFileFormat);
     return hiveSyncConfig;
   }
 

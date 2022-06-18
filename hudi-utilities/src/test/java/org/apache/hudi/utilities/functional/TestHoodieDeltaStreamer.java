@@ -43,7 +43,6 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
-import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieClusteringConfig;
@@ -133,6 +132,8 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_FIELDS;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
 import static org.apache.hudi.utilities.UtilHelpers.EXECUTE;
 import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE;
 import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE_AND_EXECUTE;
@@ -1355,13 +1356,15 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
     // Test Hive integration
     HiveSyncConfig hiveSyncConfig = getHiveSyncConfig(tableBasePath, "hive_trips");
-    hiveSyncConfig.hoodieSyncConfigParams.partitionFields = CollectionUtils.createImmutableList("year", "month", "day");
-    HoodieHiveSyncClient hiveClient = new HoodieHiveSyncClient(hiveSyncConfig, hiveServer.getHiveConf(), dfs);
-    assertTrue(hiveClient.tableExists(hiveSyncConfig.hoodieSyncConfigParams.tableName), "Table " + hiveSyncConfig.hoodieSyncConfigParams.tableName + " should exist");
-    assertEquals(3, hiveClient.getAllPartitions(hiveSyncConfig.hoodieSyncConfigParams.tableName).size(),
+    hiveSyncConfig.setValue(META_SYNC_PARTITION_FIELDS, "year,month,day");
+    hiveSyncConfig.setHadoopConf(hiveServer.getHiveConf());
+    HoodieHiveSyncClient hiveClient = new HoodieHiveSyncClient(hiveSyncConfig);
+    final String tableName = hiveSyncConfig.getString(META_SYNC_TABLE_NAME);
+    assertTrue(hiveClient.tableExists(tableName), "Table " + tableName + " should exist");
+    assertEquals(3, hiveClient.getAllPartitions(tableName).size(),
         "Table partitions should match the number of partitions we wrote");
     assertEquals(lastInstantForUpstreamTable,
-        hiveClient.getLastCommitTimeSynced(hiveSyncConfig.hoodieSyncConfigParams.tableName).get(),
+        hiveClient.getLastCommitTimeSynced(tableName).get(),
         "The last commit that was synced should be updated in the TBLPROPERTIES");
   }
 

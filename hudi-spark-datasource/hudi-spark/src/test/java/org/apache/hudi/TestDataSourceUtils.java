@@ -265,14 +265,14 @@ public class TestDataSourceUtils {
     HiveSyncConfig hiveSyncConfig = DataSourceUtils.buildHiveSyncConfig(props, config.getBasePath(), PARQUET.name());
 
     if (useSyncMode) {
-      assertFalse(hiveSyncConfig.hiveSyncConfigParams.useJdbc);
-      assertEquals(HMS.name(), hiveSyncConfig.hiveSyncConfigParams.syncMode);
+      assertFalse(hiveSyncConfig.getBoolean(HiveSyncConfig.HIVE_USE_JDBC));
+      assertEquals(HMS.name(), hiveSyncConfig.getString(HiveSyncConfig.HIVE_SYNC_MODE));
     } else {
-      assertTrue(hiveSyncConfig.hiveSyncConfigParams.useJdbc);
-      assertNull(hiveSyncConfig.hiveSyncConfigParams.syncMode);
+      assertTrue(hiveSyncConfig.getBoolean(HiveSyncConfig.HIVE_USE_JDBC));
+      assertNull(hiveSyncConfig.getString(HiveSyncConfig.HIVE_SYNC_MODE));
     }
-    assertEquals(HIVE_DATABASE, hiveSyncConfig.hoodieSyncConfigParams.databaseName);
-    assertEquals(HIVE_TABLE, hiveSyncConfig.hoodieSyncConfigParams.tableName);
+    assertEquals(HIVE_DATABASE, hiveSyncConfig.getString(HiveSyncConfig.META_SYNC_DATABASE_NAME));
+    assertEquals(HIVE_TABLE, hiveSyncConfig.getString(HiveSyncConfig.META_SYNC_TABLE_NAME));
   }
 
   private void setAndVerifyHoodieWriteClientWith(final String partitionerClassName) {

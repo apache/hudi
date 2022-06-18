@@ -168,6 +168,10 @@ public class HiveSyncConfig extends HoodieSyncConfig {
     return (HiveConf) getHadoopConf();
   }
 
+  public boolean useBucketSync() {
+    return getBooleanOrDefault(HIVE_SYNC_BUCKET_SYNC);
+  }
+
   public static class HiveSyncConfigParams {
 
     @ParametersDelegate()
@@ -216,7 +220,7 @@ public class HiveSyncConfig extends HoodieSyncConfig {
     @Parameter(names = {"--spark-schema-length-threshold"}, description = "The maximum length allowed in a single cell when storing additional schema information in Hive's metastore.")
     public int sparkSchemaLengthThreshold;
     @Parameter(names = {"--with-operation-field"}, description = "Whether to include the '_hoodie_operation' field in the metadata fields")
-    public Boolean withOperationField = false;
+    public Boolean withOperationField = false; // TODO remove this as it's not used
     @Parameter(names = {"--sync-comment"}, description = "synchronize table comments to hive")
     public boolean syncComment = false;
 

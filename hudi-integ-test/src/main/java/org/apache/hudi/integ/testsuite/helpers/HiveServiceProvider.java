@@ -18,15 +18,16 @@
 
 package org.apache.hudi.integ.testsuite.helpers;
 
-import java.io.IOException;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hive.service.server.HiveServer2;
-
-import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.hive.testutils.HiveTestService;
 import org.apache.hudi.integ.testsuite.HoodieTestSuiteWriter;
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config;
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hive.service.server.HiveServer2;
+
+import java.io.IOException;
 
 /**
  * Hive Service provider.
@@ -51,13 +52,11 @@ public class HiveServiceProvider {
   public void syncToLocalHiveIfNeeded(HoodieTestSuiteWriter writer) {
     HiveSyncTool hiveSyncTool;
     if (this.config.isHiveLocal()) {
-      hiveSyncTool = new HiveSyncTool(writer.getWriteConfig().getProps(),
-          getLocalHiveServer().getHiveConf(),
-          FSUtils.getFs(writer.getWriteConfig().getBasePath(), getLocalHiveServer().getHiveConf()));
+      HiveSyncConfig config = new HiveSyncConfig(writer.getWriteConfig().getProps(), getLocalHiveServer().getHiveConf());
+      hiveSyncTool = new HiveSyncTool(config);
     } else {
-      hiveSyncTool = new HiveSyncTool(writer.getWriteConfig().getProps(),
-          getLocalHiveServer().getHiveConf(),
-          FSUtils.getFs(writer.getWriteConfig().getBasePath(), writer.getConfiguration()));
+      HiveSyncConfig config = new HiveSyncConfig(writer.getWriteConfig().getProps(), writer.getConfiguration());
+      hiveSyncTool = new HiveSyncTool(config);
     }
     hiveSyncTool.syncHoodieTable();
   }
