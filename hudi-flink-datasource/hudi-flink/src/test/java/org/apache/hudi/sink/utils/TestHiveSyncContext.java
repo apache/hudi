@@ -19,15 +19,15 @@
 package org.apache.hudi.sink.utils;
 
 import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.hive.HiveSyncConfig;
 
 import org.apache.flink.configuration.Configuration;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Method;
+import java.util.Properties;
 
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_FIELDS;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  * Test cases for {@link HiveSyncContext}.
@@ -52,11 +52,11 @@ public class TestHiveSyncContext {
     Method buildSyncConfigMethod = threadClazz.getDeclaredMethod("buildSyncConfig", Configuration.class);
     buildSyncConfigMethod.setAccessible(true);
 
-    HiveSyncConfig hiveSyncConfig1 = HiveSyncContext.buildSyncConfig(configuration1);
-    HiveSyncConfig hiveSyncConfig2 = HiveSyncContext.buildSyncConfig(configuration2);
+    Properties props1 = HiveSyncContext.buildSyncConfig(configuration1);
+    Properties props2 = HiveSyncContext.buildSyncConfig(configuration2);
 
-    assertTrue(hiveSyncConfig1.getSplitStrings(META_SYNC_PARTITION_FIELDS).get(0).equals(hiveSyncPartitionField));
-    assertTrue(hiveSyncConfig2.getSplitStrings(META_SYNC_PARTITION_FIELDS).get(0).equals(partitionPathField));
+    assertEquals(hiveSyncPartitionField, props1.getProperty(META_SYNC_PARTITION_FIELDS.key()));
+    assertEquals(partitionPathField, props2.getProperty(META_SYNC_PARTITION_FIELDS.key()));
 
   }
 }

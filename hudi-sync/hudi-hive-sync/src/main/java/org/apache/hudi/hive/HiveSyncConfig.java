@@ -156,12 +156,18 @@ public class HiveSyncConfig extends HoodieSyncConfig {
     return "CLUSTERED BY (" + bucketCols + " INTO " + bucketNum + " BUCKETS";
   }
 
+  private static final String HADOOP_CONF_METASTORE_URIS = HiveConf.ConfVars.METASTOREURIS.varname;
+
   public HiveSyncConfig(Properties props) {
     super(props);
   }
 
   public HiveSyncConfig(Properties props, Configuration hadoopConf) {
     super(props, hadoopConf);
+    HiveConf hiveConf = new HiveConf(hadoopConf, HiveConf.class);
+    hiveConf.addResource(getHadoopFileSystem().getConf());
+    hiveConf.set(HADOOP_CONF_METASTORE_URIS, getStringOrDefault(METASTORE_URIS));
+    setHadoopConf(hiveConf);
   }
 
   public HiveConf getHiveConf() {
@@ -191,7 +197,7 @@ public class HiveSyncConfig extends HoodieSyncConfig {
                     + "com.uber.hoodie to org.apache.hudi. Stop using this after you migrated the table definition to "
                     + "org.apache.hudi input format.")
     public Boolean usePreApacheInputFormat;
-    @Parameter(names = {"--bucket-spec"}, description = "bucket spec stored in metastore", required = false)
+    @Parameter(names = {"--bucket-spec"}, description = "bucket spec stored in metastore")
     public String bucketSpec;
     @Deprecated
     @Parameter(names = {"--use-jdbc"}, description = "Hive jdbc connect url")

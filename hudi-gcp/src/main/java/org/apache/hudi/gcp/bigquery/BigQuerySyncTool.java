@@ -28,6 +28,8 @@ import com.beust.jcommander.JCommander;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import java.util.Properties;
+
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_ASSUME_DATE_PARTITIONING;
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_DATASET_NAME;
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_PARTITION_FIELDS;
@@ -55,9 +57,9 @@ public class BigQuerySyncTool extends HoodieSyncTool {
   public final String versionsTableName;
   public final String snapshotViewName;
 
-  public BigQuerySyncTool(BigQuerySyncConfig config) {
-    super(config);
-    this.config = config;
+  public BigQuerySyncTool(Properties props) {
+    super(props);
+    this.config = new BigQuerySyncConfig(props);
     this.tableName = config.getString(BIGQUERY_SYNC_TABLE_NAME);
     this.manifestTableName = tableName + "_manifest";
     this.versionsTableName = tableName + "_versions";
@@ -130,7 +132,6 @@ public class BigQuerySyncTool extends HoodieSyncTool {
       cmd.usage();
       System.exit(0);
     }
-    BigQuerySyncConfig config = new BigQuerySyncConfig(params.toProps());
-    new BigQuerySyncTool(config).syncHoodieTable();
+    new BigQuerySyncTool(params.toProps()).syncHoodieTable();
   }
 }

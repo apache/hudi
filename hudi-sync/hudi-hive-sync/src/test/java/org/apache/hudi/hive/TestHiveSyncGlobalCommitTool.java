@@ -58,21 +58,21 @@ public class TestHiveSyncGlobalCommitTool {
 
   private HiveSyncGlobalCommitParams getGlobalCommitConfig(String commitTime) throws Exception {
     HiveSyncGlobalCommitParams params = new HiveSyncGlobalCommitParams();
-    params.properties.setProperty(LOCAL_HIVE_SITE_URI, localCluster.getHiveSiteXmlLocation());
-    params.properties.setProperty(REMOTE_HIVE_SITE_URI, remoteCluster.getHiveSiteXmlLocation());
-    params.properties.setProperty(LOCAL_HIVE_SERVER_JDBC_URLS, localCluster.getHiveJdBcUrl());
-    params.properties.setProperty(REMOTE_HIVE_SERVER_JDBC_URLS, remoteCluster.getHiveJdBcUrl());
-    params.properties.setProperty(LOCAL_BASE_PATH, localCluster.tablePath(DB_NAME, TBL_NAME));
-    params.properties.setProperty(REMOTE_BASE_PATH, remoteCluster.tablePath(DB_NAME, TBL_NAME));
-    params.properties.setProperty(META_SYNC_GLOBAL_REPLICATE_TIMESTAMP.key(), commitTime);
-    params.properties.setProperty(HIVE_USER.key(), System.getProperty("user.name"));
-    params.properties.setProperty(HIVE_PASS.key(), "");
-    params.properties.setProperty(META_SYNC_DATABASE_NAME.key(), DB_NAME);
-    params.properties.setProperty(META_SYNC_TABLE_NAME.key(), TBL_NAME);
-    params.properties.setProperty(META_SYNC_BASE_PATH.key(), localCluster.tablePath(DB_NAME, TBL_NAME));
-    params.properties.setProperty(META_SYNC_ASSUME_DATE_PARTITION.key(), "true");
-    params.properties.setProperty(HIVE_USE_PRE_APACHE_INPUT_FORMAT.key(), "false");
-    params.properties.setProperty(META_SYNC_PARTITION_FIELDS.key(), "datestr");
+    params.loadedProps.setProperty(LOCAL_HIVE_SITE_URI, localCluster.getHiveSiteXmlLocation());
+    params.loadedProps.setProperty(REMOTE_HIVE_SITE_URI, remoteCluster.getHiveSiteXmlLocation());
+    params.loadedProps.setProperty(LOCAL_HIVE_SERVER_JDBC_URLS, localCluster.getHiveJdBcUrl());
+    params.loadedProps.setProperty(REMOTE_HIVE_SERVER_JDBC_URLS, remoteCluster.getHiveJdBcUrl());
+    params.loadedProps.setProperty(LOCAL_BASE_PATH, localCluster.tablePath(DB_NAME, TBL_NAME));
+    params.loadedProps.setProperty(REMOTE_BASE_PATH, remoteCluster.tablePath(DB_NAME, TBL_NAME));
+    params.loadedProps.setProperty(META_SYNC_GLOBAL_REPLICATE_TIMESTAMP.key(), commitTime);
+    params.loadedProps.setProperty(HIVE_USER.key(), System.getProperty("user.name"));
+    params.loadedProps.setProperty(HIVE_PASS.key(), "");
+    params.loadedProps.setProperty(META_SYNC_DATABASE_NAME.key(), DB_NAME);
+    params.loadedProps.setProperty(META_SYNC_TABLE_NAME.key(), TBL_NAME);
+    params.loadedProps.setProperty(META_SYNC_BASE_PATH.key(), localCluster.tablePath(DB_NAME, TBL_NAME));
+    params.loadedProps.setProperty(META_SYNC_ASSUME_DATE_PARTITION.key(), "true");
+    params.loadedProps.setProperty(HIVE_USE_PRE_APACHE_INPUT_FORMAT.key(), "false");
+    params.loadedProps.setProperty(META_SYNC_PARTITION_FIELDS.key(), "datestr");
     return params;
   }
 

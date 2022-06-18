@@ -26,6 +26,8 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.util.Properties;
@@ -46,42 +48,44 @@ public class TestSyncUtilHelpers {
     hadoopConf = fileSystem.getConf();
   }
 
-  @Test
-  public void testCreateValidSyncClass() {
-    HoodieSyncTool metaSyncTool = SyncUtilHelpers.instantiateMetaSyncTool(
-        ValidMetaSyncClass.class.getName(),
+  @ParameterizedTest
+  @ValueSource(classes = {DummySyncTool1.class, DummySyncTool2.class})
+  public void testCreateValidSyncClass(Class<?> clazz) {
+    HoodieSyncTool syncTool = SyncUtilHelpers.instantiateMetaSyncTool(
+        clazz.getName(),
         new TypedProperties(),
         hadoopConf,
         fileSystem,
         BASE_PATH,
         BASE_FORMAT
     );
-    assertTrue(metaSyncTool instanceof ValidMetaSyncClass);
+    assertTrue(clazz.isAssignableFrom(syncTool.getClass()));
   }
 
   /**
    * Ensure it still works for the deprecated constructor of {@link HoodieSyncTool}
    * as we implemented the fallback.
    */
-  @Test
-  public void testCreateDeprecatedSyncClass() {
+  @ParameterizedTest
+  @ValueSource(classes = {DeprecatedSyncTool1.class, DeprecatedSyncTool2.class})
+  public void testCreateDeprecatedSyncClass(Class<?> clazz) {
     Properties properties = new Properties();
-    HoodieSyncTool deprecatedMetaSyncClass = SyncUtilHelpers.instantiateMetaSyncTool(
-        DeprecatedMetaSyncClass.class.getName(),
+    HoodieSyncTool syncTool = SyncUtilHelpers.instantiateMetaSyncTool(
+        clazz.getName(),
         new TypedProperties(properties),
         hadoopConf,
         fileSystem,
         BASE_PATH,
         BASE_FORMAT
     );
-    assertTrue(deprecatedMetaSyncClass instanceof DeprecatedMetaSyncClass);
+    assertTrue(clazz.isAssignableFrom(syncTool.getClass()));
   }
 
   @Test
   public void testCreateInvalidSyncClass() {
     Exception exception = assertThrows(HoodieException.class, () -> {
       SyncUtilHelpers.instantiateMetaSyncTool(
-          InvalidSyncClass.class.getName(),
+          InvalidSyncTool.class.getName(),
           new TypedProperties(),
           hadoopConf,
           fileSystem,
@@ -90,43 +94,57 @@ public class TestSyncUtilHelpers {
       );
     });
 
-    String expectedMessage = "Could not load meta sync class " + InvalidSyncClass.class.getName();
+    String expectedMessage = "Could not load meta sync class " + InvalidSyncTool.class.getName();
     assertTrue(exception.getMessage().contains(expectedMessage));
 
   }
 
-  public static class ValidMetaSyncClass extends HoodieSyncTool {
-    public ValidMetaSyncClass(TypedProperties props, Configuration conf, FileSystem fs) {
-      super(props, conf, fs);
+  public static class DummySyncTool1 extends HoodieSyncTool {
+    public DummySyncTool1(Properties props, Configuration hadoopConf) {
+      super(props, hadoopConf);
     }
 
     @Override
     public void syncHoodieTable() {
       throw new HoodieException("Method unimplemented as its a test class");
     }
-
-    @Override
-    public void close() throws Exception {
-    }
   }
 
-  public static class DeprecatedMetaSyncClass extends HoodieSyncTool {
-    public DeprecatedMetaSyncClass(Properties props, FileSystem fileSystem) {
-      super(props, fileSystem);
+  public static class DummySyncTool2 extends HoodieSyncTool {
+    public DummySyncTool2(Properties props, Configuration hadoopConf) {
+      super(props, hadoopConf);
     }
 
     @Override
     public void syncHoodieTable() {
       throw new HoodieException("Method unimplemented as its a test class");
     }
+  }
+
+  public static class DeprecatedSyncTool1 extends HoodieSyncTool {
+    public DeprecatedSyncTool1(TypedProperties props, Configuration hadoopConf, FileSystem fs) {
+      super(props, hadoopConf, fs);
+    }
 
     @Override
-    public void close() throws Exception {
+    public void syncHoodieTable() {
+      throw new HoodieException("Method unimplemented as its a test class");
     }
   }
 
-  public static class InvalidSyncClass {
-    public InvalidSyncClass(Properties props) {
+  public static class DeprecatedSyncTool2 extends HoodieSyncTool {
+    public DeprecatedSyncTool2(Properties props, FileSystem fs) {
+      super(props, fs);
+    }
+
+    @Override
+    public void syncHoodieTable() {
+      throw new HoodieException("Method unimplemented as its a test class");
+    }
+  }
+
+  public static class InvalidSyncTool {
+    public InvalidSyncTool(Properties props, FileSystem fs, Configuration hadoopConf) {
     }
   }
 }

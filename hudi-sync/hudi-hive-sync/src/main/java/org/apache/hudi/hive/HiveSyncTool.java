@@ -21,7 +21,6 @@ package org.apache.hudi.hive;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.InvalidTableException;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
@@ -37,13 +36,13 @@ import org.apache.hudi.sync.common.util.SparkDataSourceTableUtils;
 
 import com.beust.jcommander.JCommander;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.parquet.schema.MessageType;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.hive.HiveSyncConfig.HIVE_AUTO_CREATE_DATABASE;
@@ -79,30 +78,25 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
   public static final String SUFFIX_SNAPSHOT_TABLE = "_rt";
   public static final String SUFFIX_READ_OPTIMIZED_TABLE = "_ro";
 
+  protected final HiveSyncConfig config;
   protected HoodieSyncClient syncClient;
   protected String snapshotTableName = null;
   protected Option<String> roTableName = null;
 
-  public HiveSyncTool(HiveSyncConfig config) {
-    super(config);
-    // TODO: reconcile the way to set METASTOREURIS
-    Configuration hadoopConf = config.getHadoopConf();
-    if (StringUtils.isNullOrEmpty(hadoopConf.get(HiveConf.ConfVars.METASTOREURIS.varname))) {
-      hadoopConf.set(HiveConf.ConfVars.METASTOREURIS.varname, config.getString(METASTORE_URIS));
-    }
+  public HiveSyncTool(Properties props, Configuration hadoopConf) {
+    super(props, hadoopConf);
     // HiveConf needs to load fs conf to allow instantiation via AWSGlueClientFactory
-    HiveConf hiveConf = new HiveConf(hadoopConf, HiveConf.class);
-    hiveConf.addResource(config.getHadoopFileSystem().getConf());
-    config.setHadoopConf(hiveConf);
-    initClient(config);
-    initConfig(config);
+    HiveSyncConfig config = new HiveSyncConfig(props, hadoopConf);
+    this.config = config;
+    initSyncClient(config);
+    initTableNameVars(config);
   }
 
-  protected void initClient(HiveSyncConfig hiveSyncConfig) {
+  protected void initSyncClient(HiveSyncConfig config) {
     try {
-      this.syncClient = new HoodieHiveSyncClient(hiveSyncConfig);
+      this.syncClient = new HoodieHiveSyncClient(config);
     } catch (RuntimeException e) {
-      if (hiveSyncConfig.getBoolean(HIVE_IGNORE_EXCEPTIONS)) {
+      if (config.getBoolean(HIVE_IGNORE_EXCEPTIONS)) {
         LOG.error("Got runtime exception when hive syncing, but continuing as ignoreExceptions config is set ", e);
       } else {
         throw new HoodieHiveSyncException("Got runtime exception when hive syncing", e);
@@ -110,18 +104,18 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
     }
   }
 
-  private void initConfig(HiveSyncConfig hiveSyncConfig) {
+  private void initTableNameVars(HiveSyncConfig config) {
     if (syncClient != null) {
       switch (syncClient.getTableType()) {
         case COPY_ON_WRITE:
-          this.snapshotTableName = hiveSyncConfig.getString(META_SYNC_TABLE_NAME);
+          this.snapshotTableName = config.getString(META_SYNC_TABLE_NAME);
           this.roTableName = Option.empty();
           break;
         case MERGE_ON_READ:
-          this.snapshotTableName = hiveSyncConfig.getString(META_SYNC_TABLE_NAME) + SUFFIX_SNAPSHOT_TABLE;
-          this.roTableName = hiveSyncConfig.getBoolean(HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE)
-              ? Option.of(hiveSyncConfig.getString(META_SYNC_TABLE_NAME))
-              : Option.of(hiveSyncConfig.getString(META_SYNC_TABLE_NAME) + SUFFIX_READ_OPTIMIZED_TABLE);
+          this.snapshotTableName = config.getString(META_SYNC_TABLE_NAME) + SUFFIX_SNAPSHOT_TABLE;
+          this.roTableName = config.getBoolean(HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE)
+              ? Option.of(config.getString(META_SYNC_TABLE_NAME))
+              : Option.of(config.getString(META_SYNC_TABLE_NAME) + SUFFIX_READ_OPTIMIZED_TABLE);
           break;
         default:
           LOG.error("Unknown table type " + syncClient.getTableType());
@@ -348,7 +342,7 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
         .collect(Collectors.toList());
   }
 
-  public static HiveSyncConfig parseConfig(String[] args) {
+  public static void main(String[] args) {
     final HiveSyncConfig.HiveSyncConfigParams params = new HiveSyncConfig.HiveSyncConfigParams();
     JCommander cmd = JCommander.newBuilder().addObject(params).build();
     cmd.parse(args);
@@ -356,10 +350,6 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
       cmd.usage();
       System.exit(0);
     }
-    return new HiveSyncConfig(params.toProps(), new Configuration());
-  }
-
-  public static void main(String[] args) {
-    new HiveSyncTool(parseConfig(args)).syncHoodieTable();
+    new HiveSyncTool(params.toProps(), new Configuration()).syncHoodieTable();
   }
 }

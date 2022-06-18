@@ -21,6 +21,11 @@ package org.apache.hudi.aws.sync;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
 
+import com.beust.jcommander.JCommander;
+import org.apache.hadoop.conf.Configuration;
+
+import java.util.Properties;
+
 /**
  * Currently Experimental. Utility class that implements syncing a Hudi Table with the
  * AWS Glue Data Catalog (https://docs.aws.amazon.com/glue/latest/dg/populate-data-catalog.html)
@@ -34,16 +39,23 @@ import org.apache.hudi.hive.HiveSyncTool;
  */
 public class AWSGlueCatalogSyncTool extends HiveSyncTool {
 
-  public AWSGlueCatalogSyncTool(HiveSyncConfig hiveSyncConfig) {
-    super(hiveSyncConfig);
+  public AWSGlueCatalogSyncTool(Properties props, Configuration hadoopConf) {
+    super(props, hadoopConf);
   }
 
   @Override
-  protected void initClient(HiveSyncConfig hiveSyncConfig) {
+  protected void initSyncClient(HiveSyncConfig hiveSyncConfig) {
     syncClient = new AWSGlueCatalogSyncClient(hiveSyncConfig);
   }
 
   public static void main(String[] args) {
-    new AWSGlueCatalogSyncTool(parseConfig(args)).syncHoodieTable();
+    final HiveSyncConfig.HiveSyncConfigParams params = new HiveSyncConfig.HiveSyncConfigParams();
+    JCommander cmd = JCommander.newBuilder().addObject(params).build();
+    cmd.parse(args);
+    if (params.help) {
+      cmd.usage();
+      System.exit(0);
+    }
+    new AWSGlueCatalogSyncTool(params.toProps(), new Configuration()).syncHoodieTable();
   }
 }

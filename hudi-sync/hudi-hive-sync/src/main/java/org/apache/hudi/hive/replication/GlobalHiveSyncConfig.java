@@ -34,14 +34,6 @@ public class GlobalHiveSyncConfig extends HiveSyncConfig {
       .noDefaultValue()
       .withDocumentation("");
 
-  public static GlobalHiveSyncConfig copy(GlobalHiveSyncConfig cfg) {
-    return new GlobalHiveSyncConfig(cfg.getProps(), cfg.getHadoopConf());
-  }
-
-  public GlobalHiveSyncConfig(Properties props) {
-    super(props);
-  }
-
   public GlobalHiveSyncConfig(Properties props, Configuration hadoopConf) {
     super(props, hadoopConf);
   }
@@ -56,7 +48,7 @@ public class GlobalHiveSyncConfig extends HiveSyncConfig {
 
     public Properties toProps() {
       final Properties props = hiveSyncConfigParams.toProps();
-      // TODO add mappings here
+      props.setProperty(META_SYNC_GLOBAL_REPLICATE_TIMESTAMP.key(), globallyReplicatedTimeStamp);
       return props;
     }
   }

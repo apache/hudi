@@ -101,7 +101,7 @@ public class TestHiveIncrementalPuller {
     String instantTime = "101";
     HiveTestUtil.createCOWTable(instantTime, 5, true);
     hiveSyncProps.setProperty(HiveSyncConfig.HIVE_SYNC_MODE.key(), "jdbc");
-    HiveSyncTool tool = new HiveSyncTool(new HiveSyncConfig(hiveSyncProps, HiveTestUtil.getHiveConf()));
+    HiveSyncTool tool = new HiveSyncTool(hiveSyncProps, HiveTestUtil.getHiveConf());
     tool.syncHoodieTable();
   }
 
@@ -110,7 +110,7 @@ public class TestHiveIncrementalPuller {
     targetBasePath = Files.createTempDirectory("hivesynctest1" + Instant.now().toEpochMilli()).toUri().toString();
     HiveTestUtil.createCOWTable(instantTime, 5, true,
             targetBasePath, "tgtdb", "test2");
-    HiveSyncTool tool = new HiveSyncTool(new HiveSyncConfig(getTargetHiveSyncConfig(targetBasePath), HiveTestUtil.getHiveConf()));
+    HiveSyncTool tool = new HiveSyncTool(getTargetHiveSyncConfig(targetBasePath), HiveTestUtil.getHiveConf());
     tool.syncHoodieTable();
   }
 

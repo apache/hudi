@@ -24,6 +24,8 @@ import org.apache.hudi.sync.datahub.config.DataHubSyncConfig;
 
 import com.beust.jcommander.JCommander;
 
+import java.util.Properties;
+
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
 
 /**
@@ -36,9 +38,9 @@ public class DataHubSyncTool extends HoodieSyncTool {
 
   protected final DataHubSyncConfig config;
 
-  public DataHubSyncTool(DataHubSyncConfig config) {
-    super(config);
-    this.config = config;
+  public DataHubSyncTool(Properties props) {
+    super(props);
+    this.config = new DataHubSyncConfig(props);
   }
 
   /**
@@ -67,7 +69,6 @@ public class DataHubSyncTool extends HoodieSyncTool {
       cmd.usage();
       System.exit(0);
     }
-    DataHubSyncConfig config = new DataHubSyncConfig(params.toProps());
-    new DataHubSyncTool(config).syncHoodieTable();
+    new DataHubSyncTool(params.toProps()).syncHoodieTable();
   }
 }

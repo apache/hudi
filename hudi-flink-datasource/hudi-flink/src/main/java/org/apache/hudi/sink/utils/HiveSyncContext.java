@@ -20,17 +20,14 @@ package org.apache.hudi.sink.utils;
 
 import org.apache.hudi.aws.sync.AWSGlueCatalogSyncTool;
 import org.apache.hudi.common.config.SerializableConfiguration;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
-import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.hive.ddl.HiveSyncMode;
 import org.apache.hudi.table.format.FilePathUtils;
 
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.hive.conf.HiveConf;
 
 import java.util.Properties;
@@ -47,6 +44,7 @@ import static org.apache.hudi.hive.HiveSyncConfig.HIVE_URL;
 import static org.apache.hudi.hive.HiveSyncConfig.HIVE_USER;
 import static org.apache.hudi.hive.HiveSyncConfig.HIVE_USE_JDBC;
 import static org.apache.hudi.hive.HiveSyncConfig.HIVE_USE_PRE_APACHE_INPUT_FORMAT;
+import static org.apache.hudi.hive.HiveSyncConfig.METASTORE_URIS;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_ASSUME_DATE_PARTITION;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
@@ -63,47 +61,45 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_USE_FILE_LI
  * <p>Use this context to create the {@link HiveSyncTool} for synchronization.
  */
 public class HiveSyncContext {
-  private final HiveSyncConfig syncConfig;
 
-  private HiveSyncContext(HiveSyncConfig syncConfig) {
-    this.syncConfig = syncConfig;
+  private final Properties props;
+  private final HiveConf hiveConf;
+
+  private HiveSyncContext(Properties props, HiveConf hiveConf) {
+    this.props = props;
+    this.hiveConf = hiveConf;
   }
 
   public HiveSyncTool hiveSyncTool() {
-    HiveSyncMode syncMode = HiveSyncMode.of(syncConfig.getString(HIVE_SYNC_MODE));
+    HiveSyncMode syncMode = HiveSyncMode.of(props.getProperty(HIVE_SYNC_MODE.key()));
     if (syncMode == HiveSyncMode.GLUE) {
-      return new AWSGlueCatalogSyncTool(this.syncConfig);
+      return new AWSGlueCatalogSyncTool(props, hiveConf);
     }
-    return new HiveSyncTool(this.syncConfig);
+    return new HiveSyncTool(props, hiveConf);
   }
 
   public static HiveSyncContext create(Configuration conf, SerializableConfiguration serConf) {
-    HiveSyncConfig syncConfig = buildSyncConfig(conf);
+    Properties props = buildSyncConfig(conf);
     org.apache.hadoop.conf.Configuration hadoopConf = HadoopConfigurations.getHadoopConf(conf);
-    String path = conf.getString(FlinkOptions.PATH);
-    FileSystem fs = FSUtils.getFs(path, hadoopConf);
     HiveConf hiveConf = new HiveConf();
-    if (!FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.HIVE_SYNC_METASTORE_URIS)) {
-      hadoopConf.set(HiveConf.ConfVars.METASTOREURIS.varname, conf.getString(FlinkOptions.HIVE_SYNC_METASTORE_URIS));
-    }
     hiveConf.addResource(serConf.get());
     hiveConf.addResource(hadoopConf);
-    syncConfig.setHadoopConf(hiveConf);
-    return new HiveSyncContext(syncConfig);
+    return new HiveSyncContext(props, hiveConf);
   }
 
   @VisibleForTesting
-  public static HiveSyncConfig buildSyncConfig(Configuration conf) {
+  public static Properties buildSyncConfig(Configuration conf) {
     Properties props = new Properties();
     props.setProperty(META_SYNC_BASE_PATH.key(), conf.getString(FlinkOptions.PATH));
     props.setProperty(META_SYNC_BASE_FILE_FORMAT.key(), conf.getString(FlinkOptions.HIVE_SYNC_FILE_FORMAT));
     props.setProperty(HIVE_USE_PRE_APACHE_INPUT_FORMAT.key(), "false");
     props.setProperty(META_SYNC_DATABASE_NAME.key(), conf.getString(FlinkOptions.HIVE_SYNC_DB));
-    props.setProperty(META_SYNC_TABLE_NAME.key(),conf.getString(FlinkOptions.HIVE_SYNC_TABLE));
+    props.setProperty(META_SYNC_TABLE_NAME.key(), conf.getString(FlinkOptions.HIVE_SYNC_TABLE));
     props.setProperty(HIVE_SYNC_MODE.key(), conf.getString(FlinkOptions.HIVE_SYNC_MODE));
     props.setProperty(HIVE_USER.key(), conf.getString(FlinkOptions.HIVE_SYNC_USERNAME));
     props.setProperty(HIVE_PASS.key(), conf.getString(FlinkOptions.HIVE_SYNC_PASSWORD));
     props.setProperty(HIVE_URL.key(), conf.getString(FlinkOptions.HIVE_SYNC_JDBC_URL));
+    props.setProperty(METASTORE_URIS.key(), conf.getString(FlinkOptions.HIVE_SYNC_METASTORE_URIS));
     props.setProperty(HIVE_TABLE_PROPERTIES.key(), conf.getString(FlinkOptions.HIVE_SYNC_TABLE_PROPERTIES));
     props.setProperty(HIVE_TABLE_SERDE_PROPERTIES.key(), conf.getString(FlinkOptions.HIVE_SYNC_TABLE_SERDE_PROPERTIES));
     props.setProperty(META_SYNC_PARTITION_FIELDS.key(), String.join(",", FilePathUtils.extractHivePartitionFields(conf)));
@@ -116,6 +112,6 @@ public class HiveSyncContext {
     props.setProperty(META_SYNC_DECODE_PARTITION.key(), String.valueOf(conf.getBoolean(FlinkOptions.URL_ENCODE_PARTITIONING)));
     props.setProperty(HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE.key(), String.valueOf(conf.getBoolean(FlinkOptions.HIVE_SYNC_SKIP_RO_SUFFIX)));
     props.setProperty(META_SYNC_ASSUME_DATE_PARTITION.key(), String.valueOf(conf.getBoolean(FlinkOptions.HIVE_SYNC_ASSUME_DATE_PARTITION)));
-    return new HiveSyncConfig(props);
+    return props;
   }
 }

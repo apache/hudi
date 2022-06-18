@@ -22,8 +22,8 @@ package org.apache.hudi.sync.common.util;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.sync.common.HoodieSyncTool;
 import org.apache.hudi.sync.common.HoodieSyncConfig;
+import org.apache.hudi.sync.common.HoodieSyncTool;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -74,18 +74,27 @@ public class SyncUtilHelpers {
     properties.put(HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT.key(), baseFileFormat);
 
     if (ReflectionUtils.hasConstructor(metaSyncFQCN,
+        new Class<?>[] {Properties.class, Configuration.class})) {
+      return ((HoodieSyncTool) ReflectionUtils.loadClass(metaSyncFQCN,
+          new Class<?>[] {Properties.class, Configuration.class},
+          properties, hadoopConfig));
+    } else if (ReflectionUtils.hasConstructor(metaSyncFQCN,
+        new Class<?>[] {Properties.class})) {
+      return ((HoodieSyncTool) ReflectionUtils.loadClass(metaSyncFQCN,
+          new Class<?>[] {Properties.class},
+          properties));
+    } else if (ReflectionUtils.hasConstructor(metaSyncFQCN,
         new Class<?>[] {TypedProperties.class, Configuration.class, FileSystem.class})) {
       return ((HoodieSyncTool) ReflectionUtils.loadClass(metaSyncFQCN,
           new Class<?>[] {TypedProperties.class, Configuration.class, FileSystem.class},
           properties, hadoopConfig, fs));
+    } else if (ReflectionUtils.hasConstructor(metaSyncFQCN,
+        new Class<?>[] {Properties.class, FileSystem.class})) {
+      return ((HoodieSyncTool) ReflectionUtils.loadClass(metaSyncFQCN,
+          new Class<?>[] {Properties.class, FileSystem.class},
+          properties, fs));
     } else {
-      LOG.warn("Falling back to deprecated constructor for class: " + metaSyncFQCN);
-      try {
-        return ((HoodieSyncTool) ReflectionUtils.loadClass(metaSyncFQCN,
-            new Class<?>[] {Properties.class, FileSystem.class}, properties, fs));
-      } catch (Throwable t) {
-        throw new HoodieException("Could not load meta sync class " + metaSyncFQCN, t);
-      }
+      throw new HoodieException("Could not load meta sync class " + metaSyncFQCN);
     }
   }
 }

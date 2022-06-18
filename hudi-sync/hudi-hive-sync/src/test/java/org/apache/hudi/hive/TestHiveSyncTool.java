@@ -30,9 +30,9 @@ import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.hive.testutils.HiveTestUtil;
 import org.apache.hudi.sync.common.model.FieldSchema;
-import org.apache.hudi.sync.common.util.ConfigUtils;
 import org.apache.hudi.sync.common.model.PartitionEvent;
 import org.apache.hudi.sync.common.model.PartitionEvent.PartitionEventType;
+import org.apache.hudi.sync.common.util.ConfigUtils;
 
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Field;
@@ -1001,7 +1001,7 @@ public class TestHiveSyncTool {
     assertFalse(
         hiveClient.tableExists(HiveTestUtil.TABLE_NAME), "Table " + HiveTestUtil.TABLE_NAME + " should not exist initially");
 
-    HiveSyncTool tool = new HiveSyncTool(new HiveSyncConfig(hiveSyncProps, getHiveConf()));
+    HiveSyncTool tool = new HiveSyncTool(hiveSyncProps, getHiveConf());
     // now delete the evolved commit instant
     Path fullPath = new Path(HiveTestUtil.basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
         + hiveClient.getActiveTimeline().getInstants()
@@ -1136,7 +1136,7 @@ public class TestHiveSyncTool {
   }
 
   private void reinitHiveSyncClient() {
-    hiveSyncTool = new HiveSyncTool(new HiveSyncConfig(hiveSyncProps, HiveTestUtil.getHiveConf()));
+    hiveSyncTool = new HiveSyncTool(hiveSyncProps, HiveTestUtil.getHiveConf());
     hiveClient = (HoodieHiveSyncClient) hiveSyncTool.syncClient;
   }
 

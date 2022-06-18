@@ -18,19 +18,20 @@
 
 package org.apache.hudi.hive.replication;
 
-import static org.apache.hudi.hive.replication.HiveSyncGlobalCommitParams.LOCAL_HIVE_SITE_URI;
-import static org.apache.hudi.hive.replication.HiveSyncGlobalCommitParams.REMOTE_HIVE_SITE_URI;
+import org.apache.hudi.hive.HoodieHiveSyncException;
 
 import com.beust.jcommander.JCommander;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hive.conf.HiveConf;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hive.conf.HiveConf;
 
-import org.apache.hudi.hive.HoodieHiveSyncException;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import static org.apache.hudi.hive.replication.HiveSyncGlobalCommitParams.LOCAL_HIVE_SITE_URI;
+import static org.apache.hudi.hive.replication.HiveSyncGlobalCommitParams.REMOTE_HIVE_SITE_URI;
 
 public class HiveSyncGlobalCommitTool implements HiveSyncGlobalCommit, AutoCloseable {
 
@@ -44,10 +45,10 @@ public class HiveSyncGlobalCommitTool implements HiveSyncGlobalCommit, AutoClose
     // TODO: figure out how to integrate this in production
     // how to load balance between piper HMS,HS2
     // if we have list of uris, we can do something similar to createHiveConf in reairsync
-    hiveConf.addResource(new Path(params.properties.getProperty(
+    hiveConf.addResource(new Path(params.loadedProps.getProperty(
         forRemote ? REMOTE_HIVE_SITE_URI : LOCAL_HIVE_SITE_URI)));
     // TODO: get clusterId as input parameters
-    ReplicationStateSync state = new ReplicationStateSync(params.mkGlobalHiveSyncConfig(forRemote),
+    ReplicationStateSync state = new ReplicationStateSync(params.mkGlobalHiveSyncProps(forRemote),
         hiveConf, forRemote ? "REMOTESYNC" : "LOCALSYNC");
     return state;
   }

@@ -18,7 +18,6 @@
 
 package org.apache.hudi.integ.testsuite.helpers;
 
-import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.hive.testutils.HiveTestService;
 import org.apache.hudi.integ.testsuite.HoodieTestSuiteWriter;
@@ -52,11 +51,11 @@ public class HiveServiceProvider {
   public void syncToLocalHiveIfNeeded(HoodieTestSuiteWriter writer) {
     HiveSyncTool hiveSyncTool;
     if (this.config.isHiveLocal()) {
-      HiveSyncConfig config = new HiveSyncConfig(writer.getWriteConfig().getProps(), getLocalHiveServer().getHiveConf());
-      hiveSyncTool = new HiveSyncTool(config);
+      hiveSyncTool = new HiveSyncTool(writer.getWriteConfig().getProps(),
+          getLocalHiveServer().getHiveConf());
     } else {
-      HiveSyncConfig config = new HiveSyncConfig(writer.getWriteConfig().getProps(), writer.getConfiguration());
-      hiveSyncTool = new HiveSyncTool(config);
+      hiveSyncTool = new HiveSyncTool(writer.getWriteConfig().getProps(),
+          writer.getConfiguration());
     }
     hiveSyncTool.syncHoodieTable();
   }

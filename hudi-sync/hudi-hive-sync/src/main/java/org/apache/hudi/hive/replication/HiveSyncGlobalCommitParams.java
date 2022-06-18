@@ -64,7 +64,7 @@ public class HiveSyncGlobalCommitParams {
   @Parameter(names = {"--help", "-h"}, help = true)
   public boolean help = false;
 
-  public Properties properties = new Properties();
+  public Properties loadedProps = new Properties();
 
   private boolean finalize = false;
 
@@ -74,30 +74,31 @@ public class HiveSyncGlobalCommitParams {
     }
     finalize = true;
     try (InputStream configStream = new FileInputStream(configFile)) {
-      properties.loadFromXML(configStream);
+      loadedProps.loadFromXML(configStream);
     }
     if (StringUtils.isNullOrEmpty(globalHiveSyncConfigParams.globallyReplicatedTimeStamp)) {
       throw new RuntimeException("globally replicated timestamp not set");
     }
   }
 
-  GlobalHiveSyncConfig mkGlobalHiveSyncConfig(boolean forRemote) {
-    GlobalHiveSyncConfig cfg = new GlobalHiveSyncConfig(properties);
-    String basePath = forRemote ? properties.getProperty(REMOTE_BASE_PATH)
-            : properties.getProperty(LOCAL_BASE_PATH, cfg.getString(META_SYNC_BASE_PATH));
-    cfg.setValue(META_SYNC_BASE_PATH, basePath);
-    String jdbcUrl = forRemote ? properties.getProperty(REMOTE_HIVE_SERVER_JDBC_URLS)
-            : properties.getProperty(LOCAL_HIVE_SERVER_JDBC_URLS, cfg.getString(HIVE_URL));
-    cfg.setValue(HIVE_URL, jdbcUrl);
+  Properties mkGlobalHiveSyncProps(boolean forRemote) {
+    Properties props = new Properties(loadedProps);
+    props.putAll(globalHiveSyncConfigParams.toProps());
+    String basePath = forRemote ? loadedProps.getProperty(REMOTE_BASE_PATH)
+            : loadedProps.getProperty(LOCAL_BASE_PATH, loadedProps.getProperty(META_SYNC_BASE_PATH.key()));
+    props.setProperty(META_SYNC_BASE_PATH.key(), basePath);
+    String jdbcUrl = forRemote ? loadedProps.getProperty(REMOTE_HIVE_SERVER_JDBC_URLS)
+            : loadedProps.getProperty(LOCAL_HIVE_SERVER_JDBC_URLS, loadedProps.getProperty(HIVE_URL.key()));
+    props.setProperty(HIVE_URL.key(), jdbcUrl);
     LOG.info("building hivesync config forRemote: " + forRemote + " " + jdbcUrl + " "
         + basePath);
-    return cfg;
+    return props;
   }
 
   @Override
   public String toString() {
     return "HiveSyncGlobalCommitParams{ " + "configFile=" + configFile + ", properties="
-        + properties + ", " + super.toString()
+        + loadedProps + ", " + super.toString()
         + " }";
   }
 

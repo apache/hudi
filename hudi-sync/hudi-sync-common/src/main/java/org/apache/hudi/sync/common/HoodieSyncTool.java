@@ -17,6 +17,7 @@
 
 package org.apache.hudi.sync.common;
 
+import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 
 import org.apache.hadoop.conf.Configuration;
@@ -30,22 +31,32 @@ import java.util.Properties;
  */
 public abstract class HoodieSyncTool implements AutoCloseable {
 
-  public final HoodieSyncConfig config;
+  protected Properties props;
+  protected Configuration hadoopConf;
 
-  public HoodieSyncTool(HoodieSyncConfig config) {
-    this.config = config;
+  public HoodieSyncTool(Properties props) {
+    this(props, SerializableConfiguration.fromProps(props).get());
+  }
+
+  public HoodieSyncTool(Properties props, Configuration hadoopConf) {
+    this.props = props;
+    this.hadoopConf = hadoopConf;
   }
 
   @Deprecated
   public HoodieSyncTool(TypedProperties props, Configuration conf, FileSystem fs) {
-    this(new HoodieSyncConfig(props, conf));
+    this(props, conf);
   }
 
   @Deprecated
   public HoodieSyncTool(Properties props, FileSystem fileSystem) {
-    this(new HoodieSyncConfig(props, fileSystem.getConf()));
+    this(props, fileSystem.getConf());
   }
 
   public abstract void syncHoodieTable();
 
+  @Override
+  public void close() throws Exception {
+    // no op
+  }
 }

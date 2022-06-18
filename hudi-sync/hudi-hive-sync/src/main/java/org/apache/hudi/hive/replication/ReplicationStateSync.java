@@ -18,29 +18,24 @@
 
 package org.apache.hudi.hive.replication;
 
-import java.util.Map;
-import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hudi.common.util.Option;
+
+import org.apache.hadoop.hive.conf.HiveConf;
+
+import java.util.Map;
+import java.util.Properties;
 
 public class ReplicationStateSync implements AutoCloseable {
 
   private GlobalHiveSyncTool globalHiveSyncTool;
-  private final GlobalHiveSyncConfig globalHiveSyncConfig;
-  private final HiveConf hiveConf;
   private Map<String, Option<String>> replicatedTimeStampMap;
   private Map<String, Option<String>> oldReplicatedTimeStampMap;
   private final String clusterId;
 
-  ReplicationStateSync(GlobalHiveSyncConfig conf, HiveConf hiveConf, String uid) {
-    this.globalHiveSyncConfig = conf;
-    this.hiveConf = hiveConf;
-    initGlobalHiveSyncTool();
+  ReplicationStateSync(Properties props, HiveConf hiveConf, String uid) {
+    globalHiveSyncTool = new GlobalHiveSyncTool(props, hiveConf);
     replicatedTimeStampMap = globalHiveSyncTool.getLastReplicatedTimeStampMap();
     clusterId = uid;
-  }
-
-  private void initGlobalHiveSyncTool() {
-    globalHiveSyncTool = GlobalHiveSyncTool.buildGlobalHiveSyncTool(globalHiveSyncConfig, hiveConf);
   }
 
   public void sync() throws Exception {
