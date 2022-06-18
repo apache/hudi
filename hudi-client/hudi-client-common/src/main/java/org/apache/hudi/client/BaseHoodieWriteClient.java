@@ -999,7 +999,6 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
     return scheduleTableService(instantTime, extraMetadata, TableServiceType.COMPACT).isPresent();
   }
 
-
   /**
    * Schedules INDEX action.
    *
@@ -1094,7 +1093,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
     return getPendingRollbackInfo(metaClient, commitToRollback, true);
   }
 
-  protected Option<HoodiePendingRollbackInfo> getPendingRollbackInfo(HoodieTableMetaClient metaClient, String commitToRollback, boolean ignoreCompactionAndClusteringInstants) {
+  public Option<HoodiePendingRollbackInfo> getPendingRollbackInfo(HoodieTableMetaClient metaClient, String commitToRollback, boolean ignoreCompactionAndClusteringInstants) {
     return getPendingRollbackInfos(metaClient, ignoreCompactionAndClusteringInstants).getOrDefault(commitToRollback, Option.empty());
   }
 
@@ -1373,14 +1372,6 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
    */
   protected Option<String> inlineScheduleClustering(Option<Map<String, String>> extraMetadata) {
     return scheduleClustering(extraMetadata);
-  }
-
-  public void rollbackInflightClustering(HoodieInstant inflightInstant, HoodieTable table) {
-    Option<HoodiePendingRollbackInfo> pendingRollbackInstantInfo = getPendingRollbackInfo(table.getMetaClient(), inflightInstant.getTimestamp(), false);
-    String commitTime = pendingRollbackInstantInfo.map(entry -> entry.getRollbackInstant().getTimestamp()).orElse(HoodieActiveTimeline.createNewInstantTime());
-    table.scheduleRollback(context, commitTime, inflightInstant, false, config.shouldRollbackUsingMarkers());
-    table.rollback(context, commitTime, inflightInstant, false, false);
-    table.getActiveTimeline().revertReplaceCommitInflightToRequested(inflightInstant);
   }
 
   /**

@@ -336,7 +336,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     timeline = timeline.reload();
     assertFalse(timeline.containsInstant(compaction));
     assertTrue(timeline.containsInstant(inflight));
-    compaction = timeline.revertCompactionInflightToRequested(inflight);
+    compaction = timeline.revertInstantFromInflightToRequested(inflight);
     timeline = timeline.reload();
     assertTrue(timeline.containsInstant(compaction));
     assertFalse(timeline.containsInstant(inflight));
