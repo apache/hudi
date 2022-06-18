@@ -58,6 +58,10 @@ public interface HoodieMetaSyncOperations {
     return false;
   }
 
+  default void dropTable(String tableName) {
+
+  }
+
   default void addPartitionsToTable(String tableName, List<String> partitionsToAdd) {
 
   }

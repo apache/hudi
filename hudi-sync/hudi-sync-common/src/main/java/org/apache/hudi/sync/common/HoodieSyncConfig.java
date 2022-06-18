@@ -165,6 +165,10 @@ public class HoodieSyncConfig extends HoodieConfig {
     return FSUtils.getFs(getString(META_SYNC_BASE_PATH), getHadoopConf());
   }
 
+  public String getAbsoluteBasePath() {
+    return getString(META_SYNC_BASE_PATH);
+  }
+
   @Override
   public String toString() {
     return props.toString();

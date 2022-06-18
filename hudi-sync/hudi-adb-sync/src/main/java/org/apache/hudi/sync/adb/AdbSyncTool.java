@@ -18,25 +18,21 @@
 
 package org.apache.hudi.sync.adb;
 
-import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.hive.SchemaDifference;
 import org.apache.hudi.hive.util.HiveSchemaUtil;
+import org.apache.hudi.sync.common.HoodieSyncTool;
 import org.apache.hudi.sync.common.model.PartitionEvent;
 import org.apache.hudi.sync.common.model.PartitionEvent.PartitionEventType;
-import org.apache.hudi.sync.common.HoodieSyncTool;
 import org.apache.hudi.sync.common.util.ConfigUtils;
+import org.apache.hudi.sync.common.util.SparkDataSourceTableUtils;
 
 import com.beust.jcommander.JCommander;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat;
 import org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe;
-import org.apache.hudi.sync.common.util.SparkDataSourceTableUtils;
 import org.apache.parquet.schema.MessageType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -45,6 +41,22 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+
+import static org.apache.hudi.sync.adb.AdbSyncConfig.ADB_SYNC_AUTO_CREATE_DATABASE;
+import static org.apache.hudi.sync.adb.AdbSyncConfig.ADB_SYNC_DROP_TABLE_BEFORE_CREATION;
+import static org.apache.hudi.sync.adb.AdbSyncConfig.ADB_SYNC_SCHEMA_STRING_LENGTH_THRESHOLD;
+import static org.apache.hudi.sync.adb.AdbSyncConfig.ADB_SYNC_SERDE_PROPERTIES;
+import static org.apache.hudi.sync.adb.AdbSyncConfig.ADB_SYNC_SKIP_LAST_COMMIT_TIME_SYNC;
+import static org.apache.hudi.sync.adb.AdbSyncConfig.ADB_SYNC_SKIP_RO_SUFFIX;
+import static org.apache.hudi.sync.adb.AdbSyncConfig.ADB_SYNC_SKIP_RT_SYNC;
+import static org.apache.hudi.sync.adb.AdbSyncConfig.ADB_SYNC_SUPPORT_TIMESTAMP;
+import static org.apache.hudi.sync.adb.AdbSyncConfig.ADB_SYNC_SYNC_AS_SPARK_DATA_SOURCE_TABLE;
+import static org.apache.hudi.sync.adb.AdbSyncConfig.ADB_SYNC_TABLE_PROPERTIES;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_FIELDS;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_SPARK_VERSION;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
 
 /**
  * Adb sync tool is mainly used to sync hoodie tables to Alibaba Cloud AnalyticDB(ADB),
@@ -63,23 +75,27 @@ public class AdbSyncTool extends HoodieSyncTool {
   public static final String SUFFIX_READ_OPTIMIZED_TABLE = "_ro";
 
   private final AdbSyncConfig adbSyncConfig;
-  private final AbstractAdbSyncHoodieClient hoodieAdbClient;
+  private final String databaseName;
+  private final String tableName;
+  private final HoodieAdbJdbcClient hoodieAdbClient;
   private final String snapshotTableName;
   private final Option<String> roTableTableName;
 
-  public AdbSyncTool(TypedProperties props, Configuration conf, FileSystem fs) {
-    super(props, conf, fs);
-    this.adbSyncConfig = new AdbSyncConfig(props);
-    this.hoodieAdbClient = getHoodieAdbClient(adbSyncConfig, fs);
+  public AdbSyncTool(AdbSyncConfig config) {
+    super(config);
+    this.adbSyncConfig = config;
+    this.databaseName = config.getString(META_SYNC_DATABASE_NAME);
+    this.tableName = config.getString(META_SYNC_TABLE_NAME);
+    this.hoodieAdbClient = new HoodieAdbJdbcClient(adbSyncConfig);
     switch (hoodieAdbClient.getTableType()) {
       case COPY_ON_WRITE:
-        this.snapshotTableName = adbSyncConfig.hoodieSyncConfigParams.tableName;
+        this.snapshotTableName = tableName;
         this.roTableTableName = Option.empty();
         break;
       case MERGE_ON_READ:
-        this.snapshotTableName = adbSyncConfig.hoodieSyncConfigParams.tableName + SUFFIX_SNAPSHOT_TABLE;
-        this.roTableTableName = adbSyncConfig.adbSyncConfigParams.hiveSyncConfigParams.skipROSuffix ? Option.of(adbSyncConfig.hoodieSyncConfigParams.tableName)
-            : Option.of(adbSyncConfig.hoodieSyncConfigParams.tableName + SUFFIX_READ_OPTIMIZED_TABLE);
+        this.snapshotTableName = tableName + SUFFIX_SNAPSHOT_TABLE;
+        this.roTableTableName = adbSyncConfig.getBoolean(ADB_SYNC_SKIP_RO_SUFFIX) ? Option.of(tableName)
+            : Option.of(tableName + SUFFIX_READ_OPTIMIZED_TABLE);
         break;
       default:
         throw new HoodieAdbSyncException("Unknown table type:" + hoodieAdbClient.getTableType()
@@ -87,8 +103,11 @@ public class AdbSyncTool extends HoodieSyncTool {
     }
   }
 
-  private AbstractAdbSyncHoodieClient getHoodieAdbClient(AdbSyncConfig adbSyncConfig, FileSystem fs) {
-    return new HoodieAdbJdbcClient(adbSyncConfig, fs);
+  @Override
+  public void close() {
+    if (hoodieAdbClient != null) {
+      hoodieAdbClient.close();
+    }
   }
 
   @Override
@@ -102,7 +121,7 @@ public class AdbSyncTool extends HoodieSyncTool {
           // Sync a ro table for MOR table
           syncHoodieTable(roTableTableName.get(), false, true);
           // Sync a rt table for MOR table
-          if (!adbSyncConfig.adbSyncConfigParams.skipRTSync) {
+          if (!adbSyncConfig.getBoolean(ADB_SYNC_SKIP_RT_SYNC)) {
             syncHoodieTable(snapshotTableName, true, false);
           }
           break;
@@ -111,30 +130,29 @@ public class AdbSyncTool extends HoodieSyncTool {
               + ", basePath:" + hoodieAdbClient.getBasePath());
       }
     } catch (Exception re) {
-      throw new HoodieAdbSyncException("Sync hoodie table to ADB failed, tableName:" + adbSyncConfig.hoodieSyncConfigParams.tableName, re);
+      throw new HoodieAdbSyncException("Sync hoodie table to ADB failed, tableName:" + tableName, re);
     } finally {
       hoodieAdbClient.close();
     }
   }
 
-  private void syncHoodieTable(String tableName, boolean useRealtimeInputFormat,
-                               boolean readAsOptimized) throws Exception {
+  private void syncHoodieTable(String tableName, boolean useRealtimeInputFormat, boolean readAsOptimized) throws Exception {
     LOG.info("Try to sync hoodie table, tableName:{}, path:{}, tableType:{}",
         tableName, hoodieAdbClient.getBasePath(), hoodieAdbClient.getTableType());
 
-    if (adbSyncConfig.adbSyncConfigParams.autoCreateDatabase) {
+    if (adbSyncConfig.getBoolean(ADB_SYNC_AUTO_CREATE_DATABASE)) {
       try {
         synchronized (AdbSyncTool.class) {
-          if (!hoodieAdbClient.databaseExists(adbSyncConfig.hoodieSyncConfigParams.databaseName)) {
-            hoodieAdbClient.createDatabase(adbSyncConfig.hoodieSyncConfigParams.databaseName);
+          if (!hoodieAdbClient.databaseExists(databaseName)) {
+            hoodieAdbClient.createDatabase(databaseName);
           }
         }
       } catch (Exception e) {
-        throw new HoodieAdbSyncException("Failed to create database:" + adbSyncConfig.hoodieSyncConfigParams.databaseName
+        throw new HoodieAdbSyncException("Failed to create database:" + databaseName
             + ", useRealtimeInputFormat = " + useRealtimeInputFormat, e);
       }
-    } else if (!hoodieAdbClient.databaseExists(adbSyncConfig.hoodieSyncConfigParams.databaseName)) {
-      throw new HoodieAdbSyncException("ADB database does not exists:" + adbSyncConfig.hoodieSyncConfigParams.databaseName);
+    } else if (!hoodieAdbClient.databaseExists(databaseName)) {
+      throw new HoodieAdbSyncException("ADB database does not exists:" + databaseName);
     }
 
     // Currently HoodieBootstrapRelation does support reading bootstrap MOR rt table,
@@ -145,11 +163,11 @@ public class AdbSyncTool extends HoodieSyncTool {
     if (hoodieAdbClient.isBootstrap()
         && hoodieAdbClient.getTableType() == HoodieTableType.MERGE_ON_READ
         && !readAsOptimized) {
-      adbSyncConfig.adbSyncConfigParams.syncAsSparkDataSourceTable = false;
+      adbSyncConfig.setValue(ADB_SYNC_SYNC_AS_SPARK_DATA_SOURCE_TABLE, "false");
       LOG.info("Disable sync as spark datasource table for mor rt table:{}", tableName);
     }
 
-    if (adbSyncConfig.adbSyncConfigParams.dropTableBeforeCreation) {
+    if (adbSyncConfig.getBoolean(ADB_SYNC_DROP_TABLE_BEFORE_CREATION)) {
       LOG.info("Drop table before creation, tableName:{}", tableName);
       hoodieAdbClient.dropTable(tableName);
     }
@@ -172,7 +190,7 @@ public class AdbSyncTool extends HoodieSyncTool {
 
     // Scan synced partitions
     List<String> writtenPartitionsSince;
-    if (adbSyncConfig.hoodieSyncConfigParams.partitionFields.isEmpty()) {
+    if (adbSyncConfig.getSplitStrings(META_SYNC_PARTITION_FIELDS).isEmpty()) {
       writtenPartitionsSince = new ArrayList<>();
     } else {
       writtenPartitionsSince = hoodieAdbClient.getPartitionsWrittenToSince(lastCommitTimeSynced);
@@ -184,7 +202,7 @@ public class AdbSyncTool extends HoodieSyncTool {
 
     // Update sync commit time
     // whether to skip syncing commit time stored in tbl properties, since it is time consuming.
-    if (!adbSyncConfig.adbSyncConfigParams.skipLastCommitTimeSync) {
+    if (!adbSyncConfig.getBoolean(ADB_SYNC_SKIP_LAST_COMMIT_TIME_SYNC)) {
       hoodieAdbClient.updateLastCommitTimeSynced(tableName);
     }
     LOG.info("Sync complete for table:{}", tableName);
@@ -201,14 +219,14 @@ public class AdbSyncTool extends HoodieSyncTool {
    * @param schema                 The extracted schema
    */
   private void syncSchema(String tableName, boolean tableExists, boolean useRealTimeInputFormat,
-                          boolean readAsOptimized, MessageType schema) throws Exception {
+      boolean readAsOptimized, MessageType schema) {
     // Append spark table properties & serde properties
-    Map<String, String> tableProperties = ConfigUtils.toMap(adbSyncConfig.adbSyncConfigParams.tableProperties);
-    Map<String, String> serdeProperties = ConfigUtils.toMap(adbSyncConfig.adbSyncConfigParams.serdeProperties);
-    if (adbSyncConfig.adbSyncConfigParams.syncAsSparkDataSourceTable) {
-      Map<String, String> sparkTableProperties = SparkDataSourceTableUtils.getSparkTableProperties(adbSyncConfig.hoodieSyncConfigParams.partitionFields,
-              adbSyncConfig.hoodieSyncConfigParams.sparkVersion, adbSyncConfig.adbSyncConfigParams.sparkSchemaLengthThreshold, schema);
-      Map<String, String> sparkSerdeProperties = SparkDataSourceTableUtils.getSparkSerdeProperties(readAsOptimized, adbSyncConfig.hoodieSyncConfigParams.basePath);
+    Map<String, String> tableProperties = ConfigUtils.toMap(adbSyncConfig.getString(ADB_SYNC_TABLE_PROPERTIES));
+    Map<String, String> serdeProperties = ConfigUtils.toMap(adbSyncConfig.getString(ADB_SYNC_SERDE_PROPERTIES));
+    if (adbSyncConfig.getBoolean(ADB_SYNC_SYNC_AS_SPARK_DATA_SOURCE_TABLE)) {
+      Map<String, String> sparkTableProperties = SparkDataSourceTableUtils.getSparkTableProperties(adbSyncConfig.getSplitStrings(META_SYNC_PARTITION_FIELDS),
+          adbSyncConfig.getString(META_SYNC_SPARK_VERSION), adbSyncConfig.getInt(ADB_SYNC_SCHEMA_STRING_LENGTH_THRESHOLD), schema);
+      Map<String, String> sparkSerdeProperties = SparkDataSourceTableUtils.getSparkSerdeProperties(readAsOptimized, adbSyncConfig.getString(META_SYNC_BASE_PATH));
       tableProperties.putAll(sparkTableProperties);
       serdeProperties.putAll(sparkSerdeProperties);
       LOG.info("Sync as spark datasource table, tableName:{}, tableExists:{}, tableProperties:{}, sederProperties:{}",
@@ -228,8 +246,8 @@ public class AdbSyncTool extends HoodieSyncTool {
     } else {
       // Check if the table schema has evolved
       Map<String, String> tableSchema = hoodieAdbClient.getMetastoreSchema(tableName);
-      SchemaDifference schemaDiff = HiveSchemaUtil.getSchemaDifference(schema, tableSchema, adbSyncConfig.hoodieSyncConfigParams.partitionFields,
-              adbSyncConfig.adbSyncConfigParams.supportTimestamp);
+      SchemaDifference schemaDiff = HiveSchemaUtil.getSchemaDifference(schema, tableSchema, adbSyncConfig.getSplitStrings(META_SYNC_PARTITION_FIELDS),
+          adbSyncConfig.getBoolean(ADB_SYNC_SUPPORT_TIMESTAMP));
       if (!schemaDiff.isEmpty()) {
         LOG.info("Schema difference found for table:{}", tableName);
         hoodieAdbClient.updateTableDefinition(tableName, schemaDiff);
@@ -245,7 +263,7 @@ public class AdbSyncTool extends HoodieSyncTool {
    */
   private void syncPartitions(String tableName, List<String> writtenPartitionsSince) {
     try {
-      if (adbSyncConfig.hoodieSyncConfigParams.partitionFields.isEmpty()) {
+      if (adbSyncConfig.getSplitStrings(META_SYNC_PARTITION_FIELDS).isEmpty()) {
         LOG.info("Not a partitioned table.");
         return;
       }
@@ -269,16 +287,14 @@ public class AdbSyncTool extends HoodieSyncTool {
   }
 
   public static void main(String[] args) {
-    // parse the params
-    final AdbSyncConfig cfg = new AdbSyncConfig();
-    JCommander cmd = new JCommander(cfg, null, args);
-    if (cfg.adbSyncConfigParams.help || args.length == 0) {
+    final AdbSyncConfig.AdbSyncConfigParams params = new AdbSyncConfig.AdbSyncConfigParams();
+    JCommander cmd = JCommander.newBuilder().addObject(params).build();
+    cmd.parse(args);
+    if (params.help) {
       cmd.usage();
-      System.exit(1);
+      System.exit(0);
     }
-
-    Configuration hadoopConf = new Configuration();
-    FileSystem fs = FSUtils.getFs(cfg.hoodieSyncConfigParams.basePath, hadoopConf);
-    new AdbSyncTool(AdbSyncConfig.toProps(cfg), hadoopConf, fs).syncHoodieTable();
+    AdbSyncConfig config = new AdbSyncConfig(params.toProps());
+    new AdbSyncTool(config).syncHoodieTable();
   }
 }
