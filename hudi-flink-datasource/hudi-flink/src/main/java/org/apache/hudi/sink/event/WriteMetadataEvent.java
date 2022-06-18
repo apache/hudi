@@ -168,7 +168,7 @@ public class WriteMetadataEvent implements OperatorEvent {
     return "WriteMetadataEvent{"
         + "writeStatusesSize=" + writeStatuses.size()
         + ", taskID=" + taskID
-        + ", instantTime=" + instantTime
+        + ", instantTime='" + instantTime + '\''
         + ", lastBatch=" + lastBatch
         + ", endInput=" + endInput
         + ", bootstrap=" + bootstrap
