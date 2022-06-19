@@ -57,7 +57,7 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
 
   public HoodieSyncClient(HoodieSyncConfig config) {
     this.config = config;
-    this.partitionValueExtractor = ReflectionUtils.loadClass(config.getString(META_SYNC_PARTITION_EXTRACTOR_CLASS));
+    this.partitionValueExtractor = ReflectionUtils.loadClass(config.getStringOrDefault(META_SYNC_PARTITION_EXTRACTOR_CLASS));
     this.metaClient = HoodieTableMetaClient.builder()
         .setConf(config.getHadoopConf())
         .setBasePath(config.getString(META_SYNC_BASE_PATH))

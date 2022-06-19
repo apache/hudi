@@ -255,10 +255,10 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
     // Check and sync schema
     if (!tableExists) {
       LOG.info("Hive table " + tableName + " is not found. Creating it");
-      HoodieFileFormat baseFileFormat = HoodieFileFormat.valueOf(config.getString(META_SYNC_BASE_FILE_FORMAT).toUpperCase());
+      HoodieFileFormat baseFileFormat = HoodieFileFormat.valueOf(config.getStringOrDefault(META_SYNC_BASE_FILE_FORMAT).toUpperCase());
       String inputFormatClassName = HoodieInputFormatUtils.getInputFormatClassName(baseFileFormat, useRealTimeInputFormat);
 
-      if (baseFileFormat.equals(HoodieFileFormat.PARQUET) && config.getBoolean(HIVE_USE_PRE_APACHE_INPUT_FORMAT)) {
+      if (baseFileFormat.equals(HoodieFileFormat.PARQUET) && config.getBooleanOrDefault(HIVE_USE_PRE_APACHE_INPUT_FORMAT)) {
         // Parquet input format had an InputFormat class visible under the old naming scheme.
         inputFormatClassName = useRealTimeInputFormat
             ? com.uber.hoodie.hadoop.realtime.HoodieRealtimeInputFormat.class.getName()
@@ -278,7 +278,7 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
       // Check if the table schema has evolved
       Map<String, String> tableSchema = syncClient.getMetastoreSchema(tableName);
       SchemaDifference schemaDiff = HiveSchemaUtil.getSchemaDifference(schema, tableSchema, config.getSplitStrings(META_SYNC_PARTITION_FIELDS),
-          config.getBoolean(HIVE_SUPPORT_TIMESTAMP_TYPE));
+          config.getBooleanOrDefault(HIVE_SUPPORT_TIMESTAMP_TYPE));
       if (!schemaDiff.isEmpty()) {
         LOG.info("Schema difference found for " + tableName);
         syncClient.updateTableSchema(tableName, schema);

@@ -171,7 +171,7 @@ public class HiveSyncConfig extends HoodieSyncConfig {
   }
 
   public HiveConf getHiveConf() {
-    return (HiveConf) getHadoopConf();
+    return new HiveConf(getHadoopConf(), HiveConf.class);
   }
 
   public boolean useBucketSync() {

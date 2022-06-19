@@ -77,10 +77,10 @@ public class HMSDDLExecutor implements DDLExecutor {
     this.fs = syncConfig.getHadoopFileSystem();
     try {
       this.partitionValueExtractor =
-          (PartitionValueExtractor) Class.forName(syncConfig.getString(META_SYNC_PARTITION_EXTRACTOR_CLASS)).newInstance();
+          (PartitionValueExtractor) Class.forName(syncConfig.getStringOrDefault(META_SYNC_PARTITION_EXTRACTOR_CLASS)).newInstance();
     } catch (Exception e) {
       throw new HoodieHiveSyncException(
-          "Failed to initialize PartitionValueExtractor class " + syncConfig.getString(META_SYNC_PARTITION_EXTRACTOR_CLASS), e);
+          "Failed to initialize PartitionValueExtractor class " + syncConfig.getStringOrDefault(META_SYNC_PARTITION_EXTRACTOR_CLASS), e);
     }
   }
 
