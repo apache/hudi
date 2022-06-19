@@ -55,6 +55,12 @@ public class TypedProperties extends Properties implements Serializable {
     }
   }
 
+  public void setStringListIfNonNull(String key, List<String> value, String delimiter) {
+    if (value != null) {
+      setPropertyIfNonNull(key, String.join(delimiter, value));
+    }
+  }
+
   @Override
   public String getProperty(String key) {
     Object oval = super.get(key);

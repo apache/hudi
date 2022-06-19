@@ -22,6 +22,7 @@ import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
@@ -203,19 +204,19 @@ public class HoodieSyncConfig extends HoodieConfig {
     @Parameter(names = {"--help", "-h"}, help = true)
     public boolean help = false;
 
-    public Properties toProps() {
-      final Properties props = new Properties();
-      props.setProperty(META_SYNC_BASE_PATH.key(), basePath);
-      props.setProperty(META_SYNC_DATABASE_NAME.key(), databaseName);
-      props.setProperty(META_SYNC_TABLE_NAME.key(), tableName);
-      props.setProperty(META_SYNC_BASE_FILE_FORMAT.key(), baseFileFormat);
-      props.setProperty(META_SYNC_PARTITION_FIELDS.key(), String.join(",", partitionFields));
-      props.setProperty(META_SYNC_PARTITION_EXTRACTOR_CLASS.key(), partitionValueExtractorClass);
-      props.setProperty(META_SYNC_ASSUME_DATE_PARTITION.key(), String.valueOf(assumeDatePartitioning));
-      props.setProperty(META_SYNC_DECODE_PARTITION.key(), String.valueOf(decodePartition));
-      props.setProperty(META_SYNC_USE_FILE_LISTING_FROM_METADATA.key(), String.valueOf(useFileListingFromMetadata));
-      props.setProperty(META_SYNC_CONDITIONAL_SYNC.key(), String.valueOf(isConditionalSync));
-      props.setProperty(META_SYNC_SPARK_VERSION.key(), sparkVersion);
+    public TypedProperties toProps() {
+      final TypedProperties props = new TypedProperties();
+      props.setPropertyIfNonNull(META_SYNC_BASE_PATH.key(), basePath);
+      props.setPropertyIfNonNull(META_SYNC_DATABASE_NAME.key(), databaseName);
+      props.setPropertyIfNonNull(META_SYNC_TABLE_NAME.key(), tableName);
+      props.setPropertyIfNonNull(META_SYNC_BASE_FILE_FORMAT.key(), baseFileFormat);
+      props.setStringListIfNonNull(META_SYNC_PARTITION_FIELDS.key(), partitionFields, ",");
+      props.setPropertyIfNonNull(META_SYNC_PARTITION_EXTRACTOR_CLASS.key(), partitionValueExtractorClass);
+      props.setPropertyIfNonNull(META_SYNC_ASSUME_DATE_PARTITION.key(), String.valueOf(assumeDatePartitioning));
+      props.setPropertyIfNonNull(META_SYNC_DECODE_PARTITION.key(), String.valueOf(decodePartition));
+      props.setPropertyIfNonNull(META_SYNC_USE_FILE_LISTING_FROM_METADATA.key(), String.valueOf(useFileListingFromMetadata));
+      props.setPropertyIfNonNull(META_SYNC_CONDITIONAL_SYNC.key(), String.valueOf(isConditionalSync));
+      props.setPropertyIfNonNull(META_SYNC_SPARK_VERSION.key(), sparkVersion);
       return props;
     }
   }

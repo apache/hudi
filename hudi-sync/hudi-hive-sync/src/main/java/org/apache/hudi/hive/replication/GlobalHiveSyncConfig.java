@@ -19,6 +19,7 @@
 package org.apache.hudi.hive.replication;
 
 import org.apache.hudi.common.config.ConfigProperty;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.hive.HiveSyncConfig;
 
 import com.beust.jcommander.Parameter;
@@ -46,9 +47,9 @@ public class GlobalHiveSyncConfig extends HiveSyncConfig {
     @Parameter(names = {"--replicated-timestamp"}, description = "Add globally replicated timestamp to enable consistent reads across clusters")
     public String globallyReplicatedTimeStamp;
 
-    public Properties toProps() {
-      final Properties props = hiveSyncConfigParams.toProps();
-      props.setProperty(META_SYNC_GLOBAL_REPLICATE_TIMESTAMP.key(), globallyReplicatedTimeStamp);
+    public TypedProperties toProps() {
+      final TypedProperties props = hiveSyncConfigParams.toProps();
+      props.setPropertyIfNonNull(META_SYNC_GLOBAL_REPLICATE_TIMESTAMP.key(), globallyReplicatedTimeStamp);
       return props;
     }
   }

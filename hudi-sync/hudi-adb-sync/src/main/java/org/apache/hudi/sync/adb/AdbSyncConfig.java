@@ -19,6 +19,7 @@
 package org.apache.hudi.sync.adb;
 
 import org.apache.hudi.common.config.ConfigProperty;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.hive.HiveSyncConfig;
 
@@ -176,31 +177,31 @@ public class AdbSyncConfig extends HiveSyncConfig {
     @Parameter(names = {"--help", "-h"}, help = true)
     public Boolean help = false;
 
-    public Properties toProps() {
-      final Properties props = hiveSyncConfigParams.toProps();
-      props.setProperty(META_SYNC_DATABASE_NAME.key(), hiveSyncConfigParams.hoodieSyncConfigParams.databaseName);
-      props.setProperty(META_SYNC_TABLE_NAME.key(), hiveSyncConfigParams.hoodieSyncConfigParams.tableName);
-      props.setProperty(ADB_SYNC_USER.key(), hiveSyncConfigParams.hiveUser);
-      props.setProperty(ADB_SYNC_PASS.key(), hiveSyncConfigParams.hivePass);
-      props.setProperty(ADB_SYNC_JDBC_URL.key(), hiveSyncConfigParams.jdbcUrl);
-      props.setProperty(META_SYNC_BASE_PATH.key(), hiveSyncConfigParams.hoodieSyncConfigParams.basePath);
-      props.setProperty(META_SYNC_PARTITION_FIELDS.key(), String.join(",", hiveSyncConfigParams.hoodieSyncConfigParams.partitionFields));
-      props.setProperty(META_SYNC_PARTITION_EXTRACTOR_CLASS.key(), hiveSyncConfigParams.hoodieSyncConfigParams.partitionValueExtractorClass);
-      props.setProperty(META_SYNC_ASSUME_DATE_PARTITION.key(), String.valueOf(hiveSyncConfigParams.hoodieSyncConfigParams.assumeDatePartitioning));
-      props.setProperty(ADB_SYNC_SKIP_RO_SUFFIX.key(), String.valueOf(hiveSyncConfigParams.skipROSuffix));
-      props.setProperty(ADB_SYNC_SKIP_RT_SYNC.key(), String.valueOf(skipRTSync));
-      props.setProperty(ADB_SYNC_USE_HIVE_STYLE_PARTITIONING.key(), String.valueOf(useHiveStylePartitioning));
-      props.setProperty(META_SYNC_USE_FILE_LISTING_FROM_METADATA.key(), String.valueOf(hiveSyncConfigParams.hoodieSyncConfigParams.useFileListingFromMetadata));
-      props.setProperty(ADB_SYNC_SUPPORT_TIMESTAMP.key(), String.valueOf(supportTimestamp));
-      props.setProperty(ADB_SYNC_TABLE_PROPERTIES.key(), tableProperties);
-      props.setProperty(ADB_SYNC_SERDE_PROPERTIES.key(), serdeProperties);
-      props.setProperty(ADB_SYNC_SYNC_AS_SPARK_DATA_SOURCE_TABLE.key(), String.valueOf(syncAsSparkDataSourceTable));
-      props.setProperty(ADB_SYNC_SCHEMA_STRING_LENGTH_THRESHOLD.key(), String.valueOf(sparkSchemaLengthThreshold));
-      props.setProperty(META_SYNC_SPARK_VERSION.key(), hiveSyncConfigParams.hoodieSyncConfigParams.sparkVersion);
-      props.setProperty(ADB_SYNC_DB_LOCATION.key(), dbLocation);
-      props.setProperty(ADB_SYNC_AUTO_CREATE_DATABASE.key(), String.valueOf(autoCreateDatabase));
-      props.setProperty(ADB_SYNC_SKIP_LAST_COMMIT_TIME_SYNC.key(), String.valueOf(skipLastCommitTimeSync));
-      props.setProperty(ADB_SYNC_DROP_TABLE_BEFORE_CREATION.key(), String.valueOf(dropTableBeforeCreation));
+    public TypedProperties toProps() {
+      final TypedProperties props = hiveSyncConfigParams.toProps();
+      props.setPropertyIfNonNull(META_SYNC_DATABASE_NAME.key(), hiveSyncConfigParams.hoodieSyncConfigParams.databaseName);
+      props.setPropertyIfNonNull(META_SYNC_TABLE_NAME.key(), hiveSyncConfigParams.hoodieSyncConfigParams.tableName);
+      props.setPropertyIfNonNull(ADB_SYNC_USER.key(), hiveSyncConfigParams.hiveUser);
+      props.setPropertyIfNonNull(ADB_SYNC_PASS.key(), hiveSyncConfigParams.hivePass);
+      props.setPropertyIfNonNull(ADB_SYNC_JDBC_URL.key(), hiveSyncConfigParams.jdbcUrl);
+      props.setPropertyIfNonNull(META_SYNC_BASE_PATH.key(), hiveSyncConfigParams.hoodieSyncConfigParams.basePath);
+      props.setPropertyIfNonNull(META_SYNC_PARTITION_FIELDS.key(), String.join(",", hiveSyncConfigParams.hoodieSyncConfigParams.partitionFields));
+      props.setPropertyIfNonNull(META_SYNC_PARTITION_EXTRACTOR_CLASS.key(), hiveSyncConfigParams.hoodieSyncConfigParams.partitionValueExtractorClass);
+      props.setPropertyIfNonNull(META_SYNC_ASSUME_DATE_PARTITION.key(), String.valueOf(hiveSyncConfigParams.hoodieSyncConfigParams.assumeDatePartitioning));
+      props.setPropertyIfNonNull(ADB_SYNC_SKIP_RO_SUFFIX.key(), String.valueOf(hiveSyncConfigParams.skipROSuffix));
+      props.setPropertyIfNonNull(ADB_SYNC_SKIP_RT_SYNC.key(), String.valueOf(skipRTSync));
+      props.setPropertyIfNonNull(ADB_SYNC_USE_HIVE_STYLE_PARTITIONING.key(), String.valueOf(useHiveStylePartitioning));
+      props.setPropertyIfNonNull(META_SYNC_USE_FILE_LISTING_FROM_METADATA.key(), String.valueOf(hiveSyncConfigParams.hoodieSyncConfigParams.useFileListingFromMetadata));
+      props.setPropertyIfNonNull(ADB_SYNC_SUPPORT_TIMESTAMP.key(), String.valueOf(supportTimestamp));
+      props.setPropertyIfNonNull(ADB_SYNC_TABLE_PROPERTIES.key(), tableProperties);
+      props.setPropertyIfNonNull(ADB_SYNC_SERDE_PROPERTIES.key(), serdeProperties);
+      props.setPropertyIfNonNull(ADB_SYNC_SYNC_AS_SPARK_DATA_SOURCE_TABLE.key(), String.valueOf(syncAsSparkDataSourceTable));
+      props.setPropertyIfNonNull(ADB_SYNC_SCHEMA_STRING_LENGTH_THRESHOLD.key(), String.valueOf(sparkSchemaLengthThreshold));
+      props.setPropertyIfNonNull(META_SYNC_SPARK_VERSION.key(), hiveSyncConfigParams.hoodieSyncConfigParams.sparkVersion);
+      props.setPropertyIfNonNull(ADB_SYNC_DB_LOCATION.key(), dbLocation);
+      props.setPropertyIfNonNull(ADB_SYNC_AUTO_CREATE_DATABASE.key(), String.valueOf(autoCreateDatabase));
+      props.setPropertyIfNonNull(ADB_SYNC_SKIP_LAST_COMMIT_TIME_SYNC.key(), String.valueOf(skipLastCommitTimeSync));
+      props.setPropertyIfNonNull(ADB_SYNC_DROP_TABLE_BEFORE_CREATION.key(), String.valueOf(dropTableBeforeCreation));
       return props;
     }
   }

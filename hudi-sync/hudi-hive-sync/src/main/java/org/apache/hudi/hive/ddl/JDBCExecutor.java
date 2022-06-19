@@ -53,11 +53,11 @@ public class JDBCExecutor extends QueryBasedDDLExecutor {
 
   public JDBCExecutor(HiveSyncConfig config) {
     super(config);
-    Objects.requireNonNull(config.getString(HIVE_URL), "--jdbc-url option is required for jdbc sync mode");
-    Objects.requireNonNull(config.getString(HIVE_USER), "--user option is required for jdbc sync mode");
-    Objects.requireNonNull(config.getString(HIVE_PASS), "--pass option is required for jdbc sync mode");
+    Objects.requireNonNull(config.getStringOrDefault(HIVE_URL), "--jdbc-url option is required for jdbc sync mode");
+    Objects.requireNonNull(config.getStringOrDefault(HIVE_USER), "--user option is required for jdbc sync mode");
+    Objects.requireNonNull(config.getStringOrDefault(HIVE_PASS), "--pass option is required for jdbc sync mode");
     this.config = config;
-    createHiveConnection(config.getString(HIVE_URL), config.getString(HIVE_USER), config.getString(HIVE_PASS));
+    createHiveConnection(config.getStringOrDefault(HIVE_URL), config.getStringOrDefault(HIVE_USER), config.getStringOrDefault(HIVE_PASS));
   }
 
   @Override

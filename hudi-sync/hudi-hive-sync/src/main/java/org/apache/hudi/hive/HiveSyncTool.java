@@ -246,7 +246,7 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
     Map<String, String> serdeProperties = ConfigUtils.toMap(config.getString(HIVE_TABLE_SERDE_PROPERTIES));
     if (config.getBoolean(HIVE_SYNC_AS_DATA_SOURCE_TABLE)) {
       Map<String, String> sparkTableProperties = SparkDataSourceTableUtils.getSparkTableProperties(config.getSplitStrings(META_SYNC_PARTITION_FIELDS),
-          config.getString(META_SYNC_SPARK_VERSION), config.getInt(HIVE_SYNC_SCHEMA_STRING_LENGTH_THRESHOLD), schema);
+          config.getStringOrDefault(META_SYNC_SPARK_VERSION), config.getIntOrDefault(HIVE_SYNC_SCHEMA_STRING_LENGTH_THRESHOLD), schema);
       Map<String, String> sparkSerdeProperties = SparkDataSourceTableUtils.getSparkSerdeProperties(readAsOptimized, config.getString(META_SYNC_BASE_PATH));
       tableProperties.putAll(sparkTableProperties);
       serdeProperties.putAll(sparkSerdeProperties);

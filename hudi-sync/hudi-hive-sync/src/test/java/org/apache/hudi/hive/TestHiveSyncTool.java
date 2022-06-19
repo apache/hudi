@@ -530,7 +530,7 @@ public class TestHiveSyncTool {
     List<FieldSchema> fieldSchemas = hiveClient.getMetastoreFieldSchemas(HiveTestUtil.TABLE_NAME);
     int commentCnt = 0;
     for (FieldSchema fieldSchema : fieldSchemas) {
-      if (fieldSchema.getComment().isPresent()) {
+      if (fieldSchema.getComment().isPresent() && !StringUtils.isNullOrEmpty(fieldSchema.getComment().get())) {
         commentCnt++;
       }
     }
@@ -550,7 +550,7 @@ public class TestHiveSyncTool {
     List<FieldSchema> fieldSchemas = hiveClient.getMetastoreFieldSchemas(HiveTestUtil.TABLE_NAME);
     int commentCnt = 0;
     for (FieldSchema fieldSchema : fieldSchemas) {
-      if (fieldSchema.getComment().isPresent()) {
+      if (fieldSchema.getComment().isPresent() && !StringUtils.isNullOrEmpty(fieldSchema.getComment().get())) {
         commentCnt++;
       }
     }
@@ -562,7 +562,7 @@ public class TestHiveSyncTool {
     fieldSchemas = hiveClient.getMetastoreFieldSchemas(HiveTestUtil.TABLE_NAME);
     commentCnt = 0;
     for (FieldSchema fieldSchema : fieldSchemas) {
-      if (fieldSchema.getComment().isPresent()) {
+      if (fieldSchema.getComment().isPresent() && !StringUtils.isNullOrEmpty(fieldSchema.getComment().get())) {
         commentCnt++;
       }
     }

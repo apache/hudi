@@ -19,6 +19,7 @@
 package org.apache.hudi.hive;
 
 import org.apache.hudi.common.config.ConfigProperty;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.sync.common.HoodieSyncConfig;
 
 import com.beust.jcommander.Parameter;
@@ -233,8 +234,8 @@ public class HiveSyncConfig extends HoodieSyncConfig {
     @Parameter(names = {"--help", "-h"}, help = true)
     public Boolean help = false;
 
-    public Properties toProps() {
-      final Properties props = hoodieSyncConfigParams.toProps();
+    public TypedProperties toProps() {
+      final TypedProperties props = hoodieSyncConfigParams.toProps();
       // TODO add mappings here
       return props;
     }
