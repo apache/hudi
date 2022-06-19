@@ -32,6 +32,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.io.IOException;
 import java.util.Properties;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -83,7 +84,7 @@ public class TestSyncUtilHelpers {
 
   @Test
   public void testCreateInvalidSyncClass() {
-    Exception exception = assertThrows(HoodieException.class, () -> {
+    Throwable t = assertThrows(HoodieException.class, () -> {
       SyncUtilHelpers.instantiateMetaSyncTool(
           InvalidSyncTool.class.getName(),
           new TypedProperties(),
@@ -94,9 +95,9 @@ public class TestSyncUtilHelpers {
       );
     });
 
-    String expectedMessage = "Could not load meta sync class " + InvalidSyncTool.class.getName();
-    assertTrue(exception.getMessage().contains(expectedMessage));
-
+    String expectedMessage = "Could not load meta sync class " + InvalidSyncTool.class.getName()
+        + ": no valid constructor found.";
+    assertEquals(expectedMessage, t.getMessage());
   }
 
   public static class DummySyncTool1 extends HoodieSyncTool {

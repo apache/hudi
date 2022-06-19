@@ -27,8 +27,6 @@ import org.apache.hudi.sync.common.HoodieSyncTool;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 
 import java.util.Properties;
 
@@ -36,13 +34,12 @@ import java.util.Properties;
  * Helper class for syncing Hudi commit data with external metastores.
  */
 public class SyncUtilHelpers {
-  private static final Logger LOG = LogManager.getLogger(SyncUtilHelpers.class);
 
   /**
    * Create an instance of an implementation of {@link HoodieSyncTool} that will sync all the relevant meta information
    * with an external metastore such as Hive etc. to ensure Hoodie tables can be queried or read via external systems.
    *
-   * @param metaSyncFQCN  The class that implements the sync of the metadata.
+   * @param metaSyncFQCN   The class that implements the sync of the metadata.
    * @param props          property map.
    * @param hadoopConfig   Hadoop confs.
    * @param fs             Filesystem used.
@@ -94,7 +91,8 @@ public class SyncUtilHelpers {
           new Class<?>[] {Properties.class, FileSystem.class},
           properties, fs));
     } else {
-      throw new HoodieException("Could not load meta sync class " + metaSyncFQCN);
+      throw new HoodieException("Could not load meta sync class " + metaSyncFQCN
+          + ": no valid constructor found.");
     }
   }
 }
