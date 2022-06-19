@@ -335,6 +335,9 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
                             Option<Map<String, String>> extraMetadata,
                             boolean acquireLockForArchival) {
     try {
+      // sync the view actively when there is new completed commit
+      // to reduce #sync conflicts for timeline service from concurrent client requests
+      table.getHoodieView().sync();
       // Delete the marker directory for the instant.
       WriteMarkersFactory.get(config.getMarkersType(), createTable(config, hadoopConf), instantTime)
           .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
