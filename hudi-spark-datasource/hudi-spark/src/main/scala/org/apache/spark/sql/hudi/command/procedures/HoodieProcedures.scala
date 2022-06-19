@@ -47,6 +47,7 @@ object HoodieProcedures {
     mapBuilder.put(DeleteMarkerProcedure.NAME, DeleteMarkerProcedure.builder)
     mapBuilder.put(ShowRollbacksProcedure.NAME, ShowRollbacksProcedure.builder)
     mapBuilder.put(ShowRollbackDetailProcedure.NAME, ShowRollbackDetailProcedure.builder)
+    mapBuilder.put(ExportInstantsProcedure.NAME, ExportInstantsProcedure.builder)
     mapBuilder.build
   }
 }
