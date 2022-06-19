@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.{OverwriteWithLatestAvroPayload, WriteOperat
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
 import org.apache.hudi.config.{HoodieIndexConfig, HoodieWriteConfig}
+import org.apache.hudi.hive.ddl.HiveSyncMode
 import org.apache.hudi.hive.{HiveSyncConfig, MultiPartKeysValueExtractor}
 import org.apache.hudi.keygen.ComplexKeyGenerator
 import org.apache.hudi.sql.InsertMode
@@ -74,11 +75,11 @@ trait ProvidesHoodieConfig extends Logging {
         PARTITIONPATH_FIELD.key -> tableConfig.getPartitionFieldProp,
         HoodieSyncConfig.META_SYNC_ENABLED.key -> enableHive.toString,
         HiveSyncConfig.HIVE_SYNC_ENABLED.key -> enableHive.toString,
-        HiveSyncConfig.HIVE_SYNC_MODE.key -> hiveSyncConfig.getString(HiveSyncConfig.HIVE_SYNC_MODE),
-        HoodieSyncConfig.META_SYNC_DATABASE_NAME.key -> hiveSyncConfig.getString(HoodieSyncConfig.META_SYNC_DATABASE_NAME),
-        HoodieSyncConfig.META_SYNC_TABLE_NAME.key -> hiveSyncConfig.getString(HoodieSyncConfig.META_SYNC_TABLE_NAME),
+        HiveSyncConfig.HIVE_SYNC_MODE.key -> hiveSyncConfig.getStringOrDefault(HiveSyncConfig.HIVE_SYNC_MODE, HiveSyncMode.HMS.name()),
+        HoodieSyncConfig.META_SYNC_DATABASE_NAME.key -> hiveSyncConfig.getStringOrDefault(HoodieSyncConfig.META_SYNC_DATABASE_NAME),
+        HoodieSyncConfig.META_SYNC_TABLE_NAME.key -> hiveSyncConfig.getStringOrDefault(HoodieSyncConfig.META_SYNC_TABLE_NAME),
         HoodieSyncConfig.META_SYNC_PARTITION_FIELDS.key -> tableConfig.getPartitionFieldProp,
-        HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key -> hiveSyncConfig.getString(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS),
+        HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key -> hiveSyncConfig.getStringOrDefault(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS),
         HiveSyncConfig.HIVE_SUPPORT_TIMESTAMP_TYPE.key -> hiveSyncConfig.getBoolean(HiveSyncConfig.HIVE_SUPPORT_TIMESTAMP_TYPE).toString,
         HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key -> hoodieProps.getString(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "200"),
         SqlKeyGenerator.PARTITION_SCHEMA -> hoodieCatalogTable.partitionSchema.toDDL
@@ -192,11 +193,11 @@ trait ProvidesHoodieConfig extends Logging {
         HoodieSyncConfig.META_SYNC_PARTITION_FIELDS.key -> partitionFieldsStr,
         HoodieSyncConfig.META_SYNC_ENABLED.key -> enableHive.toString,
         HiveSyncConfig.HIVE_SYNC_ENABLED.key -> enableHive.toString,
-        HiveSyncConfig.HIVE_SYNC_MODE.key -> hiveSyncConfig.getString(HiveSyncConfig.HIVE_SYNC_MODE),
-        HoodieSyncConfig.META_SYNC_DATABASE_NAME.key -> hiveSyncConfig.getString(HoodieSyncConfig.META_SYNC_DATABASE_NAME),
-        HoodieSyncConfig.META_SYNC_TABLE_NAME.key -> hiveSyncConfig.getString(HoodieSyncConfig.META_SYNC_TABLE_NAME),
+        HiveSyncConfig.HIVE_SYNC_MODE.key -> hiveSyncConfig.getStringOrDefault(HiveSyncConfig.HIVE_SYNC_MODE, HiveSyncMode.HMS.name()),
+        HoodieSyncConfig.META_SYNC_DATABASE_NAME.key -> hiveSyncConfig.getStringOrDefault(HoodieSyncConfig.META_SYNC_DATABASE_NAME),
+        HoodieSyncConfig.META_SYNC_TABLE_NAME.key -> hiveSyncConfig.getStringOrDefault(HoodieSyncConfig.META_SYNC_TABLE_NAME),
         HiveSyncConfig.HIVE_SUPPORT_TIMESTAMP_TYPE.key -> hiveSyncConfig.getBoolean(HiveSyncConfig.HIVE_SUPPORT_TIMESTAMP_TYPE).toString,
-        HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key -> hiveSyncConfig.getString(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS),
+        HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key -> hiveSyncConfig.getStringOrDefault(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS),
         HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key -> hoodieProps.getString(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "200"),
         HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key -> hoodieProps.getString(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "200"),
         SqlKeyGenerator.PARTITION_SCHEMA -> hoodieCatalogTable.partitionSchema.toDDL
@@ -229,12 +230,12 @@ trait ProvidesHoodieConfig extends Logging {
         PARTITIONPATH_FIELD.key -> partitionFields,
         HoodieSyncConfig.META_SYNC_ENABLED.key -> enableHive.toString,
         HiveSyncConfig.HIVE_SYNC_ENABLED.key -> enableHive.toString,
-        HiveSyncConfig.HIVE_SYNC_MODE.key -> hiveSyncConfig.getString(HiveSyncConfig.HIVE_SYNC_MODE),
-        HoodieSyncConfig.META_SYNC_DATABASE_NAME.key -> hiveSyncConfig.getString(HoodieSyncConfig.META_SYNC_DATABASE_NAME),
-        HoodieSyncConfig.META_SYNC_TABLE_NAME.key -> hiveSyncConfig.getString(HoodieSyncConfig.META_SYNC_TABLE_NAME),
+        HiveSyncConfig.HIVE_SYNC_MODE.key -> hiveSyncConfig.getStringOrDefault(HiveSyncConfig.HIVE_SYNC_MODE, HiveSyncMode.HMS.name()),
+        HoodieSyncConfig.META_SYNC_DATABASE_NAME.key -> hiveSyncConfig.getStringOrDefault(HoodieSyncConfig.META_SYNC_DATABASE_NAME),
+        HoodieSyncConfig.META_SYNC_TABLE_NAME.key -> hiveSyncConfig.getStringOrDefault(HoodieSyncConfig.META_SYNC_TABLE_NAME),
         HiveSyncConfig.HIVE_SUPPORT_TIMESTAMP_TYPE.key -> hiveSyncConfig.getBoolean(HiveSyncConfig.HIVE_SUPPORT_TIMESTAMP_TYPE).toString,
         HoodieSyncConfig.META_SYNC_PARTITION_FIELDS.key -> partitionFields,
-        HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key -> hiveSyncConfig.getString(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS)
+        HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key -> hiveSyncConfig.getStringOrDefault(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS)
       )
         .filter { case (_, v) => v != null }
     }
@@ -271,7 +272,7 @@ trait ProvidesHoodieConfig extends Logging {
         PARTITIONPATH_FIELD.key -> tableConfig.getPartitionFieldProp,
         HoodieSyncConfig.META_SYNC_ENABLED.key -> enableHive.toString,
         HiveSyncConfig.HIVE_SYNC_ENABLED.key -> enableHive.toString,
-        HiveSyncConfig.HIVE_SYNC_MODE.key -> hiveSyncConfig.getString(HiveSyncConfig.HIVE_SYNC_MODE),
+        HiveSyncConfig.HIVE_SYNC_MODE.key -> hiveSyncConfig.getStringOrDefault(HiveSyncConfig.HIVE_SYNC_MODE, HiveSyncMode.HMS.name()),
         HiveSyncConfig.HIVE_SUPPORT_TIMESTAMP_TYPE.key -> hiveSyncConfig.getBoolean(HiveSyncConfig.HIVE_SUPPORT_TIMESTAMP_TYPE).toString,
         HoodieWriteConfig.DELETE_PARALLELISM_VALUE.key -> hoodieProps.getString(HoodieWriteConfig.DELETE_PARALLELISM_VALUE.key, "200"),
         SqlKeyGenerator.PARTITION_SCHEMA -> partitionSchema.toDDL
