@@ -18,9 +18,6 @@
 
 package org.apache.hudi;
 
-import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.client.HoodieReadClient;
 import org.apache.hudi.client.HoodieWriteResult;
 import org.apache.hudi.client.SparkRDDWriteClient;
@@ -42,10 +39,12 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.exception.TableNotFoundException;
-import org.apache.hudi.hive.HiveSyncConfig;
-import org.apache.hudi.sync.common.HoodieSyncConfig;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.util.DataTypeUtils;
+
+import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
@@ -55,13 +54,9 @@ import org.apache.spark.sql.Row;
 import org.apache.spark.sql.types.StructType;
 
 import java.io.IOException;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
-import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT;
-import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 
 /**
  * Utilities used throughout the data source.
@@ -268,20 +263,6 @@ public class DataSourceUtils {
         HoodieWriteConfig.newBuilder().withPath(parameters.get("path")).withProps(parameters).build();
     return dropDuplicates(jssc, incomingHoodieRecords, writeConfig);
   }
-
-  /**
-   * @deprecated Use {@link HiveSyncConfig} constructor directly and provide the props,
-   * and set {@link HoodieSyncConfig#META_SYNC_BASE_PATH} and {@link HoodieSyncConfig#META_SYNC_BASE_FILE_FORMAT} instead.
-   */
-  @Deprecated
-  public static HiveSyncConfig buildHiveSyncConfig(TypedProperties props, String basePath, String baseFileFormat) {
-    checkRequiredProperties(props, Collections.singletonList(DataSourceWriteOptions.HIVE_TABLE().key()));
-    HiveSyncConfig hiveSyncConfig = new HiveSyncConfig(props);
-    hiveSyncConfig.setValue(META_SYNC_BASE_PATH, basePath);
-    hiveSyncConfig.setValue(META_SYNC_BASE_FILE_FORMAT, baseFileFormat);
-    return hiveSyncConfig;
-  }
-
 
   /**
    * Checks whether default value (false) of "hoodie.parquet.writelegacyformat.enabled" should be
