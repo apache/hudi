@@ -159,11 +159,11 @@ public class JDBCExecutor extends QueryBasedDDLExecutor {
   }
 
   private List<String> constructDropPartitions(String tableName, List<String> partitions) {
-    if (config.getInt(HIVE_BATCH_SYNC_PARTITION_NUM) <= 0) {
+    if (config.getIntOrDefault(HIVE_BATCH_SYNC_PARTITION_NUM) <= 0) {
       throw new HoodieHiveSyncException("batch-sync-num for sync hive table must be greater than 0, pls check your parameter");
     }
     List<String> result = new ArrayList<>();
-    int batchSyncPartitionNum = config.getInt(HIVE_BATCH_SYNC_PARTITION_NUM);
+    int batchSyncPartitionNum = config.getIntOrDefault(HIVE_BATCH_SYNC_PARTITION_NUM);
     StringBuilder alterSQL = getAlterTableDropPrefix(tableName);
 
     for (int i = 0; i < partitions.size(); i++) {
