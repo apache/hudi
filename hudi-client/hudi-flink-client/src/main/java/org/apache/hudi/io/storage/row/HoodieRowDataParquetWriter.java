@@ -49,8 +49,7 @@ public class HoodieRowDataParquetWriter extends ParquetWriter<RowData>
     this.file = HoodieWrapperFileSystem.convertToHoodiePath(file, parquetConfig.getHadoopConf());
     this.fs = (HoodieWrapperFileSystem) this.file.getFileSystem(FSUtils.registerFileSystem(file,
         parquetConfig.getHadoopConf()));
-    this.maxFileSize = parquetConfig.getMaxFileSize()
-        + Math.round(parquetConfig.getMaxFileSize() * parquetConfig.getCompressionRatio());
+    this.maxFileSize = Math.round(parquetConfig.getMaxFileSize() * parquetConfig.getCompressionRatio());
     this.writeSupport = parquetConfig.getWriteSupport();
   }
 
