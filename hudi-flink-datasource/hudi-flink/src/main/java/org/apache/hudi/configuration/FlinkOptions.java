@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
@@ -774,6 +775,12 @@ public class FlinkOptions extends HoodieConfig {
       .stringType()
       .noDefaultValue()
       .withDescription("The hive configuration directory, where the hive-site.xml lies in, the file should be put on the client machine");
+
+  public static final ConfigOption<String> CATALOG_SYNC_TOOL_CLASS_NAME = ConfigOptions
+      .key("hive_sync.catalog.sync.tool.class")
+      .stringType()
+      .defaultValue(HiveSyncTool.class.getSimpleName())
+      .withDescription("Tool class used to synchronize to HMS, optional AwsGlueCatalogSyncTool to sync metadata to aws Glue");
 
   // -------------------------------------------------------------------------
   //  Utilities

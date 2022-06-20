@@ -26,7 +26,6 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
-import org.apache.hudi.hive.ddl.HiveSyncMode;
 import org.apache.hudi.table.format.FilePathUtils;
 
 import org.apache.flink.configuration.Configuration;
@@ -44,16 +43,17 @@ public class HiveSyncContext {
   private final HiveSyncConfig syncConfig;
   private final HiveConf hiveConf;
   private final FileSystem fs;
+  private final String catalogSyncToolClassName;
 
-  private HiveSyncContext(HiveSyncConfig syncConfig, HiveConf hiveConf, FileSystem fs) {
+  private HiveSyncContext(HiveSyncConfig syncConfig, HiveConf hiveConf, FileSystem fs, String catalogSyncToolClassName) {
     this.syncConfig = syncConfig;
     this.hiveConf = hiveConf;
     this.fs = fs;
+    this.catalogSyncToolClassName = catalogSyncToolClassName;
   }
 
   public HiveSyncTool hiveSyncTool() {
-    HiveSyncMode syncMode = HiveSyncMode.of(syncConfig.syncMode);
-    if (syncMode == HiveSyncMode.GLUE) {
+    if (catalogSyncToolClassName.equals(AwsGlueCatalogSyncTool.class.getSimpleName())) {
       return new AwsGlueCatalogSyncTool(this.syncConfig, this.hiveConf, this.fs);
     }
     return new HiveSyncTool(this.syncConfig, this.hiveConf, this.fs);
@@ -63,6 +63,7 @@ public class HiveSyncContext {
     HiveSyncConfig syncConfig = buildSyncConfig(conf);
     org.apache.hadoop.conf.Configuration hadoopConf = HadoopConfigurations.getHadoopConf(conf);
     String path = conf.getString(FlinkOptions.PATH);
+    String catalogSyncToolClassName = conf.getString(FlinkOptions.CATALOG_SYNC_TOOL_CLASS_NAME);
     FileSystem fs = FSUtils.getFs(path, hadoopConf);
     HiveConf hiveConf = new HiveConf();
     if (!FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.HIVE_SYNC_METASTORE_URIS)) {
@@ -70,7 +71,7 @@ public class HiveSyncContext {
     }
     hiveConf.addResource(serConf.get());
     hiveConf.addResource(hadoopConf);
-    return new HiveSyncContext(syncConfig, hiveConf, fs);
+    return new HiveSyncContext(syncConfig, hiveConf, fs, catalogSyncToolClassName);
   }
 
   @VisibleForTesting
