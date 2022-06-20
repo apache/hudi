@@ -51,14 +51,12 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NA
  */
 public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
   private static final Logger LOG = LogManager.getLogger(HiveQueryDDLExecutor.class);
-  private final HiveSyncConfig config;
   private final IMetaStoreClient metaStoreClient;
   private SessionState sessionState = null;
   private Driver hiveDriver = null;
 
   public HiveQueryDDLExecutor(HiveSyncConfig config) throws HiveException, MetaException {
     super(config);
-    this.config = config;
     this.metaStoreClient = Hive.get(config.getHiveConf()).getMSC();
     try {
       this.sessionState = new SessionState(config.getHiveConf(),

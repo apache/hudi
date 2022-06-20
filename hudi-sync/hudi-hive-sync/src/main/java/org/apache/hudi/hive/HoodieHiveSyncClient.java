@@ -60,11 +60,13 @@ import static org.apache.hudi.sync.common.util.TableUtils.tableId;
 public class HoodieHiveSyncClient extends HoodieSyncClient {
 
   private static final Logger LOG = LogManager.getLogger(HoodieHiveSyncClient.class);
+  protected final HiveSyncConfig config;
   DDLExecutor ddlExecutor;
   private IMetaStoreClient client;
 
   public HoodieHiveSyncClient(HiveSyncConfig config) {
     super(config);
+    this.config = config;
 
     // Support JDBC, HiveQL and metastore based implementations for backwards compatibility. Future users should
     // disable jdbc and depend on metastore client for all hive registrations

@@ -48,7 +48,6 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NA
  */
 public class JDBCExecutor extends QueryBasedDDLExecutor {
   private static final Logger LOG = LogManager.getLogger(QueryBasedDDLExecutor.class);
-  private final HiveSyncConfig config;
   private Connection connection;
 
   public JDBCExecutor(HiveSyncConfig config) {
@@ -56,7 +55,6 @@ public class JDBCExecutor extends QueryBasedDDLExecutor {
     Objects.requireNonNull(config.getStringOrDefault(HIVE_URL), "--jdbc-url option is required for jdbc sync mode");
     Objects.requireNonNull(config.getStringOrDefault(HIVE_USER), "--user option is required for jdbc sync mode");
     Objects.requireNonNull(config.getStringOrDefault(HIVE_PASS), "--pass option is required for jdbc sync mode");
-    this.config = config;
     createHiveConnection(config.getStringOrDefault(HIVE_URL), config.getStringOrDefault(HIVE_USER), config.getStringOrDefault(HIVE_PASS));
   }
 

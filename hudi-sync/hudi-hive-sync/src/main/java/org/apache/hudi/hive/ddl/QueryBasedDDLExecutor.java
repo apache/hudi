@@ -25,8 +25,8 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncException;
-import org.apache.hudi.sync.common.model.PartitionValueExtractor;
 import org.apache.hudi.hive.util.HiveSchemaUtil;
+import org.apache.hudi.sync.common.model.PartitionValueExtractor;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -53,13 +53,13 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_F
  */
 public abstract class QueryBasedDDLExecutor implements DDLExecutor {
   private static final Logger LOG = LogManager.getLogger(QueryBasedDDLExecutor.class);
-  private final HiveSyncConfig config;
+  protected final HiveSyncConfig config;
   public final PartitionValueExtractor partitionValueExtractor;
   private final FileSystem fs;
 
   public QueryBasedDDLExecutor(HiveSyncConfig config) {
-    this.fs = config.getHadoopFileSystem();
     this.config = config;
+    this.fs = config.getHadoopFileSystem();
     try {
       this.partitionValueExtractor =
           (PartitionValueExtractor) Class.forName(config.getStringOrDefault(META_SYNC_PARTITION_EXTRACTOR_CLASS)).newInstance();
