@@ -26,6 +26,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import com.beust.jcommander.Parameter;
@@ -210,7 +211,7 @@ public class HoodieSyncConfig extends HoodieConfig {
       props.setPropertyIfNonNull(META_SYNC_DATABASE_NAME.key(), databaseName);
       props.setPropertyIfNonNull(META_SYNC_TABLE_NAME.key(), tableName);
       props.setPropertyIfNonNull(META_SYNC_BASE_FILE_FORMAT.key(), baseFileFormat);
-      props.setStringListIfNonNull(META_SYNC_PARTITION_FIELDS.key(), partitionFields, ",");
+      props.setPropertyIfNonNull(META_SYNC_PARTITION_FIELDS.key(), StringUtils.join(",", partitionFields));
       props.setPropertyIfNonNull(META_SYNC_PARTITION_EXTRACTOR_CLASS.key(), partitionValueExtractorClass);
       props.setPropertyIfNonNull(META_SYNC_ASSUME_DATE_PARTITION.key(), String.valueOf(assumeDatePartitioning));
       props.setPropertyIfNonNull(META_SYNC_DECODE_PARTITION.key(), String.valueOf(decodePartition));

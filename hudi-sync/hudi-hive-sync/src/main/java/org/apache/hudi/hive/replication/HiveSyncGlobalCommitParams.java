@@ -18,6 +18,7 @@
 
 package org.apache.hudi.hive.replication;
 
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.StringUtils;
 
 import com.beust.jcommander.Parameter;
@@ -82,14 +83,14 @@ public class HiveSyncGlobalCommitParams {
   }
 
   Properties mkGlobalHiveSyncProps(boolean forRemote) {
-    Properties props = new Properties(loadedProps);
+    TypedProperties props = new TypedProperties(loadedProps);
     props.putAll(globalHiveSyncConfigParams.toProps());
-    String basePath = forRemote ? loadedProps.getProperty(REMOTE_BASE_PATH, "")
-            : loadedProps.getProperty(LOCAL_BASE_PATH, loadedProps.getProperty(META_SYNC_BASE_PATH.key(), ""));
-    props.setProperty(META_SYNC_BASE_PATH.key(), basePath);
+    String basePath = forRemote ? loadedProps.getProperty(REMOTE_BASE_PATH)
+            : loadedProps.getProperty(LOCAL_BASE_PATH, loadedProps.getProperty(META_SYNC_BASE_PATH.key()));
+    props.setPropertyIfNonNull(META_SYNC_BASE_PATH.key(), basePath);
     String jdbcUrl = forRemote ? loadedProps.getProperty(REMOTE_HIVE_SERVER_JDBC_URLS)
             : loadedProps.getProperty(LOCAL_HIVE_SERVER_JDBC_URLS, loadedProps.getProperty(HIVE_URL.key()));
-    props.setProperty(HIVE_URL.key(), jdbcUrl);
+    props.setPropertyIfNonNull(HIVE_URL.key(), jdbcUrl);
     LOG.info("building hivesync config forRemote: " + forRemote + " " + jdbcUrl + " "
         + basePath);
     return props;
