@@ -73,7 +73,7 @@ public class HiveSyncConfig extends HoodieSyncConfig {
   }
 
   public HiveConf getHiveConf() {
-    return new HiveConf(getHadoopConf(), HiveConf.class);
+    return (HiveConf) getHadoopConf();
   }
 
   public boolean useBucketSync() {
@@ -92,10 +92,10 @@ public class HiveSyncConfig extends HoodieSyncConfig {
     @Parameter(names = {"--jdbc-url"}, description = "Hive jdbc connect url")
     public String jdbcUrl;
     @Parameter(names = {"--use-pre-apache-input-format"},
-            description = "Use InputFormat under com.uber.hoodie package "
-                    + "instead of org.apache.hudi package. Use this when you are in the process of migrating from "
-                    + "com.uber.hoodie to org.apache.hudi. Stop using this after you migrated the table definition to "
-                    + "org.apache.hudi input format.")
+        description = "Use InputFormat under com.uber.hoodie package "
+            + "instead of org.apache.hudi package. Use this when you are in the process of migrating from "
+            + "com.uber.hoodie to org.apache.hudi. Stop using this after you migrated the table definition to "
+            + "org.apache.hudi input format.")
     public Boolean usePreApacheInputFormat;
     @Deprecated
     @Parameter(names = {"--use-jdbc"}, description = "Hive jdbc connect url")
@@ -115,7 +115,7 @@ public class HiveSyncConfig extends HoodieSyncConfig {
     @Parameter(names = {"--serde-properties"}, description = "Serde properties to hive table")
     public String serdeProperties;
     @Parameter(names = {"--support-timestamp"}, description = "'INT64' with original type TIMESTAMP_MICROS is converted to hive 'timestamp' type."
-            + "Disabled by default for backward compatibility.")
+        + "Disabled by default for backward compatibility.")
     public Boolean supportTimestamp;
     @Parameter(names = {"--managed-table"}, description = "Create a managed table")
     public Boolean createManagedTable;

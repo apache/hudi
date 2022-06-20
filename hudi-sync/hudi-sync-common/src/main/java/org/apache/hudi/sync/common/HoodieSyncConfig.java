@@ -21,13 +21,13 @@ package org.apache.hudi.sync.common;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
+import org.apache.hudi.sync.common.util.ConfigUtils;
 
 import com.beust.jcommander.Parameter;
 import org.apache.hadoop.conf.Configuration;
@@ -140,27 +140,23 @@ public class HoodieSyncConfig extends HoodieConfig {
       .defaultValue("")
       .withDocumentation("The spark version used when syncing with a metastore.");
 
-  private SerializableConfiguration hadoopConf;
+  private Configuration hadoopConf;
 
   public HoodieSyncConfig(Properties props) {
-    this(props, SerializableConfiguration.fromProps(props));
+    this(props, ConfigUtils.createHadoopConf(props));
   }
 
   public HoodieSyncConfig(Properties props, Configuration hadoopConf) {
-    this(props, new SerializableConfiguration(hadoopConf));
-  }
-
-  private HoodieSyncConfig(Properties props, SerializableConfiguration hadoopConf) {
     super(props);
     this.hadoopConf = hadoopConf;
   }
 
   public void setHadoopConf(Configuration hadoopConf) {
-    this.hadoopConf = new SerializableConfiguration(hadoopConf);
+    this.hadoopConf = hadoopConf;
   }
 
   public Configuration getHadoopConf() {
-    return hadoopConf.get();
+    return hadoopConf;
   }
 
   public FileSystem getHadoopFileSystem() {
@@ -188,10 +184,10 @@ public class HoodieSyncConfig extends HoodieConfig {
     @Parameter(names = "--partitioned-by", description = "Fields in the schema partitioned by")
     public List<String> partitionFields;
     @Parameter(names = "--partition-value-extractor", description = "Class which implements PartitionValueExtractor "
-            + "to extract the partition values from HDFS path")
+        + "to extract the partition values from HDFS path")
     public String partitionValueExtractorClass;
     @Parameter(names = {"--assume-date-partitioning"}, description = "Assume standard yyyy/mm/dd partitioning, this"
-            + " exists to support backward compatibility. If you use hoodie 0.3.x, do not set this parameter")
+        + " exists to support backward compatibility. If you use hoodie 0.3.x, do not set this parameter")
     public Boolean assumeDatePartitioning;
     @Parameter(names = {"--decode-partition"}, description = "Decode the partition value if the partition has encoded during writing")
     public Boolean decodePartition;

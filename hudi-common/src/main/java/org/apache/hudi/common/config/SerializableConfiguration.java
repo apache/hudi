@@ -24,7 +24,6 @@ import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.Serializable;
-import java.util.Properties;
 
 /**
  * A wrapped configuration which can be serialized.
@@ -65,11 +64,5 @@ public class SerializableConfiguration implements Serializable {
     StringBuilder str = new StringBuilder();
     configuration.iterator().forEachRemaining(e -> str.append(String.format("%s => %s \n", e.getKey(), e.getValue())));
     return configuration.toString();
-  }
-
-  public static SerializableConfiguration fromProps(Properties props) {
-    Configuration hadoopConf = new Configuration();
-    props.stringPropertyNames().forEach(k -> hadoopConf.set(k, props.getProperty(k)));
-    return new SerializableConfiguration(hadoopConf);
   }
 }
