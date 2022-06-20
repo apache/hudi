@@ -470,6 +470,20 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
     }
   }
 
+  public final List<Path> getPartitionPaths() {
+    try {
+      readLock.lock();
+      return fetchAllStoredFileGroups()
+          .filter(fg -> !isFileGroupReplaced(fg))
+          .map(HoodieFileGroup::getPartitionPath)
+          .distinct()
+          .map(name -> name.isEmpty() ? metaClient.getBasePathV2() : new Path(metaClient.getBasePathV2(), name))
+          .collect(Collectors.toList());
+    } finally {
+      readLock.unlock();
+    }
+  }
+
   @Override
   public final Stream<HoodieBaseFile> getLatestBaseFiles(String partitionStr) {
     try {
