@@ -523,9 +523,6 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
   protected void postCommit(HoodieTable table, HoodieCommitMetadata metadata, String instantTime, Option<Map<String, String>> extraMetadata,
                             boolean acquireLockForArchival) {
     try {
-      // sync the view actively when there is new completed commit
-      // to reduce #sync conflicts for timeline service from concurrent client requests
-      table.getHoodieView().sync();
       // Delete the marker directory for the instant.
       WriteMarkersFactory.get(config.getMarkersType(), table, instantTime)
           .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
