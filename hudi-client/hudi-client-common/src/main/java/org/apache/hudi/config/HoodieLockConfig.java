@@ -189,6 +189,18 @@ public class HoodieLockConfig extends HoodieConfig {
       .withDocumentation("Enable early conflict detection based on markers. It will try to detect writing conflict before create markers and fast fail"
           + " which will release cluster resources as soon as possible.");
 
+  public static final ConfigProperty<Long> MARKER_CONFLICT_CHECKER_BATCH_INTERVAL = ConfigProperty
+      .key(LOCK_PREFIX + "early.conflict.async.checker.batch.interval")
+      .defaultValue(30000L)
+      .sinceVersion("0.12.0")
+      .withDocumentation("");
+
+  public static final ConfigProperty<Long> MARKER_CONFLICT_CHECKER_PERIOD = ConfigProperty
+      .key(LOCK_PREFIX + "early.conflict.async.checker.period")
+      .defaultValue(30000L)
+      .sinceVersion("0.12.0")
+      .withDocumentation("");
+
   /** @deprecated Use {@link #WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME} and its methods instead */
   @Deprecated
   public static final String WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_PROP = WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME.key();

@@ -170,6 +170,11 @@ public class MarkerUtils {
    */
   public static Map<String, Set<String>> readTimelineServerBasedMarkersFromFileSystem(
       String markerDir, FileSystem fileSystem, HoodieEngineContext context, int parallelism) {
+    return readTimelineServerBasedMarkersFromFileSystem(markerDir, fileSystem, context, parallelism, false);
+  }
+
+  public static Map<String, Set<String>> readTimelineServerBasedMarkersFromFileSystem(
+      String markerDir, FileSystem fileSystem, HoodieEngineContext context, int parallelism, boolean ignoreException) {
     Path dirPath = new Path(markerDir);
     try {
       if (fileSystem.exists(dirPath)) {
@@ -182,11 +187,16 @@ public class MarkerUtils {
             pairOfSubPathAndConf -> {
               String markersFilePathStr = pairOfSubPathAndConf.getKey();
               SerializableConfiguration conf = pairOfSubPathAndConf.getValue();
-              return readMarkersFromFile(new Path(markersFilePathStr), conf);
+              return readMarkersFromFile(new Path(markersFilePathStr), conf, ignoreException);
             });
       }
       return new HashMap<>();
     } catch (IOException ioe) {
+      if (ignoreException) {
+        LOG.warn("IOException occurs during read TimelineServer based markers from fileSystem", ioe);
+        return new HashMap<>();
+      }
+
       throw new HoodieIOException(ioe.getMessage(), ioe);
     }
   }
@@ -199,6 +209,10 @@ public class MarkerUtils {
    * @return markers in a {@code Set} of String.
    */
   public static Set<String> readMarkersFromFile(Path markersFilePath, SerializableConfiguration conf) {
+    return readMarkersFromFile(markersFilePath, conf, false);
+  }
+
+  public static Set<String> readMarkersFromFile(Path markersFilePath, SerializableConfiguration conf, boolean ignoreException) {
     FSDataInputStream fsDataInputStream = null;
     Set<String> markers = new HashSet<>();
     try {
@@ -207,7 +221,11 @@ public class MarkerUtils {
       fsDataInputStream = fs.open(markersFilePath);
       markers = new HashSet<>(FileIOUtils.readAsUTFStringLines(fsDataInputStream));
     } catch (IOException e) {
-      throw new HoodieIOException("Failed to read MARKERS file " + markersFilePath, e);
+      if (ignoreException) {
+        LOG.warn("IOException occurs during read MARKERS file, ", e);
+      } else {
+        throw new HoodieIOException("Failed to read MARKERS file " + markersFilePath, e);
+      }
     } finally {
       closeQuietly(fsDataInputStream);
     }

@@ -165,13 +165,13 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
   @Override
   public boolean hasMarkerConflict(HoodieWriteConfig config, String partitionPath, String fileId) throws IOException {
     Map<String, String> paramsMap = new HashMap<>();
-    paramsMap.put(MARKER_CONFLICT_CHECKER_BATCH_INTERVAL, "30000");
-    paramsMap.put(MARKER_CONFLICT_CHECKER_PERIOD, "30000");
+    paramsMap.put(MARKER_CONFLICT_CHECKER_BATCH_INTERVAL, config.getMarkerConflictCheckerBatchInterval());
+    paramsMap.put(MARKER_CONFLICT_CHECKER_PERIOD, config.getMarkerConflictCheckerPeriod());
     paramsMap.put(MARKER_DIR_PATH_PARAM, markerDirPath.toString());
     paramsMap.put(MARKER_BASEPATH_PARAM, basePath);
     try {
       return executeRequestToTimelineServer(
-          CHECK_MARKER_CONFLICT_URL, paramsMap, new TypeReference<Set<String>>() {}, RequestMethod.GET);
+          CHECK_MARKER_CONFLICT_URL, paramsMap, new TypeReference<Boolean>() {}, RequestMethod.GET);
     } catch (IOException e) {
       throw new HoodieRemoteException("Failed to check marker file conflict " + fileId, e);
     }
