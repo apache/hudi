@@ -104,14 +104,22 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
       val fileSlices = fileIndex.listFileSlices(convertedPartitionFilters)
       buildSplits(fileSlices.values.flatten.toSeq)
     } else {
-      // TODO refactor to avoid iterating over listed files multiple times
-      val partitions = listLatestBaseFiles(globPaths, convertedPartitionFilters, dataFilters)
-      val partitionPaths = partitions.keys.toSeq
+      val inMemoryFileIndex = HoodieInMemoryFileIndex.create(sparkSession, globPaths)
+      val partitionDirs = inMemoryFileIndex.listFiles(partitionFilters, dataFilters)
+
+      val fsView = new HoodieTableFileSystemView(metaClient, timeline, partitionDirs.flatMap(_.files).toArray)
+      val partitionPaths = fsView.getPartitionPaths.asScala
+
       if (partitionPaths.isEmpty || latestInstant.isEmpty) {
         // If this an empty table OR it has no completed commits yet, return
         List.empty[HoodieMergeOnReadFileSplit]
       } else {
-        val fileSlices = listFileSlices(partitionPaths)
+        val queryTimestamp = this.queryTimestamp.get
+
+        val fileSlices = partitionPaths.flatMap { partitionPath =>
+          val relativePath = getRelativePartitionPath(new Path(basePath), partitionPath)
+          fsView.getLatestMergedFileSlicesBeforeOrOn(relativePath, queryTimestamp).iterator().asScala.toSeq
+        }
         buildSplits(fileSlices)
       }
     }
@@ -129,20 +137,6 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
 
       HoodieMergeOnReadFileSplit(partitionedBaseFile, logFiles)
     }.toList
-  }
-
-  private def listFileSlices(partitionPaths: Seq[Path]): Seq[FileSlice] = {
-    // NOTE: It's critical for us to re-use [[InMemoryFileIndex]] to make sure we're leveraging
-    //       [[FileStatusCache]] and avoid listing the whole table again
-    val inMemoryFileIndex = HoodieInMemoryFileIndex.create(sparkSession, partitionPaths)
-    val fsView = new HoodieTableFileSystemView(metaClient, timeline, inMemoryFileIndex.allFiles.toArray)
-
-    val queryTimestamp = this.queryTimestamp.get
-
-    partitionPaths.flatMap { partitionPath =>
-      val relativePath = getRelativePartitionPath(new Path(basePath), partitionPath)
-      fsView.getLatestMergedFileSlicesBeforeOrOn(relativePath, queryTimestamp).iterator().asScala.toSeq
-    }
   }
 }
 

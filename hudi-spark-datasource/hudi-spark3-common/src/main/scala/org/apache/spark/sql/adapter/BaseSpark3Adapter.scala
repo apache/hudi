@@ -24,7 +24,7 @@ import org.apache.hudi.spark3.internal.ReflectUtil
 import org.apache.spark.sql.avro.{HoodieAvroSchemaConverters, HoodieSparkAvroSchemaConverters}
 import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
-import org.apache.spark.sql.catalyst.expressions.{Expression, Like}
+import org.apache.spark.sql.catalyst.expressions.{Expression, InterpretedPredicate, Like, Predicate}
 import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.catalyst.plans.JoinType
 import org.apache.spark.sql.catalyst.plans.logical.{InsertIntoStatement, Join, JoinHint, LogicalPlan}
@@ -148,5 +148,9 @@ abstract class BaseSpark3Adapter extends SparkAdapter {
     } else {
       None
     }
+  }
+
+  override def createInterpretedPredicate(e: Expression): InterpretedPredicate = {
+    Predicate.createInterpreted(e)
   }
 }
