@@ -18,10 +18,6 @@
 
 package org.apache.hudi.common.table.timeline;
 
-import org.apache.hadoop.fs.FSDataInputStream;
-import org.apache.hadoop.fs.FSDataOutputStream;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -32,6 +28,11 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
+
+import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -347,16 +348,15 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   }
 
   /**
-   * Revert compaction State from inflight to requested.
+   * Revert instant state from inflight to requested.
    *
    * @param inflightInstant Inflight Instant
    * @return requested instant
    */
-  public HoodieInstant revertCompactionInflightToRequested(HoodieInstant inflightInstant) {
-    ValidationUtils.checkArgument(inflightInstant.getAction().equals(HoodieTimeline.COMPACTION_ACTION));
+  public HoodieInstant revertInstantFromInflightToRequested(HoodieInstant inflightInstant) {
     ValidationUtils.checkArgument(inflightInstant.isInflight());
     HoodieInstant requestedInstant =
-        new HoodieInstant(State.REQUESTED, COMPACTION_ACTION, inflightInstant.getTimestamp());
+        new HoodieInstant(State.REQUESTED, inflightInstant.getAction(), inflightInstant.getTimestamp());
     if (metaClient.getTimelineLayoutVersion().isNullVersion()) {
       // Pass empty data since it is read from the corresponding .aux/.compaction instant file
       transitionState(inflightInstant, requestedInstant, Option.empty());
@@ -512,26 +512,6 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     // Then write to timeline
     transitionState(inflightInstant, commitInstant, data);
     return commitInstant;
-  }
-
-  /**
-   * Revert replace requested State from inflight to requested.
-   *
-   * @param inflightInstant Inflight Instant
-   * @return requested instant
-   */
-  public HoodieInstant revertReplaceCommitInflightToRequested(HoodieInstant inflightInstant) {
-    ValidationUtils.checkArgument(inflightInstant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION));
-    ValidationUtils.checkArgument(inflightInstant.isInflight());
-    HoodieInstant requestedInstant =
-        new HoodieInstant(State.REQUESTED, REPLACE_COMMIT_ACTION, inflightInstant.getTimestamp());
-    if (metaClient.getTimelineLayoutVersion().isNullVersion()) {
-      // Pass empty data since it is read from the corresponding .aux/.compaction instant file
-      transitionState(inflightInstant, requestedInstant, Option.empty());
-    } else {
-      deleteInflight(inflightInstant);
-    }
-    return requestedInstant;
   }
 
   private void transitionState(HoodieInstant fromInstant, HoodieInstant toInstant, Option<byte[]> data) {

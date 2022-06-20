@@ -114,7 +114,8 @@ public class HoodieFlinkClusteringJob {
     HoodieInstant inflightInstant = HoodieTimeline.getReplaceCommitInflightInstant(clusteringInstant.getTimestamp());
     if (timeline.containsInstant(inflightInstant)) {
       LOG.info("Rollback inflight clustering instant: [" + clusteringInstant + "]");
-      writeClient.rollbackInflightClustering(inflightInstant, table);
+      table.rollbackInflightClustering(inflightInstant,
+          commitToRollback -> writeClient.getPendingRollbackInfo(table.getMetaClient(), commitToRollback, false));
       table.getMetaClient().reloadActiveTimeline();
     }
 
