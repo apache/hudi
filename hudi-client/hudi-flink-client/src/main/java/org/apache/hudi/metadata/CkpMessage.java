@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.sink.meta;
+package org.apache.hudi.metadata;
 
 import org.apache.hudi.common.util.ValidationUtils;
 
@@ -73,6 +73,10 @@ public class CkpMessage implements Serializable, Comparable<CkpMessage> {
     return State.COMPLETED == this.state;
   }
 
+  public boolean isCancelled() {
+    return State.CANCELLED == this.state;
+  }
+
   public boolean isInflight() {
     return State.INFLIGHT == this.state;
   }
@@ -103,7 +107,10 @@ public class CkpMessage implements Serializable, Comparable<CkpMessage> {
     // than COMPLETED
     ABORTED,
     // Committed instant
-    COMPLETED
+    COMPLETED,
+    // In some conditions like rollback, instant may be deleted which means it has been dropped.
+    // So we need to mark it as CANCELLED with the highest priority
+    CANCELLED
   }
 
   @Override

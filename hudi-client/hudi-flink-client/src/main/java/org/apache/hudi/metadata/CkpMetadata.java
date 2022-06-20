@@ -16,16 +16,16 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.sink.meta;
+package org.apache.hudi.metadata;
 
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.exception.HoodieException;
 
-import org.apache.flink.configuration.Configuration;
+import org.apache.flink.annotation.VisibleForTesting;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
@@ -39,6 +39,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * The checkpoint metadata for bookkeeping the checkpoint messages.
@@ -69,18 +70,26 @@ public class CkpMetadata implements Serializable {
   private static final String CKP_META = "ckp_meta";
 
   private final FileSystem fs;
+  private final Path basePath;
   protected final Path path;
 
   private List<CkpMessage> messages;
   private List<String> instantCache;
 
-  private CkpMetadata(Configuration config) {
-    this(FSUtils.getFs(config.getString(FlinkOptions.PATH), HadoopConfigurations.getHadoopConf(config)), config.getString(FlinkOptions.PATH));
+  private CkpMetadata(String basePath, Configuration hadoopConf) {
+    this(FSUtils.getFs(basePath, hadoopConf), basePath);
   }
 
   private CkpMetadata(FileSystem fs, String basePath) {
     this.fs = fs;
+    this.basePath = new Path(basePath);
     this.path = new Path(ckpMetaPath(basePath));
+  }
+
+  // for the fist time initialization in driver
+  private CkpMetadata(HoodieTableMetaClient metaClient) throws IOException {
+    this(metaClient.getFs(), metaClient.getBasePath());
+    bootstrap(metaClient);
   }
 
   public void close() {
@@ -96,9 +105,12 @@ public class CkpMetadata implements Serializable {
    *
    * <p>This expects to be called by the driver.
    */
-  public void bootstrap() throws IOException {
+  private void bootstrap(HoodieTableMetaClient metaClient) throws IOException {
     fs.delete(path, true);
     fs.mkdirs(path);
+    metaClient.getActiveTimeline().reload().getCommitsTimeline().filterPendingExcludingCompaction()
+        .lastInstant()
+        .ifPresent(instant -> startInstant(instant.getTimestamp()));
   }
 
   public void startInstant(String instant) {
@@ -165,6 +177,18 @@ public class CkpMetadata implements Serializable {
     }
   }
 
+  /**
+   * Add a cancelled checkpoint message for a deleted instant.
+   */
+  public void deleteInstant(String instant) {
+    Path path = fullPath(CkpMessage.getFileName(instant, CkpMessage.State.CANCELLED));
+    try {
+      fs.createNewFile(path);
+    } catch (IOException e) {
+      throw new HoodieException("Exception while adding checkpoint delete metadata for instant: " + instant);
+    }
+  }
+
   // -------------------------------------------------------------------------
   //  READ METHODS
   // -------------------------------------------------------------------------
@@ -182,8 +206,23 @@ public class CkpMetadata implements Serializable {
     load();
     if (this.messages.size() > 0) {
       CkpMessage ckpMsg = this.messages.get(this.messages.size() - 1);
-      // consider 'aborted' as pending too to reuse the instant
-      if (!ckpMsg.isComplete()) {
+      if (validatePendingInstant(ckpMsg, false)) {
+        return ckpMsg.getInstant();
+      }
+    }
+    return null;
+  }
+
+  /**
+   * For some hadoop compatible systems, maybe we should supply an eagerly aligned choice for user
+   */
+  @VisibleForTesting
+  @Nullable
+  public String latestPendingInstant() {
+    load();
+    if (this.messages.size() > 0) {
+      CkpMessage ckpMsg = this.messages.get(this.messages.size() - 1);
+      if (validatePendingInstant(ckpMsg, true)) {
         return ckpMsg.getInstant();
       }
     }
@@ -203,16 +242,40 @@ public class CkpMetadata implements Serializable {
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
-  public static CkpMetadata getInstance(Configuration config) {
-    return new CkpMetadata(config);
+  public static CkpMetadata getInstance(String basePath, Configuration hadoopConf) {
+    return new CkpMetadata(basePath, hadoopConf);
   }
 
   public static CkpMetadata getInstance(FileSystem fs, String basePath) {
     return new CkpMetadata(fs, basePath);
   }
 
+  // for the fist time initialization in driver
+  public static CkpMetadata getInstanceAtFirstTime(HoodieTableMetaClient metaClient)
+      throws IOException {
+    return new CkpMetadata(metaClient);
+  }
+
   protected static String ckpMetaPath(String basePath) {
     return basePath + Path.SEPARATOR + HoodieTableMetaClient.AUXILIARYFOLDER_NAME + Path.SEPARATOR + CKP_META;
+  }
+
+  private static List<Path> getRequestOrInflightCommitFile(String instantTime, Path metaFolder) {
+    return Stream.of(
+            HoodieTimeline.makeRequestedCommitFileName(instantTime),
+            HoodieTimeline.makeInflightCommitFileName(instantTime),
+            HoodieTimeline.makeRequestedDeltaFileName(instantTime),
+            HoodieTimeline.makeInflightDeltaFileName(instantTime))
+        .map(fileName -> new Path(metaFolder, fileName))
+        .collect(Collectors.toList());
+  }
+
+  private static List<Path> getCompleteCommitFile(String instantTime, Path metaFolder) {
+    return Stream.of(
+            HoodieTimeline.makeCommitFileName(instantTime),
+            HoodieTimeline.makeDeltaFileName(instantTime))
+        .map(fileName -> new Path(metaFolder, fileName))
+        .collect(Collectors.toList());
   }
 
   private Path fullPath(String fileName) {
@@ -230,5 +293,47 @@ public class CkpMetadata implements Serializable {
           return y;
         }).get())
         .sorted().collect(Collectors.toList());
+  }
+
+  /**
+   * aligned eagerly means that we will fast validate timeline instant state
+   * by file rather than by timeline to avoid fs scan
+   */
+  private boolean validatePendingInstant(CkpMessage ckpMsg, boolean alignedEagerly) {
+    // consider 'aborted' as pending too to reuse the instant
+    if (!ckpMsg.isComplete() && !ckpMsg.isCancelled()) {
+      if (alignedEagerly) {
+        String pendingInstant = ckpMsg.getInstant();
+        Path metaPathDir = new Path(this.basePath, HoodieTableMetaClient.METAFOLDER_NAME);
+        boolean isCompleted =
+            getCompleteCommitFile(pendingInstant, metaPathDir).stream()
+                .anyMatch(this::checkFileExists);
+        boolean isRequestedOrInflight =
+            getRequestOrInflightCommitFile(pendingInstant, metaPathDir).stream()
+                .anyMatch(this::checkFileExists);
+        boolean isValid = !isCompleted && isRequestedOrInflight;
+        boolean notExist = !isCompleted && !isRequestedOrInflight;
+        if (notExist) {
+          throw new HoodieException(
+              String.format(
+                  "ckMsg is: %s but timeline instant: %s doesn't exist, isRequestedOrInflight: %s, isCompleted: %s",
+                  ckpMsg, pendingInstant, isRequestedOrInflight, isCompleted));
+        }
+
+        return isValid;
+      }
+
+      return true;
+    }
+
+    return false;
+  }
+
+  private boolean checkFileExists(Path fullPath) {
+    try {
+      return this.fs.isFile(fullPath);
+    } catch (IOException e) {
+      throw new HoodieException("Exception while checking instant file existence", e);
+    }
   }
 }
