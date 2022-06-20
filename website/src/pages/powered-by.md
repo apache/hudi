@@ -37,6 +37,9 @@ uses Apache Hudi to power their Exabyte scale TikTok #ForYouPage realtime recomm
 ### Clinbrain
 [Clinbrain](https://www.clinbrain.com/)  is the leader of big data platform and usage in medical industry. We have built 200 medical big data centers by integrating Hudi Data Lake solution in numerous hospitals. Hudi provides the ability to upsert and delete on hdfs, at the same time, it can make the fresh data-stream up-to-date efficiently in hadoop system with the hudi incremental view.
 
+### DiDi
+[DiDi](https://www.didiglobal.com/) is the World‘s Leading Transportation Platform. Based on the Hadoop ecosystem, we built a new generation of big data platform based on Apache Hudi, which provides record-level updates/deletes as well as streaming and batch integrated data processing.
+
 ### Disney+ Hotstar
 [Disney shared](https://youtu.be/ZamXiT9aqs8) how they migrated CDC data to Apache Hudi to power a real-time ads platform for their streaming service. 
 
@@ -97,6 +100,3 @@ Using Hudi at Yotpo for several usages. Firstly, integrated Hudi as a writer in 
 
 ### Zendesk 
 At [Zendesk](https://www.zendesk.com/), Apache Hudi is adopted for building Data Lake on AWS.
-
-### DiDi 
-At [DiDi](https://www.didiglobal.com/), DiDi is the World‘s Leading Transportation Platform,  Based on the Hadoop ecosystem, we built a new generation of big data platform based on Apache HUDI, which provides record-level updates/deletes  as well as streaming and batch integrated data processing。
