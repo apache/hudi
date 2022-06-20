@@ -1,6 +1,6 @@
 ---
 title: "Release 0.9.0"
-sidebar_position: 5
+sidebar_position: 6
 layout: releases
 toc: true
 last_modified_at: 2021-08-26T08:40:00-07:00
