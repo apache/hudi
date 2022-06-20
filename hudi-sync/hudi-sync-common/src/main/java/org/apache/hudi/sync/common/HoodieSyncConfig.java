@@ -47,9 +47,9 @@ public class HoodieSyncConfig extends HoodieConfig {
       .defaultValue("")
       .withDocumentation("Base path of the hoodie table to sync");
 
-  public static final ConfigProperty<Boolean> META_SYNC_ENABLED = ConfigProperty
+  public static final ConfigProperty<String> META_SYNC_ENABLED = ConfigProperty
       .key("hoodie.datasource.meta.sync.enable")
-      .defaultValue(false)
+      .defaultValue("false")
       .withDocumentation("Enable Syncing the Hudi Table with an external meta store or data catalog.");
 
   // ToDo change the prefix of the following configs from hive_sync to meta_sync
@@ -115,9 +115,9 @@ public class HoodieSyncConfig extends HoodieConfig {
       .withDocumentation("Class which implements PartitionValueExtractor to extract the partition values, "
           + "default 'SlashEncodedDayPartitionValueExtractor'.");
 
-  public static final ConfigProperty<Boolean> META_SYNC_ASSUME_DATE_PARTITION = ConfigProperty
+  public static final ConfigProperty<String> META_SYNC_ASSUME_DATE_PARTITION = ConfigProperty
       .key("hoodie.datasource.hive_sync.assume_date_partitioning")
-      .defaultValue(false)
+      .defaultValue("false")
       .withDocumentation("Assume partitioning is yyyy/mm/dd");
 
   public static final ConfigProperty<Boolean> META_SYNC_DECODE_PARTITION = ConfigProperty
@@ -130,9 +130,9 @@ public class HoodieSyncConfig extends HoodieConfig {
       .defaultValue(HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS)
       .withDocumentation("Enable the internal metadata table for file listing for syncing with metastores");
 
-  public static final ConfigProperty<Boolean> META_SYNC_CONDITIONAL_SYNC = ConfigProperty
+  public static final ConfigProperty<String> META_SYNC_CONDITIONAL_SYNC = ConfigProperty
       .key("hoodie.datasource.meta_sync.condition.sync")
-      .defaultValue(false)
+      .defaultValue("false")
       .withDocumentation("If true, only sync on conditions like schema change or partition change.");
 
   public static final ConfigProperty<String> META_SYNC_SPARK_VERSION = ConfigProperty
@@ -192,13 +192,13 @@ public class HoodieSyncConfig extends HoodieConfig {
     public String partitionValueExtractorClass;
     @Parameter(names = {"--assume-date-partitioning"}, description = "Assume standard yyyy/mm/dd partitioning, this"
             + " exists to support backward compatibility. If you use hoodie 0.3.x, do not set this parameter")
-    public boolean assumeDatePartitioning;
+    public Boolean assumeDatePartitioning;
     @Parameter(names = {"--decode-partition"}, description = "Decode the partition value if the partition has encoded during writing")
-    public boolean decodePartition;
+    public Boolean decodePartition;
     @Parameter(names = {"--use-file-listing-from-metadata"}, description = "Fetch file listing from Hudi's metadata")
-    public boolean useFileListingFromMetadata;
+    public Boolean useFileListingFromMetadata;
     @Parameter(names = {"--conditional-sync"}, description = "If true, only sync on conditions like schema change or partition change.")
-    public boolean isConditionalSync;
+    public Boolean isConditionalSync;
     @Parameter(names = {"--spark-version"}, description = "The spark version")
     public String sparkVersion;
 
@@ -213,10 +213,10 @@ public class HoodieSyncConfig extends HoodieConfig {
       props.setPropertyIfNonNull(META_SYNC_BASE_FILE_FORMAT.key(), baseFileFormat);
       props.setPropertyIfNonNull(META_SYNC_PARTITION_FIELDS.key(), StringUtils.join(",", partitionFields));
       props.setPropertyIfNonNull(META_SYNC_PARTITION_EXTRACTOR_CLASS.key(), partitionValueExtractorClass);
-      props.setPropertyIfNonNull(META_SYNC_ASSUME_DATE_PARTITION.key(), String.valueOf(assumeDatePartitioning));
-      props.setPropertyIfNonNull(META_SYNC_DECODE_PARTITION.key(), String.valueOf(decodePartition));
-      props.setPropertyIfNonNull(META_SYNC_USE_FILE_LISTING_FROM_METADATA.key(), String.valueOf(useFileListingFromMetadata));
-      props.setPropertyIfNonNull(META_SYNC_CONDITIONAL_SYNC.key(), String.valueOf(isConditionalSync));
+      props.setPropertyIfNonNull(META_SYNC_ASSUME_DATE_PARTITION.key(), assumeDatePartitioning);
+      props.setPropertyIfNonNull(META_SYNC_DECODE_PARTITION.key(), decodePartition);
+      props.setPropertyIfNonNull(META_SYNC_USE_FILE_LISTING_FROM_METADATA.key(), useFileListingFromMetadata);
+      props.setPropertyIfNonNull(META_SYNC_CONDITIONAL_SYNC.key(), isConditionalSync);
       props.setPropertyIfNonNull(META_SYNC_SPARK_VERSION.key(), sparkVersion);
       return props;
     }

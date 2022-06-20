@@ -87,10 +87,10 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
 
-import static org.apache.hudi.hive.HiveSyncConfig.HIVE_PASS;
-import static org.apache.hudi.hive.HiveSyncConfig.HIVE_URL;
-import static org.apache.hudi.hive.HiveSyncConfig.HIVE_USER;
-import static org.apache.hudi.hive.HiveSyncConfig.HIVE_USE_PRE_APACHE_INPUT_FORMAT;
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_PASS;
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_URL;
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_USER;
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_USE_PRE_APACHE_INPUT_FORMAT;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_ASSUME_DATE_PARTITION;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;

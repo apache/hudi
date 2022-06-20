@@ -32,9 +32,9 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 
-import static org.apache.hudi.hive.HiveSyncConfig.HIVE_PASS;
-import static org.apache.hudi.hive.HiveSyncConfig.HIVE_URL;
-import static org.apache.hudi.hive.HiveSyncConfig.HIVE_USER;
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_PASS;
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_URL;
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_USER;
 
 /**
  * A hive query node in the DAG of operations for a workflow. used to perform a hive query with given config.

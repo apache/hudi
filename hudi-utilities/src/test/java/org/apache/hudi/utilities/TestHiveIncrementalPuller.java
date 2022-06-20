@@ -20,6 +20,7 @@ package org.apache.hudi.utilities;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.hive.HiveSyncConfig;
+import org.apache.hudi.hive.HiveSyncConfigHolder;
 import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.hive.HoodieHiveSyncClient;
 import org.apache.hudi.hive.testutils.HiveTestUtil;
@@ -71,9 +72,9 @@ public class TestHiveIncrementalPuller {
   }
 
   private HiveIncrementalPuller.Config getHivePullerConfig(String incrementalSql) throws IOException {
-    config.hiveJDBCUrl = hiveSyncProps.getString(HiveSyncConfig.HIVE_URL.key());
-    config.hiveUsername = hiveSyncProps.getString(HiveSyncConfig.HIVE_USER.key());
-    config.hivePassword = hiveSyncProps.getString(HiveSyncConfig.HIVE_PASS.key());
+    config.hiveJDBCUrl = hiveSyncProps.getString(HiveSyncConfigHolder.HIVE_URL.key());
+    config.hiveUsername = hiveSyncProps.getString(HiveSyncConfigHolder.HIVE_USER.key());
+    config.hivePassword = hiveSyncProps.getString(HiveSyncConfigHolder.HIVE_PASS.key());
     config.hoodieTmpDir = Files.createTempDirectory("hivePullerTest").toUri().toString();
     config.sourceDb = hiveSyncProps.getString(HoodieSyncConfig.META_SYNC_DATABASE_NAME.key());
     config.sourceTable = hiveSyncProps.getString(HoodieSyncConfig.META_SYNC_TABLE_NAME.key());
@@ -100,7 +101,7 @@ public class TestHiveIncrementalPuller {
   private void createSourceTable() throws IOException, URISyntaxException {
     String instantTime = "101";
     HiveTestUtil.createCOWTable(instantTime, 5, true);
-    hiveSyncProps.setProperty(HiveSyncConfig.HIVE_SYNC_MODE.key(), "jdbc");
+    hiveSyncProps.setProperty(HiveSyncConfigHolder.HIVE_SYNC_MODE.key(), "jdbc");
     HiveSyncTool tool = new HiveSyncTool(hiveSyncProps, HiveTestUtil.getHiveConf());
     tool.syncHoodieTable();
   }
@@ -119,7 +120,7 @@ public class TestHiveIncrementalPuller {
     targetHiveSyncProps.setProperty(HoodieSyncConfig.META_SYNC_DATABASE_NAME.key(), "tgtdb");
     targetHiveSyncProps.setProperty(HoodieSyncConfig.META_SYNC_TABLE_NAME.key(), "test2");
     targetHiveSyncProps.setProperty(HoodieSyncConfig.META_SYNC_BASE_PATH.key(), basePath);
-    targetHiveSyncProps.setProperty(HiveSyncConfig.HIVE_SYNC_MODE.key(), "jdbc");
+    targetHiveSyncProps.setProperty(HiveSyncConfigHolder.HIVE_SYNC_MODE.key(), "jdbc");
 
     return targetHiveSyncProps;
   }

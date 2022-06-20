@@ -49,8 +49,8 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.hadoop.utils.HoodieHiveUtils.GLOBALLY_CONSISTENT_READ_TIMESTAMP;
-import static org.apache.hudi.hive.HiveSyncConfig.HIVE_SYNC_MODE;
-import static org.apache.hudi.hive.HiveSyncConfig.HIVE_USE_JDBC;
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_MODE;
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_USE_JDBC;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
 import static org.apache.hudi.sync.common.util.TableUtils.tableId;
 

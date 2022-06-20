@@ -32,7 +32,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.Properties;
 
-import static org.apache.hudi.hive.HiveSyncConfig.HIVE_URL;
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_URL;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 
 // TODO: stop extending HiveSyncConfig and take all the variables needed from config file
