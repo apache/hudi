@@ -171,7 +171,7 @@ public class AvroSchemaConverter {
   /**
    * Converts Flink SQL {@link LogicalType} (can be nested) into an Avro schema.
    *
-   * <p>The "{rowName}_" is used as the nested row type name prefix in order to generate the right
+   * <p>The "{rowName}." is used as the nested row type name prefix in order to generate the right
    * schema. Nested record type that only differs with type name is still compatible.
    *
    * @param logicalType logical type
@@ -263,7 +263,7 @@ public class AvroSchemaConverter {
           LogicalType fieldType = rowType.getTypeAt(i);
           SchemaBuilder.GenericDefault<Schema> fieldBuilder =
               builder.name(fieldName)
-                  .type(convertToSchema(fieldType, rowName + "_" + fieldName));
+                  .type(convertToSchema(fieldType, rowName + "." + fieldName));
 
           if (fieldType.isNullable()) {
             builder = fieldBuilder.withDefault(null);
