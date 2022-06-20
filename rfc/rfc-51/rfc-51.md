@@ -88,6 +88,7 @@ Define a new config:
 | key | default | description |
 | --- | --- | --- |
 | hoodie.table.cdc.enabled | false | `true` represents the table to be used for CDC queries and will write cdc data if needed. |
+| hoodie.table.cdc.supplemental.logging | true | If true, persist all the required information about the change data, including 'before' and 'after'. Otherwise, just persist the 'op' and the record key. |
 
 Other existing config that can be reused in cdc mode is as following:
 Define another query mode named `cdc`, which is similar to `snapshpt`, `read_optimized` and `incremental`.
@@ -100,11 +101,31 @@ When read in cdc mode, set `hoodie.datasource.query.type` to `cdc`.
 | hoodie.datasource.read.end.timestamp | -        | optional. |
 
 
+### CDC File Type
+
+Here we define five cdc file types in CDC scenario.
+
+- CDC_LOG_File: a file consists of CDC Blocks with the changing data related to one commit.
+  - when `hoodie.table.cdc.supplemental.logging` is true, it keeps all the fields about the change data, including `op`, `ts_ms`, `before` and `after`. When query hudi table in cdc query mode, load this file and return directly.
+  - when `hoodie.table.cdc.supplemental.logging` is false, it just keeps the `op` and the key of the changing record. When query hudi table in cdc query mode, we need to load the previous version and the current one of the touched file slice to extract the other info like `before` and `after` on the fly.
+- ADD_BASE_File: a normal base file for a specified instant and a specified file group. All the data in this file are new-incoming. For example, we first write data to a new file group. So we can load this file, treat each record in this as the value of `after`, and the value of `op` of each record is `i`.
+- REMOVE_BASE_FILE: a normal base file for a specified instant and a specified file group, but this file is empty. A file like this will be generated when we delete all the data in a file group. So we need to find the previous version of the file group, load it, treat each record in this as the value of `before`, and the value of `op` of each record is `d`.
+- MOR_LOG_FILE: a normal log file. For this type, we need to load the previous version of file slice, and merge each record in the log file with this data loaded separately to determine how the record has changed, and get the value of `before` and `after`.
+- REPLACED_FILE_GROUP: a file group that be replaced totally, like `DELETE_PARTITION` and `INSERT_OVERWRITE` operations. We load this file group, treat all the records as the value of `before`, and the value of `op` of each record is `d`.
+
+Notice:
+
+- **Only `CDC_LOG_File` is a new file type and written out by CDC**. The `ADD_BASE_File`, `REMOVE_BASE_FILE`, `MOR_LOG_FILE` and `REPLACED_FILE_GROUP` are just representations of the existing data files in the CDC scenario. For some examples:
+  - `INSERT` operation will maybe create a list of new data files. These files will be treated as ADD_BASE_FILE;
+  - `DELETE_PARTITION` operation will replace a list of file slice. For each of these, we get the cdc data in the `REPLACED_FILE_GROUP` way.
+
 ### Write
+
+One Design Idea is that **Write CDC files as little as possible, and reuse data files as much as possible**.
 
 Hoodie writes data by `HoodieWriteHandle`.
 We notice that only `HoodieMergeHandle` and it's subclasses will receive both the old record and the new-coming record at the same time, merge and write.
-So we will add a `LogFormatWriter` in these classes. If there is CDC data need to be written out, then call this writer to write out a log file which consist of, maybe `CDCBlock`.
+So we will add a `LogFormatWriter` in these classes. If there is CDC data need to be written out, then call this writer to write out a log file which consist of `CDCBlock`.
 The CDC log file will be placed in the same position as the base files and other log files, so that the clean service can clean up them without extra work. The file structure is like:
 
 ```
@@ -124,31 +145,36 @@ hudi_cdc_table/
 ```
 Inside of one partition directory, the `.log` file with `CDCBlock` above will keep the changing data we have to materialize.
 
-One Design Idea is that **Write CDC files as little as possible, and reuse data files as much as possible**.
+There is a option to control what data is written to `CDCBlock`, that is `hoodie.table.cdc.supplemental.logging`. See the description of this config above.
 
-As the idea, there are four file types visible for CDC:
+Spark DataFrame Syntax:
+```scala
+df.write.format("hudi").
+  options(commonOpts)
+  option("hoodie.table.cdc.enabled", "true").
+  option("hoodie.table.cdc.supplemental.logging", "true"). //enable cdc supplemental logging 
+  // option("hoodie.table.cdc.supplemental.logging", "false"). //disable cdc supplemental logging 
+  save("/path/to/hudi")
+```
 
-- CDC File: Record all the related changing data with the cdc schema for one commit. For the following cases, will generate the CDC file:
-   - `UPSERT` operation;
-   - `DELETE` operation and the files where the data to be deleted resides has other data that doesn't need to be deleted and need to be rewrited.
-- pure Add-File: all the data in this file ars incoming, and don't affect the existing data and files. In the following cases, we do not have data to be rewrited and need to write CDC data to the CDC file:
-   - `BUIK_INSERT` operation;
-   - `INSERT`operation;
-   - `BOOTSTRAP` operation;
-   - `INSERT_OVERWRITE` and `INSERT_OVERWRITE_TABLE` operations;
-- pure Remove-File: all the data in the file will be deleted, and don't affect the existing data and files. In the following cases, we also do not have data to be rewrited:
-   - `DELETE`operation and no old data should be rewrite.
-   - `DELETE_PARTITION` operation;
-- Log-File: this will be written out when writing to the MOR tables.
-
-Notice:
-
-- **Only CDC File is a new file type and written out by CDC**. The pure Add-File, pure Remove-File and Log-File are just representations of the existing data files in the CDC scenario. For some examples:
-   - `INSERT` operation will create a list of new data files. Each of these can be considered a pure Add-File.
-   - `DELETE_PARTITION` operation will delete a group of data files. Each of these can be considered a pure Remove-File.
-- For a single commit, if CDC files is existed, we just load CDC files to response. If no any CDC files, extract the list of other types of files, load (or merge for mor tables) these files and response CDC query.
-- every CDC file must be related to a commit. Here I think both the parquet format and the log file format are ok to storage the cdc data.
-
+Spark SQL Syntax:
+```sql
+-- create a hudi table that enable cdc
+create table hudi_cdc_table
+(
+    id int,
+    name string,
+    price double,
+    ts long
+) using hudi
+tblproperties (
+    'primaryKey' = 'id',
+    'preCombineField' = 'ts',
+    'hoodie.table.cdc.enabled' = 'true',
+    'hoodie.table.cdc.supplemental.logging' = 'true',
+    'type' = 'cow'
+)
+```
 
 ### Read
 
@@ -158,7 +184,8 @@ Implement `CDCReader` that do these steps to response the CDC request:
 
 - judge whether this is a table that has enabled `hoodie.table.cdc.enabled`, and the query range is valid.
 - extract and filter the commits needed from `ActiveTimeline`.
-- For each of commit, get and load (and merge for mor tables) the changing files, union and return `DataFrame`.
+- For each of commit, get and load the changing files, union and return `DataFrame`.
+  - We use different ways to extract data according to different file types, details see the description about CDC File Type.
 
 ```scala
 class CDCReader(
@@ -167,7 +194,7 @@ class CDCReader(
 ) extends BaseRelation with PrunedFilteredScan {
 
   override def schema: StructType = {
-  // 'op', 'source', 'mt_ms', 'before', 'after'
+  // 'op', 'source', 'ts_ms', 'before', 'after'
   }
   
   override def buildScan(
@@ -183,10 +210,13 @@ Notice:
 
 - Only instants that are active can be queried in a CDC scenario.
 - `CDCReader` manages all the things on CDC, and all the spark entrances(DataFrame, SQL, Streaming) call the functions in `CDCReader`.
+- If `hoodie.table.cdc.supplemental.logging` is false, we need to do more work to get the change data. The following illustration explains the difference when this config is true or false.
+
+![](read_cdc_log_file.jpg)
 
 #### COW table
 
-Just follow the above steps without further consideration.
+Reading COW table in CDC query mode is equivalent to reading a simplified MOR table that has no normal log files.
 
 #### MOR table
 
