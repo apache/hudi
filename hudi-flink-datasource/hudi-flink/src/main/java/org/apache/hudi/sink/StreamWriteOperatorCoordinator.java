@@ -285,7 +285,8 @@ public class StreamWriteOperatorCoordinator
 
     if (event.isEndInput()) {
       // handle end input event synchronously
-      handleEndInputEvent(event);
+      // wrap handleEndInputEvent in executeSync to preserve the order of events
+      executor.executeSync(() -> handleEndInputEvent(event), "handle end input event for instant %s", this.instant);
     } else {
       executor.execute(
           () -> {
