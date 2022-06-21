@@ -74,7 +74,7 @@ Following (high-level) steps are proposed:
    2. Split into interface and engine-specific implementations (holding internal engine-specific representation of the payload) 
    3. Implementing new standardized record-level APIs (like `getPartitionKey` , `getRecordKey`, etc)
    4. Staying **internal** component, that will **NOT** contain any user-defined semantic (like merging)
-2. Extract Record Combining (Merge) API from `HoodieRecordPayload` into a standalone, stateless component (engine). Such component will be
+2. Extract Record Merge API from `HoodieRecordPayload` into a standalone, stateless component. Such component will be
    1. Abstracted as stateless object providing API to combine records (according to predefined semantics) for engines (Spark, Flink) of interest
    2. Plug-in point for user-defined combination semantics
 3. Gradually deprecate, phase-out and eventually remove `HoodieRecordPayload` abstraction
@@ -82,41 +82,61 @@ Following (high-level) steps are proposed:
 Phasing out usage of `HoodieRecordPayload` will also bring the benefit of avoiding to use Java reflection in the hot-path, which
 is known to have poor performance (compared to non-reflection based instantiation).
 
-#### Combine API Engine
+#### Record Merge API
 
 Stateless component interface providing for API Combining Records will look like following:
 
 ```java
-interface HoodieRecordCombiningEngine {
-  
-  default HoodieRecord precombine(HoodieRecord older, HoodieRecord newer) {
-    if (spark) {
-      precombineSpark((SparkHoodieRecord) older, (SparkHoodieRecord) newer);
-    } else if (flink) {
-      // precombine for Flink
-    }
-  }
+interface HoodieMerge {
+   HoodieRecord preCombine(HoodieRecord older, HoodieRecord newer);
+
+   Option<HoodieRecord> combineAndGetUpdateValue(HoodieRecord older, HoodieRecord newer, Schema schema, Properties props) throws IOException;
+}
 
    /**
     * Spark-specific implementation 
     */
-  SparkHoodieRecord precombineSpark(SparkHoodieRecord older, SparkHoodieRecord newer);
-  
-  // ...
-}
+   class HoodieSparkRecordMerge implements HoodieMerge {
+
+      @Override
+      public HoodieRecord preCombine(HoodieRecord older, HoodieRecord newer) {
+        // HoodieSparkRecords preCombine
+      }
+
+      @Override
+      public Option<HoodieRecord> combineAndGetUpdateValue(HoodieRecord older, HoodieRecord newer, Schema schema, Properties props) {
+         // HoodieSparkRecord combineAndGetUpdateValue
+      }
+   }
+   
+   /**
+    * Flink-specific implementation 
+    */
+   class HoodieFlinkRecordMerge implements HoodieMerge {
+
+      @Override
+      public HoodieRecord preCombine(HoodieRecord older, HoodieRecord newer) {
+        // HoodieFlinkRecord preCombine
+      }
+
+      @Override
+      public Option<HoodieRecord> combineAndGetUpdateValue(HoodieRecord older, HoodieRecord newer, Schema schema, Properties props) {
+         // HoodieFlinkRecord combineAndGetUpdateValue
+      }
+   }
 ```
 Where user can provide their own subclass implementing such interface for the engines of interest.
 
-#### Migration from `HoodieRecordPayload` to `HoodieRecordCombiningEngine`
+#### Migration from `HoodieRecordPayload` to `HoodieMerge`
 
 To warrant backward-compatibility (BWC) on the code-level with already created subclasses of `HoodieRecordPayload` currently
-already used in production by Hudi users, we will provide a BWC-bridge in the form of instance of `HoodieRecordCombiningEngine`, that will 
+already used in production by Hudi users, we will provide a BWC-bridge in the form of instance of `HoodieMerge`, that will 
 be using user-defined subclass of `HoodieRecordPayload` to combine the records.
 
 Leveraging such bridge will make provide for seamless BWC migration to the 0.11 release, however will be removing the performance 
 benefit of this refactoring, since it would unavoidably have to perform conversion to intermediate representation (Avro). To realize
 full-suite of benefits of this refactoring, users will have to migrate their merging logic out of `HoodieRecordPayload` subclass and into
-new `HoodieRecordCombiningEngine` implementation.
+new `HoodieMerge` implementation.
 
 ### Refactoring Flows Directly Interacting w/ Records:
 
@@ -128,7 +148,7 @@ Following major components will be refactored:
 
 1. `HoodieWriteHandle`s will be  
    1. Accepting `HoodieRecord` instead of raw Avro payload (avoiding Avro conversion)
-   2. Using Combining API engine to merge records (when necessary) 
+   2. Using Record Merge API to merge records (when necessary) 
    3. Passes `HoodieRecord` as is to `FileWriter`
 2. `HoodieFileWriter`s will be 
    1. Accepting `HoodieRecord`
@@ -142,7 +162,7 @@ Following major components will be refactored:
  - What impact (if any) will there be on existing users? 
    - Users of the Hudi will observe considerably better performance for most of the routine operations: writing, reading, compaction, clustering, etc due to avoiding the superfluous intermediate de-/serialization penalty
    - By default, modified hierarchy would still leverage 
-   - Users will need to rebase their logic of combining records by creating a subclass of `HoodieRecordPayload`, and instead subclass newly created interface `HoodieRecordCombiningEngine` to get full-suite of performance benefits 
+   - Users will need to rebase their logic of combining records by creating a subclass of `HoodieRecordPayload`, and instead subclass newly created interface `HoodieMerge` to get full-suite of performance benefits 
  - If we are changing behavior how will we phase out the older behavior?
    - Older behavior leveraging `HoodieRecordPayload` for merging will be marked as deprecated in 0.11, and subsequently removed in 0.1x
  - If we need special migration tools, describe them here.
