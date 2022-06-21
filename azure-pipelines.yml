@@ -90,7 +90,7 @@ stages:
     jobs:
       - job: UT_FT_1
         displayName: UT FT common & flink & UT client/spark-client
-        timeoutInMinutes: '120'
+        timeoutInMinutes: '180'
         steps:
           - task: Maven@3
             displayName: maven install
@@ -151,7 +151,7 @@ stages:
               mavenOptions: '-Xmx4g'
       - job: UT_FT_3
         displayName: UT FT clients & cli & utilities & sync
-        timeoutInMinutes: '120'
+        timeoutInMinutes: '180'
         steps:
           - task: Maven@3
             displayName: maven install
@@ -187,7 +187,7 @@ stages:
               mavenOptions: '-Xmx4g'
       - job: UT_FT_4
         displayName: UT FT other modules
-        timeoutInMinutes: '120'
+        timeoutInMinutes: '180'
         steps:
           - task: Maven@3
             displayName: maven install
@@ -223,7 +223,7 @@ stages:
               mavenOptions: '-Xmx4g'
       - job: IT
         displayName: IT modules
-        timeoutInMinutes: '120'
+        timeoutInMinutes: '180'
         steps:
           - task: Maven@3
             displayName: maven install
