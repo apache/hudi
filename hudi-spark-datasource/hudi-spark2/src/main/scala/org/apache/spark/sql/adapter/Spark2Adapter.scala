@@ -24,7 +24,7 @@ import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSchemaConverters, HoodieAvroSerializer, HoodieSpark2_4AvroDeserializer, HoodieSpark2_4AvroSerializer, HoodieSparkAvroSchemaConverters}
 import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
-import org.apache.spark.sql.catalyst.expressions.{Expression, Like}
+import org.apache.spark.sql.catalyst.expressions.{Expression, InterpretedPredicate, Like}
 import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.catalyst.plans.JoinType
 import org.apache.spark.sql.catalyst.plans.logical.{InsertIntoTable, Join, LogicalPlan}
@@ -159,13 +159,11 @@ class Spark2Adapter extends SparkAdapter {
     throw new IllegalStateException(s"Should not call getRelationTimeTravel for spark2")
   }
 
-  override def createResolveHudiAlterTableCommand(sparkSession: SparkSession): Rule[LogicalPlan] = {
-    new Rule[LogicalPlan] {
-      override def apply(plan: LogicalPlan): LogicalPlan = plan
-    }
-  }
-
   override def createHoodieParquetFileFormat(appendPartitionValues: Boolean): Option[ParquetFileFormat] = {
     Some(new Spark24HoodieParquetFileFormat(appendPartitionValues))
+  }
+
+  override def createInterpretedPredicate(e: Expression): InterpretedPredicate = {
+    InterpretedPredicate.create(e)
   }
 }

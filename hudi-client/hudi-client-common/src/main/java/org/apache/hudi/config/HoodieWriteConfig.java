@@ -183,11 +183,6 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("Schema string representing the latest schema of the table. Hudi passes this to "
           + "implementations of evolution of schema");
 
-  public static final ConfigProperty<Boolean> SCHEMA_EVOLUTION_ENABLE = ConfigProperty
-      .key("hoodie.schema.on.read.enable")
-      .defaultValue(false)
-      .withDocumentation("enable full schema evolution for hoodie");
-
   public static final ConfigProperty<Boolean> ENABLE_INTERNAL_SCHEMA_CACHE = ConfigProperty
       .key("hoodie.schema.cache.enable")
       .defaultValue(false)
@@ -947,11 +942,11 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public boolean getSchemaEvolutionEnable() {
-    return getBoolean(SCHEMA_EVOLUTION_ENABLE);
+    return getBoolean(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE);
   }
 
   public void setSchemaEvolutionEnable(boolean enable) {
-    setValue(SCHEMA_EVOLUTION_ENABLE, String.valueOf(enable));
+    setValue(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE, String.valueOf(enable));
   }
 
   /**
@@ -1092,6 +1087,10 @@ public class HoodieWriteConfig extends HoodieConfig {
   public MarkerType getMarkersType() {
     String markerType = getString(MARKERS_TYPE);
     return MarkerType.valueOf(markerType.toUpperCase());
+  }
+
+  public boolean isHiveStylePartitioningEnabled() {
+    return getBooleanOrDefault(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE);
   }
 
   public int getMarkersTimelineServerBasedBatchNumThreads() {
@@ -2201,7 +2200,7 @@ public class HoodieWriteConfig extends HoodieConfig {
     }
 
     public Builder withSchemaEvolutionEnable(boolean enable) {
-      writeConfig.setValue(SCHEMA_EVOLUTION_ENABLE, String.valueOf(enable));
+      writeConfig.setValue(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE, String.valueOf(enable));
       return this;
     }
 

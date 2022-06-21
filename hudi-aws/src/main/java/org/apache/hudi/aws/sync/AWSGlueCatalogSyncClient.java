@@ -76,6 +76,8 @@ import static org.apache.hudi.sync.common.util.TableUtils.tableId;
 /**
  * This class implements all the AWS APIs to enable syncing of a Hudi Table with the
  * AWS Glue Data Catalog (https://docs.aws.amazon.com/glue/latest/dg/populate-data-catalog.html).
+ *
+ * @Experimental
  */
 public class AWSGlueCatalogSyncClient extends AbstractHiveSyncHoodieClient {
 

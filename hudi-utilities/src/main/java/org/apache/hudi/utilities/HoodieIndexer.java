@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.metadata.MetadataPartitionType;
 
@@ -228,6 +229,9 @@ public class HoodieIndexer {
   private Option<String> doSchedule(SparkRDDWriteClient<HoodieRecordPayload> client) {
     List<MetadataPartitionType> partitionTypes = getRequestedPartitionTypes(cfg.indexTypes);
     checkArgument(partitionTypes.size() == 1, "Currently, only one index type can be scheduled at a time.");
+    if (!isMetadataInitialized() && !partitionTypes.contains(MetadataPartitionType.FILES)) {
+      throw new HoodieException("Metadata table is not yet initialized. Initialize FILES partition before any other partition " + Arrays.toString(partitionTypes.toArray()));
+    }
     if (indexExists(partitionTypes)) {
       return Option.empty();
     }
@@ -247,6 +251,11 @@ public class HoodieIndexer {
       return true;
     }
     return false;
+  }
+
+  private boolean isMetadataInitialized() {
+    Set<String> indexedMetadataPartitions = getCompletedMetadataPartitions(metaClient.getTableConfig());
+    return !indexedMetadataPartitions.isEmpty();
   }
 
   private int runIndexing(JavaSparkContext jsc) throws Exception {
@@ -318,8 +327,6 @@ public class HoodieIndexer {
     List<String> requestedIndexTypes = Arrays.asList(indexTypes.split(","));
     return requestedIndexTypes.stream()
         .map(p -> MetadataPartitionType.valueOf(p.toUpperCase(Locale.ROOT)))
-        // FILES partition is initialized synchronously while getting metadata writer
-        .filter(p -> !MetadataPartitionType.FILES.equals(p))
         .collect(Collectors.toList());
   }
 }

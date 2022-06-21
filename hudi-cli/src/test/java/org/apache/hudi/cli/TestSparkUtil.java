@@ -16,30 +16,31 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.cli.testutils;
+package org.apache.hudi.cli;
 
-import org.apache.hudi.common.model.HoodieTableType;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.cli.utils.SparkUtil;
+import org.apache.spark.SparkConf;
 
-/**
- * Class to initial resources for shell.
- */
-public abstract class AbstractShellIntegrationTest extends AbstractShellBaseIntegrationTest {
+import org.apache.spark.launcher.SparkLauncher;
+import org.junit.jupiter.api.Test;
 
-  @Override
-  @BeforeEach
-  public void setup() throws Exception {
-    initResources();
+import java.net.URISyntaxException;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+
+public class TestSparkUtil {
+
+  @Test
+  public void testInitSparkLauncher() throws URISyntaxException {
+    SparkLauncher sparkLauncher = SparkUtil.initLauncher(null);
+    assertNotNull(sparkLauncher);
   }
 
-  @Override
-  @AfterEach
-  public void teardown() throws Exception {
-    cleanupResources();
-  }
-
-  protected HoodieTableType getTableType() {
-    return HoodieTableType.MERGE_ON_READ;
+  @Test
+  public void testGetDefaultSparkConf() {
+    SparkConf sparkConf = SparkUtil.getDefaultConf("test-spark-app", Option.of(""));
+    assertEquals(SparkUtil.DEFAULT_SPARK_MASTER, sparkConf.get("spark.master"));
   }
 }

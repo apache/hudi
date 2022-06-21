@@ -156,7 +156,7 @@ public class HoodieTableSource implements
     this.fileIndex = FileIndex.instance(this.path, this.conf);
     this.requiredPartitions = requiredPartitions;
     this.requiredPos = requiredPos == null
-        ? IntStream.range(0, schema.getColumnCount()).toArray()
+        ? IntStream.range(0, schema.toPhysicalRowDataType().getChildren().size()).toArray()
         : requiredPos;
     this.limit = limit == null ? NO_LIMIT_CONSTANT : limit;
     this.filters = filters == null ? Collections.emptyList() : filters;

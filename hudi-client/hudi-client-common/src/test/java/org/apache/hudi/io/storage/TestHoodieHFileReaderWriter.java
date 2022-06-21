@@ -50,6 +50,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -316,15 +317,20 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
     assertEquals(expectedKey50and0s, recordsByPrefix);
 
     // filter for "key1" and "key0" : entries from 'key10 to key19' and 'key00 to key09' should be matched.
-    List<GenericRecord> expectedKey1sand0s = expectedKey1s;
-    expectedKey1sand0s.addAll(allRecords.stream()
-        .filter(entry -> (entry.get("_row_key").toString()).contains("key0"))
-        .collect(Collectors.toList()));
+    List<GenericRecord> expectedKey1sand0s = allRecords.stream()
+        .filter(entry -> (entry.get("_row_key").toString()).contains("key1") || (entry.get("_row_key").toString()).contains("key0"))
+        .collect(Collectors.toList());
     iterator =
         hfileReader.getRecordsByKeyPrefixIterator(Arrays.asList("key1", "key0"), avroSchema);
     recordsByPrefix =
         StreamSupport.stream(Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), false)
             .collect(Collectors.toList());
+    Collections.sort(recordsByPrefix, new Comparator<GenericRecord>() {
+      @Override
+      public int compare(GenericRecord o1, GenericRecord o2) {
+        return o1.get("_row_key").toString().compareTo(o2.get("_row_key").toString());
+      }
+    });
     assertEquals(expectedKey1sand0s, recordsByPrefix);
   }
 

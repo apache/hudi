@@ -102,7 +102,7 @@ public class TestHoodieBulkInsertDataInternalWriter extends
       Option<List<String>> fileNames = Option.of(new ArrayList<>());
 
       // verify write statuses
-      assertWriteStatuses(commitMetadata.getWriteStatuses(), batches, size, sorted, fileAbsPaths, fileNames);
+      assertWriteStatuses(commitMetadata.getWriteStatuses(), batches, size, sorted, fileAbsPaths, fileNames, false);
 
       // verify rows
       Dataset<Row> result = sqlContext.read().parquet(fileAbsPaths.get().toArray(new String[0]));
