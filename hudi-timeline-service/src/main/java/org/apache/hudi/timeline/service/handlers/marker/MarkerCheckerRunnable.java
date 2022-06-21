@@ -18,13 +18,8 @@
 
 package org.apache.hudi.timeline.service.handlers.marker;
 
-import static org.apache.hudi.common.util.MarkerUtils.MARKERS_FILENAME_PREFIX;
-import static org.apache.hudi.common.util.MarkerUtils.MARKER_TYPE_FILENAME;
-
-import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.HoodieTimer;
@@ -35,13 +30,9 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
-import java.util.Arrays;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 public class MarkerCheckerRunnable implements Runnable {
@@ -73,11 +64,11 @@ public class MarkerCheckerRunnable implements Runnable {
 
     Path tempPath = new Path(basePath + Path.SEPARATOR + HoodieTableMetaClient.TEMPFOLDER_NAME);
     try {
-      List<Path> instants = Arrays.stream(fs.listStatus(tempPath)).map(FileStatus::getPath).collect(Collectors.toList());
+      List<Path> instants = MarkerUtils.getAllMarkerDir(tempPath, fs);
       // TODO clean instants
       Set<String> tableMarkers = instants.stream().map(Path::toString)
           .filter(dir -> !dir.contains(markerDir) && !dir.equalsIgnoreCase(markerDir)).flatMap(instant -> {
-            return readTimelineServerBasedMarkersFromFileSystem(instant, fs).stream();
+            return MarkerUtils.readTimelineServerBasedMarkersFromFileSystemLocally(instant, fs).stream();
           }).collect(Collectors.toSet());
 
       Set<String> currentFileIDs = currentInstantAllMarkers.stream().map(this::makerToFileID).collect(Collectors.toSet());
@@ -113,37 +104,6 @@ public class MarkerCheckerRunnable implements Runnable {
       return ele[0];
     } else {
       return "";
-    }
-  }
-
-  private Set<String> readTimelineServerBasedMarkersFromFileSystem(String markerDir, FileSystem fileSystem) {
-    Path dirPath = new Path(markerDir);
-    try {
-      if (fileSystem.exists(dirPath)) {
-        Predicate<FileStatus> prefixFilter = fileStatus ->
-            fileStatus.getPath().getName().startsWith(MARKERS_FILENAME_PREFIX);
-        Predicate<FileStatus> markerTypeFilter = fileStatus ->
-            !fileStatus.getPath().getName().equals(MARKER_TYPE_FILENAME);
-
-        CopyOnWriteArraySet<String> result = new CopyOnWriteArraySet<>();
-        FileStatus[] fileStatuses = fileSystem.listStatus(dirPath);
-        List<String> subPaths = Arrays.stream(fileStatuses)
-            .filter(prefixFilter.and(markerTypeFilter))
-            .map(fileStatus -> fileStatus.getPath().toString())
-            .collect(Collectors.toList());
-
-        if (subPaths.size() > 0) {
-          SerializableConfiguration conf = new SerializableConfiguration(fileSystem.getConf());
-          subPaths.stream().parallel().forEach(subPath -> {
-            result.addAll(MarkerUtils.readMarkersFromFile(new Path(subPath), conf, true));
-          });
-        }
-        return result;
-      }
-      return new HashSet<>();
-    } catch (Exception ioe) {
-      LOG.warn("IOException occurs during read TimelineServer based markers from fileSystem", ioe);
-      return new HashSet<>();
     }
   }
 }
