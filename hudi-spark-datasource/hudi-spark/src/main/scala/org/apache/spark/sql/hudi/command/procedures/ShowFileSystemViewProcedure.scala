@@ -144,22 +144,22 @@ class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure wit
     rows
   }
 
-  private def showLatestFileSlices(table: Option[Any],
-                              fsView: HoodieTableFileSystemView,
-                              partition: String,
-                              maxInstant: String,
-                              merge: Boolean): java.util.List[Row] = {
+  private def showLatestFileSlices(fsView: HoodieTableFileSystemView,
+                                   table: Option[Any],
+                                   partition: String,
+                                   maxInstant: String,
+                                   merge: Boolean): java.util.List[Row] = {
     var fileSliceStream: java.util.stream.Stream[FileSlice] = null
     if (!merge) {
       fileSliceStream = fsView.getLatestFileSlices(partition)
     } else {
-      var tmp = maxInstant
-      if (tmp.isEmpty) {
+      fileSliceStream = fsView.getLatestMergedFileSlicesBeforeOrOn(partition, if (maxInstant.isEmpty) {
         val basePath = getBasePath(table)
         val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
-        tmp = metaClient.getActiveTimeline.filterCompletedAndCompactionInstants().lastInstant().get().getTimestamp
-      }
-      fileSliceStream = fsView.getLatestMergedFileSlicesBeforeOrOn(partition, tmp)
+        metaClient.getActiveTimeline.filterCompletedAndCompactionInstants().lastInstant().get().getTimestamp
+      } else {
+        maxInstant
+      })
     }
     val rows: java.util.List[Row] = Lists.newArrayList()
     fileSliceStream.iterator().asScala.foreach {
@@ -233,7 +233,7 @@ class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure wit
       val partitionPath = getArgValueOrDefault(args, parameters(6)).get.asInstanceOf[String]
       val merge = getArgValueOrDefault(args, parameters(7)).get.asInstanceOf[Boolean]
       val fsView = buildFileSystemView(table, partitionPath, maxInstant, includeMax, includeInflight, excludeCompaction)
-      showLatestFileSlices(table, fsView, partitionPath, maxInstant, merge)
+      showLatestFileSlices(fsView, table, partitionPath, maxInstant, merge)
     }
     rows.stream().limit(limit).toArray().map(r => r.asInstanceOf[Row]).toList
   }
