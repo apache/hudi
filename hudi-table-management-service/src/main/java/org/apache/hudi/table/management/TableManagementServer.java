@@ -51,7 +51,6 @@ public class TableManagementServer {
   private int serverPort;
   private final Configuration conf;
   private final TableManagementServiceConfig config;
-  private final transient FileSystem fs;
   private transient Javalin app = null;
   private List<BaseService> services;
   private MetadataStore metadataStore;
