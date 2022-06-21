@@ -180,7 +180,19 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
         // base file to denote some log appends happened on a slice. writeToken will still fence concurrent
         // writers.
         // https://issues.apache.org/jira/browse/HUDI-1517
-        createMarkerFile(partitionPath, FSUtils.makeBaseFileName(baseInstantTime, writeToken, fileId, hoodieTable.getBaseFileExtension()));
+        Option<FileSlice> finalFileSlice = fileSlice;
+        createMarkerFile(partitionPath, FSUtils.makeBaseFileName(baseInstantTime, writeToken, fileId, hoodieTable.getBaseFileExtension()), (table) -> {
+          table.getMetaClient().reloadActiveTimeline();
+          table.getHoodieView().sync();
+          SliceView currentSliceView = table.getSliceView();
+          Option<FileSlice> currentFileSlice = currentSliceView.getLatestFileSlice(partitionPath, fileId);
+          if (currentFileSlice.isPresent()) {
+            return !currentFileSlice.get().equals(finalFileSlice.get());
+          } else {
+            FileSlice current = new FileSlice(partitionPath, baseInstantTime, this.fileId);
+            return !current.equals(finalFileSlice.get());
+          }
+        });
 
         this.writer = createLogWriter(fileSlice, baseInstantTime);
       } catch (Exception e) {

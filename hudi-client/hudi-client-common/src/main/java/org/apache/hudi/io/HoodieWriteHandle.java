@@ -51,6 +51,7 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 import java.util.HashMap;
+import java.util.function.Function;
 
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 
@@ -181,12 +182,17 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
     return new Path(config.getBasePath(), relativePath);
   }
 
+  protected Option<Path> createMarkerFile(String partitionPath, String dataFileName) {
+    return createMarkerFile(partitionPath, dataFileName, (table) -> false);
+  }
+
   /**
    * Creates an empty marker file corresponding to storage writer path.
    *
    * @param partitionPath Partition path
    */
-  protected Option<Path> createMarkerFile(String partitionPath, String dataFileName) {
+  protected Option<Path> createMarkerFile(String partitionPath, String dataFileName,
+                                          Function<HoodieTable, Boolean> conflictChecker) {
     WriteMarkers writeMarkers = WriteMarkersFactory.get(config.getMarkersType(), hoodieTable, instantTime);
 
     // do early conflict detection before create markers.
@@ -195,28 +201,32 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
 
       ConflictResolutionStrategy resolutionStrategy = config.getWriteConflictResolutionStrategy();
       if (resolutionStrategy instanceof TransactionConflictResolutionStrategy) {
-        return createMarkerFileWithTransaction(resolutionStrategy, writeMarkers, partitionPath, dataFileName);
+        return createMarkerFileWithTransaction(resolutionStrategy, writeMarkers, partitionPath, dataFileName, conflictChecker);
       } else {
-        return createMarkerFileWithEarlyConflictDetection(resolutionStrategy, writeMarkers, partitionPath, dataFileName);
+        return createMarkerFileWithEarlyConflictDetection(resolutionStrategy, writeMarkers, partitionPath, dataFileName, conflictChecker);
       }
     }
 
     return writeMarkers.create(partitionPath, dataFileName, getIOType());
   }
 
-  private Option<Path> createMarkerFileWithEarlyConflictDetection(ConflictResolutionStrategy resolutionStrategy, WriteMarkers writeMarkers, String partitionPath, String dataFileName) {
-    if (resolutionStrategy.hasMarkerConflict(writeMarkers, config, fs, partitionPath, fileId)) {
+  private Option<Path> createMarkerFileWithEarlyConflictDetection(ConflictResolutionStrategy resolutionStrategy,WriteMarkers writeMarkers,
+                                                                  String partitionPath, String dataFileName, Function<HoodieTable, Boolean> conflictChecker) {
+    if (resolutionStrategy.hasMarkerConflict(writeMarkers, config, fs, partitionPath, fileId)
+        || conflictChecker.apply(hoodieTable)) {
       resolutionStrategy.resolveMarkerConflict(writeMarkers, partitionPath, fileId);
     }
     return writeMarkers.create(partitionPath, dataFileName, getIOType());
   }
 
-  private Option<Path> createMarkerFileWithTransaction(ConflictResolutionStrategy resolutionStrategy, WriteMarkers writeMarkers, String partitionPath, String dataFileName) {
+  private Option<Path> createMarkerFileWithTransaction(ConflictResolutionStrategy resolutionStrategy,
+                                                       WriteMarkers writeMarkers, String partitionPath,
+                                                       String dataFileName, Function<HoodieTable, Boolean> conflictChecker) {
     TransactionManager txnManager = new TransactionManager(config, fs, partitionPath, fileId);
     try {
       // Need to do transaction before create marker file when using early conflict detection
       txnManager.beginTransaction(partitionPath, fileId);
-      return createMarkerFileWithEarlyConflictDetection(resolutionStrategy, writeMarkers, partitionPath, dataFileName);
+      return createMarkerFileWithEarlyConflictDetection(resolutionStrategy, writeMarkers, partitionPath, dataFileName, conflictChecker);
 
     } catch (Exception e) {
       LOG.warn("Exception occurs during create marker file in early conflict detection mode.");

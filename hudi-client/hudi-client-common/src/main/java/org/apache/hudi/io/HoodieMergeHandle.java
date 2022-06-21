@@ -196,7 +196,12 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
       setWriteStatusPath();
 
       // Create Marker file
-      createMarkerFile(partitionPath, newFileName);
+      createMarkerFile(partitionPath, newFileName, (table) -> {
+        table.getMetaClient().reloadActiveTimeline();
+        table.getHoodieView().sync();
+        HoodieBaseFile currentBaseFileToMerge = table.getBaseFileOnlyView().getLatestBaseFile(partitionPath, fileId).get();
+        return !currentBaseFileToMerge.equals(baseFileToMerge);
+      });
 
       // Create the writer for writing the new version file
       fileWriter = createNewFileWriter(instantTime, newFilePath, hoodieTable, config,
