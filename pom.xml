@@ -43,7 +43,6 @@
     <module>hudi-hadoop-mr</module>
     <module>hudi-spark-datasource</module>
     <module>hudi-timeline-service</module>
-    <module>hudi-table-management-service</module>
     <module>hudi-utilities</module>
     <module>hudi-sync</module>
     <module>packaging/hudi-hadoop-mr-bundle</module>
