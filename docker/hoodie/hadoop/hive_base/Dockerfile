@@ -16,7 +16,7 @@
 # limitations under the License.
 
 ARG HADOOP_VERSION=3.1.0
-FROM yihua/hudi-hadoop_${HADOOP_VERSION}-base:latest
+FROM apachehudi/hudi-hadoop_${HADOOP_VERSION}-base:latest
 
 ENV HIVE_HOME /opt/hive
 ENV PATH $HIVE_HOME/bin:$PATH

@@ -18,7 +18,7 @@
 ARG HADOOP_VERSION=3.1.0
 ARG HIVE_VERSION=3.1.2
 ARG SPARK_VERSION=3.2.1
-FROM yihua/hudi-hadoop_${HADOOP_VERSION}-hive_${HIVE_VERSION}-sparkbase_${SPARK_VERSION}
+FROM apachehudi/hudi-hadoop_${HADOOP_VERSION}-hive_${HIVE_VERSION}-sparkbase_${SPARK_VERSION}
 
 COPY master.sh /opt/spark
 

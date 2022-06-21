@@ -20,7 +20,7 @@
 
 ARG HADOOP_VERSION=3.1.0
 ARG HIVE_VERSION=3.1.2
-FROM yihua/hudi-hadoop_${HADOOP_VERSION}-base-java11:latest as hadoop-base
+FROM apachehudi/hudi-hadoop_${HADOOP_VERSION}-base-java11:latest as hadoop-base
 
 ENV TRINO_VERSION=368
 ENV TRINO_HOME=/usr/local/trino

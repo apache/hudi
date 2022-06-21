@@ -483,6 +483,8 @@
 
   <properties>
     <dockerCompose.envFile>${project.basedir}/compose_env</dockerCompose.envFile>
+    <!-- if testing 2.x versions of hadoop,hive,... must change dockerCompose.file
+      to docker-compose_hadoop284_hive233_spark244.yml -->
     <dockerCompose.file>${project.basedir}/../docker/compose/docker-compose_hadoop310_hive312_spark321.yml</dockerCompose.file>
     <docker.compose.skip>${skipITs}</docker.compose.skip>
     <checkstyle.skip>true</checkstyle.skip>
@@ -601,7 +603,6 @@
               <envFile>${dockerCompose.envFile}</envFile>
             </configuration>
           </execution>
-          <!--
           <execution>
             <id>down</id>
             <phase>post-integration-test</phase>
@@ -614,7 +615,6 @@
               <removeVolumes>true</removeVolumes>
             </configuration>
           </execution>
-          -->
         </executions>
       </plugin>
       <plugin>

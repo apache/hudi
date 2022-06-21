@@ -17,7 +17,7 @@
 
 ARG HADOOP_VERSION=3.1.0
 ARG HIVE_VERSION=3.1.2
-FROM yihua/hudi-hadoop_${HADOOP_VERSION}-hive_${HIVE_VERSION}
+FROM apachehudi/hudi-hadoop_${HADOOP_VERSION}-hive_${HIVE_VERSION}
 
 ENV ENABLE_INIT_DAEMON true
 ENV INIT_DAEMON_BASE_URI http://identifier/init-daemon

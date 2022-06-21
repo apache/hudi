@@ -17,7 +17,7 @@
 
 ARG HADOOP_VERSION=3.1.0
 ARG HADOOP_DN_PORT=50075
-FROM yihua/hudi-hadoop_${HADOOP_VERSION}-base:latest
+FROM apachehudi/hudi-hadoop_${HADOOP_VERSION}-base:latest
 
 ENV HADOOP_DN_PORT ${HADOOP_DN_PORT}
 

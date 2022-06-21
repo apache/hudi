@@ -51,20 +51,21 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Abstract class for unit tests of {@link HoodieFileReader} and {@link HoodieFileWriter} for
- * different file format
+ * Abstract class for unit tests of {@link HoodieFileReader} and {@link HoodieFileWriter}
+ * for different file format
  */
 public abstract class TestHoodieReaderWriterBase {
   protected static final int NUM_RECORDS = 50;
-  @TempDir protected File tempDir;
+  @TempDir
+  protected File tempDir;
 
   protected abstract Path getFilePath();
 
   protected abstract HoodieFileWriter<GenericRecord> createWriter(
       Schema avroSchema, boolean populateMetaFields) throws Exception;
 
-  protected abstract HoodieFileReader<GenericRecord> createReader(Configuration conf)
-      throws Exception;
+  protected abstract HoodieFileReader<GenericRecord> createReader(
+      Configuration conf) throws Exception;
 
   protected abstract void verifyMetadata(Configuration conf) throws IOException;
 
@@ -81,8 +82,7 @@ public abstract class TestHoodieReaderWriterBase {
 
   @Test
   public void testWriteReadMetadata() throws Exception {
-    Schema avroSchema =
-        getSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchema.avsc");
+    Schema avroSchema = getSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchema.avsc");
     writeFileWithSimpleSchema();
 
     Configuration conf = new Configuration();
@@ -147,12 +147,10 @@ public abstract class TestHoodieReaderWriterBase {
 
     Configuration conf = new Configuration();
     HoodieFileReader<GenericRecord> hoodieReader = createReader(conf);
-    String[] schemaList =
-        new String[] {
-          "/exampleEvolvedSchema.avsc", "/exampleEvolvedSchemaChangeOrder.avsc",
-          "/exampleEvolvedSchemaColumnRequire.avsc", "/exampleEvolvedSchemaColumnType.avsc",
-          "/exampleEvolvedSchemaDeleteColumn.avsc"
-        };
+    String[] schemaList = new String[] {
+        "/exampleEvolvedSchema.avsc", "/exampleEvolvedSchemaChangeOrder.avsc",
+        "/exampleEvolvedSchemaColumnRequire.avsc", "/exampleEvolvedSchemaColumnType.avsc",
+        "/exampleEvolvedSchemaDeleteColumn.avsc"};
 
     for (String evolvedSchemaPath : schemaList) {
       verifyReaderWithSchema(evolvedSchemaPath, hoodieReader);
@@ -168,8 +166,7 @@ public abstract class TestHoodieReaderWriterBase {
   }
 
   protected void writeFileWithSimpleSchema() throws Exception {
-    Schema avroSchema =
-        getSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchema.avsc");
+    Schema avroSchema = getSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchema.avsc");
     HoodieFileWriter<GenericRecord> writer = createWriter(avroSchema, true);
     for (int i = 0; i < NUM_RECORDS; i++) {
       GenericRecord record = new GenericData.Record(avroSchema);
@@ -237,24 +234,15 @@ public abstract class TestHoodieReaderWriterBase {
   }
 
   private void verifyFilterRowKeys(HoodieFileReader<GenericRecord> hoodieReader) {
-    Set<String> candidateRowKeys =
-        IntStream.range(40, NUM_RECORDS * 2)
-            .mapToObj(i -> "key" + String.format("%02d", i))
-            .collect(Collectors.toCollection(TreeSet::new));
-    List<String> expectedKeys =
-        IntStream.range(40, NUM_RECORDS)
-            .mapToObj(i -> "key" + String.format("%02d", i))
-            .sorted()
-            .collect(Collectors.toList());
-    assertEquals(
-        expectedKeys,
-        hoodieReader.filterRowKeys(candidateRowKeys).stream()
-            .sorted()
-            .collect(Collectors.toList()));
+    Set<String> candidateRowKeys = IntStream.range(40, NUM_RECORDS * 2)
+        .mapToObj(i -> "key" + String.format("%02d", i)).collect(Collectors.toCollection(TreeSet::new));
+    List<String> expectedKeys = IntStream.range(40, NUM_RECORDS)
+        .mapToObj(i -> "key" + String.format("%02d", i)).sorted().collect(Collectors.toList());
+    assertEquals(expectedKeys, hoodieReader.filterRowKeys(candidateRowKeys)
+        .stream().sorted().collect(Collectors.toList()));
   }
 
-  private void verifyReaderWithSchema(
-      String schemaPath, HoodieFileReader<GenericRecord> hoodieReader) throws IOException {
+  private void verifyReaderWithSchema(String schemaPath, HoodieFileReader<GenericRecord> hoodieReader) throws IOException {
     Schema evolvedSchema = getSchemaFromResource(TestHoodieReaderWriterBase.class, schemaPath);
     Iterator<GenericRecord> iter = hoodieReader.getRecordIterator(evolvedSchema);
     int index = 0;
