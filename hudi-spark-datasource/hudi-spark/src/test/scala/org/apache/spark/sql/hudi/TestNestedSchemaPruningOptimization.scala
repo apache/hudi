@@ -31,6 +31,7 @@ class TestNestedSchemaPruningOptimization extends HoodieSparkSqlTestBase with Sp
     val explainCommand = sparkAdapter.getCatalystPlanUtils.createExplainCommand(plan, extended = true)
     executePlan(explainCommand)
       .executeCollect()
+      .map(_.getString(0))
       .mkString("\n")
   }
 
