@@ -52,6 +52,7 @@ import static org.apache.hudi.common.table.marker.MarkerOperation.DELETE_MARKER_
 import static org.apache.hudi.common.table.marker.MarkerOperation.MARKERS_DIR_EXISTS_URL;
 import static org.apache.hudi.common.table.marker.MarkerOperation.MARKER_BASEPATH_PARAM;
 import static org.apache.hudi.common.table.marker.MarkerOperation.MARKER_CONFLICT_CHECKER_BATCH_INTERVAL;
+import static org.apache.hudi.common.table.marker.MarkerOperation.MARKER_CONFLICT_CHECKER_HEART_BEAT_INTERVAL;
 import static org.apache.hudi.common.table.marker.MarkerOperation.MARKER_CONFLICT_CHECKER_PERIOD;
 import static org.apache.hudi.common.table.marker.MarkerOperation.MARKER_DIR_PATH_PARAM;
 import static org.apache.hudi.common.table.marker.MarkerOperation.MARKER_NAME_PARAM;
@@ -169,6 +170,7 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
     paramsMap.put(MARKER_CONFLICT_CHECKER_PERIOD, config.getMarkerConflictCheckerPeriod());
     paramsMap.put(MARKER_DIR_PATH_PARAM, markerDirPath.toString());
     paramsMap.put(MARKER_BASEPATH_PARAM, basePath);
+    paramsMap.put(MARKER_CONFLICT_CHECKER_HEART_BEAT_INTERVAL, String.valueOf(config.getHoodieClientHeartbeatIntervalInMs()));
     try {
       return executeRequestToTimelineServer(
           CHECK_MARKER_CONFLICT_URL, paramsMap, new TypeReference<Boolean>() {}, RequestMethod.GET);

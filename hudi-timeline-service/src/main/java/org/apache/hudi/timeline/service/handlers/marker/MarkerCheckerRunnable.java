@@ -45,9 +45,10 @@ public class MarkerCheckerRunnable implements Runnable {
   private int parallelism;
   private FileSystem fs;
   private AtomicBoolean hasConflict;
+  private long maxAllowableHeartbeatIntervalInMs;
 
   public MarkerCheckerRunnable(AtomicBoolean hasConflict, MarkerHandler markerHandler, String markerDir, String basePath,
-                               HoodieEngineContext hoodieEngineContext, int parallelism, FileSystem fileSystem) {
+                               HoodieEngineContext hoodieEngineContext, int parallelism, FileSystem fileSystem, long maxAllowableHeartbeatIntervalInMs) {
     this.markerHandler = markerHandler;
     this.markerDir = markerDir;
     this.basePath = basePath;
@@ -55,6 +56,7 @@ public class MarkerCheckerRunnable implements Runnable {
     this.parallelism = parallelism;
     this.fs = fileSystem;
     this.hasConflict = hasConflict;
+    this.maxAllowableHeartbeatIntervalInMs = maxAllowableHeartbeatIntervalInMs;
   }
 
   @Override
@@ -65,9 +67,8 @@ public class MarkerCheckerRunnable implements Runnable {
     Path tempPath = new Path(basePath + Path.SEPARATOR + HoodieTableMetaClient.TEMPFOLDER_NAME);
     try {
       List<Path> instants = MarkerUtils.getAllMarkerDir(tempPath, fs);
-      // TODO clean instants
-      Set<String> tableMarkers = instants.stream().map(Path::toString)
-          .filter(dir -> !dir.contains(markerDir) && !dir.equalsIgnoreCase(markerDir)).flatMap(instant -> {
+      List<String> candidate = getCandidateInstants(instants, markerToInstantTime(markerDir));
+      Set<String> tableMarkers = candidate.stream().flatMap(instant -> {
             return MarkerUtils.readTimelineServerBasedMarkersFromFileSystemLocally(instant, fs).stream();
           }).collect(Collectors.toSet());
 
@@ -90,20 +91,76 @@ public class MarkerCheckerRunnable implements Runnable {
   }
 
   /**
+   * Get Candidate Instant to do conflict checking:
+   * 1. filter out current writer related instant(currentInstantTime)
+   * 2. filter out all instants after currentInstantTime
+   * 3. filter out dead writers based on heart-beat
+   * @param instants
+   * @return
+   */
+  private List<String> getCandidateInstants(List<Path> instants, String currentInstantTime) {
+    return instants.stream().map(Path::toString).filter(instantPath -> {
+      String instantTime = markerToInstantTime(instantPath);
+      return instantTime.compareToIgnoreCase(currentInstantTime) < 0;
+    }).filter(instantPath -> {
+      try {
+        return !isHeartbeatExpired(markerToInstantTime(instantPath));
+      } catch (IOException e) {
+        return false;
+      }
+    }).collect(Collectors.toList());
+  }
+
+  /**
    * Get fileID from full marker path, for example:
    * 20210623/0/20210825/932a86d9-5c1d-44c7-ac99-cb88b8ef8478-0_85-15-1390_20220620181735781.parquet.marker.MERGE
-   *    ==> get 932a86d9-5c1d-44c7-ac99-cb88b8ef8478-0
+   *    ==> get 20210623/0/20210825/932a86d9-5c1d-44c7-ac99-cb88b8ef8478-0
    * @param marker
    * @return
    */
   private String makerToFileID(String marker) {
-    if (marker.contains(Path.SEPARATOR) && marker.contains("_")) {
-      String[] splits = marker.split(Path.SEPARATOR);
-      String fileName = splits[splits.length - 1];
-      String[] ele = fileName.split("_");
-      return ele[0];
+    String[] ele = marker.split("_");
+    return ele[0];
+  }
+
+  /**
+   * Get instantTime from full marker path, for example:
+   * 20210623/0/20210825/932a86d9-5c1d-44c7-ac99-cb88b8ef8478-0_85-15-1390_20220620181735781.parquet.marker.MERGE
+   *    ==> 20220620181735781
+   * @param marker
+   * @return
+   */
+  private String markerToInstantTime(String marker) {
+    String[] ele = marker.split("_");
+    String[] splits = ele[ele.length - 1].split("\\.");
+    return splits[0];
+  }
+
+  /**
+   * Use modification time as last heart beat time
+   * @param fs
+   * @param basePath
+   * @param instantTime
+   * @return
+   * @throws IOException
+   */
+  public Long getLastHeartbeatTime(FileSystem fs, String basePath, String instantTime) throws IOException {
+    Path heartbeatFilePath = new Path(HoodieTableMetaClient.getHeartbeatFolderPath(basePath) + Path.SEPARATOR + instantTime);
+    if (fs.exists(heartbeatFilePath)) {
+      return fs.getFileStatus(heartbeatFilePath).getModificationTime();
     } else {
-      return "";
+      // NOTE : This can happen when a writer is upgraded to use lazy cleaning and the last write had failed
+      return 0L;
     }
+  }
+
+  public boolean isHeartbeatExpired(String instantTime) throws IOException {
+    Long currentTime = System.currentTimeMillis();
+    Long lastHeartbeatTime = getLastHeartbeatTime(fs, basePath, instantTime);
+    if (currentTime - lastHeartbeatTime > this.maxAllowableHeartbeatIntervalInMs) {
+      LOG.warn("Heartbeat expired, for instant: " + instantTime);
+      return true;
+    }
+    return false;
   }
 }

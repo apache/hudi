@@ -147,14 +147,14 @@ public class MarkerHandler extends Handler {
     return markerDirState.exists();
   }
 
-  public boolean checkMarkerConflict(long batchInterval, long period, String markerDir, String basePath) {
+  public boolean checkMarkerConflict(long batchInterval, long period, String markerDir, String basePath, long maxAllowableHeartbeatIntervalInMs) {
     synchronized (checkers) {
       if (checkers.containsKey(markerDir)) {
         return hasConflict.get();
       } else {
         ScheduledExecutorService markerChecker = Executors.newSingleThreadScheduledExecutor();
         markerChecker.scheduleAtFixedRate(new MarkerCheckerRunnable(hasConflict, this, markerDir, basePath,
-            hoodieEngineContext, parallelism, fileSystem), batchInterval, period, TimeUnit.MILLISECONDS);
+            hoodieEngineContext, parallelism, fileSystem, maxAllowableHeartbeatIntervalInMs), batchInterval, period, TimeUnit.MILLISECONDS);
         checkers.put(markerDir, markerChecker);
         return false;
       }

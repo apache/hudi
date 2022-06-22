@@ -454,7 +454,8 @@ public class RequestHandler {
           Long.parseLong(Objects.requireNonNull(ctx.queryParam(MarkerOperation.MARKER_CONFLICT_CHECKER_BATCH_INTERVAL, "30000"))),
           Long.parseLong(Objects.requireNonNull(ctx.queryParam(MarkerOperation.MARKER_CONFLICT_CHECKER_PERIOD, "30000"))),
           ctx.queryParam(MarkerOperation.MARKER_DIR_PATH_PARAM, ""),
-          ctx.queryParam(MarkerOperation.MARKER_BASEPATH_PARAM, ""));
+          ctx.queryParam(MarkerOperation.MARKER_BASEPATH_PARAM, ""),
+          Long.parseLong(Objects.requireNonNull(ctx.queryParam(MarkerOperation.MARKER_CONFLICT_CHECKER_HEART_BEAT_INTERVAL, "60000"))));
       writeValueAsString(ctx, hasConflict);
     }, false));
 
