@@ -516,7 +516,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     }
 
     executorService.shutdown();
-    assertTrue(executorService.awaitTermination(10, TimeUnit.SECONDS));
+    assertTrue(executorService.awaitTermination(60, TimeUnit.SECONDS));
     // required to catch exceptions
     for (Future f : futures) {
       f.get();
