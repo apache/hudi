@@ -66,11 +66,13 @@ object BoundInMemoryExecutorBenchmark extends HoodieBenchmarkBase {
   }
 
   /**
+   * OpenJDK 64-Bit Server VM 1.8.0_161-b14 on Linux 3.10.0-693.21.1.el7.x86_64
    * Intel(R) Xeon(R) Platinum 8259CL CPU @ 2.50GHz
    * COW Ingestion:                            Best Time(ms)   Avg Time(ms)   Stdev(ms)    Rate(M/s)   Per Row(ns)   Relative
    * ------------------------------------------------------------------------------------------------------------------------
-   * BoundInMemory Executor                             5557           5607          70          0.2        5556.9       1.0X
-   * Disruptor Executor                                 2758           2778          28          0.4        2757.7       2.0X
+   * BoundInMemory Executor                             5629           5765         192          0.2        5628.9       1.0X
+   * Disruptor Executor                                 2772           2862         127          0.4        2772.2       2.0X
+   *
    */
   private def cowTableDisruptorExecutorBenchmark(tableName: String = "executorBenchmark"): Unit = {
     val df = createDataFrame(recordNumber)

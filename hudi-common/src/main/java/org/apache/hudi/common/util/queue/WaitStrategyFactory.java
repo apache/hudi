@@ -18,6 +18,8 @@
 
 package org.apache.hudi.common.util.queue;
 
+import static org.apache.hudi.common.util.queue.DisruptorWaitStrategyType.BLOCKINGWAITSTRATEGY;
+
 import com.lmax.disruptor.BlockingWaitStrategy;
 import com.lmax.disruptor.BusySpinWaitStrategy;
 import com.lmax.disruptor.SleepingWaitStrategy;
@@ -27,24 +29,25 @@ import org.apache.hudi.exception.HoodieException;
 
 public class WaitStrategyFactory {
 
-  public static final String DEFAULT_STRATEGY = "BlockingWaitStrategy";
+  public static final String DEFAULT_STRATEGY = BLOCKINGWAITSTRATEGY.name();
 
   /**
    * Build WaitStrategy for disruptor
    */
   public static WaitStrategy build(String name) {
-    WaitStrategy waitStrategy = null;
-    if ("BlockingWaitStrategy".equals(name)) {
-      waitStrategy = new BlockingWaitStrategy();
-    } else if ("BusySpinWaitStrategy".equals(name)) {
-      waitStrategy = new BusySpinWaitStrategy();
-    } else if ("SleepingWaitStrategy".equals(name)) {
-      waitStrategy = new SleepingWaitStrategy();
-    } else if ("YieldingWaitStrategy".equals(name)) {
-      waitStrategy = new YieldingWaitStrategy();
-    } else {
-      throw new HoodieException("Invalid wait strategy: " + name);
+
+    DisruptorWaitStrategyType strategyType = DisruptorWaitStrategyType.valueOf(name.toUpperCase());
+    switch (strategyType) {
+      case BLOCKINGWAITSTRATEGY:
+        return new BlockingWaitStrategy();
+      case SLEEPINGWAITSTRATEGY:
+        return new SleepingWaitStrategy();
+      case YIELDINGWAITSRATEGY:
+        return new YieldingWaitStrategy();
+      case BUSYSPINWAITSTRATEGY:
+        return new BusySpinWaitStrategy();
+      default:
+        throw new HoodieException("Unsupported Executor Type " + name);
     }
-    return waitStrategy;
   }
 }

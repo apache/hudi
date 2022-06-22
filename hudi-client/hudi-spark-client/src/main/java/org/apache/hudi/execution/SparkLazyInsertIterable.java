@@ -36,7 +36,6 @@ import org.apache.avro.Schema;
 
 import java.util.Iterator;
 import java.util.List;
-import java.util.Locale;
 
 public class SparkLazyInsertIterable<T extends HoodieRecordPayload> extends HoodieLazyInsertIterable<T> {
 
@@ -88,16 +87,9 @@ public class SparkLazyInsertIterable<T extends HoodieRecordPayload> extends Hood
         schema = HoodieAvroUtils.addMetadataFields(schema);
       }
 
-      String executorType = hoodieConfig.getExecutorType();
-      ExecutorType executorTypeEnum;
+      ExecutorType executorType = hoodieConfig.getExecutorType();
 
-      try {
-        executorTypeEnum = ExecutorType.valueOf(executorType.toUpperCase(Locale.ROOT));
-      } catch (IllegalArgumentException e) {
-        throw new HoodieException("Unsupported Executor Type " + executorType);
-      }
-
-      switch (executorTypeEnum) {
+      switch (executorType) {
         case BOUNDED_IN_MEMORY_EXECUTOR:
           bufferedIteratorExecutor = new BoundedInMemoryExecutor<>(hoodieConfig.getWriteBufferLimitBytes(), inputItr, getInsertHandler(),
               getTransformFunction(schema, hoodieConfig), hoodieTable.getPreExecuteRunnable());
