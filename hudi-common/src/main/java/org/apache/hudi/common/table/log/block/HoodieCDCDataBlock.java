@@ -18,11 +18,11 @@
 
 package org.apache.hudi.common.table.log.block;
 
+import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 
 import org.apache.hadoop.fs.FSDataInputStream;
 
-import org.apache.hudi.common.table.cdc.CDCUtils;
 import org.apache.hudi.common.util.Option;
 
 import javax.annotation.Nonnull;
@@ -37,10 +37,11 @@ public class HoodieCDCDataBlock extends HoodieAvroDataBlock {
       Option<byte[]> content,
       boolean readBlockLazily,
       HoodieLogBlockContentLocation logBlockContentLocation,
+      Schema readerSchema,
       Map<HeaderMetadataType, String> header,
       String keyField) {
     super(inputStream, content, readBlockLazily, logBlockContentLocation,
-        Option.of(CDCUtils.CDC_SCHEMA), header, new HashMap<>(), keyField, null);
+        Option.of(readerSchema), header, new HashMap<>(), keyField, null);
   }
 
   public HoodieCDCDataBlock(@Nonnull List<IndexedRecord> records,

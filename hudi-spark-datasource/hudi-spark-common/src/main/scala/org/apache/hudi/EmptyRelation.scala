@@ -36,7 +36,7 @@ class EmptyRelation(val sqlContext: SQLContext, metaClient: HoodieTableMetaClien
 
   override def schema: StructType = {
     if (isCDCQuery) {
-      CDCRelation.cdcSchema()
+      CDCRelation.CDC_SPARK_SCHEMA
     } else {
       // do the best to find the table schema.
       val schemaResolver = new TableSchemaResolver(metaClient)

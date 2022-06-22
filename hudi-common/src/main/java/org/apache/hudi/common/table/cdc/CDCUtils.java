@@ -36,6 +36,9 @@ public class CDCUtils {
   /* the post-image after one record is changed */
   public static final String CDC_AFTER_IMAGE = "after";
 
+  /* the key of the changed record */
+  public static final String CDC_RECORD_KEY = "record_key";
+
   public static final String[] CDC_COLUMNS = new String[] {
       CDC_OPERATION_TYPE,
       CDC_COMMIT_TIMESTAMP,
@@ -43,6 +46,10 @@ public class CDCUtils {
       CDC_AFTER_IMAGE
   };
 
+  /**
+   * This is the standard CDC output format.
+   * Also, this is the schema of cdc log file in the case `hoodie.table.cdc.supplemental.logging` is true.
+   */
   public static final String CDC_SCHEMA_STRING = "{\"type\":\"record\",\"name\":\"Record\","
       + "\"fields\":["
       + "{\"name\":\"op\",\"type\":[\"string\",\"null\"]},"
@@ -53,6 +60,21 @@ public class CDCUtils {
 
   public static final Schema CDC_SCHEMA = new Schema.Parser().parse(CDC_SCHEMA_STRING);
 
+  /**
+   * The schema of cdc log file in the case `hoodie.table.cdc.supplemental.logging` is false.
+   */
+  public static final String CDC_SCHEMA_ONLY_OP_AND_RECORDKEY_STRING = "{\"type\":\"record\",\"name\":\"Record\","
+      + "\"fields\":["
+      + "{\"name\":\"op\",\"type\":[\"string\",\"null\"]},"
+      + "{\"name\":\"record_key\",\"type\":[\"string\",\"null\"]}"
+      + "]}";
+
+  public static final Schema CDC_SCHEMA_ONLY_OP_AND_RECORDKEY =
+      new Schema.Parser().parse(CDC_SCHEMA_ONLY_OP_AND_RECORDKEY_STRING);
+
+  /**
+   * Build the cdc record which has all the cdc fields when `hoodie.table.cdc.supplemental.logging` is true.
+   */
   public static GenericData.Record cdcRecord(
       String op, String commitTime, GenericRecord before, GenericRecord after) {
     String beforeJsonStr = recordToJson(before);
@@ -67,6 +89,16 @@ public class CDCUtils {
     record.put(CDC_COMMIT_TIMESTAMP, commitTime);
     record.put(CDC_BEFORE_IMAGE, before);
     record.put(CDC_AFTER_IMAGE, after);
+    return record;
+  }
+
+  /**
+   * Build the cdc record when `hoodie.table.cdc.supplemental.logging` is false.
+   */
+  public static GenericData.Record cdcRecord(String op, String recordKey) {
+    GenericData.Record record = new GenericData.Record(CDC_SCHEMA_ONLY_OP_AND_RECORDKEY);
+    record.put(CDC_OPERATION_TYPE, op);
+    record.put(CDC_RECORD_KEY, recordKey);
     return record;
   }
 

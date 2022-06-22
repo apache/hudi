@@ -26,26 +26,27 @@ import org.apache.hudi.common.table.cdc.CDCFileTypeEnum
  * at a single commit.
  *
  * For [[cdcFileType]] = [[CDCFileTypeEnum.ADD_BASE_File]], [[cdcFile]] is a current version of
- *   the base file in the group, and [[dependentFileSlice]] is None.
- * For [[cdcFileType]] = [[CDCFileTypeEnum.REMOVE_BASE_File]], [[cdcFile]] is a previous version
- *   of the base file in the group, [[dependentFileSlice]] is None.
- * For [[cdcFileType]] = [[CDCFileTypeEnum.CDC_LOG_FILE]], [[cdcFile]] is a log file with cdc
- *   blocks. And if `hoodie.table.cdc.supplemental.logging` is true [[dependentFileSlice]] is None,
- *   otherwise [[dependentFileSlice]] is the current base file.
+ *   the base file in the group, and [[beforeFileSlice]] is None.
+ * For [[cdcFileType]] = [[CDCFileTypeEnum.REMOVE_BASE_File]], [[cdcFile]] is null,
+ *   [[beforeFileSlice]] is the previous version of the base file in the group.
+ * For [[cdcFileType]] = [[CDCFileTypeEnum.CDC_LOG_FILE]], [[cdcFile]] is a log file with cdc blocks.
+ *   when enable the supplemental logging, both [[beforeFileSlice]] and [[afterFileSlice]] are None,
+ *   otherwise these two are the previous and current version of the base file.
  * For [[cdcFileType]] = [[CDCFileTypeEnum.MOR_LOG_FILE]], [[cdcFile]] is a normal log file and
- *   [[dependentFileSlice]] is the previous version of the file slice.
+ *   [[beforeFileSlice]] is the previous version of the file slice.
  * For [[cdcFileType]] = [[CDCFileTypeEnum.REPLACED_FILE_GROUP]], [[cdcFile]] is null,
- *   [[dependentFileSlice]] is the current version of the file slice.
+ *   [[beforeFileSlice]] is the current version of the file slice.
  *
  * @param cdcFileType the change type, which decide to how to retrieve the change data.
  *                    more details see: [[CDCFileTypeEnum]]
  * @param cdcFile the file that the change data can be parsed from.
- * @param dependentFileSlice the other files that are required when retrieve the change data.
+ * @param beforeFileSlice the other files that are required when retrieve the change data.
  */
 case class ChangeFileForSingleFileGroupAndCommit(
   cdcFileType: CDCFileTypeEnum,
   cdcFile: String,
-  dependentFileSlice: Option[FileSlice] = None
+  beforeFileSlice: Option[FileSlice] = None,
+  afterFileSlice: Option[FileSlice] = None
 ) {
-  assert(cdcFileType != null && (cdcFile != null || dependentFileSlice.nonEmpty))
+  assert(cdcFileType != null && (cdcFile != null || beforeFileSlice.nonEmpty))
 }
