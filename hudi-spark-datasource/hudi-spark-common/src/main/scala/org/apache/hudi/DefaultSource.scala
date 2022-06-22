@@ -216,7 +216,7 @@ class DefaultSource extends RelationProvider
 
     if (CDCRelation.isCDCTable(metaClient)
       && parameters.get(DataSourceReadOptions.QUERY_TYPE.key).contains(DataSourceReadOptions.QUERY_TYPE_CDC_OPT_VAL)) {
-      (shortName(), CDCRelation.cdcSchema())
+      (shortName(), CDCRelation.CDC_SPARK_SCHEMA)
     } else {
       val schemaResolver = new TableSchemaResolver(metaClient)
       val sqlSchema =

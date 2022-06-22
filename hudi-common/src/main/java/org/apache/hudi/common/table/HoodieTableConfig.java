@@ -128,7 +128,7 @@ public class HoodieTableConfig extends HoodieConfig {
           + " the record key component of HoodieKey.");
 
   public static final ConfigProperty<Boolean> CDC_ENABLED = ConfigProperty
-      .key("hoodie.table.cdf.enabled")
+      .key("hoodie.table.cdc.enabled")
       .defaultValue(false)
       .withDocumentation("When enable, persist the change data if necessary, and can be queried as a CDC query mode.");
 

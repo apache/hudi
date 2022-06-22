@@ -36,6 +36,7 @@ import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.{FileSlice, HoodieLogFile, HoodieRecord, HoodieRecordPayload}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.cdc.CDCFileTypeEnum._
+import org.apache.hudi.common.table.cdc.CDCOperationEnum._
 import org.apache.hudi.common.table.cdc.CDCUtils
 import org.apache.hudi.common.table.log.CDCLogRecordReader
 import org.apache.hudi.common.table.timeline.HoodieInstant
@@ -161,17 +162,28 @@ class HoodieCDCRDD(
 
     protected override val structTypeSchema: StructType = originTableSchema.structTypeSchema
 
-    private val requiredIndexes: List[Int] = 0.until(structTypeSchema.length).toList
+    private val recordKeyIndex: Int = {
+      val recordKey = if (metaClient.getTableConfig.populateMetaFields()) {
+        HoodieRecord.RECORD_KEY_METADATA_FIELD
+      } else {
+        metaClient.getTableConfig.getRecordKeyFieldProp
+      }
+      structTypeSchema.fieldIndex(recordKey)
+    }
 
-    private val serializer = sparkAdapter.createAvroSerializer(originTableSchema.structTypeSchema, avroSchema, nullable = false)
+    private val serializer = sparkAdapter.createAvroSerializer(originTableSchema.structTypeSchema,
+      avroSchema, nullable = false)
 
     private val reusableRecordBuilder: GenericRecordBuilder = new GenericRecordBuilder(avroSchema)
 
     /**
      * the deserializer used to convert the CDC GenericRecord to Spark InternalRow.
      */
-    private val cdcRecordDeserializer: HoodieAvroDeserializer =
-      sparkAdapter.createAvroDeserializer(CDCUtils.CDC_SCHEMA, CDCRelation.cdcSchema())
+    private val cdcRecordDeserializer: HoodieAvroDeserializer = if (cdcSupplementalLogging) {
+      sparkAdapter.createAvroDeserializer(CDCUtils.CDC_SCHEMA, CDCRelation.cdcLogFileSchema(cdcSupplementalLogging))
+    } else {
+      sparkAdapter.createAvroDeserializer(CDCUtils.CDC_SCHEMA_ONLY_OP_AND_RECORDKEY, CDCRelation.cdcLogFileSchema(cdcSupplementalLogging))
+    }
 
     private val projection: UnsafeProjection = generateUnsafeProjection(cdcSchema, requiredCdcSchema)
 
@@ -188,13 +200,13 @@ class HoodieCDCRDD(
      * two cases will use this to iterator the records:
      * 1) extract the change data from the base file directly, including 'ADD_BASE_File' and 'REMOVE_BASE_File'.
      * 2) when the type of cdc file is 'REPLACED_FILE_GROUP',
-     *    use this to trace the records that are converted from the 'dependentRecords'
+     *    use this to trace the records that are converted from the '[[beforeImageRecords]]
      */
     private var recordIter: Iterator[InternalRow] = Iterator.empty
 
     /**
      * Only one case where it will be used is that extract the change data from log files for mor table.
-     * At the time, 'logRecordIter' will work with 'dependentRecords' that keep all the records of the previous file slice.
+     * At the time, 'logRecordIter' will work with [[beforeImageRecords]] that keep all the records of the previous file slice.
      */
     private var logRecordIter: Iterator[(String, HoodieRecord[_ <: HoodieRecordPayload[_ <: HoodieRecordPayload[_ <: AnyRef]]])] = Iterator.empty
 
@@ -209,17 +221,24 @@ class HoodieCDCRDD(
     protected var recordToLoad: InternalRow = _
 
     /**
-     * The list of files to which 'dependentRecords' belong.
-     * Use it to determine if 'dependentRecords' contains all the required data that extract
+     * The list of files to which 'beforeImageRecords' belong.
+     * Use it to determine if 'beforeImageRecords' contains all the required data that extract
      * the change data from the current cdc file.
      */
-    private val dependentFiles: mutable.ArrayBuffer[String] = mutable.ArrayBuffer.empty
+    private val beforeImageFiles: mutable.ArrayBuffer[String] = mutable.ArrayBuffer.empty
 
     /**
-     * For the file group is replaced or this is a mor log file, we need to merge with the other
-     * data to get the correct change data. This is used to keep the dependent data.
+     * keep the before-image data. There cases will use this:
+     * 1) the cdc file type is [[MOR_LOG_FILE]];
+     * 2) the cdc file type is [[CDC_LOG_FILE]] and [[cdcSupplementalLogging]] is false.
      */
-    private var dependentRecords: mutable.Map[String, GenericRecord] = mutable.Map.empty
+    private var beforeImageRecords: mutable.Map[String, GenericRecord] = mutable.Map.empty
+
+    /**
+     * keep the after-image data. Only one case will use this:
+     * the cdc file type is [[CDC_LOG_FILE]] and [[cdcSupplementalLogging]] is false.
+     */
+    private var afterImageRecords: mutable.Map[String, InternalRow] = mutable.Map.empty
 
     private def needLoadNextFile: Boolean = {
       !recordIter.hasNext &&
@@ -278,7 +297,25 @@ class HoodieCDCRDD(
           loaded = loadNextLogRecord()
         case CDC_LOG_FILE =>
           val record = cdcRecordReader.next().asInstanceOf[GenericRecord]
-          recordToLoad = cdcRecordDeserializer.deserialize(record).get.asInstanceOf[InternalRow]
+          if (cdcSupplementalLogging) {
+            recordToLoad = cdcRecordDeserializer.deserialize(record).get.asInstanceOf[InternalRow]
+          } else {
+            val row = cdcRecordDeserializer.deserialize(record).get.asInstanceOf[InternalRow]
+            val op = row.getString(0)
+            val recordKey = row.getString(1)
+            recordToLoad.update(0, convertToUTF8String(op))
+            parse(op) match {
+              case INSERT =>
+                recordToLoad.update(2, null)
+                recordToLoad.update(3, convertRowToJsonString(afterImageRecords(recordKey)))
+              case UPDATE =>
+                recordToLoad.update(2, convertRowToJsonString(deserialize(beforeImageRecords(recordKey))))
+                recordToLoad.update(3, convertRowToJsonString(afterImageRecords(recordKey)))
+              case _ =>
+                recordToLoad.update(2, convertRowToJsonString(deserialize(beforeImageRecords(recordKey))))
+                recordToLoad.update(3, null)
+            }
+          }
           loaded = true
         case REPLACED_FILE_GROUP =>
           val originRecord = recordIter.next()
@@ -297,7 +334,7 @@ class HoodieCDCRDD(
       val indexedRecord = getInsertValue(logRecord)
       if (indexedRecord.isEmpty) {
         // it's a deleted record.
-        val existingRecordOpt = dependentRecords.remove(key)
+        val existingRecordOpt = beforeImageRecords.remove(key)
         if (existingRecordOpt.isEmpty) {
           // no real record is deleted, just ignore.
           logWarning("can not get any record that have the same key with the deleting logRecord.")
@@ -309,15 +346,15 @@ class HoodieCDCRDD(
           loaded = true
         }
       } else {
-        val existingRecordOpt = dependentRecords.get(key)
+        val existingRecordOpt = beforeImageRecords.get(key)
         if (existingRecordOpt.isEmpty) {
           // a new record is inserted.
           val insertedRecord = convertIndexedRecordToRow(indexedRecord.get)
           recordToLoad.update(0, CDCRelation.CDC_OPERATION_INSERT)
           recordToLoad.update(2, null)
           recordToLoad.update(3, convertRowToJsonString(insertedRecord))
-          // insert into dependentRecords
-          dependentRecords(key) = serialize(insertedRecord)
+          // insert into beforeImageRecords
+          beforeImageRecords(key) = serialize(insertedRecord)
           loaded = true
         } else {
           // a existed record is updated.
@@ -329,8 +366,8 @@ class HoodieCDCRDD(
             recordToLoad.update(0, CDCRelation.CDC_OPERATION_UPDATE)
             recordToLoad.update(2, convertRowToJsonString(existingRow))
             recordToLoad.update(3, convertRowToJsonString(mergeRow))
-            // insert into dependentRecords
-            dependentRecords(key) = serialize(mergeRow)
+            // update into beforeImageRecords
+            beforeImageRecords(key) = serialize(mergeRow)
             loaded = true
           }
         }
@@ -342,6 +379,8 @@ class HoodieCDCRDD(
       // reset all the iterator or reader first.
       recordIter = Iterator.empty
       logRecordIter = Iterator.empty
+      beforeImageRecords.clear()
+      afterImageRecords.clear()
       if (cdcRecordReader != null) {
         cdcRecordReader.close()
         cdcRecordReader = null
@@ -352,26 +391,45 @@ class HoodieCDCRDD(
         currentInstant = pair._1
         currentChangeFile = pair._2
         currentChangeFile.cdcFileType match {
-          case ADD_BASE_File | REMOVE_BASE_File =>
+          case ADD_BASE_File =>
+            assert(currentChangeFile.cdcFile != null)
             val absCDCPath = new Path(basePath, currentChangeFile.cdcFile)
             val fileStatus = fs.getFileStatus(absCDCPath)
             val pf = PartitionedFile(InternalRow.empty, absCDCPath.toUri.toString, 0, fileStatus.getLen)
             recordIter = parquetReader(pf)
+          case REMOVE_BASE_File =>
+            assert(currentChangeFile.beforeFileSlice.nonEmpty)
+            recordIter = loadFileSlice(currentChangeFile.beforeFileSlice.get)
           case MOR_LOG_FILE =>
-            currentChangeFile.dependentFileSlice.foreach(loadDependentFileSliceIfNeeded)
+            assert(currentChangeFile.cdcFile != null && currentChangeFile.beforeFileSlice.nonEmpty)
+            currentChangeFile.beforeFileSlice.foreach(loadBeforeFileSliceIfNeeded)
             val absLogPath = new Path(basePath, currentChangeFile.cdcFile)
             val morSplit = HoodieMergeOnReadFileSplit(None, List(new HoodieLogFile(fs.getFileStatus(absLogPath))))
             val logFileIterator = new LogFileIterator(morSplit, originTableSchema, originTableSchema, tableState, conf)
             logRecordIter = logFileIterator.logRecordsIterator()
           case CDC_LOG_FILE =>
+            assert(currentChangeFile.cdcFile != null)
+            if (!cdcSupplementalLogging) {
+              // load beforeFileSlice to beforeImageRecords
+              currentChangeFile.beforeFileSlice.foreach(loadBeforeFileSliceIfNeeded)
+              // load afterFileSlice to afterImageRecords
+              currentChangeFile.afterFileSlice.foreach { fileSlice =>
+                val iter = loadFileSlice(fileSlice)
+                afterImageRecords = mutable.Map.empty
+                iter.foreach { row =>
+                  val key = row.getString(recordKeyIndex)
+                  afterImageRecords.put(key, row.copy())
+                }
+              }
+            }
             val absCDCPath = new Path(basePath, currentChangeFile.cdcFile)
-            cdcRecordReader = new CDCLogRecordReader(fs, absCDCPath)
+            cdcRecordReader = new CDCLogRecordReader(fs, absCDCPath, cdcSupplementalLogging)
           case REPLACED_FILE_GROUP =>
-            currentChangeFile.dependentFileSlice.foreach(loadDependentFileSliceIfNeeded)
-            recordIter = dependentRecords.values.map { record =>
+            currentChangeFile.beforeFileSlice.foreach(loadBeforeFileSliceIfNeeded)
+            recordIter = beforeImageRecords.values.map { record =>
               deserialize(record)
             }.iterator
-            dependentRecords = mutable.Map.empty
+            beforeImageRecords.clear()
         }
         resetRecordFormat()
       } else {
@@ -409,28 +467,29 @@ class HoodieCDCRDD(
     }
 
     /**
-     * if [[dependentFiles]] are the list of file that we want to load exactly, use this directly.
-     * Or we need to re-load what we need.
+     * if [[beforeImageFiles]] are the list of file that we want to load exactly, use this directly.
+     * Otherwise we need to re-load what we need.
      */
-    private def loadDependentFileSliceIfNeeded(fileSlice: FileSlice): Unit = {
+    private def loadBeforeFileSliceIfNeeded(fileSlice: FileSlice): Unit = {
       val files = List(fileSlice.getBaseFile.get().getPath) ++
         fileSlice.getLogFiles.collect(Collectors.toList[HoodieLogFile]).asScala
           .map(f => pathToString(f.getPath)).toList
-      val same = files.sorted == dependentFiles.sorted.toList
+      val same = files.sorted == beforeImageFiles.sorted.toList
       if (!same) {
-        loadDependentFileSlice(fileSlice)
-        dependentFiles.clear()
-        dependentFiles.append(files: _*)
+        // clear up the beforeImageRecords
+        beforeImageRecords.clear()
+        val iter = loadFileSlice(fileSlice)
+        iter.foreach { row =>
+          val key = row.getString(recordKeyIndex)
+          beforeImageRecords.put(key, serialize(row))
+        }
+        // reset beforeImageFiles
+        beforeImageFiles.clear()
+        beforeImageFiles.append(files: _*)
       }
     }
 
-    /**
-     * load the dependent file slice to [[dependentRecords]].
-     */
-    private def loadDependentFileSlice(fileSlice: FileSlice): Unit = {
-      // clear up the dependentRecords
-      dependentRecords = mutable.Map.empty
-
+    private def loadFileSlice(fileSlice: FileSlice): Iterator[InternalRow] = {
       val baseFileStatus = fs.getFileStatus(new Path(fileSlice.getBaseFile.get().getPath))
       val basePartitionedFile = PartitionedFile(
         InternalRow.empty,
@@ -443,7 +502,7 @@ class HoodieCDCRDD(
         .collect(Collectors.toList[HoodieLogFile])
         .asScala.toList
 
-      val iter = if (logFiles.isEmpty) {
+      if (logFiles.isEmpty) {
         // no log files, just load the base parquet file
         parquetReader(basePartitionedFile)
       } else {
@@ -457,10 +516,6 @@ class HoodieCDCRDD(
           originTableSchema,
           tableState,
           conf)
-      }
-      iter.foreach { row =>
-        val key = row.getString(2)
-        dependentRecords.put(key, serialize(row))
       }
     }
 
