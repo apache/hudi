@@ -161,7 +161,7 @@ class CDCRelation(
 
   override final def needConversion: Boolean = false
 
-  override def schema: StructType = CDCRelation.cdcSchema()
+  override def schema: StructType = CDCRelation.CDC_SPARK_SCHEMA
 
   override def buildScan(requiredColumns: Array[String], filters: Array[Filter]): RDD[Row] = {
     val internalRows = buildScan0(requiredColumns, filters)
@@ -214,9 +214,10 @@ class CDCRelation(
           // So, we find the previous file that this operation delete from, and treat each of
           // records as a deleted one.
           val absPartitionPath = FSUtils.getPartitionPath(basePath, fileGroupId.getPartitionPath)
-          val deletedFile = FSUtils.getBaseFile(fs, absPartitionPath, fileGroupId.getFileId, writeStat.getPrevCommit)
-            .getPath.toUri.toString
-          ChangeFileForSingleFileGroupAndCommit(REMOVE_BASE_File, deletedFile)
+          val beforeBaseFile = new HoodieBaseFile(
+            FSUtils.getBaseFile(fs, absPartitionPath, fileGroupId.getFileId, writeStat.getPrevCommit))
+          val beforeFileSlice = new FileSlice(fileGroupId, writeStat.getPrevCommit, beforeBaseFile, Array.empty)
+          ChangeFileForSingleFileGroupAndCommit(REMOVE_BASE_File, null, Some(beforeFileSlice))
         } else if (writeStat.getNumUpdateWrites == 0L && writeStat.getNumDeletes == 0
             && writeStat.getNumWrites == writeStat.getNumInserts) {
           // all the records in this file are new.
@@ -226,13 +227,23 @@ class CDCRelation(
         }
       } else {
         // this is a log file
-        val dependentFileSlice =
-          getDependentFileSliceForLogFile(fileGroupId, instant, path, writeStat)
-        ChangeFileForSingleFileGroupAndCommit(MOR_LOG_FILE, path, dependentFileSlice)
+        val beforeFileSlice =
+          getDependentFileSliceForLogFile(fileGroupId, instant, path)
+        ChangeFileForSingleFileGroupAndCommit(MOR_LOG_FILE, path, beforeFileSlice)
       }
     } else {
       // this is a cdc log
-      ChangeFileForSingleFileGroupAndCommit(CDC_LOG_FILE, writeStat.getCdcPath)
+      if (cdcSupplementalLogging) {
+        ChangeFileForSingleFileGroupAndCommit(CDC_LOG_FILE, writeStat.getCdcPath)
+      } else {
+        val absPartitionPath = FSUtils.getPartitionPath(basePath, fileGroupId.getPartitionPath)
+        val beforeBaseFile = new HoodieBaseFile(FSUtils.getBaseFile(fs, absPartitionPath, fileGroupId.getFileId, writeStat.getPrevCommit))
+        val beforeFileSlice = new FileSlice(fileGroupId, writeStat.getPrevCommit, beforeBaseFile, Array.empty)
+        val currentFileSlice = new FileSlice(fileGroupId, instant.getTimestamp,
+          new HoodieBaseFile(fs.getFileStatus(new Path(basePath, writeStat.getPath))), Array.empty)
+        ChangeFileForSingleFileGroupAndCommit(CDC_LOG_FILE, writeStat.getCdcPath,
+          Some(beforeFileSlice), Some(currentFileSlice))
+      }
     }
   }
 
@@ -243,9 +254,7 @@ class CDCRelation(
   private def getDependentFileSliceForLogFile(
       fgId: HoodieFileGroupId,
       instant: HoodieInstant,
-      currentLogFile: String,
-      writeStat: HoodieWriteStat): Option[FileSlice] = {
-    val baseCommitTime = FSUtils.getCommitTime(writeStat.getPath)
+      currentLogFile: String): Option[FileSlice] = {
     val partitionPath = FSUtils.getPartitionPath(basePath, fgId.getPartitionPath)
 
     instant.getAction match {
@@ -260,7 +269,7 @@ class CDCRelation(
           val logFilePaths = pair.getRight.asScala
             .filter(_ != currentLogFileName).map(new Path(partitionPath, _)).toArray
           val logFiles = fs.listStatus(logFilePaths).map(new HoodieLogFile(_))
-          Some(new FileSlice(fgId, baseCommitTime, baseFile, logFiles))
+          Some(new FileSlice(fgId, instant.getTimestamp, baseFile, logFiles))
         }
       case _ => None
     }
@@ -274,10 +283,10 @@ object CDCRelation {
   val CDC_OPERATION_UPDATE: UTF8String = UTF8String.fromString(UPDATE.getValue)
 
   /**
-   * CDC Schema.
+   * CDC Schema For Spark.
    * Here we use the debezium format.
    */
-  def cdcSchema(): StructType = {
+  val CDC_SPARK_SCHEMA: StructType = {
     StructType(
       Seq(
         StructField(CDC_OPERATION_TYPE, StringType),
@@ -286,6 +295,29 @@ object CDCRelation {
         StructField(CDC_AFTER_IMAGE, StringType)
       )
     )
+  }
+
+  /**
+   * CDC Schema For Spark when `hoodie.table.cdc.supplemental.logging` is false.
+   */
+  val CDC_LOG_FILE_SPARK_SCHEMA: StructType = {
+    StructType(
+      Seq(
+        StructField(CDC_OPERATION_TYPE, StringType),
+        StructField(CDC_RECORD_KEY, StringType)
+      )
+    )
+  }
+
+  /**
+   * the schema of cdc log file.
+   */
+  def cdcLogFileSchema(cdcSupplementalLogging: Boolean): StructType = {
+    if (cdcSupplementalLogging) {
+      CDC_SPARK_SCHEMA
+    } else {
+      CDC_LOG_FILE_SPARK_SCHEMA
+    }
   }
 
   def isCDCTable(metaClient: HoodieTableMetaClient): Boolean = {
@@ -315,12 +347,6 @@ object CDCRelation {
     }
 
     val supplementalLogging = metaClient.getTableConfig.isCDCSupplementalLoggingEnabled
-    if (!supplementalLogging) {
-      //TODO: When this case is supported, remove the judgment.
-      throw new HoodieNotSupportedException(
-        "Hudi don't support to disable 'hoodie.table.cdc.supplemental.logging' for now.");
-    }
-
     new CDCRelation(sqlContext, metaClient, supplementalLogging, startingInstant, endingInstant, options)
   }
 

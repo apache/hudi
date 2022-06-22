@@ -1068,11 +1068,6 @@ public class HoodieTableMetaClient implements Serializable {
       if (null != cdcEnabled) {
         tableConfig.setValue(HoodieTableConfig.CDC_ENABLED, Boolean.toString(cdcEnabled));
         if (cdcEnabled && null != cdcSupplementalLoggingEnabled) {
-          if (!cdcSupplementalLoggingEnabled) {
-            //TODO: When this case is supported, remove the judgment.
-            throw new HoodieNotSupportedException(
-                "Hudi don't support to disable 'hoodie.table.cdc.supplemental.logging' for now.");
-          }
           tableConfig.setValue(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_ENABLED,
               Boolean.toString(cdcSupplementalLoggingEnabled));
         }

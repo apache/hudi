@@ -18,14 +18,13 @@
 package org.apache.hudi.functional.cdc
 
 import org.apache.hudi.DataSourceWriteOptions
-import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.{deleteRecordsToStrings, recordsToStrings}
 
 import org.apache.spark.sql.SaveMode
 
 import org.junit.jupiter.api.Assertions.{assertFalse, assertTrue}
-import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
 
@@ -41,8 +40,13 @@ class TestCDCDataFrameSuite extends TestCDCBase {
    * Step5: Upsert 30 With Clean
    * Step6: Bluk_Insert 20
    */
-  @Test
-  def testCOWDataSourceWrite(): Unit = {
+  @ParameterizedTest
+  @CsvSource(Array("false", "true"))
+  def testCOWDataSourceWrite(cdcSupplementalLogging: Boolean): Unit = {
+    val options = commonOpts ++ Map(
+      HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_ENABLED.key -> cdcSupplementalLogging.toString
+    )
+
     var totalInsertedCnt = 0L
     var totalUpdatedCnt = 0L
     var totalDeletedCnt = 0L
@@ -52,7 +56,7 @@ class TestCDCDataFrameSuite extends TestCDCBase {
     val records1 = recordsToStrings(dataGen.generateInserts("000", 100)).toList
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
     inputDF1.write.format("org.apache.hudi")
-      .options(commonOpts)
+      .options(options)
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
@@ -74,7 +78,7 @@ class TestCDCDataFrameSuite extends TestCDCBase {
     val records2 = recordsToStrings(dataGen.generateUniqueUpdates("001", 50)).toList
     val inputDF2 = spark.read.json(spark.sparkContext.parallelize(records2, 2))
     inputDF2.write.format("org.apache.hudi")
-      .options(commonOpts)
+      .options(options)
       .mode(SaveMode.Append)
       .save(basePath)
     val instant2 = metaClient.reloadActiveTimeline.lastInstant().get()
@@ -94,7 +98,7 @@ class TestCDCDataFrameSuite extends TestCDCBase {
     val records3 = deleteRecordsToStrings(dataGen.generateUniqueDeletes(20)).toList
     val inputDF3 = spark.read.json(spark.sparkContext.parallelize(records3, 2))
     inputDF3.write.format("org.apache.hudi")
-      .options(commonOpts)
+      .options(options)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.DELETE_OPERATION_OPT_VAL)
       .option("hoodie.clustering.inline", "true")
       .option("hoodie.clustering.inline.max.commits", "1")
@@ -123,7 +127,7 @@ class TestCDCDataFrameSuite extends TestCDCBase {
     val records4 = recordsToStrings(dataGen.generateInserts("003", 50)).toList
     val inputDF4 = spark.read.json(spark.sparkContext.parallelize(records4, 2))
     inputDF4.write.format("org.apache.hudi")
-      .options(commonOpts)
+      .options(options)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL)
       .mode(SaveMode.Append)
       .save(basePath)
@@ -146,7 +150,7 @@ class TestCDCDataFrameSuite extends TestCDCBase {
     val records5 = recordsToStrings(dataGen.generateUniqueUpdates("004", 30)).toList
     val inputDF5 = spark.read.json(spark.sparkContext.parallelize(records5, 2))
     inputDF5.write.format("org.apache.hudi")
-      .options(commonOpts)
+      .options(options)
       .option("hoodie.clean.automatic", "true")
       .option("hoodie.keep.min.commits", "2")
       .option("hoodie.keep.max.commits", "3")
@@ -176,7 +180,7 @@ class TestCDCDataFrameSuite extends TestCDCBase {
     val records6 = recordsToStrings(dataGen.generateInserts("005", 20)).toList
     val inputDF6 = spark.read.json(spark.sparkContext.parallelize(records6, 2))
     inputDF6.write.format("org.apache.hudi")
-      .options(commonOpts)
+      .options(options)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL)
       .mode(SaveMode.Append)
       .save(basePath)
@@ -203,8 +207,14 @@ class TestCDCDataFrameSuite extends TestCDCBase {
    * Step6: Insert Overwrite 70
    * Step7: Upsert 30 With CLean
    */
-  @Test
-  def testMORDataSourceWrite(): Unit = {
+  @ParameterizedTest
+  @CsvSource(Array("false", "true"))
+  def testMORDataSourceWrite(cdcSupplementalLogging: Boolean): Unit = {
+    val options = commonOpts ++ Map(
+      DataSourceWriteOptions.TABLE_TYPE.key() -> DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL,
+      HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_ENABLED.key -> cdcSupplementalLogging.toString
+    )
+
     var totalInsertedCnt = 0L
     var totalUpdatedCnt = 0L
     var totalDeletedCnt = 0L
@@ -214,8 +224,7 @@ class TestCDCDataFrameSuite extends TestCDCBase {
     val records1 = recordsToStrings(dataGen.generateInserts("000", 100)).toList
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
     inputDF1.write.format("org.apache.hudi")
-      .options(commonOpts)
-      .option(DataSourceWriteOptions.TABLE_TYPE.key(), DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
+      .options(options)
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
@@ -237,8 +246,7 @@ class TestCDCDataFrameSuite extends TestCDCBase {
     val records2 = recordsToStrings(dataGen.generateUniqueUpdates("001", 50)).toList
     val inputDF2 = spark.read.json(spark.sparkContext.parallelize(records2, 2))
     inputDF2.write.format("org.apache.hudi")
-      .options(commonOpts)
-      .option(DataSourceWriteOptions.TABLE_TYPE.key(), DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
+      .options(options)
       .mode(SaveMode.Append)
       .save(basePath)
     val instant2 = metaClient.reloadActiveTimeline.lastInstant().get()
@@ -258,8 +266,7 @@ class TestCDCDataFrameSuite extends TestCDCBase {
     val records3 = deleteRecordsToStrings(dataGen.generateUniqueDeletes(20)).toList
     val inputDF3 = spark.read.json(spark.sparkContext.parallelize(records3, 2))
     inputDF3.write.format("org.apache.hudi")
-      .options(commonOpts)
-      .option(DataSourceWriteOptions.TABLE_TYPE.key(), DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
+      .options(options)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.DELETE_OPERATION_OPT_VAL)
       .option("hoodie.compact.inline", "true")
       .option("hoodie.compact.inline.max.delta.commits", "1")
@@ -284,8 +291,7 @@ class TestCDCDataFrameSuite extends TestCDCBase {
     val records4 = recordsToStrings(dataGen.generateInserts("003", 100)).toList
     val inputDF4 = spark.read.json(spark.sparkContext.parallelize(records4, 2))
     inputDF4.write.format("org.apache.hudi")
-      .options(commonOpts)
-      .option(DataSourceWriteOptions.TABLE_TYPE.key(), DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
+      .options(options)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL)
       .mode(SaveMode.Append)
       .save(basePath)
@@ -307,8 +313,7 @@ class TestCDCDataFrameSuite extends TestCDCBase {
     val records5 = recordsToStrings(dataGen.generateUniqueUpdates("004", 60)).toList
     val inputDF5 = spark.read.json(spark.sparkContext.parallelize(records5, 2))
     inputDF5.write.format("org.apache.hudi")
-      .options(commonOpts)
-      .option(DataSourceWriteOptions.TABLE_TYPE.key(), DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
+      .options(options)
       .option("hoodie.clustering.inline", "true")
       .option("hoodie.clustering.inline.max.commits", "1")
       .mode(SaveMode.Append)
@@ -338,8 +343,7 @@ class TestCDCDataFrameSuite extends TestCDCBase {
     val records6 = recordsToStrings(dataGen.generateInserts("005", 70)).toList
     val inputDF6 = spark.read.json(spark.sparkContext.parallelize(records6, 2))
     inputDF6.write.format("org.apache.hudi")
-      .options(commonOpts)
-      .option(DataSourceWriteOptions.TABLE_TYPE.key(), DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
+      .options(options)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL)
       .mode(SaveMode.Append)
       .save(basePath)
@@ -361,8 +365,7 @@ class TestCDCDataFrameSuite extends TestCDCBase {
     val records7 = recordsToStrings(dataGen.generateUniqueUpdates("006", 30)).toList
     val inputDF7 = spark.read.json(spark.sparkContext.parallelize(records7, 2))
     inputDF7.write.format("org.apache.hudi")
-      .options(commonOpts)
-      .option(DataSourceWriteOptions.TABLE_TYPE.key(), DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
+      .options(options)
       .option("hoodie.clean.automatic", "true")
       .option("hoodie.keep.min.commits", "2")
       .option("hoodie.keep.max.commits", "3")
@@ -395,11 +398,12 @@ class TestCDCDataFrameSuite extends TestCDCBase {
    * Step4: Upsert
    */
   @ParameterizedTest
-  @CsvSource(Array("COPY_ON_WRITE", "MERGE_ON_READ"))
-  def testDataSourceWriteWithPartitionField(tableType: String): Unit = {
+  @CsvSource(Array("COPY_ON_WRITE,false", "MERGE_ON_READ,false", "COPY_ON_WRITE,true", "MERGE_ON_READ,true"))
+  def testDataSourceWriteWithPartitionField(tableType: String, cdcSupplementalLogging: Boolean): Unit = {
     val options = commonOpts ++ Map(
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
-      DataSourceWriteOptions.TABLE_TYPE.key -> tableType
+      DataSourceWriteOptions.TABLE_TYPE.key -> tableType,
+      HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_ENABLED.key -> cdcSupplementalLogging.toString
     )
 
     var totalInsertedCnt = 0L

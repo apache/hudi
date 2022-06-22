@@ -38,6 +38,7 @@ abstract class TestCDCBase extends HoodieClientTestBase {
 
   val commonOpts = Map(
     HoodieTableConfig.CDC_ENABLED.key -> "true",
+    HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_ENABLED.key -> "false",
     "hoodie.insert.shuffle.parallelism" -> "4",
     "hoodie.upsert.shuffle.parallelism" -> "4",
     "hoodie.bulkinsert.shuffle.parallelism" -> "2",

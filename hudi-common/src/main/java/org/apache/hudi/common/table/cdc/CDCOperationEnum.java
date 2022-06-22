@@ -18,6 +18,8 @@
 
 package org.apache.hudi.common.table.cdc;
 
+import org.apache.hudi.exception.HoodieNotSupportedException;
+
 public enum CDCOperationEnum {
   INSERT("i"),
   UPDATE("u"),
@@ -31,5 +33,17 @@ public enum CDCOperationEnum {
 
   public String getValue() {
     return this.value;
+  }
+
+  static public CDCOperationEnum parse(String value) {
+    if (value.equals("i")) {
+      return INSERT;
+    } else if (value.equals("u")) {
+      return UPDATE;
+    } else if (value.equals("d")) {
+      return DELETE;
+    } else {
+      throw new HoodieNotSupportedException("Unsupported value: " + value);
+    }
   }
 }
