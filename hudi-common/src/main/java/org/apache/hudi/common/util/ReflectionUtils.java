@@ -63,12 +63,7 @@ public class ReflectionUtils {
     return CLAZZ_CACHE.get(clazzName);
   }
 
-  public static Object getInstance(String clazzName) {
-    synchronized (INSTANCE_CACHE) {
-      if (!INSTANCE_CACHE.containsKey(clazzName)) {
-        return null;
-      }
-    }
+  private static Object getInstance(String clazzName) {
     return INSTANCE_CACHE.get(clazzName);
   }
 
@@ -99,8 +94,13 @@ public class ReflectionUtils {
     try {
       HoodieMerge hoodieMerge = (HoodieMerge) getInstance(mergeClass);
       if (null == hoodieMerge) {
-        hoodieMerge = (HoodieMerge)loadClass(mergeClass, new Object[]{});
-        INSTANCE_CACHE.put(mergeClass, hoodieMerge);
+        synchronized (HoodieMerge.class) {
+          hoodieMerge = (HoodieMerge) getInstance(mergeClass);
+          if (null == hoodieMerge) {
+            hoodieMerge = (HoodieMerge)loadClass(mergeClass, new Object[]{});
+            INSTANCE_CACHE.put(mergeClass, hoodieMerge);
+          }
+        }
       }
       return hoodieMerge;
     } catch (HoodieException e) {
