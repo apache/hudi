@@ -69,8 +69,8 @@ public class MarkerCheckerRunnable implements Runnable {
       List<Path> instants = MarkerUtils.getAllMarkerDir(tempPath, fs);
       List<String> candidate = getCandidateInstants(instants, markerToInstantTime(markerDir));
       Set<String> tableMarkers = candidate.stream().flatMap(instant -> {
-            return MarkerUtils.readTimelineServerBasedMarkersFromFileSystemLocally(instant, fs).stream();
-          }).collect(Collectors.toSet());
+        return MarkerUtils.readTimelineServerBasedMarkersFromFileSystemLocally(instant, fs).stream();
+      }).collect(Collectors.toSet());
 
       Set<String> currentFileIDs = currentInstantAllMarkers.stream().map(this::makerToFileID).collect(Collectors.toSet());
       Set<String> tableFilesIDs = tableMarkers.stream().map(this::makerToFileID).collect(Collectors.toSet());
@@ -79,8 +79,8 @@ public class MarkerCheckerRunnable implements Runnable {
 
       if (!currentFileIDs.isEmpty()) {
         LOG.info("Conflict writing detected based on markers!\n"
-        + "Conflict markers: " + currentInstantAllMarkers + "\n"
-        + "Table markers: " + tableMarkers);
+            + "Conflict markers: " + currentInstantAllMarkers + "\n"
+            + "Table markers: " + tableMarkers);
         hasConflict.compareAndSet(false, true);
       }
       LOG.info("Finish batch marker checker in " + timer.endTimer() + " ms");
@@ -92,9 +92,9 @@ public class MarkerCheckerRunnable implements Runnable {
 
   /**
    * Get Candidate Instant to do conflict checking:
-   * 1. filter out current writer related instant(currentInstantTime)
-   * 2. filter out all instants after currentInstantTime
-   * 3. filter out dead writers based on heart-beat
+   * 1. Skip current writer related instant(currentInstantTime)
+   * 2. Skip all instants after currentInstantTime
+   * 3. Skip dead writers related instants based on heart-beat
    * @param instants
    * @return
    */
