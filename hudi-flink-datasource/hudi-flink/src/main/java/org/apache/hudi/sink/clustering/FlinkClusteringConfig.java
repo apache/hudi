@@ -18,6 +18,7 @@
 
 package org.apache.hudi.sink.clustering;
 
+import org.apache.hudi.client.clustering.plan.strategy.FlinkSizeBasedClusteringPlanStrategy;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.util.StreamerUtil;
@@ -78,7 +79,10 @@ public class FlinkClusteringConfig extends Configuration {
   public Boolean cleanAsyncEnable = false;
 
   @Parameter(names = {"--plan-strategy-class"}, description = "Config to provide a strategy class to generator clustering plan", required = false)
-  public String planStrategyClass = "org.apache.hudi.client.clustering.plan.strategy.FlinkRecentDaysClusteringPlanStrategy";
+  public String planStrategyClass = FlinkSizeBasedClusteringPlanStrategy.class.getName();
+
+  @Parameter(names = {"--plan-partition-filter-mode"}, description = "Partition filter mode used in the creation of clustering plan", required = false)
+  public String planPartitionFilterMode = "NONE";
 
   @Parameter(names = {"--target-file-max-bytes"}, description = "Each group can produce 'N' (CLUSTERING_MAX_GROUP_SIZE/CLUSTERING_TARGET_FILE_SIZE) output file groups, default 1 GB", required = false)
   public Integer targetFileMaxBytes = 1024 * 1024 * 1024;
@@ -129,6 +133,7 @@ public class FlinkClusteringConfig extends Configuration {
     conf.setInteger(FlinkOptions.CLUSTERING_DELTA_COMMITS, config.clusteringDeltaCommits);
     conf.setInteger(FlinkOptions.CLUSTERING_TASKS, config.clusteringTasks);
     conf.setString(FlinkOptions.CLUSTERING_PLAN_STRATEGY_CLASS, config.planStrategyClass);
+    conf.setString(FlinkOptions.CLUSTERING_PLAN_PARTITION_FILTER_MODE_NAME, config.planPartitionFilterMode);
     conf.setInteger(FlinkOptions.CLUSTERING_PLAN_STRATEGY_TARGET_FILE_MAX_BYTES, config.targetFileMaxBytes);
     conf.setInteger(FlinkOptions.CLUSTERING_PLAN_STRATEGY_SMALL_FILE_LIMIT, config.smallFileLimit);
     conf.setInteger(FlinkOptions.CLUSTERING_PLAN_STRATEGY_SKIP_PARTITIONS_FROM_LATEST, config.skipFromLatestPartitions);

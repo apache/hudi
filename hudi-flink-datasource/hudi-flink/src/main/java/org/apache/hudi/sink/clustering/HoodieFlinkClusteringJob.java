@@ -226,7 +226,7 @@ public class HoodieFlinkClusteringJob {
         boolean scheduled = writeClient.scheduleClusteringAtInstant(clusteringInstantTime, Option.empty());
         if (!scheduled) {
           // do nothing.
-          LOG.info("No clustering plan for this job ");
+          LOG.info("No clustering plan for this job");
           return;
         }
         table.getMetaClient().reloadActiveTimeline();

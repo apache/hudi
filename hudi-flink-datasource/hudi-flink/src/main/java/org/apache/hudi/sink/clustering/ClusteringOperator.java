@@ -116,6 +116,11 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
   private final boolean asyncClustering;
 
   /**
+   * Whether the clustering sort is enabled.
+   */
+  private final boolean sortClusteringEnabled;
+
+  /**
    * Executor service to execute the clustering task.
    */
   private transient NonThrownExecutor executor;
@@ -124,6 +129,7 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
     this.conf = conf;
     this.rowType = rowType;
     this.asyncClustering = OptionsResolver.needsAsyncClustering(conf);
+    this.sortClusteringEnabled = OptionsResolver.sortClusteringEnabled(conf);
   }
 
   @Override
@@ -142,7 +148,7 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
     this.avroToRowDataConverter = AvroToRowDataConverters.createRowConverter(rowType);
     this.binarySerializer = new BinaryRowDataSerializer(rowType.getFieldCount());
 
-    if (OptionsResolver.sortClusteringEnabled(conf)) {
+    if (this.sortClusteringEnabled) {
       initSorter();
     }
 
@@ -208,7 +214,7 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
 
     RowDataSerializer rowDataSerializer = new RowDataSerializer(rowType);
 
-    if (!StringUtils.isNullOrEmpty(conf.getString(FlinkOptions.CLUSTERING_SORT_COLUMNS))) {
+    if (this.sortClusteringEnabled) {
       while (iterator.hasNext()) {
         RowData rowData = iterator.next();
         BinaryRowData binaryRowData = rowDataSerializer.toBinaryRow(rowData).copy();

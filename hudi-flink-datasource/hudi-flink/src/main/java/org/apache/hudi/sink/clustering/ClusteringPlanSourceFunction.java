@@ -73,7 +73,7 @@ public class ClusteringPlanSourceFunction extends AbstractRichFunction implement
   @Override
   public void run(SourceContext<ClusteringPlanEvent> sourceContext) throws Exception {
     for (HoodieClusteringGroup clusteringGroup : clusteringPlan.getInputGroups()) {
-      LOG.info("ClusteringPlanSourceFunction cluster " + clusteringGroup + " files");
+      LOG.info("Execute clustering plan for instant {} as {} file slices", clusteringInstantTime, clusteringGroup.getSlices().size());
       sourceContext.collect(new ClusteringPlanEvent(this.clusteringInstantTime, ClusteringGroupInfo.create(clusteringGroup), clusteringPlan.getStrategy().getStrategyParams()));
     }
   }
