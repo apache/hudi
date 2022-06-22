@@ -35,7 +35,7 @@ public enum CDCOperationEnum {
     return this.value;
   }
 
-  static public CDCOperationEnum parse(String value) {
+  public static CDCOperationEnum parse(String value) {
     if (value.equals("i")) {
       return INSERT;
     } else if (value.equals("u")) {
