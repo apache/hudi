@@ -17,6 +17,12 @@ This page covers the different ways of configuring your job to write/read Hudi t
 - [**Kafka Connect Configs**](#KAFKA_CONNECT): These set of configs are used for Kafka Connect Sink Connector for writing Hudi Tables
 - [**Amazon Web Services Configs**](#AWS): Please fill in the description for Config Group Name: Amazon Web Services Configs
 
+## Externalized Config File
+Instead of directly passing configuration settings to every Hudi job, you can also centrally set them in a configuration
+file `hudi-default.conf`. By default, Hudi would load the configuration file under `/etc/hudi/conf` directory. You can
+specify a different configuration directory location by setting the `HUDI_CONF_DIR` environment variable. This can be
+useful for uniformly enforcing repeated configs (like Hive sync or write/index tuning), across your entire data lake.
+
 ## Spark Datasource Configs {#SPARK_DATASOURCE}
 These configs control the Hudi Spark Datasource, providing ability to define keys/partitioning, pick out the write operation, specify how to merge records or choosing query type to read.
 
