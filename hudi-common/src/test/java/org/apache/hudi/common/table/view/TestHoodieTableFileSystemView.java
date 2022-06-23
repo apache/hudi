@@ -1437,12 +1437,6 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     assertFalse(roView.getLatestBaseFiles(partitionPath2)
             .anyMatch(dfile -> dfile.getFileId().equals(fileId3) || dfile.getFileId().equals(fileId4)),
         "No commit, should not find any data file");
-    assertFalse(((IncrementalTimelineSyncFileSystemView) fsView).fetchLatestBaseFiles(partitionPath1)
-            .anyMatch(dfile -> dfile.getFileId().equals(fileId1) || dfile.getFileId().equals(fileId2)),
-        "No commit, should not find any data file");
-    assertFalse(((IncrementalTimelineSyncFileSystemView) fsView).fetchLatestBaseFiles(partitionPath2)
-            .anyMatch(dfile -> dfile.getFileId().equals(fileId3) || dfile.getFileId().equals(fileId4)),
-        "No commit, should not find any data file");
 
     // Only one commit
     String commitTime1 = "1";
@@ -1477,14 +1471,6 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     assertEquals(0, roView.getLatestBaseFiles(partitionPath2)
         .filter(dfile -> dfile.getFileId().equals(fileId3)).count());
     assertEquals(0, roView.getLatestBaseFiles(partitionPath2)
-        .filter(dfile -> dfile.getFileId().equals(fileId4)).count());
-    assertEquals(0, ((IncrementalTimelineSyncFileSystemView) fsView).fetchLatestBaseFiles(partitionPath1)
-        .filter(dfile -> dfile.getFileId().equals(fileId1)).count());
-    assertEquals(fileName2, ((IncrementalTimelineSyncFileSystemView) fsView).fetchLatestBaseFiles(partitionPath1)
-        .filter(dfile -> dfile.getFileId().equals(fileId2)).findFirst().get().getFileName());
-    assertEquals(0, ((IncrementalTimelineSyncFileSystemView) fsView).fetchLatestBaseFiles(partitionPath2)
-        .filter(dfile -> dfile.getFileId().equals(fileId3)).count());
-    assertEquals(0, ((IncrementalTimelineSyncFileSystemView) fsView).fetchLatestBaseFiles(partitionPath2)
         .filter(dfile -> dfile.getFileId().equals(fileId4)).count());
 
     // ensure replacedFileGroupsBefore works with all instants
