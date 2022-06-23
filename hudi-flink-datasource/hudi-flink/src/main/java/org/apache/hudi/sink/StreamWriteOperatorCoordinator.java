@@ -50,6 +50,7 @@ import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Collection;
@@ -195,7 +196,7 @@ public class StreamWriteOperatorCoordinator
       initMetadataSync();
     }
     this.ckpMetadata = CkpMetadata.getInstance(this.metaClient.getFs(), metaClient.getBasePath());
-    this.ckpMetadata.bootstrap(this.metaClient);
+    this.ckpMetadata.reInit();
   }
 
   @Override
@@ -304,6 +305,13 @@ public class StreamWriteOperatorCoordinator
   public void subtaskFailed(int i, @Nullable Throwable throwable) {
     // reset the event
     this.eventBuffer[i] = null;
+    if (Arrays.stream(this.eventBuffer).allMatch(event -> event == null)) {
+      try {
+        this.ckpMetadata.reInit();
+      } catch (IOException e) {
+        throw new HoodieException("Re init ckpMeta error", e);
+      }
+    }
     LOG.warn("Reset the event for task [" + i + "]", throwable);
   }
 
@@ -404,6 +412,8 @@ public class StreamWriteOperatorCoordinator
       startInstant();
       // upgrade downgrade
       this.writeClient.upgradeDowngrade(this.instant, this.metaClient);
+      // avoid write task load wrong instant on running rollback
+      this.ckpMetadata.bootstrap(this.metaClient);
     }, "initialize instant %s", instant);
   }
 

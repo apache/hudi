@@ -89,14 +89,17 @@ public class CkpMetadata implements Serializable {
   //  WRITE METHODS
   // -------------------------------------------------------------------------
 
+  public void reInit() throws IOException {
+    fs.delete(path, true);
+    fs.mkdirs(path);
+  }
+
   /**
    * Initialize the message bus, would clean all the messages and publish the last pending instant.
    *
    * <p>This expects to be called by the driver.
    */
   public void bootstrap(HoodieTableMetaClient metaClient) throws IOException {
-    fs.delete(path, true);
-    fs.mkdirs(path);
     metaClient.getActiveTimeline().getCommitsTimeline().filterPendingExcludingCompaction()
         .lastInstant().ifPresent(instant -> startInstant(instant.getTimestamp()));
   }
@@ -154,7 +157,10 @@ public class CkpMetadata implements Serializable {
   public void abortInstant(String instant) {
     Path path = fullPath(CkpMessage.getFileName(instant, CkpMessage.State.ABORTED));
     try {
-      fs.createNewFile(path);
+      // when all write task failed ckpMeta will reInit and not need abort
+      if (fs.exists(fullPath(CkpMessage.getFileName(instant, CkpMessage.State.INFLIGHT)))) {
+        fs.createNewFile(path);
+      }
     } catch (IOException e) {
       throw new HoodieException("Exception while adding checkpoint abort metadata for instant: " + instant);
     }
