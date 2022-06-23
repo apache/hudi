@@ -238,4 +238,15 @@ class TestTimeTravelTable extends HoodieSparkSqlTestBase {
       }
     }
   }
+
+  test("Test Unsupported syntax can be parsed") {
+    if (HoodieSparkUtils.gteqSpark3_2) {
+      checkAnswer("select 1 distribute by 1")(Seq(1))
+      withTempDir { dir =>
+        val path = dir.toURI.getPath
+        spark.sql(s"insert overwrite local directory '$path' using parquet select 1")
+        spark.sql(s"insert overwrite local directory '$path' stored as orc select 1")
+      }
+    }
+  }
 }
