@@ -796,7 +796,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         throw new RuntimeException(ex.getMessage(), ex);
       }
     });
-    TestHelpers.waitTillCondition(condition, dsFuture, 360);
+    TestHelpers.waitTillCondition(condition, dsFuture, 720);
     if (cfg != null && !cfg.postWriteTerminationStrategyClass.isEmpty()) {
       awaitDeltaStreamerShutdown(ds);
     } else {
