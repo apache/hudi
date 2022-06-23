@@ -42,7 +42,7 @@ for Merge-On-Read tables. This is through the initial input format based integra
 known performance limitations with very large tables, which has been since fixed on PrestoDB. We are working on replicating the same fixes on Trino as well.
 :::
 
-To query Hudi tables on Trino, please place the `hudi-presto-bundle` jar into the Hive connector installation `<trino_install>/plugin/hive-hadoop2`.
+To query Hudi tables on Trino, please place the `hudi-trino-bundle` jar into the Hive connector installation `<trino_install>/plugin/hive-hadoop2`.
 
 ## Hive
 
