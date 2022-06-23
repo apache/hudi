@@ -23,40 +23,40 @@ import java.util
 import java.util.concurrent.ConcurrentHashMap
 import org.apache.avro.Schema
 import org.apache.hudi.AvroConversionUtils
+import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.avro.HoodieAvroUtils.{createFullName, fromJavaDate, toJavaDate}
 import org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField
+import org.apache.hudi.common.util.ValidationUtils
 import org.apache.hudi.exception.HoodieException
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{GenericInternalRow, JoinedRow, MutableProjection, Projection}
 import org.apache.spark.sql.catalyst.util.{ArrayBasedMapData, ArrayData, GenericArrayData, MapData}
 import org.apache.spark.sql.hudi.ColumnStatsExpressionUtils.AllowedTransformationExpression.exprUtils.generateMutableProjection
 import org.apache.spark.sql.types._
+
 import scala.collection.mutable
 
-
+/**
+ * Helper class to do common stuff across Spark InternalRow.
+ * Provides common methods similar to {@link HoodieAvroUtils}.
+ */
 object HoodieInternalRowUtils {
 
   val projectionMap = new ConcurrentHashMap[(StructType, StructType), MutableProjection]
   val schemaMap = new ConcurrentHashMap[Schema, StructType]
   val SchemaPosMap = new ConcurrentHashMap[StructType, Map[String, (StructField, Int)]]
 
-  /**
-   * @see org.apache.hudi.avro.HoodieAvroUtils#stitchRecords(org.apache.avro.generic.GenericRecord, org.apache.avro.generic.GenericRecord, org.apache.avro.Schema)
-   */
   def stitchRecords(left: InternalRow, leftSchema: StructType, right: InternalRow, rightSchema: StructType, stitchedSchema: StructType): InternalRow = {
     val mergeSchema = StructType(leftSchema.fields ++ rightSchema.fields)
     val row = new JoinedRow(left, right)
-    val projection = getCacheProjection(mergeSchema, stitchedSchema)
+    val projection = getCachedProjection(mergeSchema, stitchedSchema)
     projection(row)
   }
 
-  /**
-   * @see org.apache.hudi.avro.HoodieAvroUtils#rewriteRecord(org.apache.avro.generic.GenericRecord, org.apache.avro.Schema)
-   */
   def rewriteRecord(oldRecord: InternalRow, oldSchema: StructType, newSchema: StructType): InternalRow = {
     val newRow = new GenericInternalRow(Array.fill(newSchema.fields.length)(null).asInstanceOf[Array[Any]])
 
-    val oldFieldMap = getCacheSchemaPosMap(oldSchema)
+    val oldFieldMap = getCachedSchemaPosMap(oldSchema)
     for ((field, pos) <- newSchema.fields.zipWithIndex) {
       var oldValue: AnyRef = null
       if (oldFieldMap.contains(field.name)) {
@@ -87,29 +87,21 @@ object HoodieInternalRowUtils {
     newRow
   }
 
-  /**
-   * @see org.apache.hudi.avro.HoodieAvroUtils#rewriteRecordWithNewSchema(org.apache.avro.generic.IndexedRecord, org.apache.avro.Schema, java.util.Map)
-   */
   def rewriteRecordWithNewSchema(oldRecord: InternalRow, oldSchema: StructType, newSchema: StructType, renameCols: util.Map[String, String]): InternalRow = {
     rewriteRecordWithNewSchema(oldRecord, oldSchema, newSchema, renameCols, new util.LinkedList[String]).asInstanceOf[InternalRow]
   }
 
-  /**
-   * @see org.apache.hudi.avro.HoodieAvroUtils#rewriteRecordWithNewSchema(java.lang.Object, org.apache.avro.Schema, org.apache.avro.Schema, java.util.Map, java.util.Deque)
-   */
   private def rewriteRecordWithNewSchema(oldRecord: Any, oldSchema: DataType, newSchema: DataType, renameCols: util.Map[String, String], fieldNames: util.Deque[String]): Any = {
     if (oldRecord == null) {
       null
     } else {
       newSchema match {
         case targetSchema: StructType =>
-          if (!oldRecord.isInstanceOf[InternalRow]) {
-            throw new IllegalArgumentException("cannot rewrite record with different type")
-          }
+          ValidationUtils.checkArgument(oldRecord.isInstanceOf[InternalRow], "cannot rewrite record with different type")
           val oldRow = oldRecord.asInstanceOf[InternalRow]
           val helper = mutable.Map[Integer, Any]()
 
-          val oldSchemaPos = getCacheSchemaPosMap(oldSchema.asInstanceOf[StructType])
+          val oldSchemaPos = getCachedSchemaPosMap(oldSchema.asInstanceOf[StructType])
           targetSchema.fields.zipWithIndex.foreach { case (field, i) =>
             fieldNames.push(field.name)
             if (oldSchemaPos.contains(field.name)) {
@@ -140,9 +132,7 @@ object HoodieInternalRowUtils {
 
           newRow
         case targetSchema: ArrayType =>
-          if (!oldRecord.isInstanceOf[ArrayData]) {
-            throw new IllegalArgumentException("cannot rewrite record with different type")
-          }
+          ValidationUtils.checkArgument(oldRecord.isInstanceOf[ArrayData], "cannot rewrite record with different type")
           val oldElementType = oldSchema.asInstanceOf[ArrayType].elementType
           val oldArray = oldRecord.asInstanceOf[ArrayData]
           val newElementType = targetSchema.elementType
@@ -153,9 +143,7 @@ object HoodieInternalRowUtils {
 
           newArray
         case targetSchema: MapType =>
-          if (!oldRecord.isInstanceOf[MapData]) {
-            throw new IllegalArgumentException("cannot rewrite record with different type")
-          }
+          ValidationUtils.checkArgument(oldRecord.isInstanceOf[MapData], "cannot rewrite record with different type")
           val oldValueType = oldSchema.asInstanceOf[MapType].valueType
           val oldKeyType = oldSchema.asInstanceOf[MapType].keyType
           val oldMap = oldRecord.asInstanceOf[MapData]
@@ -174,9 +162,6 @@ object HoodieInternalRowUtils {
     }
   }
 
-  /**
-   * @see org.apache.hudi.avro.HoodieAvroUtils#rewriteRecordWithMetadata(org.apache.avro.generic.GenericRecord, org.apache.avro.Schema, java.lang.String)
-   */
   def rewriteRecordWithMetadata(record: InternalRow, oldSchema: StructType, newSchema: StructType, fileName: String): InternalRow = {
     val newRecord = rewriteRecord(record, oldSchema, newSchema)
     newRecord.update(HoodieMetadataField.FILENAME_METADATA_FIELD.ordinal, fileName)
@@ -184,9 +169,6 @@ object HoodieInternalRowUtils {
     newRecord
   }
 
-  /**
-   * @see org.apache.hudi.avro.HoodieAvroUtils#rewriteEvolutionRecordWithMetadata(org.apache.avro.generic.GenericRecord, org.apache.avro.Schema, java.lang.String)
-   */
   def rewriteEvolutionRecordWithMetadata(record: InternalRow, oldSchema: StructType, newSchema: StructType, fileName: String): InternalRow = {
     val newRecord = rewriteRecordWithNewSchema(record, oldSchema, newSchema, new util.HashMap[String, String]())
     newRecord.update(HoodieMetadataField.FILENAME_METADATA_FIELD.ordinal, fileName)
@@ -194,7 +176,7 @@ object HoodieInternalRowUtils {
     newRecord
   }
 
-  def getCacheSchema(schema: Schema): StructType = {
+  def getCachedSchema(schema: Schema): StructType = {
     if (!schemaMap.contains(schema)) {
       schemaMap.synchronized {
         if (!schemaMap.contains(schema)) {
@@ -206,7 +188,7 @@ object HoodieInternalRowUtils {
     schemaMap.get(schema)
   }
 
-  private def getCacheProjection(from: StructType, to: StructType): Projection = {
+  private def getCachedProjection(from: StructType, to: StructType): Projection = {
     val schemaPair = (from, to)
     if (!projectionMap.contains(schemaPair)) {
       projectionMap.synchronized {
@@ -219,7 +201,7 @@ object HoodieInternalRowUtils {
     projectionMap.get(schemaPair)
   }
 
-  def getCacheSchemaPosMap(schema: StructType): Map[String, (StructField, Int)] = {
+  def getCachedSchemaPosMap(schema: StructType): Map[String, (StructField, Int)] = {
     if (!SchemaPosMap.contains(schema)) {
       SchemaPosMap.synchronized {
         if (!SchemaPosMap.contains(schema)) {

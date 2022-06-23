@@ -63,10 +63,6 @@ public class ReflectionUtils {
     return CLAZZ_CACHE.get(clazzName);
   }
 
-  private static Object getInstance(String clazzName) {
-    return INSTANCE_CACHE.get(clazzName);
-  }
-
   public static <T> T loadClass(String fqcn) {
     try {
       return (T) getClass(fqcn).newInstance();
@@ -92,10 +88,10 @@ public class ReflectionUtils {
    */
   public static HoodieMerge loadHoodieMerge(String mergeClass) {
     try {
-      HoodieMerge hoodieMerge = (HoodieMerge) getInstance(mergeClass);
+      HoodieMerge hoodieMerge = (HoodieMerge) INSTANCE_CACHE.get(mergeClass);
       if (null == hoodieMerge) {
         synchronized (HoodieMerge.class) {
-          hoodieMerge = (HoodieMerge) getInstance(mergeClass);
+          hoodieMerge = (HoodieMerge) INSTANCE_CACHE.get(mergeClass);
           if (null == hoodieMerge) {
             hoodieMerge = (HoodieMerge)loadClass(mergeClass, new Object[]{});
             INSTANCE_CACHE.put(mergeClass, hoodieMerge);

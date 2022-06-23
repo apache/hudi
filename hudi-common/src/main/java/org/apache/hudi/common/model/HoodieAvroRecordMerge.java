@@ -34,7 +34,7 @@ public class HoodieAvroRecordMerge implements HoodieMerge {
     HoodieRecordPayload picked = unsafeCast(((HoodieAvroRecord) newer).getData().preCombine(((HoodieAvroRecord) older).getData()));
     if (picked instanceof HoodieMetadataPayload) {
       // NOTE: HoodieMetadataPayload return a new payload
-      return new HoodieAvroRecord(newer.getKey(), ((HoodieMetadataPayload) picked), newer.getOperation());
+      return new HoodieAvroRecord(newer.getKey(), picked, newer.getOperation());
     }
     return picked.equals(((HoodieAvroRecord) newer).getData()) ? newer : older;
   }
@@ -43,13 +43,9 @@ public class HoodieAvroRecordMerge implements HoodieMerge {
   public Option<HoodieRecord> combineAndGetUpdateValue(HoodieRecord older, HoodieRecord newer, Schema schema, Properties props) throws IOException {
     Option<IndexedRecord> previousRecordAvroPayload;
     if (older instanceof HoodieAvroIndexedRecord) {
-      previousRecordAvroPayload = Option.of(((HoodieAvroIndexedRecord) older).getData());
+      previousRecordAvroPayload = Option.ofNullable(((HoodieAvroIndexedRecord) older).getData());
     } else {
-      if (null == props) {
-        previousRecordAvroPayload = ((HoodieRecordPayload)older.getData()).getInsertValue(schema);
-      } else {
-        previousRecordAvroPayload = ((HoodieRecordPayload)older.getData()).getInsertValue(schema, props);
-      }
+      previousRecordAvroPayload = ((HoodieRecordPayload)older.getData()).getInsertValue(schema, props);
     }
     if (!previousRecordAvroPayload.isPresent()) {
       return Option.empty();

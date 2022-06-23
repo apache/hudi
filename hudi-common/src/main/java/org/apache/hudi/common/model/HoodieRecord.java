@@ -151,16 +151,15 @@ public abstract class HoodieRecord<T> implements Serializable {
     this.newLocation = null;
     this.sealed = false;
     this.operation = operation;
-    this.orderingVal = orderingVal;
+    // default natural order is 0
+    this.orderingVal = orderingVal == null ? 0 : orderingVal;
   }
 
   public HoodieRecord(HoodieRecord<T> record) {
-    this(record.key, record.data, record.orderingVal);
+    this(record.key, record.data, record.operation, record.orderingVal);
     this.currentLocation = record.currentLocation;
     this.newLocation = record.newLocation;
     this.sealed = record.sealed;
-    this.operation = record.operation;
-    this.orderingVal = record.orderingVal;
   }
 
   public HoodieRecord() {
@@ -181,10 +180,6 @@ public abstract class HoodieRecord<T> implements Serializable {
   }
 
   public Comparable getOrderingValue() {
-    if (null == orderingVal) {
-      // default natural order is 0
-      return 0;
-    }
     return orderingVal;
   }
 
