@@ -52,28 +52,20 @@ public class DataHubSyncConfig extends HoodieSyncConfig {
       .noDefaultValue()
       .withDocumentation("Pluggable class to supply a DataHub REST emitter to connect to the DataHub instance. This overwrites other emitter configs.");
 
-  public final String identifierClass;
-  public final String emitterServer;
-  public final String emitterToken;
-  public final String emitterSupplierClass;
   public final HoodieDataHubDatasetIdentifier datasetIdentifier;
 
   public DataHubSyncConfig(Properties props) {
     super(props);
-    identifierClass = getStringOrDefault(META_SYNC_DATAHUB_DATASET_IDENTIFIER_CLASS);
-    emitterServer = getStringOrDefault(META_SYNC_DATAHUB_EMITTER_SERVER, null);
-    emitterToken = getStringOrDefault(META_SYNC_DATAHUB_EMITTER_TOKEN, null);
-    emitterSupplierClass = getStringOrDefault(META_SYNC_DATAHUB_EMITTER_SUPPLIER_CLASS, null);
-
+    String identifierClass = getStringOrDefault(META_SYNC_DATAHUB_DATASET_IDENTIFIER_CLASS);
     datasetIdentifier = (HoodieDataHubDatasetIdentifier) ReflectionUtils
-        .loadClass(identifierClass, new Class<?>[] {TypedProperties.class}, props);
+        .loadClass(identifierClass, new Class<?>[] {Properties.class}, props);
   }
 
   public RestEmitter getRestEmitter() {
-    if (emitterSupplierClass != null) {
-      return ((DataHubEmitterSupplier) ReflectionUtils.loadClass(emitterSupplierClass)).get();
-    } else if (emitterServer != null) {
-      return RestEmitter.create(b -> b.server(emitterServer).token(emitterToken));
+    if (contains(META_SYNC_DATAHUB_EMITTER_SUPPLIER_CLASS)) {
+      return ((DataHubEmitterSupplier) ReflectionUtils.loadClass(getString(META_SYNC_DATAHUB_EMITTER_SUPPLIER_CLASS))).get();
+    } else if (contains(META_SYNC_DATAHUB_EMITTER_SERVER)) {
+      return RestEmitter.create(b -> b.server(getString(META_SYNC_DATAHUB_EMITTER_SERVER)).token(getStringOrDefault(META_SYNC_DATAHUB_EMITTER_TOKEN, null)));
     } else {
       return RestEmitter.createWithDefaults();
     }
@@ -100,8 +92,11 @@ public class DataHubSyncConfig extends HoodieSyncConfig {
     public Boolean help = false;
 
     public Properties toProps() {
-      final Properties props = hoodieSyncConfigParams.toProps();
-      // TODO add mappings here
+      final TypedProperties props = hoodieSyncConfigParams.toProps();
+      props.setPropertyIfNonNull(META_SYNC_DATAHUB_DATASET_IDENTIFIER_CLASS.key(), identifierClass);
+      props.setPropertyIfNonNull(META_SYNC_DATAHUB_EMITTER_SERVER.key(), emitterServer);
+      props.setPropertyIfNonNull(META_SYNC_DATAHUB_EMITTER_TOKEN.key(), emitterToken);
+      props.setPropertyIfNonNull(META_SYNC_DATAHUB_EMITTER_SUPPLIER_CLASS.key(), emitterSupplierClass);
       return props;
     }
   }
