@@ -47,11 +47,11 @@ public class HoodieAvroParquetWriter<R extends IndexedRecord>
 
   @SuppressWarnings({"unchecked", "rawtypes"})
   public HoodieAvroParquetWriter(Path file,
-                                 HoodieAvroParquetConfig parquetConfig,
+                                 HoodieParquetConfig<HoodieAvroWriteSupport> parquetConfig,
                                  String instantTime,
                                  TaskContextSupplier taskContextSupplier,
                                  boolean populateMetaFields) throws IOException {
-    super(file, (HoodieBaseParquetConfig) parquetConfig);
+    super(file, (HoodieParquetConfig) parquetConfig);
     this.fileName = file.getName();
     this.writeSupport = parquetConfig.getWriteSupport();
     this.instantTime = instantTime;

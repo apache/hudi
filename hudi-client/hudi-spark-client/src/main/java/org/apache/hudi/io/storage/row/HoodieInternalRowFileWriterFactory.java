@@ -23,6 +23,7 @@ import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.io.storage.HoodieParquetConfig;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.hadoop.fs.Path;
@@ -68,7 +69,8 @@ public class HoodieInternalRowFileWriterFactory {
     HoodieRowParquetWriteSupport writeSupport =
             new HoodieRowParquetWriteSupport(table.getHadoopConf(), structType, filter, writeConfig);
     return new HoodieInternalRowParquetWriter(
-        path, new HoodieRowParquetConfig(
+        path,
+        new HoodieParquetConfig<>(
             writeSupport,
             writeConfig.getParquetCompressionCodec(),
             writeConfig.getParquetBlockSize(),
@@ -95,13 +97,15 @@ public class HoodieInternalRowFileWriterFactory {
     HoodieRowParquetWriteSupport writeSupport =
         new HoodieRowParquetWriteSupport(table.getHadoopConf(), structType, null, writeConfig);
     return new HoodieInternalRowParquetWriter(
-        path, new HoodieRowParquetConfig(
+        path, new HoodieParquetConfig<>(
         writeSupport,
         writeConfig.getParquetCompressionCodec(),
         writeConfig.getParquetBlockSize(),
         writeConfig.getParquetPageSize(),
         writeConfig.getParquetMaxFileSize(),
         writeSupport.getHadoopConf(),
-        writeConfig.getParquetCompressionRatio()));
+        writeConfig.getParquetCompressionRatio(),
+        writeConfig.parquetDictionaryEnabled())
+    );
   }
 }
