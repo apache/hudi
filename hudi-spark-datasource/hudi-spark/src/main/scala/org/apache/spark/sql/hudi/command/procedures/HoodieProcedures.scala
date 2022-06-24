@@ -52,6 +52,8 @@ object HoodieProcedures {
     mapBuilder.put(ShowLatestFileSystemViewProcedure.NAME, ShowLatestFileSystemViewProcedure.builder)
     mapBuilder.put(ShowHoodieLogFileMetadataProcedure.NAME, ShowHoodieLogFileMetadataProcedure.builder)
     mapBuilder.put(ShowHoodieLogFileRecordsProcedure.NAME, ShowHoodieLogFileRecordsProcedure.builder)
+    mapBuilder.put(StatsWriteAmplificationProcedure.NAME, StatsWriteAmplificationProcedure.builder)
+    mapBuilder.put(StatsFileSizeProcedure.NAME, StatsFileSizeProcedure.builder)
     mapBuilder.build
   }
 }
