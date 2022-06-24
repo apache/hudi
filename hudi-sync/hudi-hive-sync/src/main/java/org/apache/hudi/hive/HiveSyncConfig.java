@@ -68,7 +68,6 @@ public class HiveSyncConfig extends HoodieSyncConfig {
     super(props, hadoopConf);
     HiveConf hiveConf = new HiveConf(hadoopConf, HiveConf.class);
     hiveConf.addResource(getHadoopFileSystem().getConf());
-    hiveConf.set(HADOOP_CONF_METASTORE_URIS, getStringOrDefault(METASTORE_URIS));
     setHadoopConf(hiveConf);
   }
 
