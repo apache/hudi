@@ -152,7 +152,9 @@ public class CkpMetadata implements Serializable {
   public void abortInstant(String instant) {
     Path path = fullPath(CkpMessage.getFileName(instant, CkpMessage.State.ABORTED));
     try {
-      fs.createNewFile(path);
+      if (fs.exists(fullPath(CkpMessage.getFileName(instant, CkpMessage.State.INFLIGHT)))) {
+        fs.createNewFile(path);
+      }
     } catch (IOException e) {
       throw new HoodieException("Exception while adding checkpoint abort metadata for instant: " + instant);
     }
