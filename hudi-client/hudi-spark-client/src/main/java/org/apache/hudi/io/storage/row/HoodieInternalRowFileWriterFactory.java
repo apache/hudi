@@ -75,7 +75,9 @@ public class HoodieInternalRowFileWriterFactory {
             writeConfig.getParquetPageSize(),
             writeConfig.getParquetMaxFileSize(),
             writeSupport.getHadoopConf(),
-            writeConfig.getParquetCompressionRatio()));
+            writeConfig.getParquetCompressionRatio(),
+            writeConfig.parquetDictionaryEnabled()
+        ));
   }
 
   public static HoodieInternalRowFileWriter getInternalRowFileWriterWithoutMetaFields(
