@@ -18,7 +18,7 @@
 
 package org.apache.hudi.configuration;
 
-import org.apache.hudi.client.clustering.plan.strategy.FlinkRecentDaysClusteringPlanStrategy;
+import org.apache.hudi.client.clustering.plan.strategy.FlinkSizeBasedClusteringPlanStrategy;
 import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.HoodieConfig;
@@ -44,6 +44,11 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
+import static org.apache.hudi.config.HoodieClusteringConfig.DAYBASED_LOOKBACK_PARTITIONS;
+import static org.apache.hudi.config.HoodieClusteringConfig.PARTITION_FILTER_BEGIN_PARTITION;
+import static org.apache.hudi.config.HoodieClusteringConfig.PARTITION_FILTER_END_PARTITION;
+import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SKIP_PARTITIONS_FROM_LATEST;
 
 /**
  * Hoodie Flink config options.
@@ -594,6 +599,12 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(false) // default false for pipeline
       .withDescription("Schedule the cluster plan, default false");
 
+  public static final ConfigOption<Boolean> CLUSTERING_ASYNC_ENABLED = ConfigOptions
+      .key("clustering.async.enabled")
+      .booleanType()
+      .defaultValue(false) // default false for pipeline
+      .withDescription("Async Clustering, default false");
+
   public static final ConfigOption<Integer> CLUSTERING_DELTA_COMMITS = ConfigOptions
       .key("clustering.delta_commits")
       .intType()
@@ -615,10 +626,21 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<String> CLUSTERING_PLAN_STRATEGY_CLASS = ConfigOptions
       .key("clustering.plan.strategy.class")
       .stringType()
-      .defaultValue(FlinkRecentDaysClusteringPlanStrategy.class.getName())
+      .defaultValue(FlinkSizeBasedClusteringPlanStrategy.class.getName())
       .withDescription("Config to provide a strategy class (subclass of ClusteringPlanStrategy) to create clustering plan "
           + "i.e select what file groups are being clustered. Default strategy, looks at the last N (determined by "
           + CLUSTERING_TARGET_PARTITIONS.key() + ") day based partitions picks the small file slices within those partitions.");
+
+  public static final ConfigOption<String> CLUSTERING_PLAN_PARTITION_FILTER_MODE_NAME = ConfigOptions
+      .key("clustering.plan.partition.filter.mode")
+      .stringType()
+      .defaultValue("NONE")
+      .withDescription("Partition filter mode used in the creation of clustering plan. Available values are - "
+          + "NONE: do not filter table partition and thus the clustering plan will include all partitions that have clustering candidate."
+          + "RECENT_DAYS: keep a continuous range of partitions, worked together with configs '" + DAYBASED_LOOKBACK_PARTITIONS.key() + "' and '"
+          + PLAN_STRATEGY_SKIP_PARTITIONS_FROM_LATEST.key() + "."
+          + "SELECTED_PARTITIONS: keep partitions that are in the specified range ['" + PARTITION_FILTER_BEGIN_PARTITION.key() + "', '"
+          + PARTITION_FILTER_END_PARTITION.key() + "'].");
 
   public static final ConfigOption<Integer> CLUSTERING_PLAN_STRATEGY_TARGET_FILE_MAX_BYTES = ConfigOptions
       .key("clustering.plan.strategy.target.file.max.bytes")
@@ -641,7 +663,7 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<String> CLUSTERING_SORT_COLUMNS = ConfigOptions
       .key("clustering.plan.strategy.sort.columns")
       .stringType()
-      .noDefaultValue()
+      .defaultValue("")
       .withDescription("Columns to sort the data by when clustering");
 
   public static final ConfigOption<Integer> CLUSTERING_MAX_NUM_GROUPS = ConfigOptions

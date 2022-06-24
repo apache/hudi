@@ -22,7 +22,6 @@ import org.apache.hudi.avro.model.HoodieClusteringGroup;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.common.model.ClusteringGroupInfo;
 import org.apache.hudi.common.model.ClusteringOperation;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
 
 import org.apache.flink.api.common.functions.AbstractRichFunction;
 import org.apache.flink.configuration.Configuration;
@@ -57,12 +56,12 @@ public class ClusteringPlanSourceFunction extends AbstractRichFunction implement
   private final HoodieClusteringPlan clusteringPlan;
 
   /**
-   * Hoodie instant.
+   * Clustering instant time.
    */
-  private final HoodieInstant instant;
+  private final String clusteringInstantTime;
 
-  public ClusteringPlanSourceFunction(HoodieInstant instant, HoodieClusteringPlan clusteringPlan) {
-    this.instant = instant;
+  public ClusteringPlanSourceFunction(String clusteringInstantTime, HoodieClusteringPlan clusteringPlan) {
+    this.clusteringInstantTime = clusteringInstantTime;
     this.clusteringPlan = clusteringPlan;
   }
 
@@ -74,8 +73,8 @@ public class ClusteringPlanSourceFunction extends AbstractRichFunction implement
   @Override
   public void run(SourceContext<ClusteringPlanEvent> sourceContext) throws Exception {
     for (HoodieClusteringGroup clusteringGroup : clusteringPlan.getInputGroups()) {
-      LOG.info("ClusteringPlanSourceFunction cluster " + clusteringGroup + " files");
-      sourceContext.collect(new ClusteringPlanEvent(this.instant.getTimestamp(), ClusteringGroupInfo.create(clusteringGroup), clusteringPlan.getStrategy().getStrategyParams()));
+      LOG.info("Execute clustering plan for instant {} as {} file slices", clusteringInstantTime, clusteringGroup.getSlices().size());
+      sourceContext.collect(new ClusteringPlanEvent(this.clusteringInstantTime, ClusteringGroupInfo.create(clusteringGroup), clusteringPlan.getStrategy().getStrategyParams()));
     }
   }
 
