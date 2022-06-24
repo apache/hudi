@@ -326,6 +326,8 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
             + config.getBasePath() + " at time " + compactionCommitTime, e);
       }
     }
+    autoCleanOnCommit();
+    autoArchiveOnCommit(table, true);
     LOG.info("Compacted successfully on commit " + compactionCommitTime);
   }
 
