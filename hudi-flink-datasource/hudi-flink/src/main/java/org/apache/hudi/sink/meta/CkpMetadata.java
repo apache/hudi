@@ -89,19 +89,14 @@ public class CkpMetadata implements Serializable {
   //  WRITE METHODS
   // -------------------------------------------------------------------------
 
-  public void reInit() throws IOException {
-    fs.delete(path, true);
-    fs.mkdirs(path);
-  }
-
   /**
    * Initialize the message bus, would clean all the messages and publish the last pending instant.
    *
    * <p>This expects to be called by the driver.
    */
   public void bootstrap(HoodieTableMetaClient metaClient) throws IOException {
-    metaClient.getActiveTimeline().getCommitsTimeline().filterPendingExcludingCompaction()
-        .lastInstant().ifPresent(instant -> startInstant(instant.getTimestamp()));
+    fs.delete(path, true);
+    fs.mkdirs(path);
   }
 
   public void startInstant(String instant) {
