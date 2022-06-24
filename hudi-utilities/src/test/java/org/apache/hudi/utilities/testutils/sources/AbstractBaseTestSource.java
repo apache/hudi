@@ -113,11 +113,11 @@ public abstract class AbstractBaseTestSource extends AvroSource {
 
     // generate `sourceLimit` number of upserts each time.
     int numExistingKeys = dataGenerator.getNumExistingKeys(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA);
-    LOG.info("NumExistingKeys=" + numExistingKeys);
+    LOG.warn("NumExistingKeys=" + numExistingKeys);
 
     int numUpdates = Math.min(numExistingKeys, sourceLimit / 2);
     int numInserts = sourceLimit - numUpdates;
-    LOG.info("Before adjustments => numInserts=" + numInserts + ", numUpdates=" + numUpdates);
+    LOG.warn("Before adjustments => numInserts=" + numInserts + ", numUpdates=" + numUpdates);
     boolean reachedMax = false;
 
     if (numInserts + numExistingKeys > maxUniqueKeys) {
@@ -134,23 +134,24 @@ public abstract class AbstractBaseTestSource extends AvroSource {
     Stream<GenericRecord> deleteStream = Stream.empty();
     Stream<GenericRecord> updateStream;
     long memoryUsage1 = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
-    LOG.info("Before DataGen. Memory Usage=" + memoryUsage1 + ", Total Memory=" + Runtime.getRuntime().totalMemory()
+    LOG.warn("Before DataGen. Memory Usage=" + memoryUsage1 + ", Total Memory=" + Runtime.getRuntime().totalMemory()
         + ", Free Memory=" + Runtime.getRuntime().freeMemory());
     if (!reachedMax && numUpdates >= 50) {
-      LOG.info("After adjustments => NumInserts=" + numInserts + ", NumUpdates=" + (numUpdates - 50) + ", NumDeletes=50, maxUniqueRecords="
+      LOG.warn("aaa After adjustments => NumInserts=" + numInserts + ", NumUpdates=" + (numUpdates - 50) + ", NumDeletes=50, maxUniqueRecords="
           + maxUniqueKeys);
       // if we generate update followed by deletes -> some keys in update batch might be picked up for deletes. Hence generating delete batch followed by updates
       deleteStream = dataGenerator.generateUniqueDeleteRecordStream(instantTime, 50).map(AbstractBaseTestSource::toGenericRecord);
       updateStream = dataGenerator.generateUniqueUpdatesStream(instantTime, numUpdates - 50, HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
           .map(AbstractBaseTestSource::toGenericRecord);
     } else {
-      LOG.info("After adjustments => NumInserts=" + numInserts + ", NumUpdates=" + numUpdates + ", maxUniqueRecords=" + maxUniqueKeys);
+      LOG.warn("bbb After adjustments => NumInserts=" + numInserts + ", NumUpdates=" + numUpdates + ", maxUniqueRecords=" + maxUniqueKeys);
       updateStream = dataGenerator.generateUniqueUpdatesStream(instantTime, numUpdates, HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
           .map(AbstractBaseTestSource::toGenericRecord);
     }
     Stream<GenericRecord> insertStream = dataGenerator.generateInsertsStream(instantTime, numInserts, false, HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
         .map(AbstractBaseTestSource::toGenericRecord);
     if (Boolean.valueOf(props.getOrDefault("hoodie.test.source.generate.inserts", "false").toString())) {
+      LOG.warn("Returning pure inserts");
       return insertStream;
     }
     return Stream.concat(deleteStream, Stream.concat(updateStream, insertStream));

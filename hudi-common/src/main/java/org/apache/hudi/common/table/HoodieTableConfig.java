@@ -333,27 +333,50 @@ public class HoodieTableConfig extends HoodieConfig {
   }
 
   private static void upsertProperties(Properties current, Properties updated) {
+    LOG.warn("Updating properties ::: ");
+    for (Map.Entry<Object, Object> kv : current.entrySet()) {
+      if (!updated.containsKey(kv.getKey().toString())) {
+        LOG.warn("Prop key removed " + kv.getKey().toString() + " " + kv.getValue().toString());
+      } else if (!updated.getProperty(kv.getKey().toString()).toString().equals(kv.getValue().toString())) {
+        LOG.warn("Prop key " + kv.getKey().toString() + " Updated from " + kv.getValue().toString() + " to " + updated.getProperty(kv.getKey().toString()).toString());
+      }
+    }
+    for (Map.Entry<Object, Object> kv : updated.entrySet()) {
+      if (!current.containsKey(kv.getKey().toString())) {
+        LOG.warn("Prop key Added " + kv.getKey().toString() + " " + kv.getValue().toString());
+      }
+    }
     updated.forEach((k, v) -> current.setProperty(k.toString(), v.toString()));
   }
 
   private static void deleteProperties(Properties current, Properties deleted) {
+    LOG.warn("Deleting properties ::: ");
+    for (Map.Entry<Object, Object> kv : deleted.entrySet()) {
+      LOG.warn("Prop key Deleted " + kv.getKey().toString() + " " + kv.getValue().toString());
+    }
     deleted.forEach((k, v) -> current.remove(k.toString()));
   }
 
   private static void modify(FileSystem fs, Path metadataFolder, Properties modifyProps, BiConsumer<Properties, Properties> modifyFn) {
+    String folderPath = metadataFolder.toString();
+    LOG.warn(folderPath + " 000 Modifying properties for " + folderPath);
     Path cfgPath = new Path(metadataFolder, HOODIE_PROPERTIES_FILE);
     Path backupCfgPath = new Path(metadataFolder, HOODIE_PROPERTIES_FILE_BACKUP);
     try {
       // 0. do any recovery from prior attempts.
+      LOG.warn(folderPath + " 111 Recover if needed ");
       recoverIfNeeded(fs, cfgPath, backupCfgPath);
 
+      LOG.warn(folderPath + " 222 Backing up existing props");
       // 1. backup the existing properties.
       try (FSDataInputStream in = fs.open(cfgPath);
            FSDataOutputStream out = fs.create(backupCfgPath, false)) {
         FileIOUtils.copy(in, out);
       }
+      LOG.warn(folderPath + " 333 Deleting original props file");
       /// 2. delete the properties file, reads will go to the backup, until we are done.
       fs.delete(cfgPath, false);
+      LOG.warn(folderPath + " 444 Reading cur props, upsert and saving back ");
       // 3. read current props, upsert and save back.
       String checksum;
       try (FSDataInputStream in = fs.open(backupCfgPath);
@@ -363,6 +386,7 @@ public class HoodieTableConfig extends HoodieConfig {
         modifyFn.accept(props, modifyProps);
         checksum = storeProperties(props, out);
       }
+      LOG.warn(folderPath + " 555 Verify and remove backup ");
       // 4. verify and remove backup.
       try (FSDataInputStream in = fs.open(cfgPath)) {
         Properties props = new TypedProperties();
@@ -370,12 +394,16 @@ public class HoodieTableConfig extends HoodieConfig {
         if (!props.containsKey(TABLE_CHECKSUM.key()) || !props.getProperty(TABLE_CHECKSUM.key()).equals(checksum)) {
           // delete the properties file and throw exception indicating update failure
           // subsequent writes will recover and update, reads will go to the backup until then
+          LOG.warn(folderPath + " 555_111 checksum property missing or does not match. " + props.containsKey(TABLE_CHECKSUM.key()) + " " + (props.containsKey(TABLE_CHECKSUM.key())
+              ? ("checksum from props = " + props.getProperty(TABLE_CHECKSUM.key()) + ", expected checksum " + checksum) : ""));
           fs.delete(cfgPath, false);
           throw new HoodieIOException("Checksum property missing or does not match.");
         }
       }
       fs.delete(backupCfgPath, false);
+      LOG.warn(folderPath + " 666 all complete");
     } catch (IOException e) {
+      LOG.warn(folderPath + " 666_111 error updating table configs");
       throw new HoodieIOException("Error updating table configs.", e);
     }
   }

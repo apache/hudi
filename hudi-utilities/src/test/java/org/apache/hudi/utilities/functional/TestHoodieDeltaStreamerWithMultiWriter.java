@@ -39,6 +39,7 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -140,7 +141,10 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctiona
 
   @ParameterizedTest
   @EnumSource(HoodieTableType.class)
+  //@RepeatedTest(50)
   void testUpsertsContinuousModeWithMultipleWritersWithoutConflicts(HoodieTableType tableType) throws Exception {
+    // runBeforeEach();
+    //HoodieTableType tableType = HoodieTableType.MERGE_ON_READ;
     // NOTE : Overriding the LockProvider to InProcessLockProvider since Zookeeper locks work in unit test but fail on Jenkins with connection timeouts
     basePath = Paths.get(URI.create(basePath().replaceAll("/$", ""))).toString();
     propsFilePath = basePath + "/" + PROPS_FILENAME_TEST_MULTI_WRITER;
@@ -149,6 +153,8 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctiona
     TypedProperties props = prepareMultiWriterProps(fs(), basePath, propsFilePath);
     props.setProperty("hoodie.write.lock.provider", "org.apache.hudi.client.transaction.lock.InProcessLockProvider");
     props.setProperty(LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY,"3000");
+    props.setProperty("hoodie.metrics.on","true");
+    props.setProperty("hoodie.metrics.reporter.type","CONSOLE");
     UtilitiesTestBase.Helpers.savePropsToDFS(props, fs(), propsFilePath);
     // Keep it higher than batch-size to test continuous mode
     int totalRecords = 3000;
@@ -158,6 +164,8 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctiona
     prepJobConfig.continuousMode = true;
     prepJobConfig.configs.add(String.format("%s=%d", SourceConfigs.MAX_UNIQUE_RECORDS_PROP, totalRecords));
     prepJobConfig.configs.add(String.format("%s=false", HoodieCompactionConfig.AUTO_CLEAN.key()));
+    prepJobConfig.configs.add("hoodie.metrics.on=true");
+    prepJobConfig.configs.add("hoodie.metrics.reporter.type=CONSOLE");
     HoodieDeltaStreamer prepJob = new HoodieDeltaStreamer(prepJobConfig, jsc());
 
     // Prepare base dataset with some commits
@@ -178,6 +186,8 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctiona
     props.setProperty("hoodie.write.lock.provider", "org.apache.hudi.client.transaction.lock.InProcessLockProvider");
     props.setProperty(LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY,"3000");
     props.setProperty("hoodie.test.source.generate.inserts", "true");
+    props.setProperty("hoodie.metrics.on","true");
+    props.setProperty("hoodie.metrics.reporter.type","CONSOLE");
     UtilitiesTestBase.Helpers.savePropsToDFS(props, fs(), basePath + "/" + PROPS_FILENAME_TEST_MULTI_WRITER);
     HoodieDeltaStreamer.Config cfgBackfillJob2 = getDeltaStreamerConfig(tableBasePath, tableType.name(), WriteOperationType.INSERT,
         propsFilePath, Collections.singletonList(TestHoodieDeltaStreamer.TestIdentityTransformer.class.getName()));
@@ -189,12 +199,16 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctiona
     cfgBackfillJob2.checkpoint = commitMetadata.getMetadata(CHECKPOINT_KEY);
     cfgBackfillJob2.configs.add(String.format("%s=%d", SourceConfigs.MAX_UNIQUE_RECORDS_PROP, totalRecords));
     cfgBackfillJob2.configs.add(String.format("%s=false", HoodieCompactionConfig.AUTO_CLEAN.key()));
+    cfgBackfillJob2.configs.add("hoodie.metrics.on=true");
+    cfgBackfillJob2.configs.add("hoodie.metrics.reporter.type=CONSOLE");
 
     HoodieDeltaStreamer.Config cfgIngestionJob2 = getDeltaStreamerConfig(tableBasePath, tableType.name(), WriteOperationType.UPSERT,
         propsFilePath, Collections.singletonList(TestHoodieDeltaStreamer.TestIdentityTransformer.class.getName()));
     cfgIngestionJob2.continuousMode = true;
     cfgIngestionJob2.configs.add(String.format("%s=%d", SourceConfigs.MAX_UNIQUE_RECORDS_PROP, totalRecords));
     cfgIngestionJob2.configs.add(String.format("%s=false", HoodieCompactionConfig.AUTO_CLEAN.key()));
+    cfgIngestionJob2.configs.add("hoodie.metrics.on=true");
+    cfgIngestionJob2.configs.add("hoodie.metrics.reporter.type=CONSOLE");
     // re-init ingestion job
     HoodieDeltaStreamer ingestionJob3 = new HoodieDeltaStreamer(cfgIngestionJob2, jsc());
     // re-init backfill job

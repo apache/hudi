@@ -40,11 +40,12 @@ public class TestDataSource extends AbstractBaseTestSource {
 
   private static final Logger LOG = LogManager.getLogger(TestDataSource.class);
   public static boolean returnEmptyBatch = false;
-  private static int counter = 0;
+  private int counter = 0;
 
   public TestDataSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
-      SchemaProvider schemaProvider) {
+                        SchemaProvider schemaProvider) {
     super(props, sparkContext, sparkSession, schemaProvider);
+    LOG.warn("Instantiating TestDS YYY ");
     initDataGen();
     returnEmptyBatch = false;
   }
@@ -67,6 +68,7 @@ public class TestDataSource extends AbstractBaseTestSource {
 
     List<GenericRecord> records =
         fetchNextBatch(props, (int) sourceLimit, instantTime, DEFAULT_PARTITION_NUM).collect(Collectors.toList());
+    LOG.warn("Total records returned in this batch " + records.size() + " batch num : " + (counter - 1));
     JavaRDD<GenericRecord> avroRDD = sparkContext.<GenericRecord>parallelize(records, 4);
     return new InputBatch<>(Option.of(avroRDD), instantTime);
   }

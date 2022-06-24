@@ -494,6 +494,8 @@ public class DeltaSync implements Serializable {
       return new HoodieAvroRecord<>(keyGenerator.getKey(record), payload);
     });
 
+    List<HoodieRecord> recs = records.collect();
+    LOG.warn("XXX Delta Sync read. checkpoint str " + checkpointStr + ", total records " + recs.size());
     return Pair.of(schemaProvider, Pair.of(checkpointStr, records));
   }
 

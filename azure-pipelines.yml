@@ -36,14 +36,6 @@ parameters:
   - name: job3Modules
     type: object
     default:
-      - 'hudi-cli'
-      - 'hudi-client/hudi-client-common'
-      - 'hudi-client/hudi-flink-client'
-      - 'hudi-client/hudi-java-client'
-      - 'hudi-sync/hudi-adb-sync'
-      - 'hudi-sync/hudi-datahub-sync'
-      - 'hudi-sync/hudi-hive-sync'
-      - 'hudi-sync/hudi-sync-common'
       - 'hudi-utilities'
   - name: job4Modules
     type: object
@@ -88,6 +80,7 @@ stages:
   - stage: test
     jobs:
       - job: UT_FT_1
+        condition: false
         displayName: UT FT common & flink & UT client/spark-client
         timeoutInMinutes: '120'
         steps:
@@ -118,6 +111,7 @@ stages:
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g'
       - job: UT_FT_2
+        condition: false
         displayName: FT client/spark-client
         timeoutInMinutes: '120'
         steps:
@@ -151,15 +145,6 @@ stages:
               publishJUnitResults: false
               jdkVersionOption: '1.8'
           - task: Maven@3
-            displayName: UT clients & cli & utilities & sync
-            inputs:
-              mavenPomFile: 'pom.xml'
-              goals: 'test'
-              options: $(MVN_OPTS_TEST) -Punit-tests -pl $(JOB3_MODULES)
-              publishJUnitResults: false
-              jdkVersionOption: '1.8'
-              mavenOptions: '-Xmx4g'
-          - task: Maven@3
             displayName: FT clients & cli & utilities & sync
             inputs:
               mavenPomFile: 'pom.xml'
@@ -169,6 +154,7 @@ stages:
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g'
       - job: UT_FT_4
+        condition: false
         displayName: UT FT other modules
         timeoutInMinutes: '120'
         steps:
@@ -199,6 +185,7 @@ stages:
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g'
       - job: IT
+        condition: false
         displayName: IT modules
         timeoutInMinutes: '120'
         steps:
