@@ -266,9 +266,12 @@ public class StreamWriteOperatorCoordinator
   @Override
   public void notifyCheckpointAborted(long checkpointId) {
     if (checkpointId == this.checkpointId) {
-      executor.execute(() -> {
-        this.ckpMetadata.abortInstant(this.instant);
-      }, "abort instant %s", this.instant);
+      // write task failed we do not reuse the instant
+      if (Arrays.stream(eventBuffer).anyMatch(s -> s == null)) {
+        executor.execute(() -> {
+          this.ckpMetadata.abortInstant(this.instant);
+        }, "abort instant %s", this.instant);
+      }
     }
   }
 
