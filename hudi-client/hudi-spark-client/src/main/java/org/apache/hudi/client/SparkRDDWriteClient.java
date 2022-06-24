@@ -326,6 +326,8 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
             + config.getBasePath() + " at time " + compactionCommitTime, e);
       }
     }
+    autoCleanOnCommit();
+    autoArchiveOnCommit(table, true);
     LOG.info("Compacted successfully on commit " + compactionCommitTime);
   }
 
@@ -345,8 +347,6 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
     if (shouldComplete && compactionMetadata.getCommitMetadata().isPresent()) {
       completeTableService(TableServiceType.COMPACT, compactionMetadata.getCommitMetadata().get(), table, compactionInstantTime);
     }
-    autoCleanOnCommit();
-    autoArchiveOnCommit(table, true);
     return compactionMetadata;
   }
 
