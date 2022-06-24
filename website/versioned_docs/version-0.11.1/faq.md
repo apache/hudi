@@ -508,6 +508,57 @@ Yes. Hudi provides the ability to post a callback notification about a write com
 be notified via a Kafka/pulsar topic or plug in your own implementation to get notified. Please refer [here](https://hudi.apache.org/docs/next/writing_data/#commit-notifications)
 for details
 
+### How do I verify datasource schema reconciliation in Hudi?
+
+With Hudi you can reconcile schema, meaning you can apply target table schema on your incoming data, so if there's a missing field in your batch it'll be injected null value. You can enable schema reconciliation using [hoodie.datasource.write.reconcile.schema](https://hudi.apache.org/docs/configurations/#hoodiedatasourcewritereconcileschema) config.
+
+Example how schema reconciliation works with Spark:
+```python
+hudi_options = {
+    'hoodie.table.name': "test_recon1",
+    'hoodie.datasource.write.recordkey.field': 'uuid',
+    'hoodie.datasource.write.table.name': "test_recon1",
+    'hoodie.datasource.write.precombine.field': 'ts',
+    'hoodie.upsert.shuffle.parallelism': 2,
+    'hoodie.insert.shuffle.parallelism': 2,
+    "hoodie.datasource.write.hive_style_partitioning":"true",
+    "hoodie.datasource.write.reconcile.schema": "true",
+    "hoodie.datasource.hive_sync.jdbcurl":"thrift://localhost:9083",
+    "hoodie.datasource.hive_sync.database":"hudi",
+    "hoodie.datasource.hive_sync.table":"test_recon1",
+    "hoodie.datasource.hive_sync.enable":"true",
+    "hoodie.datasource.hive_sync.mode": "hms"
+}
+
+some_json = '{"uuid":1,"ts":1,"Url":"hudi.apache.com"}'
+df = spark.read.json(sc.parallelize([some_json]))
+
+df.write.format("hudi").mode("append").options(**hudi_options).save(base_path)
+
+spark.sql("select * from hudi.test_recon1;").show()
+
+missing_field_json = '{"uuid":2,"ts":1}'
+df = spark.read.json(sc.parallelize([missing_field_json]))
+
+df.write.format("hudi").mode("append").options(**hudi_options).save(base_path)
+
+spark.sql("select * from hudi.test_recon1;").show()
+```
+
+After first write:
+
+|_hoodie_commit_time|_hoodie_commit_seqno|_hoodie_record_key|_hoodie_partition_path|   _hoodie_file_name|              Url| ts|uuid|
+|-------------------|--------------------|------------------|----------------------|--------------------|-----------------|---|----|
+|  20220622204044318|20220622204044318...|                 1|                      |890aafc0-d897-44d...|hudi.apache.com|  1|   1|
+
+After the second write:
+
+|_hoodie_commit_time|_hoodie_commit_seqno|_hoodie_record_key|_hoodie_partition_path|   _hoodie_file_name|              Url| ts|uuid|
+|-------------------|--------------------|------------------|----------------------|--------------------|-----------------|---|----|
+|  20220622204044318|20220622204044318...|                 1|                      |890aafc0-d897-44d...|hudi.apache.com|  1|   1|
+|  20220622204208997|20220622204208997...|                 2|                      |890aafc0-d897-44d...|             null|  1|   2|
+
+
 ## Contributing to FAQ
 
 A good and usable FAQ should be community-driven and crowd source questions/thoughts across everyone.
