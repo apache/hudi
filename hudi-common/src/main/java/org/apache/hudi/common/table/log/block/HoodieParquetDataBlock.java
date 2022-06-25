@@ -18,21 +18,20 @@
 
 package org.apache.hudi.common.table.log.block;
 
-import org.apache.hudi.avro.HoodieAvroWriteSupport;
-import org.apache.hudi.common.fs.inline.InLineFSUtils;
-import org.apache.hudi.common.fs.inline.InLineFileSystem;
-import org.apache.hudi.common.util.ClosableIterator;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ParquetReaderIterator;
-import org.apache.hudi.io.storage.HoodieAvroParquetConfig;
-import org.apache.hudi.io.storage.HoodieParquetStreamWriter;
-
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.avro.HoodieAvroWriteSupport;
+import org.apache.hudi.common.fs.inline.InLineFSUtils;
+import org.apache.hudi.common.fs.inline.InLineFileSystem;
+import org.apache.hudi.common.util.ClosableIterator;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ParquetReaderIterator;
+import org.apache.hudi.io.storage.HoodieParquetConfig;
+import org.apache.hudi.io.storage.HoodieParquetStreamWriter;
 import org.apache.parquet.avro.AvroParquetReader;
 import org.apache.parquet.avro.AvroReadSupport;
 import org.apache.parquet.avro.AvroSchemaConverter;
@@ -43,7 +42,6 @@ import org.apache.parquet.hadoop.util.HadoopInputFile;
 import org.apache.parquet.io.InputFile;
 
 import javax.annotation.Nonnull;
-
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.HashMap;
@@ -97,8 +95,8 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
     HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(
         new AvroSchemaConverter().convert(writerSchema), writerSchema, Option.empty());
 
-    HoodieAvroParquetConfig avroParquetConfig =
-        new HoodieAvroParquetConfig(
+    HoodieParquetConfig<HoodieAvroWriteSupport> avroParquetConfig =
+        new HoodieParquetConfig<>(
             writeSupport,
             compressionCodecName.get(),
             ParquetWriter.DEFAULT_BLOCK_SIZE,
