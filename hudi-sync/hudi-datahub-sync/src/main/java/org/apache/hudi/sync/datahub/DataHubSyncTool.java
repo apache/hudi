@@ -61,7 +61,7 @@ public class DataHubSyncTool extends HoodieSyncTool {
     final DataHubSyncConfig.DataHubSyncConfigParams params = new DataHubSyncConfig.DataHubSyncConfigParams();
     JCommander cmd = JCommander.newBuilder().addObject(params).build();
     cmd.parse(args);
-    if (params.help) {
+    if (params.isHelp()) {
       cmd.usage();
       System.exit(0);
     }

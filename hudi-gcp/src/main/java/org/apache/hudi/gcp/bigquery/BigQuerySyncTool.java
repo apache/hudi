@@ -128,7 +128,7 @@ public class BigQuerySyncTool extends HoodieSyncTool {
     final BigQuerySyncConfig.BigQuerySyncConfigParams params = new BigQuerySyncConfig.BigQuerySyncConfigParams();
     JCommander cmd = JCommander.newBuilder().addObject(params).build();
     cmd.parse(args);
-    if (params.help) {
+    if (params.isHelp()) {
       cmd.usage();
       System.exit(0);
     }

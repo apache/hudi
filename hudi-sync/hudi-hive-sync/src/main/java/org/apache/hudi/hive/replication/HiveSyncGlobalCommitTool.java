@@ -106,7 +106,7 @@ public class HiveSyncGlobalCommitTool implements HiveSyncGlobalCommit, AutoClose
     final HiveSyncGlobalCommitParams params = new HiveSyncGlobalCommitParams();
     JCommander cmd = JCommander.newBuilder().addObject(params).build();
     cmd.parse(args);
-    if (params.help) {
+    if (params.isHelp()) {
       cmd.usage();
       System.exit(0);
     }

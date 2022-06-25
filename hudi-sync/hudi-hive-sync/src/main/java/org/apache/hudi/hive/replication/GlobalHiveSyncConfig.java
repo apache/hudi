@@ -47,6 +47,10 @@ public class GlobalHiveSyncConfig extends HiveSyncConfig {
     @Parameter(names = {"--replicated-timestamp"}, description = "Add globally replicated timestamp to enable consistent reads across clusters")
     public String globallyReplicatedTimeStamp;
 
+    public boolean isHelp() {
+      return hiveSyncConfigParams.isHelp();
+    }
+
     public TypedProperties toProps() {
       final TypedProperties props = hiveSyncConfigParams.toProps();
       props.setPropertyIfNonNull(META_SYNC_GLOBAL_REPLICATE_TIMESTAMP.key(), globallyReplicatedTimeStamp);

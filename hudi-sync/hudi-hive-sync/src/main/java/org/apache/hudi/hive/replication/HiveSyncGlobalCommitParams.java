@@ -62,8 +62,9 @@ public class HiveSyncGlobalCommitParams {
   @ParametersDelegate()
   public final GlobalHiveSyncConfig.GlobalHiveSyncConfigParams globalHiveSyncConfigParams = new GlobalHiveSyncConfig.GlobalHiveSyncConfigParams();
 
-  @Parameter(names = {"--help", "-h"}, help = true)
-  public boolean help = false;
+  public boolean isHelp() {
+    return globalHiveSyncConfigParams.isHelp();
+  }
 
   public Properties loadedProps = new Properties();
 

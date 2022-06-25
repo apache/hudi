@@ -174,8 +174,9 @@ public class AdbSyncConfig extends HiveSyncConfig {
     @Parameter(names = {"--drop-table-before-creation"}, description = "Whether drop table before creation")
     public Boolean dropTableBeforeCreation = false;
 
-    @Parameter(names = {"--help", "-h"}, help = true)
-    public Boolean help = false;
+    public boolean isHelp() {
+      return hiveSyncConfigParams.isHelp();
+    }
 
     public TypedProperties toProps() {
       final TypedProperties props = hiveSyncConfigParams.toProps();

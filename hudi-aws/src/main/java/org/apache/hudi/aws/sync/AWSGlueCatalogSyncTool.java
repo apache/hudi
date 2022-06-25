@@ -52,7 +52,7 @@ public class AWSGlueCatalogSyncTool extends HiveSyncTool {
     final HiveSyncConfig.HiveSyncConfigParams params = new HiveSyncConfig.HiveSyncConfigParams();
     JCommander cmd = JCommander.newBuilder().addObject(params).build();
     cmd.parse(args);
-    if (params.help) {
+    if (params.isHelp()) {
       cmd.usage();
       System.exit(0);
     }

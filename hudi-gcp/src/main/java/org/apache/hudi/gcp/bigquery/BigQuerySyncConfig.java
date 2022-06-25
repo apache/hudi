@@ -115,8 +115,10 @@ public class BigQuerySyncConfig extends HoodieSyncConfig implements Serializable
     @Parameter(names = {"--assume-date-partitioning"}, description = "Assume standard yyyy/mm/dd partitioning, this"
         + " exists to support backward compatibility. If you use hoodie 0.3.x, do not set this parameter")
     public boolean assumeDatePartitioning = false;
-    @Parameter(names = {"--help", "-h"}, help = true)
-    public boolean help = false;
+
+    public boolean isHelp() {
+      return hoodieSyncConfigParams.isHelp();
+    }
 
     public Properties toProps() {
       final Properties props = hoodieSyncConfigParams.toProps();

@@ -54,8 +54,6 @@ import static org.apache.hudi.hive.HiveSyncConfigHolder.METASTORE_URIS;
  */
 public class HiveSyncConfig extends HoodieSyncConfig {
 
-  private static final String HADOOP_CONF_METASTORE_URIS = HiveConf.ConfVars.METASTOREURIS.varname;
-
   public static String getBucketSpec(String bucketCols, int bucketNum) {
     return "CLUSTERED BY (" + bucketCols + " INTO " + bucketNum + " BUCKETS";
   }
@@ -134,8 +132,9 @@ public class HiveSyncConfig extends HoodieSyncConfig {
     @Parameter(names = {"--with-operation-field"}, description = "Whether to include the '_hoodie_operation' field in the metadata fields")
     public Boolean withOperationField; // TODO remove this as it's not used
 
-    @Parameter(names = {"--help", "-h"}, help = true)
-    public Boolean help = false;
+    public boolean isHelp() {
+      return hoodieSyncConfigParams.isHelp();
+    }
 
     public TypedProperties toProps() {
       final TypedProperties props = hoodieSyncConfigParams.toProps();

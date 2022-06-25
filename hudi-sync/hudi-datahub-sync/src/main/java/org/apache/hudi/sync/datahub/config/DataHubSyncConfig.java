@@ -87,8 +87,9 @@ public class DataHubSyncConfig extends HoodieSyncConfig {
     @Parameter(names = {"--emitter-supplier-class"}, description = "Pluggable class to supply a DataHub REST emitter to connect to the DataHub instance. This overwrites other emitter configs.")
     public String emitterSupplierClass;
 
-    @Parameter(names = {"--help", "-h"}, help = true)
-    public Boolean help = false;
+    public boolean isHelp() {
+      return hoodieSyncConfigParams.isHelp();
+    }
 
     public Properties toProps() {
       final TypedProperties props = hoodieSyncConfigParams.toProps();

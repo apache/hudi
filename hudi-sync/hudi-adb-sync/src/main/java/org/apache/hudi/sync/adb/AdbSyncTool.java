@@ -291,7 +291,7 @@ public class AdbSyncTool extends HoodieSyncTool {
     final AdbSyncConfig.AdbSyncConfigParams params = new AdbSyncConfig.AdbSyncConfigParams();
     JCommander cmd = JCommander.newBuilder().addObject(params).build();
     cmd.parse(args);
-    if (params.help) {
+    if (params.isHelp()) {
       cmd.usage();
       System.exit(0);
     }

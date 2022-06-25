@@ -201,6 +201,10 @@ public class HoodieSyncConfig extends HoodieConfig {
     @Parameter(names = {"--help", "-h"}, help = true)
     public boolean help = false;
 
+    public boolean isHelp() {
+      return help;
+    }
+
     public TypedProperties toProps() {
       final TypedProperties props = new TypedProperties();
       props.setPropertyIfNonNull(META_SYNC_BASE_PATH.key(), basePath);
