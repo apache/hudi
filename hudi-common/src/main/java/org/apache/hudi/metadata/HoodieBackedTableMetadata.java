@@ -413,7 +413,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       // Open the log record scanner using the log files from the latest file slice
       List<HoodieLogFile> logFiles = slice.getLogFiles().collect(Collectors.toList());
       Pair<HoodieMetadataMergedLogRecordReader, Long> logRecordScannerOpenTimePair =
-          getLogRecordScanner(logFiles, partitionName);
+          getLogRecordScanner(logFiles, partitionName, Option.empty());
       HoodieMetadataMergedLogRecordReader logRecordScanner = logRecordScannerOpenTimePair.getKey();
       final long logScannerOpenMs = logRecordScannerOpenTimePair.getValue();
 
@@ -463,11 +463,6 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     // SOLO_COMMIT_TIMESTAMP is used during bootstrap so it is a valid timestamp
     validInstantTimestamps.add(SOLO_COMMIT_TIMESTAMP);
     return validInstantTimestamps;
-  }
-
-  public Pair<HoodieMetadataMergedLogRecordReader, Long> getLogRecordScanner(List<HoodieLogFile> logFiles,
-                                                                             String partitionName) {
-    return getLogRecordScanner(logFiles, partitionName, Option.empty());
   }
 
   public Pair<HoodieMetadataMergedLogRecordReader, Long> getLogRecordScanner(List<HoodieLogFile> logFiles,
