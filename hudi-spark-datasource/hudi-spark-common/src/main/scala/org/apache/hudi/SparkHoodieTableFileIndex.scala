@@ -79,7 +79,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
     AvroConversionUtils.convertAvroSchemaToStructType(schemaUtil.getTableAvroSchema)
   })
 
-  private lazy val sparkParsePartitionUtil = sparkAdapter.createSparkParsePartitionUtil(spark.sessionState.conf)
+  private lazy val sparkParsePartitionUtil = sparkAdapter.getSparkParsePartitionUtil
 
   /**
    * Get the partition schema from the hoodie.properties.
@@ -271,7 +271,8 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
       typeInference = false,
       Set(basePath),
       partitionDataTypes,
-      DateTimeUtils.getTimeZone(timeZoneId)
+      DateTimeUtils.getTimeZone(timeZoneId),
+      validatePartitionValues = spark.sessionState.conf.validatePartitionColumns
     )
       .toSeq(partitionSchema)
   }
