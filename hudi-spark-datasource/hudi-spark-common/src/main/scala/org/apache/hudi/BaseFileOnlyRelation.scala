@@ -166,9 +166,7 @@ class BaseFileOnlyRelation(sqlContext: SQLContext,
       DataSource.apply(
         sparkSession = sparkSession,
         paths = extraReadPaths,
-        // Here we should specify the schema to the latest commit schema since
-        // the table schema evolution.
-        userSpecifiedSchema = userSchema.orElse(Some(tableStructSchema)),
+        userSpecifiedSchema = userSchema,
         className = formatClassName,
         // Since we're reading the table as just collection of files we have to make sure
         // we only read the latest version of every Hudi's file-group, which might be compacted, clustered, etc.
@@ -177,7 +175,8 @@ class BaseFileOnlyRelation(sqlContext: SQLContext,
         // We rely on [[HoodieROTablePathFilter]], to do proper filtering to assure that
         options = optParams ++ Map(
           "mapreduce.input.pathFilter.class" -> classOf[HoodieROTablePathFilter].getName
-        )
+        ),
+        partitionColumns = partitionColumns
       )
         .resolveRelation()
         .asInstanceOf[HadoopFsRelation]
