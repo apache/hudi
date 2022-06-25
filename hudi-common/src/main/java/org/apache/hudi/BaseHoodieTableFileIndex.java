@@ -131,7 +131,7 @@ public abstract class   BaseHoodieTableFileIndex {
     this.shouldValidateInstant = shouldValidateInstant;
 
     this.tableType = metaClient.getTableType();
-    this.basePath = metaClient.getBasePath();
+    this.basePath = metaClient.getBasePathV2();
 
     this.metaClient = metaClient;
     this.engineContext = engineContext;
@@ -174,7 +174,7 @@ public abstract class   BaseHoodieTableFileIndex {
 
   protected List<PartitionPath> getAllQueryPartitionPaths() {
     List<String> queryRelativePartitionPaths = queryPaths.stream()
-        .map(path -> FSUtils.getRelativePartitionPath(new Path(basePath), path))
+        .map(path -> FSUtils.getRelativePartitionPath(basePath, path))
         .collect(Collectors.toList());
 
     // Load all the partition path from the basePath, and filter by the query partition path.
@@ -353,7 +353,7 @@ public abstract class   BaseHoodieTableFileIndex {
       return path;
     }
 
-    Path fullPartitionPath(String basePath) {
+    Path fullPartitionPath(Path basePath) {
       if (!path.isEmpty()) {
         return new CachingPath(basePath, path);
       }

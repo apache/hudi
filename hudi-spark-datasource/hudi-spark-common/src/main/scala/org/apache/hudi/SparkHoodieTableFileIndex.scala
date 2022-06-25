@@ -269,7 +269,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
     sparkParsePartitionUtil.parsePartition(
       partitionPath,
       typeInference = false,
-      Set(new Path(basePath)),
+      Set(basePath),
       partitionDataTypes,
       DateTimeUtils.getTimeZone(timeZoneId)
     )
