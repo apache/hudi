@@ -344,7 +344,8 @@ public class DataSourceUtils {
    * @param schema schema of the dataset being written
    */
   public static void tryOverrideParquetWriteLegacyFormatProperty(Map<String, String> properties, StructType schema) {
-    if (DataTypeUtils.hasSmallPrecisionDecimalType(schema)) {
+    if (DataTypeUtils.hasSmallPrecisionDecimalType(schema)
+        && properties.get(HoodieStorageConfig.PARQUET_WRITE_LEGACY_FORMAT_ENABLED.key()) == null) {
       // ParquetWriteSupport writes DecimalType to parquet as INT32/INT64 when the scale of decimalType
       // is less than {@code Decimal.MAX_LONG_DIGITS}, but {@code AvroParquetReader} which is used by
       // {@code HoodieParquetReader} does not support DecimalType encoded as INT32/INT64 as.
@@ -356,10 +357,8 @@ public class DataSourceUtils {
       //
       // If both of these conditions are true, than we override the default value of {@code
       // HoodieStorageConfig.PARQUET_WRITE_LEGACY_FORMAT_ENABLED} and set it to "true"
-      if (properties.get(HoodieStorageConfig.PARQUET_WRITE_LEGACY_FORMAT_ENABLED.key()) == null) {
-        LOG.warn("Small Decimal Type found in the persisted schema, reverting default value of 'hoodie.parquet.writelegacyformat.enabled' to true");
-        properties.put(HoodieStorageConfig.PARQUET_WRITE_LEGACY_FORMAT_ENABLED.key(), "true");
-      }
+      LOG.warn("Small Decimal Type found in the persisted schema, reverting default value of 'hoodie.parquet.writelegacyformat.enabled' to true");
+      properties.put(HoodieStorageConfig.PARQUET_WRITE_LEGACY_FORMAT_ENABLED.key(), "true");
     }
   }
 }
