@@ -41,13 +41,14 @@ import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_PASS;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_URL;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_USER;
 import static org.apache.hudi.hive.util.HiveSchemaUtil.HIVE_ESCAPE_CHARACTER;
-import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
 
 /**
  * This class offers DDL executor backed by the jdbc This class preserves the old useJDBC = true way of doing things.
  */
 public class JDBCExecutor extends QueryBasedDDLExecutor {
+
   private static final Logger LOG = LogManager.getLogger(QueryBasedDDLExecutor.class);
+
   private Connection connection;
 
   public JDBCExecutor(HiveSyncConfig config) {
@@ -128,7 +129,7 @@ public class JDBCExecutor extends QueryBasedDDLExecutor {
     ResultSet result = null;
     try {
       DatabaseMetaData databaseMetaData = connection.getMetaData();
-      result = databaseMetaData.getColumns(null, config.getString(META_SYNC_DATABASE_NAME), tableName, null);
+      result = databaseMetaData.getColumns(null, databaseName, tableName, null);
       while (result.next()) {
         String columnName = result.getString(4);
         String columnType = result.getString(6);
@@ -188,7 +189,7 @@ public class JDBCExecutor extends QueryBasedDDLExecutor {
 
   public StringBuilder getAlterTableDropPrefix(String tableName) {
     StringBuilder alterSQL = new StringBuilder("ALTER TABLE ");
-    alterSQL.append(HIVE_ESCAPE_CHARACTER).append(config.getString(META_SYNC_DATABASE_NAME))
+    alterSQL.append(HIVE_ESCAPE_CHARACTER).append(databaseName)
         .append(HIVE_ESCAPE_CHARACTER).append(".").append(HIVE_ESCAPE_CHARACTER)
         .append(tableName).append(HIVE_ESCAPE_CHARACTER).append(" DROP IF EXISTS ");
     return alterSQL;

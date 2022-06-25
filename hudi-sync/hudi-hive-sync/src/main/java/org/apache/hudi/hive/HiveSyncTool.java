@@ -63,6 +63,7 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NA
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_FIELDS;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_SPARK_VERSION;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
+import static org.apache.hudi.sync.common.util.TableUtils.tableId;
 
 /**
  * Tool to sync a hoodie HDFS table with a hive metastore table. Either use it as a api
@@ -79,15 +80,18 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
   public static final String SUFFIX_READ_OPTIMIZED_TABLE = "_ro";
 
   protected final HiveSyncConfig config;
+  protected final String databaseName;
+  protected final String tableName;
   protected HoodieSyncClient syncClient;
-  protected String snapshotTableName = null;
-  protected Option<String> roTableName = null;
+  protected String snapshotTableName;
+  protected Option<String> roTableName;
 
   public HiveSyncTool(Properties props, Configuration hadoopConf) {
     super(props, hadoopConf);
-    // HiveConf needs to load fs conf to allow instantiation via AWSGlueClientFactory
     HiveSyncConfig config = new HiveSyncConfig(props, hadoopConf);
     this.config = config;
+    this.databaseName = config.getStringOrDefault(META_SYNC_DATABASE_NAME);
+    this.tableName = config.getString(META_SYNC_TABLE_NAME);
     initSyncClient(config);
     initTableNameVars(config);
   }
@@ -108,14 +112,14 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
     if (syncClient != null) {
       switch (syncClient.getTableType()) {
         case COPY_ON_WRITE:
-          this.snapshotTableName = config.getString(META_SYNC_TABLE_NAME);
+          this.snapshotTableName = tableName;
           this.roTableName = Option.empty();
           break;
         case MERGE_ON_READ:
-          this.snapshotTableName = config.getString(META_SYNC_TABLE_NAME) + SUFFIX_SNAPSHOT_TABLE;
+          this.snapshotTableName = tableName + SUFFIX_SNAPSHOT_TABLE;
           this.roTableName = config.getBoolean(HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE)
-              ? Option.of(config.getString(META_SYNC_TABLE_NAME))
-              : Option.of(config.getString(META_SYNC_TABLE_NAME) + SUFFIX_READ_OPTIMIZED_TABLE);
+              ? Option.of(tableName)
+              : Option.of(tableName + SUFFIX_READ_OPTIMIZED_TABLE);
           break;
         default:
           LOG.error("Unknown table type " + syncClient.getTableType());
@@ -129,14 +133,14 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
     try {
       if (syncClient != null) {
         LOG.info("Syncing target hoodie table with hive table("
-            + config.getString(META_SYNC_TABLE_NAME) + "). Hive metastore URL :"
+            + tableId(databaseName, tableName) + "). Hive metastore URL :"
             + config.getString(METASTORE_URIS) + ", basePath :"
             + config.getString(META_SYNC_BASE_PATH));
 
         doSync();
       }
     } catch (RuntimeException re) {
-      throw new HoodieException("Got runtime exception when hive syncing " + config.getString(META_SYNC_TABLE_NAME), re);
+      throw new HoodieException("Got runtime exception when hive syncing " + tableName, re);
     } finally {
       close();
     }
@@ -177,17 +181,17 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
     // check if the database exists else create it
     if (config.getBoolean(HIVE_AUTO_CREATE_DATABASE)) {
       try {
-        if (!syncClient.databaseExists(config.getString(META_SYNC_DATABASE_NAME))) {
-          syncClient.createDatabase(config.getString(META_SYNC_DATABASE_NAME));
+        if (!syncClient.databaseExists(databaseName)) {
+          syncClient.createDatabase(databaseName);
         }
       } catch (Exception e) {
         // this is harmless since table creation will fail anyways, creation of DB is needed for in-memory testing
         LOG.warn("Unable to create database", e);
       }
     } else {
-      if (!syncClient.databaseExists(config.getString(META_SYNC_DATABASE_NAME))) {
-        LOG.error("Hive database does not exist " + config.getString(META_SYNC_DATABASE_NAME));
-        throw new HoodieHiveSyncException("hive database does not exist " + config.getString(META_SYNC_DATABASE_NAME));
+      if (!syncClient.databaseExists(databaseName)) {
+        LOG.error("Hive database does not exist " + databaseName);
+        throw new HoodieHiveSyncException("hive database does not exist " + databaseName);
       }
     }
 

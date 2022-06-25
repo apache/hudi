@@ -67,6 +67,7 @@ public class HiveSyncConfig extends HoodieSyncConfig {
   public HiveSyncConfig(Properties props, Configuration hadoopConf) {
     super(props, hadoopConf);
     HiveConf hiveConf = new HiveConf(hadoopConf, HiveConf.class);
+    // HiveConf needs to load fs conf to allow instantiation via AWSGlueClientFactory
     hiveConf.addResource(getHadoopFileSystem().getConf());
     setHadoopConf(hiveConf);
   }

@@ -28,7 +28,6 @@ import org.apache.hudi.hive.HoodieHiveSyncException;
 import org.apache.hudi.hive.util.HiveSchemaUtil;
 import org.apache.hudi.sync.common.model.PartitionValueExtractor;
 
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -52,14 +51,16 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_F
  * This class adds functionality for all query based DDLExecutors. The classes extending it only have to provide runSQL(sql) functions.
  */
 public abstract class QueryBasedDDLExecutor implements DDLExecutor {
+
   private static final Logger LOG = LogManager.getLogger(QueryBasedDDLExecutor.class);
+
   protected final HiveSyncConfig config;
-  public final PartitionValueExtractor partitionValueExtractor;
-  private final FileSystem fs;
+  protected final String databaseName;
+  protected final PartitionValueExtractor partitionValueExtractor;
 
   public QueryBasedDDLExecutor(HiveSyncConfig config) {
     this.config = config;
-    this.fs = config.getHadoopFileSystem();
+    this.databaseName = config.getStringOrDefault(META_SYNC_DATABASE_NAME);
     try {
       this.partitionValueExtractor =
           (PartitionValueExtractor) Class.forName(config.getStringOrDefault(META_SYNC_PARTITION_EXTRACTOR_CLASS)).newInstance();
@@ -101,7 +102,7 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
       // Cascade clause should not be present for non-partitioned tables
       String cascadeClause = config.getSplitStrings(HIVE_SUPPORT_TIMESTAMP_TYPE).size() > 0 ? " cascade" : "";
       StringBuilder sqlBuilder = new StringBuilder("ALTER TABLE ").append(HIVE_ESCAPE_CHARACTER)
-          .append(config.getString(META_SYNC_DATABASE_NAME)).append(HIVE_ESCAPE_CHARACTER).append(".")
+          .append(databaseName).append(HIVE_ESCAPE_CHARACTER).append(".")
           .append(HIVE_ESCAPE_CHARACTER).append(tableName)
           .append(HIVE_ESCAPE_CHARACTER).append(" REPLACE COLUMNS(")
           .append(newSchemaStr).append(" )").append(cascadeClause);
@@ -145,7 +146,7 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
       String comment = field.getValue().getRight();
       comment = comment.replace("'","");
       sql.append("ALTER TABLE ").append(HIVE_ESCAPE_CHARACTER)
-              .append(config.getString(META_SYNC_DATABASE_NAME)).append(HIVE_ESCAPE_CHARACTER).append(".")
+              .append(databaseName).append(HIVE_ESCAPE_CHARACTER).append(".")
               .append(HIVE_ESCAPE_CHARACTER).append(tableName)
               .append(HIVE_ESCAPE_CHARACTER)
               .append(" CHANGE COLUMN `").append(name).append("` `").append(name)
@@ -180,7 +181,7 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
 
   private StringBuilder getAlterTablePrefix(String tableName) {
     StringBuilder alterSQL = new StringBuilder("ALTER TABLE ");
-    alterSQL.append(HIVE_ESCAPE_CHARACTER).append(config.getString(META_SYNC_DATABASE_NAME))
+    alterSQL.append(HIVE_ESCAPE_CHARACTER).append(databaseName)
         .append(HIVE_ESCAPE_CHARACTER).append(".").append(HIVE_ESCAPE_CHARACTER)
         .append(tableName).append(HIVE_ESCAPE_CHARACTER).append(" ADD IF NOT EXISTS ");
     return alterSQL;
@@ -207,7 +208,7 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
   private List<String> constructChangePartitions(String tableName, List<String> partitions) {
     List<String> changePartitions = new ArrayList<>();
     // Hive 2.x doesn't like db.table name for operations, hence we need to change to using the database first
-    String useDatabase = "USE " + HIVE_ESCAPE_CHARACTER + config.getString(META_SYNC_DATABASE_NAME) + HIVE_ESCAPE_CHARACTER;
+    String useDatabase = "USE " + HIVE_ESCAPE_CHARACTER + databaseName + HIVE_ESCAPE_CHARACTER;
     changePartitions.add(useDatabase);
     String alterTable = "ALTER TABLE " + HIVE_ESCAPE_CHARACTER + tableName + HIVE_ESCAPE_CHARACTER;
     for (String partition : partitions) {
@@ -215,7 +216,7 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
       Path partitionPath = FSUtils.getPartitionPath(config.getString(META_SYNC_BASE_PATH), partition);
       String partitionScheme = partitionPath.toUri().getScheme();
       String fullPartitionPath = StorageSchemes.HDFS.getScheme().equals(partitionScheme)
-          ? FSUtils.getDFSFullPartitionPath(fs, partitionPath) : partitionPath.toString();
+          ? FSUtils.getDFSFullPartitionPath(config.getHadoopFileSystem(), partitionPath) : partitionPath.toString();
       String changePartition =
           alterTable + " PARTITION (" + partitionClause + ") SET LOCATION '" + fullPartitionPath + "'";
       changePartitions.add(changePartition);

@@ -67,7 +67,7 @@ public class HivePartitionUtil {
     Partition newPartition;
     try {
       List<String> partitionValues = partitionValueExtractor.extractPartitionValuesInPath(partitionPath);
-      newPartition = client.getPartition(config.getString(META_SYNC_DATABASE_NAME), tableName, partitionValues);
+      newPartition = client.getPartition(config.getStringOrDefault(META_SYNC_DATABASE_NAME), tableName, partitionValues);
     } catch (NoSuchObjectException ignored) {
       newPartition = null;
     } catch (TException e) {

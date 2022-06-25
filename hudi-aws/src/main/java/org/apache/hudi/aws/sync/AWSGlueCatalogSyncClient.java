@@ -90,7 +90,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
   public AWSGlueCatalogSyncClient(HiveSyncConfig config) {
     super(config);
     this.awsGlue = AWSGlueClientBuilder.standard().build();
-    this.databaseName = config.getString(META_SYNC_DATABASE_NAME);
+    this.databaseName = config.getStringOrDefault(META_SYNC_DATABASE_NAME);
   }
 
   @Override
