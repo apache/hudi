@@ -39,7 +39,7 @@ public class HiveSyncGlobalCommitTool implements HiveSyncGlobalCommit, AutoClose
   private final HiveSyncGlobalCommitParams params;
   private final List<ReplicationStateSync> replicationStateSyncList;
 
-  private ReplicationStateSync getReplicatedState(boolean forRemote) {
+  ReplicationStateSync getReplicatedState(boolean forRemote) {
     HiveConf hiveConf = new HiveConf();
     // we probably just need to set the metastore URIs
     // TODO: figure out how to integrate this in production

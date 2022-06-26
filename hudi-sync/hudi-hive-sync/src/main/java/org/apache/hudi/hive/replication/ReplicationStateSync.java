@@ -27,7 +27,7 @@ import java.util.Properties;
 
 public class ReplicationStateSync implements AutoCloseable {
 
-  private GlobalHiveSyncTool globalHiveSyncTool;
+  protected GlobalHiveSyncTool globalHiveSyncTool;
   private Map<String, Option<String>> replicatedTimeStampMap;
   private Map<String, Option<String>> oldReplicatedTimeStampMap;
   private final String clusterId;
