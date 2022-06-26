@@ -51,10 +51,6 @@ class IntervalTreeBasedGlobalIndexFileFilter implements IndexFileFilter {
       allIndexFiles.add(file);
     }));
 
-    // Note that the interval tree implementation doesn't have auto-balancing to ensure logN search time.
-    // So, we are shuffling the input here hoping the tree will not have any skewness. If not, the tree could be skewed
-    // which could result in N search time instead of NlogN.
-    Collections.shuffle(allIndexFiles);
     allIndexFiles.forEach(indexFile -> {
       if (indexFile.hasKeyRanges()) {
         indexLookUpTree

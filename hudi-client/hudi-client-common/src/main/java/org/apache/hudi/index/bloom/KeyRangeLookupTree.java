@@ -18,93 +18,90 @@
 
 package org.apache.hudi.index.bloom;
 
-import java.io.Serializable;
+import org.apache.hudi.common.util.rbtree.RedBlackTree;
+
 import java.util.HashSet;
 import java.util.Set;
 
 /**
- * Look up tree implemented as interval trees to search for any given key in (N logN) time complexity.
+ * Look up tree implemented as red-black trees to search for any given key in (N logN) time complexity.
  */
-class KeyRangeLookupTree implements Serializable {
-
-  private KeyRangeNode root;
+class KeyRangeLookupTree extends RedBlackTree<KeyRangeNode, RecordKeyRange> {
 
   /**
-   * @return the root of the tree. Could be {@code null}
+   * Flag for whether sub-tree min-max metrics need to be recalculated. When inserting or deleting nodes,
+   * we need to recalculated.
    */
-  public KeyRangeNode getRoot() {
-    return root;
+  private volatile boolean needReloadMetrics = false;
+
+  @Override
+  public void insert(KeyRangeNode newNode) {
+    needReloadMetrics = true;
+    super.insert(newNode);
+  }
+
+  @Override
+  public void remove(RecordKeyRange key) {
+    needReloadMetrics = true;
+    super.remove(key);
   }
 
   /**
-   * Inserts a new {@link KeyRangeNode} to this look up tree.
-   *
-   * @param newNode the new {@link KeyRangeNode} to be inserted
-   */
-  void insert(KeyRangeNode newNode) {
-    root = insert(getRoot(), newNode);
-  }
-
-  /**
-   * Inserts a new {@link KeyRangeNode} to this look up tree.
-   *
-   * If no root exists, make {@code newNode} as the root and return the new root.
-   *
    * If current root and newNode matches with min record key and max record key, merge two nodes. In other words, add
-   * files from {@code newNode} to current root. Return current root.
-   *
-   * If current root is < newNode if current root has no right sub tree update current root's right sub tree max and min
-   * set newNode as right sub tree else update root's right sub tree min and max with newNode's min and max record key
-   * as applicable recursively call insert() with root's right subtree as new root
-   *
-   * else // current root is >= newNode if current root has no left sub tree update current root's left sub tree max and
-   * min set newNode as left sub tree else update root's left sub tree min and max with newNode's min and max record key
-   * as applicable recursively call insert() with root's left subtree as new root
-   *
-   * @param root refers to the current root of the look up tree
-   * @param newNode newNode the new {@link KeyRangeNode} to be inserted
+   * files from {@code newNode}.
+   * @param oldNode previously inserted node
+   * @param newNode newly inserted same node
    */
-  private KeyRangeNode insert(KeyRangeNode root, KeyRangeNode newNode) {
-    if (root == null) {
-      root = newNode;
-      return root;
-    }
+  @Override
+  protected void processWhenInsertSame(KeyRangeNode oldNode, KeyRangeNode newNode) {
+    oldNode.addFiles(newNode.getFileNameList());
+  }
 
-    if (root.compareTo(newNode) == 0) {
-      root.addFiles(newNode.getFileNameList());
-      return root;
+  /**
+   * Traverse the tree to calculate sub-tree min-max metrics.
+   */
+  private void calculateSubTreeMinMax(KeyRangeNode node) {
+    if(node == null){
+      return;
     }
+    if (node.getLeft() != null) {
+      calculateSubTreeMinMax(node.getLeft());
+      node.setLeftSubTreeMin(minRecord(node.getLeft()));
+      node.setLeftSubTreeMax(maxRecord(node.getLeft()));
+    }
+    if(node.getRight() != null){
+      calculateSubTreeMinMax(node.getRight());
+      node.setRightSubTreeMin(minRecord(node.getRight()));
+      node.setRightSubTreeMax(maxRecord(node.getRight()));
+    }
+  }
 
-    if (root.compareTo(newNode) < 0) {
-      if (root.getRight() == null) {
-        root.setRightSubTreeMax(newNode.getMaxRecordKey());
-        root.setRightSubTreeMin(newNode.getMinRecordKey());
-        root.setRight(newNode);
-      } else {
-        if (root.getRightSubTreeMax().compareTo(newNode.getMaxRecordKey()) < 0) {
-          root.setRightSubTreeMax(newNode.getMaxRecordKey());
-        }
-        if (root.getRightSubTreeMin().compareTo(newNode.getMinRecordKey()) > 0) {
-          root.setRightSubTreeMin(newNode.getMinRecordKey());
-        }
-        insert(root.getRight(), newNode);
-      }
-    } else {
-      if (root.getLeft() == null) {
-        root.setLeftSubTreeMax(newNode.getMaxRecordKey());
-        root.setLeftSubTreeMin(newNode.getMinRecordKey());
-        root.setLeft(newNode);
-      } else {
-        if (root.getLeftSubTreeMax().compareTo(newNode.getMaxRecordKey()) < 0) {
-          root.setLeftSubTreeMax(newNode.getMaxRecordKey());
-        }
-        if (root.getLeftSubTreeMin().compareTo(newNode.getMinRecordKey()) > 0) {
-          root.setLeftSubTreeMin(newNode.getMinRecordKey());
-        }
-        insert(root.getLeft(), newNode);
-      }
+  /**
+   * Get the minimum value among the node and its child nodes.
+   */
+  private String minRecord(KeyRangeNode node) {
+    String min = node.getKey().getMinRecordKey();
+    if (node.getLeft() != null && node.getLeftSubTreeMin().compareTo(min) < 0) {
+      min = node.getLeftSubTreeMin();
     }
-    return root;
+    if (node.getRight() != null && node.getRightSubTreeMin().compareTo(min) < 0) {
+      min = node.getRightSubTreeMin();
+    }
+    return min;
+  }
+
+  /**
+   * Get the maximum value among the node and its child nodes.
+   */
+  private String maxRecord(KeyRangeNode node) {
+    String max = node.getKey().getMaxRecordKey();
+    if (node.getLeft() != null && node.getLeftSubTreeMax().compareTo(max) > 0) {
+      max = node.getLeftSubTreeMax();
+    }
+    if (node.getRight() != null && node.getRightSubTreeMax().compareTo(max) > 0) {
+      max = node.getRightSubTreeMax();
+    }
+    return max;
   }
 
   /**
@@ -114,6 +111,9 @@ class KeyRangeLookupTree implements Serializable {
    * @return the {@link Set} of matching index file names
    */
   Set<String> getMatchingIndexFiles(String lookupKey) {
+    if(needReloadMetrics){
+      calculateSubTreeMinMax(getRoot());
+    }
     Set<String> matchingFileNameSet = new HashSet<>();
     getMatchingIndexFiles(getRoot(), lookupKey, matchingFileNameSet);
     return matchingFileNameSet;
@@ -122,7 +122,7 @@ class KeyRangeLookupTree implements Serializable {
   /**
    * Fetches all the matching index files where the key could possibly be present.
    *
-   * @param root refers to the current root of the look up tree
+   * @param root      refers to the current root of the look up tree
    * @param lookupKey the key to be searched for
    */
   private void getMatchingIndexFiles(KeyRangeNode root, String lookupKey, Set<String> matchingFileNameSet) {

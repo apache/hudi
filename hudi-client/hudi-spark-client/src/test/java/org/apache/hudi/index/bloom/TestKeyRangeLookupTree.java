@@ -18,6 +18,8 @@
 
 package org.apache.hudi.index.bloom;
 
+import org.apache.hudi.common.testutils.RedBlackTreeTestUtil;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
@@ -28,6 +30,7 @@ import java.util.Random;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Tests {@link KeyRangeLookupTree}.
@@ -35,6 +38,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 public class TestKeyRangeLookupTree {
 
   private static final Random RANDOM = new Random();
+  private final int padLength = 5;
   private KeyRangeLookupTree keyRangeLookupTree;
   private Map<String, HashSet<String>> expectedMatches;
 
@@ -51,6 +55,7 @@ public class TestKeyRangeLookupTree {
     KeyRangeNode toInsert = new KeyRangeNode(Long.toString(300), Long.toString(450), UUID.randomUUID().toString());
     updateExpectedMatchesToTest(toInsert);
     keyRangeLookupTree.insert(toInsert);
+    checkRedBlackTree();
     testRangeOfInputs(290, 305);
     testRangeOfInputs(390, 400);
     testRangeOfInputs(445, 455);
@@ -73,6 +78,7 @@ public class TestKeyRangeLookupTree {
       updateExpectedMatchesToTest(toInsert);
       keyRangeLookupTree.insert(toInsert);
     }
+    checkRedBlackTree();
     testRangeOfInputs(110, endKey + 5);
   }
 
@@ -89,6 +95,7 @@ public class TestKeyRangeLookupTree {
       updateExpectedMatchesToTest(toInsert);
       keyRangeLookupTree.insert(toInsert);
     }
+    checkRedBlackTree();
     testRangeOfInputs(1050, 1100);
     testRangeOfInputs(1500, 1600);
     testRangeOfInputs(1990, 2100);
@@ -137,17 +144,36 @@ public class TestKeyRangeLookupTree {
     updateExpectedMatchesToTest(toInsert);
     keyRangeLookupTree.insert(toInsert);
     testRangeOfInputs(110, 999);
+    checkRedBlackTree();
+  }
+
+  /**
+   * Tests for randomly generated entries in look up tree.
+   */
+  @Test
+  public void testRandomFileGroupLookUp() {
+    for (int i = 0; i < 100; i++) {
+      String index1 = paddedNumber(RANDOM.nextInt(1000));
+      String index2 = paddedNumber(RANDOM.nextInt(1000));
+      String start = index1.compareTo(index2) < 0 ? index1 : index2;
+      String end = index1.compareTo(index2) > 0 ? index1 : index2;
+      KeyRangeNode toInsert = new KeyRangeNode(start, end, UUID.randomUUID().toString());
+      updateExpectedMatchesToTest(toInsert);
+      keyRangeLookupTree.insert(toInsert);
+    }
+    checkRedBlackTree();
+    testRangeOfInputs(0, 1000);
   }
 
   /**
    * Method to test the look up tree for different range of input keys.
    *
    * @param start starting value of the look up key
-   * @param end end value of the look up tree
+   * @param end   end value of the look up tree
    */
   private void testRangeOfInputs(long start, long end) {
     for (long i = start; i <= end; i++) {
-      String iStr = Long.toString(i);
+      String iStr = paddedNumber(i);
       if (!expectedMatches.containsKey(iStr)) {
         assertEquals(Collections.EMPTY_SET, keyRangeLookupTree.getMatchingIndexFiles(iStr));
       } else {
@@ -165,12 +191,29 @@ public class TestKeyRangeLookupTree {
     long startKey = Long.parseLong(toInsert.getMinRecordKey());
     long endKey = Long.parseLong(toInsert.getMaxRecordKey());
     for (long i = startKey; i <= endKey; i++) {
-      String iStr = Long.toString(i);
+      String iStr = paddedNumber(i);
       if (!expectedMatches.containsKey(iStr)) {
         expectedMatches.put(iStr, new HashSet<>());
       }
       expectedMatches.get(iStr).add(toInsert.getFileNameList().get(0));
     }
+  }
+
+  /**
+   * The key's comparison is in lexicographic order, so we need to fill in the numbers.
+   *
+   * @param key the numeric value of the key
+   * @return result of padded values. For example, `1` -> `00001`.
+   */
+  private String paddedNumber(long key) {
+    return String.format("%0".concat(String.valueOf(padLength)).concat("d"), key);
+  }
+
+  /**
+   * Check if the tree conforms to a red-black tree.
+   */
+  private void checkRedBlackTree() {
+    assertTrue(RedBlackTreeTestUtil.isRedBlackTree(keyRangeLookupTree));
   }
 
 }
