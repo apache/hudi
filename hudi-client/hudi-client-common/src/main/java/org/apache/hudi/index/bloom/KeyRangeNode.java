@@ -110,11 +110,11 @@ class KeyRangeNode extends RedBlackTreeNode<RecordKeyRange> {
     this.leftSubTreeMax = leftSubTreeMax;
   }
 
-  public String getMinRecordKey(){
+  public String getMinRecordKey() {
     return getKey().getMinRecordKey();
   }
 
-  public String getMaxRecordKey(){
+  public String getMaxRecordKey() {
     return getKey().getMaxRecordKey();
   }
 }

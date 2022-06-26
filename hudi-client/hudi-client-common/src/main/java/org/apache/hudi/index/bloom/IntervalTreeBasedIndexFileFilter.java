@@ -20,7 +20,6 @@ package org.apache.hudi.index.bloom;
 
 import org.apache.hudi.common.util.collection.Pair;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;

@@ -52,7 +52,7 @@ public class TestKeyRangeLookupTree {
    */
   @Test
   public void testFileGroupLookUpOneEntry() {
-    KeyRangeNode toInsert = new KeyRangeNode(Long.toString(300), Long.toString(450), UUID.randomUUID().toString());
+    KeyRangeNode toInsert = new KeyRangeNode(alignedNumber(300), alignedNumber(450), UUID.randomUUID().toString());
     updateExpectedMatchesToTest(toInsert);
     keyRangeLookupTree.insert(toInsert);
     checkRedBlackTree();
@@ -67,14 +67,14 @@ public class TestKeyRangeLookupTree {
    */
   @Test
   public void testFileGroupLookUpManyEntriesWithSameStartValue() {
-    String startKey = Long.toString(120);
+    String startKey = alignedNumber(120);
     long endKey = 250;
-    KeyRangeNode toInsert = new KeyRangeNode(startKey, Long.toString(endKey), UUID.randomUUID().toString());
+    KeyRangeNode toInsert = new KeyRangeNode(startKey, alignedNumber(endKey), UUID.randomUUID().toString());
     updateExpectedMatchesToTest(toInsert);
     keyRangeLookupTree.insert(toInsert);
     for (int i = 0; i < 10; i++) {
       endKey += 1 + RANDOM.nextInt(100);
-      toInsert = new KeyRangeNode(startKey, Long.toString(endKey), UUID.randomUUID().toString());
+      toInsert = new KeyRangeNode(startKey, alignedNumber(endKey), UUID.randomUUID().toString());
       updateExpectedMatchesToTest(toInsert);
       keyRangeLookupTree.insert(toInsert);
     }
@@ -87,11 +87,11 @@ public class TestKeyRangeLookupTree {
    */
   @Test
   public void testFileGroupLookUpManyDuplicateEntries() {
-    KeyRangeNode toInsert = new KeyRangeNode(Long.toString(1200), Long.toString(2000), UUID.randomUUID().toString());
+    KeyRangeNode toInsert = new KeyRangeNode(alignedNumber(1200), alignedNumber(2000), UUID.randomUUID().toString());
     updateExpectedMatchesToTest(toInsert);
     keyRangeLookupTree.insert(toInsert);
     for (int i = 0; i < 10; i++) {
-      toInsert = new KeyRangeNode(Long.toString(1200), Long.toString(2000), UUID.randomUUID().toString());
+      toInsert = new KeyRangeNode(alignedNumber(1200), alignedNumber(2000), UUID.randomUUID().toString());
       updateExpectedMatchesToTest(toInsert);
       keyRangeLookupTree.insert(toInsert);
     }
@@ -110,37 +110,37 @@ public class TestKeyRangeLookupTree {
   public void testFileGroupLookUp() {
 
     // testing with hand curated inputs
-    KeyRangeNode toInsert = new KeyRangeNode(Long.toString(500), Long.toString(600), UUID.randomUUID().toString());
+    KeyRangeNode toInsert = new KeyRangeNode(alignedNumber(500), alignedNumber(600), UUID.randomUUID().toString());
     updateExpectedMatchesToTest(toInsert);
     keyRangeLookupTree.insert(toInsert);
-    toInsert = new KeyRangeNode(Long.toString(750), Long.toString(950), UUID.randomUUID().toString());
+    toInsert = new KeyRangeNode(alignedNumber(750), alignedNumber(950), UUID.randomUUID().toString());
     updateExpectedMatchesToTest(toInsert);
     keyRangeLookupTree.insert(toInsert);
-    toInsert = new KeyRangeNode(Long.toString(120), Long.toString(620), UUID.randomUUID().toString());
+    toInsert = new KeyRangeNode(alignedNumber(120), alignedNumber(620), UUID.randomUUID().toString());
     updateExpectedMatchesToTest(toInsert);
     keyRangeLookupTree.insert(toInsert);
-    toInsert = new KeyRangeNode(Long.toString(550), Long.toString(775), UUID.randomUUID().toString());
+    toInsert = new KeyRangeNode(alignedNumber(550), alignedNumber(775), UUID.randomUUID().toString());
     updateExpectedMatchesToTest(toInsert);
     keyRangeLookupTree.insert(toInsert);
-    toInsert = new KeyRangeNode(Long.toString(725), Long.toString(850), UUID.randomUUID().toString());
+    toInsert = new KeyRangeNode(alignedNumber(725), alignedNumber(850), UUID.randomUUID().toString());
     updateExpectedMatchesToTest(toInsert);
     keyRangeLookupTree.insert(toInsert);
-    toInsert = new KeyRangeNode(Long.toString(750), Long.toString(825), UUID.randomUUID().toString());
+    toInsert = new KeyRangeNode(alignedNumber(750), alignedNumber(825), UUID.randomUUID().toString());
     updateExpectedMatchesToTest(toInsert);
     keyRangeLookupTree.insert(toInsert);
-    toInsert = new KeyRangeNode(Long.toString(750), Long.toString(990), UUID.randomUUID().toString());
+    toInsert = new KeyRangeNode(alignedNumber(750), alignedNumber(990), UUID.randomUUID().toString());
     updateExpectedMatchesToTest(toInsert);
     keyRangeLookupTree.insert(toInsert);
-    toInsert = new KeyRangeNode(Long.toString(800), Long.toString(820), UUID.randomUUID().toString());
+    toInsert = new KeyRangeNode(alignedNumber(800), alignedNumber(820), UUID.randomUUID().toString());
     updateExpectedMatchesToTest(toInsert);
     keyRangeLookupTree.insert(toInsert);
-    toInsert = new KeyRangeNode(Long.toString(200), Long.toString(550), UUID.randomUUID().toString());
+    toInsert = new KeyRangeNode(alignedNumber(200), alignedNumber(550), UUID.randomUUID().toString());
     updateExpectedMatchesToTest(toInsert);
     keyRangeLookupTree.insert(toInsert);
-    toInsert = new KeyRangeNode(Long.toString(520), Long.toString(600), UUID.randomUUID().toString());
+    toInsert = new KeyRangeNode(alignedNumber(520), alignedNumber(600), UUID.randomUUID().toString());
     updateExpectedMatchesToTest(toInsert);
     keyRangeLookupTree.insert(toInsert);
-    toInsert = new KeyRangeNode(Long.toString(120), Long.toString(620), UUID.randomUUID().toString());
+    toInsert = new KeyRangeNode(alignedNumber(120), alignedNumber(620), UUID.randomUUID().toString());
     updateExpectedMatchesToTest(toInsert);
     keyRangeLookupTree.insert(toInsert);
     testRangeOfInputs(110, 999);
@@ -153,8 +153,8 @@ public class TestKeyRangeLookupTree {
   @Test
   public void testRandomFileGroupLookUp() {
     for (int i = 0; i < 100; i++) {
-      String index1 = paddedNumber(RANDOM.nextInt(1000));
-      String index2 = paddedNumber(RANDOM.nextInt(1000));
+      String index1 = alignedNumber(RANDOM.nextInt(1000));
+      String index2 = alignedNumber(RANDOM.nextInt(1000));
       String start = index1.compareTo(index2) < 0 ? index1 : index2;
       String end = index1.compareTo(index2) > 0 ? index1 : index2;
       KeyRangeNode toInsert = new KeyRangeNode(start, end, UUID.randomUUID().toString());
@@ -173,10 +173,13 @@ public class TestKeyRangeLookupTree {
    */
   private void testRangeOfInputs(long start, long end) {
     for (long i = start; i <= end; i++) {
-      String iStr = paddedNumber(i);
+      String iStr = alignedNumber(i);
       if (!expectedMatches.containsKey(iStr)) {
         assertEquals(Collections.EMPTY_SET, keyRangeLookupTree.getMatchingIndexFiles(iStr));
       } else {
+        if (!expectedMatches.get(iStr).equals(keyRangeLookupTree.getMatchingIndexFiles(iStr))) {
+          System.out.println("?");
+        }
         assertEquals(expectedMatches.get(iStr), keyRangeLookupTree.getMatchingIndexFiles(iStr));
       }
     }
@@ -191,7 +194,7 @@ public class TestKeyRangeLookupTree {
     long startKey = Long.parseLong(toInsert.getMinRecordKey());
     long endKey = Long.parseLong(toInsert.getMaxRecordKey());
     for (long i = startKey; i <= endKey; i++) {
-      String iStr = paddedNumber(i);
+      String iStr = alignedNumber(i);
       if (!expectedMatches.containsKey(iStr)) {
         expectedMatches.put(iStr, new HashSet<>());
       }
@@ -200,12 +203,12 @@ public class TestKeyRangeLookupTree {
   }
 
   /**
-   * The key's comparison is in lexicographic order, so we need to fill in the numbers.
+   * Method to align the number of digits. The key's comparison is in lexicographic order, so we need to fill in the numbers.
    *
    * @param key the numeric value of the key
-   * @return result of padded values. For example, `1` -> `00001`.
+   * @return result of aligned numbers. For example, `1` -> `00001`.
    */
-  private String paddedNumber(long key) {
+  private String alignedNumber(long key) {
     return String.format("%0".concat(String.valueOf(padLength)).concat("d"), key);
   }
 

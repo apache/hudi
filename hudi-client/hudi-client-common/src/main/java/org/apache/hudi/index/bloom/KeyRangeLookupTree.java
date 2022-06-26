@@ -49,6 +49,7 @@ class KeyRangeLookupTree extends RedBlackTree<KeyRangeNode, RecordKeyRange> {
   /**
    * If current root and newNode matches with min record key and max record key, merge two nodes. In other words, add
    * files from {@code newNode}.
+   *
    * @param oldNode previously inserted node
    * @param newNode newly inserted same node
    */
@@ -61,7 +62,7 @@ class KeyRangeLookupTree extends RedBlackTree<KeyRangeNode, RecordKeyRange> {
    * Traverse the tree to calculate sub-tree min-max metrics.
    */
   private void calculateSubTreeMinMax(KeyRangeNode node) {
-    if(node == null){
+    if (node == null) {
       return;
     }
     if (node.getLeft() != null) {
@@ -69,7 +70,7 @@ class KeyRangeLookupTree extends RedBlackTree<KeyRangeNode, RecordKeyRange> {
       node.setLeftSubTreeMin(minRecord(node.getLeft()));
       node.setLeftSubTreeMax(maxRecord(node.getLeft()));
     }
-    if(node.getRight() != null){
+    if (node.getRight() != null) {
       calculateSubTreeMinMax(node.getRight());
       node.setRightSubTreeMin(minRecord(node.getRight()));
       node.setRightSubTreeMax(maxRecord(node.getRight()));
@@ -111,7 +112,7 @@ class KeyRangeLookupTree extends RedBlackTree<KeyRangeNode, RecordKeyRange> {
    * @return the {@link Set} of matching index file names
    */
   Set<String> getMatchingIndexFiles(String lookupKey) {
-    if(needReloadMetrics){
+    if (needReloadMetrics) {
       calculateSubTreeMinMax(getRoot());
     }
     Set<String> matchingFileNameSet = new HashSet<>();
