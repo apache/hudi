@@ -19,8 +19,6 @@
 
 package org.apache.hudi.hive.replication;
 
-import org.apache.hudi.hive.replication.HiveSyncGlobalCommitParams;
-import org.apache.hudi.hive.replication.HiveSyncGlobalCommitTool;
 import org.apache.hudi.hive.testutils.TestCluster;
 
 import org.apache.hadoop.fs.Path;
@@ -103,19 +101,19 @@ public class TestHiveSyncGlobalCommitTool {
   }
 
   @Test
-  public void testHiveConfigShouldMatchClusterConf() throws Exception{
+  public void testHiveConfigShouldMatchClusterConf() throws Exception {
     String commitTime = "100";
     localCluster.createCOWTable(commitTime, 5, DB_NAME, TBL_NAME);
     // simulate drs
     remoteCluster.createCOWTable(commitTime, 5, DB_NAME, TBL_NAME);
     HiveSyncGlobalCommitParams params = getGlobalCommitConfig(commitTime);
     HiveSyncGlobalCommitTool tool = new HiveSyncGlobalCommitTool(params);
-    ReplicationStateSync localReplicationStateSync =  tool.getReplicatedState(false);
+    ReplicationStateSync localReplicationStateSync = tool.getReplicatedState(false);
     ReplicationStateSync remoteReplicationStateSync = tool.getReplicatedState(true);
     assertEquals(localReplicationStateSync.globalHiveSyncTool.config.getHiveConf().get("hive.metastore.uris"),
-          localCluster.getHiveConf().get("hive.metastore.uris"));
+        localCluster.getHiveConf().get("hive.metastore.uris"));
     assertEquals(remoteReplicationStateSync.globalHiveSyncTool.config.getHiveConf().get("hive.metastore.uris"),
-          remoteCluster.getHiveConf().get("hive.metastore.uris"));
+        remoteCluster.getHiveConf().get("hive.metastore.uris"));
   }
 
   @Test
