@@ -21,6 +21,7 @@ package org.apache.hudi.hive.ddl;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.StorageSchemes;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.hive.HiveSyncConfig;
@@ -61,13 +62,9 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
   public QueryBasedDDLExecutor(HiveSyncConfig config) {
     this.config = config;
     this.databaseName = config.getStringOrDefault(META_SYNC_DATABASE_NAME);
-    try {
-      this.partitionValueExtractor =
-          (PartitionValueExtractor) Class.forName(config.getStringOrDefault(META_SYNC_PARTITION_EXTRACTOR_CLASS)).newInstance();
-    } catch (Exception e) {
-      throw new HoodieHiveSyncException(
-          "Failed to initialize PartitionValueExtractor class " + config.getStringOrDefault(META_SYNC_PARTITION_EXTRACTOR_CLASS), e);
-    }
+    this.partitionValueExtractor = (PartitionValueExtractor) ReflectionUtils.loadClassWithFallbacks(
+        config.getStringOrDefault(META_SYNC_PARTITION_EXTRACTOR_CLASS),
+        new Object[][] {new Object[] {config.getSplitStrings(META_SYNC_PARTITION_FIELDS)}, new Object[0]});
   }
 
   /**

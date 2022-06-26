@@ -88,27 +88,10 @@ public class HoodieSyncConfig extends HoodieConfig {
       .withInferFunction(PARTITION_FIELDS_INFERENCE_FUNCTION)
       .withDocumentation("Field in the table to use for determining hive partition columns.");
 
-  // If partition value extraction class is not explicitly provided, configure based on the partition fields.
-  public static final Function<HoodieConfig, Option<String>> PARTITION_EXTRACTOR_CLASS_FUNCTION = cfg -> {
-    if (!cfg.contains(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME)) {
-      return Option.of("org.apache.hudi.hive.NonPartitionedExtractor");
-    } else {
-      int numOfPartFields = cfg.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME).split(",").length;
-      if (numOfPartFields == 1
-          && cfg.contains(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE)
-          && cfg.getString(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE).equals("true")) {
-        return Option.of("org.apache.hudi.hive.HiveStylePartitionValueExtractor");
-      } else {
-        return Option.of("org.apache.hudi.hive.MultiPartKeysValueExtractor");
-      }
-    }
-  };
   public static final ConfigProperty<String> META_SYNC_PARTITION_EXTRACTOR_CLASS = ConfigProperty
       .key("hoodie.datasource.hive_sync.partition_extractor_class")
-      .defaultValue("org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor")
-      .withInferFunction(PARTITION_EXTRACTOR_CLASS_FUNCTION)
-      .withDocumentation("Class which implements PartitionValueExtractor to extract the partition values, "
-          + "default 'SlashEncodedDayPartitionValueExtractor'.");
+      .defaultValue("org.apache.hudi.sync.common.model.DefaultPartitionValueExtractor")
+      .withDocumentation("Class which implements PartitionValueExtractor to extract the partition values.");
 
   public static final ConfigProperty<String> META_SYNC_ASSUME_DATE_PARTITION = ConfigProperty
       .key("hoodie.datasource.hive_sync.assume_date_partitioning")

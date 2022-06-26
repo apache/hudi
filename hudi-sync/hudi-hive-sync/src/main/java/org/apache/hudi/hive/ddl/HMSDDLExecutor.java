@@ -20,6 +20,7 @@ package org.apache.hudi.hive.ddl;
 
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.StorageSchemes;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncException;
@@ -76,13 +77,9 @@ public class HMSDDLExecutor implements DDLExecutor {
     this.syncConfig = syncConfig;
     this.databaseName = syncConfig.getStringOrDefault(META_SYNC_DATABASE_NAME);
     this.client = Hive.get(syncConfig.getHiveConf()).getMSC();
-    try {
-      this.partitionValueExtractor =
-          (PartitionValueExtractor) Class.forName(syncConfig.getStringOrDefault(META_SYNC_PARTITION_EXTRACTOR_CLASS)).newInstance();
-    } catch (Exception e) {
-      throw new HoodieHiveSyncException(
-          "Failed to initialize PartitionValueExtractor class " + syncConfig.getStringOrDefault(META_SYNC_PARTITION_EXTRACTOR_CLASS), e);
-    }
+    this.partitionValueExtractor = (PartitionValueExtractor) ReflectionUtils.loadClassWithFallbacks(
+        syncConfig.getStringOrDefault(META_SYNC_PARTITION_EXTRACTOR_CLASS),
+        new Object[][] {new Object[] {syncConfig.getSplitStrings(META_SYNC_PARTITION_FIELDS)}, new Object[0]});
   }
 
   @Override

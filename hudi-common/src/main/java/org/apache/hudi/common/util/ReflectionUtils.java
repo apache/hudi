@@ -119,6 +119,22 @@ public class ReflectionUtils {
   }
 
   /**
+   * Creates an instance of the given class. Constructor arg types are inferred.
+   * Constructors are used in the given order; first successful instantiation will be used as the return result.
+   */
+  public static Object loadClassWithFallbacks(String clazz, Object[][] constructorArgsMatrix) {
+    for (Object[] args : constructorArgsMatrix) {
+      try {
+        return loadClass(clazz, args);
+      } catch (HoodieException e) {
+        LOG.warn(String.format("Unable to instantiate class %s with args %s. Trying next...", clazz, Arrays.toString(args)));
+      }
+    }
+    throw new HoodieException(String.format(
+        "Unable to instantiate class %s with args %s. Trying next...", clazz, Arrays.deepToString(constructorArgsMatrix)));
+  }
+
+  /**
    * Scans all classes accessible from the context class loader
    * which belong to the given package and subpackages.
    *

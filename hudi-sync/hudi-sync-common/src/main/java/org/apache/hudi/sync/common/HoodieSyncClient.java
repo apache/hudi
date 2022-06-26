@@ -47,6 +47,7 @@ import java.util.Map;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_ASSUME_DATE_PARTITION;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_FIELDS;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_USE_FILE_LISTING_FROM_METADATA;
 
 public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, AutoCloseable {
@@ -59,7 +60,9 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
 
   public HoodieSyncClient(HoodieSyncConfig config) {
     this.config = config;
-    this.partitionValueExtractor = ReflectionUtils.loadClass(config.getStringOrDefault(META_SYNC_PARTITION_EXTRACTOR_CLASS));
+    this.partitionValueExtractor = (PartitionValueExtractor) ReflectionUtils.loadClassWithFallbacks(
+        config.getStringOrDefault(META_SYNC_PARTITION_EXTRACTOR_CLASS),
+        new Object[][] {new Object[] {config.getSplitStrings(META_SYNC_PARTITION_FIELDS)}, new Object[0]});
     this.metaClient = HoodieTableMetaClient.builder()
         .setConf(config.getHadoopConf())
         .setBasePath(config.getString(META_SYNC_BASE_PATH))
