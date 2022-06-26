@@ -55,6 +55,9 @@ object HoodieProcedures {
     mapBuilder.put(StatsWriteAmplificationProcedure.NAME, StatsWriteAmplificationProcedure.builder)
     mapBuilder.put(StatsFileSizeProcedure.NAME, StatsFileSizeProcedure.builder)
     mapBuilder.put(HdfsParquetImportProcedure.NAME, HdfsParquetImportProcedure.builder)
+    mapBuilder.put(RunBootstrapProcedure.NAME, RunBootstrapProcedure.builder)
+    mapBuilder.put(ShowBootstrapMappingProcedure.NAME, ShowBootstrapMappingProcedure.builder)
+    mapBuilder.put(ShowBootstrapPartitionsProcedure.NAME, ShowBootstrapPartitionsProcedure.builder)
     mapBuilder.build
   }
 }
