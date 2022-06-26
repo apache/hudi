@@ -104,11 +104,13 @@ class ShowCommitFilesProcedure() extends BaseProcedure with ProcedureBuilder {
       if (hoodieInstant.get.getAction == HoodieTimeline.REPLACE_COMMIT_ACTION) {
         Option(HoodieReplaceCommitMetadata.fromBytes(timeline.getInstantDetails(hoodieInstant.get).get,
           classOf[HoodieReplaceCommitMetadata]))
+      } else {
+        Option(HoodieCommitMetadata.fromBytes(timeline.getInstantDetails(hoodieInstant.get).get,
+          classOf[HoodieCommitMetadata]))
       }
-      Option(HoodieCommitMetadata.fromBytes(timeline.getInstantDetails(hoodieInstant.get).get,
-        classOf[HoodieCommitMetadata]))
+    } else {
+      Option.empty
     }
-    Option.empty
   }
 }
 
