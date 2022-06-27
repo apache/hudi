@@ -50,7 +50,6 @@ import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Collection;
@@ -266,7 +265,7 @@ public class StreamWriteOperatorCoordinator
 
   @Override
   public void notifyCheckpointAborted(long checkpointId) {
-    if (checkpointId == this.checkpointId) {
+    if (checkpointId == this.checkpointId && !WriteMetadataEvent.BOOTSTRAP_INSTANT.equals(this.instant)) {
       executor.execute(() -> {
         this.ckpMetadata.abortInstant(this.instant);
       }, "abort instant %s", this.instant);
@@ -306,13 +305,6 @@ public class StreamWriteOperatorCoordinator
     // reset the event
     this.eventBuffer[i] = null;
     LOG.warn("Reset the event for task [" + i + "]", throwable);
-    if (Arrays.stream(this.eventBuffer).allMatch(event -> event == null)) {
-      try {
-        this.ckpMetadata.bootstrap(this.metaClient);
-      } catch (IOException e) {
-        throw new HoodieException("Bootstrap ckpMetadata exception", e);
-      }
-    }
   }
 
   @Override
