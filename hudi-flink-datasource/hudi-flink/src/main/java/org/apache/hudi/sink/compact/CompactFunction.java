@@ -22,6 +22,7 @@ import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.sink.utils.NonThrownExecutor;
 import org.apache.hudi.table.HoodieFlinkCopyOnWriteTable;
 import org.apache.hudi.table.action.compact.HoodieFlinkMergeOnReadTableCompactor;
@@ -72,7 +73,7 @@ public class CompactFunction extends ProcessFunction<CompactionPlanEvent, Compac
 
   public CompactFunction(Configuration conf) {
     this.conf = conf;
-    this.asyncCompaction = StreamerUtil.needsAsyncCompaction(conf);
+    this.asyncCompaction = OptionsResolver.needsAsyncCompaction(conf);
   }
 
   @Override
