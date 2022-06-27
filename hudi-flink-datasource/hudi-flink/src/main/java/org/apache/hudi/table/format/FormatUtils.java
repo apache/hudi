@@ -136,6 +136,7 @@ public class FormatUtils {
         .withBufferSize(writeConfig.getMaxDFSStreamBufferSize())
         .withMaxMemorySizeInBytes(split.getMaxCompactionMemoryInBytes())
         .withDiskMapType(writeConfig.getCommonConfig().getSpillableDiskMapType())
+        .withBitCaskDiskMapCompressionEnabled(writeConfig.getCommonConfig().isBitCaskDiskMapCompressionEnabled())
         .withSpillableMapBasePath(writeConfig.getSpillableMapBasePath())
         .withInstantRange(split.getInstantRange())
         .withOperationField(flinkConf.getBoolean(FlinkOptions.CHANGELOG_ENABLED))

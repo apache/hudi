@@ -269,6 +269,8 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
             .withReverseReader(writeConfig.getCompactionReverseLogReadEnabled())
             .withBufferSize(writeConfig.getMaxDFSStreamBufferSize())
             .withSpillableMapBasePath(writeConfig.getSpillableMapBasePath())
+            .withDiskMapType(writeConfig.getCommonConfig().getSpillableDiskMapType())
+            .withBitCaskDiskMapCompressionEnabled(writeConfig.getCommonConfig().isBitCaskDiskMapCompressionEnabled())
             .build();
 
         HoodieTableConfig tableConfig = table.getMetaClient().getTableConfig();
