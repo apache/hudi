@@ -25,6 +25,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hudi.async.AsyncArchiveService;
 import org.apache.hudi.async.AsyncCleanerService;
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.avro.model.HoodieBuildPlan;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
@@ -45,6 +46,7 @@ import org.apache.hudi.client.utils.TransactionUtils;
 import org.apache.hudi.common.HoodiePendingRollbackInfo;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.HoodieBuildCommitMetadata;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieKey;
@@ -142,6 +144,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
   protected transient Timer.Context compactionTimer;
   protected transient Timer.Context clusteringTimer;
   protected transient Timer.Context logCompactionTimer;
+  protected transient Timer.Context buildTimer;
 
   protected transient AsyncCleanerService asyncCleanerService;
   protected transient AsyncArchiveService asyncArchiveService;
@@ -1391,15 +1394,37 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
 
   /**
    * Ensures clustering instant is in expected state and performs clustering for the plan stored in metadata.
+   *
    * @param clusteringInstant Clustering Instant Time
    * @return Collection of Write Status
    */
   public abstract HoodieWriteMetadata<O> cluster(String clusteringInstant, boolean shouldComplete);
 
   /**
+   * Schedule a new build instant with passed-in instant time.
+   *
+   * @param instantTime   Build instant time
+   * @param extraMetadata Extra metadata to be stored
+   * @return True if build instant scheduled successfully
+   * @throws HoodieIOException
+   */
+  public boolean scheduleBuildAtInstant(String instantTime, Option<Map<String, String>> extraMetadata) throws HoodieIOException {
+    return scheduleTableService(instantTime, extraMetadata, TableServiceType.BUILD).isPresent();
+  }
+
+  /**
+   * Perform build for the plan stored in metadata
+   *
+   * @param instantTime    Build instant time
+   * @param shouldComplete
+   * @return
+   */
+  public abstract HoodieBuildCommitMetadata build(String instantTime, boolean shouldComplete);
+
+  /**
    * Schedule table services such as clustering, compaction & cleaning.
    *
-   * @param extraMetadata Metadata to pass onto the scheduled service instant
+   * @param extraMetadata    Metadata to pass onto the scheduled service instant
    * @param tableServiceType Type of table service to schedule
    * @return
    */
@@ -1458,6 +1483,11 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
         Option<HoodieCleanerPlan> cleanerPlan = createTable(config, hadoopConf)
             .scheduleCleaning(context, instantTime, extraMetadata);
         return cleanerPlan.isPresent() ? Option.of(instantTime) : Option.empty();
+      case BUILD:
+        LOG.info("Scheduling build at instant time: " + instantTime);
+        Option<HoodieBuildPlan> buildPlan = createTable(config, hadoopConf)
+            .scheduleBuild(context, instantTime, extraMetadata);
+        return buildPlan.isPresent() ? Option.of(instantTime) : Option.empty();
       default:
         throw new IllegalArgumentException("Invalid TableService " + tableServiceType);
     }
@@ -1488,9 +1518,9 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
   /**
    * Finalize Write operation.
    *
-   * @param table HoodieTable
+   * @param table       HoodieTable
    * @param instantTime Instant Time
-   * @param stats Hoodie Write Stat
+   * @param stats       Hoodie Write Stat
    */
   protected void finalizeWrite(HoodieTable table, String instantTime, List<HoodieWriteStat> stats) {
     try {

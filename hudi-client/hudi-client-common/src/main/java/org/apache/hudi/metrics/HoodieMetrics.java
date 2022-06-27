@@ -48,6 +48,7 @@ public class HoodieMetrics {
   private String conflictResolutionTimerName = null;
   private String conflictResolutionSuccessCounterName = null;
   private String conflictResolutionFailureCounterName = null;
+  public String buildTimerName = null;
   private HoodieWriteConfig config;
   private String tableName;
   private Timer rollbackTimer = null;
@@ -62,6 +63,7 @@ public class HoodieMetrics {
   private Timer conflictResolutionTimer = null;
   private Counter conflictResolutionSuccessCounter = null;
   private Counter conflictResolutionFailureCounter = null;
+  private Timer buildTimer = null;
 
   public HoodieMetrics(HoodieWriteConfig config) {
     this.config = config;
@@ -80,6 +82,7 @@ public class HoodieMetrics {
       this.conflictResolutionTimerName = getMetricsName("timer", "conflict_resolution");
       this.conflictResolutionSuccessCounterName = getMetricsName("counter", "conflict_resolution.success");
       this.conflictResolutionFailureCounterName = getMetricsName("counter", "conflict_resolution.failure");
+      this.buildTimerName = getMetricsName("timer", HoodieTimeline.BUILD_ACTION);
     }
   }
 
@@ -155,6 +158,13 @@ public class HoodieMetrics {
       conflictResolutionTimer = createTimer(conflictResolutionTimerName);
     }
     return conflictResolutionTimer == null ? null : conflictResolutionTimer.time();
+  }
+
+  public Timer.Context getBuildCtx() {
+    if (config.isMetricsOn() && buildTimer == null) {
+      buildTimer = createTimer(indexTimerName);
+    }
+    return buildTimer == null ? null : buildTimer.time();
   }
 
   public void updateMetricsForEmptyData(String actionType) {
@@ -261,6 +271,13 @@ public class HoodieMetrics {
     if (config.isMetricsOn()) {
       LOG.info(String.format("Sending index metrics (%s.duration, %d)", action, durationInMs));
       Metrics.registerGauge(getMetricsName("index", String.format("%s.duration", action)), durationInMs);
+    }
+  }
+
+  public void updateBuildMetrics(final String action, final long durationInMs) {
+    if (config.isMetricsOn()) {
+      LOG.info(String.format("Sending build metrics (%s.duration, %d)", action, durationInMs));
+      Metrics.registerGauge(getMetricsName(HoodieTimeline.BUILD_ACTION, String.format("%s.duration", action)), durationInMs);
     }
   }
 

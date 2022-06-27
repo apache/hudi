@@ -22,6 +22,7 @@ import org.apache.hudi.client.common.HoodieJavaEngineContext;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.HoodieBuildCommitMetadata;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -220,13 +221,18 @@ public class HoodieJavaWriteClient<T extends HoodieRecordPayload> extends
 
   @Override
   protected HoodieWriteMetadata<List<WriteStatus>> compact(String compactionInstantTime,
-                                      boolean shouldComplete) {
+                                                           boolean shouldComplete) {
     throw new HoodieNotSupportedException("Compact is not supported in HoodieJavaClient");
   }
 
   @Override
   public HoodieWriteMetadata<List<WriteStatus>> cluster(final String clusteringInstant, final boolean shouldComplete) {
     throw new HoodieNotSupportedException("Cluster is not supported in HoodieJavaClient");
+  }
+
+  @Override
+  public HoodieBuildCommitMetadata build(String instantTime, boolean shouldComplete) {
+    throw new HoodieNotSupportedException("Build is not supported in HoodieJavaClient");
   }
 
   @Override

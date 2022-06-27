@@ -136,7 +136,7 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
 
   @Override
   public HoodieDefaultTimeline getWriteTimeline() {
-    Set<String> validActions = CollectionUtils.createSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, COMPACTION_ACTION, LOG_COMPACTION_ACTION, REPLACE_COMMIT_ACTION);
+    Set<String> validActions = CollectionUtils.createSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, COMPACTION_ACTION, LOG_COMPACTION_ACTION, REPLACE_COMMIT_ACTION, BUILD_ACTION);
     return new HoodieDefaultTimeline(getInstantsAsStream().filter(s -> validActions.contains(s.getAction())), details);
   }
 
@@ -244,6 +244,18 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   @Override
   public HoodieTimeline filterCompletedIndexTimeline() {
     return new HoodieDefaultTimeline(getInstantsAsStream().filter(s -> s.getAction().equals(INDEXING_ACTION) && s.isCompleted()), details);
+  }
+
+  @Override
+  public HoodieTimeline filterPendingBuildTimeline() {
+    return new HoodieDefaultTimeline(instants.stream().filter(s ->
+        s.getAction().equals(BUILD_ACTION) && !s.isCompleted()), details);
+  }
+
+  @Override
+  public HoodieTimeline filterCompletedBuildTimeline() {
+    return new HoodieDefaultTimeline(instants.stream().filter(s ->
+        s.getAction().equals(BUILD_ACTION) && s.isCompleted()), details);
   }
 
   /**
