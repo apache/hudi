@@ -27,8 +27,10 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.secondary.index.HoodieSecondaryIndex;
 
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Stream;
 
 /**
@@ -185,4 +187,14 @@ public interface TableFileSystemView {
    * Filegroups that are in pending clustering.
    */
   Stream<Pair<HoodieFileGroupId, HoodieInstant>> getFileGroupsInPendingClustering();
+
+  /**
+   * Stream all the pending base files to build secondary index
+   */
+  Stream<Pair<HoodieSecondaryIndex, Map<String, HoodieInstant>>> getPendingSecondaryIndexBaseFiles();
+
+  /**
+   * Stream all the base files that have built secondary index
+   */
+  Stream<Pair<HoodieSecondaryIndex, Map<String, HoodieInstant>>> getSecondaryIndexBaseFiles();
 }

@@ -31,6 +31,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import java.io.IOException;
 import java.util.List;
 
 public class SecondaryIndexUtils {
@@ -53,13 +54,9 @@ public class SecondaryIndexUtils {
    * @return List<HoodieSecondaryIndex>
    */
   public static List<HoodieSecondaryIndex> fromJsonString(String jsonStr) {
-    try {
-      return SecondaryIndexUtils.fromJsonString(jsonStr,
-          new TypeReference<List<HoodieSecondaryIndex>>() {
-          });
-    } catch (Exception e) {
-      throw new HoodieSecondaryIndexException("Fail to get secondary indexes", e);
-    }
+    return SecondaryIndexUtils.fromJsonString(jsonStr,
+        new TypeReference<List<HoodieSecondaryIndex>>() {
+        });
   }
 
   public static String toJsonString(Object value) {
@@ -70,12 +67,16 @@ public class SecondaryIndexUtils {
     }
   }
 
-  public static <T> T fromJsonString(String jsonStr, TypeReference<T> type) throws Exception {
+  public static <T> T fromJsonString(String jsonStr, TypeReference<T> type) {
     if (jsonStr == null || jsonStr.isEmpty()) {
       return null;
     }
 
-    return getObjectMapper().readValue(jsonStr, type);
+    try {
+      return getObjectMapper().readValue(jsonStr, type);
+    } catch (IOException e) {
+      throw new HoodieSecondaryIndexException("Fail to parse json string");
+    }
   }
 
   public static ObjectMapper getObjectMapper() {

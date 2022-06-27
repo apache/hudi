@@ -19,13 +19,13 @@
 
 package org.apache.hudi.secondary.index;
 
-import org.apache.hudi.exception.HoodieSecondaryIndexException;
-
+import java.io.Serializable;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Objects;
 
-public class HoodieSecondaryIndex {
+public class HoodieSecondaryIndex implements Serializable {
   private String indexName;
   private SecondaryIndexType indexType;
 
@@ -57,7 +57,7 @@ public class HoodieSecondaryIndex {
     return indexType;
   }
 
-  public Map<String, Map<String, String>> getColumns() {
+  public LinkedHashMap<String, Map<String, String>> getColumns() {
     return columns;
   }
 
@@ -70,15 +70,23 @@ public class HoodieSecondaryIndex {
   }
 
   private void validate() {
-    switch (indexType) {
-      case LUCENE:
-        if (columns.size() != 1) {
-          throw new HoodieSecondaryIndexException("Lucene index only support single column");
-        }
-        break;
-      default:
-        return;
+  }
+
+  @Override
+  public boolean equals(Object obj) {
+    if (obj == this) {
+      return true;
     }
+
+    if (Objects.isNull(obj) || !(obj instanceof HoodieSecondaryIndex)) {
+      return false;
+    }
+
+    HoodieSecondaryIndex other = (HoodieSecondaryIndex) obj;
+    return this.indexName.equals(other.getIndexName())
+        && this.indexType == other.getIndexType()
+        && this.columns.equals(other.getColumns())
+        && this.options.equals(other.getOptions());
   }
 
   @Override

@@ -43,6 +43,7 @@ public class HoodieMetrics {
   public String finalizeTimerName = null;
   public String compactionTimerName = null;
   public String indexTimerName = null;
+  public String buildTimerName = null;
   private HoodieWriteConfig config;
   private String tableName;
   private Timer rollbackTimer = null;
@@ -53,6 +54,7 @@ public class HoodieMetrics {
   private Timer compactionTimer = null;
   private Timer clusteringTimer = null;
   private Timer indexTimer = null;
+  private Timer buildTimer = null;
 
   public HoodieMetrics(HoodieWriteConfig config) {
     this.config = config;
@@ -67,6 +69,7 @@ public class HoodieMetrics {
       this.finalizeTimerName = getMetricsName("timer", "finalize");
       this.compactionTimerName = getMetricsName("timer", HoodieTimeline.COMPACTION_ACTION);
       this.indexTimerName = getMetricsName("timer", "index");
+      this.buildTimerName = getMetricsName("timer", HoodieTimeline.BUILD_ACTION);
     }
   }
 
@@ -128,6 +131,13 @@ public class HoodieMetrics {
       indexTimer = createTimer(indexTimerName);
     }
     return indexTimer == null ? null : indexTimer.time();
+  }
+
+  public Timer.Context getBuildCtx() {
+    if (config.isMetricsOn() && buildTimer == null) {
+      buildTimer = createTimer(indexTimerName);
+    }
+    return buildTimer == null ? null : buildTimer.time();
   }
 
   public void updateMetricsForEmptyData(String actionType) {
@@ -231,6 +241,13 @@ public class HoodieMetrics {
     if (config.isMetricsOn()) {
       LOG.info(String.format("Sending index metrics (%s.duration, %d)", action, durationInMs));
       Metrics.registerGauge(getMetricsName("index", String.format("%s.duration", action)), durationInMs);
+    }
+  }
+
+  public void updateBuildMetrics(final String action, final long durationInMs) {
+    if (config.isMetricsOn()) {
+      LOG.info(String.format("Sending build metrics (%s.duration, %d)", action, durationInMs));
+      Metrics.registerGauge(getMetricsName(HoodieTimeline.BUILD_ACTION, String.format("%s.duration", action)), durationInMs);
     }
   }
 

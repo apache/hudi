@@ -19,6 +19,7 @@
 package org.apache.hudi.table;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.avro.model.HoodieBuildPlan;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
@@ -41,6 +42,7 @@ import org.apache.hudi.common.fs.ConsistencyGuard.FileVisibility;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FailSafeConsistencyGuard;
 import org.apache.hudi.common.fs.OptimisticConsistencyGuard;
+import org.apache.hudi.common.model.HoodieBuildCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -533,8 +535,29 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
    * Schedules Restore for the table to the given instant.
    */
   public abstract Option<HoodieRestorePlan> scheduleRestore(HoodieEngineContext context,
-                                                    String restoreInstantTime,
-                                                    String instantToRestore);
+                                                            String restoreInstantTime,
+                                                            String instantToRestore);
+
+  /**
+   * Schedule build at passed-in instant time
+   *
+   * @param context       HoodieEngineContext
+   * @param instantTime   Instant time for scheduling build
+   * @param extraMetadata Additional metadata to write into plan
+   * @return Build plan
+   */
+  public abstract Option<HoodieBuildPlan> scheduleBuild(HoodieEngineContext context,
+                                                        String instantTime,
+                                                        Option<Map<String, String>> extraMetadata);
+
+  /**
+   * Execute build for the table
+   *
+   * @param context     HoodieEngineContext
+   * @param instantTime Build instant time
+   * @return HoodieWriteMetadata
+   */
+  public abstract HoodieBuildCommitMetadata build(HoodieEngineContext context, String instantTime);
 
   public void rollbackInflightCompaction(HoodieInstant inflightInstant) {
     rollbackInflightCompaction(inflightInstant, s -> Option.empty());
@@ -561,6 +584,18 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
   public void rollbackInflightClustering(HoodieInstant inflightInstant,
                                          Function<String, Option<HoodiePendingRollbackInfo>> getPendingRollbackInstantFunc) {
     ValidationUtils.checkArgument(inflightInstant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION));
+    rollbackInflightInstant(inflightInstant, getPendingRollbackInstantFunc);
+  }
+
+  /**
+   * Rollback inflight build instant to requested build instant
+   *
+   * @param inflightInstant               Inflight build instant
+   * @param getPendingRollbackInstantFunc Function to get rollback instant
+   */
+  public void rollbackInflightBuild(HoodieInstant inflightInstant,
+                                    Function<String, Option<HoodiePendingRollbackInfo>> getPendingRollbackInstantFunc) {
+    ValidationUtils.checkArgument(inflightInstant.getAction().equals(HoodieTimeline.BUILD_ACTION));
     rollbackInflightInstant(inflightInstant, getPendingRollbackInstantFunc);
   }
 

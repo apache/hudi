@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table;
 
+import org.apache.hudi.avro.model.HoodieBuildPlan;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
@@ -35,6 +36,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieBuildCommitMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -55,6 +57,8 @@ import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.bootstrap.HoodieBootstrapWriteMetadata;
 import org.apache.hudi.table.action.bootstrap.SparkBootstrapCommitActionExecutor;
+import org.apache.hudi.table.action.build.BuildPlanActionExecutor;
+import org.apache.hudi.table.action.build.SparkExecuteBuildCommitActionExecutor;
 import org.apache.hudi.table.action.clean.CleanActionExecutor;
 import org.apache.hudi.table.action.clean.CleanPlanActionExecutor;
 import org.apache.hudi.table.action.cluster.ClusteringPlanActionExecutor;
@@ -77,6 +81,7 @@ import org.apache.hudi.table.action.rollback.BaseRollbackPlanActionExecutor;
 import org.apache.hudi.table.action.rollback.CopyOnWriteRollbackActionExecutor;
 import org.apache.hudi.table.action.rollback.RestorePlanActionExecutor;
 import org.apache.hudi.table.action.savepoint.SavepointActionExecutor;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -304,5 +309,15 @@ public class HoodieSparkCopyOnWriteTable<T extends HoodieRecordPayload>
   @Override
   public Option<HoodieRestorePlan> scheduleRestore(HoodieEngineContext context, String restoreInstantTime, String instantToRestore) {
     return new RestorePlanActionExecutor<>(context, config, this, restoreInstantTime, instantToRestore).execute();
+  }
+
+  @Override
+  public Option<HoodieBuildPlan> scheduleBuild(HoodieEngineContext context, String instantTime, Option<Map<String, String>> extraMetadata) {
+    return new BuildPlanActionExecutor<>(context, config, this, instantTime, extraMetadata).execute();
+  }
+
+  @Override
+  public HoodieBuildCommitMetadata build(HoodieEngineContext context, String instantTime) {
+    return new SparkExecuteBuildCommitActionExecutor<>(context, config, this, instantTime).execute();
   }
 }

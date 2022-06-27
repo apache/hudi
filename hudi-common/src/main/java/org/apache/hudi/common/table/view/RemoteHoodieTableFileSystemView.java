@@ -32,6 +32,7 @@ import org.apache.hudi.common.table.timeline.dto.CompactionOpDTO;
 import org.apache.hudi.common.table.timeline.dto.FileGroupDTO;
 import org.apache.hudi.common.table.timeline.dto.FileSliceDTO;
 import org.apache.hudi.common.table.timeline.dto.InstantDTO;
+import org.apache.hudi.common.table.timeline.dto.SecondaryIndexBaseFilesDTO;
 import org.apache.hudi.common.table.timeline.dto.TimelineDTO;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.RetryHelper;
@@ -39,6 +40,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieRemoteException;
+import org.apache.hudi.secondary.index.HoodieSecondaryIndex;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -99,8 +101,13 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
 
   public static final String ALL_REPLACED_FILEGROUPS_PARTITION =
       String.format("%s/%s", BASE_URL, "filegroups/replaced/partition/");
-  
+
   public static final String PENDING_CLUSTERING_FILEGROUPS = String.format("%s/%s", BASE_URL, "clustering/pending/");
+
+  public static final String PENDING_SECONDARY_INDEX_BASE_FILES
+      = String.format("%s/%s", BASE_URL, "secondaryindex/pending/");
+  public static final String COMPLETED_SECONDARY_INDEX_BASE_FILES
+      = String.format("%s/%s", BASE_URL, "secondaryindex/completed/");
 
 
   public static final String LAST_INSTANT = String.format("%s/%s", BASE_URL, "timeline/instant/last");
@@ -441,8 +448,37 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
     Map<String, String> paramsMap = getParams();
     try {
       List<ClusteringOpDTO> dtos = executeRequest(PENDING_CLUSTERING_FILEGROUPS, paramsMap,
-          new TypeReference<List<ClusteringOpDTO>>() {}, RequestMethod.GET);
+          new TypeReference<List<ClusteringOpDTO>>() {
+          }, RequestMethod.GET);
       return dtos.stream().map(ClusteringOpDTO::toClusteringOperation);
+    } catch (IOException e) {
+      throw new HoodieRemoteException(e);
+    }
+  }
+
+  @Override
+  public Stream<Pair<HoodieSecondaryIndex, Map<String, HoodieInstant>>> getPendingSecondaryIndexBaseFiles() {
+    Map<String, String> paramsMap = getParams();
+    try {
+      List<SecondaryIndexBaseFilesDTO> dtos =
+          executeRequest(PENDING_SECONDARY_INDEX_BASE_FILES, paramsMap,
+              new TypeReference<List<SecondaryIndexBaseFilesDTO>>() {
+              }, RequestMethod.GET);
+      return dtos.stream().map(SecondaryIndexBaseFilesDTO::toSecondaryIndexBaseFiles);
+    } catch (IOException e) {
+      throw new HoodieRemoteException(e);
+    }
+  }
+
+  @Override
+  public Stream<Pair<HoodieSecondaryIndex, Map<String, HoodieInstant>>> getSecondaryIndexBaseFiles() {
+    Map<String, String> paramsMap = getParams();
+    try {
+      List<SecondaryIndexBaseFilesDTO> dtos =
+          executeRequest(COMPLETED_SECONDARY_INDEX_BASE_FILES, paramsMap,
+              new TypeReference<List<SecondaryIndexBaseFilesDTO>>() {
+              }, RequestMethod.GET);
+      return dtos.stream().map(SecondaryIndexBaseFilesDTO::toSecondaryIndexBaseFiles);
     } catch (IOException e) {
       throw new HoodieRemoteException(e);
     }

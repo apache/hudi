@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table;
 
+import org.apache.hudi.avro.model.HoodieBuildPlan;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
@@ -33,6 +34,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieBuildCommitMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -418,5 +420,15 @@ public class HoodieFlinkCopyOnWriteTable<T extends HoodieRecordPayload>
         new HoodieCreateHandle(config, instantTime, this, partitionPath, fileId, recordMap, taskContextSupplier);
     createHandle.write();
     return Collections.singletonList(createHandle.close()).iterator();
+  }
+
+  @Override
+  public Option<HoodieBuildPlan> scheduleBuild(HoodieEngineContext context, String instantTime, Option<Map<String, String>> extraMetadata) {
+    throw new HoodieNotSupportedException("Schedule build is not supported for flink table yet");
+  }
+
+  @Override
+  public HoodieBuildCommitMetadata build(HoodieEngineContext context, String instantTime) {
+    throw new HoodieNotSupportedException("Build is not supported for flink table yet");
   }
 }

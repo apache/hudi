@@ -25,6 +25,8 @@ import org.apache.hudi.common.model.BootstrapFileMapping;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieBuildCommitMetadata;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -32,6 +34,7 @@ import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.BuildUtils;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.HoodieTimer;
@@ -39,6 +42,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.secondary.index.HoodieSecondaryIndex;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
@@ -52,6 +56,7 @@ import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -106,12 +111,16 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
     this.metaClient = metaClient;
     refreshTimeline(visibleActiveTimeline);
     resetFileGroupsReplaced(visibleCommitsAndCompactionTimeline);
-    this.bootstrapIndex =  BootstrapIndex.getBootstrapIndex(metaClient);
+    this.bootstrapIndex = BootstrapIndex.getBootstrapIndex(metaClient);
     // Load Pending Compaction Operations
     resetPendingCompactionOperations(CompactionUtils.getAllPendingCompactionOperations(metaClient).values().stream()
         .map(e -> Pair.of(e.getKey(), CompactionOperation.convertFromAvroRecordInstance(e.getValue()))));
     resetBootstrapBaseFileMapping(Stream.empty());
     resetFileGroupsInPendingClustering(ClusteringUtils.getAllFileGroupsInPendingClusteringPlans(metaClient));
+
+    // Load completed/pending secondary instants
+    resetSecondaryIndexBaseFiles(visibleCommitsAndCompactionTimeline);
+    resetPendingSecondaryIndexBaseFiles(BuildUtils.getAllPendingBuildSecondaryIndexes(metaClient));
   }
 
   /**
@@ -243,6 +252,62 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
     resetReplacedFileGroups(replacedFileGroups);
     LOG.info("Took " + hoodieTimer.endTimer() + " ms to read  " + replacedTimeline.countInstants() + " instants, "
         + replacedFileGroups.size() + " replaced file groups");
+  }
+
+  /**
+   * Collect committed secondary indexes' info by looking at all secondary
+   * index commit instants. The metadata in commit instants as follows:
+   * partition -> baseFile -> List<HoodieSecondaryIndex>
+   * <p>
+   * After conversion, base files which have been built secondary index will
+   * be organized as follows format:
+   * HoodieSecondaryIndex -> baseFile -> HoodieInstant
+   *
+   * @param timeline Active hoodie timeline
+   */
+  private void resetSecondaryIndexBaseFiles(HoodieTimeline timeline) {
+    HoodieTimer hoodieTimer = new HoodieTimer();
+    hoodieTimer.startTimer();
+    // for each REPLACE instant, get map of (partitionPath -> deleteFileGroup)
+    HoodieTimeline secondaryIndexTimeline = timeline.filterCompletedBuildTimeline();
+
+    // HoodieSecondaryIndex -> BaseFileName -> Instant
+    Map<HoodieSecondaryIndex, Map<String, HoodieInstant>> secondaryIndexToFileName = new HashMap<>();
+    secondaryIndexTimeline.getInstants().forEach(instant -> {
+      try {
+        byte[] metadataBytes = metaClient.getActiveTimeline().getInstantDetails(instant).get();
+        HoodieBuildCommitMetadata secondaryIndexCommitMetadata =
+            HoodieCommitMetadata.fromBytes(metadataBytes, HoodieBuildCommitMetadata.class);
+
+        // Map<partitionPath, Map<fileId, List<secondaryIndex>>>
+        Map<String, Map<String, List<HoodieSecondaryIndex>>> committedSecondaryIndexes =
+            secondaryIndexCommitMetadata.getCommittedIndexesInfo();
+
+        committedSecondaryIndexes.forEach((partitionPath, fileSecondaryIndexInfo) ->
+            // BaseFileName -> List<HoodieSecondaryIndex>
+            fileSecondaryIndexInfo.forEach((baseFileName, secondaryIndexes) ->
+                secondaryIndexes.forEach(secondaryIndex -> {
+                  Map<String, HoodieInstant> fileNameToInstant =
+                      secondaryIndexToFileName.computeIfAbsent(secondaryIndex, HoodieSecondaryIndex -> new HashMap<>());
+                  fileNameToInstant.put(baseFileName, instant);
+                })));
+      } catch (HoodieIOException ex) {
+        if (ex.getIOException() instanceof FileNotFoundException) {
+          // Secondary index instant could be deleted by archive and FileNotFoundException could be
+          // thrown during getInstantDetails function, so that we need to catch the FileNotFoundException
+          // here and continue
+          LOG.warn(ex.getMessage());
+        } else {
+          throw ex;
+        }
+      } catch (IOException e) {
+        throw new HoodieIOException("Error reading secondary index commit metadata for " + instant);
+      }
+    });
+
+    resetSecondaryIndexBaseFiles(secondaryIndexToFileName);
+    LOG.info("Took " + hoodieTimer.endTimer() + " ms to read  " + secondaryIndexTimeline.countInstants()
+        + " instants, " + secondaryIndexToFileName.size() + " secondary indexes");
   }
 
   @Override
@@ -774,6 +839,26 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
     }
   }
 
+  @Override
+  public Stream<Pair<HoodieSecondaryIndex, Map<String, HoodieInstant>>> getPendingSecondaryIndexBaseFiles() {
+    try {
+      readLock.lock();
+      return fetchPendingSecondaryIndexBaseFiles();
+    } finally {
+      readLock.unlock();
+    }
+  }
+
+  @Override
+  public Stream<Pair<HoodieSecondaryIndex, Map<String, HoodieInstant>>> getSecondaryIndexBaseFiles() {
+    try {
+      readLock.lock();
+      return fetchSecondaryIndexBaseFiles();
+    } finally {
+      readLock.unlock();
+    }
+  }
+
   // Fetch APIs to be implemented by concrete sub-classes
 
   /**
@@ -893,7 +978,6 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    */
   abstract Stream<BootstrapBaseFileMapping> fetchBootstrapBaseFiles();
 
-
   /**
    * Checks if partition is pre-loaded and available in store.
    *
@@ -943,6 +1027,26 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * Track instant time for file groups replaced.
    */
   protected abstract Option<HoodieInstant> getReplaceInstant(final HoodieFileGroupId fileGroupId);
+
+  /**
+   * Track base files in secondary index.
+   */
+  protected abstract void resetSecondaryIndexBaseFiles(Map<HoodieSecondaryIndex, Map<String, HoodieInstant>> secondaryIndexBaseFiles);
+
+  /**
+   * Track base files in pending secondary index
+   */
+  protected abstract void resetPendingSecondaryIndexBaseFiles(Map<HoodieSecondaryIndex, Map<String, HoodieInstant>> pendingSecondaryIndexBaseFiles);
+
+  /**
+   * Get all committed secondary index base files
+   */
+  protected abstract Stream<Pair<HoodieSecondaryIndex, Map<String, HoodieInstant>>> fetchSecondaryIndexBaseFiles();
+
+  /**
+   * Get all pending secondary index base files
+   */
+  protected abstract Stream<Pair<HoodieSecondaryIndex, Map<String, HoodieInstant>>> fetchPendingSecondaryIndexBaseFiles();
 
   /**
    * Check if the view is already closed.

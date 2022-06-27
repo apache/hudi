@@ -18,15 +18,16 @@
 
 package org.apache.hudi.timeline.service.handlers;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-
 import org.apache.hudi.common.table.timeline.dto.ClusteringOpDTO;
 import org.apache.hudi.common.table.timeline.dto.CompactionOpDTO;
 import org.apache.hudi.common.table.timeline.dto.FileGroupDTO;
 import org.apache.hudi.common.table.timeline.dto.FileSliceDTO;
+import org.apache.hudi.common.table.timeline.dto.SecondaryIndexBaseFilesDTO;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.timeline.service.TimelineService;
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -102,7 +103,7 @@ public class FileSliceHandler extends Handler {
     return viewManager.getFileSystemView(basePath).getReplacedFileGroupsBefore(maxCommitTime, partitionPath).map(FileGroupDTO::fromFileGroup)
         .collect(Collectors.toList());
   }
-  
+
   public List<FileGroupDTO> getAllReplacedFileGroups(String basePath, String partitionPath) {
     return viewManager.getFileSystemView(basePath).getAllReplacedFileGroups(partitionPath).map(FileGroupDTO::fromFileGroup)
         .collect(Collectors.toList());
@@ -111,6 +112,18 @@ public class FileSliceHandler extends Handler {
   public List<ClusteringOpDTO> getFileGroupsInPendingClustering(String basePath) {
     return viewManager.getFileSystemView(basePath).getFileGroupsInPendingClustering()
         .map(fgInstant -> ClusteringOpDTO.fromClusteringOp(fgInstant.getLeft(), fgInstant.getRight()))
+        .collect(Collectors.toList());
+  }
+
+  public List<SecondaryIndexBaseFilesDTO> getPendingSecondaryIndexFiles(String basePath) {
+    return viewManager.getFileSystemView(basePath).getPendingSecondaryIndexBaseFiles()
+        .map(p -> SecondaryIndexBaseFilesDTO.fromSecondaryIndexBaseFiles(p.getLeft(), p.getRight()))
+        .collect(Collectors.toList());
+  }
+
+  public List<SecondaryIndexBaseFilesDTO> getSecondaryIndexFiles(String basePath) {
+    return viewManager.getFileSystemView(basePath).getSecondaryIndexBaseFiles()
+        .map(p -> SecondaryIndexBaseFilesDTO.fromSecondaryIndexBaseFiles(p.getLeft(), p.getRight()))
         .collect(Collectors.toList());
   }
 

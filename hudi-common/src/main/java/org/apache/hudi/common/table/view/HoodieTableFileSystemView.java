@@ -29,6 +29,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.secondary.index.HoodieSecondaryIndex;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.log4j.LogManager;
@@ -76,6 +77,16 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
    * Track file groups in pending clustering.
    */
   protected Map<HoodieFileGroupId, HoodieInstant> fgIdToPendingClustering;
+
+  /**
+   * Track base files in secondary index.
+   */
+  protected Map<HoodieSecondaryIndex, Map<String, HoodieInstant>> secondaryIndexToBaseFiles;
+
+  /**
+   * Track base files in pending secondary index.
+   */
+  protected Map<HoodieSecondaryIndex, Map<String, HoodieInstant>> pendingSecondaryIndexToBaseFiles;
 
   /**
    * Flag to determine if closed.
@@ -158,11 +169,21 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
     return fgInpendingClustering;
   }
 
+  protected Map<HoodieSecondaryIndex, Map<String, HoodieInstant>> createSecondaryIndexToBaseFilesMap(
+      final Map<HoodieSecondaryIndex, Map<String, HoodieInstant>> secondaryIndexToBaseFiles) {
+    return new ConcurrentHashMap<>(secondaryIndexToBaseFiles);
+  }
+
+  protected Map<HoodieSecondaryIndex, Map<String, HoodieInstant>> createPendingSecondaryIndexToBaseFilesMap(
+      final Map<HoodieSecondaryIndex, Map<String, HoodieInstant>> pendingSecondaryIndexToBaseFiles) {
+    return new ConcurrentHashMap<>(pendingSecondaryIndexToBaseFiles);
+  }
+
   /**
    * Create a file system view, as of the given timeline, with the provided file statuses.
    */
   public HoodieTableFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline,
-      FileStatus[] fileStatuses) {
+                                   FileStatus[] fileStatuses) {
     this(metaClient, visibleActiveTimeline);
     addFilesToView(fileStatuses);
   }
@@ -360,6 +381,26 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
     return Option.ofNullable(fgIdToReplaceInstants.get(fileGroupId));
   }
 
+  @Override
+  protected void resetSecondaryIndexBaseFiles(Map<HoodieSecondaryIndex, Map<String, HoodieInstant>> secondaryIndexBaseFiles) {
+    this.secondaryIndexToBaseFiles = createSecondaryIndexToBaseFilesMap(secondaryIndexBaseFiles);
+  }
+
+  @Override
+  protected void resetPendingSecondaryIndexBaseFiles(Map<HoodieSecondaryIndex, Map<String, HoodieInstant>> pendingSecondaryIndexBaseFiles) {
+    this.pendingSecondaryIndexToBaseFiles = createPendingSecondaryIndexToBaseFilesMap(pendingSecondaryIndexBaseFiles);
+  }
+
+  @Override
+  protected Stream<Pair<HoodieSecondaryIndex, Map<String, HoodieInstant>>> fetchSecondaryIndexBaseFiles() {
+    return secondaryIndexToBaseFiles.entrySet().stream().map(x -> Pair.of(x.getKey(), x.getValue()));
+  }
+
+  @Override
+  protected Stream<Pair<HoodieSecondaryIndex, Map<String, HoodieInstant>>> fetchPendingSecondaryIndexBaseFiles() {
+    return pendingSecondaryIndexToBaseFiles.entrySet().stream().map(x -> Pair.of(x.getKey(), x.getValue()));
+  }
+
   /**
    * Get the latest file slices for a given partition including the inflight ones.
    *
@@ -381,6 +422,8 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
     this.fgIdToBootstrapBaseFile = null;
     this.fgIdToReplaceInstants = null;
     this.fgIdToPendingClustering = null;
+    this.secondaryIndexToBaseFiles = null;
+    this.pendingSecondaryIndexToBaseFiles = null;
     closed = true;
   }
 

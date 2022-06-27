@@ -96,6 +96,7 @@ public class HoodieTableMetaClient implements Serializable {
   public static final String SCHEMA_FOLDER_NAME = ".schema";
 
   public static final String MARKER_EXTN = ".marker";
+  public static final String INDEX_FOLDER_NAME = ".index";
 
   // NOTE: Since those two parameters lay on the hot-path of a lot of computations, we
   //       use tailored extension of the {@code Path} class allowing to avoid repetitive
@@ -274,6 +275,15 @@ public class HoodieTableMetaClient implements Serializable {
   public String getArchivePath() {
     String archiveFolder = tableConfig.getArchivelogFolder();
     return getMetaPath() + Path.SEPARATOR + archiveFolder;
+  }
+
+  /**
+   * Get lucene index folder path
+   *
+   * @return Lucene index folder path
+   */
+  public String getIndexFolderPath() {
+    return new Path(metaPath.get(), INDEX_FOLDER_NAME).toString();
   }
 
   /**

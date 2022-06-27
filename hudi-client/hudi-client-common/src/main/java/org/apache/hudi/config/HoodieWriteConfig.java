@@ -25,6 +25,7 @@ import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
+import org.apache.hudi.common.config.HoodieBuildConfig;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
@@ -2140,6 +2141,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean areReleaseResourceEnabled() {
     return getBooleanOrDefault(RELEASE_RESOURCE_ENABLE);
+  }
+
+  public String getBuildPartitionSelected() {
+    return getString(HoodieBuildConfig.PARTITION_SELECTED);
   }
 
   /**

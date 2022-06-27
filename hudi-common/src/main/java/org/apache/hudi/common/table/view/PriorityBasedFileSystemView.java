@@ -31,6 +31,7 @@ import org.apache.hudi.common.util.Functions.Function2;
 import org.apache.hudi.common.util.Functions.Function3;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.secondary.index.HoodieSecondaryIndex;
 
 import org.apache.http.HttpStatus;
 import org.apache.http.client.HttpResponseException;
@@ -39,6 +40,7 @@ import org.apache.log4j.Logger;
 
 import java.io.Serializable;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Stream;
 
 /**
@@ -227,6 +229,16 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
   @Override
   public Stream<Pair<HoodieFileGroupId, HoodieInstant>> getFileGroupsInPendingClustering() {
     return execute(preferredView::getFileGroupsInPendingClustering, secondaryView::getFileGroupsInPendingClustering);
+  }
+
+  @Override
+  public Stream<Pair<HoodieSecondaryIndex, Map<String, HoodieInstant>>> getPendingSecondaryIndexBaseFiles() {
+    return execute(preferredView::getPendingSecondaryIndexBaseFiles, secondaryView::getPendingSecondaryIndexBaseFiles);
+  }
+
+  @Override
+  public Stream<Pair<HoodieSecondaryIndex, Map<String, HoodieInstant>>> getSecondaryIndexBaseFiles() {
+    return execute(preferredView::getSecondaryIndexBaseFiles, secondaryView::getSecondaryIndexBaseFiles);
   }
 
   @Override

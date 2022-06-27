@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieArchivalConfig;
@@ -35,11 +36,12 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.examples.common.HoodieExampleDataGenerator;
 import org.apache.hudi.examples.common.HoodieExampleSparkUtils;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.secondary.index.HoodieSecondaryIndex;
+import org.apache.hudi.secondary.index.SecondaryIndexUtils;
+import org.apache.hudi.table.action.HoodieWriteMetadata;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.table.action.HoodieWriteMetadata;
-
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.SparkConf;
@@ -47,7 +49,10 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -87,11 +92,23 @@ public class HoodieWriteClientExample {
       Path path = new Path(tablePath);
       FileSystem fs = FSUtils.getFs(tablePath, jsc.hadoopConfiguration());
       if (!fs.exists(path)) {
+        LinkedHashMap<String, Map<String, String>> columns = new LinkedHashMap<>();
+        columns.put("rider", Collections.emptyMap());
+        HoodieSecondaryIndex secondaryIndex = HoodieSecondaryIndex.builder()
+            .setIndexName("idx_rider")
+            .setIndexType("lucene")
+            .setColumns(columns)
+            .setOptions(Collections.emptyMap())
+            .build();
+
+        ArrayList<HoodieSecondaryIndex> secondaryIndexes = new ArrayList<>();
+        secondaryIndexes.add(secondaryIndex);
         HoodieTableMetaClient.withPropertyBuilder()
-          .setTableType(tableType)
-          .setTableName(tableName)
-          .setPayloadClass(HoodieAvroPayload.class)
-          .initTable(jsc.hadoopConfiguration(), tablePath);
+            .setTableType(tableType)
+            .setTableName(tableName)
+            .setSecondaryIndexesMetadata(SecondaryIndexUtils.toJsonString(secondaryIndexes))
+            .setPayloadClass(HoodieAvroPayload.class)
+            .initTable(jsc.hadoopConfiguration(), tablePath);
       }
 
       // Create the write client to write some records in
@@ -110,6 +127,10 @@ public class HoodieWriteClientExample {
       List<HoodieRecord<HoodieAvroPayload>> recordsSoFar = new ArrayList<>(records);
       JavaRDD<HoodieRecord<HoodieAvroPayload>> writeRecords = jsc.parallelize(records, 1);
       client.insert(writeRecords, newCommitTime);
+
+      String instantTime = HoodieActiveTimeline.createNewInstantTime();
+      client.scheduleBuildAtInstant(instantTime, Option.empty());
+      client.build(instantTime, true);
 
       // updates
       newCommitTime = client.startCommit();

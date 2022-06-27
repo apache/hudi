@@ -51,6 +51,9 @@ public enum WriteOperationType {
 
   INDEX("index"),
 
+  // build
+  BUILD("build"),
+
   // alter schema
   ALTER_SCHEMA("alter_schema"),
 
@@ -94,6 +97,8 @@ public enum WriteOperationType {
         return COMPACT;
       case "index":
         return INDEX;
+      case "build":
+        return BUILD;
       case "alter_schema":
         return ALTER_SCHEMA;
       case "unknown":

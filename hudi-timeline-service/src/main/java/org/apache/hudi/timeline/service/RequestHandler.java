@@ -29,6 +29,7 @@ import org.apache.hudi.common.table.timeline.dto.CompactionOpDTO;
 import org.apache.hudi.common.table.timeline.dto.FileGroupDTO;
 import org.apache.hudi.common.table.timeline.dto.FileSliceDTO;
 import org.apache.hudi.common.table.timeline.dto.InstantDTO;
+import org.apache.hudi.common.table.timeline.dto.SecondaryIndexBaseFilesDTO;
 import org.apache.hudi.common.table.timeline.dto.TimelineDTO;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.RemoteHoodieTableFileSystemView;
@@ -412,13 +413,27 @@ public class RequestHandler {
       metricsRegistry.add("ALL_REPLACED_FILEGROUPS_PARTITION", 1);
       List<FileGroupDTO> dtos = sliceHandler.getAllReplacedFileGroups(
           ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM).getOrThrow(),
-          ctx.queryParam(RemoteHoodieTableFileSystemView.PARTITION_PARAM,""));
+          ctx.queryParam(RemoteHoodieTableFileSystemView.PARTITION_PARAM, ""));
       writeValueAsString(ctx, dtos);
     }, true));
 
     app.get(RemoteHoodieTableFileSystemView.PENDING_CLUSTERING_FILEGROUPS, new ViewHandler(ctx -> {
       metricsRegistry.add("PENDING_CLUSTERING_FILEGROUPS", 1);
       List<ClusteringOpDTO> dtos = sliceHandler.getFileGroupsInPendingClustering(
+          ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM).getOrThrow());
+      writeValueAsString(ctx, dtos);
+    }, true));
+
+    app.get(RemoteHoodieTableFileSystemView.PENDING_SECONDARY_INDEX_BASE_FILES, new ViewHandler(ctx -> {
+      metricsRegistry.add("PENDING_SECONDARY_INDEX_BASE_FILES", 1);
+      List<SecondaryIndexBaseFilesDTO> dtos = sliceHandler.getPendingSecondaryIndexFiles(
+          ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM).getOrThrow());
+      writeValueAsString(ctx, dtos);
+    }, true));
+
+    app.get(RemoteHoodieTableFileSystemView.COMPLETED_SECONDARY_INDEX_BASE_FILES, new ViewHandler(ctx -> {
+      metricsRegistry.add("COMPLETED_SECONDARY_INDEX_BASE_FILES", 1);
+      List<SecondaryIndexBaseFilesDTO> dtos = sliceHandler.getSecondaryIndexFiles(
           ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM).getOrThrow());
       writeValueAsString(ctx, dtos);
     }, true));
