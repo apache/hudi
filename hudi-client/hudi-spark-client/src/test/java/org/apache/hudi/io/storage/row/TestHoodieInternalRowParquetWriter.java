@@ -23,6 +23,7 @@ import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.io.storage.HoodieParquetConfig;
 import org.apache.hudi.testutils.HoodieClientTestHarness;
 import org.apache.hudi.testutils.SparkDatasetTestUtils;
 
@@ -73,9 +74,9 @@ public class TestHoodieInternalRowParquetWriter extends HoodieClientTestHarness 
       // init write support and parquet config
       HoodieRowParquetWriteSupport writeSupport = getWriteSupport(writeConfigBuilder, hadoopConf, parquetWriteLegacyFormatEnabled);
       HoodieWriteConfig cfg = writeConfigBuilder.build();
-      HoodieRowParquetConfig parquetConfig = new HoodieRowParquetConfig(writeSupport,
+      HoodieParquetConfig<HoodieRowParquetWriteSupport> parquetConfig = new HoodieParquetConfig<>(writeSupport,
           CompressionCodecName.SNAPPY, cfg.getParquetBlockSize(), cfg.getParquetPageSize(), cfg.getParquetMaxFileSize(),
-          writeSupport.getHadoopConf(), cfg.getParquetCompressionRatio());
+          writeSupport.getHadoopConf(), cfg.getParquetCompressionRatio(), cfg.parquetDictionaryEnabled());
 
       // prepare path
       String fileId = UUID.randomUUID().toString();

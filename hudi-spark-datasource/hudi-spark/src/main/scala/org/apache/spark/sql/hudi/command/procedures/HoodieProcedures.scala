@@ -44,6 +44,20 @@ object HoodieProcedures {
     mapBuilder.put(ShowCommitsProcedure.NAME, ShowCommitsProcedure.builder)
     mapBuilder.put(ShowCommitsMetadataProcedure.NAME, ShowCommitsMetadataProcedure.builder)
     mapBuilder.put(ShowSavepointsProcedure.NAME, ShowSavepointsProcedure.builder)
+    mapBuilder.put(DeleteMarkerProcedure.NAME, DeleteMarkerProcedure.builder)
+    mapBuilder.put(ShowRollbacksProcedure.NAME, ShowRollbacksProcedure.builder)
+    mapBuilder.put(ShowRollbackDetailProcedure.NAME, ShowRollbackDetailProcedure.builder)
+    mapBuilder.put(ExportInstantsProcedure.NAME, ExportInstantsProcedure.builder)
+    mapBuilder.put(ShowAllFileSystemViewProcedure.NAME, ShowAllFileSystemViewProcedure.builder)
+    mapBuilder.put(ShowLatestFileSystemViewProcedure.NAME, ShowLatestFileSystemViewProcedure.builder)
+    mapBuilder.put(ShowHoodieLogFileMetadataProcedure.NAME, ShowHoodieLogFileMetadataProcedure.builder)
+    mapBuilder.put(ShowHoodieLogFileRecordsProcedure.NAME, ShowHoodieLogFileRecordsProcedure.builder)
+    mapBuilder.put(StatsWriteAmplificationProcedure.NAME, StatsWriteAmplificationProcedure.builder)
+    mapBuilder.put(StatsFileSizeProcedure.NAME, StatsFileSizeProcedure.builder)
+    mapBuilder.put(HdfsParquetImportProcedure.NAME, HdfsParquetImportProcedure.builder)
+    mapBuilder.put(RunBootstrapProcedure.NAME, RunBootstrapProcedure.builder)
+    mapBuilder.put(ShowBootstrapMappingProcedure.NAME, ShowBootstrapMappingProcedure.builder)
+    mapBuilder.put(ShowBootstrapPartitionsProcedure.NAME, ShowBootstrapPartitionsProcedure.builder)
     mapBuilder.build
   }
 }

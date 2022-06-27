@@ -48,6 +48,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.config.metrics.HoodieMetricsCloudWatchConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsDatadogConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsGraphiteConfig;
@@ -173,11 +174,6 @@ public class HoodieWriteConfig extends HoodieConfig {
       .noDefaultValue()
       .withDocumentation("Schema string representing the latest schema of the table. Hudi passes this to "
           + "implementations of evolution of schema");
-
-  public static final ConfigProperty<Boolean> SCHEMA_EVOLUTION_ENABLE = ConfigProperty
-      .key("hoodie.schema.on.read.enable")
-      .defaultValue(false)
-      .withDocumentation("enable full schema evolution for hoodie");
 
   public static final ConfigProperty<Boolean> ENABLE_INTERNAL_SCHEMA_CACHE = ConfigProperty
       .key("hoodie.schema.cache.enable")
@@ -363,8 +359,8 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final ConfigProperty<Boolean> REFRESH_TIMELINE_SERVER_BASED_ON_LATEST_COMMIT = ConfigProperty
       .key("hoodie.refresh.timeline.server.based.on.latest.commit")
-      .defaultValue(false)
-      .withDocumentation("Refresh timeline in timeline server based on latest commit apart from timeline hash difference. By default (false), ");
+      .defaultValue(true)
+      .withDocumentation("Refresh timeline in timeline server based on latest commit apart from timeline hash difference. By default (true).");
 
   public static final ConfigProperty<Long> INITIAL_CONSISTENCY_CHECK_INTERVAL_MS = ConfigProperty
       .key("hoodie.consistency.check.initial_interval_ms")
@@ -928,11 +924,11 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public boolean getSchemaEvolutionEnable() {
-    return getBoolean(SCHEMA_EVOLUTION_ENABLE);
+    return getBoolean(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE);
   }
 
   public void setSchemaEvolutionEnable(boolean enable) {
-    setValue(SCHEMA_EVOLUTION_ENABLE, String.valueOf(enable));
+    setValue(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE, String.valueOf(enable));
   }
 
   /**
@@ -1061,6 +1057,10 @@ public class HoodieWriteConfig extends HoodieConfig {
   public MarkerType getMarkersType() {
     String markerType = getString(MARKERS_TYPE);
     return MarkerType.valueOf(markerType.toUpperCase());
+  }
+
+  public boolean isHiveStylePartitioningEnabled() {
+    return getBooleanOrDefault(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE);
   }
 
   public int getMarkersTimelineServerBasedBatchNumThreads() {
@@ -2170,7 +2170,7 @@ public class HoodieWriteConfig extends HoodieConfig {
     }
 
     public Builder withSchemaEvolutionEnable(boolean enable) {
-      writeConfig.setValue(SCHEMA_EVOLUTION_ENABLE, String.valueOf(enable));
+      writeConfig.setValue(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE, String.valueOf(enable));
       return this;
     }
 
@@ -2495,6 +2495,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withAutoAdjustLockConfigs(boolean autoAdjustLockConfigs) {
       writeConfig.setValue(AUTO_ADJUST_LOCK_CONFIGS, String.valueOf(autoAdjustLockConfigs));
+      return this;
+    }
+
+    public Builder withRefreshTimelineServerBasedOnLatestCommit(boolean refreshTimelineServerBasedOnLatestCommit) {
+      writeConfig.setValue(REFRESH_TIMELINE_SERVER_BASED_ON_LATEST_COMMIT, Boolean.toString(refreshTimelineServerBasedOnLatestCommit));
       return this;
     }
 

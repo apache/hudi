@@ -103,7 +103,7 @@ public class HoodieTestCommitGenerator {
   }
 
   public static String getBaseFilename(String instantTime, String fileId) {
-    return FSUtils.makeDataFileName(instantTime, BASE_FILE_WRITE_TOKEN, fileId);
+    return FSUtils.makeBaseFileName(instantTime, BASE_FILE_WRITE_TOKEN, fileId);
   }
 
   public static String getLogFilename(String instantTime, String fileId) {

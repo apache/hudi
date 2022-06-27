@@ -48,6 +48,7 @@
     <module>packaging/hudi-hadoop-mr-bundle</module>
     <module>packaging/hudi-datahub-sync-bundle</module>
     <module>packaging/hudi-hive-sync-bundle</module>
+    <module>packaging/hudi-aws-bundle</module>
     <module>packaging/hudi-gcp-bundle</module>
     <module>packaging/hudi-spark-bundle</module>
     <module>packaging/hudi-presto-bundle</module>
@@ -99,13 +100,14 @@
     <pulsar.version>2.8.1</pulsar.version>
     <confluent.version>5.3.4</confluent.version>
     <glassfish.version>2.17</glassfish.version>
+    <glassfish.el.version>3.0.1-b12</glassfish.el.version>
     <parquet.version>1.10.1</parquet.version>
     <hamcrest.version>2.2</hamcrest.version>
     <junit.jupiter.version>5.8.2</junit.jupiter.version>
     <junit.platform.version>1.8.2</junit.platform.version>
     <mockito.jupiter.version>3.3.3</mockito.jupiter.version>
     <log4j.version>1.2.17</log4j.version>
-    <log4j.test.version>2.17.0</log4j.test.version>
+    <log4j.test.version>2.17.2</log4j.test.version>
     <slf4j.version>1.7.30</slf4j.version>
     <joda.version>2.9.9</joda.version>
     <hadoop.version>2.10.1</hadoop.version>
@@ -337,6 +339,7 @@
         <configuration>
           <skip>${skipITs}</skip>
           <argLine>@{argLine}</argLine>
+          <useSystemClassLoader>false</useSystemClassLoader>
         </configuration>
       </plugin>
       <plugin>
@@ -369,6 +372,7 @@
                 ${surefire-log4j.file}
               </log4j.configuration>
             </systemPropertyVariables>
+            <useSystemClassLoader>false</useSystemClassLoader>
           </configuration>
         </plugin>
         <plugin>
@@ -444,7 +448,6 @@
               <exclude>**/target/**</exclude>
               <exclude>**/generated-sources/**</exclude>
               <exclude>.github/**</exclude>
-              <exclude>**/*.sql</exclude>
               <!-- local files not in version control -->
               <exclude>**/*.iml</exclude>
               <exclude>.mvn/**</exclude>
@@ -556,6 +559,12 @@
         <groupId>org.glassfish.jersey.containers</groupId>
         <artifactId>jersey-container-servlet-core</artifactId>
         <version>${glassfish.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.glassfish</groupId>
+        <artifactId>javax.el</artifactId>
+        <version>${glassfish.el.version}</version>
+        <scope>provided</scope>
       </dependency>
 
       <!-- Avro -->
@@ -1049,13 +1058,6 @@
         </exclusions>
       </dependency>
 
-      <dependency>
-        <groupId>com.google.code.gson</groupId>
-        <artifactId>gson</artifactId>
-        <version>2.3.1</version>
-        <scope>test</scope>
-      </dependency>
-
       <!-- Zookeeper -->
       <dependency>
         <groupId>org.apache.curator</groupId>
@@ -1075,6 +1077,7 @@
         <version>${zk-curator.version}</version>
       </dependency>
 
+      <!-- Junit 5 -->
       <dependency>
         <groupId>org.hamcrest</groupId>
         <artifactId>hamcrest-core</artifactId>
@@ -1088,7 +1091,6 @@
         <version>${junit.jupiter.version}</version>
         <scope>test</scope>
       </dependency>
-
       <dependency>
         <groupId>org.junit.jupiter</groupId>
         <artifactId>junit-jupiter-engine</artifactId>
@@ -1102,12 +1104,17 @@
         <version>${junit.jupiter.version}</version>
         <scope>test</scope>
       </dependency>
-
       <dependency>
         <groupId>org.mockito</groupId>
         <artifactId>mockito-junit-jupiter</artifactId>
         <scope>test</scope>
         <version>${mockito.jupiter.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.junit.platform</groupId>
+        <artifactId>junit-platform-runner</artifactId>
+        <version>${junit.platform.version}</version>
+        <scope>test</scope>
       </dependency>
 
       <dependency>
@@ -1116,7 +1123,6 @@
         <version>${junit.platform.version}</version>
         <scope>test</scope>
       </dependency>
-
       <dependency>
         <groupId>org.junit.platform</groupId>
         <artifactId>junit-platform-suite-engine</artifactId>
@@ -1170,6 +1176,20 @@
       <dependency>
         <groupId>org.apache.logging.log4j</groupId>
         <artifactId>log4j-core</artifactId>
+        <version>${log4j.test.version}</version>
+        <scope>test</scope>
+      </dependency>
+
+      <dependency>
+        <groupId>org.apache.logging.log4j</groupId>
+        <artifactId>log4j-api</artifactId>
+        <version>${log4j.test.version}</version>
+        <scope>test</scope>
+      </dependency>
+
+      <dependency>
+        <groupId>org.apache.logging.log4j</groupId>
+        <artifactId>log4j-slf4j-impl</artifactId>
         <version>${log4j.test.version}</version>
         <scope>test</scope>
       </dependency>
@@ -1401,6 +1421,7 @@
             <version>${maven-surefire-plugin.version}</version>
             <configuration combine.self="override">
               <skip>${skipUTs}</skip>
+              <useSystemClassLoader>false</useSystemClassLoader>
             </configuration>
           </plugin>
           <plugin>
@@ -1414,6 +1435,7 @@
               <systemPropertyVariables>
                 <dynamodb-local.endpoint>${dynamodb-local.endpoint}</dynamodb-local.endpoint>
               </systemPropertyVariables>
+              <useSystemClassLoader>false</useSystemClassLoader>
             </configuration>
             <executions>
               <execution>
@@ -1660,6 +1682,7 @@
         <parquet.version>1.12.2</parquet.version>
         <avro.version>1.10.2</avro.version>
         <orc.version>1.6.12</orc.version>
+        <antlr.version>4.8</antlr.version>
         <fasterxml.version>${fasterxml.spark3.version}</fasterxml.version>
         <fasterxml.jackson.databind.version>${fasterxml.spark3.version}</fasterxml.jackson.databind.version>
         <fasterxml.jackson.module.scala.version>${fasterxml.spark3.version}</fasterxml.jackson.module.scala.version>
@@ -1691,6 +1714,7 @@
         <hudi.spark.common.module>hudi-spark3-common</hudi.spark.common.module>
         <scalatest.version>${scalatest.spark3.version}</scalatest.version>
         <kafka.version>${kafka.spark3.version}</kafka.version>
+        <antlr.version>4.8-1</antlr.version>
         <fasterxml.version>${fasterxml.spark3.version}</fasterxml.version>
         <fasterxml.jackson.databind.version>${fasterxml.spark3.version}</fasterxml.jackson.databind.version>
         <fasterxml.jackson.module.scala.version>${fasterxml.spark3.version}</fasterxml.jackson.module.scala.version>
@@ -1725,6 +1749,7 @@
         <parquet.version>1.12.2</parquet.version>
         <avro.version>1.10.2</avro.version>
         <orc.version>1.6.12</orc.version>
+        <antlr.version>4.8</antlr.version>
         <fasterxml.version>${fasterxml.spark3.version}</fasterxml.version>
         <fasterxml.jackson.databind.version>${fasterxml.spark3.version}</fasterxml.jackson.databind.version>
         <fasterxml.jackson.module.scala.version>${fasterxml.spark3.version}</fasterxml.jackson.module.scala.version>

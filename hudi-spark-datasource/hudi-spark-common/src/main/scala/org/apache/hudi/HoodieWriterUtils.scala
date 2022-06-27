@@ -18,11 +18,10 @@
 package org.apache.hudi
 
 import java.util.Properties
-
 import org.apache.hudi.DataSourceOptionsHelper.allAlternatives
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE
-import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieConfig, TypedProperties}
+import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieCommonConfig, HoodieConfig, TypedProperties}
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
@@ -119,53 +118,62 @@ object HoodieWriterUtils {
     }
   }
 
+  def validateTableConfig(spark: SparkSession, params: Map[String, String],
+                          tableConfig: HoodieConfig): Unit = {
+    validateTableConfig(spark, params, tableConfig, false)
+  }
+
   /**
    * Detects conflicts between new parameters and existing table configurations
    */
   def validateTableConfig(spark: SparkSession, params: Map[String, String],
-      tableConfig: HoodieConfig): Unit = {
-    val resolver = spark.sessionState.conf.resolver
-    val diffConfigs = StringBuilder.newBuilder
-    params.foreach { case (key, value) =>
-      val existingValue = getStringFromTableConfigWithAlternatives(tableConfig, key)
-      if (null != existingValue && !resolver(existingValue, value)) {
-        diffConfigs.append(s"$key:\t$value\t${tableConfig.getString(key)}\n")
+      tableConfig: HoodieConfig, isOverWriteMode: Boolean): Unit = {
+    // If Overwrite is set as save mode, we don't need to do table config validation.
+    if (!isOverWriteMode) {
+      val resolver = spark.sessionState.conf.resolver
+      val diffConfigs = StringBuilder.newBuilder
+      params.foreach { case (key, value) =>
+        val existingValue = getStringFromTableConfigWithAlternatives(tableConfig, key)
+        if (null != existingValue && !resolver(existingValue, value)) {
+          diffConfigs.append(s"$key:\t$value\t${tableConfig.getString(key)}\n")
+        }
       }
-    }
 
-    if (null != tableConfig) {
-      val datasourceRecordKey = params.getOrElse(RECORDKEY_FIELD.key(), null)
-      val tableConfigRecordKey = tableConfig.getString(HoodieTableConfig.RECORDKEY_FIELDS)
-      if (null != datasourceRecordKey && null != tableConfigRecordKey
+      if (null != tableConfig) {
+        val datasourceRecordKey = params.getOrElse(RECORDKEY_FIELD.key(), null)
+        val tableConfigRecordKey = tableConfig.getString(HoodieTableConfig.RECORDKEY_FIELDS)
+        if (null != datasourceRecordKey && null != tableConfigRecordKey
           && datasourceRecordKey != tableConfigRecordKey) {
-        diffConfigs.append(s"RecordKey:\t$datasourceRecordKey\t$tableConfigRecordKey\n")
-      }
+          diffConfigs.append(s"RecordKey:\t$datasourceRecordKey\t$tableConfigRecordKey\n")
+        }
 
-      val datasourcePreCombineKey = params.getOrElse(PRECOMBINE_FIELD.key(), null)
-      val tableConfigPreCombineKey = tableConfig.getString(HoodieTableConfig.PRECOMBINE_FIELD)
-      if (null != datasourcePreCombineKey && null != tableConfigPreCombineKey
+        val datasourcePreCombineKey = params.getOrElse(PRECOMBINE_FIELD.key(), null)
+        val tableConfigPreCombineKey = tableConfig.getString(HoodieTableConfig.PRECOMBINE_FIELD)
+        if (null != datasourcePreCombineKey && null != tableConfigPreCombineKey
           && datasourcePreCombineKey != tableConfigPreCombineKey) {
-        diffConfigs.append(s"PreCombineKey:\t$datasourcePreCombineKey\t$tableConfigPreCombineKey\n")
-      }
+          diffConfigs.append(s"PreCombineKey:\t$datasourcePreCombineKey\t$tableConfigPreCombineKey\n")
+        }
 
-      val datasourceKeyGen = getOriginKeyGenerator(params)
-      val tableConfigKeyGen = tableConfig.getString(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME)
-      if (null != datasourceKeyGen && null != tableConfigKeyGen
+        val datasourceKeyGen = getOriginKeyGenerator(params)
+        val tableConfigKeyGen = tableConfig.getString(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME)
+        if (null != datasourceKeyGen && null != tableConfigKeyGen
           && datasourceKeyGen != tableConfigKeyGen) {
-        diffConfigs.append(s"KeyGenerator:\t$datasourceKeyGen\t$tableConfigKeyGen\n")
+          diffConfigs.append(s"KeyGenerator:\t$datasourceKeyGen\t$tableConfigKeyGen\n")
+        }
+      }
+
+      if (diffConfigs.nonEmpty) {
+        diffConfigs.insert(0, "\nConfig conflict(key\tcurrent value\texisting value):\n")
+        throw new HoodieException(diffConfigs.toString.trim)
       }
     }
 
-    if (diffConfigs.nonEmpty) {
-      diffConfigs.insert(0, "\nConfig conflict(key\tcurrent value\texisting value):\n")
-      throw new HoodieException(diffConfigs.toString.trim)
-    }
     // Check schema evolution for bootstrap table.
     // now we do not support bootstrap table.
     if (params.get(OPERATION.key).contains(BOOTSTRAP_OPERATION_OPT_VAL)
-      && params.getOrElse(HoodieWriteConfig.SCHEMA_EVOLUTION_ENABLE.key(), "false").toBoolean) {
+      && params.getOrElse(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key(), "false").toBoolean) {
       throw new HoodieException(String
-        .format("now schema evolution cannot support bootstrap table, pls set %s to false", HoodieWriteConfig.SCHEMA_EVOLUTION_ENABLE.key()))
+        .format("now schema evolution cannot support bootstrap table, pls set %s to false", HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key()))
     }
   }
 

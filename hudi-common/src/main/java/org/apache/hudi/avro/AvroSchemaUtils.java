@@ -109,4 +109,15 @@ public class AvroSchemaUtils {
     return Schema.createUnion(Schema.create(Schema.Type.NULL), Schema.create(avroType));
   }
 
+  /**
+   * Returns true in case when schema contains the field w/ provided name
+   */
+  public static boolean containsFieldInSchema(Schema schema, String fieldName) {
+    try {
+      Schema.Field field = schema.getField(fieldName);
+      return field != null;
+    } catch (Exception e) {
+      return false;
+    }
+  }
 }

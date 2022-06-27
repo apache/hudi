@@ -44,8 +44,8 @@ class ShowCompactionProcedure extends BaseProcedure with ProcedureBuilder with S
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
     StructField("timestamp", DataTypes.StringType, nullable = true, Metadata.empty),
-    StructField("action", DataTypes.StringType, nullable = true, Metadata.empty),
-    StructField("size", DataTypes.IntegerType, nullable = true, Metadata.empty)
+    StructField("operation_size", DataTypes.IntegerType, nullable = true, Metadata.empty),
+    StructField("state", DataTypes.StringType, nullable = true, Metadata.empty)
   ))
 
   def parameters: Array[ProcedureParameter] = PARAMETERS
@@ -64,17 +64,17 @@ class ShowCompactionProcedure extends BaseProcedure with ProcedureBuilder with S
 
     assert(metaClient.getTableType == HoodieTableType.MERGE_ON_READ,
       s"Cannot show compaction on a Non Merge On Read table.")
-    val timeLine = metaClient.getActiveTimeline
-    val compactionInstants = timeLine.getInstants.iterator().asScala
+    val compactionInstants = metaClient.getActiveTimeline.getInstants.iterator().asScala
       .filter(p => p.getAction == HoodieTimeline.COMPACTION_ACTION)
       .toSeq
       .sortBy(f => f.getTimestamp)
       .reverse
       .take(limit)
-    val compactionPlans = compactionInstants.map(instant =>
-      (instant, CompactionUtils.getCompactionPlan(metaClient, instant.getTimestamp)))
-    compactionPlans.map { case (instant, plan) =>
-      Row(instant.getTimestamp, instant.getAction, plan.getOperations.size())
+
+    compactionInstants.map(instant =>
+      (instant, CompactionUtils.getCompactionPlan(metaClient, instant.getTimestamp))
+    ).map { case (instant, plan) =>
+      Row(instant.getTimestamp, plan.getOperations.size(), instant.getState.name())
     }
   }
 

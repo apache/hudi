@@ -23,7 +23,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
-
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
@@ -101,7 +100,49 @@ public class TestHoodieBulkInsertDataInternalWriter extends
       Option<List<String>> fileNames = Option.of(new ArrayList<>());
 
       // verify write statuses
-      assertWriteStatuses(commitMetadata.getWriteStatuses(), batches, size, sorted, fileAbsPaths, fileNames);
+      assertWriteStatuses(commitMetadata.getWriteStatuses(), batches, size, sorted, fileAbsPaths, fileNames, false);
+
+      // verify rows
+      Dataset<Row> result = sqlContext.read().parquet(fileAbsPaths.get().toArray(new String[0]));
+      assertOutput(totalInputRows, result, instantTime, fileNames, populateMetaFields);
+    }
+  }
+
+  @Test
+  public void testDataInternalWriterHiveStylePartitioning() throws Exception {
+    boolean sorted = true;
+    boolean populateMetaFields = false;
+    // init config and table
+    HoodieWriteConfig cfg = getWriteConfig(populateMetaFields, "true");
+    HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
+    for (int i = 0; i < 1; i++) {
+      String instantTime = "00" + i;
+      // init writer
+      HoodieBulkInsertDataInternalWriter writer = new HoodieBulkInsertDataInternalWriter(table, cfg, instantTime, RANDOM.nextInt(100000), RANDOM.nextLong(), RANDOM.nextLong(),
+          STRUCT_TYPE, populateMetaFields, sorted);
+
+      int size = 10 + RANDOM.nextInt(1000);
+      // write N rows to partition1, N rows to partition2 and N rows to partition3 ... Each batch should create a new RowCreateHandle and a new file
+      int batches = 3;
+      Dataset<Row> totalInputRows = null;
+
+      for (int j = 0; j < batches; j++) {
+        String partitionPath = HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS[j % 3];
+        Dataset<Row> inputRows = getRandomRows(sqlContext, size, partitionPath, false);
+        writeRows(inputRows, writer);
+        if (totalInputRows == null) {
+          totalInputRows = inputRows;
+        } else {
+          totalInputRows = totalInputRows.union(inputRows);
+        }
+      }
+
+      BaseWriterCommitMessage commitMetadata = (BaseWriterCommitMessage) writer.commit();
+      Option<List<String>> fileAbsPaths = Option.of(new ArrayList<>());
+      Option<List<String>> fileNames = Option.of(new ArrayList<>());
+
+      // verify write statuses
+      assertWriteStatuses(commitMetadata.getWriteStatuses(), batches, size, sorted, fileAbsPaths, fileNames, true);
 
       // verify rows
       Dataset<Row> result = sqlContext.read().parquet(fileAbsPaths.get().toArray(new String[0]));
@@ -154,7 +195,7 @@ public class TestHoodieBulkInsertDataInternalWriter extends
     Option<List<String>> fileAbsPaths = Option.of(new ArrayList<>());
     Option<List<String>> fileNames = Option.of(new ArrayList<>());
     // verify write statuses
-    assertWriteStatuses(commitMetadata.getWriteStatuses(), 1, size / 2, false, fileAbsPaths, fileNames);
+    assertWriteStatuses(commitMetadata.getWriteStatuses(), 1, size / 2, false, fileAbsPaths, fileNames, false);
 
     // verify rows
     Dataset<Row> result = sqlContext.read().parquet(fileAbsPaths.get().toArray(new String[0]));

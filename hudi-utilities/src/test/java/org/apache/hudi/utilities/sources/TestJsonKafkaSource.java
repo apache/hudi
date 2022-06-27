@@ -26,6 +26,7 @@ import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerMetrics;
 import org.apache.hudi.utilities.deltastreamer.SourceFormatAdapter;
+import org.apache.hudi.utilities.exception.HoodieDeltaStreamerException;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.Config;
 
@@ -48,6 +49,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Properties;
 import java.util.UUID;
 
 import static org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.Config.ENABLE_KAFKA_COMMIT_OFFSET;
@@ -366,5 +368,42 @@ public class TestJsonKafkaSource extends SparkClientFunctionalTestHarness {
     // check failure case
     props.remove(ConsumerConfig.GROUP_ID_CONFIG);
     assertThrows(HoodieNotSupportedException.class,() -> kafkaSource.getSource().onCommit(""));
+  }
+
+  @Test
+  public void testFailOnDataLoss() throws Exception {
+    // create a topic with very short retention
+    final String topic = TEST_TOPIC_PREFIX + "testFailOnDataLoss";
+    Properties topicConfig = new Properties();
+    topicConfig.setProperty("retention.ms", "10000");
+    testUtils.createTopic(topic, 1, topicConfig);
+
+    HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
+    TypedProperties failOnDataLossProps = createPropsForJsonSource(topic, null, "earliest");
+    failOnDataLossProps.setProperty(Config.ENABLE_FAIL_ON_DATA_LOSS.key(), Boolean.toString(true));
+
+    Source jsonSource = new JsonKafkaSource(failOnDataLossProps, jsc(), spark(), schemaProvider, metrics);
+    SourceFormatAdapter kafkaSource = new SourceFormatAdapter(jsonSource);
+    testUtils.sendMessages(topic, jsonifyRecords(dataGenerator.generateInserts("000", 10)));
+    // send 10 records, extract 2 records to generate a checkpoint
+    InputBatch<JavaRDD<GenericRecord>> fetch1 = kafkaSource.fetchNewDataInAvroFormat(Option.empty(), 2);
+    assertEquals(2, fetch1.getBatch().get().count());
+
+    // wait for the checkpoint to expire
+    Thread.sleep(10001);
+    Throwable t = assertThrows(HoodieDeltaStreamerException.class, () -> {
+      kafkaSource.fetchNewDataInAvroFormat(Option.of(fetch1.getCheckpointForNextBatch()), Long.MAX_VALUE);
+    });
+    assertEquals(
+        "Some data may have been lost because they are not available in Kafka any more;"
+            + " either the data was aged out by Kafka or the topic may have been deleted before all the data in the topic was processed.",
+        t.getMessage());
+    t = assertThrows(HoodieDeltaStreamerException.class, () -> {
+      kafkaSource.fetchNewDataInRowFormat(Option.of(fetch1.getCheckpointForNextBatch()), Long.MAX_VALUE);
+    });
+    assertEquals(
+        "Some data may have been lost because they are not available in Kafka any more;"
+            + " either the data was aged out by Kafka or the topic may have been deleted before all the data in the topic was processed.",
+        t.getMessage());
   }
 }

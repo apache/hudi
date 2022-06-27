@@ -162,7 +162,7 @@ public abstract class ClusteringPlanStrategy<T extends HoodieRecordPayload,I,K,O
     return metrics;
   }
 
-  protected HoodieTable<T,I,K, O> getHoodieTable() {
+  protected HoodieTable<T, I, K, O> getHoodieTable() {
     return this.hoodieTable;
   }
 

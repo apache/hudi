@@ -25,6 +25,7 @@ import org.apache.spark.SparkConf
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.util.Utils
+import org.joda.time.DateTimeZone
 import org.scalactic.source
 import org.scalatest.{BeforeAndAfterAll, FunSuite, Tag}
 
@@ -40,7 +41,10 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
     dir
   }
 
-  TimeZone.setDefault(DateTimeUtils.getTimeZone("CTT"))
+  // NOTE: We have to fix the timezone to make sure all date-/timestamp-bound utilities output
+  //       is consistent with the fixtures
+  DateTimeZone.setDefault(DateTimeZone.UTC)
+  TimeZone.setDefault(DateTimeUtils.getTimeZone("UTC"))
   protected lazy val spark: SparkSession = SparkSession.builder()
     .master("local[1]")
     .appName("hoodie sql test")
@@ -50,7 +54,7 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
     .config("hoodie.upsert.shuffle.parallelism", "4")
     .config("hoodie.delete.shuffle.parallelism", "4")
     .config("spark.sql.warehouse.dir", sparkWareHouse.getCanonicalPath)
-    .config("spark.sql.session.timeZone", "CTT")
+    .config("spark.sql.session.timeZone", "UTC")
     .config(sparkConf())
     .getOrCreate()
 

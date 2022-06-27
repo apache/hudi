@@ -192,7 +192,7 @@ public class FlinkStreamerConfig extends Configuration {
   public Boolean indexGlobalEnabled = true;
 
   @Parameter(names = {"--index-partition-regex"},
-      description = "Whether to load partitions in state if partition path matching， default *")
+      description = "Whether to load partitions in state if partition path matching, default *")
   public String indexPartitionRegex = ".*";
 
   @Parameter(names = {"--source-avro-schema-path"}, description = "Source avro schema file path, the parsed schema is used for deserialization")

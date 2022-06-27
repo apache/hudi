@@ -763,4 +763,53 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
       assertResult(true)(shown.contains("COMMENT 'This is a simple hudi table'"))
     }
   }
+
+  test("Test CTAS using an illegal definition -- a COW table with compaction enabled.") {
+    val tableName = generateTableName
+    checkExceptionContain(
+      s"""
+         | create table $tableName using hudi
+         | tblproperties(
+         |    primaryKey = 'id',
+         |    type = 'cow',
+         |    hoodie.compact.inline='true'
+         | )
+         | AS
+         | select 1 as id, 'a1' as name, 10 as price, 1000 as ts
+         |""".stripMargin)("Compaction is not supported on a CopyOnWrite table")
+    val dbPath = spark.sessionState.catalog.getDatabaseMetadata("default").locationUri.getPath
+    val tablePath = s"${dbPath}/${tableName}"
+    assertResult(false)(existsPath(tablePath))
+  }
+
+  test("Test Create Non-Hudi Table(Parquet Table)") {
+    val databaseName = "test_database"
+    spark.sql(s"create database if not exists $databaseName")
+    spark.sql(s"use $databaseName")
+
+    val tableName = generateTableName
+    // Create a managed table
+    spark.sql(
+      s"""
+         | create table $tableName (
+         |  id int,
+         |  name string,
+         |  price double,
+         |  ts long
+         | ) using parquet
+       """.stripMargin)
+    val table = spark.sessionState.catalog.getTableMetadata(TableIdentifier(tableName))
+    assertResult(tableName)(table.identifier.table)
+    assertResult("parquet")(table.provider.get)
+    assertResult(CatalogTableType.MANAGED)(table.tableType)
+    assertResult(
+      Seq(
+        StructField("id", IntegerType),
+        StructField("name", StringType),
+        StructField("price", DoubleType),
+        StructField("ts", LongType))
+    )(table.schema.fields)
+
+    spark.sql("use default")
+  }
 }

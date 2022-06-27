@@ -94,7 +94,7 @@ public class FlinkMergeHandle<T extends HoodieRecordPayload, I, K, O>
    */
   private void deleteInvalidDataFile(long lastAttemptId) {
     final String lastWriteToken = FSUtils.makeWriteToken(getPartitionId(), getStageId(), lastAttemptId);
-    final String lastDataFileName = FSUtils.makeDataFileName(instantTime,
+    final String lastDataFileName = FSUtils.makeBaseFileName(instantTime,
         lastWriteToken, this.fileId, hoodieTable.getBaseFileExtension());
     final Path path = makeNewFilePath(partitionPath, lastDataFileName);
     if (path.equals(oldFilePath)) {
@@ -158,9 +158,15 @@ public class FlinkMergeHandle<T extends HoodieRecordPayload, I, K, O>
    * Use the writeToken + "-" + rollNumber as the new writeToken of a mini-batch write.
    */
   protected String newFileNameWithRollover(int rollNumber) {
-    // make the intermediate file as hidden
-    return FSUtils.makeDataFileName(instantTime, writeToken + "-" + rollNumber,
+    return FSUtils.makeBaseFileName(instantTime, writeToken + "-" + rollNumber,
         this.fileId, hoodieTable.getBaseFileExtension());
+  }
+
+  @Override
+  protected void setWriteStatusPath() {
+    // if there was rollover, should set up the path as the initial new file path.
+    Path path = rolloverPaths.size() > 0 ? rolloverPaths.get(0) : newFilePath;
+    writeStatus.getStat().setPath(new Path(config.getBasePath()), path);
   }
 
   @Override

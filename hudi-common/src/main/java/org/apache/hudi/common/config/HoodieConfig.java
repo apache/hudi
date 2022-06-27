@@ -57,6 +57,7 @@ public class HoodieConfig implements Serializable {
   }
 
   public <T> void setValue(ConfigProperty<T> cfg, String val) {
+    cfg.checkValues(val);
     props.setProperty(cfg.key(), val);
   }
 

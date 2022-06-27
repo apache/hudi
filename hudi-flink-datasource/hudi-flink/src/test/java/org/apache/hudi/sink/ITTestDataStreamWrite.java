@@ -102,7 +102,7 @@ public class ITTestDataStreamWrite extends TestLogger {
     conf.setString(FlinkOptions.INDEX_KEY_FIELD, "id");
     conf.setBoolean(FlinkOptions.PRE_COMBINE,true);
 
-    testWriteToHoodie(conf, "cow_write", 1, EXPECTED);
+    testWriteToHoodie(conf, "cow_write", 2, EXPECTED);
   }
 
   @Test
@@ -150,6 +150,17 @@ public class ITTestDataStreamWrite extends TestLogger {
     conf.setString(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ.name());
 
     testWriteToHoodie(conf, "mor_write_with_compact", 1, EXPECTED);
+  }
+
+  @Test
+  public void testWriteMergeOnReadWithClustering() throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.setBoolean(FlinkOptions.CLUSTERING_SCHEDULE_ENABLED, true);
+    conf.setInteger(FlinkOptions.CLUSTERING_DELTA_COMMITS, 1);
+    conf.setString(FlinkOptions.OPERATION, "insert");
+    conf.setString(FlinkOptions.TABLE_TYPE, HoodieTableType.COPY_ON_WRITE.name());
+
+    testWriteToHoodieWithCluster(conf, "cow_write_with_cluster", 1, EXPECTED);
   }
 
   private void testWriteToHoodie(
@@ -250,6 +261,69 @@ public class ITTestDataStreamWrite extends TestLogger {
     }
 
     TestData.checkWrittenFullData(tempFile, expected);
+  }
 
+  private void testWriteToHoodieWithCluster(
+      Configuration conf,
+      String jobName,
+      int checkpoints,
+      Map<String, List<String>> expected) throws Exception {
+
+    StreamExecutionEnvironment execEnv = StreamExecutionEnvironment.getExecutionEnvironment();
+    execEnv.getConfig().disableObjectReuse();
+    execEnv.setParallelism(4);
+    // set up checkpoint interval
+    execEnv.enableCheckpointing(4000, CheckpointingMode.EXACTLY_ONCE);
+    execEnv.getCheckpointConfig().setMaxConcurrentCheckpoints(1);
+
+    // Read from file source
+    RowType rowType =
+        (RowType) AvroSchemaConverter.convertToDataType(StreamerUtil.getSourceSchema(conf))
+            .getLogicalType();
+
+    JsonRowDataDeserializationSchema deserializationSchema = new JsonRowDataDeserializationSchema(
+        rowType,
+        InternalTypeInfo.of(rowType),
+        false,
+        true,
+        TimestampFormat.ISO_8601
+    );
+    String sourcePath = Objects.requireNonNull(Thread.currentThread()
+        .getContextClassLoader().getResource("test_source.data")).toString();
+
+    boolean isMor = conf.getString(FlinkOptions.TABLE_TYPE).equals(HoodieTableType.MERGE_ON_READ.name());
+
+    DataStream<RowData> dataStream;
+    if (isMor) {
+      TextInputFormat format = new TextInputFormat(new Path(sourcePath));
+      format.setFilesFilter(FilePathFilter.createDefaultFilter());
+      TypeInformation<String> typeInfo = BasicTypeInfo.STRING_TYPE_INFO;
+      format.setCharsetName("UTF-8");
+
+      dataStream = execEnv
+          // use PROCESS_CONTINUOUSLY mode to trigger checkpoint
+          .readFile(format, sourcePath, FileProcessingMode.PROCESS_CONTINUOUSLY, 1000, typeInfo)
+          .map(record -> deserializationSchema.deserialize(record.getBytes(StandardCharsets.UTF_8)))
+          .setParallelism(1);
+    } else {
+      dataStream = execEnv
+          // use continuous file source to trigger checkpoint
+          .addSource(new ContinuousFileSource.BoundedSourceFunction(new Path(sourcePath), checkpoints))
+          .name("continuous_file_source")
+          .setParallelism(1)
+          .map(record -> deserializationSchema.deserialize(record.getBytes(StandardCharsets.UTF_8)))
+          .setParallelism(4);
+    }
+
+    DataStream<Object> pipeline = Pipelines.append(conf, rowType, dataStream, true);
+    execEnv.addOperator(pipeline.getTransformation());
+
+    Pipelines.cluster(conf, rowType, pipeline);
+    JobClient client = execEnv.executeAsync(jobName);
+
+    // wait for the streaming job to finish
+    client.getJobExecutionResult().get();
+
+    TestData.checkWrittenFullData(tempFile, expected);
   }
 }

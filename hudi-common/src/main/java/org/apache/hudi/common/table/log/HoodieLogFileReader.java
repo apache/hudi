@@ -76,7 +76,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
   private final HoodieLogFile logFile;
   private final byte[] magicBuffer = new byte[6];
   private final Schema readerSchema;
-  private InternalSchema internalSchema = InternalSchema.getEmptyInternalSchema();
+  private InternalSchema internalSchema;
   private final String keyField;
   private boolean readBlockLazily;
   private long reverseLogFilePosition;
