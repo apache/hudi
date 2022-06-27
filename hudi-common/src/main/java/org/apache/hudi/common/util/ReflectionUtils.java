@@ -18,8 +18,6 @@
 
 package org.apache.hudi.common.util;
 
-import org.apache.hudi.common.model.HoodieMerge;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.log4j.LogManager;
@@ -47,7 +45,6 @@ public class ReflectionUtils {
   private static final Logger LOG = LogManager.getLogger(ReflectionUtils.class);
 
   private static final Map<String, Class<?>> CLAZZ_CACHE = new HashMap<>();
-  private static final Map<String, Object> INSTANCE_CACHE = new HashMap<>();
 
   public static Class<?> getClass(String clazzName) {
     synchronized (CLAZZ_CACHE) {
@@ -68,39 +65,6 @@ public class ReflectionUtils {
       return (T) getClass(fqcn).newInstance();
     } catch (InstantiationException | IllegalAccessException e) {
       throw new HoodieException("Could not load class " + fqcn, e);
-    }
-  }
-
-  /**
-   * Instantiate a given class with a generic record payload.
-   */
-  public static <T extends HoodieRecordPayload> T loadPayload(String recordPayloadClass, Object[] payloadArgs,
-      Class<?>... constructorArgTypes) {
-    try {
-      return (T) getClass(recordPayloadClass).getConstructor(constructorArgTypes).newInstance(payloadArgs);
-    } catch (InstantiationException | IllegalAccessException | InvocationTargetException | NoSuchMethodException e) {
-      throw new HoodieException("Unable to instantiate payload class ", e);
-    }
-  }
-
-  /**
-   * Instantiate a given class with a record merge.
-   */
-  public static HoodieMerge loadHoodieMerge(String mergeClass) {
-    try {
-      HoodieMerge hoodieMerge = (HoodieMerge) INSTANCE_CACHE.get(mergeClass);
-      if (null == hoodieMerge) {
-        synchronized (HoodieMerge.class) {
-          hoodieMerge = (HoodieMerge) INSTANCE_CACHE.get(mergeClass);
-          if (null == hoodieMerge) {
-            hoodieMerge = (HoodieMerge)loadClass(mergeClass, new Object[]{});
-            INSTANCE_CACHE.put(mergeClass, hoodieMerge);
-          }
-        }
-      }
-      return hoodieMerge;
-    } catch (HoodieException e) {
-      throw new HoodieException("Unable to instantiate hoodie merge class ", e);
     }
   }
 

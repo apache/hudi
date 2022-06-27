@@ -27,8 +27,8 @@ import org.apache.hudi.common.model.HoodieMerge;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.ObjectSizeCalculator;
-import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
@@ -202,7 +202,7 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
   private void initMergeClass() {
     String mergeClassName = metaClient.getTableConfig().getMergeClass();
     LOG.info("init hoodie merge with class [{}]", mergeClassName);
-    hoodieMerge = ReflectionUtils.loadHoodieMerge(mergeClassName);
+    hoodieMerge = HoodieRecordUtils.loadHoodieMerge(mergeClassName);
   }
 
   /**

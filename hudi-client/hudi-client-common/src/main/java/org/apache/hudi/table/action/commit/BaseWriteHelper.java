@@ -21,7 +21,7 @@ package org.apache.hudi.table.action.commit;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieMerge;
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
@@ -83,7 +83,7 @@ public abstract class BaseWriteHelper<T, I, K, O, R> {
    */
   public I deduplicateRecords(
       I records, HoodieTable<T, I, K, O> table, int parallelism) {
-    HoodieMerge hoodieMerge = ReflectionUtils.loadHoodieMerge(table.getConfig().getMergeClass());
+    HoodieMerge hoodieMerge = HoodieRecordUtils.loadHoodieMerge(table.getConfig().getMergeClass());
     return deduplicateRecords(records, table.getIndex(), parallelism, hoodieMerge);
   }
 

@@ -21,8 +21,8 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 
@@ -205,7 +205,7 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
   @Nonnull
   private T instantiateRecordPayloadWrapper(Object combinedAvroPayload, Comparable newPreCombineVal) {
     return unsafeCast(
-        ReflectionUtils.loadPayload(
+        HoodieRecordUtils.loadPayload(
             getData().getClass().getCanonicalName(),
             new Object[]{combinedAvroPayload, newPreCombineVal},
             GenericRecord.class,

@@ -134,17 +134,17 @@ public abstract class HoodieRecord<T> implements Serializable {
   /**
    * For purposes of preCombining.
    */
-  private Comparable orderingVal;
+  private Comparable<?> orderingVal;
 
   public HoodieRecord(HoodieKey key, T data) {
     this(key, data, null, null);
   }
 
-  public HoodieRecord(HoodieKey key, T data, Comparable orderingVal) {
+  public HoodieRecord(HoodieKey key, T data, Comparable<?> orderingVal) {
     this(key, data, null, orderingVal);
   }
 
-  public HoodieRecord(HoodieKey key, T data, HoodieOperation operation, Comparable orderingVal) {
+  public HoodieRecord(HoodieKey key, T data, HoodieOperation operation, Comparable<?> orderingVal) {
     this.key = key;
     this.data = data;
     this.currentLocation = null;
@@ -179,7 +179,7 @@ public abstract class HoodieRecord<T> implements Serializable {
     return operation;
   }
 
-  public Comparable getOrderingValue() {
+  public Comparable<?> getOrderingValue() {
     return orderingVal;
   }
 
