@@ -97,8 +97,6 @@ public class CkpMetadata implements Serializable {
   public void bootstrap(HoodieTableMetaClient metaClient) throws IOException {
     fs.delete(path, true);
     fs.mkdirs(path);
-    metaClient.getActiveTimeline().getCommitsTimeline().filterPendingExcludingCompaction()
-        .lastInstant().ifPresent(instant -> startInstant(instant.getTimestamp()));
   }
 
   public void startInstant(String instant) {
