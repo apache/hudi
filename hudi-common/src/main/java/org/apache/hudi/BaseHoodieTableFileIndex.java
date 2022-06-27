@@ -55,6 +55,8 @@ import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.hadoop.CachingPath.createPathUnsafe;
+
 /**
  * Common (engine-agnostic) File Index implementation enabling individual query engines to
  * list Hudi Table contents based on the
@@ -391,7 +393,9 @@ public abstract class   BaseHoodieTableFileIndex implements AutoCloseable {
 
     Path fullPartitionPath(Path basePath) {
       if (!path.isEmpty()) {
-        return new CachingPath(basePath, path);
+        // NOTE: Since we now that the path is a proper relative path that doesn't require
+        //       normalization we create Hadoop's Path using more performant unsafe variant
+        return new CachingPath(basePath, createPathUnsafe(path));
       }
 
       return new CachingPath(basePath);

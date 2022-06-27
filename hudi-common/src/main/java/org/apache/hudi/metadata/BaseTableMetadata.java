@@ -43,6 +43,7 @@ import org.apache.hudi.exception.HoodieMetadataException;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.hadoop.CachingPath;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -68,7 +69,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
 
   protected final transient HoodieEngineContext engineContext;
   protected final SerializableConfiguration hadoopConf;
-  protected final String dataBasePath;
+  protected final Path dataBasePath;
   protected final HoodieTableMetaClient dataMetaClient;
   protected final Option<HoodieMetadataMetrics> metrics;
   protected final HoodieMetadataConfig metadataConfig;
@@ -83,7 +84,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
                               String dataBasePath, String spillableMapDirectory) {
     this.engineContext = engineContext;
     this.hadoopConf = new SerializableConfiguration(engineContext.getHadoopConf());
-    this.dataBasePath = dataBasePath;
+    this.dataBasePath = new CachingPath(dataBasePath);
     this.dataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf.get()).setBasePath(dataBasePath).build();
     this.spillableMapDirectory = spillableMapDirectory;
     this.metadataConfig = metadataConfig;
@@ -113,7 +114,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
         throw new HoodieMetadataException("Failed to retrieve list of partition from metadata", e);
       }
     }
-    return new FileSystemBackedTableMetadata(getEngineContext(), hadoopConf, dataBasePath,
+    return new FileSystemBackedTableMetadata(getEngineContext(), hadoopConf, dataBasePath.toString(),
         metadataConfig.shouldAssumeDatePartitioning()).getAllPartitionPaths();
   }
 
@@ -138,7 +139,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
       }
     }
 
-    return new FileSystemBackedTableMetadata(getEngineContext(), hadoopConf, dataBasePath, metadataConfig.shouldAssumeDatePartitioning())
+    return new FileSystemBackedTableMetadata(getEngineContext(), hadoopConf, dataBasePath.toString(), metadataConfig.shouldAssumeDatePartitioning())
         .getAllFilesInPartition(partitionPath);
   }
 
@@ -154,7 +155,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
       }
     }
 
-    return new FileSystemBackedTableMetadata(getEngineContext(), hadoopConf, dataBasePath, metadataConfig.shouldAssumeDatePartitioning())
+    return new FileSystemBackedTableMetadata(getEngineContext(), hadoopConf, dataBasePath.toString(), metadataConfig.shouldAssumeDatePartitioning())
         .getAllFilesInPartitions(partitions);
   }
 
@@ -303,7 +304,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
    * @param partitionPath The absolute path of the partition
    */
   FileStatus[] fetchAllFilesInPartition(Path partitionPath) throws IOException {
-    String partitionName = FSUtils.getRelativePartitionPath(new Path(dataBasePath), partitionPath);
+    String partitionName = FSUtils.getRelativePartitionPath(dataBasePath, partitionPath);
     if (partitionName.isEmpty()) {
       partitionName = NON_PARTITIONED_NAME;
     }
@@ -327,7 +328,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
     Map<String, Path> partitionInfo = new HashMap<>();
     boolean foundNonPartitionedPath = false;
     for (Path partitionPath: partitionPaths) {
-      String partitionName = FSUtils.getRelativePartitionPath(new Path(dataBasePath), partitionPath);
+      String partitionName = FSUtils.getRelativePartitionPath(dataBasePath, partitionPath);
       if (partitionName.isEmpty()) {
         if (partitionInfo.size() > 1) {
           throw new HoodieMetadataException("Found mix of partitioned and non partitioned paths while fetching data from metadata table");

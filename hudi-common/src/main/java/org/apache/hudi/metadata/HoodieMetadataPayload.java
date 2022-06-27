@@ -53,6 +53,7 @@ import org.apache.hudi.common.util.hash.ColumnIndexID;
 import org.apache.hudi.common.util.hash.FileIndexID;
 import org.apache.hudi.common.util.hash.PartitionIndexID;
 import org.apache.hudi.exception.HoodieMetadataException;
+import org.apache.hudi.hadoop.CachingPath;
 import org.apache.hudi.io.storage.HoodieHFileReader;
 import org.apache.hudi.util.Lazy;
 
@@ -80,6 +81,7 @@ import static org.apache.hudi.common.util.DateTimeUtils.microsToInstant;
 import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
+import static org.apache.hudi.hadoop.CachingPath.createPathUnsafe;
 import static org.apache.hudi.metadata.HoodieTableMetadata.RECORDKEY_PARTITION_LIST;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getPartitionIdentifier;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.tryUpcastDecimal;
@@ -475,8 +477,13 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     FileSystem fs = partitionPath.getFileSystem(hadoopConf);
     long blockSize = fs.getDefaultBlockSize(partitionPath);
     return filterFileInfoEntries(false)
-        .map(e -> new FileStatus(e.getValue().getSize(), false, 0, blockSize, 0, 0,
-            null, null, null, new Path(partitionPath, e.getKey())))
+        .map(e -> {
+          // NOTE: Since we now that the Metadata Table's Payload is simply a file-name we're
+          //       creating Hadoop's Path using more performant unsafe variant
+          CachingPath filePath = new CachingPath(partitionPath, createPathUnsafe(e.getKey()));
+          return new FileStatus(e.getValue().getSize(), false, 0, blockSize, 0, 0,
+              null, null, null, filePath);
+        })
         .toArray(FileStatus[]::new);
   }
 
