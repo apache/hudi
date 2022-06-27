@@ -18,85 +18,71 @@
 
 package org.apache.hudi.io.storage;
 
-import org.apache.avro.Schema;
-import org.apache.avro.generic.IndexedRecord;
-
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecord.Mapper;
 import org.apache.hudi.common.util.ClosableIterator;
 import org.apache.hudi.common.util.MappingIterator;
 import org.apache.hudi.common.util.Option;
+
+import org.apache.avro.Schema;
+import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.util.List;
 
-public interface HoodieAvroFileReader extends HoodieFileReader, AutoCloseable {
+import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 
-  ClosableIterator<IndexedRecord> getRecordIterator(Schema readerSchema) throws IOException;
+public interface HoodieAvroFileReader extends HoodieFileReader<IndexedRecord>, AutoCloseable {
 
-  default Option<IndexedRecord> getRecordByKey(String key, Schema readerSchema) throws IOException {
+  ClosableIterator<IndexedRecord> getIndexedRecordIterator(Schema readerSchema) throws IOException;
+
+  ClosableIterator<IndexedRecord> getIndexedRecordIterator(Schema readerSchema, Schema requestedSchema) throws IOException;
+
+  default Option<IndexedRecord> getIndexedRecordByKey(String key, Schema readerSchema) throws IOException {
     throw new UnsupportedOperationException();
   }
 
-  default ClosableIterator<IndexedRecord> getRecordsByKeysIterator(List<String> keys, Schema schema) throws IOException {
+  default ClosableIterator<IndexedRecord> getIndexedRecordsByKeysIterator(List<String> keys, Schema schema) throws IOException {
     throw new UnsupportedOperationException();
   }
 
-  default ClosableIterator<IndexedRecord> getRecordsByKeysIterator(List<String> keys) throws IOException {
-    return getRecordsByKeysIterator(keys, getSchema());
+  default ClosableIterator<IndexedRecord> getIndexedRecordsByKeysIterator(List<String> keys) throws IOException {
+    return getIndexedRecordsByKeysIterator(keys, getSchema());
   }
 
-  default ClosableIterator<IndexedRecord> getRecordsByKeyPrefixIterator(List<String> keyPrefixes, Schema schema) throws IOException {
+  default ClosableIterator<IndexedRecord> getIndexedRecordsByKeyPrefixIterator(List<String> keyPrefixes, Schema schema) throws IOException {
     throw new UnsupportedEncodingException();
   }
 
-  default ClosableIterator<IndexedRecord> getRecordsByKeyPrefixIterator(List<String> keyPrefixes) throws IOException {
-    return getRecordsByKeyPrefixIterator(keyPrefixes, getSchema());
+  default ClosableIterator<IndexedRecord> getIndexedRecordsByKeyPrefixIterator(List<String> keyPrefixes) throws IOException {
+    return getIndexedRecordsByKeyPrefixIterator(keyPrefixes, getSchema());
   }
 
-  default ClosableIterator<HoodieRecord> getRecordsByKeysIterator(List<String> keys, Schema schema, HoodieRecord.Mapper mapper) throws IOException {
-    ClosableIterator<IndexedRecord> iterator = getRecordsByKeysIterator(keys, schema);
-    return new HoodieRecordTransformIterator(iterator, mapper);
+  default ClosableIterator<HoodieRecord<IndexedRecord>> getRecordsByKeysIterator(List<String> keys, Schema schema) throws IOException {
+    ClosableIterator<IndexedRecord> iterator = getIndexedRecordsByKeysIterator(keys, schema);
+    return new MappingIterator<>(iterator, data -> unsafeCast(new HoodieAvroIndexedRecord(data)));
   }
 
-  default ClosableIterator<HoodieRecord> getRecordsByKeyPrefixIterator(List<String> keyPrefixes, Schema schema, HoodieRecord.Mapper mapper) throws IOException {
-    ClosableIterator<IndexedRecord> iterator = getRecordsByKeyPrefixIterator(keyPrefixes, schema);
-    return new HoodieRecordTransformIterator(iterator, mapper);
-  }
-
-  @Override
-  default ClosableIterator<HoodieRecord> getRecordIterator(Schema schema, HoodieRecord.Mapper mapper) throws IOException {
-    return new MappingIterator<>(getRecordIterator(schema), mapper::apply);
+  default ClosableIterator<HoodieRecord<IndexedRecord>> getRecordsByKeyPrefixIterator(List<String> keyPrefixes, Schema schema) throws IOException {
+    ClosableIterator<IndexedRecord> iterator = getIndexedRecordsByKeyPrefixIterator(keyPrefixes, schema);
+    return new MappingIterator<>(iterator, data -> unsafeCast(new HoodieAvroIndexedRecord(data)));
   }
 
   @Override
-  default Option<HoodieRecord> getRecordByKey(String key, Schema readerSchema, HoodieRecord.Mapper mapper) throws IOException {
-    return getRecordByKey(key, readerSchema).map(mapper::apply);
+  default ClosableIterator<HoodieRecord<IndexedRecord>> getRecordIterator(Schema schema) throws IOException {
+    ClosableIterator<IndexedRecord> iterator = getIndexedRecordIterator(schema);
+    return new MappingIterator<>(iterator, data -> unsafeCast(new HoodieAvroIndexedRecord(data)));
   }
 
-  class HoodieRecordTransformIterator implements ClosableIterator<HoodieRecord> {
-    private final ClosableIterator<IndexedRecord> dataIterator;
-    private final HoodieRecord.Mapper mapper;
+  @Override
+  default ClosableIterator<HoodieRecord<IndexedRecord>> getRecordIterator(Schema readerSchema, Schema requestedSchema) throws IOException {
+    ClosableIterator<IndexedRecord> iterator = getIndexedRecordIterator(readerSchema, requestedSchema);
+    return new MappingIterator<>(iterator, data -> unsafeCast(new HoodieAvroIndexedRecord(data)));
+  }
 
-    public HoodieRecordTransformIterator(ClosableIterator<IndexedRecord> dataIterator, Mapper mapper) {
-      this.dataIterator = dataIterator;
-      this.mapper = mapper;
-    }
-
-    @Override
-    public boolean hasNext() {
-      return dataIterator.hasNext();
-    }
-
-    @Override
-    public HoodieRecord next() {
-      return mapper.apply(dataIterator.next());
-    }
-
-    @Override
-    public void close() {
-      dataIterator.close();
-    }
+  default Option<HoodieRecord<IndexedRecord>> getRecordByKey(String key, Schema readerSchema) throws IOException {
+    return getIndexedRecordByKey(key, readerSchema)
+        .map(data -> unsafeCast(new HoodieAvroIndexedRecord(data)));
   }
 }

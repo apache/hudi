@@ -26,6 +26,7 @@ import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.util.BaseFileUtils;
 import org.apache.hudi.common.util.ClosableIterator;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetReaderIterator;
 import org.apache.parquet.avro.AvroParquetReader;
 import org.apache.parquet.avro.AvroReadSupport;
@@ -65,12 +66,13 @@ public class HoodieAvroParquetReader implements HoodieAvroFileReader {
   }
 
   @Override
-  public ClosableIterator<IndexedRecord> getRecordIterator(Schema schema) throws IOException {
-    AvroReadSupport.setAvroReadSchema(conf, schema);
-    ParquetReader<IndexedRecord> reader = AvroParquetReader.<IndexedRecord>builder(path).withConf(conf).build();
-    ParquetReaderIterator<IndexedRecord> parquetReaderIterator = new ParquetReaderIterator<>(reader);
-    readerIterators.add(parquetReaderIterator);
-    return parquetReaderIterator;
+  public ClosableIterator<IndexedRecord> getIndexedRecordIterator(Schema schema) throws IOException {
+    return getIndexedRecordIteratorInternal(schema, Option.empty());
+  }
+
+  @Override
+  public ClosableIterator<IndexedRecord> getIndexedRecordIterator(Schema readerSchema, Schema requestedSchema) throws IOException {
+    return getIndexedRecordIteratorInternal(readerSchema, Option.of(requestedSchema));
   }
 
   @Override
@@ -86,5 +88,16 @@ public class HoodieAvroParquetReader implements HoodieAvroFileReader {
   @Override
   public long getTotalRecords() {
     return parquetUtils.getRowCount(conf, path);
+  }
+
+  private ClosableIterator<IndexedRecord> getIndexedRecordIteratorInternal(Schema schema, Option<Schema> requestedSchema) throws IOException {
+    AvroReadSupport.setAvroReadSchema(conf, schema);
+    if (requestedSchema.isPresent()) {
+      AvroReadSupport.setRequestedProjection(conf, requestedSchema.get());
+    }
+    ParquetReader<IndexedRecord> reader = AvroParquetReader.<IndexedRecord>builder(path).withConf(conf).build();
+    ParquetReaderIterator<IndexedRecord> parquetReaderIterator = new ParquetReaderIterator<>(reader);
+    readerIterators.add(parquetReaderIterator);
+    return parquetReaderIterator;
   }
 }

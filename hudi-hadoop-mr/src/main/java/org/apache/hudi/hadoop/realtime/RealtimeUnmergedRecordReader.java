@@ -19,9 +19,11 @@
 package org.apache.hudi.hadoop.realtime;
 
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.table.log.HoodieUnMergedLogRecordScanner;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.Functions;
+import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.queue.BoundedInMemoryExecutor;
 import org.apache.hudi.common.util.queue.BoundedInMemoryQueueProducer;
@@ -92,10 +94,11 @@ class RealtimeUnmergedRecordReader extends AbstractRealtimeRecordReader
         .withBufferSize(this.jobConf.getInt(HoodieRealtimeConfig.MAX_DFS_STREAM_BUFFER_SIZE_PROP, HoodieRealtimeConfig.DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE))
         .withLogRecordScannerCallback(record -> {
           // convert Hoodie log record to Hadoop AvroWritable and buffer
-          GenericRecord rec = (GenericRecord) record.toIndexedRecord(getReaderSchema(), payloadProps).get();
+          GenericRecord rec = (GenericRecord) record.toIndexedRecord(getReaderSchema(), payloadProps).get().getData();
           ArrayWritable aWritable = (ArrayWritable) HoodieRealtimeRecordReaderUtils.avroToArrayWritable(rec, getHiveSchema());
           this.executor.getQueue().insertRecord(aWritable);
         })
+        .withRecordMerger(HoodieRecordUtils.loadRecordMerger(HoodieAvroRecordMerger.class.getName()))
         .build();
     // Start reading and buffering
     this.executor.startProducers();

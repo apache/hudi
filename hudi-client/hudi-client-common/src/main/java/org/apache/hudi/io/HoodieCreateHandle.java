@@ -27,6 +27,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
@@ -99,8 +100,8 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
           hoodieTable.getPartitionMetafileFormat());
       partitionMetadata.trySave(getPartitionId());
       createMarkerFile(partitionPath, FSUtils.makeBaseFileName(this.instantTime, this.writeToken, this.fileId, hoodieTable.getBaseFileExtension()));
-      this.fileWriter = HoodieFileWriterFactory.getFileWriter(instantTime, path, hoodieTable, config,
-        writeSchemaWithMetaFields, this.taskContextSupplier);
+      this.fileWriter = HoodieFileWriterFactory.getFileWriter(instantTime, path, hoodieTable.getHadoopConf(), config,
+        writeSchemaWithMetaFields, this.taskContextSupplier, config.getRecordMerger().getRecordType());
     } catch (IOException e) {
       throw new HoodieInsertException("Failed to initialize HoodieStorageWriter for path " + path, e);
     }
@@ -131,17 +132,22 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   protected void doWrite(HoodieRecord record, Schema schema, TypedProperties props) {
     Option<Map<String, String>> recordMetadata = record.getMetadata();
     try {
-      if (!HoodieOperation.isDelete(record.getOperation()) && record.isPresent(schema, config.getProps())) {
+      if (!HoodieOperation.isDelete(record.getOperation()) && !record.isDelete(schema, config.getProps())) {
         if (record.shouldIgnore(schema, config.getProps())) {
           return;
         }
         // Convert GenericRecord to GenericRecord with hoodie commit metadata in schema
-        if (preserveMetadata) {
-          fileWriter.write(record.getRecordKey(), record.rewriteRecordWithMetadata(
-              schema, config.getProps(), schemaOnReadEnabled, writeSchemaWithMetaFields, path.getName()), writeSchemaWithMetaFields);
+        HoodieRecord rewriteRecord;
+        if (schemaOnReadEnabled) {
+          rewriteRecord = record.rewriteRecordWithNewSchema(schema, config.getProps(), writeSchemaWithMetaFields, Collections.emptyMap());
         } else {
-          fileWriter.writeWithMetadata(record.getKey(), record.rewriteRecordWithMetadata(
-              schema, config.getProps(), schemaOnReadEnabled, writeSchemaWithMetaFields, path.getName()), writeSchemaWithMetaFields);
+          rewriteRecord = record.rewriteRecord(schema, config.getProps(), writeSchemaWithMetaFields);
+        }
+        rewriteRecord = rewriteRecord.updateValues(writeSchemaWithMetaFields, config.getProps(), Collections.singletonMap(HoodieMetadataField.FILENAME_METADATA_FIELD.getFieldName(), path.getName()));
+        if (preserveMetadata) {
+          fileWriter.write(record.getRecordKey(), rewriteRecord, writeSchemaWithMetaFields);
+        } else {
+          fileWriter.writeWithMetadata(record.getKey(), rewriteRecord, writeSchemaWithMetaFields);
         }
         // update the new location of record, so we know where to find it next
         record.unseal();

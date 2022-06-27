@@ -19,31 +19,22 @@
 package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.utils.MergingIterator;
-import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.util.queue.BoundedInMemoryQueueConsumer;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.table.HoodieTable;
 
-import org.apache.avro.generic.GenericDatumReader;
-import org.apache.avro.generic.GenericDatumWriter;
-import org.apache.avro.io.BinaryDecoder;
-import org.apache.avro.io.BinaryEncoder;
-import org.apache.avro.io.DecoderFactory;
-import org.apache.avro.io.EncoderFactory;
 import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 
 import javax.annotation.Nonnull;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.Iterator;
 
@@ -60,32 +51,6 @@ public abstract class BaseMergeHelper<T, I, K, O> {
    */
   public abstract void runMerge(HoodieTable<T, I, K, O> table, HoodieMergeHandle<T, I, K, O> upsertHandle) throws IOException;
 
-  protected HoodieRecord transformRecordBasedOnNewSchema(GenericDatumReader<GenericRecord> gReader, GenericDatumWriter<GenericRecord> gWriter,
-                                                               ThreadLocal<BinaryEncoder> encoderCache, ThreadLocal<BinaryDecoder> decoderCache,
-                                                               GenericRecord gRec) {
-    ByteArrayOutputStream inStream = null;
-    try {
-      inStream = new ByteArrayOutputStream();
-      BinaryEncoder encoder = EncoderFactory.get().binaryEncoder(inStream, encoderCache.get());
-      encoderCache.set(encoder);
-      gWriter.write(gRec, encoder);
-      encoder.flush();
-
-      BinaryDecoder decoder = DecoderFactory.get().binaryDecoder(inStream.toByteArray(), decoderCache.get());
-      decoderCache.set(decoder);
-      GenericRecord transformedRec = gReader.read(null, decoder);
-      return new HoodieAvroIndexedRecord(transformedRec);
-    } catch (IOException e) {
-      throw new HoodieException(e);
-    } finally {
-      try {
-        inStream.close();
-      } catch (IOException ioe) {
-        throw new HoodieException(ioe.getMessage(), ioe);
-      }
-    }
-  }
-
   /**
    * Create Parquet record iterator that provides a stitched view of record read from skeleton and bootstrap file.
    * Skeleton file is a representation of the bootstrap file inside the table, with just the bare bone fields needed
@@ -99,7 +64,8 @@ public abstract class BaseMergeHelper<T, I, K, O> {
                                                       boolean externalSchemaTransformation) throws IOException {
     Path externalFilePath = new Path(baseFile.getBootstrapBaseFile().get().getPath());
     Configuration bootstrapFileConfig = new Configuration(table.getHadoopConf());
-    HoodieFileReader bootstrapReader = HoodieFileReaderFactory.getFileReader(bootstrapFileConfig, externalFilePath);
+    HoodieRecordType recordType = table.getConfig().getRecordMerger().getRecordType();
+    HoodieFileReader bootstrapReader = HoodieFileReaderFactory.getReaderFactory(recordType).getFileReader(bootstrapFileConfig, externalFilePath);
 
     Schema bootstrapReadSchema;
     if (externalSchemaTransformation) {
@@ -109,15 +75,15 @@ public abstract class BaseMergeHelper<T, I, K, O> {
     }
 
     return new MergingIterator<>(
-        reader.getRecordIterator(readerSchema, HoodieAvroIndexedRecord::new),
-        bootstrapReader.getRecordIterator(bootstrapReadSchema, HoodieAvroIndexedRecord::new),
-        (oneRecord, otherRecord) -> mergeRecords(oneRecord, otherRecord, readerSchema, mergeHandle.getWriterSchemaWithMetaFields()));
+        (Iterator<HoodieRecord>) reader.getRecordIterator(readerSchema),
+        (Iterator<HoodieRecord>) bootstrapReader.getRecordIterator(bootstrapReadSchema),
+        (oneRecord, otherRecord) -> mergeRecords(oneRecord, otherRecord, mergeHandle.getWriterSchemaWithMetaFields()));
   }
 
   @Nonnull
-  private static HoodieRecord mergeRecords(HoodieRecord one, HoodieRecord other, Schema readerSchema, Schema writerSchema) {
+  private static HoodieRecord mergeRecords(HoodieRecord left, HoodieRecord right, Schema targetSchema) {
     try {
-      return one.mergeWith(other, readerSchema, writerSchema);
+      return left.mergeWith(right, targetSchema);
     } catch (IOException e) {
       throw new HoodieIOException("Failed to merge records", e);
     }

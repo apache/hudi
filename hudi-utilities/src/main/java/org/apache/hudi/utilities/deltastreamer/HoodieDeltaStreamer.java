@@ -32,7 +32,7 @@ import org.apache.hudi.common.bootstrap.index.HFileBootstrapIndex;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.HoodieAvroRecordMerge;
+import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -275,7 +275,7 @@ public class HoodieDeltaStreamer implements Serializable {
 
     @Parameter(names = {"--merge-class"}, description = "Implements of HoodieMerge, that defines how to merge two records."
         + "Implement your own, if you want to implement specific record merge logic.")
-    public String mergeClassName = HoodieAvroRecordMerge.class.getName();
+    public String mergeClassName = HoodieAvroRecordMerger.class.getName();
 
     @Parameter(names = {"--schemaprovider-class"}, description = "subclass of org.apache.hudi.utilities.schema"
         + ".SchemaProvider to attach schemas to input & target table data, built in options: "

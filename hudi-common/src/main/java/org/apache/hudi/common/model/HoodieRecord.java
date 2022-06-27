@@ -20,8 +20,7 @@ package org.apache.hudi.common.model;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.hudi.common.config.TypedProperties;
+
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -102,6 +101,10 @@ public abstract class HoodieRecord<T> implements Serializable {
       IntStream.range(0, HOODIE_META_COLUMNS.size()).mapToObj(idx -> Pair.of(HOODIE_META_COLUMNS.get(idx), idx))
           .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
 
+  public static final Map<String, Integer> HOODIE_META_COLUMNS_NAME_TO_POS_WITH_OPERATION =
+      IntStream.range(0, HOODIE_META_COLUMNS_WITH_OPERATION.size()).mapToObj(idx -> Pair.of(HOODIE_META_COLUMNS_WITH_OPERATION.get(idx), idx))
+          .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
+
   public static int RECORD_KEY_META_FIELD_ORD = HOODIE_META_COLUMNS_NAME_TO_POS.get(RECORD_KEY_METADATA_FIELD);
   public static int PARTITION_PATH_META_FIELD_ORD = HOODIE_META_COLUMNS_NAME_TO_POS.get(PARTITION_PATH_METADATA_FIELD);
   public static int FILENAME_META_FIELD_ORD = HOODIE_META_COLUMNS_NAME_TO_POS.get(FILENAME_METADATA_FIELD);
@@ -109,7 +112,7 @@ public abstract class HoodieRecord<T> implements Serializable {
   /**
    * Identifies the record across the table.
    */
-  private HoodieKey key;
+  protected HoodieKey key;
 
   /**
    * Actual payload of the record.
@@ -136,32 +139,21 @@ public abstract class HoodieRecord<T> implements Serializable {
    */
   private HoodieOperation operation;
 
-  /**
-   * For purposes of preCombining.
-   */
-  private Comparable<?> orderingVal;
-
   public HoodieRecord(HoodieKey key, T data) {
-    this(key, data, null, null);
+    this(key, data, null);
   }
 
-  public HoodieRecord(HoodieKey key, T data, Comparable<?> orderingVal) {
-    this(key, data, null, orderingVal);
-  }
-
-  public HoodieRecord(HoodieKey key, T data, HoodieOperation operation, Comparable<?> orderingVal) {
+  public HoodieRecord(HoodieKey key, T data, HoodieOperation operation) {
     this.key = key;
     this.data = data;
     this.currentLocation = null;
     this.newLocation = null;
     this.sealed = false;
     this.operation = operation;
-    // default natural order is 0
-    this.orderingVal = orderingVal == null ? 0 : orderingVal;
   }
 
   public HoodieRecord(HoodieRecord<T> record) {
-    this(record.key, record.data, record.operation, record.orderingVal);
+    this(record.key, record.data, record.operation);
     this.currentLocation = record.currentLocation;
     this.newLocation = record.newLocation;
     this.sealed = record.sealed;
@@ -184,13 +176,11 @@ public abstract class HoodieRecord<T> implements Serializable {
     return operation;
   }
 
-  public Comparable<?> getOrderingValue() {
-    return orderingVal;
-  }
+  public abstract Comparable<?> getOrderingValue(Properties props);
 
   public T getData() {
     if (data == null) {
-      throw new IllegalStateException("HoodieRecord already deflated for record.");
+      throw new IllegalStateException("Payload already deflated for record.");
     }
     return data;
   }
@@ -211,6 +201,10 @@ public abstract class HoodieRecord<T> implements Serializable {
     assert currentLocation == null;
     this.currentLocation = location;
     return this;
+  }
+
+  public void setData(T data) {
+    this.data = data;
   }
 
   public HoodieRecordLocation getCurrentLocation() {
@@ -273,6 +267,8 @@ public abstract class HoodieRecord<T> implements Serializable {
     return key.getRecordKey();
   }
 
+  public abstract HoodieRecordType getRecordType();
+
   public abstract String getRecordKey(Option<BaseKeyGenerator> keyGeneratorOpt);
 
   public abstract String getRecordKey(String keyFieldName);
@@ -291,57 +287,57 @@ public abstract class HoodieRecord<T> implements Serializable {
     }
   }
 
-  //////////////////////////////////////////////////////////////////////////////
-
-  //
-  // NOTE: This method duplicates those ones of the HoodieRecordPayload and are placed here
-  //       for the duration of RFC-46 implementation, until migration off `HoodieRecordPayload`
-  //       is complete
-  //
-  public abstract HoodieRecord mergeWith(HoodieRecord other, Schema readerSchema, Schema writerSchema) throws IOException;
-
-  public abstract HoodieRecord rewriteRecord(Schema recordSchema, Schema targetSchema, TypedProperties props) throws IOException;
+  /**
+   * Get column in record to support RDDCustomColumnsSortPartitioner
+   */
+  public abstract Object getRecordColumnValues(Schema recordSchema, String[] columns, boolean consistentLogicalTimestampEnabled);
 
   /**
-   * Rewrite the GenericRecord with the Schema containing the Hoodie Metadata fields.
+   * Support bootstrap.
    */
-  public abstract HoodieRecord rewriteRecord(Schema recordSchema, Properties prop, boolean schemaOnReadEnabled, Schema writeSchemaWithMetaFields) throws IOException;
+  public abstract HoodieRecord mergeWith(HoodieRecord other, Schema targetSchema) throws IOException;
 
-  public abstract HoodieRecord rewriteRecordWithMetadata(Schema recordSchema, Properties prop, boolean schemaOnReadEnabled, Schema writeSchemaWithMetaFields, String fileName) throws IOException;
+  /**
+   * Rewrite record into new schema(add meta columns)
+   */
+  public abstract HoodieRecord rewriteRecord(Schema recordSchema, Properties props, Schema targetSchema) throws IOException;
 
-  public abstract HoodieRecord rewriteRecordWithNewSchema(Schema recordSchema, Properties prop, Schema newSchema, Map<String, String> renameCols) throws IOException;
+  /**
+   * Support schema evolution.
+   */
+  public abstract HoodieRecord rewriteRecordWithNewSchema(Schema recordSchema, Properties props, Schema newSchema, Map<String, String> renameCols) throws IOException;
 
-  public abstract HoodieRecord rewriteRecordWithNewSchema(Schema recordSchema, Properties prop, Schema newSchema, Map<String, String> renameCols, Mapper mapper) throws IOException;
+  public abstract HoodieRecord updateValues(Schema recordSchema, Properties props, Map<String, String> metadataValues) throws IOException;
 
-  public abstract HoodieRecord rewriteRecordWithNewSchema(Schema recordSchema, Properties prop, Schema newSchema) throws IOException;
+  public abstract boolean isDelete(Schema schema, Properties props) throws IOException;
 
-  public abstract HoodieRecord overrideMetadataFieldValue(Schema recordSchema, Properties prop, int pos, String newValue) throws IOException;
+  /**
+   * Is EmptyRecord. Generated by ExpressionPayload.
+   */
+  public abstract boolean shouldIgnore(Schema schema, Properties props) throws IOException;
 
-  public abstract HoodieRecord addMetadataValues(Schema recordSchema, Properties prop, Map<HoodieMetadataField, String> metadataValues) throws IOException;
+  /**
+   * This method used to extract HoodieKey not through keyGenerator.
+   */
+  public abstract HoodieRecord getKeyWithParams(
+      Schema schema,
+      Properties props,
+      Option<Pair<String, String>> simpleKeyGenFieldsOpt,
+      Boolean withOperation,
+      Option<String> partitionNameOp,
+      Boolean populateMetaFieldsOp) throws IOException;
+
+  /**
+   * This method used to extract HoodieKey through keyGenerator. This method used in ClusteringExecutionStrategy.
+   */
+  public abstract HoodieRecord getKeyWithKeyGen(Properties props, Option<BaseKeyGenerator> keyGen);
+
+  public abstract Option<HoodieAvroIndexedRecord> toIndexedRecord(Schema schema, Properties props) throws IOException;
 
   public abstract Option<Map<String, String>> getMetadata();
 
-  public abstract boolean isPresent(Schema schema, Properties prop) throws IOException;
-
-  public abstract boolean shouldIgnore(Schema schema, Properties prop) throws IOException;
-
-  public abstract Option<IndexedRecord> toIndexedRecord(Schema schema, Properties prop) throws IOException;
-
-  //////////////////////////////////////////////////////////////////////////////
-
   public static String generateSequenceId(String instantTime, int partitionId, long recordIndex) {
     return instantTime + "_" + partitionId + "_" + recordIndex;
-  }
-
-  /**
-   * NOTE: This is temporary transition construct to be able to construct
-   *       HoodieRecord instances w/o excessive wiring into a lot of components
-   *       a lot of details that are irrelevant for these
-   * TODO remove
-   */
-  @FunctionalInterface
-  public interface Mapper {
-    HoodieRecord apply(IndexedRecord avroPayload);
   }
 
   /**
@@ -383,5 +379,9 @@ public abstract class HoodieRecord<T> implements Serializable {
     public Object get(String key) {
       return null;
     }
+  }
+
+  public enum HoodieRecordType {
+    AVRO, SPARK
   }
 }

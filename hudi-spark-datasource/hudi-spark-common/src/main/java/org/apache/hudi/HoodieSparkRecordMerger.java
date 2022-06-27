@@ -16,33 +16,43 @@
  * limitations under the License.
  */
 
-package org.apache.spark.sql.hudi;
+package org.apache.hudi;
+
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
+import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 
 import org.apache.avro.Schema;
-import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieMerge;
-import org.apache.hudi.common.util.Option;
 
 import java.io.IOException;
 import java.util.Properties;
 
-public class HoodieSparkRecordMerge implements HoodieMerge {
+public class HoodieSparkRecordMerger implements HoodieRecordMerger {
 
   @Override
-  public HoodieRecord preCombine(HoodieRecord older, HoodieRecord newer) {
+  public Option<HoodieRecord> merge(HoodieRecord older, HoodieRecord newer, Schema schema, Properties props) throws IOException {
+    ValidationUtils.checkArgument(older.getRecordType() == HoodieRecordType.SPARK);
+    ValidationUtils.checkArgument(newer.getRecordType() == HoodieRecordType.SPARK);
+
+    if (newer.getData() == null) {
+      // Delete record
+      return Option.empty();
+    }
     if (older.getData() == null) {
       // use natural order for delete record
-      return older;
+      return Option.of(newer);
     }
-    if (older.getOrderingValue().compareTo(newer.getOrderingValue()) > 0) {
-      return older;
+    if (older.getOrderingValue(props).compareTo(newer.getOrderingValue(props)) > 0) {
+      return Option.of(older);
     } else {
-      return newer;
+      return Option.of(newer);
     }
   }
 
   @Override
-  public Option<HoodieRecord> combineAndGetUpdateValue(HoodieRecord older, HoodieRecord newer, Schema schema, Properties props) throws IOException {
-    return Option.of(newer);
+  public HoodieRecordType getRecordType() {
+    return HoodieRecordType.SPARK;
   }
 }

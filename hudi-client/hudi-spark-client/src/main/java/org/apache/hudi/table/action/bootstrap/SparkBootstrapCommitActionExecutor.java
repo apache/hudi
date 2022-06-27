@@ -279,7 +279,7 @@ public class SparkBootstrapCommitActionExecutor<T>
             properties, context);
     JavaRDD<HoodieRecord> inputRecordsRDD =
         (JavaRDD<HoodieRecord>) inputProvider.generateInputRecords("bootstrap_source", config.getBootstrapSourceBasePath(),
-            partitionFilesList);
+            partitionFilesList, config);
     // Start Full Bootstrap
     String bootstrapInstantTime = HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS;
     final HoodieInstant requested = new HoodieInstant(

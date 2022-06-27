@@ -489,7 +489,7 @@ public class TestBootstrap extends HoodieClientTestBase {
 
     @Override
     public JavaRDD<HoodieRecord> generateInputRecords(String tableName, String sourceBasePath,
-                                                      List<Pair<String, List<HoodieFileStatus>>> partitionPaths) {
+        List<Pair<String, List<HoodieFileStatus>>> partitionPaths, HoodieWriteConfig config) {
       String filePath = FileStatusUtils.toPath(partitionPaths.stream().flatMap(p -> p.getValue().stream())
           .findAny().get().getPath()).toString();
       ParquetFileReader reader = null;

@@ -44,7 +44,7 @@ import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.common.testutils.HoodieMetadataTestTable;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.config.HoodieStorageConfig;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.io.storage.HoodieAvroOrcWriter;
 import org.apache.hudi.io.storage.HoodieAvroParquetWriter;
 import org.apache.hudi.io.storage.HoodieOrcConfig;

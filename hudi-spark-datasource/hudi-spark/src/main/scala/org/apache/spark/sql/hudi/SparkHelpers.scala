@@ -18,15 +18,15 @@
 package org.apache.spark.sql.hudi
 
 import org.apache.avro.Schema
-import org.apache.avro.generic.IndexedRecord
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hudi.avro.HoodieAvroWriteSupport
 import org.apache.hudi.client.SparkTaskContextSupplier
 import org.apache.hudi.common.bloom.{BloomFilter, BloomFilterFactory}
+import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.common.model.{HoodieFileFormat, HoodieRecord}
 import org.apache.hudi.common.util.BaseFileUtils
-import org.apache.hudi.config.{HoodieIndexConfig, HoodieStorageConfig}
+import org.apache.hudi.config.HoodieIndexConfig
 import org.apache.hudi.io.storage.{HoodieAvroParquetWriter, HoodieParquetConfig}
 import org.apache.parquet.avro.AvroSchemaConverter
 import org.apache.parquet.hadoop.metadata.CompressionCodecName

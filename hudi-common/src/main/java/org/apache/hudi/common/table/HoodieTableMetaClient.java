@@ -102,7 +102,6 @@ public class HoodieTableMetaClient implements Serializable {
   //       computations secured by its immutability
   protected SerializablePath basePath;
   protected SerializablePath metaPath;
-
   private transient HoodieWrapperFileSystem fs;
   private boolean loadActiveTimelineOnLoad;
   protected SerializableConfiguration hadoopConf;
@@ -726,7 +725,6 @@ public class HoodieTableMetaClient implements Serializable {
     private String recordKeyFields;
     private String archiveLogFolder;
     private String payloadClassName;
-    private String mergeClassName;
     private Integer timelineLayoutVersion;
     private String baseFileFormat;
     private String preCombineField;
@@ -790,11 +788,6 @@ public class HoodieTableMetaClient implements Serializable {
 
     public PropertyBuilder setPayloadClassName(String payloadClassName) {
       this.payloadClassName = payloadClassName;
-      return this;
-    }
-
-    public PropertyBuilder setMergeClassName(String mergeClassName) {
-      this.mergeClassName = mergeClassName;
       return this;
     }
 
@@ -900,9 +893,9 @@ public class HoodieTableMetaClient implements Serializable {
 
     public PropertyBuilder fromMetaClient(HoodieTableMetaClient metaClient) {
       return setTableType(metaClient.getTableType())
-        .setTableName(metaClient.getTableConfig().getTableName())
-        .setArchiveLogFolder(metaClient.getArchivePath())
-        .setPayloadClassName(metaClient.getTableConfig().getPayloadClass());
+          .setTableName(metaClient.getTableConfig().getTableName())
+          .setArchiveLogFolder(metaClient.getArchivePath())
+          .setPayloadClassName(metaClient.getTableConfig().getPayloadClass());
     }
 
     public PropertyBuilder fromProperties(Properties properties) {
@@ -1008,10 +1001,6 @@ public class HoodieTableMetaClient implements Serializable {
           String.valueOf(HoodieTableVersion.current().versionCode()));
       if (tableType == HoodieTableType.MERGE_ON_READ && payloadClassName != null) {
         tableConfig.setValue(HoodieTableConfig.PAYLOAD_CLASS_NAME, payloadClassName);
-      }
-
-      if (mergeClassName != null) {
-        tableConfig.setValue(HoodieTableConfig.MERGE_CLASS_NAME, mergeClassName);
       }
 
       if (null != tableCreateSchema) {

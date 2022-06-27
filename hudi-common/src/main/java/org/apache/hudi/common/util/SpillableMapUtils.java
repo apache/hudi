@@ -106,13 +106,13 @@ public class SpillableMapUtils {
   /**
    * Utility method to convert bytes to HoodieRecord using schema and payload class.
    */
-  public static <R> R convertToHoodieRecordPayload(GenericRecord rec, String payloadClazz, String preCombineField, boolean withOperationField) {
+  public static <R> HoodieRecord<R> convertToHoodieRecordPayload(GenericRecord rec, String payloadClazz, String preCombineField, boolean withOperationField) {
     return convertToHoodieRecordPayload(rec, payloadClazz, preCombineField,
         Pair.of(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.PARTITION_PATH_METADATA_FIELD),
         withOperationField, Option.empty());
   }
 
-  public static <R> R convertToHoodieRecordPayload(GenericRecord record, String payloadClazz,
+  public static <R> HoodieRecord<R> convertToHoodieRecordPayload(GenericRecord record, String payloadClazz,
                                                    String preCombineField,
                                                    boolean withOperationField,
                                                    Option<String> partitionName) {
@@ -124,7 +124,7 @@ public class SpillableMapUtils {
   /**
    * Utility method to convert bytes to HoodieRecord using schema and payload class.
    */
-  public static <R> R convertToHoodieRecordPayload(GenericRecord record, String payloadClazz,
+  public static <R> HoodieRecord<R> convertToHoodieRecordPayload(GenericRecord record, String payloadClazz,
                                                    String preCombineField,
                                                    Pair<String, String> recordKeyPartitionPathFieldPair,
                                                    boolean withOperationField,
@@ -140,7 +140,7 @@ public class SpillableMapUtils {
         HoodieRecordUtils.loadPayload(payloadClazz, new Object[]{record, preCombineVal}, GenericRecord.class,
             Comparable.class), operation);
 
-    return (R) hoodieRecord;
+    return (HoodieRecord<R>) hoodieRecord;
   }
 
   /**

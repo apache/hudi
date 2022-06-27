@@ -18,13 +18,20 @@
 
 package org.apache.hudi.common.util;
 
-import org.apache.hudi.common.model.HoodieMerge;
-import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.exception.HoodieException;
-
 import java.lang.reflect.InvocationTargetException;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import org.apache.hudi.common.engine.EngineType;
+import org.apache.hudi.common.model.HoodieAvroRecordMerger;
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
+import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
 /**
  * A utility class for HoodieRecord.
@@ -32,37 +39,73 @@ import java.util.Map;
 public class HoodieRecordUtils {
 
   private static final Map<String, Object> INSTANCE_CACHE = new HashMap<>();
+  private static final Logger LOG = LogManager.getLogger(HoodieRecordUtils.class);
 
   /**
    * Instantiate a given class with a record merge.
    */
-  public static HoodieMerge loadMerge(String mergeClass) {
+  public static HoodieRecordMerger loadRecordMerger(String mergerClass) {
     try {
-      HoodieMerge merge = (HoodieMerge) INSTANCE_CACHE.get(mergeClass);
-      if (null == merge) {
-        synchronized (HoodieMerge.class) {
-          merge = (HoodieMerge) INSTANCE_CACHE.get(mergeClass);
-          if (null == merge) {
-            merge = (HoodieMerge)ReflectionUtils.loadClass(mergeClass, new Object[]{});
-            INSTANCE_CACHE.put(mergeClass, merge);
+      HoodieRecordMerger recordMerger = (HoodieRecordMerger) INSTANCE_CACHE.get(mergerClass);
+      if (null == recordMerger) {
+        synchronized (HoodieRecordMerger.class) {
+          recordMerger = (HoodieRecordMerger) INSTANCE_CACHE.get(mergerClass);
+          if (null == recordMerger) {
+            recordMerger = (HoodieRecordMerger) ReflectionUtils.loadClass(mergerClass,
+                new Object[]{});
+            INSTANCE_CACHE.put(mergerClass, recordMerger);
           }
         }
       }
-      return merge;
+      return recordMerger;
     } catch (HoodieException e) {
       throw new HoodieException("Unable to instantiate hoodie merge class ", e);
     }
   }
 
   /**
+   * Instantiate a given class with a record merge.
+   */
+  public static HoodieRecordMerger generateRecordMerger(String basePath, EngineType engineType,
+      List<String> mergerClassList) {
+    if (mergerClassList.isEmpty() || HoodieTableMetadata.isMetadataTable(basePath)) {
+      return HoodieRecordUtils.loadRecordMerger(HoodieAvroRecordMerger.class.getName());
+    } else {
+      return mergerClassList.stream()
+          .map(clazz -> {
+            try {
+              return loadRecordMerger(clazz);
+            } catch (HoodieException e) {
+              LOG.warn(String.format("Unable to init %s", clazz), e);
+              return null;
+            }
+          })
+          .filter(Objects::nonNull)
+          .filter(merger -> recordTypeCompatibleEngine(merger.getRecordType(), engineType))
+          .findFirst()
+          .orElse(HoodieRecordUtils.loadRecordMerger(HoodieAvroRecordMerger.class.getName()));
+    }
+  }
+
+  /**
    * Instantiate a given class with an avro record payload.
    */
-  public static <T extends HoodieRecordPayload> T loadPayload(String recordPayloadClass, Object[] payloadArgs,
-                                                              Class<?>... constructorArgTypes) {
+  public static <T extends HoodieRecordPayload> T loadPayload(String recordPayloadClass,
+      Object[] payloadArgs,
+      Class<?>... constructorArgTypes) {
     try {
-      return (T) ReflectionUtils.getClass(recordPayloadClass).getConstructor(constructorArgTypes).newInstance(payloadArgs);
+      return (T) ReflectionUtils.getClass(recordPayloadClass).getConstructor(constructorArgTypes)
+          .newInstance(payloadArgs);
     } catch (InstantiationException | IllegalAccessException | InvocationTargetException | NoSuchMethodException e) {
       throw new HoodieException("Unable to instantiate payload class ", e);
+    }
+  }
+
+  public static boolean recordTypeCompatibleEngine(HoodieRecordType recordType, EngineType engineType) {
+    if (engineType == EngineType.SPARK && recordType == HoodieRecordType.SPARK) {
+      return true;
+    } else {
+      return false;
     }
   }
 }

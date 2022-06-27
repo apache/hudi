@@ -19,10 +19,12 @@
 package org.apache.hudi.avro;
 
 import org.apache.hudi.common.config.SerializableSchema;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -113,7 +115,7 @@ public class HoodieAvroUtils {
    * TODO serialize other type of record.
    */
   public static Option<byte[]> recordToBytes(HoodieRecord record, Schema schema) throws IOException {
-    return Option.of(HoodieAvroUtils.indexedRecordToBytes((IndexedRecord) record.toIndexedRecord(schema, new Properties()).get()));
+    return Option.of(HoodieAvroUtils.indexedRecordToBytes(((HoodieAvroIndexedRecord) record.toIndexedRecord(schema, new Properties()).get()).getData()));
   }
 
   /**
@@ -434,14 +436,18 @@ public class HoodieAvroUtils {
 
   private static void copyOldValueOrSetDefault(GenericRecord oldRecord, GenericRecord newRecord, Schema.Field field) {
     Schema oldSchema = oldRecord.getSchema();
-    Object fieldValue = oldSchema.getField(field.name()) == null ? null : oldRecord.get(field.name());
+    Field oldSchemaField = oldSchema.getField(field.name());
+    Object fieldValue = oldSchemaField == null ? null : oldRecord.get(field.name());
 
     if (fieldValue != null) {
       // In case field's value is a nested record, we have to rewrite it as well
       Object newFieldValue;
       if (fieldValue instanceof GenericRecord) {
         GenericRecord record = (GenericRecord) fieldValue;
-        newFieldValue = rewriteRecord(record, resolveUnionSchema(field.schema(), record.getSchema().getFullName()));
+        // May return null when use rewrite
+        String recordFullName = record.getSchema().getFullName();
+        String fullName = recordFullName != null ? recordFullName : oldSchemaField.name();
+        newFieldValue = rewriteRecord(record, resolveUnionSchema(field.schema(), fullName));
       } else {
         newFieldValue = fieldValue;
       }
@@ -696,7 +702,7 @@ public class HoodieAvroUtils {
                                              String[] columns,
                                              Schema schema, boolean consistentLogicalTimestampEnabled) {
     try {
-      GenericRecord genericRecord = (GenericRecord) record.toIndexedRecord(schema, new Properties()).get();
+      GenericRecord genericRecord = (GenericRecord) ((HoodieAvroIndexedRecord) record.toIndexedRecord(schema, new Properties()).get()).getData();
       if (columns.length == 1) {
         return HoodieAvroUtils.getNestedFieldVal(genericRecord, columns[0], true, consistentLogicalTimestampEnabled);
       } else {
@@ -1031,6 +1037,28 @@ public class HoodieAvroUtils {
         return rewriteRecordWithNewSchema(oldRecords.next(), newSchema, renameCols);
       }
     };
+  }
+
+  public static HoodieRecord createHoodieRecordFromAvro(
+      IndexedRecord data,
+      String payloadClass,
+      String preCombineField,
+      Option<Pair<String, String>> simpleKeyGenFieldsOpt,
+      Boolean withOperation,
+      Option<String> partitionNameOp,
+      Boolean populateMetaFields) {
+    if (populateMetaFields) {
+      return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) data,
+          payloadClass, preCombineField, withOperation);
+      // Support HoodieFileSliceReader
+    } else if (simpleKeyGenFieldsOpt.isPresent()) {
+      // TODO in HoodieFileSliceReader may partitionName=option#empty
+      return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) data,
+          payloadClass, preCombineField, simpleKeyGenFieldsOpt.get(), withOperation, partitionNameOp);
+    } else {
+      return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) data,
+          payloadClass, preCombineField, withOperation, partitionNameOp);
+    }
   }
 
   public static GenericRecord rewriteRecordDeep(GenericRecord oldRecord, Schema newSchema) {

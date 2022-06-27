@@ -21,8 +21,8 @@ package org.apache.hudi.io.storage.row;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.HoodieDynamicBoundedBloomFilter;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.parquet.hadoop.api.WriteSupport;
 import org.apache.spark.sql.execution.datasources.parquet.ParquetWriteSupport;
 import org.apache.spark.sql.types.StructType;
@@ -34,6 +34,7 @@ import static org.apache.hudi.avro.HoodieAvroWriteSupport.HOODIE_AVRO_BLOOM_FILT
 import static org.apache.hudi.avro.HoodieAvroWriteSupport.HOODIE_BLOOM_FILTER_TYPE_CODE;
 import static org.apache.hudi.avro.HoodieAvroWriteSupport.HOODIE_MAX_RECORD_KEY_FOOTER;
 import static org.apache.hudi.avro.HoodieAvroWriteSupport.HOODIE_MIN_RECORD_KEY_FOOTER;
+import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_FIELD_ID_WRITE_ENABLED;
 
 /**
  * Hoodie Write Support for directly writing Row to Parquet.
@@ -46,11 +47,11 @@ public class HoodieRowParquetWriteSupport extends ParquetWriteSupport {
   private UTF8String minRecordKey;
   private UTF8String maxRecordKey;
 
-  public HoodieRowParquetWriteSupport(Configuration conf, StructType structType, Option<BloomFilter> bloomFilterOpt, HoodieWriteConfig writeConfig) {
+  public HoodieRowParquetWriteSupport(Configuration conf, StructType structType, Option<BloomFilter> bloomFilterOpt, HoodieStorageConfig config) {
     Configuration hadoopConf = new Configuration(conf);
-    hadoopConf.set("spark.sql.parquet.writeLegacyFormat", writeConfig.parquetWriteLegacyFormatEnabled());
-    hadoopConf.set("spark.sql.parquet.outputTimestampType", writeConfig.parquetOutputTimestampType());
-    hadoopConf.set("spark.sql.parquet.fieldId.write.enabled", writeConfig.parquetFieldIdWriteEnabled());
+    hadoopConf.set("spark.sql.parquet.writeLegacyFormat", config.getString(HoodieStorageConfig.PARQUET_WRITE_LEGACY_FORMAT_ENABLED));
+    hadoopConf.set("spark.sql.parquet.outputTimestampType", config.getString(HoodieStorageConfig.PARQUET_OUTPUT_TIMESTAMP_TYPE));
+    hadoopConf.set("spark.sql.parquet.fieldId.write.enabled", config.getString(PARQUET_FIELD_ID_WRITE_ENABLED));
     this.hadoopConf = hadoopConf;
     setSchema(structType, hadoopConf);
     this.bloomFilter = bloomFilterOpt.orElse(null);
@@ -77,6 +78,9 @@ public class HoodieRowParquetWriteSupport extends ParquetWriteSupport {
   }
 
   public void add(UTF8String recordKey) {
+    if (this.bloomFilter == null) {
+      return;
+    }
     this.bloomFilter.add(recordKey.getBytes());
 
     if (minRecordKey == null || minRecordKey.compareTo(recordKey) < 0) {

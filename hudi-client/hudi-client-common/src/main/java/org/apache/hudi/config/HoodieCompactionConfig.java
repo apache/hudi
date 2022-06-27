@@ -22,7 +22,7 @@ import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
-import org.apache.hudi.common.model.HoodieAvroRecordMerge;
+import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 import org.apache.hudi.table.action.compact.strategy.LogFileSizeBasedCompactionStrategy;
@@ -122,7 +122,7 @@ public class HoodieCompactionConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> MERGE_CLASS_NAME = ConfigProperty
       .key("hoodie.compaction.merge.class")
-      .defaultValue(HoodieAvroRecordMerge.class.getName())
+      .defaultValue(HoodieAvroRecordMerger.class.getName())
       .withDocumentation("Merge class provide stateless component interface for merging records, and support various HoodieRecord "
           + "types, such as Spark records or Flink records.");
 

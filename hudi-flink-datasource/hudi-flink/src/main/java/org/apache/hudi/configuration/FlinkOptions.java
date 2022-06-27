@@ -22,8 +22,7 @@ import org.apache.hudi.client.clustering.plan.strategy.FlinkSizeBasedClusteringP
 import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.HoodieConfig;
-import org.apache.hudi.common.model.EventTimeAvroPayload;
-import org.apache.hudi.common.model.HoodieAvroRecordMerge;
+import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -301,12 +300,28 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(WriteOperationType.UPSERT.value())
       .withDescription("The write operation, that this write should do");
 
-  public static final ConfigOption<String> MERGE_CLASS_NAME = ConfigOptions
-      .key("write.merge.class")
+  public static final String NO_PRE_COMBINE = "no_precombine";
+  public static final ConfigOption<String> PRECOMBINE_FIELD = ConfigOptions
+      .key("write.precombine.field")
       .stringType()
-      .defaultValue(HoodieAvroRecordMerge.class.getName())
-      .withDescription("Merge class provide stateless component interface for merging records, and support various HoodieRecord "
-          + "types, such as Spark records or Flink records.");
+      .defaultValue("ts")
+      .withDescription("Field used in preCombining before actual write. When two records have the same\n"
+          + "key value, we will pick the one with the largest value for the precombine field,\n"
+          + "determined by Object.compareTo(..)");
+
+  public static final ConfigOption<String> PAYLOAD_CLASS_NAME = ConfigOptions
+      .key("write.payload.class")
+      .stringType()
+      .defaultValue(OverwriteWithLatestAvroPayload.class.getName())
+      .withDescription("Payload class used. Override this, if you like to roll your own merge logic, when upserting/inserting.\n"
+          + "This will render any value set for the option in-effective");
+
+  public static final ConfigOption<String> RECORD_MERGE_STRATEGY = ConfigOptions
+      .key("record.merge.strategy")
+      .stringType()
+      .defaultValue(HoodieAvroRecordMerger.class.getName())
+      .withDescription("A list of merge class provide stateless component interface for merging records, and support various HoodieRecord "
+          + "types, such as Spark records or Flink records. Default merge");
 
   /**
    * Flag to indicate whether to drop duplicates before insert/upsert.

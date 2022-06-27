@@ -38,7 +38,9 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
+import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.examples.quickstart.utils.QuickstartConfigurations;
 import org.apache.parquet.Strings;
 import org.apache.parquet.avro.AvroParquetReader;
@@ -360,6 +362,7 @@ public class TestQuickstartData {
         .withSpillableMapBasePath("/tmp/")
         .withDiskMapType(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.defaultValue())
         .withBitCaskDiskMapCompressionEnabled(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue())
+        .withRecordMerger(HoodieRecordUtils.loadRecordMerger(HoodieAvroRecordMerger.class.getName()))
         .build();
   }
 

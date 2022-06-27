@@ -67,7 +67,7 @@ public class HoodieInternalRowFileWriterFactory {
   )
       throws IOException {
     HoodieRowParquetWriteSupport writeSupport =
-            new HoodieRowParquetWriteSupport(table.getHadoopConf(), structType, bloomFilterOpt, writeConfig);
+            new HoodieRowParquetWriteSupport(table.getHadoopConf(), structType, bloomFilterOpt, writeConfig.getStorageConfig());
 
     return new HoodieInternalRowParquetWriter(
         path,

@@ -18,9 +18,7 @@
 
 package org.apache.hudi.execution.bulkinsert;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.SerializableSchema;
-import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -63,7 +61,7 @@ public class RDDCustomColumnsSortPartitioner<T>
     final boolean consistentLogicalTimestampEnabled = this.consistentLogicalTimestampEnabled;
     return records.sortBy(
         record -> {
-          Object recordValue = HoodieAvroUtils.getRecordColumnValues((HoodieAvroRecord)record, sortColumns, schema, consistentLogicalTimestampEnabled);
+          Object recordValue = record.getRecordColumnValues(schema.get(), sortColumns, consistentLogicalTimestampEnabled);
           // null values are replaced with empty string for null_first order
           if (recordValue == null) {
             return StringUtils.EMPTY_STRING;

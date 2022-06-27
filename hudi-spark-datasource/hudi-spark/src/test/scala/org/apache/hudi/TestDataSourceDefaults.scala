@@ -209,6 +209,7 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
     val STRUCT_NAME: String = "hoodieRowTopLevelField"
     val NAMESPACE: String = "hoodieRow"
     var converterFn: Function1[Row, GenericRecord] = _
+    var internalConverterFn: Function1[InternalRow, GenericRecord] = _
 
     override def getKey(record: GenericRecord): HoodieKey = {
       new HoodieKey(HoodieAvroUtils.getNestedFieldValAsString(record, recordKeyProp, true, false),

@@ -24,6 +24,7 @@ import org.apache.hudi.client.bootstrap.BootstrapRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.util.AvroOrcUtils;
 import org.apache.hudi.common.util.OrcReaderIterator;
 import org.apache.hudi.common.util.queue.BoundedInMemoryExecutor;
@@ -63,6 +64,10 @@ class OrcBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
   @Override
   void executeBootstrap(HoodieBootstrapHandle<?, ?, ?, ?> bootstrapHandle, Path sourceFilePath, KeyGeneratorInterface keyGenerator,
                         String partitionPath, Schema avroSchema) throws Exception {
+    // TODO support spark orc reader
+    if (config.getRecordMerger().getRecordType() == HoodieRecordType.SPARK) {
+      throw new UnsupportedOperationException();
+    }
     BoundedInMemoryExecutor<GenericRecord, HoodieRecord, Void> wrapper = null;
     Reader orcReader = OrcFile.createReader(sourceFilePath, OrcFile.readerOptions(table.getHadoopConf()));
     TypeDescription orcSchema = orcReader.getSchema();

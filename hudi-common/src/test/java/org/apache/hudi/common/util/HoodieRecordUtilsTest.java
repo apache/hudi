@@ -20,8 +20,8 @@ package org.apache.hudi.common.util;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
-import org.apache.hudi.common.model.HoodieAvroRecordMerge;
-import org.apache.hudi.common.model.HoodieMerge;
+import org.apache.hudi.common.model.HoodieAvroRecordMerger;
+import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.junit.jupiter.api.Test;
 
@@ -31,11 +31,11 @@ class HoodieRecordUtilsTest {
 
   @Test
   void loadHoodieMerge() {
-    String mergeClassName = HoodieAvroRecordMerge.class.getName();
-    HoodieMerge merge1 = HoodieRecordUtils.loadMerge(mergeClassName);
-    HoodieMerge merge2 = HoodieRecordUtils.loadMerge(mergeClassName);
-    assertEquals(merge1.getClass().getName(), mergeClassName);
-    assertEquals(merge1, merge2);
+    String mergeClassName = HoodieAvroRecordMerger.class.getName();
+    HoodieRecordMerger recordMerger1 = HoodieRecordUtils.loadRecordMerger(mergeClassName);
+    HoodieRecordMerger recordMerger2 = HoodieRecordUtils.loadRecordMerger(mergeClassName);
+    assertEquals(recordMerger1.getClass().getName(), mergeClassName);
+    assertEquals(recordMerger1, recordMerger2);
   }
 
   @Test

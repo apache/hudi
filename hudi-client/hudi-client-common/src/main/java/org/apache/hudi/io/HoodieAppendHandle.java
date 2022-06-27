@@ -28,6 +28,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieDeltaWriteStat;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -36,7 +37,6 @@ import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.log.AppendResult;
@@ -64,6 +64,7 @@ import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -217,13 +218,18 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       boolean nullifyPayload = HoodieOperation.isDelete(hoodieRecord.getOperation()) && !config.allowOperationMetadataField();
       recordProperties.put(HoodiePayloadProps.PAYLOAD_IS_UPDATE_RECORD_FOR_MOR, String.valueOf(isUpdateRecord));
       Option<HoodieRecord> finalRecord = Option.empty();
-      if (!nullifyPayload && hoodieRecord.isPresent(tableSchema, recordProperties)) {
+      if (!nullifyPayload && !hoodieRecord.isDelete(tableSchema, recordProperties)) {
         if (hoodieRecord.shouldIgnore(tableSchema, recordProperties)) {
           return Option.of(hoodieRecord);
         }
         // Convert GenericRecord to GenericRecord with hoodie commit metadata in schema
-        HoodieRecord rewrittenRecord = hoodieRecord.rewriteRecord(tableSchema, recordProperties, schemaOnReadEnabled, writeSchemaWithMetaFields);
-        HoodieRecord populatedRecord = populateMetadataFields(rewrittenRecord, tableSchema, recordProperties);
+        HoodieRecord rewrittenRecord;
+        if (schemaOnReadEnabled) {
+          rewrittenRecord = hoodieRecord.rewriteRecordWithNewSchema(tableSchema, recordProperties, writeSchemaWithMetaFields, Collections.emptyMap());
+        } else {
+          rewrittenRecord = hoodieRecord.rewriteRecord(tableSchema, recordProperties, writeSchemaWithMetaFields);
+        }
+        HoodieRecord populatedRecord = populateMetadataFields(rewrittenRecord, writeSchemaWithMetaFields, recordProperties);
         finalRecord = Option.of(populatedRecord);
         if (isUpdateRecord) {
           updatedRecordsWritten++;
@@ -249,21 +255,21 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   }
 
   private HoodieRecord populateMetadataFields(HoodieRecord<T> hoodieRecord, Schema schema, Properties prop) throws IOException {
-    Map<HoodieRecord.HoodieMetadataField, String> metadataValues = new HashMap<>();
+    Map<String, String> metadataValues = new HashMap<>();
     String seqId =
         HoodieRecord.generateSequenceId(instantTime, getPartitionId(), RECORD_COUNTER.getAndIncrement());
     if (config.populateMetaFields()) {
-      metadataValues.put(HoodieRecord.HoodieMetadataField.FILENAME_METADATA_FIELD, fileId);
-      metadataValues.put(HoodieRecord.HoodieMetadataField.PARTITION_PATH_METADATA_FIELD, partitionPath);
-      metadataValues.put(HoodieRecord.HoodieMetadataField.RECORD_KEY_METADATA_FIELD, hoodieRecord.getRecordKey());
-      metadataValues.put(HoodieRecord.HoodieMetadataField.COMMIT_TIME_METADATA_FIELD, instantTime);
-      metadataValues.put(HoodieRecord.HoodieMetadataField.COMMIT_SEQNO_METADATA_FIELD, seqId);
+      metadataValues.put(HoodieRecord.HoodieMetadataField.FILENAME_METADATA_FIELD.getFieldName(), fileId);
+      metadataValues.put(HoodieRecord.HoodieMetadataField.PARTITION_PATH_METADATA_FIELD.getFieldName(), partitionPath);
+      metadataValues.put(HoodieRecord.HoodieMetadataField.RECORD_KEY_METADATA_FIELD.getFieldName(), hoodieRecord.getRecordKey());
+      metadataValues.put(HoodieRecord.HoodieMetadataField.COMMIT_TIME_METADATA_FIELD.getFieldName(), instantTime);
+      metadataValues.put(HoodieRecord.HoodieMetadataField.COMMIT_SEQNO_METADATA_FIELD.getFieldName(), seqId);
     }
     if (config.allowOperationMetadataField()) {
-      metadataValues.put(HoodieRecord.HoodieMetadataField.OPERATION_METADATA_FIELD, hoodieRecord.getOperation().getName());
+      metadataValues.put(HoodieRecord.HoodieMetadataField.OPERATION_METADATA_FIELD.getFieldName(), hoodieRecord.getOperation().getName());
     }
 
-    return hoodieRecord.addMetadataValues(schema, prop, metadataValues);
+    return hoodieRecord.updateValues(schema, prop, metadataValues);
   }
 
   private void initNewStatus() {
@@ -376,7 +382,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
 
       List<IndexedRecord> indexedRecords = new LinkedList<>();
       for (HoodieRecord hoodieRecord : recordList) {
-        indexedRecords.add((IndexedRecord) hoodieRecord.toIndexedRecord(tableSchema, config.getProps()).get());
+        indexedRecords.add(((HoodieAvroIndexedRecord) hoodieRecord.toIndexedRecord(tableSchema, config.getProps()).get()).getData());
       }
 
       Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangesMetadataMap =
@@ -439,7 +445,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
 
   @Override
   protected void doWrite(HoodieRecord record, Schema schema, TypedProperties props) {
-    Option<Map<String, String>> recordMetadata = ((HoodieRecordPayload) record.getData()).getMetadata();
+    Option<Map<String, String>> recordMetadata = record.getMetadata();
     try {
       init(record);
       flushToDiskIfRequired(record);
@@ -524,7 +530,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       record.seal();
     }
     // fetch the ordering val first in case the record was deflated.
-    final Comparable<?> orderingVal = record.getOrderingValue();
+    final Comparable<?> orderingVal = record.getOrderingValue(config.getProps());
     Option<HoodieRecord> indexedRecord = prepareRecord(record);
     if (indexedRecord.isPresent()) {
       // Skip the ignored record.

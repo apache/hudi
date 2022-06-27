@@ -24,34 +24,29 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.utils.ConcatenatingIterator;
 import org.apache.hudi.common.config.SerializableSchema;
-import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.ClusteringGroupInfo;
 import org.apache.hudi.common.model.ClusteringOperation;
-import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.model.RewriteAvroPayload;
+import org.apache.hudi.common.util.ClosableIterator;
+import org.apache.hudi.common.util.MappingIterator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieClusteringException;
-import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
-import org.apache.hudi.keygen.BaseKeyGenerator;
-import org.apache.hudi.keygen.KeyGenUtils;
+import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.cluster.strategy.ClusteringExecutionStrategy;
 
 import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
@@ -67,6 +62,8 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
+
+import static org.apache.hudi.common.table.HoodieTableConfig.POPULATE_META_FIELDS;
 
 /**
  * Clustering strategy to submit single spark jobs.
@@ -151,40 +148,28 @@ public abstract class SingleSparkJobExecutionStrategy<T>
     List<Iterator<HoodieRecord<T>>> iteratorsForPartition = clusteringOps.stream().map(clusteringOp -> {
 
       Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(getWriteConfig().getSchema()));
-      Iterable<IndexedRecord> indexedRecords = () -> {
+      Iterable<HoodieRecord<T>> indexedRecords = () -> {
         try {
-          return HoodieFileReaderFactory.getFileReader(getHoodieTable().getHadoopConf(), new Path(clusteringOp.getDataFilePath())).getRecordIterator(readerSchema);
+
+          HoodieFileReader baseFileReader = HoodieFileReaderFactory.getReaderFactory(recordType).getFileReader(getHoodieTable().getHadoopConf(), new Path(clusteringOp.getDataFilePath()));
+          Option<KeyGenerator> keyGeneratorOp;
+          if (!Boolean.parseBoolean(getWriteConfig().getProps().getOrDefault(POPULATE_META_FIELDS.key(), POPULATE_META_FIELDS.defaultValue().toString()).toString())) {
+            keyGeneratorOp = Option.of(HoodieSparkKeyGeneratorFactory.createKeyGenerator(getWriteConfig().getProps()));
+          } else {
+            keyGeneratorOp = Option.empty();
+          }
+          MappingIterator mappingIterator = new MappingIterator((ClosableIterator<HoodieRecord>) baseFileReader.getRecordIterator(readerSchema),
+              rec -> ((HoodieRecord) rec).getKeyWithKeyGen(getWriteConfig().getProps(), keyGeneratorOp));
+          return mappingIterator;
         } catch (IOException e) {
           throw new HoodieClusteringException("Error reading input data for " + clusteringOp.getDataFilePath()
               + " and " + clusteringOp.getDeltaFilePaths(), e);
         }
       };
 
-      return StreamSupport.stream(indexedRecords.spliterator(), false).map(record -> transform(record)).iterator();
+      return StreamSupport.stream(indexedRecords.spliterator(), false).iterator();
     }).collect(Collectors.toList());
 
     return new ConcatenatingIterator<>(iteratorsForPartition);
-  }
-
-  /**
-   * Transform IndexedRecord into HoodieRecord.
-   */
-  private HoodieRecord<T> transform(IndexedRecord indexedRecord) {
-    GenericRecord record = (GenericRecord) indexedRecord;
-    Option<BaseKeyGenerator> keyGeneratorOpt = Option.empty();
-    if (!getWriteConfig().populateMetaFields()) {
-      try {
-        keyGeneratorOpt = Option.of((BaseKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(new TypedProperties(getWriteConfig().getProps())));
-      } catch (IOException e) {
-        throw new HoodieIOException("Only BaseKeyGenerators are supported when meta columns are disabled ", e);
-      }
-    }
-    String key = KeyGenUtils.getRecordKeyFromGenericRecord(record, keyGeneratorOpt);
-    String partition = KeyGenUtils.getPartitionPathFromGenericRecord(record, keyGeneratorOpt);
-    HoodieKey hoodieKey = new HoodieKey(key, partition);
-
-    HoodieRecordPayload avroPayload = new RewriteAvroPayload(record);
-    HoodieRecord hoodieRecord = new HoodieAvroRecord(hoodieKey, avroPayload);
-    return hoodieRecord;
   }
 }

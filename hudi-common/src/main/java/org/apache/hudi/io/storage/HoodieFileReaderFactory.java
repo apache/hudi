@@ -20,10 +20,16 @@ package org.apache.hudi.io.storage;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hbase.io.hfile.CacheConfig;
+
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.exception.HoodieException;
 
 import java.io.IOException;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 
 import static org.apache.hudi.common.model.HoodieFileFormat.HFILE;
 import static org.apache.hudi.common.model.HoodieFileFormat.ORC;
@@ -31,7 +37,24 @@ import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
 
 public class HoodieFileReaderFactory {
 
-  public static HoodieAvroFileReader getFileReader(Configuration conf, Path path) throws IOException {
+  public static HoodieFileReaderFactory getReaderFactory(HoodieRecord.HoodieRecordType recordType) {
+    switch (recordType) {
+      case AVRO:
+        return HoodieAvroFileReaderFactory.getFileReaderFactory();
+      case SPARK:
+        try {
+          Class<?> clazz = ReflectionUtils.getClass("org.apache.hudi.io.storage.HoodieSparkFileReaderFactory");
+          Method method = clazz.getMethod("getFileReaderFactory", null);
+          return (HoodieFileReaderFactory) method.invoke(null,null);
+        } catch (NoSuchMethodException | IllegalArgumentException | InvocationTargetException | IllegalAccessException e) {
+          throw new HoodieException("Unable to create hoodie spark file writer factory", e);
+        }
+      default:
+        throw new UnsupportedOperationException(recordType + " record type not supported yet.");
+    }
+  }
+
+  public HoodieFileReader getFileReader(Configuration conf, Path path) throws IOException {
     final String extension = FSUtils.getFileExtension(path.toString());
     if (PARQUET.getFileExtension().equals(extension)) {
       return newParquetFileReader(conf, path);
@@ -46,16 +69,19 @@ public class HoodieFileReaderFactory {
     throw new UnsupportedOperationException(extension + " format not supported yet.");
   }
 
-  private static HoodieAvroFileReader newParquetFileReader(Configuration conf, Path path) {
-    return new HoodieAvroParquetReader(conf, path);
+  public HoodieFileReader getFileReader(Configuration conf, Path path, HoodieFileFormat format) throws IOException {
+    return this.newParquetFileReader(conf, path);
   }
 
-  private static HoodieAvroFileReader newHFileFileReader(Configuration conf, Path path) throws IOException {
-    CacheConfig cacheConfig = new CacheConfig(conf);
-    return new HoodieAvroHFileReader(conf, path, cacheConfig);
+  protected HoodieFileReader newParquetFileReader(Configuration conf, Path path) {
+    throw new UnsupportedOperationException();
   }
 
-  private static HoodieAvroFileReader newOrcFileReader(Configuration conf, Path path) {
-    return new HoodieAvroOrcReader(conf, path);
+  protected HoodieFileReader newHFileFileReader(Configuration conf, Path path) throws IOException {
+    throw new UnsupportedOperationException();
+  }
+
+  protected HoodieFileReader newOrcFileReader(Configuration conf, Path path) {
+    throw new UnsupportedOperationException();
   }
 }

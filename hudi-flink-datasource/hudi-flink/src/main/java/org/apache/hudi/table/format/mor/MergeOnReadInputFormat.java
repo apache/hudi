@@ -18,11 +18,13 @@
 
 package org.apache.hudi.table.format.mor;
 
+import java.util.stream.Collectors;
+import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieMerge;
+import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.util.ClosableIterator;
@@ -205,8 +207,7 @@ public class MergeOnReadInputFormat
           this.requiredPos,
           this.emitDelete,
           this.tableState.getOperationPos(),
-          getFullSchemaReader(split.getBasePath().get()),
-          tableState.getMergeClass());
+          getFullSchemaReader(split.getBasePath().get()));
     } else {
       throw new HoodieException("Unable to select an Iterator to read the Hoodie MOR File Split for "
           + "file path: " + split.getBasePath()
@@ -644,7 +645,7 @@ public class MergeOnReadInputFormat
 
     private final InstantRange instantRange;
 
-    private final HoodieMerge merge;
+    private final HoodieRecordMerger recordMerger;
 
     // add the flag because the flink ParquetColumnarRowSplitReader is buggy:
     // method #reachedEnd() returns false after it returns true.
@@ -668,8 +669,7 @@ public class MergeOnReadInputFormat
         int[] requiredPos,
         boolean emitDelete,
         int operationPos,
-        ParquetColumnarRowSplitReader reader, // the reader should be with full schema
-        String mergeClass) {
+        ParquetColumnarRowSplitReader reader) { // the reader should be with full schema
       this.tableSchema = tableSchema;
       this.reader = reader;
       this.scanner = FormatUtils.logScanner(split, tableSchema, flinkConf, hadoopConf);
@@ -684,7 +684,11 @@ public class MergeOnReadInputFormat
       this.avroToRowDataConverter = AvroToRowDataConverters.createRowConverter(requiredRowType);
       this.projection = RowDataProjection.instance(requiredRowType, requiredPos);
       this.instantRange = split.getInstantRange().orElse(null);
-      this.merge = HoodieRecordUtils.loadMerge(mergeClass);
+      List<String> mergers = Arrays.stream(finkConf.getString(FlinkOptions.RECORD_MERGE_STRATEGY).split(","))
+          .map(String::trim)
+          .distinct()
+          .collect(Collectors.toList());
+      this.recordMerger = HoodieRecordUtils.generateRecordMerger(split.getTablePath(), EngineType.FLINK, mergers);
     }
 
     @Override
@@ -701,18 +705,18 @@ public class MergeOnReadInputFormat
         final String curKey = currentRecord.getString(HOODIE_RECORD_KEY_COL_POS).toString();
         if (scanner.getRecords().containsKey(curKey)) {
           keyToSkip.add(curKey);
-          Option<IndexedRecord> mergedAvroRecord = mergeRowWithLog(currentRecord, curKey);
+          Option<HoodieAvroIndexedRecord> mergedAvroRecord = mergeRowWithLog(currentRecord, curKey);
           if (!mergedAvroRecord.isPresent()) {
             // deleted
             continue;
           } else {
-            final RowKind rowKind = FormatUtils.getRowKindSafely(mergedAvroRecord.get(), this.operationPos);
+            final RowKind rowKind = FormatUtils.getRowKindSafely(mergedAvroRecord.get().getData(), this.operationPos);
             if (!emitDelete && rowKind == RowKind.DELETE) {
               // deleted
               continue;
             }
             GenericRecord avroRecord = buildAvroRecordBySchema(
-                mergedAvroRecord.get(),
+                mergedAvroRecord.get().getData(),
                 requiredSchema,
                 requiredPos,
                 recordBuilder);
@@ -770,13 +774,14 @@ public class MergeOnReadInputFormat
       }
     }
 
-    private Option<IndexedRecord> mergeRowWithLog(
+    private Option<HoodieAvroIndexedRecord> mergeRowWithLog(
         RowData curRow,
         String curKey) throws IOException {
       final HoodieAvroRecord<?> record = (HoodieAvroRecord) scanner.getRecords().get(curKey);
       GenericRecord historyAvroRecord = (GenericRecord) rowDataToAvroConverter.convert(tableSchema, curRow);
-      Option<HoodieRecord> resultRecord = merge.combineAndGetUpdateValue(new HoodieAvroIndexedRecord(historyAvroRecord), record, tableSchema, payloadProps);
-      return ((HoodieAvroIndexedRecord) resultRecord.get()).toIndexedRecord();
+      HoodieAvroIndexedRecord hoodieAvroIndexedRecord = new HoodieAvroIndexedRecord(historyAvroRecord);
+      Option<HoodieRecord> resultRecord = recordMerger.merge(hoodieAvroIndexedRecord, record, tableSchema, payloadProps);
+      return resultRecord.get().toIndexedRecord(tableSchema, new Properties());
     }
   }
 

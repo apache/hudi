@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
@@ -40,7 +41,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCorruptedDataException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieUpsertException;
-import org.apache.hudi.io.storage.HoodieAvroFileReader;
+import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.io.storage.HoodieFileWriter;
 import org.apache.hudi.keygen.BaseKeyGenerator;
@@ -279,7 +280,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
         return false;
       }
     }
-    return writeRecord(hoodieRecord, combineRecordOp, schema, config.getProps(), isDelete);
+    return writeRecord(hoodieRecord, combineRecordOp, schema, config.getPayloadConfig().getProps(), isDelete);
   }
 
   protected void writeInsertRecord(HoodieRecord<T> hoodieRecord) throws IOException {
@@ -288,7 +289,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
     if (hoodieRecord.shouldIgnore(schema, config.getProps())) {
       return;
     }
-    if (writeRecord(hoodieRecord, Option.of(hoodieRecord), schema, config.getProps(), HoodieOperation.isDelete(hoodieRecord.getOperation()))) {
+    if (writeRecord(hoodieRecord, Option.of(hoodieRecord), schema, config.getPayloadConfig().getProps(), HoodieOperation.isDelete(hoodieRecord.getOperation()))) {
       insertRecordsWritten++;
     }
   }
@@ -306,7 +307,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
       return false;
     }
     try {
-      if (combineRecord.isPresent() && combineRecord.get().isPresent(schema, config.getProps()) && !isDelete) {
+      if (combineRecord.isPresent() && !combineRecord.get().isDelete(schema, config.getProps()) && !isDelete) {
         writeToFile(hoodieRecord.getKey(), combineRecord.get(), schema, prop, preserveMetadata && useWriterSchemaForCompaction);
         recordsWritten++;
       } else {
@@ -329,16 +330,16 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
    * Go through an old record. Here if we detect a newer version shows up, we write the new one to the file.
    */
   public void write(HoodieRecord<T> oldRecord) {
-    String key = oldRecord.getRecordKey(keyGeneratorOpt);
-    boolean copyOldRecord = true;
     Schema schema = useWriterSchemaForCompaction ? tableSchemaWithMetaFields : tableSchema;
+    boolean copyOldRecord = true;
+    String key = oldRecord.getRecordKey(keyGeneratorOpt);
     TypedProperties props = config.getPayloadConfig().getProps();
     if (keyToNewRecords.containsKey(key)) {
       // If we have duplicate records that we are updating, then the hoodie record will be deflated after
       // writing the first record. So make a copy of the record to be merged
       HoodieRecord<T> hoodieRecord = keyToNewRecords.get(key).newInstance();
       try {
-        Option<HoodieRecord> combinedRecord = merge.combineAndGetUpdateValue(oldRecord, hoodieRecord, schema, props);
+        Option<HoodieRecord> combinedRecord = recordMerger.merge(oldRecord, hoodieRecord, schema, props);
 
         if (combinedRecord.isPresent() && combinedRecord.get().shouldIgnore(schema, props)) {
           // If it is an IGNORE_RECORD, just copy the old record, and do not update the new record.
@@ -374,12 +375,19 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
   }
 
   protected void writeToFile(HoodieKey key, HoodieRecord<T> record, Schema schema, Properties prop, boolean shouldPreserveRecordMetadata) throws IOException {
+    HoodieRecord rewriteRecord;
+    if (schemaOnReadEnabled) {
+      rewriteRecord = record.rewriteRecordWithNewSchema(schema, prop, writeSchemaWithMetaFields, Collections.emptyMap());
+    } else {
+      rewriteRecord = record.rewriteRecord(schema, prop, writeSchemaWithMetaFields);
+    }
+    rewriteRecord = rewriteRecord.updateValues(writeSchemaWithMetaFields, prop, Collections.singletonMap(HoodieMetadataField.FILENAME_METADATA_FIELD.getFieldName(), newFilePath.getName()));
     if (shouldPreserveRecordMetadata) {
       // NOTE: `FILENAME_METADATA_FIELD` has to be rewritten to correctly point to the
       //       file holding this record even in cases when overall metadata is preserved
-      fileWriter.write(key.getRecordKey(), record.rewriteRecordWithMetadata(schema, prop, schemaOnReadEnabled, writeSchemaWithMetaFields, newFilePath.getName()), writeSchemaWithMetaFields);
+      fileWriter.write(key.getRecordKey(), rewriteRecord, writeSchemaWithMetaFields);
     } else {
-      fileWriter.writeWithMetadata(key, record.rewriteRecord(schema, prop, schemaOnReadEnabled, writeSchemaWithMetaFields), writeSchemaWithMetaFields);
+      fileWriter.writeWithMetadata(key, rewriteRecord, writeSchemaWithMetaFields);
     }
   }
 
@@ -444,7 +452,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
 
     long oldNumWrites = 0;
     try {
-      HoodieAvroFileReader reader = HoodieFileReaderFactory.getFileReader(hoodieTable.getHadoopConf(), oldFilePath);
+      HoodieFileReader reader = HoodieFileReaderFactory.getReaderFactory(this.config.getRecordMerger().getRecordType()).getFileReader(hoodieTable.getHadoopConf(), oldFilePath);
       oldNumWrites = reader.getTotalRecords();
     } catch (IOException e) {
       throw new HoodieUpsertException("Failed to check for merge data validation", e);
