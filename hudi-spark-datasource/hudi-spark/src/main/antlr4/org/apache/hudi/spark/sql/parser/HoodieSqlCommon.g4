@@ -42,7 +42,7 @@
 }
 
  singleStatement
-    : statement EOF
+    : statement ';'* EOF
     ;
 
  statement

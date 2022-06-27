@@ -85,6 +85,17 @@ class TestCallCommandParser extends HoodieSparkSqlTestBase {
     checkParseExceptionContain("CALL cat.system radish kebab")("mismatched input 'CALL' expecting")
   }
 
+  test("Test Call Produce with semicolon") {
+    val call = parser.parsePlan("CALL system.func(c1 => 1, c2 => '2', c3 => true);").asInstanceOf[CallCommand]
+    assertResult(ImmutableList.of("system", "func"))(JavaConverters.seqAsJavaListConverter(call.name).asJava)
+
+    assertResult(3)(call.args.size)
+
+    checkArg(call, 0, "c1", 1, DataTypes.IntegerType)
+    checkArg(call, 1, "c2", "2", DataTypes.StringType)
+    checkArg(call, 2, "c3", true, DataTypes.BooleanType)
+  }
+
   protected def checkParseExceptionContain(sql: String)(errorMsg: String): Unit = {
     var hasException = false
     try {
