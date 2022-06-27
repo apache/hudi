@@ -130,8 +130,8 @@ public class CachingPath extends Path implements Serializable {
   public static Path getPathWithoutSchemeAndAuthority(Path path) {
     // This code depends on Path.toString() to remove the leading slash before
     // the drive specification on Windows.
-    return path.isUriPathAbsolute() ?
-        createPathUnsafe(path.toUri().getPath()) :
-        path;
+    return path.isUriPathAbsolute()
+        ? createPathUnsafe(path.toUri().getPath())
+        : path;
   }
 }
