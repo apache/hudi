@@ -33,6 +33,9 @@ public class TestRedBlackTree {
 
   private static final Logger LOG = LogManager.getLogger(TestRedBlackTree.class);
 
+  /**
+   * Insert and remove nodes in order.
+   */
   @Test
   public void testOrdered() {
     RedBlackTree<RedBlackTreeNode<Integer>, Integer> tree = new RedBlackTree<>();
@@ -42,6 +45,9 @@ public class TestRedBlackTree {
     removeNodesInRange(tree, 30, 50, false);
   }
 
+  /**
+   * Insert and remove nodes randomly.
+   */
   @Test
   public void testRandom() {
     RedBlackTree<RedBlackTreeNode<Integer>, Integer> tree = new RedBlackTree<>();

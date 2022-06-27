@@ -30,7 +30,7 @@ class KeyRangeLookupTree extends RedBlackTree<KeyRangeNode, RecordKeyRange> {
 
   /**
    * Flag for whether sub-tree min-max metrics need to be recalculated. When inserting or deleting nodes,
-   * we need to recalculated.
+   * we need to recalculate.
    */
   private volatile boolean needReloadMetrics = false;
 
@@ -47,15 +47,15 @@ class KeyRangeLookupTree extends RedBlackTree<KeyRangeNode, RecordKeyRange> {
   }
 
   /**
-   * If current root and newNode matches with min record key and max record key, merge two nodes. In other words, add
-   * files from {@code newNode}.
+   * If original node and new node matches with min record key and max record key, merge two nodes. In other words, add
+   * files from {@code newNode} to {@code originNode}.
    *
-   * @param oldNode previously inserted node
+   * @param originNode previously inserted node
    * @param newNode newly inserted same node
    */
   @Override
-  protected void processWhenInsertSame(KeyRangeNode oldNode, KeyRangeNode newNode) {
-    oldNode.addFiles(newNode.getFileNameList());
+  protected void processWhenInsertSame(KeyRangeNode originNode, KeyRangeNode newNode) {
+    originNode.addFiles(newNode.getFileNameList());
   }
 
   /**
