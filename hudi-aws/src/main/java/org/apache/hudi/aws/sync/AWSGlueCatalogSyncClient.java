@@ -197,7 +197,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
       return;
     }
     try {
-      updateTableParameters(awsGlue, databaseName, tableName, tableProperties, true);
+      updateTableParameters(awsGlue, databaseName, tableName, tableProperties, false);
     } catch (Exception e) {
       throw new HoodieGlueSyncException("Fail to update properties for table " + tableId(databaseName, tableName), e);
     }
