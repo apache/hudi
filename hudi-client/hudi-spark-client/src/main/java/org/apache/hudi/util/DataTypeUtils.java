@@ -126,24 +126,23 @@ public class DataTypeUtils {
   }
 
   /**
-   * Try to find current sparktype whether contains that DecimalType which's scale < Decimal.MAX_LONG_DIGITS().
-   *
-   * @param sparkType spark schema.
-   * @return found result.
+   * Checks whether provided {@link DataType} contains {@link DecimalType} whose scale is less than
+   * {@link Decimal#MAX_LONG_DIGITS()}
    */
-  public static boolean foundSmallPrecisionDecimalType(DataType sparkType) {
+  public static boolean hasSmallPrecisionDecimalType(DataType sparkType) {
     if (sparkType instanceof StructType) {
       StructField[] fields = ((StructType) sparkType).fields();
-      return Arrays.stream(fields).anyMatch(f -> foundSmallPrecisionDecimalType(f.dataType()));
+      return Arrays.stream(fields).anyMatch(f -> hasSmallPrecisionDecimalType(f.dataType()));
     } else if (sparkType instanceof MapType) {
       MapType map = (MapType) sparkType;
-      return foundSmallPrecisionDecimalType(map.keyType()) || foundSmallPrecisionDecimalType(map.valueType());
+      return hasSmallPrecisionDecimalType(map.keyType()) || hasSmallPrecisionDecimalType(map.valueType());
     } else if (sparkType instanceof ArrayType) {
-      return foundSmallPrecisionDecimalType(((ArrayType) sparkType).elementType());
+      return hasSmallPrecisionDecimalType(((ArrayType) sparkType).elementType());
     } else if (sparkType instanceof DecimalType) {
       DecimalType decimalType = (DecimalType) sparkType;
       return decimalType.precision() < Decimal.MAX_LONG_DIGITS();
     }
+
     return false;
   }
 }
