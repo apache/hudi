@@ -851,20 +851,21 @@ spark-submit \
 --hoodie-conf hoodie.datasource.hive_sync.table=s3_meta_table \
 --hoodie-conf hoodie.datasource.hive_sync.partition_fields=bucket \
 --source-class org.apache.hudi.utilities.sources.S3EventsSource \
---hoodie-conf hoodie.deltastreamer.source.queue.url=https://sqs.us-west-2.amazonaws.com/queue/url
+--hoodie-conf hoodie.deltastreamer.s3.source.queue.url=https://sqs.us-west-2.amazonaws.com/queue/url
 --hoodie-conf hoodie.deltastreamer.s3.source.queue.region=us-west-2
 
-# To start S3EventsHoodieIncrSource
+# To start S3EventsHoodieIncrSource use following command along with ordering field, record key(s) and 
+# partition field(s) from the source s3 data.
 spark-submit \
 --jars &quot;/home/hadoop/hudi-utilities-bundle_2.11-0.9.0.jar,/usr/lib/spark/external/lib/spark-avro.jar,/home/hadoop/aws-java-sdk-sqs-1.12.22.jar&quot; \
 --master yarn --deploy-mode client \
 --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer /home/hadoop/hudi-packages/hudi-utilities-bundle_2.11-0.9.0-SNAPSHOT.jar \
 --table-type COPY_ON_WRITE \
---source-ordering-field eventTime --target-base-path s3://bucket_name/path/for/s3_hudi_table \
+--source-ordering-field &lt;ordering key from source data&gt; --target-base-path s3://bucket_name/path/for/s3_hudi_table \
 --target-table s3_hudi_table  --continuous --min-sync-interval-seconds 10 \
---hoodie-conf hoodie.datasource.write.recordkey.field=&quot;pull_request_id&quot; \
+--hoodie-conf hoodie.datasource.write.recordkey.field=&quot;&lt;record key from source data&gt;&quot; \
 --hoodie-conf hoodie.datasource.write.keygenerator.class=org.apache.hudi.keygen.SimpleKeyGenerator \
---hoodie-conf hoodie.datasource.write.partitionpath.field=s3.bucket.name --enable-hive-sync \
+--hoodie-conf hoodie.datasource.write.partitionpath.field=&lt;partition key from source data&gt; --enable-hive-sync \
 --hoodie-conf hoodie.datasource.hive_sync.partition_extractor_class=org.apache.hudi.hive.MultiPartKeysValueExtractor \
 --hoodie-conf hoodie.datasource.write.hive_style_partitioning=true \
 --hoodie-conf hoodie.datasource.hive_sync.database=default \
