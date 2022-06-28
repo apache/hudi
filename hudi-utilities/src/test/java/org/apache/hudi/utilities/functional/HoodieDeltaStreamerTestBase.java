@@ -97,7 +97,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
 
   @BeforeAll
   public static void initClass() throws Exception {
-    UtilitiesTestBase.initClass(true);
+    UtilitiesTestBase.initTestServices(true, true);
     PARQUET_SOURCE_ROOT = dfsBasePath + "/parquetFiles";
     ORC_SOURCE_ROOT = dfsBasePath + "/orcFiles";
     JSON_KAFKA_SOURCE_ROOT = dfsBasePath + "/jsonKafkaFiles";
