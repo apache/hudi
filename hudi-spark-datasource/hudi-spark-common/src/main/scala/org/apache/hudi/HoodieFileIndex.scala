@@ -162,9 +162,9 @@ case class HoodieFileIndex(spark: SparkSession,
         PartitionDirectory(InternalRow.fromSeq(partition.values), candidateFiles)
       }
 
-      logInfo(s"Total base files: ${totalFileSize}; " +
-        s"candidate files after data skipping : ${candidateFileSize}; " +
-        s"skipping percent ${if (allFiles.nonEmpty) (totalFileSize - candidateFileSize) / totalFileSize.toDouble else 0}")
+      logInfo(s"Total base files: $totalFileSize; " +
+        s"candidate files after data skipping : $candidateFileSize; " +
+        s"skipping percent ${if (allFiles.nonEmpty && totalFileSize > 0) (totalFileSize - candidateFileSize) / totalFileSize.toDouble else 0}")
 
       result
     }
@@ -264,7 +264,7 @@ case class HoodieFileIndex(spark: SparkSession,
   private def validateConfig(): Unit = {
     if (isDataSkippingEnabled && (!isMetadataTableEnabled || !isColumnStatsIndexEnabled)) {
       logWarning("Data skipping requires both Metadata Table and Column Stats Index to be enabled as well! " +
-        s"(isMetadataTableEnabled = ${isMetadataTableEnabled}, isColumnStatsIndexEnabled = ${isColumnStatsIndexEnabled}")
+        s"(isMetadataTableEnabled = $isMetadataTableEnabled, isColumnStatsIndexEnabled = $isColumnStatsIndexEnabled")
     }
   }
 }
