@@ -68,6 +68,7 @@ When writing data into Hudi, you model the records like how you would on a key-v
 When querying/reading data, Hudi just presents itself as a json-like hierarchical table, everyone is used to querying using Hive/Spark/Presto over Parquet/Json/Avro. 
 
 ### Why does Hudi require a key field to be configured?
+
 Hudi was designed to support fast record level Upserts and thus requires a key to identify whether an incoming record is 
 an insert or update or delete, and process accordingly. Additionally, Hudi automatically maintains indexes on this primary 
 key and for many use-cases like CDC, ensuring such primary key constraints is crucial to ensure data quality. In this context, 
@@ -94,7 +95,7 @@ At a high level, Hudi is based on MVCC design that writes data to versioned parq
 
 ### What are some ways to write a Hudi dataset?
 
-Typically, you obtain a set of partial updates/inserts from your source and issue [write operations](https://hudi.apache.org/docs/write_operations/) against a Hudi dataset.  If you ingesting data from any of the standard sources like Kafka, or tailing DFS, the [delta streamer](https://hudi.apache.org/docs/hoodie_deltastreamer#deltastreamer) tool is invaluable and provides an easy, self-managed solution to getting data written into Hudi. You can also write your own code to capture data from a custom source using the Spark datasource API and use a [Hudi datasource](https://hudi.apache.org/docs/writing_data/#spark-datasource-writer) to write into Hudi. 
+Typically, you obtain a set of partial updates/inserts from your source and issue [write operations](https://hudi.apache.org/docs/write_operations/) against a Hudi dataset.  If you ingesting data from any of the standard sources like Kafka, or tailing DFS, the [delta streamer](https://hudi.apache.org/docs/hoodie_deltastreamer#deltastreamer) tool is invaluable and provides an easy, self-managed solution to getting data written into Hudi. You can also write your own code to capture data from a custom source using the Spark datasource API and use a [Hudi datasource](https://hudi.apache.org/docs/writing_data/#datasource-writer) to write into Hudi. 
 
 ### How is a Hudi job deployed?
 
@@ -264,9 +265,31 @@ Simplest way to run compaction on MOR dataset is to run the [compaction inline](
 
 That said, for obvious reasons of not blocking ingesting for compaction, you may want to run it asynchronously as well. This can be done either via a separate [compaction job](https://github.com/apache/hudi/blob/master/hudi-utilities/src/main/java/org/apache/hudi/utilities/HoodieCompactor.java) that is scheduled by your workflow scheduler/notebook independently. If you are using delta streamer, then you can run in [continuous mode](https://github.com/apache/hudi/blob/d3edac4612bde2fa9deca9536801dbc48961fb95/hudi-utilities/src/main/java/org/apache/hudi/utilities/deltastreamer/HoodieDeltaStreamer.java#L241) where the ingestion and compaction are both managed concurrently in a single spark run time.
 
+### What options do I have for asynchronous/offline compactions on MOR dataset?
+
+There are a couple of options depending on how you write to Hudi. But first let us understand briefly what is involved. There are two parts to compaction
+- Scheduling: In this step, Hudi scans the partitions and selects file slices to be compacted. A compaction plan is finally written to Hudi timeline. Scheduling needs tighter coordination with other writers (regular ingestion is considered one of the writers). If scheduling is done inline with the ingestion job, this coordination is automatically taken care of. Else when scheduling happens asynchronously a lock provider needs to be configured for this coordination among multiple writers.
+- Execution: In this step the compaction plan is read and file slices are compacted. Execution doesnt need the same level of coordination with other writers as Scheduling step and can be decoupled from ingestion job easily.
+
+Depending on how you write to Hudi these are the possible options currently.
+- DeltaStreamer:
+   - In Continuous mode, asynchronous compaction is achieved by default. Here scheduling is done by the ingestion job inline and compaction execution is achieved asynchronously by a separate parallel thread.
+   - In non continuous mode, only inline compaction is possible. 
+   - Please note in either mode, by passing --disable-compaction compaction is completely disabled
+- Spark datasource:
+   - Async scheduling and async execution can be achieved by periodically running an offline Hudi Compactor Utility or Hudi CLI. However this needs a lock provider to be configured.
+   - Alternately, from 0.11.0, to avoid dependency on lock providers, scheduling alone can be done inline by regular writer using the config `hoodie.compact.schedule.inline` . And compaction execution can be done offline by periodically triggering the Hudi Compactor Utility or Hudi CLI.
+- Spark structured streaming:
+   - Compactions are scheduled and executed asynchronously inside the streaming job. Async Compactions are enabled by default for structured streaming jobs on Merge-On-Read table.
+   - Please note it is not possible to disable async compaction for MOR dataset with spark structured streaming. 
+- Flink:
+   - Async compaction is enabled by default for Merge-On-Read table.
+   - Offline compaction can be achieved by setting ```compaction.async.enabled``` to ```false``` and periodically running [Flink offline Compactor](https://hudi.apache.org/docs/next/compaction/#flink-offline-compaction). When running the offline compactor, one needs to ensure there are no active writes to the table.
+   - Third option (highly recommended over the second one) is to schedule the compactions from the regular ingestion job and executing the compaction plans from an offline job. To achieve this set ```compaction.async.enabled``` to ```false```, ```compaction.schedule.enabled``` to ```true``` and then run the [Flink offline Compactor](https://hudi.apache.org/docs/next/compaction/#flink-offline-compaction) periodically to execute the plans.
+
 ### What performance/ingest latency can I expect for Hudi writing?
 
-The speed at which you can write into Hudi depends on the [write operation](https://hudi.apache.org/docs/write_operations) and some trade-offs you make along the way like file sizing. Just like how databases incur overhead over direct/raw file I/O on disks,  Hudi operations may have overhead from supporting  database like features compared to reading/writing raw DFS files. That said, Hudi implements advanced techniques from database literature to keep these minimal. User is encouraged to have this perspective when trying to reason about Hudi performance. As the saying goes : there is no free lunch (not yet atleast)
+The speed at which you can write into Hudi depends on the [write operation](https://hudi.apache.org/docs/write_operations/) and some trade-offs you make along the way like file sizing. Just like how databases incur overhead over direct/raw file I/O on disks,  Hudi operations may have overhead from supporting  database like features compared to reading/writing raw DFS files. That said, Hudi implements advanced techniques from database literature to keep these minimal. User is encouraged to have this perspective when trying to reason about Hudi performance. As the saying goes : there is no free lunch (not yet atleast)
 
 | Storage Type | Type of workload | Performance | Tips |
 |-------|--------|--------|--------|
@@ -375,7 +398,7 @@ spark.read.parquet("your_data_set/path/to/month").limit(n) // Limit n records
      .save(basePath);
 ```
 
-For merge on read table, you may want to also try scheduling and running compaction jobs. You can run compaction directly using spark submit on org.apache.hudi.utilities.HoodieCompactor or by using [HUDI CLI](https://hudi.apache.org/docs/cli).
+For merge on read table, you may want to also try scheduling and running compaction jobs. You can run compaction directly using spark submit on org.apache.hudi.utilities.HoodieCompactor or by using [HUDI CLI](https://hudi.apache.org/docs/deployment/#cli).
 
 ### If I keep my file versions at 1, with this configuration will i be able to do a roll back (to the last commit) when write fail?
 
