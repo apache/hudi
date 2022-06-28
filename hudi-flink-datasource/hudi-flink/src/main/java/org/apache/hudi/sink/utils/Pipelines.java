@@ -330,17 +330,23 @@ public class Pipelines {
           .setParallelism(conf.getInteger(FlinkOptions.WRITE_TASKS));
     } else {
       WriteOperatorFactory<HoodieRecord> operatorFactory = StreamWriteOperator.getFactory(conf);
-      return dataStream
-          // Key-by record key, to avoid multiple subtasks write to a bucket at the same time
-          .keyBy(HoodieRecord::getRecordKey)
-          .transform(
-              "bucket_assigner",
-              TypeInformation.of(HoodieRecord.class),
-              new KeyedProcessOperator<>(new BucketAssignFunction<>(conf)))
-          .uid("uid_bucket_assigner_" + conf.getString(FlinkOptions.TABLE_NAME))
-          .setParallelism(conf.getOptional(FlinkOptions.BUCKET_ASSIGN_TASKS).orElse(defaultParallelism))
-          // shuffle by fileId(bucket id)
-          .keyBy(record -> record.getCurrentLocation().getFileId())
+
+      DataStream<HoodieRecord> bucketDataStream = dataStream
+              // Key-by record key, to avoid multiple subtasks write to a bucket at the same time
+              .keyBy(HoodieRecord::getRecordKey)
+              .transform(
+                      "bucket_assigner",
+                      TypeInformation.of(HoodieRecord.class),
+                      new KeyedProcessOperator<>(new BucketAssignFunction<>(conf)))
+              .uid("uid_bucket_assigner_" + conf.getString(FlinkOptions.TABLE_NAME))
+              .setParallelism(conf.getOptional(FlinkOptions.BUCKET_ASSIGN_TASKS).orElse(defaultParallelism));
+
+      bucketDataStream = conf.getOptional(FlinkOptions.BUCKET_ASSIGN_TASKS).orElse(defaultParallelism) ==
+              conf.getInteger(FlinkOptions.WRITE_TASKS) ? bucketDataStream : bucketDataStream
+              // shuffle by fileId(bucket id)
+              .keyBy(record -> record.getCurrentLocation().getFileId());
+
+      return bucketDataStream
           .transform(opIdentifier("stream_write", conf), TypeInformation.of(Object.class), operatorFactory)
           .uid("uid_stream_write" + conf.getString(FlinkOptions.TABLE_NAME))
           .setParallelism(conf.getInteger(FlinkOptions.WRITE_TASKS));
