@@ -98,7 +98,7 @@ public class HoodieTableSink implements DynamicTableSink, SupportsPartitioning, 
       if (OptionsResolver.needsAsyncCompaction(conf)) {
         // use synchronous compaction for bounded source.
         if (context.isBounded()) {
-          conf.setBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED, false);
+          conf.setBoolean(FlinkOptions.COMPACTION_OPERATION_ASYNC_ENABLED, false);
         }
         return Pipelines.compact(conf, pipeline);
       } else {
