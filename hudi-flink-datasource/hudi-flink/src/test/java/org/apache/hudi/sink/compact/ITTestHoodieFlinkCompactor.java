@@ -175,7 +175,7 @@ public class ITTestHoodieFlinkCompactor {
 
     env.execute("flink_hudi_compaction");
     writeClient.close();
-    TestData.checkWrittenFullData(tempFile, EXPECTED1);
+    TestData.checkWrittenDataCOW(tempFile, EXPECTED1);
   }
 
   @ParameterizedTest
@@ -216,7 +216,7 @@ public class ITTestHoodieFlinkCompactor {
 
     asyncCompactionService.shutDown();
 
-    TestData.checkWrittenFullData(tempFile, EXPECTED2);
+    TestData.checkWrittenDataCOW(tempFile, EXPECTED2);
   }
 
   @ParameterizedTest
@@ -306,7 +306,7 @@ public class ITTestHoodieFlinkCompactor {
 
     env.execute("flink_hudi_compaction");
     writeClient.close();
-    TestData.checkWrittenFullData(tempFile, EXPECTED3);
+    TestData.checkWrittenDataCOW(tempFile, EXPECTED3);
   }
 
   private String scheduleCompactionPlan(HoodieTableMetaClient metaClient, HoodieFlinkWriteClient<?> writeClient) {
