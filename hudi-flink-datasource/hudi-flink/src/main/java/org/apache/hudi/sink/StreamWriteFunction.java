@@ -104,7 +104,7 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
 
   private transient BiFunction<List<HoodieRecord>, String, List<WriteStatus>> writeFunction;
 
-  private transient HoodieMerge hoodieMerge;
+  private transient HoodieMerge merge;
 
   /**
    * Total size tracer.
@@ -202,7 +202,7 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
   private void initMergeClass() {
     String mergeClassName = metaClient.getTableConfig().getMergeClass();
     LOG.info("init hoodie merge with class [{}]", mergeClassName);
-    hoodieMerge = HoodieRecordUtils.loadHoodieMerge(mergeClassName);
+    merge = HoodieRecordUtils.loadMerge(mergeClassName);
   }
 
   /**
@@ -431,7 +431,7 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
     List<HoodieRecord> records = bucket.writeBuffer();
     ValidationUtils.checkState(records.size() > 0, "Data bucket to flush has no buffering records");
     if (config.getBoolean(FlinkOptions.PRE_COMBINE)) {
-      records = FlinkWriteHelper.newInstance().deduplicateRecords(records, (HoodieIndex) null, -1, hoodieMerge);
+      records = FlinkWriteHelper.newInstance().deduplicateRecords(records, (HoodieIndex) null, -1, merge);
     }
     bucket.preWrite(records);
     final List<WriteStatus> writeStatus = new ArrayList<>(writeFunction.apply(records, instant));
@@ -466,7 +466,7 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
             List<HoodieRecord> records = bucket.writeBuffer();
             if (records.size() > 0) {
               if (config.getBoolean(FlinkOptions.PRE_COMBINE)) {
-                records = FlinkWriteHelper.newInstance().deduplicateRecords(records, (HoodieIndex) null, -1, hoodieMerge);
+                records = FlinkWriteHelper.newInstance().deduplicateRecords(records, (HoodieIndex) null, -1, merge);
               }
               bucket.preWrite(records);
               writeStatus.addAll(writeFunction.apply(records, currentInstant));

@@ -634,7 +634,7 @@ public class MergeOnReadInputFormat
 
     private final InstantRange instantRange;
 
-    private final HoodieMerge hoodieMerge;
+    private final HoodieMerge merge;
 
     // add the flag because the flink ParquetColumnarRowSplitReader is buggy:
     // method #reachedEnd() returns false after it returns true.
@@ -671,7 +671,7 @@ public class MergeOnReadInputFormat
       this.avroToRowDataConverter = AvroToRowDataConverters.createRowConverter(requiredRowType);
       this.projection = RowDataProjection.instance(requiredRowType, requiredPos);
       this.instantRange = split.getInstantRange().orElse(null);
-      this.hoodieMerge = HoodieRecordUtils.loadHoodieMerge(mergeClass);
+      this.merge = HoodieRecordUtils.loadMerge(mergeClass);
     }
 
     @Override
@@ -762,7 +762,7 @@ public class MergeOnReadInputFormat
         String curKey) throws IOException {
       final HoodieAvroRecord<?> record = (HoodieAvroRecord) scanner.getRecords().get(curKey);
       GenericRecord historyAvroRecord = (GenericRecord) rowDataToAvroConverter.convert(tableSchema, curRow);
-      Option<HoodieRecord> resultRecord = hoodieMerge.combineAndGetUpdateValue(new HoodieAvroIndexedRecord(historyAvroRecord), record, tableSchema, new Properties());
+      Option<HoodieRecord> resultRecord = merge.combineAndGetUpdateValue(new HoodieAvroIndexedRecord(historyAvroRecord), record, tableSchema, new Properties());
       return ((HoodieAvroIndexedRecord) resultRecord.get()).toIndexedRecord();
     }
   }

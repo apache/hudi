@@ -80,7 +80,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
   // Stores the total time taken to perform reading and merging of log blocks
   private long totalTimeTakenToReadAndMergeBlocks;
 
-  private final HoodieMerge hoodieMerge;
+  private final HoodieMerge merge;
 
   @SuppressWarnings("unchecked")
   protected HoodieMergedLogRecordScanner(FileSystem fs, String basePath, List<String> logFilePaths, Schema readerSchema,
@@ -99,7 +99,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
       this.records = new ExternalSpillableMap<>(maxMemorySizeInBytes, spillableMapBasePath, new DefaultSizeEstimator(),
           new HoodieRecordSizeEstimator(readerSchema), diskMapType, isBitCaskDiskMapCompressionEnabled);
       this.maxMemorySizeInBytes = maxMemorySizeInBytes;
-      this.hoodieMerge = HoodieRecordUtils.loadHoodieMerge(getMergeClassFQN());
+      this.merge = HoodieRecordUtils.loadMerge(getMergeClassFQN());
     } catch (IOException e) {
       throw new HoodieIOException("IOException when creating ExternalSpillableMap at " + spillableMapBasePath, e);
     }
@@ -155,7 +155,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
 
       HoodieRecord<? extends HoodieRecordPayload> oldRecord = records.get(key);
       HoodieRecordPayload oldValue = oldRecord.getData();
-      HoodieRecordPayload combinedValue = (HoodieRecordPayload) hoodieMerge.preCombine(oldRecord, hoodieRecord).getData();
+      HoodieRecordPayload combinedValue = (HoodieRecordPayload) merge.preCombine(oldRecord, hoodieRecord).getData();
       // If combinedValue is oldValue, no need rePut oldRecord
       if (combinedValue != oldValue) {
         HoodieOperation operation = hoodieRecord.getOperation();

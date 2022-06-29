@@ -49,7 +49,7 @@ public class HoodieWriteHelper<T, R> extends BaseWriteHelper<T, HoodieData<Hoodi
 
   @Override
   public HoodieData<HoodieRecord<T>> deduplicateRecords(
-      HoodieData<HoodieRecord<T>> records, HoodieIndex<?, ?> index, int parallelism, HoodieMerge hoodieMerge) {
+      HoodieData<HoodieRecord<T>> records, HoodieIndex<?, ?> index, int parallelism, HoodieMerge merge) {
     boolean isIndexingGlobal = index.isGlobal();
     return records.mapToPair(record -> {
       HoodieKey hoodieKey = record.getKey();
@@ -58,7 +58,7 @@ public class HoodieWriteHelper<T, R> extends BaseWriteHelper<T, HoodieData<Hoodi
       return Pair.of(key, record);
     }).reduceByKey((rec1, rec2) -> {
       @SuppressWarnings("unchecked")
-      HoodieRecord<T> reducedRecord =  hoodieMerge.preCombine(rec1, rec2);
+      HoodieRecord<T> reducedRecord =  merge.preCombine(rec1, rec2);
       HoodieKey reducedKey = rec1.getData().equals(reducedRecord.getData()) ? rec1.getKey() : rec2.getKey();
       return reducedRecord.newInstance(reducedKey);
     }, parallelism).map(Pair::getRight);

@@ -36,19 +36,19 @@ public class HoodieRecordUtils {
   /**
    * Instantiate a given class with a record merge.
    */
-  public static HoodieMerge loadHoodieMerge(String mergeClass) {
+  public static HoodieMerge loadMerge(String mergeClass) {
     try {
-      HoodieMerge hoodieMerge = (HoodieMerge) INSTANCE_CACHE.get(mergeClass);
-      if (null == hoodieMerge) {
+      HoodieMerge merge = (HoodieMerge) INSTANCE_CACHE.get(mergeClass);
+      if (null == merge) {
         synchronized (HoodieMerge.class) {
-          hoodieMerge = (HoodieMerge) INSTANCE_CACHE.get(mergeClass);
-          if (null == hoodieMerge) {
-            hoodieMerge = (HoodieMerge)ReflectionUtils.loadClass(mergeClass, new Object[]{});
-            INSTANCE_CACHE.put(mergeClass, hoodieMerge);
+          merge = (HoodieMerge) INSTANCE_CACHE.get(mergeClass);
+          if (null == merge) {
+            merge = (HoodieMerge)ReflectionUtils.loadClass(mergeClass, new Object[]{});
+            INSTANCE_CACHE.put(mergeClass, merge);
           }
         }
       }
-      return hoodieMerge;
+      return merge;
     } catch (HoodieException e) {
       throw new HoodieException("Unable to instantiate hoodie merge class ", e);
     }

@@ -61,7 +61,7 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
    */
   protected final Schema tableSchema;
   protected final Schema tableSchemaWithMetaFields;
-  protected final HoodieMerge hoodieMerge;
+  protected final HoodieMerge merge;
 
   /**
    * The write schema. In most case the write schema is the same to the
@@ -106,7 +106,7 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
     this.taskContextSupplier = taskContextSupplier;
     this.writeToken = makeWriteToken();
     schemaOnReadEnabled = !isNullOrEmpty(hoodieTable.getConfig().getInternalSchema());
-    this.hoodieMerge = HoodieRecordUtils.loadHoodieMerge(config.getMergeClass());
+    this.merge = HoodieRecordUtils.loadMerge(config.getMergeClass());
   }
 
   /**

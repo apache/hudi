@@ -88,14 +88,14 @@ public class FlinkWriteHelper<T, R> extends BaseWriteHelper<T, List<HoodieRecord
 
   @Override
   public List<HoodieRecord<T>> deduplicateRecords(
-      List<HoodieRecord<T>> records, HoodieIndex<?, ?> index, int parallelism, HoodieMerge hoodieMerge) {
+      List<HoodieRecord<T>> records, HoodieIndex<?, ?> index, int parallelism, HoodieMerge merge) {
     // If index used is global, then records are expected to differ in their partitionPath
     Map<Object, List<HoodieRecord<T>>> keyedRecords = records.stream()
         .collect(Collectors.groupingBy(record -> record.getKey().getRecordKey()));
 
     return keyedRecords.values().stream().map(x -> x.stream().reduce((rec1, rec2) -> {
       @SuppressWarnings("unchecked")
-      final HoodieRecord reducedRec =  hoodieMerge.preCombine(rec1, rec2);
+      final HoodieRecord reducedRec =  merge.preCombine(rec1, rec2);
       // we cannot allow the user to change the key or partitionPath, since that will affect
       // everything
       // so pick it from one of the records.
