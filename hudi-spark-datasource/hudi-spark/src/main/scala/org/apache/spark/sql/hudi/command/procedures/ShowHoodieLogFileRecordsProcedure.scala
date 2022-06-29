@@ -22,7 +22,7 @@ import org.apache.avro.generic.IndexedRecord
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.common.config.HoodieCommonConfig
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.HoodieLogFile
+import org.apache.hudi.common.model.{HoodieAvroIndexedRecord, HoodieLogFile, HoodieRecord, HoodieRecordPayload}
 import org.apache.hudi.common.table.log.block.HoodieDataBlock
 import org.apache.hudi.common.table.log.{HoodieLogFormat, HoodieMergedLogRecordScanner}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
@@ -79,7 +79,7 @@ class ShowHoodieLogFileRecordsProcedure extends BaseProcedure with ProcedureBuil
         .withBitCaskDiskMapCompressionEnabled(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue)
         .build
       scanner.asScala.foreach(hoodieRecord => {
-        val record = hoodieRecord.getData.getInsertValue(schema).get()
+        val record = hoodieRecord.getData.asInstanceOf[HoodieRecordPayload[_]].getInsertValue(schema).get()
         if (allRecords.size() < limit) {
           allRecords.add(record)
         }
@@ -93,10 +93,13 @@ class ShowHoodieLogFileRecordsProcedure extends BaseProcedure with ProcedureBuil
             val block = reader.next()
             block match {
               case dataBlock: HoodieDataBlock =>
-                val recordItr = dataBlock.getRecordIterator
+                val mapper = new HoodieRecord.Mapper() {
+                  override def apply(data: IndexedRecord) = new HoodieAvroIndexedRecord(data)
+                }
+                val recordItr = dataBlock.getRecordIterator(mapper)
                 recordItr.asScala.foreach(record => {
                   if (allRecords.size() < limit) {
-                    allRecords.add(record)
+                    allRecords.add(record.getData.asInstanceOf[IndexedRecord])
                   }
                 })
                 recordItr.close()
