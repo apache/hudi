@@ -193,13 +193,13 @@ public class HoodieLockConfig extends HoodieConfig {
       .key(LOCK_PREFIX + "early.conflict.async.checker.batch.interval")
       .defaultValue(30000L)
       .sinceVersion("0.12.0")
-      .withDocumentation("");
+      .withDocumentation("Used for timeline based marker AsyncTimelineMarkerConflictResolutionStrategy. The time to delay first async marker conflict checking.");
 
   public static final ConfigProperty<Long> MARKER_CONFLICT_CHECKER_PERIOD = ConfigProperty
       .key(LOCK_PREFIX + "early.conflict.async.checker.period")
       .defaultValue(30000L)
       .sinceVersion("0.12.0")
-      .withDocumentation("");
+      .withDocumentation("Used for timeline based marker AsyncTimelineMarkerConflictResolutionStrategy. The period between each marker conflict checking.");
 
   /** @deprecated Use {@link #WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME} and its methods instead */
   @Deprecated
