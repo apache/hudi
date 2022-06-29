@@ -2,11 +2,22 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <id>https://hudi.apache.org/blog</id>
     <title>Apache Hudi: User-Facing Analytics</title>
-    <updated>2022-06-09T00:00:00.000Z</updated>
+    <updated>2022-06-29T00:00:00.000Z</updated>
     <generator>https://github.com/jpmonette/feed</generator>
     <link rel="alternate" href="https://hudi.apache.org/blog"/>
     <subtitle>Apache Hudi Blog</subtitle>
     <icon>https://hudi.apache.org/assets/images/favicon.ico</icon>
+    <entry>
+        <title type="html"><![CDATA[Apache Hudi vs Delta Lake - Transparent TPC-DS Lakehouse Performance Benchmarks]]></title>
+        <id>/2022/06/29/Apache-Hudi-vs-Delta-Lake-transparent-tpc-ds-lakehouse-performance-benchmarks</id>
+        <link href="https://hudi.apache.org/blog/2022/06/29/Apache-Hudi-vs-Delta-Lake-transparent-tpc-ds-lakehouse-performance-benchmarks"/>
+        <updated>2022-06-29T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://www.onehouse.ai/blog/apache-hudi-vs-delta-lake-transparent-tpc-ds-lakehouse-performance-benchmarks">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Alexey Kudinkin</name>
+        </author>
+    </entry>
     <entry>
         <title type="html"><![CDATA[Hudi’s Column Stats Index and Data Skipping feature help speed up queries by an orders of magnitude!]]></title>
         <id>/2022/06/09/Singificant-queries-speedup-from-Hudi-Column-Stats-Index-and-Data-Skipping-features</id>
