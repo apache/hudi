@@ -20,13 +20,14 @@ package org.apache.hudi.sink.utils;
 
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.hudi.aws.sync.AwsGlueCatalogSyncTool;
+import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.hive.ddl.HiveSyncMode;
 import org.apache.hudi.table.format.FilePathUtils;
-import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -58,15 +59,16 @@ public class HiveSyncContext {
     return new HiveSyncTool(this.syncConfig, this.hiveConf, this.fs);
   }
 
-  public static HiveSyncContext create(Configuration conf) {
+  public static HiveSyncContext create(Configuration conf, SerializableConfiguration serConf) {
     HiveSyncConfig syncConfig = buildSyncConfig(conf);
-    org.apache.hadoop.conf.Configuration hadoopConf = StreamerUtil.getHadoopConf();
+    org.apache.hadoop.conf.Configuration hadoopConf = HadoopConfigurations.getHadoopConf(conf);
     String path = conf.getString(FlinkOptions.PATH);
     FileSystem fs = FSUtils.getFs(path, hadoopConf);
     HiveConf hiveConf = new HiveConf();
     if (!FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.HIVE_SYNC_METASTORE_URIS)) {
       hadoopConf.set(HiveConf.ConfVars.METASTOREURIS.varname, conf.getString(FlinkOptions.HIVE_SYNC_METASTORE_URIS));
     }
+    hiveConf.addResource(serConf.get());
     hiveConf.addResource(hadoopConf);
     return new HiveSyncContext(syncConfig, hiveConf, fs);
   }

@@ -166,7 +166,7 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
         .map(pair -> Pair.of(pair.getKey(), pair.getValue().getFileId()))
         .collect(toList());
 
-    context.setJobStatus(this.getClass().getName(), "Obtain key ranges for file slices (range pruning=on)");
+    context.setJobStatus(this.getClass().getName(), "Obtain key ranges for file slices (range pruning=on): " + config.getTableName());
     return context.map(partitionPathFileIDList, pf -> {
       try {
         HoodieRangeInfoHandle rangeInfoHandle = new HoodieRangeInfoHandle(config, hoodieTable, pf);
@@ -208,7 +208,7 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
   protected List<Pair<String, BloomIndexFileInfo>> loadColumnRangesFromMetaIndex(
       List<String> partitions, final HoodieEngineContext context, final HoodieTable<?, ?, ?, ?> hoodieTable) {
     // also obtain file ranges, if range pruning is enabled
-    context.setJobStatus(this.getClass().getName(), "Load meta index key ranges for file slices");
+    context.setJobStatus(this.getClass().getName(), "Load meta index key ranges for file slices: " + config.getTableName());
 
     final String keyField = hoodieTable.getMetaClient().getTableConfig().getRecordKeyFieldProp();
     return context.flatMap(partitions, partitionName -> {

@@ -108,9 +108,6 @@ case class HoodieFileIndex(spark: SparkSession,
    * @return list of PartitionDirectory containing partition to base files mapping
    */
   override def listFiles(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[PartitionDirectory] = {
-    val convertedPartitionFilters =
-      HoodieFileIndex.convertFilterForTimestampKeyGenerator(metaClient, partitionFilters)
-
     // Look up candidate files names in the col-stats index, if all of the following conditions are true
     //    - Data-skipping is enabled
     //    - Col-Stats Index is present
@@ -144,7 +141,7 @@ case class HoodieFileIndex(spark: SparkSession,
       Seq(PartitionDirectory(InternalRow.empty, candidateFiles))
     } else {
       // Prune the partition path by the partition filters
-      val prunedPartitions = prunePartition(cachedAllInputFileSlices.keySet.asScala.toSeq, convertedPartitionFilters)
+      val prunedPartitions = prunePartition(cachedAllInputFileSlices.keySet.asScala.toSeq, partitionFilters)
       var totalFileSize = 0
       var candidateFileSize = 0
 
@@ -165,9 +162,9 @@ case class HoodieFileIndex(spark: SparkSession,
         PartitionDirectory(InternalRow.fromSeq(partition.values), candidateFiles)
       }
 
-      logInfo(s"Total base files: ${totalFileSize}; " +
-        s"candidate files after data skipping : ${candidateFileSize}; " +
-        s"skipping percent ${if (allFiles.nonEmpty) (totalFileSize - candidateFileSize) / totalFileSize.toDouble else 0}")
+      logInfo(s"Total base files: $totalFileSize; " +
+        s"candidate files after data skipping : $candidateFileSize; " +
+        s"skipping percent ${if (allFiles.nonEmpty && totalFileSize > 0) (totalFileSize - candidateFileSize) / totalFileSize.toDouble else 0}")
 
       result
     }
@@ -267,7 +264,7 @@ case class HoodieFileIndex(spark: SparkSession,
   private def validateConfig(): Unit = {
     if (isDataSkippingEnabled && (!isMetadataTableEnabled || !isColumnStatsIndexEnabled)) {
       logWarning("Data skipping requires both Metadata Table and Column Stats Index to be enabled as well! " +
-        s"(isMetadataTableEnabled = ${isMetadataTableEnabled}, isColumnStatsIndexEnabled = ${isColumnStatsIndexEnabled}")
+        s"(isMetadataTableEnabled = $isMetadataTableEnabled, isColumnStatsIndexEnabled = $isColumnStatsIndexEnabled")
     }
   }
 }

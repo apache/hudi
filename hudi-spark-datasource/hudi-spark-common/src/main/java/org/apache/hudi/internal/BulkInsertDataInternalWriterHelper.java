@@ -23,10 +23,11 @@ import org.apache.hudi.client.HoodieInternalWriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.io.storage.row.HoodieRowCreateHandleWithoutMetaFields;
 import org.apache.hudi.io.storage.row.HoodieRowCreateHandle;
+import org.apache.hudi.io.storage.row.HoodieRowCreateHandleWithoutMetaFields;
 import org.apache.hudi.keygen.BuiltinKeyGenerator;
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
@@ -123,13 +124,16 @@ public class BulkInsertDataInternalWriterHelper {
     try {
       String partitionPath = null;
       if (populateMetaFields) { // usual path where meta fields are pre populated in prep step.
-        partitionPath = record.getUTF8String(
-            HoodieRecord.HOODIE_META_COLUMNS_NAME_TO_POS.get(HoodieRecord.PARTITION_PATH_METADATA_FIELD)).toString();
+        partitionPath = String.valueOf(record.getUTF8String(HoodieRecord.PARTITION_PATH_META_FIELD_POS));
       } else { // if meta columns are disabled.
         if (!keyGeneratorOpt.isPresent()) { // NoPartitionerKeyGen
           partitionPath = "";
         } else if (simpleKeyGen) { // SimpleKeyGen
-          partitionPath = (record.get(simplePartitionFieldIndex, simplePartitionFieldDataType)).toString();
+          Object parititionPathValue = record.get(simplePartitionFieldIndex, simplePartitionFieldDataType);
+          partitionPath = parititionPathValue != null ? parititionPathValue.toString() : PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH;
+          if (writeConfig.isHiveStylePartitioningEnabled()) {
+            partitionPath = (keyGeneratorOpt.get()).getPartitionPathFields().get(0) + "=" + partitionPath;
+          }
         } else {
           // only BuiltIn key generators are supported if meta fields are disabled.
           partitionPath = keyGeneratorOpt.get().getPartitionPath(record, structType);

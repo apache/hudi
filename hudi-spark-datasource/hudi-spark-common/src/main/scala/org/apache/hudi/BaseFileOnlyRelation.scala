@@ -54,6 +54,16 @@ class BaseFileOnlyRelation(sqlContext: SQLContext,
 
   override type FileSplit = HoodieBaseFileSplit
 
+  // TODO(HUDI-3204) this is to override behavior (exclusively) for COW tables to always extract
+  //                 partition values from partition path
+  //                 For more details please check HUDI-4161
+  // NOTE: This override has to mirror semantic of whenever this Relation is converted into [[HadoopFsRelation]],
+  //       which is currently done for all cases, except when Schema Evolution is enabled
+  override protected val shouldExtractPartitionValuesFromPartitionPath: Boolean = {
+    val enableSchemaOnRead = !internalSchema.isEmptySchema
+    !enableSchemaOnRead
+  }
+
   override lazy val mandatoryFields: Seq[String] =
   // TODO reconcile, record's key shouldn't be mandatory for base-file only relation
     Seq(recordKeyField)
@@ -156,7 +166,9 @@ class BaseFileOnlyRelation(sqlContext: SQLContext,
       DataSource.apply(
         sparkSession = sparkSession,
         paths = extraReadPaths,
-        userSpecifiedSchema = userSchema,
+        // Here we should specify the schema to the latest commit schema since
+        // the table schema evolution.
+        userSpecifiedSchema = userSchema.orElse(Some(tableStructSchema)),
         className = formatClassName,
         // Since we're reading the table as just collection of files we have to make sure
         // we only read the latest version of every Hudi's file-group, which might be compacted, clustered, etc.
@@ -165,8 +177,7 @@ class BaseFileOnlyRelation(sqlContext: SQLContext,
         // We rely on [[HoodieROTablePathFilter]], to do proper filtering to assure that
         options = optParams ++ Map(
           "mapreduce.input.pathFilter.class" -> classOf[HoodieROTablePathFilter].getName
-        ),
-        partitionColumns = partitionColumns
+        )
       )
         .resolveRelation()
         .asInstanceOf[HadoopFsRelation]

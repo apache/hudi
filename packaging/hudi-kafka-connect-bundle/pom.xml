@@ -30,6 +30,7 @@
     <properties>
         <checkstyle.skip>true</checkstyle.skip>
         <main.basedir>${project.parent.basedir}</main.basedir>
+        <skipTests>true</skipTests>
         <kafka.connect.bundle.shade.prefix>org.apache.hudi.</kafka.connect.bundle.shade.prefix>
     </properties>
 
@@ -124,6 +125,7 @@
                                     <include>org.apache.hbase:hbase-hadoop2-compat</include>
                                     <include>org.apache.hbase:hbase-metrics</include>
                                     <include>org.apache.hbase:hbase-metrics-api</include>
+                                    <include>org.apache.hbase:hbase-protocol</include>
                                     <include>org.apache.hbase:hbase-protocol-shaded</include>
                                     <include>org.apache.hbase:hbase-server</include>
                                     <include>org.apache.hbase.thirdparty:hbase-shaded-miscellaneous</include>
@@ -282,8 +284,16 @@
             <scope>compile</scope>
             <exclusions>
                 <exclusion>
-                    <groupId>log4j</groupId>
-                    <artifactId>log4j</artifactId>
+                    <groupId>org.apache.logging.log4j</groupId>
+                    <artifactId>log4j-api</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.logging.log4j</groupId>
+                    <artifactId>log4j-core</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.logging.log4j</groupId>
+                    <artifactId>log4j-1.2-api</artifactId>
                 </exclusion>
             </exclusions>
         </dependency>

@@ -21,6 +21,7 @@ package org.apache.hudi.utils;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
@@ -63,6 +64,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -162,6 +164,18 @@ public class TestData {
           TimestampData.fromEpochMillis(7000), StringData.fromString("par4")),
       insertRow(StringData.fromString("id8"), StringData.fromString("Han"), 56,
           TimestampData.fromEpochMillis(8000), StringData.fromString("par4"))
+  );
+
+  // data set of test_source.data first commit.
+  public static List<RowData> DATA_SET_SOURCE_INSERT_FIRST_COMMIT = Arrays.asList(
+      insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
+          TimestampData.fromEpochMillis(1000), StringData.fromString("par1")),
+      insertRow(StringData.fromString("id2"), StringData.fromString("Stephen"), 33,
+          TimestampData.fromEpochMillis(2000), StringData.fromString("par1")),
+      insertRow(StringData.fromString("id3"), StringData.fromString("Julian"), 53,
+          TimestampData.fromEpochMillis(3000), StringData.fromString("par2")),
+      insertRow(StringData.fromString("id4"), StringData.fromString("Fabian"), 31,
+          TimestampData.fromEpochMillis(4000), StringData.fromString("par2"))
   );
 
   // data set of test_source.data latest commit.
@@ -289,6 +303,24 @@ public class TestData {
         insertRow(StringData.fromString("id" + i), StringData.fromString("Danny"), 23,
             TimestampData.fromEpochMillis(i), StringData.fromString("par1"))));
     return inserts;
+  }
+
+  public static List<RowData> filterOddRows(List<RowData> rows) {
+    return filterRowsByIndexPredicate(rows, i -> i % 2 != 0);
+  }
+
+  public static List<RowData> filterEvenRows(List<RowData> rows) {
+    return filterRowsByIndexPredicate(rows, i -> i % 2 == 0);
+  }
+
+  private static List<RowData> filterRowsByIndexPredicate(List<RowData> rows, Predicate<Integer> predicate) {
+    List<RowData> filtered = new ArrayList<>();
+    for (int i = 0; i < rows.size(); i++) {
+      if (predicate.test(i)) {
+        filtered.add(rows.get(i));
+      }
+    }
+    return filtered;
   }
 
   private static Integer toIdSafely(Object id) {
@@ -629,10 +661,11 @@ public class TestData {
       File[] dataFiles = partitionDir.listFiles(file ->
           file.getName().contains(".log.") && !file.getName().startsWith(".."));
       assertNotNull(dataFiles);
-      HoodieMergedLogRecordScanner scanner = getScanner(
-          fs, baseFile.getPath(), Arrays.stream(dataFiles).map(File::getAbsolutePath)
-              .sorted(Comparator.naturalOrder()).collect(Collectors.toList()),
-          schema, latestInstant);
+      List<String> logPaths = Arrays.stream(dataFiles)
+          .sorted((f1, f2) -> HoodieLogFile.getLogFileComparator()
+              .compare(new HoodieLogFile(f1.getPath()), new HoodieLogFile(f2.getPath())))
+          .map(File::getAbsolutePath).collect(Collectors.toList());
+      HoodieMergedLogRecordScanner scanner = getScanner(fs, baseFile.getPath(), logPaths, schema, latestInstant);
       List<String> readBuffer = scanner.getRecords().values().stream()
           .map(hoodieRecord -> {
             try {

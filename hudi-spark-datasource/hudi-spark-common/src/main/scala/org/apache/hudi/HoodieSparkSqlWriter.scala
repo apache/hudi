@@ -26,7 +26,7 @@ import org.apache.hudi.HoodieConversionUtils.toProperties
 import org.apache.hudi.HoodieWriterUtils._
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.client.{HoodieWriteResult, SparkRDDWriteClient}
-import org.apache.hudi.common.config.{HoodieConfig, HoodieMetadataConfig, TypedProperties}
+import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieConfig, HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model._
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
@@ -83,9 +83,9 @@ object HoodieSparkSqlWriter {
     val fs = basePath.getFileSystem(sparkContext.hadoopConfiguration)
     tableExists = fs.exists(new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME))
     var tableConfig = getHoodieTableConfig(sparkContext, path, hoodieTableConfigOpt)
-    validateTableConfig(sqlContext.sparkSession, optParams, tableConfig)
+    validateTableConfig(sqlContext.sparkSession, optParams, tableConfig, mode == SaveMode.Overwrite)
 
-    val (parameters, hoodieConfig) = mergeParamsAndGetHoodieConfig(optParams, tableConfig)
+    val (parameters, hoodieConfig) = mergeParamsAndGetHoodieConfig(optParams, tableConfig, mode)
     val originKeyGeneratorClassName = HoodieWriterUtils.getOriginKeyGenerator(parameters)
     val timestampKeyGeneratorConfigs = extractConfigsRelatedToTimestampBasedKeyGenerator(
       originKeyGeneratorClassName, parameters)
@@ -212,7 +212,6 @@ object HoodieSparkSqlWriter {
             (writeStatuses, client)
           }
           case WriteOperationType.DELETE_PARTITION => {
-            val genericRecords = registerKryoClassesAndGetGenericRecords(tblName, sparkContext, df, reconcileSchema)
             if (!tableExists) {
               throw new HoodieException(s"hoodie table at $basePath does not exist")
             }
@@ -222,6 +221,7 @@ object HoodieSparkSqlWriter {
               val partitionColsToDelete = parameters(DataSourceWriteOptions.PARTITIONS_TO_DELETE.key()).split(",")
               java.util.Arrays.asList(partitionColsToDelete: _*)
             } else {
+              val genericRecords = registerKryoClassesAndGetGenericRecords(tblName, sparkContext, df, reconcileSchema)
               genericRecords.map(gr => keyGenerator.getKey(gr).getPartitionPath).toJavaRDD().distinct().collect()
             }
             // Create a HoodieWriteClient & issue the delete.
@@ -338,7 +338,7 @@ object HoodieSparkSqlWriter {
   def addSchemaEvolutionParameters(parameters: Map[String, String], internalSchemaOpt: Option[InternalSchema]): Map[String, String] = {
     val schemaEvolutionEnable = if (internalSchemaOpt.isDefined) "true" else "false"
     parameters ++ Map(HoodieWriteConfig.INTERNAL_SCHEMA_STRING.key() -> SerDeHelper.toJson(internalSchemaOpt.getOrElse(null)),
-      HoodieWriteConfig.SCHEMA_EVOLUTION_ENABLE.key() -> schemaEvolutionEnable)
+      HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key() -> schemaEvolutionEnable)
   }
 
   /**
@@ -408,9 +408,9 @@ object HoodieSparkSqlWriter {
     val fs = basePath.getFileSystem(sparkContext.hadoopConfiguration)
     tableExists = fs.exists(new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME))
     val tableConfig = getHoodieTableConfig(sparkContext, path, hoodieTableConfigOpt)
-    validateTableConfig(sqlContext.sparkSession, optParams, tableConfig)
+    validateTableConfig(sqlContext.sparkSession, optParams, tableConfig, mode == SaveMode.Overwrite)
 
-    val (parameters, hoodieConfig) = mergeParamsAndGetHoodieConfig(optParams, tableConfig)
+    val (parameters, hoodieConfig) = mergeParamsAndGetHoodieConfig(optParams, tableConfig, mode)
     val tableName = hoodieConfig.getStringOrThrow(HoodieWriteConfig.TBL_NAME, s"'${HoodieWriteConfig.TBL_NAME.key}' must be set.")
     val tableType = hoodieConfig.getStringOrDefault(TABLE_TYPE)
     val bootstrapBasePath = hoodieConfig.getStringOrThrow(BASE_PATH,
@@ -564,8 +564,7 @@ object HoodieSparkSqlWriter {
       throw new HoodieException("Bulk insert using row writer is not supported with current Spark version."
         + " To use row writer please switch to spark 2 or spark 3")
     }
-    val hoodieConfig = HoodieWriterUtils.convertMapToHoodieConfig(params)
-    val syncHiveSuccess = metaSync(sqlContext.sparkSession, hoodieConfig, basePath, df.schema)
+    val syncHiveSuccess = metaSync(sqlContext.sparkSession, writeConfig, basePath, df.schema)
     (syncHiveSuccess, common.util.Option.ofNullable(instantTime))
   }
 
@@ -735,14 +734,14 @@ object HoodieSparkSqlWriter {
   }
 
   private def mergeParamsAndGetHoodieConfig(optParams: Map[String, String],
-      tableConfig: HoodieTableConfig): (Map[String, String], HoodieConfig) = {
+      tableConfig: HoodieTableConfig, mode: SaveMode): (Map[String, String], HoodieConfig) = {
     val translatedOptions = DataSourceWriteOptions.translateSqlOptions(optParams)
     val mergedParams = mutable.Map.empty ++ HoodieWriterUtils.parametersWithWriteDefaults(translatedOptions)
     if (!mergedParams.contains(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key)
       && mergedParams.contains(KEYGENERATOR_CLASS_NAME.key)) {
       mergedParams(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key) = mergedParams(KEYGENERATOR_CLASS_NAME.key)
     }
-    if (null != tableConfig) {
+    if (null != tableConfig && mode != SaveMode.Overwrite) {
       tableConfig.getProps.foreach { case (key, value) =>
         mergedParams(key) = value
       }

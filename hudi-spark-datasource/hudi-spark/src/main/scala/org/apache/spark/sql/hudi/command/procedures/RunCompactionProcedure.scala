@@ -20,10 +20,9 @@ package org.apache.spark.sql.hudi.command.procedures
 import org.apache.hudi.common.model.HoodieCommitMetadata
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieTimeline}
-import org.apache.hudi.common.util.{HoodieTimer, Option => HOption}
+import org.apache.hudi.common.util.{CompactionUtils, HoodieTimer, Option => HOption}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.{HoodieCLIUtils, SparkAdapterSupport}
-
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types._
@@ -47,7 +46,9 @@ class RunCompactionProcedure extends BaseProcedure with ProcedureBuilder with Sp
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
-    StructField("instant", DataTypes.StringType, nullable = true, Metadata.empty)
+    StructField("timestamp", DataTypes.StringType, nullable = true, Metadata.empty),
+    StructField("operation_size", DataTypes.IntegerType, nullable = true, Metadata.empty),
+    StructField("state", DataTypes.StringType, nullable = true, Metadata.empty)
   ))
 
   def parameters: Array[ProcedureParameter] = PARAMETERS
@@ -66,13 +67,12 @@ class RunCompactionProcedure extends BaseProcedure with ProcedureBuilder with Sp
     val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
     val client = HoodieCLIUtils.createHoodieClientFromPath(sparkSession, basePath, Map.empty)
 
+    var willCompactionInstants: Seq[String] = Seq.empty
     operation match {
       case "schedule" =>
         val instantTime = instantTimestamp.map(_.toString).getOrElse(HoodieActiveTimeline.createNewInstantTime)
         if (client.scheduleCompactionAtInstant(instantTime, HOption.empty[java.util.Map[String, String]])) {
-          Seq(Row(instantTime))
-        } else {
-          Seq.empty[Row]
+          willCompactionInstants = Seq(instantTime)
         }
       case "run" =>
         // Do compaction
@@ -81,7 +81,7 @@ class RunCompactionProcedure extends BaseProcedure with ProcedureBuilder with Sp
           .filter(p => p.getAction == HoodieTimeline.COMPACTION_ACTION)
           .map(_.getTimestamp)
           .toSeq.sortBy(f => f)
-        val willCompactionInstants = if (instantTimestamp.isEmpty) {
+        willCompactionInstants = if (instantTimestamp.isEmpty) {
           if (pendingCompactionInstants.nonEmpty) {
             pendingCompactionInstants
           } else { // If there are no pending compaction, schedule to generate one.
@@ -102,9 +102,9 @@ class RunCompactionProcedure extends BaseProcedure with ProcedureBuilder with Sp
               s"$basePath, Available pending compaction instants are: ${pendingCompactionInstants.mkString(",")} ")
           }
         }
+
         if (willCompactionInstants.isEmpty) {
           logInfo(s"No need to compaction on $basePath")
-          Seq.empty[Row]
         } else {
           logInfo(s"Run compaction at instants: [${willCompactionInstants.mkString(",")}] on $basePath")
           val timer = new HoodieTimer
@@ -116,9 +116,20 @@ class RunCompactionProcedure extends BaseProcedure with ProcedureBuilder with Sp
           }
           logInfo(s"Finish Run compaction at instants: [${willCompactionInstants.mkString(",")}]," +
             s" spend: ${timer.endTimer()}ms")
-          Seq.empty[Row]
         }
       case _ => throw new UnsupportedOperationException(s"Unsupported compaction operation: $operation")
+    }
+
+    val compactionInstants = metaClient.reloadActiveTimeline().getInstants.iterator().asScala
+      .filter(instant => willCompactionInstants.contains(instant.getTimestamp))
+      .toSeq
+      .sortBy(p => p.getTimestamp)
+      .reverse
+
+    compactionInstants.map(instant =>
+      (instant, CompactionUtils.getCompactionPlan(metaClient, instant.getTimestamp))
+    ).map { case (instant, plan) =>
+      Row(instant.getTimestamp, plan.getOperations.size(), instant.getState.name())
     }
   }
 

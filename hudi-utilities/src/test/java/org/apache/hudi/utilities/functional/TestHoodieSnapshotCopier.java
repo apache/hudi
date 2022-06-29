@@ -99,27 +99,27 @@ public class TestHoodieSnapshotCopier extends FunctionalTestHarness {
     HoodieTestDataGenerator.writePartitionMetadataDeprecated(fs, new String[] {"2016/05/01", "2016/05/02", "2016/05/06"},
         basePath);
     // Make commit1
-    File file11 = new File(basePath + "/2016/05/01/" + FSUtils.makeDataFileName(commitTime1, TEST_WRITE_TOKEN, "id11"));
+    File file11 = new File(basePath + "/2016/05/01/" + FSUtils.makeBaseFileName(commitTime1, TEST_WRITE_TOKEN, "id11"));
     file11.createNewFile();
-    File file12 = new File(basePath + "/2016/05/02/" + FSUtils.makeDataFileName(commitTime1, TEST_WRITE_TOKEN, "id12"));
+    File file12 = new File(basePath + "/2016/05/02/" + FSUtils.makeBaseFileName(commitTime1, TEST_WRITE_TOKEN, "id12"));
     file12.createNewFile();
-    File file13 = new File(basePath + "/2016/05/06/" + FSUtils.makeDataFileName(commitTime1, TEST_WRITE_TOKEN, "id13"));
+    File file13 = new File(basePath + "/2016/05/06/" + FSUtils.makeBaseFileName(commitTime1, TEST_WRITE_TOKEN, "id13"));
     file13.createNewFile();
 
     // Make commit2
-    File file21 = new File(basePath + "/2016/05/01/" + FSUtils.makeDataFileName(commitTime2, TEST_WRITE_TOKEN, "id21"));
+    File file21 = new File(basePath + "/2016/05/01/" + FSUtils.makeBaseFileName(commitTime2, TEST_WRITE_TOKEN, "id21"));
     file21.createNewFile();
-    File file22 = new File(basePath + "/2016/05/02/" + FSUtils.makeDataFileName(commitTime2, TEST_WRITE_TOKEN, "id22"));
+    File file22 = new File(basePath + "/2016/05/02/" + FSUtils.makeBaseFileName(commitTime2, TEST_WRITE_TOKEN, "id22"));
     file22.createNewFile();
-    File file23 = new File(basePath + "/2016/05/06/" + FSUtils.makeDataFileName(commitTime2, TEST_WRITE_TOKEN, "id23"));
+    File file23 = new File(basePath + "/2016/05/06/" + FSUtils.makeBaseFileName(commitTime2, TEST_WRITE_TOKEN, "id23"));
     file23.createNewFile();
 
     // Make commit3
-    File file31 = new File(basePath + "/2016/05/01/" + FSUtils.makeDataFileName(commitTime3, TEST_WRITE_TOKEN, "id31"));
+    File file31 = new File(basePath + "/2016/05/01/" + FSUtils.makeBaseFileName(commitTime3, TEST_WRITE_TOKEN, "id31"));
     file31.createNewFile();
-    File file32 = new File(basePath + "/2016/05/02/" + FSUtils.makeDataFileName(commitTime3, TEST_WRITE_TOKEN, "id32"));
+    File file32 = new File(basePath + "/2016/05/02/" + FSUtils.makeBaseFileName(commitTime3, TEST_WRITE_TOKEN, "id32"));
     file32.createNewFile();
-    File file33 = new File(basePath + "/2016/05/06/" + FSUtils.makeDataFileName(commitTime3, TEST_WRITE_TOKEN, "id33"));
+    File file33 = new File(basePath + "/2016/05/06/" + FSUtils.makeBaseFileName(commitTime3, TEST_WRITE_TOKEN, "id33"));
     file33.createNewFile();
 
     // Do a snapshot copy

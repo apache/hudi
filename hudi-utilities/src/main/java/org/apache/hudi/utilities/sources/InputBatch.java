@@ -28,6 +28,7 @@ import org.apache.spark.api.java.JavaSparkContext;
 
 public class InputBatch<T> {
 
+  public static final Schema NULL_SCHEMA = Schema.create(Schema.Type.NULL);
   private final Option<T> batch;
   private final String checkpointForNextBatch;
   private final SchemaProvider schemaProvider;
@@ -69,7 +70,7 @@ public class InputBatch<T> {
 
     @Override
     public Schema getSourceSchema() {
-      return Schema.create(Schema.Type.NULL);
+      return NULL_SCHEMA;
     }
   }
 }

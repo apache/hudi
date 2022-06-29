@@ -99,6 +99,11 @@ public class HoodieList<T> extends HoodieData<T> {
 
   @Override
   public <O> HoodieData<O> mapPartitions(SerializableFunction<Iterator<T>, Iterator<O>> func, boolean preservesPartitioning) {
+    return mapPartitions(func);
+  }
+
+  @Override
+  public <O> HoodieData<O> mapPartitions(SerializableFunction<Iterator<T>, Iterator<O>> func) {
     List<O> result = new ArrayList<>();
     throwingMapWrapper(func).apply(listData.iterator()).forEachRemaining(result::add);
     return HoodieList.of(result);

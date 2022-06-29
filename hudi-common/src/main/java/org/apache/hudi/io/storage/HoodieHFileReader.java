@@ -258,6 +258,10 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
       if (!scanner.next()) {
         return Collections.emptyIterator();
       }
+    } else if (val == -1) {
+      // Whenever val == -1 HFile reader will place the pointer right before the first record. We have to advance it to the first record
+      // of the file to validate whether it matches our search criteria
+      scanner.seekTo();
     }
 
     class KeyPrefixIterator implements Iterator<GenericRecord> {

@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
@@ -88,7 +89,7 @@ public class RunCompactionActionExecutor<T extends HoodieRecordPayload> extends
           context, compactionPlan, table, configCopy, instantTime, compactionHandler);
 
       compactor.maybePersist(statuses, config);
-      context.setJobStatus(this.getClass().getSimpleName(), "Preparing compaction metadata");
+      context.setJobStatus(this.getClass().getSimpleName(), "Preparing compaction metadata: " + config.getTableName());
       List<HoodieWriteStat> updateStatusMap = statuses.map(WriteStatus::getStat).collectAsList();
       HoodieCommitMetadata metadata = new HoodieCommitMetadata(true);
       for (HoodieWriteStat stat : updateStatusMap) {
@@ -99,6 +100,7 @@ public class RunCompactionActionExecutor<T extends HoodieRecordPayload> extends
         metadata.addMetadata(SerDeHelper.LATEST_SCHEMA, schemaPair.getLeft().get());
         metadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, schemaPair.getRight().get());
       }
+      metadata.setOperationType(WriteOperationType.COMPACT);
       compactionMetadata.setWriteStatuses(statuses);
       compactionMetadata.setCommitted(false);
       compactionMetadata.setCommitMetadata(Option.of(metadata));

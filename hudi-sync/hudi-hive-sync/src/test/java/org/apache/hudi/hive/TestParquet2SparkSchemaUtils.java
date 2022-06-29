@@ -18,7 +18,7 @@
 
 package org.apache.hudi.hive;
 
-import org.apache.hudi.hive.util.Parquet2SparkSchemaUtils;
+import org.apache.hudi.sync.common.util.Parquet2SparkSchemaUtils;
 import org.apache.spark.sql.execution.SparkSqlParser;
 import org.apache.spark.sql.execution.datasources.parquet.SparkToParquetSchemaConverter;
 import org.apache.spark.sql.internal.SQLConf;

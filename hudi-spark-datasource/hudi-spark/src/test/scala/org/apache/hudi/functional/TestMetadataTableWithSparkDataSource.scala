@@ -78,7 +78,7 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
       .save(basePath)
 
     // Files partition of MT
-    val filesPartitionDF = spark.read.options(metadataOpts).format(hudi).load(s"$basePath/.hoodie/metadata/files")
+    val filesPartitionDF = spark.read.format(hudi).load(s"$basePath/.hoodie/metadata/files")
 
     // Smoke test
     filesPartitionDF.show()
@@ -96,7 +96,7 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
     assertEquals(expectedKeys, keys)
 
     // Column Stats Index partition of MT
-    val colStatsDF = spark.read.options(metadataOpts).format(hudi).load(s"$basePath/.hoodie/metadata/column_stats")
+    val colStatsDF = spark.read.format(hudi).load(s"$basePath/.hoodie/metadata/column_stats")
 
     // Smoke test
     colStatsDF.show()

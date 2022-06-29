@@ -103,7 +103,7 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestBase 
     }).collect(Collectors.toList()).get(0);
 
     assertEquals(newPathWithWriteToken.getKey().toString(), Paths.get(this.basePath, partitionPath,
-        FSUtils.makeDataFileName(instantTime, newPathWithWriteToken.getRight(), fileName)).toString());
+        FSUtils.makeBaseFileName(instantTime, newPathWithWriteToken.getRight(), fileName)).toString());
   }
 
   private HoodieWriteConfig makeHoodieClientConfig() {
@@ -379,7 +379,7 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestBase 
 
     List<HoodieRecord> records = new ArrayList<>();
     // Approx 1150 records are written for block size of 64KB
-    for (int i = 0; i < 2000; i++) {
+    for (int i = 0; i < 2050; i++) {
       String recordStr = "{\"_row_key\":\"" + UUID.randomUUID().toString()
           + "\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":" + i + "}";
       RawTripTestPayload rowChange = new RawTripTestPayload(recordStr);
@@ -402,7 +402,8 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestBase 
         counts++;
       }
     }
-    assertEquals(5, counts, "If the number of records are more than 1150, then there should be a new file");
+    // we check canWrite only once every 1000 records. and so 2 files with 1000 records and 3rd file with 50 records.
+    assertEquals(3, counts, "If the number of records are more than 1150, then there should be a new file");
   }
 
   @Test

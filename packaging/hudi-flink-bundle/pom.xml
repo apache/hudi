@@ -31,6 +31,7 @@
   <properties>
     <checkstyle.skip>true</checkstyle.skip>
     <main.basedir>${project.parent.basedir}</main.basedir>
+    <skipTests>true</skipTests>
     <flink.bundle.hive.scope>provided</flink.bundle.hive.scope>
     <flink.bundle.shade.prefix>org.apache.hudi.</flink.bundle.shade.prefix>
     <javax.servlet.version>3.1.0</javax.servlet.version>
@@ -154,6 +155,7 @@
                   <include>org.apache.hbase:hbase-hadoop2-compat</include>
                   <include>org.apache.hbase:hbase-metrics</include>
                   <include>org.apache.hbase:hbase-metrics-api</include>
+                  <include>org.apache.hbase:hbase-protocol</include>
                   <include>org.apache.hbase:hbase-protocol-shaded</include>
                   <include>org.apache.hbase:hbase-server</include>
                   <include>org.apache.hbase.thirdparty:hbase-shaded-miscellaneous</include>

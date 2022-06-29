@@ -166,18 +166,6 @@ public class HoodieAvroUtils {
     return reader.read(null, jsonDecoder);
   }
 
-  /**
-   * True if the schema contains this name of field
-   */
-  public static boolean containsFieldInSchema(Schema schema, String fieldName) {
-    try {
-      Field field = schema.getField(fieldName);
-      return field != null;
-    } catch (Exception e) {
-      return false;
-    }
-  }
-
   public static boolean isMetadataField(String fieldName) {
     return HoodieRecord.COMMIT_TIME_METADATA_FIELD.equals(fieldName)
         || HoodieRecord.COMMIT_SEQNO_METADATA_FIELD.equals(fieldName)
@@ -400,7 +388,7 @@ public class HoodieAvroUtils {
       copyOldValueOrSetDefault(genericRecord, newRecord, f);
     }
     // do not preserve FILENAME_METADATA_FIELD
-    newRecord.put(HoodieRecord.FILENAME_METADATA_FIELD_POS, fileName);
+    newRecord.put(HoodieRecord.FILENAME_META_FIELD_POS, fileName);
     if (!GenericData.get().validate(newSchema, newRecord)) {
       throw new SchemaCompatibilityException(
           "Unable to validate the rewritten record " + genericRecord + " against schema " + newSchema);
@@ -412,7 +400,7 @@ public class HoodieAvroUtils {
   public static GenericRecord rewriteEvolutionRecordWithMetadata(GenericRecord genericRecord, Schema newSchema, String fileName) {
     GenericRecord newRecord = HoodieAvroUtils.rewriteRecordWithNewSchema(genericRecord, newSchema, new HashMap<>());
     // do not preserve FILENAME_METADATA_FIELD
-    newRecord.put(HoodieRecord.FILENAME_METADATA_FIELD_POS, fileName);
+    newRecord.put(HoodieRecord.FILENAME_META_FIELD_POS, fileName);
     return newRecord;
   }
 

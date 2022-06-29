@@ -34,9 +34,10 @@ import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.common.util.ValidationUtils.checkState
-import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
+import org.apache.hudi.internal.schema.{HoodieSchemaException, InternalSchema}
 import org.apache.hudi.io.storage.HoodieHFileReader
+import org.apache.spark.SerializableWritable
 import org.apache.spark.execution.datasources.HoodieInMemoryFileIndex
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
@@ -74,7 +75,7 @@ case class HoodieTableState(tablePath: String,
 abstract class HoodieBaseRelation(val sqlContext: SQLContext,
                                   val metaClient: HoodieTableMetaClient,
                                   val optParams: Map[String, String],
-                                  userSchema: Option[StructType])
+                                  schemaSpec: Option[StructType])
   extends BaseRelation
     with FileRelation
     with PrunedFilteredScan
@@ -122,29 +123,37 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     optParams.get(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key)
       .map(HoodieSqlCommonUtils.formatQueryInstant)
 
+  /**
+   * NOTE: Initialization of teh following members is coupled on purpose to minimize amount of I/O
+   *       required to fetch table's Avro and Internal schemas
+   */
   protected lazy val (tableAvroSchema: Schema, internalSchema: InternalSchema) = {
-    val schemaUtil = new TableSchemaResolver(metaClient)
-    val avroSchema = Try(schemaUtil.getTableAvroSchema) match {
-      case Success(schema) => schema
-      case Failure(e) =>
-        logWarning("Failed to fetch schema from the table", e)
-        // If there is no commit in the table, we can't get the schema
-        // t/h [[TableSchemaResolver]], fallback to the provided [[userSchema]] instead.
-        userSchema match {
-          case Some(s) => convertToAvroSchema(s)
-          case _ => throw new IllegalArgumentException("User-provided schema is required in case the table is empty")
-        }
+    val schemaResolver = new TableSchemaResolver(metaClient)
+    val avroSchema: Schema = schemaSpec.map(convertToAvroSchema).getOrElse {
+      Try(schemaResolver.getTableAvroSchema) match {
+        case Success(schema) => schema
+        case Failure(e) =>
+          logError("Failed to fetch schema from the table", e)
+          throw new HoodieSchemaException("Failed to fetch schema from the table")
+      }
     }
-    // try to find internalSchema
-    val internalSchemaFromMeta = try {
-      schemaUtil.getTableInternalSchemaFromCommitMetadata.orElse(InternalSchema.getEmptyInternalSchema)
-    } catch {
-      case _: Exception => InternalSchema.getEmptyInternalSchema
+
+    val internalSchema: InternalSchema = if (!isSchemaEvolutionEnabled) {
+      InternalSchema.getEmptyInternalSchema
+    } else {
+      Try(schemaResolver.getTableInternalSchemaFromCommitMetadata) match {
+        case Success(internalSchemaOpt) =>
+          toScalaOption(internalSchemaOpt).getOrElse(InternalSchema.getEmptyInternalSchema)
+        case Failure(e) =>
+          logWarning("Failed to fetch internal-schema from the table", e)
+          InternalSchema.getEmptyInternalSchema
+      }
     }
-    (avroSchema, internalSchemaFromMeta)
+
+    (avroSchema, internalSchema)
   }
 
-  protected val tableStructSchema: StructType = AvroConversionUtils.convertAvroSchemaToStructType(tableAvroSchema)
+  protected lazy val tableStructSchema: StructType = AvroConversionUtils.convertAvroSchemaToStructType(tableAvroSchema)
 
   protected val partitionColumns: Array[String] = tableConfig.getPartitionFields.orElse(Array.empty)
 
@@ -171,7 +180,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
   protected val shouldExtractPartitionValuesFromPartitionPath: Boolean = {
     // Controls whether partition columns (which are the source for the partition path values) should
     // be omitted from persistence in the data files. On the read path it affects whether partition values (values
-    // of partition columns) will be read from the data file ot extracted from partition path
+    // of partition columns) will be read from the data file or extracted from partition path
     val shouldOmitPartitionColumns = metaClient.getTableConfig.shouldDropPartitionColumns && partitionColumns.nonEmpty
     val shouldExtractPartitionValueFromPath =
       optParams.getOrElse(DataSourceReadOptions.EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH.key,
@@ -196,7 +205,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
    * meaning that regardless of whether this columns are being requested by the query they will be fetched
    * regardless so that relation is able to combine records properly (if necessary)
    *
-   * @VisibleInTests
+   * @VisibleForTesting
    */
   val mandatoryFields: Seq[String]
 
@@ -214,6 +223,11 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
 
   protected def queryTimestamp: Option[String] =
     specifiedQueryTimestamp.orElse(toScalaOption(timeline.lastInstant()).map(_.getTimestamp))
+
+  /**
+   * Returns true in case table supports Schema on Read (Schema Evolution)
+   */
+  def hasSchemaOnRead: Boolean = !internalSchema.isEmptySchema
 
   override def schema: StructType = tableStructSchema
 
@@ -419,7 +433,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
       }
     } catch {
       case NonFatal(e) =>
-        logWarning(s"Failed to get the right partition InternalRow for file : ${file.toString}")
+        logWarning(s"Failed to get the right partition InternalRow for file: ${file.toString}", e)
         InternalRow.empty
     }
   }
@@ -494,6 +508,15 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
 
   private def prunePartitionColumns(dataStructSchema: StructType): StructType =
     StructType(dataStructSchema.filterNot(f => partitionColumns.contains(f.name)))
+
+  private def isSchemaEvolutionEnabled = {
+    // NOTE: Schema evolution could be configured both t/h optional parameters vehicle as well as
+    //       t/h Spark Session configuration (for ex, for Spark SQL)
+    optParams.getOrElse(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.key,
+      DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.defaultValue.toString).toBoolean ||
+    sparkSession.conf.get(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.key,
+      DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.defaultValue.toString).toBoolean
+  }
 }
 
 object HoodieBaseRelation extends SparkAdapterSupport {
@@ -513,11 +536,10 @@ object HoodieBaseRelation extends SparkAdapterSupport {
                                 filters: Seq[Filter],
                                 options: Map[String, String],
                                 hadoopConf: Configuration): PartitionedFile => Iterator[InternalRow] = {
-    val hadoopConfBroadcast =
-      spark.sparkContext.broadcast(new SerializableConfiguration(hadoopConf))
+    val hadoopConfBroadcast = spark.sparkContext.broadcast(new SerializableWritable(hadoopConf))
 
     partitionedFile => {
-      val hadoopConf = hadoopConfBroadcast.value.get()
+      val hadoopConf = hadoopConfBroadcast.value.value
       val reader = new HoodieHFileReader[GenericRecord](hadoopConf, new Path(partitionedFile.filePath),
         new CacheConfig(hadoopConf))
 

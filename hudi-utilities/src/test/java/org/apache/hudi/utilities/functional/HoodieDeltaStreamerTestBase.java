@@ -30,7 +30,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.MultiPartKeysValueExtractor;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
-import org.apache.hudi.utilities.sources.TestParquetDFSSourceEmptyBatch;
+import org.apache.hudi.utilities.sources.TestDataSource;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 
 import org.apache.avro.Schema;
@@ -97,7 +97,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
 
   @BeforeAll
   public static void initClass() throws Exception {
-    UtilitiesTestBase.initClass(true);
+    UtilitiesTestBase.initTestServices(true, true);
     PARQUET_SOURCE_ROOT = dfsBasePath + "/parquetFiles";
     ORC_SOURCE_ROOT = dfsBasePath + "/orcFiles";
     JSON_KAFKA_SOURCE_ROOT = dfsBasePath + "/jsonKafkaFiles";
@@ -192,7 +192,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
   @BeforeEach
   public void setup() throws Exception {
     super.setup();
-    TestParquetDFSSourceEmptyBatch.returnEmptyBatch = false;
+    TestDataSource.returnEmptyBatch = false;
   }
 
   @AfterAll

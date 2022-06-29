@@ -1509,20 +1509,24 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     testUtils.sendMessages(topicName, Helpers.jsonifyRecords(dataGenerator.generateInsertsAsPerSchema("000", numRecords, HoodieTestDataGenerator.TRIP_SCHEMA)));
   }
 
-  private void prepareParquetDFSSource(boolean useSchemaProvider, boolean hasTransformer) throws IOException {
+  private void prepareParquetDFSSource(boolean useSchemaProvider, boolean hasTransformer, String emptyBatchParam) throws IOException {
     prepareParquetDFSSource(useSchemaProvider, hasTransformer, "source.avsc", "target.avsc",
-        PROPS_FILENAME_TEST_PARQUET, PARQUET_SOURCE_ROOT, false);
+        PROPS_FILENAME_TEST_PARQUET, PARQUET_SOURCE_ROOT, false, "partition_path", emptyBatchParam);
+  }
+
+  private void prepareParquetDFSSource(boolean useSchemaProvider, boolean hasTransformer) throws IOException {
+    prepareParquetDFSSource(useSchemaProvider, hasTransformer, "");
   }
 
   private void prepareParquetDFSSource(boolean useSchemaProvider, boolean hasTransformer, String sourceSchemaFile, String targetSchemaFile,
-                                       String propsFileName, String parquetSourceRoot, boolean addCommonProps) throws IOException {
+                                       String propsFileName, String parquetSourceRoot, boolean addCommonProps, String partitionPath) throws IOException {
     prepareParquetDFSSource(useSchemaProvider, hasTransformer, sourceSchemaFile, targetSchemaFile, propsFileName, parquetSourceRoot, addCommonProps,
-        "partition_path");
+        partitionPath, "");
   }
 
   private void prepareParquetDFSSource(boolean useSchemaProvider, boolean hasTransformer, String sourceSchemaFile, String targetSchemaFile,
                                        String propsFileName, String parquetSourceRoot, boolean addCommonProps,
-                                       String partitionPath) throws IOException {
+                                       String partitionPath, String emptyBatchParam) throws IOException {
     // Properties used for testing delta-streamer with Parquet source
     TypedProperties parquetProps = new TypedProperties();
 
@@ -1541,6 +1545,9 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       }
     }
     parquetProps.setProperty("hoodie.deltastreamer.source.dfs.root", parquetSourceRoot);
+    if (!StringUtils.isNullOrEmpty(emptyBatchParam)) {
+      parquetProps.setProperty(TestParquetDFSSourceEmptyBatch.RETURN_EMPTY_BATCH, emptyBatchParam);
+    }
     UtilitiesTestBase.Helpers.savePropsToDFS(parquetProps, dfs, dfsBasePath + "/" + propsFileName);
   }
 
@@ -1549,7 +1556,13 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   }
 
   private void testParquetDFSSource(boolean useSchemaProvider, List<String> transformerClassNames, boolean testEmptyBatch) throws Exception {
-    prepareParquetDFSSource(useSchemaProvider, transformerClassNames != null);
+    PARQUET_SOURCE_ROOT = dfsBasePath + "/parquetFilesDfs" + testNum;
+    int parquetRecordsCount = 10;
+    boolean hasTransformer = transformerClassNames != null && !transformerClassNames.isEmpty();
+    prepareParquetDFSFiles(parquetRecordsCount, PARQUET_SOURCE_ROOT, FIRST_PARQUET_FILE_NAME, false, null, null);
+    prepareParquetDFSSource(useSchemaProvider, hasTransformer, "source.avsc", "target.avsc", PROPS_FILENAME_TEST_PARQUET,
+        PARQUET_SOURCE_ROOT, false, "partition_path", testEmptyBatch ? "1" : "");
+
     String tableBasePath = dfsBasePath + "/test_parquet_table" + testNum;
     HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(
         TestHelpers.makeConfig(tableBasePath, WriteOperationType.INSERT, testEmptyBatch ? TestParquetDFSSourceEmptyBatch.class.getName()
@@ -1557,21 +1570,37 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
             transformerClassNames, PROPS_FILENAME_TEST_PARQUET, false,
             useSchemaProvider, 100000, false, null, null, "timestamp", null), jsc);
     deltaStreamer.sync();
-    TestHelpers.assertRecordCount(PARQUET_NUM_RECORDS, tableBasePath, sqlContext);
-    testNum++;
+    TestHelpers.assertRecordCount(parquetRecordsCount, tableBasePath, sqlContext);
 
     if (testEmptyBatch) {
       prepareParquetDFSFiles(100, PARQUET_SOURCE_ROOT, "2.parquet", false, null, null);
-      // parquet source to return empty batch
-      TestParquetDFSSourceEmptyBatch.returnEmptyBatch = true;
       deltaStreamer.sync();
       // since we mimic'ed empty batch, total records should be same as first sync().
-      TestHelpers.assertRecordCount(PARQUET_NUM_RECORDS, tableBasePath, sqlContext);
+      TestHelpers.assertRecordCount(parquetRecordsCount, tableBasePath, sqlContext);
       HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(tableBasePath).setConf(jsc.hadoopConfiguration()).build();
 
       // validate table schema fetches valid schema from last but one commit.
       TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
       assertNotEquals(tableSchemaResolver.getTableAvroSchema(), Schema.create(Schema.Type.NULL).toString());
+    }
+
+    // proceed w/ non empty batch.
+    prepareParquetDFSFiles(100, PARQUET_SOURCE_ROOT, "3.parquet", false, null, null);
+    deltaStreamer.sync();
+    TestHelpers.assertRecordCount(parquetRecordsCount + 100, tableBasePath, sqlContext);
+    // validate commit metadata for all completed commits to have valid schema in extra metadata.
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(tableBasePath).setConf(jsc.hadoopConfiguration()).build();
+    metaClient.reloadActiveTimeline().getCommitsTimeline().filterCompletedInstants().getInstants().forEach(entry -> assertValidSchemaInCommitMetadata(entry, metaClient));
+    testNum++;
+  }
+
+  private void assertValidSchemaInCommitMetadata(HoodieInstant instant, HoodieTableMetaClient metaClient) {
+    try {
+      HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
+          .fromBytes(metaClient.getActiveTimeline().getInstantDetails(instant).get(), HoodieCommitMetadata.class);
+      assertFalse(StringUtils.isNullOrEmpty(commitMetadata.getMetadata(HoodieCommitMetadata.SCHEMA_KEY)));
+    } catch (IOException ioException) {
+      throw new HoodieException("Failed to parse commit metadata for " + instant.toString());
     }
   }
 
@@ -2111,6 +2140,28 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     metaClient.reloadActiveTimeline();
     assertEquals(testDeltaSync.getLatestCommitMetadataWithValidCheckpointInfo(metaClient.getActiveTimeline()
         .getCommitsTimeline()).get().getMetadata(CHECKPOINT_KEY), "def");
+  }
+
+  @Test
+  public void testDropPartitionColumns() throws Exception {
+    String tableBasePath = dfsBasePath + "/test_drop_partition_columns" + testNum++;
+    // ingest data with dropping partition columns enabled
+    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT);
+    cfg.configs.add(String.format("%s=%s", HoodieTableConfig.DROP_PARTITION_COLUMNS.key(), "true"));
+    HoodieDeltaStreamer ds = new HoodieDeltaStreamer(cfg, jsc);
+    ds.sync();
+    // assert ingest successful
+    TestHelpers.assertAtLeastNCommits(1, tableBasePath, dfs);
+
+    TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(
+            HoodieTableMetaClient.builder().setBasePath(tableBasePath).setConf(dfs.getConf()).build());
+    // get schema from data file written in the latest commit
+    Schema tableSchema = tableSchemaResolver.getTableAvroSchemaFromDataFile();
+    assertNotNull(tableSchema);
+
+    List<String> tableFields = tableSchema.getFields().stream().map(Schema.Field::name).collect(Collectors.toList());
+    // now assert that the partition column is not in the target schema
+    assertFalse(tableFields.contains("partition_path"));
   }
 
   class TestDeltaSync extends DeltaSync {

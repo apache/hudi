@@ -1046,7 +1046,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   private void initialCommit(String createInstantTime, List<MetadataPartitionType> partitionTypes) {
     // List all partitions in the basePath of the containing dataset
     LOG.info("Initializing metadata table by using file listings in " + dataWriteConfig.getBasePath());
-    engineContext.setJobStatus(this.getClass().getSimpleName(), "Initializing metadata table by listing files and partitions");
+    engineContext.setJobStatus(this.getClass().getSimpleName(), "Initializing metadata table by listing files and partitions: " + dataWriteConfig.getTableName());
 
     Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionToRecordsMap = new HashMap<>();
 

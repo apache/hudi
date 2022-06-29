@@ -453,7 +453,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     val hiveSyncConfig = buildHiveSyncConfig(hoodieProps, hoodieCatalogTable)
 
     // Enable the hive sync by default if spark have enable the hive metastore.
-    val enableHive = isEnableHive(sparkSession)
+    val enableHive = isUsingHiveCatalog(sparkSession)
     withSparkConf(sparkSession, hoodieCatalogTable.catalogProperties) {
       Map(
         "path" -> path,
@@ -467,6 +467,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
         KEYGENERATOR_CLASS_NAME.key -> classOf[SqlKeyGenerator].getCanonicalName,
         SqlKeyGenerator.ORIGIN_KEYGEN_CLASS_NAME -> tableConfig.getKeyGeneratorClassName,
         HoodieSyncConfig.META_SYNC_ENABLED.key -> enableHive.toString,
+        HiveSyncConfig.HIVE_SYNC_ENABLED.key -> enableHive.toString,
         HiveSyncConfig.HIVE_SYNC_MODE.key -> hiveSyncConfig.syncMode,
         HoodieSyncConfig.META_SYNC_DATABASE_NAME.key -> targetTableDb,
         HoodieSyncConfig.META_SYNC_TABLE_NAME.key -> targetTableName,

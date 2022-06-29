@@ -14,8 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 dag_name: cow-spark-simple.yaml
-dag_rounds: 3
-dag_intermittent_delay_mins: 0
+dag_rounds: 5
+dag_intermittent_delay_mins: 1
 dag_content:
   first_insert:
     config:

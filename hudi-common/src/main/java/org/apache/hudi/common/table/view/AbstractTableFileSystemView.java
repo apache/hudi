@@ -18,8 +18,6 @@
 
 package org.apache.hudi.common.table.view;
 
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.bootstrap.index.BootstrapIndex;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BootstrapBaseFileMapping;
@@ -41,6 +39,9 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
+
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -465,6 +466,20 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
     try {
       readLock.lock();
       return fetchPendingCompactionOperations();
+    } finally {
+      readLock.unlock();
+    }
+  }
+
+  public final List<Path> getPartitionPaths() {
+    try {
+      readLock.lock();
+      return fetchAllStoredFileGroups()
+          .filter(fg -> !isFileGroupReplaced(fg))
+          .map(HoodieFileGroup::getPartitionPath)
+          .distinct()
+          .map(name -> name.isEmpty() ? metaClient.getBasePathV2() : new Path(metaClient.getBasePathV2(), name))
+          .collect(Collectors.toList());
     } finally {
       readLock.unlock();
     }
@@ -959,6 +974,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    */
   public Stream<HoodieBaseFile> fetchLatestBaseFiles(final String partitionPath) {
     return fetchAllStoredFileGroups(partitionPath)
+        .filter(fg -> !isFileGroupReplaced(fg))
         .map(fg -> Pair.of(fg.getFileGroupId(), getLatestBaseFile(fg)))
         .filter(p -> p.getValue().isPresent())
         .map(p -> addBootstrapBaseFileIfPresent(p.getKey(), p.getValue().get()));

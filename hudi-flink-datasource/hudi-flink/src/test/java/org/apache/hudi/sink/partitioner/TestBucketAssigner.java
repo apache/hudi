@@ -24,6 +24,7 @@ import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.sink.partitioner.profile.WriteProfile;
 import org.apache.hudi.table.action.commit.BucketInfo;
 import org.apache.hudi.table.action.commit.BucketType;
@@ -71,7 +72,7 @@ public class TestBucketAssigner {
 
     writeConfig = StreamerUtil.getHoodieClientConfig(conf);
     context = new HoodieFlinkEngineContext(
-        new SerializableConfiguration(StreamerUtil.getHadoopConf()),
+        new SerializableConfiguration(HadoopConfigurations.getHadoopConf(conf)),
         new FlinkTaskContextSupplier(null));
     StreamerUtil.initTableIfNotExists(conf);
   }

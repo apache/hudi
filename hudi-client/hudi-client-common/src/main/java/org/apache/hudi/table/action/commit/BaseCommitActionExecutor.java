@@ -94,7 +94,7 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload, I,
     this.lastCompletedTxn = TransactionUtils.getLastCompletedTxnInstantAndMetadata(table.getMetaClient());
     this.pendingInflightAndRequestedInstants = TransactionUtils.getInflightAndRequestedInstants(table.getMetaClient());
     this.pendingInflightAndRequestedInstants.remove(instantTime);
-    if (table.getStorageLayout().doesNotSupport(operationType)) {
+    if (!table.getStorageLayout().writeOperationSupported(operationType)) {
       throw new UnsupportedOperationException("Executor " + this.getClass().getSimpleName()
           + " is not compatible with table layout " + table.getStorageLayout().getClass().getSimpleName());
     }

@@ -18,6 +18,12 @@
 
 package org.apache.hudi;
 
+import org.apache.avro.Conversions;
+import org.apache.avro.LogicalTypes;
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericFixed;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.common.config.TypedProperties;
@@ -27,21 +33,16 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.config.HoodieClusteringConfig;
+import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.execution.bulkinsert.RDDCustomColumnsSortPartitioner;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.table.BulkInsertPartitioner;
-
-import org.apache.avro.Conversions;
-import org.apache.avro.LogicalTypes;
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericData;
-import org.apache.avro.generic.GenericFixed;
-import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
+import org.apache.spark.sql.types.DecimalType;
 import org.apache.spark.sql.types.DecimalType$;
 import org.apache.spark.sql.types.Metadata;
 import org.apache.spark.sql.types.StructField;
@@ -51,7 +52,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
@@ -61,11 +63,13 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 
-import static org.apache.hudi.DataSourceUtils.mayBeOverwriteParquetWriteLegacyFormatProp;
+import static org.apache.hudi.DataSourceUtils.tryOverrideParquetWriteLegacyFormatProperty;
 import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
 import static org.apache.hudi.hive.ddl.HiveSyncMode.HMS;
 import static org.hamcrest.CoreMatchers.containsString;
@@ -313,31 +317,39 @@ public class TestDataSourceUtils {
   }
 
   @ParameterizedTest
-  @CsvSource({"true, false", "true, true", "false, true", "false, false"})
-  public void testAutoModifyParquetWriteLegacyFormatParameter(boolean smallDecimal, boolean defaultWriteValue) {
-    // create test StructType
-    List<StructField> structFields = new ArrayList<>();
+  @MethodSource("testAutoModifyParquetWriteLegacyFormatParameterParams")
+  public void testAutoModifyParquetWriteLegacyFormatParameter(boolean smallDecimal, Boolean propValue, Boolean expectedPropValue) {
+    DecimalType decimalType;
     if (smallDecimal) {
-      structFields.add(StructField.apply("d1", DecimalType$.MODULE$.apply(10, 2), false, Metadata.empty()));
+      decimalType = DecimalType$.MODULE$.apply(10, 2);
     } else {
-      structFields.add(StructField.apply("d1", DecimalType$.MODULE$.apply(38, 10), false, Metadata.empty()));
+      decimalType = DecimalType$.MODULE$.apply(38, 10);
     }
-    StructType structType = StructType$.MODULE$.apply(structFields);
-    // create write options
-    Map<String, String> options = new HashMap<>();
-    options.put("hoodie.parquet.writelegacyformat.enabled", String.valueOf(defaultWriteValue));
 
-    // start test
-    mayBeOverwriteParquetWriteLegacyFormatProp(options, structType);
+    StructType structType = StructType$.MODULE$.apply(
+        Arrays.asList(
+            StructField.apply("d1", decimalType, false, Metadata.empty())
+        )
+    );
 
-    // check result
-    boolean res = Boolean.parseBoolean(options.get("hoodie.parquet.writelegacyformat.enabled"));
-    if (smallDecimal) {
-      // should auto modify "hoodie.parquet.writelegacyformat.enabled" = "true".
-      assertEquals(true, res);
-    } else {
-      // should not modify the value of "hoodie.parquet.writelegacyformat.enabled".
-      assertEquals(defaultWriteValue, res);
-    }
+    Map<String, String> options = propValue != null
+        ? Collections.singletonMap(HoodieStorageConfig.PARQUET_WRITE_LEGACY_FORMAT_ENABLED.key(), String.valueOf(propValue))
+        : new HashMap<>();
+
+    tryOverrideParquetWriteLegacyFormatProperty(options, structType);
+
+    Boolean finalPropValue =
+        Option.ofNullable(options.get(HoodieStorageConfig.PARQUET_WRITE_LEGACY_FORMAT_ENABLED.key()))
+            .map(Boolean::parseBoolean)
+            .orElse(null);
+    assertEquals(expectedPropValue, finalPropValue);
+  }
+
+  private static Stream<Arguments> testAutoModifyParquetWriteLegacyFormatParameterParams() {
+    return Arrays.stream(new Object[][] {
+        {true, null, true},   {false, null, null},
+        {true, false, false}, {true, true, true},
+        {false, true, true},  {false, false, false}
+    }).map(Arguments::of);
   }
 }

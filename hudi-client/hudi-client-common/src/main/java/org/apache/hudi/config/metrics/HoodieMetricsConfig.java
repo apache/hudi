@@ -24,7 +24,6 @@ import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.config.HoodieMetricsCloudWatchConfig;
 import org.apache.hudi.metrics.MetricsReporterType;
 
 import javax.annotation.concurrent.Immutable;
