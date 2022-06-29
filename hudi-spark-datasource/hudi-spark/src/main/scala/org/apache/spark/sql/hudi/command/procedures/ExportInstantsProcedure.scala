@@ -17,14 +17,14 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
-import org.apache.avro.generic.GenericRecord
+import org.apache.avro.generic.{GenericRecord, IndexedRecord}
 import org.apache.avro.specific.SpecificData
 import org.apache.hadoop.fs.{FileStatus, FileSystem, Path}
 import org.apache.hudi.HoodieCLIUtils
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.avro.model.HoodieArchivedMetaEntry
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.HoodieLogFile
+import org.apache.hudi.common.model.{HoodieAvroIndexedRecord, HoodieLogFile, HoodieRecord}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.log.HoodieLogFormat
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock
@@ -124,7 +124,10 @@ class ExportInstantsProcedure extends BaseProcedure with ProcedureBuilder with L
       }) {
         val blk = reader.next.asInstanceOf[HoodieAvroDataBlock]
         try {
-          val recordItr = blk.getRecordIterator
+          val mapper = new HoodieRecord.Mapper() {
+            override def apply(data: IndexedRecord) = new HoodieAvroIndexedRecord(data)
+          }
+          val recordItr = blk.getRecordIterator(mapper)
           try while ( {
             recordItr.hasNext
           }) {
