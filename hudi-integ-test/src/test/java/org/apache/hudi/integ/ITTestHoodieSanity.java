@@ -23,6 +23,7 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -95,6 +96,7 @@ public class ITTestHoodieSanity extends ITTestBase {
     dropHiveTables(hiveTableName, HoodieTableType.MERGE_ON_READ.name());
   }
 
+  @Disabled("Disabled due to flakiness with hive drop table timing out")
   @ParameterizedTest
   @ValueSource(strings = { HOODIE_JAVA_APP, HOODIE_JAVA_STREAMING_APP })
   /**

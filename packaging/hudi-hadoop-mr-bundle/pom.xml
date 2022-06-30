@@ -29,6 +29,8 @@
   <properties>
     <checkstyle.skip>true</checkstyle.skip>
     <main.basedir>${project.parent.basedir}</main.basedir>
+    <!-- override parquet version to be same as Hive 3.1.2 -->
+    <parquet.version>1.10.1</parquet.version>
     <skipTests>true</skipTests>
   </properties>
 
@@ -276,7 +278,6 @@
     <dependency>
       <groupId>org.apache.avro</groupId>
       <artifactId>avro</artifactId>
-      <version>${avro.version}</version>
       <scope>compile</scope>
     </dependency>
   </dependencies>

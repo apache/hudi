@@ -27,7 +27,7 @@ import org.apache.hudi.timeline.service.handlers.marker.MarkerCreationDispatchin
 import org.apache.hudi.timeline.service.handlers.marker.MarkerCreationFuture;
 import org.apache.hudi.timeline.service.handlers.marker.MarkerDirState;
 
-import io.javalin.Context;
+import io.javalin.http.Context;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;

@@ -44,6 +44,7 @@ import org.apache.hadoop.hive.ql.session.SessionState;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -71,6 +72,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@Disabled
 public class TestHiveSyncTool {
 
   private static final List<Object> SYNC_MODES = Arrays.asList(
@@ -227,6 +229,7 @@ public class TestHiveSyncTool {
         "DataBases " + HiveTestUtil.DB_NAME + " should exist after sync completes");
   }
 
+  @Disabled
   @ParameterizedTest
   @MethodSource({"syncDataSourceTableParams"})
   public void testSyncCOWTableWithProperties(boolean useSchemaFromCommitMetadata,
@@ -318,6 +321,7 @@ public class TestHiveSyncTool {
     }
   }
 
+  @Disabled
   @ParameterizedTest
   @MethodSource({"syncDataSourceTableParams"})
   public void testSyncMORTableWithProperties(boolean useSchemaFromCommitMetadata,
@@ -537,6 +541,7 @@ public class TestHiveSyncTool {
     assertEquals(2, commentCnt, "hive schema field comment numbers should match the avro schema field doc numbers");
   }
 
+  @Disabled
   @ParameterizedTest
   @MethodSource("syncMode")
   public void testSyncWithCommentedSchema(String syncMode) throws Exception {
@@ -569,6 +574,7 @@ public class TestHiveSyncTool {
     assertEquals(2, commentCnt, "hive schema field comment numbers should match the avro schema field doc numbers");
   }
 
+  @Disabled
   @ParameterizedTest
   @MethodSource("syncModeAndSchemaFromCommitMetadata")
   public void testSyncMergeOnRead(boolean useSchemaFromCommitMetadata, String syncMode) throws Exception {

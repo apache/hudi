@@ -31,12 +31,14 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hudi.hive.replication.HiveSyncGlobalCommitConfig;
 import org.apache.hudi.hive.replication.HiveSyncGlobalCommitTool;
 import org.apache.hudi.hive.testutils.TestCluster;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+@Disabled
 public class TestHiveSyncGlobalCommitTool {
 
   @RegisterExtension

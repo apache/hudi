@@ -41,6 +41,7 @@ import org.apache.hadoop.hdfs.protocol.LocatedBlocks;
 import org.apache.hadoop.hdfs.server.datanode.DataNode;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -61,6 +62,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
  * {@link MiniClusterUtil} to reproduce append() issue : https://issues.apache.org/jira/browse/HDFS-6325 Reference :
  * https://issues.apache.org/jira/secure/attachment/12645053/HDFS-6325.patch.
  */
+@Disabled
 public class TestHoodieLogFormatAppendFailure {
 
   private static File baseDir;

@@ -214,8 +214,6 @@ public class HiveIncrementalPuller {
     executeStatement("set mapred.job.queue.name=" + config.yarnQueueName, stmt);
     // Set the inputFormat to HoodieCombineHiveInputFormat
     executeStatement("set hive.input.format=org.apache.hudi.hadoop.hive.HoodieCombineHiveInputFormat", stmt);
-    // Allow queries without partition predicate
-    executeStatement("set hive.strict.checks.large.query=false", stmt);
     // Don't gather stats for the table created
     executeStatement("set hive.stats.autogather=false", stmt);
     // Set the hoodie mode

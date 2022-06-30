@@ -18,6 +18,7 @@
 
 package org.apache.hudi.utilities.sources;
 
+import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
@@ -29,8 +30,6 @@ import org.apache.hudi.utilities.deltastreamer.SourceFormatAdapter;
 import org.apache.hudi.utilities.exception.HoodieDeltaStreamerException;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.Config;
-
-import org.apache.avro.generic.GenericRecord;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -54,6 +53,7 @@ import java.util.UUID;
 
 import static org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.Config.ENABLE_KAFKA_COMMIT_OFFSET;
 import static org.apache.hudi.utilities.testutils.UtilitiesTestBase.Helpers.jsonifyRecords;
+import static org.apache.hudi.utilities.testutils.UtilitiesTestBase.Helpers.jsonifyRecordsByPartitions;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -328,7 +328,7 @@ public class TestJsonKafkaSource extends SparkClientFunctionalTestHarness {
 
     // 1. Extract without any checkpoint => get all the data, respecting sourceLimit
     assertEquals(Option.empty(), kafkaSource.fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE).getBatch());
-    testUtils.sendMessages(topic, jsonifyRecords(dataGenerator.generateInserts("000", 1000)));
+    testUtils.sendMessages(topic, jsonifyRecordsByPartitions(dataGenerator.generateInserts("000", 1000), topicPartitions.size()));
 
     InputBatch<JavaRDD<GenericRecord>> fetch1 = kafkaSource.fetchNewDataInAvroFormat(Option.empty(), 599);
     // commit to kafka after first batch
@@ -347,7 +347,7 @@ public class TestJsonKafkaSource extends SparkClientFunctionalTestHarness {
       assertEquals(500L, endOffsets.get(topicPartition0));
       assertEquals(500L, endOffsets.get(topicPartition1));
 
-      testUtils.sendMessages(topic, jsonifyRecords(dataGenerator.generateInserts("001", 500)));
+      testUtils.sendMessages(topic, jsonifyRecordsByPartitions(dataGenerator.generateInserts("001", 500), topicPartitions.size()));
       InputBatch<Dataset<Row>> fetch2 =
               kafkaSource.fetchNewDataInRowFormat(Option.of(fetch1.getCheckpointForNextBatch()), Long.MAX_VALUE);
 

@@ -58,6 +58,7 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaRDD;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -144,6 +145,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
     }
   }
 
+  @Disabled
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   void testRollbackWithDeltaAndCompactionCommit(boolean rollbackUsingMarkers) throws Exception {
