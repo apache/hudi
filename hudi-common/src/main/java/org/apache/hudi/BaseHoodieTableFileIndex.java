@@ -274,8 +274,15 @@ public abstract class   BaseHoodieTableFileIndex implements AutoCloseable {
   private void doRefresh() {
     long startTime = System.currentTimeMillis();
 
-    HoodieTableMetadata newTableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, basePath.toString(),
-        FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue());
+    HoodieTableMetadata newTableMetadata;
+
+    // TODO make configurable
+    if (partitionColumns.length > 0) {
+      newTableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, basePath.toString(),
+          FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue());
+    } else {
+      newTableMetadata = HoodieTableMetadata.createFSBackedTableMetadata(engineContext, metadataConfig, basePath.toString());
+    }
 
     resetTableMetadata(newTableMetadata);
 
@@ -346,6 +353,10 @@ public abstract class   BaseHoodieTableFileIndex implements AutoCloseable {
 
   private List<String> getAllPartitionPathsUnchecked() {
     try {
+      if (partitionColumns.length == 0) {
+        return Collections.singletonList("");
+      }
+
       return tableMetadata.getAllPartitionPaths();
     } catch (IOException e) {
       throw new HoodieIOException("Failed to fetch partition paths for a table", e);
