@@ -10,6 +10,8 @@ last_modified_at: 2020-09-01T15:59:57-04:00
 We have setup the following regular syncs for community users and developers to meet, interact and exchange ideas. 
 Meetings will be recorded and made available, on a best-effort basis.
 
+See more informations about Chinese community sync call by changing the website language into Chinese.
+
 ### Schedules
 
 Refer to the [Apache Hudi events calendar](https://calendar.google.com/calendar/embed?src=rgpb1ta2mgp5au38fr2834poa8%40group.calendar.google.com&ctz=America%2FLos_Angeles).
