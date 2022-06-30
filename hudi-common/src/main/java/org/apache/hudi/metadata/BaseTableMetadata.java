@@ -39,6 +39,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.hash.ColumnIndexID;
 import org.apache.hudi.common.util.hash.FileIndexID;
 import org.apache.hudi.common.util.hash.PartitionIndexID;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieMetadataException;
 
 import org.apache.hadoop.fs.FileStatus;
@@ -56,8 +57,10 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 public abstract class BaseTableMetadata implements HoodieTableMetadata {
@@ -279,20 +282,23 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
    */
   protected List<String> fetchAllPartitionPaths() {
     HoodieTimer timer = new HoodieTimer().startTimer();
-    Option<HoodieRecord<HoodieMetadataPayload>> hoodieRecord = getRecordByKey(RECORDKEY_PARTITION_LIST,
+    Option<HoodieRecord<HoodieMetadataPayload>> recordOpt = getRecordByKey(RECORDKEY_PARTITION_LIST,
         MetadataPartitionType.FILES.getPartitionPath());
     metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_PARTITIONS_STR, timer.endTimer()));
 
-    List<String> partitions = Collections.emptyList();
-    if (hoodieRecord.isPresent()) {
-      handleSpuriousDeletes(hoodieRecord, "\"all partitions\"");
-      partitions = hoodieRecord.get().getData().getFilenames();
-      // Partition-less tables have a single empty partition
-      if (partitions.contains(NON_PARTITIONED_NAME)) {
-        partitions.remove(NON_PARTITIONED_NAME);
-        partitions.add("");
+    List<String> partitions = recordOpt.map(record -> {
+      HoodieMetadataPayload metadataPayload = record.getData();
+      checkForSpuriousDeletes(metadataPayload, "\"all partitions\"");
+
+      List<String> relativePaths = metadataPayload.getFilenames();
+      // Non-partitioned tables have a single empty partition
+      if (relativePaths.size() == 1 && relativePaths.get(0).equals(NON_PARTITIONED_NAME)) {
+        return Collections.singletonList("");
+      } else {
+        return relativePaths;
       }
-    }
+    })
+      .orElse(Collections.emptyList());
 
     LOG.info("Listed partitions from metadata: #partitions=" + partitions.size());
     return partitions;
@@ -304,75 +310,81 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
    * @param partitionPath The absolute path of the partition
    */
   FileStatus[] fetchAllFilesInPartition(Path partitionPath) throws IOException {
-    String partitionName = FSUtils.getRelativePartitionPath(dataBasePath, partitionPath);
-    if (partitionName.isEmpty()) {
-      partitionName = NON_PARTITIONED_NAME;
-    }
+    String relativePartitionPath = FSUtils.getRelativePartitionPath(dataBasePath, partitionPath);
+    String recordKey = relativePartitionPath.isEmpty() ? NON_PARTITIONED_NAME : relativePartitionPath;
 
     HoodieTimer timer = new HoodieTimer().startTimer();
-    Option<HoodieRecord<HoodieMetadataPayload>> hoodieRecord = getRecordByKey(partitionName,
+    Option<HoodieRecord<HoodieMetadataPayload>> recordOpt = getRecordByKey(recordKey,
         MetadataPartitionType.FILES.getPartitionPath());
     metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_FILES_STR, timer.endTimer()));
 
-    FileStatus[] statuses = {};
-    if (hoodieRecord.isPresent()) {
-      handleSpuriousDeletes(hoodieRecord, partitionName);
-      statuses = hoodieRecord.get().getData().getFileStatuses(hadoopConf.get(), partitionPath);
-    }
+    FileStatus[] statuses = recordOpt.map(record -> {
+      HoodieMetadataPayload metadataPayload = record.getData();
+      checkForSpuriousDeletes(metadataPayload, recordKey);
+      return extractFileStatuses(partitionPath, metadataPayload);
+    }).orElse(new FileStatus[0]);
 
-    LOG.info("Listed file in partition from metadata: partition=" + partitionName + ", #files=" + statuses.length);
+    LOG.info("Listed file in partition from metadata: partition=" + relativePartitionPath + ", #files=" + statuses.length);
     return statuses;
   }
 
   Map<String, FileStatus[]> fetchAllFilesInPartitionPaths(List<Path> partitionPaths) throws IOException {
-    Map<String, Path> partitionInfo = new HashMap<>();
-    boolean foundNonPartitionedPath = false;
-    for (Path partitionPath: partitionPaths) {
-      String partitionName = FSUtils.getRelativePartitionPath(dataBasePath, partitionPath);
-      if (partitionName.isEmpty()) {
-        if (partitionInfo.size() > 1) {
-          throw new HoodieMetadataException("Found mix of partitioned and non partitioned paths while fetching data from metadata table");
-        }
-        partitionInfo.put(NON_PARTITIONED_NAME, partitionPath);
-        foundNonPartitionedPath = true;
-      } else {
-        if (foundNonPartitionedPath) {
-          throw new HoodieMetadataException("Found mix of partitioned and non partitioned paths while fetching data from metadata table");
-        }
-        partitionInfo.put(partitionName, partitionPath);
-      }
-    }
+    Map<String, Path> partitionIdToPathMap =
+        partitionPaths.parallelStream()
+            .collect(
+                Collectors.toMap(partitionPath -> {
+                  String partitionId = FSUtils.getRelativePartitionPath(dataBasePath, partitionPath);
+                  return partitionId.isEmpty() ? NON_PARTITIONED_NAME : partitionId;
+                }, Function.identity())
+            );
 
     HoodieTimer timer = new HoodieTimer().startTimer();
-    List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> partitionsFileStatus =
-        getRecordsByKeys(new ArrayList<>(partitionInfo.keySet()), MetadataPartitionType.FILES.getPartitionPath());
+    List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> partitionIdRecordPairs =
+        getRecordsByKeys(new ArrayList<>(partitionIdToPathMap.keySet()), MetadataPartitionType.FILES.getPartitionPath());
     metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_FILES_STR, timer.endTimer()));
-    Map<String, FileStatus[]> result = new HashMap<>();
 
-    for (Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>> entry: partitionsFileStatus) {
-      if (entry.getValue().isPresent()) {
-        handleSpuriousDeletes(entry.getValue(), entry.getKey());
-        result.put(partitionInfo.get(entry.getKey()).toString(), entry.getValue().get().getData().getFileStatuses(hadoopConf.get(), partitionInfo.get(entry.getKey())));
-      }
-    }
+    Map<String, FileStatus[]> partitionPathToFilesMap = partitionIdRecordPairs.parallelStream()
+        .map(pair -> {
+          String partitionId = pair.getKey();
+          Option<HoodieRecord<HoodieMetadataPayload>> recordOpt = pair.getValue();
+
+          Path partitionPath = partitionIdToPathMap.get(partitionId);
+
+          return recordOpt.map(record -> {
+            HoodieMetadataPayload metadataPayload = record.getData();
+            checkForSpuriousDeletes(metadataPayload, partitionId);
+
+            FileStatus[] files = extractFileStatuses(partitionPath, metadataPayload);
+            return Pair.of(partitionPath.toString(), files);
+          }).orElse(null);
+        })
+        .filter(Objects::nonNull)
+        .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
 
     LOG.info("Listed files in partitions from metadata: partition list =" + Arrays.toString(partitionPaths.toArray()));
-    return result;
+
+    return partitionPathToFilesMap;
+  }
+
+  private FileStatus[] extractFileStatuses(Path partitionPath, HoodieMetadataPayload metadataPayload) {
+    try {
+      return metadataPayload.getFileStatuses(hadoopConf.get(), partitionPath);
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to extract file-statuses from the payload", e);
+    }
   }
 
   /**
    * Handle spurious deletes. Depending on config, throw an exception or log a warn msg.
-   * @param hoodieRecord instance of {@link HoodieRecord} of interest.
-   * @param partitionName partition name of interest.
    */
-  private void handleSpuriousDeletes(Option<HoodieRecord<HoodieMetadataPayload>> hoodieRecord, String partitionName) {
-    if (!hoodieRecord.get().getData().getDeletions().isEmpty()) {
+  private void checkForSpuriousDeletes(HoodieMetadataPayload metadataPayload, String partitionName) {
+    if (!metadataPayload.getDeletions().isEmpty()) {
       if (metadataConfig.ignoreSpuriousDeletes()) {
         LOG.warn("Metadata record for " + partitionName + " encountered some files to be deleted which was not added before. "
             + "Ignoring the spurious deletes as the `" + HoodieMetadataConfig.IGNORE_SPURIOUS_DELETES.key() + "` config is set to true");
       } else {
         throw new HoodieMetadataException("Metadata record for " + partitionName + " is inconsistent: "
-            + hoodieRecord.get().getData());
+            + metadataPayload);
       }
     }
   }
