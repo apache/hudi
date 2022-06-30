@@ -303,8 +303,6 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       }
     }
 
-    List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> result = new ArrayList<>();
-
     HoodieTimer readTimer = new HoodieTimer();
     readTimer.startTimer();
 

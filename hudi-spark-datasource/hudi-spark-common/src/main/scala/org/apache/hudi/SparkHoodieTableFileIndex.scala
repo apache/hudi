@@ -26,6 +26,8 @@ import org.apache.hudi.common.bootstrap.index.BootstrapIndex
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.model.{FileSlice, HoodieTableQueryType}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.hadoop.CachingPath
+import org.apache.hudi.hadoop.CachingPath.createPathUnsafe
 import org.apache.hudi.keygen.{TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
@@ -245,16 +247,16 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
         // HIVE_STYLE_PARTITIONING is disable.
         // e.g. convert "/xx/xx/2021/02" to "/xx/xx/year=2021/month=02"
         val partitionWithName =
-        partitionFragments.zip(partitionColumns).map {
-          case (partition, columnName) =>
-            if (partition.indexOf("=") == -1) {
-              s"${columnName}=$partition"
-            } else {
-              partition
-            }
-        }.mkString("/")
+          partitionFragments.zip(partitionColumns).map {
+            case (partition, columnName) =>
+              if (partition.indexOf("=") == -1) {
+                s"${columnName}=$partition"
+              } else {
+                partition
+              }
+          }.mkString("/")
 
-        val pathWithPartitionName = new Path(basePath, partitionWithName)
+        val pathWithPartitionName = new CachingPath(basePath, createPathUnsafe(partitionWithName))
         val partitionValues = parsePartitionPath(pathWithPartitionName, partitionSchema)
 
         partitionValues.map(_.asInstanceOf[Object]).toArray
