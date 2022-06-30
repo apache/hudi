@@ -475,6 +475,13 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
    */
   public FileStatus[] getFileStatuses(Configuration hadoopConf, Path partitionPath) throws IOException {
     FileSystem fs = partitionPath.getFileSystem(hadoopConf);
+    return getFileStatuses(fs, partitionPath);
+  }
+
+  /**
+   * Returns the files added as part of this record.
+   */
+  public FileStatus[] getFileStatuses(FileSystem fs, Path partitionPath) {
     long blockSize = fs.getDefaultBlockSize(partitionPath);
     return filterFileInfoEntries(false)
         .map(e -> {

@@ -19,6 +19,7 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hudi.avro.model.HoodieMetadataBloomFilter;
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.common.bloom.BloomFilter;
@@ -149,6 +150,10 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
   @Override
   public Map<String, FileStatus[]> getAllFilesInPartitions(List<String> partitions)
       throws IOException {
+    if (partitions.isEmpty()) {
+      return Collections.emptyMap();
+    }
+
     if (isMetadataTableEnabled) {
       try {
         List<Path> partitionPaths = partitions.stream().map(Path::new).collect(Collectors.toList());
@@ -321,8 +326,13 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
     FileStatus[] statuses = recordOpt.map(record -> {
       HoodieMetadataPayload metadataPayload = record.getData();
       checkForSpuriousDeletes(metadataPayload, recordKey);
-      return extractFileStatuses(partitionPath, metadataPayload);
-    }).orElse(new FileStatus[0]);
+      try {
+        return metadataPayload.getFileStatuses(hadoopConf.get(), partitionPath);
+      } catch (IOException e) {
+        throw new HoodieIOException("Failed to extract file-statuses from the payload", e);
+      }
+    })
+        .orElse(new FileStatus[0]);
 
     LOG.info("Listed file in partition from metadata: partition=" + relativePartitionPath + ", #files=" + statuses.length);
     return statuses;
@@ -343,6 +353,8 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
         getRecordsByKeys(new ArrayList<>(partitionIdToPathMap.keySet()), MetadataPartitionType.FILES.getPartitionPath());
     metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_FILES_STR, timer.endTimer()));
 
+    FileSystem fs = partitionPaths.get(0).getFileSystem(hadoopConf.get());
+
     Map<String, FileStatus[]> partitionPathToFilesMap = partitionIdRecordPairs.parallelStream()
         .map(pair -> {
           String partitionId = pair.getKey();
@@ -354,9 +366,10 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
             HoodieMetadataPayload metadataPayload = record.getData();
             checkForSpuriousDeletes(metadataPayload, partitionId);
 
-            FileStatus[] files = extractFileStatuses(partitionPath, metadataPayload);
+            FileStatus[] files = metadataPayload.getFileStatuses(fs, partitionPath);
             return Pair.of(partitionPath.toString(), files);
-          }).orElse(null);
+          })
+              .orElse(null);
         })
         .filter(Objects::nonNull)
         .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
@@ -364,14 +377,6 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
     LOG.info("Listed files in partitions from metadata: partition list =" + Arrays.toString(partitionPaths.toArray()));
 
     return partitionPathToFilesMap;
-  }
-
-  private FileStatus[] extractFileStatuses(Path partitionPath, HoodieMetadataPayload metadataPayload) {
-    try {
-      return metadataPayload.getFileStatuses(hadoopConf.get(), partitionPath);
-    } catch (IOException e) {
-      throw new HoodieIOException("Failed to extract file-statuses from the payload", e);
-    }
   }
 
   /**
