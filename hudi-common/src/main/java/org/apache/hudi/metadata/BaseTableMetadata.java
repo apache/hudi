@@ -303,7 +303,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
         return relativePaths;
       }
     })
-      .orElse(Collections.emptyList());
+        .orElse(Collections.emptyList());
 
     LOG.info("Listed partitions from metadata: #partitions=" + partitions.size());
     return partitions;
