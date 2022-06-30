@@ -72,8 +72,8 @@ In turn, `views` define how the underlying data is exposed to the queries (i.e h
 
 | Storage Type  | Supported Views |
 |-------------- |------------------|
-| Copy On Write | Read Optimized + Incremental   |
-| Merge On Read | Read Optimized + Incremental + Near Real-time |
+| Copy On Write | Snapshot Queries + Incremental Queries   |
+| Merge On Read | Snapshot Queries + Incremental Queries + Read Optimized Queries |
 
 ### Storage Types
 Hudi supports the following storage types.
