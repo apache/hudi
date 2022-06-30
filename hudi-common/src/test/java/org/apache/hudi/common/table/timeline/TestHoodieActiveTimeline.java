@@ -19,6 +19,7 @@
 package org.apache.hudi.common.table.timeline;
 
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
+import org.apache.hudi.common.fs.NoOpConsistencyGuard;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
@@ -620,7 +621,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
   private void shouldAllowTempCommit(boolean allowTempCommit, Consumer<HoodieTableMetaClient> fun) {
     if (allowTempCommit) {
       HoodieWrapperFileSystem fs = metaClient.getFs();
-      HoodieWrapperFileSystem newFs = new HoodieWrapperFileSystem(fs.getFileSystem(), fs.getConsistencyGuard()) {
+      HoodieWrapperFileSystem newFs = new HoodieWrapperFileSystem(fs.getFileSystem(), new NoOpConsistencyGuard()) {
         @Override
         protected boolean needCreateTempFile() {
           return true;

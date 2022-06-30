@@ -1028,26 +1028,29 @@ public class HoodieWrapperFileSystem extends FileSystem {
         fsout.write(content.get());
       }
     } catch (IOException e) {
-      throw new HoodieIOException("Failed to create file " + fullPath, e);
+      String errorMsg = "Failed to create file" + (tmpPath != null ? tmpPath : fullPath);
+      throw new HoodieIOException(errorMsg, e);
     } finally {
       try {
         if (null != fsout) {
           fsout.close();
         }
+      } catch (IOException e) {
+        String errorMsg = "Failed to close file" + (needTempFile ? tmpPath : fullPath);
+        throw new HoodieIOException(errorMsg, e);
+      }
+
+      try {
         if (null != tmpPath) {
           fileSystem.rename(tmpPath, fullPath);
         }
       } catch (IOException e) {
-        throw new HoodieIOException("Failed to close file " + fullPath, e);
+        throw new HoodieIOException("Failed to rename " + tmpPath + " to the target " + fullPath, e);
       }
     }
   }
 
   public FileSystem getFileSystem() {
     return fileSystem;
-  }
-
-  public ConsistencyGuard getConsistencyGuard() {
-    return consistencyGuard;
   }
 }
