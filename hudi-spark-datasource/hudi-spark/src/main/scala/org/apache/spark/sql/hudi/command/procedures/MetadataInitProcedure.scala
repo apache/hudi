@@ -68,7 +68,7 @@ class MetadataInitProcedure extends BaseProcedure with ProcedureBuilder with Spa
     }
 
     val action = if (readOnly) "Opened" else "Initialized"
-    Seq(Row(action + " Metadata Table in "+ metadataPath +" (duration=" + timer.endTimer / 1000.0 + "sec)"))
+    Seq(Row(action + " Metadata Table in " + metadataPath + " (duration=" + timer.endTimer / 1000.0 + "sec)"))
   }
 
   override def build = new MetadataInitProcedure()
