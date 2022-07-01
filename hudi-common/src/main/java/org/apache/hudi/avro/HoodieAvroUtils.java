@@ -761,39 +761,32 @@ public class HoodieAvroUtils {
         }
         IndexedRecord indexedRecord = (IndexedRecord) oldRecord;
         List<Schema.Field> fields = newSchema.getFields();
-        Map<Integer, Object> helper = new HashMap<>();
-
+        GenericData.Record newRecord = new GenericData.Record(newSchema);
         for (int i = 0; i < fields.size(); i++) {
           Schema.Field field = fields.get(i);
           String fieldName = field.name();
           fieldNames.push(fieldName);
           if (oldSchema.getField(field.name()) != null) {
             Schema.Field oldField = oldSchema.getField(field.name());
-            helper.put(i, rewriteRecordWithNewSchema(indexedRecord.get(oldField.pos()), oldField.schema(), fields.get(i).schema(), renameCols, fieldNames));
+            newRecord.put(i, rewriteRecordWithNewSchema(indexedRecord.get(oldField.pos()), oldField.schema(), fields.get(i).schema(), renameCols, fieldNames));
           } else {
             String fieldFullName = createFullName(fieldNames);
-            String[] colNamePartsFromOldSchema = renameCols.getOrDefault(fieldFullName, "").split("\\.");
-            String lastColNameFromOldSchema = colNamePartsFromOldSchema[colNamePartsFromOldSchema.length - 1];
+            String fieldNameFromOldSchema = renameCols.getOrDefault(fieldFullName, "");
             // deal with rename
-            if (oldSchema.getField(field.name()) == null && oldSchema.getField(lastColNameFromOldSchema) != null) {
+            if (oldSchema.getField(field.name()) == null && oldSchema.getField(fieldNameFromOldSchema) != null) {
               // find rename
-              Schema.Field oldField = oldSchema.getField(lastColNameFromOldSchema);
-              helper.put(i, rewriteRecordWithNewSchema(indexedRecord.get(oldField.pos()), oldField.schema(), fields.get(i).schema(), renameCols, fieldNames));
+              Schema.Field oldField = oldSchema.getField(fieldNameFromOldSchema);
+              newRecord.put(i, rewriteRecordWithNewSchema(indexedRecord.get(oldField.pos()), oldField.schema(), fields.get(i).schema(), renameCols, fieldNames));
+            } else {
+              // deal with default value
+              if (fields.get(i).defaultVal() instanceof JsonProperties.Null) {
+                newRecord.put(i, null);
+              } else {
+                newRecord.put(i, fields.get(i).defaultVal());
+              }
             }
           }
           fieldNames.pop();
-        }
-        GenericData.Record newRecord = new GenericData.Record(newSchema);
-        for (int i = 0; i < fields.size(); i++) {
-          if (helper.containsKey(i)) {
-            newRecord.put(i, helper.get(i));
-          } else {
-            if (fields.get(i).defaultVal() instanceof JsonProperties.Null) {
-              newRecord.put(i, null);
-            } else {
-              newRecord.put(i, fields.get(i).defaultVal());
-            }
-          }
         }
         return newRecord;
       case ARRAY:
@@ -804,7 +797,7 @@ public class HoodieAvroUtils {
         List<Object> newArray = new ArrayList();
         fieldNames.push("element");
         for (Object element : array) {
-          newArray.add(rewriteRecordWithNewSchema(element, oldSchema.getElementType(), newSchema.getElementType(), renameCols, fieldNames));
+          newArray.add(rewriteRecordWithNewSchema(element, getActualSchemaFromUnion(oldSchema.getElementType(), element), newSchema.getElementType(), renameCols, fieldNames));
         }
         fieldNames.pop();
         return newArray;
@@ -816,7 +809,8 @@ public class HoodieAvroUtils {
         Map<Object, Object> newMap = new HashMap<>();
         fieldNames.push("value");
         for (Map.Entry<Object, Object> entry : map.entrySet()) {
-          newMap.put(entry.getKey(), rewriteRecordWithNewSchema(entry.getValue(), oldSchema.getValueType(), newSchema.getValueType(), renameCols, fieldNames));
+          newMap.put(entry.getKey(), rewriteRecordWithNewSchema(entry.getValue(),
+              getActualSchemaFromUnion(oldSchema.getValueType(), entry.getValue()), newSchema.getValueType(), renameCols, fieldNames));
         }
         fieldNames.pop();
         return newMap;
@@ -1027,5 +1021,9 @@ public class HoodieAvroUtils {
         return rewriteRecordWithNewSchema(oldRecords.next(), newSchema, renameCols);
       }
     };
+  }
+
+  public static GenericRecord rewriteRecordDeep(GenericRecord oldRecord, Schema newSchema) {
+    return rewriteRecordWithNewSchema(oldRecord, newSchema, Collections.EMPTY_MAP);
   }
 }
