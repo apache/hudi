@@ -19,6 +19,7 @@
 package org.apache.hudi.common.util;
 
 import javax.annotation.Nullable;
+import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -88,7 +89,10 @@ public class StringUtils {
   }
 
   public static String objToString(@Nullable Object obj) {
-    return obj == null ? null : obj.toString();
+    if (obj == null) {
+      return null;
+    }
+    return obj instanceof ByteBuffer ? toHexString(((ByteBuffer) obj).array()) : obj.toString();
   }
 
   /**

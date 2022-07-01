@@ -20,6 +20,7 @@ package org.apache.hudi.common.util;
 
 import org.junit.jupiter.api.Test;
 
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 
@@ -49,6 +50,20 @@ public class TestStringUtils {
     String str = "This is a test";
     assertEquals(str, StringUtils.nullToEmpty(str));
     assertEquals("", StringUtils.nullToEmpty(null));
+  }
+
+  @Test
+  public void testStringObjToString() {
+    assertNull(StringUtils.objToString(null));
+    assertEquals("Test String", StringUtils.objToString("Test String"));
+
+    // assert byte buffer
+    ByteBuffer byteBuffer1 = ByteBuffer.wrap("1234".getBytes());
+    ByteBuffer byteBuffer2 = ByteBuffer.wrap("5678".getBytes());
+    // assert equal because ByteBuffer has overwritten the toString to return a summary string
+    assertEquals(byteBuffer1.toString(), byteBuffer2.toString());
+    // assert not equal
+    assertNotEquals(StringUtils.objToString(byteBuffer1), StringUtils.objToString(byteBuffer2));
   }
 
   @Test
