@@ -104,6 +104,10 @@ module.exports = {
             from: ['/releases'],
             to: '/releases/release-0.11.1',
           },
+          {
+            from: ['/docs/learn'],
+            to: '/learn/faq',
+          },
         ],
       },
     ],
@@ -134,7 +138,7 @@ module.exports = {
             },
             {
               label: 'FAQ',
-              href: '/docs/faq',
+              href: '/learn/faq',
             },
             {
               label: 'Technical Wiki',
@@ -281,7 +285,7 @@ module.exports = {
             },
             {
               label: 'FAQ',
-              href: '/docs/faq',
+              href: '/learn/faq',
             },
             {
               label: 'Technical Wiki',
