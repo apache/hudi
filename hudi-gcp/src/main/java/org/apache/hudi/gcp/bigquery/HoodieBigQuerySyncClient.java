@@ -183,6 +183,6 @@ public class HoodieBigQuerySyncClient extends HoodieSyncClient {
 
   @Override
   public void close() {
-    // bigQuery has no connection close method, so do nothing.
+    bigquery = null;
   }
 }

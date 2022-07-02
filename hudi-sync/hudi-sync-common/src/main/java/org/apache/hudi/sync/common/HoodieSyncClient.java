@@ -74,7 +74,7 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
   }
 
   public String getBasePath() {
-    return metaClient.getBasePath();
+    return metaClient.getBasePathV2().toString();
   }
 
   public boolean isBootstrap() {

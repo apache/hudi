@@ -77,7 +77,7 @@ public class BigQuerySyncConfig extends HoodieSyncConfig implements Serializable
 
   public static final ConfigProperty<Boolean> BIGQUERY_SYNC_USE_FILE_LISTING_FROM_METADATA = ConfigProperty
       .key("hoodie.gcp.bigquery.sync.use_file_listing_from_metadata")
-      .defaultValue(true)
+      .defaultValue(false)
       .withDocumentation("");
 
   public static final ConfigProperty<Boolean> BIGQUERY_SYNC_ASSUME_DATE_PARTITIONING = ConfigProperty

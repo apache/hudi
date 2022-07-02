@@ -49,19 +49,7 @@ public class TypedProperties extends Properties implements Serializable {
     }
   }
 
-  public void setPropertyIfNonNull(String key, String value) {
-    if (value != null) {
-      setProperty(key, value);
-    }
-  }
-
-  public void setPropertyIfNonNull(String key, Boolean value) {
-    if (value != null) {
-      setProperty(key, value.toString());
-    }
-  }
-
-  public void setPropertyIfNonNull(String key, Integer value) {
+  public void setPropertyIfNonNull(String key, Object value) {
     if (value != null) {
       setProperty(key, value.toString());
     }

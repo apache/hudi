@@ -78,7 +78,7 @@ public class BigQuerySyncTool extends HoodieSyncTool {
           throw new UnsupportedOperationException(bqSyncClient.getTableType() + " table type is not supported yet.");
       }
     } catch (Exception e) {
-      throw new HoodieBigQuerySyncException("Got runtime exception when big query syncing " + tableName, e);
+      throw new HoodieBigQuerySyncException("Failed to sync BigQuery for table:" + tableName, e);
     }
   }
 
@@ -117,11 +117,6 @@ public class BigQuerySyncTool extends HoodieSyncTool {
 
     // TODO: Implement automatic schema evolution when you add a new column.
     LOG.info("Sync table complete for " + snapshotViewName);
-  }
-
-  @Override
-  public void close() {
-    // no op
   }
 
   public static void main(String[] args) {

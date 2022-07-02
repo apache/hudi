@@ -53,8 +53,10 @@ public class GlobalHiveSyncTool extends HiveSyncTool {
     Option<String> timestamp = Option.ofNullable(config.getString(META_SYNC_GLOBAL_REPLICATE_TIMESTAMP));
     if (timestamp.isPresent()) {
       syncClient.updateLastReplicatedTimeStamp(tableName, timestamp.get());
+      LOG.info("Sync complete for " + tableName);
+    } else {
+      LOG.warn("Sync skipped: " + META_SYNC_GLOBAL_REPLICATE_TIMESTAMP.key() + " is not set.");
     }
-    LOG.info("Sync complete for " + tableName);
   }
 
   public Map<String, Option<String>> getLastReplicatedTimeStampMap() {
