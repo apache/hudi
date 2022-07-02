@@ -18,11 +18,10 @@
 
 package org.apache.hudi.sink.utils;
 
-import org.apache.flink.configuration.Configuration;
-
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.hive.HiveSyncConfig;
 
+import org.apache.flink.configuration.Configuration;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Method;
