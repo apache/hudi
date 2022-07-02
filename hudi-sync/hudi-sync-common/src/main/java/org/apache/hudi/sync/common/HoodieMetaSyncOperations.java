@@ -54,22 +54,37 @@ public interface HoodieMetaSyncOperations {
 
   }
 
+  /**
+   * Check if table exists in metastore.
+   */
   default boolean tableExists(String tableName) {
     return false;
   }
 
+  /**
+   * Drop table from metastore.
+   */
   default void dropTable(String tableName) {
 
   }
 
+  /**
+   * Add partitions to the table in metastore.
+   */
   default void addPartitionsToTable(String tableName, List<String> partitionsToAdd) {
 
   }
 
+  /**
+   * Update partitions to the table in metastore.
+   */
   default void updatePartitionsToTable(String tableName, List<String> changedPartitions) {
 
   }
 
+  /**
+   * Drop partitions from the table in metastore.
+   */
   default void dropPartitions(String tableName, List<String> partitionsToDrop) {
 
   }
@@ -95,10 +110,16 @@ public interface HoodieMetaSyncOperations {
 
   }
 
+  /**
+   * Get the schema from metastore.
+   */
   default Map<String, String> getMetastoreSchema(String tableName) {
     return Collections.emptyMap();
   }
 
+  /**
+   * Get the schema from the Hudi table on storage.
+   */
   default MessageType getStorageSchema() {
     return null;
   }
@@ -110,38 +131,65 @@ public interface HoodieMetaSyncOperations {
 
   }
 
+  /**
+   * Get the list of field schemas from metastore.
+   */
   default List<FieldSchema> getMetastoreFieldSchemas(String tableName) {
     return Collections.emptyList();
   }
 
+  /**
+   * Get the list of field schema from the Hudi table on storage.
+   */
   default List<FieldSchema> getStorageFieldSchemas() {
     return Collections.emptyList();
   }
 
+  /**
+   * Update the field comments for table in metastore, by using the ones from storage.
+   */
   default void updateTableComments(String tableName, List<FieldSchema> fromMetastore, List<FieldSchema> fromStorage) {
 
   }
 
+  /**
+   * Get the timestamp of last sync.
+   */
   default Option<String> getLastCommitTimeSynced(String tableName) {
     return Option.empty();
   }
 
+  /**
+   * Update the timestamp of last sync.
+   */
   default void updateLastCommitTimeSynced(String tableName) {
 
   }
 
+  /**
+   * Update the table properties in metastore.
+   */
   default void updateTableProperties(String tableName, Map<String, String> tableProperties) {
 
   }
 
+  /**
+   * Get the timestamp of last replication.
+   */
   default Option<String> getLastReplicatedTime(String tableName) {
     return Option.empty();
   }
 
+  /**
+   * Update the timestamp of last replication.
+   */
   default void updateLastReplicatedTimeStamp(String tableName, String timeStamp) {
 
   }
 
+  /**
+   * Delete the timestamp of last replication.
+   */
   default void deleteLastReplicatedTimeStamp(String tableName) {
 
   }

@@ -38,52 +38,53 @@ public class BigQuerySyncConfig extends HoodieSyncConfig implements Serializable
   public static final ConfigProperty<String> BIGQUERY_SYNC_PROJECT_ID = ConfigProperty
       .key("hoodie.gcp.bigquery.sync.project_id")
       .noDefaultValue()
-      .withDocumentation("");
+      .withDocumentation("Name of the target project in BigQuery");
 
   public static final ConfigProperty<String> BIGQUERY_SYNC_DATASET_NAME = ConfigProperty
       .key("hoodie.gcp.bigquery.sync.dataset_name")
       .noDefaultValue()
-      .withDocumentation("");
+      .withDocumentation("Name of the target dataset in BigQuery");
 
   public static final ConfigProperty<String> BIGQUERY_SYNC_DATASET_LOCATION = ConfigProperty
       .key("hoodie.gcp.bigquery.sync.dataset_location")
       .noDefaultValue()
-      .withDocumentation("");
+      .withDocumentation("Location of the target dataset in BigQuery");
 
   public static final ConfigProperty<String> BIGQUERY_SYNC_TABLE_NAME = ConfigProperty
       .key("hoodie.gcp.bigquery.sync.table_name")
       .noDefaultValue()
-      .withDocumentation("");
+      .withDocumentation("Name of the target table in BigQuery");
 
   public static final ConfigProperty<String> BIGQUERY_SYNC_SOURCE_URI = ConfigProperty
       .key("hoodie.gcp.bigquery.sync.source_uri")
       .noDefaultValue()
-      .withDocumentation("");
+      .withDocumentation("Name of the source uri gcs path of the table");
 
   public static final ConfigProperty<String> BIGQUERY_SYNC_SOURCE_URI_PREFIX = ConfigProperty
       .key("hoodie.gcp.bigquery.sync.source_uri_prefix")
       .noDefaultValue()
-      .withDocumentation("");
+      .withDocumentation("Name of the source uri gcs path prefix of the table");
 
   public static final ConfigProperty<String> BIGQUERY_SYNC_SYNC_BASE_PATH = ConfigProperty
       .key("hoodie.gcp.bigquery.sync.base_path")
       .noDefaultValue()
-      .withDocumentation("");
+      .withDocumentation("Base path of the hoodie table to sync");
 
   public static final ConfigProperty<String> BIGQUERY_SYNC_PARTITION_FIELDS = ConfigProperty
       .key("hoodie.gcp.bigquery.sync.partition_fields")
       .noDefaultValue()
-      .withDocumentation("");
+      .withDocumentation("Comma-delimited partition fields. Default to non-partitioned.");
 
   public static final ConfigProperty<Boolean> BIGQUERY_SYNC_USE_FILE_LISTING_FROM_METADATA = ConfigProperty
       .key("hoodie.gcp.bigquery.sync.use_file_listing_from_metadata")
       .defaultValue(false)
-      .withDocumentation("");
+      .withDocumentation("Fetch file listing from Hudi's metadata");
 
   public static final ConfigProperty<Boolean> BIGQUERY_SYNC_ASSUME_DATE_PARTITIONING = ConfigProperty
       .key("hoodie.gcp.bigquery.sync.assume_date_partitioning")
       .defaultValue(false)
-      .withDocumentation("");
+      .withDocumentation("Assume standard yyyy/mm/dd partitioning, this"
+          + " exists to support backward compatibility. If you use hoodie 0.3.x, do not set this parameter");
 
   public BigQuerySyncConfig(Properties props) {
     super(props);
@@ -94,17 +95,17 @@ public class BigQuerySyncConfig extends HoodieSyncConfig implements Serializable
     @ParametersDelegate()
     public final HoodieSyncConfigParams hoodieSyncConfigParams = new HoodieSyncConfigParams();
 
-    @Parameter(names = {"--project-id"}, description = "name of the target project in BigQuery", required = true)
+    @Parameter(names = {"--project-id"}, description = "Name of the target project in BigQuery", required = true)
     public String projectId;
-    @Parameter(names = {"--dataset-name"}, description = "name of the target dataset in BigQuery", required = true)
+    @Parameter(names = {"--dataset-name"}, description = "Name of the target dataset in BigQuery", required = true)
     public String datasetName;
-    @Parameter(names = {"--dataset-location"}, description = "location of the target dataset in BigQuery", required = true)
+    @Parameter(names = {"--dataset-location"}, description = "Location of the target dataset in BigQuery", required = true)
     public String datasetLocation;
-    @Parameter(names = {"--table-name"}, description = "name of the target table in BigQuery", required = true)
+    @Parameter(names = {"--table-name"}, description = "Name of the target table in BigQuery", required = true)
     public String tableName;
-    @Parameter(names = {"--source-uri"}, description = "name of the source uri gcs path of the table", required = true)
+    @Parameter(names = {"--source-uri"}, description = "Name of the source uri gcs path of the table", required = true)
     public String sourceUri;
-    @Parameter(names = {"--source-uri-prefix"}, description = "name of the source uri gcs path prefix of the table", required = true)
+    @Parameter(names = {"--source-uri-prefix"}, description = "Name of the source uri gcs path prefix of the table", required = true)
     public String sourceUriPrefix;
     @Parameter(names = {"--base-path"}, description = "Base path of the hoodie table to sync", required = true)
     public String basePath;
