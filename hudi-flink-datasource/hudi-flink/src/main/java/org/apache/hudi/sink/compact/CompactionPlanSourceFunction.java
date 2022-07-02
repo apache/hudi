@@ -18,16 +18,28 @@
 
 package org.apache.hudi.sink.compact;
 
-import org.apache.hudi.avro.model.HoodieCompactionPlan;
-import org.apache.hudi.common.model.CompactionOperation;
-
 import org.apache.flink.api.common.functions.AbstractRichFunction;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.functions.source.SourceFunction;
+import org.apache.hadoop.fs.Path;
+import org.apache.hudi.avro.model.HoodieCompactionPlan;
+import org.apache.hudi.client.HoodieFlinkWriteClient;
+import org.apache.hudi.common.model.CompactionOperation;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.CompactionUtils;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.OptionsResolver;
+import org.apache.hudi.table.HoodieFlinkTable;
+import org.apache.hudi.util.CompactionUtil;
+import org.apache.hudi.util.StreamerUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 import static java.util.stream.Collectors.toList;
 
@@ -48,47 +60,147 @@ import static java.util.stream.Collectors.toList;
  *   as the instant time.</li>
  * </ul>
  */
-public class CompactionPlanSourceFunction extends AbstractRichFunction implements SourceFunction<CompactionPlanEvent> {
+public class CompactionPlanSourceFunction
+    extends AbstractRichFunction implements SourceFunction<CompactionPlanEvent> {
+  private static final Logger LOG = LoggerFactory.getLogger(CompactionPlanSourceFunction.class);
 
-  protected static final Logger LOG = LoggerFactory.getLogger(CompactionPlanSourceFunction.class);
-
-  /**
-   * Compaction instant time.
-   */
-  private final String compactionInstantTime;
+  private static final long serialVersionUID = 1L;
 
   /**
-   * The compaction plan.
+   * The interval between consecutive path scans.
    */
-  private final HoodieCompactionPlan compactionPlan;
+  private final long interval;
 
-  public CompactionPlanSourceFunction(HoodieCompactionPlan compactionPlan, String compactionInstantTime) {
-    this.compactionPlan = compactionPlan;
-    this.compactionInstantTime = compactionInstantTime;
+  private volatile boolean isRunning = true;
+
+  private final Configuration conf;
+
+  protected HoodieFlinkWriteClient writeClient;
+
+  /**
+   * The hoodie table.
+   */
+  private transient HoodieFlinkTable<?> table;
+
+  /**
+   * The path to monitor.
+   */
+  private final transient Path path;
+
+  private final Boolean isStreamingMode;
+
+  public CompactionPlanSourceFunction(
+      Configuration conf,
+      String path,
+      Boolean isStreamingMode) {
+    this.conf = conf;
+    this.path = new Path(path);
+    this.isStreamingMode = isStreamingMode;
+    this.interval = conf.getInteger(FlinkOptions.COMPACTION_STREAMING_CHECK_INTERVAL);
   }
 
   @Override
   public void open(Configuration parameters) throws Exception {
-    // no operation
+    super.open(parameters);
+    if (writeClient == null) {
+      this.writeClient = StreamerUtil.createWriteClient(conf, getRuntimeContext());
+    }
+    this.table = this.writeClient.getHoodieTable();
   }
 
   @Override
-  public void run(SourceContext sourceContext) throws Exception {
-    List<CompactionOperation> operations = this.compactionPlan.getOperations().stream()
+  public void run(SourceContext<CompactionPlanEvent> context) throws Exception {
+    if (isStreamingMode) {
+      while (isRunning) {
+        monitorCompactionPlan(context);
+        TimeUnit.SECONDS.sleep(interval);
+      }
+    } else {
+      monitorCompactionPlan(context);
+    }
+  }
+
+  public void monitorCompactionPlan(SourceContext<CompactionPlanEvent> context) throws IOException {
+    table.getMetaClient().reloadActiveTimeline();
+
+    // checks the compaction plan and do compaction.
+    if (OptionsResolver.needsScheduleCompaction(conf)) {
+      Option<String> compactionInstantTimeOption = CompactionUtil.getCompactionInstantTime(table.getMetaClient());
+      if (compactionInstantTimeOption.isPresent()) {
+        boolean scheduled = writeClient.scheduleCompactionAtInstant(compactionInstantTimeOption.get(), Option.empty());
+        if (!scheduled) {
+          // do nothing.
+          LOG.info("No compaction plan for this job ");
+          return;
+        }
+        table.getMetaClient().reloadActiveTimeline();
+      }
+    }
+
+    // fetch the instant based on the configured execution sequence
+    String compactionSeq = conf.getString(FlinkOptions.COMPACTION_SEQUENCE);
+    HoodieTimeline timeline = table.getActiveTimeline().filterPendingCompactionTimeline();
+    Option<HoodieInstant> requested = CompactionUtil.isLIFO(compactionSeq) ? timeline.lastInstant() : timeline.firstInstant();
+    if (!requested.isPresent()) {
+      // do nothing.
+      LOG.info("No compaction plan scheduled, turns on the compaction plan schedule with --schedule option");
+      return;
+    }
+
+    String compactionInstantTime = requested.get().getTimestamp();
+
+    // generate compaction plan
+    // should support configurable commit metadata
+    HoodieCompactionPlan compactionPlan = CompactionUtils.getCompactionPlan(
+        table.getMetaClient(), compactionInstantTime);
+
+    if (compactionPlan == null || (compactionPlan.getOperations() == null)
+        || (compactionPlan.getOperations().isEmpty())) {
+      // No compaction plan, do nothing and return.
+      LOG.info("No compaction plan for instant " + compactionInstantTime);
+      return;
+    }
+
+    HoodieInstant instant = HoodieTimeline.getCompactionRequestedInstant(compactionInstantTime);
+    HoodieTimeline pendingCompactionTimeline = table.getActiveTimeline().filterPendingCompactionTimeline();
+    if (!pendingCompactionTimeline.containsInstant(instant)) {
+      // this means that the compaction plan was written to auxiliary path(.tmp)
+      // but not the meta path(.hoodie), this usually happens when the job crush
+      // exceptionally.
+
+      // clean the compaction plan in auxiliary path and cancels the compaction.
+
+      LOG.warn("The compaction plan was fetched through the auxiliary path(.tmp) but not the meta path(.hoodie).\n"
+          + "Clean the compaction plan in auxiliary path and cancels the compaction");
+      CompactionUtil.cleanInstant(table.getMetaClient(), instant);
+      return;
+    }
+
+    LOG.info("Start to compaction for instant " + compactionInstantTime);
+
+    // Mark instant as compaction inflight
+    table.getActiveTimeline().transitionCompactionRequestedToInflight(instant);
+    table.getMetaClient().reloadActiveTimeline();
+
+    List<CompactionOperation> operations = compactionPlan.getOperations().stream()
         .map(CompactionOperation::convertFromAvroRecordInstance).collect(toList());
     LOG.info("CompactionPlanFunction compacting " + operations + " files");
     for (CompactionOperation operation : operations) {
-      sourceContext.collect(new CompactionPlanEvent(compactionInstantTime, operation));
+      context.collect(new CompactionPlanEvent(compactionInstantTime, operation));
     }
   }
 
   @Override
   public void close() throws Exception {
-    // no operation
+    super.close();
+
+    if (LOG.isDebugEnabled()) {
+      LOG.debug("Closed CompactionPlan Source for path: " + path + ".");
+    }
   }
 
   @Override
   public void cancel() {
-    // no operation
+    isRunning = false;
   }
 }

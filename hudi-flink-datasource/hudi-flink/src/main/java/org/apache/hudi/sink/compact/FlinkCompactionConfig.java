@@ -87,8 +87,8 @@ public class FlinkCompactionConfig extends Configuration {
   @Parameter(names = {"--compaction-target-io"}, description = "Target IO per compaction (both read and write) for batching compaction, default 512000M.", required = false)
   public Long compactionTargetIo = 512000L;
 
-  @Parameter(names = {"--compaction-tasks"}, description = "Parallelism of tasks that do actual compaction, default is -1", required = false)
-  public Integer compactionTasks = -1;
+  @Parameter(names = {"--compaction-tasks"}, description = "Parallelism of tasks that do actual compaction, default is 4", required = false)
+  public Integer compactionTasks = 4;
 
   @Parameter(names = {"--schedule", "-sc"}, description = "Not recommended. Schedule the compaction plan in this job.\n"
       + "There is a risk of losing data when scheduling compaction outside the writer job.\n"
@@ -98,13 +98,14 @@ public class FlinkCompactionConfig extends Configuration {
 
   public static final String SEQ_FIFO = "FIFO";
   public static final String SEQ_LIFO = "LIFO";
+
   @Parameter(names = {"--seq"}, description = "Compaction plan execution sequence, two options are supported:\n"
       + "1). FIFO: execute the oldest plan first;\n"
       + "2). LIFO: execute the latest plan first, by default LIFO", required = false)
-  public String compactionSeq = SEQ_LIFO;
+  public String compactionSeq = SEQ_FIFO;
 
-  @Parameter(names = {"--service"}, description = "Flink Compaction runs in service mode, disable by default")
-  public Boolean serviceMode = false;
+  @Parameter(names = {"--mode"}, description = "Flink Compaction mode, batch by default")
+  public String compactionMode = CompactionMode.BATCH.name();
 
   @Parameter(names = {"--min-compaction-interval-seconds"},
       description = "Min compaction interval of async compaction service, default 10 minutes")

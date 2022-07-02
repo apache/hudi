@@ -514,6 +514,20 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(4) // default WRITE_TASKS * COMPACTION_DELTA_COMMITS * 0.2 (assumes 5 commits generate one bucket)
       .withDescription("Parallelism of tasks that do actual compaction, default is 4");
 
+  public static final ConfigOption<String> COMPACTION_SEQUENCE = ConfigOptions
+      .key("compaction.sequence")
+      .stringType()
+      .defaultValue("FIFO") // default WRITE_TASKS * COMPACTION_DELTA_COMMITS * 0.2 (assumes 5 commits generate one bucket)
+      .withDescription("Compaction plan execution sequence, two options are supported:\n"
+          + "1). FIFO: execute the oldest plan first;\n"
+          + "2). LIFO: execute the latest plan first, by default FIFO");
+
+  public static final ConfigOption<Integer> COMPACTION_STREAMING_CHECK_INTERVAL = ConfigOptions
+      .key("compaction.streaming.check-interval")
+      .intType()
+      .defaultValue(60)// default 1 minute
+      .withDescription("Check interval for streaming of SECOND, default 1 minute");
+
   public static final String NUM_COMMITS = "num_commits";
   public static final String TIME_ELAPSED = "time_elapsed";
   public static final String NUM_AND_TIME = "num_and_time";

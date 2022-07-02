@@ -18,21 +18,6 @@
 
 package org.apache.hudi.sink.compact;
 
-import org.apache.hudi.avro.model.HoodieCompactionPlan;
-import org.apache.hudi.client.HoodieFlinkWriteClient;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.util.CompactionUtils;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.table.HoodieFlinkTable;
-import org.apache.hudi.util.CompactionUtil;
-import org.apache.hudi.util.StreamerUtil;
-import org.apache.hudi.utils.TestConfigurations;
-import org.apache.hudi.utils.TestData;
-import org.apache.hudi.utils.TestSQL;
-
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
@@ -41,11 +26,18 @@ import org.apache.flink.table.api.EnvironmentSettings;
 import org.apache.flink.table.api.TableEnvironment;
 import org.apache.flink.table.api.config.ExecutionConfigOptions;
 import org.apache.flink.table.api.internal.TableEnvironmentImpl;
+import org.apache.hudi.client.HoodieFlinkWriteClient;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.util.CompactionUtil;
+import org.apache.hudi.util.StreamerUtil;
+import org.apache.hudi.utils.TestConfigurations;
+import org.apache.hudi.utils.TestData;
+import org.apache.hudi.utils.TestSQL;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.util.Arrays;
@@ -60,8 +52,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * IT cases for {@link org.apache.hudi.common.model.HoodieRecord}.
  */
 public class ITTestHoodieFlinkCompactor {
-
-  protected static final Logger LOG = LoggerFactory.getLogger(ITTestHoodieFlinkCompactor.class);
 
   private static final Map<String, List<String>> EXPECTED1 = new HashMap<>();
 
@@ -130,29 +120,20 @@ public class ITTestHoodieFlinkCompactor {
     if (compactionInstantTimeOption.isPresent()) {
       scheduled = writeClient.scheduleCompactionAtInstant(compactionInstantTimeOption.get(), Option.empty());
     }
-
-    String compactionInstantTime = compactionInstantTimeOption.get();
-
     assertTrue(scheduled, "The compaction plan should be scheduled");
 
-    HoodieFlinkTable<?> table = writeClient.getHoodieTable();
-    // generate compaction plan
-    // should support configurable commit metadata
-    HoodieCompactionPlan compactionPlan = CompactionUtils.getCompactionPlan(
-        table.getMetaClient(), compactionInstantTime);
-
-    HoodieInstant instant = HoodieTimeline.getCompactionRequestedInstant(compactionInstantTime);
-    // Mark instant as compaction inflight
-    table.getActiveTimeline().transitionCompactionRequestedToInflight(instant);
-
-    env.addSource(new CompactionPlanSourceFunction(compactionPlan, compactionInstantTime))
+    // get compactionParallelism.
+    int compactionParallelism = conf.getInteger(FlinkOptions.COMPACTION_TASKS);
+    CompactionPlanSourceFunction compactionPlanSourceFunction =
+        new CompactionPlanSourceFunction(conf, cfg.path, settings.isStreamingMode());
+    env.addSource(compactionPlanSourceFunction)
         .name("compaction_source")
         .uid("uid_compaction_source")
         .rebalance()
         .transform("compact_task",
             TypeInformation.of(CompactionCommitEvent.class),
             new ProcessOperator<>(new CompactFunction(conf)))
-        .setParallelism(compactionPlan.getOperations().size())
+        .setParallelism(compactionParallelism)
         .addSink(new CompactionCommitSink(conf))
         .name("clean_commits")
         .uid("uid_clean_commits")
@@ -193,13 +174,15 @@ public class ITTestHoodieFlinkCompactor {
     Configuration conf = FlinkCompactionConfig.toFlinkConfig(cfg);
     conf.setString(FlinkOptions.TABLE_TYPE.key(), "MERGE_ON_READ");
 
-    HoodieFlinkCompactor.AsyncCompactionService asyncCompactionService = new HoodieFlinkCompactor.AsyncCompactionService(cfg, conf, env);
-    asyncCompactionService.start(null);
+    HoodieFlinkCompactor.AsyncCompactionService asyncCompactionService =
+        new HoodieFlinkCompactor.AsyncCompactionService(cfg, conf, env);
+    HoodieFlinkCompactor hoodieFlinkCompactor = new HoodieFlinkCompactor(asyncCompactionService);
+    hoodieFlinkCompactor.start(cfg.compactionMode);
 
     // wait for the asynchronous commit to finish
     TimeUnit.SECONDS.sleep(5);
 
-    asyncCompactionService.shutDown();
+    hoodieFlinkCompactor.shutDown();
 
     TestData.checkWrittenFullData(tempFile, EXPECTED2);
   }
