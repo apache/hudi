@@ -107,7 +107,7 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
 
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
 
-    try (FSDataOutputStream outputStream = new FSDataOutputStream(baos)) {
+    try (FSDataOutputStream outputStream = new FSDataOutputStream(baos, null)) {
       try (HoodieParquetStreamWriter<IndexedRecord> parquetWriter = new HoodieParquetStreamWriter<>(outputStream, avroParquetConfig)) {
         for (IndexedRecord record : records) {
           String recordKey = getRecordKey(record).orElse(null);
