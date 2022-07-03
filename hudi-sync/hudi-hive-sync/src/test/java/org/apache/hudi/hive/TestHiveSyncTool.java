@@ -59,10 +59,23 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_AUTO_CREATE_DATABASE;
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_CREATE_MANAGED_TABLE;
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_IGNORE_EXCEPTIONS;
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_AS_DATA_SOURCE_TABLE;
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_COMMENT;
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_MODE;
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_TABLE_PROPERTIES;
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_TABLE_SERDE_PROPERTIES;
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_URL;
 import static org.apache.hudi.hive.testutils.HiveTestUtil.basePath;
 import static org.apache.hudi.hive.testutils.HiveTestUtil.ddlExecutor;
 import static org.apache.hudi.hive.testutils.HiveTestUtil.getHiveConf;
 import static org.apache.hudi.hive.testutils.HiveTestUtil.hiveSyncProps;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_CONDITIONAL_SYNC;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_FIELDS;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -130,7 +143,7 @@ public class TestHiveSyncTool {
   @ParameterizedTest
   @MethodSource({"syncModeAndSchemaFromCommitMetadata"})
   public void testBasicSync(boolean useSchemaFromCommitMetadata, String syncMode) throws Exception {
-    hiveSyncProps.setProperty(HiveSyncConfigHolder.HIVE_SYNC_MODE.key(), syncMode);
+    hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), syncMode);
 
     String instantTime = "100";
     HiveTestUtil.createCOWTable(instantTime, 5, useSchemaFromCommitMetadata);
@@ -194,33 +207,33 @@ public class TestHiveSyncTool {
   @ParameterizedTest
   @MethodSource({"syncMode"})
   public void testSyncDataBase(String syncMode) throws Exception {
-    hiveSyncProps.setProperty(HiveSyncConfigHolder.HIVE_SYNC_MODE.key(), syncMode);
+    hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), syncMode);
     String instantTime = "100";
     HiveTestUtil.createCOWTable(instantTime, 5, true);
-    hiveSyncProps.setProperty(HiveSyncConfig.META_SYNC_DATABASE_NAME.key(), HiveTestUtil.DB_NAME);
+    hiveSyncProps.setProperty(META_SYNC_DATABASE_NAME.key(), HiveTestUtil.DB_NAME);
 
     // while autoCreateDatabase is false and database not exists;
-    hiveSyncProps.setProperty(HiveSyncConfigHolder.HIVE_AUTO_CREATE_DATABASE.key(), "false");
+    hiveSyncProps.setProperty(HIVE_AUTO_CREATE_DATABASE.key(), "false");
     reinitHiveSyncClient();
     // Lets do the sync
     assertThrows(Exception.class, (this::reSyncHiveTable));
 
     // while autoCreateDatabase is true and database not exists;
-    hiveSyncProps.setProperty(HiveSyncConfigHolder.HIVE_AUTO_CREATE_DATABASE.key(), "true");
+    hiveSyncProps.setProperty(HIVE_AUTO_CREATE_DATABASE.key(), "true");
     reinitHiveSyncClient();
     assertDoesNotThrow((this::reSyncHiveTable));
     assertTrue(hiveClient.databaseExists(HiveTestUtil.DB_NAME),
         "DataBases " + HiveTestUtil.DB_NAME + " should exist after sync completes");
 
     // while autoCreateDatabase is false and database exists;
-    hiveSyncProps.setProperty(HiveSyncConfigHolder.HIVE_AUTO_CREATE_DATABASE.key(), "false");
+    hiveSyncProps.setProperty(HIVE_AUTO_CREATE_DATABASE.key(), "false");
     reinitHiveSyncClient();
     assertDoesNotThrow((this::reSyncHiveTable));
     assertTrue(hiveClient.databaseExists(HiveTestUtil.DB_NAME),
         "DataBases " + HiveTestUtil.DB_NAME + " should exist after sync completes");
 
     // while autoCreateDatabase is true and database exists;
-    hiveSyncProps.setProperty(HiveSyncConfigHolder.HIVE_AUTO_CREATE_DATABASE.key(), "true");
+    hiveSyncProps.setProperty(HIVE_AUTO_CREATE_DATABASE.key(), "true");
     assertDoesNotThrow((this::reSyncHiveTable));
     assertTrue(hiveClient.databaseExists(HiveTestUtil.DB_NAME),
         "DataBases " + HiveTestUtil.DB_NAME + " should exist after sync completes");
@@ -243,10 +256,10 @@ public class TestHiveSyncTool {
         put("tp_1", "p1");
       }
     };
-    hiveSyncProps.setProperty(HiveSyncConfigHolder.HIVE_SYNC_MODE.key(), syncMode);
-    hiveSyncProps.setProperty(HiveSyncConfigHolder.HIVE_SYNC_AS_DATA_SOURCE_TABLE.key(), String.valueOf(syncAsDataSourceTable));
-    hiveSyncProps.setProperty(HiveSyncConfigHolder.HIVE_TABLE_SERDE_PROPERTIES.key(), ConfigUtils.configToString(serdeProperties));
-    hiveSyncProps.setProperty(HiveSyncConfigHolder.HIVE_TABLE_PROPERTIES.key(), ConfigUtils.configToString(tableProperties));
+    hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), syncMode);
+    hiveSyncProps.setProperty(HIVE_SYNC_AS_DATA_SOURCE_TABLE.key(), String.valueOf(syncAsDataSourceTable));
+    hiveSyncProps.setProperty(HIVE_TABLE_SERDE_PROPERTIES.key(), ConfigUtils.configToString(serdeProperties));
+    hiveSyncProps.setProperty(HIVE_TABLE_PROPERTIES.key(), ConfigUtils.configToString(tableProperties));
 
     String instantTime = "100";
     HiveTestUtil.createCOWTable(instantTime, 5, useSchemaFromCommitMetadata);
@@ -334,10 +347,10 @@ public class TestHiveSyncTool {
         put("tp_1", "p1");
       }
     };
-    hiveSyncProps.setProperty(HiveSyncConfigHolder.HIVE_SYNC_MODE.key(), syncMode);
-    hiveSyncProps.setProperty(HiveSyncConfigHolder.HIVE_SYNC_AS_DATA_SOURCE_TABLE.key(), String.valueOf(syncAsDataSourceTable));
-    hiveSyncProps.setProperty(HiveSyncConfigHolder.HIVE_TABLE_SERDE_PROPERTIES.key(), ConfigUtils.configToString(serdeProperties));
-    hiveSyncProps.setProperty(HiveSyncConfigHolder.HIVE_TABLE_PROPERTIES.key(), ConfigUtils.configToString(tableProperties));
+    hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), syncMode);
+    hiveSyncProps.setProperty(HIVE_SYNC_AS_DATA_SOURCE_TABLE.key(), String.valueOf(syncAsDataSourceTable));
+    hiveSyncProps.setProperty(HIVE_TABLE_SERDE_PROPERTIES.key(), ConfigUtils.configToString(serdeProperties));
+    hiveSyncProps.setProperty(HIVE_TABLE_PROPERTIES.key(), ConfigUtils.configToString(tableProperties));
 
     String instantTime = "100";
     String deltaCommitTime = "101";
@@ -393,8 +406,8 @@ public class TestHiveSyncTool {
   public void testSyncManagedTable(boolean useSchemaFromCommitMetadata,
                                    boolean isManagedTable,
                                    String syncMode) throws Exception {
-    hiveSyncProps.setProperty(HiveSyncConfigHolder.HIVE_SYNC_MODE.key(), syncMode);
-    hiveSyncProps.setProperty(HiveSyncConfigHolder.HIVE_CREATE_MANAGED_TABLE.key(), String.valueOf(isManagedTable));
+    hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), syncMode);
+    hiveSyncProps.setProperty(HIVE_CREATE_MANAGED_TABLE.key(), String.valueOf(isManagedTable));
 
     String instantTime = "100";
     HiveTestUtil.createCOWTable(instantTime, 5, useSchemaFromCommitMetadata);
@@ -421,7 +434,7 @@ public class TestHiveSyncTool {
   @ParameterizedTest
   @MethodSource("syncMode")
   public void testSyncWithSchema(String syncMode) throws Exception {
-    hiveSyncProps.setProperty(HiveSyncConfigHolder.HIVE_SYNC_MODE.key(), syncMode);
+    hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), syncMode);
     String commitTime = "100";
     HiveTestUtil.createCOWTableWithSchema(commitTime, "/complex.schema.avsc");
 
@@ -436,7 +449,7 @@ public class TestHiveSyncTool {
   @ParameterizedTest
   @MethodSource("syncMode")
   public void testSyncIncremental(String syncMode) throws Exception {
-    hiveSyncProps.setProperty(HiveSyncConfigHolder.HIVE_SYNC_MODE.key(), syncMode);
+    hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), syncMode);
     String commitTime1 = "100";
     HiveTestUtil.createCOWTable(commitTime1, 5, true);
     reinitHiveSyncClient();
@@ -471,7 +484,7 @@ public class TestHiveSyncTool {
   @ParameterizedTest
   @MethodSource("syncMode")
   public void testSyncIncrementalWithSchemaEvolution(String syncMode) throws Exception {
-    hiveSyncProps.setProperty(HiveSyncConfigHolder.HIVE_SYNC_MODE.key(), syncMode);
+    hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), syncMode);
     String commitTime1 = "100";
     HiveTestUtil.createCOWTable(commitTime1, 5, true);
     reinitHiveSyncClient();
@@ -504,7 +517,7 @@ public class TestHiveSyncTool {
   @ParameterizedTest
   @MethodSource("syncMode")
   public void testUpdateTableComments(String syncMode) throws Exception {
-    hiveSyncProps.setProperty(HiveSyncConfigHolder.HIVE_SYNC_MODE.key(), syncMode);
+    hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), syncMode);
     String commitTime = "100";
     HiveTestUtil.createCOWTableWithSchema(commitTime, "/simple-test.avsc");
     reinitHiveSyncClient();
@@ -539,8 +552,8 @@ public class TestHiveSyncTool {
   @ParameterizedTest
   @MethodSource("syncMode")
   public void testSyncWithCommentedSchema(String syncMode) throws Exception {
-    hiveSyncProps.setProperty(HiveSyncConfigHolder.HIVE_SYNC_MODE.key(), syncMode);
-    hiveSyncProps.setProperty(HiveSyncConfigHolder.HIVE_SYNC_COMMENT.key(), "false");
+    hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), syncMode);
+    hiveSyncProps.setProperty(HIVE_SYNC_COMMENT.key(), "false");
     String commitTime = "100";
     HiveTestUtil.createCOWTableWithSchema(commitTime, "/simple-test-doced.avsc");
 
@@ -555,7 +568,7 @@ public class TestHiveSyncTool {
     }
     assertEquals(0, commentCnt, "hive schema field comment numbers should match the avro schema field doc numbers");
 
-    hiveSyncProps.setProperty(HiveSyncConfigHolder.HIVE_SYNC_COMMENT.key(), "true");
+    hiveSyncProps.setProperty(HIVE_SYNC_COMMENT.key(), "true");
     reinitHiveSyncClient();
     reSyncHiveTable();
     fieldSchemas = hiveClient.getMetastoreFieldSchemas(HiveTestUtil.TABLE_NAME);
@@ -571,7 +584,7 @@ public class TestHiveSyncTool {
   @ParameterizedTest
   @MethodSource("syncModeAndSchemaFromCommitMetadata")
   public void testSyncMergeOnRead(boolean useSchemaFromCommitMetadata, String syncMode) throws Exception {
-    hiveSyncProps.setProperty(HiveSyncConfigHolder.HIVE_SYNC_MODE.key(), syncMode);
+    hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), syncMode);
     String instantTime = "100";
     String deltaCommitTime = "101";
     HiveTestUtil.createMORTable(instantTime, deltaCommitTime, 5, true,
@@ -635,7 +648,7 @@ public class TestHiveSyncTool {
   @ParameterizedTest
   @MethodSource("syncModeAndSchemaFromCommitMetadata")
   public void testSyncMergeOnReadRT(boolean useSchemaFromCommitMetadata, String syncMode) throws Exception {
-    hiveSyncProps.setProperty(HiveSyncConfigHolder.HIVE_SYNC_MODE.key(), syncMode);
+    hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), syncMode);
     String instantTime = "100";
     String deltaCommitTime = "101";
     String snapshotTableName = HiveTestUtil.TABLE_NAME + HiveSyncTool.SUFFIX_SNAPSHOT_TABLE;
@@ -701,12 +714,12 @@ public class TestHiveSyncTool {
   @ParameterizedTest
   @MethodSource("syncMode")
   public void testMultiPartitionKeySync(String syncMode) throws Exception {
-    hiveSyncProps.setProperty(HiveSyncConfigHolder.HIVE_SYNC_MODE.key(), syncMode);
+    hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), syncMode);
     String instantTime = "100";
     HiveTestUtil.createCOWTable(instantTime, 5, true);
 
-    hiveSyncProps.setProperty(HiveSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key(), MultiPartKeysValueExtractor.class.getCanonicalName());
-    hiveSyncProps.setProperty(HiveSyncConfig.META_SYNC_PARTITION_FIELDS.key(), "year,month,day");
+    hiveSyncProps.setProperty(META_SYNC_PARTITION_EXTRACTOR_CLASS.key(), MultiPartKeysValueExtractor.class.getCanonicalName());
+    hiveSyncProps.setProperty(META_SYNC_PARTITION_FIELDS.key(), "year,month,day");
 
     HiveTestUtil.getCreatedTablesSet().add(HiveTestUtil.DB_NAME + "." + HiveTestUtil.TABLE_NAME);
 
@@ -768,7 +781,7 @@ public class TestHiveSyncTool {
   @ParameterizedTest
   @MethodSource("syncMode")
   public void testDropPartitionKeySync(String syncMode) throws Exception {
-    hiveSyncProps.setProperty(HiveSyncConfigHolder.HIVE_SYNC_MODE.key(), syncMode);
+    hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), syncMode);
 
     String instantTime = "100";
     HiveTestUtil.createCOWTable(instantTime, 1, true);
@@ -812,7 +825,7 @@ public class TestHiveSyncTool {
   @ParameterizedTest
   @MethodSource("syncMode")
   public void testDropPartition(String syncMode) throws Exception {
-    hiveSyncProps.setProperty(HiveSyncConfigHolder.HIVE_SYNC_MODE.key(), syncMode);
+    hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), syncMode);
 
     String instantTime = "100";
     HiveTestUtil.createCOWTable(instantTime, 1, true);
@@ -848,12 +861,12 @@ public class TestHiveSyncTool {
   @ParameterizedTest
   @MethodSource("syncMode")
   public void testNonPartitionedSync(String syncMode) throws Exception {
-    hiveSyncProps.setProperty(HiveSyncConfigHolder.HIVE_SYNC_MODE.key(), syncMode);
+    hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), syncMode);
     String instantTime = "100";
     HiveTestUtil.createCOWTable(instantTime, 5, true);
     // Set partition value extractor to NonPartitionedExtractor
-    hiveSyncProps.setProperty(HiveSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key(), NonPartitionedExtractor.class.getCanonicalName());
-    hiveSyncProps.setProperty(HiveSyncConfig.META_SYNC_PARTITION_FIELDS.key(), "");
+    hiveSyncProps.setProperty(META_SYNC_PARTITION_EXTRACTOR_CLASS.key(), NonPartitionedExtractor.class.getCanonicalName());
+    hiveSyncProps.setProperty(META_SYNC_PARTITION_FIELDS.key(), "");
 
     HiveTestUtil.getCreatedTablesSet().add(HiveTestUtil.DB_NAME + "." + HiveTestUtil.TABLE_NAME);
 
@@ -874,7 +887,7 @@ public class TestHiveSyncTool {
   @ParameterizedTest
   @MethodSource("syncMode")
   public void testReadSchemaForMOR(String syncMode) throws Exception {
-    hiveSyncProps.setProperty(HiveSyncConfigHolder.HIVE_SYNC_MODE.key(), syncMode);
+    hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), syncMode);
     String commitTime = "100";
     String snapshotTableName = HiveTestUtil.TABLE_NAME + HiveSyncTool.SUFFIX_SNAPSHOT_TABLE;
     HiveTestUtil.createMORTable(commitTime, "", 5, false, true);
@@ -927,8 +940,8 @@ public class TestHiveSyncTool {
         "Table " + HiveTestUtil.TABLE_NAME + " should not exist initially");
 
     // Lets do the sync
-    hiveSyncProps.setProperty(HiveSyncConfigHolder.HIVE_IGNORE_EXCEPTIONS.key(), "true");
-    hiveSyncProps.setProperty(HiveSyncConfigHolder.HIVE_URL.key(), hiveSyncProps.getString(HiveSyncConfigHolder.HIVE_URL.key())
+    hiveSyncProps.setProperty(HIVE_IGNORE_EXCEPTIONS.key(), "true");
+    hiveSyncProps.setProperty(HIVE_URL.key(), hiveSyncProps.getString(HIVE_URL.key())
         .replace(String.valueOf(HiveTestUtil.hiveTestService.getHiveServerPort()), String.valueOf(NetworkTestUtils.nextFreePort())));
     reinitHiveSyncClient();
     reSyncHiveTable();
@@ -963,7 +976,7 @@ public class TestHiveSyncTool {
   @ParameterizedTest
   @MethodSource("syncMode")
   public void testPickingOlderParquetFileIfLatestIsEmptyCommit(String syncMode) throws Exception {
-    hiveSyncProps.setProperty(HiveSyncConfigHolder.HIVE_SYNC_MODE.key(), syncMode);
+    hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), syncMode);
     final String commitTime = "100";
     HiveTestUtil.createCOWTable(commitTime, 1, true);
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
@@ -982,7 +995,7 @@ public class TestHiveSyncTool {
   @ParameterizedTest
   @MethodSource("syncMode")
   public void testNotPickingOlderParquetFileWhenLatestCommitReadFails(String syncMode) throws Exception {
-    hiveSyncProps.setProperty(HiveSyncConfigHolder.HIVE_SYNC_MODE.key(), syncMode);
+    hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), syncMode);
     final String commitTime = "100";
     HiveTestUtil.createCOWTable(commitTime, 1, true);
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
@@ -1021,7 +1034,7 @@ public class TestHiveSyncTool {
   @ParameterizedTest
   @MethodSource("syncMode")
   public void testNotPickingOlderParquetFileWhenLatestCommitReadFailsForExistingTable(String syncMode) throws Exception {
-    hiveSyncProps.setProperty(HiveSyncConfigHolder.HIVE_SYNC_MODE.key(), syncMode);
+    hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), syncMode);
     final String commitTime = "100";
     HiveTestUtil.createCOWTable(commitTime, 1, true);
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
@@ -1066,7 +1079,7 @@ public class TestHiveSyncTool {
   @ParameterizedTest
   @MethodSource("syncMode")
   public void testTypeConverter(String syncMode) throws Exception {
-    hiveSyncProps.setProperty(HiveSyncConfigHolder.HIVE_SYNC_MODE.key(), syncMode);
+    hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), syncMode);
     HiveTestUtil.createCOWTable("100", 5, true);
     // create database.
     ddlExecutor.runSQL("create database " + HiveTestUtil.DB_NAME);
@@ -1107,8 +1120,8 @@ public class TestHiveSyncTool {
   @MethodSource("syncMode")
   public void testSyncWithoutDiffs(String syncMode) throws Exception {
     String tableName = HiveTestUtil.TABLE_NAME + HiveSyncTool.SUFFIX_SNAPSHOT_TABLE;
-    hiveSyncProps.setProperty(HiveSyncConfigHolder.HIVE_SYNC_MODE.key(), syncMode);
-    hiveSyncProps.setProperty(HiveSyncConfig.META_SYNC_CONDITIONAL_SYNC.key(), "true");
+    hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), syncMode);
+    hiveSyncProps.setProperty(META_SYNC_CONDITIONAL_SYNC.key(), "true");
 
     String commitTime0 = "100";
     String commitTime1 = "101";
@@ -1140,6 +1153,6 @@ public class TestHiveSyncTool {
   }
 
   private int getPartitionFieldSize() {
-    return hiveSyncProps.getString(HiveSyncConfig.META_SYNC_PARTITION_FIELDS.key()).split(",").length;
+    return hiveSyncProps.getString(META_SYNC_PARTITION_FIELDS.key()).split(",").length;
   }
 }

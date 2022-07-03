@@ -20,11 +20,9 @@ package org.apache.hudi.utilities;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.hive.HiveSyncConfig;
-import org.apache.hudi.hive.HiveSyncConfigHolder;
 import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.hive.HoodieHiveSyncClient;
 import org.apache.hudi.hive.testutils.HiveTestUtil;
-import org.apache.hudi.sync.common.HoodieSyncConfig;
 import org.apache.hudi.utilities.exception.HoodieIncrementalPullSQLException;
 
 import org.apache.hadoop.hive.metastore.api.MetaException;
@@ -41,7 +39,14 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.time.Instant;
 
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_PASS;
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_MODE;
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_URL;
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_USER;
 import static org.apache.hudi.hive.testutils.HiveTestUtil.hiveSyncProps;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -72,12 +77,12 @@ public class TestHiveIncrementalPuller {
   }
 
   private HiveIncrementalPuller.Config getHivePullerConfig(String incrementalSql) throws IOException {
-    config.hiveJDBCUrl = hiveSyncProps.getString(HiveSyncConfigHolder.HIVE_URL.key());
-    config.hiveUsername = hiveSyncProps.getString(HiveSyncConfigHolder.HIVE_USER.key());
-    config.hivePassword = hiveSyncProps.getString(HiveSyncConfigHolder.HIVE_PASS.key());
+    config.hiveJDBCUrl = hiveSyncProps.getString(HIVE_URL.key());
+    config.hiveUsername = hiveSyncProps.getString(HIVE_USER.key());
+    config.hivePassword = hiveSyncProps.getString(HIVE_PASS.key());
     config.hoodieTmpDir = Files.createTempDirectory("hivePullerTest").toUri().toString();
-    config.sourceDb = hiveSyncProps.getString(HoodieSyncConfig.META_SYNC_DATABASE_NAME.key());
-    config.sourceTable = hiveSyncProps.getString(HoodieSyncConfig.META_SYNC_TABLE_NAME.key());
+    config.sourceDb = hiveSyncProps.getString(META_SYNC_DATABASE_NAME.key());
+    config.sourceTable = hiveSyncProps.getString(META_SYNC_TABLE_NAME.key());
     config.targetDb = "tgtdb";
     config.targetTable = "test2";
     config.tmpDb = "tmp_db";
@@ -101,7 +106,7 @@ public class TestHiveIncrementalPuller {
   private void createSourceTable() throws IOException, URISyntaxException {
     String instantTime = "101";
     HiveTestUtil.createCOWTable(instantTime, 5, true);
-    hiveSyncProps.setProperty(HiveSyncConfigHolder.HIVE_SYNC_MODE.key(), "jdbc");
+    hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), "jdbc");
     HiveSyncTool tool = new HiveSyncTool(hiveSyncProps, HiveTestUtil.getHiveConf());
     tool.syncHoodieTable();
   }
@@ -117,17 +122,17 @@ public class TestHiveIncrementalPuller {
 
   private TypedProperties getTargetHiveSyncConfig(String basePath) {
     TypedProperties targetHiveSyncProps = new TypedProperties(hiveSyncProps);
-    targetHiveSyncProps.setProperty(HoodieSyncConfig.META_SYNC_DATABASE_NAME.key(), "tgtdb");
-    targetHiveSyncProps.setProperty(HoodieSyncConfig.META_SYNC_TABLE_NAME.key(), "test2");
-    targetHiveSyncProps.setProperty(HoodieSyncConfig.META_SYNC_BASE_PATH.key(), basePath);
-    targetHiveSyncProps.setProperty(HiveSyncConfigHolder.HIVE_SYNC_MODE.key(), "jdbc");
+    targetHiveSyncProps.setProperty(META_SYNC_DATABASE_NAME.key(), "tgtdb");
+    targetHiveSyncProps.setProperty(META_SYNC_TABLE_NAME.key(), "test2");
+    targetHiveSyncProps.setProperty(META_SYNC_BASE_PATH.key(), basePath);
+    targetHiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), "jdbc");
 
     return targetHiveSyncProps;
   }
 
   private TypedProperties getAssertionSyncConfig(String databaseName) {
     TypedProperties assertHiveSyncProps = new TypedProperties(hiveSyncProps);
-    assertHiveSyncProps.setProperty(HoodieSyncConfig.META_SYNC_DATABASE_NAME.key(), databaseName);
+    assertHiveSyncProps.setProperty(META_SYNC_DATABASE_NAME.key(), databaseName);
     return assertHiveSyncProps;
   }
 
