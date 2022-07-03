@@ -29,7 +29,6 @@ import org.apache.hudi.hive.ddl.HiveQueryDDLExecutor;
 import org.apache.hudi.hive.ddl.HiveSyncMode;
 import org.apache.hudi.hive.ddl.JDBCExecutor;
 import org.apache.hudi.sync.common.HoodieSyncClient;
-import org.apache.hudi.sync.common.HoodieSyncException;
 import org.apache.hudi.sync.common.model.FieldSchema;
 import org.apache.hudi.sync.common.model.Partition;
 
@@ -97,33 +96,21 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
     }
   }
 
-  /**
-   * Add the (NEW) partitions to the table.
-   */
   @Override
   public void addPartitionsToTable(String tableName, List<String> partitionsToAdd) {
     ddlExecutor.addPartitionsToTable(tableName, partitionsToAdd);
   }
 
-  /**
-   * Partition path has changed - update the path for te following partitions.
-   */
   @Override
   public void updatePartitionsToTable(String tableName, List<String> changedPartitions) {
     ddlExecutor.updatePartitionsToTable(tableName, changedPartitions);
   }
 
-  /**
-   * Partition path has changed - drop the following partitions.
-   */
   @Override
   public void dropPartitions(String tableName, List<String> partitionsToDrop) {
     ddlExecutor.dropPartitionsToTable(tableName, partitionsToDrop);
   }
 
-  /**
-   * Update the table properties to the table.
-   */
   @Override
   public void updateTableProperties(String tableName, Map<String, String> tableProperties) {
     if (tableProperties == null || tableProperties.isEmpty()) {
@@ -175,9 +162,6 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
     ddlExecutor.createTable(tableName, storageSchema, inputFormatClass, outputFormatClass, serdeClass, serdeProperties, tableProperties);
   }
 
-  /**
-   * Get the table schema.
-   */
   @Override
   public Map<String, String> getMetastoreSchema(String tableName) {
     if (!tableExists(tableName)) {
@@ -187,22 +171,6 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
     return ddlExecutor.getTableSchema(tableName);
   }
 
-  /**
-   * Gets the schema for a hoodie table. Depending on the type of table, try to read schema from commit metadata if
-   * present, else fallback to reading from any file written in the latest commit. We will assume that the schema has
-   * not changed within a single atomic write.
-   *
-   * @return Parquet schema for this table
-   */
-  @Override
-  public MessageType getStorageSchema() {
-    try {
-      return new TableSchemaResolver(metaClient).getTableParquetSchema();
-    } catch (Exception e) {
-      throw new HoodieSyncException("Failed to read data schema", e);
-    }
-  }
-
   @Override
   public boolean tableExists(String tableName) {
     try {
@@ -210,11 +178,6 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
     } catch (TException e) {
       throw new HoodieHiveSyncException("Failed to check if table exists " + tableName, e);
     }
-  }
-
-  @Deprecated
-  public boolean doesDataBaseExist(String databaseName) {
-    return databaseExists(databaseName);
   }
 
   @Override

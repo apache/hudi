@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.Option;
@@ -36,6 +37,7 @@ import org.apache.hudi.sync.common.model.PartitionValueExtractor;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+import org.apache.parquet.schema.MessageType;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -93,6 +95,15 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
       throw new HoodieSyncException("Failed to get commit metadata", e);
     }
     return false;
+  }
+
+  @Override
+  public MessageType getStorageSchema() {
+    try {
+      return new TableSchemaResolver(metaClient).getTableParquetSchema();
+    } catch (Exception e) {
+      throw new HoodieSyncException("Failed to read schema from storage.", e);
+    }
   }
 
   public List<String> getPartitionsWrittenToSince(Option<String> lastCommitTimeSynced) {
