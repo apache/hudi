@@ -27,7 +27,9 @@ import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.hive.HoodieHiveClient;
 import org.apache.hudi.hive.testutils.HiveTestUtil;
 import org.apache.hudi.sync.common.HoodieSyncConfig;
+import org.apache.hudi.utilities.exception.HoodieIncrementalPullException;
 import org.apache.hudi.utilities.exception.HoodieIncrementalPullSQLException;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -111,7 +113,7 @@ public class TestHiveIncrementalPuller {
     String instantTime = "100";
     targetBasePath = Files.createTempDirectory("hivesynctest1" + Instant.now().toEpochMilli()).toUri().toString();
     HiveTestUtil.createCOWTable(instantTime, 5, true,
-            targetBasePath, "tgtdb", "test2");
+        targetBasePath, "tgtdb", "test2");
     HiveSyncTool tool = new HiveSyncTool(getTargetHiveSyncConfig(targetBasePath), HiveTestUtil.getHiveConf(), fileSystem);
     tool.syncHoodieTable();
   }
@@ -141,20 +143,20 @@ public class TestHiveIncrementalPuller {
   public void testPullerWithoutIncrementalClause() throws IOException, URISyntaxException {
     createTables();
     HiveIncrementalPuller puller = new HiveIncrementalPuller(getHivePullerConfig(
-            "select name from testdb.test1"));
-    Exception e = assertThrows(HoodieIncrementalPullSQLException.class, puller::saveDelta,
-            "Should fail when incremental clause not provided!");
-    assertTrue(e.getMessage().contains("Incremental SQL does not have clause `_hoodie_commit_time` > '%s', which means its not pulling incrementally"));
+        "select name from testdb.test1"));
+    Exception e = assertThrows(HoodieIncrementalPullException.class, puller::saveDelta,
+        "Failed to get data location for table testdb.test1");
+    assertTrue(e.getMessage().contains("Failed to get data location for table"));
   }
 
   @Test
   public void testPullerWithoutSourceInSql() throws IOException, URISyntaxException {
     createTables();
     HiveIncrementalPuller puller = new HiveIncrementalPuller(getHivePullerConfig(
-            "select name from tgtdb.test2 where `_hoodie_commit_time` > '%s'"));
-    Exception e = assertThrows(HoodieIncrementalPullSQLException.class, puller::saveDelta,
-            "Should fail when source db and table names not provided!");
-    assertTrue(e.getMessage().contains("Incremental SQL does not have testdb.test1"));
+        "select name from tgtdb.test2 where `_hoodie_commit_time` > '%s'"));
+    Exception e = assertThrows(HoodieIncrementalPullException.class, puller::saveDelta,
+        "Failed to get data location for table tgtdb.test2");
+    assertTrue(e.getMessage().contains("Failed to get data location for table"));
   }
 
   @Test
