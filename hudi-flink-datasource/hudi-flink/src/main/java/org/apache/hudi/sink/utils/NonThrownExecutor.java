@@ -155,6 +155,10 @@ public class NonThrownExecutor implements AutoCloseable {
   // -------------------------------------------------------------------------
   //  Inner Class
   // -------------------------------------------------------------------------
+
+  /**
+   * The exception hook.
+   */
   public interface ExceptionHook {
     void apply(String errMsg, Throwable t);
   }

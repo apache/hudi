@@ -39,6 +39,7 @@ import org.apache.flink.table.types.logical.TypeInformationRawType;
 import org.apache.flink.table.types.logical.utils.LogicalTypeChecks;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * Converts an Avro schema into Flink's type information. It uses {@link org.apache.flink.api.java.typeutils.RowTypeInfo} for
@@ -96,9 +97,24 @@ public class AvroSchemaConverter {
           actualSchema = schema.getTypes().get(0);
           nullable = false;
         } else {
+          List<Schema> nonNullTypes = schema.getTypes().stream()
+              .filter(s -> s.getType() != Schema.Type.NULL)
+              .collect(Collectors.toList());
+          nullable = schema.getTypes().size() > nonNullTypes.size();
+
           // use Kryo for serialization
-          return new AtomicDataType(
-              new TypeInformationRawType<>(false, Types.GENERIC(Object.class)));
+          DataType rawDataType = new AtomicDataType(
+              new TypeInformationRawType<>(false, Types.GENERIC(Object.class)))
+              .notNull();
+
+          if (recordTypesOfSameNumFields(nonNullTypes)) {
+            DataType converted = DataTypes.ROW(
+                DataTypes.FIELD("wrapper", rawDataType))
+                .notNull();
+            return nullable ? converted.nullable() : converted;
+          }
+          // use Kryo for serialization
+          return nullable ? rawDataType.nullable() : rawDataType;
         }
         DataType converted = convertToDataType(actualSchema);
         return nullable ? converted.nullable() : converted;
@@ -153,6 +169,20 @@ public class AvroSchemaConverter {
       default:
         throw new IllegalArgumentException("Unsupported Avro type '" + schema.getType() + "'.");
     }
+  }
+
+  /**
+   * Returns true if all the types are RECORD type with same number of fields.
+   */
+  private static boolean recordTypesOfSameNumFields(List<Schema> types) {
+    if (types == null || types.size() == 0) {
+      return false;
+    }
+    if (types.stream().anyMatch(s -> s.getType() != Schema.Type.RECORD)) {
+      return false;
+    }
+    int numFields = types.get(0).getFields().size();
+    return types.stream().allMatch(s -> s.getFields().size() == numFields);
   }
 
   /**
