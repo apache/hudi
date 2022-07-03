@@ -76,6 +76,7 @@ case class CreateHoodieTableAsSelectCommand(
       table.storage.compressed,
       table.storage.properties.--(needFilterProps))
     val newTable = table.copy(
+      identifier = tableIdentWithDB,
       storage = newStorage,
       schema = reOrderedQuery.schema,
       properties = table.properties.--(needFilterProps)
