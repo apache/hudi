@@ -153,7 +153,9 @@ public class HoodieDatasetBulkInsertHelper {
    * @param rows
    * @return
    */
-  public static Dataset<Row> prepareHoodieDatasetForBulkInsertWithoutMetaFields(Dataset<Row> rows) {
+  public static Dataset<Row> prepareHoodieDatasetForBulkInsertWithoutMetaFields(Dataset<Row> rows,
+                                                                                HoodieWriteConfig writeConfig,
+                                                                                BulkInsertPartitioner<Dataset<Row>> bulkInsertPartitionerRows) {
     // add empty meta cols.
     Dataset<Row> rowsWithMetaCols = rows
         .withColumn(HoodieRecord.COMMIT_TIME_METADATA_FIELD,
@@ -182,8 +184,8 @@ public class HoodieDatasetBulkInsertHelper {
     allCols.addAll(metaFields);
     allCols.addAll(originalFields);
 
-    return rowsWithMetaCols.select(
-        JavaConverters.collectionAsScalaIterableConverter(allCols).asScala().toSeq());
+    return bulkInsertPartitionerRows.repartitionRecords(rowsWithMetaCols.select(
+        JavaConverters.collectionAsScalaIterableConverter(allCols).asScala().toSeq()), writeConfig.getBulkInsertShuffleParallelism());
   }
 
 }

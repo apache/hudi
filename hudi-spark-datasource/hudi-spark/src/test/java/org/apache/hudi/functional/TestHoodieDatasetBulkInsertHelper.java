@@ -158,7 +158,8 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
   public void testBulkInsertHelperNoMetaFields() {
     List<Row> rows = DataSourceTestUtils.generateRandomRows(10);
     Dataset<Row> dataset = sqlContext.createDataFrame(rows, structType);
-    Dataset<Row> result = HoodieDatasetBulkInsertHelper.prepareHoodieDatasetForBulkInsertWithoutMetaFields(dataset);
+    Dataset<Row> result = HoodieDatasetBulkInsertHelper.prepareHoodieDatasetForBulkInsertWithoutMetaFields(dataset,
+        getConfigBuilder(schemaStr).build(), new NonSortPartitionerWithRows());
     StructType resultSchema = result.schema();
 
     assertEquals(result.count(), 10);

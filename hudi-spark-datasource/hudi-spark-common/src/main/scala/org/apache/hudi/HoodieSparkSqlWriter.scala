@@ -546,7 +546,7 @@ object HoodieSparkSqlWriter {
       HoodieDatasetBulkInsertHelper.prepareHoodieDatasetForBulkInsert(sqlContext, writeConfig, df, structName, nameSpace,
         bulkInsertPartitionerRows, isGlobalIndex, dropPartitionColumns)
     } else {
-      HoodieDatasetBulkInsertHelper.prepareHoodieDatasetForBulkInsertWithoutMetaFields(df)
+      HoodieDatasetBulkInsertHelper.prepareHoodieDatasetForBulkInsertWithoutMetaFields(df, writeConfig, bulkInsertPartitionerRows)
     }
     if (HoodieSparkUtils.isSpark2) {
       hoodieDF.write.format("org.apache.hudi.internal")
