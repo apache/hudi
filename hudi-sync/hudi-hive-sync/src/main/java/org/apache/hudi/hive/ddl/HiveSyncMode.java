@@ -27,10 +27,6 @@ public enum HiveSyncMode {
    */
   HMS,
   /**
-   * The GLUE mode use the glue client to sync metadata.
-   */
-  GLUE,
-  /**
    * The HIVEQL mode execute hive ql to sync metadata.
    */
   HIVEQL,

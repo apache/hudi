@@ -55,7 +55,7 @@ public class HiveSyncConfig extends HoodieSyncConfig {
   @Parameter(names = {"--use-jdbc"}, description = "Hive jdbc connect url")
   public Boolean useJdbc;
 
-  @Parameter(names = {"--sync-mode"}, description = "Mode to choose for Hive ops. Valid values are hms,glue,jdbc and hiveql")
+  @Parameter(names = {"--sync-mode"}, description = "Mode to choose for Hive ops. Valid values are hms,jdbc and hiveql")
   public String syncMode;
 
   @Parameter(names = {"--auto-create-database"}, description = "Auto create hive database")
