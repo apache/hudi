@@ -35,6 +35,7 @@ import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.fs.Path;
+import org.apache.flink.table.types.logical.RowType;
 import org.apache.hadoop.fs.FileStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -77,6 +78,7 @@ public class IncrementalInputSplits implements Serializable {
   private static final Logger LOG = LoggerFactory.getLogger(IncrementalInputSplits.class);
   private final Configuration conf;
   private final Path path;
+  private final RowType rowType;
   private final long maxCompactionMemoryInBytes;
   // for partition pruning
   private final Set<String> requiredPartitions;
@@ -86,11 +88,13 @@ public class IncrementalInputSplits implements Serializable {
   private IncrementalInputSplits(
       Configuration conf,
       Path path,
+      RowType rowType,
       long maxCompactionMemoryInBytes,
       @Nullable Set<String> requiredPartitions,
       boolean skipCompaction) {
     this.conf = conf;
     this.path = path;
+    this.rowType = rowType;
     this.maxCompactionMemoryInBytes = maxCompactionMemoryInBytes;
     this.requiredPartitions = requiredPartitions;
     this.skipCompaction = skipCompaction;
@@ -167,7 +171,7 @@ public class IncrementalInputSplits implements Serializable {
 
     if (instantRange == null) {
       // reading from the earliest, scans the partitions and files directly.
-      FileIndex fileIndex = FileIndex.instance(new org.apache.hadoop.fs.Path(path.toUri()), conf);
+      FileIndex fileIndex = FileIndex.instance(new org.apache.hadoop.fs.Path(path.toUri()), conf, rowType);
       if (this.requiredPartitions != null) {
         // apply partition push down
         fileIndex.setPartitionPaths(this.requiredPartitions);
@@ -349,6 +353,7 @@ public class IncrementalInputSplits implements Serializable {
   public static class Builder {
     private Configuration conf;
     private Path path;
+    private RowType rowType;
     private long maxCompactionMemoryInBytes;
     // for partition pruning
     private Set<String> requiredPartitions;
@@ -368,6 +373,11 @@ public class IncrementalInputSplits implements Serializable {
       return this;
     }
 
+    public Builder rowType(RowType rowType) {
+      this.rowType = rowType;
+      return this;
+    }
+
     public Builder maxCompactionMemoryInBytes(long maxCompactionMemoryInBytes) {
       this.maxCompactionMemoryInBytes = maxCompactionMemoryInBytes;
       return this;
@@ -384,7 +394,8 @@ public class IncrementalInputSplits implements Serializable {
     }
 
     public IncrementalInputSplits build() {
-      return new IncrementalInputSplits(Objects.requireNonNull(this.conf), Objects.requireNonNull(this.path),
+      return new IncrementalInputSplits(
+          Objects.requireNonNull(this.conf), Objects.requireNonNull(this.path), Objects.requireNonNull(this.rowType),
           this.maxCompactionMemoryInBytes, this.requiredPartitions, this.skipCompaction);
     }
   }
