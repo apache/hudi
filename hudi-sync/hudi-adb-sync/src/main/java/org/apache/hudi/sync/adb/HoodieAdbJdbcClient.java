@@ -309,6 +309,9 @@ public class HoodieAdbJdbcClient extends HoodieSyncClient {
     throw new UnsupportedOperationException("Not support dropPartitions yet.");
   }
 
+  /**
+   * TODO migrate to implementation of {@link #getAllPartitions(String)}
+   */
   public Map<List<String>, String> scanTablePartitions(String tableName) {
     String sql = constructShowPartitionSql(tableName);
     Function<ResultSet, Map<List<String>, String>> transform = resultSet -> {

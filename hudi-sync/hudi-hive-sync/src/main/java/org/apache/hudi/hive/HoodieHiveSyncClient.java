@@ -128,16 +128,6 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
     }
   }
 
-  /**
-   * Scan table partitions.
-   *
-   * @deprecated Use {@link #getAllPartitions} instead.
-   */
-  @Deprecated
-  public List<org.apache.hadoop.hive.metastore.api.Partition> scanTablePartitions(String tableName) throws TException {
-    return client.listPartitions(databaseName, tableName, (short) -1);
-  }
-
   @Override
   public void updateTableSchema(String tableName, MessageType newSchema) {
     ddlExecutor.updateTableDefinition(tableName, newSchema);
