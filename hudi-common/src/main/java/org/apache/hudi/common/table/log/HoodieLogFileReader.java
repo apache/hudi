@@ -71,6 +71,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
   private static final int BLOCK_SCAN_READ_BUFFER_SIZE = 1024 * 1024; // 1 MB
   private static final Logger LOG = LogManager.getLogger(HoodieLogFileReader.class);
 
+  private final FileSystem fs;
   private final Configuration hadoopConf;
   private final FSDataInputStream inputStream;
   private final HoodieLogFile logFile;
@@ -106,6 +107,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
   public HoodieLogFileReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema, int bufferSize,
                              boolean readBlockLazily, boolean reverseReader, boolean enableRecordLookups,
                              String keyField, InternalSchema internalSchema) throws IOException {
+    this.fs = fs;
     this.hadoopConf = fs.getConf();
     // NOTE: We repackage {@code HoodieLogFile} here to make sure that the provided path
     //       is prefixed with an appropriate scheme given that we're not propagating the FS
@@ -225,7 +227,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
             String.format("Parquet block could not be of version (%d)", HoodieLogFormatVersion.DEFAULT_VERSION));
 
         return new HoodieParquetDataBlock(inputStream, content, readBlockLazily, logBlockContentLoc,
-             Option.ofNullable(readerSchema), header, footer, keyField);
+            Option.ofNullable(readerSchema), header, footer, keyField);
 
       case DELETE_BLOCK:
         return new HoodieDeleteBlock(content, inputStream, readBlockLazily, Option.of(logBlockContentLoc), header, footer);
@@ -267,13 +269,14 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
   private boolean isBlockCorrupted(int blocksize) throws IOException {
     long currentPos = inputStream.getPos();
     long blockSizeFromFooter;
-    
+    long endOfBlockPos = currentPos + blocksize - Long.BYTES;
+
     try {
       // check if the blocksize mentioned in the footer is the same as the header;
       // by seeking and checking the length of a long.  We do not seek `currentPos + blocksize`
       // which can be the file size for the last block in the file, causing EOFException
       // for some FSDataInputStream implementation
-      inputStream.seek(currentPos + blocksize - Long.BYTES);
+      inputStream.seek(endOfBlockPos);
       // Block size in the footer includes the magic header, which the header does not include.
       // So we have to shorten the footer block size by the size of magic hash
       blockSizeFromFooter = inputStream.readLong() - magicBuffer.length;
@@ -285,6 +288,22 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
       // release-3.1.0-RC1/BufferedFSInputStream.java#L73
       inputStream.seek(currentPos);
       return true;
+    } catch (IOException e) {
+      if (logFile.getFileSize() < 0) {
+        long logFileSize = FSUtils.getFileSize(fs, logFile.getPath());
+        logFile.setFileLen(logFileSize);
+      }
+      if (endOfBlockPos > logFile.getFileSize() || endOfBlockPos < 0) {
+        LOG.info("Found corrupted block in file " + logFile + " with block size(" + blocksize + ") running past EOF");
+        // this is corrupt
+        // This seek is required because contract of seek() is different for naked DFSInputStream vs BufferedFSInputStream
+        // release-3.1.0-RC1/DFSInputStream.java#L1455
+        // release-3.1.0-RC1/BufferedFSInputStream.java#L73
+        inputStream.seek(currentPos);
+        return true;
+      } else {
+        throw e;
+      }
     }
 
     if (blocksize != blockSizeFromFooter) {
@@ -464,7 +483,8 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
 
   /**
    * Fetch the right {@link FSDataInputStream} to be used by wrapping with required input streams.
-   * @param fs instance of {@link FileSystem} in use.
+   *
+   * @param fs         instance of {@link FileSystem} in use.
    * @param bufferSize buffer size to be used.
    * @return the right {@link FSDataInputStream} as required.
    */
@@ -491,8 +511,9 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
   /**
    * GCS FileSystem needs some special handling for seek and hence this method assists to fetch the right {@link FSDataInputStream} to be
    * used by wrapping with required input streams.
+   *
    * @param fsDataInputStream original instance of {@link FSDataInputStream}.
-   * @param bufferSize buffer size to be used.
+   * @param bufferSize        buffer size to be used.
    * @return the right {@link FSDataInputStream} as required.
    */
   private static FSDataInputStream getFSDataInputStreamForGCS(FSDataInputStream fsDataInputStream,
@@ -509,7 +530,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
 
     if (fsDataInputStream.getWrappedStream() instanceof FSDataInputStream
         && ((FSDataInputStream) fsDataInputStream.getWrappedStream()).getWrappedStream() instanceof FSInputStream) {
-      FSInputStream inputStream = (FSInputStream)((FSDataInputStream) fsDataInputStream.getWrappedStream()).getWrappedStream();
+      FSInputStream inputStream = (FSInputStream) ((FSDataInputStream) fsDataInputStream.getWrappedStream()).getWrappedStream();
       return new TimedFSDataInputStream(logFile.getPath(),
           new FSDataInputStream(new BufferedFSInputStream(inputStream, bufferSize)));
     }
