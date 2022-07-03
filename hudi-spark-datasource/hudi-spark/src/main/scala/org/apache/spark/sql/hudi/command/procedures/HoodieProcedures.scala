@@ -64,6 +64,8 @@ object HoodieProcedures {
     mapBuilder.put(RunBootstrapProcedure.NAME, RunBootstrapProcedure.builder)
     mapBuilder.put(ShowBootstrapMappingProcedure.NAME, ShowBootstrapMappingProcedure.builder)
     mapBuilder.put(ShowBootstrapPartitionsProcedure.NAME, ShowBootstrapPartitionsProcedure.builder)
+    mapBuilder.put(UpgradeTableProcedure.NAME, UpgradeTableProcedure.builder)
+    mapBuilder.put(DowngradeTableProcedure.NAME, DowngradeTableProcedure.builder)
     mapBuilder.put(ListMetadataFilesProcedure.NAME, ListMetadataFilesProcedure.builder)
     mapBuilder.put(ListMetadataPartitionsProcedure.NAME, ListMetadataPartitionsProcedure.builder)
     mapBuilder.put(MetadataCreateProcedure.NAME, MetadataCreateProcedure.builder)
