@@ -47,6 +47,10 @@ public class ConfigUtils {
     String[] keyvalues = keyValueConfig.split("\n");
     Map<String, String> tableProperties = new HashMap<>();
     for (String keyValue : keyvalues) {
+      // Handle multiple new lines and lines that contain only spaces after splitting
+      if (keyValue.trim().isEmpty()) {
+        continue;
+      }
       String[] keyValueArray = keyValue.split("=");
       if (keyValueArray.length == 1 || keyValueArray.length == 2) {
         String key = keyValueArray[0].trim();
