@@ -39,8 +39,6 @@ import org.apache.avro.specific.SpecificRecordBase;
 
 import java.util.List;
 
-import static org.apache.hudi.common.data.HoodieList.getList;
-
 /**
  * Impl of a flink hoodie table.
  */

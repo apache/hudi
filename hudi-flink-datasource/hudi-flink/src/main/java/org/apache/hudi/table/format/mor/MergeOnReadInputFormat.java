@@ -18,12 +18,15 @@
 
 package org.apache.hudi.table.format.mor;
 
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieMerge;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.util.ClosableIterator;
+import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
@@ -208,7 +211,8 @@ public class MergeOnReadInputFormat
           this.requiredPos,
           this.emitDelete,
           this.tableState.getOperationPos(),
-          getFullSchemaReader(split.getBasePath().get()));
+          getFullSchemaReader(split.getBasePath().get()),
+          tableState.getMergeClass());
     } else {
       throw new HoodieException("Unable to select an Iterator to read the Hoodie MOR File Split for "
           + "file path: " + split.getBasePath()
@@ -700,6 +704,8 @@ public class MergeOnReadInputFormat
 
     private final InstantRange instantRange;
 
+    private final HoodieMerge merge;
+
     // add the flag because the flink ParquetColumnarRowSplitReader is buggy:
     // method #reachedEnd() returns false after it returns true.
     // refactor it out once FLINK-22370 is resolved.
@@ -722,11 +728,12 @@ public class MergeOnReadInputFormat
         int[] requiredPos,
         boolean emitDelete,
         int operationPos,
-        ParquetColumnarRowSplitReader reader) { // the reader should be with full schema
+        ParquetColumnarRowSplitReader reader,
+        String mergeClass) { // the reader should be with full schema
       this(flinkConf, hadoopConf, split, tableRowType, requiredRowType, tableSchema,
           Option.of(RowDataProjection.instance(requiredRowType, requiredPos)),
           Option.of(record -> buildAvroRecordBySchema(record, requiredSchema, requiredPos, new GenericRecordBuilder(requiredSchema))),
-          emitDelete, operationPos, reader);
+          emitDelete, operationPos, reader, mergeClass);
     }
 
     public MergeIterator(
@@ -740,7 +747,8 @@ public class MergeOnReadInputFormat
         Option<Function<IndexedRecord, GenericRecord>> avroProjection,
         boolean emitDelete,
         int operationPos,
-        ParquetColumnarRowSplitReader reader) { // the reader should be with full schema
+        ParquetColumnarRowSplitReader reader,
+        String mergeClass) { // the reader should be with full schema
       this.tableSchema = tableSchema;
       this.reader = reader;
       this.scanner = FormatUtils.logScanner(split, tableSchema, flinkConf, hadoopConf);
@@ -753,6 +761,7 @@ public class MergeOnReadInputFormat
       this.avroToRowDataConverter = AvroToRowDataConverters.createRowConverter(requiredRowType);
       this.projection = projection;
       this.instantRange = split.getInstantRange().orElse(null);
+      this.merge = HoodieRecordUtils.loadMerge(mergeClass);
     }
 
     @Override
@@ -841,7 +850,8 @@ public class MergeOnReadInputFormat
         String curKey) throws IOException {
       final HoodieAvroRecord<?> record = (HoodieAvroRecord) scanner.getRecords().get(curKey);
       GenericRecord historyAvroRecord = (GenericRecord) rowDataToAvroConverter.convert(tableSchema, curRow);
-      return record.getData().combineAndGetUpdateValue(historyAvroRecord, tableSchema, payloadProps);
+      Option<HoodieRecord> resultRecord = merge.combineAndGetUpdateValue(new HoodieAvroIndexedRecord(historyAvroRecord), record, tableSchema, payloadProps);
+      return ((HoodieAvroIndexedRecord) resultRecord.get()).toIndexedRecord();
     }
   }
 

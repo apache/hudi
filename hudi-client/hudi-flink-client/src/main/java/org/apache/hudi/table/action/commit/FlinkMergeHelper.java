@@ -31,7 +31,6 @@ import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.storage.HoodieAvroFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.table.HoodieTable;
-import scala.collection.immutable.List;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericDatumReader;
@@ -43,6 +42,7 @@ import org.apache.hadoop.conf.Configuration;
 
 import java.io.IOException;
 import java.util.Iterator;
+import java.util.List;
 
 /**
  * Flink merge helper.

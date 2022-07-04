@@ -40,7 +40,7 @@ import java.util.List;
  *
  * @param <T> type of the payload
  */
-public class FlinkLazyInsertIterable<T extends HoodieLazyInsertIterable<T> {
+public class FlinkLazyInsertIterable<T> extends HoodieLazyInsertIterable<T> {
 
   public FlinkLazyInsertIterable(Iterator<HoodieRecord<T>> recordItr,
                                  boolean areRecordsSorted,

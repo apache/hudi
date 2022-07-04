@@ -263,7 +263,8 @@ public class TestStreamReadOperator {
         tableAvroSchema.toString(),
         AvroSchemaConverter.convertToSchema(TestConfigurations.ROW_TYPE).toString(),
         Collections.emptyList(),
-        new String[0]);
+        new String[0],
+        metaClient.getTableConfig().getMergeClass());
     MergeOnReadInputFormat inputFormat = MergeOnReadInputFormat.builder()
         .config(conf)
         .tableState(hoodieTableState)

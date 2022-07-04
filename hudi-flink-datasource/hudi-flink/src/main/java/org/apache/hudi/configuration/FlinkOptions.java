@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
+import org.apache.hudi.common.model.HoodieAvroRecordMerge;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -321,6 +322,13 @@ public class FlinkOptions extends HoodieConfig {
       .stringType()
       .defaultValue(WriteOperationType.UPSERT.value())
       .withDescription("The write operation, that this write should do");
+
+  public static final ConfigOption<String> MERGE_CLASS_NAME = ConfigOptions
+      .key("write.merge.class")
+      .stringType()
+      .defaultValue(HoodieAvroRecordMerge.class.getName())
+      .withDescription("Merge class provide stateless component interface for merging records, and support various HoodieRecord "
+          + "types, such as Spark records or Flink records.");
 
   /**
    * Flag to indicate whether to drop duplicates before insert/upsert.

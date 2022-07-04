@@ -16,17 +16,33 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.execution.bulkinsert;
+package org.apache.spark.sql.hudi;
 
+import org.apache.avro.Schema;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.table.BulkInsertPartitioner;
+import org.apache.hudi.common.model.HoodieMerge;
+import org.apache.hudi.common.util.Option;
 
-import org.apache.spark.api.java.JavaRDD;
+import java.io.IOException;
+import java.util.Properties;
 
-/**
- * Abstract of bucket index bulk_insert partitioner
- * TODO implement partitioner for SIMPLE BUCKET INDEX
- */
-public abstract class RDDBucketIndexPartitioner<T>
-    implements BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
+public class HoodieSparkRecordMerge implements HoodieMerge {
+
+  @Override
+  public HoodieRecord preCombine(HoodieRecord older, HoodieRecord newer) {
+    if (older.getData() == null) {
+      // use natural order for delete record
+      return older;
+    }
+    if (older.getOrderingValue().compareTo(newer.getOrderingValue()) > 0) {
+      return older;
+    } else {
+      return newer;
+    }
+  }
+
+  @Override
+  public Option<HoodieRecord> combineAndGetUpdateValue(HoodieRecord older, HoodieRecord newer, Schema schema, Properties props) throws IOException {
+    return Option.of(newer);
+  }
 }
