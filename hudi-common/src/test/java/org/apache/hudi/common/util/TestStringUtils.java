@@ -23,6 +23,7 @@ import org.junit.jupiter.api.Test;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -43,6 +44,14 @@ public class TestStringUtils {
   public void testStringJoin() {
     assertNotEquals(null, StringUtils.join(""));
     assertNotEquals(null, StringUtils.join(STRINGS));
+  }
+
+  @Test
+  public void testStringJoinWithJavaImpl() {
+    assertNull(StringUtils.join(",", null));
+    assertEquals("", String.join(",", Collections.singletonList("")));
+    assertEquals(",", String.join(",", Arrays.asList("", "")));
+    assertEquals("a,", String.join(",", Arrays.asList("a", "")));
   }
 
   @Test

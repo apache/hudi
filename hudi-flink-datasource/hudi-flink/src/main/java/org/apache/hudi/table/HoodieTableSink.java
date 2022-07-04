@@ -67,7 +67,7 @@ public class HoodieTableSink implements DynamicTableSink, SupportsPartitioning, 
           .getCheckpointConfig().getCheckpointTimeout();
       conf.setLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, ckpTimeout);
 
-      RowType rowType = (RowType) schema.toSourceRowDataType().notNull().getLogicalType();
+      RowType rowType = (RowType) schema.toSinkRowDataType().notNull().getLogicalType();
 
       // bulk_insert mode
       final String writeOperation = this.conf.get(FlinkOptions.OPERATION);
