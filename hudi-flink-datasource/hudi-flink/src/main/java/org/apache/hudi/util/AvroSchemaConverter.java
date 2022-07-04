@@ -36,7 +36,6 @@ import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.table.types.logical.TimeType;
 import org.apache.flink.table.types.logical.TimestampType;
 import org.apache.flink.table.types.logical.TypeInformationRawType;
-import org.apache.flink.table.types.logical.utils.LogicalTypeChecks;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -339,7 +338,7 @@ public class AvroSchemaConverter {
       keyType = multisetType.getElementType();
       valueType = new IntType();
     }
-    if (!LogicalTypeChecks.hasFamily(keyType, LogicalTypeFamily.CHARACTER_STRING)) {
+    if (!DataTypeUtils.isFamily(keyType, LogicalTypeFamily.CHARACTER_STRING)) {
       throw new UnsupportedOperationException(
           "Avro format doesn't support non-string as key type of map. "
               + "The key type is: "

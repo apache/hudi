@@ -18,6 +18,7 @@
 
 package org.apache.hudi.util;
 
+import org.apache.hudi.adapter.Utils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.HoodieTableFactory;
 
@@ -223,8 +224,7 @@ public class HoodiePipeline {
    * @param isBounded    A flag indicating whether the input data stream is bounded
    */
   private static DataStreamSink<?> sink(DataStream<RowData> input, ObjectIdentifier tablePath, ResolvedCatalogTable catalogTable, boolean isBounded) {
-    FactoryUtil.DefaultDynamicTableContext context = new FactoryUtil.DefaultDynamicTableContext(tablePath, catalogTable,
-        Configuration.fromMap(catalogTable.getOptions()), Thread.currentThread().getContextClassLoader(), false);
+    FactoryUtil.DefaultDynamicTableContext context = Utils.getTableContext(tablePath, catalogTable, Configuration.fromMap(catalogTable.getOptions()));
     HoodieTableFactory hoodieTableFactory = new HoodieTableFactory();
     return ((DataStreamSinkProvider) hoodieTableFactory.createDynamicTableSink(context)
             .getSinkRuntimeProvider(new SinkRuntimeProviderContext(isBounded)))
@@ -239,8 +239,7 @@ public class HoodiePipeline {
    * @param catalogTable The hoodie catalog table
    */
   private static DataStream<RowData> source(StreamExecutionEnvironment execEnv, ObjectIdentifier tablePath, ResolvedCatalogTable catalogTable) {
-    FactoryUtil.DefaultDynamicTableContext context = new FactoryUtil.DefaultDynamicTableContext(tablePath, catalogTable,
-        Configuration.fromMap(catalogTable.getOptions()), Thread.currentThread().getContextClassLoader(), false);
+    FactoryUtil.DefaultDynamicTableContext context = Utils.getTableContext(tablePath, catalogTable, Configuration.fromMap(catalogTable.getOptions()));
     HoodieTableFactory hoodieTableFactory = new HoodieTableFactory();
     DataStreamScanProvider dataStreamScanProvider = (DataStreamScanProvider) ((ScanTableSource) hoodieTableFactory
             .createDynamicTableSource(context))
@@ -252,8 +251,8 @@ public class HoodiePipeline {
    *  A POJO that contains tableId and resolvedCatalogTable.
    */
   public static class TableDescriptor {
-    private ObjectIdentifier tableId;
-    private ResolvedCatalogTable resolvedCatalogTable;
+    private final ObjectIdentifier tableId;
+    private final ResolvedCatalogTable resolvedCatalogTable;
 
     public TableDescriptor(ObjectIdentifier tableId, ResolvedCatalogTable resolvedCatalogTable) {
       this.tableId = tableId;

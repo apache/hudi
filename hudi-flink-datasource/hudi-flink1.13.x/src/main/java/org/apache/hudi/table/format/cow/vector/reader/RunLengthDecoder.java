@@ -58,7 +58,7 @@ final class RunLengthDecoder {
   private BytePacker packer;
 
   // Current decoding mode and values
-  RunLengthDecoder.MODE mode;
+  MODE mode;
   int currentCount;
   int currentValue;
 
@@ -102,7 +102,7 @@ final class RunLengthDecoder {
     }
     if (bitWidth == 0) {
       // 0 bit width, treat this as an RLE run of valueCount number of 0's.
-      this.mode = RunLengthDecoder.MODE.RLE;
+      this.mode = MODE.RLE;
       this.currentCount = valueCount;
       this.currentValue = 0;
     } else {
@@ -266,7 +266,7 @@ final class RunLengthDecoder {
   void readNextGroup() {
     try {
       int header = readUnsignedVarInt();
-      this.mode = (header & 1) == 0 ? RunLengthDecoder.MODE.RLE : RunLengthDecoder.MODE.PACKED;
+      this.mode = (header & 1) == 0 ? MODE.RLE : MODE.PACKED;
       switch (mode) {
         case RLE:
           this.currentCount = header >>> 1;

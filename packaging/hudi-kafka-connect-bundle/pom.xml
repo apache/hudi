@@ -90,7 +90,7 @@
                                     <include>org.apache.hudi:flink-core</include>
                                     <include>org.apache.hudi:hudi-flink-client</include>
                                     <include>org.apache.flink:flink-core</include>
-                                    <include>org.apache.flink:flink-hadoop-compatibility_${scala.binary.version}</include>
+                                    <include>${flink.hadoop.compatibility.artifactId}</include>
 
                                     <include>com.github.davidmoten:guava-mini</include>
                                     <include>com.github.davidmoten:hilbert-curve</include>

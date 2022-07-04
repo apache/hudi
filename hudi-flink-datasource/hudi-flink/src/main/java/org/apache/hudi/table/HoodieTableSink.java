@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table;
 
+import org.apache.hudi.adapter.DataStreamSinkProviderAdapter;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -30,7 +31,6 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.table.catalog.ResolvedSchema;
 import org.apache.flink.table.connector.ChangelogMode;
-import org.apache.flink.table.connector.sink.DataStreamSinkProvider;
 import org.apache.flink.table.connector.sink.DynamicTableSink;
 import org.apache.flink.table.connector.sink.abilities.SupportsOverwrite;
 import org.apache.flink.table.connector.sink.abilities.SupportsPartitioning;
@@ -60,7 +60,7 @@ public class HoodieTableSink implements DynamicTableSink, SupportsPartitioning, 
 
   @Override
   public SinkRuntimeProvider getSinkRuntimeProvider(Context context) {
-    return (DataStreamSinkProvider) dataStream -> {
+    return (DataStreamSinkProviderAdapter) dataStream -> {
 
       // setup configuration
       long ckpTimeout = dataStream.getExecutionEnvironment()
