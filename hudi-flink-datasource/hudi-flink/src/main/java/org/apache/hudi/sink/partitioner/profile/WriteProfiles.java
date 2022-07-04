@@ -19,7 +19,6 @@
 package org.apache.hudi.sink.partitioner.profile;
 
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -33,7 +32,6 @@ import org.apache.hudi.util.StreamerUtil;
 import org.apache.flink.core.fs.Path;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -96,28 +94,27 @@ public class WriteProfiles {
       Configuration hadoopConf,
       List<HoodieCommitMetadata> metadataList,
       HoodieTableType tableType) {
-    FileSystem fs = FSUtils.getFs(basePath.toString(), hadoopConf);
     Map<String, FileStatus> uniqueIdToFileStatus = new HashMap<>();
     metadataList.forEach(metadata ->
-        uniqueIdToFileStatus.putAll(getFilesToReadOfInstant(basePath, metadata, fs, tableType)));
+        uniqueIdToFileStatus.putAll(getFilesToReadOfInstant(basePath, metadata, hadoopConf, tableType)));
     return uniqueIdToFileStatus.values().toArray(new FileStatus[0]);
   }
 
   /**
    * Returns the commit file status info with given metadata.
    *
-   * @param basePath  Table base path
-   * @param metadata  The metadata
-   * @param fs        The filesystem
-   * @param tableType The table type
+   * @param basePath   Table base path
+   * @param metadata   The metadata
+   * @param hadoopConf The hadoop configuration
+   * @param tableType  The table type
    * @return the commit file status info grouping by specific ID
    */
   private static Map<String, FileStatus> getFilesToReadOfInstant(
       Path basePath,
       HoodieCommitMetadata metadata,
-      FileSystem fs,
+      Configuration hadoopConf,
       HoodieTableType tableType) {
-    return getFilesToRead(fs.getConf(), metadata, basePath.toString(), tableType).entrySet().stream()
+    return getFilesToRead(hadoopConf, metadata, basePath.toString(), tableType).entrySet().stream()
         .filter(entry -> StreamerUtil.isValidFile(entry.getValue()))
         .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
   }
