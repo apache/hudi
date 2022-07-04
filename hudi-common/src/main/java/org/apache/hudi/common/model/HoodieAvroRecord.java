@@ -21,11 +21,10 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.keygen.BaseKeyGenerator;
-import org.apache.hudi.metadata.HoodieMetadataPayload;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -39,7 +38,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 
-import static org.apache.hudi.TypeUtils.unsafeCast;
+import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 
 public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecord<T> {
   public HoodieAvroRecord(HoodieKey key, T data) {
@@ -47,7 +46,7 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
   }
 
   public HoodieAvroRecord(HoodieKey key, T data, HoodieOperation operation) {
-    super(key, data, operation);
+    super(key, data, operation, null);
   }
 
   public HoodieAvroRecord(HoodieRecord<T> record) {
@@ -106,34 +105,6 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
   // NOTE: This method duplicates those ones of the HoodieRecordPayload and are placed here
   //       for the duration of RFC-46 implementation, until migration off `HoodieRecordPayload`
   //       is complete
-  //
-  // TODO cleanup
-
-  // NOTE: This method is assuming semantic that `preCombine` operation is bound to pick one or the other
-  //       object, and may not create a new one
-  @Override
-  public HoodieRecord<T> preCombine(HoodieRecord<T> previousRecord) {
-    T picked = unsafeCast(getData().preCombine(previousRecord.getData()));
-    if (picked instanceof HoodieMetadataPayload) {
-      // NOTE: HoodieMetadataPayload return a new payload
-      return new HoodieAvroRecord<>(getKey(), picked, getOperation());
-    }
-    return picked.equals(getData()) ? this : previousRecord;
-  }
-
-  // NOTE: This method is assuming semantic that only records bearing the same (partition, key) could
-  //       be combined
-  @Override
-  public Option<HoodieRecord> combineAndGetUpdateValue(HoodieRecord previousRecord, Schema schema, Properties props) throws IOException {
-    Option<IndexedRecord> previousRecordAvroPayload = previousRecord.toIndexedRecord(schema, props);
-    if (!previousRecordAvroPayload.isPresent()) {
-      return Option.empty();
-    }
-
-    return getData().combineAndGetUpdateValue(previousRecordAvroPayload.get(), schema, props)
-        .map(combinedAvroPayload -> new HoodieAvroIndexedRecord((IndexedRecord) combinedAvroPayload));
-  }
-
   @Override
   public HoodieRecord mergeWith(HoodieRecord other, Schema readerSchema, Schema writerSchema) throws IOException {
     ValidationUtils.checkState(other instanceof HoodieAvroRecord);
@@ -141,7 +112,7 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
         (GenericRecord) toIndexedRecord(readerSchema, new Properties()).get(),
         (GenericRecord) other.toIndexedRecord(readerSchema, new Properties()).get(),
         writerSchema);
-    return new HoodieAvroRecord(getKey(), instantiateRecordPayloadWrapper(mergedPayload, getPrecombineValue(getData())), getOperation());
+    return new HoodieAvroRecord(getKey(), instantiateRecordPayloadWrapper(mergedPayload, getOrderingValue()), getOperation());
   }
 
   @Override
@@ -234,20 +205,10 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
   @Nonnull
   private T instantiateRecordPayloadWrapper(Object combinedAvroPayload, Comparable newPreCombineVal) {
     return unsafeCast(
-        ReflectionUtils.loadPayload(
+        HoodieRecordUtils.loadPayload(
             getData().getClass().getCanonicalName(),
             new Object[]{combinedAvroPayload, newPreCombineVal},
             GenericRecord.class,
             Comparable.class));
   }
-
-  private static <T extends HoodieRecordPayload> Comparable getPrecombineValue(T data) {
-    if (data instanceof BaseAvroPayload) {
-      return ((BaseAvroPayload) data).orderingVal;
-    }
-
-    return -1;
-  }
-
-  //////////////////////////////////////////////////////////////////////////////
 }

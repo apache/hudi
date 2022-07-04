@@ -16,17 +16,23 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.execution.bulkinsert;
+package org.apache.hudi.common.model;
 
-import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.table.BulkInsertPartitioner;
+import org.apache.avro.Schema;
+import org.apache.hudi.common.util.Option;
 
-import org.apache.spark.api.java.JavaRDD;
+import java.io.IOException;
+import java.io.Serializable;
+import java.util.Properties;
 
 /**
- * Abstract of bucket index bulk_insert partitioner
- * TODO implement partitioner for SIMPLE BUCKET INDEX
+ * HoodieMerge defines how to merge two records. It is a stateless component.
+ * It can implement the merging logic of HoodieRecord of different engines
+ * and avoid the performance consumption caused by the serialization/deserialization of Avro payload.
  */
-public abstract class RDDBucketIndexPartitioner<T>
-    implements BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
+public interface HoodieMerge extends Serializable {
+  
+  HoodieRecord preCombine(HoodieRecord older, HoodieRecord newer);
+
+  Option<HoodieRecord> combineAndGetUpdateValue(HoodieRecord older, HoodieRecord newer, Schema schema, Properties props) throws IOException;
 }

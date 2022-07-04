@@ -96,6 +96,8 @@ public abstract class AbstractHoodieLogRecordReader {
   private final String payloadClassFQN;
   // preCombine field
   private final String preCombineField;
+  // Stateless component for merging records
+  private final String mergeClassFQN;
   // simple key gen fields
   private Option<Pair<String, String>> simpleKeyGenFields = Option.empty();
   // Log File Paths
@@ -160,6 +162,7 @@ public abstract class AbstractHoodieLogRecordReader {
     HoodieTableConfig tableConfig = this.hoodieTableMetaClient.getTableConfig();
     this.payloadClassFQN = tableConfig.getPayloadClass();
     this.preCombineField = tableConfig.getPreCombineField();
+    this.mergeClassFQN = tableConfig.getMergeClass();
     this.totalLogFiles.addAndGet(logFilePaths.size());
     this.logFilePaths = logFilePaths;
     this.reverseReader = reverseReader;
@@ -523,6 +526,10 @@ public abstract class AbstractHoodieLogRecordReader {
 
   protected String getPayloadClassFQN() {
     return payloadClassFQN;
+  }
+
+  protected String getMergeClassFQN() {
+    return mergeClassFQN;
   }
 
   public Option<String> getPartitionName() {

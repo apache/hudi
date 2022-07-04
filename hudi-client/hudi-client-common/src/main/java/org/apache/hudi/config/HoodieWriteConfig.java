@@ -33,6 +33,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FileSystemRetryConfig;
+import org.apache.hudi.common.model.HoodieAvroRecordMerge;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -124,6 +125,12 @@ public class HoodieWriteConfig extends HoodieConfig {
       .defaultValue(OverwriteWithLatestAvroPayload.class.getName())
       .withDocumentation("Payload class used. Override this, if you like to roll your own merge logic, when upserting/inserting. "
           + "This will render any value set for PRECOMBINE_FIELD_OPT_VAL in-effective");
+
+  public static final ConfigProperty<String> MERGE_CLASS_NAME = ConfigProperty
+      .key("hoodie.datasource.write.merge.class")
+      .defaultValue(HoodieAvroRecordMerge.class.getName())
+      .withDocumentation("Merge class provide stateless component interface for merging records, and support various HoodieRecord "
+          + "types, such as Spark records or Flink records.");
 
   public static final ConfigProperty<String> KEYGENERATOR_CLASS_NAME = ConfigProperty
       .key("hoodie.datasource.write.keygenerator.class")
@@ -1330,6 +1337,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public String getPayloadClass() {
     return getString(HoodiePayloadConfig.PAYLOAD_CLASS_NAME);
+  }
+
+  public String getMergeClass() {
+    return getString(HoodieCompactionConfig.MERGE_CLASS_NAME);
   }
 
   public int getTargetPartitionsPerDayBasedCompaction() {

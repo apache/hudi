@@ -136,25 +136,35 @@ public abstract class HoodieRecord<T> implements Serializable {
    */
   private HoodieOperation operation;
 
+  /**
+   * For purposes of preCombining.
+   */
+  private Comparable<?> orderingVal;
+
   public HoodieRecord(HoodieKey key, T data) {
-    this(key, data, null);
+    this(key, data, null, null);
   }
 
-  public HoodieRecord(HoodieKey key, T data, HoodieOperation operation) {
+  public HoodieRecord(HoodieKey key, T data, Comparable<?> orderingVal) {
+    this(key, data, null, orderingVal);
+  }
+
+  public HoodieRecord(HoodieKey key, T data, HoodieOperation operation, Comparable<?> orderingVal) {
     this.key = key;
     this.data = data;
     this.currentLocation = null;
     this.newLocation = null;
     this.sealed = false;
     this.operation = operation;
+    // default natural order is 0
+    this.orderingVal = orderingVal == null ? 0 : orderingVal;
   }
 
   public HoodieRecord(HoodieRecord<T> record) {
-    this(record.key, record.data);
+    this(record.key, record.data, record.operation, record.orderingVal);
     this.currentLocation = record.currentLocation;
     this.newLocation = record.newLocation;
     this.sealed = record.sealed;
-    this.operation = record.operation;
   }
 
   public HoodieRecord() {
@@ -174,14 +184,16 @@ public abstract class HoodieRecord<T> implements Serializable {
     return operation;
   }
 
+  public Comparable<?> getOrderingValue() {
+    return orderingVal;
+  }
+
   public T getData() {
     if (data == null) {
-      throw new IllegalStateException("Payload already deflated for record.");
+      throw new IllegalStateException("HoodieRecord already deflated for record.");
     }
     return data;
   }
-
-  public abstract Comparable<?> getOrderingValue();
 
   /**
    * Release the actual payload, to ease memory pressure. To be called after the record has been written to storage.
@@ -286,16 +298,6 @@ public abstract class HoodieRecord<T> implements Serializable {
   //       for the duration of RFC-46 implementation, until migration off `HoodieRecordPayload`
   //       is complete
   //
-  // TODO cleanup
-
-  // NOTE: This method is assuming semantic that `preCombine` operation is bound to pick one or the other
-  //       object, and may not create a new one
-  public abstract HoodieRecord<T> preCombine(HoodieRecord<T> previousRecord);
-
-  // NOTE: This method is assuming semantic that only records bearing the same (partition, key) could
-  //       be combined
-  public abstract Option<HoodieRecord> combineAndGetUpdateValue(HoodieRecord previousRecord, Schema schema, Properties props) throws IOException;
-
   public abstract HoodieRecord mergeWith(HoodieRecord other, Schema readerSchema, Schema writerSchema) throws IOException;
 
   public abstract HoodieRecord rewriteRecord(Schema recordSchema, Schema targetSchema, TypedProperties props) throws IOException;

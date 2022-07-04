@@ -733,9 +733,9 @@ public class TestData {
         if (scanner != null) {
           for (String curKey : scanner.getRecords().keySet()) {
             if (!keyToSkip.contains(curKey)) {
-              Option<GenericRecord> record = (Option<GenericRecord>) scanner.getRecords()
-                  .get(curKey).getData()
-                  .getInsertValue(schema, config.getProps());
+              Option<GenericRecord> record = (Option<GenericRecord>) ((HoodieAvroRecord) scanner.getRecords()
+                      .get(curKey)).getData()
+                      .getInsertValue(schema, config.getProps());
               if (record.isPresent()) {
                 readBuffer.add(filterOutVariables(record.get()));
               }

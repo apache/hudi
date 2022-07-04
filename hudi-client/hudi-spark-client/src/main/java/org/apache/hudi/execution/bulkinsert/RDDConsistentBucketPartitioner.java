@@ -22,10 +22,10 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.ConsistentHashingNode;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieConsistentHashingMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -59,7 +59,7 @@ import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SORT_C
 /**
  * A partitioner for (consistent hashing) bucket index used in bulk_insert
  */
-public class RDDConsistentBucketPartitioner<T extends HoodieRecordPayload> extends RDDBucketIndexPartitioner<T> {
+public class RDDConsistentBucketPartitioner<T> extends RDDBucketIndexPartitioner<T> {
 
   private static final Logger LOG = LogManager.getLogger(RDDConsistentBucketPartitioner.class);
 
@@ -235,8 +235,8 @@ public class RDDConsistentBucketPartitioner<T extends HoodieRecordPayload> exten
     final String[] sortColumns = sortColumnNames;
     final SerializableSchema schema = new SerializableSchema(HoodieAvroUtils.addMetadataFields((new Schema.Parser().parse(table.getConfig().getSchema()))));
     Comparator<HoodieRecord<T>> comparator = (Comparator<HoodieRecord<T>> & Serializable) (t1, t2) -> {
-      Object obj1 = HoodieAvroUtils.getRecordColumnValues(t1, sortColumns, schema, consistentLogicalTimestampEnabled);
-      Object obj2 = HoodieAvroUtils.getRecordColumnValues(t2, sortColumns, schema, consistentLogicalTimestampEnabled);
+      Object obj1 = HoodieAvroUtils.getRecordColumnValues((HoodieAvroRecord) t1, sortColumns, schema, consistentLogicalTimestampEnabled);
+      Object obj2 = HoodieAvroUtils.getRecordColumnValues((HoodieAvroRecord)t2, sortColumns, schema, consistentLogicalTimestampEnabled);
       return ((Comparable) obj1).compareTo(obj2);
     };
 

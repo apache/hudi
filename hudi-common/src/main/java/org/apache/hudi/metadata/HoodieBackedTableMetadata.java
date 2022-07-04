@@ -158,9 +158,10 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     List<FileSlice> partitionFileSlices =
         HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(metadataMetaClient, partitionName);
 
-    return engineContext.parallelize(partitionFileSlices)
+    return (shouldLoadInMemory ? HoodieListData.lazy(partitionFileSlices) :
+        engineContext.parallelize(partitionFileSlices))
         .flatMap(
-            (SerializableFunction<FileSlice, Iterator<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>>>) fileSlice -> {
+            (SerializableFunction<FileSlice, Iterator<HoodieRecord<HoodieMetadataPayload>>>) fileSlice -> {
               // NOTE: Since this will be executed by executors, we can't access previously cached
               //       readers, and therefore have to always open new ones
               Pair<HoodieAvroFileReader, HoodieMetadataMergedLogRecordReader> readers =
@@ -171,31 +172,31 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
                 HoodieAvroFileReader baseFileReader = readers.getKey();
                 HoodieMetadataMergedLogRecordReader logRecordScanner = readers.getRight();
 
-            if (baseFileReader == null && logRecordScanner == null) {
-              // TODO: what do we do if both does not exist? should we throw an exception and let caller do the fallback ?
-              return Collections.emptyIterator();
-            }
+                if (baseFileReader == null && logRecordScanner == null) {
+                  // TODO: what do we do if both does not exist? should we throw an exception and let caller do the fallback ?
+                  return Collections.emptyIterator();
+                }
 
-            boolean fullKeys = false;
+              boolean fullKeys = false;
 
-            Map<String, Option<HoodieRecord<HoodieMetadataPayload>>> logRecords =
-                readLogRecords(logRecordScanner, sortedKeyPrefixes, fullKeys, timings);
+              Map<String, Option<HoodieRecord<HoodieMetadataPayload>>> logRecords =
+                  readLogRecords(logRecordScanner, sortedKeyPrefixes, fullKeys, timings);
 
-            List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> mergedRecords =
-                readFromBaseAndMergeWithLogRecords(baseFileReader, sortedKeyPrefixes, fullKeys, logRecords, timings, partitionName);
+              List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> mergedRecords =
+                  readFromBaseAndMergeWithLogRecords(baseFileReader, sortedKeyPrefixes, fullKeys, logRecords, timings, partitionName);
 
-            LOG.debug(String.format("Metadata read for %s keys took [baseFileRead, logMerge] %s ms",
-                sortedKeyPrefixes.size(), timings));
+              LOG.debug(String.format("Metadata read for %s keys took [baseFileRead, logMerge] %s ms",
+                  sortedKeyPrefixes.size(), timings));
 
-            return mergedRecords.stream()
+              return mergedRecords.stream()
                 .map(keyRecordPair -> keyRecordPair.getValue().orElse(null))
                 .iterator();
-          } catch (IOException ioe) {
-            throw new HoodieIOException("Error merging records from metadata table for  " + sortedKeyPrefixes.size() + " key : ", ioe);
-          } finally {
-            closeReader(readers);
-          }
-        })
+            } catch (IOException ioe) {
+              throw new HoodieIOException("Error merging records from metadata table for  " + sortedKeyPrefixes.size() + " key : ", ioe);
+            } finally {
+              closeReader(readers);
+            }
+          })
         .filter(Objects::nonNull);
   }
 

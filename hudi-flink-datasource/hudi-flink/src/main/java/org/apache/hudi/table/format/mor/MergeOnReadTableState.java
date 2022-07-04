@@ -41,6 +41,7 @@ public class MergeOnReadTableState implements Serializable {
   private final List<MergeOnReadInputSplit> inputSplits;
   private final String[] pkFields;
   private final int operationPos;
+  private final String mergeClass;
 
   public MergeOnReadTableState(
       RowType rowType,
@@ -48,7 +49,8 @@ public class MergeOnReadTableState implements Serializable {
       String avroSchema,
       String requiredAvroSchema,
       List<MergeOnReadInputSplit> inputSplits,
-      String[] pkFields) {
+      String[] pkFields,
+      String mergeClass) {
     this.rowType = rowType;
     this.requiredRowType = requiredRowType;
     this.avroSchema = avroSchema;
@@ -56,6 +58,7 @@ public class MergeOnReadTableState implements Serializable {
     this.inputSplits = inputSplits;
     this.pkFields = pkFields;
     this.operationPos = rowType.getFieldIndex(HoodieRecord.OPERATION_METADATA_FIELD);
+    this.mergeClass = mergeClass;
   }
 
   public RowType getRowType() {
@@ -80,6 +83,10 @@ public class MergeOnReadTableState implements Serializable {
 
   public int getOperationPos() {
     return operationPos;
+  }
+
+  public String getMergeClass() {
+    return mergeClass;
   }
 
   public int[] getRequiredPositions() {
