@@ -118,16 +118,6 @@ public class WriteProfiles {
       FileSystem fs,
       HoodieTableType tableType) {
     return getFilesToRead(fs.getConf(), metadata, basePath.toString(), tableType).entrySet().stream()
-        // filter out the file paths that does not exist, some files may be cleaned by
-        // the cleaner.
-        .filter(entry -> {
-          try {
-            return fs.exists(entry.getValue().getPath());
-          } catch (IOException e) {
-            LOG.error("Checking exists of path: {} error", entry.getValue().getPath());
-            throw new HoodieException(e);
-          }
-        })
         .filter(entry -> StreamerUtil.isValidFile(entry.getValue()))
         .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
   }

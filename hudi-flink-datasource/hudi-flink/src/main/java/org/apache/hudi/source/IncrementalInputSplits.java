@@ -18,7 +18,10 @@
 
 package org.apache.hudi.source;
 
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BaseFile;
+import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -29,6 +32,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.sink.partitioner.profile.WriteProfiles;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
@@ -36,11 +40,13 @@ import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.fs.Path;
 import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -216,18 +222,22 @@ public class IncrementalInputSplits implements Serializable {
     final String endInstant = instantToIssue.getTimestamp();
     final AtomicInteger cnt = new AtomicInteger(0);
     final String mergeType = this.conf.getString(FlinkOptions.MERGE_TYPE);
+    final FileSystem fs = FSUtils.getFs(path.toString(), hadoopConf);
     List<MergeOnReadInputSplit> inputSplits = writePartitions.stream()
-        .map(relPartitionPath -> fsView.getLatestMergedFileSlicesBeforeOrOn(relPartitionPath, endInstant)
-            .map(fileSlice -> {
-              Option<List<String>> logPaths = Option.ofNullable(fileSlice.getLogFiles()
-                  .sorted(HoodieLogFile.getLogFileComparator())
-                  .map(logFile -> logFile.getPath().toString())
-                  .collect(Collectors.toList()));
-              String basePath = fileSlice.getBaseFile().map(BaseFile::getPath).orElse(null);
-              return new MergeOnReadInputSplit(cnt.getAndAdd(1),
-                  basePath, logPaths, endInstant,
-                  metaClient.getBasePath(), maxCompactionMemoryInBytes, mergeType, instantRange, fileSlice.getFileId());
-            }).collect(Collectors.toList()))
+        .map(relPartitionPath -> {
+          Stream<FileSlice> latestMergedFileSlices = fsView.getLatestMergedFileSlicesBeforeOrOn(relPartitionPath, endInstant);
+          return filterFileSliceWithValidFiles(fs, latestMergedFileSlices)
+              .map(fileSlice -> {
+                Option<List<String>> logPaths = Option.ofNullable(fileSlice.getLogFiles()
+                    .sorted(HoodieLogFile.getLogFileComparator())
+                    .map(logFile -> logFile.getPath().toString())
+                    .collect(Collectors.toList()));
+                String basePath = fileSlice.getBaseFile().map(BaseFile::getPath).orElse(null);
+                return new MergeOnReadInputSplit(cnt.getAndAdd(1),
+                    basePath, logPaths, endInstant,
+                    metaClient.getBasePath(), maxCompactionMemoryInBytes, mergeType, instantRange, fileSlice.getFileId());
+              }).collect(Collectors.toList());
+        })
         .flatMap(Collection::stream)
         .collect(Collectors.toList());
     return Result.instance(inputSplits, endInstant);
@@ -300,6 +310,51 @@ public class IncrementalInputSplits implements Serializable {
     return this.skipCompaction
         ? instants.filter(instant -> !instant.getAction().equals(HoodieTimeline.COMMIT_ACTION))
         : instants;
+  }
+
+  private Stream<FileSlice> filterFileSliceWithValidFiles(FileSystem fs, Stream<FileSlice> fileSlices) {
+    // we need to filter out the base file and log file that does not exist
+    return fileSlices.map(fileSlice -> {
+      List<HoodieLogFile> logFiles = fileSlice.getLogFiles()
+          .filter(logFile -> {
+            try {
+              return fs.exists(logFile.getPath());
+            } catch (IOException e) {
+              LOG.error("Checking exists of log file path: {} error", logFile.getPath().toString());
+              throw new HoodieException(e);
+            }
+          }).collect(Collectors.toList());
+      return generateFileSlice(fileSlice.getPartitionPath(),
+          fileSlice.getBaseInstantTime(),
+          fileSlice.getFileId(),
+          fileSlice.getBaseFile().orElse(null),
+          logFiles);
+    }).filter(fileSlice -> {
+      // we should keep the file slice if any base/log file exists
+      if (fileSlice.getLatestLogFile().isPresent()) {
+        return true;
+      }
+      Option<String> basePath = fileSlice.getBaseFile().map(BaseFile::getPath);
+      try {
+        return basePath.isPresent() && fs.exists(new org.apache.hadoop.fs.Path(basePath.get()));
+      } catch (IOException e) {
+        LOG.error("Checking exists of base path: {} error", basePath);
+        throw new HoodieException(e);
+      }
+    });
+  }
+
+  private FileSlice generateFileSlice(String partitionPath,
+                                      String baseInstant,
+                                      String fileId,
+                                      HoodieBaseFile baseFile,
+                                      List<HoodieLogFile> logFiles) {
+    FileSlice fileSlice = new FileSlice(partitionPath, baseInstant, fileId);
+    fileSlice.setBaseFile(baseFile);
+    for (HoodieLogFile logFile : logFiles) {
+      fileSlice.addLogFile(logFile);
+    }
+    return fileSlice;
   }
 
   private static <T> List<T> mergeList(List<T> list1, List<T> list2) {
