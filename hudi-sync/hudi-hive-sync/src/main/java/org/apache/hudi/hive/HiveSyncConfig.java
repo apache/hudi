@@ -129,6 +129,8 @@ public class HiveSyncConfig extends HoodieSyncConfig {
     public String bucketSpec;
     @Parameter(names = {"--sync-comment"}, description = "synchronize table comments to hive")
     public Boolean syncComment;
+    @Parameter(names = {"--with-operation-field"}, description = "Whether to include the '_hoodie_operation' field in the metadata fields")
+    public Boolean withOperationField; // TODO remove this as it's not used
 
     public boolean isHelp() {
       return hoodieSyncConfigParams.isHelp();
