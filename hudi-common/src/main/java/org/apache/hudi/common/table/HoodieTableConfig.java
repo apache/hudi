@@ -622,7 +622,7 @@ public class HoodieTableConfig extends HoodieConfig {
   public Set<String> getMetadataPartitions() {
     return new HashSet<>(
         StringUtils.split(getStringOrDefault(TABLE_METADATA_PARTITIONS, StringUtils.EMPTY_STRING),
-            CONFIG_VALUES_DELIMITER);
+            CONFIG_VALUES_DELIMITER));
   }
 
   /**
