@@ -109,7 +109,7 @@ public class TestHoodieBulkInsertDataInternalWriter extends
   }
 
   @Test
-  public void testDataInternalWriterHiveStylePartitioning() throws Exception {
+  public void testDataInternalWriterPartitioningHandling() throws Exception {
     boolean sorted = true;
     boolean populateMetaFields = false;
     // init config and table

@@ -52,7 +52,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 public class HoodieBulkInsertInternalWriterTestBase extends HoodieClientTestHarness {
 
-  protected static final Random RANDOM = new Random();
+  protected static final Random RANDOM = new Random(0xDEED);
 
   @BeforeEach
   public void setUp() throws Exception {

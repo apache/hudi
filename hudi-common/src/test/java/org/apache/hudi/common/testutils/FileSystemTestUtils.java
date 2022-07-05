@@ -44,7 +44,7 @@ public class FileSystemTestUtils {
   public static final String FORWARD_SLASH = "/";
   public static final String FILE_SCHEME = "file";
   public static final String COLON = ":";
-  public static final Random RANDOM = new Random();
+  public static final Random RANDOM = new Random(0xDEED);
 
   public static Path getRandomOuterInMemPath() {
     String randomFileName = UUID.randomUUID().toString();
