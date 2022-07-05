@@ -191,9 +191,9 @@ public class TestHoodieIndexer extends HoodieCommonTestHarness implements SparkP
 
     // validate table config
     metaClient = reload(metaClient);
-    assertFalse(reload(metaClient).getTableConfig().getMetadataPartitions().contains(FILES.getPartitionPath()));
-    assertFalse(reload(metaClient).getTableConfig().getMetadataPartitions().contains(COLUMN_STATS.getPartitionPath()));
-    assertFalse(reload(metaClient).getTableConfig().getMetadataPartitions().contains(BLOOM_FILTERS.getPartitionPath()));
+    assertFalse(metaClient.getTableConfig().getMetadataPartitions().contains(FILES.getPartitionPath()));
+    assertFalse(metaClient.getTableConfig().getMetadataPartitions().contains(COLUMN_STATS.getPartitionPath()));
+    assertFalse(metaClient.getTableConfig().getMetadataPartitions().contains(BLOOM_FILTERS.getPartitionPath()));
     // validate metadata partitions actually exist
     assertFalse(metadataPartitionExists(basePath, context, FILES));
 
