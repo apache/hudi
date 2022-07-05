@@ -24,11 +24,11 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.keygen.BuiltinKeyGenerator;
 import org.apache.hudi.keygen.ComplexKeyGenerator;
+import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.table.BulkInsertPartitioner;
-
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.sql.Column;
@@ -38,14 +38,13 @@ import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.api.java.UDF1;
 import org.apache.spark.sql.functions;
 import org.apache.spark.sql.types.DataTypes;
+import scala.collection.JavaConverters;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-
-import scala.collection.JavaConverters;
 
 import static org.apache.spark.sql.functions.callUDF;
 
@@ -97,8 +96,31 @@ public class HoodieDatasetBulkInsertHelper {
       // simple fields for both record key and partition path: can directly use withColumn
       String partitionPathField = keyGeneratorClass.equals(SimpleKeyGenerator.class.getName()) ? partitionPathFields :
           partitionPathFields.substring(partitionPathFields.indexOf(":") + 1);
-      rowDatasetWithRecordKeysAndPartitionPath = rows.withColumn(HoodieRecord.RECORD_KEY_METADATA_FIELD, functions.col(recordKeyFields).cast(DataTypes.StringType))
-          .withColumn(HoodieRecord.PARTITION_PATH_METADATA_FIELD, functions.col(partitionPathField).cast(DataTypes.StringType));
+
+      // TODO(HUDI-3993) cleanup duplication
+      String tableName = properties.getString(HoodieWriteConfig.TBL_NAME.key());
+      String partitionPathDecorationUDFName = PARTITION_PATH_UDF_FN + tableName;
+
+      boolean shouldURLEncodePartitionPath = config.shouldURLEncodePartitionPath();
+      boolean isHiveStylePartitioned = config.isHiveStylePartitioningEnabled();
+
+      if (shouldURLEncodePartitionPath || isHiveStylePartitioned) {
+        sqlContext.udf().register(
+            partitionPathDecorationUDFName,
+            (UDF1<String, String>) partitionPathValue ->
+                KeyGenUtils.handlePartitionPathDecoration(partitionPathField, partitionPathValue,
+                    shouldURLEncodePartitionPath, isHiveStylePartitioned),
+            DataTypes.StringType);
+
+        rowDatasetWithRecordKeysAndPartitionPath =
+            rows.withColumn(HoodieRecord.RECORD_KEY_METADATA_FIELD, functions.col(recordKeyFields).cast(DataTypes.StringType))
+                .withColumn(HoodieRecord.PARTITION_PATH_METADATA_FIELD,
+                    callUDF(partitionPathDecorationUDFName, functions.col(partitionPathField).cast(DataTypes.StringType)));
+      } else {
+        rowDatasetWithRecordKeysAndPartitionPath =
+            rows.withColumn(HoodieRecord.RECORD_KEY_METADATA_FIELD, functions.col(recordKeyFields).cast(DataTypes.StringType))
+                .withColumn(HoodieRecord.PARTITION_PATH_METADATA_FIELD, functions.col(partitionPathField).cast(DataTypes.StringType));
+      }
     } else {
       // use udf
       String tableName = properties.getString(HoodieWriteConfig.TBL_NAME.key());
