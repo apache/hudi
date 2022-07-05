@@ -20,15 +20,12 @@ package org.apache.spark.sql.hudi.streaming
 import java.io.{BufferedWriter, InputStream, OutputStream, OutputStreamWriter}
 import java.nio.charset.StandardCharsets
 import java.util.Date
-
 import org.apache.hadoop.fs.Path
-
-import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, IncrementalRelation, MergeOnReadIncrementalRelation, SparkAdapterSupport}
+import org.apache.hudi.{AvroConversionUtils, CopyOnWriteIncrementalRelation, DataSourceReadOptions, MergeOnReadIncrementalRelation, SparkAdapterSupport}
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.{FileIOUtils, TablePathUtils}
-
 import org.apache.spark.sql.hudi.streaming.HoodieStreamSource.VERSION
 import org.apache.spark.sql.hudi.streaming.HoodieSourceOffset.INIT_OFFSET
 import org.apache.spark.internal.Logging
@@ -159,14 +156,13 @@ class HoodieStreamSource(
         DataSourceReadOptions.END_INSTANTTIME.key -> endOffset.commitTime
       )
 
+      val requiredColumns = schema.fields.map(_.name)
       val rdd = tableType match {
         case HoodieTableType.COPY_ON_WRITE =>
-          val serDe = sparkAdapter.createSparkRowSerDe(RowEncoder(schema))
-          new IncrementalRelation(sqlContext, incParams, Some(schema), metaClient)
-            .buildScan()
-            .map(serDe.serializeRow)
+          new CopyOnWriteIncrementalRelation(sqlContext, incParams, Some(schema), metaClient)
+            .buildScan(requiredColumns, Array.empty[Filter])
+            .asInstanceOf[RDD[InternalRow]]
         case HoodieTableType.MERGE_ON_READ =>
-          val requiredColumns = schema.fields.map(_.name)
           new MergeOnReadIncrementalRelation(sqlContext, incParams, Some(schema), metaClient)
             .buildScan(requiredColumns, Array.empty[Filter])
             .asInstanceOf[RDD[InternalRow]]
