@@ -17,12 +17,6 @@
 
 package org.apache.hudi.utilities;
 
-import com.beust.jcommander.JCommander;
-import com.beust.jcommander.Parameter;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hive.conf.HiveConf;
-import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.common.config.TypedProperties;
@@ -37,16 +31,22 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hive.HiveSyncConfig;
+import org.apache.hudi.hive.HiveSyncConfigHolder;
 import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
+import org.apache.hudi.sync.common.HoodieSyncConfig;
 import org.apache.hudi.table.HoodieSparkTable;
 
+import com.beust.jcommander.JCommander;
+import com.beust.jcommander.Parameter;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
-
-import scala.Tuple2;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -55,6 +55,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
+
+import scala.Tuple2;
 
 /**
  * A tool with spark-submit to drop Hudi table partitions.
@@ -352,11 +354,13 @@ public class HoodieDropPartitionsTool implements Serializable {
     props.put(DataSourceWriteOptions.HIVE_SYNC_MODE().key(), cfg.hiveSyncMode);
     props.put(DataSourceWriteOptions.HIVE_IGNORE_EXCEPTIONS().key(), cfg.hiveSyncIgnoreException);
     props.put(DataSourceWriteOptions.HIVE_PASS().key(), cfg.hivePassWord);
+    props.put(HiveSyncConfig.META_SYNC_BASE_PATH, cfg.basePath);
+    props.put(HiveSyncConfig.META_SYNC_BASE_FILE_FORMAT, "PARQUET");
     props.put(DataSourceWriteOptions.PARTITIONS_TO_DELETE().key(), cfg.partitions);
     props.put(DataSourceWriteOptions.HIVE_PARTITION_EXTRACTOR_CLASS().key(), cfg.partitionValueExtractorClass);
     props.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), cfg.hivePartitionsField);
 
-    return DataSourceUtils.buildHiveSyncConfig(props, cfg.basePath, "PARQUET");
+    return new HiveSyncConfig(props, new Configuration());
   }
 
   private void verifyHiveConfigs() {
@@ -366,9 +370,9 @@ public class HoodieDropPartitionsTool implements Serializable {
 
   private void syncHive(HiveSyncConfig hiveSyncConfig) {
     LOG.info("Syncing target hoodie table with hive table("
-        + hiveSyncConfig.tableName
+        + hiveSyncConfig.getStringOrDefault(HoodieSyncConfig.META_SYNC_TABLE_NAME)
         + "). Hive metastore URL :"
-        + hiveSyncConfig.jdbcUrl
+        + hiveSyncConfig.getStringOrDefault(HiveSyncConfigHolder.HIVE_URL)
         + ", basePath :" + cfg.basePath);
     LOG.info("Hive Sync Conf => " + hiveSyncConfig.toString());
     FileSystem fs = FSUtils.getFs(cfg.basePath, jsc.hadoopConfiguration());
@@ -378,7 +382,7 @@ public class HoodieDropPartitionsTool implements Serializable {
     }
     hiveConf.addResource(fs.getConf());
     LOG.info("Hive Conf => " + hiveConf.getAllProperties().toString());
-    HiveSyncTool hiveSyncTool = new HiveSyncTool(hiveSyncConfig, hiveConf, fs);
+    HiveSyncTool hiveSyncTool = new HiveSyncTool(hiveSyncConfig.getProps(), hiveConf);
     hiveSyncTool.syncHoodieTable();
   }
 
