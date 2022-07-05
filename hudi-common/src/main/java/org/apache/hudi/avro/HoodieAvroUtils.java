@@ -745,15 +745,18 @@ public class HoodieAvroUtils {
    * b) For GenericRecord, copy over the data from the old schema to the new schema or set default values for all fields of this transformed schema
    *
    * @param oldRecord oldRecord to be rewritten
+   * @param oldAvroSchema old avro schema.
    * @param newSchema newSchema used to rewrite oldRecord
    * @param renameCols a map store all rename cols, (k, v)-> (colNameFromNewSchema, colNameFromOldSchema)
    * @param fieldNames track the full name of visited field when we travel new schema.
    * @return newRecord for new Schema
    */
-  private static Object rewriteRecordWithNewSchema(Object oldRecord, Schema oldSchema, Schema newSchema, Map<String, String> renameCols, Deque<String> fieldNames) {
+  private static Object rewriteRecordWithNewSchema(Object oldRecord, Schema oldAvroSchema, Schema newSchema, Map<String, String> renameCols, Deque<String> fieldNames) {
     if (oldRecord == null) {
       return null;
     }
+    // try to get real schema for union type
+    Schema oldSchema = getActualSchemaFromUnion(oldAvroSchema, oldRecord);
     switch (newSchema.getType()) {
       case RECORD:
         if (!(oldRecord instanceof IndexedRecord)) {
@@ -797,7 +800,7 @@ public class HoodieAvroUtils {
         List<Object> newArray = new ArrayList();
         fieldNames.push("element");
         for (Object element : array) {
-          newArray.add(rewriteRecordWithNewSchema(element, getActualSchemaFromUnion(oldSchema.getElementType(), element), newSchema.getElementType(), renameCols, fieldNames));
+          newArray.add(rewriteRecordWithNewSchema(element, oldSchema.getElementType(), newSchema.getElementType(), renameCols, fieldNames));
         }
         fieldNames.pop();
         return newArray;
@@ -809,8 +812,7 @@ public class HoodieAvroUtils {
         Map<Object, Object> newMap = new HashMap<>();
         fieldNames.push("value");
         for (Map.Entry<Object, Object> entry : map.entrySet()) {
-          newMap.put(entry.getKey(), rewriteRecordWithNewSchema(entry.getValue(),
-              getActualSchemaFromUnion(oldSchema.getValueType(), entry.getValue()), newSchema.getValueType(), renameCols, fieldNames));
+          newMap.put(entry.getKey(), rewriteRecordWithNewSchema(entry.getValue(), oldSchema.getValueType(), newSchema.getValueType(), renameCols, fieldNames));
         }
         fieldNames.pop();
         return newMap;

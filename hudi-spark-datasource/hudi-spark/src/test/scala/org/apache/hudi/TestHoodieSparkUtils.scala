@@ -199,9 +199,7 @@ class TestHoodieSparkUtils {
       fail("createRdd should fail, because records don't have a column which is not nullable in the passed in schema")
     } catch {
       case e: Exception =>
-        val cause = e.getCause
-        assertTrue(cause.isInstanceOf[SchemaCompatibilityException])
-        assertTrue(e.getMessage.contains("Unable to validate the rewritten record {\"innerKey\": \"innerKey1_2\", \"innerValue\": 2} against schema"))
+        assertTrue(e.getMessage.contains("null of string in field new_nested_col of test_namespace.test_struct_name.nullableInnerStruct of union"))
     }
     spark.stop()
   }

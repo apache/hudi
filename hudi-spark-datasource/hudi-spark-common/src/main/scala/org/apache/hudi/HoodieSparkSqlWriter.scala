@@ -244,7 +244,8 @@ object HoodieSparkSqlWriter {
             var schema = AvroConversionUtils.convertStructTypeToAvroSchema(df.schema, structName, nameSpace)
             val lastestSchema = getLatestTableSchema(fs, basePath, sparkContext, schema)
             var internalSchemaOpt = getLatestTableInternalSchema(fs, basePath, sparkContext)
-            if (reconcileSchema && parameters(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.key()).toBoolean && internalSchemaOpt.isEmpty) {
+            if (reconcileSchema && parameters.getOrDefault(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.key(), "false").toBoolean
+              && internalSchemaOpt.isEmpty) {
               // force apply full schema evolution.
               internalSchemaOpt = Some(AvroInternalSchemaConverter.convert(schema))
             }

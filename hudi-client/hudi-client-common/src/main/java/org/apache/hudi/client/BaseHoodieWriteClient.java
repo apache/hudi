@@ -39,6 +39,7 @@ import org.apache.hudi.client.heartbeat.HeartbeatUtils;
 import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.client.utils.TransactionUtils;
 import org.apache.hudi.common.HoodiePendingRollbackInfo;
+import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
@@ -276,7 +277,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
     TableSchemaResolver schemaUtil = new TableSchemaResolver(table.getMetaClient());
     String historySchemaStr = schemaUtil.getTableHistorySchemaStrFromCommitMetadata().orElse("");
     FileBasedInternalSchemaStorageManager schemasManager = new FileBasedInternalSchemaStorageManager(table.getMetaClient());
-    if (!historySchemaStr.isEmpty() || Boolean.parseBoolean(config.getString("hoodie.datasource.write.reconcile.schema"))) {
+    if (!historySchemaStr.isEmpty() || Boolean.parseBoolean(config.getString(HoodieCommonConfig.RECONCILE_SCHEMA.key()))) {
       InternalSchema internalSchema;
       Schema avroSchema = HoodieAvroUtils.createHoodieWriteSchema(new Schema.Parser().parse(config.getSchema()));
       if (historySchemaStr.isEmpty()) {
