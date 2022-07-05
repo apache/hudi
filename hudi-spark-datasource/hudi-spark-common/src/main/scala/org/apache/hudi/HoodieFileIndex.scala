@@ -251,7 +251,7 @@ case class HoodieFileIndex(spark: SparkSession,
   override def sizeInBytes: Long = cachedFileSize
 
   private def isColumnStatsIndexAvailable =
-    HoodieTableMetadataUtil.getCompletedMetadataPartitions(metaClient.getTableConfig)
+    metaClient.getTableConfig.getMetadataPartitions
       .contains(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS)
 
   private def isDataSkippingEnabled: Boolean =
