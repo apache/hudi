@@ -18,18 +18,22 @@
 
 package org.apache.hudi.hive.replication;
 
-import com.beust.jcommander.Parameter;
+import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.util.StringUtils;
 
+import com.beust.jcommander.Parameter;
 import com.beust.jcommander.Parameters;
-import java.io.File;
+import com.beust.jcommander.ParametersDelegate;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
+
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.util.Properties;
-import org.apache.hudi.common.util.StringUtils;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_URL;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 
 // TODO: stop extending HiveSyncConfig and take all the variables needed from config file
 @Parameters(commandDescription = "A tool to sync the hudi table to hive from different clusters. Similar to HiveSyncTool but syncs it to more"
@@ -40,9 +44,9 @@ import org.apache.log4j.Logger;
     + "  The tool tries to be transactional but does not guarantee it. If the sync fails midway in one cluster it will try to roll back the committed "
     + "  timestamp from already successful sync on other clusters but that can also fail."
     + "  The tool does not roll back any synced partitions but only the timestamp.")
-public class HiveSyncGlobalCommitConfig extends GlobalHiveSyncConfig {
+public class HiveSyncGlobalCommitParams {
 
-  private static final Logger LOG = LogManager.getLogger(HiveSyncGlobalCommitConfig.class);
+  private static final Logger LOG = LogManager.getLogger(HiveSyncGlobalCommitParams.class);
 
   public static String LOCAL_HIVE_SITE_URI = "hivesyncglobal.local_hive_site_uri";
   public static String REMOTE_HIVE_SITE_URI = "hivesyncglobal.remote_hive_site_uri";
@@ -55,7 +59,14 @@ public class HiveSyncGlobalCommitConfig extends GlobalHiveSyncConfig {
       "--config-xml-file"}, description = "path to the config file in Hive", required = true)
   public String configFile;
 
-  public Properties properties = new Properties();
+  @ParametersDelegate()
+  public final GlobalHiveSyncConfig.GlobalHiveSyncConfigParams globalHiveSyncConfigParams = new GlobalHiveSyncConfig.GlobalHiveSyncConfigParams();
+
+  public boolean isHelp() {
+    return globalHiveSyncConfigParams.isHelp();
+  }
+
+  public Properties loadedProps = new Properties();
 
   private boolean finalize = false;
 
@@ -64,33 +75,33 @@ public class HiveSyncGlobalCommitConfig extends GlobalHiveSyncConfig {
       throw new RuntimeException("trying to modify finalized config");
     }
     finalize = true;
-    try (InputStream configStream = new FileInputStream(new File(configFile))) {
-      properties.loadFromXML(configStream);
+    try (InputStream configStream = new FileInputStream(configFile)) {
+      loadedProps.loadFromXML(configStream);
     }
-    if (StringUtils.isNullOrEmpty(globallyReplicatedTimeStamp)) {
+    if (StringUtils.isNullOrEmpty(globalHiveSyncConfigParams.globallyReplicatedTimeStamp)) {
       throw new RuntimeException("globally replicated timestamp not set");
     }
   }
 
-  GlobalHiveSyncConfig mkGlobalHiveSyncConfig(boolean forRemote) {
-    GlobalHiveSyncConfig cfg = GlobalHiveSyncConfig.copy(this);
-    cfg.basePath = forRemote ? properties.getProperty(REMOTE_BASE_PATH)
-        : properties.getProperty(LOCAL_BASE_PATH, cfg.basePath);
-    cfg.jdbcUrl = forRemote ? properties.getProperty(REMOTE_HIVE_SERVER_JDBC_URLS)
-        : properties.getProperty(LOCAL_HIVE_SERVER_JDBC_URLS, cfg.jdbcUrl);
-    LOG.info("building hivesync config forRemote: " + forRemote + " " + cfg.jdbcUrl + " "
-        + cfg.basePath);
-    return cfg;
+  Properties mkGlobalHiveSyncProps(boolean forRemote) {
+    TypedProperties props = new TypedProperties(loadedProps);
+    props.putAll(globalHiveSyncConfigParams.toProps());
+    String basePath = forRemote ? loadedProps.getProperty(REMOTE_BASE_PATH)
+            : loadedProps.getProperty(LOCAL_BASE_PATH, loadedProps.getProperty(META_SYNC_BASE_PATH.key()));
+    props.setPropertyIfNonNull(META_SYNC_BASE_PATH.key(), basePath);
+    String jdbcUrl = forRemote ? loadedProps.getProperty(REMOTE_HIVE_SERVER_JDBC_URLS)
+            : loadedProps.getProperty(LOCAL_HIVE_SERVER_JDBC_URLS, loadedProps.getProperty(HIVE_URL.key()));
+    props.setPropertyIfNonNull(HIVE_URL.key(), jdbcUrl);
+    LOG.info("building hivesync config forRemote: " + forRemote + " " + jdbcUrl + " "
+        + basePath);
+    return props;
   }
 
   @Override
   public String toString() {
-    return "HiveSyncGlobalCommitConfig{ " + "configFile=" + configFile + ", properties="
-        + properties + ", " + super.toString()
+    return "HiveSyncGlobalCommitParams{ " + "configFile=" + configFile + ", properties="
+        + loadedProps + ", " + super.toString()
         + " }";
   }
 
-  public void storeToXML(OutputStream configStream) throws IOException {
-    this.properties.storeToXML(configStream, "hivesync global config");
-  }
 }

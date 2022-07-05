@@ -233,7 +233,7 @@ public class CommitsCommand implements CommandMarker {
       @CliOption(key = "sparkMaster", unspecifiedDefaultValue = "", help = "Spark Master") String master,
       @CliOption(key = "sparkMemory", unspecifiedDefaultValue = "4G",
          help = "Spark executor memory") final String sparkMemory,
-      @CliOption(key = "rollbackUsingMarkers", unspecifiedDefaultValue = "true",
+      @CliOption(key = "rollbackUsingMarkers", unspecifiedDefaultValue = "false",
          help = "Enabling marker based rollback") final String rollbackUsingMarkers)
       throws Exception {
     HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();

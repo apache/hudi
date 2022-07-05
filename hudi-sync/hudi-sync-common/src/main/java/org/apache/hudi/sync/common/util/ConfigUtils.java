@@ -18,9 +18,13 @@
 
 package org.apache.hudi.sync.common.util;
 
+import org.apache.hudi.common.util.StringUtils;
+
+import org.apache.hadoop.conf.Configuration;
+
 import java.util.HashMap;
 import java.util.Map;
-import org.apache.hudi.common.util.StringUtils;
+import java.util.Properties;
 
 public class ConfigUtils {
   /**
@@ -32,6 +36,7 @@ public class ConfigUtils {
   /**
    * Convert the key-value config to a map.The format of the config
    * is a key-value pair just like "k1=v1\nk2=v2\nk3=v3".
+   *
    * @param keyValueConfig
    * @return
    */
@@ -42,6 +47,10 @@ public class ConfigUtils {
     String[] keyvalues = keyValueConfig.split("\n");
     Map<String, String> tableProperties = new HashMap<>();
     for (String keyValue : keyvalues) {
+      // Handle multiple new lines and lines that contain only spaces after splitting
+      if (keyValue.trim().isEmpty()) {
+        continue;
+      }
       String[] keyValueArray = keyValue.split("=");
       if (keyValueArray.length == 1 || keyValueArray.length == 2) {
         String key = keyValueArray[0].trim();
@@ -49,7 +58,7 @@ public class ConfigUtils {
         tableProperties.put(key, value);
       } else {
         throw new IllegalArgumentException("Bad key-value config: " + keyValue + ", must be the"
-          + " format 'key = value'");
+            + " format 'key = value'");
       }
     }
     return tableProperties;
@@ -58,6 +67,7 @@ public class ConfigUtils {
   /**
    * Convert map config to key-value string.The format of the config
    * is a key-value pair just like "k1=v1\nk2=v2\nk3=v3".
+   *
    * @param config
    * @return
    */
@@ -73,6 +83,12 @@ public class ConfigUtils {
       sb.append(entry.getKey()).append("=").append(entry.getValue());
     }
     return sb.toString();
+  }
+
+  public static Configuration createHadoopConf(Properties props) {
+    Configuration hadoopConf = new Configuration();
+    props.stringPropertyNames().forEach(k -> hadoopConf.set(k, props.getProperty(k)));
+    return hadoopConf;
   }
 
 }
