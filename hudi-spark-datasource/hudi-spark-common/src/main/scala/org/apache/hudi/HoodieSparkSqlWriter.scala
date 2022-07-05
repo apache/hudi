@@ -523,7 +523,7 @@ object HoodieSparkSqlWriter {
     val params: mutable.Map[String, String] = collection.mutable.Map(parameters.toSeq: _*)
     params(HoodieWriteConfig.AVRO_SCHEMA_STRING.key) = schema.toString
     val writeConfig = DataSourceUtils.createHoodieConfig(schema.toString, path, tblName, mapAsJavaMap(params))
-    val bulkInsertPartitionerRows: BulkInsertPartitioner[Dataset[Row]] = if (populateMetaFields) {
+    val bulkInsertPartitionerRows: BulkInsertPartitioner[Dataset[Row]] = {
       val userDefinedBulkInsertPartitionerOpt = DataSourceUtils.createUserDefinedBulkInsertPartitionerWithRows(writeConfig)
       if (userDefinedBulkInsertPartitionerOpt.isPresent) {
         userDefinedBulkInsertPartitionerOpt.get
@@ -531,9 +531,6 @@ object HoodieSparkSqlWriter {
       else {
         BulkInsertInternalPartitionerWithRowsFactory.get(writeConfig.getBulkInsertSortMode)
       }
-    } else {
-      // Sort modes are not yet supported when meta fields are disabled
-      new NonSortPartitionerWithRows()
     }
     val arePartitionRecordsSorted = bulkInsertPartitionerRows.arePartitionRecordsSorted()
     params(HoodieInternalConfig.BULKINSERT_ARE_PARTITIONER_RECORDS_SORTED) = arePartitionRecordsSorted.toString
