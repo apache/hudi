@@ -336,9 +336,9 @@ public class HoodieWriteConfig extends HoodieConfig {
           + "lowest and best effort file sizing. "
           + "NONE: No sorting. Fastest and matches `spark.write.parquet()` in terms of number of files, overheads");
 
-  public static final ConfigProperty<Boolean> EMBEDDED_TIMELINE_SERVER_ENABLE = ConfigProperty
+  public static final ConfigProperty<String> EMBEDDED_TIMELINE_SERVER_ENABLE = ConfigProperty
       .key("hoodie.embed.timeline.server")
-      .defaultValue(true)
+      .defaultValue("true")
       .withDocumentation("When true, spins up an instance of the timeline server (meta server that serves cached file listings, statistics),"
           + "running on each writer's driver process, accepting requests during the write from executors.");
 

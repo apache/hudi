@@ -43,7 +43,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieClusteringConfig;
-import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieClusteringException;
@@ -58,7 +57,6 @@ import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.KeyGenUtils;
-import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.table.BulkInsertPartitioner;
@@ -163,7 +161,6 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
                                                                        final Map<String, String> strategyParams, final Schema schema,
                                                                        final List<HoodieFileGroupId> fileGroupIdList, final boolean preserveHoodieMetadata);
 
-
   protected HoodieData<WriteStatus> performRowWrite(Dataset<Row> inputRecords, Map<String, String> parameters) {
     String uuid = UUID.randomUUID().toString();
     parameters.put(HoodieWriteConfig.BULKINSERT_ROW_IDENTIFY_ID.key(), uuid);
@@ -196,17 +193,9 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
     params.put(HoodieWriteConfig.BULKINSERT_PARALLELISM_VALUE.key(), String.valueOf(numOutputGroups));
     params.put(HoodieWriteConfig.BULKINSERT_ROW_AUTO_COMMIT.key(), String.valueOf(false));
     params.put(HoodieWriteConfig.EMBEDDED_TIMELINE_SERVER_REUSE_ENABLED.key(), String.valueOf(true));
-    if (writeConfig.populateMetaFields()) {
-      // If the table enables populateMetaFields, use SimpleKeyGenerator with the metadata of
-      // recordKey and partitionPath to avoid regeneration.
-      params.put(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), SimpleKeyGenerator.class.getName());
-      params.put(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), HoodieRecord.RECORD_KEY_METADATA_FIELD);
-      params.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), HoodieRecord.PARTITION_PATH_METADATA_FIELD);
-    } else {
-      params.put(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), writeConfig.getKeyGeneratorClass());
-      params.put(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), writeConfig.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME));
-      params.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), writeConfig.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME));
-    }
+    params.compute(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), (k, v) -> writeConfig.getKeyGeneratorClass());
+    params.compute(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), (k, v) -> writeConfig.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME));
+    params.compute(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), (k, v) -> writeConfig.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME));
     params.put("hoodie.datasource.write.operation", "bulk_insert");
     params.put("hoodie.instant.time", instantTime);
     params.put(HoodieWriteConfig.BULKINSERT_PRESERVE_METADATA.key(), String.valueOf(preserveHoodieMetadata));
@@ -269,6 +258,10 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
             default:
               throw new UnsupportedOperationException(String.format("Layout optimization strategy '%s' is not supported", layoutOptStrategy));
           }
+          parameters.compute(HoodieClusteringConfig.LAYOUT_OPTIMIZE_STRATEGY.key(),
+              (k, v) -> getWriteConfig().getString(HoodieClusteringConfig.LAYOUT_OPTIMIZE_STRATEGY));
+          parameters.compute(HoodieClusteringConfig.LAYOUT_OPTIMIZE_SPATIAL_CURVE_BUILD_METHOD.key(),
+              (k, v) -> getWriteConfig().getString(HoodieClusteringConfig.LAYOUT_OPTIMIZE_SPATIAL_CURVE_BUILD_METHOD));
           return orderColumnStr;
         });
   }

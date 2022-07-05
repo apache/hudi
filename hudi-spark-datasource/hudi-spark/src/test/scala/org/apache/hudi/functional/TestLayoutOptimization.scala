@@ -25,15 +25,16 @@ import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieWriteConfig}
 import org.apache.hudi.testutils.HoodieClientTestBase
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieFileIndex}
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
 import org.apache.spark.sql._
 import org.apache.spark.sql.types._
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Tag}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.Arguments.arguments
 import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 
+import java.util
+import java.util.{function, stream}
 import scala.collection.JavaConversions._
 
 @Tag("functional")
@@ -84,7 +85,8 @@ class TestLayoutOptimization extends HoodieClientTestBase {
 
   @ParameterizedTest
   @MethodSource(Array("testLayoutOptimizationParameters"))
-  def testLayoutOptimizationFunctional(tableType: String,
+  def testLayoutOptimizationFunctional(clusteringAsRow: String,
+                                       tableType: String,
                                        layoutOptimizationStrategy: String,
                                        spatialCurveCompositionStrategy: String): Unit = {
     val curveCompositionStrategy =
@@ -112,6 +114,7 @@ class TestLayoutOptimization extends HoodieClientTestBase {
       .option("hoodie.clustering.plan.strategy.small.file.limit", "629145600")
       .option("hoodie.clustering.plan.strategy.max.bytes.per.group", Long.MaxValue.toString)
       .option("hoodie.clustering.plan.strategy.target.file.max.bytes", String.valueOf(64 * 1024 * 1024L))
+      .option(HoodieClusteringConfig.CLUSTERING_AS_ROW.key(), clusteringAsRow)
       .option(HoodieClusteringConfig.LAYOUT_OPTIMIZE_STRATEGY.key(), layoutOptimizationStrategy)
       .option(HoodieClusteringConfig.LAYOUT_OPTIMIZE_SPATIAL_CURVE_BUILD_METHOD.key(), curveCompositionStrategy)
       .option(HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS.key, "begin_lat,begin_lon")
@@ -165,17 +168,26 @@ class TestLayoutOptimization extends HoodieClientTestBase {
 object TestLayoutOptimization {
   def testLayoutOptimizationParameters(): java.util.stream.Stream[Arguments] = {
     java.util.stream.Stream.of(
-      arguments("COPY_ON_WRITE", "linear", null),
-      arguments("COPY_ON_WRITE", "z-order", "direct"),
-      arguments("COPY_ON_WRITE", "z-order", "sample"),
-      arguments("COPY_ON_WRITE", "hilbert", "direct"),
-      arguments("COPY_ON_WRITE", "hilbert", "sample"),
+      Seq("COPY_ON_WRITE", "linear", null),
+      Seq("COPY_ON_WRITE", "z-order", "direct"),
+      Seq("COPY_ON_WRITE", "z-order", "sample"),
+      Seq("COPY_ON_WRITE", "hilbert", "direct"),
+      Seq("COPY_ON_WRITE", "hilbert", "sample"),
+      Seq("MERGE_ON_READ", "linear", null),
+      Seq("MERGE_ON_READ", "z-order", "direct"),
+      Seq("MERGE_ON_READ", "z-order", "sample"),
+      Seq("MERGE_ON_READ", "hilbert", "direct"),
+      Seq("MERGE_ON_READ", "hilbert", "sample")
+    ).flatMap(new function.Function[Seq[String], util.stream.Stream[Arguments]] {
+      override def apply(args: Seq[String]): stream.Stream[Arguments] = {
+        val enableRowClusteringArgs = "true" +: args
+        val disableRowClusteringArgs = "false" +: args
 
-      arguments("MERGE_ON_READ", "linear", null),
-      arguments("MERGE_ON_READ", "z-order", "direct"),
-      arguments("MERGE_ON_READ", "z-order", "sample"),
-      arguments("MERGE_ON_READ", "hilbert", "direct"),
-      arguments("MERGE_ON_READ", "hilbert", "sample")
-    )
+        java.util.stream.Stream.of(
+        Arguments.of(enableRowClusteringArgs.toArray:_*),
+        Arguments.of(disableRowClusteringArgs.toArray:_*)
+        )
+      }
+    })
   }
 }

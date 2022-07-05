@@ -142,8 +142,8 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .key("hoodie.clustering.as.row")
       .defaultValue(false)
       .sinceVersion("0.12.0")
-      .withDocumentation("If set to true, will perform bulk_insert operation directly using the spark native " +
-          "`Row` representation, avoiding any additional conversion costs.");
+      .withDocumentation("If set to true, will perform bulk_insert operation directly using the spark native "
+          + "`Row` representation, avoiding any additional conversion costs.");
 
   public static final ConfigProperty<String> PLAN_STRATEGY_SKIP_PARTITIONS_FROM_LATEST = ConfigProperty
       .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "daybased.skipfromlatest.partitions")
