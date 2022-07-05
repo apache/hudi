@@ -33,7 +33,6 @@ import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.table.HoodieTable;
-
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.sql.catalyst.InternalRow;
@@ -126,11 +125,15 @@ public class BulkInsertDataInternalWriterHelper {
       if (populateMetaFields) { // usual path where meta fields are pre populated in prep step.
         partitionPath = String.valueOf(record.getUTF8String(HoodieRecord.PARTITION_PATH_META_FIELD_POS));
       } else { // if meta columns are disabled.
+        // TODO(HUDI-3993) remove duplication
         if (!keyGeneratorOpt.isPresent()) { // NoPartitionerKeyGen
           partitionPath = "";
         } else if (simpleKeyGen) { // SimpleKeyGen
-          Object parititionPathValue = record.get(simplePartitionFieldIndex, simplePartitionFieldDataType);
-          partitionPath = parititionPathValue != null ? parititionPathValue.toString() : PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH;
+          Object partitionPathValue = record.get(simplePartitionFieldIndex, simplePartitionFieldDataType);
+          partitionPath = partitionPathValue != null ? partitionPathValue.toString() : PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH;
+          if (writeConfig.shouldURLEncodePartitionPath()) {
+            partitionPath = PartitionPathEncodeUtils.escapePathName(partitionPath);
+          }
           if (writeConfig.isHiveStylePartitioningEnabled()) {
             partitionPath = (keyGeneratorOpt.get()).getPartitionPathFields().get(0) + "=" + partitionPath;
           }

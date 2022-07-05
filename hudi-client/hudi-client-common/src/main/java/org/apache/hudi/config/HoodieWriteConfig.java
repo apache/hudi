@@ -1065,6 +1065,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBooleanOrDefault(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE);
   }
 
+  public boolean shouldURLEncodePartitionPath() {
+    return getBooleanOrDefault(KeyGeneratorOptions.URL_ENCODE_PARTITIONING);
+  }
+
   public int getMarkersTimelineServerBasedBatchNumThreads() {
     return getInt(MARKERS_TIMELINE_SERVER_BASED_BATCH_NUM_THREADS);
   }
