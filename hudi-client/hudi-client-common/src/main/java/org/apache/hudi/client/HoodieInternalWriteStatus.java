@@ -149,6 +149,14 @@ public class HoodieInternalWriteStatus implements Serializable {
     this.successRecordKeys = successRecordKeys;
   }
 
+  public double getFailureFraction() {
+    return failureFraction;
+  }
+
+  public boolean isTrackSuccessRecords() {
+    return trackSuccessRecords;
+  }
+
   @Override
   public String toString() {
     return "PartitionPath " + partitionPath + ", FileID " + fileId + ", Success records "

@@ -211,6 +211,23 @@ public class HoodieWriteConfig extends HoodieConfig {
           + " optimally for common query patterns. For now we support a build-in user defined bulkinsert partitioner org.apache.hudi.execution.bulkinsert.RDDCustomColumnsSortPartitioner"
           + " which can does sorting based on specified column values set by " + BULKINSERT_USER_DEFINED_PARTITIONER_SORT_COLUMNS.key());
 
+  public static final ConfigProperty<String> BULKINSERT_ROW_IDENTIFY_ID = ConfigProperty
+      .key("hoodie.bulkinsert.row.writestatus.id")
+      .noDefaultValue()
+      .withDocumentation("The unique id for each write operation, HoodieInternalWriteStatusCoordinator will use "
+          + "this id to identify the related write statuses");
+  public static final ConfigProperty<Boolean> BULKINSERT_PRESERVE_METADATA = ConfigProperty
+      .key("hoodie.datasource.preserve.metadata")
+      .defaultValue(false)
+      .withDocumentation("Whether to preserve metadata from the read source, this is only take effective "
+          + "When using bulk_insert and row writer is enabled");
+
+  public static final ConfigProperty<Boolean> BULKINSERT_ROW_AUTO_COMMIT = ConfigProperty
+      .key("hoodie.bulkinsert.row.auto.commit")
+      .defaultValue(true)
+      .withDocumentation("Whether to create request, inflight and post commit automatically, this can be turned "
+          + "off to perform inspection of the uncommitted write before deciding to commit.");
+
   public static final ConfigProperty<String> UPSERT_PARALLELISM_VALUE = ConfigProperty
       .key("hoodie.upsert.shuffle.parallelism")
       .defaultValue("200")
@@ -319,15 +336,15 @@ public class HoodieWriteConfig extends HoodieConfig {
           + "lowest and best effort file sizing. "
           + "NONE: No sorting. Fastest and matches `spark.write.parquet()` in terms of number of files, overheads");
 
-  public static final ConfigProperty<String> EMBEDDED_TIMELINE_SERVER_ENABLE = ConfigProperty
+  public static final ConfigProperty<Boolean> EMBEDDED_TIMELINE_SERVER_ENABLE = ConfigProperty
       .key("hoodie.embed.timeline.server")
-      .defaultValue("true")
+      .defaultValue(true)
       .withDocumentation("When true, spins up an instance of the timeline server (meta server that serves cached file listings, statistics),"
           + "running on each writer's driver process, accepting requests during the write from executors.");
 
-  public static final ConfigProperty<String> EMBEDDED_TIMELINE_SERVER_REUSE_ENABLED = ConfigProperty
+  public static final ConfigProperty<Boolean> EMBEDDED_TIMELINE_SERVER_REUSE_ENABLED = ConfigProperty
       .key("hoodie.embed.timeline.server.reuse.enabled")
-      .defaultValue("false")
+      .defaultValue(false)
       .withDocumentation("Controls whether the timeline server instance should be cached and reused across the JVM (across task lifecycles)"
           + "to avoid startup costs. This should rarely be changed.");
 
@@ -982,6 +999,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(AUTO_COMMIT_ENABLE);
   }
 
+  public Boolean bulkInsertRowAutoCommit() {
+    return getBoolean(BULKINSERT_ROW_AUTO_COMMIT);
+  }
+
   public Boolean shouldAssumeDatePartitioning() {
     return metadataConfig.shouldAssumeDatePartitioning();
   }
@@ -1084,7 +1105,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public boolean isEmbeddedTimelineServerReuseEnabled() {
-    return Boolean.parseBoolean(getStringOrDefault(EMBEDDED_TIMELINE_SERVER_REUSE_ENABLED));
+    return getBoolean(EMBEDDED_TIMELINE_SERVER_REUSE_ENABLED);
   }
 
   public int getEmbeddedTimelineServerPort() {

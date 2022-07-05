@@ -35,7 +35,10 @@ import org.apache.hudi.table.action.commit.SparkBulkInsertHelper;
 import org.apache.avro.Schema;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Row;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -52,6 +55,20 @@ public class SparkSingleFileSortExecutionStrategy<T extends HoodieRecordPayload<
                                               HoodieEngineContext engineContext,
                                               HoodieWriteConfig writeConfig) {
     super(table, engineContext, writeConfig);
+  }
+
+  @Override
+  public HoodieData<WriteStatus> performClusteringWithRecordsRow(Dataset<Row> inputRecords, int numOutputGroups, String instantTime, Map<String, String> strategyParams, Schema schema, List<HoodieFileGroupId> fileGroupIdList, boolean preserveHoodieMetadata) {
+    if (numOutputGroups != 1 || fileGroupIdList.size() != 1) {
+      throw new HoodieClusteringException("Expect only one file group for strategy: " + getClass().getName());
+    }
+    LOG.info("Starting clustering for a group, parallelism:" + numOutputGroups + " commit:" + instantTime);
+
+    HashMap<String, String> params = new HashMap<>(
+        buildHoodieRowParameters(numOutputGroups, instantTime, strategyParams, preserveHoodieMetadata));
+    params.put(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE.key(), String.valueOf(Long.MAX_VALUE));
+
+    return performRowWrite(inputRecords, params);
   }
 
   @Override

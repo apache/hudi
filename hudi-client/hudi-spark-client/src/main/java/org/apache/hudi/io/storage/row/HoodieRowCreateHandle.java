@@ -70,6 +70,8 @@ public class HoodieRowCreateHandle implements Serializable {
   private final UTF8String commitTime;
   private final Function<Long, String> seqIdGenerator;
 
+  private final boolean preserveMetadata;
+
   private final HoodieTimer currTimer;
 
   protected final HoodieInternalRowFileWriter fileWriter;
@@ -104,6 +106,8 @@ public class HoodieRowCreateHandle implements Serializable {
 
     this.writeStatus = new HoodieInternalWriteStatus(!table.getIndex().isImplicitWithStorage(),
         writeConfig.getWriteStatusFailureFraction());
+    this.preserveMetadata = writeConfig.getBoolean(HoodieWriteConfig.BULKINSERT_PRESERVE_METADATA);
+
     writeStatus.setPartitionPath(partitionPath);
     writeStatus.setFileId(fileId);
     writeStatus.setStat(new HoodieWriteStat());
@@ -153,13 +157,22 @@ public class HoodieRowCreateHandle implements Serializable {
       //          over again)
       UTF8String recordKey = row.getUTF8String(HoodieRecord.RECORD_KEY_META_FIELD_ORD);
       UTF8String partitionPath = row.getUTF8String(HoodieRecord.PARTITION_PATH_META_FIELD_ORD);
-      // This is the only meta-field that is generated dynamically, hence conversion b/w
-      // [[String]] and [[UTF8String]] is unavoidable
-      UTF8String seqId = UTF8String.fromString(seqIdGenerator.apply(GLOBAL_SEQ_NO.getAndIncrement()));
 
-      InternalRow updatedRow = new HoodieInternalRow(commitTime, seqId, recordKey,
-          partitionPath, fileName, row, true);
+      InternalRow updatedRow;
+      if (preserveMetadata) {
+        updatedRow = new HoodieInternalRow(row.getUTF8String(HoodieRecord.COMMIT_TIME_METADATA_FIELD_POS),
+            row.getUTF8String(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD_POS),
+            recordKey,
+            partitionPath,
+            fileName, row, true);
+      } else {
+        // This is the only meta-field that is generated dynamically, hence conversion b/w
+        // [[String]] and [[UTF8String]] is unavoidable
+        UTF8String seqId = UTF8String.fromString(seqIdGenerator.apply(GLOBAL_SEQ_NO.getAndIncrement()));
 
+        updatedRow = new HoodieInternalRow(commitTime, seqId, recordKey,
+            partitionPath, fileName, row, true);
+      }
       try {
         fileWriter.writeRow(recordKey, updatedRow);
         // NOTE: To avoid conversion on the hot-path we only convert [[UTF8String]] into [[String]]

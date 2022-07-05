@@ -20,8 +20,10 @@ package org.apache.hudi.spark3.internal;
 
 import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.client.HoodieInternalWriteStatus;
+import org.apache.hudi.client.HoodieInternalWriteStatusCoordinator;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.internal.DataSourceInternalWriterHelper;
 
@@ -63,11 +65,18 @@ public class HoodieDataSourceInternalBatchWrite implements BatchWrite {
     this.extraMetadata = DataSourceUtils.getExtraMetadata(properties);
     this.dataSourceInternalWriterHelper = new DataSourceInternalWriterHelper(instantTime, writeConfig, structType,
         jss, hadoopConfiguration, extraMetadata);
+
+    if (writeConfig.bulkInsertRowAutoCommit()) {
+      this.dataSourceInternalWriterHelper.createRequestedCommit();
+    }
   }
 
   @Override
   public DataWriterFactory createBatchWriterFactory(PhysicalWriteInfo info) {
-    dataSourceInternalWriterHelper.createInflightCommit();
+    if (writeConfig.shouldAutoCommit()) {
+      dataSourceInternalWriterHelper.createInflightCommit();
+    }
+
     if (WriteOperationType.BULK_INSERT == dataSourceInternalWriterHelper.getWriteOperationType()) {
       return new HoodieBulkInsertDataInternalWriterFactory(dataSourceInternalWriterHelper.getHoodieTable(),
           writeConfig, instantTime, structType, populateMetaFields, arePartitionRecordsSorted);
@@ -88,9 +97,19 @@ public class HoodieDataSourceInternalBatchWrite implements BatchWrite {
 
   @Override
   public void commit(WriterCommitMessage[] messages) {
-    List<HoodieWriteStat> writeStatList = Arrays.stream(messages).map(m -> (HoodieWriterCommitMessage) m)
-        .flatMap(m -> m.getWriteStatuses().stream().map(HoodieInternalWriteStatus::getStat)).collect(Collectors.toList());
-    dataSourceInternalWriterHelper.commit(writeStatList);
+    List<HoodieInternalWriteStatus> writeStatusList = Arrays.stream(messages).map(m -> (HoodieWriterCommitMessage) m)
+        .flatMap(m -> m.getWriteStatuses().stream())
+        .collect(Collectors.toList());
+    if (writeConfig.shouldAutoCommit()) {
+      List<HoodieWriteStat> writeStatList = writeStatusList.stream()
+          .map(HoodieInternalWriteStatus::getStat).collect(Collectors.toList());
+      dataSourceInternalWriterHelper.commit(writeStatList);
+    }
+
+    Option.ofNullable(writeConfig.getString(HoodieWriteConfig.BULKINSERT_ROW_IDENTIFY_ID.key())).map(id -> {
+      HoodieInternalWriteStatusCoordinator.get().assignStatuses(id, writeStatusList);
+      return true;
+    });
   }
 
   @Override

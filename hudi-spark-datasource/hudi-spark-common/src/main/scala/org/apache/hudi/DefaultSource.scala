@@ -175,14 +175,16 @@ class DefaultSource extends RelationProvider
                               mode: SaveMode,
                               optParams: Map[String, String],
                               df: DataFrame): BaseRelation = {
-    val dfWithoutMetaCols = df.drop(HoodieRecord.HOODIE_META_COLUMNS.asScala:_*)
+    val colsWithoutHoodieMeta = df.schema
+      .filter(field => !HoodieRecord.HOODIE_META_COLUMNS.contains(field.name))
+      .foldLeft(new StructType())((s, f) => s.add(f))
 
     if (optParams.get(OPERATION.key).contains(BOOTSTRAP_OPERATION_OPT_VAL)) {
-      HoodieSparkSqlWriter.bootstrap(sqlContext, mode, optParams, dfWithoutMetaCols)
+      HoodieSparkSqlWriter.bootstrap(sqlContext, mode, optParams, df)
     } else {
-      HoodieSparkSqlWriter.write(sqlContext, mode, optParams, dfWithoutMetaCols)
+      HoodieSparkSqlWriter.write(sqlContext, mode, optParams, df)
     }
-    new HoodieEmptyRelation(sqlContext, dfWithoutMetaCols.schema)
+    new HoodieEmptyRelation(sqlContext, colsWithoutHoodieMeta)
   }
 
   override def createSink(sqlContext: SQLContext,

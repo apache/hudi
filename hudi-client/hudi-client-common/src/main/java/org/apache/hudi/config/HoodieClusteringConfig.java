@@ -138,6 +138,13 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .sinceVersion("0.9.0")
       .withDocumentation("Config to control frequency of async clustering");
 
+  public static final ConfigProperty<Boolean> CLUSTERING_AS_ROW = ConfigProperty
+      .key("hoodie.clustering.as.row")
+      .defaultValue(false)
+      .sinceVersion("0.12.0")
+      .withDocumentation("If set to true, will perform bulk_insert operation directly using the spark native " +
+          "`Row` representation, avoiding any additional conversion costs.");
+
   public static final ConfigProperty<String> PLAN_STRATEGY_SKIP_PARTITIONS_FROM_LATEST = ConfigProperty
       .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "daybased.skipfromlatest.partitions")
       .defaultValue("0")
