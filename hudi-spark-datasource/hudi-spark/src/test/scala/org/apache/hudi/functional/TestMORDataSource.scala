@@ -583,7 +583,7 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
         .orderBy(desc("_hoodie_commit_seqno"))
         .columns.mkString(","))
     val sampleRow = df
-      .select("begin_lat", "current_date", "fare.currency", "tip_history", "nation.name")
+      .select("begin_lat", "current_date", "fare.currency", "tip_history", "nation")
       .orderBy(desc("_hoodie_commit_time"))
       .head()
     assertEquals(sampleRow.getDouble(0), sampleRow.get(0))

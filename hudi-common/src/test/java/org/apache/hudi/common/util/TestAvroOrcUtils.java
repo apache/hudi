@@ -43,7 +43,7 @@ public class TestAvroOrcUtils extends HoodieCommonTestHarness {
         + "timestamp:bigint,_row_key:string,partition_path:string,rider:string,driver:string,begin_lat:double,"
         + "begin_lon:double,end_lat:double,end_lon:double,"
         + "distance_in_meters:int,seconds_since_epoch:bigint,weight:float,"
-        + "nation:struct<name:binary>,"
+        + "nation:binary,city:struct<name:string>,"
         + "current_date:date,current_ts:bigint,height:decimal(10,6),"
         + "city_to_state:map<string,string>,"
         + "fare:struct<amount:double,currency:string>,"

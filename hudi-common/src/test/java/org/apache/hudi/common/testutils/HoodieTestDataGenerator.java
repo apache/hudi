@@ -114,8 +114,9 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   public static final String EXTRA_TYPE_SCHEMA = "{\"name\": \"distance_in_meters\", \"type\": \"int\"},"
       + "{\"name\": \"seconds_since_epoch\", \"type\": \"long\"},"
       + "{\"name\": \"weight\", \"type\": \"float\"},"
-      + "{\"name\": \"nation\",\"type\": {\"type\":\"record\", \"name\":\"nation\",\"fields\": ["
-      + "{\"name\": \"name\",\"type\": \"bytes\"}]}},"
+      + "{\"name\": \"nation\", \"type\": \"bytes\"},"
+      + "{\"name\": \"city\",\"type\": {\"type\":\"record\", \"name\":\"city\",\"fields\": ["
+      + "{\"name\": \"name\",\"type\": \"string\"}]}},"
       + "{\"name\":\"current_date\",\"type\": {\"type\": \"int\", \"logicalType\": \"date\"}},"
       + "{\"name\":\"current_ts\",\"type\": {\"type\": \"long\"}},"
       + "{\"name\":\"height\",\"type\":{\"type\":\"fixed\",\"name\":\"abc\",\"size\":5,\"logicalType\":\"decimal\",\"precision\":10,\"scale\":6}},";
@@ -134,7 +135,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
 
   public static final String NULL_SCHEMA = Schema.create(Schema.Type.NULL).toString();
   public static final String TRIP_HIVE_COLUMN_TYPES = "bigint,string,string,string,string,double,"
-      + "double,double,double,int,bigint,float,struct<binary>,int,bigint,decimal(10,6),"
+      + "double,double,double,int,bigint,float,binary,struct<name:string>,int,bigint,decimal(10,6),"
       + "map<string,string>,struct<amount:double,currency:string>,array<struct<amount:double,currency:string>>,boolean";
 
 
@@ -318,13 +319,14 @@ public class HoodieTestDataGenerator implements AutoCloseable {
       rec.put("distance_in_meters", rand.nextInt());
       rec.put("seconds_since_epoch", rand.nextLong());
       rec.put("weight", rand.nextFloat());
-
-      // Construct nested field of "nation"
-      Schema nationSchema = AVRO_SCHEMA.getField("nation").schema();
-      GenericRecord nationRecord = new GenericData.Record(nationSchema);
       byte[] bytes = "Canada".getBytes();
-      nationRecord.put("name", ByteBuffer.wrap(bytes));
-      rec.put("nation", nationRecord);
+      rec.put("nation", ByteBuffer.wrap(bytes));
+      
+      // Construct nested field of "city"
+      Schema citySchema = AVRO_SCHEMA.getField("city").schema();
+      GenericRecord cityRecord = new GenericData.Record(citySchema);
+      cityRecord.put("name", "LA");
+      rec.put("city", cityRecord);
       long randomMillis = genRandomTimeMillis(rand);
       Instant instant = Instant.ofEpochMilli(randomMillis);
       rec.put("current_date", (int) LocalDateTime.ofInstant(instant, ZoneOffset.UTC).toLocalDate().toEpochDay());
