@@ -16,24 +16,26 @@
  */
 package org.apache.hudi
 
+import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.async.{AsyncClusteringService, AsyncCompactService, SparkStreamingAsyncClusteringService, SparkStreamingAsyncCompactService}
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
-import org.apache.hudi.common.model.HoodieRecordPayload
+import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieRecordPayload}
 import org.apache.hudi.common.table.marker.MarkerType
 import org.apache.hudi.common.table.timeline.HoodieInstant.State
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
-import org.apache.hudi.common.util.{ClusteringUtils, CompactionUtils}
+import org.apache.hudi.common.util.{ClusteringUtils, CompactionUtils, StringUtils}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieCorruptedDataException
 import org.apache.log4j.LogManager
 import org.apache.spark.api.java.JavaSparkContext
-import org.apache.spark.sql.execution.streaming.Sink
+import org.apache.spark.sql.execution.streaming.{Sink, StreamExecution}
 import org.apache.spark.sql.streaming.OutputMode
 import org.apache.spark.sql.{DataFrame, SQLContext, SaveMode}
 
 import java.lang
+import java.nio.charset.StandardCharsets
 import java.util.function.Function
 import scala.collection.JavaConversions._
 import scala.util.{Failure, Success, Try}
@@ -46,14 +48,23 @@ class HoodieStreamingSink(sqlContext: SQLContext,
     with Serializable {
   @volatile private var latestBatchId = -1L
 
+  /*@transient private val hadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf()
+
+  private lazy val tablePath: Path = {
+    val path = new Path(options.getOrElse("path", "Missing 'path' option"))
+    val fs = path.getFileSystem(hadoopConf)
+    TablePathUtils.getTablePath(fs, path).get()
+  }
+  private lazy val metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(tablePath.toString).build()*/
+
   private val log = LogManager.getLogger(classOf[HoodieStreamingSink])
 
-  private val retryCnt = options.getOrDefault(DataSourceWriteOptions.STREAMING_RETRY_CNT.key,
-    DataSourceWriteOptions.STREAMING_RETRY_CNT.defaultValue).toInt
-  private val retryIntervalMs = options.getOrDefault(DataSourceWriteOptions.STREAMING_RETRY_INTERVAL_MS.key,
-    DataSourceWriteOptions.STREAMING_RETRY_INTERVAL_MS.defaultValue).toLong
-  private val ignoreFailedBatch = options.getOrDefault(DataSourceWriteOptions.STREAMING_IGNORE_FAILED_BATCH.key,
-    DataSourceWriteOptions.STREAMING_IGNORE_FAILED_BATCH.defaultValue).toBoolean
+  private val retryCnt = options.getOrDefault(STREAMING_RETRY_CNT.key,
+    STREAMING_RETRY_CNT.defaultValue).toInt
+  private val retryIntervalMs = options.getOrDefault(STREAMING_RETRY_INTERVAL_MS.key,
+    STREAMING_RETRY_INTERVAL_MS.defaultValue).toLong
+  private val ignoreFailedBatch = options.getOrDefault(STREAMING_IGNORE_FAILED_BATCH.key,
+    STREAMING_IGNORE_FAILED_BATCH.defaultValue).toBoolean
 
   private var isAsyncCompactorServiceShutdownAbnormally = false
   private var isAsyncClusteringServiceShutdownAbnormally = false
@@ -65,10 +76,11 @@ class HoodieStreamingSink(sqlContext: SQLContext,
       SaveMode.Overwrite
     }
 
-  private var asyncCompactorService : AsyncCompactService = _
+  private var asyncCompactorService: AsyncCompactService = _
   private var asyncClusteringService: AsyncClusteringService = _
-  private var writeClient : Option[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]] = Option.empty
-  private var hoodieTableConfig : Option[HoodieTableConfig] = Option.empty
+  private var writeClient: Option[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]] = Option.empty
+  private var hoodieTableConfig: Option[HoodieTableConfig] = Option.empty
+  private var metaClient: HoodieTableMetaClient = _
 
   override def addBatch(batchId: Long, data: DataFrame): Unit = this.synchronized {
     if (isAsyncCompactorServiceShutdownAbnormally) {
@@ -84,20 +96,62 @@ class HoodieStreamingSink(sqlContext: SQLContext,
     var updatedOptions = options.updated(HoodieWriteConfig.MARKERS_TYPE.key(), MarkerType.DIRECT.name())
     // we need auto adjustment enabled for streaming sink since async table services are feasible within the same JVM.
     updatedOptions = updatedOptions.updated(HoodieWriteConfig.AUTO_ADJUST_LOCK_CONFIGS.key, "true")
+    // disable row writer bulk insert of write stream
+    if (options.getOrDefault(OPERATION.key, UPSERT_OPERATION_OPT_VAL).equalsIgnoreCase(BULK_INSERT_OPERATION_OPT_VAL)) {
+      updatedOptions = updatedOptions.updated(ENABLE_ROW_WRITER.key, "false")
+    }
+
+    val queryId = sqlContext.sparkContext.getLocalProperty(StreamExecution.QUERY_ID_KEY)
+    assert(queryId != null)
+    log.warn(s"Query id: $queryId")
+
+    if (metaClient != null) {
+      val lastCommit = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants().lastInstant()
+      if (lastCommit.isPresent) {
+        val commitMetadata = HoodieCommitMetadata.fromBytes(metaClient.getActiveTimeline.getInstantDetails(lastCommit.get()).get(), classOf[HoodieCommitMetadata])
+        val lastCheckpoint = commitMetadata.getMetadata(HoodieWriteConfig.DELTASTREAMER_CHECKPOINT_KEY)
+        if (!StringUtils.isNullOrEmpty(lastCheckpoint)) {
+          latestBatchId = lastCheckpoint.toLong
+        }
+      }
+    }
+
+    if (latestBatchId >= batchId) {
+      log.warn(s"Skipping already completed batch $batchId in query $queryId")
+      return
+    }
 
     retry(retryCnt, retryIntervalMs)(
       Try(
         HoodieSparkSqlWriter.write(
           sqlContext, mode, updatedOptions, data, hoodieTableConfig, writeClient, Some(triggerAsyncCompactor), Some(triggerAsyncClustering))
-      ) match {
+      )
+      match {
         case Success((true, commitOps, compactionInstantOps, clusteringInstant, client, tableConfig)) =>
-          log.info(s"Micro batch id=$batchId succeeded"
-            + (commitOps.isPresent match {
-            case true => s" for commit=${commitOps.get()}"
-            case _ => s" with no new commits"
+          log.warn(s"Micro batch id=$batchId succeeded"
+            + (if (commitOps.isPresent) {
+            s" for commit=${commitOps.get()}"
+          } else {
+            s" with no new commits"
           }))
+          log.warn(s"Current value of latestBatchId: $latestBatchId")
+          log.warn(s"Setting latestBatchId to batchId $batchId")
+          latestBatchId = batchId
           writeClient = Some(client)
           hoodieTableConfig = Some(tableConfig)
+          metaClient = HoodieTableMetaClient.builder()
+            .setConf(sqlContext.sparkContext.hadoopConfiguration)
+            .setBasePath(client.getConfig.getBasePath)
+            .build()
+          // let's update batchId as checkpoint for this commit
+          if (commitOps.isPresent) {
+            val instant = metaClient.getActiveTimeline.getCompletedInstantForTimestamp(commitOps.get())
+            val commitMetadata = HoodieCommitMetadata.fromBytes(metaClient.getActiveTimeline.getInstantDetails(instant).get(), classOf[HoodieCommitMetadata])
+            commitMetadata.addMetadata(HoodieWriteConfig.DELTASTREAMER_CHECKPOINT_KEY, batchId.toString)
+            metaClient.getActiveTimeline.deleteInstantFile(instant)
+            val inflightInstant = HoodieTimeline.getInflightInstant(instant, metaClient.getTableType)
+            metaClient.getActiveTimeline.saveAsComplete(inflightInstant, org.apache.hudi.common.util.Option.of(commitMetadata.toJsonString.getBytes(StandardCharsets.UTF_8)))
+          }
           if (compactionInstantOps.isPresent) {
             asyncCompactorService.enqueuePendingAsyncServiceInstant(
               new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, compactionInstantOps.get()))
@@ -122,7 +176,7 @@ class HoodieStreamingSink(sqlContext: SQLContext,
           log.error(s"Micro batch id=$batchId threw following exception: ", e)
           if (ignoreFailedBatch) {
             log.info(s"Ignore the exception and move on streaming as per " +
-              s"${DataSourceWriteOptions.STREAMING_IGNORE_FAILED_BATCH.key} configuration")
+              s"${STREAMING_IGNORE_FAILED_BATCH.key} configuration")
             Success((true, None, None))
           } else {
             if (retryCnt > 1) log.info(s"Retrying the failed micro batch id=$batchId ...")
@@ -131,19 +185,20 @@ class HoodieStreamingSink(sqlContext: SQLContext,
         case Success((false, commitOps, compactionInstantOps, clusteringInstant, client, tableConfig)) =>
           log.error(s"Micro batch id=$batchId ended up with errors"
             + (commitOps.isPresent match {
-              case true =>  s" for commit=${commitOps.get()}"
-              case _ => s""
-            }))
+            case true => s" for commit=${commitOps.get()}"
+            case _ => s""
+          }))
           if (ignoreFailedBatch) {
             log.info(s"Ignore the errors and move on streaming as per " +
-              s"${DataSourceWriteOptions.STREAMING_IGNORE_FAILED_BATCH.key} configuration")
+              s"${STREAMING_IGNORE_FAILED_BATCH.key} configuration")
             Success((true, None, None))
           } else {
-            if (retryCnt > 1) log.info(s"Retrying the failed micro batch id=$batchId ...")
+            if (retryCnt > 1) log.warn(s"Retrying the failed micro batch id=$batchId ...")
             Failure(new HoodieCorruptedDataException(s"Micro batch id=$batchId ended up with errors"))
           }
       }
-    ) match {
+    )
+    match {
       case Failure(e) =>
         if (!ignoreFailedBatch) {
           log.error(s"Micro batch id=$batchId threw following expections," +
@@ -198,14 +253,14 @@ class HoodieStreamingSink(sqlContext: SQLContext,
       // First time, scan .hoodie folder and get all pending compactions
       val metaClient = HoodieTableMetaClient.builder().setConf(sqlContext.sparkContext.hadoopConfiguration)
         .setBasePath(client.getConfig.getBasePath).build()
-      val pendingInstants :java.util.List[HoodieInstant] =
+      val pendingInstants: java.util.List[HoodieInstant] =
         CompactionUtils.getPendingCompactionInstantTimes(metaClient)
-      pendingInstants.foreach((h : HoodieInstant) => asyncCompactorService.enqueuePendingAsyncServiceInstant(h))
+      pendingInstants.foreach((h: HoodieInstant) => asyncCompactorService.enqueuePendingAsyncServiceInstant(h))
     }
   }
 
   protected def triggerAsyncClustering(client: SparkRDDWriteClient[HoodieRecordPayload[Nothing]]): Unit = {
-    if (null ==  asyncClusteringService) {
+    if (null == asyncClusteringService) {
       log.info("Triggering async clustering!")
       asyncClusteringService = new SparkStreamingAsyncClusteringService(new HoodieSparkEngineContext(new JavaSparkContext(sqlContext.sparkContext)),
         client)
@@ -226,12 +281,12 @@ class HoodieStreamingSink(sqlContext: SQLContext,
       // First time, scan .hoodie folder and get all pending clustering instants
       val metaClient = HoodieTableMetaClient.builder().setConf(sqlContext.sparkContext.hadoopConfiguration)
         .setBasePath(client.getConfig.getBasePath).build()
-      val pendingInstants :java.util.List[HoodieInstant] = ClusteringUtils.getPendingClusteringInstantTimes(metaClient)
-      pendingInstants.foreach((h : HoodieInstant) => asyncClusteringService.enqueuePendingAsyncServiceInstant(h))
+      val pendingInstants: java.util.List[HoodieInstant] = ClusteringUtils.getPendingClusteringInstantTimes(metaClient)
+      pendingInstants.foreach((h: HoodieInstant) => asyncClusteringService.enqueuePendingAsyncServiceInstant(h))
     }
   }
 
-  private def reset(force: Boolean) : Unit = this.synchronized {
+  private def reset(force: Boolean): Unit = this.synchronized {
     if (asyncCompactorService != null) {
       asyncCompactorService.shutdown(force)
       asyncCompactorService = null

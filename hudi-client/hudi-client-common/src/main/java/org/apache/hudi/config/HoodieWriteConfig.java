@@ -319,6 +319,11 @@ public class HoodieWriteConfig extends HoodieConfig {
           + "lowest and best effort file sizing. "
           + "NONE: No sorting. Fastest and matches `spark.write.parquet()` in terms of number of files, overheads");
 
+  public static final ConfigProperty<String> BULK_INSERT_WRITE_STREAM_ENABLE = ConfigProperty
+          .key("hoodie.bulkinsert.write.stream")
+          .defaultValue("false")
+          .withDocumentation("Enable this config to do bulk insert with `writeStream` dataset using row-writer path, instead of converting to RDD");
+
   public static final ConfigProperty<String> EMBEDDED_TIMELINE_SERVER_ENABLE = ConfigProperty
       .key("hoodie.embed.timeline.server")
       .defaultValue("true")
@@ -1124,6 +1129,10 @@ public class HoodieWriteConfig extends HoodieConfig {
   public BulkInsertSortMode getBulkInsertSortMode() {
     String sortMode = getStringOrDefault(BULK_INSERT_SORT_MODE);
     return BulkInsertSortMode.valueOf(sortMode.toUpperCase());
+  }
+
+  public boolean isBulkInsertWriteStreamEnabled() {
+    return getBoolean(BULK_INSERT_WRITE_STREAM_ENABLE);
   }
 
   public boolean isMergeDataValidationCheckEnabled() {
@@ -2436,6 +2445,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withBulkInsertSortMode(String mode) {
       writeConfig.setValue(BULK_INSERT_SORT_MODE, mode);
+      return this;
+    }
+
+    public Builder withBulkInsertWriteStreamEnabled(boolean bulkInsertWriteStreamEnabled) {
+      writeConfig.setValue(BULK_INSERT_WRITE_STREAM_ENABLE, String.valueOf(bulkInsertWriteStreamEnabled));
       return this;
     }
 

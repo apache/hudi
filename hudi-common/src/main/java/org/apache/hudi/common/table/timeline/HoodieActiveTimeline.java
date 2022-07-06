@@ -243,7 +243,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     }
   }
 
-  protected void deleteInstantFile(HoodieInstant instant) {
+  public void deleteInstantFile(HoodieInstant instant) {
     LOG.info("Deleting instant " + instant);
     Path inFlightCommitFilePath = getInstantFileNamePath(instant.getFileName());
     try {
@@ -262,6 +262,14 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   public Option<byte[]> getInstantDetails(HoodieInstant instant) {
     Path detailPath = getInstantFileNamePath(instant.getFileName());
     return readDataFromPath(detailPath);
+  }
+
+  public HoodieInstant getCompletedInstantForTimestamp(String timestamp) {
+    return filterCompletedInstants()
+            .getInstants()
+            .filter(i -> timestamp.equals(i.getTimestamp()))
+            .findFirst()
+            .orElseThrow(() -> new HoodieIOException(String.format("No completed instant with timestamp %s ", timestamp)));
   }
 
   /**

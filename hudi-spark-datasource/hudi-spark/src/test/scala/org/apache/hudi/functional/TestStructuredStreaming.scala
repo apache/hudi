@@ -24,6 +24,7 @@ import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestTable}
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieStorageConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.TableNotFoundException
+import org.apache.hudi.keygen.ComplexKeyGenerator
 import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
 import org.apache.log4j.LogManager
@@ -50,6 +51,10 @@ class TestStructuredStreaming extends HoodieClientTestBase {
     DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
     DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
     DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
+    DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> classOf[ComplexKeyGenerator].getName,
+    DataSourceWriteOptions.OPERATION.key -> DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL,
+    // HoodieWriteConfig.BULK_INSERT_WRITE_STREAM_ENABLE.key -> "true",
+    "hoodie.bulkinsert.sort.mode" -> "NONE",
     HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
   )
 
@@ -132,7 +137,7 @@ class TestStructuredStreaming extends HoodieClientTestBase {
       // Read RO View
       val hoodieROViewDF2 = spark.read.format("org.apache.hudi")
         .load(destPath + "/*/*/*/*")
-      assertEquals(100, hoodieROViewDF2.count()) // still 100, since we only updated
+      assertEquals(200, hoodieROViewDF2.count()) // still 100, since we only updated
 
 
       // Read Incremental View
@@ -155,7 +160,7 @@ class TestStructuredStreaming extends HoodieClientTestBase {
         .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, commitInstantTime1)
         .load(destPath)
 
-      assertEquals(uniqueKeyCnt, hoodieIncViewDF2.count()) // 100 records must be pulled
+      assertEquals(100, hoodieIncViewDF2.count()) // 100 records must be pulled
       countsPerCommit = hoodieIncViewDF2.groupBy("_hoodie_commit_time").count().collect()
       assertEquals(1, countsPerCommit.length)
       assertEquals(commitInstantTime2, countsPerCommit(0).get(0))
@@ -178,10 +183,8 @@ class TestStructuredStreaming extends HoodieClientTestBase {
         numInstants = timeline.countInstants
         success = true
       }
-      val metaClient = HoodieTableMetaClient.builder().setConf(fs.getConf).setBasePath(tablePath)
-      .setLoadActiveTimelineOnLoad(true).build()
     } catch {
-      case te: TableNotFoundException =>
+      case _: TableNotFoundException =>
         log.info("Got table not found exception. Retrying")
     } finally {
       if (!success) {
