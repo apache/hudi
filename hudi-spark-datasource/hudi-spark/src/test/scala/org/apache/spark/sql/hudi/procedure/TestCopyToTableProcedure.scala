@@ -49,7 +49,7 @@ class TestCopyToTableProcedure extends HoodieSparkSqlTestBase {
       spark.sql(s"insert into $tableName select 3, 'a3', 30, 2000")
       spark.sql(s"insert into $tableName select 4, 'a4', 40, 2500")
 
-      val copyTableName = "copyTable"
+      val copyTableName = generateTableName
       // Check required fields
       checkExceptionContain(s"call copy_to_table(table=>'$tableName')")(s"Argument: new_table is required")
 
@@ -85,7 +85,7 @@ class TestCopyToTableProcedure extends HoodieSparkSqlTestBase {
       spark.sql(s"insert into $tableName select 3, 'a3', 30, 2000")
       spark.sql(s"insert into $tableName select 4, 'a4', 40, 2500")
 
-      val copyTableName = "copyTable"
+      val copyTableName = generateTableName
       val row = spark.sql(s"""call copy_to_table(table=>'$tableName',new_table=>'$copyTableName',query_type=>'snapshot')""").collectAsList()
       // check exit code
       assert(row.size() == 1 && row.get(0).get(0) == 0)
@@ -106,7 +106,7 @@ class TestCopyToTableProcedure extends HoodieSparkSqlTestBase {
       assert(finalTableCount == 8)
 
       // check snapshot copy with mark instanceTime
-      val copyTableName2 = "copyTable2"
+      val copyTableName2 = generateTableName
       val row2 = spark.sql(s"""call copy_to_table(table=>'$tableName',new_table=>'$copyTableName2',query_type=>'snapshot',as_of_instant=>'$instanceTime')""").collectAsList()
       // check exit code
       assert(row2.size() == 1 && row2.get(0).get(0) == 0)
@@ -149,7 +149,7 @@ class TestCopyToTableProcedure extends HoodieSparkSqlTestBase {
       val endTime = spark.sql(s"select max(_hoodie_commit_time) from $tableName").collectAsList().get(0).get(0)
 
 
-      val copyTableName = "copyTable"
+      val copyTableName = generateTableName
       // Check required fields
       checkExceptionContain(s"call copy_to_table(table=>'$tableName',new_table=>'$copyTableName',query_type=>'incremental')")("begin_instance_time and end_instance_time can not be null")
 
@@ -171,7 +171,7 @@ class TestCopyToTableProcedure extends HoodieSparkSqlTestBase {
   test("Test Call copy_to_table Procedure with read_optimized") {
     withTempDir { tmp =>
       val tableName = generateTableName
-      // create mor table
+      // create mor table with hoodie.compact.inline.max.delta.commits=5
       spark.sql(
         s"""
            |create table $tableName (
@@ -184,20 +184,20 @@ class TestCopyToTableProcedure extends HoodieSparkSqlTestBase {
            | options (
            |  type='mor',
            |  primaryKey = 'id',
-           |  preCombineField = 'ts'
+           |  preCombineField = 'ts',
+           |  hoodie.compact.inline.max.delta.commits='5',
+           |  hoodie.compact.inline='true'
+           |
            | )
        """.stripMargin)
 
-      // set hoodie.compact.inline.max.delta.commits=5
-      spark.sql("set hoodie.compact.inline.max.delta.commits=5")
-      spark.sql("set hoodie.compact.inline=true")
-      //add 5 delta commit
+      //add 4 delta commit
       spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000")
       spark.sql(s"update $tableName set ts=2000 where id = 1")
       spark.sql(s"update $tableName set ts=3000 where id = 1")
       spark.sql(s"update $tableName set ts=4000 where id = 1")
 
-      val copyTableName = "copyTable"
+      val copyTableName = generateTableName
 
       val copyCmd = spark.sql(s"""call copy_to_table(table=>'$tableName',new_table=>'$copyTableName',query_type=>'read_optimized')""").collectAsList()
       assert(copyCmd.size() == 1 && copyCmd.get(0).get(0) == 0)
@@ -209,7 +209,7 @@ class TestCopyToTableProcedure extends HoodieSparkSqlTestBase {
       // trigger compact (delta_commit==5)
       spark.sql(s"update $tableName set ts=5000 where id = 1")
 
-      val copyTableName2 = "copyTable2"
+      val copyTableName2 = generateTableName
       val copyCmd2 = spark.sql(s"""call copy_to_table(table=>'$tableName',new_table=>'$copyTableName2',query_type=>'read_optimized')""").collectAsList()
       assert(copyCmd2.size() == 1 && copyCmd2.get(0).get(0) == 0)
       val copyDf2 = spark.sql(s"select * from $copyTableName2")
@@ -244,7 +244,7 @@ class TestCopyToTableProcedure extends HoodieSparkSqlTestBase {
       spark.sql(s"insert into $tableName select 3, 'a3', 30, 2000")
       spark.sql(s"insert into $tableName select 4, 'a4', 40, 2500")
 
-      val copyTableName = "copyTable"
+      val copyTableName = generateTableName
       // Check required fields
       checkExceptionContain(s"call copy_to_table(table=>'$tableName')")(s"Argument: new_table is required")
 
@@ -294,7 +294,7 @@ class TestCopyToTableProcedure extends HoodieSparkSqlTestBase {
       spark.sql(s"insert into $tableName select 3, 'a3', 30, 2000")
       spark.sql(s"insert into $tableName select 4, 'a4', 40, 2500")
 
-      val copyTableName = "copyTable"
+      val copyTableName = generateTableName
       // Check required fields
       checkExceptionContain(s"call copy_to_table(table=>'$tableName')")(s"Argument: new_table is required")
 
