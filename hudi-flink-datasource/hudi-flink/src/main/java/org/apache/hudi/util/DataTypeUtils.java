@@ -22,10 +22,14 @@ import org.apache.hudi.common.util.ValidationUtils;
 
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.LogicalType;
+import org.apache.flink.table.types.logical.LogicalTypeFamily;
 import org.apache.flink.table.types.logical.LogicalTypeRoot;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.table.types.logical.TimestampType;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Arrays;
 
 /**
@@ -68,5 +72,52 @@ public class DataTypeUtils {
   public static RowType.RowField[] projectRowFields(RowType rowType, String[] names) {
     int [] fieldIndices = Arrays.stream(names).mapToInt(rowType::getFieldIndex).toArray();
     return Arrays.stream(fieldIndices).mapToObj(i -> rowType.getFields().get(i)).toArray(RowType.RowField[]::new);
+  }
+
+  /**
+   * Returns whether the given logical type belongs to the family.
+   */
+  public static boolean isFamily(LogicalType logicalType, LogicalTypeFamily family) {
+    return logicalType.getTypeRoot().getFamilies().contains(family);
+  }
+
+  /**
+   * Resolves the partition path string into value obj with given data type.
+   */
+  public static Object resolvePartition(String partition, DataType type) {
+    if (partition == null) {
+      return null;
+    }
+
+    LogicalTypeRoot typeRoot = type.getLogicalType().getTypeRoot();
+    switch (typeRoot) {
+      case CHAR:
+      case VARCHAR:
+        return partition;
+      case BOOLEAN:
+        return Boolean.parseBoolean(partition);
+      case TINYINT:
+        return Integer.valueOf(partition).byteValue();
+      case SMALLINT:
+        return Short.valueOf(partition);
+      case INTEGER:
+        return Integer.valueOf(partition);
+      case BIGINT:
+        return Long.valueOf(partition);
+      case FLOAT:
+        return Float.valueOf(partition);
+      case DOUBLE:
+        return Double.valueOf(partition);
+      case DATE:
+        return LocalDate.parse(partition);
+      case TIMESTAMP_WITHOUT_TIME_ZONE:
+        return LocalDateTime.parse(partition);
+      case DECIMAL:
+        return new BigDecimal(partition);
+      default:
+        throw new RuntimeException(
+            String.format(
+                "Can not convert %s to type %s for partition value", partition, type));
+    }
   }
 }

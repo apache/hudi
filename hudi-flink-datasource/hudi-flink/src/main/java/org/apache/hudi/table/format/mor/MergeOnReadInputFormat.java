@@ -35,6 +35,7 @@ import org.apache.hudi.table.format.FormatUtils;
 import org.apache.hudi.table.format.cow.ParquetSplitReaderUtil;
 import org.apache.hudi.table.format.cow.vector.reader.ParquetColumnarRowSplitReader;
 import org.apache.hudi.util.AvroToRowDataConverters;
+import org.apache.hudi.util.DataTypeUtils;
 import org.apache.hudi.util.RowDataProjection;
 import org.apache.hudi.util.RowDataToAvroConverters;
 import org.apache.hudi.util.StringToRowDataConverter;
@@ -65,8 +66,6 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.IntStream;
 
-import static org.apache.flink.table.data.vector.VectorizedColumnBatch.DEFAULT_SIZE;
-import static org.apache.flink.table.filesystem.RowPartitionComputer.restorePartValueFromType;
 import static org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.HOODIE_COMMIT_TIME_COL_POS;
 import static org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.HOODIE_RECORD_KEY_COL_POS;
 import static org.apache.hudi.table.format.FormatUtils.buildAvroRecordBySchema;
@@ -74,8 +73,7 @@ import static org.apache.hudi.table.format.FormatUtils.buildAvroRecordBySchema;
 /**
  * The base InputFormat class to read from Hoodie data + log files.
  *
- * <P>Use {@link org.apache.flink.formats.parquet.utils.ParquetRecordReader}
- * to read files instead of {@link org.apache.flink.core.fs.FSDataInputStream},
+ * <P>Use {@code ParquetRecordReader} to read files instead of {@link org.apache.flink.core.fs.FSDataInputStream},
  * overrides {@link #createInputSplits(int)} and {@link #close()} to change the behaviors.
  */
 public class MergeOnReadInputFormat
@@ -299,7 +297,7 @@ public class MergeOnReadInputFormat
         this.conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING),
         FilePathUtils.extractPartitionKeys(this.conf));
     LinkedHashMap<String, Object> partObjects = new LinkedHashMap<>();
-    partSpec.forEach((k, v) -> partObjects.put(k, restorePartValueFromType(
+    partSpec.forEach((k, v) -> partObjects.put(k, DataTypeUtils.resolvePartition(
         defaultPartName.equals(v) ? null : v,
         fieldTypes.get(fieldNames.indexOf(k)))));
 
@@ -311,7 +309,7 @@ public class MergeOnReadInputFormat
         fieldTypes.toArray(new DataType[0]),
         partObjects,
         requiredPos,
-        DEFAULT_SIZE,
+        2048,
         new org.apache.flink.core.fs.Path(path),
         0,
         Long.MAX_VALUE); // read the whole file
