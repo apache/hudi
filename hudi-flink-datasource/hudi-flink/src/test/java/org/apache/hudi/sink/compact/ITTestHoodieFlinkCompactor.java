@@ -280,17 +280,9 @@ public class ITTestHoodieFlinkCompactor {
     }
     table.getMetaClient().reloadActiveTimeline();
 
-    Pair<String, HoodieCompactionPlan> firstPlan = compactionPlans.get(0);
-    DataStream<CompactionPlanEvent> source = env.addSource(new CompactionPlanSourceFunction(firstPlan.getRight(), firstPlan.getLeft()))
-        .name("compaction_source " + firstPlan.getLeft())
-        .uid("uid_compaction_source " + firstPlan.getLeft());
-    if (compactionPlans.size() > 1) {
-      for (Pair<String, HoodieCompactionPlan> pair : compactionPlans.subList(1, compactionPlans.size())) {
-        source = source.union(env.addSource(new CompactionPlanSourceFunction(pair.getRight(), pair.getLeft()))
-            .name("compaction_source " + pair.getLeft())
-            .uid("uid_compaction_source " + pair.getLeft()));
-      }
-    }
+    DataStream<CompactionPlanEvent> source = env.addSource(new MultiCompactionPlanSourceFunction(compactionPlans))
+        .name("compaction_source")
+        .uid("uid_compaction_source");
     SingleOutputStreamOperator<Void> operator = source.rebalance()
         .transform("compact_task",
             TypeInformation.of(CompactionCommitEvent.class),

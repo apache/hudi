@@ -299,17 +299,9 @@ public class HoodieFlinkCompactor {
 
       // use side-output to make operations that is in the same plan to be placed in the same stream
       // keyby() cannot sure that different operations are in the different stream
-      Pair<String, HoodieCompactionPlan> firstPlan = compactionPlans.get(0);
-      DataStream<CompactionPlanEvent> source = env.addSource(new CompactionPlanSourceFunction(firstPlan.getRight(), firstPlan.getLeft()))
-          .name("compaction_source " + firstPlan.getLeft())
-          .uid("uid_compaction_source " + firstPlan.getLeft());
-      if (compactionPlans.size() > 1) {
-        for (Pair<String, HoodieCompactionPlan> pair : compactionPlans.subList(1, compactionPlans.size())) {
-          source = source.union(env.addSource(new CompactionPlanSourceFunction(pair.getRight(), pair.getLeft()))
-              .name("compaction_source " + pair.getLeft())
-              .uid("uid_compaction_source_" + pair.getLeft()));
-        }
-      }
+      DataStream<CompactionPlanEvent> source = env.addSource(new MultiCompactionPlanSourceFunction(compactionPlans))
+          .name("compaction_source")
+          .uid("uid_compaction_source");
 
       SingleOutputStreamOperator<Void> operator = source.rebalance()
           .transform("compact_task",
