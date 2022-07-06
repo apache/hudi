@@ -19,14 +19,12 @@
 package org.apache.hudi.sink.compact;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.Arrays;
 import java.util.List;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.compact.strategy.AllPendingCompactionPlanSelectStrategy;
 import org.apache.hudi.sink.compact.strategy.CompactionPlanSelectStrategy;
 import org.apache.hudi.sink.compact.strategy.InstantCompactionPlanSelectStrategy;
@@ -119,8 +117,14 @@ public class TestCompactionPlanSelectStrategy {
     InstantCompactionPlanSelectStrategy strategy = new InstantCompactionPlanSelectStrategy();
     assertHoodieInstantsEquals(new HoodieInstant[]{INSTANT_004}, strategy.select(pendingCompactionTimeline, compactionConfig));
 
+    compactionConfig.compactionPlanInstant = "002,003";
+    assertHoodieInstantsEquals(new HoodieInstant[]{INSTANT_002, INSTANT_003}, strategy.select(pendingCompactionTimeline, compactionConfig));
+
+    compactionConfig.compactionPlanInstant = "002,005";
+    assertHoodieInstantsEquals(new HoodieInstant[]{INSTANT_002}, strategy.select(pendingCompactionTimeline, compactionConfig));
+
     compactionConfig.compactionPlanInstant = "005";
-    assertThrows(HoodieException.class, () -> strategy.select(pendingCompactionTimeline, compactionConfig));
+    assertHoodieInstantsEquals(new HoodieInstant[]{}, strategy.select(pendingCompactionTimeline, compactionConfig));
   }
 
   private void assertHoodieInstantsEquals(HoodieInstant[] expected, List<HoodieInstant> actual) {

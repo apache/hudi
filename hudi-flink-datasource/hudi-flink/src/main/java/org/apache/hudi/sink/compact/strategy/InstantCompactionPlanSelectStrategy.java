@@ -21,11 +21,10 @@ package org.apache.hudi.sink.compact.strategy;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.stream.Stream;
+import java.util.stream.Collectors;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.compact.FlinkCompactionConfig;
 import org.apache.hudi.sink.compact.HoodieFlinkCompactor;
 import org.slf4j.Logger;
@@ -43,11 +42,9 @@ public class InstantCompactionPlanSelectStrategy implements CompactionPlanSelect
       LOG.warn("None instant is selected");
       return Collections.emptyList();
     }
-    Stream<String> instants = Arrays.stream(config.compactionPlanInstant.split(","));
-    HoodieInstant specifiedInstant = pendingCompactionTimeline.getInstants()
-        .filter(instant -> instants.anyMatch(i -> i.equals(instant.getTimestamp())))
-        .findFirst()
-        .orElseThrow(() -> new HoodieException("The instant " + config.compactionPlanInstant + " is not found in timeline"));
-    return Collections.singletonList(specifiedInstant);
+    List<String> instants = Arrays.asList(config.compactionPlanInstant.split(","));
+    return pendingCompactionTimeline.getInstants()
+        .filter(instant -> instants.contains(instant.getTimestamp()))
+        .collect(Collectors.toList());
   }
 }

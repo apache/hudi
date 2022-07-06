@@ -33,8 +33,8 @@ public class SingleCompactionPlanSelectStrategy implements CompactionPlanSelectS
   @Override
   public List<HoodieInstant> select(HoodieTimeline pendingCompactionTimeline, FlinkCompactionConfig config) {
     Option<HoodieInstant> compactionPlanInstant = CompactionUtil.isLIFO(config.compactionSeq)
-        ? pendingCompactionTimeline.firstInstant()
-        : pendingCompactionTimeline.lastInstant();
+        ? pendingCompactionTimeline.lastInstant()
+        : pendingCompactionTimeline.firstInstant();
     if (compactionPlanInstant.isPresent()) {
       return Collections.singletonList(compactionPlanInstant.get());
     }

@@ -33,7 +33,7 @@ public class MultiCompactionPlanSelectStrategy implements CompactionPlanSelectSt
   @Override
   public List<HoodieInstant> select(HoodieTimeline pendingCompactionTimeline, FlinkCompactionConfig config) {
     List<HoodieInstant> pendingCompactionPlanInstants = pendingCompactionTimeline.getInstants().collect(Collectors.toList());
-    if (!CompactionUtil.isLIFO(config.compactionSeq)) {
+    if (CompactionUtil.isLIFO(config.compactionSeq)) {
       Collections.reverse(pendingCompactionPlanInstants);
     }
     int range = Math.min(config.compactionPlanMaxSelect, pendingCompactionPlanInstants.size());
