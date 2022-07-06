@@ -123,17 +123,19 @@ public class CompactionPlanSourceFunction
   public void monitorCompactionPlan(SourceContext<CompactionPlanEvent> context) throws IOException {
     table.getMetaClient().reloadActiveTimeline();
 
-    // checks the compaction plan and do compaction.
-    if (OptionsResolver.needsScheduleCompaction(conf)) {
-      Option<String> compactionInstantTimeOption = CompactionUtil.getCompactionInstantTime(table.getMetaClient());
-      if (compactionInstantTimeOption.isPresent()) {
-        boolean scheduled = writeClient.scheduleCompactionAtInstant(compactionInstantTimeOption.get(), Option.empty());
-        if (!scheduled) {
-          // do nothing.
-          LOG.info("No compaction plan for this job ");
-          return;
+    if (!this.isStreamingMode) {
+      // checks the compaction plan and do compaction.
+      if (OptionsResolver.needsScheduleCompaction(conf)) {
+        Option<String> compactionInstantTimeOption = CompactionUtil.getCompactionInstantTime(table.getMetaClient());
+        if (compactionInstantTimeOption.isPresent()) {
+          boolean scheduled = writeClient.scheduleCompactionAtInstant(compactionInstantTimeOption.get(), Option.empty());
+          if (!scheduled) {
+            // do nothing.
+            LOG.info("No compaction plan for this job ");
+            return;
+          }
+          table.getMetaClient().reloadActiveTimeline();
         }
-        table.getMetaClient().reloadActiveTimeline();
       }
     }
 
