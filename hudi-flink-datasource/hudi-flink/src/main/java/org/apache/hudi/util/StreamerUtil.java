@@ -53,6 +53,7 @@ import org.apache.hudi.schema.FilebasedSchemaProvider;
 import org.apache.hudi.sink.transform.ChainedTransformer;
 import org.apache.hudi.sink.transform.Transformer;
 import org.apache.hudi.streamer.FlinkStreamerConfig;
+import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilterMode;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 
 import org.apache.avro.Schema;
@@ -168,6 +169,8 @@ public class StreamerUtil {
                 HoodieClusteringConfig.newBuilder()
                     .withAsyncClustering(conf.getBoolean(FlinkOptions.CLUSTERING_SCHEDULE_ENABLED))
                     .withClusteringPlanStrategyClass(conf.getString(FlinkOptions.CLUSTERING_PLAN_STRATEGY_CLASS))
+                    .withClusteringPlanPartitionFilterMode(
+                        ClusteringPlanPartitionFilterMode.valueOf(conf.getString(FlinkOptions.CLUSTERING_PLAN_PARTITION_FILTER_MODE_NAME)))
                     .withClusteringTargetPartitions(conf.getInteger(FlinkOptions.CLUSTERING_TARGET_PARTITIONS))
                     .withClusteringMaxNumGroups(conf.getInteger(FlinkOptions.CLUSTERING_MAX_NUM_GROUPS))
                     .withClusteringTargetFileMaxBytes(conf.getInteger(FlinkOptions.CLUSTERING_PLAN_STRATEGY_TARGET_FILE_MAX_BYTES))
@@ -309,26 +312,6 @@ public class StreamerUtil {
    */
   public static String generateBucketKey(String partitionPath, String fileId) {
     return String.format("%s_%s", partitionPath, fileId);
-  }
-
-  /**
-   * Returns whether there is need to schedule the async compaction.
-   *
-   * @param conf The flink configuration.
-   */
-  public static boolean needsAsyncCompaction(Configuration conf) {
-    return OptionsResolver.isMorTable(conf)
-        && conf.getBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED);
-  }
-
-  /**
-   * Returns whether there is need to schedule the compaction plan.
-   *
-   * @param conf The flink configuration.
-   */
-  public static boolean needsScheduleCompaction(Configuration conf) {
-    return OptionsResolver.isMorTable(conf)
-        && conf.getBoolean(FlinkOptions.COMPACTION_SCHEDULE_ENABLED);
   }
 
   /**

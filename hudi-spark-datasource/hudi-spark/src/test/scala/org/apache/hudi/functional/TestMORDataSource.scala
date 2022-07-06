@@ -719,6 +719,8 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
       .save(basePath)
     // There should no base file in the file list.
     assertTrue(DataSourceTestUtils.isLogFileOnly(basePath))
+    // Test read logs only mor table with glob paths.
+    assertEquals(20, spark.read.format("hudi").load(basePath + "/*/*/*/*").count())
     // Test read log only mor table.
     assertEquals(20, spark.read.format("hudi").load(basePath).count())
   }

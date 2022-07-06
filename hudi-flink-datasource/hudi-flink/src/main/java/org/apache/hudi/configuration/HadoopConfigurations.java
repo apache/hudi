@@ -18,10 +18,10 @@
 
 package org.apache.hudi.configuration;
 
+import org.apache.hudi.util.FlinkClientUtil;
+
 import org.apache.flink.configuration.Configuration;
 import org.apache.hadoop.fs.Path;
-
-import org.apache.hudi.util.FlinkClientUtil;
 
 import java.util.Map;
 

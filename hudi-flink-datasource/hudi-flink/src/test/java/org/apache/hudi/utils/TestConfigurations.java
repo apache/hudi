@@ -318,6 +318,9 @@ public class TestConfigurations {
     }
   }
 
+  /**
+   * Tool to construct the catalog DDL.
+   */
   public static class Catalog {
     private final String catalogName;
     private String catalogPath = ".";

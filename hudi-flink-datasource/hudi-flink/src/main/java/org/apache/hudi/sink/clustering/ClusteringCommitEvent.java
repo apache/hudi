@@ -24,7 +24,7 @@ import java.io.Serializable;
 import java.util.List;
 
 /**
- * Represents a commit event from the clustering task {@link ClusteringFunction}.
+ * Represents a commit event from the clustering task {@link ClusteringOperator}.
  */
 public class ClusteringCommitEvent implements Serializable {
   private static final long serialVersionUID = 1L;
@@ -51,6 +51,10 @@ public class ClusteringCommitEvent implements Serializable {
     this.taskID = taskID;
   }
 
+  public ClusteringCommitEvent(String instant, int taskID) {
+    this(instant, null, taskID);
+  }
+
   public void setInstant(String instant) {
     this.instant = instant;
   }
@@ -73,5 +77,9 @@ public class ClusteringCommitEvent implements Serializable {
 
   public int getTaskID() {
     return taskID;
+  }
+
+  public boolean isFailed() {
+    return this.writeStatuses == null;
   }
 }

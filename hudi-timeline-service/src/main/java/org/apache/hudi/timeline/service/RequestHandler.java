@@ -122,10 +122,9 @@ public class RequestHandler {
     String lastKnownInstantFromClient =
         ctx.queryParam(RemoteHoodieTableFileSystemView.LAST_INSTANT_TS, HoodieTimeline.INVALID_INSTANT_TS);
     String timelineHashFromClient = ctx.queryParam(RemoteHoodieTableFileSystemView.TIMELINE_HASH, "");
+    String numInstantsFromClient = ctx.queryParam(RemoteHoodieTableFileSystemView.NUM_INSTANTS, "-1");
     HoodieTimeline localTimeline =
         viewManager.getFileSystemView(basePath).getTimeline().filterCompletedAndCompactionInstants();
-    String localLastKnownInstant = localTimeline.lastInstant().isPresent() ? localTimeline.lastInstant().get().getTimestamp()
-        : HoodieTimeline.INVALID_INSTANT_TS;
     if (LOG.isDebugEnabled()) {
       LOG.debug("Client [ LastTs=" + lastKnownInstantFromClient + ", TimelineHash=" + timelineHashFromClient
           + "], localTimeline=" + localTimeline.getInstants().collect(Collectors.toList()));
@@ -139,12 +138,29 @@ public class RequestHandler {
     String localTimelineHash = localTimeline.getTimelineHash();
     // refresh if timeline hash mismatches and if local's last known instant < client's last known instant (if config is enabled)
     if (!localTimelineHash.equals(timelineHashFromClient)
-        && (!timelineServiceConfig.refreshTimelineBasedOnLatestCommit || HoodieTimeline.compareTimestamps(localLastKnownInstant, HoodieTimeline.LESSER_THAN, lastKnownInstantFromClient))) {
+        && (!timelineServiceConfig.refreshTimelineBasedOnLatestCommit
+            || localTimelineBehind(localTimeline, lastKnownInstantFromClient, numInstantsFromClient))) {
       return true;
     }
 
     // As a safety check, even if hash is same, ensure instant is present
     return !localTimeline.containsOrBeforeTimelineStarts(lastKnownInstantFromClient);
+  }
+
+  private static boolean localTimelineBehind(HoodieTimeline localTimeline, String lastKnownInstantFromClient, String numInstantsFromClient) {
+    String localLastKnownInstant = localTimeline.lastInstant().isPresent() ? localTimeline.lastInstant().get().getTimestamp()
+        : HoodieTimeline.INVALID_INSTANT_TS;
+    // Why comparing the num commits ?
+    // Assumes there are 4 commits on the timeline:
+    // timestamp(action): ts_0(commit), ts_1(commit), ts_2(clean), ts_3(commit)
+    // when ts_1 is in INFLIGHT state, ts_2 clean action is already finished,
+    // after ts_1 triggers #sync, the local timeline is refreshed as [ts_0, ts_2],
+    // when ts_1 switches state from INFLIGHT to COMPLETED, no #sync triggers.
+    // at ts_3, when the fs view snapshot is requested, the ts_3 client timeline should be [ts_0, ts_1, ts_2],
+    // if we only compare the latest commit, the local timeline is NOT behind, but the fs view is not complete
+    // because ts_1 is lost.
+    return HoodieTimeline.compareTimestamps(localLastKnownInstant, HoodieTimeline.LESSER_THAN, lastKnownInstantFromClient)
+        || localTimeline.countInstants() < Integer.parseInt(numInstantsFromClient);
   }
 
   /**

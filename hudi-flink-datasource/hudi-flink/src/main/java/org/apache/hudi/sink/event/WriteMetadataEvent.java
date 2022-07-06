@@ -163,6 +163,18 @@ public class WriteMetadataEvent implements OperatorEvent {
     return lastBatch && this.instantTime.equals(currentInstant);
   }
 
+  @Override
+  public String toString() {
+    return "WriteMetadataEvent{"
+        + "writeStatusesSize=" + writeStatuses.size()
+        + ", taskID=" + taskID
+        + ", instantTime='" + instantTime + '\''
+        + ", lastBatch=" + lastBatch
+        + ", endInput=" + endInput
+        + ", bootstrap=" + bootstrap
+        + '}';
+  }
+
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------

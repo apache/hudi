@@ -30,7 +30,7 @@
 
   <properties>
     <hadoop.aliyun.version>3.2.1</hadoop.aliyun.version>
-    <mysql.connector.java.version>5.1.47</mysql.connector.java.version>
+    <mysql.connector.java.version>8.0.28</mysql.connector.java.version>
     <aliyun.sdk.oss.version>3.1.0</aliyun.sdk.oss.version>
     <aliyun.java.sdk.core.version>3.7.1</aliyun.java.sdk.core.version>
   </properties>
@@ -98,8 +98,16 @@
 
     <!-- Logging -->
     <dependency>
-      <groupId>log4j</groupId>
-      <artifactId>log4j</artifactId>
+      <groupId>org.apache.logging.log4j</groupId>
+      <artifactId>log4j-api</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.logging.log4j</groupId>
+      <artifactId>log4j-core</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.logging.log4j</groupId>
+      <artifactId>log4j-1.2-api</artifactId>
     </dependency>
 
     <dependency>

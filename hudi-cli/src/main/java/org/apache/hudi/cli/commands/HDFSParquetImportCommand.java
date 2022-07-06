@@ -53,7 +53,7 @@ public class HDFSParquetImportCommand implements CommandMarker {
       @CliOption(key = "tableName", mandatory = true, help = "Table name") final String tableName,
       @CliOption(key = "tableType", mandatory = true, help = "Table type") final String tableType,
       @CliOption(key = "rowKeyField", mandatory = true, help = "Row key field name") final String rowKeyField,
-      @CliOption(key = "partitionPathField", mandatory = true,
+      @CliOption(key = "partitionPathField", unspecifiedDefaultValue = "",
           help = "Partition path field name") final String partitionPathField,
       @CliOption(key = {"parallelism"}, mandatory = true,
           help = "Parallelism for hoodie insert") final String parallelism,

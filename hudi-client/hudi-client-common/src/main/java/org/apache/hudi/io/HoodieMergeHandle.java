@@ -195,8 +195,10 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
       writeStatus.getStat().setFileId(fileId);
       setWriteStatusPath();
 
-      // Create Marker file
-      createMarkerFile(partitionPath, newFileName, (table) -> {
+      // Create Marker file,
+      // uses name of `newFilePath` instead of `newFileName`
+      // in case the sub-class may roll over the file handle name.
+      createMarkerFile(partitionPath, newFilePath.getName(), (table) -> {
         table.getMetaClient().reloadActiveTimeline();
         table.getHoodieView().sync();
         HoodieBaseFile currentBaseFileToMerge = table.getBaseFileOnlyView().getLatestBaseFile(partitionPath, fileId).get();
