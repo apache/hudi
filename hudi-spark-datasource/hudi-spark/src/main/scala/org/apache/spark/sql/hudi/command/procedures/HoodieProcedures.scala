@@ -74,6 +74,7 @@ object HoodieProcedures {
     mapBuilder.put(ShowMetadataStatsProcedure.NAME, ShowMetadataStatsProcedure.builder)
     mapBuilder.put(ValidateMetadataFilesProcedure.NAME, ValidateMetadataFilesProcedure.builder)
     mapBuilder.put(ShowFsPathDetailProcedure.NAME, ShowFsPathDetailProcedure.builder)
+    mapBuilder.put(CopyToTableProcedure.NAME, CopyToTableProcedure.builder)
     mapBuilder.build
   }
 }
