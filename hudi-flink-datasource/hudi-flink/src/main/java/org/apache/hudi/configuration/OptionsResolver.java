@@ -164,4 +164,12 @@ public class OptionsResolver {
   public static boolean sortClusteringEnabled(Configuration conf) {
     return !StringUtils.isNullOrEmpty(conf.getString(FlinkOptions.CLUSTERING_SORT_COLUMNS));
   }
+
+  /**
+   * Returns whether the operation is INSERT OVERWRITE (table or partition).
+   */
+  public static boolean isInsertOverwrite(Configuration conf) {
+    return conf.getString(FlinkOptions.OPERATION).equals(WriteOperationType.INSERT_OVERWRITE_TABLE.value())
+        || conf.getString(FlinkOptions.OPERATION).equals(WriteOperationType.INSERT_OVERWRITE.value());
+  }
 }

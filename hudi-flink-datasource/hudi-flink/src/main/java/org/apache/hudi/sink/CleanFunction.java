@@ -19,9 +19,9 @@
 package org.apache.hudi.sink;
 
 import org.apache.hudi.client.HoodieFlinkWriteClient;
-import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.sink.utils.NonThrownExecutor;
 import org.apache.hudi.util.StreamerUtil;
 
@@ -65,7 +65,7 @@ public class CleanFunction<T> extends AbstractRichFunction
       this.writeClient = StreamerUtil.createWriteClient(conf, getRuntimeContext());
       this.executor = NonThrownExecutor.builder(LOG).waitForTasksFinish(true).build();
 
-      if (conf.getString(FlinkOptions.OPERATION).equals(WriteOperationType.INSERT_OVERWRITE_TABLE.value())) {
+      if (OptionsResolver.isInsertOverwrite(conf)) {
         String instantTime = HoodieActiveTimeline.createNewInstantTime();
         LOG.info(String.format("exec sync clean with instant time %s...", instantTime));
         executor.execute(() -> writeClient.clean(instantTime), "wait for sync cleaning finish");
