@@ -17,9 +17,26 @@
  * under the License.
  */
 
-package org.apache.hudi.common.config;
+package org.apache.hudi.secondary.index.filter;
 
-public class HoodieSecondaryIndexConfig {
-  public static final String HOODIE_SECONDARY_INDEX_DATA = "hoodie.secondary.index.data";
-  public static final String HOODIE_SECONDARY_INDEX_FILTER = "hoodie.secondary.index.filter";
+import org.apache.hudi.internal.schema.Types.Field;
+import org.apache.hudi.secondary.index.IRowIdSet;
+import org.apache.hudi.secondary.index.ISecondaryIndexReader;
+
+import java.io.IOException;
+
+public class NullFilter extends IndexFilter {
+  public NullFilter(ISecondaryIndexReader indexReader, Field field) {
+    super(indexReader, field);
+  }
+
+  @Override
+  public IRowIdSet getRowIdSet() throws IOException {
+    return indexReader.queryNullTerm(getField());
+  }
+
+  @Override
+  public String toString() {
+    return "isnull(" + getField().name() + ")";
+  }
 }

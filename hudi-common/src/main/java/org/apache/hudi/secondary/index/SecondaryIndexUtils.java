@@ -30,11 +30,34 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.parquet.hadoop.util.SerializationUtil;
+import org.roaringbitmap.RoaringBitmap;
 
 import java.io.IOException;
 import java.util.List;
 
 public class SecondaryIndexUtils {
+  /**
+   * key to configure the specific row id set to read
+   */
+  public static final String SPECIFIC_ROW_ID_SET = "parquet.read.specific.row.id.set";
+
+  public static void setSpecificRowIdSet(Configuration configuration, RoaringBitmap rowIdSet) {
+    try {
+      SerializationUtil.writeObjectToConfAsBase64(SPECIFIC_ROW_ID_SET, rowIdSet, configuration);
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  public static RoaringBitmap getSpecificRowIdSet(Configuration configuration) {
+    try {
+      return SerializationUtil.readObjectFromConfAsBase64(SPECIFIC_ROW_ID_SET, configuration);
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    }
+  }
 
   /**
    * Get secondary index metadata for this table
@@ -48,7 +71,7 @@ public class SecondaryIndexUtils {
   }
 
   /**
-   * Parse secondary index str to List<HOodieSecondaryIndex>
+   * Parse secondary index str to List<HoodieSecondaryIndex>
    *
    * @param jsonStr Secondary indexes with json format
    * @return List<HoodieSecondaryIndex>

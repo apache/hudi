@@ -19,12 +19,22 @@
 
 package org.apache.hudi.secondary.index;
 
-import org.roaringbitmap.RoaringBitmap;
+import org.apache.hudi.exception.HoodieNotSupportedException;
 
-public interface SecondaryIndexReader {
-  SecondaryIndexReader open(HoodieSecondaryIndex secondaryIndex, String indexPath);
+public class EmptyRowIdSet extends RowIdSet {
 
-  RoaringBitmap queryTerm();
+  @Override
+  public void add(int rowId) {
+    throw new HoodieNotSupportedException("Not supported for empty row id set");
+  }
 
-  void close();
+  @Override
+  public boolean get(int rowId) {
+    return false;
+  }
+
+  @Override
+  public int cardinality() {
+    return 0;
+  }
 }

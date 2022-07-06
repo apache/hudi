@@ -17,9 +17,24 @@
  * under the License.
  */
 
-package org.apache.hudi.common.config;
+package org.apache.hudi.secondary.index;
 
-public class HoodieSecondaryIndexConfig {
-  public static final String HOODIE_SECONDARY_INDEX_DATA = "hoodie.secondary.index.data";
-  public static final String HOODIE_SECONDARY_INDEX_FILTER = "hoodie.secondary.index.filter";
+import java.io.Serializable;
+
+public interface IRowIdSet extends Serializable {
+  void add(int rowId);
+
+  boolean get(int rowId);
+
+  IRowIdSetIterator iterator();
+
+  int cardinality();
+
+  Object getContainer();
+
+  IRowIdSet and(IRowIdSet other);
+
+  IRowIdSet or(IRowIdSet other);
+
+  IRowIdSet not(IRowIdSet other);
 }

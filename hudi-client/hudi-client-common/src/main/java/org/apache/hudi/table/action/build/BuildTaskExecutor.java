@@ -35,7 +35,7 @@ import org.apache.hudi.exception.HoodieBuildException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.secondary.index.HoodieSecondaryIndex;
-import org.apache.hudi.secondary.index.SecondaryIndexBuilder;
+import org.apache.hudi.secondary.index.ISecondaryIndexBuilder;
 import org.apache.hudi.secondary.index.SecondaryIndexFactory;
 import org.apache.hudi.secondary.index.SecondaryIndexType;
 import org.apache.hudi.secondary.index.SecondaryIndexUtils;
@@ -65,7 +65,7 @@ public class BuildTaskExecutor {
   private final Path baseFilePath;
   private final String indexFolderPath;
   private final List<HoodieSecondaryIndex> combinedSecondaryIndices;
-  private final List<SecondaryIndexBuilder> indexBuilders;
+  private final List<ISecondaryIndexBuilder> indexBuilders;
   private final ClosableIterator<IndexedRecord> recordIterator;
 
   private final int batchSize = 1000;
@@ -130,7 +130,7 @@ public class BuildTaskExecutor {
     }
 
     // Close all index builders
-    indexBuilders.forEach(SecondaryIndexBuilder::close);
+    indexBuilders.forEach(ISecondaryIndexBuilder::close);
     LOG.info("Finish building indexes for file: {}, timeCost: {}ms",
         baseFilePath, buildTimer.endTimer());
 
@@ -188,7 +188,7 @@ public class BuildTaskExecutor {
    * @param conf           Hadoop conf
    * @return IndexBuilder
    */
-  private SecondaryIndexBuilder initBuilderForIndex(
+  private ISecondaryIndexBuilder initBuilderForIndex(
       HoodieSecondaryIndex secondaryIndex,
       Schema schema,
       Configuration conf) {

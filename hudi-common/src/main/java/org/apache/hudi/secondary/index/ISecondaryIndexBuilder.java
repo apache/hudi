@@ -17,9 +17,18 @@
  * under the License.
  */
 
-package org.apache.hudi.common.config;
+package org.apache.hudi.secondary.index;
 
-public class HoodieSecondaryIndexConfig {
-  public static final String HOODIE_SECONDARY_INDEX_DATA = "hoodie.secondary.index.data";
-  public static final String HOODIE_SECONDARY_INDEX_FILTER = "hoodie.secondary.index.filter";
+import org.apache.avro.generic.GenericRecord;
+
+import java.io.IOException;
+
+public interface ISecondaryIndexBuilder {
+  void addBatch(GenericRecord[] records, int size) throws IOException;
+
+  void addRow(GenericRecord record) throws IOException;
+
+  String getName();
+
+  void close();
 }

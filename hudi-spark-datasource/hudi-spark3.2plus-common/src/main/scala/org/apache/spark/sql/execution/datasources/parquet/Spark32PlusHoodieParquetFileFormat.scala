@@ -25,12 +25,17 @@ import org.apache.hadoop.mapreduce.{JobID, TaskAttemptID, TaskID, TaskType}
 import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.util.InternalSchemaCache
+import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
 import org.apache.hudi.common.util.collection.Pair
+import org.apache.hudi.common.util.{BuildUtils, HoodieTimer, InternalSchemaCache}
 import org.apache.hudi.internal.schema.InternalSchema
+import org.apache.hudi.internal.schema.Types.Field
 import org.apache.hudi.internal.schema.action.InternalSchemaMerger
+import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
 import org.apache.hudi.internal.schema.utils.{InternalSchemaUtils, SerDeHelper}
+import org.apache.hudi.secondary.index._
+import org.apache.hudi.secondary.index.filter._
 import org.apache.parquet.filter2.compat.FilterCompat
 import org.apache.parquet.filter2.predicate.FilterApi
 import org.apache.parquet.format.converter.ParquetMetadataConverter.SKIP_ROW_GROUPS
@@ -47,8 +52,11 @@ import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types.{AtomicType, DataType, StructField, StructType}
 import org.apache.spark.util.SerializableConfiguration
+import org.roaringbitmap.RoaringBitmap
 
 import java.net.URI
+
+import scala.collection.JavaConverters._
 
 /**
  * This class is an extension of [[ParquetFileFormat]] overriding Spark-specific behavior
@@ -159,6 +167,61 @@ class Spark32PlusHoodieParquetFileFormat(private val shouldAppendPartitionValues
 
       lazy val footerFileMetaData =
         ParquetFooterReader.readFooter(sharedConf, filePath, SKIP_ROW_GROUPS).getFileMetaData
+
+      val internalSchema = AvroInternalSchemaConverter.convert(footerFileMetaData.getSchema)
+
+      val timer = new HoodieTimer
+      timer.startTimer()
+      // BaseFilePath -> List[HoodieSecondaryIndex]
+      val indexData = BuildUtils.getBaseFileIndexInfo(sharedConf)
+      val indexDataOpt = if (indexData != null) {
+        Some(indexData.asScala)
+      } else {
+        None
+      }
+
+      // Because of schema evolution, field name in filter may not be consistence with file schema
+      val newFilters = filters.map(rebuildFilterFromParquet(_, fileSchema, querySchemaOption.orElse(null)))
+
+      // Try to use index only if some fields have been built index with this file
+      val filtersNeedPush = indexDataOpt.map(indexData => {
+        val normalizedFilePath = filePath.toString
+        val index = normalizedFilePath.indexOf(tablePath)
+        val baseFilePath: String = if (index >= 0) {
+          normalizedFilePath.substring(tablePath.length + 1)
+        } else {
+          normalizedFilePath
+        }
+
+        indexData.get(baseFilePath).map(validIndex => {
+          timer.startTimer()
+          val indexMeta = SecondaryIndexUtils.fromJsonString(
+            sharedConf.get(HoodieTableConfig.SECONDARY_INDEXES_METADATA.key())).asScala
+
+          // Pair[IndexDir, IndexType] -> IndexReader
+          val indexReaders: Map[Pair[String, SecondaryIndexType], ISecondaryIndexReader] =
+            Map.empty.withDefault(key => SecondaryIndexFactory.getIndexReader(key.getLeft, key.getRight, sharedConf))
+          // Determine and convert filter to index filter
+          val indexFolder = BuildUtils.getIndexFolderPath(tablePath)
+          val filtersTuple = splitFilters(newFilters, internalSchema.columns().asScala, indexMeta,
+            validIndex.asScala, filePath.getName, indexFolder, indexReaders)
+          logInfo(s"Split filter cost ${timer.endTimer()} ms")
+
+          // Pass index hit row id set through hadoop configuration
+          if (filtersTuple._1.nonEmpty) {
+            timer.startTimer()
+            val indexFilter = filtersTuple._1.reduce((x, y) => new AndFilter(x, y))
+            val specificRowIdSet = indexFilter.getRowIdSet.getContainer.asInstanceOf[RoaringBitmap]
+            SecondaryIndexUtils.setSpecificRowIdSet(sharedConf, specificRowIdSet)
+            logInfo(s"Exec index filter $indexFilter cost ${timer.endTimer()} ms")
+          }
+
+          // Filters which will be pushed down as parquet filters
+          filtersTuple._2
+        }).getOrElse(newFilters)
+      }).getOrElse(newFilters)
+      logInfo(s"Convert index total cost ${timer.endTimer()} ms, push down $filtersNeedPush as parquet filter")
+
       // Try to push down filters when filter push-down is enabled.
       val pushed = if (enableParquetFilterPushDown) {
         val parquetSchema = footerFileMetaData.getSchema
@@ -191,12 +254,10 @@ class Spark32PlusHoodieParquetFileFormat(private val shouldAppendPartitionValues
             isCaseSensitive,
             datetimeRebaseMode)
         }
-        filters.map(rebuildFilterFromParquet(_, fileSchema, querySchemaOption.orElse(null)))
-          // Collects all converted Parquet filter predicates. Notice that not all predicates can be
-          // converted (`ParquetFilters.createFilter` returns an `Option`). That's why a `flatMap`
-          // is used here.
-          .flatMap(parquetFilters.createFilter)
-          .reduceOption(FilterApi.and)
+        // Collects all converted Parquet filter predicates. Notice that not all predicates can be
+        // converted (`ParquetFilters.createFilter` returns an `Option`). That's why a `flatMap`
+        // is used here.
+        filtersNeedPush.flatMap(parquetFilters.createFilter).reduceOption(FilterApi.and)
       } else {
         None
       }
@@ -500,6 +561,203 @@ object Spark32PlusHoodieParquetFileFormat {
           AlwaysTrue
       }
     }
+  }
+
+  /**
+   * Split passed-in filters into index filters and normal filters which will
+   * be pushed down as parquet filters
+   *
+   * @param filters      Spark sql filter
+   * @param fields       Hudi fields which converted from parquet file schema
+   * @param indexMeta    Secondary index meta data for this table
+   * @param validIndex   Indexes which have been built for this base file
+   * @param fileName     File name
+   * @param indexFolder  Folder to save index data
+   * @param indexReaders Index data reader
+   * @return Index filters and normal filters
+   */
+  private def splitFilters(
+      filters: Seq[Filter],
+      fields: Seq[Field],
+      indexMeta: Seq[HoodieSecondaryIndex],
+      validIndex: Seq[HoodieSecondaryIndex],
+      fileName: String,
+      indexFolder: String,
+      indexReaders: Map[Pair[String, SecondaryIndexType], ISecondaryIndexReader]): (Seq[IndexFilter], Seq[Filter]) = {
+
+    var indexFilters: Seq[IndexFilter] = Seq.empty
+    var newFilters: Seq[Filter] = Seq.empty
+    filters.foreach(filter => {
+      val indexFilter = buildIndexFilter(filter, fields, indexMeta, validIndex, fileName, indexFolder, indexReaders)
+      if (indexFilter.isDefined) {
+        indexFilters = indexFilters :+ indexFilter.get
+      } else {
+        newFilters = newFilters :+ filter
+      }
+    })
+
+    (indexFilters, newFilters)
+  }
+
+  /**
+   * Build hoodie index filter from {@code org.apache.spark.sql.sources.Filter}
+   * Because of the schema evolution, the field name may be changed, so the
+   * passed-in field name must be the real field name,
+   *
+   * @param filter       Spark sql filter
+   * @param fields       Hudi fields which converted from parquet file schema
+   * @param indexMeta    Secondary index meta data for this table
+   * @param validIndex   Indexes which have been built for this base file
+   * @param fileName     File name
+   * @param indexFolder  Folder to save index data
+   * @param indexReaders Index data reader
+   * @return Hoodie index filter
+   */
+  private def buildIndexFilter(
+      filter: Filter,
+      fields: Seq[Field],
+      indexMeta: Seq[HoodieSecondaryIndex],
+      validIndex: Seq[HoodieSecondaryIndex],
+      fileName: String,
+      indexFolder: String,
+      indexReaders: Map[Pair[String, SecondaryIndexType], ISecondaryIndexReader]): Option[IndexFilter] = {
+    filter match {
+      case eq: EqualTo if canUseIndex(eq.attribute, indexMeta, validIndex) =>
+        rebuildHudiField(eq.attribute, fields)
+            .map(field => {
+              val indexReader = buildIndexReader(field.name(), indexMeta, fileName, indexFolder, indexReaders)
+              new TermFilter(indexReader, field, eq.value)
+            })
+      case eqs: EqualNullSafe if canUseIndex(eqs.attribute, indexMeta, validIndex) =>
+        rebuildHudiField(eqs.attribute, fields)
+            .map(field => {
+              val indexReader = buildIndexReader(field.name(), indexMeta, fileName, indexFolder, indexReaders)
+              new NullFilter(indexReader, field)
+            })
+      case gt: GreaterThan if canUseIndex(gt.attribute, indexMeta, validIndex) =>
+        rebuildHudiField(gt.attribute, fields)
+            .map(field => {
+              val indexReader = buildIndexReader(field.name(), indexMeta, fileName, indexFolder, indexReaders)
+              new RangeFilter(indexReader, field, gt.value, null, false, false)
+            })
+      case gtr: GreaterThanOrEqual if canUseIndex(gtr.attribute, indexMeta, validIndex) =>
+        rebuildHudiField(gtr.attribute, fields)
+            .map(field => {
+              val indexReader = buildIndexReader(field.name(), indexMeta, fileName, indexFolder, indexReaders)
+              new RangeFilter(indexReader, field, gtr.value, null, true, false)
+            })
+      case lt: LessThan if canUseIndex(lt.attribute, indexMeta, validIndex) =>
+        rebuildHudiField(lt.attribute, fields)
+            .map(field => {
+              val indexReader = buildIndexReader(field.name(), indexMeta, fileName, indexFolder, indexReaders)
+              new RangeFilter(indexReader, field, null, lt.value, false, false)
+            })
+      case lte: LessThanOrEqual if canUseIndex(lte.attribute, indexMeta, validIndex) =>
+        rebuildHudiField(lte.attribute, fields)
+            .map(field => {
+              val indexReader = buildIndexReader(field.name(), indexMeta, fileName, indexFolder, indexReaders)
+              new RangeFilter(indexReader, field, null, lte.value, false, true)
+            })
+      case i: In if canUseIndex(i.attribute, indexMeta, validIndex) =>
+        rebuildHudiField(i.attribute, fields)
+            .map(field => {
+              val indexReader = buildIndexReader(field.name(), indexMeta, fileName, indexFolder, indexReaders)
+              val values = i.values.toList.map(_.asInstanceOf[AnyRef]).asJava
+              new TermListFilter(indexReader, field, values)
+            })
+      case isn: IsNull if canUseIndex(isn.attribute, indexMeta, validIndex) =>
+        rebuildHudiField(isn.attribute, fields)
+            .map(field => {
+              val indexReader = buildIndexReader(field.name(), indexMeta, fileName, indexFolder, indexReaders)
+              new NullFilter(indexReader, field)
+            })
+      case isnn: IsNotNull if canUseIndex(isnn.attribute, indexMeta, validIndex) =>
+        rebuildHudiField(isnn.attribute, fields)
+            .map(field => {
+              val indexReader = buildIndexReader(field.name(), indexMeta, fileName, indexFolder, indexReaders)
+              new NotNullFilter(indexReader, field)
+            })
+      case And(left, right) =>
+        buildIndexFilter(left, fields, indexMeta, validIndex, fileName, indexFolder, indexReaders)
+            .flatMap(left =>
+              buildIndexFilter(right, fields, indexMeta, validIndex, fileName, indexFolder, indexReaders)
+                  .map(right => new AndFilter(left, right)))
+      case Or(left, right) =>
+        buildIndexFilter(left, fields, indexMeta, validIndex, fileName, indexFolder, indexReaders)
+            .flatMap(left =>
+              buildIndexFilter(right, fields, indexMeta, validIndex, fileName, indexFolder, indexReaders)
+                  .map(right => new OrFilter(left, right)))
+      case Not(child) =>
+        buildIndexFilter(child, fields, indexMeta, validIndex, fileName, indexFolder, indexReaders)
+            .map(x => new NotFilter(x))
+      case ssw: StringStartsWith if canUseIndex(ssw.attribute, indexMeta, validIndex) =>
+        rebuildHudiField(ssw.attribute, fields)
+            .map(field => {
+              val indexReader = buildIndexReader(field.name(), indexMeta, fileName, indexFolder, indexReaders)
+              new PrefixFilter(indexReader, field, ssw.value)
+            })
+      case ses: StringEndsWith if canUseIndex(ses.attribute, indexMeta, validIndex) =>
+        rebuildHudiField(ses.attribute, fields)
+            .map(field => {
+              val indexReader = buildIndexReader(field.name(), indexMeta, fileName, indexFolder, indexReaders)
+              new RegexFilter(indexReader, field, s"%${ses.value}")
+            })
+      case sc: StringContains if canUseIndex(sc.attribute, indexMeta, validIndex) =>
+        rebuildHudiField(sc.attribute, fields)
+            .map(field => {
+              val indexReader = buildIndexReader(field.name(), indexMeta, fileName, indexFolder, indexReaders)
+              new RegexFilter(indexReader, field, s"%${sc.value}%")
+            })
+      case AlwaysTrue =>
+        Some(new AllRowFilter(null))
+      case AlwaysFalse =>
+        Some(new EmptyRowFilter(null))
+      case _ =>
+        None
+    }
+  }
+
+  /**
+   * Check whether the given field can use secondary index with this file
+   *
+   * @param fieldName  Field name  to be checked
+   * @param indexMeta  Secondary index meta data for this table
+   * @param validIndex All HoodieSecondaryIndex that have been built index in this file
+   * @return true if can use secondary index for this field
+   */
+  private def canUseIndex(
+      fieldName: String,
+      indexMeta: Seq[HoodieSecondaryIndex],
+      validIndex: Seq[HoodieSecondaryIndex]): Boolean = {
+    indexMeta.exists(index =>
+      index.getColumns.size() == 1 &&
+          index.getColumns.keySet().contains(fieldName) &&
+          validIndex.contains(index))
+  }
+
+  private def buildIndexReader(
+      fieldName: String,
+      indexMeta: Seq[HoodieSecondaryIndex],
+      fileName: String,
+      indexFolder: String,
+      indexReaders: Map[Pair[String, SecondaryIndexType], ISecondaryIndexReader]): ISecondaryIndexReader = {
+    indexMeta.find(index => index.getColumns.keySet().contains(fieldName))
+        .map(index => {
+          val indexSavePath = BuildUtils.getIndexSaveDir(indexFolder, index.getIndexType.name(), fileName)
+          indexReaders(Pair.of(indexSavePath.toString, index.getIndexType))
+        }).get
+  }
+
+  /**
+   * Get hudi field from given field name
+   *
+   * @param fieldName Field name in filter
+   * @param fields    Hudi fields which converted from parquet file schema
+   * @return Hudi field
+   */
+  private def rebuildHudiField(
+      fieldName: String, fields: Seq[Field]): Option[Field] = {
+    fields.find(field => field.name().equals(fieldName))
   }
 }
 

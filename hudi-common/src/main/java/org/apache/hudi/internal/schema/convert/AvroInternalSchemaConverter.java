@@ -18,14 +18,17 @@
 
 package org.apache.hudi.internal.schema.convert;
 
-import org.apache.avro.JsonProperties;
-import org.apache.avro.LogicalType;
-import org.apache.avro.LogicalTypes;
-import org.apache.avro.Schema;
 import org.apache.hudi.internal.schema.HoodieSchemaException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.Type;
 import org.apache.hudi.internal.schema.Types;
+
+import org.apache.avro.JsonProperties;
+import org.apache.avro.LogicalType;
+import org.apache.avro.LogicalTypes;
+import org.apache.avro.Schema;
+import org.apache.parquet.avro.AvroSchemaConverter;
+import org.apache.parquet.schema.MessageType;
 
 import java.util.ArrayList;
 import java.util.Deque;
@@ -76,18 +79,32 @@ public class AvroInternalSchemaConverter {
     return buildAvroSchemaFromType(type, name);
   }
 
-  /** Convert an avro schema into internal type. */
+  /**
+   * Convert an avro schema into internal type.
+   */
   public static Type convertToField(Schema schema) {
     return buildTypeFromAvroSchema(schema);
   }
 
-  /** Convert an avro schema into internalSchema. */
+  /**
+   * Convert an avro schema into internalSchema.
+   */
   public static InternalSchema convert(Schema schema) {
     List<Types.Field> fields = ((Types.RecordType) convertToField(schema)).fields();
     return new InternalSchema(fields);
   }
 
-  /** Check whether current avro schema is optional?. */
+  /**
+   * Convert parquet schema into internalSchema.
+   */
+  public static InternalSchema convert(MessageType schema) {
+    Schema avroSchema = new AvroSchemaConverter().convert(schema);
+    return convert(avroSchema);
+  }
+
+  /**
+   * Check whether current avro schema is optional?.
+   */
   public static boolean isOptional(Schema schema) {
     if (schema.getType() == UNION && schema.getTypes().size() == 2) {
       return schema.getTypes().get(0).getType() == Schema.Type.NULL || schema.getTypes().get(1).getType() == Schema.Type.NULL;
@@ -95,7 +112,9 @@ public class AvroInternalSchemaConverter {
     return false;
   }
 
-  /** Returns schema with nullable true. */
+  /**
+   * Returns schema with nullable true.
+   */
   public static Schema nullableSchema(Schema schema) {
     if (schema.getType() == UNION) {
       if (!isOptional(schema)) {

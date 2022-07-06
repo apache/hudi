@@ -17,9 +17,29 @@
  * under the License.
  */
 
-package org.apache.hudi.common.config;
+package org.apache.hudi.secondary.index;
 
-public class HoodieSecondaryIndexConfig {
-  public static final String HOODIE_SECONDARY_INDEX_DATA = "hoodie.secondary.index.data";
-  public static final String HOODIE_SECONDARY_INDEX_FILTER = "hoodie.secondary.index.filter";
+import org.roaringbitmap.PeekableIntIterator;
+
+public class RowIdSetIterator implements IRowIdSetIterator {
+  private final PeekableIntIterator iterator;
+
+  public RowIdSetIterator(PeekableIntIterator iterator) {
+    this.iterator = iterator;
+  }
+
+  @Override
+  public boolean hasNext() {
+    return iterator.hasNext();
+  }
+
+  @Override
+  public int nextRowId() {
+    return iterator.next();
+  }
+
+  @Override
+  public void advance(int target) {
+    iterator.advanceIfNeeded(target);
+  }
 }

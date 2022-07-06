@@ -26,6 +26,7 @@
   <!-- Member Names expected to start with "_"  -->
   <suppress checks="naming" files="TestRecord.java" lines="1-9999"/>
   <suppress checks="IllegalImport" files="Option.java" />
+  <suppress checks="IllegalImport" files="HoodieColumnChunkPageReadStore.java"/>
   <!-- java.util.Optional part of DataSource V2 API signature -->
   <suppress checks="IllegalImport" files="DefaultSource.java" />
   <suppress checks="IllegalImport" files="HoodieTableSource.java" />

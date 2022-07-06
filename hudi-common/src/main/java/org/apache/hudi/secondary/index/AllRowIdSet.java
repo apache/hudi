@@ -17,9 +17,13 @@
  * under the License.
  */
 
-package org.apache.hudi.common.config;
+package org.apache.hudi.secondary.index;
 
-public class HoodieSecondaryIndexConfig {
-  public static final String HOODIE_SECONDARY_INDEX_DATA = "hoodie.secondary.index.data";
-  public static final String HOODIE_SECONDARY_INDEX_FILTER = "hoodie.secondary.index.filter";
+public class AllRowIdSet extends RowIdSet {
+
+  public AllRowIdSet(int maxRow) {
+    super();
+    // Row id belongs to [0, maxRow)
+    rowIdSet.add(0L, maxRow);
+  }
 }

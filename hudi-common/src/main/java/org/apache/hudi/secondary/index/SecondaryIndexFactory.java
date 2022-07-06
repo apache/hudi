@@ -22,15 +22,29 @@ package org.apache.hudi.secondary.index;
 import org.apache.hudi.common.config.HoodieBuildTaskConfig;
 import org.apache.hudi.exception.HoodieSecondaryIndexException;
 import org.apache.hudi.secondary.index.lucene.LuceneIndexBuilder;
+import org.apache.hudi.secondary.index.lucene.LuceneIndexReader;
+
+import org.apache.hadoop.conf.Configuration;
 
 public class SecondaryIndexFactory {
-  public static SecondaryIndexBuilder getIndexBuilder(HoodieBuildTaskConfig indexConfig) {
+  public static ISecondaryIndexBuilder getIndexBuilder(HoodieBuildTaskConfig indexConfig) {
     switch (indexConfig.getIndexType()) {
       case LUCENE:
         return new LuceneIndexBuilder(indexConfig);
       default:
         throw new HoodieSecondaryIndexException(
             "Unknown hoodie secondary index type: " + indexConfig.getIndexType());
+    }
+  }
+
+  public static ISecondaryIndexReader getIndexReader(
+      String indexDir, SecondaryIndexType indexType, Configuration conf) {
+    switch (indexType) {
+      case LUCENE:
+        return new LuceneIndexReader(indexDir, conf);
+      default:
+        throw new HoodieSecondaryIndexException(
+            "Unknown hoodie secondary index type:" + indexType);
     }
   }
 }

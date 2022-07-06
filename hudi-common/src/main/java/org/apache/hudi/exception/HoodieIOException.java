@@ -34,6 +34,10 @@ public class HoodieIOException extends HoodieException {
     this.ioException = t;
   }
 
+  public HoodieIOException(IOException t) {
+    super(t);
+  }
+
   public HoodieIOException(String msg) {
     super(msg);
   }

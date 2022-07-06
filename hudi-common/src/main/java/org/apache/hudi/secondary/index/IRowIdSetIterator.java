@@ -19,16 +19,12 @@
 
 package org.apache.hudi.secondary.index;
 
-import org.apache.avro.generic.GenericRecord;
+public interface IRowIdSetIterator {
+  static final int NO_MORE_ROWS = Integer.MAX_VALUE;
 
-import java.io.IOException;
+  boolean hasNext();
 
-public interface SecondaryIndexBuilder {
-  void addBatch(GenericRecord[] records, int size) throws IOException;
+  int nextRowId();
 
-  void addRow(GenericRecord record) throws IOException;
-
-  String getName();
-
-  void close();
+  void advance(int target);
 }
