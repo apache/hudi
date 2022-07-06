@@ -19,30 +19,31 @@ package org.apache.spark.sql.adapter
 
 import org.apache.hudi.Spark3RowSerDe
 import org.apache.hudi.client.utils.SparkRowSerDe
-import org.apache.spark.SPARK_VERSION
 import org.apache.hudi.spark3.internal.ReflectUtil
+import org.apache.spark.SPARK_VERSION
+import org.apache.spark.internal.Logging
 import org.apache.spark.sql.avro.{HoodieAvroSchemaConverters, HoodieSparkAvroSchemaConverters}
 import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
-import org.apache.spark.sql.catalyst.expressions.{Expression, Like}
+import org.apache.spark.sql.catalyst.expressions.{Expression, InterpretedPredicate, Like, Predicate}
 import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.catalyst.plans.JoinType
 import org.apache.spark.sql.catalyst.plans.logical.{InsertIntoStatement, Join, JoinHint, LogicalPlan}
-import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.catalyst.{AliasIdentifier, TableIdentifier}
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits._
 import org.apache.spark.sql.connector.catalog.Table
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
-import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.{Row, SparkSession}
 
+import scala.util.control.NonFatal
+
 /**
  * Base implementation of [[SparkAdapter]] for Spark 3.x branch
  */
-abstract class BaseSpark3Adapter extends SparkAdapter {
+abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
 
   override def createSparkRowSerDe(encoder: ExpressionEncoder[Row]): SparkRowSerDe = {
     new Spark3RowSerDe(encoder)
@@ -115,7 +116,13 @@ abstract class BaseSpark3Adapter extends SparkAdapter {
     unfoldSubqueryAliases(table) match {
       case LogicalRelation(_, _, Some(table), _) => isHoodieTable(table)
       case relation: UnresolvedRelation =>
-        isHoodieTable(toTableIdentifier(relation), spark)
+        try {
+          isHoodieTable(toTableIdentifier(relation), spark)
+        } catch {
+          case NonFatal(e) =>
+            logWarning("Failed to determine whether the table is a hoodie table", e)
+            false
+        }
       case DataSourceV2Relation(table: Table, _, _, _, _) => isHoodieTable(table.properties())
       case _=> false
     }
@@ -148,5 +155,9 @@ abstract class BaseSpark3Adapter extends SparkAdapter {
     } else {
       None
     }
+  }
+
+  override def createInterpretedPredicate(e: Expression): InterpretedPredicate = {
+    Predicate.createInterpreted(e)
   }
 }

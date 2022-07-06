@@ -19,14 +19,14 @@
 
 package org.apache.hudi.sync.datahub;
 
-import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.sync.common.AbstractSyncTool;
+import org.apache.hudi.sync.common.HoodieSyncTool;
 import org.apache.hudi.sync.datahub.config.DataHubSyncConfig;
 
 import com.beust.jcommander.JCommander;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
+
+import java.util.Properties;
+
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
 
 /**
  * To sync with DataHub via REST APIs.
@@ -34,17 +34,13 @@ import org.apache.hadoop.fs.FileSystem;
  * @Experimental
  * @see <a href="https://datahubproject.io/">https://datahubproject.io/</a>
  */
-public class DataHubSyncTool extends AbstractSyncTool {
+public class DataHubSyncTool extends HoodieSyncTool {
 
-  private final DataHubSyncConfig config;
+  protected final DataHubSyncConfig config;
 
-  public DataHubSyncTool(TypedProperties props, Configuration conf, FileSystem fs) {
-    this(new DataHubSyncConfig(props), conf, fs);
-  }
-
-  public DataHubSyncTool(DataHubSyncConfig config, Configuration conf, FileSystem fs) {
-    super(config.getProps(), conf, fs);
-    this.config = config;
+  public DataHubSyncTool(Properties props) {
+    super(props);
+    this.config = new DataHubSyncConfig(props);
   }
 
   /**
@@ -55,20 +51,20 @@ public class DataHubSyncTool extends AbstractSyncTool {
    */
   @Override
   public void syncHoodieTable() {
-    try (DataHubSyncClient syncClient = new DataHubSyncClient(config, conf, fs)) {
-      syncClient.updateTableDefinition(config.tableName);
-      syncClient.updateLastCommitTimeSynced(config.tableName);
+    try (DataHubSyncClient syncClient = new DataHubSyncClient(config)) {
+      syncClient.updateTableSchema(config.getString(META_SYNC_TABLE_NAME), null);
+      syncClient.updateLastCommitTimeSynced(config.getString(META_SYNC_TABLE_NAME));
     }
   }
 
   public static void main(String[] args) {
-    final DataHubSyncConfig cfg = new DataHubSyncConfig();
-    JCommander cmd = new JCommander(cfg, null, args);
-    if (cfg.help || args.length == 0) {
+    final DataHubSyncConfig.DataHubSyncConfigParams params = new DataHubSyncConfig.DataHubSyncConfigParams();
+    JCommander cmd = JCommander.newBuilder().addObject(params).build();
+    cmd.parse(args);
+    if (params.isHelp()) {
       cmd.usage();
-      System.exit(1);
+      System.exit(0);
     }
-    FileSystem fs = FSUtils.getFs(cfg.basePath, new Configuration());
-    new DataHubSyncTool(cfg, fs.getConf(), fs).syncHoodieTable();
+    new DataHubSyncTool(params.toProps()).syncHoodieTable();
   }
 }

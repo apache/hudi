@@ -135,8 +135,8 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
       } finally {
         // remove commitBuffer to avoid obsolete metadata commit
         reset(instant);
-        return;
       }
+      return;
     }
 
     try {

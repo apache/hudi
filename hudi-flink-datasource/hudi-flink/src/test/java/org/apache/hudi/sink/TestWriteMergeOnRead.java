@@ -39,6 +39,31 @@ public class TestWriteMergeOnRead extends TestWriteCopyOnWrite {
   }
 
   @Test
+  public void testIndexStateBootstrapWithMultiFilesInOneSlice() throws Exception {
+    // open the function and ingest data
+    preparePipeline(conf)
+        .consume(TestData.filterOddRows(TestData.DATA_SET_INSERT))
+        .assertEmptyDataFiles()
+        .checkpoint(1)
+        .assertNextEvent()
+        .checkpointComplete(1)
+        .consume(TestData.filterEvenRows(TestData.DATA_SET_INSERT))
+        .checkpoint(2)
+        .assertNextEvent()
+        .checkpointComplete(2)
+        .checkWrittenData(EXPECTED1, 4)
+        // write another commit but does not complete it
+        .consume(TestData.filterEvenRows(TestData.DATA_SET_INSERT))
+        .checkpoint(3)
+        .assertNextEvent()
+        .end();
+
+    // reset the config option
+    conf.setBoolean(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, true);
+    validateIndexLoaded();
+  }
+
+  @Test
   public void testIndexStateBootstrapWithCompactionScheduled() throws Exception {
     // sets up the delta commits as 1 to generate a new compaction plan.
     conf.setInteger(FlinkOptions.COMPACTION_DELTA_COMMITS, 1);

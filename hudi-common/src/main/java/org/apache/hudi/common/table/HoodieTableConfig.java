@@ -57,6 +57,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.HashSet;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 
@@ -618,11 +619,10 @@ public class HoodieTableConfig extends HoodieConfig {
     );
   }
 
-  public List<String> getMetadataPartitions() {
-    return StringUtils.split(
-        getStringOrDefault(TABLE_METADATA_PARTITIONS, StringUtils.EMPTY_STRING),
-        CONFIG_VALUES_DELIMITER
-    );
+  public Set<String> getMetadataPartitions() {
+    return new HashSet<>(
+        StringUtils.split(getStringOrDefault(TABLE_METADATA_PARTITIONS, StringUtils.EMPTY_STRING),
+            CONFIG_VALUES_DELIMITER));
   }
 
   /**

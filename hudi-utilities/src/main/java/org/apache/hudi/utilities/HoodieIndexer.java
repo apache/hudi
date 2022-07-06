@@ -53,7 +53,6 @@ import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getCompletedMetadataPartitions;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getInflightAndCompletedMetadataPartitions;
 import static org.apache.hudi.utilities.UtilHelpers.EXECUTE;
 import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE;
@@ -243,7 +242,7 @@ public class HoodieIndexer {
   }
 
   private boolean indexExists(List<MetadataPartitionType> partitionTypes) {
-    Set<String> indexedMetadataPartitions = getCompletedMetadataPartitions(metaClient.getTableConfig());
+    Set<String> indexedMetadataPartitions = metaClient.getTableConfig().getMetadataPartitions();
     Set<String> requestedIndexPartitionPaths = partitionTypes.stream().map(MetadataPartitionType::getPartitionPath).collect(Collectors.toSet());
     requestedIndexPartitionPaths.retainAll(indexedMetadataPartitions);
     if (!requestedIndexPartitionPaths.isEmpty()) {
@@ -254,7 +253,7 @@ public class HoodieIndexer {
   }
 
   private boolean isMetadataInitialized() {
-    Set<String> indexedMetadataPartitions = getCompletedMetadataPartitions(metaClient.getTableConfig());
+    Set<String> indexedMetadataPartitions = metaClient.getTableConfig().getMetadataPartitions();
     return !indexedMetadataPartitions.isEmpty();
   }
 

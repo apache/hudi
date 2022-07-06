@@ -71,7 +71,7 @@ public class ScheduleCompactionActionExecutor<T extends HoodieRecordPayload, I, 
     if (!config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()
         && !config.getFailedWritesCleanPolicy().isLazy()) {
       // TODO(yihua): this validation is removed for Java client used by kafka-connect.  Need to revisit this.
-      if (config.getEngineType() != EngineType.JAVA) {
+      if (config.getEngineType() == EngineType.SPARK) {
         // if there are inflight writes, their instantTime must not be less than that of compaction instant time
         table.getActiveTimeline().getCommitsTimeline().filterPendingExcludingCompaction().firstInstant()
             .ifPresent(earliestInflight -> ValidationUtils.checkArgument(
