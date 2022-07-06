@@ -121,6 +121,12 @@ public abstract class AbstractStreamWriteFunction<I>
   private transient CkpMetadata ckpMetadata;
 
   /**
+   * Since flink 1.15, the streaming job with bounded source triggers one checkpoint
+   * after calling #endInput, use this flag to avoid unnecessary data flush.
+   */
+  private transient boolean inputEnded;
+
+  /**
    * Constructs a StreamWriteFunctionBase.
    *
    * @param config The config options
@@ -154,12 +160,20 @@ public abstract class AbstractStreamWriteFunction<I>
 
   @Override
   public void snapshotState(FunctionSnapshotContext functionSnapshotContext) throws Exception {
+    if (inputEnded) {
+      return;
+    }
     snapshotState();
     // Reload the snapshot state as the current state.
     reloadWriteMetaState();
   }
 
   public abstract void snapshotState();
+
+  @Override
+  public void endInput() {
+    this.inputEnded = true;
+  }
 
   // -------------------------------------------------------------------------
   //  Getter/Setter

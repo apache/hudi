@@ -18,6 +18,7 @@
 
 package org.apache.hudi.sink.compact;
 
+import org.apache.hudi.config.HoodieMemoryConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 
 import com.beust.jcommander.Parameter;
@@ -124,6 +125,8 @@ public class FlinkCompactionConfig extends Configuration {
   @Parameter(names = {"--select-instant"}, description = "Specify the compaction plan instant to compact."
       + "It's only effective for InstantCompactionPlanSelectStrategy.")
   public String compactionPlanInstant;
+  @Parameter(names = {"--spillable_map_path"}, description = "Default file path prefix for spillable map.", required = false)
+  public String spillableMapPath = HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH.defaultValue();
 
   /**
    * Transforms a {@code HoodieFlinkCompaction.config} into {@code Configuration}.
@@ -148,6 +151,8 @@ public class FlinkCompactionConfig extends Configuration {
     // use synchronous compaction always
     conf.setBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED, false);
     conf.setBoolean(FlinkOptions.COMPACTION_SCHEDULE_ENABLED, config.schedule);
+    // Map memory
+    conf.setString(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH.key(), config.spillableMapPath);
 
     return conf;
   }

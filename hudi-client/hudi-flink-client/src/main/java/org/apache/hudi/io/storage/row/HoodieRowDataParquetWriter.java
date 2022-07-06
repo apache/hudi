@@ -23,6 +23,7 @@ import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 
 import org.apache.flink.table.data.RowData;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.io.storage.HoodieParquetConfig;
 import org.apache.parquet.hadoop.ParquetFileWriter;
 import org.apache.parquet.hadoop.ParquetWriter;
 
@@ -39,7 +40,7 @@ public class HoodieRowDataParquetWriter extends ParquetWriter<RowData>
   private final long maxFileSize;
   private final HoodieRowDataParquetWriteSupport writeSupport;
 
-  public HoodieRowDataParquetWriter(Path file, HoodieRowDataParquetConfig parquetConfig)
+  public HoodieRowDataParquetWriter(Path file, HoodieParquetConfig<HoodieRowDataParquetWriteSupport> parquetConfig)
       throws IOException {
     super(HoodieWrapperFileSystem.convertToHoodiePath(file, parquetConfig.getHadoopConf()),
         ParquetFileWriter.Mode.CREATE, parquetConfig.getWriteSupport(), parquetConfig.getCompressionCodecName(),

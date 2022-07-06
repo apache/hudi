@@ -30,6 +30,7 @@ import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.utils.MockCoordinatorExecutor;
+import org.apache.hudi.sink.utils.NonThrownExecutor;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestUtils;
@@ -46,11 +47,14 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.Mockito;
+import org.slf4j.Logger;
 
 import java.io.File;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.is;
@@ -296,6 +300,40 @@ public class TestStreamWriteOperatorCoordinator {
     completedTimeline = metadataTableMetaClient.getActiveTimeline().filterCompletedInstants();
     assertThat("One instant need to sync to metadata table", completedTimeline.getInstants().count(), is(3L));
     assertThat(completedTimeline.lastInstant().get().getTimestamp(), is(instant));
+  }
+
+  @Test
+  public void testEndInputIsTheLastEvent() throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    MockOperatorCoordinatorContext context = new MockOperatorCoordinatorContext(new OperatorID(), 1);
+    Logger logger = Mockito.mock(Logger.class); // avoid too many logs by executor
+    NonThrownExecutor executor = NonThrownExecutor.builder(logger).waitForTasksFinish(true).build();
+
+    try (StreamWriteOperatorCoordinator coordinator = new StreamWriteOperatorCoordinator(conf, context)) {
+      coordinator.start();
+      coordinator.setExecutor(executor);
+      coordinator.handleEventFromOperator(0, WriteMetadataEvent.emptyBootstrap(0));
+      TimeUnit.SECONDS.sleep(5); // wait for handled bootstrap event
+
+      int eventCount = 20_000; // big enough to fill executor's queue
+      for (int i = 0; i < eventCount; i++) {
+        coordinator.handleEventFromOperator(0, createOperatorEvent(0, coordinator.getInstant(), "par1", true, 0.1));
+      }
+
+      WriteMetadataEvent endInput = WriteMetadataEvent.builder()
+          .taskID(0)
+          .instantTime(coordinator.getInstant())
+          .writeStatus(Collections.emptyList())
+          .endInput(true)
+          .build();
+      coordinator.handleEventFromOperator(0, endInput);
+
+      // wait for submitted events completed
+      executor.close();
+
+      // there should be no events after endInput
+      assertNull(coordinator.getEventBuffer()[0]);
+    }
   }
 
   // -------------------------------------------------------------------------

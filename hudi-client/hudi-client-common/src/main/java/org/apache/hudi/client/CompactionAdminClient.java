@@ -18,8 +18,6 @@
 
 package org.apache.hudi.client;
 
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -44,6 +42,9 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.action.compact.OperationResult;
+
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -172,7 +173,7 @@ public class CompactionAdminClient extends BaseHoodieClient {
       Path inflightPath = new Path(metaClient.getMetaPath(), inflight.getFileName());
       if (metaClient.getFs().exists(inflightPath)) {
         // revert if in inflight state
-        metaClient.getActiveTimeline().revertCompactionInflightToRequested(inflight);
+        metaClient.getActiveTimeline().revertInstantFromInflightToRequested(inflight);
       }
       // Overwrite compaction plan with updated info
       metaClient.getActiveTimeline().saveToCompactionRequested(

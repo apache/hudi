@@ -20,7 +20,7 @@ package org.apache.hudi.cli.integ;
 
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.commands.TableCommand;
-import org.apache.hudi.cli.testutils.AbstractShellIntegrationTest;
+import org.apache.hudi.cli.testutils.HoodieCLIIntegrationTestBase;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
@@ -55,7 +55,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Test class for {@link org.apache.hudi.cli.commands.HDFSParquetImportCommand}.
  */
 @Disabled("Disable due to flakiness and feature deprecation.")
-public class ITTestHDFSParquetImportCommand extends AbstractShellIntegrationTest {
+public class ITTestHDFSParquetImportCommand extends HoodieCLIIntegrationTestBase {
 
   private Path sourcePath;
   private Path targetPath;

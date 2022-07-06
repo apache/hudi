@@ -22,7 +22,7 @@ import org.apache.hadoop.fs.Path
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.sql.InsertMode
 import org.apache.hudi.sync.common.util.ConfigUtils
-import org.apache.hudi.{DataSourceWriteOptions, SparkAdapterSupport}
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, SparkAdapterSupport}
 import org.apache.spark.sql.HoodieSpark3SqlUtils.convertTransforms
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.{NoSuchTableException, TableAlreadyExistsException, UnresolvedAttribute}
@@ -33,6 +33,7 @@ import org.apache.spark.sql.connector.catalog.TableChange.{AddColumn, ColumnChan
 import org.apache.spark.sql.connector.catalog._
 import org.apache.spark.sql.connector.expressions.Transform
 import org.apache.spark.sql.execution.datasources.DataSource
+import org.apache.spark.sql.hudi.analysis.HoodieV1OrV2Table
 import org.apache.spark.sql.hudi.command._
 import org.apache.spark.sql.hudi.{HoodieSqlCommonUtils, ProvidesHoodieConfig}
 import org.apache.spark.sql.types.{StructField, StructType}
@@ -105,12 +106,30 @@ class HoodieCatalog extends DelegatingCatalogExtension
           case _ =>
             catalogTable0
         }
-        HoodieInternalV2Table(
+
+        val v2Table = HoodieInternalV2Table(
           spark = spark,
           path = catalogTable.location.toString,
           catalogTable = Some(catalogTable),
           tableIdentifier = Some(ident.toString))
-      case o => o
+
+        val schemaEvolutionEnabled: Boolean = spark.sessionState.conf.getConfString(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.key,
+          DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.defaultValue.toString).toBoolean
+
+        // NOTE: PLEASE READ CAREFULLY
+        //
+        // Since Hudi relations don't currently implement DS V2 Read API, we by default fallback to V1 here.
+        // Such fallback will have considerable performance impact, therefore it's only performed in cases
+        // where V2 API have to be used. Currently only such use-case is using of Schema Evolution feature
+        //
+        // Check out HUDI-4178 for more details
+        if (schemaEvolutionEnabled) {
+          v2Table
+        } else {
+          v2Table.v1TableWrapper
+        }
+
+      case t => t
     }
   }
 
@@ -118,9 +137,13 @@ class HoodieCatalog extends DelegatingCatalogExtension
                            schema: StructType,
                            partitions: Array[Transform],
                            properties: util.Map[String, String]): Table = {
-    val locUriAndTableType = deduceTableLocationURIAndTableType(ident, properties)
-    createHoodieTable(ident, schema, locUriAndTableType, partitions, properties,
-      Map.empty, Option.empty, TableCreationMode.CREATE)
+    if (sparkAdapter.isHoodieTable(properties)) {
+      val locUriAndTableType = deduceTableLocationURIAndTableType(ident, properties)
+      createHoodieTable(ident, schema, locUriAndTableType, partitions, properties,
+        Map.empty, Option.empty, TableCreationMode.CREATE)
+    } else {
+      super.createTable(ident, schema, partitions, properties)
+    }
   }
 
   override def tableExists(ident: Identifier): Boolean = super.tableExists(ident)
@@ -128,7 +151,7 @@ class HoodieCatalog extends DelegatingCatalogExtension
   override def dropTable(ident: Identifier): Boolean = {
     val table = loadTable(ident)
     table match {
-      case _: HoodieInternalV2Table =>
+      case HoodieV1OrV2Table(_) =>
         DropHoodieTableCommand(ident.asTableIdentifier, ifExists = true, isView = false, purge = false).run(spark)
         true
       case _ => super.dropTable(ident)
@@ -138,7 +161,7 @@ class HoodieCatalog extends DelegatingCatalogExtension
   override def purgeTable(ident: Identifier): Boolean = {
     val table = loadTable(ident)
     table match {
-      case _: HoodieInternalV2Table =>
+      case HoodieV1OrV2Table(_) =>
         DropHoodieTableCommand(ident.asTableIdentifier, ifExists = true, isView = false, purge = true).run(spark)
         true
       case _ => super.purgeTable(ident)
@@ -149,56 +172,53 @@ class HoodieCatalog extends DelegatingCatalogExtension
   @throws[TableAlreadyExistsException]
   override def renameTable(oldIdent: Identifier, newIdent: Identifier): Unit = {
     loadTable(oldIdent) match {
-      case _: HoodieInternalV2Table =>
+      case HoodieV1OrV2Table(_) =>
         AlterHoodieTableRenameCommand(oldIdent.asTableIdentifier, newIdent.asTableIdentifier, false).run(spark)
       case _ => super.renameTable(oldIdent, newIdent)
     }
   }
 
   override def alterTable(ident: Identifier, changes: TableChange*): Table = {
-    val tableIdent = TableIdentifier(ident.name(), ident.namespace().lastOption)
-    // scalastyle:off
-    val table = loadTable(ident) match {
-      case hoodieTable: HoodieInternalV2Table => hoodieTable
-      case _ => return super.alterTable(ident, changes: _*)
-    }
-    // scalastyle:on
+    loadTable(ident) match {
+      case HoodieV1OrV2Table(table) => {
+        val tableIdent = TableIdentifier(ident.name(), ident.namespace().lastOption)
+        changes.groupBy(c => c.getClass).foreach {
+          case (t, newColumns) if t == classOf[AddColumn] =>
+            AlterHoodieTableAddColumnsCommand(
+              tableIdent,
+              newColumns.asInstanceOf[Seq[AddColumn]].map { col =>
+                StructField(
+                  col.fieldNames()(0),
+                  col.dataType(),
+                  col.isNullable)
+              }).run(spark)
 
-    val grouped = changes.groupBy(c => c.getClass)
-
-    grouped.foreach {
-      case (t, newColumns) if t == classOf[AddColumn] =>
-        AlterHoodieTableAddColumnsCommand(
-          tableIdent,
-          newColumns.asInstanceOf[Seq[AddColumn]].map { col =>
-            StructField(
-              col.fieldNames()(0),
-              col.dataType(),
-              col.isNullable)
-          }).run(spark)
-      case (t, columnChanges) if classOf[ColumnChange].isAssignableFrom(t) =>
-        columnChanges.foreach {
-          case dataType: UpdateColumnType =>
-            val colName = UnresolvedAttribute(dataType.fieldNames()).name
-            val newDataType = dataType.newDataType()
-            val structField = StructField(colName, newDataType)
-            AlterHoodieTableChangeColumnCommand(tableIdent, colName, structField).run(spark)
-          case dataType: UpdateColumnComment =>
-            val newComment = dataType.newComment()
-            val colName = UnresolvedAttribute(dataType.fieldNames()).name
-            val fieldOpt = table.schema().findNestedField(dataType.fieldNames(), includeCollections = true,
-              spark.sessionState.conf.resolver).map(_._2)
-            val field = fieldOpt.getOrElse {
-              throw new AnalysisException(
-                s"Couldn't find column $colName in:\n${table.schema().treeString}")
+          case (t, columnChanges) if classOf[ColumnChange].isAssignableFrom(t) =>
+            columnChanges.foreach {
+              case dataType: UpdateColumnType =>
+                val colName = UnresolvedAttribute(dataType.fieldNames()).name
+                val newDataType = dataType.newDataType()
+                val structField = StructField(colName, newDataType)
+                AlterHoodieTableChangeColumnCommand(tableIdent, colName, structField).run(spark)
+              case dataType: UpdateColumnComment =>
+                val newComment = dataType.newComment()
+                val colName = UnresolvedAttribute(dataType.fieldNames()).name
+                val fieldOpt = table.schema.findNestedField(dataType.fieldNames(), includeCollections = true,
+                  spark.sessionState.conf.resolver).map(_._2)
+                val field = fieldOpt.getOrElse {
+                  throw new AnalysisException(
+                    s"Couldn't find column $colName in:\n${table.schema.treeString}")
+                }
+                AlterHoodieTableChangeColumnCommand(tableIdent, colName, field.withComment(newComment)).run(spark)
             }
-            AlterHoodieTableChangeColumnCommand(tableIdent, colName, field.withComment(newComment)).run(spark)
+          case (t, _) =>
+            throw new UnsupportedOperationException(s"not supported table change: ${t.getClass}")
         }
-      case (t, _) =>
-        throw new UnsupportedOperationException(s"not supported table change: ${t.getClass}")
-    }
 
-    loadTable(ident)
+        loadTable(ident)
+      }
+      case _ => super.alterTable(ident, changes: _*)
+    }
   }
 
   private def deduceTableLocationURIAndTableType(

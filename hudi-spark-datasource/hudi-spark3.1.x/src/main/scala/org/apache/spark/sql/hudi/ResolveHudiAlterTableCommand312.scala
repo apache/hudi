@@ -16,6 +16,8 @@
  */
 package org.apache.spark.sql.hudi
 
+import org.apache.hudi.common.config.HoodieCommonConfig
+
 import java.util.Locale
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.internal.schema.action.TableChange.ColumnChangeID
@@ -114,8 +116,9 @@ case class ResolveHudiAlterTableCommand312(sparkSession: SparkSession) extends R
       }
   }
 
-  private def schemaEvolutionEnabled(): Boolean = sparkSession
-    .sessionState.conf.getConfString(HoodieWriteConfig.SCHEMA_EVOLUTION_ENABLE.key(), "false").toBoolean
+  private def schemaEvolutionEnabled(): Boolean =
+    sparkSession.sessionState.conf.getConfString(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key,
+      HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.defaultValue.toString).toBoolean
 
   private def isHoodieTable(table: CatalogTable): Boolean = table.provider.map(_.toLowerCase(Locale.ROOT)).orNull == "hudi"
 

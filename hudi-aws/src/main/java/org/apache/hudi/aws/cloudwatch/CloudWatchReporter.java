@@ -74,7 +74,7 @@ public class CloudWatchReporter extends ScheduledReporter {
   }
 
   public static class Builder {
-    private MetricRegistry registry;
+    private final MetricRegistry registry;
     private Clock clock;
     private String prefix;
     private TimeUnit rateUnit;

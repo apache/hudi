@@ -18,6 +18,7 @@
 package org.apache.spark.sql.hudi
 
 import org.apache.hudi.DataSourceWriteOptions.{KEYGENERATOR_CLASS_NAME, MOR_TABLE_TYPE_OPT_VAL, PARTITIONPATH_FIELD, PRECOMBINE_FIELD, RECORDKEY_FIELD, TABLE_TYPE}
+import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieDuplicateKeyException
@@ -615,7 +616,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
           .setConf(spark.sessionState.newHadoopConf())
           .build()
 
-        assertResult(true)(new TableSchemaResolver(metaClient).isHasOperationField)
+        assertResult(true)(new TableSchemaResolver(metaClient).hasOperationField)
 
         spark.sql(
           s"""
@@ -693,6 +694,49 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         checkAnswer(s"select name, price, ts, nestedcol.a1, nestedcol.a2.b2.c2 from $tableName")(
           Seq("name_1", 10.0, 1000, "a", 999)
         )
+      }
+    }
+  }
+
+  test("Test Insert Into With Catalog Identifier for spark >= 3.2.0") {
+    Seq("hudi", "parquet").foreach { format =>
+      withTempDir { tmp =>
+        val tableName = s"spark_catalog.default.$generateTableName"
+        // Create a partitioned table
+        if (HoodieSparkUtils.gteqSpark3_2) {
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  name string,
+               |  price double,
+               |  ts long,
+               |  dt string
+               |) using $format
+               | tblproperties (primaryKey = 'id')
+               | partitioned by (dt)
+               | location '${tmp.getCanonicalPath}'
+       """.stripMargin)
+          // Insert into dynamic partition
+          spark.sql(
+            s"""
+               | insert into $tableName
+               | select 1 as id, 'a1' as name, 10 as price, 1000 as ts, '2021-01-05' as dt
+        """.stripMargin)
+          checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+            Seq(1, "a1", 10.0, 1000, "2021-01-05")
+          )
+          // Insert into static partition
+          spark.sql(
+            s"""
+               | insert into $tableName partition(dt = '2021-01-05')
+               | select 2 as id, 'a2' as name, 10 as price, 1000 as ts
+        """.stripMargin)
+          checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+            Seq(1, "a1", 10.0, 1000, "2021-01-05"),
+            Seq(2, "a2", 10.0, 1000, "2021-01-05")
+          )
+        }
       }
     }
   }

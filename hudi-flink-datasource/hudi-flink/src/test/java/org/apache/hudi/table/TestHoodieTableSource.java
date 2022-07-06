@@ -28,6 +28,7 @@ import org.apache.flink.api.common.io.FileInputFormat;
 import org.apache.flink.api.common.io.InputFormat;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.data.RowData;
+import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.function.ThrowingSupplier;
@@ -38,7 +39,6 @@ import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -76,22 +76,18 @@ public class TestHoodieTableSource {
         Arrays.asList(conf.getString(FlinkOptions.PARTITION_PATH_FIELD).split(",")),
         "default-par",
         conf);
-    Path[] paths = tableSource.getReadPaths();
-    assertNotNull(paths);
-    String[] names = Arrays.stream(paths).map(Path::getName)
-        .sorted(Comparator.naturalOrder()).toArray(String[]::new);
-    assertThat(Arrays.toString(names), is("[par1, par2, par3, par4]"));
+    FileStatus[] fileStatuses = tableSource.getReadFiles();
+    assertNotNull(fileStatuses);
+    assertThat(fileStatuses.length, is(4));
     // apply partition pruning
     Map<String, String> partitions = new HashMap<>();
     partitions.put("partition", "par1");
 
     tableSource.applyPartitions(Collections.singletonList(partitions));
 
-    Path[] paths2 = tableSource.getReadPaths();
-    assertNotNull(paths2);
-    String[] names2 = Arrays.stream(paths2).map(Path::getName)
-        .sorted(Comparator.naturalOrder()).toArray(String[]::new);
-    assertThat(Arrays.toString(names2), is("[par1]"));
+    FileStatus[] fileStatuses2 = tableSource.getReadFiles();
+    assertNotNull(fileStatuses2);
+    assertThat(fileStatuses2.length, is(1));
   }
 
   @Test

@@ -20,7 +20,7 @@ package org.apache.hudi.cli.integ;
 
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.commands.TableCommand;
-import org.apache.hudi.cli.testutils.AbstractShellIntegrationTest;
+import org.apache.hudi.cli.testutils.HoodieCLIIntegrationTestBase;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
@@ -57,7 +57,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * A command use SparkLauncher need load jars under lib which generate during mvn package.
  * Use integration test instead of unit test.
  */
-public class ITTestClusteringCommand extends AbstractShellIntegrationTest {
+public class ITTestClusteringCommand extends HoodieCLIIntegrationTestBase {
 
   @BeforeEach
   public void init() throws IOException {
@@ -105,9 +105,10 @@ public class ITTestClusteringCommand extends AbstractShellIntegrationTest {
 
     // get clustering instance
     HoodieActiveTimeline timeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
-    Option<String> instance =
+    Option<String> instanceOpt =
         timeline.filterPendingReplaceTimeline().firstInstant().map(HoodieInstant::getTimestamp);
-    assertTrue(instance.isPresent(), "Must have pending clustering.");
+    assertTrue(instanceOpt.isPresent(), "Must have pending clustering.");
+    final String instance = instanceOpt.get();
 
     CommandResult cr2 = getShell().executeCommand(
         String.format("clustering run --parallelism %s --clusteringInstant %s --sparkMaster %s",

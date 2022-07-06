@@ -32,6 +32,10 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_PASS;
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_URL;
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_USER;
+
 /**
  * A hive query node in the DAG of operations for a workflow. used to perform a hive query with given config.
  */
@@ -57,8 +61,8 @@ public class HiveQueryNode extends DagNode<Boolean> {
         .getDeltaSyncService().getDeltaSync().getCfg().baseFileFormat);
     HiveSyncConfig hiveSyncConfig = new HiveSyncConfig(properties);
     this.hiveServiceProvider.syncToLocalHiveIfNeeded(executionContext.getHoodieTestSuiteWriter());
-    Connection con = DriverManager.getConnection(hiveSyncConfig.jdbcUrl, hiveSyncConfig.hiveUser,
-        hiveSyncConfig.hivePass);
+    Connection con = DriverManager.getConnection(hiveSyncConfig.getString(HIVE_URL),
+        hiveSyncConfig.getString(HIVE_USER), hiveSyncConfig.getString(HIVE_PASS));
     Statement stmt = con.createStatement();
     stmt.execute("set hive.input.format=org.apache.hadoop.hive.ql.io.HiveInputFormat");
     for (String hiveProperty : this.config.getHiveProperties()) {

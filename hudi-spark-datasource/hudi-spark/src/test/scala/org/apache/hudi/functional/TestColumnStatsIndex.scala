@@ -250,7 +250,7 @@ class TestColumnStatsIndex extends HoodieClientTestBase with ColumnStatsIndexSup
 
     {
       // We have to include "c1", since we sort the expected outputs by this column
-      val requestedColumns = Seq("c1", "c4")
+      val requestedColumns = Seq("c4", "c1")
 
       val partialColStatsDF = readColumnStatsIndex(spark, basePath, metadataConfig, requestedColumns)
       val partialTransposedColStatsDF = transposeColumnStatsIndex(spark, partialColStatsDF, requestedColumns, sourceTableSchema)
