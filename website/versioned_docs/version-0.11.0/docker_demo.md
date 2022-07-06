@@ -44,7 +44,7 @@ Also, this has not been tested on some environments like Docker on Windows.
 The first step is to build hudi. **Note** This step builds hudi on default supported scala version - 2.11.
 ```java
 cd <HUDI_WORKSPACE>
-mvn package -DskipTests
+mvn clean package -Pintegration-tests -DskipTests
 ```
 
 ### Bringing up Demo Cluster
