@@ -18,21 +18,34 @@
 
 package org.apache.hudi.sink.compact.strategy;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.stream.Stream;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.compact.FlinkCompactionConfig;
+import org.apache.hudi.sink.compact.HoodieFlinkCompactor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Specify the compaction plan instant to compact
  */
 public class InstantCompactionPlanSelectStrategy implements CompactionPlanSelectStrategy {
+  protected static final Logger LOG = LoggerFactory.getLogger(HoodieFlinkCompactor.class);
+
   @Override
   public List<HoodieInstant> select(HoodieTimeline pendingCompactionTimeline, FlinkCompactionConfig config) {
+    if (StringUtils.isNullOrEmpty(config.compactionPlanInstant)) {
+      LOG.warn("None instant is selected");
+      return Collections.emptyList();
+    }
+    Stream<String> instants = Arrays.stream(config.compactionPlanInstant.split(","));
     HoodieInstant specifiedInstant = pendingCompactionTimeline.getInstants()
-        .filter(instant -> config.compactionPlanInstant.equals(instant.getTimestamp()))
+        .filter(instant -> instants.anyMatch(i -> i.equals(instant.getTimestamp())))
         .findFirst()
         .orElseThrow(() -> new HoodieException("The instant " + config.compactionPlanInstant + " is not found in timeline"));
     return Collections.singletonList(specifiedInstant);

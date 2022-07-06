@@ -122,7 +122,8 @@ public class FlinkCompactionConfig extends Configuration {
       + "It's only effective for MultiCompactionPlanSelectStrategy.")
   public Integer compactionPlanMaxSelect = 10;
 
-  @Parameter(names = {"--select-instant"}, description = "Specify the compaction plan instant to compact."
+  @Parameter(names = {"--select-instant"}, description = "Specify the compaction plan instant to compact and you can specify more than"
+      + "one instant in a time by using comma."
       + "It's only effective for InstantCompactionPlanSelectStrategy.")
   public String compactionPlanInstant;
   @Parameter(names = {"--spillable_map_path"}, description = "Default file path prefix for spillable map.", required = false)
