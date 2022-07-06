@@ -20,7 +20,8 @@ package org.apache.hudi.client.transaction;
 
 
 /**
- * This class is a basic implementation of a conflict resolution strategy for concurrent writes {@link ConflictResolutionStrategy}.
+ * This strategy is used for direct marker writers, trying to do early conflict detection with Transaction.
+ * It will use fileSystem api like list and exist directly to check if there is any marker file conflict.
  */
 public class DirectMarkerWithTransactionConflictResolutionStrategy extends SimpleDirectMarkerConflictResolutionStrategy
     implements TransactionConflictResolutionStrategy {

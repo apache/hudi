@@ -61,19 +61,23 @@ public class MarkerCheckerRunnable implements Runnable {
 
   @Override
   public void run() {
-    HoodieTimer timer = new HoodieTimer().startTimer();
-    Set<String> currentInstantAllMarkers = markerHandler.getAllMarkers(markerDir);
-
-    Path tempPath = new Path(basePath + Path.SEPARATOR + HoodieTableMetaClient.TEMPFOLDER_NAME);
     try {
+      if (!fs.exists(new Path(markerDir))) {
+        return;
+      }
+
+      HoodieTimer timer = new HoodieTimer().startTimer();
+      Set<String> currentInstantAllMarkers = markerHandler.getAllMarkers(markerDir);
+      Path tempPath = new Path(basePath + Path.SEPARATOR + HoodieTableMetaClient.TEMPFOLDER_NAME);
+
       List<Path> instants = MarkerUtils.getAllMarkerDir(tempPath, fs);
       List<String> candidate = getCandidateInstants(instants, markerToInstantTime(markerDir));
       Set<String> tableMarkers = candidate.stream().flatMap(instant -> {
         return MarkerUtils.readTimelineServerBasedMarkersFromFileSystemLocally(instant, fs).stream();
       }).collect(Collectors.toSet());
 
-      Set<String> currentFileIDs = currentInstantAllMarkers.stream().map(this::makerToFileID).collect(Collectors.toSet());
-      Set<String> tableFilesIDs = tableMarkers.stream().map(this::makerToFileID).collect(Collectors.toSet());
+      Set<String> currentFileIDs = currentInstantAllMarkers.stream().map(this::makerToPartitionAndFileID).collect(Collectors.toSet());
+      Set<String> tableFilesIDs = tableMarkers.stream().map(this::makerToPartitionAndFileID).collect(Collectors.toSet());
 
       currentFileIDs.retainAll(tableFilesIDs);
 
@@ -118,7 +122,7 @@ public class MarkerCheckerRunnable implements Runnable {
    * @param marker
    * @return
    */
-  private String makerToFileID(String marker) {
+  private String makerToPartitionAndFileID(String marker) {
     String[] ele = marker.split("_");
     return ele[0];
   }

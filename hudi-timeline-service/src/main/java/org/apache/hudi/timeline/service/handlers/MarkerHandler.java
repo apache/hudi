@@ -147,6 +147,16 @@ public class MarkerHandler extends Handler {
     return markerDirState.exists();
   }
 
+  /**
+   * Check if there is any marker conflict for current markerDir
+   * For new markerDir init and create MarkerCheckerRunnable which will trigger at fixed rate
+   * @param batchInterval
+   * @param period
+   * @param markerDir
+   * @param basePath
+   * @param maxAllowableHeartbeatIntervalInMs
+   * @return
+   */
   public boolean checkMarkerConflict(long batchInterval, long period, String markerDir, String basePath, long maxAllowableHeartbeatIntervalInMs) {
     synchronized (checkers) {
       if (checkers.containsKey(markerDir)) {

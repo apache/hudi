@@ -31,7 +31,8 @@ import java.io.IOException;
 import java.util.ConcurrentModificationException;
 
 /**
- * This class is a basic implementation of a conflict resolution strategy for concurrent writes {@link ConflictResolutionStrategy}.
+ * This strategy is used for timeline server based marker writers, trying to do early conflict detection.
+ * It will call timeline server /v1/hoodie/marker/check-marker-conflict API to check if there is any marker conflict.
  */
 public class AsyncTimelineMarkerConflictResolutionStrategy extends SimpleConcurrentFileWritesConflictResolutionStrategy {
 

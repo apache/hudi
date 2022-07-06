@@ -18,5 +18,10 @@
 
 package org.apache.hudi.client.transaction;
 
+/**
+ * The conflict resolution strategy for early conflict detection.
+ * Any strategy implements this interface will check marker conflict,
+ * try to resolve conflict and create marker in a Transaction
+ */
 public interface TransactionConflictResolutionStrategy {
 }

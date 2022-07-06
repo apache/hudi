@@ -169,7 +169,7 @@ public abstract class WriteMarkers implements Serializable {
   abstract Option<Path> create(String partitionPath, String dataFileName, IOType type, boolean checkIfExists);
 
   /**
-   *
+   * check if there is any marker conflict during early conflict detection.
    * @param config
    * @param partitionPath
    * @param fileId
