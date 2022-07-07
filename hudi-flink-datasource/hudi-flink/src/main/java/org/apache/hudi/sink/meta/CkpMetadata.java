@@ -104,7 +104,7 @@ public class CkpMetadata implements Serializable {
     try {
       fs.createNewFile(path);
     } catch (IOException e) {
-      throw new HoodieException("Exception while adding checkpoint start metadata for instant: " + instant);
+      throw new HoodieException("Exception while adding checkpoint start metadata for instant: " + instant, e);
     }
     // cleaning
     clean(instant);
@@ -142,7 +142,7 @@ public class CkpMetadata implements Serializable {
     try {
       fs.createNewFile(path);
     } catch (IOException e) {
-      throw new HoodieException("Exception while adding checkpoint commit metadata for instant: " + instant);
+      throw new HoodieException("Exception while adding checkpoint commit metadata for instant: " + instant, e);
     }
   }
 
@@ -166,7 +166,7 @@ public class CkpMetadata implements Serializable {
     try {
       this.messages = scanCkpMetadata(this.path);
     } catch (IOException e) {
-      throw new HoodieException("Exception while scanning the checkpoint meta files under path: " + this.path);
+      throw new HoodieException("Exception while scanning the checkpoint meta files under path: " + this.path, e);
     }
   }
 

@@ -124,12 +124,13 @@
         <!-- Flink -->
         <dependency>
             <groupId>org.apache.flink</groupId>
-            <artifactId>flink-streaming-java_${scala.binary.version}</artifactId>
+            <artifactId>${flink.streaming.java.artifactId}</artifactId>
+            <version>${flink.version}</version>
             <scope>compile</scope>
         </dependency>
         <dependency>
             <groupId>org.apache.flink</groupId>
-            <artifactId>flink-clients_${scala.binary.version}</artifactId>
+            <artifactId>${flink.clients.artifactId}</artifactId>
             <scope>compile</scope>
             <exclusions>
                 <exclusion>
@@ -144,7 +145,7 @@
         </dependency>
         <dependency>
             <groupId>org.apache.flink</groupId>
-            <artifactId>flink-connector-kafka_${scala.binary.version}</artifactId>
+            <artifactId>${flink.connector.kafka.artifactId}</artifactId>
             <scope>compile</scope>
         </dependency>
         <dependency>
@@ -154,12 +155,12 @@
         </dependency>
         <dependency>
             <groupId>org.apache.flink</groupId>
-            <artifactId>flink-hadoop-compatibility_${scala.binary.version}</artifactId>
+            <artifactId>${flink.hadoop.compatibility.artifactId}</artifactId>
             <version>${flink.version}</version>
         </dependency>
         <dependency>
             <groupId>org.apache.flink</groupId>
-            <artifactId>flink-parquet_${scala.binary.version}</artifactId>
+            <artifactId>${flink.parquet.artifactId}</artifactId>
             <version>${flink.version}</version>
             <scope>provided</scope>
         </dependency>
@@ -189,7 +190,7 @@
         </dependency>
         <dependency>
             <groupId>org.apache.flink</groupId>
-            <artifactId>flink-statebackend-rocksdb_${scala.binary.version}</artifactId>
+            <artifactId>${flink.statebackend.rocksdb.artifactId}</artifactId>
             <version>${flink.version}</version>
             <scope>provided</scope>
         </dependency>
@@ -348,7 +349,7 @@
         <!-- Flink dependencies -->
         <dependency>
             <groupId>org.apache.flink</groupId>
-            <artifactId>flink-test-utils_${scala.binary.version}</artifactId>
+            <artifactId>${flink.test.utils.artifactId}</artifactId>
             <version>${flink.version}</version>
             <scope>test</scope>
         </dependency>
@@ -361,7 +362,7 @@
         </dependency>
         <dependency>
             <groupId>org.apache.flink</groupId>
-            <artifactId>flink-streaming-java_${scala.binary.version}</artifactId>
+            <artifactId>${flink.streaming.java.artifactId}</artifactId>
             <version>${flink.version}</version>
             <scope>test</scope>
             <type>test-jar</type>
@@ -375,14 +376,13 @@
         </dependency>
         <dependency>
             <groupId>org.apache.flink</groupId>
-            <artifactId>flink-json</artifactId>
+            <artifactId>flink-csv</artifactId>
             <version>${flink.version}</version>
             <scope>test</scope>
-            <type>test-jar</type>
         </dependency>
         <dependency>
             <groupId>org.apache.flink</groupId>
-            <artifactId>flink-csv</artifactId>
+            <artifactId>flink-connector-files</artifactId>
             <version>${flink.version}</version>
             <scope>test</scope>
         </dependency>

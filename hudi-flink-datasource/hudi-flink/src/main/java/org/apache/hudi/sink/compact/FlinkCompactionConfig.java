@@ -23,6 +23,7 @@ import org.apache.hudi.configuration.FlinkOptions;
 
 import com.beust.jcommander.Parameter;
 import org.apache.flink.configuration.Configuration;
+import org.apache.hudi.sink.compact.strategy.SingleCompactionPlanSelectStrategy;
 
 /**
  * Configurations for Hoodie Flink compaction.
@@ -110,6 +111,21 @@ public class FlinkCompactionConfig extends Configuration {
       description = "Min compaction interval of async compaction service, default 10 minutes")
   public Integer minCompactionIntervalSeconds = 600;
 
+  @Parameter(names = {"--select-strategy"}, description = "The strategy define how to select compaction plan to compact.\n"
+      + "1). SingleCompactionPlanSelectStrategy: Select first or last compaction plan."
+      + "2). MultiCompactionPlanSelectStrategy: Select first or last n compaction plan (n is defined by compactionPlanMaxSelect)."
+      + "3). AllPendingCompactionPlanSelectStrategy: Select all pending compaction plan"
+      + "4). InstantCompactionPlanSelectStrategy: Select the compaction plan that instant is specified by compactionPlanInstant")
+  public String compactionPlanSelectStrategy = SingleCompactionPlanSelectStrategy.class.getName();
+
+  @Parameter(names = {"--select-max-number"}, description = "Max number of compaction plan would be selected in compaction."
+      + "It's only effective for MultiCompactionPlanSelectStrategy.")
+  public Integer compactionPlanMaxSelect = 10;
+
+  @Parameter(names = {"--select-instant"}, description = "Specify the compaction plan instant to compact and you can specify more than"
+      + "one instant in a time by using comma."
+      + "It's only effective for InstantCompactionPlanSelectStrategy.")
+  public String compactionPlanInstant;
   @Parameter(names = {"--spillable_map_path"}, description = "Default file path prefix for spillable map.", required = false)
   public String spillableMapPath = HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH.defaultValue();
 

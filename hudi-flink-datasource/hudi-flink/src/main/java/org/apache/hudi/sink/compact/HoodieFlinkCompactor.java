@@ -18,6 +18,11 @@
 
 package org.apache.hudi.sink.compact;
 
+import org.apache.flink.streaming.api.datastream.DataStream;
+import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
+import org.apache.flink.streaming.api.functions.ProcessFunction;
+import org.apache.flink.util.Collector;
+import org.apache.flink.util.OutputTag;
 import org.apache.hudi.async.HoodieAsyncTableService;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
@@ -26,9 +31,11 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.sink.compact.strategy.CompactionPlanSelectStrategy;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.util.CompactionUtil;
 import org.apache.hudi.util.StreamerUtil;
@@ -42,9 +49,12 @@ import org.apache.flink.streaming.api.operators.ProcessOperator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.stream.Collectors;
 
 /**
  * Flink hudi compaction program that can be executed manually.
@@ -218,74 +228,104 @@ public class HoodieFlinkCompactor {
       }
 
       // fetch the instant based on the configured execution sequence
-      HoodieTimeline timeline = table.getActiveTimeline().filterPendingCompactionTimeline();
-      Option<HoodieInstant> requested = CompactionUtil.isLIFO(cfg.compactionSeq) ? timeline.lastInstant() : timeline.firstInstant();
-      if (!requested.isPresent()) {
+      HoodieTimeline timeline = table.getActiveTimeline();
+      List<HoodieInstant> requested = ((CompactionPlanSelectStrategy) ReflectionUtils.loadClass(cfg.compactionPlanSelectStrategy))
+          .select(timeline.filterPendingCompactionTimeline(), cfg);
+      if (requested.isEmpty()) {
         // do nothing.
         LOG.info("No compaction plan scheduled, turns on the compaction plan schedule with --schedule option");
         return;
       }
 
-      String compactionInstantTime = requested.get().getTimestamp();
+      List<String> compactionInstantTimes = requested.stream().map(HoodieInstant::getTimestamp).collect(Collectors.toList());
+      compactionInstantTimes.forEach(timestamp -> {
+        HoodieInstant inflightInstant = HoodieTimeline.getCompactionInflightInstant(timestamp);
+        if (timeline.containsInstant(inflightInstant)) {
+          LOG.info("Rollback inflight compaction instant: [" + timestamp + "]");
+          table.rollbackInflightCompaction(inflightInstant);
+          table.getMetaClient().reloadActiveTimeline();
+        }
+      });
 
-      HoodieInstant inflightInstant = HoodieTimeline.getCompactionInflightInstant(compactionInstantTime);
-      if (timeline.containsInstant(inflightInstant)) {
-        LOG.info("Rollback inflight compaction instant: [" + compactionInstantTime + "]");
-        table.rollbackInflightCompaction(inflightInstant);
-        table.getMetaClient().reloadActiveTimeline();
-      }
-
-      // generate compaction plan
+      // generate timestamp and compaction plan pair
       // should support configurable commit metadata
-      HoodieCompactionPlan compactionPlan = CompactionUtils.getCompactionPlan(
-          table.getMetaClient(), compactionInstantTime);
+      List<Pair<String, HoodieCompactionPlan>> compactionPlans = compactionInstantTimes.stream()
+          .map(timestamp -> {
+            try {
+              return Pair.of(timestamp, CompactionUtils.getCompactionPlan(table.getMetaClient(), timestamp));
+            } catch (IOException e) {
+              throw new HoodieException(e);
+            }
+          })
+          // reject empty compaction plan
+          .filter(pair -> !(pair.getRight() == null
+              || pair.getRight().getOperations() == null
+              || pair.getRight().getOperations().isEmpty()))
+          .collect(Collectors.toList());
 
-      if (compactionPlan == null || (compactionPlan.getOperations() == null)
-          || (compactionPlan.getOperations().isEmpty())) {
+      if (compactionPlans.isEmpty()) {
         // No compaction plan, do nothing and return.
-        LOG.info("No compaction plan for instant " + compactionInstantTime);
+        LOG.info("No compaction plan for instant " + String.join(",", compactionInstantTimes));
         return;
       }
 
-      HoodieInstant instant = HoodieTimeline.getCompactionRequestedInstant(compactionInstantTime);
+      List<HoodieInstant> instants = compactionInstantTimes.stream().map(HoodieTimeline::getCompactionRequestedInstant).collect(Collectors.toList());
       HoodieTimeline pendingCompactionTimeline = table.getActiveTimeline().filterPendingCompactionTimeline();
-      if (!pendingCompactionTimeline.containsInstant(instant)) {
-        // this means that the compaction plan was written to auxiliary path(.tmp)
-        // but not the meta path(.hoodie), this usually happens when the job crush
-        // exceptionally.
-
-        // clean the compaction plan in auxiliary path and cancels the compaction.
-
-        LOG.warn("The compaction plan was fetched through the auxiliary path(.tmp) but not the meta path(.hoodie).\n"
-            + "Clean the compaction plan in auxiliary path and cancels the compaction");
-        CompactionUtil.cleanInstant(table.getMetaClient(), instant);
-        return;
+      for (HoodieInstant instant : instants) {
+        if (!pendingCompactionTimeline.containsInstant(instant)) {
+          // this means that the compaction plan was written to auxiliary path(.tmp)
+          // but not the meta path(.hoodie), this usually happens when the job crush
+          // exceptionally.
+          // clean the compaction plan in auxiliary path and cancels the compaction.
+          LOG.warn("The compaction plan was fetched through the auxiliary path(.tmp) but not the meta path(.hoodie).\n"
+              + "Clean the compaction plan in auxiliary path and cancels the compaction");
+          CompactionUtil.cleanInstant(table.getMetaClient(), instant);
+          return;
+        }
       }
 
       // get compactionParallelism.
       int compactionParallelism = conf.getInteger(FlinkOptions.COMPACTION_TASKS) == -1
-          ? compactionPlan.getOperations().size() : conf.getInteger(FlinkOptions.COMPACTION_TASKS);
+          ? Math.toIntExact(compactionPlans.stream().mapToLong(pair -> pair.getRight().getOperations().size()).sum())
+          : conf.getInteger(FlinkOptions.COMPACTION_TASKS);
 
-      LOG.info("Start to compaction for instant " + compactionInstantTime);
+      LOG.info("Start to compaction for instant " + compactionInstantTimes);
 
       // Mark instant as compaction inflight
-      table.getActiveTimeline().transitionCompactionRequestedToInflight(instant);
+      for (HoodieInstant instant : instants) {
+        table.getActiveTimeline().transitionCompactionRequestedToInflight(instant);
+      }
       table.getMetaClient().reloadActiveTimeline();
 
-      env.addSource(new CompactionPlanSourceFunction(compactionPlan, compactionInstantTime))
+      // use side-output to make operations that is in the same plan to be placed in the same stream
+      // keyby() cannot sure that different operations are in the different stream
+      DataStream<CompactionPlanEvent> source = env.addSource(new MultiCompactionPlanSourceFunction(compactionPlans))
           .name("compaction_source")
-          .uid("uid_compaction_source")
-          .rebalance()
+          .uid("uid_compaction_source");
+
+      SingleOutputStreamOperator<Void> operator = source.rebalance()
           .transform("compact_task",
               TypeInformation.of(CompactionCommitEvent.class),
               new ProcessOperator<>(new CompactFunction(conf)))
           .setParallelism(compactionParallelism)
-          .addSink(new CompactionCommitSink(conf))
-          .name("clean_commits")
-          .uid("uid_clean_commits")
+          .process(new ProcessFunction<CompactionCommitEvent, Void>() {
+            @Override
+            public void processElement(CompactionCommitEvent event, ProcessFunction<CompactionCommitEvent, Void>.Context context, Collector<Void> out) {
+              context.output(new OutputTag<>(event.getInstant(), TypeInformation.of(CompactionCommitEvent.class)), event);
+            }
+          })
+          .name("group_by_compaction_plan")
+          .uid("uid_group_by_compaction_plan")
           .setParallelism(1);
 
-      env.execute("flink_hudi_compaction_" + compactionInstantTime);
+      compactionPlans.forEach(pair ->
+          operator.getSideOutput(new OutputTag<>(pair.getLeft(), TypeInformation.of(CompactionCommitEvent.class)))
+              .addSink(new CompactionCommitSink(conf))
+              .name("clean_commits " + pair.getLeft())
+              .uid("uid_clean_commits_" + pair.getLeft())
+              .setParallelism(1));
+
+      env.execute("flink_hudi_compaction_" + String.join(",", compactionInstantTimes));
     }
 
     /**
