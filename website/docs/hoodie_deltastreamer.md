@@ -224,7 +224,7 @@ A deltastreamer job can then be triggered as follows:
 Read more in depth about concurrency control in the [concurrency control concepts](/docs/concurrency_control) section
 
 ## Checkpointing
-HoodieDeltaStreamer uses checkpoints to keep track of what data has been read already so it can resume without needing to reprocess all data.
+`HoodieDeltaStreamer` uses checkpoints to keep track of what data has been read already so it can resume without needing to reprocess all data.
 When using a Kafka source, the checkpoint is the [Kafka Offset](https://cwiki.apache.org/confluence/display/KAFKA/Offset+Management) 
 When using a DFS source, the checkpoint is the 'last modified' timestamp of the latest file read.
 Checkpoints are saved in the .hoodie commit file as `deltastreamer.checkpoint.key`.
@@ -316,7 +316,7 @@ For DFS sources the following behaviors are expected:
 - `HoodieDeltaStreamer` reads the files under the source base path (`hoodie.deltastreamer.source.dfs.root`) directly, and it won't use the partition paths under this base path as fields of the dataset. Detailed examples can be found [here](https://github.com/apache/hudi/issues/5485).
 
 ### Kafka
-Hudi can read directly from Kafka clusters. See more details on HoodieDeltaStreamer to learn how to setup streaming 
+Hudi can read directly from Kafka clusters. See more details on `HoodieDeltaStreamer` to learn how to setup streaming 
 ingestion with exactly once semantics, checkpointing, and plugin transformations. The following formats are supported 
 when reading data from Kafka:
 
@@ -335,7 +335,7 @@ to trigger/processing of new or changed data as soon as it is available on S3.
 3. Find the queue URL and Region to set these configurations:
    1. hoodie.deltastreamer.s3.source.queue.url=https://sqs.us-west-2.amazonaws.com/queue/url
    2. hoodie.deltastreamer.s3.source.queue.region=us-west-2 
-4. start the S3EventsSource and S3EventsHoodieIncrSource using the HoodieDeltaStreamer utility as shown in sample commands below:
+4. start the S3EventsSource and S3EventsHoodieIncrSource using the `HoodieDeltaStreamer` utility as shown in sample commands below:
 
 Insert code sample from this blog: https://hudi.apache.org/blog/2021/08/23/s3-events-source/#configuration-and-setup
 
@@ -524,7 +524,7 @@ There are 3 use cases for incremental query:
 | `read.end-commit` | `false` | the latest commit | -- |
 
 ## Kafka Connect Sink
-If you want to perform streaming ingestion into Hudi format similar to HoodieDeltaStreamer, but you don't want to depend on Spark,
+If you want to perform streaming ingestion into Hudi format similar to `HoodieDeltaStreamer`, but you don't want to depend on Spark,
 try out the new experimental release of Hudi Kafka Connect Sink. Read the [ReadMe](https://github.com/apache/hudi/tree/master/hudi-kafka-connect) 
 for full documentation.
 
