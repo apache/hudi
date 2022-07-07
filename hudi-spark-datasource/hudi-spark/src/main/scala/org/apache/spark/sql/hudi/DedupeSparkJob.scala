@@ -43,7 +43,6 @@ class DedupeSparkJob(basePath: String,
   val sparkHelper = new SparkHelper(sqlContext, fs)
   val LOG = Logger.getLogger(this.getClass)
 
-
   /**
     *
     * @param tblName
@@ -61,7 +60,6 @@ class DedupeSparkJob(basePath: String,
     sqlContext.sql(dupeSql)
   }
 
-
   /**
     *
     * Check a given partition for duplicates and suggest the deletions that need to be done in each file,
@@ -70,7 +68,6 @@ class DedupeSparkJob(basePath: String,
     * @return
     */
   private def planDuplicateFix(): HashMap[String, HashSet[String]] = {
-
     val tmpTableName = s"htbl_${System.currentTimeMillis()}"
     val dedupeTblName = s"${tmpTableName}_dupeKeys"
 

@@ -60,12 +60,10 @@ object SparkHelpers {
   }
 }
 
-
 /**
   * Bunch of Spark Shell/Scala stuff useful for debugging
   */
 class SparkHelper(sqlContext: SQLContext, fs: FileSystem) {
-
 
   /**
     * Print keys from a file
@@ -84,7 +82,6 @@ class SparkHelper(sqlContext: SQLContext, fs: FileSystem) {
   def getRowKeyDF(file: String): DataFrame = {
     sqlContext.read.parquet(file).select(s"`${HoodieRecord.RECORD_KEY_METADATA_FIELD}`")
   }
-
 
   /**
     * Does the rowKey actually exist in the file.
@@ -110,7 +107,6 @@ class SparkHelper(sqlContext: SQLContext, fs: FileSystem) {
     println(keyCount)
     keyCount
   }
-
 
   /**
     *
