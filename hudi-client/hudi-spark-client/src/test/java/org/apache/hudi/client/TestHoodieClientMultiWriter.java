@@ -35,10 +35,8 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.*;
-import org.apache.hudi.exception.HoodieEarlyConflictException;
 import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
-import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
 import org.apache.hadoop.fs.Path;
@@ -71,11 +69,7 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.common.config.LockConfiguration.FILESYSTEM_LOCK_PATH_PROP_KEY;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.*;
 
 public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
 
@@ -173,96 +167,23 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     assertTrue(writer1Completed.get() && writer2Completed.get());
   }
 
-  @ParameterizedTest
-  @EnumSource(value = HoodieTableType.class, names = {"COPY_ON_WRITE", "MERGE_ON_READ"})
-  public void testHoodieClientBasicMultiWriterWithEarlyConflictDetectionForTimelineServerBasedMarker(HoodieTableType tableType) throws Exception {
-    if (tableType == HoodieTableType.MERGE_ON_READ) {
-      setUpMORTestTable();
-    }
-    Properties properties = new Properties();
-    properties.setProperty(FILESYSTEM_LOCK_PATH_PROP_KEY, basePath + "/.hoodie/.locks");
-    properties.setProperty(LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY, "3000");
-    HoodieWriteConfig writeConfig = getConfigBuilder()
-            .withStorageConfig(HoodieStorageConfig.newBuilder().parquetMaxFileSize(20 * 1024).build())
-            .withHeartbeatIntervalInMs(3600 * 1000)
-            .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
-                    .withStorageType(FileSystemViewStorageType.MEMORY)
-                    .withSecondaryStorageType(FileSystemViewStorageType.MEMORY).build())
-            .withCompactionConfig(HoodieCompactionConfig.newBuilder()
-                    .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
-                    .withAutoArchive(false).withAutoClean(false).build())
-            .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
-            .withMarkersType(MarkerType.TIMELINE_SERVER_BASED.name())
-            .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class)
-                    .withEarlyConflictDetectionEnable(true)
-                    .withConflictResolutionStrategy(AsyncTimelineMarkerConflictResolutionStrategy.class.getName())
-                    .withMarkerConflictCheckerBatchInterval(0)
-                    .withMarkerConflictCheckerPeriod(100)
-                    .build()).withAutoCommit(false).withProperties(properties).build();
-    // Create the first commit
-    createCommitWithInserts(writeConfig, getHoodieWriteClient(writeConfig), "000", "001", 2000, true);
-
-    final SparkRDDWriteClient client1 = getHoodieWriteClient(writeConfig);
-    final SparkRDDWriteClient client2 = getHoodieWriteClient(writeConfig);
-
-    final String nextCommitTime2 = "002";
-    final JavaRDD<WriteStatus> writeStatusList2 = startCommitForUpdate(writeConfig, client1, nextCommitTime2, 1000);
-    final String nextCommitTime3 = "003";
-
-    assertThrows(SparkException.class, () -> {
-      final JavaRDD<WriteStatus> writeStatusList3 = startCommitForUpdate(writeConfig, client2, nextCommitTime3, 1000);
-      client2.commit(nextCommitTime3, writeStatusList3);
-    }, "Early conflict detected but cannot resolve conflicts for overlapping writes");
-    assertDoesNotThrow(() -> {
-      client1.commit(nextCommitTime2, writeStatusList2);
-    });
-  }
-
-  @ParameterizedTest
-  @EnumSource(value = HoodieTableType.class, names = {"COPY_ON_WRITE", "MERGE_ON_READ"})
-  public void testHoodieClientBasicMultiWriterWithEarlyConflictDetectionForDirectMarker(HoodieTableType tableType) throws Exception {
-    if (tableType == HoodieTableType.MERGE_ON_READ) {
-      setUpMORTestTable();
-    }
-    Properties properties = new Properties();
-    properties.setProperty(FILESYSTEM_LOCK_PATH_PROP_KEY, basePath + "/.hoodie/.locks");
-    properties.setProperty(LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY, "3000");
-    HoodieWriteConfig writeConfig = getConfigBuilder()
-            .withHeartbeatIntervalInMs(3600 * 1000)
-            .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
-                    .withStorageType(FileSystemViewStorageType.MEMORY)
-                    .withSecondaryStorageType(FileSystemViewStorageType.MEMORY).build())
-            .withCompactionConfig(HoodieCompactionConfig.newBuilder()
-                    .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
-                    .withAutoArchive(false).withAutoClean(false).build())
-            .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
-            .withMarkersType(MarkerType.DIRECT.name())
-            .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class)
-                    .withEarlyConflictDetectionEnable(true)
-                    .withConflictResolutionStrategy(SimpleDirectMarkerConflictResolutionStrategy.class.getName())
-                    .withMarkerConflictCheckerBatchInterval(0)
-                    .withMarkerConflictCheckerPeriod(100)
-                    .build()).withAutoCommit(false).withProperties(properties).build();
-
-    // Create the first commit need to create lots of small files here
-    createCommitWithBulkInserts(writeConfig, getHoodieWriteClient(writeConfig), "000", "001", 200, true);
-
-    final SparkRDDWriteClient client1 = getHoodieWriteClient(writeConfig);
-    final SparkRDDWriteClient client2 = getHoodieWriteClient(writeConfig);
-
-    final String nextCommitTime2 = "002";
-    final JavaRDD<WriteStatus> writeStatusList2 = startCommitForUpdate(writeConfig, client1, nextCommitTime2, 100);
-    final String nextCommitTime3 = "003";
-
-    assertThrows(SparkException.class, () -> {
-      final JavaRDD<WriteStatus> writeStatusList3 = startCommitForUpdate(writeConfig, client2, nextCommitTime3, 100);
-      client2.commit(nextCommitTime3, writeStatusList3);
-    }, "Early conflict detected but cannot resolve conflicts for overlapping writes");
-    assertDoesNotThrow(() -> {
-      client1.commit(nextCommitTime2, writeStatusList2);
-    });
-  }
-
+  /**
+   * Test multi-writers with early conflict detect enable, including
+   *    1. MOR + Direct marker
+   *    2. COW + Direct marker
+   *    3. MOR + Timeline server based marker
+   *    4. COW + Timeline server based marker
+   *
+   *  ---|---------|--------------------|--------------------------------------|-------------------------> time
+   * init 001
+   *               002 start writing
+   *                                    003 start which has conflict with 002
+   *                                    and failed soon
+   *                                                                           002 commit successfully
+   * @param tableType
+   * @param markerType
+   * @throws Exception
+   */
   @ParameterizedTest
   @MethodSource("configParams")
   public void testHoodieClientBasicMultiWriterWithEarlyConflictDetection(String tableType, String markerType) throws Exception {
@@ -275,22 +196,30 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
 
     HoodieWriteConfig writeConfig = buildWriteConfigForEarlyConflictDetect(markerType, properties);
     // Create the first commit
-    createCommitWithInserts(writeConfig, getHoodieWriteClient(writeConfig), "000", "001", 2000, true);
+    final String nextCommitTime1 = "001";
+    createCommitWithInserts(writeConfig, getHoodieWriteClient(writeConfig), "000", nextCommitTime1, 2000, true);
 
-    final SparkRDDWriteClient client1 = getHoodieWriteClient(writeConfig);
     final SparkRDDWriteClient client2 = getHoodieWriteClient(writeConfig);
+    final SparkRDDWriteClient client3 = getHoodieWriteClient(writeConfig);
 
     final String nextCommitTime2 = "002";
-    final JavaRDD<WriteStatus> writeStatusList2 = startCommitForUpdate(writeConfig, client1, nextCommitTime2, 1000);
+    final JavaRDD<WriteStatus> writeStatusList2 = startCommitForUpdate(writeConfig, client2, nextCommitTime2, 1000);
     final String nextCommitTime3 = "003";
 
     assertThrows(SparkException.class, () -> {
-      final JavaRDD<WriteStatus> writeStatusList3 = startCommitForUpdate(writeConfig, client2, nextCommitTime3, 1000);
-      client2.commit(nextCommitTime3, writeStatusList3);
+      final JavaRDD<WriteStatus> writeStatusList3 = startCommitForUpdate(writeConfig, client3, nextCommitTime3, 1000);
+      client3.commit(nextCommitTime3, writeStatusList3);
     }, "Early conflict detected but cannot resolve conflicts for overlapping writes");
     assertDoesNotThrow(() -> {
-      client1.commit(nextCommitTime2, writeStatusList2);
+      client2.commit(nextCommitTime2, writeStatusList2);
     });
+
+    List<String> completedInstant = metaClient.reloadActiveTimeline().getCommitsTimeline()
+            .filterCompletedInstants().getInstants().map(HoodieInstant::getTimestamp).collect(Collectors.toList());
+
+    assertEquals(2, completedInstant.size());
+    assertTrue(completedInstant.contains(nextCommitTime1));
+    assertTrue(completedInstant.contains(nextCommitTime2));
   }
 
   @Test

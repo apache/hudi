@@ -92,8 +92,7 @@ public class HoodieClientTestUtils {
    */
   public static SparkConf getSparkConfForTest(String appName) {
     SparkConf sparkConf = new SparkConf().setAppName(appName)
-        .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer").setMaster("local[8]")
-        .set("spark.driver.bindAddress","localhost").set("spark.driver.host","localhost");
+        .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer").setMaster("local[8]");
 
     String evlogDir = System.getProperty("SPARK_EVLOG_DIR");
     if (evlogDir != null) {
