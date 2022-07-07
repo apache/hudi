@@ -51,7 +51,7 @@ resources to learn more, engage, and get help as you get started.
 
 ### Join in on discussions
 See all the ways to [engage with the community here](/community/get-involved). Two most popular methods include:
-- [Hudi Slack Channel](https://join.slack.com/t/apache-hudi/shared_invite/enQtODYyNDAxNzc5MTg2LTE5OTBlYmVhYjM0N2ZhOTJjOWM4YzBmMWU2MjZjMGE4NDc5ZDFiOGQ2N2VkYTVkNzU3ZDQ4OTI1NmFmYWQ0NzE)
+- [Hudi Slack Channel](https://join.slack.com/t/apache-hudi/shared_invite/zt-1c44wsfgl-gX_6f50DezdnWVrGsxC~Ug)
 - [Hudi mailing list](mailto:users-subscribe@hudi.apache.org) - (send any msg to subscribe)
 
 ### Come to Office Hours for help
@@ -65,5 +65,5 @@ Apache Hudi welcomes you to join in on the fun and make a lasting impact on the 
 [contributor guide](/contribute/how-to-contribute) to learn more, and don’t hesitate to directly reach out to any of the 
 current committers to learn more.
 
-Have an idea, an ask, or feedback about a pain-point, but don’t have time to contribute? Join the [Hudi Slack Channel](https://join.slack.com/t/apache-hudi/shared_invite/enQtODYyNDAxNzc5MTg2LTE5OTBlYmVhYjM0N2ZhOTJjOWM4YzBmMWU2MjZjMGE4NDc5ZDFiOGQ2N2VkYTVkNzU3ZDQ4OTI1NmFmYWQ0NzE)
+Have an idea, an ask, or feedback about a pain-point, but don’t have time to contribute? Join the [Hudi Slack Channel](https://join.slack.com/t/apache-hudi/shared_invite/zt-1c44wsfgl-gX_6f50DezdnWVrGsxC~Ug)
 and share!
