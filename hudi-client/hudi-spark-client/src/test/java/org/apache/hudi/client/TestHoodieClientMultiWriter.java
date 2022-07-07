@@ -34,7 +34,11 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.config.*;
+import org.apache.hudi.config.HoodieClusteringConfig;
+import org.apache.hudi.config.HoodieCompactionConfig;
+import org.apache.hudi.config.HoodieLockConfig;
+import org.apache.hudi.config.HoodieStorageConfig;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.testutils.HoodieClientTestBase;
@@ -69,7 +73,12 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.common.config.LockConfiguration.FILESYSTEM_LOCK_PATH_PROP_KEY;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
-import static org.junit.jupiter.api.Assertions.*;
+
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
 
@@ -698,7 +707,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
   public static Stream<Arguments> configParams() {
     Object[][] data =
             new Object[][] {{"COPY_ON_WRITE", MarkerType.TIMELINE_SERVER_BASED.name()}, {"MERGE_ON_READ", MarkerType.DIRECT.name()},
-                    {"MERGE_ON_READ", MarkerType.TIMELINE_SERVER_BASED.name()}, {"COPY_ON_WRITE", MarkerType.DIRECT.name()}};
+                {"MERGE_ON_READ", MarkerType.TIMELINE_SERVER_BASED.name()}, {"COPY_ON_WRITE", MarkerType.DIRECT.name()}};
     return Stream.of(data).map(Arguments::of);
   }
 
