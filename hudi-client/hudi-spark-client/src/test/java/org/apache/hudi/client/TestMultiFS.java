@@ -42,7 +42,6 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -75,7 +74,7 @@ public class TestMultiFS extends HoodieClientTestHarness {
         .build();
   }
 
-  @Disabled
+
   @Test
   public void readLocalWriteHDFS() throws Exception {
     // Initialize table and filesystem
