@@ -167,32 +167,6 @@ public class StreamerUtil {
             .withPath(conf.getString(FlinkOptions.PATH))
             .combineInput(conf.getBoolean(FlinkOptions.PRE_COMBINE), true)
             .withMergeAllowDuplicateOnInserts(OptionsResolver.insertClustering(conf))
-//<<<<<<< HEAD
-//            .withCleanConfig(HoodieCleanConfig.newBuilder()
-//                .withAsyncClean(conf.getBoolean(FlinkOptions.CLEAN_ASYNC_ENABLED))
-//                .retainCommits(conf.getInteger(FlinkOptions.CLEAN_RETAIN_COMMITS))
-//                .retainFileVersions(conf.getInteger(FlinkOptions.CLEAN_RETAIN_FILE_VERSIONS))
-//                // override and hardcode to 20,
-//                // actually Flink cleaning is always with parallelism 1 now
-//                .withCleanerParallelism(20)
-//                .withCleanerPolicy(HoodieCleaningPolicy.valueOf(conf.getString(FlinkOptions.CLEAN_POLICY)))
-//                .build())
-//            .withArchivalConfig(HoodieArchivalConfig.newBuilder()
-//                .archiveCommitsWith(conf.getInteger(FlinkOptions.ARCHIVE_MIN_COMMITS), conf.getInteger(FlinkOptions.ARCHIVE_MAX_COMMITS))
-//                .build())
-//            .withCompactionConfig(HoodieCompactionConfig.newBuilder()
-//                .withTargetIOPerCompactionInMB(conf.getLong(FlinkOptions.COMPACTION_TARGET_IO))
-//                .withInlineCompactionTriggerStrategy(
-//                    CompactionTriggerStrategy.valueOf(conf.getString(FlinkOptions.COMPACTION_TRIGGER_STRATEGY).toUpperCase(Locale.ROOT)))
-//                .withMaxNumDeltaCommitsBeforeCompaction(conf.getInteger(FlinkOptions.COMPACTION_DELTA_COMMITS))
-//                .withMaxDeltaSecondsBeforeCompaction(conf.getInteger(FlinkOptions.COMPACTION_DELTA_SECONDS))
-//                .build())
-//            .withMemoryConfig(HoodieMemoryConfig.newBuilder()
-//                .withMaxMemoryMaxSize(
-//                    conf.getInteger(FlinkOptions.WRITE_MERGE_MAX_MEMORY) * 1024 * 1024L,
-//                    conf.getInteger(FlinkOptions.COMPACTION_MAX_MEMORY) * 1024 * 1024L
-//                ).build())
-//=======
             .withClusteringConfig(
                 HoodieClusteringConfig.newBuilder()
                     .withAsyncClustering(conf.getBoolean(FlinkOptions.CLUSTERING_SCHEDULE_ENABLED))
