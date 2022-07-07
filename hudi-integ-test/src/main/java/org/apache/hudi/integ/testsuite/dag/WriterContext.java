@@ -21,7 +21,9 @@ package org.apache.hudi.integ.testsuite.dag;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.integ.testsuite.HoodieContinousTestSuiteWriter;
 import org.apache.hudi.integ.testsuite.HoodieTestSuiteJob.HoodieTestSuiteConfig;
+import org.apache.hudi.integ.testsuite.HoodieInlineTestSuiteWriter;
 import org.apache.hudi.integ.testsuite.HoodieTestSuiteWriter;
 import org.apache.hudi.integ.testsuite.configuration.DFSDeltaConfig;
 import org.apache.hudi.integ.testsuite.generator.DeltaGenerator;
@@ -37,6 +39,8 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
 
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * WriterContext wraps the delta writer/data generator related configuration needed to init/reinit.
@@ -53,6 +57,7 @@ public class WriterContext {
   private BuiltinKeyGenerator keyGenerator;
   private transient SparkSession sparkSession;
   private transient JavaSparkContext jsc;
+  private ExecutorService executorService;
 
   public WriterContext(JavaSparkContext jsc, TypedProperties props, HoodieTestSuiteConfig cfg,
       BuiltinKeyGenerator keyGenerator, SparkSession sparkSession) {
@@ -67,7 +72,8 @@ public class WriterContext {
     try {
       this.schemaProvider = UtilHelpers.createSchemaProvider(cfg.schemaProviderClassName, props, jsc);
       String schemaStr = schemaProvider.getSourceSchema().toString();
-      this.hoodieTestSuiteWriter = new HoodieTestSuiteWriter(jsc, props, cfg, schemaStr);
+      this.hoodieTestSuiteWriter = (cfg.testContinousMode && cfg.useDeltaStreamer) ? new HoodieContinousTestSuiteWriter(jsc, props, cfg, schemaStr)
+          : new HoodieInlineTestSuiteWriter(jsc, props, cfg, schemaStr);
       int inputParallelism = cfg.inputParallelism > 0 ? cfg.inputParallelism : jsc.defaultParallelism();
       this.deltaGenerator = new DeltaGenerator(
           new DFSDeltaConfig(DeltaOutputMode.valueOf(cfg.outputTypeName), DeltaInputType.valueOf(cfg.inputFormatName),
@@ -75,6 +81,10 @@ public class WriterContext {
               schemaStr, cfg.limitFileSize, inputParallelism, cfg.deleteOldInput, cfg.useHudiToGenerateUpdates),
           jsc, sparkSession, schemaStr, keyGenerator);
       log.info(String.format("Initialized writerContext with: %s", schemaStr));
+      if (cfg.testContinousMode) {
+        executorService = Executors.newFixedThreadPool(1);
+        executorService.execute(new TestSuiteWriterRunnable(hoodieTestSuiteWriter));
+      }
     } catch (Exception e) {
       throw new HoodieException("Failed to reinitialize writerContext", e);
     }
@@ -112,5 +122,36 @@ public class WriterContext {
 
   public SparkSession getSparkSession() {
     return sparkSession;
+  }
+
+  public void shutdownResources() {
+    this.hoodieTestSuiteWriter.shutdownResources();
+    if (executorService != null) {
+      executorService.shutdownNow();
+    }
+  }
+
+  /**
+   * TestSuiteWriterRunnable to spin up a thread to execute deltastreamer with async table services.
+   */
+  class TestSuiteWriterRunnable implements Runnable {
+    private HoodieTestSuiteWriter hoodieTestSuiteWriter;
+
+    TestSuiteWriterRunnable(HoodieTestSuiteWriter hoodieTestSuiteWriter) {
+      this.hoodieTestSuiteWriter = hoodieTestSuiteWriter;
+    }
+
+    @Override
+    public void run() {
+      try {
+        Thread.sleep(20000);
+        log.info("Starting continuous sync with deltastreamer ");
+        hoodieTestSuiteWriter.getDeltaStreamerWrapper().sync();
+        log.info("Completed continuous sync with deltastreamer ");
+      } catch (Exception e) {
+        log.error("Deltastreamer failed in continuous mode " + e.getMessage());
+        throw new HoodieException("Shutting down deltastreamer in continuous mode failed ", e);
+      }
+    }
   }
 }

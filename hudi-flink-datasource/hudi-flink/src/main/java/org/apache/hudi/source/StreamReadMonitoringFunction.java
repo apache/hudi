@@ -36,6 +36,7 @@ import org.apache.flink.runtime.state.FunctionSnapshotContext;
 import org.apache.flink.streaming.api.checkpoint.CheckpointedFunction;
 import org.apache.flink.streaming.api.functions.source.RichSourceFunction;
 import org.apache.flink.streaming.api.functions.source.SourceFunction;
+import org.apache.flink.table.types.logical.RowType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -99,6 +100,7 @@ public class StreamReadMonitoringFunction
   public StreamReadMonitoringFunction(
       Configuration conf,
       Path path,
+      RowType rowType,
       long maxCompactionMemoryInBytes,
       @Nullable Set<String> requiredPartitionPaths) {
     this.conf = conf;
@@ -107,6 +109,7 @@ public class StreamReadMonitoringFunction
     this.incrementalInputSplits = IncrementalInputSplits.builder()
         .conf(conf)
         .path(path)
+        .rowType(rowType)
         .maxCompactionMemoryInBytes(maxCompactionMemoryInBytes)
         .requiredPartitions(requiredPartitionPaths)
         .skipCompaction(conf.getBoolean(FlinkOptions.READ_STREAMING_SKIP_COMPACT))

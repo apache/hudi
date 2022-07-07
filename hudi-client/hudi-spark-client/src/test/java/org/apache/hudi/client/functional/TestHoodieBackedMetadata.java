@@ -151,7 +151,6 @@ import static org.apache.hudi.common.model.WriteOperationType.DELETE;
 import static org.apache.hudi.common.model.WriteOperationType.INSERT;
 import static org.apache.hudi.common.model.WriteOperationType.UPSERT;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getCompletedMetadataPartitions;
 import static org.apache.hudi.metadata.MetadataPartitionType.BLOOM_FILTERS;
 import static org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS;
 import static org.apache.hudi.metadata.MetadataPartitionType.FILES;
@@ -242,9 +241,9 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     HoodieTableMetaClient.reload(metaClient);
     HoodieTableConfig tableConfig = metaClient.getTableConfig();
     assertFalse(tableConfig.getMetadataPartitions().isEmpty());
-    assertTrue(getCompletedMetadataPartitions(tableConfig).contains(FILES.getPartitionPath()));
-    assertFalse(getCompletedMetadataPartitions(tableConfig).contains(COLUMN_STATS.getPartitionPath()));
-    assertFalse(getCompletedMetadataPartitions(tableConfig).contains(BLOOM_FILTERS.getPartitionPath()));
+    assertTrue(tableConfig.getMetadataPartitions().contains(FILES.getPartitionPath()));
+    assertFalse(tableConfig.getMetadataPartitions().contains(COLUMN_STATS.getPartitionPath()));
+    assertFalse(tableConfig.getMetadataPartitions().contains(BLOOM_FILTERS.getPartitionPath()));
 
     // enable column stats and run 1 upserts
     HoodieWriteConfig cfgWithColStatsEnabled = HoodieWriteConfig.newBuilder()
@@ -267,9 +266,9 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     HoodieTableMetaClient.reload(metaClient);
     tableConfig = metaClient.getTableConfig();
     assertFalse(tableConfig.getMetadataPartitions().isEmpty());
-    assertTrue(getCompletedMetadataPartitions(tableConfig).contains(FILES.getPartitionPath()));
-    assertTrue(getCompletedMetadataPartitions(tableConfig).contains(COLUMN_STATS.getPartitionPath()));
-    assertFalse(getCompletedMetadataPartitions(tableConfig).contains(BLOOM_FILTERS.getPartitionPath()));
+    assertTrue(tableConfig.getMetadataPartitions().contains(FILES.getPartitionPath()));
+    assertTrue(tableConfig.getMetadataPartitions().contains(COLUMN_STATS.getPartitionPath()));
+    assertFalse(tableConfig.getMetadataPartitions().contains(BLOOM_FILTERS.getPartitionPath()));
 
     // disable column stats and run 1 upsert
     HoodieWriteConfig cfgWithColStatsDisabled = HoodieWriteConfig.newBuilder()
@@ -293,9 +292,9 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     HoodieTableMetaClient.reload(metaClient);
     tableConfig = metaClient.getTableConfig();
     assertFalse(tableConfig.getMetadataPartitions().isEmpty());
-    assertTrue(getCompletedMetadataPartitions(tableConfig).contains(FILES.getPartitionPath()));
-    assertFalse(getCompletedMetadataPartitions(tableConfig).contains(COLUMN_STATS.getPartitionPath()));
-    assertFalse(getCompletedMetadataPartitions(tableConfig).contains(BLOOM_FILTERS.getPartitionPath()));
+    assertTrue(tableConfig.getMetadataPartitions().contains(FILES.getPartitionPath()));
+    assertFalse(tableConfig.getMetadataPartitions().contains(COLUMN_STATS.getPartitionPath()));
+    assertFalse(tableConfig.getMetadataPartitions().contains(BLOOM_FILTERS.getPartitionPath()));
 
     // enable bloom filter as well as column stats and run 1 upsert
     HoodieWriteConfig cfgWithBloomFilterEnabled = HoodieWriteConfig.newBuilder()
@@ -319,9 +318,9 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     HoodieTableMetaClient.reload(metaClient);
     tableConfig = metaClient.getTableConfig();
     assertFalse(tableConfig.getMetadataPartitions().isEmpty());
-    assertTrue(getCompletedMetadataPartitions(tableConfig).contains(FILES.getPartitionPath()));
-    assertTrue(getCompletedMetadataPartitions(tableConfig).contains(COLUMN_STATS.getPartitionPath()));
-    assertTrue(getCompletedMetadataPartitions(tableConfig).contains(BLOOM_FILTERS.getPartitionPath()));
+    assertTrue(tableConfig.getMetadataPartitions().contains(FILES.getPartitionPath()));
+    assertTrue(tableConfig.getMetadataPartitions().contains(COLUMN_STATS.getPartitionPath()));
+    assertTrue(tableConfig.getMetadataPartitions().contains(BLOOM_FILTERS.getPartitionPath()));
   }
 
   @Test
@@ -362,7 +361,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     HoodieTableConfig hoodieTableConfig2 =
         new HoodieTableConfig(this.fs, metaClient.getMetaPath(), writeConfig2.getPayloadClass());
-    assertEquals(Collections.emptyList(), hoodieTableConfig2.getMetadataPartitions());
+    assertEquals(Collections.emptySet(), hoodieTableConfig2.getMetadataPartitions());
     // Assert metadata table folder is deleted
     assertFalse(metaClient.getFs().exists(
         new Path(HoodieTableMetadata.getMetadataTableBasePath(writeConfig2.getBasePath()))));

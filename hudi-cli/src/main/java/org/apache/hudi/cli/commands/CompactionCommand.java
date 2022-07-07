@@ -558,7 +558,7 @@ public class CompactionCommand implements CommandMarker {
   @CliCommand(value = "compaction unscheduleFileId", help = "UnSchedule Compaction for a fileId")
   public String unscheduleCompactFile(
       @CliOption(key = "fileId", mandatory = true, help = "File Id") final String fileId,
-      @CliOption(key = "partitionPath", mandatory = true, help = "partition path") final String partitionPath,
+      @CliOption(key = "partitionPath", unspecifiedDefaultValue = "", help = "partition path") final String partitionPath,
       @CliOption(key = "sparkMaster", unspecifiedDefaultValue = "local", help = "Spark Master") String master,
       @CliOption(key = "sparkMemory", unspecifiedDefaultValue = "2G", help = "executor memory") String sparkMemory,
       @CliOption(key = {"skipValidation"}, help = "skip validation", unspecifiedDefaultValue = "false") boolean skipV,

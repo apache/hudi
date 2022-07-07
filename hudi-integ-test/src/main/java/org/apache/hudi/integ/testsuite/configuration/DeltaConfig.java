@@ -103,6 +103,7 @@ public class DeltaConfig implements Serializable {
     private static String DELETE_INPUT_DATA_EXCEPT_LATEST = "delete_input_data_except_latest";
     private static String PARTITIONS_TO_DELETE = "partitions_to_delete";
     private static String INPUT_PARTITIONS_TO_SKIP_VALIDATE = "input_partitions_to_skip_validate";
+    private static String MAX_WAIT_TIME_FOR_DELTASTREAMER_TO_CATCH_UP_MS = "max_wait_time_for_deltastreamer_catch_up_ms";
 
     // Spark SQL Create Table
     private static String TABLE_TYPE = "table_type";
@@ -251,6 +252,10 @@ public class DeltaConfig implements Serializable {
 
     public boolean enableRowWriting() {
       return Boolean.valueOf(configsMap.getOrDefault(ENABLE_ROW_WRITING, false).toString());
+    }
+
+    public long maxWaitTimeForDeltastreamerToCatchupMs() {
+      return Long.valueOf(configsMap.getOrDefault(MAX_WAIT_TIME_FOR_DELTASTREAMER_TO_CATCH_UP_MS, 5 * 60 * 1000).toString());
     }
 
     public Option<String> getTableType() {

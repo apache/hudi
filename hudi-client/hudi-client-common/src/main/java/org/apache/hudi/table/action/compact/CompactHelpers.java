@@ -25,7 +25,6 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.Option;
@@ -77,7 +76,7 @@ public class CompactHelpers<T extends HoodieRecordPayload, I, K, O> {
     HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
     try {
       activeTimeline.transitionCompactionInflightToComplete(
-          new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, compactionCommitTime),
+          HoodieTimeline.getCompactionInflightInstant(compactionCommitTime),
           Option.of(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
     } catch (IOException e) {
       throw new HoodieCompactionException(

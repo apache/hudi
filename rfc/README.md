@@ -89,4 +89,6 @@ The list of all RFCs can be found here.
 | 51 | [Change Data Capture](./rfc-51/rfc-51.md) | `UNDER REVIEW` |
 | 52 | [Introduce Secondary Index to Improve HUDI Query Performance](./rfc-52/rfc-52.md) | `UNDER REVIEW` |
 | 53 | [Use Lock-Free Message Queue Improving Hoodie Writing Efficiency](./rfc-53/rfc-53.md) | `UNDER REVIEW` | 
-
+| 54 | [New Table APIs and Streamline Hudi Configs](./rfc-54/rfc-54.md) | `UNDER REVIEW` | 
+| 55 | [Improve Hive/Meta sync class design and hierachies](./rfc-55/rfc-55.md) | `UNDER REVIEW` | 
+| 56 | [Early Conflict Detection For Multi-Writer](./rfc-56/rfc-56.md) | `UNDER REVIEW` | 

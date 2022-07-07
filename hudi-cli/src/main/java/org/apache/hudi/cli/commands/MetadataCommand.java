@@ -27,6 +27,7 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
@@ -225,7 +226,7 @@ public class MetadataCommand implements CommandMarker {
 
   @CliCommand(value = "metadata list-files", help = "Print a list of all files in a partition from the metadata")
   public String listFiles(
-      @CliOption(key = {"partition"}, help = "Name of the partition to list files", mandatory = true) final String partition) throws IOException {
+      @CliOption(key = {"partition"}, help = "Name of the partition to list files", unspecifiedDefaultValue = "") final String partition) throws IOException {
     HoodieCLI.getTableMetaClient();
     HoodieMetadataConfig config = HoodieMetadataConfig.newBuilder().enable(true).build();
     HoodieBackedTableMetadata metaReader = new HoodieBackedTableMetadata(
@@ -235,8 +236,13 @@ public class MetadataCommand implements CommandMarker {
       return "[ERROR] Metadata Table not enabled/initialized\n\n";
     }
 
+    Path partitionPath = new Path(HoodieCLI.basePath);
+    if (!StringUtils.isNullOrEmpty(partition)) {
+      partitionPath = new Path(HoodieCLI.basePath, partition);
+    }
+
     HoodieTimer timer = new HoodieTimer().startTimer();
-    FileStatus[] statuses = metaReader.getAllFilesInPartition(new Path(HoodieCLI.basePath, partition));
+    FileStatus[] statuses = metaReader.getAllFilesInPartition(partitionPath);
     LOG.debug("Took " + timer.endTimer() + " ms");
 
     final List<Comparable[]> rows = new ArrayList<>();
@@ -364,7 +370,7 @@ public class MetadataCommand implements CommandMarker {
 
   private void initJavaSparkContext(Option<String> userDefinedMaster) {
     if (jsc == null) {
-      jsc = SparkUtil.initJavaSparkConf(SparkUtil.getDefaultConf("HoodieCLI", userDefinedMaster));
+      jsc = SparkUtil.initJavaSparkContext(SparkUtil.getDefaultConf("HoodieCLI", userDefinedMaster));
     }
   }
 }

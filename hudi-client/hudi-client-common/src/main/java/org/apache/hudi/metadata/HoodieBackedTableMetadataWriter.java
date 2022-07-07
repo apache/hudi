@@ -98,7 +98,6 @@ import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deseri
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 import static org.apache.hudi.metadata.HoodieTableMetadata.METADATA_TABLE_NAME_SUFFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getCompletedMetadataPartitions;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getInflightAndCompletedMetadataPartitions;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getInflightMetadataPartitions;
 
@@ -585,7 +584,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   }
 
   private void updateInitializedPartitionsInTableConfig(List<MetadataPartitionType> partitionTypes) {
-    Set<String> completedPartitions = getCompletedMetadataPartitions(dataMetaClient.getTableConfig());
+    Set<String> completedPartitions = dataMetaClient.getTableConfig().getMetadataPartitions();
     completedPartitions.addAll(partitionTypes.stream().map(MetadataPartitionType::getPartitionPath).collect(Collectors.toSet()));
     dataMetaClient.getTableConfig().setValue(HoodieTableConfig.TABLE_METADATA_PARTITIONS.key(), String.join(",", completedPartitions));
     HoodieTableConfig.update(dataMetaClient.getFs(), new Path(dataMetaClient.getMetaPath()), dataMetaClient.getTableConfig().getProps());
@@ -722,7 +721,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   }
 
   public void dropMetadataPartitions(List<MetadataPartitionType> metadataPartitions) throws IOException {
-    Set<String> completedIndexes = getCompletedMetadataPartitions(dataMetaClient.getTableConfig());
+    Set<String> completedIndexes = dataMetaClient.getTableConfig().getMetadataPartitions();
     Set<String> inflightIndexes = getInflightMetadataPartitions(dataMetaClient.getTableConfig());
 
     for (MetadataPartitionType partitionType : metadataPartitions) {
@@ -812,7 +811,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
   private Set<String> getMetadataPartitionsToUpdate() {
     // fetch partitions to update from table config
-    Set<String> partitionsToUpdate = getCompletedMetadataPartitions(dataMetaClient.getTableConfig());
+    Set<String> partitionsToUpdate = dataMetaClient.getTableConfig().getMetadataPartitions();
     // add inflight indexes as well because the file groups have already been initialized, so writers can log updates
     // NOTE: Async HoodieIndexer can move some partition to inflight. While that partition is still being built,
     //       the regular ingestion writers should not be blocked. They can go ahead and log updates to the metadata partition.

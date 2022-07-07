@@ -323,6 +323,10 @@ public class FilePathUtils {
   public static LinkedHashMap<String, String> validateAndReorderPartitions(
       Map<String, String> partitionKVs,
       List<String> partitionKeys) {
+    if (partitionKeys.size() == 0) {
+      // in case the partition fields are not in schema
+      return new LinkedHashMap<>(partitionKVs);
+    }
     LinkedHashMap<String, String> map = new LinkedHashMap<>();
     for (String k : partitionKeys) {
       if (!partitionKVs.containsKey(k)) {

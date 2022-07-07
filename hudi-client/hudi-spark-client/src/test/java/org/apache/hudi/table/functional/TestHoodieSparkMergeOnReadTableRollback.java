@@ -228,8 +228,8 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
         allFiles = listAllBaseFilesInPath(hoodieTable);
         // After rollback, there should be no base file with the failed commit time
         List<String> remainingFiles = Arrays.stream(allFiles).filter(file -> file.getPath().getName()
-            .contains(commitTime1)).map(fileStatus -> fileStatus.getPath().toString()).collect(Collectors.toList());
-        assertEquals(0, remainingFiles.size(), "There files should have been rolled-back "
+            .contains("_" + commitTime1)).map(fileStatus -> fileStatus.getPath().toString()).collect(Collectors.toList());
+        assertEquals(0, remainingFiles.size(), "These files should have been rolled-back "
             + "when rolling back commit " + commitTime1 + " but are still remaining. Files: " + remainingFiles);
         inputPaths = tableView.getLatestBaseFiles()
             .map(baseFile -> new Path(baseFile.getPath()).getParent().toString())
@@ -241,7 +241,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
       /*
        * Write 3 (inserts + updates - testing successful delta commit)
        */
-      final String commitTime2 = "003";
+      final String commitTime2 = "000000003";
       try (SparkRDDWriteClient thirdClient = getHoodieWriteClient(getHoodieWriteConfigWithSmallFileHandlingOff(true));) {
         thirdClient.startCommitWithTime(commitTime2);
 
@@ -266,8 +266,10 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
         thirdClient.rollback(commitTime2);
         allFiles = listAllBaseFilesInPath(hoodieTable);
         // After rollback, there should be no base file with the failed commit time
-        assertEquals(0, Arrays.stream(allFiles)
-            .filter(file -> file.getPath().getName().contains(commitTime2)).count());
+        List<String> remainingFiles = Arrays.stream(allFiles).filter(file -> file.getPath().getName()
+            .contains("_" + commitTime2)).map(fileStatus -> fileStatus.getPath().toString()).collect(Collectors.toList());
+        assertEquals(0, remainingFiles.size(), "These files should have been rolled-back "
+            + "when rolling back commit " + commitTime2 + " but are still remaining. Files: " + remainingFiles);
 
         metaClient = HoodieTableMetaClient.reload(metaClient);
         hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);
@@ -283,7 +285,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
         /*
          * Write 4 (updates)
          */
-        newCommitTime = "004";
+        newCommitTime = "000000004";
         thirdClient.startCommitWithTime(newCommitTime);
 
         writeStatusJavaRDD = thirdClient.upsert(writeRecords, newCommitTime);

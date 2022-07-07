@@ -20,17 +20,21 @@ package org.apache.hudi.table;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.BaseFile;
+import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.hadoop.HoodieROTablePathFilter;
 import org.apache.hudi.source.FileIndex;
 import org.apache.hudi.source.IncrementalInputSplits;
 import org.apache.hudi.source.StreamReadMonitoringFunction;
@@ -42,13 +46,12 @@ import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 import org.apache.hudi.table.format.mor.MergeOnReadTableState;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.ChangelogModes;
+import org.apache.hudi.util.ExpressionUtils;
 import org.apache.hudi.util.InputFormats;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.avro.Schema;
 import org.apache.flink.annotation.VisibleForTesting;
-import org.apache.flink.api.common.io.FileInputFormat;
-import org.apache.flink.api.common.io.FilePathFilter;
 import org.apache.flink.api.common.io.InputFormat;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.configuration.Configuration;
@@ -69,7 +72,6 @@ import org.apache.flink.table.connector.source.abilities.SupportsLimitPushDown;
 import org.apache.flink.table.connector.source.abilities.SupportsPartitionPushDown;
 import org.apache.flink.table.connector.source.abilities.SupportsProjectionPushDown;
 import org.apache.flink.table.data.RowData;
-import org.apache.flink.table.expressions.Expression;
 import org.apache.flink.table.expressions.ResolvedExpression;
 import org.apache.flink.table.runtime.types.TypeInfoDataTypeConverter;
 import org.apache.flink.table.types.DataType;
@@ -113,6 +115,7 @@ public class HoodieTableSource implements
   private final long maxCompactionMemoryInBytes;
 
   private final ResolvedSchema schema;
+  private final RowType tableRowType;
   private final Path path;
   private final List<String> partitionKeys;
   private final String defaultPartName;
@@ -121,7 +124,7 @@ public class HoodieTableSource implements
 
   private int[] requiredPos;
   private long limit;
-  private List<Expression> filters;
+  private List<ResolvedExpression> filters;
 
   private List<Map<String, String>> requiredPartitions;
 
@@ -143,21 +146,22 @@ public class HoodieTableSource implements
       @Nullable List<Map<String, String>> requiredPartitions,
       @Nullable int[] requiredPos,
       @Nullable Long limit,
-      @Nullable List<Expression> filters) {
+      @Nullable List<ResolvedExpression> filters) {
     this.schema = schema;
+    this.tableRowType = (RowType) schema.toPhysicalRowDataType().notNull().getLogicalType();
     this.path = path;
     this.partitionKeys = partitionKeys;
     this.defaultPartName = defaultPartName;
     this.conf = conf;
-    this.fileIndex = FileIndex.instance(this.path, this.conf);
     this.requiredPartitions = requiredPartitions;
     this.requiredPos = requiredPos == null
-        ? IntStream.range(0, schema.getColumnCount()).toArray()
+        ? IntStream.range(0, this.tableRowType.getFieldCount()).toArray()
         : requiredPos;
     this.limit = limit == null ? NO_LIMIT_CONSTANT : limit;
     this.filters = filters == null ? Collections.emptyList() : filters;
     this.hadoopConf = HadoopConfigurations.getHadoopConf(conf);
     this.metaClient = StreamerUtil.metaClientForReader(conf, hadoopConf);
+    this.fileIndex = FileIndex.instance(this.path, this.conf, this.tableRowType);
     this.maxCompactionMemoryInBytes = StreamerUtil.getMaxCompactionMemoryInBytes(conf);
   }
 
@@ -177,12 +181,12 @@ public class HoodieTableSource implements
             (TypeInformation<RowData>) TypeInfoDataTypeConverter.fromDataTypeToTypeInfo(getProducedDataType());
         if (conf.getBoolean(FlinkOptions.READ_AS_STREAMING)) {
           StreamReadMonitoringFunction monitoringFunction = new StreamReadMonitoringFunction(
-              conf, FilePathUtils.toFlinkPath(path), maxCompactionMemoryInBytes, getRequiredPartitionPaths());
+              conf, FilePathUtils.toFlinkPath(path), tableRowType, maxCompactionMemoryInBytes, getRequiredPartitionPaths());
           InputFormat<RowData, ?> inputFormat = getInputFormat(true);
           OneInputStreamOperatorFactory<MergeOnReadInputSplit, RowData> factory = StreamReadOperator.factory((MergeOnReadInputFormat) inputFormat);
           SingleOutputStreamOperator<RowData> source = execEnv.addSource(monitoringFunction, getSourceOperatorName("split_monitor"))
               .setParallelism(1)
-              .keyBy(inputSplit -> inputSplit.getFileId())
+              .keyBy(MergeOnReadInputSplit::getFileId)
               .transform("split_reader", typeInfo, factory)
               .setParallelism(conf.getInteger(FlinkOptions.READ_TASKS));
           return new DataStreamSource<>(source);
@@ -215,7 +219,8 @@ public class HoodieTableSource implements
 
   @Override
   public Result applyFilters(List<ResolvedExpression> filters) {
-    this.filters = new ArrayList<>(filters);
+    this.filters = filters.stream().filter(ExpressionUtils::isSimpleCallExpression).collect(Collectors.toList());
+    this.fileIndex.setFilters(this.filters);
     // refuse all the filters now
     return SupportsFilterPushDown.Result.of(Collections.emptyList(), new ArrayList<>(filters));
   }
@@ -256,13 +261,6 @@ public class HoodieTableSource implements
             .mapToObj(i -> DataTypes.FIELD(schemaFieldNames[i], schemaTypes[i]))
             .toArray(DataTypes.Field[]::new))
         .bridgedTo(RowData.class);
-  }
-
-  private List<Map<String, String>> getOrFetchPartitions() {
-    if (requiredPartitions == null) {
-      requiredPartitions = listPartitions().orElse(Collections.emptyList());
-    }
-    return requiredPartitions;
   }
 
   private String getSourceOperatorName(String operatorName) {
@@ -362,7 +360,9 @@ public class HoodieTableSource implements
         return baseFileOnlyInputFormat();
       case FlinkOptions.QUERY_TYPE_INCREMENTAL:
         IncrementalInputSplits incrementalInputSplits = IncrementalInputSplits.builder()
-            .conf(conf).path(FilePathUtils.toFlinkPath(path))
+            .conf(conf)
+            .path(FilePathUtils.toFlinkPath(path))
+            .rowType(this.tableRowType)
             .maxCompactionMemoryInBytes(maxCompactionMemoryInBytes)
             .requiredPartitions(getRequiredPartitionPaths()).build();
         final IncrementalInputSplits.Result result = incrementalInputSplits.inputSplits(metaClient, hadoopConf);
@@ -381,8 +381,8 @@ public class HoodieTableSource implements
   }
 
   private InputFormat<RowData, ?> getStreamInputFormat() {
-    // if table does not exist, use schema from the DDL
-    Schema tableAvroSchema = this.metaClient == null ? inferSchemaFromDdl() : getTableAvroSchema();
+    // if table does not exist or table data does not exist, use schema from the DDL
+    Schema tableAvroSchema = (this.metaClient == null || !tableDataExists()) ? inferSchemaFromDdl() : getTableAvroSchema();
     final DataType rowDataType = AvroSchemaConverter.convertToDataType(tableAvroSchema);
     final RowType rowType = (RowType) rowDataType.getLogicalType();
     final RowType requiredRowType = (RowType) getProducedDataType().notNull().getLogicalType();
@@ -397,6 +397,15 @@ public class HoodieTableSource implements
     String errMsg = String.format("Invalid query type : '%s', options ['%s'] are supported now", queryType,
         FlinkOptions.QUERY_TYPE_SNAPSHOT);
     throw new HoodieException(errMsg);
+  }
+
+  /**
+   * Returns whether the hoodie table data exists .
+   */
+  private  boolean tableDataExists() {
+    HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
+    Option<Pair<HoodieInstant, HoodieCommitMetadata>> instantAndCommitMetadata = activeTimeline.getLastCommitMetadataWithValidData();
+    return instantAndCommitMetadata.isPresent();
   }
 
   private MergeOnReadInputFormat mergeOnReadInputFormat(
@@ -426,11 +435,18 @@ public class HoodieTableSource implements
   }
 
   private InputFormat<RowData, ?> baseFileOnlyInputFormat() {
-    final Path[] paths = getReadPaths();
-    if (paths.length == 0) {
+    final FileStatus[] fileStatuses = getReadFiles();
+    if (fileStatuses.length == 0) {
       return InputFormats.EMPTY_INPUT_FORMAT;
     }
-    FileInputFormat<RowData> format = new CopyOnWriteInputFormat(
+
+    HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient,
+        metaClient.getCommitsAndCompactionTimeline().filterCompletedInstants(), fileStatuses);
+    Path[] paths = fsView.getLatestBaseFiles()
+        .map(HoodieBaseFile::getFileStatus)
+        .map(FileStatus::getPath).toArray(Path[]::new);
+
+    return new CopyOnWriteInputFormat(
         FilePathUtils.toFlinkPaths(paths),
         this.schema.getColumnNames().toArray(new String[0]),
         this.schema.getColumnDataTypes().toArray(new DataType[0]),
@@ -440,12 +456,10 @@ public class HoodieTableSource implements
         getParquetConf(this.conf, this.hadoopConf),
         this.conf.getBoolean(FlinkOptions.UTC_TIMEZONE)
     );
-    format.setFilesFilter(new LatestFileFilter(this.hadoopConf));
-    return format;
   }
 
   private Schema inferSchemaFromDdl() {
-    Schema schema = AvroSchemaConverter.convertToSchema(this.schema.toPhysicalRowDataType().getLogicalType());
+    Schema schema = AvroSchemaConverter.convertToSchema(this.tableRowType);
     return HoodieAvroUtils.addMetadataFields(schema, conf.getBoolean(FlinkOptions.CHANGELOG_ENABLED));
   }
 
@@ -485,23 +499,13 @@ public class HoodieTableSource implements
    * Get the reader paths with partition path expanded.
    */
   @VisibleForTesting
-  public Path[] getReadPaths() {
-    return partitionKeys.isEmpty()
-        ? new Path[] {path}
-        : FilePathUtils.partitionPath2ReadPath(path, partitionKeys, getOrFetchPartitions(),
-        conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING));
-  }
-
-  private static class LatestFileFilter extends FilePathFilter {
-    private final HoodieROTablePathFilter hoodieFilter;
-
-    public LatestFileFilter(org.apache.hadoop.conf.Configuration hadoopConf) {
-      this.hoodieFilter = new HoodieROTablePathFilter(hadoopConf);
+  public FileStatus[] getReadFiles() {
+    Set<String> requiredPartitionPaths = getRequiredPartitionPaths();
+    fileIndex.setPartitionPaths(requiredPartitionPaths);
+    List<String> relPartitionPaths = fileIndex.getOrBuildPartitionPaths();
+    if (relPartitionPaths.size() == 0) {
+      return new FileStatus[0];
     }
-
-    @Override
-    public boolean filterPath(org.apache.flink.core.fs.Path filePath) {
-      return !this.hoodieFilter.accept(new Path(filePath.toUri()));
-    }
+    return fileIndex.getFilesInPartitions();
   }
 }

@@ -88,7 +88,7 @@ public class FlinkCreateHandle<T extends HoodieRecordPayload, I, K, O>
    */
   private void deleteInvalidDataFile(long lastAttemptId) {
     final String lastWriteToken = FSUtils.makeWriteToken(getPartitionId(), getStageId(), lastAttemptId);
-    final String lastDataFileName = FSUtils.makeDataFileName(instantTime,
+    final String lastDataFileName = FSUtils.makeBaseFileName(instantTime,
         lastWriteToken, this.fileId, hoodieTable.getBaseFileExtension());
     final Path path = makeNewFilePath(partitionPath, lastDataFileName);
     try {
@@ -136,7 +136,7 @@ public class FlinkCreateHandle<T extends HoodieRecordPayload, I, K, O>
    * Use the writeToken + "-" + rollNumber as the new writeToken of a mini-batch write.
    */
   private Path newFilePathWithRollover(int rollNumber) {
-    final String dataFileName = FSUtils.makeDataFileName(instantTime, writeToken + "-" + rollNumber, fileId,
+    final String dataFileName = FSUtils.makeBaseFileName(instantTime, writeToken + "-" + rollNumber, fileId,
         hoodieTable.getBaseFileExtension());
     return makeNewFilePath(partitionPath, dataFileName);
   }
