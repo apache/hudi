@@ -318,4 +318,36 @@ class TestCopyToTableProcedure extends HoodieSparkSqlTestBase {
 
     }
   }
+
+  test("Test Call copy_to_table Procedure with not support mode") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      // create table
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | location '${tmp.getCanonicalPath}/$tableName'
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts'
+           | )
+       """.stripMargin)
+
+      // insert data to table
+      spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000")
+      spark.sql(s"insert into $tableName select 2, 'a2', 20, 1500")
+      spark.sql(s"insert into $tableName select 3, 'a3', 30, 2000")
+      spark.sql(s"insert into $tableName select 4, 'a4', 40, 2500")
+
+      val copyTableName = generateTableName
+      // Check required fields
+      checkExceptionContain(s"call copy_to_table(table=>'$tableName',new_table=>'$copyTableName',save_mode=>'append1')")(s"save_mode not support append1")
+
+    }
+  }
 }
