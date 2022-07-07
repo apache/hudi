@@ -22,8 +22,8 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieEarlyConflictException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.table.marker.TimelineServerBasedWriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkers;
 
@@ -47,7 +47,7 @@ public class AsyncTimelineMarkerConflictResolutionStrategy extends SimpleConcurr
   }
 
   @Override
-  public Option<HoodieCommitMetadata> resolveMarkerConflict(WriteMarkers writeMarkers, String partitionPath, String dataFileName) throws HoodieWriteConflictException {
-    throw new HoodieWriteConflictException(new ConcurrentModificationException("Cannot resolve conflicts for overlapping writes"));
+  public Option<HoodieCommitMetadata> resolveMarkerConflict(WriteMarkers writeMarkers, String partitionPath, String dataFileName) {
+    throw new HoodieEarlyConflictException(new ConcurrentModificationException("Early conflict detected but cannot resolve conflicts for overlapping writes"));
   }
 }

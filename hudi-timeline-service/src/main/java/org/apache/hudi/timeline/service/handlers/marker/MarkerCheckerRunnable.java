@@ -71,7 +71,7 @@ public class MarkerCheckerRunnable implements Runnable {
       Path tempPath = new Path(basePath + Path.SEPARATOR + HoodieTableMetaClient.TEMPFOLDER_NAME);
 
       List<Path> instants = MarkerUtils.getAllMarkerDir(tempPath, fs);
-      List<String> candidate = getCandidateInstants(instants, markerToInstantTime(markerDir));
+      List<String> candidate = getCandidateInstants(instants, markerDirToInstantTime(markerDir));
       Set<String> tableMarkers = candidate.stream().flatMap(instant -> {
         return MarkerUtils.readTimelineServerBasedMarkersFromFileSystemLocally(instant, fs).stream();
       }).collect(Collectors.toSet());
@@ -82,7 +82,7 @@ public class MarkerCheckerRunnable implements Runnable {
       currentFileIDs.retainAll(tableFilesIDs);
 
       if (!currentFileIDs.isEmpty()) {
-        LOG.info("Conflict writing detected based on markers!\n"
+        LOG.warn("Conflict writing detected based on markers!\n"
             + "Conflict markers: " + currentInstantAllMarkers + "\n"
             + "Table markers: " + tableMarkers);
         hasConflict.compareAndSet(false, true);
@@ -104,11 +104,11 @@ public class MarkerCheckerRunnable implements Runnable {
    */
   private List<String> getCandidateInstants(List<Path> instants, String currentInstantTime) {
     return instants.stream().map(Path::toString).filter(instantPath -> {
-      String instantTime = markerToInstantTime(instantPath);
+      String instantTime = markerDirToInstantTime(instantPath);
       return instantTime.compareToIgnoreCase(currentInstantTime) < 0;
     }).filter(instantPath -> {
       try {
-        return !isHeartbeatExpired(markerToInstantTime(instantPath));
+        return !isHeartbeatExpired(markerDirToInstantTime(instantPath));
       } catch (IOException e) {
         return false;
       }
@@ -129,15 +129,14 @@ public class MarkerCheckerRunnable implements Runnable {
 
   /**
    * Get instantTime from full marker path, for example:
-   * 20210623/0/20210825/932a86d9-5c1d-44c7-ac99-cb88b8ef8478-0_85-15-1390_20220620181735781.parquet.marker.MERGE
-   *    ==> 20220620181735781
+   * /var/folders/t3/th1dw75d0yz2x2k2qt6ys9zh0000gp/T/junit6502909693741900820/dataset/.hoodie/.temp/003
+   *    ==> 003
    * @param marker
    * @return
    */
-  private String markerToInstantTime(String marker) {
-    String[] ele = marker.split("_");
-    String[] splits = ele[ele.length - 1].split("\\.");
-    return splits[0];
+  private static String markerDirToInstantTime(String marker) {
+    String[] ele = marker.split("/");
+    return ele[ele.length - 1];
   }
 
   /**

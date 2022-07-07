@@ -160,6 +160,8 @@ public class DirectWriteMarkers extends WriteMarkers {
     long res = Arrays.stream(fs.listStatus(new Path(tempFolderPath)))
         .parallel()
         .map(FileStatus::getPath)
+        .filter(markerPath -> {
+          return !markerPath.getName().equalsIgnoreCase(instantTime);})
         .flatMap(currentMarkerDirPath -> {
           try {
             Path markerPartitionPath;
@@ -180,7 +182,11 @@ public class DirectWriteMarkers extends WriteMarkers {
           }
         }).count();
 
-    return res != 0L;
+    if (res != 0L) {
+      LOG.warn("Detected conflict marker files: " + partitionPath + "/" + fileId + " for " + instantTime);
+      return true;
+    }
+    return false;
   }
 
   private String getTempFolderPath() {

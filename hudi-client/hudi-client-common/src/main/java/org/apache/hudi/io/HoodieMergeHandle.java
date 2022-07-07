@@ -202,7 +202,11 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
         table.getMetaClient().reloadActiveTimeline();
         table.getHoodieView().sync();
         HoodieBaseFile currentBaseFileToMerge = table.getBaseFileOnlyView().getLatestBaseFile(partitionPath, fileId).get();
-        return !currentBaseFileToMerge.equals(baseFileToMerge);
+        if (!currentBaseFileToMerge.equals(baseFileToMerge)) {
+          LOG.warn("Base file to merge is changed because of multi-writer");
+          return true;
+        }
+        return false;
       });
 
       // Create the writer for writing the new version file

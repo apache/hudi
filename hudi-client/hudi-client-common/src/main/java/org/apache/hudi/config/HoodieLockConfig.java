@@ -318,13 +318,23 @@ public class HoodieLockConfig extends HoodieConfig {
       return this;
     }
 
-    public HoodieLockConfig.Builder withConflictResolutionStrategy(ConflictResolutionStrategy conflictResolutionStrategy) {
-      lockConfig.setValue(WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME, conflictResolutionStrategy.getClass().getName());
+    public HoodieLockConfig.Builder withConflictResolutionStrategy(String conflictResolutionStrategy) {
+      lockConfig.setValue(WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME, conflictResolutionStrategy);
       return this;
     }
 
     public HoodieLockConfig.Builder withEarlyConflictDetectionEnable(boolean enable) {
       lockConfig.setValue(EARLY_CONFLICT_DETECTION_ENABLE, String.valueOf(enable));
+      return this;
+    }
+
+    public HoodieLockConfig.Builder withMarkerConflictCheckerBatchInterval(long interval) {
+      lockConfig.setValue(MARKER_CONFLICT_CHECKER_BATCH_INTERVAL, String.valueOf(interval));
+      return this;
+    }
+
+    public HoodieLockConfig.Builder withMarkerConflictCheckerPeriod(long period) {
+      lockConfig.setValue(MARKER_CONFLICT_CHECKER_PERIOD, String.valueOf(period));
       return this;
     }
 

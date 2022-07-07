@@ -81,6 +81,5 @@ public interface ConflictResolutionStrategy {
    * @return
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
-  Option<HoodieCommitMetadata> resolveMarkerConflict(WriteMarkers writeMarkers, String partitionPath, String dataFileName) throws HoodieWriteConflictException;
-
+  Option<HoodieCommitMetadata> resolveMarkerConflict(WriteMarkers writeMarkers, String partitionPath, String dataFileName);
 }
