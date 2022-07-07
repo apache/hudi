@@ -35,7 +35,7 @@ import java.util.ConcurrentModificationException;
  * This strategy is used for direct marker writers, trying to do early conflict detection.
  * It will use fileSystem api like list and exist directly to check if there is any marker file conflict.
  */
-public class SimpleDirectMarkerConflictResolutionStrategy extends SimpleConcurrentFileWritesConflictResolutionStrategy{
+public class SimpleDirectMarkerConflictResolutionStrategy extends SimpleConcurrentFileWritesConflictResolutionStrategy {
   private static final Logger LOG = LogManager.getLogger(SimpleDirectMarkerConflictResolutionStrategy.class);
 
   @Override

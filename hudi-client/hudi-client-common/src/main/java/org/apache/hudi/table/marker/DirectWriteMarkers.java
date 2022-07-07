@@ -161,7 +161,8 @@ public class DirectWriteMarkers extends WriteMarkers {
         .parallel()
         .map(FileStatus::getPath)
         .filter(markerPath -> {
-          return !markerPath.getName().equalsIgnoreCase(instantTime);})
+          return !markerPath.getName().equalsIgnoreCase(instantTime);
+        })
         .flatMap(currentMarkerDirPath -> {
           try {
             Path markerPartitionPath;

@@ -2042,7 +2042,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public boolean isEarlyConflictDetectionEnable() {
-   return getBoolean(HoodieLockConfig.EARLY_CONFLICT_DETECTION_ENABLE);
+    return getBoolean(HoodieLockConfig.EARLY_CONFLICT_DETECTION_ENABLE);
   }
 
   /**

@@ -32,7 +32,6 @@ import org.apache.log4j.Logger;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.Set;
-import java.util.function.Function;
 
 /**
  * Operates on markers for a given write action (commit, delta commit, compaction).

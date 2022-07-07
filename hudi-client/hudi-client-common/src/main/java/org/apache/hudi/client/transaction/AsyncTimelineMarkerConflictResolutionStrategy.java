@@ -37,7 +37,7 @@ import java.util.ConcurrentModificationException;
 public class AsyncTimelineMarkerConflictResolutionStrategy extends SimpleConcurrentFileWritesConflictResolutionStrategy {
 
   @Override
-  public boolean hasMarkerConflict(WriteMarkers writeMarkers, HoodieWriteConfig config, FileSystem fs , String partitionPath, String fileId) {
+  public boolean hasMarkerConflict(WriteMarkers writeMarkers, HoodieWriteConfig config, FileSystem fs, String partitionPath, String fileId) {
     try {
       assert writeMarkers instanceof TimelineServerBasedWriteMarkers;
       return writeMarkers.hasMarkerConflict(config, partitionPath, fileId);
