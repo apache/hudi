@@ -165,8 +165,10 @@ object HoodieSparkUtils extends SparkAdapterSupport {
       } else {
         val readerAvroSchema = new Schema.Parser().parse(readerAvroSchemaStr)
         val transform: GenericRecord => GenericRecord =
-          if (sameSchema) identity
-          else {
+          if (sameSchema) {
+            identity
+          } else {
+            // NOTE: Avro schema parsing is performed outside of the transforming lambda
             HoodieAvroUtils.rewriteRecordDeep(_, readerAvroSchema)
           }
 
