@@ -137,7 +137,7 @@
         <artifactId>scalatest-maven-plugin</artifactId>
         <version>1.0</version>
         <configuration>
-          <skipTests>${skipUTs}</skipTests>
+          <skipTests>true</skipTests>
           <reportsDirectory>${project.build.directory}/surefire-reports</reportsDirectory>
           <junitxml>.</junitxml>
           <filereports>TestSuite.txt</filereports>
