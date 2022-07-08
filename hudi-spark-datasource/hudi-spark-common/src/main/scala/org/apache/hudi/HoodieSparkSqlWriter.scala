@@ -529,7 +529,12 @@ object HoodieSparkSqlWriter {
         userDefinedBulkInsertPartitionerOpt.get
       }
       else {
-        BulkInsertInternalPartitionerWithRowsFactory.get(writeConfig.getBulkInsertSortMode)
+        if (populateMetaFields) {
+          BulkInsertInternalPartitionerWithRowsFactory.get(writeConfig.getBulkInsertSortMode)
+        } else {
+          // Sort modes are not yet supported when meta fields are disabled
+          new NonSortPartitionerWithRows()
+        }
       }
     }
     val arePartitionRecordsSorted = bulkInsertPartitionerRows.arePartitionRecordsSorted()
