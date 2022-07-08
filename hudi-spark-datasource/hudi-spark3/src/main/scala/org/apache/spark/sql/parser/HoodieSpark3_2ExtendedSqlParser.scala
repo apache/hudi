@@ -29,26 +29,30 @@ import org.apache.spark.sql.catalyst.parser.{ParseErrorListener, ParseException,
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.trees.Origin
 import org.apache.spark.sql.catalyst.{FunctionIdentifier, TableIdentifier}
+import org.apache.spark.sql.internal.VariableSubstitution
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{AnalysisException, SparkSession}
 
-import scala.util.control.NonFatal
+import java.util.Locale
 
 class HoodieSpark3_2ExtendedSqlParser(session: SparkSession, delegate: ParserInterface)
   extends ParserInterface with Logging {
 
   private lazy val conf = session.sqlContext.conf
   private lazy val builder = new HoodieSpark3_2ExtendedSqlAstBuilder(conf, delegate)
+  private val substitutor = new VariableSubstitution
 
-  override def parsePlan(sqlText: String): LogicalPlan = parse(sqlText) { parser =>
-    try {
-      builder.visit(parser.singleStatement()) match {
-        case plan: LogicalPlan => plan
-        case _=> delegate.parsePlan(sqlText)
+  override def parsePlan(sqlText: String): LogicalPlan = {
+    val substitutionSql = substitutor.substitute(sqlText)
+    if (isHoodieCommand(substitutionSql)) {
+      parse(substitutionSql) { parser =>
+        builder.visit(parser.singleStatement()) match {
+          case plan: LogicalPlan => plan
+          case _ => delegate.parsePlan(sqlText)
+        }
       }
-    } catch {
-      case NonFatal(_) =>
-        delegate.parsePlan(sqlText)
+    } else {
+      delegate.parsePlan(substitutionSql)
     }
   }
 
@@ -110,6 +114,14 @@ class HoodieSpark3_2ExtendedSqlParser(session: SparkSession, delegate: ParserInt
 
   override def parseMultipartIdentifier(sqlText: String): Seq[String] = {
     delegate.parseMultipartIdentifier(sqlText)
+  }
+
+  private def isHoodieCommand(sqlText: String): Boolean = {
+    val normalized = sqlText.toLowerCase(Locale.ROOT).trim().replaceAll("\\s+", " ")
+    normalized.contains("system_time as of") ||
+      normalized.contains("timestamp as of") ||
+      normalized.contains("system_version as of") ||
+      normalized.contains("version as of")
   }
 }
 
