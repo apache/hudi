@@ -106,7 +106,7 @@ public class AvroToRowDataConverters {
   /**
    * Creates a runtime converter which assuming input object is not null.
    */
-  private static AvroToRowDataConverter createConverter(LogicalType type) {
+  public static AvroToRowDataConverter createConverter(LogicalType type) {
     switch (type.getTypeRoot()) {
       case NULL:
         return avroObject -> null;
@@ -121,6 +121,7 @@ public class AvroToRowDataConverters {
       case INTERVAL_DAY_TIME: // long
       case FLOAT: // float
       case DOUBLE: // double
+      case RAW:
         return avroObject -> avroObject;
       case DATE:
         return AvroToRowDataConverters::convertToDate;
@@ -143,7 +144,6 @@ public class AvroToRowDataConverters {
       case MAP:
       case MULTISET:
         return createMapConverter(type);
-      case RAW:
       default:
         throw new UnsupportedOperationException("Unsupported type: " + type);
     }

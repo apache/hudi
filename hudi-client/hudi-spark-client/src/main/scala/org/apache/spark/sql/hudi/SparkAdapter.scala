@@ -24,18 +24,17 @@ import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSchemaConver
 import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
-import org.apache.spark.sql.catalyst.expressions.Expression
+import org.apache.spark.sql.catalyst.expressions.{Expression, InterpretedPredicate}
 import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.catalyst.plans.JoinType
 import org.apache.spark.sql.catalyst.plans.logical.{Join, LogicalPlan, SubqueryAlias}
+import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.catalyst.{AliasIdentifier, TableIdentifier}
+import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.execution.datasources.{FilePartition, LogicalRelation, PartitionedFile, SparkParsePartitionUtil}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.DataType
 import org.apache.spark.sql.{HoodieCatalystExpressionUtils, Row, SparkSession}
-import org.apache.spark.sql.{Row, SparkSession}
-import org.apache.spark.sql.catalyst.rules.Rule
-import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 
 import java.util.Locale
 
@@ -141,8 +140,8 @@ trait SparkAdapter extends Serializable {
       maxSplitBytes: Long): Seq[FilePartition]
 
   def isHoodieTable(table: LogicalPlan, spark: SparkSession): Boolean = {
-    tripAlias(table) match {
-      case LogicalRelation(_, _, Some(tbl), _) => isHoodieTable(tbl)
+    unfoldSubqueryAliases(table) match {
+      case LogicalRelation(_, _, Some(table), _) => isHoodieTable(table)
       case relation: UnresolvedRelation =>
         isHoodieTable(toTableIdentifier(relation), spark)
       case _=> false
@@ -162,22 +161,22 @@ trait SparkAdapter extends Serializable {
     isHoodieTable(table)
   }
 
-  def tripAlias(plan: LogicalPlan): LogicalPlan = {
+  protected def unfoldSubqueryAliases(plan: LogicalPlan): LogicalPlan = {
     plan match {
       case SubqueryAlias(_, relation: LogicalPlan) =>
-        tripAlias(relation)
+        unfoldSubqueryAliases(relation)
       case other =>
         other
     }
   }
 
   /**
-    * Create customresolutionRule to deal with alter command for hudi.
-    */
-  def createResolveHudiAlterTableCommand(sparkSession: SparkSession): Rule[LogicalPlan]
-
-  /**
     * Create instance of [[ParquetFileFormat]]
     */
   def createHoodieParquetFileFormat(appendPartitionValues: Boolean): Option[ParquetFileFormat]
+
+  /**
+   * Create instance of [[InterpretedPredicate]]
+   */
+  def createInterpretedPredicate(e: Expression): InterpretedPredicate
 }

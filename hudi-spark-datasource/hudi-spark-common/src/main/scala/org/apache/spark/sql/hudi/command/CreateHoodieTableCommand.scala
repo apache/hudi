@@ -29,7 +29,7 @@ import org.apache.spark.sql.catalyst.catalog._
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable.needFilterProps
 import org.apache.spark.sql.hive.HiveClientUtils
 import org.apache.spark.sql.hive.HiveExternalCatalog._
-import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isEnableHive
+import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isUsingHiveCatalog
 import org.apache.spark.sql.hudi.{HoodieOptionConfig, HoodieSqlCommonUtils}
 import org.apache.spark.sql.internal.StaticSQLConf.SCHEMA_STRING_LENGTH_THRESHOLD
 import org.apache.spark.sql.types.StructType
@@ -144,7 +144,7 @@ object CreateHoodieTableCommand {
     )
 
     // Create table in the catalog
-    val enableHive = isEnableHive(sparkSession)
+    val enableHive = isUsingHiveCatalog(sparkSession)
     if (enableHive) {
       createHiveDataSourceTable(sparkSession, newTable, ignoreIfExists)
     } else {

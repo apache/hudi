@@ -109,7 +109,7 @@ public class HoodieClientTestUtils {
     for (HoodieInstant commit : commitsToReturn) {
       HoodieCommitMetadata metadata =
           HoodieCommitMetadata.fromBytes(commitTimeline.getInstantDetails(commit).get(), HoodieCommitMetadata.class);
-      fileIdToFullPath.putAll(metadata.getFileIdAndFullPaths(basePath));
+      fileIdToFullPath.putAll(metadata.getFileIdAndFullPaths(new Path(basePath)));
     }
     return fileIdToFullPath;
   }

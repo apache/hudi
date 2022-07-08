@@ -22,7 +22,7 @@ import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
-import org.apache.hudi.hive.HiveSyncConfig
+import org.apache.hudi.hive.HiveSyncConfigHolder
 import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, HoodieSparkSqlWriter, SparkAdapterSupport}
 import org.apache.spark.sql._
@@ -181,14 +181,14 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     var sourceDF = Dataset.ofRows(sparkSession, mergeInto.sourceTable)
     targetKey2SourceExpression.foreach {
       case (targetColumn, sourceExpression)
-        if !isEqualToTarget(targetColumn, sourceExpression) =>
+        if !containsPrimaryKeyFieldReference(targetColumn, sourceExpression) =>
           sourceDF = sourceDF.withColumn(targetColumn, new Column(sourceExpression))
           sourceDFOutput = sourceDFOutput :+ AttributeReference(targetColumn, sourceExpression.dataType)()
       case _=>
     }
     target2SourcePreCombineFiled.foreach {
       case (targetPreCombineField, sourceExpression)
-        if !isEqualToTarget(targetPreCombineField, sourceExpression) =>
+        if !containsPreCombineFieldReference(targetPreCombineField, sourceExpression) =>
           sourceDF = sourceDF.withColumn(targetPreCombineField, new Column(sourceExpression))
           sourceDFOutput = sourceDFOutput :+ AttributeReference(targetPreCombineField, sourceExpression.dataType)()
       case _=>
@@ -196,21 +196,49 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     sourceDF
   }
 
-  private def isEqualToTarget(targetColumnName: String, sourceExpression: Expression): Boolean = {
-    val sourceColumnName = sourceDFOutput.map(_.name)
+  /**
+   * Check whether the source expression has the same column name with target column.
+   *
+   * Merge condition cases that return true:
+   * 1) merge into .. on h0.id = s0.id ..
+   * 2) merge into .. on h0.id = cast(s0.id as int) ..
+   * "id" is primaryKey field of h0.
+   */
+  private def containsPrimaryKeyFieldReference(targetColumnName: String, sourceExpression: Expression): Boolean = {
+    val sourceColumnNames = sourceDFOutput.map(_.name)
     val resolver = sparkSession.sessionState.conf.resolver
 
     sourceExpression match {
-      case attr: AttributeReference if sourceColumnName.find(resolver(_, attr.name)).get.equals(targetColumnName) => true
+      case attr: AttributeReference if sourceColumnNames.find(resolver(_, attr.name)).get.equals(targetColumnName) => true
       // SPARK-35857: the definition of Cast has been changed in Spark3.2.
       // Match the class type instead of call the `unapply` method.
       case cast: Cast =>
         cast.child match {
-          case attr: AttributeReference if sourceColumnName.find(resolver(_, attr.name)).get.equals(targetColumnName) => true
+          case attr: AttributeReference if sourceColumnNames.find(resolver(_, attr.name)).get.equals(targetColumnName) => true
           case _ => false
         }
       case _=> false
     }
+  }
+
+  /**
+   * Check whether the source expression on preCombine field contains the same column name with target column.
+   *
+   * Merge expression cases that return true:
+   * 1) merge into .. on .. update set ts = s0.ts
+   * 2) merge into .. on .. update set ts = cast(s0.ts as int)
+   * 3) merge into .. on .. update set ts = s0.ts+1 (expressions like this whose sub node has the same column name with target)
+   * "ts" is preCombine field of h0.
+   */
+  private def containsPreCombineFieldReference(targetColumnName: String, sourceExpression: Expression): Boolean = {
+    val sourceColumnNames = sourceDFOutput.map(_.name)
+    val resolver = sparkSession.sessionState.conf.resolver
+
+    // sub node of the expression may have same column name with target column name
+    sourceExpression.find {
+      case attr: AttributeReference => sourceColumnNames.find(resolver(_, attr.name)).get.equals(targetColumnName)
+      case _ => false
+    }.isDefined
   }
 
   /**
@@ -453,7 +481,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     val hiveSyncConfig = buildHiveSyncConfig(hoodieProps, hoodieCatalogTable)
 
     // Enable the hive sync by default if spark have enable the hive metastore.
-    val enableHive = isEnableHive(sparkSession)
+    val enableHive = isUsingHiveCatalog(sparkSession)
     withSparkConf(sparkSession, hoodieCatalogTable.catalogProperties) {
       Map(
         "path" -> path,
@@ -467,13 +495,13 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
         KEYGENERATOR_CLASS_NAME.key -> classOf[SqlKeyGenerator].getCanonicalName,
         SqlKeyGenerator.ORIGIN_KEYGEN_CLASS_NAME -> tableConfig.getKeyGeneratorClassName,
         HoodieSyncConfig.META_SYNC_ENABLED.key -> enableHive.toString,
-        HiveSyncConfig.HIVE_SYNC_ENABLED.key -> enableHive.toString,
-        HiveSyncConfig.HIVE_SYNC_MODE.key -> hiveSyncConfig.syncMode,
+        HiveSyncConfigHolder.HIVE_SYNC_MODE.key -> hiveSyncConfig.getString(HiveSyncConfigHolder.HIVE_SYNC_MODE),
+        HiveSyncConfigHolder.HIVE_SYNC_ENABLED.key -> enableHive.toString,
         HoodieSyncConfig.META_SYNC_DATABASE_NAME.key -> targetTableDb,
         HoodieSyncConfig.META_SYNC_TABLE_NAME.key -> targetTableName,
-        HiveSyncConfig.HIVE_SUPPORT_TIMESTAMP_TYPE.key -> hiveSyncConfig.supportTimestamp.toString,
+        HiveSyncConfigHolder.HIVE_SUPPORT_TIMESTAMP_TYPE.key -> hiveSyncConfig.getBoolean(HiveSyncConfigHolder.HIVE_SUPPORT_TIMESTAMP_TYPE).toString,
         HoodieSyncConfig.META_SYNC_PARTITION_FIELDS.key -> tableConfig.getPartitionFieldProp,
-        HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key -> hiveSyncConfig.partitionValueExtractorClass,
+        HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key -> hiveSyncConfig.getString(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS),
         HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key -> hoodieProps.getString(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "200"), // set the default parallelism to 200 for sql
         HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key -> hoodieProps.getString(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "200"),
         HoodieWriteConfig.DELETE_PARALLELISM_VALUE.key -> hoodieProps.getString(HoodieWriteConfig.DELETE_PARALLELISM_VALUE.key, "200"),

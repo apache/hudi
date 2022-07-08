@@ -184,6 +184,11 @@ public class KafkaOffsetGen {
             .defaultValue(false)
             .withDocumentation("Automatically submits offset to kafka.");
 
+    public static final ConfigProperty<Boolean> ENABLE_FAIL_ON_DATA_LOSS = ConfigProperty
+            .key("hoodie.deltastreamer.source.kafka.enable.failOnDataLoss")
+            .defaultValue(false)
+            .withDocumentation("Fail when checkpoint goes out of bounds instead of seeking to earliest offsets.");
+
     public static final ConfigProperty<Long> MAX_EVENTS_FROM_KAFKA_SOURCE_PROP = ConfigProperty
             .key("hoodie.deltastreamer.kafka.source.maxEvents")
             .defaultValue(5000000L)
@@ -329,9 +334,19 @@ public class KafkaOffsetGen {
                                                         Option<String> lastCheckpointStr, Set<TopicPartition> topicPartitions) {
     Map<TopicPartition, Long> earliestOffsets = consumer.beginningOffsets(topicPartitions);
     Map<TopicPartition, Long> checkpointOffsets = CheckpointUtils.strToOffsets(lastCheckpointStr.get());
-    boolean checkpointOffsetReseter = checkpointOffsets.entrySet().stream()
+    boolean isCheckpointOutOfBounds = checkpointOffsets.entrySet().stream()
         .anyMatch(offset -> offset.getValue() < earliestOffsets.get(offset.getKey()));
-    return checkpointOffsetReseter ? earliestOffsets : checkpointOffsets;
+    if (isCheckpointOutOfBounds) {
+      if (this.props.getBoolean(Config.ENABLE_FAIL_ON_DATA_LOSS.key(), Config.ENABLE_FAIL_ON_DATA_LOSS.defaultValue())) {
+        throw new HoodieDeltaStreamerException("Some data may have been lost because they are not available in Kafka any more;"
+            + " either the data was aged out by Kafka or the topic may have been deleted before all the data in the topic was processed.");
+      } else {
+        LOG.warn("Some data may have been lost because they are not available in Kafka any more;"
+            + " either the data was aged out by Kafka or the topic may have been deleted before all the data in the topic was processed."
+            + " If you want delta streamer to fail on such cases, set \"" + Config.ENABLE_FAIL_ON_DATA_LOSS.key() + "\" to \"true\".");
+      }
+    }
+    return isCheckpointOutOfBounds ? earliestOffsets : checkpointOffsets;
   }
 
   /**

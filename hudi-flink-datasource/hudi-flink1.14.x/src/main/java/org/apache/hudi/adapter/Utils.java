@@ -18,6 +18,7 @@
 
 package org.apache.hudi.adapter;
 
+import org.apache.flink.configuration.ReadableConfig;
 import org.apache.flink.streaming.api.TimeCharacteristic;
 import org.apache.flink.streaming.api.functions.source.SourceFunction;
 import org.apache.flink.streaming.api.operators.Output;
@@ -25,6 +26,9 @@ import org.apache.flink.streaming.api.operators.StreamSourceContexts;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 import org.apache.flink.streaming.runtime.tasks.ProcessingTimeService;
 import org.apache.flink.streaming.runtime.tasks.StreamTask;
+import org.apache.flink.table.catalog.ObjectIdentifier;
+import org.apache.flink.table.catalog.ResolvedCatalogTable;
+import org.apache.flink.table.factories.FactoryUtil;
 
 /**
  * Adapter utils.
@@ -44,5 +48,13 @@ public class Utils {
         watermarkInterval,
         -1,
         true);
+  }
+
+  public static FactoryUtil.DefaultDynamicTableContext getTableContext(
+      ObjectIdentifier tablePath,
+      ResolvedCatalogTable catalogTable,
+      ReadableConfig conf) {
+    return new FactoryUtil.DefaultDynamicTableContext(tablePath, catalogTable,
+        conf, Thread.currentThread().getContextClassLoader(), false);
   }
 }
