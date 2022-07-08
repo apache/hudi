@@ -20,6 +20,7 @@ package org.apache.hudi.sink.compact;
 
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.model.CompactionOperation;
+import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.flink.api.common.functions.AbstractRichFunction;
 import org.apache.flink.configuration.Configuration;
@@ -28,8 +29,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.List;
-
-import static java.util.stream.Collectors.toList;
+import java.util.stream.Collectors;
 
 /**
  * Flink hudi compaction source function.
@@ -53,18 +53,12 @@ public class CompactionPlanSourceFunction extends AbstractRichFunction implement
   protected static final Logger LOG = LoggerFactory.getLogger(CompactionPlanSourceFunction.class);
 
   /**
-   * Compaction instant time.
+   * compaction plan instant -> compaction plan
    */
-  private final String compactionInstantTime;
+  private final List<Pair<String, HoodieCompactionPlan>> compactionPlans;
 
-  /**
-   * The compaction plan.
-   */
-  private final HoodieCompactionPlan compactionPlan;
-
-  public CompactionPlanSourceFunction(HoodieCompactionPlan compactionPlan, String compactionInstantTime) {
-    this.compactionPlan = compactionPlan;
-    this.compactionInstantTime = compactionInstantTime;
+  public CompactionPlanSourceFunction(List<Pair<String, HoodieCompactionPlan>> compactionPlans) {
+    this.compactionPlans = compactionPlans;
   }
 
   @Override
@@ -74,11 +68,14 @@ public class CompactionPlanSourceFunction extends AbstractRichFunction implement
 
   @Override
   public void run(SourceContext sourceContext) throws Exception {
-    List<CompactionOperation> operations = this.compactionPlan.getOperations().stream()
-        .map(CompactionOperation::convertFromAvroRecordInstance).collect(toList());
-    LOG.info("CompactionPlanFunction compacting " + operations + " files");
-    for (CompactionOperation operation : operations) {
-      sourceContext.collect(new CompactionPlanEvent(compactionInstantTime, operation));
+    for (Pair<String, HoodieCompactionPlan> pair : compactionPlans) {
+      HoodieCompactionPlan compactionPlan = pair.getRight();
+      List<CompactionOperation> operations = compactionPlan.getOperations().stream()
+          .map(CompactionOperation::convertFromAvroRecordInstance).collect(Collectors.toList());
+      LOG.info("CompactionPlanFunction compacting " + operations + " files");
+      for (CompactionOperation operation : operations) {
+        sourceContext.collect(new CompactionPlanEvent(pair.getLeft(), operation));
+      }
     }
   }
 
