@@ -412,7 +412,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
     List<Column> cols = new ArrayList<>();
     for (String key : mapSchema.keySet()) {
       // In Glue, the full schema should exclude the partition keys
-      if (!syncConfig.partitionFields.contains(key)) {
+      if (!config.getSplitStrings(META_SYNC_PARTITION_FIELDS).contains(key)) {
         String keyType = getPartitionKeyType(mapSchema, key);
         Column column = new Column().withName(key).withType(keyType.toLowerCase()).withComment("");
         cols.add(column);
