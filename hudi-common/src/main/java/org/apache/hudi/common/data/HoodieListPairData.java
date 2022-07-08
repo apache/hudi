@@ -23,6 +23,7 @@ import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.function.SerializablePairFunction;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 
 import java.util.HashMap;
@@ -130,8 +131,29 @@ public class HoodieListPairData<K, V> extends HoodiePairData<K, V> {
 
   @Override
   public <W> HoodiePairData<K, Pair<V, Option<W>>> leftOuterJoin(HoodiePairData<K, W> other) {
-    // TODO
-    throw new UnsupportedOperationException("");
+    ValidationUtils.checkArgument(other instanceof HoodieListPairData);
+
+    // Transform right-side container to a multi-map of [[K]] to [[List<W>]] values
+    HashMap<K, List<W>> rightStreamMap = ((HoodieListPairData<K, W>) other).dataStream.collect(
+        Collectors.groupingBy(
+            Pair::getKey,
+            HashMap::new,
+            Collectors.mapping(Pair::getValue, Collectors.toList())));
+
+    Stream<Pair<K, Pair<V, Option<W>>>> leftOuterJoined = dataStream.flatMap(pair -> {
+      K key = pair.getKey();
+      V leftValue = pair.getValue();
+      List<W> rightValues = rightStreamMap.get(key);
+
+      if (rightValues == null) {
+        return Stream.of(Pair.of(key, Pair.of(leftValue, Option.empty())));
+      } else {
+        return rightValues.stream().map(rightValue ->
+            Pair.of(key, Pair.of(leftValue, Option.of(rightValue))));
+      }
+    });
+
+    return new HoodieListPairData<>(leftOuterJoined);
   }
 
   public static <K, V> HoodieListPairData<K, V> of(List<Pair<K, V>> data) {
