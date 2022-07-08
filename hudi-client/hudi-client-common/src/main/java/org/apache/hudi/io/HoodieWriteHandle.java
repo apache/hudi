@@ -182,8 +182,8 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
     return new Path(config.getBasePath(), relativePath);
   }
 
-  protected Option<Path> createMarkerFile(String partitionPath, String dataFileName) {
-    return createMarkerFile(partitionPath, dataFileName, (table) -> false);
+  protected void createMarkerFile(String partitionPath, String dataFileName) {
+    createMarkerFile(partitionPath, dataFileName, (table) -> false);
   }
 
   /**
@@ -191,7 +191,7 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
    *
    * @param partitionPath Partition path
    */
-  protected Option<Path> createMarkerFile(String partitionPath, String dataFileName,
+  protected void createMarkerFile(String partitionPath, String dataFileName,
                                           Function<HoodieTable, Boolean> conflictChecker) {
     WriteMarkers writeMarkers = WriteMarkersFactory.get(config.getMarkersType(), hoodieTable, instantTime);
 
@@ -201,13 +201,13 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
 
       ConflictResolutionStrategy resolutionStrategy = config.getWriteConflictResolutionStrategy();
       if (resolutionStrategy instanceof TransactionConflictResolutionStrategy) {
-        return createMarkerFileWithTransaction(resolutionStrategy, writeMarkers, partitionPath, dataFileName, conflictChecker);
+        createMarkerFileWithTransaction(resolutionStrategy, writeMarkers, partitionPath, dataFileName, conflictChecker);
       } else {
-        return createMarkerFileWithEarlyConflictDetection(resolutionStrategy, writeMarkers, partitionPath, dataFileName, conflictChecker);
+        createMarkerFileWithEarlyConflictDetection(resolutionStrategy, writeMarkers, partitionPath, dataFileName, conflictChecker);
       }
     }
 
-    return writeMarkers.create(partitionPath, dataFileName, getIOType());
+    writeMarkers.create(partitionPath, dataFileName, getIOType());
   }
 
   private Option<Path> createMarkerFileWithEarlyConflictDetection(ConflictResolutionStrategy resolutionStrategy,WriteMarkers writeMarkers,

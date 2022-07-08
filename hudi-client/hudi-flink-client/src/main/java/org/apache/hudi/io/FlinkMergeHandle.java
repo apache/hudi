@@ -116,15 +116,15 @@ public class FlinkMergeHandle<T extends HoodieRecordPayload, I, K, O>
   }
 
   @Override
-  protected Option<Path> createMarkerFile(String partitionPath, String dataFileName) {
+  protected void createMarkerFile(String partitionPath, String dataFileName) {
     WriteMarkers writeMarkers = WriteMarkersFactory.get(config.getMarkersType(), hoodieTable, instantTime);
-    return writeMarkers.createIfNotExists(partitionPath, dataFileName, getIOType());
+    writeMarkers.createIfNotExists(partitionPath, dataFileName, getIOType());
   }
 
   @Override
   protected void makeOldAndNewFilePaths(String partitionPath, String oldFileName, String newFileName) {
     // If the data file already exists, it means the write task write merge data bucket multiple times
-    // in one hoodie commit, rolls over to a new name instead.FlinkCreateHandle
+    // in one hoodie commit, rolls over to a new name instead.
 
     // Use the existing file path as the base file path (file1),
     // and generates new file path with roll over number (file2).
