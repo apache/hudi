@@ -39,6 +39,7 @@ import org.apache.log4j.Logger;
 import java.io.IOException;
 import java.util.Iterator;
 import java.util.List;
+import java.util.function.Function;
 
 /**
  * A {@link HoodieMergeHandle} that supports MERGE write incrementally(small data buffers).
@@ -107,6 +108,12 @@ public class FlinkMergeAndReplaceHandle<T extends HoodieRecordPayload, I, K, O>
   protected void createMarkerFile(String partitionPath, String dataFileName) {
     WriteMarkers writeMarkers = WriteMarkersFactory.get(config.getMarkersType(), hoodieTable, instantTime);
     writeMarkers.createIfNotExists(partitionPath, dataFileName, getIOType());
+  }
+
+  @Override
+  protected void createMarkerFile(String partitionPath, String dataFileName,
+                                  Function<HoodieTable, Boolean> conflictChecker) {
+    createMarkerFile(partitionPath, dataFileName);
   }
 
   @Override

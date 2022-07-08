@@ -33,6 +33,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Iterator;
 import java.util.List;
+import java.util.function.Function;
 
 /**
  * A {@link HoodieAppendHandle} that supports APPEND write incrementally(mini-batches).
@@ -72,6 +73,12 @@ public class FlinkAppendHandle<T extends HoodieRecordPayload, I, K, O>
     // Just skip the marker creation if it already exists, the new data would append to
     // the file directly.
     writeMarkers.createIfNotExists(partitionPath, dataFileName, getIOType());
+  }
+
+  @Override
+  protected void createMarkerFile(String partitionPath, String dataFileName,
+                                  Function<HoodieTable, Boolean> conflictChecker) {
+    createMarkerFile(partitionPath, dataFileName);
   }
 
   @Override
