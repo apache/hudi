@@ -18,11 +18,6 @@
 
 package org.apache.hudi.sink.compact;
 
-import org.apache.flink.streaming.api.datastream.DataStream;
-import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
-import org.apache.flink.streaming.api.functions.ProcessFunction;
-import org.apache.flink.util.Collector;
-import org.apache.flink.util.OutputTag;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -54,8 +49,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
-import java.util.Arrays;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -138,17 +134,7 @@ public class ITTestHoodieFlinkCompactor {
 
     HoodieFlinkWriteClient writeClient = StreamerUtil.createWriteClient(conf);
 
-    boolean scheduled = false;
-    // judge whether have operation
-    // To compute the compaction instant time and do compaction.
-    Option<String> compactionInstantTimeOption = CompactionUtil.getCompactionInstantTime(metaClient);
-    if (compactionInstantTimeOption.isPresent()) {
-      scheduled = writeClient.scheduleCompactionAtInstant(compactionInstantTimeOption.get(), Option.empty());
-    }
-
-    String compactionInstantTime = compactionInstantTimeOption.get();
-
-    assertTrue(scheduled, "The compaction plan should be scheduled");
+    String compactionInstantTime = scheduleCompactionPlan(metaClient, writeClient);
 
     HoodieFlinkTable<?> table = writeClient.getHoodieTable();
     // generate compaction plan
@@ -160,7 +146,7 @@ public class ITTestHoodieFlinkCompactor {
     // Mark instant as compaction inflight
     table.getActiveTimeline().transitionCompactionRequestedToInflight(instant);
 
-    env.addSource(new CompactionPlanSourceFunction(compactionPlan, compactionInstantTime))
+    env.addSource(new CompactionPlanSourceFunction(Collections.singletonList(Pair.of(compactionInstantTime, compactionPlan))))
         .name("compaction_source")
         .uid("uid_compaction_source")
         .rebalance()
@@ -280,29 +266,18 @@ public class ITTestHoodieFlinkCompactor {
     }
     table.getMetaClient().reloadActiveTimeline();
 
-    DataStream<CompactionPlanEvent> source = env.addSource(new MultiCompactionPlanSourceFunction(compactionPlans))
+    env.addSource(new CompactionPlanSourceFunction(compactionPlans))
         .name("compaction_source")
-        .uid("uid_compaction_source");
-    SingleOutputStreamOperator<Void> operator = source.rebalance()
+        .uid("uid_compaction_source")
+        .rebalance()
         .transform("compact_task",
             TypeInformation.of(CompactionCommitEvent.class),
             new ProcessOperator<>(new CompactFunction(conf)))
         .setParallelism(1)
-        .process(new ProcessFunction<CompactionCommitEvent, Void>() {
-          @Override
-          public void processElement(CompactionCommitEvent event, ProcessFunction<CompactionCommitEvent, Void>.Context context, Collector<Void> out) {
-            context.output(new OutputTag<>(event.getInstant(), TypeInformation.of(CompactionCommitEvent.class)), event);
-          }
-        })
-        .name("group_by_compaction_plan")
-        .uid("uid_group_by_compaction_plan")
+        .addSink(new CompactionCommitSink(conf))
+        .name("compaction_commit")
+        .uid("uid_compaction_commit")
         .setParallelism(1);
-    compactionPlans.forEach(pair ->
-        operator.getSideOutput(new OutputTag<>(pair.getLeft(), TypeInformation.of(CompactionCommitEvent.class)))
-            .addSink(new CompactionCommitSink(conf))
-            .name("clean_commits " + pair.getLeft())
-            .uid("uid_clean_commits_" + pair.getLeft())
-            .setParallelism(1));
 
     env.execute("flink_hudi_compaction");
     writeClient.close();
@@ -311,8 +286,7 @@ public class ITTestHoodieFlinkCompactor {
 
   private String scheduleCompactionPlan(HoodieTableMetaClient metaClient, HoodieFlinkWriteClient<?> writeClient) {
     boolean scheduled = false;
-    // judge whether have operation
-    // To compute the compaction instant time and do compaction.
+    // judge whether there are any compaction operations.
     Option<String> compactionInstantTimeOption = CompactionUtil.getCompactionInstantTime(metaClient);
     if (compactionInstantTimeOption.isPresent()) {
       scheduled = writeClient.scheduleCompactionAtInstant(compactionInstantTimeOption.get(), Option.empty());
