@@ -170,10 +170,6 @@
       <classifier>tests</classifier>
       <scope>test</scope>
       <exclusions>
-        <exclusion>
-          <groupId>org.eclipse.jetty</groupId>
-          <artifactId>*</artifactId>
-        </exclusion>
       </exclusions>
     </dependency>
     <dependency>

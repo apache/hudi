@@ -61,6 +61,7 @@
     <module>hudi-kafka-connect</module>
     <module>packaging/hudi-flink-bundle</module>
     <module>packaging/hudi-kafka-connect-bundle</module>
+    <module>hudi-shaded</module>
   </modules>
 
   <licenses>
@@ -869,10 +870,6 @@
           <exclusion>
             <groupId>javax.xml.bind</groupId>
             <artifactId>jaxb-api</artifactId>
-          </exclusion>
-          <exclusion>
-            <groupId>org.eclipse.jetty</groupId>
-            <artifactId>*</artifactId>
           </exclusion>
         </exclusions>
       </dependency>
