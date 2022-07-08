@@ -43,43 +43,51 @@ public abstract class HoodiePairData<K, V> implements Serializable {
   public abstract Object get();
 
   /**
-   * Caches the data.
+   * Persists the data (if applicable)
    *
    * @param cacheConfig config value for caching.
    */
   public abstract void persist(String cacheConfig);
 
   /**
-   * Removes the cached data.
+   * Un-persists the data (if applicable)
    */
   public abstract void unpersist();
 
   /**
-   * @return all keys in {@link HoodieData}.
+   * Returns a {@link HoodieData} holding the key from every corresponding pair
    */
   public abstract HoodieData<K> keys();
 
   /**
-   * @return all values in {@link HoodieData}.
+   * Returns a {@link HoodieData} holding the value from every corresponding pair
    */
   public abstract HoodieData<V> values();
 
   /**
-   * @return the number of pairs.
+   * Returns number of held pairs
    */
   public abstract long count();
 
   /**
-   * @return the number of pairs per key in a {@link Map}.
+   * Counts the number of pairs grouping them by key
    */
   public abstract Map<K, Long> countByKey();
 
   /**
-   * TODO java-doc
+   * Groups the values for each key in the dataset into a single sequence
    */
   public abstract HoodiePairData<K, Iterable<V>> groupByKey();
 
-  public abstract HoodiePairData<K, V> reduceByKey(SerializableBiFunction<V, V, V> func, int parallelism);
+  /**
+   * Reduces original sequence by de-duplicating the pairs w/ the same key, using provided
+   * binary operator {@code combiner}. Returns an instance of {@link HoodiePairData} holding
+   * the "de-duplicated" pairs, ie only pairs with unique keys.
+   *
+   * @param combiner method to combine values of the pairs with the same key
+   * @param parallelism target parallelism (if applicable)
+   */
+  public abstract HoodiePairData<K, V> reduceByKey(SerializableBiFunction<V, V, V> combiner, int parallelism);
 
   /**
    * @param func serializable map function.
@@ -92,20 +100,21 @@ public abstract class HoodiePairData<K, V> implements Serializable {
    * @param mapToPairFunc serializable map function to generate another pair.
    * @param <L>           new key type.
    * @param <W>           new value type.
-   * @return {@link HoodiePairData<L, W>} containing the result. Actual execution may be deferred.
+   * @return containing the result. Actual execution may be deferred.
    */
   public abstract <L, W> HoodiePairData<L, W> mapToPair(
       SerializablePairFunction<Pair<K, V>, L, W> mapToPairFunc);
 
   /**
-   * Performs a left outer join of this and other. For each element (k, v) in this,
-   * the resulting HoodiePairData will either contain all pairs (k, (v, Some(w))) for w in other,
-   * or the pair (k, (v, None)) if no elements in other have key k.
+   * Performs a left outer join of this dataset against {@code other}.
+   *
+   * For each element (k, v) in this, the resulting {@link HoodiePairData} will either contain all
+   * pairs {@code (k, (v, Some(w)))} for every {@code w} in the {@code other}, or the pair {@code (k, (v, None))}
+   * if no elements in {@code other} have the pair w/ a key {@code k}
    *
    * @param other the other {@link HoodiePairData}
    * @param <W>   value type of the other {@link HoodiePairData}
-   * @return {@link HoodiePairData<K, Pair<V, Option<W>>>} containing the left outer join result.
-   * Actual execution may be deferred.
+   * @return containing the result of the left outer join
    */
   public abstract <W> HoodiePairData<K, Pair<V, Option<W>>> leftOuterJoin(HoodiePairData<K, W> other);
 

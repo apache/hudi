@@ -37,7 +37,16 @@ import static org.apache.hudi.common.function.FunctionWrapper.throwingMapToPairW
 import static org.apache.hudi.common.function.FunctionWrapper.throwingMapWrapper;
 
 /**
- * TODO java-doc
+ * In-memory implementation of {@link HoodiePairData} holding internally a {@link Stream} of {@link Pair}s.
+ *
+ * NOTE: This is an in-memory counterpart for {@code HoodieJavaPairRDD}, and it strives to provide
+ *       similar semantic as RDD container -- all intermediate (non-terminal, not de-referencing
+ *       the stream like "collect", "groupBy", etc) operations are executed *lazily*.
+ *       This allows to make sure that compute/memory churn is minimal since only necessary
+ *       computations will ultimately be performed.
+ *
+ * @param <K> type of the key in the pair
+ * @param <V> type of the value in the pair
  */
 public class HoodieListPairData<K, V> extends HoodiePairData<K, V> {
 
@@ -98,12 +107,12 @@ public class HoodieListPairData<K, V> extends HoodiePairData<K, V> {
   }
 
   @Override
-  public HoodiePairData<K, V> reduceByKey(SerializableBiFunction<V, V, V> func, int parallelism) {
+  public HoodiePairData<K, V> reduceByKey(SerializableBiFunction<V, V, V> combiner, int parallelism) {
     Map<K, java.util.Optional<V>> reducedMap = dataStream.collect(
         Collectors.groupingBy(
             Pair::getKey,
             HashMap::new,
-            Collectors.mapping(Pair::getValue, Collectors.reducing(func::apply))));
+            Collectors.mapping(Pair::getValue, Collectors.reducing(combiner::apply))));
 
     return new HoodieListPairData<>(
         reducedMap.entrySet()
