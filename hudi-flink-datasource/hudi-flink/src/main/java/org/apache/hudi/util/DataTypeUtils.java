@@ -23,7 +23,10 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.LogicalTypeRoot;
+import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.table.types.logical.TimestampType;
+
+import java.util.Arrays;
 
 /**
  * Utilities for {@link org.apache.flink.table.types.DataType}.
@@ -57,5 +60,13 @@ public class DataTypeUtils {
    */
   public static boolean isDatetimeType(DataType type) {
     return isTimestampType(type) || isDateType(type);
+  }
+
+  /**
+   * Projects the row fields with given names.
+   */
+  public static RowType.RowField[] projectRowFields(RowType rowType, String[] names) {
+    int [] fieldIndices = Arrays.stream(names).mapToInt(rowType::getFieldIndex).toArray();
+    return Arrays.stream(fieldIndices).mapToObj(i -> rowType.getFields().get(i)).toArray(RowType.RowField[]::new);
   }
 }

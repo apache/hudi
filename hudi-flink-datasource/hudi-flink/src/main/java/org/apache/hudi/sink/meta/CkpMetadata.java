@@ -18,7 +18,6 @@
 
 package org.apache.hudi.sink.meta;
 
-import org.apache.flink.configuration.Configuration;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -26,6 +25,7 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.exception.HoodieException;
 
+import org.apache.flink.configuration.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
@@ -97,8 +97,6 @@ public class CkpMetadata implements Serializable {
   public void bootstrap(HoodieTableMetaClient metaClient) throws IOException {
     fs.delete(path, true);
     fs.mkdirs(path);
-    metaClient.getActiveTimeline().getCommitsTimeline().filterPendingExcludingCompaction()
-        .lastInstant().ifPresent(instant -> startInstant(instant.getTimestamp()));
   }
 
   public void startInstant(String instant) {

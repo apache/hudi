@@ -102,7 +102,6 @@ import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_METADATA_PART
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.deleteMetadataPartition;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.deleteMetadataTable;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getCompletedMetadataPartitions;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.metadataPartitionExists;
 
 /**
@@ -900,7 +899,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
         return false;
     }
     return metadataIndexDisabled
-        && getCompletedMetadataPartitions(metaClient.getTableConfig()).contains(partitionType.getPartitionPath());
+        && metaClient.getTableConfig().getMetadataPartitions().contains(partitionType.getPartitionPath());
   }
 
   private boolean shouldExecuteMetadataTableDeletion() {
@@ -919,7 +918,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
    * Clears hoodie.table.metadata.partitions in hoodie.properties
    */
   private void clearMetadataTablePartitionsConfig(Option<MetadataPartitionType> partitionType, boolean clearAll) {
-    Set<String> partitions = getCompletedMetadataPartitions(metaClient.getTableConfig());
+    Set<String> partitions = metaClient.getTableConfig().getMetadataPartitions();
     if (clearAll && partitions.size() > 0) {
       LOG.info("Clear hoodie.table.metadata.partitions in hoodie.properties");
       metaClient.getTableConfig().setValue(TABLE_METADATA_PARTITIONS.key(), EMPTY_STRING);

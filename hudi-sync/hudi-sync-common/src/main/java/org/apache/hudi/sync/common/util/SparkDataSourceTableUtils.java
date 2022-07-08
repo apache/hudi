@@ -1,12 +1,13 @@
 /*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -15,15 +16,10 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.sync.common;
+package org.apache.hudi.sync.common.util;
 
-import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.sync.common.util.ConfigUtils;
-import org.apache.hudi.sync.common.util.Parquet2SparkSchemaUtils;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.parquet.schema.GroupType;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.PrimitiveType;
@@ -33,40 +29,18 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 
 import static org.apache.parquet.schema.OriginalType.UTF8;
 import static org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName.BINARY;
 
-/**
- * Base class to sync Hudi meta data with Metastores to make
- * Hudi table queryable through external systems.
- */
-public abstract class AbstractSyncTool {
-  protected final Configuration conf;
-  protected final FileSystem fs;
-  protected TypedProperties props;
-
-  public AbstractSyncTool(TypedProperties props, Configuration conf, FileSystem fs) {
-    this.props = props;
-    this.conf = conf;
-    this.fs = fs;
-  }
-
-  @Deprecated
-  public AbstractSyncTool(Properties props, FileSystem fileSystem) {
-    this(new TypedProperties(props), fileSystem.getConf(), fileSystem);
-  }
-
-  public abstract void syncHoodieTable();
-
+public class SparkDataSourceTableUtils {
   /**
    * Get Spark Sql related table properties. This is used for spark datasource table.
    * @param schema  The schema to write to the table.
    * @return A new parameters added the spark's table properties.
    */
-  protected Map<String, String> getSparkTableProperties(List<String> partitionNames, String sparkVersion,
-                                                      int schemaLengthThreshold, MessageType schema)  {
+  public static Map<String, String> getSparkTableProperties(List<String> partitionNames, String sparkVersion,
+                                                            int schemaLengthThreshold, MessageType schema) {
     // Convert the schema and partition info used by spark sql to hive table properties.
     // The following code refers to the spark code in
     // https://github.com/apache/spark/blob/master/sql/hive/src/main/scala/org/apache/spark/sql/hive/HiveExternalCatalog.scala
@@ -122,7 +96,7 @@ public abstract class AbstractSyncTool {
     return sparkProperties;
   }
 
-  protected Map<String, String> getSparkSerdeProperties(boolean readAsOptimized, String basePath) {
+  public static Map<String, String> getSparkSerdeProperties(boolean readAsOptimized, String basePath) {
     Map<String, String> sparkSerdeProperties = new HashMap<>();
     sparkSerdeProperties.put("path", basePath);
     sparkSerdeProperties.put(ConfigUtils.IS_QUERY_AS_RO_TABLE, String.valueOf(readAsOptimized));

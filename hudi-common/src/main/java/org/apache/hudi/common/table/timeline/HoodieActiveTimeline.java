@@ -30,7 +30,6 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.hadoop.fs.FSDataInputStream;
-import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
@@ -539,7 +538,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
         if (allowRedundantTransitions) {
           FileIOUtils.createFileInPath(metaClient.getFs(), getInstantFileNamePath(toInstant.getFileName()), data);
         } else {
-          createImmutableFileInPath(getInstantFileNamePath(toInstant.getFileName()), data);
+          metaClient.getFs().createImmutableFileInPath(getInstantFileNamePath(toInstant.getFileName()), data);
         }
         LOG.info("Create new file for toInstant ?" + getInstantFileNamePath(toInstant.getFileName()));
       }
@@ -706,33 +705,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     if (allowOverwrite || metaClient.getTimelineLayoutVersion().isNullVersion()) {
       FileIOUtils.createFileInPath(metaClient.getFs(), fullPath, content);
     } else {
-      createImmutableFileInPath(fullPath, content);
-    }
-  }
-
-  /**
-   * Creates a new file in timeline with overwrite set to false. This ensures
-   * files are created only once and never rewritten
-   * @param fullPath File Path
-   * @param content Content to be stored
-   */
-  private void createImmutableFileInPath(Path fullPath, Option<byte[]> content) {
-    FSDataOutputStream fsout = null;
-    try {
-      fsout = metaClient.getFs().create(fullPath, false);
-      if (content.isPresent()) {
-        fsout.write(content.get());
-      }
-    } catch (IOException e) {
-      throw new HoodieIOException("Failed to create file " + fullPath, e);
-    } finally {
-      try {
-        if (null != fsout) {
-          fsout.close();
-        }
-      } catch (IOException e) {
-        throw new HoodieIOException("Failed to close file " + fullPath, e);
-      }
+      metaClient.getFs().createImmutableFileInPath(fullPath, content);
     }
   }
 

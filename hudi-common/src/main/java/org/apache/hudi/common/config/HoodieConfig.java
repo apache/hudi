@@ -21,6 +21,7 @@ package org.apache.hudi.common.config;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -29,6 +30,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.lang.reflect.Modifier;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Properties;
 
 /**
@@ -131,6 +133,14 @@ public class HoodieConfig implements Serializable {
   public <T> String getString(ConfigProperty<T> configProperty) {
     Option<Object> rawValue = getRawValue(configProperty);
     return rawValue.map(Object::toString).orElse(null);
+  }
+
+  public <T> List<String> getSplitStrings(ConfigProperty<T> configProperty) {
+    return getSplitStrings(configProperty, ",");
+  }
+
+  public <T> List<String> getSplitStrings(ConfigProperty<T> configProperty, String delimiter) {
+    return StringUtils.split(getString(configProperty), delimiter);
   }
 
   public String getString(String key) {
