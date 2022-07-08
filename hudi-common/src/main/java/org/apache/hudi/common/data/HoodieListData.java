@@ -69,12 +69,10 @@ public class HoodieListData<T> extends HoodieData<T> {
   }
 
   /**
-   * @param hoodieData {@link HoodieListData <T>} instance containing the {@link List} of objects.
-   * @param <T>        type of object.
-   * @return the a {@link List} of objects in type T.
+   * @deprecated use {@link HoodieData#collectAsList()} instead
    */
   public static <T> List<T> getList(HoodieData<T> hoodieData) {
-    return ((HoodieListData<T>) hoodieData).collectAsList();
+    return hoodieData.collectAsList();
   }
 
   @Override

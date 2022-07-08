@@ -171,4 +171,9 @@ public class HoodieMapPair<K, V> extends HoodiePairData<K, V> {
     return mapPairData.entrySet().stream().flatMap(
         entry -> entry.getValue().stream().map(e -> new ImmutablePair<>(entry.getKey(), e)));
   }
+
+  @Override
+  public List<Pair<K, V>> collectAsList() {
+    throw new UnsupportedOperationException("not supported");
+  }
 }

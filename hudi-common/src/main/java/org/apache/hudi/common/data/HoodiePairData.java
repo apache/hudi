@@ -26,6 +26,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 
 import java.io.Serializable;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -107,4 +108,11 @@ public abstract class HoodiePairData<K, V> implements Serializable {
    * Actual execution may be deferred.
    */
   public abstract <W> HoodiePairData<K, Pair<V, Option<W>>> leftOuterJoin(HoodiePairData<K, W> other);
+
+  /**
+   * Collects results of the underlying collection into a {@link List<Pair<K, V>>}
+   *
+   * This is a terminal operation
+   */
+  public abstract List<Pair<K, V>> collectAsList();
 }

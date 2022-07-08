@@ -26,6 +26,7 @@ import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.function.SerializablePairFunction;
 import org.apache.hudi.common.util.collection.Pair;
 
+import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.storage.StorageLevel;
 
@@ -75,6 +76,10 @@ public class HoodieJavaRDD<T> extends HoodieData<T> {
    */
   public static <T> JavaRDD<T> getJavaRDD(HoodieData<T> hoodieData) {
     return ((HoodieJavaRDD<T>) hoodieData).rddData;
+  }
+
+  public static <K, V> JavaPairRDD<K, V> getJavaRDD(HoodiePairData<K, V> hoodieData) {
+    return ((HoodieJavaPairRDD<K, V>) hoodieData).get();
   }
 
   @Override

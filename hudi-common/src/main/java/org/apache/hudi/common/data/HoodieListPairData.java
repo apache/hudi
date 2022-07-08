@@ -143,4 +143,9 @@ public class HoodieListPairData<K, V> extends HoodiePairData<K, V> {
         .flatMap(e -> e.getValue().stream().map(v -> Pair.of(e.getKey(), v)));
     return new HoodieListPairData<>(exploded);
   }
+
+  @Override
+  public List<Pair<K, V>> collectAsList() {
+    return dataStream.collect(Collectors.toList());
+  }
 }
