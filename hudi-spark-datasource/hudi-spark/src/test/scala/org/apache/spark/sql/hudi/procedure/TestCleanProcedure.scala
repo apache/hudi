@@ -19,7 +19,6 @@
 
 package org.apache.spark.sql.hudi.procedure
 
-import org.apache.spark.sql.Row
 import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase
 
 class TestCleanProcedure extends HoodieSparkSqlTestBase {
@@ -61,44 +60,5 @@ class TestCleanProcedure extends HoodieSparkSqlTestBase {
       )
     }
   }
-
-  test("Test Call run_clean Procedure by Path") {
-    withTempDir { tmp =>
-      val tableName = generateTableName
-      spark.sql(
-        s"""
-           |create table $tableName (
-           | id int,
-           | name string,
-           | price double,
-           | ts long
-           | ) using hudi
-           | location '${tmp.getCanonicalPath}'
-           | tblproperties (
-           |   primaryKey = 'id',
-           |   type = 'cow',
-           |   preCombineField = 'ts'
-           | )
-           |""".stripMargin)
-
-      spark.sql("set hoodie.parquet.max.file.size = 10000")
-      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
-      spark.sql(s"update $tableName set price = 11 where id = 1")
-      spark.sql(s"update $tableName set price = 12 where id = 1")
-      spark.sql(s"update $tableName set price = 13 where id = 1")
-
-      val result1 = spark.sql(s"call run_clean(path => '${tmp.getCanonicalPath}', retainCommits => 1)")
-        .collect()
-        .map(row => Seq(row.getString(0), row.getLong(1), row.getInt(2), row.getString(3), row.getString(4), row.getInt(5)))
-
-      assertResult(1)(result1.length)
-      assertResult(2)(result1(0)(2))
-
-      checkAnswer(s"select id, name, price, ts from $tableName order by id") (
-        Seq(1, "a1", 13, 1000)
-      )
-    }
-  }
-
 
 }

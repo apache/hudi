@@ -27,17 +27,14 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
-import scala.collection.mutable
-
 class RunCleanProcedure extends BaseProcedure with ProcedureBuilder with Logging {
 
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.optional(0, "table", DataTypes.StringType, None),
-    ProcedureParameter.optional(1, "path", DataTypes.StringType, None),
-    ProcedureParameter.optional(3, "skipLocking", DataTypes.BooleanType, false),
-    ProcedureParameter.optional(4, "scheduleInLine", DataTypes.BooleanType, true),
-    ProcedureParameter.optional(5, "cleanPolicy", DataTypes.StringType, None),
-    ProcedureParameter.optional(6, "retainCommits", DataTypes.IntegerType, 10)
+    ProcedureParameter.required(0, "table", DataTypes.StringType, None),
+    ProcedureParameter.optional(1, "skipLocking", DataTypes.BooleanType, false),
+    ProcedureParameter.optional(2, "scheduleInLine", DataTypes.BooleanType, true),
+    ProcedureParameter.optional(3, "cleanPolicy", DataTypes.StringType, None),
+    ProcedureParameter.optional(4, "retainCommits", DataTypes.IntegerType, 10)
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -65,12 +62,11 @@ class RunCleanProcedure extends BaseProcedure with ProcedureBuilder with Logging
     super.checkArgs(PARAMETERS, args)
 
     val tableName = getArgValueOrDefault(args, PARAMETERS(0))
-    val tablePath = getArgValueOrDefault(args, PARAMETERS(1))
-    val skipLocking = getArgValueOrDefault(args, PARAMETERS(2)).get.asInstanceOf[Boolean]
-    val scheduleInLine = getArgValueOrDefault(args, PARAMETERS(3)).get.asInstanceOf[Boolean]
-    val cleanPolicy = getArgValueOrDefault(args, PARAMETERS(4))
-    val retainCommits = getArgValueOrDefault(args, PARAMETERS(5)).get.asInstanceOf[Integer]
-    val basePath = getBasePath(tableName, tablePath)
+    val skipLocking = getArgValueOrDefault(args, PARAMETERS(1)).get.asInstanceOf[Boolean]
+    val scheduleInLine = getArgValueOrDefault(args, PARAMETERS(2)).get.asInstanceOf[Boolean]
+    val cleanPolicy = getArgValueOrDefault(args, PARAMETERS(3))
+    val retainCommits = getArgValueOrDefault(args, PARAMETERS(4)).get.asInstanceOf[Integer]
+    val basePath = getBasePath(tableName, Option.empty)
     val cleanInstantTime = HoodieActiveTimeline.createNewInstantTime()
     var props: Map[String, String] = Map(
       HoodieCompactionConfig.CLEANER_COMMITS_RETAINED.key() -> String.valueOf(retainCommits)
