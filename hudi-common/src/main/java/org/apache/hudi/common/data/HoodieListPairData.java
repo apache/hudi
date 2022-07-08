@@ -21,7 +21,6 @@ package org.apache.hudi.common.data;
 import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.function.SerializablePairFunction;
-import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -84,14 +83,7 @@ public class HoodieListPairData<K, V> extends HoodiePairData<K, V> {
 
   @Override
   public Map<K, Long> countByKey() {
-    return dataStream.reduce(
-        new HashMap<>(),
-        (acc, p) -> {
-          acc.compute(p.getKey(), (k, count) -> count == null ? 1 : count + 1);
-          return acc;
-        },
-        (a, b) -> CollectionUtils.combine(a, b, Long::sum)
-    );
+    return dataStream.collect(Collectors.groupingBy(Pair::getKey, Collectors.counting()));
   }
 
   @Override
@@ -107,15 +99,16 @@ public class HoodieListPairData<K, V> extends HoodiePairData<K, V> {
 
   @Override
   public HoodiePairData<K, V> reduceByKey(SerializableBiFunction<V, V, V> func, int parallelism) {
-    HashMap<K, V> reducedMap = dataStream.reduce(
-        new HashMap<>(),
-        (acc, p) -> {
-          acc.merge(p.getKey(), p.getValue(), func::apply);
-          return acc;
-        },
-        (a, b) -> CollectionUtils.combine(a, b, func::apply)
-    );
-    return new HoodieListPairData<>(reducedMap.entrySet().stream().map(e -> Pair.of(e.getKey(), e.getValue())));
+    Map<K, java.util.Optional<V>> reducedMap = dataStream.collect(
+        Collectors.groupingBy(
+            Pair::getKey,
+            HashMap::new,
+            Collectors.mapping(Pair::getValue, Collectors.reducing(func::apply))));
+
+    return new HoodieListPairData<>(
+        reducedMap.entrySet()
+            .stream()
+            .map(e -> Pair.of(e.getKey(), e.getValue().orElse(null))));
   }
 
   @Override

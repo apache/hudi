@@ -74,7 +74,7 @@ public class TestHoodieListDataPairData {
 
   @Test
   public void testKeys() {
-    assertHoodieDataEquals(Arrays.asList(KEY1, KEY2, KEY3, KEY4), testHoodiePairData.keys());
+    assertHoodieDataEquals(Arrays.asList(KEY1, KEY1, KEY2, KEY2, KEY3, KEY4), testHoodiePairData.keys());
   }
 
   @Test
@@ -129,8 +129,7 @@ public class TestHoodieListDataPairData {
             createImmutableMap(
                 Pair.of(1, createImmutableList(1001)),
                 Pair.of(2, createImmutableList(2001)),
-                Pair.of(3, createImmutableList(3001)),
-                Pair.of(4, createImmutableList())),
+                Pair.of(3, createImmutableList(3001))),
             createImmutableMap(
                 Pair.of(1, createImmutableList(1001, 1002, 1003)),
                 Pair.of(2, createImmutableList(2001, 2002)),
