@@ -100,14 +100,6 @@ public abstract class HoodieData<T> implements Serializable {
       Iterator<O>> func, boolean preservesPartitioning);
 
   /**
-   * Counterpart to {@link #mapPartitions(SerializableFunction, boolean)}, which does not preserve
-   * the partitioning
-   */
-  <O> HoodieData<O> mapPartitions(SerializableFunction<Iterator<T>, Iterator<O>> func) {
-    return mapPartitions(func, false);
-  }
-
-  /**
    * Maps every element in the collection into a collection of the new elements (provided by
    * {@link Iterator}) using provided mapping {@code func}, subsequently flattening the result
    * (by concatenating) into a single collection

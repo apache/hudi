@@ -83,7 +83,8 @@ public abstract class HoodieBucketIndex extends HoodieIndex<Object, Object> {
             Option<HoodieRecordLocation> loc = mapper.getRecordLocation(record.getKey(), record.getPartitionPath());
             return HoodieIndexUtils.getTaggedRecord(record, loc);
           }
-        }
+        },
+        false
     );
   }
 
