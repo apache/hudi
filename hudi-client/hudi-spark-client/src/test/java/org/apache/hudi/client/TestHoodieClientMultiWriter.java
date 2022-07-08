@@ -275,7 +275,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
 
     // Create the first commit
     SparkRDDWriteClient<?> client = getHoodieWriteClient(cfg);
-    createCommitWithBulkInsertsForPartition(cfg, client, "000", "001", 100, "2016/03/01");
+    createCommitWithInsertsForPartition(cfg, client, "000", "001", 100, "2016/03/01");
 
     int numConcurrentWriters = 5;
     ExecutorService executors = Executors.newFixedThreadPool(numConcurrentWriters);
@@ -287,7 +287,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
       futures.add(executors.submit(() -> {
         try {
           SparkRDDWriteClient<?> writeClient = getHoodieWriteClient(cfg);
-          createCommitWithBulkInsertsForPartition(cfg, writeClient, "001", newCommitTime, 100, partition);
+          createCommitWithInsertsForPartition(cfg, writeClient, "001", newCommitTime, 100, partition);
         } catch (Exception e) {
           throw new RuntimeException(e);
         }
@@ -637,7 +637,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     statusJavaRDD.collect();
   }
 
-  private void createCommitWithBulkInsertsForPartition(HoodieWriteConfig cfg, SparkRDDWriteClient client,
+  private void createCommitWithInsertsForPartition(HoodieWriteConfig cfg, SparkRDDWriteClient client,
                                                    String prevCommitTime, String newCommitTime, int numRecords,
                                                    String partition) throws Exception {
     JavaRDD<WriteStatus> result = insertBatch(cfg, client, newCommitTime, prevCommitTime, numRecords, SparkRDDWriteClient::insert,

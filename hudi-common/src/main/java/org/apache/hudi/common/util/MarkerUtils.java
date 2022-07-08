@@ -174,11 +174,6 @@ public class MarkerUtils {
    */
   public static Map<String, Set<String>> readTimelineServerBasedMarkersFromFileSystem(
       String markerDir, FileSystem fileSystem, HoodieEngineContext context, int parallelism) {
-    return readTimelineServerBasedMarkersFromFileSystem(markerDir, fileSystem, context, parallelism, false);
-  }
-
-  public static Map<String, Set<String>> readTimelineServerBasedMarkersFromFileSystem(
-      String markerDir, FileSystem fileSystem, HoodieEngineContext context, int parallelism, boolean ignoreException) {
     Path dirPath = new Path(markerDir);
     try {
       if (fileSystem.exists(dirPath)) {
@@ -191,16 +186,11 @@ public class MarkerUtils {
             pairOfSubPathAndConf -> {
               String markersFilePathStr = pairOfSubPathAndConf.getKey();
               SerializableConfiguration conf = pairOfSubPathAndConf.getValue();
-              return readMarkersFromFile(new Path(markersFilePathStr), conf, ignoreException);
+              return readMarkersFromFile(new Path(markersFilePathStr), conf);
             });
       }
       return new HashMap<>();
     } catch (IOException ioe) {
-      if (ignoreException) {
-        LOG.warn("IOException occurs during read TimelineServer based markers from fileSystem", ioe);
-        return new HashMap<>();
-      }
-
       throw new HoodieIOException(ioe.getMessage(), ioe);
     }
   }
