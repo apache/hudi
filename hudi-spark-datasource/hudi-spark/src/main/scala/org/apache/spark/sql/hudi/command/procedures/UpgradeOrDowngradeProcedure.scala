@@ -22,7 +22,7 @@ import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion
 import org.apache.hudi.common.table.{HoodieTableMetaClient, HoodieTableVersion}
 import org.apache.hudi.common.util.Option
-import org.apache.hudi.config.{HoodieCompactionConfig, HoodieIndexConfig, HoodieWriteConfig}
+import org.apache.hudi.config.{HoodieIndexConfig, HoodieWriteConfig, HoodieCleanConfig}
 import org.apache.hudi.index.HoodieIndex
 import org.apache.hudi.table.upgrade.{SparkUpgradeDowngradeHelper, UpgradeDowngrade}
 import org.apache.spark.internal.Logging
@@ -82,7 +82,7 @@ class UpgradeOrDowngradeProcedure extends BaseProcedure with ProcedureBuilder wi
     HoodieWriteConfig.newBuilder
       .withPath(basePath)
       .withRollbackUsingMarkers(true)
-      .withCompactionConfig(HoodieCompactionConfig.newBuilder.withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.EAGER).build)
+      .withCleanConfig(HoodieCleanConfig.newBuilder.withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.EAGER).build)
       .withIndexConfig(HoodieIndexConfig.newBuilder.withIndexType(HoodieIndex.IndexType.BLOOM).build)
       .build
   }

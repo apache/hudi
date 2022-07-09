@@ -26,7 +26,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.config.HoodieCompactionConfig;
+import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieLockException;
@@ -57,9 +57,9 @@ public class TestTransactionManager extends HoodieCommonTestHarness {
   private HoodieWriteConfig getWriteConfig() {
     return HoodieWriteConfig.newBuilder()
         .withPath(basePath)
-        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
-            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
-            .build())
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+        .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
+        .build())
         .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
         .withLockConfig(HoodieLockConfig.newBuilder()
             .withLockProvider(InProcessLockProvider.class)
