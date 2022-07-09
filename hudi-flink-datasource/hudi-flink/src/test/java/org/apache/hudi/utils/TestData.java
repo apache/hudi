@@ -733,11 +733,12 @@ public class TestData {
         if (scanner != null) {
           for (String curKey : scanner.getRecords().keySet()) {
             if (!keyToSkip.contains(curKey)) {
-              GenericRecord record = (GenericRecord) scanner.getRecords()
-                  .get(curKey).getData()
-                  .getInsertValue(schema, config.getProps())
-                  .orElse(null);
-              readBuffer.add(filterOutVariables(record));
+              Option<GenericRecord> record = (Option<GenericRecord>) scanner.getRecords()
+                      .get(curKey).getData()
+                      .getInsertValue(schema, config.getProps());
+              if (record.isPresent()) {
+                readBuffer.add(filterOutVariables(record.get()));
+              }
             }
           }
         }
