@@ -36,6 +36,7 @@ import static org.apache.hudi.common.config.LockConfiguration.DEFAULT_LOCK_ACQUI
 import static org.apache.hudi.common.config.LockConfiguration.DEFAULT_LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS;
 import static org.apache.hudi.common.config.LockConfiguration.DEFAULT_ZK_CONNECTION_TIMEOUT_MS;
 import static org.apache.hudi.common.config.LockConfiguration.DEFAULT_ZK_SESSION_TIMEOUT_MS;
+import static org.apache.hudi.common.config.LockConfiguration.FILESYSTEM_LOCK_EXPIRE_PROP_KEY;
 import static org.apache.hudi.common.config.LockConfiguration.FILESYSTEM_LOCK_PATH_PROP_KEY;
 import static org.apache.hudi.common.config.LockConfiguration.HIVE_DATABASE_NAME_PROP_KEY;
 import static org.apache.hudi.common.config.LockConfiguration.HIVE_METASTORE_URI_PROP_KEY;
@@ -107,6 +108,12 @@ public class HoodieLockConfig extends HoodieConfig {
       .noDefaultValue()
       .sinceVersion("0.8.0")
       .withDocumentation("For DFS based lock providers, path to store the locks under.");
+
+  public static final ConfigProperty<Integer> FILESYSTEM_LOCK_EXPIRE = ConfigProperty
+        .key(FILESYSTEM_LOCK_EXPIRE_PROP_KEY)
+        .defaultValue(0)
+        .sinceVersion("0.12.0")
+        .withDocumentation("For DFS based lock providers, expire time in minutes");
 
   public static final ConfigProperty<String> HIVE_DATABASE_NAME = ConfigProperty
       .key(HIVE_DATABASE_NAME_PROP_KEY)
