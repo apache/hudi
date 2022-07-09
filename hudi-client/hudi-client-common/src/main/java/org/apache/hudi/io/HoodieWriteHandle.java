@@ -205,9 +205,11 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
       } else {
         createMarkerFileWithEarlyConflictDetection(resolutionStrategy, writeMarkers, partitionPath, dataFileName, conflictChecker);
       }
-    }
 
-    writeMarkers.create(partitionPath, dataFileName, getIOType());
+    } else {
+      // create marker directly
+      writeMarkers.create(partitionPath, dataFileName, getIOType());
+    }
   }
 
   private Option<Path> createMarkerFileWithEarlyConflictDetection(ConflictResolutionStrategy resolutionStrategy,WriteMarkers writeMarkers,
