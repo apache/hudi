@@ -52,15 +52,6 @@ public class HiveSyncConfigHolder {
       .withDocumentation("Flag to choose InputFormat under com.uber.hoodie package instead of org.apache.hudi package. "
           + "Use this when you are in the process of migrating from "
           + "com.uber.hoodie to org.apache.hudi. Stop using this after you migrated the table definition to org.apache.hudi input format");
-  /**
-   * @deprecated Use {@link #HIVE_SYNC_MODE} instead of this config from 0.9.0
-   */
-  @Deprecated
-  public static final ConfigProperty<String> HIVE_USE_JDBC = ConfigProperty
-      .key("hoodie.datasource.hive_sync.use_jdbc")
-      .defaultValue("true")
-      .deprecatedAfter("0.9.0")
-      .withDocumentation("Use JDBC when hive synchronization is enabled");
   public static final ConfigProperty<String> METASTORE_URIS = ConfigProperty
       .key("hoodie.datasource.hive_sync.metastore.uris")
       .defaultValue("thrift://localhost:9083")
@@ -109,7 +100,7 @@ public class HiveSyncConfigHolder {
       .withDocumentation("The number of partitions one batch when synchronous partitions to hive.");
   public static final ConfigProperty<String> HIVE_SYNC_MODE = ConfigProperty
       .key("hoodie.datasource.hive_sync.mode")
-      .noDefaultValue()
+      .defaultValue("hms")
       .withDocumentation("Mode to choose for Hive ops. Valid values are hms, jdbc and hiveql.");
   public static final ConfigProperty<Boolean> HIVE_SYNC_BUCKET_SYNC = ConfigProperty
       .key("hoodie.datasource.hive_sync.bucket_sync")
