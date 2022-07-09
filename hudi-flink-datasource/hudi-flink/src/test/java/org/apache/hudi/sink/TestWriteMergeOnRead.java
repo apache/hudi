@@ -69,6 +69,7 @@ public class TestWriteMergeOnRead extends TestWriteCopyOnWrite {
   @Test
   public void testIndexStateBootstrapWithCompactionScheduled() throws Exception {
     // sets up the delta commits as 1 to generate a new compaction plan.
+    conf.set(FlinkOptions.COMPACTION_ASYNC_ENABLED, true);
     conf.setInteger(FlinkOptions.COMPACTION_DELTA_COMMITS, 1);
     // open the function and ingest data
     preparePipeline(conf)
