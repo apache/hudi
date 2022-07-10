@@ -14,7 +14,7 @@
   See the License for the specific language governing permissions and
   limitations under the License.
 -->
-# RFC-55: Improve metasync class design and simplify configs
+# RFC-55: Improve hudi-sync classes design and simplify configs
 
 ## Proposers
 
@@ -32,23 +32,22 @@ JIRA: [HUDI-3730](https://issues.apache.org/jira/browse/HUDI-3730)
 
 ## Abstract
 
-![ArchitectureMetaSync.png](ArchitectureMetaSync.png)
+![hudi-sync-flows.png](hudi-sync-flows.png)
 
-Hudi now can sync meta to various Catalogs if user has need, and user can sync meta in different framework such as Spark, Flink, and Kafka connect. 
-The current situation is:
+Hudi support sync to various metastores via different processing framework like Spark, Flink, and Kafka connect. 
 
-* The way to generate Sync configs are inconsistent in different framework;
-* The abstraction of SyncClasses was designed for HiveSync, there are some duplicated code, useless method, parameters and config for new Catalogs, it needs to be improved. 
+There are some room for improvement
+
+* The way to generate Sync configs are inconsistent in different framework
+* The abstraction of SyncClasses was designed for HiveSync, hence there are duplicated code, unused method, and parameters.
  
-That being said, we need a standard way to call meta sync. We also need a unified abstraction of XXXSyncTool , XXXSyncClient and XXXSyncConfig to handle all supported meta sync, including hms, bigquery, datahub, etc
+We need a standard way to run hudi sync. We also need a unified abstraction of XXXSyncTool , XXXSyncClient and XXXSyncConfig to handle supported metastores, like hive metastore, bigquery, datahub, etc.
 
 ## Classes design
 
-![classDesign.png](classDesign.png)
+![hudi-sync-class-diagram.png](hudi-sync-class-diagram.png)
 
-* for the engines which need use MetaSync, should implement _SupportMetaSync_ on the sync classes, such as DeltaSync, KafkaConnectTransactionServices and etc. for example: `runMetaSync();` then will sync metadata by every SyncToolClasses which indicated in config
-* redesign AbstractSyncClient and AbstractSyncTool, add Catalog Interface. make the hierarchy of classes more clearly and more precisely 
-* unify the way to generate SyncConfig and the way to call SyncTool，remove some useless parameters
+Below are the proposed key classes to handle the main sync logic. They are extensible for different metastores.
 
 ### `HoodieSyncTool`
 
@@ -129,20 +128,30 @@ public abstract class HoodieSyncClient implements AutoCloseable {
 
 ## Config simplification
 
-- users should not need to set additional table name
+- rename all sync related configs to suffix as `hoodie.sync.*`
+  - no more `hoodie.meta.sync.*` or `hoodie.meta_sync.*`
+  - no more variable name or class name like `metaSyncEnabled` or `metaSyncTool`; standardize as `hoodieSync*` to align with module name `hudi-sync`
+- remove all sync related option constants from `DataSourceOptions`
+- `database` and `table` should not be required by sync tool; they should be inferred from table properties
 - users should not need to set PartitionValueExtractor; partition values should be inferred automatically
 - remove `USE_JDBC` and fully adopt `SYNC_MODE`
-
-(more to be added)
+- remove `HIVE_SYNC_ENDABLED` and related arguments from sync tools and delta streamers. Use `SYNC_ENABLED`
+- migrate repeated sync config to original config
+   - `META_SYNC_BASE_FILE_FORMAT` -> `org.apache.hudi.common.table.HoodieTableConfig.BASE_FILE_FORMAT`
+   - `META_SYNC_PARTITION_FIELDS` -> `org.apache.hudi.common.table.HoodieTableConfig.PARTITION_FIELDS`
+   - `META_SYNC_ASSUME_DATE_PARTITION` -> `org.apache.hudi.common.config.HoodieMetadataConfig.ASSUME_DATE_PARTITIONING`
+   - `META_SYNC_DECODE_PARTITION` -> `org.apache.hudi.common.table.HoodieTableConfig.URL_ENCODE_PARTITIONING`
+   - `META_SYNC_USE_FILE_LISTING_FROM_METADATA` -> `org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE`
 
 ## Rollout/Adoption Plan
 
- - What impact (if any) will there be on existing users? 
-   - No impact, the config changes should be back compatible with the old one if there have
- - If we are changing behavior how will we phase out the older behavior?
- - If we need special migration tools, describe them here.
- - When will we remove the existing behavior
+- Users who set `USE_JDBC` will need to change to set `SYNC_MODE=jdbc`
+- Users who set `--enable-hive-sync` or `HIVE_SYNC_ENABLED` will need to drop the argument or config and change to `--enable-sync` or `SYNC_ENABLED`.
+- Users who import from `DataSourceOptions` for meta sync constants will need to import relevant configs from `HoodieSyncConfig` and subclasses.
+- Users who set `AwsGlueCatalogSyncTool` as sync tool class need to update the class name to `AWSGlueCatalogSyncTool`
 
 ## Test Plan
 
-Describe in few sentences how the RFC will be tested. How will we know that the implementation works as expected? How will we know nothing broke?.
+- CI covers most operations for Hive sync with HMS
+- end-to-end testing with setup for Glue Catalog, BigQuery, DataHub instance
+- manual testing with partitions added and removed
