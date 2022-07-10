@@ -124,11 +124,14 @@ public class UtilitiesTestBase {
   }
 
   public static void initTestServices(boolean needsHive, boolean needsZookeeper) throws Exception {
-    hdfsTestService = new HdfsTestService();
-    dfsCluster = hdfsTestService.start(true);
-    dfs = dfsCluster.getFileSystem();
-    dfsBasePath = dfs.getWorkingDirectory().toString();
-    dfs.mkdirs(new Path(dfsBasePath));
+
+    if (hdfsTestService == null) {
+      hdfsTestService = new HdfsTestService();
+      dfsCluster = hdfsTestService.start(true);
+      dfs = dfsCluster.getFileSystem();
+      dfsBasePath = dfs.getWorkingDirectory().toString();
+      dfs.mkdirs(new Path(dfsBasePath));
+    }
     if (needsHive) {
       hiveTestService = new HiveTestService(hdfsTestService.getHadoopConf());
       hiveServer = hiveTestService.start();

@@ -32,6 +32,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.Properties;
 
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_MODE;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_URL;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 
@@ -92,6 +93,7 @@ public class HiveSyncGlobalCommitParams {
     String jdbcUrl = forRemote ? loadedProps.getProperty(REMOTE_HIVE_SERVER_JDBC_URLS)
             : loadedProps.getProperty(LOCAL_HIVE_SERVER_JDBC_URLS, loadedProps.getProperty(HIVE_URL.key()));
     props.setPropertyIfNonNull(HIVE_URL.key(), jdbcUrl);
+    props.setProperty(HIVE_SYNC_MODE.key(), "jdbc");
     LOG.info("building hivesync config forRemote: " + forRemote + " " + jdbcUrl + " "
         + basePath);
     return props;
