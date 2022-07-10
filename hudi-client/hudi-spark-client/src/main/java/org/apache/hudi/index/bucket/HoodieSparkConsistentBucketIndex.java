@@ -49,6 +49,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -117,7 +118,9 @@ public class HoodieSparkConsistentBucketIndex extends HoodieBucketIndex {
         seqNo = Integer.parseInt(m.get(SparkConsistentBucketClusteringPlanStrategy.METADATA_SEQUENCE_NUMBER_KEY));
       }
 
-      HoodieConsistentHashingMetadata meta = loadMetadata(hoodieTable, partition);
+      Option<HoodieConsistentHashingMetadata> metadataOption = loadMetadata(hoodieTable, partition);
+      ValidationUtils.checkState(metadataOption.isPresent(), "Failed to load metadata for partition: " + partition);
+      HoodieConsistentHashingMetadata meta = metadataOption.get();
       ValidationUtils.checkState(meta.getSeqNo() == seqNo,
           "Non serialized update to hashing metadata, old seq: " + meta.getSeqNo() + ", new seq: " + seqNo);
 
@@ -159,22 +162,22 @@ public class HoodieSparkConsistentBucketIndex extends HoodieBucketIndex {
    * @return Consistent hashing metadata
    */
   public HoodieConsistentHashingMetadata loadOrCreateMetadata(HoodieTable table, String partition) {
-    HoodieConsistentHashingMetadata metadata = loadMetadata(table, partition);
-    if (metadata != null) {
-      return metadata;
+    Option<HoodieConsistentHashingMetadata> metadataOption = loadMetadata(table, partition);
+    if (metadataOption.isPresent()) {
+      return metadataOption.get();
     }
 
     // There is no metadata, so try to create a new one and save it.
-    metadata = new HoodieConsistentHashingMetadata(partition, numBuckets);
+    HoodieConsistentHashingMetadata metadata = new HoodieConsistentHashingMetadata(partition, numBuckets);
     if (saveMetadata(table, metadata, false)) {
       return metadata;
     }
 
     // The creation failed, so try load metadata again. Concurrent creation of metadata should have succeeded.
     // Note: the consistent problem of cloud storage is handled internal in the HoodieWrapperFileSystem, i.e., ConsistentGuard
-    metadata = loadMetadata(table, partition);
-    ValidationUtils.checkState(metadata != null, "Failed to load or create metadata, partition: " + partition);
-    return metadata;
+    metadataOption = loadMetadata(table, partition);
+    ValidationUtils.checkState(metadataOption.isPresent(), "Failed to load or create metadata, partition: " + partition);
+    return metadataOption.get();
   }
 
   /**
@@ -184,13 +187,10 @@ public class HoodieSparkConsistentBucketIndex extends HoodieBucketIndex {
    * @param partition table partition
    * @return Consistent hashing metadata or null if it does not exist
    */
-  public static HoodieConsistentHashingMetadata loadMetadata(HoodieTable table, String partition) {
+  public static Option<HoodieConsistentHashingMetadata> loadMetadata(HoodieTable table, String partition) {
     Path metadataPath = FSUtils.getPartitionPath(table.getMetaClient().getHashingMetadataPath(), partition);
 
     try {
-      if (!table.getMetaClient().getFs().exists(metadataPath)) {
-        return null;
-      }
       FileStatus[] metaFiles = table.getMetaClient().getFs().listStatus(metadataPath);
       final HoodieTimeline completedCommits = table.getMetaClient().getActiveTimeline().getCommitTimeline().filterCompletedInstants();
       Predicate<FileStatus> metaFilePredicate = fileStatus -> {
@@ -207,11 +207,13 @@ public class HoodieSparkConsistentBucketIndex extends HoodieBucketIndex {
           .max(Comparator.comparing(a -> a.getPath().getName())).orElse(null);
 
       if (metaFile == null) {
-        return null;
+        return Option.empty();
       }
 
       byte[] content = FileIOUtils.readAsByteArray(table.getMetaClient().getFs().open(metaFile.getPath()));
-      return HoodieConsistentHashingMetadata.fromBytes(content);
+      return Option.of(HoodieConsistentHashingMetadata.fromBytes(content));
+    } catch (FileNotFoundException e) {
+      return Option.empty();
     } catch (IOException e) {
       LOG.error("Error when loading hashing metadata, partition: " + partition, e);
       throw new HoodieIndexException("Error while loading hashing metadata", e);

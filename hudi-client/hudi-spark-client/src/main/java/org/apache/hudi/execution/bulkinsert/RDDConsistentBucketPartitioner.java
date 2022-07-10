@@ -29,7 +29,6 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.bucket.ConsistentBucketIdentifier;
 import org.apache.hudi.index.bucket.HoodieSparkConsistentBucketIndex;
 import org.apache.hudi.io.AppendHandleFactory;
@@ -38,8 +37,8 @@ import org.apache.hudi.io.WriteHandleFactory;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.Schema;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.apache.spark.Partitioner;
 import org.apache.spark.api.java.JavaRDD;
 
@@ -65,7 +64,6 @@ public class RDDConsistentBucketPartitioner<T extends HoodieRecordPayload> exten
   private static final Logger LOG = LogManager.getLogger(RDDConsistentBucketPartitioner.class);
 
   private final HoodieTable table;
-  private final HoodieWriteConfig config;
   private final List<String> indexKeyFields;
   private final Map<String, List<ConsistentHashingNode>> hashingChildrenNodes;
   private final String[] sortColumnNames;
@@ -75,12 +73,11 @@ public class RDDConsistentBucketPartitioner<T extends HoodieRecordPayload> exten
   private List<Boolean> doAppend;
   private List<String> fileIdPfxList;
 
-  public RDDConsistentBucketPartitioner(HoodieTable table, HoodieWriteConfig config, Map<String, String> strategyParams, boolean preserveHoodieMetadata) {
+  public RDDConsistentBucketPartitioner(HoodieTable table, Map<String, String> strategyParams, boolean preserveHoodieMetadata) {
     this.table = table;
-    this.config = config;
-    this.indexKeyFields = Arrays.asList(config.getBucketIndexHashField().split(","));
+    this.indexKeyFields = Arrays.asList(table.getConfig().getBucketIndexHashField().split(","));
     this.hashingChildrenNodes = new HashMap<>();
-    this.consistentLogicalTimestampEnabled = config.isConsistentLogicalTimestampEnabled();
+    this.consistentLogicalTimestampEnabled = table.getConfig().isConsistentLogicalTimestampEnabled();
     this.preserveHoodieMetadata = preserveHoodieMetadata;
 
     if (strategyParams.containsKey(PLAN_STRATEGY_SORT_COLUMNS.key())) {
@@ -90,8 +87,8 @@ public class RDDConsistentBucketPartitioner<T extends HoodieRecordPayload> exten
     }
   }
 
-  public RDDConsistentBucketPartitioner(HoodieTable table, HoodieWriteConfig config) {
-    this(table, config, Collections.emptyMap(), false);
+  public RDDConsistentBucketPartitioner(HoodieTable table) {
+    this(table, Collections.emptyMap(), false);
     ValidationUtils.checkArgument(table.getIndex() instanceof HoodieSparkConsistentBucketIndex,
         "RDDConsistentBucketPartitioner can only be used together with consistent hashing bucket index");
     ValidationUtils.checkArgument(table.getMetaClient().getTableType().equals(HoodieTableType.MERGE_ON_READ),
@@ -104,13 +101,13 @@ public class RDDConsistentBucketPartitioner<T extends HoodieRecordPayload> exten
    * using hashing metadata and records' key.
    *
    * @param records               Input Hoodie records
-   * @param outputSparkPartitions Not used
+   * @param outputSparkPartitions Not used, the actual parallelism is determined by the bucket number
    * @return partitioned records, each partition of data corresponds to a bucket (i.e., file group)
    */
   @Override
   public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records, int outputSparkPartitions) {
     Map<String, ConsistentBucketIdentifier> partitionToIdentifier = initializeBucketIdentifier(records);
-    Map<String, Map<String, Integer>> partitionToFileIdPfxIdxMap = generateFileIdPfx(partitionToIdentifier, outputSparkPartitions);
+    Map<String, Map<String, Integer>> partitionToFileIdPfxIdxMap = generateFileIdPfx(partitionToIdentifier);
     return doPartition(records, new Partitioner() {
       @Override
       public int numPartitions() {
@@ -130,7 +127,7 @@ public class RDDConsistentBucketPartitioner<T extends HoodieRecordPayload> exten
   @Override
   public boolean arePartitionRecordsSorted() {
     return (sortColumnNames != null && sortColumnNames.length > 0)
-        || table.requireSortedRecords() || config.getBulkInsertSortMode() != BulkInsertSortMode.NONE;
+        || table.requireSortedRecords() || table.getConfig().getBulkInsertSortMode() != BulkInsertSortMode.NONE;
   }
 
   @Override
@@ -172,13 +169,13 @@ public class RDDConsistentBucketPartitioner<T extends HoodieRecordPayload> exten
 
   /**
    * Initialize fileIdPfx for each data partition. Specifically, the following fields is constructed:
-   * - fileIdPfx: the Nth element corresponds to the Nth data partition, indicating its fileIdPfx
+   * - fileIdPfxList: the Nth element corresponds to the Nth data partition, indicating its fileIdPfx
    * - doAppend: represents if the Nth data partition should use AppendHandler
    * - partitionToFileIdPfxIdxMap (return value): (table partition) -> (fileIdPfx -> idx) mapping
    *
-   * @param parallelism Not used, the actual parallelism is determined by the bucket number
+   * @param partitionToIdentifier Mapping from table partition to bucket identifier
    */
-  private Map<String, Map<String, Integer>> generateFileIdPfx(Map<String, ConsistentBucketIdentifier> partitionToIdentifier, int parallelism) {
+  private Map<String, Map<String, Integer>> generateFileIdPfx(Map<String, ConsistentBucketIdentifier> partitionToIdentifier) {
     Map<String, Map<String, Integer>> partitionToFileIdPfxIdxMap = new HashMap(partitionToIdentifier.size() * 2);
     doAppend = new ArrayList<>();
     fileIdPfxList = new ArrayList<>();
@@ -218,7 +215,7 @@ public class RDDConsistentBucketPartitioner<T extends HoodieRecordPayload> exten
   private JavaRDD<HoodieRecord<T>> doPartition(JavaRDD<HoodieRecord<T>> records, Partitioner partitioner) {
     if (sortColumnNames != null && sortColumnNames.length > 0) {
       return doPartitionAndCustomColumnSort(records, partitioner);
-    } else if (table.requireSortedRecords() || config.getBulkInsertSortMode() != BulkInsertSortMode.NONE) {
+    } else if (table.requireSortedRecords() || table.getConfig().getBulkInsertSortMode() != BulkInsertSortMode.NONE) {
       return doPartitionAndSortByRecordKey(records, partitioner);
     } else {
       // By default, do partition only
@@ -236,7 +233,7 @@ public class RDDConsistentBucketPartitioner<T extends HoodieRecordPayload> exten
    */
   private JavaRDD<HoodieRecord<T>> doPartitionAndCustomColumnSort(JavaRDD<HoodieRecord<T>> records, Partitioner partitioner) {
     final String[] sortColumns = sortColumnNames;
-    final SerializableSchema schema = new SerializableSchema(HoodieAvroUtils.addMetadataFields((new Schema.Parser().parse(config.getSchema()))));
+    final SerializableSchema schema = new SerializableSchema(HoodieAvroUtils.addMetadataFields((new Schema.Parser().parse(table.getConfig().getSchema()))));
     Comparator<HoodieRecord<T>> comparator = (Comparator<HoodieRecord<T>> & Serializable) (t1, t2) -> {
       Object obj1 = HoodieAvroUtils.getRecordColumnValues(t1, sortColumns, schema, consistentLogicalTimestampEnabled);
       Object obj2 = HoodieAvroUtils.getRecordColumnValues(t2, sortColumns, schema, consistentLogicalTimestampEnabled);
@@ -265,7 +262,7 @@ public class RDDConsistentBucketPartitioner<T extends HoodieRecordPayload> exten
    * @return
    */
   private JavaRDD<HoodieRecord<T>> doPartitionAndSortByRecordKey(JavaRDD<HoodieRecord<T>> records, Partitioner partitioner) {
-    if (config.getBulkInsertSortMode() == BulkInsertSortMode.GLOBAL_SORT) {
+    if (table.getConfig().getBulkInsertSortMode() == BulkInsertSortMode.GLOBAL_SORT) {
       LOG.warn("Consistent bucket does not support global sort mode, the sort will only be done within each data partition");
     }
 

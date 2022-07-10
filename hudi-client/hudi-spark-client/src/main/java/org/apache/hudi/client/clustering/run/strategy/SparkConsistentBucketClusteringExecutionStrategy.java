@@ -33,8 +33,8 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.commit.SparkBulkInsertHelper;
 
 import org.apache.avro.Schema;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.util.List;
 import java.util.Map;
@@ -46,7 +46,7 @@ import java.util.Properties;
 public class SparkConsistentBucketClusteringExecutionStrategy<T extends HoodieRecordPayload<T>>
     extends MultipleSparkJobExecutionStrategy<T> {
 
-  private static final Logger LOG = LogManager.getLogger(SparkSortAndSizeExecutionStrategy.class);
+  private static final Logger LOG = LogManager.getLogger(SparkConsistentBucketClusteringExecutionStrategy.class);
 
   public SparkConsistentBucketClusteringExecutionStrategy(HoodieTable table, HoodieEngineContext engineContext,
                                                           HoodieWriteConfig writeConfig) {
@@ -64,7 +64,7 @@ public class SparkConsistentBucketClusteringExecutionStrategy<T extends HoodieRe
     props.put(HoodieWriteConfig.AUTO_COMMIT_ENABLE.key(), Boolean.FALSE.toString());
     HoodieWriteConfig newConfig = HoodieWriteConfig.newBuilder().withProps(props).build();
 
-    RDDConsistentBucketPartitioner<T> partitioner = new RDDConsistentBucketPartitioner<>(getHoodieTable(), getWriteConfig(), strategyParams, preserveHoodieMetadata);
+    RDDConsistentBucketPartitioner<T> partitioner = new RDDConsistentBucketPartitioner<>(getHoodieTable(), strategyParams, preserveHoodieMetadata);
     try {
       List<ConsistentHashingNode> nodes = ConsistentHashingNode.fromJsonString(extraMetadata.get(SparkConsistentBucketClusteringPlanStrategy.METADATA_CHILD_NODE_KEY));
       partitioner.addHashingChildrenNodes(extraMetadata.get(SparkConsistentBucketClusteringPlanStrategy.METADATA_PARTITION_KEY), nodes);
@@ -74,6 +74,6 @@ public class SparkConsistentBucketClusteringExecutionStrategy<T extends HoodieRe
     }
 
     return (HoodieData<WriteStatus>) SparkBulkInsertHelper.newInstance()
-        .bulkInsert(inputRecords, instantTime, getHoodieTable(), newConfig, false, partitioner, true, numOutputGroups, null);
+        .bulkInsert(inputRecords, instantTime, getHoodieTable(), newConfig, false, partitioner, true, numOutputGroups);
   }
 }

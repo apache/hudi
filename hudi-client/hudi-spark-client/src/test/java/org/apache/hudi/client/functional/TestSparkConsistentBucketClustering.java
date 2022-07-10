@@ -21,7 +21,7 @@ package org.apache.hudi.client.functional;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.clustering.plan.strategy.SparkConsistentBucketClusteringPlanStrategy;
 import org.apache.hudi.client.clustering.run.strategy.SparkConsistentBucketClusteringExecutionStrategy;
-import org.apache.hudi.client.clustering.update.strategy.SparkConsistentHashingDuplicateUpdateStrategy;
+import org.apache.hudi.client.clustering.update.strategy.SparkConsistentBucketDuplicateUpdateStrategy;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.model.HoodieConsistentHashingMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -73,7 +73,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.Random;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.config.HoodieClusteringConfig.DAYBASED_LOOKBACK_PARTITIONS;
@@ -83,8 +82,6 @@ import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SKIP_P
 @Tag("functional")
 public class TestSparkConsistentBucketClustering extends HoodieClientTestHarness {
 
-  private final Random random = new Random();
-  private HoodieIndex index;
   private HoodieWriteConfig config;
   private HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0);
 
@@ -110,11 +107,10 @@ public class TestSparkConsistentBucketClustering extends HoodieClientTestHarness
         .withClusteringConfig(HoodieClusteringConfig.newBuilder()
             .withClusteringPlanStrategyClass(SparkConsistentBucketClusteringPlanStrategy.class.getName())
             .withClusteringExecutionStrategyClass(SparkConsistentBucketClusteringExecutionStrategy.class.getName())
-            .withClusteringUpdatesStrategy(SparkConsistentHashingDuplicateUpdateStrategy.class.getName()).build())
+            .withClusteringUpdatesStrategy(SparkConsistentBucketDuplicateUpdateStrategy.class.getName()).build())
         .build();
 
     writeClient = getHoodieWriteClient(config);
-    index = writeClient.getIndex();
   }
 
   @AfterEach
@@ -142,7 +138,7 @@ public class TestSparkConsistentBucketClustering extends HoodieClientTestHarness
     Assertions.assertEquals(2000, readRecords(dataGen.getPartitionPaths()).size());
 
     Arrays.stream(dataGen.getPartitionPaths()).forEach(p -> {
-      HoodieConsistentHashingMetadata metadata = HoodieSparkConsistentBucketIndex.loadMetadata(table, p);
+      HoodieConsistentHashingMetadata metadata = HoodieSparkConsistentBucketIndex.loadMetadata(table, p).get();
       Assertions.assertEquals(targetBucketNum, metadata.getNodes().size());
 
       // The file slice has no log files
@@ -214,7 +210,7 @@ public class TestSparkConsistentBucketClustering extends HoodieClientTestHarness
     setup(5120);
     writeData(HoodieActiveTimeline.createNewInstantTime(), 2000, true);
     String clusteringTime = (String) writeClient.scheduleClustering(Option.empty()).get();
-    // Schedule again, it should not be scheduled as the previous one are doing clustering to all partition
+    // Schedule again, it should not be scheduled as the previous one are doing clustering to all partitions
     Assertions.assertFalse(writeClient.scheduleClustering(Option.empty()).isPresent());
     writeClient.cluster(clusteringTime, true);
 

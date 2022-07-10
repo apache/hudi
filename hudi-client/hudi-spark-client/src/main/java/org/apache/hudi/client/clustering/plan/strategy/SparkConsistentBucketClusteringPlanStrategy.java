@@ -30,7 +30,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.view.SyncableFileSystemView;
+import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -43,8 +43,8 @@ import org.apache.hudi.index.bucket.HoodieSparkConsistentBucketIndex;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.cluster.strategy.PartitionAwareClusteringPlanStrategy;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 
 import java.io.IOException;
@@ -101,7 +101,7 @@ public class SparkConsistentBucketClusteringPlanStrategy<T extends HoodieRecordP
    */
   @Override
   protected Stream<FileSlice> getFileSlicesEligibleForClustering(String partition) {
-    SyncableFileSystemView fileSystemView = (SyncableFileSystemView) getHoodieTable().getSliceView();
+    TableFileSystemView fileSystemView = getHoodieTable().getFileSystemView();
     boolean isPartitionInClustering = fileSystemView.getFileGroupsInPendingClustering().anyMatch(p -> p.getLeft().getPartitionPath().equals(partition));
     if (isPartitionInClustering) {
       LOG.info("Partition: " + partition + " is already in clustering, skip");
@@ -127,9 +127,9 @@ public class SparkConsistentBucketClusteringPlanStrategy<T extends HoodieRecordP
   protected Stream<HoodieClusteringGroup> buildClusteringGroupsForPartition(String partitionPath, List<FileSlice> fileSlices) {
     ValidationUtils.checkArgument(getHoodieTable().getIndex() instanceof HoodieSparkConsistentBucketIndex,
         "Mismatch of index type and the clustering strategy, index: " + getHoodieTable().getIndex().getClass().getSimpleName());
-    HoodieConsistentHashingMetadata metadata = HoodieSparkConsistentBucketIndex.loadMetadata(getHoodieTable(), partitionPath);
-    ValidationUtils.checkArgument(metadata != null, "Metadata is null for partition: " + partitionPath);
-    ConsistentBucketIdentifier identifier = new ConsistentBucketIdentifier(metadata);
+    Option<HoodieConsistentHashingMetadata> metadata = HoodieSparkConsistentBucketIndex.loadMetadata(getHoodieTable(), partitionPath);
+    ValidationUtils.checkArgument(metadata.isPresent(), "Metadata is empty for partition: " + partitionPath);
+    ConsistentBucketIdentifier identifier = new ConsistentBucketIdentifier(metadata.get());
 
     // Apply split rule
     int splitSlot = getWriteConfig().getBucketIndexMaxNumBuckets() - identifier.getNumBuckets();
@@ -159,7 +159,7 @@ public class SparkConsistentBucketClusteringPlanStrategy<T extends HoodieRecordP
   }
 
   /**
-   * Generate clustering groups according to split rules。
+   * Generate clustering groups according to split rules.
    * Currently, we always split bucket into two sub-buckets.
    *
    * @param identifier bucket identifier
@@ -226,45 +226,35 @@ public class SparkConsistentBucketClusteringPlanStrategy<T extends HoodieRecordP
         continue;
       }
 
-      int startIdx = i;
-      int endIdx = i;
-      // Backward check
+      // 0: startIdx, 1: endIdx
+      int[] rangeIdx = {i, i};
       long totalSize = fileSlices.get(i).getTotalFileSize();
-      do {
-        int preIdx = startIdx >= 1 ? startIdx - 1 : fileSlices.size() - 1;
-        boolean isNeighbour = identifier.getBucketByFileId(fileSlices.get(preIdx).getFileId()) == identifier.getFormerBucket(fileSlices.get(startIdx).getFileId());
-        /**
-         * Merge condition:
-         * 1. there is still slot to merge bucket
-         * 2. the previous file slices is not merged
-         * 3. the previous file slice and current file slice are neighbour in the hash ring
-         * 4. Both the total file size up to now and the previous file slice size are smaller than merge size threshold
-         */
-        if (remainingMergeSlot == 0 || added[preIdx] || !isNeighbour || totalSize > mergeSize || fileSlices.get(preIdx).getTotalFileSize() > mergeSize) {
-          break;
-        }
+      // Do backward check first (k == 0), and then forward check (k == 1)
+      for (int k = 0; k < 2; ++k) {
+        boolean forward = k == 1;
+        do {
+          int nextIdx = forward ? (rangeIdx[k] + 1 < fileSlices.size() ? rangeIdx[k] + 1 : 0) : (rangeIdx[k] >= 1 ? rangeIdx[k] - 1 : fileSlices.size() - 1);
+          boolean isNeighbour = identifier.getBucketByFileId(fileSlices.get(nextIdx).getFileId()) == identifier.getFormerBucket(fileSlices.get(rangeIdx[k]).getFileId());
+          /**
+           * Merge condition:
+           * 1. there is still slot to merge bucket
+           * 2. the previous file slices is not merged
+           * 3. the previous file slice and current file slice are neighbour in the hash ring
+           * 4. Both the total file size up to now and the previous file slice size are smaller than merge size threshold
+           */
+          if (remainingMergeSlot == 0 || added[nextIdx] || !isNeighbour || totalSize > mergeSize || fileSlices.get(nextIdx).getTotalFileSize() > mergeSize) {
+            break;
+          }
 
-        // Mark preIdx as merge candidate
-        totalSize += fileSlices.get(preIdx).getTotalFileSize();
-        startIdx = preIdx;
-        remainingMergeSlot--;
-      } while (startIdx != i);
+          // Mark preIdx as merge candidate
+          totalSize += fileSlices.get(nextIdx).getTotalFileSize();
+          rangeIdx[k] = nextIdx;
+          remainingMergeSlot--;
+        } while (rangeIdx[k] != i);
+      }
 
-      // Forward check
-      do {
-        int nextIdx = endIdx + 1 < fileSlices.size() ? endIdx + 1 : 0;
-        boolean isNeighbour = identifier.getBucketByFileId(fileSlices.get(endIdx).getFileId()) == identifier.getFormerBucket(fileSlices.get(nextIdx).getFileId());
-
-        if (remainingMergeSlot == 0 || added[nextIdx] || !isNeighbour || totalSize > mergeSize || fileSlices.get(nextIdx).getTotalFileSize() > mergeSize) {
-          break;
-        }
-
-        // Mark nextIdx as merge candidate
-        totalSize += fileSlices.get(nextIdx).getTotalFileSize();
-        endIdx = nextIdx;
-        remainingMergeSlot--;
-      } while (endIdx != i);
-
+      int startIdx = rangeIdx[0];
+      int endIdx = rangeIdx[1];
       if (endIdx == i && startIdx == i) {
         continue;
       }

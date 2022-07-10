@@ -112,6 +112,7 @@ public class ConsistentBucketIdentifier extends BucketIdentifier {
   }
 
   public List<ConsistentHashingNode> mergeBucket(List<String> fileIds) {
+    ValidationUtils.checkArgument(fileIds.size() >= 2, "At least two file groups should be provided for merging");
     // Get nodes using fileIds
     List<ConsistentHashingNode> nodes = fileIds.stream().map(this::getBucketByFileId).collect(Collectors.toList());
 

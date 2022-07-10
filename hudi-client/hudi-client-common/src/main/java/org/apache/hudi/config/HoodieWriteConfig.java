@@ -2694,18 +2694,6 @@ public class HoodieWriteConfig extends HoodieConfig {
       ValidationUtils.checkArgument(!(inlineCompact && inlineCompactSchedule), String.format("Either of inline compaction (%s) or "
               + "schedule inline compaction (%s) can be enabled. Both can't be set to true at the same time. %s, %s", HoodieCompactionConfig.INLINE_COMPACT.key(),
           HoodieCompactionConfig.SCHEDULE_INLINE_COMPACT.key(), inlineCompact, inlineCompactSchedule));
-
-      if (writeConfig.getIndexType() == HoodieIndex.IndexType.BUCKET && writeConfig.getBucketIndexEngineType() == HoodieIndex.BucketIndexEngineType.CONSISTENT_HASHING) {
-        if (!writeConfig.getClusteringPlanStrategyClass().equals(HoodieClusteringConfig.SPARK_CONSISTENT_BUCKET_CLUSTERING_PLAN_STRATEGY)) {
-          LOG.warn("Force setting clustering plan strategy class to '" + HoodieClusteringConfig.SPARK_CONSISTENT_BUCKET_CLUSTERING_PLAN_STRATEGY + "' because of consistent hashing bucket index");
-          writeConfig.setValue(HoodieClusteringConfig.PLAN_STRATEGY_CLASS_NAME, HoodieClusteringConfig.SPARK_CONSISTENT_BUCKET_CLUSTERING_PLAN_STRATEGY);
-        }
-
-        if (!writeConfig.getClusteringExecutionStrategyClass().equals(HoodieClusteringConfig.SPARK_CONSISTENT_BUCKET_EXECUTION_STRATEGY)) {
-          LOG.warn("Force setting clustering execution strategy class to '" + HoodieClusteringConfig.SPARK_CONSISTENT_BUCKET_EXECUTION_STRATEGY + "' because of consistent hashing bucket index");
-          writeConfig.setValue(HoodieClusteringConfig.EXECUTION_STRATEGY_CLASS_NAME, HoodieClusteringConfig.SPARK_CONSISTENT_BUCKET_EXECUTION_STRATEGY);
-        }
-      }
     }
 
     public HoodieWriteConfig build() {

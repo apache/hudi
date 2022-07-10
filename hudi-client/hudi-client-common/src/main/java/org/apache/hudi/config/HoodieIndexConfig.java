@@ -30,8 +30,8 @@ import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import javax.annotation.concurrent.Immutable;
 
@@ -272,13 +272,13 @@ public class HoodieIndexConfig extends HoodieConfig {
       .key("hoodie.bucket.index.max.num.buckets")
       .noDefaultValue()
       .withDocumentation("Only applies if bucket index engine is consistent hashing. Determine the upper bound of "
-          + "the num of buckets in the hudi table. Resizing are not allowed to split bucket if the number is reached.");
+          + "the number of buckets in the hudi table. Bucket resizing cannot be done higher than this max limit.");
 
   public static final ConfigProperty<String> BUCKET_INDEX_MIN_NUM_BUCKETS = ConfigProperty
       .key("hoodie.bucket.index.min.num.buckets")
       .noDefaultValue()
       .withDocumentation("Only applies if bucket index engine is consistent hashing. Determine the lower bound of "
-          + "the num of buckets in the hudi table. Resizing are not allowed to merge buckets if the number is reached.");
+          + "the number of buckets in the hudi table. Bucket resizing cannot be done lower than this min limit.");
 
   public static final ConfigProperty<String> BUCKET_INDEX_HASH_FIELD = ConfigProperty
       .key("hoodie.bucket.index.hash.field")
@@ -297,7 +297,7 @@ public class HoodieIndexConfig extends HoodieConfig {
       .defaultValue(0.2)
       .withDocumentation("Control if buckets should be merged when using consistent hashing bucket index"
           + "Specifically, if a file slice size is smaller than `hoodie.xxxx.max.file.size` * threshold, then it will be considered"
-          + "as a merge condidate.");
+          + "as a merge candidate.");
 
   /**
    * Deprecated configs. These are now part of {@link HoodieHBaseIndexConfig}.

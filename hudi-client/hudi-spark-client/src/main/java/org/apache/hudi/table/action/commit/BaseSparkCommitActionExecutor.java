@@ -43,6 +43,7 @@ import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.execution.SparkLazyInsertIterable;
+import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.io.CreateHandleFactory;
 import org.apache.hudi.io.HoodieConcatHandle;
 import org.apache.hudi.io.HoodieMergeHandle;
@@ -355,7 +356,8 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
     }
 
     // Pre-check: if the old file does not exist (which may happen in bucket index case), fallback to insert
-    if (!table.getBaseFileOnlyView().getLatestBaseFile(partitionPath, fileId).isPresent()) {
+    if (!table.getBaseFileOnlyView().getLatestBaseFile(partitionPath, fileId).isPresent()
+        && HoodieIndex.IndexType.BUCKET.equals(config.getIndexType())) {
       return handleInsert(fileId, recordItr);
     }
 

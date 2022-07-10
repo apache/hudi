@@ -105,7 +105,7 @@ public abstract class ClusteringPlanStrategy<T extends HoodieRecordPayload,I,K,O
   public abstract Option<HoodieClusteringPlan> generateClusteringPlan();
 
   /**
-   * Check if the clustering can proceed. If not, empty plan will be returned to stop the scheduling.
+   * Check if the clustering can proceed. If not (i.e., return false), the PlanStrategy will generate an empty plan to stop the scheduling.
    */
   public boolean checkPrecondition() {
     return true;

@@ -33,7 +33,7 @@ public abstract class BulkInsertInternalPartitionerFactory {
   public static BulkInsertPartitioner get(HoodieTable table, HoodieWriteConfig config) {
     if (config.getIndexType().equals(HoodieIndex.IndexType.BUCKET)
         && config.getBucketIndexEngineType().equals(HoodieIndex.BucketIndexEngineType.CONSISTENT_HASHING)) {
-      return new RDDConsistentBucketPartitioner(table, config);
+      return new RDDConsistentBucketPartitioner(table);
     }
     return get(config.getBulkInsertSortMode());
   }

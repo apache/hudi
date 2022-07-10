@@ -84,6 +84,20 @@ public class SparkBulkInsertHelper<T extends HoodieRecordPayload, R> extends Bas
     return result;
   }
 
+  /**
+   * Do bulk insert using WriteHandleFactory from the partitioner (i.e., partitioner.getWriteHandleFactory)
+   */
+  public HoodieData<WriteStatus> bulkInsert(HoodieData<HoodieRecord<T>> inputRecords,
+                                            String instantTime,
+                                            HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table,
+                                            HoodieWriteConfig config,
+                                            boolean performDedupe,
+                                            BulkInsertPartitioner partitioner,
+                                            boolean useWriterSchema,
+                                            int parallelism) {
+    return bulkInsert(inputRecords, instantTime, table, config, performDedupe, partitioner, useWriterSchema, parallelism, null);
+  }
+
   @Override
   public HoodieData<WriteStatus> bulkInsert(HoodieData<HoodieRecord<T>> inputRecords,
                                             String instantTime,

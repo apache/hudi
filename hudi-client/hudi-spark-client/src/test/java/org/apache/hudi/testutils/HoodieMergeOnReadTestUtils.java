@@ -40,6 +40,8 @@ import org.apache.hadoop.mapred.FileInputFormat;
 import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -50,6 +52,8 @@ import java.util.stream.Collectors;
  * Utility methods to aid in testing MergeOnRead (workaround for HoodieReadClient for MOR).
  */
 public class HoodieMergeOnReadTestUtils {
+
+  private static final Logger LOG = LogManager.getLogger(HoodieMergeOnReadTestUtils.class);
 
   public static List<RecordReader> getRecordReadersUsingInputFormat(Configuration conf, List<String> inputPaths,
                                                                     String basePath, JobConf jobConf, boolean realtime, boolean populateMetaField) {
@@ -164,7 +168,7 @@ public class HoodieMergeOnReadTestUtils {
         }
       }
     } catch (IOException ie) {
-      ie.printStackTrace();
+      LOG.error(ie);
     }
     return records;
   }
