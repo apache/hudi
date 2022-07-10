@@ -143,6 +143,7 @@ public class HoodieSyncConfig extends HoodieConfig {
 
   public HoodieSyncConfig(Properties props, Configuration hadoopConf) {
     super(props);
+    setDefaults(getClass().getName());
     this.hadoopConf = hadoopConf;
   }
 
