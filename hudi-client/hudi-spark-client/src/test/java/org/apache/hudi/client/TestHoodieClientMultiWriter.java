@@ -18,7 +18,6 @@
 
 package org.apache.hudi.client;
 
-import org.apache.commons.io.FileUtils;
 import org.apache.hudi.client.transaction.AsyncTimelineMarkerConflictResolutionStrategy;
 import org.apache.hudi.client.transaction.SimpleDirectMarkerConflictResolutionStrategy;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
@@ -34,6 +33,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
@@ -161,7 +161,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     assertEquals(2, completedInstant.size());
     assertTrue(completedInstant.contains(nextCommitTime1));
     assertTrue(completedInstant.contains(nextCommitTime2));
-    FileUtils.deleteQuietly(new File(basePath));
+    FileIOUtils.deleteDirectory(new File(basePath));
   }
 
   @ParameterizedTest
