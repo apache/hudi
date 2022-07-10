@@ -43,7 +43,7 @@ import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_USER;
 import static org.apache.hudi.hive.util.HiveSchemaUtil.HIVE_ESCAPE_CHARACTER;
 
 /**
- * This class offers DDL executor backed by the jdbc This class preserves the old useJDBC = true way of doing things.
+ * This class offers DDL executor backed by the jdbc.
  */
 public class JDBCExecutor extends QueryBasedDDLExecutor {
 

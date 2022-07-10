@@ -28,7 +28,8 @@ import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.config.HoodieCompactionConfig;
+import org.apache.hudi.config.HoodieArchivalConfig;
+import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 import org.apache.hudi.utilities.schema.SchemaProvider;
@@ -64,8 +65,8 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
   @Test
   public void testHoodieIncrSource() throws IOException {
     HoodieWriteConfig writeConfig = getConfigBuilder(basePath(), metaClient)
-        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
-            .archiveCommitsWith(2, 3).retainCommits(1).build())
+        .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(2, 3).build())
+        .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(1).build())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .withMaxNumDeltaCommitsBeforeCompaction(1).build())
         .build();

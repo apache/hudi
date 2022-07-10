@@ -623,7 +623,7 @@ class HoodieSpark3_2ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
                                              ctx: QueryOrganizationContext,
                                              expressions: Seq[Expression],
                                              query: LogicalPlan): LogicalPlan = {
-    throw new ParseException("DISTRIBUTE BY is not supported", ctx)
+    RepartitionByExpression(expressions, query, None)
   }
 
   override def visitTransformQuerySpecification(

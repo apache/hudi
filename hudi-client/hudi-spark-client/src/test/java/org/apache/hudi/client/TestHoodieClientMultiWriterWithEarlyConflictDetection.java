@@ -36,7 +36,8 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
-import org.apache.hudi.config.HoodieCompactionConfig;
+import org.apache.hudi.config.HoodieArchivalConfig;
+import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -180,17 +181,20 @@ public class TestHoodieClientMultiWriterWithEarlyConflictDetection extends Hoodi
               .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
                       .withStorageType(FileSystemViewStorageType.MEMORY)
                       .withSecondaryStorageType(FileSystemViewStorageType.MEMORY).build())
-              .withCompactionConfig(HoodieCompactionConfig.newBuilder()
-                      .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
-                      .withAutoArchive(false).withAutoClean(false).build())
-              .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
-              .withMarkersType(MarkerType.DIRECT.name())
-              .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class)
-                      .withEarlyConflictDetectionEnable(true)
-                      .withConflictResolutionStrategy(SimpleDirectMarkerConflictResolutionStrategy.class.getName())
-                      .withMarkerConflictCheckerBatchInterval(0)
-                      .withMarkerConflictCheckerPeriod(100)
-                      .build()).withAutoCommit(false).withProperties(properties).build();
+          .withCleanConfig(HoodieCleanConfig.newBuilder()
+              .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
+              .withAutoClean(false).build())
+          .withArchivalConfig(HoodieArchivalConfig.newBuilder()
+              .withAutoArchive(false).build())
+          .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
+          .withMarkersType(MarkerType.DIRECT.name())
+          .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class)
+              .withEarlyConflictDetectionEnable(true)
+              .withConflictResolutionStrategy(SimpleDirectMarkerConflictResolutionStrategy.class.getName())
+              .withMarkerConflictCheckerBatchInterval(0)
+              .withMarkerConflictCheckerPeriod(100)
+              .build())
+          .withAutoCommit(false).withProperties(properties).build();
     } else {
       return getConfigBuilder()
               .withStorageConfig(HoodieStorageConfig.newBuilder().parquetMaxFileSize(20 * 1024).build())
@@ -198,9 +202,11 @@ public class TestHoodieClientMultiWriterWithEarlyConflictDetection extends Hoodi
               .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
                       .withStorageType(FileSystemViewStorageType.MEMORY)
                       .withSecondaryStorageType(FileSystemViewStorageType.MEMORY).build())
-              .withCompactionConfig(HoodieCompactionConfig.newBuilder()
-                      .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
-                      .withAutoArchive(false).withAutoClean(false).build())
+          .withCleanConfig(HoodieCleanConfig.newBuilder()
+              .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
+              .withAutoClean(false).build())
+          .withArchivalConfig(HoodieArchivalConfig.newBuilder()
+              .withAutoArchive(false).build())
               .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
               .withMarkersType(MarkerType.TIMELINE_SERVER_BASED.name())
               .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class)
@@ -208,7 +214,8 @@ public class TestHoodieClientMultiWriterWithEarlyConflictDetection extends Hoodi
                       .withConflictResolutionStrategy(AsyncTimelineMarkerConflictResolutionStrategy.class.getName())
                       .withMarkerConflictCheckerBatchInterval(0)
                       .withMarkerConflictCheckerPeriod(100)
-                      .build()).withAutoCommit(false).withProperties(properties).build();
+                      .build())
+          .withAutoCommit(false).withProperties(properties).build();
     }
   }
 }
