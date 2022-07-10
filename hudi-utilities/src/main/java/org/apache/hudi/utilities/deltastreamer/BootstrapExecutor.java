@@ -162,7 +162,7 @@ public class BootstrapExecutor implements Serializable {
    * Sync to Hive.
    */
   private void syncHive() {
-    if (cfg.enableHiveSync || cfg.enableMetaSync) {
+    if (cfg.enableSync) {
       TypedProperties metaProps = new TypedProperties();
       metaProps.putAll(props);
       metaProps.put(META_SYNC_BASE_PATH.key(), cfg.targetBasePath);

@@ -212,28 +212,28 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     }
 
     static HoodieDeltaStreamer.Config makeConfig(String basePath, WriteOperationType op, List<String> transformerClassNames,
-                                                 String propsFilename, boolean enableHiveSync) {
-      return makeConfig(basePath, op, transformerClassNames, propsFilename, enableHiveSync, true,
+                                                 String propsFilename, boolean enableSync) {
+      return makeConfig(basePath, op, transformerClassNames, propsFilename, enableSync, true,
           false, null, null);
     }
 
     static HoodieDeltaStreamer.Config makeConfig(String basePath, WriteOperationType op, List<String> transformerClassNames,
-                                                 String propsFilename, boolean enableHiveSync, boolean useSchemaProviderClass, boolean updatePayloadClass,
+                                                 String propsFilename, boolean enableSync, boolean useSchemaProviderClass, boolean updatePayloadClass,
                                                  String payloadClassName, String tableType) {
-      return makeConfig(basePath, op, TestDataSource.class.getName(), transformerClassNames, propsFilename, enableHiveSync,
+      return makeConfig(basePath, op, TestDataSource.class.getName(), transformerClassNames, propsFilename, enableSync,
           useSchemaProviderClass, 1000, updatePayloadClass, payloadClassName, tableType, "timestamp", null);
     }
 
     static HoodieDeltaStreamer.Config makeConfig(String basePath, WriteOperationType op, String sourceClassName,
-                                                 List<String> transformerClassNames, String propsFilename, boolean enableHiveSync, boolean useSchemaProviderClass,
+                                                 List<String> transformerClassNames, String propsFilename, boolean enableSync, boolean useSchemaProviderClass,
                                                  int sourceLimit, boolean updatePayloadClass, String payloadClassName, String tableType, String sourceOrderingField,
                                                  String checkpoint) {
-      return makeConfig(basePath, op, sourceClassName, transformerClassNames, propsFilename, enableHiveSync, useSchemaProviderClass, sourceLimit, updatePayloadClass, payloadClassName,
+      return makeConfig(basePath, op, sourceClassName, transformerClassNames, propsFilename, enableSync, useSchemaProviderClass, sourceLimit, updatePayloadClass, payloadClassName,
           tableType, sourceOrderingField, checkpoint, false);
     }
 
     static HoodieDeltaStreamer.Config makeConfig(String basePath, WriteOperationType op, String sourceClassName,
-                                                 List<String> transformerClassNames, String propsFilename, boolean enableHiveSync, boolean useSchemaProviderClass,
+                                                 List<String> transformerClassNames, String propsFilename, boolean enableSync, boolean useSchemaProviderClass,
                                                  int sourceLimit, boolean updatePayloadClass, String payloadClassName, String tableType, String sourceOrderingField,
                                                  String checkpoint, boolean allowCommitOnNoCheckpointChange) {
       HoodieDeltaStreamer.Config cfg = new HoodieDeltaStreamer.Config();
@@ -243,7 +243,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       cfg.sourceClassName = sourceClassName;
       cfg.transformerClassNames = transformerClassNames;
       cfg.operation = op;
-      cfg.enableHiveSync = enableHiveSync;
+      cfg.enableSync = enableSync;
       cfg.sourceOrderingField = sourceOrderingField;
       cfg.propsFilePath = dfsBasePath + "/" + propsFilename;
       cfg.sourceLimit = sourceLimit;
@@ -489,7 +489,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
     // Boolean Parameter
     HoodieDeltaStreamer.Config conf3 = getBaseConfig();
-    conf3.enableHiveSync = true;
+    conf3.enableSync = true;
 
     // ArrayList Parameter with 1 value
     HoodieDeltaStreamer.Config conf4 = getBaseConfig();
@@ -507,7 +507,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     HoodieDeltaStreamer.Config conf = getBaseConfig();
     conf.baseFileFormat = BASE_FILE_FORMAT_VALUE;
     conf.sourceLimit = Long.parseLong(SOURCE_LIMIT_VALUE);
-    conf.enableHiveSync = true;
+    conf.enableSync = true;
     conf.configs = Arrays.asList(HOODIE_CONF_VALUE1, HOODIE_CONF_VALUE2);
 
     String[] allConfig = new String[] {TGT_BASE_PATH_PARAM, TGT_BASE_PATH_VALUE, SOURCE_LIMIT_PARAM,

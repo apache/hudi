@@ -417,7 +417,7 @@ public class SparkMain {
   private static int doBootstrap(JavaSparkContext jsc, String tableName, String tableType, String basePath,
       String sourcePath, String recordKeyCols, String partitionFields, String parallelism, String schemaProviderClass,
       String bootstrapIndexClass, String selectorClass, String keyGenerator, String fullBootstrapInputProvider,
-      String payloadClassName, String enableHiveSync, String propsFilePath, List<String> configs) throws IOException {
+      String payloadClassName, String enableSync, String propsFilePath, List<String> configs) throws IOException {
 
     TypedProperties properties = propsFilePath == null ? buildProperties(configs)
         : readConfig(jsc.hadoopConfiguration(), new Path(propsFilePath), configs).getProps(true);
@@ -443,7 +443,7 @@ public class SparkMain {
     cfg.schemaProviderClassName = schemaProviderClass;
     cfg.bootstrapIndexClass = bootstrapIndexClass;
     cfg.payloadClassName = payloadClassName;
-    cfg.enableHiveSync = Boolean.valueOf(enableHiveSync);
+    cfg.enableSync = Boolean.valueOf(enableSync);
 
     new BootstrapExecutor(cfg, jsc, FSUtils.getFs(basePath, jsc.hadoopConfiguration()),
         jsc.hadoopConfiguration(), properties).execute();

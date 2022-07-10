@@ -132,7 +132,7 @@ public class HoodieMultiTableDeltaStreamer {
       Helpers.deepCopyConfigs(config, cfg);
       String overriddenTargetBasePath = tableProperties.getString(Constants.TARGET_BASE_PATH_PROP, "");
       cfg.targetBasePath = StringUtils.isNullOrEmpty(overriddenTargetBasePath) ? targetBasePath : overriddenTargetBasePath;
-      if (cfg.enableMetaSync && StringUtils.isNullOrEmpty(tableProperties.getString(HoodieSyncConfig.META_SYNC_TABLE_NAME.key(), ""))) {
+      if (cfg.enableSync && StringUtils.isNullOrEmpty(tableProperties.getString(HoodieSyncConfig.META_SYNC_TABLE_NAME.key(), ""))) {
         throw new HoodieException("Meta sync table field not provided!");
       }
       populateSchemaProviderProps(cfg, tableProperties);
@@ -202,8 +202,7 @@ public class HoodieMultiTableDeltaStreamer {
     }
 
     static void deepCopyConfigs(Config globalConfig, HoodieDeltaStreamer.Config tableConfig) {
-      tableConfig.enableHiveSync = globalConfig.enableHiveSync;
-      tableConfig.enableMetaSync = globalConfig.enableMetaSync;
+      tableConfig.enableSync = globalConfig.enableSync;
       tableConfig.syncClientToolClassNames = globalConfig.syncClientToolClassNames;
       tableConfig.schemaProviderClassName = globalConfig.schemaProviderClassName;
       tableConfig.sourceOrderingField = globalConfig.sourceOrderingField;
@@ -239,10 +238,6 @@ public class HoodieMultiTableDeltaStreamer {
     if (config.help || args.length == 0) {
       cmd.usage();
       System.exit(1);
-    }
-
-    if (config.enableHiveSync) {
-      logger.warn("--enable-hive-sync will be deprecated in a future release; please use --enable-sync instead for Hive syncing");
     }
 
     if (config.targetTableName != null) {
@@ -328,11 +323,8 @@ public class HoodieMultiTableDeltaStreamer {
         description = "Should duplicate records from source be dropped/filtered out before insert/bulk-insert")
     public Boolean filterDupes = false;
 
-    @Parameter(names = {"--enable-hive-sync"}, description = "Enable syncing to hive")
-    public Boolean enableHiveSync = false;
-
-    @Parameter(names = {"--enable-sync"}, description = "Enable syncing meta")
-    public Boolean enableMetaSync = false;
+    @Parameter(names = {"--enable-sync"}, description = "Enable sync to metastores")
+    public Boolean enableSync = false;
 
     @Parameter(names = {"--sync-tool-classes"}, description = "Meta sync client tool, using comma to separate multi tools")
     public String syncClientToolClassNames = HiveSyncTool.class.getName();

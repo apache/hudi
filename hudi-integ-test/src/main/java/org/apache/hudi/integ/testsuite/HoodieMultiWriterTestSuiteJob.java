@@ -200,8 +200,7 @@ public class HoodieMultiWriterTestSuiteJob {
   }
 
   static void deepCopyConfigs(HoodieMultiWriterTestSuiteConfig globalConfig, HoodieMultiWriterTestSuiteConfig tableConfig) {
-    tableConfig.enableHiveSync = globalConfig.enableHiveSync;
-    tableConfig.enableMetaSync = globalConfig.enableMetaSync;
+    tableConfig.enableSync = globalConfig.enableSync;
     tableConfig.schemaProviderClassName = globalConfig.schemaProviderClassName;
     tableConfig.sourceOrderingField = globalConfig.sourceOrderingField;
     tableConfig.sourceClassName = globalConfig.sourceClassName;

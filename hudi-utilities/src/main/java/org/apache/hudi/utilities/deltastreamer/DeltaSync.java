@@ -54,7 +54,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hive.HiveSyncConfig;
-import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
@@ -631,7 +630,7 @@ public class DeltaSync implements Serializable {
         }
 
         if (!isEmpty) {
-          runMetaSync();
+          runSync();
         }
       } else {
         LOG.info("Commit " + instantTime + " failed!");
@@ -692,15 +691,8 @@ public class DeltaSync implements Serializable {
     return syncClassName.substring(syncClassName.lastIndexOf(".") + 1);
   }
 
-  public void runMetaSync() {
-    Set<String> syncClientToolClasses = new HashSet<>(Arrays.asList(cfg.syncClientToolClassNames.split(",")));
-    // for backward compatibility
-    if (cfg.enableHiveSync) {
-      cfg.enableMetaSync = true;
-      syncClientToolClasses.add(HiveSyncTool.class.getName());
-      LOG.info("When set --enable-hive-sync will use HiveSyncTool for backward compatibility");
-    }
-    if (cfg.enableMetaSync) {
+  public void runSync() {
+    if (cfg.enableSync) {
       FileSystem fs = FSUtils.getFs(cfg.targetBasePath, jssc.hadoopConfiguration());
 
       TypedProperties metaProps = new TypedProperties();
@@ -710,6 +702,7 @@ public class DeltaSync implements Serializable {
             props.getInteger(HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS.key())));
       }
 
+      Set<String> syncClientToolClasses = new HashSet<>(Arrays.asList(cfg.syncClientToolClassNames.split(",")));
       for (String impl : syncClientToolClasses) {
         Timer.Context syncContext = metrics.getMetaSyncTimerContext();
         SyncUtilHelpers.runHoodieMetaSync(impl.trim(), metaProps, conf, fs, cfg.targetBasePath, cfg.baseFileFormat);

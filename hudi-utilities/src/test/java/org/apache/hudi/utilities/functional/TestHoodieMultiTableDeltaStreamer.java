@@ -52,12 +52,12 @@ public class TestHoodieMultiTableDeltaStreamer extends HoodieDeltaStreamerTestBa
 
   static class TestHelpers {
 
-    static HoodieMultiTableDeltaStreamer.Config getConfig(String fileName, String configFolder, String sourceClassName, boolean enableHiveSync, boolean enableMetaSync,
+    static HoodieMultiTableDeltaStreamer.Config getConfig(String fileName, String configFolder, String sourceClassName, boolean enableSync,
                                                           Class<?> clazz) {
-      return getConfig(fileName, configFolder, sourceClassName, enableHiveSync, enableMetaSync, true, "multi_table_dataset", clazz);
+      return getConfig(fileName, configFolder, sourceClassName, enableSync, true, "multi_table_dataset", clazz);
     }
 
-    static HoodieMultiTableDeltaStreamer.Config getConfig(String fileName, String configFolder, String sourceClassName, boolean enableHiveSync, boolean enableMetaSync,
+    static HoodieMultiTableDeltaStreamer.Config getConfig(String fileName, String configFolder, String sourceClassName, boolean enableSync,
         boolean setSchemaProvider, String basePathPrefix, Class<?> clazz) {
       HoodieMultiTableDeltaStreamer.Config config = new HoodieMultiTableDeltaStreamer.Config();
       config.configFolder = configFolder;
@@ -70,8 +70,7 @@ public class TestHoodieMultiTableDeltaStreamer extends HoodieDeltaStreamerTestBa
       if (setSchemaProvider) {
         config.schemaProviderClassName = clazz != null ? clazz.getName() : FilebasedSchemaProvider.class.getName();
       }
-      config.enableHiveSync = enableHiveSync;
-      config.enableMetaSync = enableMetaSync;
+      config.enableSync = enableSync;
       config.syncClientToolClassNames = "com.example.DummySyncTool1,com.example.DummySyncTool2";
       return config;
     }
@@ -79,7 +78,7 @@ public class TestHoodieMultiTableDeltaStreamer extends HoodieDeltaStreamerTestBa
 
   @Test
   public void testMetaSyncConfig() throws IOException {
-    HoodieMultiTableDeltaStreamer.Config cfg = TestHelpers.getConfig(PROPS_FILENAME_TEST_SOURCE1, dfsBasePath + "/config", TestDataSource.class.getName(), true, true, null);
+    HoodieMultiTableDeltaStreamer.Config cfg = TestHelpers.getConfig(PROPS_FILENAME_TEST_SOURCE1, dfsBasePath + "/config", TestDataSource.class.getName(), true, null);
     HoodieMultiTableDeltaStreamer streamer = new HoodieMultiTableDeltaStreamer(cfg, jsc);
     TableExecutionContext executionContext = streamer.getTableExecutionContexts().get(1);
     assertEquals("com.example.DummySyncTool1,com.example.DummySyncTool2", executionContext.getConfig().syncClientToolClassNames);
@@ -87,17 +86,17 @@ public class TestHoodieMultiTableDeltaStreamer extends HoodieDeltaStreamerTestBa
 
   @Test
   public void testInvalidHiveSyncProps() throws IOException {
-    HoodieMultiTableDeltaStreamer.Config cfg = TestHelpers.getConfig(PROPS_INVALID_HIVE_SYNC_TEST_SOURCE1, dfsBasePath + "/config", TestDataSource.class.getName(), true, true, null);
+    HoodieMultiTableDeltaStreamer.Config cfg = TestHelpers.getConfig(PROPS_INVALID_HIVE_SYNC_TEST_SOURCE1, dfsBasePath + "/config", TestDataSource.class.getName(), true, null);
     Exception e = assertThrows(HoodieException.class, () -> {
       new HoodieMultiTableDeltaStreamer(cfg, jsc);
-    }, "Should fail when hive sync table not provided with enableHiveSync flag");
+    }, "Should fail when hive sync table not provided with enableSync flag");
     LOG.debug("Expected error when creating table execution objects", e);
     assertTrue(e.getMessage().contains("Meta sync table field not provided!"));
   }
 
   @Test
   public void testInvalidPropsFilePath() throws IOException {
-    HoodieMultiTableDeltaStreamer.Config cfg = TestHelpers.getConfig(PROPS_INVALID_FILE, dfsBasePath + "/config", TestDataSource.class.getName(), true, true, null);
+    HoodieMultiTableDeltaStreamer.Config cfg = TestHelpers.getConfig(PROPS_INVALID_FILE, dfsBasePath + "/config", TestDataSource.class.getName(), true, null);
     Exception e = assertThrows(IllegalArgumentException.class, () -> {
       new HoodieMultiTableDeltaStreamer(cfg, jsc);
     }, "Should fail when invalid props file is provided");
@@ -107,7 +106,7 @@ public class TestHoodieMultiTableDeltaStreamer extends HoodieDeltaStreamerTestBa
 
   @Test
   public void testInvalidTableConfigFilePath() throws IOException {
-    HoodieMultiTableDeltaStreamer.Config cfg = TestHelpers.getConfig(PROPS_INVALID_TABLE_CONFIG_FILE, dfsBasePath + "/config", TestDataSource.class.getName(), true, true, null);
+    HoodieMultiTableDeltaStreamer.Config cfg = TestHelpers.getConfig(PROPS_INVALID_TABLE_CONFIG_FILE, dfsBasePath + "/config", TestDataSource.class.getName(), true, null);
     Exception e = assertThrows(IllegalArgumentException.class, () -> {
       new HoodieMultiTableDeltaStreamer(cfg, jsc);
     }, "Should fail when invalid table config props file path is provided");
@@ -117,7 +116,7 @@ public class TestHoodieMultiTableDeltaStreamer extends HoodieDeltaStreamerTestBa
 
   @Test
   public void testCustomConfigProps() throws IOException {
-    HoodieMultiTableDeltaStreamer.Config cfg = TestHelpers.getConfig(PROPS_FILENAME_TEST_SOURCE1, dfsBasePath + "/config", TestDataSource.class.getName(), false, false, SchemaRegistryProvider.class);
+    HoodieMultiTableDeltaStreamer.Config cfg = TestHelpers.getConfig(PROPS_FILENAME_TEST_SOURCE1, dfsBasePath + "/config", TestDataSource.class.getName(), false, SchemaRegistryProvider.class);
     HoodieMultiTableDeltaStreamer streamer = new HoodieMultiTableDeltaStreamer(cfg, jsc);
     TableExecutionContext executionContext = streamer.getTableExecutionContexts().get(1);
     assertEquals(2, streamer.getTableExecutionContexts().size());
@@ -136,7 +135,7 @@ public class TestHoodieMultiTableDeltaStreamer extends HoodieDeltaStreamerTestBa
   @Disabled
   public void testInvalidIngestionProps() {
     Exception e = assertThrows(Exception.class, () -> {
-      HoodieMultiTableDeltaStreamer.Config cfg = TestHelpers.getConfig(PROPS_FILENAME_TEST_SOURCE1, dfsBasePath + "/config", TestDataSource.class.getName(), true, true, null);
+      HoodieMultiTableDeltaStreamer.Config cfg = TestHelpers.getConfig(PROPS_FILENAME_TEST_SOURCE1, dfsBasePath + "/config", TestDataSource.class.getName(), true, null);
       new HoodieMultiTableDeltaStreamer(cfg, jsc);
     }, "Creation of execution object should fail without kafka topic");
     LOG.debug("Creation of execution object failed with error: " + e.getMessage(), e);
@@ -155,7 +154,7 @@ public class TestHoodieMultiTableDeltaStreamer extends HoodieDeltaStreamerTestBa
     testUtils.sendMessages(topicName1, Helpers.jsonifyRecords(dataGenerator.generateInsertsAsPerSchema("000", 5, HoodieTestDataGenerator.TRIP_SCHEMA)));
     testUtils.sendMessages(topicName2, Helpers.jsonifyRecords(dataGenerator.generateInsertsAsPerSchema("000", 10, HoodieTestDataGenerator.SHORT_TRIP_SCHEMA)));
 
-    HoodieMultiTableDeltaStreamer.Config cfg = TestHelpers.getConfig(PROPS_FILENAME_TEST_SOURCE1, dfsBasePath + "/config", JsonKafkaSource.class.getName(), false, false, null);
+    HoodieMultiTableDeltaStreamer.Config cfg = TestHelpers.getConfig(PROPS_FILENAME_TEST_SOURCE1, dfsBasePath + "/config", JsonKafkaSource.class.getName(), false, null);
     HoodieMultiTableDeltaStreamer streamer = new HoodieMultiTableDeltaStreamer(cfg, jsc);
     List<TableExecutionContext> executionContexts = streamer.getTableExecutionContexts();
     TypedProperties properties = executionContexts.get(1).getProperties();
@@ -206,7 +205,7 @@ public class TestHoodieMultiTableDeltaStreamer extends HoodieDeltaStreamerTestBa
     // add only common props. later we can add per table props
     String parquetPropsFile = populateCommonPropsAndWriteToFile();
 
-    HoodieMultiTableDeltaStreamer.Config cfg = TestHelpers.getConfig(parquetPropsFile, dfsBasePath + "/config", ParquetDFSSource.class.getName(), false, false,
+    HoodieMultiTableDeltaStreamer.Config cfg = TestHelpers.getConfig(parquetPropsFile, dfsBasePath + "/config", ParquetDFSSource.class.getName(), false,
         false, "multi_table_parquet", null);
     HoodieMultiTableDeltaStreamer streamer = new HoodieMultiTableDeltaStreamer(cfg, jsc);
 
@@ -237,7 +236,7 @@ public class TestHoodieMultiTableDeltaStreamer extends HoodieDeltaStreamerTestBa
 
   @Test
   public void testTableLevelProperties() throws IOException {
-    HoodieMultiTableDeltaStreamer.Config cfg = TestHelpers.getConfig(PROPS_FILENAME_TEST_SOURCE1, dfsBasePath + "/config", TestDataSource.class.getName(), false, false, null);
+    HoodieMultiTableDeltaStreamer.Config cfg = TestHelpers.getConfig(PROPS_FILENAME_TEST_SOURCE1, dfsBasePath + "/config", TestDataSource.class.getName(), false, null);
     HoodieMultiTableDeltaStreamer streamer = new HoodieMultiTableDeltaStreamer(cfg, jsc);
     List<TableExecutionContext> tableExecutionContexts = streamer.getTableExecutionContexts();
     tableExecutionContexts.forEach(tableExecutionContext -> {

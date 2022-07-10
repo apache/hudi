@@ -298,12 +298,8 @@ public class HoodieDeltaStreamer implements Serializable {
         description = "Should duplicate records from source be dropped/filtered out before insert/bulk-insert")
     public Boolean filterDupes = false;
 
-    //will abandon in the future version, recommended use --enable-sync
-    @Parameter(names = {"--enable-hive-sync"}, description = "Enable syncing to hive")
-    public Boolean enableHiveSync = false;
-
-    @Parameter(names = {"--enable-sync"}, description = "Enable syncing meta")
-    public Boolean enableMetaSync = false;
+    @Parameter(names = {"--enable-sync"}, description = "Enable sync to metastores")
+    public Boolean enableSync = false;
 
     @Parameter(names = {"--sync-tool-classes"}, description = "Meta sync client tool, using comma to separate multi tools")
     public String syncClientToolClassNames = HiveSyncTool.class.getName();
@@ -441,8 +437,7 @@ public class HoodieDeltaStreamer implements Serializable {
               && Objects.equals(transformerClassNames, config.transformerClassNames)
               && operation == config.operation
               && Objects.equals(filterDupes, config.filterDupes)
-              && Objects.equals(enableHiveSync, config.enableHiveSync)
-              && Objects.equals(enableMetaSync, config.enableMetaSync)
+              && Objects.equals(enableSync, config.enableSync)
               && Objects.equals(syncClientToolClassNames, config.syncClientToolClassNames)
               && Objects.equals(maxPendingCompactions, config.maxPendingCompactions)
               && Objects.equals(maxPendingClustering, config.maxPendingClustering)
@@ -468,7 +463,7 @@ public class HoodieDeltaStreamer implements Serializable {
               baseFileFormat, propsFilePath, configs, sourceClassName,
               sourceOrderingField, payloadClassName, schemaProviderClassName,
               transformerClassNames, sourceLimit, operation, filterDupes,
-              enableHiveSync, enableMetaSync, syncClientToolClassNames, maxPendingCompactions, maxPendingClustering,
+              enableSync, syncClientToolClassNames, maxPendingCompactions, maxPendingClustering,
               continuousMode, minSyncIntervalSeconds, sparkMaster, commitOnErrors,
               deltaSyncSchedulingWeight, compactSchedulingWeight, clusterSchedulingWeight, deltaSyncSchedulingMinShare,
               compactSchedulingMinShare, clusterSchedulingMinShare, forceDisableCompaction, checkpoint,
@@ -492,8 +487,7 @@ public class HoodieDeltaStreamer implements Serializable {
               + ", sourceLimit=" + sourceLimit
               + ", operation=" + operation
               + ", filterDupes=" + filterDupes
-              + ", enableHiveSync=" + enableHiveSync
-              + ", enableMetaSync=" + enableMetaSync
+              + ", enableSync=" + enableSync
               + ", syncClientToolClassNames=" + syncClientToolClassNames
               + ", maxPendingCompactions=" + maxPendingCompactions
               + ", maxPendingClustering=" + maxPendingClustering
@@ -548,10 +542,6 @@ public class HoodieDeltaStreamer implements Serializable {
     Map<String, String> additionalSparkConfigs = SchedulerConfGenerator.getSparkSchedulingConfigs(cfg);
     JavaSparkContext jssc =
         UtilHelpers.buildSparkContext("delta-streamer-" + cfg.targetTableName, cfg.sparkMaster, additionalSparkConfigs);
-
-    if (cfg.enableHiveSync) {
-      LOG.warn("--enable-hive-sync will be deprecated in a future release; please use --enable-sync instead for Hive syncing");
-    }
 
     try {
       new HoodieDeltaStreamer(cfg, jssc).sync();

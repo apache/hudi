@@ -340,7 +340,7 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctiona
     cfg.sourceClassName = TestDataSource.class.getName();
     cfg.transformerClassNames = transformerClassNames;
     cfg.operation = op;
-    cfg.enableHiveSync = false;
+    cfg.enableSync = false;
     cfg.sourceOrderingField = "timestamp";
     cfg.propsFilePath = propsFilePath;
     cfg.sourceLimit = 1000;
