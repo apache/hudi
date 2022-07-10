@@ -100,7 +100,7 @@ public class HiveSyncConfigHolder {
       .withDocumentation("The number of partitions one batch when synchronous partitions to hive.");
   public static final ConfigProperty<String> HIVE_SYNC_MODE = ConfigProperty
       .key("hoodie.datasource.hive_sync.mode")
-      .defaultValue("hms")
+      .defaultValue("jdbc")
       .withDocumentation("Mode to choose for Hive ops. Valid values are hms, jdbc and hiveql.");
   public static final ConfigProperty<Boolean> HIVE_SYNC_BUCKET_SYNC = ConfigProperty
       .key("hoodie.datasource.hive_sync.bucket_sync")
