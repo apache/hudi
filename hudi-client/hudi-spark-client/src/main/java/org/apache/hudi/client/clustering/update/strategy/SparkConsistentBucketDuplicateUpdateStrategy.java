@@ -38,6 +38,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.bucket.ConsistentBucketIdentifier;
+import org.apache.hudi.index.bucket.ConsistentBucketIndexUtils;
 import org.apache.hudi.index.bucket.HoodieSparkConsistentBucketIndex;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.cluster.strategy.UpdateStrategy;
@@ -131,7 +132,7 @@ public class SparkConsistentBucketDuplicateUpdateStrategy<T extends HoodieRecord
       String preInstant = partitionToInstant.putIfAbsent(p, instant);
       checkState(preInstant == null || preInstant.equals(instant), "Find a partition: " + p + " with two clustering instants");
       if (!partitionToHashingMeta.containsKey(p)) {
-        Option<HoodieConsistentHashingMetadata> metadataOption = HoodieSparkConsistentBucketIndex.loadMetadata(table, p);
+        Option<HoodieConsistentHashingMetadata> metadataOption = ConsistentBucketIndexUtils.loadMetadata(table.getMetaClient(), p);
         checkState(metadataOption.isPresent(), "Failed to load consistent hashing metadata for partition: " + p);
         partitionToHashingMeta.put(p, metadataOption.get());
       }

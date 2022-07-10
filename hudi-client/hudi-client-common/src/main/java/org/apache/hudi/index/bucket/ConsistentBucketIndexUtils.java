@@ -1,0 +1,144 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
+package org.apache.hudi.index.bucket;
+
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
+import org.apache.hudi.common.model.HoodieConsistentHashingMetadata;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.exception.HoodieIndexException;
+
+import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
+
+import java.io.IOException;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.Predicate;
+
+/**
+ * Helper class to manage consistent bucket index metadata.
+ */
+public class ConsistentBucketIndexUtils {
+
+  private static final Logger LOG = LogManager.getLogger(ConsistentBucketIndexUtils.class);
+
+  /**
+   * Load hashing metadata of the given partition, if it is not existed, create a new one (also persist it into storage)
+   *
+   * @param metaClient  hoodie meta client
+   * @param partition   table partition
+   * @param numBuckets  default bucket number
+   * @return Consistent hashing metadata
+   */
+  public static HoodieConsistentHashingMetadata loadOrCreateMetadata(HoodieTableMetaClient metaClient, String partition, int numBuckets) {
+    Option<HoodieConsistentHashingMetadata> metadataOption = loadMetadata(metaClient, partition);
+    if (metadataOption.isPresent()) {
+      return metadataOption.get();
+    }
+
+    // There is no metadata, so try to create a new one and save it.
+    HoodieConsistentHashingMetadata metadata = new HoodieConsistentHashingMetadata(partition, numBuckets);
+    if (saveMetadata(metaClient, metadata)) {
+      return metadata;
+    }
+
+    // The creation failed, so try load metadata again. Concurrent creation of metadata should have succeeded.
+    // Note: the consistent problem of cloud storage is handled internal in the HoodieWrapperFileSystem, i.e., ConsistentGuard
+    metadataOption = loadMetadata(metaClient, partition);
+    ValidationUtils.checkState(metadataOption.isPresent(), "Failed to load or create metadata, partition: " + partition);
+    return metadataOption.get();
+  }
+
+
+  /**
+   * Load hashing metadata of the given partition, if it is not existed, return null
+   *
+   * @param metaClient  hoodie meta client
+   * @param partition   table partition
+   * @return Consistent hashing metadata or null if it does not exist
+   */
+  public static Option<HoodieConsistentHashingMetadata> loadMetadata(HoodieTableMetaClient metaClient, String partition) {
+    Path metadataPath = FSUtils.getPartitionPath(metaClient.getHashingMetadataPath(), partition);
+
+    try {
+      HoodieWrapperFileSystem fs = metaClient.getFs();
+      FileStatus[] metaFiles = fs.listStatus(metadataPath);
+      final HoodieTimeline completedCommits = metaClient.getActiveTimeline().getCommitTimeline().filterCompletedInstants();
+      Predicate<FileStatus> metaFilePredicate = fileStatus -> {
+        String filename = fileStatus.getPath().getName();
+        if (!filename.contains(HoodieConsistentHashingMetadata.HASHING_METADATA_FILE_SUFFIX)) {
+          return false;
+        }
+        String timestamp = HoodieConsistentHashingMetadata.getTimestampFromFile(filename);
+        return completedCommits.containsInstant(timestamp) || timestamp.equals(HoodieTimeline.INIT_INSTANT_TS);
+      };
+
+      // Get a valid hashing metadata with the largest (latest) timestamp
+      FileStatus metaFile = Arrays.stream(metaFiles).filter(metaFilePredicate)
+          .max(Comparator.comparing(a -> a.getPath().getName())).orElse(null);
+
+      if (metaFile == null) {
+        return Option.empty();
+      }
+
+      byte[] content = FileIOUtils.readAsByteArray(fs.open(metaFile.getPath()));
+      return Option.of(HoodieConsistentHashingMetadata.fromBytes(content));
+    } catch (IOException e) {
+      LOG.error("Error when loading hashing metadata, partition: " + partition, e);
+      throw new HoodieIndexException("Error while loading hashing metadata", e);
+    }
+  }
+
+  /**
+   * Save metadata into storage
+   *
+   * @param metaClient  hoodie meta client
+   * @param metadata    hashing metadata to be saved
+   * @return true if the metadata is saved successfully
+   */
+  public static boolean saveMetadata(HoodieTableMetaClient metaClient, HoodieConsistentHashingMetadata metadata) {
+    HoodieWrapperFileSystem fs = metaClient.getFs();
+    Path dir = FSUtils.getPartitionPath(metaClient.getHashingMetadataPath(), metadata.getPartitionPath());
+    Path fullPath = new Path(dir, metadata.getFilename() + ".tmp." + ThreadLocalRandom.current().nextInt());
+    try (FSDataOutputStream fsOut = fs.create(fullPath, false)) {
+      byte[] bytes = metadata.toBytes();
+      fsOut.write(bytes);
+      fsOut.flush();
+      fsOut.close();
+
+      // Atomic renaming to ensure only one can succeed creating the initial hashing metadata
+      fs.rename(fullPath, new Path(dir, metadata.getFilename()));
+      return true;
+    } catch (IOException e) {
+      LOG.warn("Failed to update bucket metadata: " + metadata, e);
+    }
+    return false;
+  }
+
+}

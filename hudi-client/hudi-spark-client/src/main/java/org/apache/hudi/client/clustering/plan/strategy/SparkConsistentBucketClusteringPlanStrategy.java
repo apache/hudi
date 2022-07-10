@@ -39,6 +39,7 @@ import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.index.bucket.ConsistentBucketIdentifier;
+import org.apache.hudi.index.bucket.ConsistentBucketIndexUtils;
 import org.apache.hudi.index.bucket.HoodieSparkConsistentBucketIndex;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.cluster.strategy.PartitionAwareClusteringPlanStrategy;
@@ -127,7 +128,7 @@ public class SparkConsistentBucketClusteringPlanStrategy<T extends HoodieRecordP
   protected Stream<HoodieClusteringGroup> buildClusteringGroupsForPartition(String partitionPath, List<FileSlice> fileSlices) {
     ValidationUtils.checkArgument(getHoodieTable().getIndex() instanceof HoodieSparkConsistentBucketIndex,
         "Mismatch of index type and the clustering strategy, index: " + getHoodieTable().getIndex().getClass().getSimpleName());
-    Option<HoodieConsistentHashingMetadata> metadata = HoodieSparkConsistentBucketIndex.loadMetadata(getHoodieTable(), partitionPath);
+    Option<HoodieConsistentHashingMetadata> metadata = ConsistentBucketIndexUtils.loadMetadata(getHoodieTable().getMetaClient(), partitionPath);
     ValidationUtils.checkArgument(metadata.isPresent(), "Metadata is empty for partition: " + partitionPath);
     ConsistentBucketIdentifier identifier = new ConsistentBucketIdentifier(metadata.get());
 

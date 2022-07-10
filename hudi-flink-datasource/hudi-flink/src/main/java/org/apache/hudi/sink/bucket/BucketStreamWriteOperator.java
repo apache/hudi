@@ -18,6 +18,9 @@
 
 package org.apache.hudi.sink.bucket;
 
+import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.sink.common.AbstractWriteOperator;
 import org.apache.hudi.sink.common.WriteOperatorFactory;
 
@@ -25,16 +28,30 @@ import org.apache.flink.configuration.Configuration;
 
 /**
  * Operator for {@link BucketStreamWriteFunction}.
- *
- * @param <I> The input type
  */
-public class BucketStreamWriteOperator<I> extends AbstractWriteOperator<I> {
-
-  public BucketStreamWriteOperator(Configuration conf) {
-    super(new BucketStreamWriteFunction<>(conf));
-  }
+public class BucketStreamWriteOperator {
 
   public static <I> WriteOperatorFactory<I> getFactory(Configuration conf) {
-    return WriteOperatorFactory.instance(conf, new BucketStreamWriteOperator<>(conf));
+    String bucketEngineType = conf.get(FlinkOptions.BUCKET_INDEX_ENGINE_TYPE);
+    if (bucketEngineType.equalsIgnoreCase(HoodieIndex.BucketIndexEngineType.SIMPLE.name())) {
+      return WriteOperatorFactory.instance(conf, new SimpleBucketStreamWriteOperator<>(conf));
+    } else if (bucketEngineType.equalsIgnoreCase(HoodieIndex.BucketIndexEngineType.CONSISTENT_HASHING.name())) {
+      return WriteOperatorFactory.instance(conf, new ConsistentBucketStreamWriteOperator<>(conf));
+    } else {
+      throw new HoodieException("Unknown bucket index engine type: " + bucketEngineType);
+    }
   }
+
+  public static class SimpleBucketStreamWriteOperator<I> extends AbstractWriteOperator<I> {
+    public SimpleBucketStreamWriteOperator(Configuration conf) {
+      super(new BucketStreamWriteFunction<>(conf));
+    }
+  }
+
+  public static class ConsistentBucketStreamWriteOperator<I> extends AbstractWriteOperator<I> {
+    public ConsistentBucketStreamWriteOperator(Configuration conf) {
+      super(new ConsistentBucketStreamWriteFunction<>(conf));
+    }
+  }
+
 }
