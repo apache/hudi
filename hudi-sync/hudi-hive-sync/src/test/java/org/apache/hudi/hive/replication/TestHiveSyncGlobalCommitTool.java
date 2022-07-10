@@ -74,7 +74,7 @@ public class TestHiveSyncGlobalCommitTool {
     params.loadedProps.setProperty(META_SYNC_BASE_PATH.key(), localCluster.tablePath(DB_NAME, TBL_NAME));
     params.loadedProps.setProperty(META_SYNC_ASSUME_DATE_PARTITION.key(), "true");
     params.loadedProps.setProperty(HIVE_USE_PRE_APACHE_INPUT_FORMAT.key(), "false");
-    params.loadedProps.setProperty(META_SYNC_PARTITION_FIELDS.key(), "datestr");
+    params.loadedProps.setProperty(META_SYNC_PARTITION_FIELDS.key(), "year,month,day");
     return params;
   }
 

@@ -19,7 +19,6 @@
 
 package org.apache.hudi.sync.common.model;
 
-import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 
@@ -30,15 +29,15 @@ import java.util.Objects;
 
 public class DefaultPartitionValueExtractor implements PartitionValueExtractor {
 
-  private final List<String> partitionFields;
+  private final String[] partitionFields;
 
-  public DefaultPartitionValueExtractor(List<String> partitionFields) {
+  public DefaultPartitionValueExtractor(String[] partitionFields) {
     this.partitionFields = partitionFields;
   }
 
   @Override
   public List<String> extractPartitionValuesInPath(String partitionPath) {
-    if (CollectionUtils.isNullOrEmpty(partitionFields)) {
+    if (partitionFields == null || partitionFields.length == 0) {
       return Collections.emptyList();
     }
 
@@ -47,8 +46,8 @@ public class DefaultPartitionValueExtractor implements PartitionValueExtractor {
 
     String[] parts = partitionPath.split("/");
     int depth = parts.length;
-    ValidationUtils.checkArgument(depth == partitionFields.size(),
-        "Expected partition depth of " + partitionFields.size() + " but got " + depth);
+    ValidationUtils.checkArgument(depth == partitionFields.length,
+        "Expected partition depth of " + partitionFields.length + " but got " + depth);
 
     String[] partitionValues = new String[depth];
     Boolean isHiveStyle = null;
@@ -64,7 +63,7 @@ public class DefaultPartitionValueExtractor implements PartitionValueExtractor {
 
       if (isHiveStyle) {
         String foundFieldName = parts[i].substring(0, equalSignIndex);
-        String fieldName = partitionFields.get(i);
+        String fieldName = partitionFields[i];
         ValidationUtils.checkArgument(Objects.equals(fieldName, foundFieldName),
             "Expected field `" + fieldName + "` at depth=" + i + " but got `" + foundFieldName + "`");
         partitionValues[i] = parts[i].substring(equalSignIndex + 1);

@@ -64,7 +64,7 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
     this.databaseName = config.getStringOrDefault(META_SYNC_DATABASE_NAME);
     this.partitionValueExtractor = (PartitionValueExtractor) ReflectionUtils.loadClassWithFallbacks(
         config.getStringOrDefault(META_SYNC_PARTITION_EXTRACTOR_CLASS),
-        new Object[][] {new Object[] {config.getSplitStrings(META_SYNC_PARTITION_FIELDS)}, new Object[0]});
+        new Object[][] {new Object[] {config.getSplitStringArray(META_SYNC_PARTITION_FIELDS)}, new Object[0]});
   }
 
   /**

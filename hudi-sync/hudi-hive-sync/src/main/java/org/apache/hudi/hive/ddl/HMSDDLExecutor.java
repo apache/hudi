@@ -79,7 +79,7 @@ public class HMSDDLExecutor implements DDLExecutor {
     this.client = Hive.get(syncConfig.getHiveConf()).getMSC();
     this.partitionValueExtractor = (PartitionValueExtractor) ReflectionUtils.loadClassWithFallbacks(
         syncConfig.getStringOrDefault(META_SYNC_PARTITION_EXTRACTOR_CLASS),
-        new Object[][] {new Object[] {syncConfig.getSplitStrings(META_SYNC_PARTITION_FIELDS)}, new Object[0]});
+        new Object[][] {new Object[] {syncConfig.getSplitStringArray(META_SYNC_PARTITION_FIELDS)}, new Object[0]});
   }
 
   @Override

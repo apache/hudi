@@ -130,9 +130,22 @@ public class HoodieConfig implements Serializable {
         });
   }
 
+  public String getString(String key) {
+    return props.getProperty(key);
+  }
+
   public <T> String getString(ConfigProperty<T> configProperty) {
     Option<Object> rawValue = getRawValue(configProperty);
     return rawValue.map(Object::toString).orElse(null);
+  }
+
+  public <T> String getStringOrDefault(ConfigProperty<T> configProperty) {
+    return getStringOrDefault(configProperty, configProperty.defaultValue().toString());
+  }
+
+  public <T> String getStringOrDefault(ConfigProperty<T> configProperty, String defaultVal) {
+    Option<Object> rawValue = getRawValue(configProperty);
+    return rawValue.map(Object::toString).orElse(defaultVal);
   }
 
   public <T> List<String> getSplitStrings(ConfigProperty<T> configProperty) {
@@ -143,8 +156,12 @@ public class HoodieConfig implements Serializable {
     return StringUtils.split(getString(configProperty), delimiter);
   }
 
-  public String getString(String key) {
-    return props.getProperty(key);
+  public <T> String[] getSplitStringArray(ConfigProperty<T> configProperty) {
+    return getSplitStrings(configProperty).toArray(new String[0]);
+  }
+
+  public <T> String[] getSplitStringArray(ConfigProperty<T> configProperty, String delimiter) {
+    return getSplitStrings(configProperty, delimiter).toArray(new String[0]);
   }
 
   public <T> Integer getInt(ConfigProperty<T> configProperty) {
@@ -185,15 +202,6 @@ public class HoodieConfig implements Serializable {
   public <T> Double getDouble(ConfigProperty<T> configProperty) {
     Option<Object> rawValue = getRawValue(configProperty);
     return rawValue.map(v -> Double.parseDouble(v.toString())).orElse(null);
-  }
-
-  public <T> String getStringOrDefault(ConfigProperty<T> configProperty) {
-    return getStringOrDefault(configProperty, configProperty.defaultValue().toString());
-  }
-
-  public <T> String getStringOrDefault(ConfigProperty<T> configProperty, String defaultVal) {
-    Option<Object> rawValue = getRawValue(configProperty);
-    return rawValue.map(Object::toString).orElse(defaultVal);
   }
 
   public TypedProperties getProps() {

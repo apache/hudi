@@ -26,7 +26,6 @@ import org.junit.jupiter.params.provider.CsvSource;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -36,13 +35,13 @@ class TestDefaultPartitionValueExtractor {
 
   @Test
   void testNonPartition() {
-    PartitionValueExtractor extractor = new DefaultPartitionValueExtractor(Collections.emptyList());
+    PartitionValueExtractor extractor = new DefaultPartitionValueExtractor(new String[0]);
     assertEquals(Collections.emptyList(), extractor.extractPartitionValuesInPath(null));
   }
 
   @Test
   void testNonEmptyPartitionsParsingWithIllegalPartitionPath() {
-    PartitionValueExtractor extractor = new DefaultPartitionValueExtractor(Arrays.asList("foo", "bar"));
+    PartitionValueExtractor extractor = new DefaultPartitionValueExtractor(new String[] {"foo", "bar"});
     assertThrows(IllegalArgumentException.class, () -> extractor.extractPartitionValuesInPath(""));
     assertThrows(IllegalArgumentException.class, () -> extractor.extractPartitionValuesInPath(null));
   }
@@ -57,7 +56,7 @@ class TestDefaultPartitionValueExtractor {
       "a,b,c:0=a/1=b/2=c:3"}, delimiter = ':')
   void testMultiPartPartitions(String expected, String partitionPath, String depthStr) {
     int depth = Integer.parseInt(depthStr);
-    List<String> partitionFields = IntStream.range(0, depth).mapToObj(String::valueOf).collect(Collectors.toList());
+    String[] partitionFields = IntStream.range(0, depth).mapToObj(String::valueOf).toArray(String[]::new);
     PartitionValueExtractor extractor = new DefaultPartitionValueExtractor(partitionFields);
     List<String> partitionValues = extractor.extractPartitionValuesInPath(partitionPath);
     List<String> expectedPartitionValues = Arrays.asList(expected.split(","));
@@ -70,7 +69,7 @@ class TestDefaultPartitionValueExtractor {
       "false:a/1=b/2=c:3"}, delimiter = ':')
   void testInconsistentHiveStylePartitions(boolean expectedHiveStyle, String partitionPath, String depthStr) {
     int depth = Integer.parseInt(depthStr);
-    List<String> partitionFields = IntStream.range(0, depth).mapToObj(String::valueOf).collect(Collectors.toList());
+    String[] partitionFields = IntStream.range(0, depth).mapToObj(String::valueOf).toArray(String[]::new);
     PartitionValueExtractor extractor = new DefaultPartitionValueExtractor(partitionFields);
     Throwable t = assertThrows(IllegalArgumentException.class, () -> extractor.extractPartitionValuesInPath(partitionPath));
     assertEquals("Expected hiveStyle=" + expectedHiveStyle + " at depth=1 but got hiveStyle=" + !expectedHiveStyle, t.getMessage());
@@ -82,7 +81,7 @@ class TestDefaultPartitionValueExtractor {
       "0=a/P1=b/2=c:3:P1"}, delimiter = ':')
   void testInconsistentFieldNameInHiveStylePartitions(String partitionPath, String depthStr, String unexpectedFieldName) {
     int depth = Integer.parseInt(depthStr);
-    List<String> partitionFields = IntStream.range(0, depth).mapToObj(String::valueOf).collect(Collectors.toList());
+    String[] partitionFields = IntStream.range(0, depth).mapToObj(String::valueOf).toArray(String[]::new);
     PartitionValueExtractor extractor = new DefaultPartitionValueExtractor(partitionFields);
     Throwable t = assertThrows(IllegalArgumentException.class, () -> extractor.extractPartitionValuesInPath(partitionPath));
     assertEquals("Expected field `1` at depth=1 but got `" + unexpectedFieldName + "`", t.getMessage());
