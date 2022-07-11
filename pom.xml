@@ -102,7 +102,8 @@
     <pulsar.version>2.8.1</pulsar.version>
     <confluent.version>5.3.4</confluent.version>
     <glassfish.version>2.17</glassfish.version>
-    <parquet.version>1.12.1</parquet.version>
+    <hive.parquet.version>1.10.1</hive.parquet.version>
+    <parquet.version>1.12.2</parquet.version>
     <glassfish.el.version>3.0.1-b12</glassfish.el.version>
     <parquet.version>1.10.1</parquet.version>
     <junit.jupiter.version>5.7.2</junit.jupiter.version>
@@ -401,7 +402,6 @@
           <artifactId>scala-maven-plugin</artifactId>
           <version>${scala-maven-plugin.version}</version>
           <configuration>
-            <recompileMode>all</recompileMode>
             <checkMultipleScalaVersions>false</checkMultipleScalaVersions>
           </configuration>
         </plugin>
@@ -1513,14 +1513,6 @@
 
               <source>${java.version}</source>
               <target>${java.version}</target>
-              <compilerArgs>
-                <arg>-verbose</arg>
-                <arg>-Xlint:unchecked</arg>
-              </compilerArgs>
-              <testCompilerArguments>
-                <arg>-verbose</arg>
-                <arg>-Xlint:unchecked</arg>
-              </testCompilerArguments>
             </configuration>
           </plugin>
           <plugin>
@@ -1751,7 +1743,6 @@
         <hudi.spark.common.module>hudi-spark3-common</hudi.spark.common.module>
         <scalatest.version>${scalatest.spark3.version}</scalatest.version>
         <kafka.version>${kafka.spark3.version}</kafka.version>
-        <scalatest.version>3.1.0</scalatest.version>
         <parquet.version>1.12.2</parquet.version>
         <avro.version>1.10.2</avro.version>
         <orc.version>1.6.12</orc.version>

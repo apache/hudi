@@ -22,6 +22,8 @@ SCRIPT_PATH=$(cd `dirname $0`; pwd)
 HUDI_DEMO_ENV=$1
 WS_ROOT=`dirname $SCRIPT_PATH`
 # restart cluster
+
+# if testing with hadoop hive spark 2.x versions, add back lines with 2.x version and comment out the 3.x versions.
 #HUDI_WS=${WS_ROOT} docker-compose -f ${SCRIPT_PATH}/compose/docker-compose_hadoop284_hive233_spark244.yml down
 HUDI_WS=${WS_ROOT} docker-compose -f ${SCRIPT_PATH}/compose/docker-compose_hadoop310_hive312_spark321.yml down
 if [ "$HUDI_DEMO_ENV" != "dev" ]; then
