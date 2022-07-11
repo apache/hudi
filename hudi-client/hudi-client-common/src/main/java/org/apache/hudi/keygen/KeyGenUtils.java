@@ -18,7 +18,6 @@
 
 package org.apache.hudi.keygen;
 
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -29,11 +28,16 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.parser.BaseHoodieDateTimeParser;
+
+import org.apache.avro.generic.GenericRecord;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class KeyGenUtils {
 
@@ -195,5 +199,16 @@ public class KeyGenUtils {
       }
     }
     return keyGenerator;
+  }
+
+  static List<String> getRecordKeyFields(TypedProperties props) {
+    if (props.containsKey(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key())) {
+      return Collections.emptyList();
+    }
+
+    return Arrays.stream(props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()).split(","))
+        .map(String::trim)
+        .filter(s -> !s.isEmpty())
+        .collect(Collectors.toList());
   }
 }

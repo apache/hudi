@@ -23,7 +23,6 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.avro.generic.GenericRecord;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
@@ -36,14 +35,7 @@ public class ComplexAvroKeyGenerator extends BaseKeyGenerator {
 
   public ComplexAvroKeyGenerator(TypedProperties props) {
     super(props);
-    if (props.containsKey(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key())) {
-      this.recordKeyFields = Arrays.stream(props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()).split(","))
-          .map(String::trim)
-          .filter(s -> !s.isEmpty())
-          .collect(Collectors.toList());
-    } else {
-      this.recordKeyFields = Collections.emptyList();
-    }
+    this.recordKeyFields = KeyGenUtils.getRecordKeyFields(props);
     this.partitionPathFields = Arrays.stream(props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()).split(","))
         .map(String::trim)
         .filter(s -> !s.isEmpty())

@@ -18,15 +18,11 @@
 package org.apache.hudi.keygen;
 
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import org.apache.avro.generic.GenericRecord;
 
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
-import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 
@@ -40,12 +36,7 @@ public class NonpartitionedAvroKeyGenerator extends BaseKeyGenerator {
 
   public NonpartitionedAvroKeyGenerator(TypedProperties props) {
     super(props);
-    if (props.containsKey(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key())) {
-      this.recordKeyFields = Arrays.stream(props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key())
-          .split(",")).map(String::trim).filter(s -> !s.isEmpty()).collect(Collectors.toList());
-    } else {
-      this.recordKeyFields = Collections.emptyList();
-    }
+    this.recordKeyFields = KeyGenUtils.getRecordKeyFields(props);
     this.partitionPathFields = EMPTY_PARTITION_FIELD_LIST;
   }
 

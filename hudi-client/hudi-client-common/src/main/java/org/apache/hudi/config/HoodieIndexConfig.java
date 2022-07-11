@@ -634,7 +634,7 @@ public class HoodieIndexConfig extends HoodieConfig {
     private void validateBucketIndexConfig() {
       if (hoodieIndexConfig.getString(INDEX_TYPE).equalsIgnoreCase(HoodieIndex.IndexType.BUCKET.toString())) {
         if (!hoodieIndexConfig.contains(KeyGeneratorOptions.RECORDKEY_FIELD_NAME)) {
-          throw new HoodieIndexException(String.format("No record key field specified. Set %s to ue bucket index.", KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()));
+          throw new HoodieIndexException(String.format("No record key field specified. Set %s to use bucket index.", KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()));
         }
         // check the bucket index hash field
         if (StringUtils.isNullOrEmpty(hoodieIndexConfig.getString(BUCKET_INDEX_HASH_FIELD))) {

@@ -48,7 +48,8 @@ public class KeyGeneratorOptions extends HoodieConfig {
       .noDefaultValue()
       .withDocumentation("Record key field. Value to be used as the `recordKey` component of `HoodieKey`.\n"
           + "Actual value will be obtained by invoking .toString() on the field value. Nested fields can be specified using\n"
-          + "the dot notation eg: `a.b.c`");
+          + "the dot notation eg: `a.b.c`. Not setting this config leads to creation of an immutable append-only table. "
+          + "So if you need updates in the table, it is recommended to set the record key field");
 
   public static final ConfigProperty<String> PARTITIONPATH_FIELD_NAME = ConfigProperty
       .key("hoodie.datasource.write.partitionpath.field")
