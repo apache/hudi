@@ -695,7 +695,7 @@ public class TestData {
     final int[] requiredPos = IntStream.range(0, schema.getFields().size()).toArray();
     for (File partitionDir : partitionDirs) {
       List<String> readBuffer = new ArrayList<>();
-      List<FileSlice> fileSlices = table.getSliceView().getLatestFileSlices(partitionDir.getName()).collect(Collectors.toList());
+      List<FileSlice> fileSlices = table.getSliceView().getLatestMergedFileSlicesBeforeOrOn(partitionDir.getName(), latestInstant).collect(Collectors.toList());
       for (FileSlice fileSlice : fileSlices) {
         HoodieMergedLogRecordScanner scanner = null;
         List<String> logPaths = fileSlice.getLogFiles()
