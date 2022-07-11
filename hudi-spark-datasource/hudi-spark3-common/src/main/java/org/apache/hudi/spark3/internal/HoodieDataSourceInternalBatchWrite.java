@@ -73,7 +73,7 @@ public class HoodieDataSourceInternalBatchWrite implements BatchWrite {
 
   @Override
   public DataWriterFactory createBatchWriterFactory(PhysicalWriteInfo info) {
-    if (writeConfig.shouldAutoCommit()) {
+    if (writeConfig.bulkInsertRowAutoCommit()) {
       dataSourceInternalWriterHelper.createInflightCommit();
     }
 
@@ -100,7 +100,7 @@ public class HoodieDataSourceInternalBatchWrite implements BatchWrite {
     List<HoodieInternalWriteStatus> writeStatusList = Arrays.stream(messages).map(m -> (HoodieWriterCommitMessage) m)
         .flatMap(m -> m.getWriteStatuses().stream())
         .collect(Collectors.toList());
-    if (writeConfig.shouldAutoCommit()) {
+    if (writeConfig.bulkInsertRowAutoCommit()) {
       List<HoodieWriteStat> writeStatList = writeStatusList.stream()
           .map(HoodieInternalWriteStatus::getStat).collect(Collectors.toList());
       dataSourceInternalWriterHelper.commit(writeStatList);
