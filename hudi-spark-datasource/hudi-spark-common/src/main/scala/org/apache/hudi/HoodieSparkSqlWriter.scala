@@ -40,6 +40,7 @@ import org.apache.hudi.hive.{HiveSyncConfigHolder, HiveSyncTool}
 import org.apache.hudi.index.SparkHoodieIndexFactory
 import org.apache.hudi.internal.DataSourceInternalWriterHelper
 import org.apache.hudi.internal.schema.InternalSchema
+import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
 import org.apache.hudi.internal.schema.utils.{AvroSchemaEvolutionUtils, SerDeHelper}
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.keygen.{TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
@@ -242,16 +243,29 @@ object HoodieSparkSqlWriter {
                 classOf[org.apache.avro.Schema]))
             var schema = AvroConversionUtils.convertStructTypeToAvroSchema(df.schema, structName, nameSpace)
             val lastestSchema = getLatestTableSchema(fs, basePath, sparkContext, schema)
-            val internalSchemaOpt = getLatestTableInternalSchema(fs, basePath, sparkContext)
+            var internalSchemaOpt = getLatestTableInternalSchema(fs, basePath, sparkContext)
+            if (reconcileSchema && parameters.getOrDefault(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.key(), "false").toBoolean
+              && internalSchemaOpt.isEmpty) {
+              // force apply full schema evolution.
+              internalSchemaOpt = Some(AvroInternalSchemaConverter.convert(schema))
+            }
             if (reconcileSchema) {
               schema = lastestSchema
             }
             if (internalSchemaOpt.isDefined) {
-              schema = {
-                val newSparkSchema = AvroConversionUtils.convertAvroSchemaToStructType(AvroSchemaEvolutionUtils.canonicalizeColumnNullability(schema, lastestSchema))
-                AvroConversionUtils.convertStructTypeToAvroSchema(newSparkSchema, structName, nameSpace)
-
+              // Apply schema evolution.
+              val mergedSparkSchema = if (!reconcileSchema) {
+                AvroConversionUtils.convertAvroSchemaToStructType(AvroSchemaEvolutionUtils.canonicalizeColumnNullability(schema, lastestSchema))
+              } else {
+                // Auto merge write schema and read schema.
+                val mergedInternalSchema = AvroSchemaEvolutionUtils.reconcileSchema(schema, internalSchemaOpt.get)
+                AvroConversionUtils.convertAvroSchemaToStructType(AvroInternalSchemaConverter.convert(mergedInternalSchema, lastestSchema.getName))
               }
+              schema = AvroConversionUtils.convertStructTypeToAvroSchema(mergedSparkSchema, structName, nameSpace)
+            }
+
+            if (reconcileSchema && internalSchemaOpt.isEmpty) {
+              schema = lastestSchema
             }
             validateSchemaForHoodieIsDeleted(schema)
             sparkContext.getConf.registerAvroSchemas(schema)

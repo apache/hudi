@@ -20,6 +20,7 @@ package org.apache.hudi.table.format.cow;
 
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.table.format.cow.vector.reader.ParquetColumnarRowSplitReader;
+import org.apache.hudi.util.DataTypeUtils;
 
 import org.apache.flink.api.common.io.FileInputFormat;
 import org.apache.flink.api.common.io.FilePathFilter;
@@ -46,9 +47,6 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Set;
-
-import static org.apache.flink.table.data.vector.VectorizedColumnBatch.DEFAULT_SIZE;
-import static org.apache.flink.table.filesystem.RowPartitionComputer.restorePartValueFromType;
 
 /**
  * An implementation of {@link FileInputFormat} to read {@link RowData} records
@@ -110,7 +108,7 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
     LinkedHashMap<String, String> partSpec = PartitionPathUtils.extractPartitionSpecFromPath(
         fileSplit.getPath());
     LinkedHashMap<String, Object> partObjects = new LinkedHashMap<>();
-    partSpec.forEach((k, v) -> partObjects.put(k, restorePartValueFromType(
+    partSpec.forEach((k, v) -> partObjects.put(k, DataTypeUtils.resolvePartition(
         partDefaultName.equals(v) ? null : v,
         fullFieldTypes[fieldNameList.indexOf(k)])));
 
@@ -122,7 +120,7 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
         fullFieldTypes,
         partObjects,
         selectedFields,
-        DEFAULT_SIZE,
+        2048,
         fileSplit.getPath(),
         fileSplit.getStart(),
         fileSplit.getLength());

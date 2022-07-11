@@ -158,7 +158,7 @@
         </dependency>
         <dependency>
             <groupId>org.apache.flink</groupId>
-            <artifactId>flink-hadoop-compatibility_${scala.binary.version}</artifactId>
+            <artifactId>${flink.hadoop.compatibility.artifactId}</artifactId>
             <version>${flink.version}</version>
         </dependency>
 

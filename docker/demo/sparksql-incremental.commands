@@ -47,6 +47,7 @@ spark.sql("select key, `_hoodie_partition_path` as datestr, symbol, ts, open, cl
     option(HoodieWriteConfig.TBL_NAME.key(), "stock_ticks_derived_mor").
     option(HoodieSyncConfig.META_SYNC_TABLE_NAME.key(), "stock_ticks_derived_mor").
     option(HoodieSyncConfig.META_SYNC_DATABASE_NAME.key(), "default").
+    option(HiveSyncConfigHolder.HIVE_SYNC_MODE.key(), "jdbc").
     option(HiveSyncConfigHolder.HIVE_URL.key(), "jdbc:hive2://hiveserver:10000").
     option(HiveSyncConfigHolder.HIVE_USER.key(), "hive").
     option(HiveSyncConfigHolder.HIVE_PASS.key(), "hive").
@@ -79,6 +80,7 @@ spark.sql("select key, `_hoodie_partition_path` as datestr, symbol, ts, open, cl
     option(HoodieWriteConfig.TBL_NAME.key(), "stock_ticks_derived_mor_bs").
     option(HoodieSyncConfig.META_SYNC_TABLE_NAME.key(), "stock_ticks_derived_mor_bs").
     option(HoodieSyncConfig.META_SYNC_DATABASE_NAME.key(), "default").
+    option(HiveSyncConfigHolder.HIVE_SYNC_MODE.key(), "jdbc").
     option(HiveSyncConfigHolder.HIVE_URL.key(), "jdbc:hive2://hiveserver:10000").
     option(HiveSyncConfigHolder.HIVE_USER.key(), "hive").
     option(HiveSyncConfigHolder.HIVE_PASS.key(), "hive").

@@ -21,7 +21,6 @@ package org.apache.hudi.hive;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.hive.ddl.DDLExecutor;
 import org.apache.hudi.hive.ddl.HMSDDLExecutor;
@@ -49,7 +48,6 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.hadoop.utils.HoodieHiveUtils.GLOBALLY_CONSISTENT_READ_TIMESTAMP;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_MODE;
-import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_USE_JDBC;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
 import static org.apache.hudi.sync.common.util.TableUtils.tableId;
 
@@ -72,23 +70,19 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
     // Support JDBC, HiveQL and metastore based implementations for backwards compatibility. Future users should
     // disable jdbc and depend on metastore client for all hive registrations
     try {
-      if (!StringUtils.isNullOrEmpty(config.getString(HIVE_SYNC_MODE))) {
-        HiveSyncMode syncMode = HiveSyncMode.of(config.getString(HIVE_SYNC_MODE));
-        switch (syncMode) {
-          case HMS:
-            ddlExecutor = new HMSDDLExecutor(config);
-            break;
-          case HIVEQL:
-            ddlExecutor = new HiveQueryDDLExecutor(config);
-            break;
-          case JDBC:
-            ddlExecutor = new JDBCExecutor(config);
-            break;
-          default:
-            throw new HoodieHiveSyncException("Invalid sync mode given " + config.getString(HIVE_SYNC_MODE));
-        }
-      } else {
-        ddlExecutor = config.getBoolean(HIVE_USE_JDBC) ? new JDBCExecutor(config) : new HiveQueryDDLExecutor(config);
+      HiveSyncMode syncMode = HiveSyncMode.of(config.getStringOrDefault(HIVE_SYNC_MODE));
+      switch (syncMode) {
+        case HMS:
+          ddlExecutor = new HMSDDLExecutor(config);
+          break;
+        case HIVEQL:
+          ddlExecutor = new HiveQueryDDLExecutor(config);
+          break;
+        case JDBC:
+          ddlExecutor = new JDBCExecutor(config);
+          break;
+        default:
+          throw new HoodieHiveSyncException("Invalid sync mode given " + config.getString(HIVE_SYNC_MODE));
       }
       this.client = Hive.get(config.getHiveConf()).getMSC();
     } catch (Exception e) {
