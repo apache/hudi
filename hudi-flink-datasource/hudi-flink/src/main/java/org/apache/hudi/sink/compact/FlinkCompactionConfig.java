@@ -20,10 +20,10 @@ package org.apache.hudi.sink.compact;
 
 import org.apache.hudi.config.HoodieMemoryConfig;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.sink.compact.strategy.CompactionPlanStrategy;
 
 import com.beust.jcommander.Parameter;
 import org.apache.flink.configuration.Configuration;
-import org.apache.hudi.sink.compact.strategy.SingleCompactionPlanSelectStrategy;
 
 /**
  * Configurations for Hoodie Flink compaction.
@@ -102,7 +102,7 @@ public class FlinkCompactionConfig extends Configuration {
   @Parameter(names = {"--seq"}, description = "Compaction plan execution sequence, two options are supported:\n"
       + "1). FIFO: execute the oldest plan first;\n"
       + "2). LIFO: execute the latest plan first, by default LIFO", required = false)
-  public String compactionSeq = SEQ_LIFO;
+  public String compactionSeq = SEQ_FIFO;
 
   @Parameter(names = {"--service"}, description = "Flink Compaction runs in service mode, disable by default")
   public Boolean serviceMode = false;
@@ -111,21 +111,21 @@ public class FlinkCompactionConfig extends Configuration {
       description = "Min compaction interval of async compaction service, default 10 minutes")
   public Integer minCompactionIntervalSeconds = 600;
 
-  @Parameter(names = {"--select-strategy"}, description = "The strategy define how to select compaction plan to compact.\n"
-      + "1). SingleCompactionPlanSelectStrategy: Select first or last compaction plan."
-      + "2). MultiCompactionPlanSelectStrategy: Select first or last n compaction plan (n is defined by compactionPlanMaxSelect)."
-      + "3). AllPendingCompactionPlanSelectStrategy: Select all pending compaction plan"
-      + "4). InstantCompactionPlanSelectStrategy: Select the compaction plan that instant is specified by compactionPlanInstant")
-  public String compactionPlanSelectStrategy = SingleCompactionPlanSelectStrategy.class.getName();
+  @Parameter(names = {"--plan-select-strategy"}, description = "The strategy define how to select compaction plan to compact.\n"
+      + "1). num_instants: select plans by specific number of instants, it's the default strategy with 1 instant at a time;\n"
+      + "3). all: Select all pending compaction plan;\n"
+      + "4). instants: Select the compaction plan by specific instants")
+  public String compactionPlanSelectStrategy = CompactionPlanStrategy.NUM_INSTANTS;
 
-  @Parameter(names = {"--select-max-number"}, description = "Max number of compaction plan would be selected in compaction."
+  @Parameter(names = {"--max-num-plans"}, description = "Max number of compaction plan would be selected in compaction."
       + "It's only effective for MultiCompactionPlanSelectStrategy.")
-  public Integer compactionPlanMaxSelect = 10;
+  public Integer maxNumCompactionPlans = 1;
 
-  @Parameter(names = {"--select-instant"}, description = "Specify the compaction plan instant to compact and you can specify more than"
-      + "one instant in a time by using comma."
-      + "It's only effective for InstantCompactionPlanSelectStrategy.")
+  @Parameter(names = {"--target-instants"}, description = "Specify the compaction plan instants to compact,\n"
+      + "Multiple instants are supported by comma separated instant time.\n"
+      + "It's only effective for 'instants' plan selection strategy.")
   public String compactionPlanInstant;
+
   @Parameter(names = {"--spillable_map_path"}, description = "Default file path prefix for spillable map.", required = false)
   public String spillableMapPath = HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH.defaultValue();
 

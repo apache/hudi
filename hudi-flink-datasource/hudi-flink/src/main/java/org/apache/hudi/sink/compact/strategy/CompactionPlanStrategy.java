@@ -18,26 +18,21 @@
 
 package org.apache.hudi.sink.compact.strategy;
 
-import java.util.Collections;
-import java.util.List;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.sink.compact.FlinkCompactionConfig;
-import org.apache.hudi.util.CompactionUtil;
+
+import java.util.List;
 
 /**
- * Select one compaction plan to compact
+ * Compaction plan selection strategy.
  */
-public class SingleCompactionPlanSelectStrategy implements CompactionPlanSelectStrategy {
-  @Override
-  public List<HoodieInstant> select(HoodieTimeline pendingCompactionTimeline, FlinkCompactionConfig config) {
-    Option<HoodieInstant> compactionPlanInstant = CompactionUtil.isLIFO(config.compactionSeq)
-        ? pendingCompactionTimeline.lastInstant()
-        : pendingCompactionTimeline.firstInstant();
-    if (compactionPlanInstant.isPresent()) {
-      return Collections.singletonList(compactionPlanInstant.get());
-    }
-    return Collections.emptyList();
-  }
+public interface CompactionPlanStrategy {
+  String ALL = "all";
+  String INSTANTS = "instants";
+  String NUM_INSTANTS = "num_instants";
+
+  /**
+   * Define how to select compaction plan to compact.
+   */
+  List<HoodieInstant> select(HoodieTimeline pendingCompactionTimeline);
 }

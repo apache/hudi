@@ -23,6 +23,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.Schema.Field;
 import org.apache.avro.SchemaCompatibility;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.io.hfile.CacheConfig;
@@ -259,6 +260,11 @@ public class TableSchemaResolver {
     } catch (IOException e) {
       throw new HoodieException("Failed to read data schema", e);
     }
+  }
+
+  public static MessageType convertAvroSchemaToParquet(Schema schema, Configuration hadoopConf) {
+    AvroSchemaConverter avroSchemaConverter = new AvroSchemaConverter(hadoopConf);
+    return avroSchemaConverter.convert(schema);
   }
 
   private Schema convertParquetSchemaToAvro(MessageType parquetSchema) {

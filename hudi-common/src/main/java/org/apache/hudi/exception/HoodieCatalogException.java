@@ -7,7 +7,7 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,20 +16,29 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.sink.compact.strategy;
-
-import java.util.List;
-import java.util.stream.Collectors;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.sink.compact.FlinkCompactionConfig;
+package org.apache.hudi.exception;
 
 /**
- * Select all pending compaction plan to compact
+ * <p>
+ * Exception thrown for Hoodie Catalog errors.
+ * </p>
  */
-public class AllPendingCompactionPlanSelectStrategy implements CompactionPlanSelectStrategy {
-  @Override
-  public List<HoodieInstant> select(HoodieTimeline pendingCompactionTimeline, FlinkCompactionConfig config) {
-    return pendingCompactionTimeline.getInstants().collect(Collectors.toList());
+public class HoodieCatalogException extends RuntimeException {
+
+  public HoodieCatalogException() {
+    super();
   }
+
+  public HoodieCatalogException(String message) {
+    super(message);
+  }
+
+  public HoodieCatalogException(String message, Throwable t) {
+    super(message, t);
+  }
+
+  public HoodieCatalogException(Throwable t) {
+    super(t);
+  }
+
 }

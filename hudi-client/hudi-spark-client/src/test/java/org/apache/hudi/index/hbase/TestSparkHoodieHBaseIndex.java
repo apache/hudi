@@ -32,6 +32,8 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.config.HoodieCleanConfig;
+import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieHBaseIndexConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
@@ -477,9 +479,9 @@ public class TestSparkHoodieHBaseIndex extends SparkClientFunctionalTestHarness 
   public void testHbaseTagLocationForArchivedCommits() throws Exception {
     // Load to memory
     Map<String, String> params = new HashMap<String, String>();
-    params.put(HoodieCompactionConfig.CLEANER_COMMITS_RETAINED.key(), "1");
-    params.put(HoodieCompactionConfig.MAX_COMMITS_TO_KEEP.key(), "3");
-    params.put(HoodieCompactionConfig.MIN_COMMITS_TO_KEEP.key(), "2");
+    params.put(HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key(), "1");
+    params.put(HoodieArchivalConfig.MAX_COMMITS_TO_KEEP.key(), "3");
+    params.put(HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.key(), "2");
     HoodieWriteConfig config = getConfigBuilder(100, false, false).withProps(params).build();
 
     SparkHoodieHBaseIndex index = new SparkHoodieHBaseIndex(config);
