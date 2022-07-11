@@ -75,8 +75,6 @@
                                     <include>org.apache.hudi:hudi-common</include>
                                     <include>org.apache.hudi:hudi-client-common</include>
                                     <include>org.apache.hudi:hudi-java-client</include>
-                                    <include>org.apache.hudi:hudi-spark-client</include>
-                                    <include>org.apache.hudi:hudi-spark-common_${scala.binary.version}</include>
                                     <include>org.apache.hudi:hudi-kafka-connect</include>
                                     <include>org.apache.hudi:hudi-utilities_${scala.binary.version}</include>
                                     <include>org.apache.hudi:hudi-hive-sync</include>
@@ -321,11 +319,6 @@
                     <artifactId>servlet-api</artifactId>
                 </exclusion>
             </exclusions>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.hudi</groupId>
-            <artifactId>hudi-spark-common_${scala.binary.version}</artifactId>
-            <version>${project.version}</version>
         </dependency>
 
         <!-- Avro/ Parquet -->
