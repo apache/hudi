@@ -82,7 +82,7 @@ Creates a Flink Hudi table first and insert data into the Hudi table using SQL `
 
 ```sql
 -- sets up the result mode to tableau to show the results directly in the CLI
-set execution.result-mode=tableau;
+set sql-client.execution.result-mode = tableau;
 
 CREATE TABLE t1(
   uuid VARCHAR(20) PRIMARY KEY NOT ENFORCED,
