@@ -19,29 +19,26 @@
 
 package org.apache.hudi.index.bloom;
 
-import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecordLocation;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaPairRDD;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.io.HoodieKeyLookupResult;
 import org.apache.hudi.table.HoodieTable;
-
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.Partitioner;
+import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
+import scala.Tuple2;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-
-import scala.Tuple2;
 
 import static org.apache.hudi.metadata.MetadataPartitionType.BLOOM_FILTERS;
 
@@ -66,12 +63,11 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
   public HoodiePairData<HoodieKey, HoodieRecordLocation> findMatchingFilesForRecordKeys(
       HoodieWriteConfig config, HoodieEngineContext context, HoodieTable hoodieTable,
       HoodiePairData<String, String> partitionRecordKeyPairs,
-      HoodieData<Pair<String, HoodieKey>> fileComparisonPairs,
+      HoodiePairData<String, HoodieKey> fileGroupToRecordKeyPairs,
       Map<String, List<BloomIndexFileInfo>> partitionToFileInfo,
       Map<String, Long> recordsPerPartition) {
-    JavaRDD<Tuple2<String, HoodieKey>> fileComparisonsRDD =
-        HoodieJavaRDD.getJavaRDD(fileComparisonPairs)
-            .map(pair -> new Tuple2<>(pair.getLeft(), pair.getRight()));
+    JavaPairRDD<String, HoodieKey> fileComparisonsRDD =
+        HoodieJavaRDD.getJavaRDD(fileGroupToRecordKeyPairs);
 
     int inputParallelism = HoodieJavaPairRDD.getJavaPairRDD(partitionRecordKeyPairs).partitions().size();
     int joinParallelism = Math.max(inputParallelism, config.getBloomIndexParallelism());
@@ -83,8 +79,8 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
         && hoodieTable.getMetaClient().getTableConfig().getMetadataPartitions()
         .contains(BLOOM_FILTERS.getPartitionPath())) {
       // Step 1: Sort by file id
-      JavaRDD<Tuple2<String, HoodieKey>> sortedFileIdAndKeyPairs =
-          fileComparisonsRDD.sortBy(Tuple2::_1, true, joinParallelism);
+      JavaPairRDD<String, HoodieKey> sortedFileIdAndKeyPairs =
+          fileComparisonsRDD.sortByKey(true, joinParallelism);
 
       // Step 2: Use bloom filter to filter and the actual log file to get the record location
       keyLookupResultRDD = sortedFileIdAndKeyPairs.mapPartitionsWithIndex(
@@ -95,21 +91,23 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
       Partitioner partitioner = new BucketizedBloomCheckPartitioner(joinParallelism, comparisonsPerFileGroup,
           config.getBloomIndexKeysPerBucket());
 
-      keyLookupResultRDD = fileComparisonsRDD.mapToPair(t -> new Tuple2<>(Pair.of(t._1, t._2.getRecordKey()), t))
-          .repartitionAndSortWithinPartitions(partitioner)
-          .map(Tuple2::_2)
+      keyLookupResultRDD = fileComparisonsRDD.repartitionAndSortWithinPartitions(partitioner)
           .mapPartitionsWithIndex(new HoodieBloomIndexCheckFunction(hoodieTable, config), true);
     } else {
-      keyLookupResultRDD = fileComparisonsRDD.sortBy(Tuple2::_1, true, joinParallelism)
+      keyLookupResultRDD = fileComparisonsRDD.sortByKey(true, joinParallelism)
           .mapPartitionsWithIndex(new HoodieBloomIndexCheckFunction(hoodieTable, config), true);
     }
 
     return HoodieJavaPairRDD.of(keyLookupResultRDD.flatMap(List::iterator)
         .filter(lr -> lr.getMatchingRecordKeys().size() > 0)
-        .flatMapToPair(lookupResult -> lookupResult.getMatchingRecordKeys().stream()
-            .map(recordKey -> new Tuple2<>(new HoodieKey(recordKey, lookupResult.getPartitionPath()),
-                new HoodieRecordLocation(lookupResult.getBaseInstantTime(), lookupResult.getFileId())))
-            .collect(Collectors.toList()).iterator()));
+        .flatMapToPair(lookupResult ->
+            lookupResult.getMatchingRecordKeys().stream()
+                .map(recordKey -> new Tuple2<>(new HoodieKey(recordKey, lookupResult.getPartitionPath()),
+                    new HoodieRecordLocation(lookupResult.getBaseInstantTime(), lookupResult.getFileId())))
+                .collect(Collectors.toList())
+                .iterator()
+        )
+    );
   }
 
   /**
@@ -119,14 +117,14 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
       final HoodieWriteConfig config,
       final Map<String, Long> recordsPerPartition,
       final Map<String, List<BloomIndexFileInfo>> partitionToFileInfo,
-      final JavaRDD<Tuple2<String, HoodieKey>> fileComparisonsRDD,
+      final JavaPairRDD<String, HoodieKey> fileComparisonsRDD,
       final HoodieEngineContext context) {
     Map<String, Long> fileToComparisons;
     if (config.getBloomIndexPruneByRanges()) {
       // we will just try exploding the input and then count to determine comparisons
       // FIX(vc): Only do sampling here and extrapolate?
       context.setJobStatus(this.getClass().getSimpleName(), "Compute all comparisons needed between records and files: " + config.getTableName());
-      fileToComparisons = fileComparisonsRDD.mapToPair(t -> t).countByKey();
+      fileToComparisons = fileComparisonsRDD.countByKey();
     } else {
       fileToComparisons = new HashMap<>();
       partitionToFileInfo.forEach((key, value) -> {

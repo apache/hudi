@@ -19,8 +19,6 @@
 
 package org.apache.hudi.index.bloom;
 
-import org.apache.hudi.common.data.HoodieData;
-import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
@@ -57,10 +55,11 @@ public class ListBasedHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper 
   public HoodiePairData<HoodieKey, HoodieRecordLocation> findMatchingFilesForRecordKeys(
       HoodieWriteConfig config, HoodieEngineContext context, HoodieTable hoodieTable,
       HoodiePairData<String, String> partitionRecordKeyPairs,
-      HoodieData<Pair<String, HoodieKey>> fileComparisonPairs,
+      HoodiePairData<String, HoodieKey> fileComparisonPairs,
       Map<String, List<BloomIndexFileInfo>> partitionToFileInfo, Map<String, Long> recordsPerPartition) {
     List<Pair<String, HoodieKey>> fileComparisonPairList =
-        HoodieListData.getList(fileComparisonPairs).stream()
+        fileComparisonPairs.collectAsList()
+            .stream()
             .sorted(Comparator.comparing(Pair::getLeft)).collect(toList());
 
     List<HoodieKeyLookupResult> keyLookupResults = new ArrayList<>();

@@ -74,7 +74,7 @@ public class HoodieGlobalBloomIndex extends HoodieBloomIndex {
    */
 
   @Override
-  HoodieData<Pair<String, HoodieKey>> explodeRecordsWithFileComparisons(
+  HoodiePairData<String, HoodieKey> explodeRecordsWithFileComparisons(
       final Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo,
       HoodiePairData<String, String> partitionRecordKeyPairs) {
 
@@ -90,7 +90,9 @@ public class HoodieGlobalBloomIndex extends HoodieBloomIndex {
           .map(partitionFileIdPair -> (Pair<String, HoodieKey>) new ImmutablePair<>(partitionFileIdPair.getRight(),
               new HoodieKey(recordKey, partitionFileIdPair.getLeft())))
           .collect(Collectors.toList());
-    }).flatMap(List::iterator);
+    })
+        .flatMap(List::iterator)
+        .mapToPair(t -> t);
   }
 
   /**

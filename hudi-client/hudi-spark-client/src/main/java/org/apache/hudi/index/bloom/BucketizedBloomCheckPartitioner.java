@@ -18,6 +18,7 @@
 
 package org.apache.hudi.index.bloom;
 
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.util.NumericUtils;
 import org.apache.hudi.common.util.collection.Pair;
 
@@ -142,8 +143,8 @@ public class BucketizedBloomCheckPartitioner extends Partitioner {
 
   @Override
   public int getPartition(Object key) {
-    final Pair<String, String> parts = (Pair<String, String>) key;
-    final long hashOfKey = NumericUtils.getMessageDigestHash("MD5", parts.getRight());
+    final Pair<String, HoodieKey> parts = (Pair<String, HoodieKey>) key;
+    final long hashOfKey = NumericUtils.getMessageDigestHash("MD5", parts.getRight().getRecordKey());
     final List<Integer> candidatePartitions = fileGroupToPartitions.get(parts.getLeft());
     final int idx = (int) Math.floorMod((int) hashOfKey, candidatePartitions.size());
     assert idx >= 0;

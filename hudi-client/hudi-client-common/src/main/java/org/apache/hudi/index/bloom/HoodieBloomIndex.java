@@ -126,7 +126,7 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
 
     // Step 3: Obtain a HoodieData, for each incoming record, that already exists, with the file id,
     // that contains it.
-    HoodieData<Pair<String, HoodieKey>> fileComparisonPairs =
+    HoodiePairData<String, HoodieKey> fileComparisonPairs =
         explodeRecordsWithFileComparisons(partitionToFileInfo, partitionRecordKeyPairs);
 
     return bloomIndexHelper.findMatchingFilesForRecordKeys(config, context, hoodieTable,
@@ -277,7 +277,7 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
    * Sub-partition to ensure the records can be looked up against files & also prune file<=>record comparisons based on
    * recordKey ranges in the index info.
    */
-  HoodieData<Pair<String, HoodieKey>> explodeRecordsWithFileComparisons(
+  HoodiePairData<String, HoodieKey> explodeRecordsWithFileComparisons(
       final Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo,
       HoodiePairData<String, String> partitionRecordKeyPairs) {
     IndexFileFilter indexFileFilter =
@@ -288,11 +288,14 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
       String recordKey = partitionRecordKeyPair.getRight();
       String partitionPath = partitionRecordKeyPair.getLeft();
 
+      // TODO(HUDI-4249) avoid collections
       return indexFileFilter.getMatchingFilesAndPartition(partitionPath, recordKey).stream()
-          .map(partitionFileIdPair -> (Pair<String, HoodieKey>) new ImmutablePair<>(partitionFileIdPair.getRight(),
+          .map(partitionFileIdPair -> new ImmutablePair<>(partitionFileIdPair.getRight(),
               new HoodieKey(recordKey, partitionPath)))
           .collect(Collectors.toList());
-    }).flatMap(List::iterator);
+    })
+        .flatMap(List::iterator)
+        .mapToPair(t -> t);
   }
 
   /**
