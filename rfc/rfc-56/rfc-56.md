@@ -17,7 +17,6 @@
 # RFC-56: Early Conflict Detection For Multi-writer
 
 
-
 ## Proposers
 
 - @zhangyue19921010
@@ -32,14 +31,23 @@ JIRA: https://issues.apache.org/jira/browse/HUDI-1575
 
 ## Abstract
 
-At present, Hudi implements an optimized occ mechanism based on timeline to ensure data consistency, integrity and 
-correctness between multi-writers. However, the related conflict detection is performed before commit metadata and 
-after the data writing is completed. If this detection was failed, it would lead to a waste of cluster resources 
-because computing and writing were finished already. To solve this problem, this RFC design an early conflict detection 
-mechanism based on the existing Hudi marker mechanism. This new mechanism will do conflict checking before the writers 
-creating markers and before starting to write corresponding data file. So that the writing conflicts can be detected as 
-early as possible. What's more? We can stop writing earlier because of early conflict detection and release the 
-resources to cluster, improving resource utilization.
+At present, Hudi implements an optimized OCC (Optimistic Concurrency Control) based on timeline to ensure data
+consistency, integrity and correctness between multi-writers. However, the related conflict detection is performed
+before commit metadata and after the data writing is completed. If this detection was failed, it would lead to a waste
+of cluster resources because computing and writing were finished already. To solve this problem, this RFC design an
+early conflict detection mechanism based on the existing Hudi marker mechanism. There are some subtle differences in
+early conflict detection work flow between different types of marker matainers.
+
+
+For direct markers, we will list necessary marker files directly and do conflict checking before the writers creating
+markers and before starting to write corresponding data file. For the timeline-server based markers, we just get the
+the result of marker conflict checking before the writers creating markers and before starting to write corresponding
+data file. The conflicts are asynchronously and periodically checked. Both writers may still write the data files of
+the same file slice, until the conflict is detected in the next round of checking.
+
+
+So that the writing conflicts can be detected as early as possible. What's more? We can stop writing earlier because of
+early conflict detection and release the resources to cluster, improving resource utilization.
 
 ## Background
 As we know, Transactions and multi-writers of data lakes are becoming the key characteristics of building LakeHouse 
@@ -71,10 +79,11 @@ Hudi currently has two important mechanisms, marker mechanism and heartbeat mech
 2. Heartbeat mechanism that can track all active writers to a Hudi table.
 
 
-Based on marker and heartbeat, this RFC design a new conflict detection: Early Conflict Detection. 
-Before the writer creates the marker and before it starts to write the file, Hudi will perform this new conflict 
-detection, trying to detect the writing conflict as early as possible and abort the writer when the conflict occurs, 
-so that we can release resources as soon as possible and improve resource utilization.
+Based on marker and heartbeat, this RFC design a new conflict detection: Early Conflict Detection.
+Before the writer creates the marker and before it starts to write the file, Hudi will perform this new conflict
+detection, trying to detect the writing conflict directly or get the async conflict check result(Timeline-Based) as
+early as possible and abort the writer when the conflict occurs, so that we can release resources as soon as possible
+and improve resource utilization.
 
 
 ## Implementation
@@ -119,7 +128,10 @@ at the same time.
 
 
 In addition, during checking conflicts, we do not need to list all marker files in all directories, we can prune based 
-on the current partition Path and fileID to avoid unnecessary list operations.
+on the current partition Path and fileID to avoid unnecessary list operations. For example(also shown in figure2), we
+are going to create maker file based on partition path 2022/07/01, and fileID ff26cb9e-e034-4931-9c59-71bac578f7a0-0.
+During marker conflict checking, we do not need to list all the partitions we have under ".temp". Just list marker files under
+$BasePath/.hoodie/.temp/instantTime/2022/07/01 and check if fileID ff26cb9e-e034-4931-9c59-71bac578f7a0-0 existed or not.
 
 ##### SimpleDirectMarkerConflictResolutionStrategy
 
@@ -149,8 +161,8 @@ For the timeline server side, there is a MarkerCheckerRunnable thread, which wil
 writer and other active writers at fixed rate. If any conflict was detected, this thread will async update the value 
 of hasConflict.
 
-We did a performance test for async conflict checker based on 1500+ inflight markers located in MARKER0~MARKER19 
-and it will take 179ms to finish checking conflict.
+We did a performance test for async conflict checker using local fs and two concurrency writers based on 1500+ inflight
+markers located in MARKER0~MARKER19. It will take 179ms to finish checking conflict.
 
 Here we need to pay attention to two details:
 
@@ -210,7 +222,12 @@ the same after passed marker conflict checker.
 
 ### [3] Try to resolve conflict
 
-For now, the default behavior is throwing an `HoodieWriteConflictException`
+For now, the default behavior is that conflict write handlers will throw an `HoodieWriteConflictException` which are
+running on executors. Also these tasks will be failed and retried.
+
+As for HoodieDeltaStreamer, when we detect marker conflicts, corresponding writing task fails and retries. If the retry
+reaches a certain number of times we set, the current stage will fail.
+At this time, this behavior is consistent with the existing OCC based conflict detection.
 
 ## Configuration
 
