@@ -21,12 +21,14 @@ package org.apache.hudi.common.data;
 
 import org.apache.hudi.common.util.collection.Pair;
 
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -46,5 +48,20 @@ class TestHoodieListData {
   void distinctWithKey(List<Pair<String, Integer>> expected, List<Pair<String, Integer>> originalList) {
     List<Pair<String, Integer>> distinctList = HoodieListData.of(originalList).distinctWithKey(Pair::getLeft, 1).collectAsList();
     assertEquals(expected, distinctList);
+  }
+
+  @Test
+  void testEagerSemantic() {
+    List<String> sourceList = Arrays.asList("quick", "brown", "fox");
+
+    HoodieListData<String> originalListData = HoodieListData.eager(sourceList);
+    HoodieData<Integer> lengthsListData = originalListData.map(String::length);
+
+    List<Integer> expectedLengths = sourceList.stream().map(String::length).collect(Collectors.toList());
+    assertEquals(expectedLengths, lengthsListData.collectAsList());
+    // Here we assert that even though we already de-referenced derivative container,
+    // we still can dereference its parent (multiple times)
+    assertEquals(3, originalListData.count());
+    assertEquals(sourceList, originalListData.collectAsList());
   }
 }

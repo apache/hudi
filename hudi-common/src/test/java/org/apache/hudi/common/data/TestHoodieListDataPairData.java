@@ -69,7 +69,7 @@ public class TestHoodieListDataPairData {
   @BeforeEach
   public void setup() {
     testPairs = constructPairs();
-    testHoodiePairData = HoodieListPairData.of(testPairs);
+    testHoodiePairData = HoodieListPairData.lazy(testPairs);
   }
 
   @Test
@@ -141,20 +141,20 @@ public class TestHoodieListDataPairData {
   @ParameterizedTest
   @MethodSource
   public void testReduceByKey(Map<Integer, List<Integer>> expected, Map<Integer, List<Integer>> original) {
-    HoodiePairData<Integer, Integer> reduced = HoodieListPairData.of(original).reduceByKey((a, b) -> a, 1);
+    HoodiePairData<Integer, Integer> reduced = HoodieListPairData.lazy(original).reduceByKey((a, b) -> a, 1);
     assertEquals(expected, toMap(reduced));
   }
 
   @Test
   public void testLeftOuterJoinSingleValuePerKey() {
-    HoodiePairData<String, String> pairData1 = HoodieListPairData.of(Arrays.asList(
+    HoodiePairData<String, String> pairData1 = HoodieListPairData.lazy(Arrays.asList(
         ImmutablePair.of(KEY1, STRING_VALUE1),
         ImmutablePair.of(KEY2, STRING_VALUE2),
         ImmutablePair.of(KEY3, STRING_VALUE3),
         ImmutablePair.of(KEY4, STRING_VALUE4)
     ));
 
-    HoodiePairData<String, Integer> pairData2 = HoodieListPairData.of(Arrays.asList(
+    HoodiePairData<String, Integer> pairData2 = HoodieListPairData.lazy(Arrays.asList(
         ImmutablePair.of(KEY1, INTEGER_VALUE1),
         ImmutablePair.of(KEY2, INTEGER_VALUE2),
         ImmutablePair.of(KEY5, INTEGER_VALUE3)
@@ -176,7 +176,7 @@ public class TestHoodieListDataPairData {
 
   @Test
   public void testLeftOuterJoinMultipleValuesPerKey() {
-    HoodiePairData<String, Integer> otherPairData = HoodieListPairData.of(Arrays.asList(
+    HoodiePairData<String, Integer> otherPairData = HoodieListPairData.lazy(Arrays.asList(
         ImmutablePair.of(KEY1, INTEGER_VALUE1),
         ImmutablePair.of(KEY2, INTEGER_VALUE2),
         ImmutablePair.of(KEY2, INTEGER_VALUE3),
@@ -200,6 +200,24 @@ public class TestHoodieListDataPairData {
 
     assertEquals(expectedResultMap,
         toMap(testHoodiePairData.leftOuterJoin(otherPairData)));
+  }
+
+  @Test
+  void testEagerSemantic() {
+    List<Pair<String, Integer>> sourceList =
+        Stream.of("quick", "brown", "fox")
+            .map(s -> Pair.of(s, s.length()))
+            .collect(Collectors.toList());
+
+    HoodieListPairData<String, Integer> originalListData = HoodieListPairData.eager(sourceList);
+    HoodieData<Integer> lengthsListData = originalListData.values();
+
+    List<Integer> expectedLengths = sourceList.stream().map(Pair::getValue).collect(Collectors.toList());
+    assertEquals(expectedLengths, lengthsListData.collectAsList());
+    // Here we assert that even though we already de-referenced derivative container,
+    // we still can dereference its parent (multiple times)
+    assertEquals(3, originalListData.count());
+    assertEquals(sourceList, originalListData.collectAsList());
   }
 
   private static List<Pair<String, String>> constructPairs() {
