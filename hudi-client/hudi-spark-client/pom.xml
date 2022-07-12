@@ -49,6 +49,12 @@
       <artifactId>hudi-shaded</artifactId>
       <version>${project.parent.version}</version>
       <scope>test</scope>
+      <exclusions>
+        <exclusion>
+          <groupId>io.netty</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
 
     <!-- Spark -->

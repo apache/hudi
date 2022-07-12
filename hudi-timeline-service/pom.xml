@@ -55,6 +55,69 @@
         <groupId>org.apache.rat</groupId>
         <artifactId>apache-rat-plugin</artifactId>
       </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-shade-plugin</artifactId>
+        <version>${maven-shade-plugin.version}</version>
+        <executions>
+          <execution>
+            <phase>package</phase>
+            <goals>
+              <goal>shade</goal>
+            </goals>
+            <configuration>
+              <transformers>
+                <transformer implementation="org.apache.maven.plugins.shade.resource.ApacheLicenseResourceTransformer">
+                </transformer>
+                <transformer implementation="org.apache.maven.plugins.shade.resource.ApacheNoticeResourceTransformer">
+                  <addHeader>true</addHeader>
+                </transformer>
+                <transformer implementation="org.apache.maven.plugins.shade.resource.IncludeResourceTransformer">
+                  <resource>META-INF/LICENSE</resource>
+                  <file>target/classes/META-INF/LICENSE</file>
+                </transformer>
+              </transformers>
+              <artifactSet>
+                <includes>
+                  <include>org.eclipse.jetty:*</include>
+                  <include>org.eclipse.jetty.websocket:*</include>
+                  <include>io.javalin:*</include>
+
+                  <include>org.apache.hadoop:*</include>
+                  <include>org.mockito:*</include>
+                  <include>org.junit.jupiter:*</include>
+                  <include>org.junit.vintage:*</include>
+                  <include>org.apache.hudi:*</include>
+                  <include>org.rocksdb:*</include>
+                  <include>com.beust:*</include>
+                  <include>org.apache.httpcomponents:*</include>
+                  <include>com.fasterxml.jackson.core:*</include>
+                  <include>log4j:*</include>
+                </includes>
+              </artifactSet>
+              <relocations>
+                <relocation>
+                  <pattern>org.eclipse.jetty.</pattern>
+                  <shadedPattern>org.apache.hudi.timeline.org.eclipse.jetty.</shadedPattern>
+                </relocation>
+              </relocations>
+              <createDependencyReducedPom>false</createDependencyReducedPom>
+              <filters>
+                <filter>
+                  <artifact>*:*</artifact>
+                  <excludes>
+                    <exclude>META-INF/*.SF</exclude>
+                    <exclude>META-INF/*.DSA</exclude>
+                    <exclude>META-INF/*.RSA</exclude>
+                    <exclude>META-INF/services/javax.*</exclude>
+                  </excludes>
+                </filter>
+              </filters>
+              <finalName>${project.artifactId}-${project.version}</finalName>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
     </plugins>
 
     <resources>
