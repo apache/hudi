@@ -40,7 +40,7 @@ import scala.Tuple2;
  *
  * @param <T> type of object.
  */
-public class HoodieJavaRDD<T> extends HoodieData<T> {
+public class HoodieJavaRDD<T> implements HoodieData<T> {
 
   private final JavaRDD<T> rddData;
 

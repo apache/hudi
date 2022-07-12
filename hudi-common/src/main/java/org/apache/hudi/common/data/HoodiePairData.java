@@ -36,48 +36,48 @@ import java.util.Map;
  * @param <K> type of key.
  * @param <V> type of value.
  */
-public abstract class HoodiePairData<K, V> implements Serializable {
+public interface HoodiePairData<K, V> extends Serializable {
   /**
    * @return the collection of pairs.
    */
-  public abstract Object get();
+  Object get();
 
   /**
    * Persists the data (if applicable)
    *
    * @param cacheConfig config value for caching.
    */
-  public abstract void persist(String cacheConfig);
+  void persist(String cacheConfig);
 
   /**
    * Un-persists the data (if applicable)
    */
-  public abstract void unpersist();
+  void unpersist();
 
   /**
    * Returns a {@link HoodieData} holding the key from every corresponding pair
    */
-  public abstract HoodieData<K> keys();
+  HoodieData<K> keys();
 
   /**
    * Returns a {@link HoodieData} holding the value from every corresponding pair
    */
-  public abstract HoodieData<V> values();
+  HoodieData<V> values();
 
   /**
    * Returns number of held pairs
    */
-  public abstract long count();
+  long count();
 
   /**
    * Counts the number of pairs grouping them by key
    */
-  public abstract Map<K, Long> countByKey();
+  Map<K, Long> countByKey();
 
   /**
    * Groups the values for each key in the dataset into a single sequence
    */
-  public abstract HoodiePairData<K, Iterable<V>> groupByKey();
+  HoodiePairData<K, Iterable<V>> groupByKey();
 
   /**
    * Reduces original sequence by de-duplicating the pairs w/ the same key, using provided
@@ -87,14 +87,14 @@ public abstract class HoodiePairData<K, V> implements Serializable {
    * @param combiner method to combine values of the pairs with the same key
    * @param parallelism target parallelism (if applicable)
    */
-  public abstract HoodiePairData<K, V> reduceByKey(SerializableBiFunction<V, V, V> combiner, int parallelism);
+  HoodiePairData<K, V> reduceByKey(SerializableBiFunction<V, V, V> combiner, int parallelism);
 
   /**
    * @param func serializable map function.
    * @param <O>  output object type.
    * @return {@link HoodieData<O>} containing the result. Actual execution may be deferred.
    */
-  public abstract <O> HoodieData<O> map(SerializableFunction<Pair<K, V>, O> func);
+  <O> HoodieData<O> map(SerializableFunction<Pair<K, V>, O> func);
 
   /**
    * @param mapToPairFunc serializable map function to generate another pair.
@@ -102,7 +102,7 @@ public abstract class HoodiePairData<K, V> implements Serializable {
    * @param <W>           new value type.
    * @return containing the result. Actual execution may be deferred.
    */
-  public abstract <L, W> HoodiePairData<L, W> mapToPair(
+  <L, W> HoodiePairData<L, W> mapToPair(
       SerializablePairFunction<Pair<K, V>, L, W> mapToPairFunc);
 
   /**
@@ -116,12 +116,12 @@ public abstract class HoodiePairData<K, V> implements Serializable {
    * @param <W>   value type of the other {@link HoodiePairData}
    * @return containing the result of the left outer join
    */
-  public abstract <W> HoodiePairData<K, Pair<V, Option<W>>> leftOuterJoin(HoodiePairData<K, W> other);
+  <W> HoodiePairData<K, Pair<V, Option<W>>> leftOuterJoin(HoodiePairData<K, W> other);
 
   /**
    * Collects results of the underlying collection into a {@link List<Pair<K, V>>}
    *
    * This is a terminal operation
    */
-  public abstract List<Pair<K, V>> collectAsList();
+  List<Pair<K, V>> collectAsList();
 }

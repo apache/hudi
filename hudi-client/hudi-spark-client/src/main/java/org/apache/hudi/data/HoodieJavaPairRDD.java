@@ -42,7 +42,7 @@ import scala.Tuple2;
  * @param <K> type of key.
  * @param <V> type of value.
  */
-public class HoodieJavaPairRDD<K, V> extends HoodiePairData<K, V> {
+public class HoodieJavaPairRDD<K, V> implements HoodiePairData<K, V> {
 
   private final JavaPairRDD<K, V> pairRDDData;
 

@@ -48,29 +48,29 @@ import java.util.List;
  *
  * @param <T> type of object
  */
-public abstract class HoodieData<T> implements Serializable {
+public interface HoodieData<T> extends Serializable {
 
   /**
    * Persists the data w/ provided {@code level} (if applicable)
    */
-  public abstract void persist(String level);
+  void persist(String level);
 
   /**
    * Un-persists the data (if previously persisted)
    */
-  public abstract void unpersist();
+  void unpersist();
 
   /**
    * Returns whether the collection is empty.
    */
-  public abstract boolean isEmpty();
+  boolean isEmpty();
 
   /**
    * Returns number of objects held in the collection
    *
    * NOTE: This is a terminal operation
    */
-  public abstract long count();
+  long count();
 
   /**
    * Maps every element in the collection using provided mapping {@code func}.
@@ -81,7 +81,7 @@ public abstract class HoodieData<T> implements Serializable {
    * @param <O>  output object type
    * @return {@link HoodieData<O>} holding mapped elements
    */
-  public abstract <O> HoodieData<O> map(SerializableFunction<T, O> func);
+  <O> HoodieData<O> map(SerializableFunction<T, O> func);
 
   /**
    * Maps every element in the collection's partition (if applicable) by applying provided
@@ -96,7 +96,7 @@ public abstract class HoodieData<T> implements Serializable {
    * @param <O>                   output object type
    * @return {@link HoodieData<O>} holding mapped elements
    */
-  public abstract <O> HoodieData<O> mapPartitions(SerializableFunction<Iterator<T>,
+  <O> HoodieData<O> mapPartitions(SerializableFunction<Iterator<T>,
       Iterator<O>> func, boolean preservesPartitioning);
 
   /**
@@ -110,7 +110,7 @@ public abstract class HoodieData<T> implements Serializable {
    * @param <O>  output object type
    * @return {@link HoodieData<O>} holding mapped elements
    */
-  public abstract <O> HoodieData<O> flatMap(SerializableFunction<T, Iterator<O>> func);
+  <O> HoodieData<O> flatMap(SerializableFunction<T, Iterator<O>> func);
 
   /**
    * Maps every element in the collection using provided mapping {@code func} into a {@link Pair<K, V>}
@@ -123,21 +123,21 @@ public abstract class HoodieData<T> implements Serializable {
    * @param <V>  value type of the pair
    * @return {@link HoodiePairData<K, V>} holding mapped elements
    */
-  public abstract <K, V> HoodiePairData<K, V> mapToPair(SerializablePairFunction<T, K, V> func);
+  <K, V> HoodiePairData<K, V> mapToPair(SerializablePairFunction<T, K, V> func);
 
   /**
    * Returns new {@link HoodieData} collection holding only distinct objects of the original one
    *
    * This is a stateful intermediate operation
    */
-  public abstract HoodieData<T> distinct();
+  HoodieData<T> distinct();
 
   /**
    * Returns new {@link HoodieData} collection holding only distinct objects of the original one
    *
    * This is a stateful intermediate operation
    */
-  public abstract HoodieData<T> distinct(int parallelism);
+  HoodieData<T> distinct(int parallelism);
 
   /**
    * Returns new instance of {@link HoodieData} collection only containing elements matching provided
@@ -146,7 +146,7 @@ public abstract class HoodieData<T> implements Serializable {
    * @param filterFunc filtering func either accepting or rejecting the elements
    * @return {@link HoodieData<T>} holding filtered elements
    */
-  public abstract HoodieData<T> filter(SerializableFunction<T, Boolean> filterFunc);
+  HoodieData<T> filter(SerializableFunction<T, Boolean> filterFunc);
 
   /**
    * Unions {@link HoodieData} with another instance of {@link HoodieData}.
@@ -157,14 +157,14 @@ public abstract class HoodieData<T> implements Serializable {
    * @param other {@link HoodieData} collection
    * @return {@link HoodieData<T>} holding superset of elements of this and {@code other} collections
    */
-  public abstract HoodieData<T> union(HoodieData<T> other);
+  HoodieData<T> union(HoodieData<T> other);
 
   /**
    * Collects results of the underlying collection into a {@link List<T>}
    *
    * This is a terminal operation
    */
-  public abstract List<T> collectAsList();
+  List<T> collectAsList();
 
   /**
    * Re-partitions underlying collection (if applicable) making sure new {@link HoodieData} has
@@ -173,9 +173,9 @@ public abstract class HoodieData<T> implements Serializable {
    * @param parallelism target number of partitions in the underlying collection
    * @return {@link HoodieData<T>} holding re-partitioned collection
    */
-  public abstract HoodieData<T> repartition(int parallelism);
+  HoodieData<T> repartition(int parallelism);
 
-  public <O> HoodieData<T> distinctWithKey(SerializableFunction<T, O> keyGetter, int parallelism) {
+  default <O> HoodieData<T> distinctWithKey(SerializableFunction<T, O> keyGetter, int parallelism) {
     return mapToPair(i -> Pair.of(keyGetter.apply(i), i))
         .reduceByKey((value1, value2) -> value1, parallelism)
         .values();
