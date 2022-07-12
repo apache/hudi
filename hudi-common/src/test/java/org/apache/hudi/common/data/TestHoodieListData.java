@@ -46,7 +46,7 @@ class TestHoodieListData {
   @ParameterizedTest
   @MethodSource
   void distinctWithKey(List<Pair<String, Integer>> expected, List<Pair<String, Integer>> originalList) {
-    List<Pair<String, Integer>> distinctList = HoodieListData.of(originalList).distinctWithKey(Pair::getLeft, 1).collectAsList();
+    List<Pair<String, Integer>> distinctList = HoodieListData.eager(originalList).distinctWithKey(Pair::getLeft, 1).collectAsList();
     assertEquals(expected, distinctList);
   }
 

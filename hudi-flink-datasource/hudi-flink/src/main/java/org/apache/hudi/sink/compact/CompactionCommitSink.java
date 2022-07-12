@@ -158,7 +158,7 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
         .collect(Collectors.toList());
 
     HoodieCommitMetadata metadata = CompactHelpers.getInstance().createCompactionMetadata(
-        table, instant, HoodieListData.of(statuses), writeClient.getConfig().getSchema());
+        table, instant, HoodieListData.eager(statuses), writeClient.getConfig().getSchema());
 
     // commit the compaction
     this.writeClient.commitCompaction(instant, metadata, Option.empty());

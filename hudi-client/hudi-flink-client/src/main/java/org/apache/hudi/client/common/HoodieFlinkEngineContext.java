@@ -84,12 +84,12 @@ public class HoodieFlinkEngineContext extends HoodieEngineContext {
 
   @Override
   public <T> HoodieData<T> emptyHoodieData() {
-    return HoodieListData.of(Collections.emptyList());
+    return HoodieListData.eager(Collections.emptyList());
   }
 
   @Override
   public <T> HoodieData<T> parallelize(List<T> data, int parallelism) {
-    return HoodieListData.of(data);
+    return HoodieListData.eager(data);
   }
 
   public RuntimeContext getRuntimeContext() {

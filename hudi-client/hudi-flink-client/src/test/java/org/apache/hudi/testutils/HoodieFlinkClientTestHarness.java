@@ -134,7 +134,7 @@ public class HoodieFlinkClientTestHarness extends HoodieCommonTestHarness implem
 
   protected List<HoodieRecord> tagLocation(
       HoodieIndex index, List<HoodieRecord> records, HoodieTable table) {
-    return ((HoodieData<HoodieRecord>) index.tagLocation(HoodieListData.of(records), context, table)).collectAsList();
+    return ((HoodieData<HoodieRecord>) index.tagLocation(HoodieListData.eager(records), context, table)).collectAsList();
   }
 
   /**

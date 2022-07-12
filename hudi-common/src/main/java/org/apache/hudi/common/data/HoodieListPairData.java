@@ -87,16 +87,6 @@ public class HoodieListPairData<K, V> extends HoodieBaseListData<Pair<K, V>> imp
   }
 
   @Override
-  public long count() {
-    return super.count();
-  }
-
-  @Override
-  public List<Pair<K, V>> collectAsList() {
-    return super.collectAsList();
-  }
-
-  @Override
   public HoodieData<K> keys() {
     return new HoodieListData<>(asStream().map(Pair::getKey), lazy);
   }
@@ -176,6 +166,16 @@ public class HoodieListPairData<K, V> extends HoodieBaseListData<Pair<K, V>> imp
     });
 
     return new HoodieListPairData<>(leftOuterJoined, lazy);
+  }
+
+  @Override
+  public long count() {
+    return super.count();
+  }
+
+  @Override
+  public List<Pair<K, V>> collectAsList() {
+    return super.collectAsList();
   }
 
   public static <K, V> HoodieListPairData<K, V> lazy(List<Pair<K, V>> data) {

@@ -94,7 +94,7 @@ public abstract class JavaExecutionStrategy<T extends HoodieRecordPayload<T>>
             Option.ofNullable(clusteringPlan.getPreserveHoodieMetadata()).orElse(false),
             instantTime)));
     HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata = new HoodieWriteMetadata<>();
-    writeMetadata.setWriteStatuses(HoodieListData.of(writeStatusList));
+    writeMetadata.setWriteStatuses(HoodieListData.eager(writeStatusList));
     return writeMetadata;
   }
 

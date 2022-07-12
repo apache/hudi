@@ -183,7 +183,7 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
           partitionRecordKeyMap.put(t.getLeft(), recordKeyList);
         });
 
-    List<Pair<String, HoodieKey>> comparisonKeyList = index.explodeRecordsWithFileComparisons(partitionToFileIndexInfo, HoodieListPairData.of(partitionRecordKeyMap)).collectAsList();
+    List<Pair<String, HoodieKey>> comparisonKeyList = index.explodeRecordsWithFileComparisons(partitionToFileIndexInfo, HoodieListPairData.lazy(partitionRecordKeyMap)).collectAsList();
 
     assertEquals(10, comparisonKeyList.size());
     java.util.Map<String, List<String>> recordKeyToFileComps = comparisonKeyList.stream()

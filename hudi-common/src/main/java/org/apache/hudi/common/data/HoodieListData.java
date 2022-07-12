@@ -69,18 +69,6 @@ public class HoodieListData<T> extends HoodieBaseListData<T> implements HoodieDa
   }
 
   /**
-   * Creates instance of {@link HoodieListData} bearing *lazy* execution semantic
-   *
-   * @param listData a {@link List} of objects in type T
-   * @param <T>      type of object
-   * @return a new instance containing the {@link List<T>} reference
-   */
-  // TODO rename to lazy
-  public static <T> HoodieListData<T> of(List<T> listData) {
-    return new HoodieListData<>(listData, true);
-  }
-
-  /**
    * Creates instance of {@link HoodieListData} bearing *eager* execution semantic
    *
    * @param listData a {@link List} of objects in type T
@@ -91,6 +79,17 @@ public class HoodieListData<T> extends HoodieBaseListData<T> implements HoodieDa
     return new HoodieListData<>(listData, false);
   }
 
+  /**
+   * Creates instance of {@link HoodieListData} bearing *lazy* execution semantic
+   *
+   * @param listData a {@link List} of objects in type T
+   * @param <T>      type of object
+   * @return a new instance containing the {@link List<T>} reference
+   */
+  public static <T> HoodieListData<T> lazy(List<T> listData) {
+    return new HoodieListData<>(listData, true);
+  }
+
   @Override
   public void persist(String level) {
     // No OP
@@ -99,21 +98,6 @@ public class HoodieListData<T> extends HoodieBaseListData<T> implements HoodieDa
   @Override
   public void unpersist() {
     // No OP
-  }
-
-  @Override
-  public boolean isEmpty() {
-    return super.isEmpty();
-  }
-
-  @Override
-  public long count() {
-    return super.count();
-  }
-
-  @Override
-  public List<T> collectAsList() {
-    return super.collectAsList();
   }
 
   @Override
@@ -179,5 +163,20 @@ public class HoodieListData<T> extends HoodieBaseListData<T> implements HoodieDa
   public HoodieData<T> repartition(int parallelism) {
     // no op
     return this;
+  }
+
+  @Override
+  public boolean isEmpty() {
+    return super.isEmpty();
+  }
+
+  @Override
+  public long count() {
+    return super.count();
+  }
+
+  @Override
+  public List<T> collectAsList() {
+    return super.collectAsList();
   }
 }

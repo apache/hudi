@@ -50,7 +50,7 @@ public class JavaWriteHelper<T extends HoodieRecordPayload,R> extends BaseWriteH
 
   @Override
   protected List<HoodieRecord<T>> tag(List<HoodieRecord<T>> dedupedRecords, HoodieEngineContext context, HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table) {
-    return table.getIndex().tagLocation(HoodieListData.of(dedupedRecords), context, table).collectAsList();
+    return table.getIndex().tagLocation(HoodieListData.eager(dedupedRecords), context, table).collectAsList();
   }
 
   @Override
