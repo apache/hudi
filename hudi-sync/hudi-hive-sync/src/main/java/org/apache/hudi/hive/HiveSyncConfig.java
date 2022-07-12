@@ -45,7 +45,6 @@ import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_TABLE_PROPERTIES;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_TABLE_SERDE_PROPERTIES;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_URL;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_USER;
-import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_USE_JDBC;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_USE_PRE_APACHE_INPUT_FORMAT;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.METASTORE_URIS;
 
@@ -95,9 +94,6 @@ public class HiveSyncConfig extends HoodieSyncConfig {
             + "com.uber.hoodie to org.apache.hudi. Stop using this after you migrated the table definition to "
             + "org.apache.hudi input format.")
     public Boolean usePreApacheInputFormat;
-    @Deprecated
-    @Parameter(names = {"--use-jdbc"}, description = "Hive jdbc connect url")
-    public Boolean useJdbc;
     @Parameter(names = {"--metastore-uris"}, description = "Hive metastore uris")
     public String metastoreUris;
     @Parameter(names = {"--sync-mode"}, description = "Mode to choose for Hive ops. Valid values are hms,jdbc and hiveql")
@@ -142,7 +138,6 @@ public class HiveSyncConfig extends HoodieSyncConfig {
       props.setPropertyIfNonNull(HIVE_PASS.key(), hivePass);
       props.setPropertyIfNonNull(HIVE_URL.key(), jdbcUrl);
       props.setPropertyIfNonNull(HIVE_USE_PRE_APACHE_INPUT_FORMAT.key(), usePreApacheInputFormat);
-      props.setPropertyIfNonNull(HIVE_USE_JDBC.key(), useJdbc);
       props.setPropertyIfNonNull(HIVE_SYNC_MODE.key(), syncMode);
       props.setPropertyIfNonNull(METASTORE_URIS.key(), metastoreUris);
       props.setPropertyIfNonNull(HIVE_AUTO_CREATE_DATABASE.key(), autoCreateDatabase);

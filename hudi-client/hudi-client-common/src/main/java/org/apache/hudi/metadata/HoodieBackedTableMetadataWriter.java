@@ -58,6 +58,8 @@ import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieArchivalConfig;
+import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
@@ -255,20 +257,24 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         .withPath(HoodieTableMetadata.getMetadataTableBasePath(writeConfig.getBasePath()))
         .withSchema(HoodieMetadataRecord.getClassSchema().toString())
         .forTable(tableName)
-        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+        // we will trigger cleaning manually, to control the instant times
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
             .withAsyncClean(writeConfig.isMetadataAsyncClean())
-            // we will trigger cleaning manually, to control the instant times
             .withAutoClean(false)
             .withCleanerParallelism(parallelism)
             .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS)
             .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
             .retainCommits(writeConfig.getMetadataCleanerCommitsRetained())
+            .build())
+        // we will trigger archive manually, to ensure only regular writer invokes it
+        .withArchivalConfig(HoodieArchivalConfig.newBuilder()
             .archiveCommitsWith(minCommitsToKeep, maxCommitsToKeep)
-            // we will trigger compaction manually, to control the instant times
+            .withAutoArchive(false)
+            .build())
+        // we will trigger compaction manually, to control the instant times
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withInlineCompaction(false)
             .withMaxNumDeltaCommitsBeforeCompaction(writeConfig.getMetadataCompactDeltaCommitMax())
-            // we will trigger archive manually, to ensure only regular writer invokes it
-            .withAutoArchive(false)
             // by default, the HFile does not keep the metadata fields, set up as false
             // to always use the metadata of the new record.
             .withPreserveCommitMetadata(false)

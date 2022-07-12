@@ -78,7 +78,6 @@ object HoodieWriterUtils {
     hoodieConfig.setDefaultValue(HoodieSyncConfig.META_SYNC_PARTITION_FIELDS)
     hoodieConfig.setDefaultValue(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS)
     hoodieConfig.setDefaultValue(HIVE_STYLE_PARTITIONING)
-    hoodieConfig.setDefaultValue(HiveSyncConfigHolder.HIVE_USE_JDBC)
     hoodieConfig.setDefaultValue(HiveSyncConfigHolder.HIVE_CREATE_MANAGED_TABLE)
     hoodieConfig.setDefaultValue(HiveSyncConfigHolder.HIVE_SYNC_AS_DATA_SOURCE_TABLE)
     hoodieConfig.setDefaultValue(ASYNC_COMPACT_ENABLE)

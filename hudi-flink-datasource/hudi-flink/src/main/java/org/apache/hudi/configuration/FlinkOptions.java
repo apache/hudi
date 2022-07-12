@@ -756,12 +756,6 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(false)
       .withDescription("Assume partitioning is yyyy/mm/dd, default false");
 
-  public static final ConfigOption<Boolean> HIVE_SYNC_USE_JDBC = ConfigOptions
-      .key("hive_sync.use_jdbc")
-      .booleanType()
-      .defaultValue(true)
-      .withDescription("Use JDBC when hive synchronization is enabled, default true");
-
   public static final ConfigOption<Boolean> HIVE_SYNC_AUTO_CREATE_DB = ConfigOptions
       .key("hive_sync.auto_create_db")
       .booleanType()
