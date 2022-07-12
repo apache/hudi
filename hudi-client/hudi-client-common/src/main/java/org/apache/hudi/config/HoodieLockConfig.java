@@ -113,7 +113,7 @@ public class HoodieLockConfig extends HoodieConfig {
         .key(FILESYSTEM_LOCK_EXPIRE_PROP_KEY)
         .defaultValue(0)
         .sinceVersion("0.12.0")
-        .withDocumentation("For DFS based lock providers, expire time in minutes");
+        .withDocumentation("For DFS based lock providers, expire time in minutes, must be a nonnegative number, default means no expire");
 
   public static final ConfigProperty<String> HIVE_DATABASE_NAME = ConfigProperty
       .key(HIVE_DATABASE_NAME_PROP_KEY)

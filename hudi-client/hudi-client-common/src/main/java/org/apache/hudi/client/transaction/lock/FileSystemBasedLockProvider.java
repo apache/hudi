@@ -47,11 +47,11 @@ import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_RETRY
  * using DFS. Users might need to manually clean the Locker's path if writeClient crash and never run again.
  * NOTE: This only works for DFS with atomic create/delete operation
  */
-public class FileBasedLockProvider implements LockProvider<String>, Serializable {
+public class FileSystemBasedLockProvider implements LockProvider<String>, Serializable {
 
-  private static final Logger LOG = LogManager.getLogger(FileBasedLockProvider.class);
+  private static final Logger LOG = LogManager.getLogger(FileSystemBasedLockProvider.class);
 
-  private static final String LOCK = "lock";
+  private static final String LOCK_FILE_NAME = "lock";
 
   private final int retryMaxCount;
   private final int retryWaitTimeMs;
@@ -60,20 +60,20 @@ public class FileBasedLockProvider implements LockProvider<String>, Serializable
   private transient Path lockFile;
   protected LockConfiguration lockConfiguration;
 
-  public FileBasedLockProvider(final LockConfiguration lockConfiguration, final Configuration configuration) {
+  public FileSystemBasedLockProvider(final LockConfiguration lockConfiguration, final Configuration configuration) {
     checkRequiredProps(lockConfiguration);
     this.lockConfiguration = lockConfiguration;
     final String lockDirectory = lockConfiguration.getConfig().getString(FILESYSTEM_LOCK_PATH_PROP_KEY);
     this.retryWaitTimeMs = lockConfiguration.getConfig().getInteger(LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY);
     this.retryMaxCount = lockConfiguration.getConfig().getInteger(LOCK_ACQUIRE_NUM_RETRIES_PROP_KEY);
     this.lockTimeoutMinutes = lockConfiguration.getConfig().getInteger(FILESYSTEM_LOCK_EXPIRE_PROP_KEY);
-    this.lockFile = new Path(lockDirectory + "/" + LOCK);
+    this.lockFile = new Path(lockDirectory + Path.SEPARATOR + LOCK_FILE_NAME);
     this.fs = FSUtils.getFs(this.lockFile.toString(), configuration);
   }
 
   @Override
   public void close() {
-    synchronized (LOCK) {
+    synchronized (LOCK_FILE_NAME) {
       try {
         fs.delete(this.lockFile, true);
       } catch (IOException e) {
@@ -86,9 +86,9 @@ public class FileBasedLockProvider implements LockProvider<String>, Serializable
   public boolean tryLock(long time, TimeUnit unit) {
     try {
       int numRetries = 0;
-      synchronized (LOCK) {
+      synchronized (LOCK_FILE_NAME) {
         while (fs.exists(this.lockFile)) {
-          LOCK.wait(retryWaitTimeMs);
+          LOCK_FILE_NAME.wait(retryWaitTimeMs);
           numRetries++;
           if (numRetries > retryMaxCount) {
             return false;
@@ -110,7 +110,7 @@ public class FileBasedLockProvider implements LockProvider<String>, Serializable
 
   @Override
   public void unlock() {
-    synchronized (LOCK) {
+    synchronized (LOCK_FILE_NAME) {
       try {
         if (fs.exists(this.lockFile)) {
           fs.delete(this.lockFile, true);
@@ -147,7 +147,7 @@ public class FileBasedLockProvider implements LockProvider<String>, Serializable
   }
 
   protected String generateLogStatement(LockState state) {
-    return StringUtils.join(state.name(), " lock at", getLock());
+    return StringUtils.join(state.name(), " lock at: ", getLock());
   }
 
   private void checkRequiredProps(final LockConfiguration config) {
