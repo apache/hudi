@@ -223,7 +223,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     toScalaOption(timeline.lastInstant())
 
   protected def queryTimestamp: Option[String] =
-    specifiedQueryTimestamp.orElse(toScalaOption(timeline.lastInstant()).map(_.getTimestamp))
+    specifiedQueryTimestamp.orElse(latestInstant.map(_.getTimestamp))
 
   /**
    * Returns true in case table supports Schema on Read (Schema Evolution)
@@ -372,18 +372,16 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
    * otherwise will use the table path to do the listing.
    */
   protected def listLatestFileSlices(globPaths: Seq[Path], partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[FileSlice] = {
-    if (latestInstant.isEmpty) {
-      return Seq()
-    }
+    latestInstant.map { _ =>
+      val partitionDirs = listPartitionDirectories(globPaths, partitionFilters, dataFilters)
+      val fsView = new HoodieTableFileSystemView(metaClient, timeline, partitionDirs.flatMap(_.files).toArray)
 
-    val partitionDirs = listPartitionDirectories(globPaths, partitionFilters, dataFilters)
-    val fsView = new HoodieTableFileSystemView(metaClient, timeline, partitionDirs.flatMap(_.files).toArray)
-
-    val queryTimestamp = this.queryTimestamp.get
-    fsView.getPartitionPaths.asScala.flatMap { partitionPath =>
-      val relativePath = getRelativePartitionPath(new Path(basePath), partitionPath)
-      fsView.getLatestMergedFileSlicesBeforeOrOn(relativePath, queryTimestamp).iterator().asScala.toSeq
-    }
+      val queryTimestamp = this.queryTimestamp.get
+      fsView.getPartitionPaths.asScala.flatMap { partitionPath =>
+        val relativePath = getRelativePartitionPath(new Path(basePath), partitionPath)
+        fsView.getLatestMergedFileSlicesBeforeOrOn(relativePath, queryTimestamp).iterator().asScala.toSeq
+      }
+    }.getOrElse(Seq())
   }
 
   protected def convertToExpressions(filters: Array[Filter]): Array[Expression] = {
