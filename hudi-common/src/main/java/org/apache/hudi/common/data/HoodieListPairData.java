@@ -33,7 +33,6 @@ import java.util.stream.Collector;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.common.data.HoodieListData.materialize;
 import static org.apache.hudi.common.function.FunctionWrapper.throwingMapToPairWrapper;
 import static org.apache.hudi.common.function.FunctionWrapper.throwingMapWrapper;
 
@@ -62,19 +61,14 @@ import static org.apache.hudi.common.function.FunctionWrapper.throwingMapWrapper
  * @param <K> type of the key in the pair
  * @param <V> type of the value in the pair
  */
-public class HoodieListPairData<K, V> extends HoodiePairData<K, V> {
-
-  private final Stream<Pair<K, V>> dataStream;
-  private final boolean lazy;
+public class HoodieListPairData<K, V> extends HoodieBaseListData<Pair<K, V>> implements HoodiePairData<K, V> {
 
   private HoodieListPairData(List<Pair<K, V>> data, boolean lazy) {
-    this.dataStream = data.stream().parallel();
-    this.lazy = lazy;
+    super(data, lazy);
   }
 
   HoodieListPairData(Stream<Pair<K, V>> dataStream, boolean lazy) {
-    this.dataStream = lazy ? dataStream : materialize(dataStream);
-    this.lazy = lazy;
+    super(dataStream, lazy);
   }
 
   @Override
@@ -93,23 +87,28 @@ public class HoodieListPairData<K, V> extends HoodiePairData<K, V> {
   }
 
   @Override
+  public long count() {
+    return super.count();
+  }
+
+  @Override
+  public List<Pair<K, V>> collectAsList() {
+    return super.collectAsList();
+  }
+
+  @Override
   public HoodieData<K> keys() {
-    return new HoodieListData<>(dataStream.map(Pair::getKey), lazy);
+    return new HoodieListData<>(asStream().map(Pair::getKey), lazy);
   }
 
   @Override
   public HoodieData<V> values() {
-    return new HoodieListData<>(dataStream.map(Pair::getValue), lazy);
-  }
-
-  @Override
-  public long count() {
-    return dataStream.count();
+    return new HoodieListData<>(asStream().map(Pair::getValue), lazy);
   }
 
   @Override
   public Map<K, Long> countByKey() {
-    return dataStream.collect(Collectors.groupingBy(Pair::getKey, Collectors.counting()));
+    return asStream().collect(Collectors.groupingBy(Pair::getKey, Collectors.counting()));
   }
 
   @Override
@@ -118,7 +117,7 @@ public class HoodieListPairData<K, V> extends HoodiePairData<K, V> {
     Collector<Pair<K, V>, ?, Map<K, List<V>>> groupingCollector =
         Collectors.groupingBy(Pair::getKey, mappingCollector);
 
-    Map<K, List<V>> groupedByKey = dataStream.collect(groupingCollector);
+    Map<K, List<V>> groupedByKey = asStream().collect(groupingCollector);
     return new HoodieListPairData<>(
         groupedByKey.entrySet().stream().map(e -> Pair.of(e.getKey(), e.getValue())),
         lazy
@@ -127,7 +126,7 @@ public class HoodieListPairData<K, V> extends HoodiePairData<K, V> {
 
   @Override
   public HoodiePairData<K, V> reduceByKey(SerializableBiFunction<V, V, V> combiner, int parallelism) {
-    Map<K, java.util.Optional<V>> reducedMap = dataStream.collect(
+    Map<K, java.util.Optional<V>> reducedMap = asStream().collect(
         Collectors.groupingBy(
             Pair::getKey,
             HashMap::new,
@@ -144,12 +143,12 @@ public class HoodieListPairData<K, V> extends HoodiePairData<K, V> {
   @Override
   public <O> HoodieData<O> map(SerializableFunction<Pair<K, V>, O> func) {
     Function<Pair<K, V>, O> uncheckedMapper = throwingMapWrapper(func);
-    return new HoodieListData<>(dataStream.map(uncheckedMapper), lazy);
+    return new HoodieListData<>(asStream().map(uncheckedMapper), lazy);
   }
 
   @Override
   public <L, W> HoodiePairData<L, W> mapToPair(SerializablePairFunction<Pair<K, V>, L, W> mapToPairFunc) {
-    return new HoodieListPairData<>(dataStream.map(p -> throwingMapToPairWrapper(mapToPairFunc).apply(p)), lazy);
+    return new HoodieListPairData<>(asStream().map(p -> throwingMapToPairWrapper(mapToPairFunc).apply(p)), lazy);
   }
 
   @Override
@@ -157,13 +156,13 @@ public class HoodieListPairData<K, V> extends HoodiePairData<K, V> {
     ValidationUtils.checkArgument(other instanceof HoodieListPairData);
 
     // Transform right-side container to a multi-map of [[K]] to [[List<W>]] values
-    HashMap<K, List<W>> rightStreamMap = ((HoodieListPairData<K, W>) other).dataStream.collect(
+    HashMap<K, List<W>> rightStreamMap = ((HoodieListPairData<K, W>) other).asStream().collect(
         Collectors.groupingBy(
             Pair::getKey,
             HashMap::new,
             Collectors.mapping(Pair::getValue, Collectors.toList())));
 
-    Stream<Pair<K, Pair<V, Option<W>>>> leftOuterJoined = dataStream.flatMap(pair -> {
+    Stream<Pair<K, Pair<V, Option<W>>>> leftOuterJoined = asStream().flatMap(pair -> {
       K key = pair.getKey();
       V leftValue = pair.getValue();
       List<W> rightValues = rightStreamMap.get(key);
@@ -193,11 +192,6 @@ public class HoodieListPairData<K, V> extends HoodiePairData<K, V> {
 
   public static <K, V> HoodieListPairData<K, V> eager(Map<K, List<V>> data) {
     return new HoodieListPairData<>(explode(data), false);
-  }
-
-  @Override
-  public List<Pair<K, V>> collectAsList() {
-    return dataStream.collect(Collectors.toList());
   }
 
   private static <K, V> Stream<Pair<K, V>> explode(Map<K, List<V>> data) {

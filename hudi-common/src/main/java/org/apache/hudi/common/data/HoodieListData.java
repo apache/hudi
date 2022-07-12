@@ -29,7 +29,6 @@ import java.util.List;
 import java.util.Spliterator;
 import java.util.Spliterators;
 import java.util.function.Function;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
@@ -59,21 +58,14 @@ import static org.apache.hudi.common.function.FunctionWrapper.throwingMapWrapper
  *
  * @param <T> type of object.
  */
-public class HoodieListData<T> extends HoodieData<T> {
+public class HoodieListData<T> extends HoodieBaseListData<T> implements HoodieData<T> {
 
-  protected final Stream<T> dataStream;
-  protected final boolean lazy;
-
-  protected HoodieListData(List<T> data, boolean lazy) {
-    this.dataStream = data.stream().parallel();
-    this.lazy = lazy;
+  private HoodieListData(List<T> data, boolean lazy) {
+    super(data, lazy);
   }
 
   HoodieListData(Stream<T> dataStream, boolean lazy) {
-    // NOTE: In case this container is being instantiated by an eager parent, we have to
-    //       pre-materialize the stream
-    this.dataStream = lazy ? dataStream : materialize(dataStream);
-    this.lazy = lazy;
+    super(dataStream, lazy);
   }
 
   /**
@@ -111,17 +103,22 @@ public class HoodieListData<T> extends HoodieData<T> {
 
   @Override
   public boolean isEmpty() {
-    return !dataStream.findAny().isPresent();
+    return super.isEmpty();
   }
 
   @Override
   public long count() {
-    return dataStream.count();
+    return super.count();
+  }
+
+  @Override
+  public List<T> collectAsList() {
+    return super.collectAsList();
   }
 
   @Override
   public <O> HoodieData<O> map(SerializableFunction<T, O> func) {
-    return new HoodieListData<>(dataStream.map(throwingMapWrapper(func)), lazy);
+    return new HoodieListData<>(asStream().map(throwingMapWrapper(func)), lazy);
   }
 
   @Override
@@ -130,7 +127,7 @@ public class HoodieListData<T> extends HoodieData<T> {
     return new HoodieListData<>(
         StreamSupport.stream(
             Spliterators.spliteratorUnknownSize(
-                mapper.apply(dataStream.iterator()), Spliterator.ORDERED), true),
+                mapper.apply(asStream().iterator()), Spliterator.ORDERED), true),
         lazy
     );
   }
@@ -138,7 +135,7 @@ public class HoodieListData<T> extends HoodieData<T> {
   @Override
   public <O> HoodieData<O> flatMap(SerializableFunction<T, Iterator<O>> func) {
     Function<T, Iterator<O>> mapper = throwingMapWrapper(func);
-    Stream<O> mappedStream = dataStream.flatMap(e ->
+    Stream<O> mappedStream = asStream().flatMap(e ->
         StreamSupport.stream(
             Spliterators.spliteratorUnknownSize(mapper.apply(e), Spliterator.ORDERED), true));
     return new HoodieListData<>(mappedStream, lazy);
@@ -147,12 +144,12 @@ public class HoodieListData<T> extends HoodieData<T> {
   @Override
   public <K, V> HoodiePairData<K, V> mapToPair(SerializablePairFunction<T, K, V> func) {
     Function<T, Pair<K, V>> throwableMapToPairFunc = throwingMapToPairWrapper(func);
-    return new HoodieListPairData<>(dataStream.map(throwableMapToPairFunc), lazy);
+    return new HoodieListPairData<>(asStream().map(throwableMapToPairFunc), lazy);
   }
 
   @Override
   public HoodieData<T> distinct() {
-    return new HoodieListData<>(dataStream.distinct(), lazy);
+    return new HoodieListData<>(asStream().distinct(), lazy);
   }
 
   @Override
@@ -169,27 +166,18 @@ public class HoodieListData<T> extends HoodieData<T> {
 
   @Override
   public HoodieData<T> filter(SerializableFunction<T, Boolean> filterFunc) {
-    return new HoodieListData<>(dataStream.filter(r -> throwingMapWrapper(filterFunc).apply(r)), lazy);
+    return new HoodieListData<>(asStream().filter(r -> throwingMapWrapper(filterFunc).apply(r)), lazy);
   }
 
   @Override
   public HoodieData<T> union(HoodieData<T> other) {
     ValidationUtils.checkArgument(other instanceof HoodieListData);
-    return new HoodieListData<>(Stream.concat(dataStream, ((HoodieListData<T>)other).dataStream), lazy);
-  }
-
-  @Override
-  public List<T> collectAsList() {
-    return dataStream.collect(Collectors.toList());
+    return new HoodieListData<>(Stream.concat(asStream(), ((HoodieListData<T>)other).asStream()), lazy);
   }
 
   @Override
   public HoodieData<T> repartition(int parallelism) {
     // no op
     return this;
-  }
-
-  static <T> Stream<T> materialize(Stream<T> dataStream) {
-    return dataStream.collect(Collectors.toList()).parallelStream();
   }
 }
