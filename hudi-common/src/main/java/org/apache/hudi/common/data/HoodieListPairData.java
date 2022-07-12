@@ -33,11 +33,21 @@ import java.util.stream.Collector;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.data.HoodieListData.materialize;
 import static org.apache.hudi.common.function.FunctionWrapper.throwingMapToPairWrapper;
 import static org.apache.hudi.common.function.FunctionWrapper.throwingMapWrapper;
 
 /**
  * In-memory implementation of {@link HoodiePairData} holding internally a {@link Stream} of {@link Pair}s.
+ *
+ * {@link HoodieListData} can have either of the 2 execution semantics:
+ *
+ * <ol>
+ *   <li>Eager: with every operation being executed right away</li>
+ *   <li>Lazy: with every operation being "stacked up", with it execution postponed until
+ *   "terminal" operation is invoked</li>
+ * </ol>
+ *
  *
  * NOTE: This is an in-memory counterpart for {@code HoodieJavaPairRDD}, and it strives to provide
  *       similar semantic as RDD container -- all intermediate (non-terminal, not de-referencing
@@ -45,24 +55,31 @@ import static org.apache.hudi.common.function.FunctionWrapper.throwingMapWrapper
  *       This allows to make sure that compute/memory churn is minimal since only necessary
  *       computations will ultimately be performed.
  *
+ *       Please note, however, that while RDD container allows the same collection to be
+ *       de-referenced more than once (ie terminal operation invoked more than once),
+ *       {@link HoodieListData} allows that only when instantiated w/ an eager execution semantic.
+ *
  * @param <K> type of the key in the pair
  * @param <V> type of the value in the pair
  */
 public class HoodieListPairData<K, V> extends HoodiePairData<K, V> {
 
   private final Stream<Pair<K, V>> dataStream;
+  private final boolean lazy;
 
-  public HoodieListPairData(List<Pair<K, V>> data) {
+  private HoodieListPairData(List<Pair<K, V>> data, boolean lazy) {
     this.dataStream = data.stream().parallel();
+    this.lazy = lazy;
   }
 
-  HoodieListPairData(Stream<Pair<K, V>> dataStream) {
-    this.dataStream = dataStream;
+  HoodieListPairData(Stream<Pair<K, V>> dataStream, boolean lazy) {
+    this.dataStream = lazy ? dataStream : materialize(dataStream);
+    this.lazy = lazy;
   }
 
   @Override
   public List<Pair<K, V>> get() {
-    return dataStream.collect(Collectors.toList());
+    return collectAsList();
   }
 
   @Override
@@ -77,12 +94,12 @@ public class HoodieListPairData<K, V> extends HoodiePairData<K, V> {
 
   @Override
   public HoodieData<K> keys() {
-    return new HoodieListData<>(dataStream.map(Pair::getKey));
+    return new HoodieListData<>(dataStream.map(Pair::getKey), lazy);
   }
 
   @Override
   public HoodieData<V> values() {
-    return new HoodieListData<>(dataStream.map(Pair::getValue));
+    return new HoodieListData<>(dataStream.map(Pair::getValue), lazy);
   }
 
   @Override
@@ -102,8 +119,10 @@ public class HoodieListPairData<K, V> extends HoodiePairData<K, V> {
         Collectors.groupingBy(Pair::getKey, mappingCollector);
 
     Map<K, List<V>> groupedByKey = dataStream.collect(groupingCollector);
-    return new HoodieListPairData<>(groupedByKey.entrySet().stream()
-        .map(e -> Pair.of(e.getKey(), e.getValue())));
+    return new HoodieListPairData<>(
+        groupedByKey.entrySet().stream().map(e -> Pair.of(e.getKey(), e.getValue())),
+        lazy
+    );
   }
 
   @Override
@@ -117,18 +136,20 @@ public class HoodieListPairData<K, V> extends HoodiePairData<K, V> {
     return new HoodieListPairData<>(
         reducedMap.entrySet()
             .stream()
-            .map(e -> Pair.of(e.getKey(), e.getValue().orElse(null))));
+            .map(e -> Pair.of(e.getKey(), e.getValue().orElse(null))),
+        lazy
+    );
   }
 
   @Override
   public <O> HoodieData<O> map(SerializableFunction<Pair<K, V>, O> func) {
     Function<Pair<K, V>, O> uncheckedMapper = throwingMapWrapper(func);
-    return new HoodieListData<>(dataStream.map(uncheckedMapper));
+    return new HoodieListData<>(dataStream.map(uncheckedMapper), lazy);
   }
 
   @Override
   public <L, W> HoodiePairData<L, W> mapToPair(SerializablePairFunction<Pair<K, V>, L, W> mapToPairFunc) {
-    return new HoodieListPairData<>(dataStream.map(p -> throwingMapToPairWrapper(mapToPairFunc).apply(p)));
+    return new HoodieListPairData<>(dataStream.map(p -> throwingMapToPairWrapper(mapToPairFunc).apply(p)), lazy);
   }
 
   @Override
@@ -155,21 +176,32 @@ public class HoodieListPairData<K, V> extends HoodiePairData<K, V> {
       }
     });
 
-    return new HoodieListPairData<>(leftOuterJoined);
+    return new HoodieListPairData<>(leftOuterJoined, lazy);
   }
 
-  public static <K, V> HoodieListPairData<K, V> of(List<Pair<K, V>> data) {
-    return new HoodieListPairData<>(data);
+  public static <K, V> HoodieListPairData<K, V> lazy(List<Pair<K, V>> data) {
+    return new HoodieListPairData<>(data, true);
   }
 
-  public static <K, V> HoodieListPairData<K, V> of(Map<K, List<V>> data) {
-    Stream<Pair<K, V>> exploded = data.entrySet().stream()
-        .flatMap(e -> e.getValue().stream().map(v -> Pair.of(e.getKey(), v)));
-    return new HoodieListPairData<>(exploded);
+  public static <K, V> HoodieListPairData<K, V> eager(List<Pair<K, V>> data) {
+    return new HoodieListPairData<>(data, false);
+  }
+
+  public static <K, V> HoodieListPairData<K, V> lazy(Map<K, List<V>> data) {
+    return new HoodieListPairData<>(explode(data), true);
+  }
+
+  public static <K, V> HoodieListPairData<K, V> eager(Map<K, List<V>> data) {
+    return new HoodieListPairData<>(explode(data), false);
   }
 
   @Override
   public List<Pair<K, V>> collectAsList() {
     return dataStream.collect(Collectors.toList());
+  }
+
+  private static <K, V> Stream<Pair<K, V>> explode(Map<K, List<V>> data) {
+    return data.entrySet().stream()
+        .flatMap(e -> e.getValue().stream().map(v -> Pair.of(e.getKey(), v)));
   }
 }

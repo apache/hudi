@@ -39,40 +39,64 @@ import static org.apache.hudi.common.function.FunctionWrapper.throwingMapWrapper
 /**
  * In-memory implementation of {@link HoodieData} holding internally a {@link Stream} of objects.
  *
+ * {@link HoodieListData} can have either of the 2 execution semantics:
+ *
+ * <ol>
+ *   <li>Eager: with every operation being executed right away</li>
+ *   <li>Lazy: with every operation being "stacked up", with it execution postponed until
+ *   "terminal" operation is invoked</li>
+ * </ol>
+ *
  * NOTE: This is an in-memory counterpart for {@code HoodieJavaRDD}, and it strives to provide
  *       similar semantic as RDD container -- all intermediate (non-terminal, not de-referencing
  *       the stream like "collect", "groupBy", etc) operations are executed *lazily*.
  *       This allows to make sure that compute/memory churn is minimal since only necessary
  *       computations will ultimately be performed.
  *
+ *       Please note, however, that while RDD container allows the same collection to be
+ *       de-referenced more than once (ie terminal operation invoked more than once),
+ *       {@link HoodieListData} allows that only when instantiated w/ an eager execution semantic.
+ *
  * @param <T> type of object.
  */
 public class HoodieListData<T> extends HoodieData<T> {
 
-  private final Stream<T> dataStream;
+  protected final Stream<T> dataStream;
+  protected final boolean lazy;
 
-  private HoodieListData(List<T> data) {
+  protected HoodieListData(List<T> data, boolean lazy) {
     this.dataStream = data.stream().parallel();
+    this.lazy = lazy;
   }
 
-  HoodieListData(Stream<T> dataStream) {
-    this.dataStream = dataStream;
+  HoodieListData(Stream<T> dataStream, boolean lazy) {
+    // NOTE: In case this container is being instantiated by an eager parent, we have to
+    //       pre-materialize the stream
+    this.dataStream = lazy ? dataStream : materialize(dataStream);
+    this.lazy = lazy;
   }
 
   /**
-   * @param listData a {@link List} of objects in type T.
-   * @param <T>      type of object.
-   * @return a new instance containing the {@link List<T>} reference.
+   * Creates instance of {@link HoodieListData} bearing *lazy* execution semantic
+   *
+   * @param listData a {@link List} of objects in type T
+   * @param <T>      type of object
+   * @return a new instance containing the {@link List<T>} reference
    */
+  // TODO rename to lazy
   public static <T> HoodieListData<T> of(List<T> listData) {
-    return new HoodieListData<>(listData);
+    return new HoodieListData<>(listData, true);
   }
 
   /**
-   * @deprecated use {@link HoodieData#collectAsList()} instead
+   * Creates instance of {@link HoodieListData} bearing *eager* execution semantic
+   *
+   * @param listData a {@link List} of objects in type T
+   * @param <T>      type of object
+   * @return a new instance containing the {@link List<T>} reference
    */
-  public static <T> List<T> getList(HoodieData<T> hoodieData) {
-    return hoodieData.collectAsList();
+  public static <T> HoodieListData<T> eager(List<T> listData) {
+    return new HoodieListData<>(listData, false);
   }
 
   @Override
@@ -97,7 +121,7 @@ public class HoodieListData<T> extends HoodieData<T> {
 
   @Override
   public <O> HoodieData<O> map(SerializableFunction<T, O> func) {
-    return new HoodieListData<>(dataStream.map(throwingMapWrapper(func)));
+    return new HoodieListData<>(dataStream.map(throwingMapWrapper(func)), lazy);
   }
 
   @Override
@@ -106,7 +130,8 @@ public class HoodieListData<T> extends HoodieData<T> {
     return new HoodieListData<>(
         StreamSupport.stream(
             Spliterators.spliteratorUnknownSize(
-                mapper.apply(dataStream.iterator()), Spliterator.ORDERED), true)
+                mapper.apply(dataStream.iterator()), Spliterator.ORDERED), true),
+        lazy
     );
   }
 
@@ -116,18 +141,18 @@ public class HoodieListData<T> extends HoodieData<T> {
     Stream<O> mappedStream = dataStream.flatMap(e ->
         StreamSupport.stream(
             Spliterators.spliteratorUnknownSize(mapper.apply(e), Spliterator.ORDERED), true));
-    return new HoodieListData<>(mappedStream);
+    return new HoodieListData<>(mappedStream, lazy);
   }
 
   @Override
   public <K, V> HoodiePairData<K, V> mapToPair(SerializablePairFunction<T, K, V> func) {
     Function<T, Pair<K, V>> throwableMapToPairFunc = throwingMapToPairWrapper(func);
-    return new HoodieListPairData<>(dataStream.map(throwableMapToPairFunc));
+    return new HoodieListPairData<>(dataStream.map(throwableMapToPairFunc), lazy);
   }
 
   @Override
   public HoodieData<T> distinct() {
-    return new HoodieListData<>(dataStream.distinct());
+    return new HoodieListData<>(dataStream.distinct(), lazy);
   }
 
   @Override
@@ -144,13 +169,13 @@ public class HoodieListData<T> extends HoodieData<T> {
 
   @Override
   public HoodieData<T> filter(SerializableFunction<T, Boolean> filterFunc) {
-    return new HoodieListData<>(dataStream.filter(r -> throwingMapWrapper(filterFunc).apply(r)));
+    return new HoodieListData<>(dataStream.filter(r -> throwingMapWrapper(filterFunc).apply(r)), lazy);
   }
 
   @Override
   public HoodieData<T> union(HoodieData<T> other) {
     ValidationUtils.checkArgument(other instanceof HoodieListData);
-    return new HoodieListData<>(Stream.concat(dataStream, ((HoodieListData<T>)other).dataStream));
+    return new HoodieListData<>(Stream.concat(dataStream, ((HoodieListData<T>)other).dataStream), lazy);
   }
 
   @Override
@@ -162,5 +187,9 @@ public class HoodieListData<T> extends HoodieData<T> {
   public HoodieData<T> repartition(int parallelism) {
     // no op
     return this;
+  }
+
+  static <T> Stream<T> materialize(Stream<T> dataStream) {
+    return dataStream.collect(Collectors.toList()).parallelStream();
   }
 }
