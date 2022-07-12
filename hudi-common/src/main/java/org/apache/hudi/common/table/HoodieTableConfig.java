@@ -181,6 +181,11 @@ public class HoodieTableConfig extends HoodieConfig {
       .withDocumentation("When enabled, populates all meta fields. When disabled, no meta fields are populated "
           + "and incremental queries will not be functional. This is only meant to be used for append only/immutable data for batch processing");
 
+  public static final ConfigProperty<Boolean> UPSERT_WITHOUT_RECORD_KEY = ConfigProperty
+      .key("hoodie.upsert.without.record.key")
+      .defaultValue(false)
+      .withDocumentation("");
+
   public static final ConfigProperty<String> KEY_GENERATOR_CLASS_NAME = ConfigProperty
       .key("hoodie.table.keygenerator.class")
       .noDefaultValue()
@@ -580,6 +585,10 @@ public class HoodieTableConfig extends HoodieConfig {
    */
   public boolean populateMetaFields() {
     return Boolean.parseBoolean(getStringOrDefault(POPULATE_META_FIELDS));
+  }
+
+  public boolean upsertWithoutRecordKey() {
+    return Boolean.parseBoolean(getStringOrDefault(UPSERT_WITHOUT_RECORD_KEY));
   }
 
   /**

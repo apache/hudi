@@ -741,6 +741,7 @@ public class HoodieTableMetaClient implements Serializable {
     private Boolean shouldDropPartitionColumns;
     private String metadataPartitions;
     private String inflightMetadataPartitions;
+    private Boolean upsertWithoutRecordKey;
 
     /**
      * Persist the configs that is written at the first time, and should not be changed.
@@ -822,6 +823,11 @@ public class HoodieTableMetaClient implements Serializable {
 
     public PropertyBuilder setBootstrapBasePath(String bootstrapBasePath) {
       this.bootstrapBasePath = bootstrapBasePath;
+      return this;
+    }
+
+    public PropertyBuilder setUpsertWithoutRecordKey(boolean upsertWithoutRecordKey) {
+      this.upsertWithoutRecordKey = upsertWithoutRecordKey;
       return this;
     }
 
@@ -982,6 +988,9 @@ public class HoodieTableMetaClient implements Serializable {
       if (hoodieConfig.contains(HoodieTableConfig.TABLE_METADATA_PARTITIONS_INFLIGHT)) {
         setInflightMetadataPartitions(hoodieConfig.getString(HoodieTableConfig.TABLE_METADATA_PARTITIONS_INFLIGHT));
       }
+      if (hoodieConfig.contains(HoodieTableConfig.UPSERT_WITHOUT_RECORD_KEY)) {
+        setUpsertWithoutRecordKey(hoodieConfig.getBooleanOrDefault(HoodieTableConfig.UPSERT_WITHOUT_RECORD_KEY));
+      }
       return this;
     }
 
@@ -1071,6 +1080,9 @@ public class HoodieTableMetaClient implements Serializable {
       }
       if (null != inflightMetadataPartitions) {
         tableConfig.setValue(HoodieTableConfig.TABLE_METADATA_PARTITIONS_INFLIGHT, inflightMetadataPartitions);
+      }
+      if (null != upsertWithoutRecordKey) {
+        tableConfig.setValue(HoodieTableConfig.UPSERT_WITHOUT_RECORD_KEY, Boolean.toString(upsertWithoutRecordKey));
       }
       return tableConfig.getProps();
     }

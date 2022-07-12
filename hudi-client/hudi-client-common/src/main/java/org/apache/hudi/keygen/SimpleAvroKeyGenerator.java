@@ -18,6 +18,7 @@
 package org.apache.hudi.keygen;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import org.apache.avro.generic.GenericRecord;
@@ -53,7 +54,11 @@ public class SimpleAvroKeyGenerator extends BaseKeyGenerator {
     if (getRecordKeyFields().isEmpty()) {
       return EMPTY_STRING;
     }
-    return KeyGenUtils.getRecordKey(record, getRecordKeyFields().get(0), isConsistentLogicalTimestampEnabled());
+    String keyField = getRecordKeyFields().get(0);
+    if (HoodieRecord.COMMIT_SEQNO_METADATA_FIELD.equals(keyField)) {
+      return EMPTY_STRING;
+    }
+    return KeyGenUtils.getRecordKey(record, keyField, isConsistentLogicalTimestampEnabled());
   }
 
   @Override

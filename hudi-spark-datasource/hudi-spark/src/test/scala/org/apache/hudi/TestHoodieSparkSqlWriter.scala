@@ -207,6 +207,41 @@ class TestHoodieSparkSqlWriter {
     assert(df.except(trimmedDf).count() == 0)
   }
 
+  @Test
+  def testUpsertWithoutRecordKey(): Unit = {
+    // create a new table without record key
+     val fooTableModifier = commonTableModifier.-(RECORDKEY_FIELD.key)
+       .updated(HoodieTableConfig.UPSERT_WITHOUT_RECORD_KEY.key, "true")
+
+    // generate the inserts
+    val schema = DataSourceTestUtils.getStructTypeExampleSchema
+    val structType = AvroConversionUtils.convertAvroSchemaToStructType(schema)
+    val inserts = DataSourceTestUtils.generateRandomRows(1000)
+
+    // add some updates so that preCombine kicks in
+    val toUpdateDataset = sqlContext.createDataFrame(DataSourceTestUtils.getUniqueRows(inserts, 40), structType)
+    val updates = DataSourceTestUtils.updateRowsWithHigherTs(toUpdateDataset)
+    val records = inserts.union(updates)
+    val recordsSeq = convertRowListToSeq(records)
+    val df = spark.createDataFrame(sc.parallelize(recordsSeq), structType)
+    // write to Hudi
+    HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableModifier, df)
+
+    // collect all partition paths to issue read of parquet files
+    val partitions = Seq(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH,
+      HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH)
+    // Check the entire dataset has all records still
+    val fullPartitionPaths = new Array[String](3)
+    for (i <- fullPartitionPaths.indices) {
+      fullPartitionPaths(i) = String.format("%s/%s/*", tempBasePath, partitions(i))
+    }
+    // fetch all records from parquet files generated from write to hudi
+    val actualDf = sqlContext.read.parquet(fullPartitionPaths(0), fullPartitionPaths(1), fullPartitionPaths(2))
+    // remove metadata columns so that expected and actual DFs can be compared as is
+    val trimmedDf = dropMetaFields(actualDf)
+    assertEquals(actualDf.count, trimmedDf.count)
+  }
+
   /**
    * Utility method for performing bulk insert  tests.
    */

@@ -1146,6 +1146,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS);
   }
 
+  public boolean upsertWithoutRecordKey() {
+    return getBooleanOrDefault(HoodieTableConfig.UPSERT_WITHOUT_RECORD_KEY);
+  }
+
   /**
    * compaction properties.
    */
