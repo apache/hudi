@@ -67,8 +67,7 @@ public class HoodieJavaWriteClient<T extends HoodieRecordPayload> extends
     // Create a Hoodie table which encapsulated the commits and files visible
     HoodieJavaTable<T> table = HoodieJavaTable.create(config, (HoodieJavaEngineContext) context);
     Timer.Context indexTimer = metrics.getIndexCtx();
-    List<HoodieRecord<T>> recordsWithLocation = HoodieListData.getList(
-        getIndex().tagLocation(HoodieListData.of(hoodieRecords), context, table));
+    List<HoodieRecord<T>> recordsWithLocation = getIndex().tagLocation(HoodieListData.of(hoodieRecords), context, table).collectAsList();
     metrics.updateIndexMetrics(LOOKUP_STR, metrics.getDurationInMs(indexTimer == null ? 0L : indexTimer.stop()));
     return recordsWithLocation.stream().filter(v1 -> !v1.isCurrentLocationKnown()).collect(Collectors.toList());
   }

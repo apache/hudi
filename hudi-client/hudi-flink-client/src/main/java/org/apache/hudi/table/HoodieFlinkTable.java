@@ -40,8 +40,6 @@ import org.apache.avro.specific.SpecificRecordBase;
 
 import java.util.List;
 
-import static org.apache.hudi.common.data.HoodieListData.getList;
-
 public abstract class HoodieFlinkTable<T extends HoodieRecordPayload>
     extends HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>>
     implements ExplicitWriteHandleTable<T> {
@@ -78,7 +76,7 @@ public abstract class HoodieFlinkTable<T extends HoodieRecordPayload>
 
   public static HoodieWriteMetadata<List<WriteStatus>> convertMetadata(
       HoodieWriteMetadata<HoodieData<WriteStatus>> metadata) {
-    return metadata.clone(getList(metadata.getWriteStatuses()));
+    return metadata.clone(metadata.getWriteStatuses().collectAsList());
   }
 
   @Override

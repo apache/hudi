@@ -61,7 +61,7 @@ public abstract class FlinkHoodieIndex<T extends HoodieRecordPayload> extends Ho
   public <R> HoodieData<HoodieRecord<R>> tagLocation(
       HoodieData<HoodieRecord<R>> records, HoodieEngineContext context,
       HoodieTable hoodieTable) throws HoodieIndexException {
-    List<HoodieRecord<T>> hoodieRecords = tagLocation(HoodieListData.getList(records.map(record -> (HoodieRecord<T>) record)), context, hoodieTable);
+    List<HoodieRecord<T>> hoodieRecords = tagLocation(records.map(record -> (HoodieRecord<T>) record).collectAsList(), context, hoodieTable);
     return HoodieListData.of(hoodieRecords.stream().map(r -> (HoodieRecord<R>) r).collect(Collectors.toList()));
   }
 
@@ -70,6 +70,6 @@ public abstract class FlinkHoodieIndex<T extends HoodieRecordPayload> extends Ho
   public HoodieData<WriteStatus> updateLocation(
       HoodieData<WriteStatus> writeStatuses, HoodieEngineContext context,
       HoodieTable hoodieTable) throws HoodieIndexException {
-    return HoodieListData.of(updateLocation(HoodieListData.getList(writeStatuses), context, hoodieTable));
+    return HoodieListData.of(updateLocation(writeStatuses.collectAsList(), context, hoodieTable));
   }
 }

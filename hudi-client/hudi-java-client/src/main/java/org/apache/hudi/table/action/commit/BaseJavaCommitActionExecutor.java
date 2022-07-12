@@ -130,8 +130,7 @@ public abstract class BaseJavaCommitActionExecutor<T extends HoodieRecordPayload
   protected List<WriteStatus> updateIndex(List<WriteStatus> writeStatuses, HoodieWriteMetadata<List<WriteStatus>> result) {
     Instant indexStartTime = Instant.now();
     // Update the index back
-    List<WriteStatus> statuses = HoodieListData.getList(
-        table.getIndex().updateLocation(HoodieListData.of(writeStatuses), context, table));
+    List<WriteStatus> statuses = table.getIndex().updateLocation(HoodieListData.of(writeStatuses), context, table).collectAsList();
     result.setIndexUpdateDuration(Duration.between(indexStartTime, Instant.now()));
     result.setWriteStatuses(statuses);
     return statuses;
@@ -339,8 +338,7 @@ public abstract class BaseJavaCommitActionExecutor<T extends HoodieRecordPayload
   public void updateIndexAndCommitIfNeeded(List<WriteStatus> writeStatuses, HoodieWriteMetadata result) {
     Instant indexStartTime = Instant.now();
     // Update the index back
-    List<WriteStatus> statuses = HoodieListData.getList(
-        table.getIndex().updateLocation(HoodieListData.of(writeStatuses), context, table));
+    List<WriteStatus> statuses = table.getIndex().updateLocation(HoodieListData.of(writeStatuses), context, table).collectAsList();
     result.setIndexUpdateDuration(Duration.between(indexStartTime, Instant.now()));
     result.setWriteStatuses(statuses);
     result.setPartitionToReplaceFileIds(getPartitionToReplacedFileIds(result));
