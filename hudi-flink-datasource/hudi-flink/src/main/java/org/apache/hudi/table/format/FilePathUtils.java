@@ -442,4 +442,8 @@ public class FilePathUtils {
     }
     return conf.getString(FlinkOptions.HIVE_SYNC_PARTITION_FIELDS).split(",");
   }
+
+  public static boolean isHiveStylePartitioning(String path) {
+    return HIVE_PARTITION_NAME_PATTERN.matcher(path).matches();
+  }
 }

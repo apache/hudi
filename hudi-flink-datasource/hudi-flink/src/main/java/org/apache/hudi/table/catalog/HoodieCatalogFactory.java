@@ -18,6 +18,8 @@
 
 package org.apache.hudi.table.catalog;
 
+import org.apache.hudi.exception.HoodieCatalogException;
+
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.catalog.Catalog;
@@ -30,8 +32,8 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 
+import static org.apache.flink.table.factories.FactoryUtil.PROPERTY_VERSION;
 import static org.apache.hudi.table.catalog.CatalogOptions.CATALOG_PATH;
-import static org.apache.hudi.table.catalog.CatalogOptions.DEFAULT_DATABASE;
 
 /**
  * A catalog factory impl that creates {@link HoodieCatalog}.
@@ -52,21 +54,35 @@ public class HoodieCatalogFactory implements CatalogFactory {
         FactoryUtil.createCatalogFactoryHelper(this, context);
     helper.validate();
 
-    return new HoodieCatalog(
-        context.getName(),
-        (Configuration) helper.getOptions());
+    if (helper.getOptions().get(HoodieCatalogFactoryOptions.MODE).equalsIgnoreCase("hms")) {
+      return new HoodieHiveCatalog(
+          context.getName(),
+          helper.getOptions().get(HoodieCatalogFactoryOptions.DEFAULT_DATABASE),
+          helper.getOptions().get(HoodieCatalogFactoryOptions.HIVE_CONF_DIR),
+          helper.getOptions().get(HoodieCatalogFactoryOptions.INIT_FS_TABLE));
+    } else if (helper.getOptions().get(HoodieCatalogFactoryOptions.MODE).equalsIgnoreCase("dfs")) {
+      return new HoodieCatalog(
+          context.getName(),
+          (Configuration) helper.getOptions());
+    } else {
+      throw new HoodieCatalogException("hoodie catalog supports only the hms and dfs modes.");
+    }
   }
 
   @Override
   public Set<ConfigOption<?>> requiredOptions() {
-    Set<ConfigOption<?>> options = new HashSet<>();
-    options.add(CATALOG_PATH);
-    options.add(DEFAULT_DATABASE);
-    return options;
+    return Collections.emptySet();
   }
 
   @Override
   public Set<ConfigOption<?>> optionalOptions() {
-    return Collections.emptySet();
+    final Set<ConfigOption<?>> options = new HashSet<>();
+    options.add(HoodieCatalogFactoryOptions.DEFAULT_DATABASE);
+    options.add(PROPERTY_VERSION);
+    options.add(HoodieCatalogFactoryOptions.HIVE_CONF_DIR);
+    options.add(HoodieCatalogFactoryOptions.MODE);
+    options.add(CATALOG_PATH);
+    options.add(HoodieCatalogFactoryOptions.INIT_FS_TABLE);
+    return options;
   }
 }
