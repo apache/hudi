@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
@@ -778,6 +779,12 @@ public class FlinkOptions extends HoodieConfig {
       .booleanType()
       .defaultValue(false)
       .withDescription("Skip the _ro suffix for Read optimized table when registering, default false");
+
+  public static final ConfigOption<String> CATALOG_SYNC_TOOL_CLASS_NAME = ConfigOptions
+      .key("hive_sync.catalog.sync.tool.class")
+      .stringType()
+      .defaultValue(HiveSyncTool.class.getSimpleName())
+      .withDescription("Tool class used to synchronize to HMS, optional AWSGlueCatalogSyncTool to sync metadata to aws Glue");
 
   public static final ConfigOption<Boolean> HIVE_SYNC_SUPPORT_TIMESTAMP = ConfigOptions
       .key("hive_sync.support_timestamp")
