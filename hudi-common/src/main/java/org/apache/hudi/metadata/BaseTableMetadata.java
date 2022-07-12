@@ -40,6 +40,12 @@ import org.apache.hudi.common.util.hash.ColumnIndexID;
 import org.apache.hudi.common.util.hash.FileIndexID;
 import org.apache.hudi.common.util.hash.PartitionIndexID;
 import org.apache.hudi.exception.HoodieMetadataException;
+import org.apache.hudi.index.ColumnDomain;
+import org.apache.hudi.index.ColumnHandle;
+import org.apache.hudi.index.Domain;
+import org.apache.hudi.index.Marker;
+import org.apache.hudi.index.Range;
+import org.apache.hudi.index.Type;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
@@ -54,10 +60,13 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.ListIterator;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
+
+import static org.apache.hudi.common.util.Option.fromJavaOptional;
 
 public abstract class BaseTableMetadata implements HoodieTableMetadata {
 
@@ -271,6 +280,98 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
       }
     }
     return fileToColumnStatMap;
+  }
+
+  public FileStatus[] getFilesToQueryUsingCSI(List<String> columns, ColumnDomain<ColumnHandle> columnDomain) throws IOException {
+    if (!isColumnStatsIndexEnabled) {
+      LOG.error("Metadata column stats index is disabled!");
+      return new FileStatus[0];
+    }
+    List<String> encodedColumnNames = columns.stream().map(col -> new ColumnIndexID(col).asBase64EncodedString()).collect(Collectors.toList());
+    List<HoodieMetadataColumnStats> colStatsRecords = getRecordsByKeyPrefixes(encodedColumnNames, HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS)
+            .filter(record -> record.getData().getColumnStatMetadata().isPresent())
+            .map(rec -> rec.getData().getColumnStatMetadata().get()).collectAsList();
+
+    //this has the columns which are to be filtered using col stats.
+    Map<String, List<HoodieMetadataColumnStats>> statsByColumn = colStatsRecords.stream().collect(Collectors.groupingBy(HoodieMetadataColumnStats::getColumnName));
+    /*
+    For every column in columnDomain, compare the stats in file with every range for that column till you find a match. This file needs to be then compared with
+    next column's ranges similarly. If all the checks pass, file is filtered for querying, else rejected.
+     */
+
+    List<String> filesToScan = filterFilesFromCSI(columnDomain, statsByColumn);
+    //get file status objects from file names
+    return getFileStatuses(filesToScan);
+  }
+
+  private FileStatus[] getFileStatuses(List<String> files) throws IOException {
+    List<String> allPartitionPaths = getAllPartitionPaths()
+            .stream().map(partitionPath ->
+                    FSUtils.getPartitionPath(dataBasePath, partitionPath).toString())
+            .collect(Collectors.toList());
+
+    try {
+      List<Path> partitionPaths = allPartitionPaths.stream().map(Path::new).collect(Collectors.toList());
+      Map<String, FileStatus[]> filesByPartition = fetchAllFilesInPartitionPaths(partitionPaths);
+      Map<String, List<FileStatus>> statusByName = filesByPartition.values().stream().flatMap(Arrays::stream)
+              .collect(Collectors.groupingBy(fileStatus -> fileStatus.getPath().getName()));
+      return files.stream().map(statusByName::get).toArray(FileStatus[]::new);
+    } catch (Exception e) {
+      throw new HoodieMetadataException("Failed to retrieve files from metadata", e);
+    }
+  }
+
+  private List<String> filterFilesFromCSI(ColumnDomain<ColumnHandle> columnDomain, Map<String, List<HoodieMetadataColumnStats>> statsByColumn) {
+    List<List<String>> filteredFiles = new ArrayList<>();
+    for (Map.Entry<String, List<HoodieMetadataColumnStats>> entry : statsByColumn.entrySet()) {
+      String columnName = entry.getKey();
+      Option<Domain> domain = fromJavaOptional(columnDomain.getDomains().get().entrySet().stream()
+              .filter(e -> e.getKey().getName().equalsIgnoreCase(columnName))
+              .findFirst()
+              .map(Map.Entry::getValue));
+      if (!domain.isPresent()) {
+        continue;
+      }
+      //call the filtering logic here
+      Option<ColumnHandle> handle = fromJavaOptional(columnDomain.getDomains().get().entrySet().stream()
+              .filter(e -> e.getKey().getName().equalsIgnoreCase(columnName)).findFirst().map(Map.Entry::getKey));
+      List<String> eligibleFilesPerColumn = filterFilesUsingCSI(domain.get(), entry.getValue(), handle.get().getType());
+      filteredFiles.add(eligibleFilesPerColumn);
+    }
+
+    // get the intersection of all column wise eligible files since all the domains need to be satisfied in the returned list of files.
+    List<String> commons = new ArrayList<String>(filteredFiles.get(0));
+    for (ListIterator<List<String>> iter = filteredFiles.listIterator(0); iter.hasNext(); ) {
+      commons.retainAll(iter.next());
+    }
+
+    return commons;
+  }
+
+  private List<String> filterFilesUsingCSI(Domain domain, List<HoodieMetadataColumnStats> statsList, Type type) {
+    Map<Marker, Range> rangeMap = domain.getValues().getRanges();
+    List<String> eligibleFiles = new ArrayList<>();
+    for (HoodieMetadataColumnStats stat : statsList) {
+      if (checkIfEligibleToScan(createRangeFromMetadataColumnStat(stat, type), rangeMap)) {
+        eligibleFiles.add(stat.getFileName());
+      }
+    }
+    return eligibleFiles;
+  }
+
+  private Range createRangeFromMetadataColumnStat(HoodieMetadataColumnStats stats, Type type) {
+    Object minValue = stats.getMinValue();
+    Object maxValue = stats.getMaxValue();
+    return new Range(Marker.above(type, minValue), Marker.below(type, maxValue));
+  }
+
+  private boolean checkIfEligibleToScan(Range fileRange, Map<Marker, Range> domainRangeMap) {
+    for (Map.Entry<Marker, Range> entry : domainRangeMap.entrySet()) {
+      if (entry.getValue().overlaps(fileRange)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**
