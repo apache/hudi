@@ -23,7 +23,6 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.keygen.BuiltinKeyGenerator;
-import org.apache.hudi.keygen.ComplexKeyGenerator;
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
@@ -87,18 +86,15 @@ public class HoodieDatasetBulkInsertHelper {
     BuiltinKeyGenerator keyGenerator = (BuiltinKeyGenerator) ReflectionUtils.loadClass(keyGeneratorClass, properties);
 
     Dataset<Row> rowDatasetWithRecordKeysAndPartitionPath;
-    if (keyGeneratorClass.equals(NonpartitionedKeyGenerator.class.getName())) {
+    if (keyGeneratorClass.equals(NonpartitionedKeyGenerator.class.getName())
+        || (keyGeneratorClass.equals(SimpleKeyGenerator.class.getName()) && !config.isHiveStylePartitioningEnabled())) {
       // for non partitioned, set partition path to empty.
+      // or if SimpleKeyGenerator and not Hive style partition, use withColumn to improve performance
+      Column partitionColumn = keyGeneratorClass.equals(NonpartitionedKeyGenerator.class.getName())
+          ? functions.lit("").cast(DataTypes.StringType)
+          : functions.col(partitionPathFields).cast(DataTypes.StringType);
       rowDatasetWithRecordKeysAndPartitionPath = rows.withColumn(HoodieRecord.RECORD_KEY_METADATA_FIELD, functions.col(recordKeyFields))
-          .withColumn(HoodieRecord.PARTITION_PATH_METADATA_FIELD, functions.lit("").cast(DataTypes.StringType));
-    } else if (keyGeneratorClass.equals(SimpleKeyGenerator.class.getName())
-        || (keyGeneratorClass.equals(ComplexKeyGenerator.class.getName()) && !recordKeyFields.contains(",") && !partitionPathFields.contains(",")
-        && (!partitionPathFields.contains("timestamp")))) { // incase of ComplexKeyGen, check partition path type.
-      // simple fields for both record key and partition path: can directly use withColumn
-      String partitionPathField = keyGeneratorClass.equals(SimpleKeyGenerator.class.getName()) ? partitionPathFields :
-          partitionPathFields.substring(partitionPathFields.indexOf(":") + 1);
-      rowDatasetWithRecordKeysAndPartitionPath = rows.withColumn(HoodieRecord.RECORD_KEY_METADATA_FIELD, functions.col(recordKeyFields).cast(DataTypes.StringType))
-          .withColumn(HoodieRecord.PARTITION_PATH_METADATA_FIELD, functions.col(partitionPathField).cast(DataTypes.StringType));
+          .withColumn(HoodieRecord.PARTITION_PATH_METADATA_FIELD, partitionColumn);
     } else {
       // use udf
       String tableName = properties.getString(HoodieWriteConfig.TBL_NAME.key());
