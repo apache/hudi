@@ -263,7 +263,7 @@ public class ITTestDataStreamWrite extends TestLogger {
       client.getJobExecutionResult().get();
     }
 
-    TestData.checkWrittenFullData(tempFile, expected);
+    TestData.checkWrittenDataCOW(tempFile, expected);
   }
 
   private void testWriteToHoodieWithCluster(
@@ -327,7 +327,7 @@ public class ITTestDataStreamWrite extends TestLogger {
     // wait for the streaming job to finish
     client.getJobExecutionResult().get();
 
-    TestData.checkWrittenFullData(tempFile, expected);
+    TestData.checkWrittenDataCOW(tempFile, expected);
   }
 
   public void execute(StreamExecutionEnvironment execEnv, boolean isMor, String jobName) throws Exception {
@@ -449,7 +449,7 @@ public class ITTestDataStreamWrite extends TestLogger {
     builder.sink(dataStream, false);
 
     execute(execEnv, true, "Api_Sink_Test");
-    TestData.checkWrittenFullData(tempFile, EXPECTED);
+    TestData.checkWrittenDataCOW(tempFile, EXPECTED);
   }
 
 }
