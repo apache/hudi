@@ -45,7 +45,7 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{Expression, SubqueryExpression}
 import org.apache.spark.sql.execution.FileRelation
-import org.apache.spark.sql.execution.datasources.{FileStatusCache, PartitionedFile, PartitioningUtils}
+import org.apache.spark.sql.execution.datasources.{FileStatusCache, PartitionDirectory, PartitionedFile, PartitioningUtils}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.sources.{BaseRelation, Filter, PrunedFilteredScan}
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
@@ -342,18 +342,16 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
   protected def collectFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[FileSplit]
 
   /**
-   * Construct HoodieTableFileSystemView based on globPaths if specified, otherwise use the table path.
+   * Get all PartitionDirectories based on globPaths if specified, otherwise use the table path.
    * Will perform pruning if necessary
    */
-  private def getHoodieFsView(globPaths: Seq[Path], partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): HoodieTableFileSystemView = {
-    val partitionDirs = if (globPaths.isEmpty) {
+  private def listPartitionDirectories(globPaths: Seq[Path], partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[PartitionDirectory] = {
+    if (globPaths.isEmpty) {
       fileIndex.listFiles(partitionFilters, dataFilters)
     } else {
       val inMemoryFileIndex = HoodieInMemoryFileIndex.create(sparkSession, globPaths)
       inMemoryFileIndex.listFiles(partitionFilters, dataFilters)
     }
-
-    new HoodieTableFileSystemView(metaClient, timeline, partitionDirs.flatMap(_.files).toArray)
   }
 
   /**
@@ -361,7 +359,9 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
    * under the table path.
    */
   protected def listLatestBaseFiles(globPaths: Seq[Path], partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Map[Path, Seq[FileStatus]] = {
-    val fsView = getHoodieFsView(globPaths, partitionFilters, dataFilters)
+    val partitionDirs = listPartitionDirectories(globPaths, partitionFilters, dataFilters)
+    val fsView = new HoodieTableFileSystemView(metaClient, timeline, partitionDirs.flatMap(_.files).toArray)
+
     val latestBaseFiles = fsView.getLatestBaseFiles.iterator().asScala.toList.map(_.getFileStatus)
 
     latestBaseFiles.groupBy(getPartitionPath)
@@ -372,17 +372,17 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
    * otherwise will use the table path to do the listing.
    */
   protected def listLatestFileSlices(globPaths: Seq[Path], partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[FileSlice] = {
-    val fsView = getHoodieFsView(globPaths, partitionFilters, dataFilters)
-    val partitionPaths = fsView.getPartitionPaths.asScala
+    if (latestInstant.isEmpty) {
+      return Seq()
+    }
 
-    if (partitionPaths.isEmpty || latestInstant.isEmpty) {
-      Seq()
-    } else {
-      val queryTimestamp = this.queryTimestamp.get
-      partitionPaths.flatMap { partitionPath =>
-        val relativePath = getRelativePartitionPath(new Path(basePath), partitionPath)
-        fsView.getLatestMergedFileSlicesBeforeOrOn(relativePath, queryTimestamp).iterator().asScala.toSeq
-      }
+    val partitionDirs = listPartitionDirectories(globPaths, partitionFilters, dataFilters)
+    val fsView = new HoodieTableFileSystemView(metaClient, timeline, partitionDirs.flatMap(_.files).toArray)
+
+    val queryTimestamp = this.queryTimestamp.get
+    fsView.getPartitionPaths.asScala.flatMap { partitionPath =>
+      val relativePath = getRelativePartitionPath(new Path(basePath), partitionPath)
+      fsView.getLatestMergedFileSlicesBeforeOrOn(relativePath, queryTimestamp).iterator().asScala.toSeq
     }
   }
 

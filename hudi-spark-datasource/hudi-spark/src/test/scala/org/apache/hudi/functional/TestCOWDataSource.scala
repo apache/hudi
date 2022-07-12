@@ -306,7 +306,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
       .mode(SaveMode.Append)
       .save(basePath)
 
-    val baseFilePath = fs.listStatus(new Path(basePath, dataGen.getPartitionPaths.head))
+    val record1FilePaths = fs.listStatus(new Path(basePath, dataGen.getPartitionPaths.head))
       .filter(!_.getPath.getName.contains("hoodie_partition_metadata"))
       .filter(_.getPath.getName.endsWith("parquet"))
       .map(_.getPath.toString)
@@ -322,7 +322,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
       .save(basePath)
 
     val hudiReadPathDF = spark.read.format("org.apache.hudi")
-      .option(DataSourceReadOptions.READ_PATHS.key, baseFilePath)
+      .option(DataSourceReadOptions.READ_PATHS.key, record1FilePaths)
       .load()
 
     val expectedCount = records1.asScala.count(record => record.getPartitionPath == dataGen.getPartitionPaths.head)

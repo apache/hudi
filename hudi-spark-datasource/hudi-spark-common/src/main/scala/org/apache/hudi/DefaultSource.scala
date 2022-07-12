@@ -87,13 +87,13 @@ class DefaultSource extends RelationProvider
     }
 
     // Add default options for unspecified read options keys.
-    val parameters = if(globPaths.nonEmpty) {
+    val parameters = if (globPaths.nonEmpty) {
       Map(
         "glob.paths" -> globPaths.mkString(",")
-      ) ++ DataSourceOptionsHelper.parametersWithReadDefaults(optParams)
+      )
     } else {
-      DataSourceOptionsHelper.parametersWithReadDefaults(optParams)
-    }
+      Map()
+    } ++ DataSourceOptionsHelper.parametersWithReadDefaults(optParams)
 
     // Get the table base path
     val tablePath = if (globPaths.nonEmpty) {
