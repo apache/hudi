@@ -120,9 +120,6 @@ public class HoodieSimpleIndex
           return HoodieIndexUtils.getTaggedRecord(untaggedRecord, location);
         });
 
-    if (config.getSimpleIndexUseCaching()) {
-      inputRecords.unpersist();
-    }
     return taggedRecords;
   }
 
