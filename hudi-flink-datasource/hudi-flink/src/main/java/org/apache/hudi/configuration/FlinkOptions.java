@@ -502,6 +502,12 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(true) // default true for MOR write
       .withDescription("Schedule the compaction plan, enabled by default for MOR");
 
+  public static final ConfigOption<Integer> COMPACTION_FIFO_MAX_PENDING_PLANS = ConfigOptions
+      .key("compaction.fifo_max.pending.plans")
+      .intType()
+      .defaultValue(0)
+      .withDescription("Max pending plan to switch FIFO to LIFO, default 0 mean always FIFO");
+
   public static final ConfigOption<Boolean> COMPACTION_ASYNC_ENABLED = ConfigOptions
       .key("compaction.async.enabled")
       .booleanType()

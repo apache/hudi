@@ -99,16 +99,18 @@ public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPla
   }
 
   private void scheduleCompaction(HoodieFlinkTable<?> table, long checkpointId) throws IOException {
-    // the first instant takes the highest priority.
-    Option<HoodieInstant> firstRequested = table.getActiveTimeline().filterPendingCompactionTimeline()
-        .filter(instant -> instant.getState() == HoodieInstant.State.REQUESTED).firstInstant();
-    if (!firstRequested.isPresent()) {
+    //compaction plan execution sequence should be configurable to avoid too much compaction needed to compacted to fail the job
+    //When there are a large number of compact plans that need to be executed，inline compact operation handle the latest compaction plan to ensure stability and some
+    //external job (offline or compact server) to handle the rest compaction plan
+    // default the first instant takes the highest priority.
+    Option<HoodieInstant> compactionInstant = CompactionUtil.getScheduleCompactionInstant(table, conf);
+    if (!compactionInstant.isPresent()) {
       // do nothing.
       LOG.info("No compaction plan for checkpoint " + checkpointId);
       return;
     }
 
-    String compactionInstantTime = firstRequested.get().getTimestamp();
+    String compactionInstantTime = compactionInstant.get().getTimestamp();
 
     // generate compaction plan
     // should support configurable commit metadata

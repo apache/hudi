@@ -208,4 +208,13 @@ public class CompactionUtil {
   public static boolean isLIFO(String seq) {
     return seq.toUpperCase(Locale.ROOT).equals(FlinkCompactionConfig.SEQ_LIFO);
   }
+
+  public static Option<HoodieInstant> getScheduleCompactionInstant(HoodieFlinkTable table, Configuration conf) {
+    HoodieTimeline hoodieTimeline = table.getMetaClient().reloadActiveTimeline().filterPendingCompactionTimeline()
+        .filter(instant -> instant.getState() == HoodieInstant.State.REQUESTED);
+    int fifoMaxPendingPlans = conf.getInteger(FlinkOptions.COMPACTION_FIFO_MAX_PENDING_PLANS);
+    return fifoMaxPendingPlans != 0 && hoodieTimeline.countInstants() >= fifoMaxPendingPlans
+      ? hoodieTimeline.lastInstant() : hoodieTimeline.firstInstant();
+  }
+
 }

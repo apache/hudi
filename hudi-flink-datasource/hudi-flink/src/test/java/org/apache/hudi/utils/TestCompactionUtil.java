@@ -50,6 +50,7 @@ import java.util.stream.IntStream;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -83,7 +84,7 @@ public class TestCompactionUtil {
   void rollbackCompaction() throws Exception {
     beforeEach();
     List<String> oriInstants = IntStream.range(0, 3)
-        .mapToObj(i -> generateCompactionPlan()).collect(Collectors.toList());
+        .mapToObj(i -> generateCompactionPlan(true)).collect(Collectors.toList());
     List<HoodieInstant> instants = metaClient.getActiveTimeline()
         .filterPendingCompactionTimeline()
         .filter(instant -> instant.getState() == HoodieInstant.State.INFLIGHT)
@@ -104,7 +105,7 @@ public class TestCompactionUtil {
     beforeEach();
     conf.setInteger(FlinkOptions.COMPACTION_TIMEOUT_SECONDS, 0);
     List<String> oriInstants = IntStream.range(0, 3)
-        .mapToObj(i -> generateCompactionPlan()).collect(Collectors.toList());
+        .mapToObj(i -> generateCompactionPlan(true)).collect(Collectors.toList());
     List<HoodieInstant> instants = metaClient.getActiveTimeline()
         .filterPendingCompactionTimeline()
         .filter(instant -> instant.getState() == HoodieInstant.State.INFLIGHT)
@@ -149,10 +150,35 @@ public class TestCompactionUtil {
     assertThat("Two compaction plan expects to be scheduled", numCompactionCommits, is(2));
   }
 
+  @Test
+  void testGetScheduleCompactionInstant() throws Exception {
+    Map<String, String> options = new HashMap<>();
+    options.put(FlinkOptions.COMPACTION_SCHEDULE_ENABLED.key(), "false");
+    options.put(FlinkOptions.COMPACTION_TRIGGER_STRATEGY.key(), FlinkOptions.TIME_ELAPSED);
+    options.put(FlinkOptions.COMPACTION_DELTA_SECONDS.key(), "0");
+    beforeEach(options);
+
+    IntStream.range(0, 5).forEach(idx -> generateCompactionPlan(false));
+    //don't set compaction.fifo.max.pending.plans,always FIFO
+    assertEquals(table.getMetaClient().reloadActiveTimeline().filterPendingCompactionTimeline().firstInstant(), CompactionUtil.getScheduleCompactionInstant(table, conf));
+
+    //set compaction.fifo.max.pending.plans to 10.
+    conf.setInteger(FlinkOptions.COMPACTION_FIFO_MAX_PENDING_PLANS, 10);
+    IntStream.range(0, 3).forEach(idx -> generateCompactionPlan(false));
+    //pending compact plans still lower than COMPACTION_FIFO_MAX_PENDING_PLANS,still FIFO
+    assertEquals(table.getMetaClient().reloadActiveTimeline().filterPendingCompactionTimeline().firstInstant(), CompactionUtil.getScheduleCompactionInstant(table, conf));
+
+    IntStream.range(0, 3).forEach(idx -> generateCompactionPlan(false));
+    //pending compact plans bigger than COMPACTION_FIFO_MAX_PENDING_PLANS switch to LIFO
+
+    Option<HoodieInstant> lastPendingCompactionInstant = CompactionUtil.getScheduleCompactionInstant(table, conf);
+    assertEquals(table.getMetaClient().reloadActiveTimeline().filterPendingCompactionTimeline().q(), lastPendingCompactionInstant);
+  }
+
   /**
    * Generates a compaction plan on the timeline and returns its instant time.
    */
-  private String generateCompactionPlan() {
+  private String generateCompactionPlan(boolean needToInflight) {
     HoodieCompactionOperation operation = new HoodieCompactionOperation();
     HoodieCompactionPlan plan = new HoodieCompactionPlan(Collections.singletonList(operation), Collections.emptyMap(), 1);
     String instantTime = HoodieActiveTimeline.createNewInstantTime();
@@ -161,7 +187,9 @@ public class TestCompactionUtil {
     try {
       metaClient.getActiveTimeline().saveToCompactionRequested(compactionInstant,
           TimelineMetadataUtils.serializeCompactionPlan(plan));
-      table.getActiveTimeline().transitionCompactionRequestedToInflight(compactionInstant);
+      if (needToInflight) {
+        table.getActiveTimeline().transitionCompactionRequestedToInflight(compactionInstant);
+      }
     } catch (IOException ioe) {
       throw new HoodieIOException("Exception scheduling compaction", ioe);
     }
