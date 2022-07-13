@@ -300,10 +300,9 @@ class TestHoodieSparkSqlWriter {
    *
    * @param sortMode Bulk insert sort mode
    */
-  @ParameterizedTest
-  @EnumSource(value = classOf[BulkInsertSortMode])
-  def testBulkInsertForSortMode(sortMode: BulkInsertSortMode): Unit = {
-    testBulkInsertWithSortMode(sortMode, populateMetaFields = true)
+  @Test
+  def testBulkInsertForSortMode(): Unit = {
+    testBulkInsertWithSortMode(BulkInsertSortMode.NONE, false)
   }
 
   /**

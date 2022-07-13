@@ -72,7 +72,7 @@
  </check>
  <check level="error" class="org.scalastyle.scalariform.NoWhitespaceBeforeLeftBracketChecker" enabled="true"/>
  <check level="error" class="org.scalastyle.scalariform.NoWhitespaceAfterLeftBracketChecker" enabled="true"/>
- <check level="error" class="org.scalastyle.scalariform.ReturnChecker" enabled="true"/>
+ <check level="warning" class="org.scalastyle.scalariform.ReturnChecker" enabled="true"/>
  <check level="error" class="org.scalastyle.scalariform.NullChecker" enabled="false"/>
  <check level="error" class="org.scalastyle.scalariform.NoCloneChecker" enabled="true"/>
  <check level="error" class="org.scalastyle.scalariform.NoFinalizeChecker" enabled="true"/>

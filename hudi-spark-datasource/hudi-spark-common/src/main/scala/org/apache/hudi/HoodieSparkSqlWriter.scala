@@ -42,6 +42,7 @@ import org.apache.hudi.internal.DataSourceInternalWriterHelper
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
 import org.apache.hudi.internal.schema.utils.{AvroSchemaEvolutionUtils, SerDeHelper}
+import org.apache.hudi.io.storage.row.HoodieInternalRowFileWriterFactory
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.keygen.{TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.sync.common.HoodieSyncConfig
@@ -177,7 +178,19 @@ object HoodieSparkSqlWriter {
         operation == WriteOperationType.BULK_INSERT) {
         val (success, commitTime: common.util.Option[String]) = bulkInsertAsRow(sqlContext, parameters, df, tblName,
           basePath, path, instantTime, partitionColumns)
-        return (success, commitTime, common.util.Option.empty(), common.util.Option.empty(), hoodieWriteClient.orNull, tableConfig)
+
+        // Check for errors and commit the write.
+        /*val (writeSuccessful, compactionInstant, clusteringInstant) =
+          commitAndPerformPostOperations(sqlContext.sparkSession, df.schema,
+            writeResult, parameters, writeClient, tableConfig, jsc,
+            TableInstantInfo(basePath, instantTime, commitActionType, operation))
+
+        (writeSuccessful, common.util.Option.ofNullable(instantTime), compactionInstant, clusteringInstant, writeClient, tableConfig)*/
+
+        return (success, commitTime, common.util.Option.empty(), common.util.Option.empty(), hoodieWriteClient.getOrElse(DataSourceUtils.createHoodieClient(jsc,
+          null, path, tblName,
+          mapAsJavaMap(parameters - HoodieWriteConfig.AUTO_COMMIT_ENABLE.key)))
+          .asInstanceOf[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]], tableConfig)
       }
       // scalastyle:on
 
@@ -563,11 +576,51 @@ object HoodieSparkSqlWriter {
       HoodieDatasetBulkInsertHelper.prepareHoodieDatasetForBulkInsertWithoutMetaFields(df)
     }
     if (HoodieSparkUtils.isSpark2) {
-      hoodieDF.write.format("org.apache.hudi.internal")
+      if (writeConfig.isBulkInsertWriteStreamEnabled) {
+        // init internal writer HoodieDataSourceInternalWriter
+        val internalRows = HoodieDatasetBulkInsertHelper.toInternalRows(hoodieDF)
+//        val writer = HoodieInternalRowFileWriterFactory.getInternalRowFileWriterWithoutMetaFields(basePath,)
+        val writerHelper = new DataSourceInternalWriterHelper(instantTime, writeConfig, hoodieDF.schema,
+          sqlContext.sparkSession, sparkContext.hadoopConfiguration, DataSourceUtils.getExtraMetadata(params))
+
+        val hoodieTable = writerHelper.getHoodieTable
+        val writer = HoodieInternalRowFileWriterFactory.getInternalRowFileWriterWithoutMetaFields(
+          basePath,
+          hoodieTable,
+          writeConfig,
+          hoodieDF.schema)
+        /*val internalWriter = new HoodieDataSourceInternalWriter(
+          instantTime,
+          writeConfig,
+          hoodieDF.schema,
+          sqlContext.sparkSession,
+          sparkContext.hadoopConfiguration,
+          DataSourceUtils.getExtraMetadata(params),
+          populateMetaFields,
+          arePartitionRecordsSorted)
+        internalRows.foreach(row => internalWriter.createWriterFactory()
+          .createDataWriter(0, Random.nextLong, Random.nextLong)
+          .write(row))*/
+        internalRows.foreach(row => writer.writeRow(row))
+
+        /*val query = hoodieDF.writeStream.trigger(Trigger.ProcessingTime(2000))
+          .foreachBatch { (batchDF: DataFrame, batchId: Long) =>
+          batchDF.persist()
+          batchDF.write.format("org.apache.hudi")
+            .option(DataSourceInternalWriterHelper.INSTANT_TIME_OPT_KEY, instantTime)
+            .options(params)
+            .mode(SaveMode.Append)
+            .save()
+          batchDF.unpersist()
+        }.start()
+        query.awaitTermination(2000L)*/
+      } else {
+        hoodieDF.write.format("org.apache.hudi.internal")
         .option(DataSourceInternalWriterHelper.INSTANT_TIME_OPT_KEY, instantTime)
         .options(params)
         .mode(SaveMode.Append)
         .save()
+      }
     } else if (HoodieSparkUtils.isSpark3) {
       hoodieDF.write.format("org.apache.hudi.spark3.internal")
         .option(DataSourceInternalWriterHelper.INSTANT_TIME_OPT_KEY, instantTime)
@@ -581,6 +634,63 @@ object HoodieSparkSqlWriter {
     }
     val syncHiveSuccess = metaSync(sqlContext.sparkSession, writeConfig, basePath, df.schema)
     (syncHiveSuccess, common.util.Option.ofNullable(instantTime))
+  }
+
+  def bulkInsertStreamAsRow(sqlContext: SQLContext,
+                      parameters: Map[String, String],
+                      df: DataFrame,
+                      tblName: String,
+                      path: String,
+                      partitionColumns: String): Dataset[Row] = {
+    val sparkContext = sqlContext.sparkContext
+    val populateMetaFields = java.lang.Boolean.parseBoolean((parameters.getOrElse(HoodieTableConfig.POPULATE_META_FIELDS.key(),
+      String.valueOf(HoodieTableConfig.POPULATE_META_FIELDS.defaultValue()))))
+    val dropPartitionColumns = parameters.get(DataSourceWriteOptions.DROP_PARTITION_COLUMNS.key()).map(_.toBoolean)
+      .getOrElse(DataSourceWriteOptions.DROP_PARTITION_COLUMNS.defaultValue())
+    // register classes & schemas
+    val (structName, nameSpace) = AvroConversionUtils.getAvroRecordNameAndNamespace(tblName)
+    sparkContext.getConf.registerKryoClasses(
+      Array(classOf[org.apache.avro.generic.GenericData],
+        classOf[org.apache.avro.Schema]))
+    var schema = AvroConversionUtils.convertStructTypeToAvroSchema(df.schema, structName, nameSpace)
+    if (dropPartitionColumns) {
+      schema = generateSchemaWithoutPartitionColumns(partitionColumns, schema)
+    }
+    validateSchemaForHoodieIsDeleted(schema)
+    sparkContext.getConf.registerAvroSchemas(schema)
+    log.info(s"Registered avro schema : ${schema.toString(true)}")
+    if (parameters(INSERT_DROP_DUPS.key).toBoolean) {
+      throw new HoodieException("Dropping duplicates with bulk_insert in row writer path is not supported yet")
+    }
+    val params: mutable.Map[String, String] = collection.mutable.Map(parameters.toSeq: _*)
+    params(HoodieWriteConfig.AVRO_SCHEMA_STRING.key) = schema.toString
+    val writeConfig = DataSourceUtils.createHoodieConfig(schema.toString, path, tblName, mapAsJavaMap(params))
+    val bulkInsertPartitionerRows: BulkInsertPartitioner[Dataset[Row]] = if (populateMetaFields) {
+      val userDefinedBulkInsertPartitionerOpt = DataSourceUtils.createUserDefinedBulkInsertPartitionerWithRows(writeConfig)
+      if (userDefinedBulkInsertPartitionerOpt.isPresent) {
+        userDefinedBulkInsertPartitionerOpt.get
+      }
+      else {
+        BulkInsertInternalPartitionerWithRowsFactory.get(writeConfig.getBulkInsertSortMode)
+      }
+    } else {
+      // Sort modes are not yet supported when meta fields are disabled
+      new NonSortPartitionerWithRows()
+    }
+    val arePartitionRecordsSorted = bulkInsertPartitionerRows.arePartitionRecordsSorted()
+    params(HoodieInternalConfig.BULKINSERT_ARE_PARTITIONER_RECORDS_SORTED) = arePartitionRecordsSorted.toString
+    val isGlobalIndex = if (populateMetaFields) {
+      SparkHoodieIndexFactory.isGlobalIndex(writeConfig)
+    } else {
+      false
+    }
+    val hoodieDF = if (populateMetaFields) {
+      HoodieDatasetBulkInsertHelper.prepareHoodieDatasetForBulkInsert(sqlContext, writeConfig, df, structName, nameSpace,
+        bulkInsertPartitionerRows, isGlobalIndex, dropPartitionColumns)
+    } else {
+      HoodieDatasetBulkInsertHelper.prepareHoodieDatasetForBulkInsertWithoutMetaFields(df)
+    }
+    hoodieDF
   }
 
   private def handleSaveModes(spark: SparkSession, mode: SaveMode, tablePath: Path, tableConfig: HoodieTableConfig, tableName: String,

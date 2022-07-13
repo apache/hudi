@@ -53,7 +53,10 @@ class TestStructuredStreaming extends HoodieClientTestBase {
     DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
     DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> classOf[ComplexKeyGenerator].getName,
     DataSourceWriteOptions.OPERATION.key -> DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL,
-    // HoodieWriteConfig.BULK_INSERT_WRITE_STREAM_ENABLE.key -> "true",
+    DataSourceWriteOptions.STREAMING_RETRY_CNT.key -> "0",
+    "hoodie.metadata.enable" -> "false",
+    "hoodie.populate.meta.fields" -> "false",
+     HoodieWriteConfig.BULK_INSERT_WRITE_STREAM_ENABLE.key -> "true",
     "hoodie.bulkinsert.sort.mode" -> "NONE",
     HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
   )

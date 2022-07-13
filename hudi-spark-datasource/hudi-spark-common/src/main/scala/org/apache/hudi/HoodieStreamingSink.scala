@@ -97,9 +97,9 @@ class HoodieStreamingSink(sqlContext: SQLContext,
     // we need auto adjustment enabled for streaming sink since async table services are feasible within the same JVM.
     updatedOptions = updatedOptions.updated(HoodieWriteConfig.AUTO_ADJUST_LOCK_CONFIGS.key, "true")
     // disable row writer bulk insert of write stream
-    if (options.getOrDefault(OPERATION.key, UPSERT_OPERATION_OPT_VAL).equalsIgnoreCase(BULK_INSERT_OPERATION_OPT_VAL)) {
+    /*if (options.getOrDefault(OPERATION.key, UPSERT_OPERATION_OPT_VAL).equalsIgnoreCase(BULK_INSERT_OPERATION_OPT_VAL)) {
       updatedOptions = updatedOptions.updated(ENABLE_ROW_WRITER.key, "false")
-    }
+    }*/
 
     val queryId = sqlContext.sparkContext.getLocalProperty(StreamExecution.QUERY_ID_KEY)
     assert(queryId != null)
@@ -120,6 +120,8 @@ class HoodieStreamingSink(sqlContext: SQLContext,
       log.warn(s"Skipping already completed batch $batchId in query $queryId")
       return
     }
+
+    val isStreaming = data.isStreaming
 
     retry(retryCnt, retryIntervalMs)(
       Try(

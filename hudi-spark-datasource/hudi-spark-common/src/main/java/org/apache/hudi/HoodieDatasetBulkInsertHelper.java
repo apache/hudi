@@ -31,14 +31,19 @@ import org.apache.hudi.table.BulkInsertPartitioner;
 
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+import org.apache.spark.package$;
 import org.apache.spark.sql.Column;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.api.java.UDF1;
+import org.apache.spark.sql.catalyst.InternalRow;
+import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder;
 import org.apache.spark.sql.functions;
 import org.apache.spark.sql.types.DataTypes;
 
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -184,6 +189,30 @@ public class HoodieDatasetBulkInsertHelper {
 
     return rowsWithMetaCols.select(
         JavaConverters.collectionAsScalaIterableConverter(allCols).asScala().toSeq());
+  }
+
+  public static List<InternalRow> toInternalRows(Dataset<Row> rows) throws Exception {
+    ExpressionEncoder encoder = SparkRowWriteHelper.getEncoder(rows.schema());
+    List<InternalRow> toReturn = new ArrayList<>();
+    List<Row> rowList = rows.collectAsList();
+    for (Row row : rowList) {
+      toReturn.add(serializeRow(encoder, row).copy());
+    }
+    return toReturn;
+  }
+
+  private static InternalRow serializeRow(ExpressionEncoder encoder, Row row)
+      throws InvocationTargetException, IllegalAccessException, NoSuchMethodException, ClassNotFoundException {
+    // TODO remove reflection if Spark 2.x support is dropped
+    if (package$.MODULE$.SPARK_VERSION().startsWith("2.")) {
+      Method spark2method = encoder.getClass().getMethod("toRow", Object.class);
+      return (InternalRow) spark2method.invoke(encoder, row);
+    } else {
+      Class<?> serializerClass = Class.forName("org.apache.spark.sql.catalyst.encoders.ExpressionEncoder$Serializer");
+      Object serializer = encoder.getClass().getMethod("createSerializer").invoke(encoder);
+      Method aboveSpark2method = serializerClass.getMethod("apply", Object.class);
+      return (InternalRow) aboveSpark2method.invoke(serializer, row);
+    }
   }
 
 }

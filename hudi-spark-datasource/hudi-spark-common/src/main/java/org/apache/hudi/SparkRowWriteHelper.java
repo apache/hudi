@@ -19,6 +19,7 @@
 package org.apache.hudi;
 
 import org.apache.hudi.common.model.HoodieRecord;
+
 import org.apache.spark.api.java.function.MapFunction;
 import org.apache.spark.api.java.function.ReduceFunction;
 import org.apache.spark.sql.Dataset;
@@ -29,12 +30,13 @@ import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder;
 import org.apache.spark.sql.catalyst.encoders.RowEncoder;
 import org.apache.spark.sql.catalyst.expressions.Attribute;
 import org.apache.spark.sql.types.StructType;
-import scala.Tuple2;
-import scala.collection.JavaConversions;
-import scala.collection.JavaConverters;
 
 import java.util.List;
 import java.util.stream.Collectors;
+
+import scala.Tuple2;
+import scala.collection.JavaConversions;
+import scala.collection.JavaConverters;
 
 /**
  * Helper class to assist in deduplicating Rows for BulkInsert with Rows.
@@ -62,7 +64,7 @@ public class SparkRowWriteHelper {
         .map((MapFunction<Tuple2<String, Row>, Row>) value -> value._2, getEncoder(inputDf.schema()));
   }
 
-  private ExpressionEncoder getEncoder(StructType schema) {
+  static ExpressionEncoder getEncoder(StructType schema) {
     List<Attribute> attributes = JavaConversions.asJavaCollection(schema.toAttributes()).stream()
         .map(Attribute::toAttribute).collect(Collectors.toList());
     return RowEncoder.apply(schema)
