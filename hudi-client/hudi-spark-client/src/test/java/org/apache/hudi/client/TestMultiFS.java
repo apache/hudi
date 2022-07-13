@@ -74,7 +74,6 @@ public class TestMultiFS extends HoodieClientTestHarness {
         .build();
   }
 
-
   @Test
   public void readLocalWriteHDFS() throws Exception {
     // Initialize table and filesystem

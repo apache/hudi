@@ -26,7 +26,6 @@ import org.apache.hudi.utilities.testutils.sources.AbstractDFSSourceTestBase;
 
 import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 
 import java.io.IOException;
 import java.util.List;
@@ -34,7 +33,7 @@ import java.util.List;
 /**
  * Basic tests for {@link CsvDFSSource}.
  */
-@Disabled
+
 public class TestCsvDFSSource extends AbstractDFSSourceTestBase {
 
   @BeforeEach

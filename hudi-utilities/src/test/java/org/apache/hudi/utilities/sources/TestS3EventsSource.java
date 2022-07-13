@@ -29,7 +29,6 @@ import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -43,7 +42,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 /**
  * Basic tests for {@link S3EventsSource}.
  */
-@Disabled
+
 public class TestS3EventsSource extends AbstractCloudObjectsSourceTestBase {
 
   @BeforeEach

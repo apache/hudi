@@ -97,26 +97,15 @@
       <type>test-jar</type>
       <scope>test</scope>
     </dependency>
+
     <dependency>
-      <groupId>org.apache.hadoop</groupId>
-      <artifactId>hadoop-common</artifactId>
-      <classifier>tests</classifier>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-shaded</artifactId>
+      <version>${project.parent.version}</version>
       <scope>test</scope>
       <exclusions>
         <exclusion>
-          <groupId>org.eclipse.jetty</groupId>
-          <artifactId>*</artifactId>
-        </exclusion>
-      </exclusions>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hadoop</groupId>
-      <artifactId>hadoop-hdfs</artifactId>
-      <classifier>tests</classifier>
-      <scope>test</scope>
-      <exclusions>
-        <exclusion>
-          <groupId>org.eclipse.jetty</groupId>
+          <groupId>io.netty</groupId>
           <artifactId>*</artifactId>
         </exclusion>
       </exclusions>

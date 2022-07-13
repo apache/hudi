@@ -151,7 +151,6 @@ import static org.junit.jupiter.params.provider.Arguments.arguments;
 /**
  * Basic tests against {@link HoodieDeltaStreamer}, by issuing bulk_inserts, upserts, inserts. Check counts at the end.
  */
-@Disabled("Disabled due to HDFS MiniCluster jetty conflict")
 @Tag("functional")
 public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
