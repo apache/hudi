@@ -42,7 +42,6 @@ public class TestHoodieCatalogUtils {
         name,
         null,
         createHiveConf(),
-        true,
         true);
   }
 
@@ -53,7 +52,7 @@ public class TestHoodieCatalogUtils {
       String warehouseDir = TEMPORARY_FOLDER.newFolder().getAbsolutePath() + "/metastore_db";
       String warehouseUri = String.format(HIVE_WAREHOUSE_URI_FORMAT, warehouseDir);
 
-      HiveConf.setHiveSiteLocation(classLoader.getResource(HoodieCatalogFactoryOptions.HIVE_SITE_FILE));
+      HiveConf.setHiveSiteLocation(classLoader.getResource(CatalogOptions.HIVE_SITE_FILE));
       HiveConf hiveConf = new HiveConf();
       hiveConf.setVar(
           HiveConf.ConfVars.METASTOREWAREHOUSE,

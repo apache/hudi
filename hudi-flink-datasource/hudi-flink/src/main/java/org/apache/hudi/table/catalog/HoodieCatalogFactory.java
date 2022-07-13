@@ -30,6 +30,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Locale;
 import java.util.Set;
 
 import static org.apache.flink.table.factories.FactoryUtil.PROPERTY_VERSION;
@@ -53,19 +54,19 @@ public class HoodieCatalogFactory implements CatalogFactory {
     final FactoryUtil.CatalogFactoryHelper helper =
         FactoryUtil.createCatalogFactoryHelper(this, context);
     helper.validate();
-
-    if (helper.getOptions().get(HoodieCatalogFactoryOptions.MODE).equalsIgnoreCase("hms")) {
-      return new HoodieHiveCatalog(
-          context.getName(),
-          helper.getOptions().get(HoodieCatalogFactoryOptions.DEFAULT_DATABASE),
-          helper.getOptions().get(HoodieCatalogFactoryOptions.HIVE_CONF_DIR),
-          helper.getOptions().get(HoodieCatalogFactoryOptions.INIT_FS_TABLE));
-    } else if (helper.getOptions().get(HoodieCatalogFactoryOptions.MODE).equalsIgnoreCase("dfs")) {
-      return new HoodieCatalog(
-          context.getName(),
-          (Configuration) helper.getOptions());
-    } else {
-      throw new HoodieCatalogException("hoodie catalog supports only the hms and dfs modes.");
+    String mode = helper.getOptions().get(CatalogOptions.MODE);
+    switch (mode.toLowerCase(Locale.ROOT)) {
+      case "hms":
+        return new HoodieHiveCatalog(
+            context.getName(),
+            helper.getOptions().get(CatalogOptions.DEFAULT_DATABASE),
+            helper.getOptions().get(CatalogOptions.HIVE_CONF_DIR));
+      case "dfs":
+        return new HoodieCatalog(
+            context.getName(),
+            (Configuration) helper.getOptions());
+      default:
+        throw new HoodieCatalogException(String.format("Invalid catalog mode: %s, supported modes: [hms, dfs].", mode));
     }
   }
 
@@ -77,12 +78,11 @@ public class HoodieCatalogFactory implements CatalogFactory {
   @Override
   public Set<ConfigOption<?>> optionalOptions() {
     final Set<ConfigOption<?>> options = new HashSet<>();
-    options.add(HoodieCatalogFactoryOptions.DEFAULT_DATABASE);
+    options.add(CatalogOptions.DEFAULT_DATABASE);
     options.add(PROPERTY_VERSION);
-    options.add(HoodieCatalogFactoryOptions.HIVE_CONF_DIR);
-    options.add(HoodieCatalogFactoryOptions.MODE);
+    options.add(CatalogOptions.HIVE_CONF_DIR);
+    options.add(CatalogOptions.MODE);
     options.add(CATALOG_PATH);
-    options.add(HoodieCatalogFactoryOptions.INIT_FS_TABLE);
     return options;
   }
 }

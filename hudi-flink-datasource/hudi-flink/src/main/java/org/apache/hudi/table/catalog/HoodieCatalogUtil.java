@@ -35,7 +35,7 @@ import java.io.InputStream;
 import java.net.URL;
 
 import static org.apache.flink.util.StringUtils.isNullOrWhitespaceOnly;
-import static org.apache.hudi.table.catalog.HoodieCatalogFactoryOptions.HIVE_SITE_FILE;
+import static org.apache.hudi.table.catalog.CatalogOptions.HIVE_SITE_FILE;
 
 /**
  * Utilities for Hoodie Catalog.
@@ -51,10 +51,7 @@ public class HoodieCatalogUtil {
    */
   public static HiveConf createHiveConf(@Nullable String hiveConfDir) {
     // create HiveConf from hadoop configuration with hadoop conf directory configured.
-    Configuration hadoopConf = HadoopConfigurations.getHadoopConfiguration(hiveConfDir);
-    if (isNullOrWhitespaceOnly(hiveConfDir) || hadoopConf == null) {
-      hadoopConf = HadoopConfigurations.getHadoopConf(new org.apache.flink.configuration.Configuration());
-    }
+    Configuration hadoopConf = HadoopConfigurations.getHadoopConf(new org.apache.flink.configuration.Configuration());
 
     // ignore all the static conf file URLs that HiveConf may have set
     HiveConf.setHiveSiteLocation(null);

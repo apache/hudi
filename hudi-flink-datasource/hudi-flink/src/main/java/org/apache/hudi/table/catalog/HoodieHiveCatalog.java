@@ -18,12 +18,13 @@
 
 package org.apache.hudi.table.catalog;
 
+import org.apache.hadoop.hive.metastore.TableType;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieCatalogException;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.sync.common.util.ConfigUtils;
@@ -33,6 +34,7 @@ import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.avro.Schema;
 import org.apache.flink.annotation.VisibleForTesting;
+import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.sql.parser.hive.ddl.SqlAlterHiveDatabase;
 import org.apache.flink.sql.parser.hive.ddl.SqlAlterHiveDatabaseOwner;
@@ -100,7 +102,7 @@ import static org.apache.flink.util.Preconditions.checkArgument;
 import static org.apache.flink.util.Preconditions.checkNotNull;
 import static org.apache.flink.util.StringUtils.isNullOrWhitespaceOnly;
 import static org.apache.hudi.configuration.FlinkOptions.PATH;
-import static org.apache.hudi.table.catalog.HoodieCatalogFactoryOptions.DEFAULT_DB;
+import static org.apache.hudi.table.catalog.CatalogOptions.DEFAULT_DB;
 import static org.apache.hudi.table.catalog.TableOptionProperties.COMMENT;
 import static org.apache.hudi.table.catalog.TableOptionProperties.PK_COLUMNS;
 import static org.apache.hudi.table.catalog.TableOptionProperties.PK_CONSTRAINT_NAME;
@@ -113,22 +115,20 @@ public class HoodieHiveCatalog extends AbstractCatalog {
   private static final Logger LOG = LoggerFactory.getLogger(HoodieHiveCatalog.class);
 
   private final HiveConf hiveConf;
-  private final boolean iniTable;
   private IMetaStoreClient client;
 
-  public HoodieHiveCatalog(String catalogName, String defaultDatabase, String hiveConf, boolean iniTable) {
-    this(catalogName, defaultDatabase, HoodieCatalogUtil.createHiveConf(hiveConf), iniTable, false);
+  public HoodieHiveCatalog(String catalogName, String defaultDatabase, String hiveConf) {
+    this(catalogName, defaultDatabase, HoodieCatalogUtil.createHiveConf(hiveConf), false);
   }
 
-  public HoodieHiveCatalog(String catalogName, String defaultDatabase, HiveConf hiveConf, boolean iniTable, boolean allowEmbedded) {
+  public HoodieHiveCatalog(String catalogName, String defaultDatabase, HiveConf hiveConf, boolean allowEmbedded) {
     super(catalogName, defaultDatabase == null ? DEFAULT_DB : defaultDatabase);
     this.hiveConf = hiveConf;
-    this.iniTable = iniTable;
     if (!allowEmbedded) {
       checkArgument(
           !HoodieCatalogUtil.isEmbeddedMetastore(this.hiveConf),
           "Embedded metastore is not allowed. Make sure you have set a valid value for "
-              + HiveConf.ConfVars.METASTOREURIS.toString());
+              + HiveConf.ConfVars.METASTOREURIS);
     }
     LOG.info("Created Hoodie Catalog '{}' in hms mode", catalogName);
   }
@@ -139,15 +139,18 @@ public class HoodieHiveCatalog extends AbstractCatalog {
       try {
         this.client = Hive.get(hiveConf).getMSC();
       } catch (Exception e) {
-        throw new HoodieCatalogException("Failed to create HiveMetaStoreClient", e);
+        throw new HoodieCatalogException("Failed to create hive metastore client", e);
       }
       LOG.info("Connected to Hive metastore");
     }
     if (!databaseExists(getDefaultDatabase())) {
-      throw new HoodieCatalogException(
-          String.format(
-              "Configured default database %s doesn't exist in catalog %s.",
-              getDefaultDatabase(), getName()));
+      LOG.info("{} does not exist, will be created.", getDefaultDatabase());
+      CatalogDatabase database = new CatalogDatabaseImpl(Collections.EMPTY_MAP, "default database");
+      try {
+        createDatabase(getDefaultDatabase(), database, true);
+      } catch (DatabaseAlreadyExistException e) {
+        throw new HoodieCatalogException(getName(), e);
+      }
     }
   }
 
@@ -156,7 +159,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     if (client != null) {
       client.close();
       client = null;
-      LOG.info("Close connection to Hive metastore");
+      LOG.info("Disconnect to hive metastore");
     }
   }
 
@@ -176,7 +179,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     }
   }
 
-  public Database getHiveDatabase(String databaseName) throws DatabaseNotExistException {
+  private Database getHiveDatabase(String databaseName) throws DatabaseNotExistException {
     try {
       return client.getDatabase(databaseName);
     } catch (NoSuchObjectException e) {
@@ -328,7 +331,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
 
   // ------ tables ------
 
-  private Table checkHoodieTable(Table hiveTable) {
+  private Table isHoodieTable(Table hiveTable) {
     if (!hiveTable.getParameters().getOrDefault(CONNECTOR.key(), "").equalsIgnoreCase("hudi")
         && !hiveTable.getParameters().getOrDefault(SPARK_SOURCE_PROVIDER, "").equalsIgnoreCase("hudi")) {
       throw new HoodieCatalogException(String.format("the %s is not hoodie table", hiveTable.getTableName()));
@@ -336,29 +339,15 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     return hiveTable;
   }
 
-  private boolean isFlinkTable(Table hiveTable) {
+  private boolean isFlinkHoodieTable(Table hiveTable) {
     return hiveTable.getParameters().getOrDefault(CONNECTOR.key(), "").equalsIgnoreCase("hudi");
-  }
-
-  private org.apache.avro.Schema getLatestTableSchema(String path) {
-    if (StringUtils.isNullOrEmpty(path) || !StreamerUtil.tableExists(path, hiveConf)) {
-      return null;
-    }
-
-    try {
-      HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(path, hiveConf);
-      return new TableSchemaResolver(metaClient).getTableAvroSchema(false);
-    } catch (Exception e) {
-      LOG.warn("Error while resolving the latest table schema", e);
-    }
-    return null;
   }
 
   @VisibleForTesting
   public Table getHiveTable(ObjectPath tablePath) throws TableNotExistException {
     try {
       Table hiveTable = client.getTable(tablePath.getDatabaseName(), tablePath.getObjectName());
-      return checkHoodieTable(hiveTable);
+      return isHoodieTable(hiveTable);
     } catch (NoSuchObjectException e) {
       throw new TableNotExistException(getName(), tablePath);
     } catch (TException e) {
@@ -367,7 +356,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
   }
 
   private Table translateSparkTable2Flink(ObjectPath tablePath, Table hiveTable) {
-    if (!isFlinkTable(hiveTable)) {
+    if (!isFlinkHoodieTable(hiveTable)) {
       try {
         Map<String, String> parameters = hiveTable.getParameters();
         parameters.putAll(TableOptionProperties.translateSparkTableProperties2Flink(hiveTable));
@@ -396,7 +385,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     hiveTable = translateSparkTable2Flink(tablePath, hiveTable);
     String path = hiveTable.getSd().getLocation();
     Map<String, String> parameters = hiveTable.getParameters();
-    Schema latestTableSchema = getLatestTableSchema(path);
+    Schema latestTableSchema = StreamerUtil.getLatestTableSchema(path, hiveConf);
     org.apache.flink.table.api.Schema schema;
     if (latestTableSchema != null) {
       org.apache.flink.table.api.Schema.Builder builder = org.apache.flink.table.api.Schema.newBuilder()
@@ -408,10 +397,10 @@ public class HoodieHiveCatalog extends AbstractCatalog {
       schema = builder.build();
     } else {
       LOG.warn("{} does not have any hoodie schema, and use hive table schema to infer the table schema", tablePath);
-      schema = TableOptionProperties.convertTableSchema(hiveTable);
+      schema = HiveTableOptions.convertTableSchema(hiveTable);
     }
     return CatalogTable.of(schema, parameters.get(COMMENT),
-        TableOptionProperties.getFieldNames(hiveTable.getPartitionKeys()), parameters);
+        HiveTableOptions.getFieldNames(hiveTable.getPartitionKeys()), parameters);
   }
 
   @Override
@@ -429,12 +418,11 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     }
 
     if (table instanceof CatalogView) {
-      throw new HoodieCatalogException("Hoodie catalog does not support to CREATE VIEW.");
+      throw new HoodieCatalogException("CREATE VIEW is not supported.");
     }
 
     try {
-      boolean isMorTable = table.getOptions().getOrDefault(FlinkOptions.TABLE_TYPE.key(),
-          FlinkOptions.TABLE_TYPE.defaultValue()).equalsIgnoreCase(FlinkOptions.TABLE_TYPE_MERGE_ON_READ);
+      boolean isMorTable = OptionsResolver.isMorTable(table.getOptions());
       Table hiveTable = instantiateHiveTable(tablePath, table, inferTablePath(tablePath, table), isMorTable);
       //create hive table
       client.createTable(hiveTable);
@@ -451,12 +439,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
   }
 
   private void initTableIfNotExists(ObjectPath tablePath, CatalogTable catalogTable) {
-    if (!iniTable) {
-      LOG.info("Skip init table.");
-      return;
-    }
     Configuration flinkConf = Configuration.fromMap(applyOptionsHook(catalogTable.getOptions()));
-    flinkConf.addAllToProperties(hiveConf.getAllProperties());
     final String avroSchema = AvroSchemaConverter.convertToSchema(catalogTable.getSchema().toPhysicalRowDataType().getLogicalType()).toString();
     flinkConf.setString(FlinkOptions.SOURCE_AVRO_SCHEMA, avroSchema);
 
@@ -523,19 +506,42 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     Table hiveTable =
         org.apache.hadoop.hive.ql.metadata.Table.getEmptyTable(
             tablePath.getDatabaseName(), tablePath.getObjectName());
+
+    if (Boolean.parseBoolean(table.getOptions().getOrDefault(FlinkOptions.HIVE_IS_EXTERNAL.key(), "true"))) {
+      hiveTable.setTableType(TableType.EXTERNAL_TABLE.toString());
+    }
+
     hiveTable.setOwner(UserGroupInformation.getCurrentUser().getUserName());
     hiveTable.setCreateTime((int) (System.currentTimeMillis() / 1000));
 
     Map<String, String> properties = applyOptionsHook(table.getOptions());
-    properties.put("EXTERNAL", "TRUE");
+
     // Table comment
     if (table.getComment() != null) {
       properties.put(COMMENT, table.getComment());
     }
 
+    //set pk
+    if (table.getUnresolvedSchema().getPrimaryKey().isPresent()) {
+      String pkColumns = String.join(",", table.getUnresolvedSchema().getPrimaryKey().get().getColumnNames());
+      String recordKey = properties.getOrDefault(FlinkOptions.RECORD_KEY_FIELD.key(), FlinkOptions.RECORD_KEY_FIELD.defaultValue());
+      if (!Objects.equals(pkColumns, recordKey)) {
+        throw new HoodieCatalogException(
+            String.format("If the table has primaryKey, the primaryKey should be the the same as the recordKey, but pk %s and recordKey %s are the different",
+                pkColumns,
+                recordKey));
+      }
+      properties.put(PK_CONSTRAINT_NAME, table.getUnresolvedSchema().getPrimaryKey().get().getConstraintName());
+      properties.put(PK_COLUMNS, pkColumns);
+    }
+
+    if (!properties.containsKey(FlinkOptions.PATH.key())) {
+      properties.put(FlinkOptions.PATH.key(), location);
+    }
+
     //set sd
     StorageDescriptor sd = new StorageDescriptor();
-    List<FieldSchema> allColumns = TableOptionProperties.createHiveColumns(table.getSchema());
+    List<FieldSchema> allColumns = HiveTableOptions.createHiveColumns(table.getSchema());
 
     // Table columns and partition keys
     if (table instanceof CatalogTable) {
@@ -570,31 +576,12 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     serdeProperties.put("path", location);
     serdeProperties.put(ConfigUtils.IS_QUERY_AS_RO_TABLE, String.valueOf(!useRealTimeInputFormat));
     serdeProperties.put("serialization.format", "1");
+
+    serdeProperties.putAll(TableOptionProperties.translateFlinkTableProperties2Spark((CatalogTable)table, hiveConf, properties));
+
     sd.setSerdeInfo(new SerDeInfo(null, serDeClassName, serdeProperties));
 
     sd.setLocation(location);
-
-    hiveTable.setSd(sd);
-
-    properties.putAll(TableOptionProperties.translateFlinkTableProperties2Spark((CatalogTable)table, hiveConf));
-
-    //set pk
-    if (table.getUnresolvedSchema().getPrimaryKey().isPresent()) {
-      String pkColumns = String.join(",", table.getUnresolvedSchema().getPrimaryKey().get().getColumnNames());
-      String recordKey = properties.getOrDefault(FlinkOptions.RECORD_KEY_FIELD.key(), FlinkOptions.RECORD_KEY_FIELD.defaultValue());
-      if (!Objects.equals(pkColumns, recordKey)) {
-        throw new HoodieCatalogException(
-            String.format("If the table has primaryKey, the primaryKey should be the the same as the recordKey, but pk %s and recordKey %s are the different",
-                pkColumns,
-                recordKey));
-      }
-      properties.put(PK_CONSTRAINT_NAME, table.getUnresolvedSchema().getPrimaryKey().get().getConstraintName());
-      properties.put(PK_COLUMNS, pkColumns);
-    }
-
-    if (!properties.containsKey(FlinkOptions.PATH.key())) {
-      properties.put(FlinkOptions.PATH.key(), location);
-    }
 
     hiveTable.setParameters(properties);
     return hiveTable;
@@ -704,6 +691,11 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     }
   }
 
+  private boolean sameOptions(Map<String, String> existingOptions, Map<String, String> newOptions, ConfigOption option) {
+    return existingOptions.getOrDefault(option.key(), String.valueOf(option.defaultValue()))
+        .equalsIgnoreCase(newOptions.getOrDefault(option.key(), String.valueOf(option.defaultValue())));
+  }
+
   @Override
   public void alterTable(
       ObjectPath tablePath, CatalogBaseTable newCatalogTable, boolean ignoreIfNotExists)
@@ -720,10 +712,8 @@ public class HoodieHiveCatalog extends AbstractCatalog {
 
     try {
       Table hiveTable = getHiveTable(tablePath);
-      if (!hiveTable.getParameters().getOrDefault(FlinkOptions.TABLE_TYPE.key(), FlinkOptions.TABLE_TYPE.defaultValue())
-          .equalsIgnoreCase(newCatalogTable.getOptions().getOrDefault(FlinkOptions.TABLE_TYPE.key(), FlinkOptions.TABLE_TYPE.defaultValue()))
-          || !hiveTable.getParameters().getOrDefault(FlinkOptions.INDEX_TYPE.key(), FlinkOptions.INDEX_TYPE.defaultValue())
-          .equalsIgnoreCase(newCatalogTable.getOptions().getOrDefault(FlinkOptions.INDEX_TYPE.key(), FlinkOptions.INDEX_TYPE.defaultValue()))) {
+      if (!sameOptions(hiveTable.getParameters(), newCatalogTable.getOptions(), FlinkOptions.TABLE_TYPE)
+          || !sameOptions(hiveTable.getParameters(), newCatalogTable.getOptions(), FlinkOptions.INDEX_TYPE)) {
         throw new HoodieCatalogException("Hoodie catalog does not support to alter table type and index type");
       }
     } catch (TableNotExistException e) {
@@ -734,8 +724,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     }
 
     try {
-      boolean isMorTable = newCatalogTable.getOptions().getOrDefault(FlinkOptions.TABLE_TYPE.key(),
-          FlinkOptions.TABLE_TYPE.defaultValue()).equalsIgnoreCase(FlinkOptions.TABLE_TYPE_MERGE_ON_READ);
+      boolean isMorTable = OptionsResolver.isMorTable(newCatalogTable.getOptions());
       Table hiveTable = instantiateHiveTable(tablePath, newCatalogTable, inferTablePath(tablePath, newCatalogTable), isMorTable);
       //alter hive table
       client.alter_table(tablePath.getDatabaseName(), tablePath.getObjectName(), hiveTable);

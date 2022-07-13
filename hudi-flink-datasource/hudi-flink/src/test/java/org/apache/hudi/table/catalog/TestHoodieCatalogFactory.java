@@ -45,8 +45,8 @@ public class TestHoodieCatalogFactory {
 
     final Map<String, String> options = new HashMap<>();
     options.put(CommonCatalogOptions.CATALOG_TYPE.key(), HoodieCatalogFactory.IDENTIFIER);
-    options.put(HoodieCatalogFactoryOptions.HIVE_CONF_DIR.key(), CONF_DIR.getPath());
-    options.put(HoodieCatalogFactoryOptions.MODE.key(), "hms");
+    options.put(CatalogOptions.HIVE_CONF_DIR.key(), CONF_DIR.getPath());
+    options.put(CatalogOptions.MODE.key(), "hms");
 
     final Catalog actualCatalog =
         FactoryUtil.createCatalog(
