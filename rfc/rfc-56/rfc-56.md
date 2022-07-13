@@ -33,21 +33,21 @@ JIRA: https://issues.apache.org/jira/browse/HUDI-1575
 
 At present, Hudi implements an optimized OCC (Optimistic Concurrency Control) based on timeline to ensure data
 consistency, integrity and correctness between multi-writers. However, the related conflict detection is performed
-before commit metadata and after the data writing is completed. If this detection was failed, it would lead to a waste
+before commit metadata and after the data writing is completed. If any conflict is detected, it would lead to a waste
 of cluster resources because computing and writing were finished already. To solve this problem, this RFC design an
 early conflict detection mechanism based on the existing Hudi marker mechanism. There are some subtle differences in
-early conflict detection work flow between different types of marker matainers.
+early conflict detection work flow between different types of marker maintainers.
 
 
 For direct markers, we will list necessary marker files directly and do conflict checking before the writers creating
 markers and before starting to write corresponding data file. For the timeline-server based markers, we just get the
 the result of marker conflict checking before the writers creating markers and before starting to write corresponding
-data file. The conflicts are asynchronously and periodically checked. Both writers may still write the data files of
-the same file slice, until the conflict is detected in the next round of checking.
+data file. The conflicts are asynchronously and periodically checked so that the writing conflicts can be detected as
+early as possible. Both writers may still write the data files of the same file slice, until the conflict is detected
+in the next round of checking.
 
-
-So that the writing conflicts can be detected as early as possible. What's more? We can stop writing earlier because of
-early conflict detection and release the resources to cluster, improving resource utilization.
+What's more? We can stop writing earlier because of early conflict detection and release the resources to cluster,
+improving resource utilization.
 
 ## Background
 As we know, Transactions and multi-writers of data lakes are becoming the key characteristics of building LakeHouse 
@@ -79,7 +79,7 @@ Hudi currently has two important mechanisms, marker mechanism and heartbeat mech
 2. Heartbeat mechanism that can track all active writers to a Hudi table.
 
 
-Based on marker and heartbeat, this RFC design a new conflict detection: Early Conflict Detection.
+Based on marker and heartbeat, this RFC proposes a new conflict detection: Early Conflict Detection.
 Before the writer creates the marker and before it starts to write the file, Hudi will perform this new conflict
 detection, trying to detect the writing conflict directly or get the async conflict check result(Timeline-Based) as
 early as possible and abort the writer when the conflict occurs, so that we can release resources as soon as possible
@@ -88,7 +88,7 @@ and improve resource utilization.
 
 ## Implementation
 Here is the high level workflow of early conflict detection as figure1 showed. 
-As we can see, only both `supportsOptimisticConcurrencyControl` and `isEarlyConflictDetectionEnable` are true, we 
+As we can see, when both `supportsOptimisticConcurrencyControl` and `isEarlyConflictDetectionEnable` are true, we
 could use this early conflict detection feature. Else, we will skip this check and create marker directly.
 
 ![](figure1.png)
@@ -244,5 +244,3 @@ This RFC adds three new configs to control the behavior of early conflict detect
  - No impact will there be on existing users
 
 ## Test Plan
-
-Describe in few sentences how the RFC will be tested. How will we know that the implementation works as expected? How will we know nothing broke?.
