@@ -124,11 +124,10 @@ public class TestFileBasedLockProvider {
 
   @Test
   public void testUnlockWithoutLock() {
-    try{
+    try {
       FileSystemBasedLockProvider fileBasedLockProvider = new FileSystemBasedLockProvider(lockConfiguration, hadoopConf);
       fileBasedLockProvider.unlock();
-    }
-    catch (HoodieLockException e) {
+    } catch (HoodieLockException e) {
       Assertions.fail();
     }
   }
