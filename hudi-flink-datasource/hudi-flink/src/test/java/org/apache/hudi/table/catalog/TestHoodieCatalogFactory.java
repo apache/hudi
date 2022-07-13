@@ -41,7 +41,7 @@ public class TestHoodieCatalogFactory {
   public void testCreateHiveCatalog() {
     final String catalogName = "mycatalog";
 
-    final HoodieHiveCatalog expectedCatalog = TestHoodieCatalogUtils.createHiveCatalog(catalogName);
+    final HoodieHiveCatalog expectedCatalog = HoodieCatalogTestUtils.createHiveCatalog(catalogName);
 
     final Map<String, String> options = new HashMap<>();
     options.put(CommonCatalogOptions.CATALOG_TYPE.key(), HoodieCatalogFactory.IDENTIFIER);

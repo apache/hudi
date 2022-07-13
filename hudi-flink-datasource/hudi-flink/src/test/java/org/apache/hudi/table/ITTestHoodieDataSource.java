@@ -24,7 +24,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.table.catalog.HoodieHiveCatalog;
-import org.apache.hudi.table.catalog.TestHoodieCatalogUtils;
+import org.apache.hudi.table.catalog.HoodieCatalogTestUtils;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
@@ -1293,7 +1293,7 @@ public class ITTestHoodieDataSource extends AbstractTestBase {
   void testBuiltinFunctionWithHMSCatalog() {
     TableEnvironment tableEnv = batchTableEnv;
 
-    HoodieHiveCatalog hoodieCatalog = TestHoodieCatalogUtils.createHiveCatalog("hudi_catalog");
+    HoodieHiveCatalog hoodieCatalog = HoodieCatalogTestUtils.createHiveCatalog("hudi_catalog");
 
     tableEnv.registerCatalog("hudi_catalog", hoodieCatalog);
     tableEnv.executeSql("use catalog " + ("hudi_catalog"));

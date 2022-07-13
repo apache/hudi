@@ -54,6 +54,12 @@ public class CatalogOptions {
       .stringType()
       .defaultValue("dfs");
 
+  public static final ConfigOption<Boolean> HIVE_IS_EXTERNAL = ConfigOptions
+      .key("hive.is-external")
+      .booleanType()
+      .defaultValue(false)
+      .withDescription("Whether the table is external, default false");
+
   /**
    * Returns all the common table options that can be shared.
    *

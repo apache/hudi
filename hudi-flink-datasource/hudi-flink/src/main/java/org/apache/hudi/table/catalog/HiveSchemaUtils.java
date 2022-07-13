@@ -43,9 +43,9 @@ import java.util.List;
 import static org.apache.flink.util.Preconditions.checkNotNull;
 
 /**
- * hive table options.
+ * Utilities for Hive field schema.
  */
-public class HiveTableOptions {
+public class HiveSchemaUtils {
   /** Get field names from field schemas. */
   public static List<String> getFieldNames(List<FieldSchema> fieldSchemas) {
     List<String> names = new ArrayList<>(fieldSchemas.size());

@@ -24,7 +24,7 @@ import org.apache.hadoop.hive.conf.HiveConf;
 import java.io.IOException;
 
 /** Test utils for Hoodie catalog. */
-public class TestHoodieCatalogUtils {
+public class HoodieCatalogTestUtils {
   private static final String HIVE_WAREHOUSE_URI_FORMAT =
       "jdbc:derby:;databaseName=%s;create=true";
 
@@ -46,7 +46,7 @@ public class TestHoodieCatalogUtils {
   }
 
   public static HiveConf createHiveConf() {
-    ClassLoader classLoader = TestHoodieCatalogUtils.class.getClassLoader();
+    ClassLoader classLoader = HoodieCatalogTestUtils.class.getClassLoader();
     try {
       TEMPORARY_FOLDER.create();
       String warehouseDir = TEMPORARY_FOLDER.newFolder().getAbsolutePath() + "/metastore_db";

@@ -798,15 +798,6 @@ public class FlinkOptions extends HoodieConfig {
       .noDefaultValue()
       .withDescription("The hive configuration directory, where the hive-site.xml lies in, the file should be put on the client machine");
 
-  // ------------------------------------------------------------------------
-  //  Create Table Options With Catalog
-  // ------------------------------------------------------------------------
-  public static final ConfigOption<Boolean> HIVE_IS_EXTERNAL = ConfigOptions
-      .key("hive.is-external")
-      .booleanType()
-      .defaultValue(true)
-      .withDescription("Whether the table is external, default true");
-
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------

@@ -397,10 +397,10 @@ public class HoodieHiveCatalog extends AbstractCatalog {
       schema = builder.build();
     } else {
       LOG.warn("{} does not have any hoodie schema, and use hive table schema to infer the table schema", tablePath);
-      schema = HiveTableOptions.convertTableSchema(hiveTable);
+      schema = HiveSchemaUtils.convertTableSchema(hiveTable);
     }
     return CatalogTable.of(schema, parameters.get(COMMENT),
-        HiveTableOptions.getFieldNames(hiveTable.getPartitionKeys()), parameters);
+        HiveSchemaUtils.getFieldNames(hiveTable.getPartitionKeys()), parameters);
   }
 
   @Override
@@ -507,7 +507,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
         org.apache.hadoop.hive.ql.metadata.Table.getEmptyTable(
             tablePath.getDatabaseName(), tablePath.getObjectName());
 
-    if (Boolean.parseBoolean(table.getOptions().getOrDefault(FlinkOptions.HIVE_IS_EXTERNAL.key(), "true"))) {
+    if (Boolean.parseBoolean(table.getOptions().get(CatalogOptions.HIVE_IS_EXTERNAL.key()))) {
       hiveTable.setTableType(TableType.EXTERNAL_TABLE.toString());
     }
 
@@ -541,7 +541,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
 
     //set sd
     StorageDescriptor sd = new StorageDescriptor();
-    List<FieldSchema> allColumns = HiveTableOptions.createHiveColumns(table.getSchema());
+    List<FieldSchema> allColumns = HiveSchemaUtils.createHiveColumns(table.getSchema());
 
     // Table columns and partition keys
     if (table instanceof CatalogTable) {

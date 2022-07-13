@@ -19,9 +19,7 @@
 package org.apache.hudi.exception;
 
 /**
- * <p>
  * Exception thrown for Hoodie Catalog errors.
- * </p>
  */
 public class HoodieCatalogException extends RuntimeException {
 

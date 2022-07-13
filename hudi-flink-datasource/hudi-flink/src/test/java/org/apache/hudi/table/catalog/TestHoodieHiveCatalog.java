@@ -67,7 +67,7 @@ public class TestHoodieHiveCatalog {
 
   @BeforeAll
   public static void createCatalog() {
-    hoodieCatalog = TestHoodieCatalogUtils.createHiveCatalog();
+    hoodieCatalog = HoodieCatalogTestUtils.createHiveCatalog();
     hoodieCatalog.open();
   }
 
@@ -107,12 +107,12 @@ public class TestHoodieHiveCatalog {
   public void testCreateManagerTable() throws TableAlreadyExistException, DatabaseNotExistException, TableNotExistException {
     Map<String, String> originOptions = new HashMap<>();
     originOptions.put(FactoryUtil.CONNECTOR.key(), "hudi");
-    originOptions.put(FlinkOptions.HIVE_IS_EXTERNAL.key(), "false");
+    originOptions.put(CatalogOptions.HIVE_IS_EXTERNAL.key(), "false");
     CatalogTable table =
         new CatalogTableImpl(schema, originOptions, "hudi table");
     hoodieCatalog.createTable(tablePath, table, false);
     Table table1 = hoodieCatalog.getHiveTable(tablePath);
-    assertEquals(table1.getParameters().get(FlinkOptions.HIVE_IS_EXTERNAL.key()), "false");
+    assertEquals(table1.getParameters().get(CatalogOptions.HIVE_IS_EXTERNAL.key()), "false");
     assertEquals(table1.getTableType(), "MANAGED_TABLE");
   }
 
