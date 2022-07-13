@@ -288,6 +288,29 @@ public class ITTestHoodieFlinkCompactor {
     TestData.checkWrittenDataCOW(tempFile, EXPECTED3);
   }
 
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testHoodieFlinkCompactorInBatchModeWrite(boolean compactionOnBatchModeEnable) throws Exception {
+    // Create hoodie table and insert into data.
+    EnvironmentSettings settings = EnvironmentSettings.newInstance().inBatchMode().build();
+    TableEnvironment tableEnv = TableEnvironmentImpl.create(settings);
+    tableEnv.getConfig().getConfiguration()
+            .setInteger(ExecutionConfigOptions.TABLE_EXEC_RESOURCE_DEFAULT_PARALLELISM, 1);
+    Map<String, String> options = new HashMap<>();
+    options.put(FlinkOptions.COMPACTION_DELTA_COMMITS.key(), "2");
+    options.put(FlinkOptions.PATH.key(), tempFile.getAbsolutePath());
+    options.put(FlinkOptions.TABLE_TYPE.key(), "MERGE_ON_READ");
+    options.put(FlinkOptions.COMPACTION_SCHEDULE_ENABLED.key(), String.valueOf(compactionOnBatchModeEnable));
+    String hoodieTableDDL = TestConfigurations.getCreateHoodieTableDDL("t1", options);
+    tableEnv.executeSql(hoodieTableDDL);
+    tableEnv.executeSql(TestSQL.INSERT_T1).await();
+    tableEnv.executeSql(TestSQL.UPDATE_INSERT_T1).await();
+    Map<String, List<String>> expected = compactionOnBatchModeEnable ? EXPECTED2 : new HashMap<>();
+    // wait for the asynchronous commit to finish
+    TimeUnit.SECONDS.sleep(3);
+    TestData.checkWrittenDataCOW(tempFile, expected);
+  }
+
   private String scheduleCompactionPlan(HoodieTableMetaClient metaClient, HoodieFlinkWriteClient<?> writeClient) {
     boolean scheduled = false;
     // judge whether there are any compaction operations.

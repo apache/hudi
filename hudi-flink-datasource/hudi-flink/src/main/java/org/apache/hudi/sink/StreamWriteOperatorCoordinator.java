@@ -439,6 +439,12 @@ public class StreamWriteOperatorCoordinator
         Thread.currentThread().setContextClassLoader(getClass().getClassLoader());
         // sync Hive synchronously if it is enabled in batch mode.
         syncHive();
+        // when we are batch write to hoodie, this can do compaction online.
+        if (tableState.scheduleCompaction) {
+          LOG.info("scheduleCompaction for batch mode write !");
+          // if async compaction is on, schedule the compaction
+          CompactionUtil.scheduleCompaction(metaClient, writeClient, tableState.isDeltaTimeCompaction, committed);
+        }
       }
     }
   }
