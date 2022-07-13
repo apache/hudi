@@ -38,7 +38,6 @@ import scala.Tuple2;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 import static org.apache.hudi.metadata.MetadataPartitionType.BLOOM_FILTERS;
 

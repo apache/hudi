@@ -53,18 +53,20 @@ public class HoodieWriteHelper<T extends HoodieRecordPayload, R> extends BaseWri
   public HoodieData<HoodieRecord<T>> deduplicateRecords(
       HoodieData<HoodieRecord<T>> records, HoodieIndex<?, ?> index, int parallelism) {
     boolean isIndexingGlobal = index.isGlobal();
+
     return records.mapToPair(record -> {
       HoodieKey hoodieKey = record.getKey();
       // If index used is global, then records are expected to differ in their partitionPath
       Object key = isIndexingGlobal ? hoodieKey.getRecordKey() : hoodieKey;
       return Pair.of(key, record);
-    }).reduceByKey((rec1, rec2) -> {
+    })
+    .reduceByKey((rec1, rec2) -> {
       @SuppressWarnings("unchecked")
       T reducedData = (T) rec2.getData().preCombine(rec1.getData());
       HoodieKey reducedKey = rec1.getData().equals(reducedData) ? rec1.getKey() : rec2.getKey();
 
       return new HoodieAvroRecord<>(reducedKey, reducedData);
-    }, parallelism).map(Pair::getRight);
+    }, parallelism)
+    .map(Pair::getRight);
   }
-
 }
