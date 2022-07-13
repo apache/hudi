@@ -100,11 +100,6 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
     // Step 3: Tag the incoming records, as inserts or updates, by joining with existing record keys
     HoodieData<HoodieRecord<R>> taggedRecords = tagLocationBacktoRecords(keyFilenamePairs, records);
 
-    if (config.getBloomIndexUseCaching()) {
-      records.unpersist();
-      keyFilenamePairs.unpersist();
-    }
-
     return taggedRecords;
   }
 
