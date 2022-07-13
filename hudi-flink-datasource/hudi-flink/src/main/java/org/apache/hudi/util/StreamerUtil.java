@@ -514,4 +514,12 @@ public class StreamerUtil {
     TableSchemaResolver schemaUtil = new TableSchemaResolver(metaClient);
     return schemaUtil.getTableAvroSchema(includeMetadataFields);
   }
+
+  public static boolean fileExists(FileSystem fs, Path path) {
+    try {
+      return fs.exists(path);
+    } catch (IOException e) {
+      throw new HoodieException("Exception while checking file " + path + " existence", e);
+    }
+  }
 }
