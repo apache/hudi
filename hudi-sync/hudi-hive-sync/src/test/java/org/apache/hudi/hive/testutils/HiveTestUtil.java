@@ -125,7 +125,6 @@ public class HiveTestUtil {
       hiveTestService = new HiveTestService(configuration);
       hiveServer = hiveTestService.start();
     }
-    fileSystem = FileSystem.get(configuration);
 
     basePath = Files.createTempDirectory("hivesynctest" + Instant.now().toEpochMilli()).toUri().toString();
 
@@ -141,7 +140,8 @@ public class HiveTestUtil {
     hiveSyncProps.setProperty(META_SYNC_PARTITION_FIELDS.key(), "datestr");
     hiveSyncProps.setProperty(HIVE_BATCH_SYNC_PARTITION_NUM.key(), "3");
 
-    hiveSyncConfig = new HiveSyncConfig(hiveSyncProps, configuration);
+    hiveSyncConfig = new HiveSyncConfig(hiveSyncProps, hiveTestService.getHiveConf());
+    fileSystem = hiveSyncConfig.getHadoopFileSystem();
 
     dtfOut = DateTimeFormatter.ofPattern("yyyy/MM/dd");
     ddlExecutor = new HiveQueryDDLExecutor(hiveSyncConfig);
