@@ -20,8 +20,8 @@ package org.apache.spark.sql.execution.datasources.parquet
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hadoop.mapred.FileSplit
+import org.apache.hadoop.mapreduce._
 import org.apache.hadoop.mapreduce.task.TaskAttemptContextImpl
-import org.apache.hadoop.mapreduce.{JobID, TaskAttemptID, TaskID, TaskType}
 import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.fs.FSUtils
@@ -325,7 +325,7 @@ class Spark32PlusHoodieParquetFileFormat(private val shouldAppendPartitionValues
               DataSourceUtils.int96RebaseSpec(footerFileMetaData.getKeyValueMetaData.get, int96RebaseModeInRead)
             val datetimeRebaseSpec =
               DataSourceUtils.datetimeRebaseSpec(footerFileMetaData.getKeyValueMetaData.get, datetimeRebaseModeInRead)
-            new VectorizedParquetRecordReader(
+            new HoodieVectorizedParquetRecordReader(
               convertTz.orNull,
               datetimeRebaseSpec.mode.toString,
               datetimeRebaseSpec.timeZone,
@@ -362,13 +362,9 @@ class Spark32PlusHoodieParquetFileFormat(private val shouldAppendPartitionValues
           //       data file configurable
           if (shouldAppendPartitionValues) {
             logDebug(s"Appending $partitionSchema ${file.partitionValues}")
-            vectorizedReader.initBatch(partitionSchema, file.partitionValues)
+            initBatchAndEnableReturningBatch(vectorizedReader, partitionSchema, file.partitionValues, returningBatch)
           } else {
-            vectorizedReader.initBatch(StructType(Nil), InternalRow.empty)
-          }
-
-          if (returningBatch) {
-            vectorizedReader.enableReturningBatches()
+            initBatchAndEnableReturningBatch(vectorizedReader, StructType(Nil), InternalRow.empty, returningBatch)
           }
 
           // UnsafeRowParquetRecordReader appends the columns internally to avoid another copy.
@@ -456,6 +452,21 @@ class Spark32PlusHoodieParquetFileFormat(private val shouldAppendPartitionValues
     }
   }
 
+  private def initBatchAndEnableReturningBatch(
+      recordReader: RecordReader[Void, AnyRef],
+      partitionColumns: StructType,
+      partitionValues: InternalRow,
+      returningBatch: Boolean): Unit = {
+    recordReader match {
+      case reader: VectorizedParquetRecordReader =>
+        reader.initBatch(partitionColumns, partitionValues)
+        if (returningBatch) reader.enableReturningBatches()
+      case reader: HoodieVectorizedParquetRecordReader =>
+        reader.initBatch(partitionColumns, partitionValues)
+        if (returningBatch) reader.enableReturningBatches()
+      case _ =>
+    }
+  }
 }
 
 object Spark32PlusHoodieParquetFileFormat {
