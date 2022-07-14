@@ -143,9 +143,9 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload, I, K, O> extends 
         // Convert GenericRecord to GenericRecord with hoodie commit metadata in schema
         if (preserveMetadata) {
           fileWriter.writeAvro(record.getRecordKey(),
-              rewriteRecordWithMetadata((GenericRecord) avroRecord.get(), path.getName()));
+              tryRewriteRecordWithMetadata((GenericRecord) avroRecord.get(), path.getName()));
         } else {
-          fileWriter.writeAvroWithMetadata(record.getKey(), rewriteRecord((GenericRecord) avroRecord.get()));
+          fileWriter.writeAvroWithMetadata(record.getKey(), tryRewriteRecord((GenericRecord) avroRecord.get()));
         }
         // update the new location of record, so we know where to find it next
         record.unseal();

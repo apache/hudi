@@ -216,7 +216,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
           return avroRecord;
         }
         // Convert GenericRecord to GenericRecord with hoodie commit metadata in schema
-        GenericRecord rewriteRecord = rewriteRecord((GenericRecord) avroRecord.get());
+        GenericRecord rewriteRecord = tryRewriteRecord((GenericRecord) avroRecord.get());
         avroRecord = Option.of(rewriteRecord);
         String seqId =
             HoodieRecord.generateSequenceId(instantTime, getPartitionId(), RECORD_COUNTER.getAndIncrement());

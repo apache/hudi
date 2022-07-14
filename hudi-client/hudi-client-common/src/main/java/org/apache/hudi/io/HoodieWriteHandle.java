@@ -18,6 +18,11 @@
 
 package org.apache.hudi.io;
 
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
@@ -34,19 +39,13 @@ import org.apache.hudi.io.storage.HoodieFileWriter;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
-
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
-import java.util.HashMap;
+import java.util.Objects;
 
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 
@@ -82,6 +81,8 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
    */
   protected final Schema tableSchema;
   protected final Schema tableSchemaWithMetaFields;
+
+  protected final boolean writeSchemaEqualTableSchema;
 
   /**
    * The write schema. In most case the write schema is the same to the
@@ -120,6 +121,7 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
     this.tableSchemaWithMetaFields = HoodieAvroUtils.addMetadataFields(tableSchema, config.allowOperationMetadataField());
     this.writeSchema = overriddenSchema.orElseGet(() -> getWriteSchema(config));
     this.writeSchemaWithMetaFields = HoodieAvroUtils.addMetadataFields(writeSchema, config.allowOperationMetadataField());
+    this.writeSchemaEqualTableSchema = Objects.equals(writeSchema, tableSchema);
     this.timer = new HoodieTimer().startTimer();
     this.writeStatus = (WriteStatus) ReflectionUtils.loadClass(config.getWriteStatusClassName(),
         !hoodieTable.getIndex().isImplicitWithStorage(), config.getWriteStatusFailureFraction());
@@ -227,16 +229,34 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
   }
 
   /**
-   * Rewrite the GenericRecord with the Schema containing the Hoodie Metadata fields.
+   * Rewrites the given record to adhere to the configured Writer's Schema.
+   *
+   * NOTE: In cases when incoming records' schema (Table's schema) is equivalent to the Writer's
+   *       schema, no actual re-shaping will occur and record will only be amended w/ the required
+   *       meta-fields
    */
-  protected GenericRecord rewriteRecord(GenericRecord record) {
-    return schemaOnReadEnabled ? HoodieAvroUtils.rewriteRecordWithNewSchema(record, writeSchemaWithMetaFields, new HashMap<>())
+  protected GenericRecord tryRewriteRecord(GenericRecord record) {
+    if (writeSchemaEqualTableSchema) {
+      Schema schema = record.getSchema();
+      if (schema == tableSchemaWithMetaFields) {
+        // No rewriting is necessary
+        return record;
+      } else if (schema == tableSchema) {
+        // We simply need to extend existing record to have meta-fields
+        return HoodieAvroUtils.reshapeRecord(record, writeSchemaWithMetaFields);
+      }
+    }
+
+    return schemaOnReadEnabled
+        ? HoodieAvroUtils.rewriteRecordWithNewSchema(record, writeSchemaWithMetaFields, Collections.emptyMap())
         : HoodieAvroUtils.rewriteRecord(record, writeSchemaWithMetaFields);
   }
 
-  protected GenericRecord rewriteRecordWithMetadata(GenericRecord record, String fileName) {
-    return schemaOnReadEnabled ? HoodieAvroUtils.rewriteEvolutionRecordWithMetadata(record, writeSchemaWithMetaFields, fileName)
-        : HoodieAvroUtils.rewriteRecordWithMetadata(record, writeSchemaWithMetaFields, fileName);
+  protected GenericRecord tryRewriteRecordWithMetadata(GenericRecord record, String fileName) {
+    GenericRecord reshaped = tryRewriteRecord(record);
+    // Do not preserve FILENAME_METADATA_FIELD
+    reshaped.put(HoodieRecord.FILENAME_META_FIELD_POS, fileName);
+    return reshaped;
   }
 
   public abstract List<WriteStatus> close();

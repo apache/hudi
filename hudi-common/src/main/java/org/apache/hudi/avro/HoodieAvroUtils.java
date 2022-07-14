@@ -52,7 +52,6 @@ import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.io.EncoderFactory;
 import org.apache.avro.io.JsonDecoder;
 import org.apache.avro.io.JsonEncoder;
-import org.apache.avro.specific.SpecificRecordBase;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -338,6 +337,13 @@ public class HoodieAvroUtils {
   }
 
   /**
+   * TODO java-doc
+   */
+  public static GenericRecord reshapeRecord(GenericRecord record, Schema newSchema) {
+    return rewriteRecordInternal(record, newSchema, false, false);
+  }
+
+  /**
    * Given an Avro record with a given schema, rewrites it into the new schema while setting fields only from the new
    * schema.
    *
@@ -365,42 +371,21 @@ public class HoodieAvroUtils {
    * the default defined in the avro schema itself.
    * TODO: See if we can always pass GenericRecord instead of SpecificBaseRecord in some cases.
    */
-  public static GenericRecord rewriteRecord(GenericRecord oldRecord, Schema newSchema) {
-    GenericRecord newRecord = new GenericData.Record(newSchema);
-    boolean isSpecificRecord = oldRecord instanceof SpecificRecordBase;
-    for (Schema.Field f : newSchema.getFields()) {
-      if (!(isSpecificRecord && isMetadataField(f.name()))) {
-        copyOldValueOrSetDefault(oldRecord, newRecord, f);
-      }
-    }
-
-    if (!ConvertingGenericData.INSTANCE.validate(newSchema, newRecord)) {
-      throw new SchemaCompatibilityException(
-          "Unable to validate the rewritten record " + oldRecord + " against schema " + newSchema);
-    }
-
-    return newRecord;
+  public static GenericRecord rewriteRecord(GenericRecord record, Schema newSchema) {
+    return rewriteRecordInternal(record, newSchema, true, true);
   }
 
-  public static GenericRecord rewriteRecordWithMetadata(GenericRecord genericRecord, Schema newSchema, String fileName) {
+  private static GenericRecord rewriteRecordInternal(GenericRecord record, Schema newSchema, boolean recursive, boolean validate) {
     GenericRecord newRecord = new GenericData.Record(newSchema);
     for (Schema.Field f : newSchema.getFields()) {
-      copyOldValueOrSetDefault(genericRecord, newRecord, f);
+      copyOldValueOrSetDefault(record, newRecord, f, recursive, validate);
     }
-    // do not preserve FILENAME_METADATA_FIELD
-    newRecord.put(HoodieRecord.FILENAME_META_FIELD_POS, fileName);
-    if (!GenericData.get().validate(newSchema, newRecord)) {
-      throw new SchemaCompatibilityException(
-          "Unable to validate the rewritten record " + genericRecord + " against schema " + newSchema);
-    }
-    return newRecord;
-  }
 
-  // TODO Unify the logical of rewriteRecordWithMetadata and rewriteEvolutionRecordWithMetadata, and delete this function.
-  public static GenericRecord rewriteEvolutionRecordWithMetadata(GenericRecord genericRecord, Schema newSchema, String fileName) {
-    GenericRecord newRecord = HoodieAvroUtils.rewriteRecordWithNewSchema(genericRecord, newSchema, new HashMap<>());
-    // do not preserve FILENAME_METADATA_FIELD
-    newRecord.put(HoodieRecord.FILENAME_META_FIELD_POS, fileName);
+    if (validate && !ConvertingGenericData.INSTANCE.validate(newSchema, newRecord)) {
+      throw new SchemaCompatibilityException(
+          "Unable to validate the rewritten record " + record + " against schema " + newSchema);
+    }
+
     return newRecord;
   }
 
@@ -425,16 +410,20 @@ public class HoodieAvroUtils {
     return rewriteRecord(record, newSchema);
   }
 
-  private static void copyOldValueOrSetDefault(GenericRecord oldRecord, GenericRecord newRecord, Schema.Field field) {
+  private static void copyOldValueOrSetDefault(GenericRecord oldRecord,
+                                               GenericRecord newRecord,
+                                               Schema.Field field,
+                                               boolean recursive,
+                                               boolean validate) {
     Schema oldSchema = oldRecord.getSchema();
     Object fieldValue = oldSchema.getField(field.name()) == null ? null : oldRecord.get(field.name());
 
     if (fieldValue != null) {
       // In case field's value is a nested record, we have to rewrite it as well
       Object newFieldValue;
-      if (fieldValue instanceof GenericRecord) {
+      if (fieldValue instanceof GenericRecord && recursive) {
         GenericRecord record = (GenericRecord) fieldValue;
-        newFieldValue = rewriteRecord(record, resolveUnionSchema(field.schema(), record.getSchema().getFullName()));
+        newFieldValue = rewriteRecordInternal(record, resolveUnionSchema(field.schema(), record.getSchema().getFullName()), true, validate);
       } else {
         newFieldValue = fieldValue;
       }

@@ -381,9 +381,9 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
     if (shouldPreserveRecordMetadata) {
       // NOTE: `FILENAME_METADATA_FIELD` has to be rewritten to correctly point to the
       //       file holding this record even in cases when overall metadata is preserved
-      fileWriter.writeAvro(key.getRecordKey(), rewriteRecordWithMetadata(avroRecord, newFilePath.getName()));
+      fileWriter.writeAvro(key.getRecordKey(), tryRewriteRecordWithMetadata(avroRecord, newFilePath.getName()));
     } else {
-      fileWriter.writeAvroWithMetadata(key, rewriteRecord(avroRecord));
+      fileWriter.writeAvroWithMetadata(key, tryRewriteRecord(avroRecord));
     }
   }
 
