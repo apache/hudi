@@ -54,9 +54,9 @@
   <properties>
     <skipITs>false</skipITs>
     <docker.build.skip>true</docker.build.skip>
-    <docker.spark.version>2.4.4</docker.spark.version>
-    <docker.hive.version>2.3.3</docker.hive.version>
-    <docker.hadoop.version>2.8.4</docker.hadoop.version>
+    <docker.spark.version>3.2.1</docker.spark.version>
+    <docker.hive.version>3.1.2</docker.hive.version>
+    <docker.hadoop.version>3.1.0</docker.hadoop.version>
     <docker.presto.version>0.271</docker.presto.version>
     <docker.trino.version>368</docker.trino.version>
     <dockerfile.maven.version>1.4.13</dockerfile.maven.version>
