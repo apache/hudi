@@ -70,10 +70,7 @@ public class TestFileBasedLockProvider {
   public static void cleanUpAfterAll() throws IOException {
     Path workDir = dfsCluster.getFileSystem().getWorkingDirectory();
     FileSystem fs = workDir.getFileSystem(hdfsTestService.getHadoopConf());
-    FileStatus[] fileStatuses = dfsCluster.getFileSystem().listStatus(workDir);
-    for (FileStatus f : fileStatuses) {
-      fs.delete(f.getPath(), true);
-    }
+    fs.delete(new Path("/tmp/lock"), true);
     if (hdfsTestService != null) {
       hdfsTestService.stop();
       hdfsTestService = null;
