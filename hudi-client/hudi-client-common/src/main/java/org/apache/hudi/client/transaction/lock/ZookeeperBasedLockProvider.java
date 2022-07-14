@@ -96,7 +96,7 @@ public class ZookeeperBasedLockProvider implements LockProvider<InterProcessMute
       acquireLock(time, unit);
       LOG.info(generateLogStatement(LockState.ACQUIRED, generateLogSuffixString()));
     } catch (HoodieLockException e) {
-      throw e;
+      LOG.error(e);
     } catch (Exception e) {
       throw new HoodieLockException(generateLogStatement(LockState.FAILED_TO_ACQUIRE, generateLogSuffixString()), e);
     }
