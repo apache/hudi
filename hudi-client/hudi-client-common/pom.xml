@@ -71,6 +71,7 @@
     <dependency>
       <groupId>org.apache.parquet</groupId>
       <artifactId>parquet-avro</artifactId>
+      <version>${parquet.version}</version>
     </dependency>
 
     <!-- Hilbert Curve -->
