@@ -1658,7 +1658,7 @@
                   <rules>
                     <bannedDependencies>
                       <excludes combine.children="append">
-                        <!-- remove for testing purpose --->
+                        <!-- remove for testing purpose -->
                         <exclude>*:*_2.13</exclude>
                       </excludes>
                     </bannedDependencies>
