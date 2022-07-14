@@ -84,10 +84,7 @@ public class TestFileBasedLockProvider {
   public void cleanUpAfterEach() throws IOException {
     Path workDir = dfsCluster.getFileSystem().getWorkingDirectory();
     FileSystem fs = workDir.getFileSystem(hdfsTestService.getHadoopConf());
-    FileStatus[] fileStatuses = dfsCluster.getFileSystem().listStatus(workDir);
-    for (FileStatus f : fileStatuses) {
-      fs.delete(f.getPath(), true);
-    }
+    fs.delete(new Path("/tmp/lock"), true);
   }
 
   @Test
@@ -124,13 +121,8 @@ public class TestFileBasedLockProvider {
     FileSystemBasedLockProvider fileBasedLockProvider = new FileSystemBasedLockProvider(lockConfiguration, hadoopConf);
     Assertions.assertTrue(fileBasedLockProvider.tryLock(lockConfiguration.getConfig()
           .getLong(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY), TimeUnit.MILLISECONDS));
-    try {
-      fileBasedLockProvider.tryLock(lockConfiguration.getConfig()
-            .getLong(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY), TimeUnit.MILLISECONDS);
-      Assertions.fail();
-    } catch (HoodieLockException e) {
-      // expected
-    }
+    Assertions.assertFalse(fileBasedLockProvider.tryLock(lockConfiguration.getConfig()
+            .getLong(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY), TimeUnit.MILLISECONDS));
     fileBasedLockProvider.unlock();
   }
 

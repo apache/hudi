@@ -64,9 +64,9 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
   public FileSystemBasedLockProvider(final LockConfiguration lockConfiguration, final Configuration configuration) {
     checkRequiredProps(lockConfiguration);
     this.lockConfiguration = lockConfiguration;
-    String lockDirectory = lockConfiguration.getConfig().getString(FILESYSTEM_LOCK_PATH_PROP_KEY);
+    String lockDirectory = lockConfiguration.getConfig().getString(FILESYSTEM_LOCK_PATH_PROP_KEY, null);
     if (StringUtils.isNullOrEmpty(lockDirectory)) {
-      lockDirectory = this.lockConfiguration.getConfig().getProperty(HoodieWriteConfig.BASE_PATH.key());
+      lockDirectory = lockConfiguration.getConfig().getString(HoodieWriteConfig.BASE_PATH.key(), null);
     }
     this.retryWaitTimeMs = lockConfiguration.getConfig().getInteger(LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY);
     this.retryMaxCount = lockConfiguration.getConfig().getInteger(LOCK_ACQUIRE_NUM_RETRIES_PROP_KEY);
@@ -99,7 +99,7 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
         acquireLock();
         return fs.exists(this.lockFile);
       }
-    } catch (IOException e) {
+    } catch (IOException | HoodieIOException e) {
       LOG.info(generateLogStatement(LockState.FAILED_TO_ACQUIRE), e);
       return false;
     }
@@ -129,7 +129,7 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
       if (System.currentTimeMillis() - modificationTime > lockTimeoutMinutes * 60 * 1000) {
         return true;
       }
-    } catch (IOException e) {
+    } catch (IOException | HoodieIOException e) {
       LOG.error(generateLogStatement(LockState.ALREADY_RELEASED) + " failed to get lockFile's modification time", e);
     }
     return false;
@@ -148,8 +148,8 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
   }
 
   private void checkRequiredProps(final LockConfiguration config) {
-    ValidationUtils.checkArgument(config.getConfig().getString(FILESYSTEM_LOCK_PATH_PROP_KEY) != null
-          || this.lockConfiguration.getConfig().getProperty(HoodieWriteConfig.BASE_PATH.key()) != null);
+    ValidationUtils.checkArgument(config.getConfig().getString(FILESYSTEM_LOCK_PATH_PROP_KEY, null) != null
+          || config.getConfig().getString(HoodieWriteConfig.BASE_PATH.key(), null) != null);
     ValidationUtils.checkArgument(config.getConfig().getInteger(LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY) > 0);
     ValidationUtils.checkArgument(config.getConfig().getInteger(LOCK_ACQUIRE_NUM_RETRIES_PROP_KEY) > 0);
     ValidationUtils.checkArgument(config.getConfig().getInteger(FILESYSTEM_LOCK_EXPIRE_PROP_KEY) >= 0);
