@@ -23,15 +23,20 @@ import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.function.SerializablePairFunction;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.MappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
 
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Spliterator;
+import java.util.Spliterators;
 import java.util.function.Function;
 import java.util.stream.Collector;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import java.util.stream.StreamSupport;
 
 import static org.apache.hudi.common.function.FunctionWrapper.throwingMapToPairWrapper;
 import static org.apache.hudi.common.function.FunctionWrapper.throwingMapWrapper;
@@ -124,6 +129,25 @@ public class HoodieListPairData<K, V> extends HoodiePairData<K, V> {
   public <O> HoodieData<O> map(SerializableFunction<Pair<K, V>, O> func) {
     Function<Pair<K, V>, O> uncheckedMapper = throwingMapWrapper(func);
     return new HoodieListData<>(dataStream.map(uncheckedMapper));
+  }
+
+  @Override
+  public <W> HoodiePairData<K, W> mapValues(SerializableFunction<V, W> func) {
+    Function<V, W> uncheckedMapper = throwingMapWrapper(func);
+    return new HoodieListPairData<>(dataStream.map(p -> Pair.of(p.getKey(), uncheckedMapper.apply(p.getValue()))));
+  }
+
+  @Override
+  public <W> HoodiePairData<K, W> flatMapValues(SerializableFunction<V, Iterator<W>> func) {
+    Function<V, Iterator<W>> uncheckedMapper = throwingMapWrapper(func);
+    return new HoodieListPairData<>(dataStream.flatMap(p -> {
+      Iterator<W> mappedValuesIterator = uncheckedMapper.apply(p.getValue());
+      Iterator<Pair<K, W>> mappedPairsIterator =
+          new MappingIterator<>(mappedValuesIterator, w -> Pair.of(p.getKey(), w));
+
+      return StreamSupport.stream(
+          Spliterators.spliteratorUnknownSize(mappedPairsIterator, Spliterator.ORDERED), true);
+    }));
   }
 
   @Override

@@ -120,6 +120,16 @@ public class HoodieListData<T> extends HoodieData<T> {
   }
 
   @Override
+  public <K, V> HoodiePairData<K, V> flatMapToPair(SerializableFunction<T, Iterator<? extends Pair<K, V>>> func) {
+    Function<T, Iterator<? extends Pair<K, V>>> mapper = throwingMapWrapper(func);
+    Stream<Pair<K, V>> mappedStream = dataStream.flatMap(e ->
+        StreamSupport.stream(
+            Spliterators.spliteratorUnknownSize(mapper.apply(e), Spliterator.ORDERED), true));
+
+    return new HoodieListPairData<>(mappedStream);
+  }
+
+  @Override
   public <K, V> HoodiePairData<K, V> mapToPair(SerializablePairFunction<T, K, V> func) {
     Function<T, Pair<K, V>> throwableMapToPairFunc = throwingMapToPairWrapper(func);
     return new HoodieListPairData<>(dataStream.map(throwableMapToPairFunc));

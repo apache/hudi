@@ -31,6 +31,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.storage.StorageLevel;
 
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
@@ -119,6 +120,16 @@ public class HoodieJavaPairRDD<K, V> extends HoodiePairData<K, V> {
   public <O> HoodieData<O> map(SerializableFunction<Pair<K, V>, O> func) {
     return HoodieJavaRDD.of(pairRDDData.map(
         tuple -> func.apply(new ImmutablePair<>(tuple._1, tuple._2))));
+  }
+
+  @Override
+  public <W> HoodiePairData<K, W> mapValues(SerializableFunction<V, W> func) {
+    return HoodieJavaPairRDD.of(pairRDDData.mapValues(func::apply));
+  }
+
+  @Override
+  public <W> HoodiePairData<K, W> flatMapValues(SerializableFunction<V, Iterator<W>> func) {
+    return HoodieJavaPairRDD.of(pairRDDData.flatMapValues(func::apply));
   }
 
   @Override

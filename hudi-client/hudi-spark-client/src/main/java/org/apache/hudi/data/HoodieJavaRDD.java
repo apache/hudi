@@ -24,6 +24,7 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.function.SerializablePairFunction;
+import org.apache.hudi.common.util.collection.MappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.spark.api.java.JavaPairRDD;
@@ -32,6 +33,7 @@ import org.apache.spark.storage.StorageLevel;
 
 import java.util.Iterator;
 import java.util.List;
+import java.util.function.Function;
 
 import scala.Tuple2;
 
@@ -114,7 +116,14 @@ public class HoodieJavaRDD<T> extends HoodieData<T> {
 
   @Override
   public <O> HoodieData<O> flatMap(SerializableFunction<T, Iterator<O>> func) {
-    return HoodieJavaRDD.of(rddData.flatMap(e -> func.apply(e)));
+    return HoodieJavaRDD.of(rddData.flatMap(func::apply));
+  }
+
+  @Override
+  public <K, V> HoodiePairData<K, V> flatMapToPair(SerializableFunction<T, Iterator<? extends Pair<K, V>>> func) {
+    return HoodieJavaPairRDD.of(
+        rddData.flatMapToPair(e ->
+            new MappingIterator<>(func.apply(e), p -> new Tuple2<>(p.getKey(), p.getValue()))));
   }
 
   @Override
