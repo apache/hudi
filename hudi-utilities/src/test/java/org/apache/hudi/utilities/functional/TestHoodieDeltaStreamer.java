@@ -1788,6 +1788,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     testORCDFSSource(false, null);
   }
 
+  @Disabled("Disable due to hive's orc conflict.")
   @Test
   public void testORCDFSSourceWithSchemaProviderAndWithTransformer() throws Exception {
     testORCDFSSource(true, Collections.singletonList(TripsWithDistanceTransformer.class.getName()));
