@@ -22,6 +22,7 @@ package org.apache.hudi.index.bloom;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
@@ -34,22 +35,22 @@ import java.util.Map;
  * Helper for {@link HoodieBloomIndex} containing engine-specific logic.
  */
 public abstract class BaseHoodieBloomIndexHelper implements Serializable {
+
   /**
    * Find out <RowKey, filename> pair.
    *
-   * @param config                  Write config.
-   * @param context                 {@link HoodieEngineContext} instance to use.
-   * @param hoodieTable             {@link HoodieTable} instance to use.
-   * @param partitionRecordKeyPairs Pairs of partition path and record key.
-   * @param fileComparisonPairs     Pairs of filename and record key based on file comparisons.
-   * @param partitionToFileInfo     Partition path to {@link BloomIndexFileInfo} map.
-   * @param recordsPerPartition     Number of records per partition in a map.
+   * @param context             {@link HoodieEngineContext} instance to use.
+   * @param fileComparisonPairs Pairs of filename and record key based on file comparisons.
+   * @param records             Container holding (key, record) pairs
+   * @param partitionToFileInfo Partition path to {@link BloomIndexFileInfo} map.
+   * @param hoodieTable         {@link HoodieTable} instance to use.
+   * @param config              Write config.
    * @return {@link HoodiePairData} of {@link HoodieKey} and {@link HoodieRecordLocation} pairs.
    */
-  public abstract HoodiePairData<HoodieKey, HoodieRecordLocation> findMatchingFilesForRecordKeys(
-      HoodieWriteConfig config, HoodieEngineContext context, HoodieTable hoodieTable,
-      HoodiePairData<String, String> partitionRecordKeyPairs,
-      HoodiePairData<String, HoodieKey> fileComparisonPairs,
-      Map<String, List<BloomIndexFileInfo>> partitionToFileInfo,
-      Map<String, Long> recordsPerPartition);
+  public abstract HoodiePairData<HoodieKey, HoodieRecordLocation> findMatchingFilesForRecordKeys(HoodieEngineContext context,
+                                                                                                 HoodiePairData<String, HoodieKey> fileComparisonPairs,
+                                                                                                 HoodiePairData<HoodieKey, ? extends HoodieRecord> records,
+                                                                                                 Map<String, List<BloomIndexFileInfo>> partitionToFileInfo,
+                                                                                                 HoodieTable hoodieTable,
+                                                                                                 HoodieWriteConfig config);
 }

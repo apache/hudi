@@ -29,11 +29,11 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.MetadataNotFoundException;
 import org.apache.hudi.index.HoodieIndex;
@@ -46,7 +46,6 @@ import org.apache.log4j.Logger;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static java.util.stream.Collectors.groupingBy;
@@ -71,22 +70,23 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
   }
 
   @Override
-  public <R> HoodieData<HoodieRecord<R>> tagLocation(
-      HoodieData<HoodieRecord<R>> records, HoodieEngineContext context,
-      HoodieTable hoodieTable) {
+  public <R> HoodieData<HoodieRecord<R>> tagLocation(HoodieData<HoodieRecord<R>> records, HoodieEngineContext context, HoodieTable hoodieTable) throws HoodieIndexException {
+    throw new UnsupportedOperationException("not implemented");
+  }
+
+  @Override
+  public <R> HoodiePairData<HoodieKey, HoodieRecord<R>> tagLocationX(HoodieEngineContext context,
+                                                                     HoodiePairData<HoodieKey, HoodieRecord<R>> records,
+                                                                     HoodieTable hoodieTable) {
     // Step 0: cache the input records if needed
     if (config.getBloomIndexUseCaching()) {
       records.persist(new HoodieConfig(config.getProps())
           .getString(HoodieIndexConfig.BLOOM_INDEX_INPUT_STORAGE_LEVEL_VALUE));
     }
 
-    // Step 1: Extract out thinner pairs of (partitionPath, recordKey)
-    HoodiePairData<String, String> partitionRecordKeyPairs = records.mapToPair(
-        record -> new ImmutablePair<>(record.getPartitionPath(), record.getRecordKey()));
-
-    // Step 2: Lookup indexes for all the partition/recordkey pair
+    // Step 1: Lookup indexes for all the partition/recordkey pair
     HoodiePairData<HoodieKey, HoodieRecordLocation> keyFilenamePairs =
-        lookupIndex(partitionRecordKeyPairs, context, hoodieTable);
+        lookupIndex(context, records, hoodieTable);
 
     // Cache the result, for subsequent stages.
     if (config.getBloomIndexUseCaching()) {
@@ -98,7 +98,7 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
     }
 
     // Step 3: Tag the incoming records, as inserts or updates, by joining with existing record keys
-    HoodieData<HoodieRecord<R>> taggedRecords = tagLocationBacktoRecords(keyFilenamePairs, records);
+    HoodiePairData<HoodieKey, HoodieRecord<R>> taggedRecords = tagLocationBackToRecords(keyFilenamePairs, records);
 
     return taggedRecords;
   }
@@ -107,12 +107,11 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
    * Lookup the location for each record key and return the pair<record_key,location> for all record keys already
    * present and drop the record keys if not present.
    */
-  private HoodiePairData<HoodieKey, HoodieRecordLocation> lookupIndex(
-      HoodiePairData<String, String> partitionRecordKeyPairs, final HoodieEngineContext context,
-      final HoodieTable hoodieTable) {
+  private HoodiePairData<HoodieKey, HoodieRecordLocation> lookupIndex(HoodieEngineContext context,
+                                                                      HoodiePairData<HoodieKey, ? extends HoodieRecord> records,
+                                                                      HoodieTable hoodieTable) {
     // Step 1: Obtain records per partition, in the incoming records
-    Map<String, Long> recordsPerPartition = partitionRecordKeyPairs.countByKey();
-    List<String> affectedPartitionPathList = new ArrayList<>(recordsPerPartition.keySet());
+    List<String> affectedPartitionPathList = records.map(p -> p.getKey().getPartitionPath()).distinct().collectAsList();
 
     // Step 2: Load all involved files as <Partition, filename> pairs
     List<Pair<String, BloomIndexFileInfo>> fileInfoList = getBloomIndexFileInfoForPartitions(context, hoodieTable, affectedPartitionPathList);
@@ -121,11 +120,11 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
 
     // Step 3: Obtain a HoodieData, for each incoming record, that already exists, with the file id,
     // that contains it.
-    HoodiePairData<String, HoodieKey> fileComparisonPairs =
-        explodeRecordsWithFileComparisons(partitionToFileInfo, partitionRecordKeyPairs);
+    HoodiePairData<String, HoodieKey> candidateFileGroupToRecordKeyPairs =
+        explodeRecordsWithFileComparisons(partitionToFileInfo, records);
 
-    return bloomIndexHelper.findMatchingFilesForRecordKeys(config, context, hoodieTable,
-        partitionRecordKeyPairs, fileComparisonPairs, partitionToFileInfo, recordsPerPartition);
+    return bloomIndexHelper.findMatchingFilesForRecordKeys(context, candidateFileGroupToRecordKeyPairs,
+        records, partitionToFileInfo, hoodieTable, config);
   }
 
   private List<Pair<String, BloomIndexFileInfo>> getBloomIndexFileInfoForPartitions(HoodieEngineContext context,
@@ -272,41 +271,34 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
    * Sub-partition to ensure the records can be looked up against files & also prune file<=>record comparisons based on
    * recordKey ranges in the index info.
    */
-  HoodiePairData<String, HoodieKey> explodeRecordsWithFileComparisons(
-      final Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo,
-      HoodiePairData<String, String> partitionRecordKeyPairs) {
+  HoodiePairData<String, HoodieKey> explodeRecordsWithFileComparisons(Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo,
+                                                                      HoodiePairData<HoodieKey, ? extends HoodieRecord> records) {
     IndexFileFilter indexFileFilter =
         config.useBloomIndexTreebasedFilter() ? new IntervalTreeBasedIndexFileFilter(partitionToFileIndexInfo)
             : new ListBasedIndexFileFilter(partitionToFileIndexInfo);
 
-    return partitionRecordKeyPairs.map(partitionRecordKeyPair -> {
-      String recordKey = partitionRecordKeyPair.getRight();
-      String partitionPath = partitionRecordKeyPair.getLeft();
+    return records.map(keyRecordPair -> {
+      HoodieKey key = keyRecordPair.getLeft();
 
-      // TODO(HUDI-4249) avoid collections
-      return indexFileFilter.getMatchingFilesAndPartition(partitionPath, recordKey).stream()
-          .map(partitionFileIdPair -> new ImmutablePair<>(partitionFileIdPair.getRight(),
-              new HoodieKey(recordKey, partitionPath)))
-          .collect(Collectors.toList());
+      return indexFileFilter.getMatchingFilesAndPartition(key.getPartitionPath(), key.getRecordKey())
+          .stream()
+          .map(partitionFileIdPair -> new ImmutablePair<>(partitionFileIdPair.getRight(), key));
     })
-        .flatMap(List::iterator)
-        .mapToPair(t -> t);
+    .flatMapToPair(Stream::iterator);
   }
 
   /**
    * Tag the <rowKey, filename> back to the original HoodieRecord List.
    */
-  protected <R> HoodieData<HoodieRecord<R>> tagLocationBacktoRecords(
+  protected <R> HoodiePairData<HoodieKey, HoodieRecord<R>> tagLocationBackToRecords(
       HoodiePairData<HoodieKey, HoodieRecordLocation> keyFilenamePair,
-      HoodieData<HoodieRecord<R>> records) {
-    HoodiePairData<HoodieKey, HoodieRecord<R>> keyRecordPairs =
-        records.mapToPair(record -> new ImmutablePair<>(record.getKey(), record));
+      HoodiePairData<HoodieKey, HoodieRecord<R>> records) {
     // Here as the records might have more data than keyFilenamePairs (some row keys' fileId is null),
     // so we do left outer join.
-
     // TODO we can do reverse outer join which is going to be smaller
-    return keyRecordPairs.leftOuterJoin(keyFilenamePair).values()
-        .map(v -> HoodieIndexUtils.getTaggedRecord(v.getLeft(), Option.ofNullable(v.getRight().orElse(null))));
+    return records.leftOuterJoin(keyFilenamePair)
+        .mapValues(recordLocationPair ->
+            (HoodieRecord<R>) HoodieIndexUtils.getTaggedRecord(recordLocationPair.getLeft(), recordLocationPair.getRight()));
   }
 
   @Override

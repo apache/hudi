@@ -20,16 +20,16 @@ package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
 
-public class HoodieWriteHelper<T extends HoodieRecordPayload, R> extends BaseWriteHelper<T, HoodieData<HoodieRecord<T>>,
+public class HoodieWriteHelper<T extends HoodieRecordPayload, R> extends BaseWriteHelper<T, HoodiePairData<HoodieKey, HoodieRecord<T>>,
     HoodieData<HoodieKey>, HoodieData<WriteStatus>, R> {
 
   private HoodieWriteHelper() {
@@ -44,29 +44,31 @@ public class HoodieWriteHelper<T extends HoodieRecordPayload, R> extends BaseWri
   }
 
   @Override
-  protected HoodieData<HoodieRecord<T>> tag(HoodieData<HoodieRecord<T>> dedupedRecords, HoodieEngineContext context,
-                                            HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table) {
-    return table.getIndex().tagLocation(dedupedRecords, context, table);
+  protected HoodiePairData<HoodieKey, HoodieRecord<T>> tag(HoodiePairData<HoodieKey, HoodieRecord<T>> dedupedRecords, HoodieEngineContext context,
+                                            HoodieTable<T, HoodiePairData<HoodieKey, HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table) {
+    return table.getIndex().tagLocationX(context, dedupedRecords, table);
   }
 
   @Override
-  public HoodieData<HoodieRecord<T>> deduplicateRecords(
-      HoodieData<HoodieRecord<T>> records, HoodieIndex<?, ?> index, int parallelism) {
+  public HoodiePairData<HoodieKey, HoodieRecord<T>> deduplicateRecords(
+      HoodiePairData<HoodieKey, HoodieRecord<T>> records, HoodieIndex<?, ?> index, int parallelism) {
     boolean isIndexingGlobal = index.isGlobal();
 
+    /*
     return records.mapToPair(record -> {
       HoodieKey hoodieKey = record.getKey();
       // If index used is global, then records are expected to differ in their partitionPath
       Object key = isIndexingGlobal ? hoodieKey.getRecordKey() : hoodieKey;
       return Pair.of(key, record);
     })
-    .reduceByKey((rec1, rec2) -> {
+     */
+
+    return records.reduceByKey((rec1, rec2) -> {
       @SuppressWarnings("unchecked")
       T reducedData = (T) rec2.getData().preCombine(rec1.getData());
       HoodieKey reducedKey = rec1.getData().equals(reducedData) ? rec1.getKey() : rec2.getKey();
 
       return new HoodieAvroRecord<>(reducedKey, reducedData);
-    }, parallelism)
-    .map(Pair::getRight);
+    }, parallelism);
   }
 }

@@ -40,6 +40,7 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieFileGroup;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -60,6 +61,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.data.HoodieJavaPairRDD;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.index.HoodieIndex;
@@ -77,6 +79,7 @@ import org.apache.hudi.timeline.service.TimelineService;
 import org.apache.hudi.util.JFunction;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SQLContext;
@@ -508,8 +511,8 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
 
   public JavaRDD<HoodieRecord> tagLocation(
       HoodieIndex index, JavaRDD<HoodieRecord> records, HoodieTable table) {
-    return HoodieJavaRDD.getJavaRDD(
-        index.tagLocation(HoodieJavaRDD.of(records), context, table));
+    JavaPairRDD<HoodieKey, HoodieRecord> keyRecordPairs = records.mapToPair(r -> Tuple2.apply(r.getKey(), r));
+    return HoodieJavaRDD.getJavaRDD(index.tagLocationX(context, HoodieJavaPairRDD.of(keyRecordPairs), table).values());
   }
 
   public static Pair<HashMap<String, WorkloadStat>, WorkloadStat> buildProfile(JavaRDD<HoodieRecord> inputRecordsRDD) {

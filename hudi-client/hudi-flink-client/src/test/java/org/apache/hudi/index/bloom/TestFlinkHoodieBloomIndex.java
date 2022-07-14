@@ -50,6 +50,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static java.util.Arrays.asList;
@@ -175,17 +176,14 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
             new BloomIndexFileInfo("f3", "001", "003"), new BloomIndexFileInfo("f4", "002", "007"),
             new BloomIndexFileInfo("f5", "009", "010")));
 
-    Map<String, List<String>> partitionRecordKeyMap = new HashMap<>();
-    asList(Pair.of("2017/10/22", "003"), Pair.of("2017/10/22", "002"),
-        Pair.of("2017/10/22", "005"), Pair.of("2017/10/22", "004"))
-        .forEach(t -> {
-          List<String> recordKeyList = partitionRecordKeyMap.getOrDefault(t.getLeft(), new ArrayList<>());
-          recordKeyList.add(t.getRight());
-          partitionRecordKeyMap.put(t.getLeft(), recordKeyList);
-        });
+    List<Pair<HoodieKey, HoodieRecord>> keyRecordPairs =
+        Stream.of(Pair.of("2017/10/22", "003"), Pair.of("2017/10/22", "002"),
+            Pair.of("2017/10/22", "005"), Pair.of("2017/10/22", "004"))
+        .map(p -> Pair.of(new HoodieKey(p.getRight(), p.getLeft()), (HoodieRecord) null))
+        .collect(Collectors.toList());
 
     List<Pair<String, HoodieKey>> comparisonKeyList =
-        index.explodeRecordsWithFileComparisons(partitionToFileIndexInfo, HoodieListPairData.of(partitionRecordKeyMap))
+        index.explodeRecordsWithFileComparisons(partitionToFileIndexInfo, HoodieListPairData.of(keyRecordPairs))
             .collectAsList();
 
     assertEquals(10, comparisonKeyList.size());

@@ -22,6 +22,7 @@ package org.apache.hudi.index.bloom;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
@@ -52,11 +53,12 @@ public class ListBasedHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper 
   }
 
   @Override
-  public HoodiePairData<HoodieKey, HoodieRecordLocation> findMatchingFilesForRecordKeys(
-      HoodieWriteConfig config, HoodieEngineContext context, HoodieTable hoodieTable,
-      HoodiePairData<String, String> partitionRecordKeyPairs,
-      HoodiePairData<String, HoodieKey> fileComparisonPairs,
-      Map<String, List<BloomIndexFileInfo>> partitionToFileInfo, Map<String, Long> recordsPerPartition) {
+  public HoodiePairData<HoodieKey, HoodieRecordLocation> findMatchingFilesForRecordKeys(HoodieEngineContext context,
+                                                                                        HoodiePairData<String, HoodieKey> fileComparisonPairs,
+                                                                                        HoodiePairData<HoodieKey, ? extends HoodieRecord> partitionRecordKeyPairs,
+                                                                                        Map<String, List<BloomIndexFileInfo>> partitionToFileInfo,
+                                                                                        HoodieTable hoodieTable,
+                                                                                        HoodieWriteConfig config) {
     List<Pair<String, HoodieKey>> fileComparisonPairList =
         fileComparisonPairs.collectAsList()
             .stream()

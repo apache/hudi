@@ -23,6 +23,7 @@ import org.apache.hudi.PublicAPIClass;
 import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieKey;
@@ -79,6 +80,17 @@ public abstract class HoodieIndex<I, O> implements Serializable {
   public abstract <R> HoodieData<HoodieRecord<R>> tagLocation(
       HoodieData<HoodieRecord<R>> records, HoodieEngineContext context,
       HoodieTable hoodieTable) throws HoodieIndexException;
+
+  /**
+   * Looks up the index and tags each incoming record with a location of a file that contains
+   * the row (if it is actually present).
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public <R> HoodiePairData<HoodieKey, HoodieRecord<R>> tagLocationX(
+      HoodieEngineContext context, HoodiePairData<HoodieKey, HoodieRecord<R>> records,
+      HoodieTable hoodieTable) throws HoodieIndexException {
+    throw new UnsupportedOperationException("not implemented");
+  }
 
   /**
    * Extracts the location of written records, and updates the index.

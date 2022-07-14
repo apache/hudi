@@ -225,9 +225,10 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
             new BloomIndexFileInfo("f3", "001", "003"), new BloomIndexFileInfo("f4", "002", "007"),
             new BloomIndexFileInfo("f5", "009", "010")));
 
-    JavaPairRDD<String, String> partitionRecordKeyPairRDD =
+    JavaPairRDD<HoodieKey, HoodieRecord> partitionRecordKeyPairRDD =
         jsc.parallelize(Arrays.asList(new Tuple2<>("2017/10/22", "003"), new Tuple2<>("2017/10/22", "002"),
-            new Tuple2<>("2017/10/22", "005"), new Tuple2<>("2017/10/22", "004"))).mapToPair(t -> t);
+            new Tuple2<>("2017/10/22", "005"), new Tuple2<>("2017/10/22", "004")))
+            .mapToPair(t -> new Tuple2<>(new HoodieKey(t._2, t._1), null));
 
     List<Pair<String, HoodieKey>> comparisonKeyList =
         index.explodeRecordsWithFileComparisons(partitionToFileIndexInfo, HoodieJavaPairRDD.of(partitionRecordKeyPairRDD)).collectAsList();

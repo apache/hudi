@@ -194,9 +194,10 @@ public class TestHoodieGlobalBloomIndex extends TestHoodieMetadataBase {
         Arrays.asList(new BloomIndexFileInfo("f4", "002", "007"), new BloomIndexFileInfo("f5", "009", "010")));
 
     // the partition of the key of the incoming records will be ignored
-    JavaPairRDD<String, String> partitionRecordKeyPairRDD =
+    JavaPairRDD<HoodieKey, HoodieRecord> partitionRecordKeyPairRDD =
         jsc.parallelize(Arrays.asList(new Tuple2<>("2017/10/21", "003"), new Tuple2<>("2017/10/22", "002"),
-            new Tuple2<>("2017/10/22", "005"), new Tuple2<>("2017/10/23", "004"))).mapToPair(t -> t);
+            new Tuple2<>("2017/10/22", "005"), new Tuple2<>("2017/10/23", "004")))
+            .mapToPair(t -> new Tuple2<>(new HoodieKey(t._1, t._2), null));
 
     List<Pair<String, HoodieKey>> comparisonKeyList =
         index.explodeRecordsWithFileComparisons(partitionToFileIndexInfo, HoodieJavaPairRDD.of(partitionRecordKeyPairRDD))

@@ -19,16 +19,12 @@
 
 package org.apache.hudi.index.bloom;
 
-import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
-import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
@@ -37,8 +33,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.table.HoodieTable;
 
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -76,67 +70,65 @@ public class HoodieGlobalBloomIndex extends HoodieBloomIndex {
   @Override
   HoodiePairData<String, HoodieKey> explodeRecordsWithFileComparisons(
       final Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo,
-      HoodiePairData<String, String> partitionRecordKeyPairs) {
+      HoodiePairData<HoodieKey, ? extends HoodieRecord> records) {
 
     IndexFileFilter indexFileFilter =
         config.useBloomIndexTreebasedFilter() ? new IntervalTreeBasedGlobalIndexFileFilter(partitionToFileIndexInfo)
             : new ListBasedGlobalIndexFileFilter(partitionToFileIndexInfo);
 
-    return partitionRecordKeyPairs.map(partitionRecordKeyPair -> {
-      String recordKey = partitionRecordKeyPair.getRight();
-      String partitionPath = partitionRecordKeyPair.getLeft();
+    return records.map(keyRecordPair -> {
+      HoodieKey key = keyRecordPair.getKey();
 
-      return indexFileFilter.getMatchingFilesAndPartition(partitionPath, recordKey).stream()
-          .map(partitionFileIdPair -> (Pair<String, HoodieKey>) new ImmutablePair<>(partitionFileIdPair.getRight(),
-              new HoodieKey(recordKey, partitionFileIdPair.getLeft())))
+      return indexFileFilter.getMatchingFilesAndPartition(key.getPartitionPath(), key.getRecordKey())
+          .stream()
+          .map(partitionFileIdPair -> (Pair<String, HoodieKey>) new ImmutablePair<>(partitionFileIdPair.getRight(), key))
           .collect(Collectors.toList());
     })
-        .flatMap(List::iterator)
-        .mapToPair(t -> t);
+        .flatMapToPair(List::iterator);
   }
 
   /**
    * Tagging for global index should only consider the record key.
    */
   @Override
-  protected <R> HoodieData<HoodieRecord<R>> tagLocationBacktoRecords(
+  protected <R> HoodiePairData<HoodieKey, HoodieRecord<R>> tagLocationBackToRecords(
       HoodiePairData<HoodieKey, HoodieRecordLocation> keyLocationPairs,
-      HoodieData<HoodieRecord<R>> records) {
-
-    HoodiePairData<String, HoodieRecord<R>> incomingRowKeyRecordPairs =
-        records.mapToPair(record -> new ImmutablePair<>(record.getRecordKey(), record));
-
-    HoodiePairData<String, Pair<HoodieRecordLocation, HoodieKey>> existingRecordKeyToRecordLocationHoodieKeyMap =
-        keyLocationPairs.mapToPair(p -> new ImmutablePair<>(
-            p.getKey().getRecordKey(), new ImmutablePair<>(p.getValue(), p.getKey())));
+      HoodiePairData<HoodieKey, HoodieRecord<R>> records) {
 
     // Here as the records might have more data than rowKeys (some rowKeys' fileId is null), so we do left outer join.
-    return incomingRowKeyRecordPairs.leftOuterJoin(existingRecordKeyToRecordLocationHoodieKeyMap).values().flatMap(record -> {
-      final HoodieRecord<R> hoodieRecord = record.getLeft();
-      final Option<Pair<HoodieRecordLocation, HoodieKey>> recordLocationHoodieKeyPair = record.getRight();
-      if (recordLocationHoodieKeyPair.isPresent()) {
-        // Record key matched to file
-        if (config.getBloomIndexUpdatePartitionPath()
-            && !recordLocationHoodieKeyPair.get().getRight().getPartitionPath().equals(hoodieRecord.getPartitionPath())) {
-          // Create an empty record to delete the record in the old partition
-          HoodieRecord<R> deleteRecord = new HoodieAvroRecord(recordLocationHoodieKeyPair.get().getRight(),
-              new EmptyHoodieRecordPayload());
-          deleteRecord.setCurrentLocation(recordLocationHoodieKeyPair.get().getLeft());
-          deleteRecord.seal();
-          // Tag the incoming record for inserting to the new partition
-          HoodieRecord<R> insertRecord = HoodieIndexUtils.getTaggedRecord(hoodieRecord, Option.empty());
-          return Arrays.asList(deleteRecord, insertRecord).iterator();
+    return records.leftOuterJoin(keyLocationPairs)
+      .mapValues(record -> {
+        final HoodieRecord<R> hoodieRecord = record.getLeft();
+        final Option<HoodieRecordLocation> recordLocationOpt = record.getRight();
+        if (recordLocationOpt.isPresent()) {
+          HoodieKey key = hoodieRecord.getKey();
+
+          // Record key matched to file
+          /*
+          // TODO this conditional is always false
+          if (config.getBloomIndexUpdatePartitionPath()
+              && !recordLocationOpt.get().getPartitionPath().equals(hoodieRecord.getPartitionPath())) {
+            // Create an empty record to delete the record in the old partition
+            HoodieRecord<R> deleteRecord = new HoodieAvroRecord(recordLocationOpt.get().getRight(),
+                new EmptyHoodieRecordPayload());
+            deleteRecord.setCurrentLocation(recordLocationOpt.get().getLeft());
+            deleteRecord.seal();
+            // Tag the incoming record for inserting to the new partition
+            HoodieRecord<R> insertRecord = HoodieIndexUtils.getTaggedRecord(hoodieRecord, Option.empty());
+            return Stream.of(deleteRecord, insertRecord).iterator();
+          } else {
+            // Ignore the incoming record's partition, regardless of whether it differs from its old partition or not.
+            // When it differs, the record will still be updated at its old partition.
+            return Collections.singletonList(
+                (HoodieRecord<R>) HoodieIndexUtils.getTaggedRecord(new HoodieAvroRecord(recordLocationOpt.get().getRight(), (HoodieRecordPayload) hoodieRecord.getData()),
+                    Option.ofNullable(recordLocationOpt.get().getLeft()))).iterator();
+          }
+          */
+          return (HoodieRecord<R>) HoodieIndexUtils.getTaggedRecord(hoodieRecord, recordLocationOpt);
         } else {
-          // Ignore the incoming record's partition, regardless of whether it differs from its old partition or not.
-          // When it differs, the record will still be updated at its old partition.
-          return Collections.singletonList(
-              (HoodieRecord<R>) HoodieIndexUtils.getTaggedRecord(new HoodieAvroRecord(recordLocationHoodieKeyPair.get().getRight(), (HoodieRecordPayload) hoodieRecord.getData()),
-                  Option.ofNullable(recordLocationHoodieKeyPair.get().getLeft()))).iterator();
+          return (HoodieRecord<R>) HoodieIndexUtils.getTaggedRecord(hoodieRecord, Option.empty());
         }
-      } else {
-        return Collections.singletonList((HoodieRecord<R>) HoodieIndexUtils.getTaggedRecord(hoodieRecord, Option.empty())).iterator();
-      }
-    });
+      });
   }
 
   @Override
