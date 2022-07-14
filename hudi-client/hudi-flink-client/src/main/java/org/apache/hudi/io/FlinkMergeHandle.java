@@ -43,7 +43,7 @@ import java.util.List;
 /**
  * A {@link HoodieMergeHandle} that supports MERGE write incrementally(small data buffers).
  *
- * <p>For a new data buffer, it initialize and set up the next file path to write,
+ * <p>For a new data buffer, it initializes and set up the next file path to write,
  * and closes the file path when the data buffer write finish. When next data buffer
  * write starts, it rolls over to another new file. If all the data buffers write finish
  * for a checkpoint round, it renames the last new file path as the desired file name
@@ -143,8 +143,7 @@ public class FlinkMergeHandle<T extends HoodieRecordPayload, I, K, O>
           break;
         }
 
-        oldFilePath = newFilePath; // override the old file name
-        rolloverPaths.add(oldFilePath);
+        rolloverPaths.add(newFilePath);
         newFileName = newFileNameWithRollover(rollNumber++);
         newFilePath = makeNewFilePath(partitionPath, newFileName);
         LOG.warn("Duplicate write for MERGE bucket with path: " + oldFilePath + ", rolls over to new path: " + newFilePath);
@@ -160,13 +159,6 @@ public class FlinkMergeHandle<T extends HoodieRecordPayload, I, K, O>
   protected String newFileNameWithRollover(int rollNumber) {
     return FSUtils.makeBaseFileName(instantTime, writeToken + "-" + rollNumber,
         this.fileId, hoodieTable.getBaseFileExtension());
-  }
-
-  @Override
-  protected void setWriteStatusPath() {
-    // if there was rollover, should set up the path as the initial new file path.
-    Path path = rolloverPaths.size() > 0 ? rolloverPaths.get(0) : newFilePath;
-    writeStatus.getStat().setPath(new Path(config.getBasePath()), path);
   }
 
   @Override
@@ -188,26 +180,18 @@ public class FlinkMergeHandle<T extends HoodieRecordPayload, I, K, O>
 
   public void finalizeWrite() {
     // The file visibility should be kept by the configured ConsistencyGuard instance.
-    rolloverPaths.add(newFilePath);
-    if (rolloverPaths.size() == 1) {
+    if (rolloverPaths.size() == 0) {
       // only one flush action, no need to roll over
       return;
     }
 
-    for (int i = 0; i < rolloverPaths.size() - 1; i++) {
-      Path path = rolloverPaths.get(i);
+    for (Path path : rolloverPaths) {
       try {
         fs.delete(path, false);
+        LOG.info("Delete the rollover data file: " + path + " success!");
       } catch (IOException e) {
-        throw new HoodieIOException("Error when clean the temporary roll file: " + path, e);
+        throw new HoodieIOException("Error when clean the temporary rollover data file: " + path, e);
       }
-    }
-    final Path lastPath = rolloverPaths.get(rolloverPaths.size() - 1);
-    final Path desiredPath = rolloverPaths.get(0);
-    try {
-      fs.rename(lastPath, desiredPath);
-    } catch (IOException e) {
-      throw new HoodieIOException("Error when rename the temporary roll file: " + lastPath + " to: " + desiredPath, e);
     }
   }
 
