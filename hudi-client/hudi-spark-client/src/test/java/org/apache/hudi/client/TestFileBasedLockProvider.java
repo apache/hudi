@@ -27,6 +27,7 @@ import org.apache.hadoop.hdfs.MiniDFSCluster;
 import org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieLockException;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -91,6 +92,16 @@ public class TestFileBasedLockProvider {
 
   @Test
   public void testAcquireLock() {
+    FileSystemBasedLockProvider fileBasedLockProvider = new FileSystemBasedLockProvider(lockConfiguration, hadoopConf);
+    Assertions.assertTrue(fileBasedLockProvider.tryLock(lockConfiguration.getConfig()
+          .getLong(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY), TimeUnit.MILLISECONDS));
+    fileBasedLockProvider.unlock();
+  }
+
+  @Test
+  public void testAcquireLockWithDefaultPath() {
+    lockConfiguration.getConfig().remove(FILESYSTEM_LOCK_PATH_PROP_KEY);
+    lockConfiguration.getConfig().setProperty(HoodieWriteConfig.BASE_PATH.key(), "/tmp/");
     FileSystemBasedLockProvider fileBasedLockProvider = new FileSystemBasedLockProvider(lockConfiguration, hadoopConf);
     Assertions.assertTrue(fileBasedLockProvider.tryLock(lockConfiguration.getConfig()
           .getLong(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY), TimeUnit.MILLISECONDS));

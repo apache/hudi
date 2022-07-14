@@ -28,6 +28,7 @@ import org.apache.hudi.common.lock.LockProvider;
 import org.apache.hudi.common.lock.LockState;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieLockException;
 import org.apache.log4j.LogManager;
@@ -63,7 +64,10 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
   public FileSystemBasedLockProvider(final LockConfiguration lockConfiguration, final Configuration configuration) {
     checkRequiredProps(lockConfiguration);
     this.lockConfiguration = lockConfiguration;
-    final String lockDirectory = lockConfiguration.getConfig().getString(FILESYSTEM_LOCK_PATH_PROP_KEY);
+    String lockDirectory = lockConfiguration.getConfig().getString(FILESYSTEM_LOCK_PATH_PROP_KEY);
+    if (StringUtils.isNullOrEmpty(lockDirectory)) {
+      lockDirectory = this.lockConfiguration.getConfig().getProperty(HoodieWriteConfig.BASE_PATH.key());
+    }
     this.retryWaitTimeMs = lockConfiguration.getConfig().getInteger(LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY);
     this.retryMaxCount = lockConfiguration.getConfig().getInteger(LOCK_ACQUIRE_NUM_RETRIES_PROP_KEY);
     this.lockTimeoutMinutes = lockConfiguration.getConfig().getInteger(FILESYSTEM_LOCK_EXPIRE_PROP_KEY);
@@ -151,7 +155,8 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
   }
 
   private void checkRequiredProps(final LockConfiguration config) {
-    ValidationUtils.checkArgument(config.getConfig().getString(FILESYSTEM_LOCK_PATH_PROP_KEY) != null);
+    ValidationUtils.checkArgument(config.getConfig().getString(FILESYSTEM_LOCK_PATH_PROP_KEY) != null
+          || this.lockConfiguration.getConfig().getProperty(HoodieWriteConfig.BASE_PATH.key()) != null);
     ValidationUtils.checkArgument(config.getConfig().getInteger(LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY) > 0);
     ValidationUtils.checkArgument(config.getConfig().getInteger(LOCK_ACQUIRE_NUM_RETRIES_PROP_KEY) > 0);
     ValidationUtils.checkArgument(config.getConfig().getInteger(FILESYSTEM_LOCK_EXPIRE_PROP_KEY) >= 0);
