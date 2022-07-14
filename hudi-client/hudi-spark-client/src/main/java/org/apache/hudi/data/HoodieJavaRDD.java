@@ -26,16 +26,13 @@ import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.function.SerializablePairFunction;
 import org.apache.hudi.common.util.collection.MappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
-
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.storage.StorageLevel;
+import scala.Tuple2;
 
 import java.util.Iterator;
 import java.util.List;
-import java.util.function.Function;
-
-import scala.Tuple2;
 
 /**
  * Holds a {@link JavaRDD} of objects.

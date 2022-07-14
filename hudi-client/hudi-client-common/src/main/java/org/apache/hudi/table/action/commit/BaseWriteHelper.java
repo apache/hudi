@@ -70,19 +70,7 @@ public abstract class BaseWriteHelper<T extends HoodieRecordPayload, I, K, O, R>
 
   public I combineOnCondition(
       boolean condition, I records, int parallelism, HoodieTable<T, I, K, O> table) {
-    return condition ? deduplicateRecords(records, table, parallelism) : records;
-  }
-
-  /**
-   * Deduplicate Hoodie records, using the given deduplication function.
-   *
-   * @param records     hoodieRecords to deduplicate
-   * @param parallelism parallelism or partitions to be used while reducing/deduplicating
-   * @return Collection of HoodieRecord already be deduplicated
-   */
-  public I deduplicateRecords(
-      I records, HoodieTable<T, I, K, O> table, int parallelism) {
-    return deduplicateRecords(records, table.getIndex(), parallelism);
+    return condition ? deduplicateRecords(records, table.getIndex(), parallelism) : records;
   }
 
   public abstract I deduplicateRecords(
