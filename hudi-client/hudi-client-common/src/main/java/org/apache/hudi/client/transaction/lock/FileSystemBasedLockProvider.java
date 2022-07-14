@@ -89,26 +89,19 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
   @Override
   public boolean tryLock(long time, TimeUnit unit) {
     try {
-      int numRetries = 0;
       synchronized (LOCK_FILE_NAME) {
-        while (fs.exists(this.lockFile)) {
-          LOCK_FILE_NAME.wait(retryWaitTimeMs);
-          numRetries++;
-          if (numRetries > retryMaxCount) {
-            return false;
-          }
+        if (fs.exists(this.lockFile)) {
           // Check whether lock is already expired or not, if so try to delete lock file
           if (lockTimeoutMinutes != 0 && checkIfExpired()) {
-            if (fs.delete(this.lockFile, true)) {
-              break;
-            }
+            fs.delete(this.lockFile, true);
           }
         }
         acquireLock();
         return fs.exists(this.lockFile);
       }
-    } catch (IOException | InterruptedException e) {
-      throw new HoodieLockException(generateLogStatement(LockState.FAILED_TO_ACQUIRE), e);
+    } catch (IOException e) {
+      LOG.info(generateLogStatement(LockState.FAILED_TO_ACQUIRE), e);
+      return false;
     }
   }
 

@@ -106,6 +106,7 @@ public class TestFileBasedLockProvider {
     Assertions.assertTrue(fileBasedLockProvider.tryLock(lockConfiguration.getConfig()
           .getLong(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY), TimeUnit.MILLISECONDS));
     fileBasedLockProvider.unlock();
+    lockConfiguration.getConfig().setProperty(FILESYSTEM_LOCK_PATH_PROP_KEY, "/tmp/");
   }
 
   @Test
