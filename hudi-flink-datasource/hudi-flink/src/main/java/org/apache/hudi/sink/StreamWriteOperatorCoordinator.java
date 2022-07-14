@@ -32,6 +32,7 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.sink.event.BucketIdAssignEvent;
 import org.apache.hudi.sink.event.CommitAckEvent;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.meta.CkpMetadata;
@@ -285,6 +286,20 @@ public class StreamWriteOperatorCoordinator
 
   @Override
   public void handleEventFromOperator(int i, OperatorEvent operatorEvent) {
+    if (operatorEvent instanceof BucketIdAssignEvent) {
+      BucketIdAssignEvent bucketIdAssignEvent = ((BucketIdAssignEvent) operatorEvent);
+      LOG.info("receive bucketIdAssignEvent {} from task {} ", bucketIdAssignEvent, i);
+      CompletableFuture<?>[] futures = Arrays.stream(this.gateways).filter(Objects::nonNull)
+        .filter(subtaskGateway -> subtaskGateway.getSubtask() != i)
+        .map(gw -> gw.sendEvent(operatorEvent))
+        .toArray(CompletableFuture<?>[]::new);
+      CompletableFuture.allOf(futures).whenComplete((resp, error) -> {
+        if (!sendToFinishedTasks(error)) {
+          throw new HoodieException("Error while waiting for bucket assign events to finish sending", error);
+        }
+      });
+      return;
+    }
     ValidationUtils.checkState(operatorEvent instanceof WriteMetadataEvent,
         "The coordinator can only handle WriteMetaEvent");
     WriteMetadataEvent event = (WriteMetadataEvent) operatorEvent;

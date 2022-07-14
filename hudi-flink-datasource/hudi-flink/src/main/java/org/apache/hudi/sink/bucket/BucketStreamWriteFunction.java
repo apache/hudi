@@ -21,11 +21,14 @@ package org.apache.hudi.sink.bucket;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.index.bucket.BucketIdentifier;
 import org.apache.hudi.sink.StreamWriteFunction;
+import org.apache.hudi.sink.event.BucketIdAssignEvent;
 
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 import org.apache.flink.runtime.state.FunctionInitializationContext;
 import org.apache.flink.streaming.api.functions.ProcessFunction;
 import org.apache.flink.util.Collector;
@@ -37,6 +40,8 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.IntStream;
 
 /**
  * A stream write function with bucket hash index.
@@ -133,9 +138,16 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
    * Determine whether the current fileID belongs to the current task.
    * (partition + curBucket) % numPartitions == this taskID belongs to this task.
    */
-  public boolean isBucketToLoad(int bucketNumber, String partition) {
+  public boolean isBucketToLoad(int bucketNumber, String partition, Integer taskID) {
     int globalHash = ((partition + bucketNumber).hashCode()) & Integer.MAX_VALUE;
     return BucketIdentifier.mod(globalHash, parallelism) == taskID;
+  }
+
+  @Override
+  public void handleOperatorEvent(OperatorEvent event) {
+    ValidationUtils.checkState(event instanceof BucketIdAssignEvent, "The bucket stream write can only handle BucketIdAssignEvent");
+    BucketIdAssignEvent bucketIdAssignEvent = ((BucketIdAssignEvent) event);
+    bucketIndex.put(bucketIdAssignEvent.getPartitionPath(), bucketIdAssignEvent.getBucketIdAssignment().get(taskID));
   }
 
   /**
@@ -150,21 +162,24 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
         this.metaClient.getBasePath() + "/" + partition));
 
     // Load existing fileID belongs to this task
-    Map<Integer, String> bucketToFileIDMap = new HashMap<>();
+    Map<Integer, Map<Integer, String>> bucketIdAssignment = bucketIdAssign(partition);
+    Map<Integer, String> bucketToFileIDMap = bucketIdAssignment.remove(taskID);
+    bucketIndex.put(partition, bucketToFileIDMap);
+    this.eventGateway.sendEventToCoordinator(new BucketIdAssignEvent(partition, bucketIdAssignment));
+  }
+
+  public Map<Integer, Map<Integer, String>> bucketIdAssign(String partition) {
+    Map<Integer, Map<Integer, String>> bucketIdAssignment = new ConcurrentHashMap<>();
     this.writeClient.getHoodieTable().getFileSystemView().getAllFileGroups(partition).forEach(fileGroup -> {
       String fileID = fileGroup.getFileGroupId().getFileId();
       int bucketNumber = BucketIdentifier.bucketIdFromFileId(fileID);
-      if (isBucketToLoad(bucketNumber, partition)) {
-        LOG.info(String.format("Should load this partition bucket %s with fileID %s", bucketNumber, fileID));
-        if (bucketToFileIDMap.containsKey(bucketNumber)) {
-          throw new RuntimeException(String.format("Duplicate fileID %s from bucket %s of partition %s found "
-              + "during the BucketStreamWriteFunction index bootstrap.", fileID, bucketNumber, partition));
-        } else {
-          LOG.info(String.format("Adding fileID %s to the bucket %s of partition %s.", fileID, bucketNumber, partition));
-          bucketToFileIDMap.put(bucketNumber, fileID);
+      IntStream.range(0, parallelism).forEach(taskID -> {
+        if (isBucketToLoad(bucketNumber, partition, taskID)) {
+          bucketIdAssignment.computeIfAbsent(taskID, k -> new HashMap<>())
+            .put(bucketNumber, fileID);
         }
-      }
+      });
     });
-    bucketIndex.put(partition, bucketToFileIDMap);
+    return bucketIdAssignment;
   }
 }
