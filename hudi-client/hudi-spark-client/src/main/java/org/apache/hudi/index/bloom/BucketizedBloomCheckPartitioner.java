@@ -18,10 +18,6 @@
 
 package org.apache.hudi.index.bloom;
 
-import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.common.util.NumericUtils;
-import org.apache.hudi.common.util.collection.Pair;
-
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.Partitioner;
@@ -103,6 +99,7 @@ public class BucketizedBloomCheckPartitioner extends Partitioner {
 
         // mark this partition against the file group
         List<Integer> partitionList = this.fileGroupToPartitions.getOrDefault(e.getKey(), new ArrayList<>());
+        // TODO address: this might be adding same partition index if minBuckets > 1
         partitionList.add(partitionIndex);
         this.fileGroupToPartitions.put(e.getKey(), partitionList);
 
@@ -143,12 +140,16 @@ public class BucketizedBloomCheckPartitioner extends Partitioner {
 
   @Override
   public int getPartition(Object key) {
-    final Pair<String, HoodieKey> parts = (Pair<String, HoodieKey>) key;
-    final long hashOfKey = NumericUtils.getMessageDigestHash("MD5", parts.getRight().getRecordKey());
-    final List<Integer> candidatePartitions = fileGroupToPartitions.get(parts.getLeft());
+    final String fileGroupId = (String) key;
+    /*
+    final long hashOfKey = NumericUtils.getMessageDigestHash("MD5", fileGroupId.getRight().getRecordKey());
+    final List<Integer> candidatePartitions = fileGroupToPartitions.get(fileGroupId.getLeft());
     final int idx = (int) Math.floorMod((int) hashOfKey, candidatePartitions.size());
-    assert idx >= 0;
     return candidatePartitions.get(idx);
+    */
+    // TODO revisit
+    // We take just the first partition from the candidate list
+    return fileGroupToPartitions.get(fileGroupId).get(0);
   }
 
   Map<String, List<Integer>> getFileGroupToPartitions() {
