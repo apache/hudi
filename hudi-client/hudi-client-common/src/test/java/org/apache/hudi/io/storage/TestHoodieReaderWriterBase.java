@@ -19,6 +19,7 @@
 
 package org.apache.hudi.io.storage;
 
+import org.apache.avro.AvroRuntimeException;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.model.HoodieKey;
 
@@ -258,10 +259,17 @@ public abstract class TestHoodieReaderWriterBase {
     if ("/exampleEvolvedSchemaColumnType.avsc".equals(schemaPath)) {
       assertEquals(Integer.toString(index), record.get("number").toString());
     } else if ("/exampleEvolvedSchemaDeleteColumn.avsc".equals(schemaPath)) {
-      assertNull(record.get("number"));
+      assertIfFieldExistsInRecord(record, "number");
     } else {
       assertEquals(index, record.get("number"));
     }
-    assertNull(record.get("added_field"));
+    assertIfFieldExistsInRecord(record, "added_field");
   }
+
+  private void assertIfFieldExistsInRecord(GenericRecord record, String field) {
+    try {
+      assertNull(record.get(field));
+    } catch (AvroRuntimeException e) {
+      assertEquals("Not a valid schema field: " + field, e.getMessage());
+    }
 }
