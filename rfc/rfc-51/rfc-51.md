@@ -15,7 +15,7 @@
   limitations under the License.
 -->
 
-# RFC-50: Hudi CDC
+# RFC-50: Hudi to support Change-Data-Capture
 
 # Proposers
 
@@ -24,30 +24,32 @@
 # Approvers
 
 - @Raymond
+- @Vinoth
+- @Danny
 
 # Statue
 JIRA: [https://issues.apache.org/jira/browse/HUDI-3478](https://issues.apache.org/jira/browse/HUDI-3478)
 
-# Hudi Supports Change-Data-Capture
+# Hudi to Support Change-Data-Capture
 
 ## Abstract
 
-We want to introduce the Change-Data-Capture(CDC) capacity that make hudi can produce the changeing data by which we can know how the records is changed, to response the CDC cases.
-
+The Change-Data-Capture (CDC) feature enables Hudi to show how records were changed by producing the changes and therefore to handle CDC query usecases.
 
 ## Background
 
-In some use cases where hudi tables is used as streaming source, We want to be aware every records' changing in one commit exactly. In a certain commit or snapshot, which records are inserted, which records are deleted, and which records are updated. Even for the updated records, both the old value before updated and the new value after updated are needed.
+In cases where Hudi tables used as streaming sources, we want to be aware of all records' changes in one commit exactly, as in which records were inserted, deleted, and updated. And for updated records, the old values before update and the new ones after.
 
-To implement this capacity, we have to upgrade the write and read parts. Let hudi can figure out the changing data when read. And in some cases, writing the extra data to help querying the changing data if necessary.
+To implement this feature, we need to implement the logic on the write and read path to let Hudi figure out the changed data when read. In some cases, we need to write extra data to help optimize CDC queries.
 
-## Scenario Definition
+## Scenarios
 
-Here use a simple case to explain the CDC.
+Here is a simple case to explain the CDC.
 
 ![](scenario-definition.jpg)
 
-Here we follow the debezium output format, there are four columns shown:
+We follow the debezium output format: four columns as shown below
+
 - op: the operation of this record;
 - ts_ms: the timestamp;
 - source: source information such as the name of database and table. **Maybe we don't need this column in Hudi**;
@@ -55,12 +57,12 @@ Here we follow the debezium output format, there are four columns shown:
 - after: the current image after this operation;
 
 `op` column has three enum values:
+
 - i: represent `insert`; when `op` is `i`, `before` is always null;
 - u: represent `update`; when `op` is `u`, both `before` and `after` don't be null;
 - d: represent `delete`; when `op` is `d`, `after` is always null;
 
-Notice:
-Here the illustration ignores all the metadata columns in `before` and `after` columns like `_hoodie_commit_time`.
+Note: the illustration here ignores all the Hudi metadata columns like `_hoodie_commit_time` in `before` and `after` columns.
 
 ## Goals
 
@@ -70,14 +72,14 @@ Here the illustration ignores all the metadata columns in `before` and `after` c
 4. Support Spark DataFrame/SQL/Streaming Query;
 
 ## Implementation
+
 ### CDC Architecture
 
 ![](arch.jpg)
 
-Notice:
-Other operations like `Compact`, `Clean`, `Index` do not write/change any data. So we don't need to consider in CDC scenario.
+Note: Table operations like `Compact`, `Clean`, `Index` do not write/change any data. So we don't need to consider them in CDC scenario.
  
-### Points to be upgraded
+### Modifiying code paths
 
 ![](points.jpg)
 
@@ -101,9 +103,9 @@ When read in cdc mode, set `hoodie.datasource.query.type` to `cdc`.
 | hoodie.datasource.read.end.timestamp | -        | optional. |
 
 
-### CDC File Type
+### CDC File Types
 
-Here we define five cdc file types in CDC scenario.
+Here we define 5 cdc file types in CDC scenario.
 
 - CDC_LOG_File: a file consists of CDC Blocks with the changing data related to one commit.
   - when `hoodie.table.cdc.supplemental.logging` is true, it keeps all the fields about the change data, including `op`, `ts_ms`, `before` and `after`. When query hudi table in cdc query mode, load this file and return directly.
@@ -113,7 +115,7 @@ Here we define five cdc file types in CDC scenario.
 - MOR_LOG_FILE: a normal log file. For this type, we need to load the previous version of file slice, and merge each record in the log file with this data loaded separately to determine how the record has changed, and get the value of `before` and `after`.
 - REPLACED_FILE_GROUP: a file group that be replaced totally, like `DELETE_PARTITION` and `INSERT_OVERWRITE` operations. We load this file group, treat all the records as the value of `before`, and the value of `op` of each record is `d`.
 
-Notice:
+Note:
 
 - **Only `CDC_LOG_File` is a new file type and written out by CDC**. The `ADD_BASE_File`, `REMOVE_BASE_FILE`, `MOR_LOG_FILE` and `REPLACED_FILE_GROUP` are just representations of the existing data files in the CDC scenario. For some examples:
   - `INSERT` operation will maybe create a list of new data files. These files will be treated as ADD_BASE_FILE;
@@ -121,9 +123,9 @@ Notice:
 
 ### Write
 
-One Design Idea is that **Write CDC files as little as possible, and reuse data files as much as possible**.
+The idea is to **Write CDC files as little as possible, and reuse data files as much as possible**.
 
-Hoodie writes data by `HoodieWriteHandle`.
+Hudi writes data by `HoodieWriteHandle`.
 We notice that only `HoodieMergeHandle` and it's subclasses will receive both the old record and the new-coming record at the same time, merge and write.
 So we will add a `LogFormatWriter` in these classes. If there is CDC data need to be written out, then call this writer to write out a log file which consist of `CDCBlock`.
 The CDC log file will be placed in the same position as the base files and other log files, so that the clean service can clean up them without extra work. The file structure is like:
@@ -143,11 +145,13 @@ hudi_cdc_table/
         .filegroup2-instant1.log
     ...
 ```
-Inside of one partition directory, the `.log` file with `CDCBlock` above will keep the changing data we have to materialize.
 
-There is a option to control what data is written to `CDCBlock`, that is `hoodie.table.cdc.supplemental.logging`. See the description of this config above.
+Under a partition directory, the `.log` file with `CDCBlock` above will keep the changing data we have to materialize.
 
-Spark DataFrame Syntax:
+There is an option to control what data is written to `CDCBlock`, that is `hoodie.table.cdc.supplemental.logging`. See the description of this config above.
+
+Spark DataSource example:
+
 ```scala
 df.write.format("hudi").
   options(commonOpts)
@@ -157,7 +161,8 @@ df.write.format("hudi").
   save("/path/to/hudi")
 ```
 
-Spark SQL Syntax:
+Spark SQL example:
+
 ```sql
 -- create a hudi table that enable cdc
 create table hudi_cdc_table
@@ -206,7 +211,7 @@ class CDCReader(
 }
 ```
 
-Notice:
+Note:
 
 - Only instants that are active can be queried in a CDC scenario.
 - `CDCReader` manages all the things on CDC, and all the spark entrances(DataFrame, SQL, Streaming) call the functions in `CDCReader`.
@@ -227,9 +232,10 @@ Here use an illustration to explain how we can query the CDC on MOR table in kin
 
 ![](query_cdc_on_mor.jpg)
 
-####Syntax
+#### Examples
 
-Spark DataFrame Syntax:
+Spark DataSource
+
 ```scala
 spark.read.format("hudi").
   option("hoodie.datasource.query.type", "cdc").
@@ -238,7 +244,8 @@ spark.read.format("hudi").
   load("/path/to/hudi")
 ```
 
-Spark SQL Syntax:
+Spark SQL
+
 ```sql
 -- query the CDC data between 20220426103000000 and 20220426113000000;
 select * 
@@ -250,22 +257,25 @@ from hudi_table_changes("hudi_cdc_table", "20220426103000000");
 
 ```
 
-Spark Streaming Sytax:
+Spark Streaming
+
 ```scala
 val df = spark.readStream.format("hudi").
   option("hoodie.datasource.query.type", "cdc").
   load("/path/to/hudi")
 
-// launch a streaming which start from the current snapshot of hudi table,
+// launch a streaming which starts from the current snapshot of the hudi table,
 // and output at the console.
 val stream = df.writeStream.format("console").start
 ```
 
 # Rollout/Adoption Plan
-This is a new feature that can enable CDF and CDC query, does not impact existing jobs and tables. Also this dos not depend on Spark versions.
+
+The CDC feature can be enabled by the corresponding configuration, which is default false. Using this feature dos not depend on Spark versions.
+
 # Test Plan
 
 - [ ] Unit tests for this
-- [ ] Prodect integration test
+- [ ] Production end-to-end integration test
 - [ ] Benchmark snapshot query for large tables
 
