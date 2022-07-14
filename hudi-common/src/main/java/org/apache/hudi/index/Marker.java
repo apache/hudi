@@ -20,6 +20,7 @@ package org.apache.hudi.index;
 
 import org.apache.hudi.common.util.Option;
 
+import java.math.BigInteger;
 import java.util.Objects;
 
 import static java.util.Objects.requireNonNull;
@@ -94,7 +95,7 @@ public class Marker implements Comparable<Marker> {
     }
     // INVARIANT: value and o.value are present
 
-    int compare = value.get().toString().compareTo(o.value.get().toString());
+    int compare = compareValues(o);
     if (compare == 0) {
       if (bound == o.bound) {
         return 0;
@@ -109,6 +110,40 @@ public class Marker implements Comparable<Marker> {
       return (o.bound == Bound.BELOW) ? 1 : -1;
     }
     return compare;
+  }
+
+  public int compareValues(Marker o) {
+    switch (type) {
+      case LONG:
+        return ((Long) value.get()).compareTo((Long) o.value.get());
+      case DOUBLE:
+        return ((Double) value.get()).compareTo((Double) o.value.get());
+      case INTEGER:
+        return ((Integer) value.get()).compareTo((Integer) o.value.get());
+      case BOOLEAN:
+        return ((Boolean) value.get()).compareTo((Boolean) o.value.get());
+      case BIGINTEGER:
+        return ((BigInteger) value.get()).compareTo((BigInteger) o.value.get());
+      default:
+        return value.get().toString().compareTo(o.value.get().toString());
+    }
+  }
+
+  public static int compareValues(Type type, Object min, Object max) {
+    switch (type) {
+      case LONG:
+        return ((Long) min).compareTo((Long) max);
+      case DOUBLE:
+        return ((Double) min).compareTo((Double) max);
+      case INTEGER:
+        return ((Integer) min).compareTo((Integer) max);
+      case BOOLEAN:
+        return ((Boolean) min).compareTo((Boolean) max);
+      case BIGINTEGER:
+        return ((BigInteger) min).compareTo((BigInteger) max);
+      default:
+        return min.toString().compareTo(max.toString());
+    }
   }
 
   public boolean isUpperUnbounded() {

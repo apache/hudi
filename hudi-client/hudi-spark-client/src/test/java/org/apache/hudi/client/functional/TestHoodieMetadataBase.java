@@ -88,25 +88,26 @@ public class TestHoodieMetadataBase extends HoodieClientTestHarness {
   }
 
   public void init(HoodieTableType tableType, HoodieWriteConfig writeConfig) throws IOException {
-    init(tableType, Option.of(writeConfig), true, false, false, false);
+    init(tableType, Option.of(writeConfig), true, false, false, false, false);
   }
 
   public void init(HoodieTableType tableType, boolean enableMetadataTable) throws IOException {
-    init(tableType, enableMetadataTable, true, false, false);
+    init(tableType, enableMetadataTable, true, false, false, false);
   }
 
   public void init(HoodieTableType tableType, boolean enableMetadataTable, boolean enableColumnStats) throws IOException {
-    init(tableType, enableMetadataTable, true, false, false);
+    init(tableType, enableMetadataTable, true, false, false, enableColumnStats);
   }
 
   public void init(HoodieTableType tableType, boolean enableMetadataTable, boolean enableFullScan, boolean enableMetrics, boolean
-      validateMetadataPayloadStateConsistency) throws IOException {
+      validateMetadataPayloadStateConsistency, boolean enableColumnStats) throws IOException {
     init(tableType, Option.empty(), enableMetadataTable, enableFullScan, enableMetrics,
-        validateMetadataPayloadStateConsistency);
+        validateMetadataPayloadStateConsistency, enableColumnStats);
   }
 
   public void init(HoodieTableType tableType, Option<HoodieWriteConfig> writeConfig, boolean enableMetadataTable,
-                   boolean enableFullScan, boolean enableMetrics, boolean validateMetadataPayloadStateConsistency) throws IOException {
+                   boolean enableFullScan, boolean enableMetrics, boolean validateMetadataPayloadStateConsistency,
+                   boolean enableColumnStats) throws IOException {
     this.tableType = tableType;
     initPath();
     initSparkContexts("TestHoodieMetadata");
@@ -119,7 +120,7 @@ public class TestHoodieMetadataBase extends HoodieClientTestHarness {
     this.writeConfig = writeConfig.isPresent()
         ? writeConfig.get() : getWriteConfigBuilder(HoodieFailedWritesCleaningPolicy.EAGER, true,
         enableMetadataTable, enableMetrics, enableFullScan, true,
-        validateMetadataPayloadStateConsistency)
+        validateMetadataPayloadStateConsistency, enableColumnStats)
         .build();
     initWriteConfigAndMetatableWriter(this.writeConfig, enableMetadataTable);
   }
@@ -326,12 +327,12 @@ public class TestHoodieMetadataBase extends HoodieClientTestHarness {
 
   protected HoodieWriteConfig.Builder getWriteConfigBuilder(HoodieFailedWritesCleaningPolicy policy, boolean autoCommit, boolean useFileListingMetadata,
                                                             boolean enableMetrics) {
-    return getWriteConfigBuilder(policy, autoCommit, useFileListingMetadata, enableMetrics, true, true, false);
+    return getWriteConfigBuilder(policy, autoCommit, useFileListingMetadata, enableMetrics, true, true, false, false);
   }
 
   protected HoodieWriteConfig.Builder getWriteConfigBuilder(HoodieFailedWritesCleaningPolicy policy, boolean autoCommit, boolean useFileListingMetadata,
                                                             boolean enableMetrics, boolean enableFullScan, boolean useRollbackUsingMarkers,
-                                                            boolean validateMetadataPayloadConsistency) {
+                                                            boolean validateMetadataPayloadConsistency, boolean enableColumnStatsIndex) {
     Properties properties = new Properties();
     properties.put(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key(), SimpleKeyGenerator.class.getName());
     return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(TRIP_EXAMPLE_SCHEMA)
@@ -350,6 +351,7 @@ public class TestHoodieMetadataBase extends HoodieClientTestHarness {
             .enable(useFileListingMetadata)
             .enableFullScan(enableFullScan)
             .enableMetrics(enableMetrics)
+            .withMetadataIndexColumnStats(enableColumnStatsIndex)
             .withPopulateMetaFields(HoodieMetadataConfig.POPULATE_META_FIELDS.defaultValue())
             .ignoreSpuriousDeletes(validateMetadataPayloadConsistency)
             .build())

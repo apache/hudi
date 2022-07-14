@@ -57,6 +57,7 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -283,28 +284,35 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
   }
 
   public FileStatus[] getFilesToQueryUsingCSI(List<String> columns, ColumnDomain<ColumnHandle> columnDomain) throws IOException {
+    List<HoodieMetadataColumnStats> colStatsRecords = getColumnStatsByPrefix(columns);
+    return filterFilesUsingProvidedColumnStats(colStatsRecords, columnDomain);
+  }
+
+  public List<HoodieMetadataColumnStats> getColumnStatsByPrefix(List<String> columns) {
     if (!isColumnStatsIndexEnabled) {
       LOG.error("Metadata column stats index is disabled!");
-      return new FileStatus[0];
+      throw new HoodieMetadataException("Please enable column stats index!");
     }
     List<String> encodedColumnNames = columns.stream().map(col -> new ColumnIndexID(col).asBase64EncodedString()).collect(Collectors.toList());
-    List<HoodieMetadataColumnStats> colStatsRecords = getRecordsByKeyPrefixes(encodedColumnNames, HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS)
+    return getRecordsByKeyPrefixes(encodedColumnNames, HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS)
             .filter(record -> record.getData().getColumnStatMetadata().isPresent())
             .map(rec -> rec.getData().getColumnStatMetadata().get()).collectAsList();
+  }
 
+  public FileStatus[] filterFilesUsingProvidedColumnStats(List<HoodieMetadataColumnStats> columnStats, ColumnDomain<ColumnHandle> columnDomain) throws IOException {
     //this has the columns which are to be filtered using col stats.
-    Map<String, List<HoodieMetadataColumnStats>> statsByColumn = colStatsRecords.stream().collect(Collectors.groupingBy(HoodieMetadataColumnStats::getColumnName));
+    Map<String, List<HoodieMetadataColumnStats>> statsByColumn = columnStats.stream().collect(Collectors.groupingBy(HoodieMetadataColumnStats::getColumnName));
     /*
     For every column in columnDomain, compare the stats in file with every range for that column till you find a match. This file needs to be then compared with
     next column's ranges similarly. If all the checks pass, file is filtered for querying, else rejected.
      */
 
-    List<String> filesToScan = filterFilesFromCSI(columnDomain, statsByColumn);
+    Option<List<String>> filesToScan = filterFilesFromCSI(columnDomain, statsByColumn);
     //get file status objects from file names
     return getFileStatuses(filesToScan);
   }
 
-  private FileStatus[] getFileStatuses(List<String> files) throws IOException {
+  private FileStatus[] getFileStatuses(Option<List<String>> files) throws IOException {
     List<String> allPartitionPaths = getAllPartitionPaths()
             .stream().map(partitionPath ->
                     FSUtils.getPartitionPath(dataBasePath, partitionPath).toString())
@@ -315,13 +323,16 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
       Map<String, FileStatus[]> filesByPartition = fetchAllFilesInPartitionPaths(partitionPaths);
       Map<String, List<FileStatus>> statusByName = filesByPartition.values().stream().flatMap(Arrays::stream)
               .collect(Collectors.groupingBy(fileStatus -> fileStatus.getPath().getName()));
-      return files.stream().map(statusByName::get).toArray(FileStatus[]::new);
+      return files.orElse(new ArrayList<>(statusByName.keySet())).stream()
+              .map(statusByName::get)
+              .flatMap(Collection::stream)
+              .toArray(FileStatus[]::new);
     } catch (Exception e) {
       throw new HoodieMetadataException("Failed to retrieve files from metadata", e);
     }
   }
 
-  private List<String> filterFilesFromCSI(ColumnDomain<ColumnHandle> columnDomain, Map<String, List<HoodieMetadataColumnStats>> statsByColumn) {
+  private Option<List<String>> filterFilesFromCSI(ColumnDomain<ColumnHandle> columnDomain, Map<String, List<HoodieMetadataColumnStats>> statsByColumn) {
     List<List<String>> filteredFiles = new ArrayList<>();
     for (Map.Entry<String, List<HoodieMetadataColumnStats>> entry : statsByColumn.entrySet()) {
       String columnName = entry.getKey();
@@ -340,12 +351,15 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
     }
 
     // get the intersection of all column wise eligible files since all the domains need to be satisfied in the returned list of files.
+    if (filteredFiles.isEmpty()) {
+      return Option.empty();
+    }
     List<String> commons = new ArrayList<String>(filteredFiles.get(0));
     for (ListIterator<List<String>> iter = filteredFiles.listIterator(0); iter.hasNext(); ) {
       commons.retainAll(iter.next());
     }
 
-    return commons;
+    return Option.of(commons);
   }
 
   private List<String> filterFilesUsingCSI(Domain domain, List<HoodieMetadataColumnStats> statsList, Type type) {
@@ -362,6 +376,9 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
   private Range createRangeFromMetadataColumnStat(HoodieMetadataColumnStats stats, Type type) {
     Object minValue = stats.getMinValue();
     Object maxValue = stats.getMaxValue();
+    if (Marker.compareValues(type, minValue, maxValue) == 0) {
+      return new Range(Marker.exactly(type, minValue), Marker.exactly(type, maxValue));
+    }
     return new Range(Marker.above(type, minValue), Marker.below(type, maxValue));
   }
 
