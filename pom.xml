@@ -1715,6 +1715,8 @@
         <sparkbundle.version>${spark2.bundle.version}</sparkbundle.version>
         <hudi.spark.module>hudi-spark2</hudi.spark.module>
         <hudi.spark.common.module>hudi-spark2-common</hudi.spark.common.module>
+        <scala.version>${scala11.version}</scala.version>
+        <scala.binary.version>${spark2.scala.binary.version}</scala.binary.version>
         <scalatest.version>3.0.1</scalatest.version>
         <kafka.version>2.0.0</kafka.version>
         <parquet.version>1.10.1</parquet.version>
@@ -1767,7 +1769,6 @@
       <activation>
         <property>
           <name>spark3</name>
-          <value>!disabled</value>
         </property>
       </activation>
     </profile>
