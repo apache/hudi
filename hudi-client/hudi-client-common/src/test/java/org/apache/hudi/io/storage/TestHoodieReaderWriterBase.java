@@ -272,4 +272,5 @@ public abstract class TestHoodieReaderWriterBase {
     } catch (AvroRuntimeException e) {
       assertEquals("Not a valid schema field: " + field, e.getMessage());
     }
+  }
 }
