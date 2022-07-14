@@ -55,13 +55,13 @@ import org.apache.hudi.table.WorkloadProfile;
 import org.apache.hudi.table.WorkloadStat;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.cluster.strategy.UpdateStrategy;
-
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.Partitioner;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.storage.StorageLevel;
+import scala.Tuple2;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -76,8 +76,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
-
-import scala.Tuple2;
 
 import static org.apache.hudi.common.util.ClusteringUtils.getAllFileGroupsInPendingClusteringPlans;
 import static org.apache.hudi.config.HoodieWriteConfig.WRITE_STATUS_STORAGE_LEVEL_VALUE;
@@ -181,16 +179,17 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
 
     // group the records by partitionPath + currentLocation combination, count the number of
     // records in each partition
-    Map<Tuple2<String, Option<HoodieRecordLocation>>, Long> partitionLocationCounts = inputRecords
-        .mapToPair(record -> Pair.of(
-            new Tuple2<>(record.getPartitionPath(), Option.ofNullable(record.getCurrentLocation())), record))
+    Map<Tuple2<String, HoodieRecordLocation>, Long> partitionLocationCounts = inputRecords
+        // NOTE: We insert record as null, since we're ultimately just counting unique key combinations
+        .mapToPair(record -> Pair.of(new Tuple2<>(record.getPartitionPath(), record.getCurrentLocation()), null))
         .countByKey();
 
     // count the number of both inserts and updates in each partition, update the counts to workLoadStats
-    for (Map.Entry<Tuple2<String, Option<HoodieRecordLocation>>, Long> e : partitionLocationCounts.entrySet()) {
+    for (Map.Entry<Tuple2<String, HoodieRecordLocation>, Long> e : partitionLocationCounts.entrySet()) {
       String partitionPath = e.getKey()._1();
+      Option<HoodieRecordLocation> locOption = Option.ofNullable(e.getKey()._2());
+
       Long count = e.getValue();
-      Option<HoodieRecordLocation> locOption = e.getKey()._2();
 
       if (!partitionPathStatMap.containsKey(partitionPath)) {
         partitionPathStatMap.put(partitionPath, new WorkloadStat());
@@ -239,13 +238,15 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
       // Partition only
       partitionedRDD = mappedRDD.partitionBy(partitioner);
     }
-    return HoodieJavaRDD.of(partitionedRDD.map(Tuple2::_2).mapPartitionsWithIndex((partition, recordItr) -> {
-      if (WriteOperationType.isChangingRecords(operationType)) {
-        return handleUpsertPartition(instantTime, partition, recordItr, partitioner);
-      } else {
-        return handleInsertPartition(instantTime, partition, recordItr, partitioner);
-      }
-    }, true).flatMap(List::iterator));
+    return HoodieJavaRDD.of(partitionedRDD.values()
+        .mapPartitionsWithIndex((partition, recordItr) -> {
+          if (WriteOperationType.isChangingRecords(operationType)) {
+            return handleUpsertPartition(instantTime, partition, recordItr, partitioner);
+          } else {
+            return handleInsertPartition(instantTime, partition, recordItr, partitioner);
+          }
+        }, true)
+        .flatMap(List::iterator));
   }
 
   protected HoodieData<WriteStatus> updateIndex(HoodieData<WriteStatus> writeStatuses, HoodieWriteMetadata<HoodieData<WriteStatus>> result) {
