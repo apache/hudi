@@ -23,7 +23,6 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
@@ -36,6 +35,10 @@ import org.apache.hadoop.fs.FileSystem;
 import java.util.List;
 import java.util.Properties;
 import java.util.function.Function;
+
+import static org.apache.hudi.common.table.HoodieTableConfig.DATABASE_NAME;
+import static org.apache.hudi.common.table.HoodieTableConfig.HOODIE_TABLE_NAME_KEY;
+import static org.apache.hudi.common.table.HoodieTableConfig.HOODIE_WRITE_TABLE_NAME_KEY;
 
 /**
  * Configs needed to sync data into external meta stores, catalogs, etc.
@@ -56,22 +59,14 @@ public class HoodieSyncConfig extends HoodieConfig {
   public static final ConfigProperty<String> META_SYNC_DATABASE_NAME = ConfigProperty
       .key("hoodie.datasource.hive_sync.database")
       .defaultValue("default")
+      .withInferFunction(cfg -> Option.ofNullable(cfg.getString(DATABASE_NAME)))
       .withDocumentation("The name of the destination database that we should sync the hudi table to.");
 
-  // If the table name for the metastore destination is not provided, pick it up from write or table configs.
-  public static final Function<HoodieConfig, Option<String>> TABLE_NAME_INFERENCE_FUNCTION = cfg -> {
-    if (cfg.contains(HoodieTableConfig.HOODIE_WRITE_TABLE_NAME_KEY)) {
-      return Option.of(cfg.getString(HoodieTableConfig.HOODIE_WRITE_TABLE_NAME_KEY));
-    } else if (cfg.contains(HoodieTableConfig.HOODIE_TABLE_NAME_KEY)) {
-      return Option.of(cfg.getString(HoodieTableConfig.HOODIE_TABLE_NAME_KEY));
-    } else {
-      return Option.empty();
-    }
-  };
   public static final ConfigProperty<String> META_SYNC_TABLE_NAME = ConfigProperty
       .key("hoodie.datasource.hive_sync.table")
       .defaultValue("unknown")
-      .withInferFunction(TABLE_NAME_INFERENCE_FUNCTION)
+      .withInferFunction(cfg -> Option.ofNullable(cfg.getString(HOODIE_WRITE_TABLE_NAME_KEY))
+          .or(() -> Option.ofNullable(cfg.getString(HOODIE_TABLE_NAME_KEY))))
       .withDocumentation("The name of the destination table that we should sync the hudi table to.");
 
   public static final ConfigProperty<String> META_SYNC_BASE_FILE_FORMAT = ConfigProperty
@@ -148,6 +143,7 @@ public class HoodieSyncConfig extends HoodieConfig {
 
   public HoodieSyncConfig(Properties props, Configuration hadoopConf) {
     super(props);
+    setDefaults(getClass().getName());
     this.hadoopConf = hadoopConf;
   }
 
@@ -173,9 +169,9 @@ public class HoodieSyncConfig extends HoodieConfig {
   }
 
   public static class HoodieSyncConfigParams {
-    @Parameter(names = {"--database"}, description = "name of the target database in meta store", required = true)
+    @Parameter(names = {"--database"}, description = "name of the target database in meta store")
     public String databaseName;
-    @Parameter(names = {"--table"}, description = "name of the target table in meta store", required = true)
+    @Parameter(names = {"--table"}, description = "name of the target table in meta store")
     public String tableName;
     @Parameter(names = {"--base-path"}, description = "Base path of the hoodie table to sync", required = true)
     public String basePath;

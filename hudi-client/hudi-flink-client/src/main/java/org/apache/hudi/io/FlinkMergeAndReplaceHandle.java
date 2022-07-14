@@ -167,7 +167,7 @@ public class FlinkMergeAndReplaceHandle<T extends HoodieRecordPayload, I, K, O>
     try {
       fs.rename(newFilePath, oldFilePath);
     } catch (IOException e) {
-      throw new HoodieIOException("Error while renaming the temporary roll file: "
+      throw new HoodieIOException("Error while renaming the temporary rollover file: "
           + newFilePath + " to old base file name: " + oldFilePath, e);
     }
   }

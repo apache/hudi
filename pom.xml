@@ -123,8 +123,8 @@
     <spark2.version>2.4.4</spark2.version>
     <spark3.version>3.2.1</spark3.version>
     <sparkbundle.version></sparkbundle.version>
-    <flink1.15.version>1.15.0</flink1.15.version>
-    <flink1.14.version>1.14.4</flink1.14.version>
+    <flink1.15.version>1.15.1</flink1.15.version>
+    <flink1.14.version>1.14.5</flink1.14.version>
     <flink1.13.version>1.13.6</flink1.13.version>
     <flink.version>${flink1.13.version}</flink.version>
     <hudi.flink.module>hudi-flink1.13.x</hudi.flink.module>
