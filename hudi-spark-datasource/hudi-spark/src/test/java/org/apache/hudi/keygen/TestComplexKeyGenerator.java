@@ -83,7 +83,6 @@ public class TestComplexKeyGenerator extends KeyGeneratorTestUtilities {
   public void testWrongRecordKeyField() {
     ComplexKeyGenerator keyGenerator = new ComplexKeyGenerator(getWrongRecordKeyFieldProps());
     Assertions.assertThrows(HoodieKeyException.class, () -> keyGenerator.getRecordKey(getRecord()));
-    Assertions.assertThrows(HoodieKeyException.class, () -> keyGenerator.buildFieldSchemaInfoIfNeeded(KeyGeneratorTestUtilities.structType));
   }
 
   @Test

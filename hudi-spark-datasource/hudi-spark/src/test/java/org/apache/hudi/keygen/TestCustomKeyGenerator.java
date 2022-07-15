@@ -202,7 +202,7 @@ public class TestCustomKeyGenerator extends KeyGeneratorTestUtilities {
     Assertions.assertTrue(keyGenerator.getPartitionPath(row).isEmpty());
 
     InternalRow internalRow = KeyGeneratorTestUtilities.getInternalRow(row);
-    Assertions.assertTrue(keyGenerator.getPartitionPath(internalRow, row.schema()).isEmpty());
+    Assertions.assertEquals(0, keyGenerator.getPartitionPath(internalRow, row.schema()).numBytes());
   }
 
   @Test
