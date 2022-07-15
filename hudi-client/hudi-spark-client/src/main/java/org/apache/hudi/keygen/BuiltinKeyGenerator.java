@@ -22,17 +22,14 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.client.utils.SparkRowSerDe;
-import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.spark.sql.HoodieUnsafeRowUtils;
 import org.apache.spark.sql.HoodieUnsafeRowUtils$;
-import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
-import org.apache.spark.sql.catalyst.expressions.codegen.UTF8StringBuilder;
 import org.apache.spark.sql.types.StructType;
+import org.apache.spark.unsafe.UTF8StringBuilder;
 import org.apache.spark.unsafe.types.UTF8String;
 import scala.Function1;
 
@@ -43,7 +40,6 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
 import static org.apache.hudi.keygen.KeyGenUtils.DEFAULT_PARTITION_PATH_SEPARATOR;
 import static org.apache.hudi.keygen.KeyGenUtils.DEFAULT_RECORD_KEY_PARTS_SEPARATOR;
 import static org.apache.hudi.keygen.KeyGenUtils.HUDI_DEFAULT_PARTITION_PATH;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Base class for all built-in key generators.
@@ -133,6 +129,8 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
       String partitionPathPartStr = partitionPathParts[i] != null
           ? partitionPathParts[i].toString()
           : HUDI_DEFAULT_PARTITION_PATH;
+
+      // TODO support url-encoding
 
       if (hiveStylePartitioning) {
         sb.append(recordKeyFields.get(i))

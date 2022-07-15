@@ -28,8 +28,6 @@ import org.apache.spark.unsafe.types.UTF8String;
 
 import java.util.Collections;
 
-import static org.apache.hudi.keygen.KeyGenUtils.HUDI_DEFAULT_PARTITION_PATH;
-
 /**
  * Simple key generator, which takes names of fields to be used for recordKey and partitionPath as configs.
  */

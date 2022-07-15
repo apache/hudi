@@ -24,7 +24,6 @@ import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import java.util.List;
-import java.util.stream.Collectors;
 
 public abstract class BaseKeyGenerator extends KeyGenerator {
 
