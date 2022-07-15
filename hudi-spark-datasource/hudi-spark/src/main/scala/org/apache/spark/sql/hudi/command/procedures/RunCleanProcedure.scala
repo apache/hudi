@@ -18,11 +18,10 @@
 package org.apache.spark.sql.hudi.command.procedures
 
 import java.util.function.Supplier
-
 import org.apache.hudi.HoodieCLIUtils
-import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieTimeline}
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
 import org.apache.hudi.common.util.JsonUtils
-import org.apache.hudi.config.HoodieCompactionConfig
+import org.apache.hudi.config.HoodieCleanConfig
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
@@ -69,10 +68,10 @@ class RunCleanProcedure extends BaseProcedure with ProcedureBuilder with Logging
     val basePath = getBasePath(tableName, Option.empty)
     val cleanInstantTime = HoodieActiveTimeline.createNewInstantTime()
     var props: Map[String, String] = Map(
-      HoodieCompactionConfig.CLEANER_COMMITS_RETAINED.key() -> String.valueOf(retainCommits)
+      HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key() -> String.valueOf(retainCommits)
     )
     if (cleanPolicy.isDefined) {
-      props += (HoodieCompactionConfig.CLEANER_POLICY.key() -> String.valueOf(cleanPolicy.get))
+      props += (HoodieCleanConfig.CLEANER_POLICY.key() -> String.valueOf(cleanPolicy.get))
     }
     val client = HoodieCLIUtils.createHoodieClientFromPath(sparkSession, basePath, props)
     val hoodieCleanMeta = client.clean(cleanInstantTime, scheduleInLine, skipLocking)
