@@ -17,7 +17,6 @@
 
 package org.apache.hudi
 
-import javolution.io.Struct.UTF8String
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.apache.hudi.avro.HoodieAvroUtils
@@ -32,6 +31,7 @@ import org.apache.hudi.testutils.KeyGeneratorTestUtilities
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types.StructType
+import org.apache.spark.unsafe.types.UTF8String
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{BeforeEach, Test}
 import org.scalatest.Assertions.fail
@@ -265,7 +265,7 @@ class TestDataSourceDefaults {
       getKey(genericRecord).getPartitionPath
     }
 
-    override def getPartitionPath(internalRow: InternalRow, structType: StructType): String = null
+    override def getPartitionPath(internalRow: InternalRow, structType: StructType): UTF8String = null
   }
 
   @Test def testComplexKeyGenerator() = {
