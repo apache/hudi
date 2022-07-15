@@ -76,20 +76,20 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public String getRecordKey(InternalRow internalRow, StructType schema) {
     try {
-      initDeserializer(schema);
-      Row row = sparkRowSerDe.deserializeRow(internalRow);
-      return getRecordKey(row);
+      // TODO fix
+      buildFieldSchemaInfoIfNeeded(structType);
+      return RowKeyGeneratorHelper.getRecordKeyFromInternalRow(internalRow, getRecordKeyFields(), recordKeySchemaInfo, false);
     } catch (Exception e) {
       throw new HoodieException("Conversion of InternalRow to Row failed with exception", e);
     }
   }
-
   /**
    * Fetch partition path from {@link Row}.
    *
    * @param row instance of {@link Row} from which partition path is requested
    * @return the partition path of interest from {@link Row}.
    */
+
   @Override
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public String getPartitionPath(Row row) {
