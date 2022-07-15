@@ -67,6 +67,7 @@ import org.apache.parquet.avro.AvroReadSupport;
 import org.apache.parquet.hadoop.ParquetReader;
 import org.apache.spark.TaskContext;
 import org.apache.spark.api.java.JavaRDD;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -448,6 +449,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase {
     assertEquals(3, counts, "If the number of records are more than 1150, then there should be a new file");
   }
 
+  @Disabled("Avro test setup issue")
   @Test
   public void testInsertUpsertWithHoodieAvroPayload() throws Exception {
     Schema schema = getSchemaFromResource(TestCopyOnWriteActionExecutor.class, "/testDataGeneratorSchema.txt");
