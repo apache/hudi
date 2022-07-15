@@ -71,7 +71,6 @@ public class GlobalDeleteKeyGenerator extends BuiltinKeyGenerator {
     return combineRecordKeyUnsafe(rowAccessor.getRecordKeyParts(internalRow));
   }
 
-
   @Override
   public String getRecordKey(InternalRow internalRow, StructType schema) {
     buildFieldSchemaInfoIfNeeded(schema);

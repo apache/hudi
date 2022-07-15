@@ -114,7 +114,7 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
    * NOTE: This method has to stay final (so that it's easier for JIT compiler to apply certain
    *       optimizations, like inlining)
    */
-  protected final String combinePartitionPath(Object ...partitionPathParts) {
+  protected final String combinePartitionPath(Object... partitionPathParts) {
     checkState(partitionPathParts.length == recordKeyFields.size());
     // Avoid creating [[StringBuilder]] in case there's just one partition-path part,
     // and Hive-style of partitioning is not required
@@ -152,7 +152,7 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
    * NOTE: This method has to stay final (so that it's easier for JIT compiler to apply certain
    *       optimizations, like inlining)
    */
-  protected final UTF8String combinePartitionPathUnsafe(Object ...partitionPathParts) {
+  protected final UTF8String combinePartitionPathUnsafe(Object... partitionPathParts) {
     checkState(partitionPathParts.length == recordKeyFields.size());
     // Avoid creating [[StringBuilder]] in case there's just one partition-path part,
     // and Hive-style of partitioning is not required
@@ -188,7 +188,7 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
    * NOTE: This method has to stay final (so that it's easier for JIT compiler to apply certain
    *       optimizations, like inlining)
    */
-  protected final String combineRecordKey(Object ...recordKeyParts) {
+  protected final String combineRecordKey(Object... recordKeyParts) {
     if (recordKeyParts.length == 1) {
       return requireNonNullNonEmptyKey(recordKeyParts[0].toString());
     }
@@ -210,7 +210,7 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
    * NOTE: This method has to stay final (so that it's easier for JIT compiler to apply certain
    *       optimizations, like inlining)
    */
-  protected final UTF8String combineRecordKeyUnsafe(Object ...recordKeyParts) {
+  protected final UTF8String combineRecordKeyUnsafe(Object... recordKeyParts) {
     if (recordKeyParts.length == 1) {
       return requireNonNullNonEmptyKey(toUTF8String(recordKeyParts[0]));
     }

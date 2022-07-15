@@ -97,7 +97,7 @@ public class ComplexKeyGenerator extends BuiltinKeyGenerator {
     return combinePartitionPathUnsafe(rowAccessor.getRecordPartitionPathValues(row));
   }
 
-  private String combineCompositeRecordKey(Object ...recordKeyParts) {
+  private String combineCompositeRecordKey(Object... recordKeyParts) {
     StringBuilder sb = new StringBuilder();
     for (int i = 0; i < recordKeyParts.length; ++i) {
       sb.append(recordKeyFields.get(i));
@@ -113,7 +113,7 @@ public class ComplexKeyGenerator extends BuiltinKeyGenerator {
     return sb.toString();
   }
 
-  private UTF8String combineCompositeRecordKeyUnsafe(Object ...recordKeyParts) {
+  private UTF8String combineCompositeRecordKeyUnsafe(Object... recordKeyParts) {
     UTF8StringBuilder sb = new UTF8StringBuilder();
     for (int i = 0; i < recordKeyParts.length; ++i) {
       sb.append(recordKeyFields.get(i));
