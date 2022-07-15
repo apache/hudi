@@ -77,7 +77,7 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
   public String getRecordKey(InternalRow internalRow, StructType schema) {
     try {
       // TODO fix
-      buildFieldSchemaInfoIfNeeded(structType);
+      buildFieldSchemaInfoIfNeeded(schema);
       return RowKeyGeneratorHelper.getRecordKeyFromInternalRow(internalRow, getRecordKeyFields(), recordKeySchemaInfo, false);
     } catch (Exception e) {
       throw new HoodieException("Conversion of InternalRow to Row failed with exception", e);
@@ -120,6 +120,7 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
 
   void buildFieldSchemaInfoIfNeeded(StructType structType) {
     if (this.structType == null) {
+      this.structType = structType;
       getRecordKeyFields()
           .stream().filter(f -> !f.isEmpty())
           .forEach(f -> recordKeySchemaInfo.put(f, RowKeyGeneratorHelper.getFieldSchemaInfo(structType, f, true)));
@@ -127,7 +128,6 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
         getPartitionPathFields().stream().filter(f -> !f.isEmpty())
             .forEach(f -> partitionPathSchemaInfo.put(f, RowKeyGeneratorHelper.getFieldSchemaInfo(structType, f, false)));
       }
-      this.structType = structType;
     }
   }
 
