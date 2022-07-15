@@ -267,15 +267,15 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport {
         case StringStartsWith(attribute, value) =>
           val leftExp = toAttribute(attribute, tableSchema)
           val rightExp = Literal.create(s"$value%")
-          sparkAdapter.createLike(leftExp, rightExp)
+          sparkAdapter.getCatalystPlanUtils.createLike(leftExp, rightExp)
         case StringEndsWith(attribute, value) =>
           val leftExp = toAttribute(attribute, tableSchema)
           val rightExp = Literal.create(s"%$value")
-          sparkAdapter.createLike(leftExp, rightExp)
+          sparkAdapter.getCatalystPlanUtils.createLike(leftExp, rightExp)
         case StringContains(attribute, value) =>
           val leftExp = toAttribute(attribute, tableSchema)
           val rightExp = Literal.create(s"%$value%")
-          sparkAdapter.createLike(leftExp, rightExp)
+          sparkAdapter.getCatalystPlanUtils.createLike(leftExp, rightExp)
         case _ => null
       }
     )

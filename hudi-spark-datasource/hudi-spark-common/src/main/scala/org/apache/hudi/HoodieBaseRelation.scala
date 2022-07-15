@@ -632,7 +632,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
 object HoodieBaseRelation extends SparkAdapterSupport {
 
   private def generateUnsafeProjection(from: StructType, to: StructType) =
-    sparkAdapter.createCatalystExpressionUtils().generateUnsafeProjection(from, to)
+    sparkAdapter.getCatalystExpressionUtils().generateUnsafeProjection(from, to)
 
   def convertToAvroSchema(structSchema: StructType): Schema =
     sparkAdapter.getAvroSchemaConverters.toAvroType(structSchema, nullable = false, "Record")

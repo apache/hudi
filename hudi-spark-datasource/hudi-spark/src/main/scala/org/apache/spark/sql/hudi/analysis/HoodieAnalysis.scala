@@ -140,8 +140,8 @@ case class HoodieAnalysis(sparkSession: SparkSession) extends Rule[LogicalPlan]
           DeleteHoodieTableCommand(d)
 
       // Convert to InsertIntoHoodieTableCommand
-      case l if sparkAdapter.isInsertInto(l) =>
-        val (table, partition, query, overwrite, _) = sparkAdapter.getInsertIntoChildren(l).get
+      case l if sparkAdapter.getCatalystPlanUtils.isInsertInto(l) =>
+        val (table, partition, query, overwrite, _) = sparkAdapter.getCatalystPlanUtils.getInsertIntoChildren(l).get
         table match {
           case relation: LogicalRelation if sparkAdapter.isHoodieTable(relation, sparkSession) =>
             new InsertIntoHoodieTableCommand(relation, query, partition, overwrite)
@@ -430,9 +430,9 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
 
     // Append the meta field to the insert query to walk through the validate for the
     // number of insert fields with the number of the target table fields.
-    case l if sparkAdapter.isInsertInto(l) =>
+    case l if sparkAdapter.getCatalystPlanUtils.isInsertInto(l) =>
       val (table, partition, query, overwrite, ifPartitionNotExists) =
-        sparkAdapter.getInsertIntoChildren(l).get
+        sparkAdapter.getCatalystPlanUtils.getInsertIntoChildren(l).get
 
       if (sparkAdapter.isHoodieTable(table, sparkSession) && query.resolved &&
         !containUnResolvedStar(query) &&
@@ -449,21 +449,21 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
             val withMetaFieldProjects = metaFields ++ query.output
             Project(withMetaFieldProjects, query)
         }
-        sparkAdapter.createInsertInto(table, partition, newQuery, overwrite, ifPartitionNotExists)
+        sparkAdapter.getCatalystPlanUtils.createInsertInto(table, partition, newQuery, overwrite, ifPartitionNotExists)
       } else {
         l
       }
 
-    case l if sparkAdapter.isRelationTimeTravel(l) =>
+    case l if sparkAdapter.getCatalystPlanUtils.isRelationTimeTravel(l) =>
       val (plan: UnresolvedRelation, timestamp, version) =
-        sparkAdapter.getRelationTimeTravel(l).get
+        sparkAdapter.getCatalystPlanUtils.getRelationTimeTravel(l).get
 
       if (timestamp.isEmpty && version.nonEmpty) {
         throw new AnalysisException(
           "version expression is not supported for time travel")
       }
 
-      val tableIdentifier = sparkAdapter.toTableIdentifier(plan)
+      val tableIdentifier = sparkAdapter.getCatalystPlanUtils.toTableIdentifier(plan)
       if (sparkAdapter.isHoodieTable(tableIdentifier, sparkSession)) {
         val hoodieCatalogTable = HoodieCatalogTable(sparkSession, tableIdentifier)
         val table = hoodieCatalogTable.table
@@ -535,7 +535,7 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
     // Fake a project for the expression based on the source plan.
     val fakeProject = if (right.isDefined) {
       Project(Seq(Alias(expression, "_c0")()),
-        sparkAdapter.createJoin(left, right.get, Inner))
+        sparkAdapter.getCatalystPlanUtils.createJoin(left, right.get, Inner))
     } else {
       Project(Seq(Alias(expression, "_c0")()),
         left)

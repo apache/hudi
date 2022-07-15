@@ -40,7 +40,7 @@ class Spark3_2Adapter extends BaseSpark3Adapter {
   override def createAvroDeserializer(rootAvroType: Schema, rootCatalystType: DataType): HoodieAvroDeserializer =
     new HoodieSpark3_2AvroDeserializer(rootAvroType, rootCatalystType)
 
-  override def createCatalystExpressionUtils(): HoodieCatalystExpressionUtils = HoodieSpark3_2CatalystExpressionUtils
+  override def getCatalystExpressionUtils(): HoodieCatalystExpressionUtils = HoodieSpark3_2CatalystExpressionUtils
 
   /**
    * if the logical plan is a TimeTravelRelation LogicalPlan.

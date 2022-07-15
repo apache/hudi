@@ -384,7 +384,7 @@ private object ColumnStatsExpressionUtils {
    * Returns only [[AttributeReference]] contained as a sub-expression
    */
   object AllowedTransformationExpression extends SparkAdapterSupport {
-    val exprUtils: HoodieCatalystExpressionUtils = sparkAdapter.createCatalystExpressionUtils()
+    val exprUtils: HoodieCatalystExpressionUtils = sparkAdapter.getCatalystExpressionUtils()
 
     def unapply(expr: Expression): Option[AttributeReference] = {
       // First step, we check that expression

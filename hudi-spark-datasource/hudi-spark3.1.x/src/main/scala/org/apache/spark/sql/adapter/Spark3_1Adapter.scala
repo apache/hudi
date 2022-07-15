@@ -33,7 +33,7 @@ import org.apache.spark.sql.{HoodieCatalystExpressionUtils, HoodieSpark3_1Cataly
  */
 class Spark3_1Adapter extends BaseSpark3Adapter {
 
-  override def createCatalystExpressionUtils(): HoodieCatalystExpressionUtils = HoodieSpark3_1CatalystExpressionUtils
+  override def getCatalystExpressionUtils(): HoodieCatalystExpressionUtils = HoodieSpark3_1CatalystExpressionUtils
 
   override def createAvroSerializer(rootCatalystType: DataType, rootAvroType: Schema, nullable: Boolean): HoodieAvroSerializer =
     new HoodieSpark3_1AvroSerializer(rootCatalystType, rootAvroType, nullable)
