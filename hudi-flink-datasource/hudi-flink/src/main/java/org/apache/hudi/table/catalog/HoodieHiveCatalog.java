@@ -221,7 +221,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
       String databaseName, CatalogDatabase database, boolean ignoreIfExists)
       throws DatabaseAlreadyExistException, CatalogException {
     checkArgument(
-        !isNullOrWhitespaceOnly(databaseName), "databaseName cannot be null or empty");
+        !isNullOrWhitespaceOnly(databaseName), "Database name can not null or empty");
     checkNotNull(database, "database cannot be null");
 
     Map<String, String> properties = database.getProperties();
@@ -332,8 +332,8 @@ public class HoodieHiveCatalog extends AbstractCatalog {
   // ------ tables ------
 
   private Table isHoodieTable(Table hiveTable) {
-    if (!hiveTable.getParameters().getOrDefault(CONNECTOR.key(), "").equalsIgnoreCase("hudi")
-        && !hiveTable.getParameters().getOrDefault(SPARK_SOURCE_PROVIDER, "").equalsIgnoreCase("hudi")) {
+    if (!hiveTable.getParameters().getOrDefault(SPARK_SOURCE_PROVIDER, "").equalsIgnoreCase("hudi")
+        && !isFlinkHoodieTable(hiveTable)) {
       throw new HoodieCatalogException(String.format("the %s is not hoodie table", hiveTable.getTableName()));
     }
     return hiveTable;
@@ -507,14 +507,15 @@ public class HoodieHiveCatalog extends AbstractCatalog {
         org.apache.hadoop.hive.ql.metadata.Table.getEmptyTable(
             tablePath.getDatabaseName(), tablePath.getObjectName());
 
-    if (Boolean.parseBoolean(table.getOptions().get(CatalogOptions.HIVE_IS_EXTERNAL.key()))) {
-      hiveTable.setTableType(TableType.EXTERNAL_TABLE.toString());
-    }
-
     hiveTable.setOwner(UserGroupInformation.getCurrentUser().getUserName());
     hiveTable.setCreateTime((int) (System.currentTimeMillis() / 1000));
 
     Map<String, String> properties = applyOptionsHook(table.getOptions());
+
+    if (Boolean.parseBoolean(table.getOptions().get(CatalogOptions.TABLE_EXTERNAL.key()))) {
+      hiveTable.setTableType(TableType.EXTERNAL_TABLE.toString());
+      properties.put("EXTERNAL", "TRUE");
+    }
 
     // Table comment
     if (table.getComment() != null) {

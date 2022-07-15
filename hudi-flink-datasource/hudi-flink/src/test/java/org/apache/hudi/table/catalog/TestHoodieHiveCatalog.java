@@ -39,7 +39,9 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
+import java.io.File;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -47,6 +49,8 @@ import java.util.Map;
 
 import static org.apache.flink.table.factories.FactoryUtil.CONNECTOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Test cases for {@link HoodieHiveCatalog}.
@@ -103,17 +107,28 @@ public class TestHoodieHiveCatalog {
     assertEquals(((CatalogTable)table1).getPartitionKeys(), Collections.singletonList("par1"));
   }
 
-  @Test
-  public void testCreateManagerTable() throws TableAlreadyExistException, DatabaseNotExistException, TableNotExistException {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testCreateExternalTable(boolean isExternal) throws TableAlreadyExistException, DatabaseNotExistException, TableNotExistException {
     Map<String, String> originOptions = new HashMap<>();
     originOptions.put(FactoryUtil.CONNECTOR.key(), "hudi");
-    originOptions.put(CatalogOptions.HIVE_IS_EXTERNAL.key(), "false");
+    originOptions.put(CatalogOptions.TABLE_EXTERNAL.key(), String.valueOf(isExternal));
     CatalogTable table =
         new CatalogTableImpl(schema, originOptions, "hudi table");
     hoodieCatalog.createTable(tablePath, table, false);
     Table table1 = hoodieCatalog.getHiveTable(tablePath);
-    assertEquals(table1.getParameters().get(CatalogOptions.HIVE_IS_EXTERNAL.key()), "false");
-    assertEquals(table1.getTableType(), "MANAGED_TABLE");
+    if (isExternal) {
+      assertTrue(Boolean.parseBoolean(table1.getParameters().get(CatalogOptions.TABLE_EXTERNAL.key())));
+      assertEquals("EXTERNAL_TABLE", table1.getTableType());
+    } else {
+      assertFalse(Boolean.parseBoolean(table1.getParameters().get(CatalogOptions.TABLE_EXTERNAL.key())));
+      assertEquals("MANAGED_TABLE", table1.getTableType());
+    }
+
+    hoodieCatalog.dropTable(tablePath, false);
+    String path = table1.getParameters().get(FlinkOptions.PATH.key());
+    File file = new File(path.replaceFirst("file:/", ""));
+    assertTrue(isExternal && file.exists() || !isExternal && !file.exists());
   }
 
   @Test
