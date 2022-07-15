@@ -23,7 +23,7 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.types.StructType;
-import org.apache.spark.unsafe.UTF8StringBuilder;
+import org.apache.hudi.unsafe.UTF8StringBuilder;
 import org.apache.spark.unsafe.types.UTF8String;
 
 import java.util.Arrays;
@@ -54,7 +54,7 @@ public class ComplexKeyGenerator extends BuiltinKeyGenerator {
         .map(String::trim)
         .filter(s -> !s.isEmpty())
         .collect(Collectors.toList());
-    complexAvroKeyGenerator = new ComplexAvroKeyGenerator(props);
+    this.complexAvroKeyGenerator = new ComplexAvroKeyGenerator(props);
   }
 
   @Override
