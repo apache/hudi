@@ -23,7 +23,6 @@ import org.apache.hudi.client.HoodieInternalWriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.storage.row.HoodieRowCreateHandle;
@@ -44,6 +43,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Properties;
 import java.util.UUID;
 
@@ -74,7 +74,7 @@ public class BulkInsertDataInternalWriterHelper {
    * NOTE: This is stored as Catalyst's internal {@link UTF8String} to avoid
    *       conversion (deserialization) b/w {@link UTF8String} and {@link String}
    */
-  private String lastKnownPartitionPath = null;
+  private UTF8String lastKnownPartitionPath = null;
   private HoodieRowCreateHandle handle;
   private int numFilesWritten = 0;
 
@@ -133,10 +133,10 @@ public class BulkInsertDataInternalWriterHelper {
 
   public void write(InternalRow row) throws IOException {
     try {
-      String partitionPath = extractPartitionPath(row);
-      if (lastKnownPartitionPath == null || !lastKnownPartitionPath.equals(partitionPath) || !handle.canWrite()) {
+      UTF8String partitionPath = extractPartitionPath(row);
+      if (lastKnownPartitionPath == null || !Objects.equals(lastKnownPartitionPath, partitionPath) || !handle.canWrite()) {
         LOG.info("Creating new file for partition path " + partitionPath);
-        handle = getRowCreateHandle(partitionPath);
+        handle = getRowCreateHandle(partitionPath.toString());
         lastKnownPartitionPath = partitionPath;
       }
 
@@ -162,31 +162,19 @@ public class BulkInsertDataInternalWriterHelper {
     handle = null;
   }
 
-  private String extractPartitionPath(InternalRow row) {
-    String partitionPath;
+  private UTF8String extractPartitionPath(InternalRow row) {
     if (populateMetaFields) {
       // In case meta-fields are materialized w/in the table itself, we can just simply extract
       // partition path from there
       //
       // NOTE: Helper keeps track of [[lastKnownPartitionPath]] as [[UTF8String]] to avoid
       //       conversion from Catalyst internal representation into a [[String]]
-      partitionPath = row.getString(HoodieRecord.PARTITION_PATH_META_FIELD_POS);
+      return row.getUTF8String(HoodieRecord.PARTITION_PATH_META_FIELD_POS);
     } else if (keyGeneratorOpt.isPresent()) {
-      // TODO(HUDI-4039) this should be handled by the SimpleKeyGenerator itself
-      if (simpleKeyGen) {
-        String partitionPathValue = row.get(simplePartitionFieldIndex, simplePartitionFieldDataType).toString();
-        partitionPath = partitionPathValue != null ? partitionPathValue : PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH;
-        if (writeConfig.isHiveStylePartitioningEnabled()) {
-          partitionPath = (keyGeneratorOpt.get()).getPartitionPathFields().get(0) + "=" + partitionPath;
-        }
-      } else {
-        // only BuiltIn key generators are supported if meta fields are disabled.
-        partitionPath = keyGeneratorOpt.get().getPartitionPath(row, structType);
-      }
+      return keyGeneratorOpt.get().getPartitionPath(row, structType);
     } else {
-      partitionPath = "";
+      return UTF8String.EMPTY_UTF8;
     }
-    return partitionPath;
   }
 
   private HoodieRowCreateHandle getRowCreateHandle(String partitionPath) throws IOException {
