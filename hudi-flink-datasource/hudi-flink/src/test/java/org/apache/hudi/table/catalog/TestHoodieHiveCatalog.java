@@ -32,7 +32,11 @@ import org.apache.flink.table.catalog.exceptions.DatabaseNotExistException;
 import org.apache.flink.table.catalog.exceptions.TableAlreadyExistException;
 import org.apache.flink.table.catalog.exceptions.TableNotExistException;
 import org.apache.flink.table.factories.FactoryUtil;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.metastore.api.Table;
+import org.apache.hudi.util.StreamerUtil;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -41,7 +45,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
-import java.io.File;
+import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -109,7 +113,7 @@ public class TestHoodieHiveCatalog {
 
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
-  public void testCreateExternalTable(boolean isExternal) throws TableAlreadyExistException, DatabaseNotExistException, TableNotExistException {
+  public void testCreateExternalTable(boolean isExternal) throws TableAlreadyExistException, DatabaseNotExistException, TableNotExistException, IOException {
     Map<String, String> originOptions = new HashMap<>();
     originOptions.put(FactoryUtil.CONNECTOR.key(), "hudi");
     originOptions.put(CatalogOptions.TABLE_EXTERNAL.key(), String.valueOf(isExternal));
@@ -126,9 +130,9 @@ public class TestHoodieHiveCatalog {
     }
 
     hoodieCatalog.dropTable(tablePath, false);
-    String path = table1.getParameters().get(FlinkOptions.PATH.key());
-    File file = new File(path.replaceFirst("file:/", ""));
-    assertTrue(isExternal && file.exists() || !isExternal && !file.exists());
+    Path path = new Path(table1.getParameters().get(FlinkOptions.PATH.key()));
+    boolean exists = StreamerUtil.fileExists(FileSystem.getLocal(new Configuration()), path);
+    assertTrue(isExternal && exists || !isExternal && !exists);
   }
 
   @Test
