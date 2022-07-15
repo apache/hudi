@@ -181,4 +181,12 @@ public class OptionsResolver {
     return conf.getString(FlinkOptions.OPERATION).equals(WriteOperationType.INSERT_OVERWRITE_TABLE.value())
         || conf.getString(FlinkOptions.OPERATION).equals(WriteOperationType.INSERT_OVERWRITE.value());
   }
+
+  /**
+   * Returns whether the read start commit is specific commit timestamp.
+   */
+  public static boolean isSpecificStartCommit(Configuration conf) {
+    return conf.getOptional(FlinkOptions.READ_START_COMMIT).isPresent()
+        && !conf.get(FlinkOptions.READ_START_COMMIT).equalsIgnoreCase(FlinkOptions.START_COMMIT_EARLIEST);
+  }
 }

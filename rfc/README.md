@@ -92,3 +92,4 @@ The list of all RFCs can be found here.
 | 54 | [New Table APIs and Streamline Hudi Configs](./rfc-54/rfc-54.md) | `UNDER REVIEW` | 
 | 55 | [Improve Hive/Meta sync class design and hierachies](./rfc-55/rfc-55.md) | `ONGOING` | 
 | 56 | [Early Conflict Detection For Multi-Writer](./rfc-56/rfc-56.md) | `UNDER REVIEW` | 
+| 57 | [DeltaStreamer Protobuf Support](./rfc-57/rfc-57.md)                                                                                                                                                                | `UNDER REVIEW` | 

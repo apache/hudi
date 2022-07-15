@@ -529,4 +529,12 @@ public class StreamerUtil {
     }
     return null;
   }
+    
+  public static boolean fileExists(FileSystem fs, Path path) {
+    try {
+      return fs.exists(path);
+    } catch (IOException e) {
+      throw new HoodieException("Exception while checking file " + path + " existence", e);
+    }
+  }
 }
