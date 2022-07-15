@@ -41,8 +41,6 @@ import scala.util.control.NonFatal
  */
 abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
 
-  def getCatalystPlanUtils: HoodieCatalystPlansUtils = HoodieSpark3CatalystPlanUtils
-
   override def createSparkRowSerDe(encoder: ExpressionEncoder[Row]): SparkRowSerDe = {
     new Spark3RowSerDe(encoder)
   }

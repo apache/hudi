@@ -25,7 +25,7 @@ import org.apache.spark.sql.catalyst.plans.JoinType
 import org.apache.spark.sql.catalyst.plans.logical.{InsertIntoStatement, Join, JoinHint, LogicalPlan}
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits._
 
-object HoodieSpark3CatalystPlanUtils extends HoodieCatalystPlansUtils {
+abstract class HoodieSpark3CatalystPlanUtils extends HoodieCatalystPlansUtils {
 
   override def toTableIdentifier(aliasId: AliasIdentifier): TableIdentifier = {
     aliasId match {
@@ -69,19 +69,4 @@ object HoodieSpark3CatalystPlanUtils extends HoodieCatalystPlansUtils {
   override def createLike(left: Expression, right: Expression): Expression = {
     new Like(left, right)
   }
-
-  /**
-   * if the logical plan is a TimeTravelRelation LogicalPlan.
-   */
-  override def isRelationTimeTravel(plan: LogicalPlan): Boolean = {
-    false
-  }
-
-  /**
-   * Get the member of the TimeTravelRelation LogicalPlan.
-   */
-  override def getRelationTimeTravel(plan: LogicalPlan): Option[(LogicalPlan, Option[Expression], Option[String])] = {
-    throw new IllegalStateException(s"Should not call getRelationTimeTravel for spark3.1.x")
-  }
-
 }
