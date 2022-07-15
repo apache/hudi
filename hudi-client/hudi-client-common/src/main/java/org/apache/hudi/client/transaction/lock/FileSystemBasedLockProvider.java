@@ -26,6 +26,7 @@ import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.lock.LockProvider;
 import org.apache.hudi.common.lock.LockState;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -40,8 +41,6 @@ import java.util.concurrent.TimeUnit;
 
 import static org.apache.hudi.common.config.LockConfiguration.FILESYSTEM_LOCK_EXPIRE_PROP_KEY;
 import static org.apache.hudi.common.config.LockConfiguration.FILESYSTEM_LOCK_PATH_PROP_KEY;
-import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_NUM_RETRIES_PROP_KEY;
-import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY;
 
 /**
  * A FileSystem based lock. This {@link LockProvider} implementation allows to lock table operations
@@ -54,8 +53,6 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
 
   private static final String LOCK_FILE_NAME = "lock";
 
-  private final int retryMaxCount;
-  private final int retryWaitTimeMs;
   private final int lockTimeoutMinutes;
   private transient FileSystem fs;
   private transient Path lockFile;
@@ -66,10 +63,9 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
     this.lockConfiguration = lockConfiguration;
     String lockDirectory = lockConfiguration.getConfig().getString(FILESYSTEM_LOCK_PATH_PROP_KEY, null);
     if (StringUtils.isNullOrEmpty(lockDirectory)) {
-      lockDirectory = lockConfiguration.getConfig().getString(HoodieWriteConfig.BASE_PATH.key(), null);
+      lockDirectory = lockConfiguration.getConfig().getString(HoodieWriteConfig.BASE_PATH.key(), null)
+            + Path.SEPARATOR + HoodieTableMetaClient.METAFOLDER_NAME;
     }
-    this.retryWaitTimeMs = lockConfiguration.getConfig().getInteger(LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY);
-    this.retryMaxCount = lockConfiguration.getConfig().getInteger(LOCK_ACQUIRE_NUM_RETRIES_PROP_KEY);
     this.lockTimeoutMinutes = lockConfiguration.getConfig().getInteger(FILESYSTEM_LOCK_EXPIRE_PROP_KEY);
     this.lockFile = new Path(lockDirectory + Path.SEPARATOR + LOCK_FILE_NAME);
     this.fs = FSUtils.getFs(this.lockFile.toString(), configuration);
@@ -150,8 +146,6 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
   private void checkRequiredProps(final LockConfiguration config) {
     ValidationUtils.checkArgument(config.getConfig().getString(FILESYSTEM_LOCK_PATH_PROP_KEY, null) != null
           || config.getConfig().getString(HoodieWriteConfig.BASE_PATH.key(), null) != null);
-    ValidationUtils.checkArgument(config.getConfig().getInteger(LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY) > 0);
-    ValidationUtils.checkArgument(config.getConfig().getInteger(LOCK_ACQUIRE_NUM_RETRIES_PROP_KEY) > 0);
     ValidationUtils.checkArgument(config.getConfig().getInteger(FILESYSTEM_LOCK_EXPIRE_PROP_KEY) >= 0);
   }
 }

@@ -70,6 +70,7 @@ public class TestFileBasedLockProvider {
     Path workDir = dfsCluster.getFileSystem().getWorkingDirectory();
     FileSystem fs = workDir.getFileSystem(hdfsTestService.getHadoopConf());
     fs.delete(new Path("/tmp/lock"), true);
+    fs.delete(new Path("/tmp/.hoodie/lock"), true);
     if (hdfsTestService != null) {
       hdfsTestService.stop();
       hdfsTestService = null;
