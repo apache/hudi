@@ -44,25 +44,24 @@ import org.apache.hudi.avro.HoodieAvroUtils
 
 import scala.collection.JavaConverters._
 
-object HoodieSparkUtils extends SparkAdapterSupport {
+private[hudi] trait SparkVersionsSupport {
+  def getSparkVersion: String
 
-  def isSpark2: Boolean = SPARK_VERSION.startsWith("2.")
+  def isSpark2: Boolean = getSparkVersion.startsWith("2.")
+  def isSpark3: Boolean = getSparkVersion.startsWith("3.")
+  def isSpark3_0: Boolean = getSparkVersion.startsWith("3.0")
+  def isSpark3_1: Boolean = getSparkVersion.startsWith("3.1")
+  def isSpark3_2: Boolean = getSparkVersion.startsWith("3.2")
 
-  def isSpark3: Boolean = SPARK_VERSION.startsWith("3.")
+  def gteqSpark3_1: Boolean = getSparkVersion >= "3.1"
+  def gteqSpark3_1_3: Boolean = getSparkVersion >= "3.1.3"
+  def gteqSpark3_2: Boolean = getSparkVersion >= "3.2"
+  def gteqSpark3_2_1: Boolean = getSparkVersion >= "3.2.1"
+}
 
-  def isSpark3_0: Boolean = SPARK_VERSION.startsWith("3.0")
+object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport {
 
-  def isSpark3_1: Boolean = SPARK_VERSION.startsWith("3.1")
-
-  def gteqSpark3_1: Boolean = SPARK_VERSION >= "3.1"
-
-  def gteqSpark3_1_3: Boolean = SPARK_VERSION >= "3.1.3"
-
-  def isSpark3_2: Boolean = SPARK_VERSION.startsWith("3.2")
-
-  def gteqSpark3_2: Boolean = SPARK_VERSION >= "3.2"
-
-  def gteqSpark3_2_1: Boolean = SPARK_VERSION >= "3.2.1"
+  override def getSparkVersion: String = SPARK_VERSION
 
   def getMetaSchema: StructType = {
     StructType(HoodieRecord.HOODIE_META_COLUMNS.asScala.map(col => {
