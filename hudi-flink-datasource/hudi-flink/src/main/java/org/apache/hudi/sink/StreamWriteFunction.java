@@ -408,16 +408,6 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
         && this.buckets.values().stream().anyMatch(bucket -> bucket.records.size() > 0);
   }
 
-  private void cleanWriteHandles() {
-    if (freshInstant(currentInstant)) {
-      // In rare cases, when a checkpoint was aborted and the instant time
-      // is reused, the merge handle generates a new file name
-      // with the reused instant time of last checkpoint, the write handles
-      // should be kept and reused in case data loss.
-      this.writeClient.cleanHandles();
-    }
-  }
-
   @SuppressWarnings("unchecked, rawtypes")
   private boolean flushBucket(DataBucket bucket) {
     String instant = instantToWrite(true);
@@ -489,7 +479,7 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
     this.eventGateway.sendEventToCoordinator(event);
     this.buckets.clear();
     this.tracer.reset();
-    cleanWriteHandles();
+    this.writeClient.cleanHandles();
     this.writeStatuses.addAll(writeStatus);
     // blocks flushing until the coordinator starts a new instant
     this.confirming = true;
