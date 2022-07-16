@@ -23,6 +23,7 @@ import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.client.utils.SparkRowSerDe;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.hudi.unsafe.UTF8StringBuilder;
 import org.apache.spark.sql.HoodieUnsafeRowUtils;
@@ -152,7 +153,7 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
    *       optimizations, like inlining)
    */
   protected final UTF8String combinePartitionPathUnsafe(Object... partitionPathParts) {
-    checkState(partitionPathParts.length == recordKeyFields.size());
+    checkState(partitionPathParts.length == partitionPathFields.size());
     // Avoid creating [[StringBuilder]] in case there's just one partition-path part,
     // and Hive-style of partitioning is not required
     if (!hiveStylePartitioning && partitionPathParts.length == 1) {
@@ -163,12 +164,17 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
 
     UTF8StringBuilder sb = new UTF8StringBuilder();
     for (int i = 0; i < partitionPathParts.length; ++i) {
-      UTF8String partitionPathPartStr = partitionPathParts[i] != null
-          ? toUTF8String(partitionPathParts[i])
+      // NOTE: That partition-path part could be of arbitrary type (accepted by Spark), and therefore
+      //       we will have to convert it to [[UTF8String]] prior to constructing final partition path
+      Object partitionPathPart = partitionPathParts[i];
+      UTF8String partitionPathPartStr = partitionPathPart != null
+          // NOTE: We first attempt to encode partition-path part prior to converting to [[UTF8String]]
+          //       to avoid unnecessary conversion in case the original path-part is already an [[UTF8String]]
+          ? toUTF8String(tryEncodePartitionPath(partitionPathPart))
           : HUDI_DEFAULT_PARTITION_PATH_UTF8;
 
       if (hiveStylePartitioning) {
-        sb.append(recordKeyFields.get(i));
+        sb.append(partitionPathFields.get(i));
         sb.append("=");
         sb.append(partitionPathPartStr);
       } else {
@@ -254,6 +260,14 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
 
   protected static <T> T handleNullRecordKey() {
     throw new HoodieKeyException("Record key has to be non-null!");
+  }
+
+  private Object tryEncodePartitionPath(Object partitionPathPart) {
+    if (encodePartitionPath) {
+      return PartitionPathEncodeUtils.escapePathName(partitionPathPart.toString());
+    } else {
+      return partitionPathPart;
+    }
   }
 
   private void tryInitRowConverter(StructType structType) {
