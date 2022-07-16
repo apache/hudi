@@ -88,7 +88,7 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
       synchronized (LOCK_FILE_NAME) {
         if (fs.exists(this.lockFile)) {
           // Check whether lock is already expired or not, if so try to delete lock file
-          if (lockTimeoutMinutes != 0 && checkIfExpired()) {
+          if (checkIfExpired()) {
             fs.delete(this.lockFile, true);
           }
         }
@@ -120,6 +120,9 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
   }
 
   private boolean checkIfExpired() {
+    if (lockTimeoutMinutes == 0) {
+      return false;
+    }
     try {
       long modificationTime = fs.getFileStatus(this.lockFile).getModificationTime();
       if (System.currentTimeMillis() - modificationTime > lockTimeoutMinutes * 60 * 1000) {
