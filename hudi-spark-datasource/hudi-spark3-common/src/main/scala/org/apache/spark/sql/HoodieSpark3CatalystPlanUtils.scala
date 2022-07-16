@@ -18,14 +18,19 @@
 package org.apache.spark.sql
 
 import org.apache.hudi.spark3.internal.ReflectUtil
-import org.apache.spark.sql.catalyst.{AliasIdentifier, TableIdentifier}
 import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
 import org.apache.spark.sql.catalyst.expressions.{Expression, Like}
 import org.apache.spark.sql.catalyst.plans.JoinType
 import org.apache.spark.sql.catalyst.plans.logical.{InsertIntoStatement, Join, JoinHint, LogicalPlan}
+import org.apache.spark.sql.catalyst.{AliasIdentifier, TableIdentifier}
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits._
+import org.apache.spark.sql.execution.command.ExplainCommand
+import org.apache.spark.sql.execution.{ExtendedMode, SimpleMode}
 
 abstract class HoodieSpark3CatalystPlanUtils extends HoodieCatalystPlansUtils {
+
+  def createExplainCommand(plan: LogicalPlan, extended: Boolean): LogicalPlan =
+    ExplainCommand(plan, mode = if (extended) ExtendedMode else SimpleMode)
 
   override def toTableIdentifier(aliasId: AliasIdentifier): TableIdentifier = {
     aliasId match {

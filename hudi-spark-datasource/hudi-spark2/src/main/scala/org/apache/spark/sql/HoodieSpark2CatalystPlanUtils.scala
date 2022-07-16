@@ -22,8 +22,12 @@ import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
 import org.apache.spark.sql.catalyst.expressions.{Expression, Like}
 import org.apache.spark.sql.catalyst.plans.JoinType
 import org.apache.spark.sql.catalyst.plans.logical.{InsertIntoTable, Join, LogicalPlan}
+import org.apache.spark.sql.execution.command.ExplainCommand
 
 object HoodieSpark2CatalystPlanUtils extends HoodieCatalystPlansUtils {
+
+  def createExplainCommand(plan: LogicalPlan, extended: Boolean): LogicalPlan =
+    ExplainCommand(plan, extended = extended)
 
   override def toTableIdentifier(aliasId: AliasIdentifier): TableIdentifier = {
     TableIdentifier(aliasId.identifier, aliasId.database)

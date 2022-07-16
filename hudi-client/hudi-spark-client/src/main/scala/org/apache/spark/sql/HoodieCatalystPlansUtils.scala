@@ -25,6 +25,8 @@ import org.apache.spark.sql.catalyst.plans.logical.{Join, LogicalPlan}
 
 trait HoodieCatalystPlansUtils {
 
+  def createExplainCommand(plan: LogicalPlan, extended: Boolean): LogicalPlan
+
   /**
    * Convert a AliasIdentifier to TableIdentifier.
    */
