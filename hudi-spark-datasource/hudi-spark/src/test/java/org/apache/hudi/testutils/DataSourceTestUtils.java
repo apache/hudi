@@ -49,6 +49,8 @@ import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_T
  */
 public class DataSourceTestUtils {
 
+  private static final Random RANDOM = new Random(0xDAADDEED);
+
   public static Schema getStructTypeExampleSchema() throws IOException {
     return new Schema.Parser().parse(FileIOUtils.readAsUTFString(DataSourceTestUtils.class.getResourceAsStream("/exampleSchema.txt")));
   }
@@ -58,13 +60,12 @@ public class DataSourceTestUtils {
   }
 
   public static List<Row> generateRandomRows(int count) {
-    Random random = new Random(0xFAFAFA);
     List<Row> toReturn = new ArrayList<>();
     List<String> partitions = Arrays.asList(new String[] {DEFAULT_FIRST_PARTITION_PATH, DEFAULT_SECOND_PARTITION_PATH, DEFAULT_THIRD_PARTITION_PATH});
     for (int i = 0; i < count; i++) {
       Object[] values = new Object[3];
-      values[0] = HoodieTestDataGenerator.genPseudoRandomUUID(random).toString();
-      values[1] = partitions.get(random.nextInt(3));
+      values[0] = HoodieTestDataGenerator.genPseudoRandomUUID(RANDOM).toString();
+      values[1] = partitions.get(RANDOM.nextInt(3));
       values[2] = new Date().getTime();
       toReturn.add(RowFactory.create(values));
     }
@@ -98,13 +99,12 @@ public class DataSourceTestUtils {
   }
 
   public static List<Row> generateRandomRowsEvolvedSchema(int count) {
-    Random random = new Random(0xFAFAFA);
     List<Row> toReturn = new ArrayList<>();
     List<String> partitions = Arrays.asList(new String[] {DEFAULT_FIRST_PARTITION_PATH, DEFAULT_SECOND_PARTITION_PATH, DEFAULT_THIRD_PARTITION_PATH});
     for (int i = 0; i < count; i++) {
       Object[] values = new Object[4];
       values[0] = UUID.randomUUID().toString();
-      values[1] = partitions.get(random.nextInt(3));
+      values[1] = partitions.get(RANDOM.nextInt(3));
       values[2] = new Date().getTime();
       values[3] = UUID.randomUUID().toString();
       toReturn.add(RowFactory.create(values));
@@ -113,14 +113,13 @@ public class DataSourceTestUtils {
   }
 
   public static List<Row> updateRowsWithHigherTs(Dataset<Row> inputDf) {
-    Random random = new Random(0xFAFAFA);
     List<Row> input = inputDf.collectAsList();
     List<Row> rows = new ArrayList<>();
     for (Row row : input) {
       Object[] values = new Object[3];
       values[0] = row.getAs("_row_key");
       values[1] = row.getAs("partition");
-      values[2] = ((Long) row.getAs("ts")) + random.nextInt(1000);
+      values[2] = ((Long) row.getAs("ts")) + RANDOM.nextInt(1000);
       rows.add(RowFactory.create(values));
     }
     return rows;
