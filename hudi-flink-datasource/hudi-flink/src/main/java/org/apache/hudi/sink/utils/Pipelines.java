@@ -358,9 +358,9 @@ public class Pipelines {
    * The whole pipeline looks like the following:
    *
    * <pre>
-   *                                           /=== | task1 | ===\
-   *      | plan generation | ===> hash                           | commit |
-   *                                           \=== | task2 | ===/
+   *                                     /=== | task1 | ===\
+   *      | plan generation | ===> hash                      | commit |
+   *                                     \=== | task2 | ===/
    *
    *      Note: both the compaction plan generation task and commission task are singleton.
    * </pre>
@@ -374,6 +374,8 @@ public class Pipelines {
             TypeInformation.of(CompactionPlanEvent.class),
             new CompactionPlanOperator(conf))
         .setParallelism(1) // plan generate must be singleton
+        // make the distribution strategy deterministic to avoid concurrent modifications
+        // on the same bucket files
         .keyBy(plan -> plan.getOperation().getFileGroupId().getFileId())
         .transform("compact_task",
             TypeInformation.of(CompactionCommitEvent.class),
@@ -393,9 +395,9 @@ public class Pipelines {
    * The whole pipeline looks like the following:
    *
    * <pre>
-   *                                           /=== | task1 | ===\
-   *      | plan generation | ===> hash                           | commit |
-   *                                           \=== | task2 | ===/
+   *                                     /=== | task1 | ===\
+   *      | plan generation | ===> hash                      | commit |
+   *                                     \=== | task2 | ===/
    *
    *      Note: both the clustering plan generation task and commission task are singleton.
    * </pre>
@@ -410,9 +412,11 @@ public class Pipelines {
             TypeInformation.of(ClusteringPlanEvent.class),
             new ClusteringPlanOperator(conf))
         .setParallelism(1) // plan generate must be singleton
-        .keyBy(plan -> plan.getClusteringGroupInfo().getOperations()
-          .stream().map(ClusteringOperation::getFileId)
-          .collect(Collectors.joining()))
+        .keyBy(plan ->
+            // make the distribution strategy deterministic to avoid concurrent modifications
+            // on the same bucket files
+            plan.getClusteringGroupInfo().getOperations()
+                .stream().map(ClusteringOperation::getFileId).collect(Collectors.joining()))
         .transform("clustering_task",
             TypeInformation.of(ClusteringCommitEvent.class),
             new ClusteringOperator(conf, rowType))
