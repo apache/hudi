@@ -117,8 +117,8 @@ public class HoodieHiveCatalog extends AbstractCatalog {
   private final HiveConf hiveConf;
   private IMetaStoreClient client;
 
-  public HoodieHiveCatalog(String catalogName, String defaultDatabase, String hiveConf) {
-    this(catalogName, defaultDatabase, HoodieCatalogUtil.createHiveConf(hiveConf), false);
+  public HoodieHiveCatalog(String catalogName, String defaultDatabase, String hiveConfDir) {
+    this(catalogName, defaultDatabase, HoodieCatalogUtil.createHiveConf(hiveConfDir), false);
   }
 
   public HoodieHiveCatalog(String catalogName, String defaultDatabase, HiveConf hiveConf, boolean allowEmbedded) {
@@ -264,8 +264,8 @@ public class HoodieHiveCatalog extends AbstractCatalog {
       String databaseName, CatalogDatabase newDatabase, boolean ignoreIfNotExists)
       throws DatabaseNotExistException, CatalogException {
     checkArgument(
-        !isNullOrWhitespaceOnly(databaseName), "databaseName cannot be null or empty");
-    checkNotNull(newDatabase, "newDatabase cannot be null");
+        !isNullOrWhitespaceOnly(databaseName), "Database name cannot be null or empty");
+    checkNotNull(newDatabase, "New database cannot be null");
 
     // client.alterDatabase doesn't throw any exception if there is no existing database
     Database hiveDB;
@@ -380,7 +380,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
 
   @Override
   public CatalogBaseTable getTable(ObjectPath tablePath) throws TableNotExistException, CatalogException {
-    checkNotNull(tablePath, "tablePath cannot be null");
+    checkNotNull(tablePath, "Table path cannot be null");
     Table hiveTable = getHiveTable(tablePath);
     hiveTable = translateSparkTable2Flink(tablePath, hiveTable);
     String path = hiveTable.getSd().getLocation();
@@ -406,8 +406,8 @@ public class HoodieHiveCatalog extends AbstractCatalog {
   @Override
   public void createTable(ObjectPath tablePath, CatalogBaseTable table, boolean ignoreIfExists)
       throws TableAlreadyExistException, DatabaseNotExistException, CatalogException {
-    checkNotNull(tablePath, "tablePath cannot be null");
-    checkNotNull(table, "table cannot be null");
+    checkNotNull(tablePath, "Table path cannot be null");
+    checkNotNull(table, "Table cannot be null");
 
     if (!databaseExists(tablePath.getDatabaseName())) {
       throw new DatabaseNotExistException(getName(), tablePath.getDatabaseName());
@@ -528,7 +528,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
       String recordKey = properties.getOrDefault(FlinkOptions.RECORD_KEY_FIELD.key(), FlinkOptions.RECORD_KEY_FIELD.defaultValue());
       if (!Objects.equals(pkColumns, recordKey)) {
         throw new HoodieCatalogException(
-            String.format("If the table has primaryKey, the primaryKey should be the the same as the recordKey, but pk %s and recordKey %s are the different",
+            String.format("Primary key [%s] and record key [%s] should be the the same.",
                 pkColumns,
                 recordKey));
       }
@@ -583,6 +583,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     sd.setSerdeInfo(new SerDeInfo(null, serDeClassName, serdeProperties));
 
     sd.setLocation(location);
+    hiveTable.setSd(sd);
 
     hiveTable.setParameters(properties);
     return hiveTable;
@@ -592,7 +593,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
   public List<String> listTables(String databaseName)
       throws DatabaseNotExistException, CatalogException {
     checkArgument(
-        !isNullOrWhitespaceOnly(databaseName), "databaseName cannot be null or empty");
+        !isNullOrWhitespaceOnly(databaseName), "Database name cannot be null or empty");
 
     try {
       return client.getAllTables(databaseName);
@@ -612,7 +613,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
 
   @Override
   public boolean tableExists(ObjectPath tablePath) throws CatalogException {
-    checkNotNull(tablePath, "tablePath cannot be null");
+    checkNotNull(tablePath, "Table path cannot be null");
 
     try {
       return client.tableExists(tablePath.getDatabaseName(), tablePath.getObjectName());
@@ -630,7 +631,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
   @Override
   public void dropTable(ObjectPath tablePath, boolean ignoreIfNotExists)
       throws TableNotExistException, CatalogException {
-    checkNotNull(tablePath, "tablePath cannot be null");
+    checkNotNull(tablePath, "Table path cannot be null");
 
     try {
       client.dropTable(
@@ -654,9 +655,9 @@ public class HoodieHiveCatalog extends AbstractCatalog {
   @Override
   public void renameTable(ObjectPath tablePath, String newTableName, boolean ignoreIfNotExists)
       throws TableNotExistException, TableAlreadyExistException, CatalogException {
-    checkNotNull(tablePath, "tablePath cannot be null");
+    checkNotNull(tablePath, "Table path cannot be null");
     checkArgument(
-        !isNullOrWhitespaceOnly(newTableName), "newTableName cannot be null or empty");
+        !isNullOrWhitespaceOnly(newTableName), "New table name cannot be null or empty");
 
     try {
       // alter_table() doesn't throw a clear exception when target table doesn't exist.
@@ -701,8 +702,8 @@ public class HoodieHiveCatalog extends AbstractCatalog {
   public void alterTable(
       ObjectPath tablePath, CatalogBaseTable newCatalogTable, boolean ignoreIfNotExists)
       throws TableNotExistException, CatalogException {
-    checkNotNull(tablePath, "tablePath cannot be null");
-    checkNotNull(newCatalogTable, "newCatalogTable cannot be null");
+    checkNotNull(tablePath, "Table path cannot be null");
+    checkNotNull(newCatalogTable, "New catalog table cannot be null");
 
     if (!newCatalogTable.getOptions().getOrDefault(CONNECTOR.key(), "").equalsIgnoreCase("hudi")) {
       throw new HoodieCatalogException(String.format("The %s is not hoodie table", tablePath.getObjectName()));

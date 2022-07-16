@@ -1330,7 +1330,7 @@ public class ITTestHoodieDataSource extends AbstractTestBase {
     HoodieHiveCatalog hoodieCatalog = HoodieCatalogTestUtils.createHiveCatalog("hudi_catalog");
 
     tableEnv.registerCatalog("hudi_catalog", hoodieCatalog);
-    tableEnv.executeSql("use catalog " + ("hudi_catalog"));
+    tableEnv.executeSql("use catalog hudi_catalog");
 
     String dbName = "hudi";
     tableEnv.executeSql("create database " + dbName);
@@ -1339,27 +1339,28 @@ public class ITTestHoodieDataSource extends AbstractTestBase {
     String hoodieTableDDL = sql("t1")
         .field("f_int int")
         .field("f_date DATE")
+        .field("f_par string")
         .pkField("f_int")
-        .partitionField("f_int")
+        .partitionField("f_par")
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath() + "/" + dbName + "/" + "t1")
         .option(FlinkOptions.RECORD_KEY_FIELD, "f_int")
         .option(FlinkOptions.PRECOMBINE_FIELD, "f_date")
         .end();
     tableEnv.executeSql(hoodieTableDDL);
 
-    String insertSql = "insert into t1 values (1, TO_DATE('2022-02-02')), (2, DATE '2022-02-02')";
+    String insertSql = "insert into t1 values (1, TO_DATE('2022-02-02'), '1'), (2, DATE '2022-02-02', '1')";
     execInsertSql(tableEnv, insertSql);
 
     List<Row> result = CollectionUtil.iterableToList(
         () -> tableEnv.sqlQuery("select * from t1").execute().collect());
     final String expected = "["
-        + "+I[1, 2022-02-02], "
-        + "+I[2, 2022-02-02]]";
+        + "+I[1, 2022-02-02, 1], "
+        + "+I[2, 2022-02-02, 1]]";
     assertRowsEquals(result, expected);
 
     List<Row> partitionResult = CollectionUtil.iterableToList(
         () -> tableEnv.sqlQuery("select * from t1 where f_int = 1").execute().collect());
-    assertRowsEquals(partitionResult, "[+I[1, 2022-02-02]]");
+    assertRowsEquals(partitionResult, "[+I[1, 2022-02-02, 1]]");
   }
 
   // -------------------------------------------------------------------------
