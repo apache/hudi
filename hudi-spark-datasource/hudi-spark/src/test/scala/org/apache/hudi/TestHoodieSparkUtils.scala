@@ -29,8 +29,6 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
-import org.mockito.Mockito.when
-import org.scalatest.mockito.MockitoSugar.mock
 
 import java.io.File
 import java.nio.file.Paths
