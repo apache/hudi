@@ -126,9 +126,9 @@
     <spark.version>${spark3.version}</spark.version>
     <spark2.version>2.4.4</spark2.version>
     <spark3.version>3.2.1</spark3.version>
+    <sparkbundle.version>3</sparkbundle.version>
     <spark2.bundle.version>2.4</spark2.bundle.version>
     <spark3.bundle.version>3.2</spark3.bundle.version>
-    <sparkbundle.version>${spark3.bundle.version}</sparkbundle.version>
     <hudi.spark.module>hudi-spark3</hudi.spark.module>
     <hudi.spark.common.module>hudi-spark3-common</hudi.spark.common.module>
     <avro.version>${spark3.avro.version}</avro.version>
