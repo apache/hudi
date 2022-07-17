@@ -26,9 +26,10 @@ import org.apache.hadoop.mapred.JobConf
 import org.apache.hudi.HoodieBaseRelation.{convertToAvroSchema, createHFileReader, generateUnsafeProjection, getPartitionPath}
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.avro.HoodieAvroUtils
-import org.apache.hudi.common.config.{HoodieMetadataConfig, SerializableConfiguration}
+import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.{HoodieFileFormat, HoodieRecord}
+import org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath
+import org.apache.hudi.common.model.{FileSlice, HoodieFileFormat, HoodieRecord}
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
@@ -44,7 +45,7 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{Expression, SubqueryExpression}
 import org.apache.spark.sql.execution.FileRelation
-import org.apache.spark.sql.execution.datasources.{FileStatusCache, PartitionedFile, PartitioningUtils}
+import org.apache.spark.sql.execution.datasources.{FileStatusCache, PartitionDirectory, PartitionedFile, PartitioningUtils}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.sources.{BaseRelation, Filter, PrunedFilteredScan}
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
@@ -222,7 +223,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     toScalaOption(timeline.lastInstant())
 
   protected def queryTimestamp: Option[String] =
-    specifiedQueryTimestamp.orElse(toScalaOption(timeline.lastInstant()).map(_.getTimestamp))
+    specifiedQueryTimestamp.orElse(latestInstant.map(_.getTimestamp))
 
   /**
    * Returns true in case table supports Schema on Read (Schema Evolution)
@@ -340,18 +341,47 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
    */
   protected def collectFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[FileSplit]
 
-  protected def listLatestBaseFiles(globbedPaths: Seq[Path], partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Map[Path, Seq[FileStatus]] = {
-    val partitionDirs = if (globbedPaths.isEmpty) {
+  /**
+   * Get all PartitionDirectories based on globPaths if specified, otherwise use the table path.
+   * Will perform pruning if necessary
+   */
+  private def listPartitionDirectories(globPaths: Seq[Path], partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[PartitionDirectory] = {
+    if (globPaths.isEmpty) {
       fileIndex.listFiles(partitionFilters, dataFilters)
     } else {
-      val inMemoryFileIndex = HoodieInMemoryFileIndex.create(sparkSession, globbedPaths)
+      val inMemoryFileIndex = HoodieInMemoryFileIndex.create(sparkSession, globPaths)
       inMemoryFileIndex.listFiles(partitionFilters, dataFilters)
     }
+  }
 
+  /**
+   * Get all latest base files with partition paths, if globPaths is empty, will listing files
+   * under the table path.
+   */
+  protected def listLatestBaseFiles(globPaths: Seq[Path], partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Map[Path, Seq[FileStatus]] = {
+    val partitionDirs = listPartitionDirectories(globPaths, partitionFilters, dataFilters)
     val fsView = new HoodieTableFileSystemView(metaClient, timeline, partitionDirs.flatMap(_.files).toArray)
+
     val latestBaseFiles = fsView.getLatestBaseFiles.iterator().asScala.toList.map(_.getFileStatus)
 
     latestBaseFiles.groupBy(getPartitionPath)
+  }
+
+  /**
+   * Get all fileSlices(contains base files and log files if exist) from globPaths if not empty,
+   * otherwise will use the table path to do the listing.
+   */
+  protected def listLatestFileSlices(globPaths: Seq[Path], partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[FileSlice] = {
+    latestInstant.map { _ =>
+      val partitionDirs = listPartitionDirectories(globPaths, partitionFilters, dataFilters)
+      val fsView = new HoodieTableFileSystemView(metaClient, timeline, partitionDirs.flatMap(_.files).toArray)
+
+      val queryTimestamp = this.queryTimestamp.get
+      fsView.getPartitionPaths.asScala.flatMap { partitionPath =>
+        val relativePath = getRelativePartitionPath(new Path(basePath), partitionPath)
+        fsView.getLatestMergedFileSlicesBeforeOrOn(relativePath, queryTimestamp).iterator().asScala.toSeq
+      }
+    }.getOrElse(Seq())
   }
 
   protected def convertToExpressions(filters: Array[Filter]): Array[Expression] = {
