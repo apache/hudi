@@ -119,16 +119,16 @@ public class HoodieStorageConfig extends HoodieConfig {
       .withDocumentation("Whether to use dictionary encoding");
 
   public static final ConfigProperty<String> PARQUET_WRITE_LEGACY_FORMAT_ENABLED = ConfigProperty
-          .key("hoodie.parquet.writelegacyformat.enabled")
-          .defaultValue("false")
-          .withDocumentation("Sets spark.sql.parquet.writeLegacyFormat. If true, data will be written in a way of Spark 1.4 and earlier. "
-                  + "For example, decimal values will be written in Parquet's fixed-length byte array format which other systems such as Apache Hive and Apache Impala use. "
-                  + "If false, the newer format in Parquet will be used. For example, decimals will be written in int-based format.");
+      .key("hoodie.parquet.writelegacyformat.enabled")
+      .defaultValue("false")
+      .withDocumentation("Sets spark.sql.parquet.writeLegacyFormat. If true, data will be written in a way of Spark 1.4 and earlier. "
+          + "For example, decimal values will be written in Parquet's fixed-length byte array format which other systems such as Apache Hive and Apache Impala use. "
+          + "If false, the newer format in Parquet will be used. For example, decimals will be written in int-based format.");
 
   public static final ConfigProperty<String> PARQUET_OUTPUT_TIMESTAMP_TYPE = ConfigProperty
-          .key("hoodie.parquet.outputtimestamptype")
-          .defaultValue("TIMESTAMP_MICROS")
-          .withDocumentation("Sets spark.sql.parquet.outputTimestampType. Parquet timestamp type to use when Spark writes data to Parquet files.");
+      .key("hoodie.parquet.outputtimestamptype")
+      .defaultValue("TIMESTAMP_MICROS")
+      .withDocumentation("Sets spark.sql.parquet.outputTimestampType. Parquet timestamp type to use when Spark writes data to Parquet files.");
 
   public static final ConfigProperty<String> HFILE_COMPRESSION_ALGORITHM_NAME = ConfigProperty
       .key("hoodie.hfile.compression.algorithm")

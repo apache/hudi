@@ -21,7 +21,6 @@ package org.apache.hudi
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.fs.{FileSystem, Path}
-import org.apache.hudi.avro.HoodieAvroUtils.rewriteRecord
 import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.model.HoodieRecord
@@ -39,8 +38,10 @@ import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, Literal}
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
-
 import java.util.Properties
+
+import org.apache.hudi.avro.HoodieAvroUtils
+
 import scala.collection.JavaConverters._
 
 object HoodieSparkUtils extends SparkAdapterSupport {
@@ -162,11 +163,11 @@ object HoodieSparkUtils extends SparkAdapterSupport {
       if (rows.isEmpty) {
         Iterator.empty
       } else {
+        val readerAvroSchema = new Schema.Parser().parse(readerAvroSchemaStr)
         val transform: GenericRecord => GenericRecord =
           if (sameSchema) identity
           else {
-            val readerAvroSchema = new Schema.Parser().parse(readerAvroSchemaStr)
-            rewriteRecord(_, readerAvroSchema)
+            HoodieAvroUtils.rewriteRecordDeep(_, readerAvroSchema)
           }
 
         // Since caller might request to get records in a different ("evolved") schema, we will be rewriting from

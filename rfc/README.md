@@ -66,12 +66,12 @@ The list of all RFCs can be found here.
 | 28 | [Support Z-order curve](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=181307144) | `COMPLETED` |
 | 29 | [Hash Index](https://cwiki.apache.org/confluence/display/HUDI/RFC+-+29%3A+Hash+Index) | `ONGOING` | 
 | 30 | [Batch operation](https://cwiki.apache.org/confluence/display/HUDI/RFC+-+30%3A+Batch+operation) | `UNDER REVIEW` | 
-| 31 | [Hive integration Improvement](https://cwiki.apache.org/confluence/display/HUDI/RFC+-+31%3A+Hive+integration+Improvment)| `UNDER REVIEW` | 
+| 31 | [Hive integration Improvement](https://cwiki.apache.org/confluence/display/HUDI/RFC+-+31%3A+Hive+integration+Improvment)| `ONGOING` | 
 | 32 | [Kafka Connect Sink for Hudi](https://cwiki.apache.org/confluence/display/HUDI/RFC-32+Kafka+Connect+Sink+for+Hudi)| `ONGOING` | 
 | 33 | [Hudi supports more comprehensive Schema Evolution](https://cwiki.apache.org/confluence/display/HUDI/RFC+-+33++Hudi+supports+more+comprehensive+Schema+Evolution)| `ONGOING` | 
 | 34 | [Hudi BigQuery Integration](./rfc-34/rfc-34.md) | `COMPLETED` | 
 | 35 | [Make Flink MOR table writing streaming friendly](https://cwiki.apache.org/confluence/display/HUDI/RFC-35%3A+Make+Flink+MOR+table+writing+streaming+friendly)| `UNDER REVIEW` | 
-| 36 | [HUDI Metastore Server](https://cwiki.apache.org/confluence/display/HUDI/%5BWIP%5D+RFC-36%3A+HUDI+Metastore+Server)| `UNDER REVIEW` | 
+| 36 | [HUDI Metastore Server](https://cwiki.apache.org/confluence/display/HUDI/%5BWIP%5D+RFC-36%3A+HUDI+Metastore+Server)| `IN PROGRESS` | 
 | 37 | [Hudi Metadata based Bloom Index](rfc-37/rfc-37.md) | `ONGOING` | 
 | 38 | [Spark Datasource V2 Integration](./rfc-38/rfc-38.md) | `IN PROGRESS` | 
 | 39 | [Incremental source for Debezium](./rfc-39/rfc-39.md) | `ONGOING` | 
@@ -79,16 +79,17 @@ The list of all RFCs can be found here.
 | 41 | [Hudi Snowflake Integration] | `UNDER REVIEW`| 
 | 42 | [Consistent Hashing Index](./rfc-42/rfc-42.md) | `IN PROGRESS` | 
 | 43 | [Compaction / Clustering Service](./rfc-43/rfc-43.md) | `UNDER REVIEW` | 
-| 44 | [Hudi Connector for Presto](./rfc-44/rfc-44.md) | `IN PROGRESS` | 
+| 44 | [Hudi Connector for Presto](./rfc-44/rfc-44.md) | `ONGOING` | 
 | 45 | [Asynchronous Metadata Indexing](./rfc-45/rfc-45.md) | `ONGOING` | 
-| 46 | [Optimizing Record Payload Handling](./rfc-46/rfc-46.md) | `UNDER REVIEW` | 
-| 47 | [Add Call Produce Command for Spark SQL](./rfc-47/rfc-47.md) | `UNDER REVIEW` | 
+| 46 | [Optimizing Record Payload Handling](./rfc-46/rfc-46.md) | `IN PROGRESS` | 
+| 47 | [Add Call Produce Command for Spark SQL](./rfc-47/rfc-47.md) | `ONGOING` | 
 | 48 | [LogCompaction for MOR tables](./rfc-48/rfc-48.md) | `UNDER REVIEW` | 
 | 49 | [Support sync with DataHub](./rfc-49/rfc-49.md)    | `ONGOING` |
-| 50 | [Improve Timeline Server](./rfc-50/rfc-50.md) | `UNDER REVIEW` | 
+| 50 | [Improve Timeline Server](./rfc-50/rfc-50.md) | `IN PROGRESS` | 
 | 51 | [Change Data Capture](./rfc-51/rfc-51.md) | `UNDER REVIEW` |
 | 52 | [Introduce Secondary Index to Improve HUDI Query Performance](./rfc-52/rfc-52.md) | `UNDER REVIEW` |
-| 53 | [Use Lock-Free Message Queue Improving Hoodie Writing Efficiency](./rfc-53/rfc-53.md) | `UNDER REVIEW` | 
+| 53 | [Use Lock-Free Message Queue Improving Hoodie Writing Efficiency](./rfc-53/rfc-53.md) | `IN PROGRESS` | 
 | 54 | [New Table APIs and Streamline Hudi Configs](./rfc-54/rfc-54.md) | `UNDER REVIEW` | 
-| 55 | [Improve Hive/Meta sync class design and hierachies](./rfc-55/rfc-55.md) | `UNDER REVIEW` | 
+| 55 | [Improve Hive/Meta sync class design and hierachies](./rfc-55/rfc-55.md) | `ONGOING` | 
 | 56 | [Early Conflict Detection For Multi-Writer](./rfc-56/rfc-56.md) | `UNDER REVIEW` | 
+| 57 | [DeltaStreamer Protobuf Support](./rfc-57/rfc-57.md)                                                                                                                                                                | `UNDER REVIEW` | 

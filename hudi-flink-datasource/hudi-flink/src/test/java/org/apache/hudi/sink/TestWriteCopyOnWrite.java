@@ -250,7 +250,7 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         .checkpoint(2)
         .assertNextEvent()
         .checkpointComplete(2)
-        .checkWrittenFullData(EXPECTED5)
+        .checkWrittenDataCOW(EXPECTED5)
         .end();
   }
 
@@ -282,7 +282,7 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         .checkpoint(2)
         .handleEvents(2)
         .checkpointComplete(2)
-        .checkWrittenFullData(EXPECTED5)
+        .checkWrittenDataCOW(EXPECTED5)
         .end();
   }
 
@@ -305,7 +305,7 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         .checkpoint(2)
         .handleEvents(1)
         .checkpointComplete(2)
-        .checkWrittenFullData(EXPECTED5)
+        .checkWrittenDataCOW(EXPECTED5)
         .end();
   }
 

@@ -21,7 +21,6 @@
 		"hoodie.datasource.hive_sync.table": "huditesttopic",
 		"hoodie.datasource.hive_sync.partition_fields": "date",
 		"hoodie.datasource.hive_sync.partition_extractor_class": "org.apache.hudi.hive.MultiPartKeysValueExtractor",
-		"hoodie.datasource.hive_sync.use_jdbc": "false",
 		"hoodie.datasource.hive_sync.mode": "hms",
 		"dfs.client.use.datanode.hostname": "true",
 		"hive.metastore.uris": "thrift://hivemetastore:9083",
