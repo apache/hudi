@@ -20,36 +20,33 @@
 package org.apache.hudi.snowflake.sync;
 
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.sync.common.AbstractSyncHoodieClient;
+import org.apache.hudi.sync.common.HoodieSyncClient;
 
 import com.snowflake.snowpark_java.Row;
 import com.snowflake.snowpark_java.Session;
-import com.snowflake.snowpark_java.types.StructField;
 import com.snowflake.snowpark_java.types.StructType;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.apache.parquet.schema.MessageType;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
-import java.util.stream.Collectors;
+
+import static org.apache.hudi.snowflake.sync.SnowflakeSyncConfig.SNOWFLAKE_SYNC_PROPERTIES_FILE;
+import static org.apache.hudi.snowflake.sync.SnowflakeSyncConfig.SNOWFLAKE_SYNC_SYNC_BASE_FILE_FORMAT;
 
 /*
  * Snowflake Hudi client to perform all the table operations on Snowflake Cloud Platform.
  */
-public class HoodieSnowflakeSyncClient extends AbstractSyncHoodieClient {
+public class HoodieSnowflakeSyncClient extends HoodieSyncClient {
   private static final Logger LOG = LogManager.getLogger(HoodieSnowflakeSyncClient.class);
-  private final SnowflakeSyncConfig syncConfig;
+  private final SnowflakeSyncConfig config;
   private transient Session snowflakeSession;
 
-  public HoodieSnowflakeSyncClient(final SnowflakeSyncConfig syncConfig, final FileSystem fs) {
-    super(syncConfig.basePath, false, false, false, fs);
-    this.syncConfig = syncConfig;
+  public HoodieSnowflakeSyncClient(final SnowflakeSyncConfig config) {
+    super(config);
+    this.config = config;
     this.createSnowflakeConnection();
   }
 
@@ -58,19 +55,12 @@ public class HoodieSnowflakeSyncClient extends AbstractSyncHoodieClient {
       try {
         // Initialize client that will be used to send requests. This client only needs to be created
         // once, and can be reused for multiple requests.
-        snowflakeSession = Session.builder().configFile(syncConfig.propertiesFile).create();
+        snowflakeSession = Session.builder().configFile(config.getString(SNOWFLAKE_SYNC_PROPERTIES_FILE)).create();
         LOG.info("Successfully established Snowflake connection.");
       } catch (Exception e) {
         throw new HoodieSnowflakeSyncException("Cannot create snowflake connection ", e);
       }
     }
-  }
-
-  @Override
-  public void createTable(final String tableName, final MessageType storageSchema, final String inputFormatClass,
-                          final String outputFormatClass, final String serdeClass,
-                          final Map<String, String> serdeProperties, final Map<String, String> tableProperties) {
-    // snowflake create table arguments are different, so do nothing.
   }
 
   public void createStage(String stageName, String basePath, String storageIntegration) {
@@ -102,7 +92,7 @@ public class HoodieSnowflakeSyncClient extends AbstractSyncHoodieClient {
 
   private void createCustomFileFormat(String fileFormatName) {
     try {
-      String query = "CREATE OR REPLACE FILE FORMAT " + fileFormatName + " TYPE = '" + syncConfig.baseFileFormat + "';";
+      String query = "CREATE OR REPLACE FILE FORMAT " + fileFormatName + " TYPE = '" + config.getString(SNOWFLAKE_SYNC_SYNC_BASE_FILE_FORMAT) + "';";
       snowflakeSession.sql(query).show();
     } catch (Exception e) {
       throw new HoodieSnowflakeSyncException("Custom file format was not created. ", e);
@@ -131,7 +121,7 @@ public class HoodieSnowflakeSyncClient extends AbstractSyncHoodieClient {
     }
   }
 
-  public void createVersionsTable(String stageName, String tableName, List<String> partitionFields, List<String> partitionExtractExpr) {
+  public void createVersionsTable(String stageName, String tableName, String partitionFields, String partitionExtractExpr) {
     try {
       String fileFormatName = "my_custom_file_format";
       createCustomFileFormat(fileFormatName);
@@ -143,17 +133,14 @@ public class HoodieSnowflakeSyncClient extends AbstractSyncHoodieClient {
             + String.join(", ", inferredColumns) + ") ";
       } else {
         // Configuring partitioning options for partitioned table.
-        inferredColumns.addAll(partitionExtractExpr);
-        String partitionFieldsStr = partitionFields.stream()
-            .map(s -> "\"" + s + "\"")
-            .collect(Collectors.joining(", "));
+        inferredColumns.addAll(Arrays.asList(partitionExtractExpr.split(",")));
         query = "CREATE OR REPLACE EXTERNAL TABLE " + tableName + "("
             + String.join(", ", inferredColumns)
-            + ") PARTITION BY (" + partitionFieldsStr + ") ";
+            + ") PARTITION BY (" + partitionFields + ") ";
       }
       query += " WITH LOCATION = @" + stageName
-          + "  FILE_FORMAT = (TYPE = " + syncConfig.baseFileFormat + ")"
-          + "  PATTERN = '.*[.]" + syncConfig.baseFileFormat.toLowerCase() + "'"
+          + "  FILE_FORMAT = (TYPE = " + config.getString(SNOWFLAKE_SYNC_SYNC_BASE_FILE_FORMAT) + ")"
+          + "  PATTERN = '.*[.]" + config.getString(SNOWFLAKE_SYNC_SYNC_BASE_FILE_FORMAT).toLowerCase() + "'"
           + "  AUTO_REFRESH = false";
       snowflakeSession.sql(query).show();
       LOG.info("External versions table created.");
@@ -175,22 +162,6 @@ public class HoodieSnowflakeSyncClient extends AbstractSyncHoodieClient {
   }
 
   @Override
-  public Map<String, String> getTableSchema(String tableName) {
-    try {
-      StructType schema = snowflakeSession.table(tableName).schema();
-      Map<String, String> columnsMap =  new HashMap<>();
-      for (StructField field: schema) {
-        columnsMap.put(
-            field.name(),
-            field.dataType().toString());
-      }
-      return columnsMap;
-    } catch (Exception e) {
-      throw new HoodieSnowflakeSyncException("Unable to infer schema: ", e);
-    }
-  }
-
-  @Override
   public void addPartitionsToTable(final String tableName, final List<String> partitionsToAdd) {
     try {
       String query = "ALTER EXTERNAL TABLE " + tableName + " REFRESH";
@@ -199,11 +170,6 @@ public class HoodieSnowflakeSyncClient extends AbstractSyncHoodieClient {
     } catch (Exception e) {
       throw new HoodieSnowflakeSyncException("Table metadata not refreshed ", e);
     }
-  }
-
-  @Override
-  public boolean doesTableExist(final String tableName) {
-    return tableExists(tableName);
   }
 
   @Override

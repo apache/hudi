@@ -19,90 +19,95 @@
 
 package org.apache.hudi.snowflake.sync;
 
-import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.config.ConfigProperty;
+import org.apache.hudi.sync.common.HoodieSyncConfig;
 
 import com.beust.jcommander.Parameter;
+import com.beust.jcommander.ParametersDelegate;
 
 import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
+import java.util.Properties;
 
 /**
  * Configs needed to sync data into Snowflake.
  */
-public class SnowflakeSyncConfig implements Serializable {
-  public static final String SNOWFLAKE_SYNC_PROPERTIES_FILE = "hoodie.snowflake.sync.properties_file";
-  public static final String SNOWFLAKE_SYNC_STORAGE_INTEGRATION = "hoodie.snowflake.sync.storage_integration";
-  public static final String SNOWFLAKE_SYNC_TABLE_NAME = "hoodie.snowflake.sync.table_name";
-  public static final String SNOWFLAKE_SYNC_SYNC_BASE_PATH = "hoodie.snowflake.sync.base_path";
-  public static final String SNOWFLAKE_SYNC_SYNC_BASE_FILE_FORMAT = "hoodie.snowflake.sync.base_file_format";
-  public static final String SNOWFLAKE_SYNC_PARTITION_FIELDS = "hoodie.snowflake.sync.partition_fields";
-  public static final String SNOWFLAKE_SYNC_PARTITION_EXTRACT_EXPRESSION = "hoodie.snowflake.sync.partition_extract_expression";
+public class SnowflakeSyncConfig extends HoodieSyncConfig implements Serializable {
+  public static final ConfigProperty<String> SNOWFLAKE_SYNC_PROPERTIES_FILE = ConfigProperty
+      .key("hoodie.snowflake.sync.properties_file")
+      .noDefaultValue()
+      .withDocumentation("Name of the snowflake properties file");
 
-  @Parameter(names = {"--properties-file"}, description = "name of the snowflake profile properties file.", required = true)
-  public String propertiesFile;
-  @Parameter(names = {"--storage-integration"}, description = "name of the storage integration in snowflake", required = true)
-  public String storageIntegration;
-  @Parameter(names = {"--table-name"}, description = "name of the target table in snowflake", required = true)
-  public String tableName;
-  @Parameter(names = {"--base-path"}, description = "Base path of the hoodie table to sync", required = true)
-  public String basePath;
-  @Parameter(names = {"--base-file-format"}, description = "Base path of the hoodie table to sync")
-  public String baseFileFormat = "PARQUET";
-  @Parameter(names = {"--partitioned-by"}, description = "Comma-delimited partition fields. Default to non-partitioned.")
-  public List<String> partitionFields = new ArrayList<>();
-  @Parameter(names = {"--partition-extract-expr"}, description = "Comma-delimited partition extract expression. Default to non-partitioned.")
-  public List<String> partitionExtractExpr = new ArrayList<>();
-  @Parameter(names = {"--help", "-h"}, help = true)
-  public Boolean help = false;
+  public static final ConfigProperty<String> SNOWFLAKE_SYNC_STORAGE_INTEGRATION = ConfigProperty
+      .key("hoodie.snowflake.sync.storage_integration")
+      .noDefaultValue()
+      .withDocumentation("Name of the snowflake storage integration");
 
-  public static SnowflakeSyncConfig copy(SnowflakeSyncConfig cfg) {
-    SnowflakeSyncConfig newConfig = new SnowflakeSyncConfig();
-    newConfig.propertiesFile = cfg.propertiesFile;
-    newConfig.storageIntegration = cfg.storageIntegration;
-    newConfig.tableName = cfg.tableName;
-    newConfig.basePath = cfg.basePath;
-    newConfig.baseFileFormat = cfg.baseFileFormat;
-    newConfig.partitionFields = cfg.partitionFields;
-    newConfig.partitionExtractExpr = cfg.partitionExtractExpr;
-    newConfig.help = cfg.help;
-    return newConfig;
+  public static final ConfigProperty<String> SNOWFLAKE_SYNC_TABLE_NAME = ConfigProperty
+      .key("hoodie.snowflake.sync.table_name")
+      .noDefaultValue()
+      .withDocumentation("Name of the target table in Snowflake");
+
+  public static final ConfigProperty<String> SNOWFLAKE_SYNC_SYNC_BASE_PATH = ConfigProperty
+      .key("hoodie.snowflake.sync.base_path")
+      .noDefaultValue()
+      .withDocumentation("Base path of the hoodie table to sync.");
+
+  public static final ConfigProperty<String> SNOWFLAKE_SYNC_SYNC_BASE_FILE_FORMAT = ConfigProperty
+      .key("hoodie.snowflake.sync.base_file_format")
+      .noDefaultValue()
+      .withDocumentation("Name of the file format");
+
+  public static final ConfigProperty<String> SNOWFLAKE_SYNC_PARTITION_FIELDS = ConfigProperty
+      .key("hoodie.snowflake.sync.partition_fields")
+      .noDefaultValue()
+      .withDocumentation("Comma-delimited partition fields. Default to non-partitioned.");
+
+  public static final ConfigProperty<String> SNOWFLAKE_SYNC_PARTITION_EXTRACT_EXPRESSION = ConfigProperty
+      .key("hoodie.snowflake.sync.partition_extract_expression")
+      .noDefaultValue()
+      .withDocumentation("Comma-delimited partition extract expression. Default to non-partitioned.");
+
+  public SnowflakeSyncConfig(final Properties props) {
+    super(props);
   }
 
-  public TypedProperties toProps() {
-    TypedProperties properties = new TypedProperties();
-    properties.put(SNOWFLAKE_SYNC_PROPERTIES_FILE, propertiesFile);
-    properties.put(SNOWFLAKE_SYNC_STORAGE_INTEGRATION, storageIntegration);
-    properties.put(SNOWFLAKE_SYNC_TABLE_NAME, tableName);
-    properties.put(SNOWFLAKE_SYNC_SYNC_BASE_PATH, basePath);
-    properties.put(SNOWFLAKE_SYNC_SYNC_BASE_FILE_FORMAT, baseFileFormat);
-    properties.put(SNOWFLAKE_SYNC_PARTITION_FIELDS, String.join(",", partitionFields));
-    properties.put(SNOWFLAKE_SYNC_PARTITION_EXTRACT_EXPRESSION, String.join(",", partitionExtractExpr));
-    return properties;
-  }
+  public static class SnowflakeSyncConfigParams {
 
-  public static SnowflakeSyncConfig fromProps(TypedProperties props) {
-    SnowflakeSyncConfig config = new SnowflakeSyncConfig();
-    config.propertiesFile = props.getString(SNOWFLAKE_SYNC_PROPERTIES_FILE);
-    config.storageIntegration = props.getString(SNOWFLAKE_SYNC_STORAGE_INTEGRATION);
-    config.tableName = props.getString(SNOWFLAKE_SYNC_TABLE_NAME);
-    config.basePath = props.getString(SNOWFLAKE_SYNC_SYNC_BASE_PATH);
-    config.baseFileFormat = props.getString(SNOWFLAKE_SYNC_SYNC_BASE_FILE_FORMAT);
-    config.partitionFields = props.getStringList(SNOWFLAKE_SYNC_PARTITION_FIELDS, ",", Collections.emptyList());
-    config.partitionExtractExpr = props.getStringList(SNOWFLAKE_SYNC_PARTITION_EXTRACT_EXPRESSION, ",", Collections.emptyList());
-    return config;
-  }
+    @ParametersDelegate()
+    public final HoodieSyncConfigParams hoodieSyncConfigParams = new HoodieSyncConfigParams();
+    @Parameter(names = {"--properties-file"}, description = "name of the snowflake profile properties file.", required = true)
+    public String propertiesFile;
+    @Parameter(names = {"--storage-integration"}, description = "name of the storage integration in snowflake", required = true)
+    public String storageIntegration;
+    @Parameter(names = {"--table-name"}, description = "name of the target table in snowflake", required = true)
+    public String tableName;
+    @Parameter(names = {"--base-path"}, description = "Base path of the hoodie table to sync", required = true)
+    public String basePath;
+    @Parameter(names = {"--base-file-format"}, description = "Base path of the hoodie table to sync")
+    public String baseFileFormat = "PARQUET";
+    @Parameter(names = {"--partitioned-by"}, description = "Comma-delimited partition fields. Default to non-partitioned.")
+    public List<String> partitionFields = new ArrayList<>();
+    @Parameter(names = {"--partition-extract-expr"}, description = "Comma-delimited partition extract expression. Default to non-partitioned.")
+    public List<String> partitionExtractExpr = new ArrayList<>();
+    @Parameter(names = {"--help", "-h"}, help = true)
+    public Boolean help = false;
 
-  @Override
-  public String toString() {
-    return "SnowflakeSyncConfig{propertiesFile='" + propertiesFile
-        + "', storageIntegration'" + storageIntegration
-        + "', tableName='" + tableName
-        + "', basePath='" + basePath
-        + "', baseFileFormat='" + baseFileFormat
-        + "', partitionFields='" + partitionFields
-        + "', partitionExtractExpr='" + partitionExtractExpr
-        + "', help=" + help + "}";
+    public Properties toProps() {
+      final Properties props = hoodieSyncConfigParams.toProps();
+      props.put(SnowflakeSyncConfig.SNOWFLAKE_SYNC_PROPERTIES_FILE, this.propertiesFile);
+      props.put(SnowflakeSyncConfig.SNOWFLAKE_SYNC_STORAGE_INTEGRATION, this.storageIntegration);
+      props.put(SnowflakeSyncConfig.SNOWFLAKE_SYNC_TABLE_NAME, this.tableName);
+      props.put(SnowflakeSyncConfig.SNOWFLAKE_SYNC_SYNC_BASE_PATH, this.basePath);
+      props.put(SnowflakeSyncConfig.SNOWFLAKE_SYNC_SYNC_BASE_FILE_FORMAT, this.baseFileFormat);
+      props.put(SnowflakeSyncConfig.SNOWFLAKE_SYNC_PARTITION_FIELDS, String.join(",", this.partitionFields));
+      props.put(SnowflakeSyncConfig.SNOWFLAKE_SYNC_PARTITION_EXTRACT_EXPRESSION, String.join(",", this.partitionExtractExpr));
+      return props;
+    }
+
+    public boolean isHelp() {
+      return hoodieSyncConfigParams.isHelp();
+    }
   }
 }

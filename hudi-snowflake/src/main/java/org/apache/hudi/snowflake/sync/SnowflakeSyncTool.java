@@ -19,18 +19,22 @@
 
 package org.apache.hudi.snowflake.sync;
 
-import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.sync.common.AbstractSyncTool;
+import org.apache.hudi.sync.common.HoodieSyncTool;
 import org.apache.hudi.sync.common.util.ManifestFileWriter;
 
 import com.beust.jcommander.JCommander;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+
+import java.util.Properties;
+
+import static org.apache.hudi.snowflake.sync.SnowflakeSyncConfig.SNOWFLAKE_SYNC_PARTITION_EXTRACT_EXPRESSION;
+import static org.apache.hudi.snowflake.sync.SnowflakeSyncConfig.SNOWFLAKE_SYNC_PARTITION_FIELDS;
+import static org.apache.hudi.snowflake.sync.SnowflakeSyncConfig.SNOWFLAKE_SYNC_STORAGE_INTEGRATION;
+import static org.apache.hudi.snowflake.sync.SnowflakeSyncConfig.SNOWFLAKE_SYNC_SYNC_BASE_PATH;
+import static org.apache.hudi.snowflake.sync.SnowflakeSyncConfig.SNOWFLAKE_SYNC_TABLE_NAME;
 
 /**
  * Tool to sync a hoodie table with a snowflake table. Either use it as an api
@@ -64,31 +68,40 @@ import org.apache.log4j.Logger;
  *
  * @Experimental
  */
-public class SnowflakeSyncTool extends AbstractSyncTool {
+public class SnowflakeSyncTool extends HoodieSyncTool {
 
   private static final Logger LOG = LogManager.getLogger(SnowflakeSyncTool.class);
-  private static final String STAGE_SUFFIX  = "_stage";
-  private static final String VERSIONS_SUFFIX  = "_versions";
-  private static final String MANIFEST_SUFFIX  = "_manifest";
-
-  public final SnowflakeSyncConfig cfg;
+  public final SnowflakeSyncConfig config;
+  public final String tableName;
   public final String stageName;
   public final String manifestTableName;
   public final String versionsTableName;
   public final String snapshotViewName;
 
-  public SnowflakeSyncTool(TypedProperties properties, Configuration conf, FileSystem fs) {
-    super(properties, conf, fs);
-    cfg = SnowflakeSyncConfig.fromProps(properties);
-    stageName = cfg.tableName + STAGE_SUFFIX;
-    manifestTableName = cfg.tableName + MANIFEST_SUFFIX;
-    versionsTableName = cfg.tableName + VERSIONS_SUFFIX;
-    snapshotViewName = cfg.tableName;
+  public SnowflakeSyncTool(Properties props) {
+    super(props);
+    this.config = new SnowflakeSyncConfig(props);
+    this.tableName = config.getString(SNOWFLAKE_SYNC_TABLE_NAME);
+    stageName = tableName + "_stage";
+    manifestTableName = tableName + "_manifest";
+    versionsTableName = tableName + "_versions";
+    snapshotViewName = tableName;
+  }
+
+  public static void main(String[] args) {
+    final SnowflakeSyncConfig.SnowflakeSyncConfigParams params = new SnowflakeSyncConfig.SnowflakeSyncConfigParams();
+    JCommander cmd = JCommander.newBuilder().addObject(params).build();
+    cmd.parse(args);
+    if (params.isHelp()) {
+      cmd.usage();
+      System.exit(0);
+    }
+    new SnowflakeSyncTool(params.toProps()).syncHoodieTable();
   }
 
   @Override
   public void syncHoodieTable() {
-    try (HoodieSnowflakeSyncClient snowSyncClient = new HoodieSnowflakeSyncClient(SnowflakeSyncConfig.fromProps(props), fs)) {
+    try (HoodieSnowflakeSyncClient snowSyncClient = new HoodieSnowflakeSyncClient(config)) {
       switch (snowSyncClient.getTableType()) {
         case COPY_ON_WRITE:
           syncCoWTable(snowSyncClient);
@@ -98,7 +111,7 @@ public class SnowflakeSyncTool extends AbstractSyncTool {
           throw new UnsupportedOperationException(snowSyncClient.getTableType() + " table type is not supported yet.");
       }
     } catch (Exception e) {
-      throw new HoodieSnowflakeSyncException("Got runtime exception when snowflake syncing " + cfg.tableName, e);
+      throw new HoodieSnowflakeSyncException("Got runtime exception when snowflake syncing " + tableName, e);
     }
   }
 
@@ -107,32 +120,25 @@ public class SnowflakeSyncTool extends AbstractSyncTool {
     LOG.info("Sync hoodie table " + snapshotViewName + " at base path " + snowSyncClient.getBasePath());
 
     ManifestFileWriter manifestFileWriter = ManifestFileWriter.builder()
-        .setConf(conf)
-        .setBasePath(cfg.basePath)
+        .setConf(config.getHadoopConf())
+        .setBasePath(config.getString(SNOWFLAKE_SYNC_SYNC_BASE_PATH))
         .setUseFileListingFromMetadata(false)
         .setAssumeDatePartitioning(false)
         .build();
     manifestFileWriter.writeManifestFile();
 
-    snowSyncClient.createStage(stageName, cfg.basePath, cfg.storageIntegration);
+    snowSyncClient.createStage(stageName,
+        config.getString(SNOWFLAKE_SYNC_SYNC_BASE_PATH),
+        config.getString(SNOWFLAKE_SYNC_STORAGE_INTEGRATION));
     LOG.info("External temporary stage creation complete for " + stageName);
     snowSyncClient.createManifestTable(stageName, manifestTableName);
     LOG.info("Manifest table creation complete for " + manifestTableName);
-    snowSyncClient.createVersionsTable(stageName, versionsTableName, cfg.partitionFields, cfg.partitionExtractExpr);
+    snowSyncClient.createVersionsTable(stageName, versionsTableName,
+        config.getString(SNOWFLAKE_SYNC_PARTITION_FIELDS),
+        config.getString(SNOWFLAKE_SYNC_PARTITION_EXTRACT_EXPRESSION));
     LOG.info("Versions table creation complete for " + versionsTableName);
     snowSyncClient.createSnapshotView(snapshotViewName, versionsTableName, manifestTableName);
     LOG.info("Snapshot view creation complete for " + snapshotViewName);
     LOG.info("Snowflake sync complete for " + snapshotViewName);
-  }
-
-  public static void main(String[] args) {
-    SnowflakeSyncConfig cfg = new SnowflakeSyncConfig();
-    JCommander cmd = new JCommander(cfg, null, args);
-    if (cfg.help || args.length == 0) {
-      cmd.usage();
-      System.exit(1);
-    }
-    FileSystem fs = FSUtils.getFs(cfg.basePath, new Configuration());
-    new SnowflakeSyncTool(cfg.toProps(), fs.getConf(), fs).syncHoodieTable();
   }
 }
