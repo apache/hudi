@@ -22,7 +22,6 @@ package org.apache.hudi.hive.replication;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.hive.testutils.HiveTestService;
 
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
