@@ -107,7 +107,7 @@ public class HoodieLockConfig extends HoodieConfig {
       .key(FILESYSTEM_LOCK_PATH_PROP_KEY)
       .noDefaultValue()
       .sinceVersion("0.8.0")
-      .withDocumentation("For DFS based lock providers, path to store the locks under. If don't provide one, will use Table's meta path as default");
+      .withDocumentation("For DFS based lock providers, path to store the locks under. use Table's meta path as default");
 
   public static final ConfigProperty<Integer> FILESYSTEM_LOCK_EXPIRE = ConfigProperty
         .key(FILESYSTEM_LOCK_EXPIRE_PROP_KEY)

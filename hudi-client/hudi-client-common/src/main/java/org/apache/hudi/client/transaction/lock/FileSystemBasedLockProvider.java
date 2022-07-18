@@ -63,7 +63,7 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
     this.lockConfiguration = lockConfiguration;
     String lockDirectory = lockConfiguration.getConfig().getString(FILESYSTEM_LOCK_PATH_PROP_KEY, null);
     if (StringUtils.isNullOrEmpty(lockDirectory)) {
-      lockDirectory = lockConfiguration.getConfig().getString(HoodieWriteConfig.BASE_PATH.key(), null)
+      lockDirectory = lockConfiguration.getConfig().getString(HoodieWriteConfig.BASE_PATH.key())
             + Path.SEPARATOR + HoodieTableMetaClient.METAFOLDER_NAME;
     }
     this.lockTimeoutMinutes = lockConfiguration.getConfig().getInteger(FILESYSTEM_LOCK_EXPIRE_PROP_KEY);
@@ -86,11 +86,9 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
   public boolean tryLock(long time, TimeUnit unit) {
     try {
       synchronized (LOCK_FILE_NAME) {
-        if (fs.exists(this.lockFile)) {
-          // Check whether lock is already expired or not, if so try to delete lock file
-          if (checkIfExpired()) {
-            fs.delete(this.lockFile, true);
-          }
+        // Check whether lock is already expired, if so try to delete lock file
+        if (fs.exists(this.lockFile) && checkIfExpired()) {
+          fs.delete(this.lockFile, true);
         }
         acquireLock();
         return fs.exists(this.lockFile);
