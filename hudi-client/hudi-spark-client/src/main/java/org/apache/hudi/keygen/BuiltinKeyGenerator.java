@@ -147,15 +147,13 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
     StringBuilder sb = new StringBuilder();
     for (int i = 0; i < partitionPathParts.length; ++i) {
       String partitionPathPartStr = partitionPathParts[i] != null
-          ? partitionPathParts[i].toString()
+          ? tryEncodePartitionPath(partitionPathParts[i]).toString()
           : HUDI_DEFAULT_PARTITION_PATH;
 
-      // TODO support url-encoding
-
       if (hiveStylePartitioning) {
-        sb.append(recordKeyFields.get(i))
-            .append("=")
-            .append(partitionPathPartStr);
+        sb.append(partitionPathFields.get(i))
+          .append("=")
+          .append(partitionPathPartStr);
       } else {
         sb.append(partitionPathPartStr);
       }
