@@ -257,20 +257,36 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
    * NOTE: This method has to stay final (so that it's easier for JIT compiler to apply certain
    *       optimizations, like inlining)
    */
+  @SuppressWarnings("StringEquality")
   protected final String combineCompositeRecordKey(Object... recordKeyParts) {
+    boolean hasNonNullNonEmptyPart = false;
     StringBuilder sb = new StringBuilder();
     for (int i = 0; i < recordKeyParts.length; ++i) {
+      // NOTE: If record-key part has already been a string [[toString]] will be a no-op
+      String convertedKeyPart = handleEmptyCompositeKeyPart(recordKeyParts[i]);
+
       sb.append(recordKeyFields.get(i));
       sb.append(COMPOSITE_KEY_FIELD_VALUE_INFIX);
-      // NOTE: If record-key part has already been a string [[toString]] will be a no-op
-      sb.append(handleEmptyCompositeKeyPart(recordKeyParts[i]));
+      sb.append(convertedKeyPart);
+      // This check is to validate that overall composite-key has at least one non-null, non-empty
+      // segment
+      //
+      // NOTE: Converted key-part is compared against null/empty stub using ref-equality
+      //       for performance reasons (it relies on the fact that we're using internalized
+      //       constants)
+      hasNonNullNonEmptyPart |= convertedKeyPart != NULL_RECORDKEY_PLACEHOLDER
+          && convertedKeyPart != EMPTY_RECORDKEY_PLACEHOLDER;
 
       if (i < recordKeyParts.length - 1) {
         sb.append(DEFAULT_RECORD_KEY_PARTS_SEPARATOR);
       }
     }
 
-    return sb.toString();
+    if (hasNonNullNonEmptyPart) {
+      return sb.toString();
+    } else {
+      throw new HoodieKeyException(String.format("All of the values for (%s) were either null or empty", recordKeyFields));
+    }
   }
 
   /**
@@ -278,18 +294,29 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
    *       optimizations, like inlining)
    */
   protected final UTF8String combineCompositeRecordKeyUTF8(Object... recordKeyParts) {
+    boolean hasNonNullNonEmptyPart = false;
     UTF8StringBuilder sb = new UTF8StringBuilder();
     for (int i = 0; i < recordKeyParts.length; ++i) {
+      UTF8String convertedKeyPart = handleEmptyCompositeKeyPartUTF8(toUTF8String(recordKeyParts[i]));
+
       sb.append(recordKeyFields.get(i));
       sb.append(COMPOSITE_KEY_FIELD_VALUE_INFIX);
-      sb.append(handleEmptyCompositeKeyPartUTF8(toUTF8String(recordKeyParts[i])));
+      sb.append(convertedKeyPart);
+      // This check is to validate that overall composite-key has at least one non-null, non-empty
+      // segment
+      hasNonNullNonEmptyPart |= convertedKeyPart != NULL_RECORD_KEY_PLACEHOLDER_UTF8
+          && convertedKeyPart != EMPTY_RECORD_KEY_PLACEHOLDER_UTF8;
 
       if (i < recordKeyParts.length - 1) {
         sb.append(DEFAULT_RECORD_KEY_PARTS_SEPARATOR);
       }
     }
 
-    return sb.build();
+    if (hasNonNullNonEmptyPart) {
+      return sb.build();
+    } else {
+      throw new HoodieKeyException(String.format("All of the values for (%s) were either null or empty", recordKeyFields));
+    }
   }
 
   protected static UTF8String toUTF8String(Object o) {
