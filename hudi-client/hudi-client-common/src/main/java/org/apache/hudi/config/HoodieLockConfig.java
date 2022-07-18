@@ -26,6 +26,7 @@ import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.lock.LockProvider;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.timeline.service.handlers.marker.AsyncTimelineMarkerEarlyConflictDetectionStrategy;
 
 import java.io.File;
 import java.io.FileReader;
@@ -180,15 +181,15 @@ public class HoodieLockConfig extends HoodieConfig {
       .defaultValue(SimpleConcurrentFileWritesConflictResolutionStrategy.class.getName())
       .sinceVersion("0.8.0")
       .withDocumentation("Lock provider class name, this should be subclass of "
-          + "org.apache.hudi.common.conflict.detection.HoodieEarlyConflictDetectionStrategy");
+          + "org.apache.hudi.client.transaction.ConflictResolutionStrategy");
 
   // Pluggable strategies to use when early conflict detection
   public static final ConfigProperty<String> EARLY_CONFLICT_DETECTION_STRATEGY_CLASS_NAME = ConfigProperty
       .key(LOCK_PREFIX + "early.conflict.detection.strategy")
-      .defaultValue(SimpleConcurrentFileWritesConflictResolutionStrategy.class.getName())
+      .defaultValue(AsyncTimelineMarkerEarlyConflictDetectionStrategy.class.getName())
       .sinceVersion("0.12.0")
-      .withDocumentation("early conflict detection class name, this should be subclass of "
-          + "oorg.apache.hudi.common.model.HoodieEarlyConflictDetectionStrategy");
+      .withDocumentation("Early conflict detection class name, this should be subclass of "
+          + "org.apache.hudi.common.conflict.detection.HoodieEarlyConflictDetectionStrategy");
 
   public static final ConfigProperty<Boolean> EARLY_CONFLICT_DETECTION_ENABLE = ConfigProperty
       .key(LOCK_PREFIX + "early.conflict.detection.enable")
