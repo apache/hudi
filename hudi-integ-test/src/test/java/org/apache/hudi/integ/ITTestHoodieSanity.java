@@ -34,6 +34,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Smoke tests to run as part of verification.
  */
+
+@Disabled
 public class ITTestHoodieSanity extends ITTestBase {
 
   private static final String HDFS_BASE_URL =  "hdfs://namenode";
@@ -58,6 +60,7 @@ public class ITTestHoodieSanity extends ITTestBase {
     dropHiveTables(hiveTableName, HoodieTableType.COPY_ON_WRITE.name());
   }
 
+  @Disabled
   @ParameterizedTest
   @ValueSource(strings = { HOODIE_JAVA_APP, HOODIE_JAVA_STREAMING_APP })
   /**
