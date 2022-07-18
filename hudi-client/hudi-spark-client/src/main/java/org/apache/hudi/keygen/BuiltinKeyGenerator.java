@@ -233,7 +233,7 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
    * NOTE: This method has to stay final (so that it's easier for JIT compiler to apply certain
    *       optimizations, like inlining)
    */
-  protected final UTF8String combineRecordKeyUTF8(Object... recordKeyParts) {
+  protected final UTF8String combineRecordKeyUnsafe(Object... recordKeyParts) {
     if (recordKeyParts.length == 1) {
       return requireNonNullNonEmptyKey(toUTF8String(recordKeyParts[0]));
     }
@@ -291,7 +291,7 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
    * NOTE: This method has to stay final (so that it's easier for JIT compiler to apply certain
    *       optimizations, like inlining)
    */
-  protected final UTF8String combineCompositeRecordKeyUTF8(Object... recordKeyParts) {
+  protected final UTF8String combineCompositeRecordKeyUnsafe(Object... recordKeyParts) {
     boolean hasNonNullNonEmptyPart = false;
     UTF8StringBuilder sb = new UTF8StringBuilder();
     for (int i = 0; i < recordKeyParts.length; ++i) {

@@ -71,7 +71,7 @@ public class ComplexKeyGenerator extends BuiltinKeyGenerator {
   @Override
   public UTF8String getRecordKey(InternalRow internalRow, StructType schema) {
     tryInitRowAccessor(schema);
-    return combineCompositeRecordKeyUTF8(rowAccessor.getRecordKeyParts(internalRow));
+    return combineCompositeRecordKeyUnsafe(rowAccessor.getRecordKeyParts(internalRow));
   }
 
   @Override
