@@ -38,7 +38,6 @@ import org.apache.spark.unsafe.types.UTF8String;
 import scala.Function1;
 
 import javax.annotation.concurrent.ThreadSafe;
-
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -47,7 +46,9 @@ import static org.apache.hudi.common.util.CollectionUtils.tail;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 import static org.apache.hudi.keygen.KeyGenUtils.DEFAULT_PARTITION_PATH_SEPARATOR;
 import static org.apache.hudi.keygen.KeyGenUtils.DEFAULT_RECORD_KEY_PARTS_SEPARATOR;
+import static org.apache.hudi.keygen.KeyGenUtils.EMPTY_RECORDKEY_PLACEHOLDER;
 import static org.apache.hudi.keygen.KeyGenUtils.HUDI_DEFAULT_PARTITION_PATH;
+import static org.apache.hudi.keygen.KeyGenUtils.NULL_RECORDKEY_PLACEHOLDER;
 
 /**
  * Base class for all built-in key generators.
@@ -65,6 +66,9 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
   private static final String COMPOSITE_KEY_FIELD_VALUE_INFIX = ":";
 
   protected static final UTF8String HUDI_DEFAULT_PARTITION_PATH_UTF8 = UTF8String.fromString(HUDI_DEFAULT_PARTITION_PATH);
+  protected static final UTF8String NULL_RECORD_KEY_PLACEHOLDER_UTF8 = UTF8String.fromString(NULL_RECORDKEY_PLACEHOLDER);
+  protected static final UTF8String EMPTY_RECORD_KEY_PLACEHOLDER_UTF8 = UTF8String.fromString(EMPTY_RECORDKEY_PLACEHOLDER);
+
 
   protected transient volatile SparkRowConverter rowConverter;
   protected transient volatile SparkRowAccessor rowAccessor;
@@ -253,7 +257,7 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
       sb.append(recordKeyFields.get(i));
       sb.append(COMPOSITE_KEY_FIELD_VALUE_INFIX);
       // NOTE: If record-key part has already been a string [[toString]] will be a no-op
-      sb.append(requireNonNullNonEmptyKey(recordKeyParts[i].toString()));
+      sb.append(handleEmptyCompositeKeyPart(recordKeyParts[i]));
 
       if (i < recordKeyParts.length - 1) {
         sb.append(DEFAULT_RECORD_KEY_PARTS_SEPARATOR);
@@ -272,7 +276,7 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
     for (int i = 0; i < recordKeyParts.length; ++i) {
       sb.append(recordKeyFields.get(i));
       sb.append(COMPOSITE_KEY_FIELD_VALUE_INFIX);
-      sb.append(requireNonNullNonEmptyKey(toUTF8String(recordKeyParts[i])));
+      sb.append(handleEmptyCompositeKeyPartUTF8(toUTF8String(recordKeyParts[i])));
 
       if (i < recordKeyParts.length - 1) {
         sb.append(DEFAULT_RECORD_KEY_PARTS_SEPARATOR);
@@ -327,6 +331,54 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
         }
       }
     }
+  }
+
+  private static String handleEmptyCompositeKeyPart(Object keyPart) {
+    if (keyPart == null) {
+      return NULL_RECORDKEY_PLACEHOLDER;
+    } else {
+      // NOTE: [[toString]] is a no-op if key-part was already a [[String]]
+      String keyPartStr = keyPart.toString();
+      return !keyPartStr.isEmpty() ? keyPartStr : EMPTY_RECORDKEY_PLACEHOLDER;
+    }
+  }
+
+  private static UTF8String handleEmptyCompositeKeyPartUTF8(UTF8String keyPart) {
+    if (keyPart == null) {
+      return NULL_RECORD_KEY_PLACEHOLDER_UTF8;
+    } else if (keyPart.numChars() == 0) {
+      return EMPTY_RECORD_KEY_PLACEHOLDER_UTF8;
+    }
+
+    return keyPart;
+  }
+
+  /**
+   * Converts provided (raw) value extracted from the {@link InternalRow} object into a deserialized,
+   * JVM native format (for ex, converting {@code Long} into {@link Instant},
+   * {@code Integer} to {@link LocalDate}, etc)
+   *
+   * This method allows to avoid costly full-row deserialization sequence. Note, that this method
+   * should be maintained in sync w/
+   *
+   * <ol>
+   *   <li>{@code RowEncoder#deserializerFor}, as well as</li>
+   *   <li>{@code HoodieAvroUtils#convertValueForAvroLogicalTypes}</li>
+   * </ol>
+   *
+   * @param dataType target data-type of the given value
+   * @param value target value to be converted
+   */
+  private static Object convertToLogicalDataType(DataType dataType, Object value) {
+    if (dataType instanceof TimestampType) {
+      // Provided value have to be [[Long]] in this case, representing micros since epoch
+      return new Timestamp((Long) value / 1000);
+    } else if (dataType instanceof DateType) {
+      // Provided value have to be [[Int]] in this case
+      return LocalDate.ofEpochDay((Integer) value);
+    }
+
+    return value;
   }
 
   protected static class SparkRowConverter {
@@ -400,34 +452,6 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
 
       return nestedFieldValues;
     }
-  }
-
-  /**
-   * Converts provided (raw) value extracted from the {@link InternalRow} object into a deserialized,
-   * JVM native format (for ex, converting {@code Long} into {@link Instant},
-   * {@code Integer} to {@link LocalDate}, etc)
-   *
-   * This method allows to avoid costly full-row deserialization sequence. Note, that this method
-   * should be maintained in sync w/
-   *
-   * <ol>
-   *   <li>{@code RowEncoder#deserializerFor}, as well as</li>
-   *   <li>{@code HoodieAvroUtils#convertValueForAvroLogicalTypes}</li>
-   * </ol>
-   *
-   * @param dataType target data-type of the given value
-   * @param value target value to be converted
-   */
-  private static Object convertToLogicalDataType(DataType dataType, Object value) {
-    if (dataType instanceof TimestampType) {
-      // Provided value have to be [[Long]] in this case, representing micros since epoch
-      return new Timestamp((Long) value / 1000);
-    } else if (dataType instanceof DateType) {
-      // Provided value have to be [[Int]] in this case
-      return LocalDate.ofEpochDay((Integer) value);
-    }
-
-    return value;
   }
 }
 
