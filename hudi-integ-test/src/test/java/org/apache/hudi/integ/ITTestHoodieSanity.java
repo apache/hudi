@@ -23,6 +23,7 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -43,6 +44,7 @@ public class ITTestHoodieSanity extends ITTestBase {
     SINGLE_KEY_PARTITIONED, MULTI_KEYS_PARTITIONED, NON_PARTITIONED,
   }
 
+  @Disabled
   @Test
   /**
    * A basic integration test that runs HoodieJavaApp to create a sample COW Hoodie with single partition key data-set
@@ -95,6 +97,7 @@ public class ITTestHoodieSanity extends ITTestBase {
     dropHiveTables(hiveTableName, HoodieTableType.MERGE_ON_READ.name());
   }
 
+  @Disabled
   @ParameterizedTest
   @ValueSource(strings = { HOODIE_JAVA_APP, HOODIE_JAVA_STREAMING_APP })
   /**
