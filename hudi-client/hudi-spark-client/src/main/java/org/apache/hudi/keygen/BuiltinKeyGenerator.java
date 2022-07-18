@@ -62,6 +62,8 @@ import static org.apache.hudi.keygen.KeyGenUtils.HUDI_DEFAULT_PARTITION_PATH;
 @ThreadSafe
 public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements SparkKeyGeneratorInterface {
 
+  private static final String COMPOSITE_KEY_FIELD_VALUE_INFIX = ":";
+
   protected static final UTF8String HUDI_DEFAULT_PARTITION_PATH_UTF8 = UTF8String.fromString(HUDI_DEFAULT_PARTITION_PATH);
 
   protected transient volatile SparkRowConverter rowConverter;
@@ -231,6 +233,45 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
     UTF8StringBuilder sb = new UTF8StringBuilder();
     for (int i = 0; i < recordKeyParts.length; ++i) {
       // NOTE: If record-key part has already been a string [[toString]] will be a no-op
+      sb.append(requireNonNullNonEmptyKey(toUTF8String(recordKeyParts[i])));
+
+      if (i < recordKeyParts.length - 1) {
+        sb.append(DEFAULT_RECORD_KEY_PARTS_SEPARATOR);
+      }
+    }
+
+    return sb.build();
+  }
+
+  /**
+   * NOTE: This method has to stay final (so that it's easier for JIT compiler to apply certain
+   *       optimizations, like inlining)
+   */
+  protected final String combineCompositeRecordKey(Object... recordKeyParts) {
+    StringBuilder sb = new StringBuilder();
+    for (int i = 0; i < recordKeyParts.length; ++i) {
+      sb.append(recordKeyFields.get(i));
+      sb.append(COMPOSITE_KEY_FIELD_VALUE_INFIX);
+      // NOTE: If record-key part has already been a string [[toString]] will be a no-op
+      sb.append(requireNonNullNonEmptyKey(recordKeyParts[i].toString()));
+
+      if (i < recordKeyParts.length - 1) {
+        sb.append(DEFAULT_RECORD_KEY_PARTS_SEPARATOR);
+      }
+    }
+
+    return sb.toString();
+  }
+
+  /**
+   * NOTE: This method has to stay final (so that it's easier for JIT compiler to apply certain
+   *       optimizations, like inlining)
+   */
+  protected final UTF8String combineCompositeRecordKeyUTF8(Object... recordKeyParts) {
+    UTF8StringBuilder sb = new UTF8StringBuilder();
+    for (int i = 0; i < recordKeyParts.length; ++i) {
+      sb.append(recordKeyFields.get(i));
+      sb.append(COMPOSITE_KEY_FIELD_VALUE_INFIX);
       sb.append(requireNonNullNonEmptyKey(toUTF8String(recordKeyParts[i])));
 
       if (i < recordKeyParts.length - 1) {
