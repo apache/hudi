@@ -48,7 +48,7 @@ bin/spark-submit \
   --min-sync-interval-seconds 60
 ```
 
-## Example with Spark 3.1.2
+## Example with Spark 3.1.3
 
 * Build Hudi: `mvn clean install -DskipTests -Dspark3.1 -Dscala-2.12`
 * Run deltastreamer
@@ -60,7 +60,7 @@ bin/spark-submit \
   --conf spark.sql.catalogImplementation=hive \
   --conf spark.driver.maxResultSize=1g \
   --conf spark.ui.port=6679 \
-  --packages org.apache.spark:spark-avro_2.12:3.1.2 \
+  --packages org.apache.spark:spark-avro_2.12:3.1.3 \
   --jars /path/to/hudi/packaging/hudi-spark-bundle/target/hudi-spark3.1-bundle_2.12-0.12.0-SNAPSHOT.jar \
   --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer `ls /path/to/hudi/packaging/hudi-utilities-slim-bundle/target/hudi-utilities-slim-bundle_2.12-0.12.0-SNAPSHOT.jar` \
   --props `ls /path/to/hudi/dfs-source.properties` \
@@ -76,7 +76,7 @@ bin/spark-submit \
   --min-sync-interval-seconds 60
 ```
 
-## Example with Spark 3.2.0
+## Example with Spark 3.2.2
 
 * Build Hudi: `mvn clean install -DskipTests -Dspark3.2 -Dscala-2.12`
 * Run deltastreamer
@@ -88,7 +88,7 @@ bin/spark-submit \
   --conf spark.sql.catalogImplementation=hive \
   --conf spark.driver.maxResultSize=1g \
   --conf spark.ui.port=6679 \
-  --packages org.apache.spark:spark-avro_2.12:3.2.0 \
+  --packages org.apache.spark:spark-avro_2.12:3.2.2 \
   --jars /path/to/hudi/packaging/hudi-spark-bundle/target/hudi-spark3.2-bundle_2.12-0.12.0-SNAPSHOT.jar \
   --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer `ls /path/to/hudi/packaging/hudi-utilities-slim-bundle/target/hudi-utilities-slim-bundle_2.12-0.12.0-SNAPSHOT.jar` \
   --props `ls /path/to/hudi/dfs-source.properties` \
