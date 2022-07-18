@@ -99,6 +99,6 @@ public class AvroConvertor implements Serializable {
 
   public GenericRecord fromProtoMessage(Message message) {
     initSchema();
-    return ProtobufConversionUtil.convertToAvro(schema, message);
+    return ProtoConversionUtil.convertToAvro(schema, message);
   }
 }

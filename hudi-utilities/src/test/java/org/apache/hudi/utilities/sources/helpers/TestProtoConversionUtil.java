@@ -101,7 +101,7 @@ public class TestProtoConversionUtil {
     Schema.Parser parser = new Schema.Parser();
     Schema protoSchema = parser.parse(getSchema("schema-provider/proto/sample_schema_nested.txt"));
 
-    GenericRecord actual = ProtobufConversionUtil.convertToAvro(protoSchema, sample);
+    GenericRecord actual = ProtoConversionUtil.convertToAvro(protoSchema, sample);
 
     Schema nestedMessageSchema = protoSchema.getField("nested_message").schema().getTypes().get(1);
 
@@ -156,7 +156,7 @@ public class TestProtoConversionUtil {
     Schema.Parser parser = new Schema.Parser();
     Schema protoSchema = parser.parse(getSchema("schema-provider/proto/sample_schema_nested.txt"));
 
-    GenericRecord actual = ProtobufConversionUtil.convertToAvro(protoSchema, sample);
+    GenericRecord actual = ProtoConversionUtil.convertToAvro(protoSchema, sample);
 
     // all fields will have default values
     GenericData.Record expectedRecord = new GenericData.Record(protoSchema);
@@ -244,7 +244,7 @@ public class TestProtoConversionUtil {
     Schema.Parser parser = new Schema.Parser();
     Schema protoSchema = parser.parse(getSchema("schema-provider/proto/sample_schema_flattened.txt"));
 
-    GenericRecord actual = ProtobufConversionUtil.convertToAvro(protoSchema, sample);
+    GenericRecord actual = ProtoConversionUtil.convertToAvro(protoSchema, sample);
 
     Schema nestedMessageSchema = protoSchema.getField("nested_message").schema().getTypes().get(1);
 
@@ -289,7 +289,7 @@ public class TestProtoConversionUtil {
     Schema.Parser parser = new Schema.Parser();
     Schema protoSchema = parser.parse(getSchema("schema-provider/proto/sample_schema_flattened.txt"));
 
-    GenericRecord actual = ProtobufConversionUtil.convertToAvro(protoSchema, sample);
+    GenericRecord actual = ProtoConversionUtil.convertToAvro(protoSchema, sample);
 
     // all fields will have default values
     GenericData.Record expectedRecord = new GenericData.Record(protoSchema);

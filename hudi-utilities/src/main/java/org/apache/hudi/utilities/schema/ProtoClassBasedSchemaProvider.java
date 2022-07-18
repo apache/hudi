@@ -23,7 +23,7 @@ import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.utilities.sources.helpers.ProtobufConversionUtil;
+import org.apache.hudi.utilities.sources.helpers.ProtoConversionUtil;
 
 import org.apache.avro.Schema;
 import org.apache.log4j.LogManager;
@@ -32,6 +32,9 @@ import org.apache.spark.api.java.JavaSparkContext;
 
 import java.util.Arrays;
 
+/**
+ * A schema provider that takes in a class name for a generated protobuf class that is on the classpath.
+ */
 public class ProtoClassBasedSchemaProvider extends SchemaProvider {
   private static final Logger LOG = LogManager.getLogger(ProtoClassBasedSchemaProvider.class);
   /**
@@ -56,7 +59,7 @@ public class ProtoClassBasedSchemaProvider extends SchemaProvider {
     String className = config.getString(Config.PROTO_SCHEMA_CLASS_NAME);
     boolean flattenWrappedPrimitives = props.getBoolean(ProtoClassBasedSchemaProvider.Config.PROTO_SCHEMA_FLATTEN_WRAPPED_PRIMITIVES, false);
     try {
-      schemaString = ProtobufConversionUtil.getAvroSchemaForMessageClass(ReflectionUtils.getClass(className), flattenWrappedPrimitives).toString();
+      schemaString = ProtoConversionUtil.getAvroSchemaForMessageClass(ReflectionUtils.getClass(className), flattenWrappedPrimitives).toString();
     } catch (Exception e) {
       throw new HoodieException(String.format("Error reading proto source schema for class: %s", className), e);
     }

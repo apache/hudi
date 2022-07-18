@@ -47,12 +47,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static com.google.protobuf.Descriptors.FieldDescriptor.Type.BYTES;
-
 /**
- * A utility class to help translate
+ * A utility class to help translate from Proto to Avro.
  */
-public class ProtobufConversionUtil {
+public class ProtoConversionUtil {
 
   /**
    * Creates an Avro {@link Schema} for the provided class. Assumes that the class is a protobuf {@link Message}.
