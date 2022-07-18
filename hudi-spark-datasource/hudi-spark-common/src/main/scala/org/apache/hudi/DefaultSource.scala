@@ -68,11 +68,9 @@ class DefaultSource extends RelationProvider
   override def createRelation(sqlContext: SQLContext,
                               optParams: Map[String, String],
                               schema: StructType): BaseRelation = {
-    // Add default options for unspecified read options keys.
-    val parameters = DataSourceOptionsHelper.parametersWithReadDefaults(optParams)
+    val path = optParams.get("path")
+    val readPathsStr = optParams.get(DataSourceReadOptions.READ_PATHS.key)
 
-    val path = parameters.get("path")
-    val readPathsStr = parameters.get(DataSourceReadOptions.READ_PATHS.key)
     if (path.isEmpty && readPathsStr.isEmpty) {
       throw new HoodieException(s"'path' or '$READ_PATHS' or both must be specified.")
     }
@@ -87,6 +85,16 @@ class DefaultSource extends RelationProvider
     } else {
       Seq.empty
     }
+
+    // Add default options for unspecified read options keys.
+    val parameters = (if (globPaths.nonEmpty) {
+      Map(
+        "glob.paths" -> globPaths.mkString(",")
+      )
+    } else {
+      Map()
+    }) ++ DataSourceOptionsHelper.parametersWithReadDefaults(optParams)
+
     // Get the table base path
     val tablePath = if (globPaths.nonEmpty) {
       DataSourceUtils.getTablePath(fs, globPaths.toArray)

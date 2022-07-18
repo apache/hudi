@@ -365,7 +365,10 @@ public class StreamWriteOperatorCoordinator
    */
   private boolean allEventsReceived() {
     return Arrays.stream(eventBuffer)
-        .allMatch(event -> event != null && event.isReady(this.instant));
+        // we do not use event.isReady to check the instant
+        // because the write task may send an event eagerly for empty
+        // data set, the even may have a timestamp of last committed instant.
+        .allMatch(event -> event != null && event.isLastBatch());
   }
 
   private void addEventToBuffer(WriteMetadataEvent event) {
@@ -425,12 +428,14 @@ public class StreamWriteOperatorCoordinator
     addEventToBuffer(event);
     if (allEventsReceived()) {
       // start to commit the instant.
-      commitInstant(this.instant);
-      // The executor thread inherits the classloader of the #handleEventFromOperator
-      // caller, which is a AppClassLoader.
-      Thread.currentThread().setContextClassLoader(getClass().getClassLoader());
-      // sync Hive synchronously if it is enabled in batch mode.
-      syncHive();
+      boolean committed = commitInstant(this.instant);
+      if (committed) {
+        // The executor thread inherits the classloader of the #handleEventFromOperator
+        // caller, which is a AppClassLoader.
+        Thread.currentThread().setContextClassLoader(getClass().getClassLoader());
+        // sync Hive synchronously if it is enabled in batch mode.
+        syncHive();
+      }
     }
   }
 
@@ -474,8 +479,8 @@ public class StreamWriteOperatorCoordinator
   /**
    * Commits the instant.
    */
-  private void commitInstant(String instant) {
-    commitInstant(instant, -1);
+  private boolean commitInstant(String instant) {
+    return commitInstant(instant, -1);
   }
 
   /**

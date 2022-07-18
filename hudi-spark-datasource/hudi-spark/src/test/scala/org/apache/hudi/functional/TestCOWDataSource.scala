@@ -17,7 +17,7 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hadoop.fs.FileSystem
+import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.HoodieRecord
@@ -294,6 +294,39 @@ class TestCOWDataSource extends HoodieClientTestBase {
     assertEquals(2, commits.size)
     assertEquals("commit", commits(0))
     assertEquals("replacecommit", commits(1))
+  }
+
+  @Test
+  def testReadPathsOnCopyOnWriteTable(): Unit = {
+    val records1 = dataGen.generateInsertsContainsAllPartitions("001", 20)
+    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(recordsToStrings(records1), 2))
+    inputDF1.write.format("org.apache.hudi")
+      .options(commonOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    val record1FilePaths = fs.listStatus(new Path(basePath, dataGen.getPartitionPaths.head))
+      .filter(!_.getPath.getName.contains("hoodie_partition_metadata"))
+      .filter(_.getPath.getName.endsWith("parquet"))
+      .map(_.getPath.toString)
+      .mkString(",")
+
+    val records2 = dataGen.generateInsertsContainsAllPartitions("002", 20)
+    val inputDF2 = spark.read.json(spark.sparkContext.parallelize(recordsToStrings(records2), 2))
+    inputDF2.write.format("org.apache.hudi")
+      .options(commonOpts)
+      // Use bulk insert here to make sure the files have different file groups.
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    val hudiReadPathDF = spark.read.format("org.apache.hudi")
+      .option(DataSourceReadOptions.READ_PATHS.key, record1FilePaths)
+      .load()
+
+    val expectedCount = records1.asScala.count(record => record.getPartitionPath == dataGen.getPartitionPaths.head)
+    assertEquals(expectedCount, hudiReadPathDF.count())
   }
 
   @Test def testOverWriteTableModeUseReplaceAction(): Unit = {

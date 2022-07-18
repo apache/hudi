@@ -248,22 +248,9 @@ public class ITTestDataStreamWrite extends TestLogger {
       Pipelines.clean(conf, pipeline);
       Pipelines.compact(conf, pipeline);
     }
-    JobClient client = execEnv.executeAsync(jobName);
-    if (isMor) {
-      if (client.getJobStatus().get() != JobStatus.FAILED) {
-        try {
-          TimeUnit.SECONDS.sleep(20); // wait long enough for the compaction to finish
-          client.cancel();
-        } catch (Throwable var1) {
-          // ignored
-        }
-      }
-    } else {
-      // wait for the streaming job to finish
-      client.getJobExecutionResult().get();
-    }
 
-    TestData.checkWrittenFullData(tempFile, expected);
+    execute(execEnv, isMor, jobName);
+    TestData.checkWrittenDataCOW(tempFile, expected);
   }
 
   private void testWriteToHoodieWithCluster(
@@ -322,17 +309,14 @@ public class ITTestDataStreamWrite extends TestLogger {
     execEnv.addOperator(pipeline.getTransformation());
 
     Pipelines.cluster(conf, rowType, pipeline);
-    JobClient client = execEnv.executeAsync(jobName);
+    execEnv.execute(jobName);
 
-    // wait for the streaming job to finish
-    client.getJobExecutionResult().get();
-
-    TestData.checkWrittenFullData(tempFile, expected);
+    TestData.checkWrittenDataCOW(tempFile, expected);
   }
 
   public void execute(StreamExecutionEnvironment execEnv, boolean isMor, String jobName) throws Exception {
-    JobClient client = execEnv.executeAsync(jobName);
     if (isMor) {
+      JobClient client = execEnv.executeAsync(jobName);
       if (client.getJobStatus().get() != JobStatus.FAILED) {
         try {
           TimeUnit.SECONDS.sleep(20); // wait long enough for the compaction to finish
@@ -343,7 +327,7 @@ public class ITTestDataStreamWrite extends TestLogger {
       }
     } else {
       // wait for the streaming job to finish
-      client.getJobExecutionResult().get();
+      execEnv.execute(jobName);
     }
   }
 
@@ -449,7 +433,6 @@ public class ITTestDataStreamWrite extends TestLogger {
     builder.sink(dataStream, false);
 
     execute(execEnv, true, "Api_Sink_Test");
-    TestData.checkWrittenFullData(tempFile, EXPECTED);
+    TestData.checkWrittenDataCOW(tempFile, EXPECTED);
   }
-
 }

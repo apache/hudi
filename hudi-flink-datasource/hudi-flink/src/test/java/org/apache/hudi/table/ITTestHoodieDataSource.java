@@ -23,6 +23,8 @@ import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.table.catalog.HoodieHiveCatalog;
+import org.apache.hudi.table.catalog.HoodieCatalogTestUtils;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
@@ -40,6 +42,7 @@ import org.apache.flink.table.api.config.ExecutionConfigOptions;
 import org.apache.flink.table.api.internal.TableEnvironmentImpl;
 import org.apache.flink.table.catalog.ObjectPath;
 import org.apache.flink.table.catalog.exceptions.TableNotExistException;
+import org.apache.flink.table.data.RowData;
 import org.apache.flink.test.util.AbstractTestBase;
 import org.apache.flink.types.Row;
 import org.apache.flink.util.CollectionUtil;
@@ -1122,6 +1125,39 @@ public class ITTestHoodieDataSource extends AbstractTestBase {
 
   @ParameterizedTest
   @EnumSource(value = HoodieTableType.class)
+  void testIncrementalReadArchivedCommits(HoodieTableType tableType) throws Exception {
+    TableEnvironment tableEnv = batchTableEnv;
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.setString(FlinkOptions.TABLE_NAME, "t1");
+    conf.setString(FlinkOptions.TABLE_TYPE, tableType.name());
+    conf.setInteger(FlinkOptions.ARCHIVE_MIN_COMMITS, 3);
+    conf.setInteger(FlinkOptions.ARCHIVE_MAX_COMMITS, 4);
+    conf.setInteger(FlinkOptions.CLEAN_RETAIN_COMMITS, 2);
+    conf.setString("hoodie.commits.archival.batch", "1");
+
+    // write 10 batches of data set
+    for (int i = 0; i < 20; i += 2) {
+      List<RowData> dataset = TestData.dataSetInsert(i + 1, i + 2);
+      TestData.writeData(dataset, conf);
+    }
+
+    String secondArchived = TestUtils.getNthArchivedInstant(tempFile.getAbsolutePath(), 1);
+
+    String hoodieTableDDL = sql("t1")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.TABLE_TYPE, tableType)
+        .option(FlinkOptions.READ_START_COMMIT, secondArchived)
+        .end();
+    tableEnv.executeSql(hoodieTableDDL);
+
+    List<Row> result = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1").execute().collect());
+    assertRowsEquals(result, TestData.dataSetInsert(3, 4, 5, 6, 7, 8, 9, 10,
+        11, 12, 13, 14, 15, 16, 17, 18, 19, 20));
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableType.class)
   void testReadWithWiderSchema(HoodieTableType tableType) throws Exception {
     TableEnvironment tableEnv = batchTableEnv;
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
@@ -1285,6 +1321,46 @@ public class ITTestHoodieDataSource extends AbstractTestBase {
         + "+I[id6, Emma, 20, 1970-01-01T00:00:06, par3], "
         + "+I[id7, Bob, 44, 1970-01-01T00:00:07, par4], "
         + "+I[id8, Han, 56, 1970-01-01T00:00:08, par4]]");
+  }
+
+  @Test
+  void testBuiltinFunctionWithHMSCatalog() {
+    TableEnvironment tableEnv = batchTableEnv;
+
+    HoodieHiveCatalog hoodieCatalog = HoodieCatalogTestUtils.createHiveCatalog("hudi_catalog");
+
+    tableEnv.registerCatalog("hudi_catalog", hoodieCatalog);
+    tableEnv.executeSql("use catalog hudi_catalog");
+
+    String dbName = "hudi";
+    tableEnv.executeSql("create database " + dbName);
+    tableEnv.executeSql("use " + dbName);
+
+    String hoodieTableDDL = sql("t1")
+        .field("f_int int")
+        .field("f_date DATE")
+        .field("f_par string")
+        .pkField("f_int")
+        .partitionField("f_par")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath() + "/" + dbName + "/" + "t1")
+        .option(FlinkOptions.RECORD_KEY_FIELD, "f_int")
+        .option(FlinkOptions.PRECOMBINE_FIELD, "f_date")
+        .end();
+    tableEnv.executeSql(hoodieTableDDL);
+
+    String insertSql = "insert into t1 values (1, TO_DATE('2022-02-02'), '1'), (2, DATE '2022-02-02', '1')";
+    execInsertSql(tableEnv, insertSql);
+
+    List<Row> result = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1").execute().collect());
+    final String expected = "["
+        + "+I[1, 2022-02-02, 1], "
+        + "+I[2, 2022-02-02, 1]]";
+    assertRowsEquals(result, expected);
+
+    List<Row> partitionResult = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1 where f_int = 1").execute().collect());
+    assertRowsEquals(partitionResult, "[+I[1, 2022-02-02, 1]]");
   }
 
   // -------------------------------------------------------------------------
