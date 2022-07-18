@@ -45,6 +45,11 @@ public class TransactionManager implements Serializable {
     this.isOptimisticConcurrencyControlEnabled = config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl();
   }
 
+  public TransactionManager(HoodieWriteConfig config, FileSystem fs, String partitionPath, String fileId) {
+    this.lockManager = new LockManager(config, fs, partitionPath, fileId);
+    this.isOptimisticConcurrencyControlEnabled = config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl();
+  }
+
   public void beginTransaction(Option<HoodieInstant> newTxnOwnerInstant,
                                Option<HoodieInstant> lastCompletedTxnOwnerInstant) {
     if (isOptimisticConcurrencyControlEnabled) {
@@ -57,6 +62,14 @@ public class TransactionManager implements Serializable {
     }
   }
 
+  public void beginTransaction(String partitionPath, String fileId) {
+    if (isOptimisticConcurrencyControlEnabled) {
+      LOG.info("Transaction starting for " + partitionPath + "/" + fileId);
+      lockManager.lock();
+      LOG.info("Transaction started for " + partitionPath + "/" + fileId);
+    }
+  }
+
   public void endTransaction(Option<HoodieInstant> currentTxnOwnerInstant) {
     if (isOptimisticConcurrencyControlEnabled) {
       LOG.info("Transaction ending with transaction owner " + currentTxnOwnerInstant);
@@ -64,6 +77,14 @@ public class TransactionManager implements Serializable {
         lockManager.unlock();
         LOG.info("Transaction ended with transaction owner " + currentTxnOwnerInstant);
       }
+    }
+  }
+
+  public void endTransaction(String filePath) {
+    if (isOptimisticConcurrencyControlEnabled) {
+      LOG.info("Transaction ending with transaction for " + filePath);
+      lockManager.unlock();
+      LOG.info("Transaction ended with transaction for " + filePath);
     }
   }
 

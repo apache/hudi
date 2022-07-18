@@ -30,6 +30,7 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieMetastoreConfig;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.conflict.detection.HoodieEarlyConflictDetectionStrategy;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FileSystemRetryConfig;
@@ -2027,12 +2028,36 @@ public class HoodieWriteConfig extends HoodieConfig {
     return ReflectionUtils.loadClass(getString(HoodieLockConfig.WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME));
   }
 
+  public String getMarkerConflictCheckerBatchInterval() {
+    return String.valueOf(getLong(HoodieLockConfig.MARKER_CONFLICT_CHECKER_BATCH_INTERVAL));
+  }
+
+  public String getMarkerConflictCheckerPeriod() {
+    return String.valueOf(getLong(HoodieLockConfig.MARKER_CONFLICT_CHECKER_PERIOD));
+  }
+
   public Long getLockAcquireWaitTimeoutInMs() {
     return getLong(HoodieLockConfig.LOCK_ACQUIRE_WAIT_TIMEOUT_MS);
   }
 
   public WriteConcurrencyMode getWriteConcurrencyMode() {
     return WriteConcurrencyMode.fromValue(getString(WRITE_CONCURRENCY_MODE));
+  }
+
+  public boolean isEarlyConflictDetectionEnable() {
+    return getBoolean(HoodieLockConfig.EARLY_CONFLICT_DETECTION_ENABLE);
+  }
+
+  public boolean isEarlyConflictDetectionWithTransaction() {
+    return getBoolean(HoodieLockConfig.EARLY_CONFLICT_DETECTION_ENABLE);
+  }
+
+  public String getEarlyConflictDetectionStrategyClassName() {
+    return getString(HoodieLockConfig.WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME);
+  }
+
+  public HoodieEarlyConflictDetectionStrategy getEarlyConflictDetectionStrategy() {
+    return ReflectionUtils.loadClass(getString(HoodieLockConfig.WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME));
   }
 
   /**

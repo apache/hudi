@@ -29,6 +29,12 @@ public class MarkerOperation implements Serializable {
 
   public static final String MARKER_DIR_PATH_PARAM = "markerdirpath";
   public static final String MARKER_NAME_PARAM = "markername";
+  public static final String MARKER_CONFLICT_CHECKER_BATCH_INTERVAL = "batchinterval";
+  public static final String MARKER_CONFLICT_CHECKER_PERIOD = "period";
+  public static final String MARKER_CONFLICT_CHECKER_HEART_BEAT_INTERVAL = "heartbeatinterval";
+  public static final String MARKER_BASEPATH_PARAM = "basepath";
+  public static final String MARKER_CONFLICT_CHECKER_ENABLE = "HoodieEarlyConflictDetectionStrategy";
+  public static final String MARKER_CONFLICT_CHECKER_STRATEGY = "earlyconflictdetectionstrategy";
 
   // GET requests
   public static final String ALL_MARKERS_URL = String.format("%s/%s", BASE_URL, "all");

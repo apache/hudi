@@ -468,7 +468,13 @@ public class RequestHandler {
       ctx.result(markerHandler.createMarker(
           ctx,
           ctx.queryParam(MarkerOperation.MARKER_DIR_PATH_PARAM, ""),
-          ctx.queryParam(MarkerOperation.MARKER_NAME_PARAM, "")));
+          ctx.queryParam(MarkerOperation.MARKER_NAME_PARAM, ""),
+          ctx.queryParam(MarkerOperation.MARKER_CONFLICT_CHECKER_BATCH_INTERVAL, ""),
+          ctx.queryParam(MarkerOperation.MARKER_CONFLICT_CHECKER_PERIOD, ""),
+          ctx.queryParam(MarkerOperation.MARKER_CONFLICT_CHECKER_HEART_BEAT_INTERVAL, ""),
+          ctx.queryParam(MarkerOperation.MARKER_BASEPATH_PARAM, ""),
+          ctx.queryParam(MarkerOperation.MARKER_CONFLICT_CHECKER_ENABLE, ""),
+          ctx.queryParam(MarkerOperation.MARKER_CONFLICT_CHECKER_STRATEGY, "")));
     }, false));
 
     app.post(MarkerOperation.DELETE_MARKER_DIR_URL, new ViewHandler(ctx -> {

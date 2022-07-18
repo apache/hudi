@@ -18,14 +18,20 @@
 
 package org.apache.hudi.table.marker;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.common.config.SerializableConfiguration;
+import org.apache.hudi.common.conflict.detection.HoodieEarlyConflictDetectionStrategy;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.conflict.detection.HoodieDirectMarkerBasedEarlyConflictDetectionStrategy;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.MarkerUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
@@ -152,6 +158,24 @@ public class DirectWriteMarkers extends WriteMarkers {
 
   @Override
   protected Option<Path> create(String partitionPath, String dataFileName, IOType type, boolean checkIfExists) {
+    return create(getMarkerPath(partitionPath, dataFileName, type), checkIfExists);
+  }
+
+  @Override
+  public Option<Path> createWithEarlyConflictDetection(String partitionPath, String dataFileName, IOType type, boolean checkIfExists,
+                                                       HoodieEarlyConflictDetectionStrategy resolutionStrategy,
+                                                       Set<HoodieInstant> completedCommitInstants, HoodieWriteConfig config) {
+    HoodieDirectMarkerBasedEarlyConflictDetectionStrategy strategy = (HoodieDirectMarkerBasedEarlyConflictDetectionStrategy) resolutionStrategy;
+    HoodieTableMetaClient metaClient =
+        HoodieTableMetaClient.builder().setConf(new Configuration()).setBasePath(config.getBasePath())
+            .setLoadActiveTimelineOnLoad(true).setConsistencyGuardConfig(config.getConsistencyGuardConfig())
+            .setLayoutVersion(Option.of(new TimelineLayoutVersion(config.getTimelineLayoutVersion())))
+            .setFileSystemRetryConfig(config.getFileSystemRetryConfig())
+            .setProperties(config.getProps()).build();
+
+    if (strategy.hasMarkerConflict(basePath, fs, partitionPath, dataFileName, instantTime, completedCommitInstants, metaClient)) {
+      strategy.resolveMarkerConflict(basePath, partitionPath, dataFileName);
+    }
     return create(getMarkerPath(partitionPath, dataFileName, type), checkIfExists);
   }
 

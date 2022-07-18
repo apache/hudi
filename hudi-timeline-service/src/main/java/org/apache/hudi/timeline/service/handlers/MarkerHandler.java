@@ -18,10 +18,18 @@
 
 package org.apache.hudi.timeline.service.handlers;
 
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
+
+import org.apache.hudi.common.conflict.detection.HoodieTimelineServerBasedEarlyConflictDetectionStrategy;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.model.IOType;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
+import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.timeline.service.TimelineService;
 import org.apache.hudi.timeline.service.handlers.marker.MarkerCreationDispatchingRunnable;
 import org.apache.hudi.timeline.service.handlers.marker.MarkerCreationFuture;
@@ -38,6 +46,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -78,9 +87,13 @@ public class MarkerHandler extends Handler {
   // A thread to dispatch marker creation requests to batch processing threads
   private final MarkerCreationDispatchingRunnable markerCreationDispatchingRunnable;
   private final Object firstCreationRequestSeenLock = new Object();
+  private final Object earlyConflictDetectionLock = new Object();
   private transient HoodieEngineContext hoodieEngineContext;
   private ScheduledFuture<?> dispatchingThreadFuture;
   private boolean firstCreationRequestSeen;
+  private final ConcurrentHashMap<String, ScheduledExecutorService> checkers;
+  private String currentMarkerDir = null;
+  private HoodieTimelineServerBasedEarlyConflictDetectionStrategy earlyConflictDetectionStrategy;
 
   public MarkerHandler(Configuration conf, TimelineService.Config timelineServiceConfig,
                        HoodieEngineContext hoodieEngineContext, FileSystem fileSystem,
@@ -97,6 +110,7 @@ public class MarkerHandler extends Handler {
     this.markerCreationDispatchingRunnable =
         new MarkerCreationDispatchingRunnable(markerDirStateMap, batchingExecutorService);
     this.firstCreationRequestSeen = false;
+    this.checkers = new ConcurrentHashMap<>();
   }
 
   /**
@@ -108,6 +122,7 @@ public class MarkerHandler extends Handler {
     }
     dispatchingExecutorService.shutdown();
     batchingExecutorService.shutdown();
+    checkers.values().forEach(ExecutorService::shutdown);
   }
 
   /**
@@ -149,7 +164,43 @@ public class MarkerHandler extends Handler {
    * @param markerName marker name
    * @return the {@code CompletableFuture} instance for the request
    */
-  public CompletableFuture<String> createMarker(Context context, String markerDir, String markerName) {
+  public CompletableFuture<String> createMarker(Context context, String markerDir, String markerName,
+                                                String batchInterval, String period, String maxAllowableHeartbeatIntervalInMs,
+                                                String basePath, String earlyConflictDetectionEnable,
+                                                String earlyConflictDetectionClassName) {
+    // Step1 do early conflict detection if enable
+    if (Boolean.parseBoolean(earlyConflictDetectionEnable)) {
+      try {
+        synchronized (earlyConflictDetectionLock) {
+          if (earlyConflictDetectionStrategy == null) {
+            earlyConflictDetectionStrategy = ReflectionUtils.loadClass(earlyConflictDetectionClassName);
+          }
+
+          if (!markerDir.equalsIgnoreCase(currentMarkerDir)) {
+            this.currentMarkerDir = markerDir;
+            Set<String> actions = CollectionUtils.createSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, REPLACE_COMMIT_ACTION);
+            Set<HoodieInstant> oldInstants = viewManager.getFileSystemView(basePath)
+                .getTimeline()
+                .filterCompletedInstants()
+                .filter(instant -> actions.contains(instant.getAction()))
+                .getInstants()
+                .collect(Collectors.toSet());
+
+            earlyConflictDetectionStrategy.fresh(batchInterval, period, markerDir, basePath, maxAllowableHeartbeatIntervalInMs, fileSystem,
+                this, oldInstants);
+          }
+        }
+
+        if (earlyConflictDetectionStrategy.hasMarkerConflict()) {
+          earlyConflictDetectionStrategy.resolveMarkerConflict(basePath, markerDir, markerName);
+        }
+      } catch (Exception ex) {
+        LOG.warn("Failed to create marker with early conflict detection enable", ex);
+        return new MarkerCreationFuture(context, markerDir, markerName);
+      }
+    }
+
+    // Step 2 create marker
     LOG.info("Request: create marker " + markerDir + " " + markerName);
     MarkerCreationFuture future = new MarkerCreationFuture(context, markerDir, markerName);
     // Add the future to the list

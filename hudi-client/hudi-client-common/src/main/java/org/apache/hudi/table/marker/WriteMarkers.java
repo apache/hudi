@@ -18,13 +18,16 @@
 
 package org.apache.hudi.table.marker;
 
+import org.apache.hudi.common.conflict.detection.HoodieEarlyConflictDetectionStrategy;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -165,4 +168,17 @@ public abstract class WriteMarkers implements Serializable {
    * @return the marker path or empty option if already exists and {@code checkIfExists} is true
    */
   abstract Option<Path> create(String partitionPath, String dataFileName, IOType type, boolean checkIfExists);
+
+  /**
+   * Creates a marker.
+   *
+   * @param partitionPath  partition path in the table
+   * @param dataFileName  data file name
+   * @param type write IO type
+   * @param checkIfExists whether to check if the marker already exists
+   * @return the marker path or empty option if already exists and {@code checkIfExists} is true
+   */
+  public abstract Option<Path> createWithEarlyConflictDetection(String partitionPath, String dataFileName, IOType type, boolean checkIfExists,
+                                                                HoodieEarlyConflictDetectionStrategy resolutionStrategy,
+                                                                Set<HoodieInstant> completedCommitInstants, HoodieWriteConfig config);
 }

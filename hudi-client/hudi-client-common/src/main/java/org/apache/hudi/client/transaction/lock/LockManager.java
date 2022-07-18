@@ -23,6 +23,7 @@ import java.util.concurrent.TimeUnit;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.config.SerializableConfiguration;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.lock.LockProvider;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieLockConfig;
@@ -55,6 +56,33 @@ public class LockManager implements Serializable, AutoCloseable {
         Integer.parseInt(HoodieLockConfig.LOCK_ACQUIRE_CLIENT_NUM_RETRIES.defaultValue()));
     maxWaitTimeInMs = lockConfiguration.getConfig().getLong(LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY,
         Long.parseLong(HoodieLockConfig.LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS.defaultValue()));
+  }
+
+  /**
+   * Try to have a lock at partitionPath + fileID level for different write handler.
+   * @param writeConfig
+   * @param fs
+   * @param partitionPath
+   * @param fileId
+   */
+  public LockManager(HoodieWriteConfig writeConfig, FileSystem fs, String partitionPath, String fileId) {
+    this.writeConfig = writeConfig;
+    this.hadoopConf = new SerializableConfiguration(fs.getConf());
+    TypedProperties props = refreshLockConfig(writeConfig, partitionPath + "/" + fileId);
+    this.lockConfiguration = new LockConfiguration(props);
+    maxRetries = lockConfiguration.getConfig().getInteger(LOCK_ACQUIRE_CLIENT_NUM_RETRIES_PROP_KEY,
+        Integer.parseInt(HoodieLockConfig.LOCK_ACQUIRE_CLIENT_NUM_RETRIES.defaultValue()));
+    maxWaitTimeInMs = lockConfiguration.getConfig().getLong(LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY,
+        Long.parseLong(HoodieLockConfig.LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS.defaultValue()));
+  }
+
+  /**
+   * rebuild lock related configs, only support ZK related lock for now.
+   */
+  private TypedProperties refreshLockConfig(HoodieWriteConfig writeConfig, String key) {
+    TypedProperties props = new TypedProperties(writeConfig.getProps());
+    props.setProperty(LockConfiguration.ZK_LOCK_KEY_PROP_KEY, key);
+    return props;
   }
 
   public void lock() {

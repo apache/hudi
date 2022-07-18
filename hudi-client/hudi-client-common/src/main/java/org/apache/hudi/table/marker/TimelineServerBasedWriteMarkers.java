@@ -18,12 +18,16 @@
 
 package org.apache.hudi.table.marker;
 
+import org.apache.hudi.common.conflict.detection.HoodieEarlyConflictDetectionStrategy;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.IOType;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieEarlyConflictDetectionException;
 import org.apache.hudi.exception.HoodieRemoteException;
 import org.apache.hudi.table.HoodieTable;
 
@@ -38,6 +42,7 @@ import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.util.Collections;
+import java.util.ConcurrentModificationException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
@@ -48,6 +53,12 @@ import static org.apache.hudi.common.table.marker.MarkerOperation.CREATE_AND_MER
 import static org.apache.hudi.common.table.marker.MarkerOperation.CREATE_MARKER_URL;
 import static org.apache.hudi.common.table.marker.MarkerOperation.DELETE_MARKER_DIR_URL;
 import static org.apache.hudi.common.table.marker.MarkerOperation.MARKERS_DIR_EXISTS_URL;
+import static org.apache.hudi.common.table.marker.MarkerOperation.MARKER_BASEPATH_PARAM;
+import static org.apache.hudi.common.table.marker.MarkerOperation.MARKER_CONFLICT_CHECKER_BATCH_INTERVAL;
+import static org.apache.hudi.common.table.marker.MarkerOperation.MARKER_CONFLICT_CHECKER_ENABLE;
+import static org.apache.hudi.common.table.marker.MarkerOperation.MARKER_CONFLICT_CHECKER_HEART_BEAT_INTERVAL;
+import static org.apache.hudi.common.table.marker.MarkerOperation.MARKER_CONFLICT_CHECKER_PERIOD;
+import static org.apache.hudi.common.table.marker.MarkerOperation.MARKER_CONFLICT_CHECKER_STRATEGY;
 import static org.apache.hudi.common.table.marker.MarkerOperation.MARKER_DIR_PATH_PARAM;
 import static org.apache.hudi.common.table.marker.MarkerOperation.MARKER_NAME_PARAM;
 
@@ -132,14 +143,54 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
     HoodieTimer timer = new HoodieTimer().startTimer();
     String markerFileName = getMarkerFileName(dataFileName, type);
 
-    Map<String, String> paramsMap = new HashMap<>();
-    paramsMap.put(MARKER_DIR_PATH_PARAM, markerDirPath.toString());
-    if (StringUtils.isNullOrEmpty(partitionPath)) {
-      paramsMap.put(MARKER_NAME_PARAM, markerFileName);
+    Map<String, String> paramsMap = initConfigMap(partitionPath, markerFileName);
+    boolean success = executeCreateMarkerRequest(paramsMap, partitionPath, markerFileName);
+    LOG.info("[timeline-server-based] Created marker file " + partitionPath + "/" + markerFileName
+        + " in " + timer.endTimer() + " ms");
+    if (success) {
+      return Option.of(new Path(FSUtils.getPartitionPath(markerDirPath, partitionPath), markerFileName));
     } else {
-      paramsMap.put(MARKER_NAME_PARAM, partitionPath + "/" + markerFileName);
+      return Option.empty();
     }
+  }
 
+  @Override
+  public Option<Path> createWithEarlyConflictDetection(String partitionPath, String dataFileName, IOType type, boolean checkIfExists,
+                                                       HoodieEarlyConflictDetectionStrategy resolutionStrategy,
+                                                       Set<HoodieInstant> completedCommitInstants, HoodieWriteConfig config) {
+    HoodieTimer timer = new HoodieTimer().startTimer();
+    String markerFileName = getMarkerFileName(dataFileName, type);
+    Map<String, String> paramsMap = initConfigMap(partitionPath, markerFileName);
+
+    paramsMap.put(MARKER_CONFLICT_CHECKER_BATCH_INTERVAL, config.getMarkerConflictCheckerBatchInterval());
+    paramsMap.put(MARKER_CONFLICT_CHECKER_PERIOD, config.getMarkerConflictCheckerPeriod());
+    paramsMap.put(MARKER_DIR_PATH_PARAM, markerDirPath.toString());
+    paramsMap.put(MARKER_BASEPATH_PARAM, basePath);
+    paramsMap.put(MARKER_CONFLICT_CHECKER_HEART_BEAT_INTERVAL, String.valueOf(config.getHoodieClientHeartbeatIntervalInMs()));
+    paramsMap.put(MARKER_CONFLICT_CHECKER_ENABLE, String.valueOf(config.isEarlyConflictDetectionEnable()));
+    paramsMap.put(MARKER_CONFLICT_CHECKER_STRATEGY, config.getEarlyConflictDetectionStrategyClassName());
+
+    boolean success = executeCreateMarkerRequest(paramsMap, partitionPath, markerFileName);
+
+    LOG.info("[timeline-server-based] Created marker file with early conflict detection " + partitionPath + "/" + markerFileName
+        + " in " + timer.endTimer() + " ms");
+
+    if (success) {
+      return Option.of(new Path(FSUtils.getPartitionPath(markerDirPath, partitionPath), markerFileName));
+    } else {
+      // this failed may due to early conflict detection, so we need to throw out.
+      throw new HoodieEarlyConflictDetectionException(new ConcurrentModificationException("Early conflict detected but cannot resolve conflicts for overlapping writes"));
+    }
+  }
+
+  /**
+   * execute create marker request with specific parasMap
+   * @param paramsMap
+   * @param partitionPath
+   * @param markerFileName
+   * @return
+   */
+  private boolean executeCreateMarkerRequest(Map<String, String> paramsMap, String partitionPath, String markerFileName) {
     boolean success;
     try {
       success = executeRequestToTimelineServer(
@@ -148,13 +199,25 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
     } catch (IOException e) {
       throw new HoodieRemoteException("Failed to create marker file " + partitionPath + "/" + markerFileName, e);
     }
-    LOG.info("[timeline-server-based] Created marker file " + partitionPath + "/" + markerFileName
-        + " in " + timer.endTimer() + " ms");
-    if (success) {
-      return Option.of(new Path(FSUtils.getPartitionPath(markerDirPath, partitionPath), markerFileName));
+    return success;
+  }
+
+  /**
+   * init create marker related config maps.
+   * @param partitionPath
+   * @param markerFileName
+   * @return
+   */
+  private Map<String, String> initConfigMap(String partitionPath, String markerFileName) {
+
+    Map<String, String> paramsMap = new HashMap<>();
+    paramsMap.put(MARKER_DIR_PATH_PARAM, markerDirPath.toString());
+    if (StringUtils.isNullOrEmpty(partitionPath)) {
+      paramsMap.put(MARKER_NAME_PARAM, markerFileName);
     } else {
-      return Option.empty();
+      paramsMap.put(MARKER_NAME_PARAM, partitionPath + "/" + markerFileName);
     }
+    return paramsMap;
   }
 
   private <T> T executeRequestToTimelineServer(String requestPath, Map<String, String> queryParameters,
