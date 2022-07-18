@@ -67,7 +67,7 @@ public class NonpartitionedKeyGenerator extends BuiltinKeyGenerator {
   @Override
   public UTF8String getRecordKey(InternalRow internalRow, StructType schema) {
     tryInitRowAccessor(schema);
-    return combineRecordKeyUnsafe(rowAccessor.getRecordKeyParts(internalRow));
+    return combineRecordKeyUTF8(rowAccessor.getRecordKeyParts(internalRow));
   }
 
   @Override

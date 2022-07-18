@@ -223,7 +223,7 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
    * NOTE: This method has to stay final (so that it's easier for JIT compiler to apply certain
    *       optimizations, like inlining)
    */
-  protected final UTF8String combineRecordKeyUnsafe(Object... recordKeyParts) {
+  protected final UTF8String combineRecordKeyUTF8(Object... recordKeyParts) {
     if (recordKeyParts.length == 1) {
       return requireNonNullNonEmptyKey(toUTF8String(recordKeyParts[0]));
     }
