@@ -102,18 +102,18 @@ As we know, hoodie has two ways to create and maintain markers:
 2. TimelineServerBasedWriteMarkers: marker operations are all handled at the timeline service which serves as a proxy
 
 Therefore, for different types of Marker, we must implement the corresponding check marker conflict logic.
-Here we expand the existing `ConflictResolutionStrategy` interface to ensure the scalability of checking marker conflict.
+Here we design a new interface `HoodieEarlyConflictDetectionStrategy` to ensure the scalability of checking marker conflict.
 
 ![](flow1.png)
 
-In this design, we provide `DirectMarkerWithTransactionConflictResolutionStrategy` and 
-`SimpleDirectMarkerConflictResolutionStrategy` for DirectWriteMarkers to perform corresponding conflict detection and 
-conflict resolution. And we provide `AsyncTimelineMarkerConflictResolutionStrategy` for TimelineServerBasedWriteMarkers 
-to perform corresponding conflict detection and conflict resolution
+In this design, we provide `SimpleTransactionDirectMarkerBasedEarlyConflictDetectionStrategy` and
+`SimpleDirectMarkerBasedEarlyConflictDetectionStrategy` for DirectWriteMarkers to perform corresponding conflict detection and
+conflict resolution. And we provide `AsyncTimelineMarkerEarlyConflictDetectionStrategy
+` for TimelineServerBasedWriteMarkers to perform corresponding conflict detection and conflict resolution
 
 #### DirectWriteMarkers related strategy
 
-##### DirectMarkerWithTransactionConflictResolutionStrategy
+##### SimpleTransactionDirectMarkerBasedEarlyConflictDetectionStrategy
 
 ![](figure2.png)
 
@@ -133,9 +133,9 @@ are going to create maker file based on partition path 2022/07/01, and fileID ff
 During marker conflict checking, we do not need to list all the partitions we have under ".temp". Just list marker files under
 $BasePath/.hoodie/.temp/instantTime/2022/07/01 and check if fileID ff26cb9e-e034-4931-9c59-71bac578f7a0-0 existed or not.
 
-##### SimpleDirectMarkerConflictResolutionStrategy
+##### SimpleDirectMarkerBasedEarlyConflictDetectionStrategy
 
-Compared with `DirectMarkerWithTransactionConflictResolutionStrategy`, the current strategy drops the steps of
+Compared with `SimpleTransactionDirectMarkerBasedEarlyConflictDetectionStrategy`, the current strategy drops the steps of
 transaction including new transaction, begin transaction and end transaction. The advantages are that the checking
 speed is faster, and multiple writers will not affect each other. But the downside is that the conflict detection may be
 delayed.
@@ -147,12 +147,11 @@ If so, the conflict can only be found in the pre-commit conflict checking and fa
 This leads to waste of resources, but don't compromise the correctness of the data.
 
 
-As we can see, not only DirectMarkerWithTransactionConflictResolutionStrategy but also SimpleDirectMarkerConflictResolutionStrategy
- have extra fs calling for ealy conflict detection.
+As we can see, all these direct based early conflict detection strategy need extra fs calling.
 
 #### TimelineServerBasedWriteMarkers related strategy
 
-##### AsyncTimelineMarkerConflictResolutionStrategy
+##### AsyncTimelineMarkerEarlyConflictDetectionStrategy
 
 This design expands the create marker api on timeline server.
 
@@ -220,8 +219,8 @@ At this time, this behavior is consistent with the existing OCC based conflict d
 This RFC adds three new configs to control the behavior of early conflict detection
 
 1. `hoodie.write.lock.early.conflict.detection.enable` default false. Enable early conflict detection based on markers. It will try to detect writing conflict before create markers and fast fail which will release cluster resources as soon as possible.
-2. `hoodie.write.lock.early.conflict.async.checker.batch.interval` default 30000L. Used for timeline based marker AsyncTimelineMarkerConflictResolutionStrategy. The time to delay first async marker conflict checking.
-3. `hoodie.write.lock.early.conflict.async.checker.period` default 30000L. Used for timeline based marker AsyncTimelineMarkerConflictResolutionStrategy. The period between each marker conflict checking.
+2. `hoodie.write.lock.early.conflict.async.checker.batch.interval` default 30000L. Used for timeline based marker AsyncTimelineMarkerEarlyConflictDetectionStrategy. The time to delay first async marker conflict checking.
+3. `hoodie.write.lock.early.conflict.async.checker.period` default 30000L. Used for timeline based marker AsyncTimelineMarkerEarlyConflictDetectionStrategy. The period between each marker conflict checking.
 4. `hoodie.write.lock.early.conflict.detection.strategy` default AsyncTimelineMarkerEarlyConflictDetectionStrategy. Early conflict detection class name, this should be subclass of oorg.apache.hudi.common.model.HoodieEarlyConflictDetectionStrategy
 
 
