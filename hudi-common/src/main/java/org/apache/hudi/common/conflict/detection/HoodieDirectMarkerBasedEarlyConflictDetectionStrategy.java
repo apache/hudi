@@ -49,7 +49,7 @@ public abstract class HoodieDirectMarkerBasedEarlyConflictDetectionStrategy impl
    * and only list these specific partition_paths we need instead of list all the '$base_path/.temp/'
    * @param basePath
    * @param partitionPath
-   * @param fileId
+   * @param fileId 162b13d7-9530-48cf-88a4-02241817ae0c-0_1-74-100_003.parquet
    * @return true if current fileID is already existed under .temp/instant_time/partition_path/..
    * @throws IOException
    */

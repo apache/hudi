@@ -141,10 +141,10 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
 
     // start to write commit 002
     final JavaRDD<WriteStatus> writeStatusList2 = startCommitForUpdate(writeConfig, client2, nextCommitTime2, 1000);
-    final String nextCommitTime3 = "003";
 
     // start to write commit 003
     // this commit 003 will failed quickly because early conflict detection before create marker.
+    final String nextCommitTime3 = "003";
     assertThrows(SparkException.class, () -> {
       final JavaRDD<WriteStatus> writeStatusList3 = startCommitForUpdate(writeConfig, client3, nextCommitTime3, 1000);
       client3.commit(nextCommitTime3, writeStatusList3);
@@ -154,6 +154,71 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     assertDoesNotThrow(() -> {
       client2.commit(nextCommitTime2, writeStatusList2);
     });
+
+    List<String> completedInstant = metaClient.reloadActiveTimeline().getCommitsTimeline()
+        .filterCompletedInstants().getInstants().map(HoodieInstant::getTimestamp).collect(Collectors.toList());
+
+    assertEquals(2, completedInstant.size());
+    assertTrue(completedInstant.contains(nextCommitTime1));
+    assertTrue(completedInstant.contains(nextCommitTime2));
+    FileIOUtils.deleteDirectory(new File(basePath));
+  }
+
+  /**
+   * Test multi-writers with early conflict detect enable, including
+   *    1. MOR + Direct marker
+   *    2. COW + Direct marker
+   *    3. MOR + Timeline server based marker
+   *    4. COW + Timeline server based marker
+   *
+   *  ---|---------|--------------------|--------------------------------------|-------------------------> time
+   * init 001
+   *               002 start writing
+   *                                    003 start which has conflict with 002
+   *                                    and failed soon
+   *                                                                           002 commit successfully
+   * @param tableType
+   * @param markerType
+   * @throws Exception
+   */
+  @ParameterizedTest
+  @MethodSource("configParams")
+  public void testHoodieClientBasicMultiWriterWithEarlyConflictDetectionCommitConflict(String tableType, String markerType) throws Exception {
+    if (tableType.equalsIgnoreCase(HoodieTableType.MERGE_ON_READ.name())) {
+      setUpMORTestTable();
+    }
+    Properties properties = new Properties();
+    properties.setProperty(FILESYSTEM_LOCK_PATH_PROP_KEY, basePath + "/.hoodie/.locks");
+    properties.setProperty(LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY, "3000");
+
+    HoodieWriteConfig writeConfig = buildWriteConfigForEarlyConflictDetect(markerType, properties);
+    // Create the first commit
+    final String nextCommitTime1 = "001";
+    createCommitWithInserts(writeConfig, getHoodieWriteClient(writeConfig), "000", nextCommitTime1, 2000, true);
+
+    final SparkRDDWriteClient client2 = getHoodieWriteClient(writeConfig);
+    final SparkRDDWriteClient client3 = getHoodieWriteClient(writeConfig);
+
+    final String nextCommitTime2 = "002";
+    final String nextCommitTime3 = "003";
+
+    // start to write commit 002
+    final JavaRDD<WriteStatus> writeStatusList2 = startCommitForUpdate(writeConfig, client2, nextCommitTime2, 1000);
+    // start to commit 002 and success
+    assertDoesNotThrow(() -> {
+      client2.commit(nextCommitTime2, writeStatusList2);
+    });
+
+    // start to write commit 003
+    final JavaRDD<WriteStatus> writeStatusList3 = startCommitForUpdate(writeConfig, client3, nextCommitTime3, 1000);
+
+    // start to commit 003
+    // this commit 003 will failed quickly because early conflict detection before create marker.
+    assertThrows(SparkException.class, () -> {
+      client3.commit(nextCommitTime3, writeStatusList3);
+    }, "Early conflict detected but cannot resolve conflicts for overlapping writes");
+
+
 
     List<String> completedInstant = metaClient.reloadActiveTimeline().getCommitsTimeline()
         .filterCompletedInstants().getInstants().map(HoodieInstant::getTimestamp).collect(Collectors.toList());
@@ -726,9 +791,11 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
   }
 
   public static Stream<Arguments> configParams() {
+//    Object[][] data =
+//        new Object[][] {{"COPY_ON_WRITE", MarkerType.TIMELINE_SERVER_BASED.name()}, {"MERGE_ON_READ", MarkerType.TIMELINE_SERVER_BASED.name()},
+//            {"MERGE_ON_READ", MarkerType.DIRECT.name()}, {"COPY_ON_WRITE", MarkerType.DIRECT.name()}};
     Object[][] data =
-        new Object[][] {{"COPY_ON_WRITE", MarkerType.TIMELINE_SERVER_BASED.name()}, {"MERGE_ON_READ", MarkerType.TIMELINE_SERVER_BASED.name()},
-            {"MERGE_ON_READ", MarkerType.DIRECT.name()}, {"COPY_ON_WRITE", MarkerType.DIRECT.name()}};
+        new Object[][] {{"COPY_ON_WRITE", MarkerType.TIMELINE_SERVER_BASED.name()}};
     return Stream.of(data).map(Arguments::of);
   }
 

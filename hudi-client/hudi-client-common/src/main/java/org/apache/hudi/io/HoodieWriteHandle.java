@@ -216,7 +216,7 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
         .getInstants()
         .collect(Collectors.toSet());
 
-    return writeMarkers.createWithEarlyConflictDetection(partitionPath, dataFileName, getIOType(), false, resolutionStrategy, completedCommitInstants, config);
+    return writeMarkers.createWithEarlyConflictDetection(partitionPath, dataFileName, getIOType(), false, resolutionStrategy, completedCommitInstants, config, fileId);
 
   }
 

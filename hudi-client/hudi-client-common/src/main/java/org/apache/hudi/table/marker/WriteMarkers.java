@@ -180,5 +180,5 @@ public abstract class WriteMarkers implements Serializable {
    */
   public abstract Option<Path> createWithEarlyConflictDetection(String partitionPath, String dataFileName, IOType type, boolean checkIfExists,
                                                                 HoodieEarlyConflictDetectionStrategy resolutionStrategy,
-                                                                Set<HoodieInstant> completedCommitInstants, HoodieWriteConfig config);
+                                                                Set<HoodieInstant> completedCommitInstants, HoodieWriteConfig config, String fileId);
 }

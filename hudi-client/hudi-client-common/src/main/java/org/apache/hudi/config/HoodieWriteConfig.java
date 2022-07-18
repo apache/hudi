@@ -2048,16 +2048,12 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(HoodieLockConfig.EARLY_CONFLICT_DETECTION_ENABLE);
   }
 
-  public boolean isEarlyConflictDetectionWithTransaction() {
-    return getBoolean(HoodieLockConfig.EARLY_CONFLICT_DETECTION_ENABLE);
-  }
-
   public String getEarlyConflictDetectionStrategyClassName() {
-    return getString(HoodieLockConfig.WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME);
+    return getString(HoodieLockConfig.EARLY_CONFLICT_DETECTION_STRATEGY_CLASS_NAME);
   }
 
   public HoodieEarlyConflictDetectionStrategy getEarlyConflictDetectionStrategy() {
-    return ReflectionUtils.loadClass(getString(HoodieLockConfig.WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME));
+    return ReflectionUtils.loadClass(getString(HoodieLockConfig.EARLY_CONFLICT_DETECTION_STRATEGY_CLASS_NAME));
   }
 
   /**

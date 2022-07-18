@@ -157,7 +157,7 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
   @Override
   public Option<Path> createWithEarlyConflictDetection(String partitionPath, String dataFileName, IOType type, boolean checkIfExists,
                                                        HoodieEarlyConflictDetectionStrategy resolutionStrategy,
-                                                       Set<HoodieInstant> completedCommitInstants, HoodieWriteConfig config) {
+                                                       Set<HoodieInstant> completedCommitInstants, HoodieWriteConfig config, String fileId) {
     HoodieTimer timer = new HoodieTimer().startTimer();
     String markerFileName = getMarkerFileName(dataFileName, type);
     Map<String, String> paramsMap = initConfigMap(partitionPath, markerFileName);

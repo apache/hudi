@@ -347,7 +347,7 @@ public class HoodieLockConfig extends HoodieConfig {
     }
 
     public HoodieLockConfig.Builder withEarlyConflictDetectionStrategy(String className) {
-      lockConfig.setValue(WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME, className);
+      lockConfig.setValue(EARLY_CONFLICT_DETECTION_STRATEGY_CLASS_NAME, className);
       return this;
     }
 

@@ -21,7 +21,10 @@ package org.apache.hudi.timeline.service.handlers;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
+import static org.apache.hudi.timeline.service.RequestHandler.jsonifyResult;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.hudi.common.conflict.detection.HoodieTimelineServerBasedEarlyConflictDetectionStrategy;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.metrics.Registry;
@@ -30,6 +33,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.timeline.service.TimelineService;
 import org.apache.hudi.timeline.service.handlers.marker.MarkerCreationDispatchingRunnable;
 import org.apache.hudi.timeline.service.handlers.marker.MarkerCreationFuture;
@@ -196,7 +200,14 @@ public class MarkerHandler extends Handler {
         }
       } catch (Exception ex) {
         LOG.warn("Failed to create marker with early conflict detection enable", ex);
-        return new MarkerCreationFuture(context, markerDir, markerName);
+        MarkerCreationFuture future = new MarkerCreationFuture(context, markerDir, markerName);
+        try {
+          future.complete(jsonifyResult(
+              future.getContext(), future.isSuccessful(), metricsRegistry, new ObjectMapper(), LOG));
+        } catch (JsonProcessingException e) {
+          throw new HoodieException("Failed to JSON encode the value", e);
+        }
+        return future;
       }
     }
 

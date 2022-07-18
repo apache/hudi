@@ -164,7 +164,7 @@ public class DirectWriteMarkers extends WriteMarkers {
   @Override
   public Option<Path> createWithEarlyConflictDetection(String partitionPath, String dataFileName, IOType type, boolean checkIfExists,
                                                        HoodieEarlyConflictDetectionStrategy resolutionStrategy,
-                                                       Set<HoodieInstant> completedCommitInstants, HoodieWriteConfig config) {
+                                                       Set<HoodieInstant> completedCommitInstants, HoodieWriteConfig config, String fileId) {
     HoodieDirectMarkerBasedEarlyConflictDetectionStrategy strategy = (HoodieDirectMarkerBasedEarlyConflictDetectionStrategy) resolutionStrategy;
     HoodieTableMetaClient metaClient =
         HoodieTableMetaClient.builder().setConf(new Configuration()).setBasePath(config.getBasePath())
@@ -173,8 +173,8 @@ public class DirectWriteMarkers extends WriteMarkers {
             .setFileSystemRetryConfig(config.getFileSystemRetryConfig())
             .setProperties(config.getProps()).build();
 
-    if (strategy.hasMarkerConflict(basePath, fs, partitionPath, dataFileName, instantTime, completedCommitInstants, metaClient)) {
-      strategy.resolveMarkerConflict(basePath, partitionPath, dataFileName);
+    if (strategy.hasMarkerConflict(basePath, fs, partitionPath, fileId, instantTime, completedCommitInstants, metaClient)) {
+      strategy.resolveMarkerConflict(basePath, partitionPath, fileId);
     }
     return create(getMarkerPath(partitionPath, dataFileName, type), checkIfExists);
   }
