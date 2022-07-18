@@ -65,6 +65,12 @@ public class ComplexKeyGenerator extends BuiltinKeyGenerator {
   }
 
   @Override
+  public String getRecordKey(InternalRow internalRow, StructType schema) {
+    buildFieldSchemaInfoIfNeeded(schema);
+    return RowKeyGeneratorHelper.getRecordKeyFromInternalRow(internalRow, getRecordKeyFields(), recordKeySchemaInfo, true);
+  }
+
+  @Override
   public String getPartitionPath(Row row) {
     buildFieldSchemaInfoIfNeeded(row.schema());
     return RowKeyGeneratorHelper.getPartitionPathFromRow(row, getPartitionPathFields(),

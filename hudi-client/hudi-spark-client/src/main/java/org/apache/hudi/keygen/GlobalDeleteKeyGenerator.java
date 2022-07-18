@@ -65,6 +65,12 @@ public class GlobalDeleteKeyGenerator extends BuiltinKeyGenerator {
   }
 
   @Override
+  public String getRecordKey(InternalRow internalRow, StructType schema) {
+    buildFieldSchemaInfoIfNeeded(schema);
+    return RowKeyGeneratorHelper.getRecordKeyFromInternalRow(internalRow, getRecordKeyFields(), recordKeySchemaInfo, true);
+  }
+
+  @Override
   public String getPartitionPath(Row row) {
     return globalAvroDeleteKeyGenerator.getEmptyPartition();
   }
