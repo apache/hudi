@@ -19,7 +19,7 @@
 package org.apache.hudi.table.marker;
 
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.hudi.common.conflict.detection.HoodieDirectMarkerBasedEarlyConflictDetectionStrategy;
+import org.apache.hudi.common.conflict.detection.HoodieTransactionDirectMarkerBasedEarlyConflictDetectionStrategy;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.exception.HoodieEarlyConflictDetectionException;
@@ -35,8 +35,8 @@ import java.util.Set;
  * This strategy is used for direct marker writers, trying to do early conflict detection.
  * It will use fileSystem api like list and exist directly to check if there is any marker file conflict.
  */
-public class SimpleDirectMarkerDirectMarkerBasedEarlyConflictDetectionStrategy extends HoodieDirectMarkerBasedEarlyConflictDetectionStrategy {
-  private static final Logger LOG = LogManager.getLogger(SimpleDirectMarkerDirectMarkerBasedEarlyConflictDetectionStrategy.class);
+public class SimpleTransactionDirectMarkerBasedEarlyConflictDetectionStrategy extends HoodieTransactionDirectMarkerBasedEarlyConflictDetectionStrategy {
+  private static final Logger LOG = LogManager.getLogger(SimpleTransactionDirectMarkerBasedEarlyConflictDetectionStrategy.class);
 
   @Override
   public boolean hasMarkerConflict(String basePath, FileSystem fs, String partitionPath, String fileId, String instantTime,

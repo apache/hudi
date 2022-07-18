@@ -42,7 +42,7 @@ import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
-import org.apache.hudi.table.marker.SimpleDirectMarkerDirectMarkerBasedEarlyConflictDetectionStrategy;
+import org.apache.hudi.table.marker.SimpleDirectMarkerBasedEarlyConflictDetectionStrategy;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
 import org.apache.hadoop.fs.Path;
@@ -748,7 +748,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
           .withMarkersType(MarkerType.DIRECT.name())
           .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class)
               .withEarlyConflictDetectionEnable(true)
-              .withEarlyConflictDetectionStrategy(SimpleDirectMarkerDirectMarkerBasedEarlyConflictDetectionStrategy.class.getName())
+              .withEarlyConflictDetectionStrategy(SimpleDirectMarkerBasedEarlyConflictDetectionStrategy.class.getName())
               .withMarkerConflictCheckerBatchInterval(0)
               .withMarkerConflictCheckerPeriod(100)
               .build())
