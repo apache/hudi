@@ -24,8 +24,11 @@ import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.client.utils.SparkRowSerDe;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.hudi.unsafe.UTF8StringBuilder;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 import org.apache.spark.sql.HoodieUnsafeRowUtils;
 import org.apache.spark.sql.HoodieUnsafeRowUtils$;
 import org.apache.spark.sql.Row;
@@ -41,6 +44,7 @@ import javax.annotation.concurrent.ThreadSafe;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 
 import static org.apache.hudi.common.util.CollectionUtils.tail;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
@@ -62,6 +66,8 @@ import static org.apache.hudi.keygen.KeyGenUtils.NULL_RECORDKEY_PLACEHOLDER;
  */
 @ThreadSafe
 public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements SparkKeyGeneratorInterface {
+
+  private static final Logger LOG = LogManager.getLogger(BuiltinKeyGenerator.class);
 
   private static final String COMPOSITE_KEY_FIELD_VALUE_INFIX = ":";
 
@@ -407,14 +413,8 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
     private final HoodieUnsafeRowUtils.NestedFieldPath[] partitionPathFieldsPaths;
 
     SparkRowAccessor(StructType schema) {
-      this.recordKeyFieldsPaths =
-          getRecordKeyFields().stream()
-              .map(recordKeyField -> HoodieUnsafeRowUtils$.MODULE$.composeNestedFieldPath(schema, recordKeyField))
-              .toArray(HoodieUnsafeRowUtils.NestedFieldPath[]::new);
-      this.partitionPathFieldsPaths =
-          getPartitionPathFields().stream()
-              .map(recordKeyField -> HoodieUnsafeRowUtils$.MODULE$.composeNestedFieldPath(schema, recordKeyField))
-              .toArray(HoodieUnsafeRowUtils.NestedFieldPath[]::new);
+      this.recordKeyFieldsPaths = resolveNestedFieldPaths(getRecordKeyFields(), schema);
+      this.partitionPathFieldsPaths = resolveNestedFieldPaths(getPartitionPathFields(), schema);
     }
 
     public Object[] getRecordKeyParts(Row row) {
@@ -451,6 +451,17 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
       }
 
       return nestedFieldValues;
+    }
+
+    private HoodieUnsafeRowUtils.NestedFieldPath[] resolveNestedFieldPaths(List<String> fieldPaths, StructType schema) {
+      try {
+        return fieldPaths.stream()
+            .map(fieldPath -> HoodieUnsafeRowUtils$.MODULE$.composeNestedFieldPath(schema, fieldPath))
+            .toArray(HoodieUnsafeRowUtils.NestedFieldPath[]::new);
+      } catch (Exception e) {
+        LOG.error(String.format("Failed to resolve nested field-paths (%s) in schema (%s)", fieldPaths, schema), e);
+        throw new HoodieException("Failed to resolve nested field-paths", e);
+      }
     }
   }
 }
