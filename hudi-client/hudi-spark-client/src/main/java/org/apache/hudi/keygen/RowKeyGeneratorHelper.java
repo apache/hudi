@@ -46,6 +46,7 @@ import static org.apache.hudi.keygen.KeyGenUtils.DEFAULT_PARTITION_PATH_SEPARATO
 import static org.apache.hudi.keygen.KeyGenUtils.EMPTY_RECORDKEY_PLACEHOLDER;
 import static org.apache.hudi.keygen.KeyGenUtils.HUDI_DEFAULT_PARTITION_PATH;
 import static org.apache.hudi.keygen.KeyGenUtils.NULL_RECORDKEY_PLACEHOLDER;
+import static org.apache.hudi.keygen.RowKeyGenUtils.convertToLogicalDataType;
 
 /**
  * Helper class to fetch fields from Row.
@@ -66,7 +67,8 @@ public class RowKeyGeneratorHelper {
         if (internalRow.isNullAt(fieldPos)) {
           val = NULL_RECORDKEY_PLACEHOLDER;
         } else {
-          val = internalRow.get(fieldPos, recordKeyPositions.get(field).getValue()).toString();
+          DataType dataType = recordKeyPositions.get(field).getValue();
+          val = convertToLogicalDataType(dataType, internalRow.get(fieldPos, dataType)).toString();
           if (val.isEmpty()) {
             val = EMPTY_RECORDKEY_PLACEHOLDER;
           } else {
@@ -182,7 +184,7 @@ public class RowKeyGeneratorHelper {
         if (fieldPos == -1 || internalRow.isNullAt(fieldPos)) {
           val = HUDI_DEFAULT_PARTITION_PATH;
         } else {
-          Object value = internalRow.get(fieldPos, dataType);
+          Object value = convertToLogicalDataType(dataType, internalRow.get(fieldPos, dataType));
           if (value == null || value.toString().isEmpty()) {
             val = HUDI_DEFAULT_PARTITION_PATH;
           } else {
