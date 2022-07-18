@@ -146,6 +146,10 @@ both writers will pass conflict checking and successfully create a marker, which
 If so, the conflict can only be found in the pre-commit conflict checking and fail writing.
 This leads to waste of resources, but don't compromise the correctness of the data.
 
+
+As we can see, not only DirectMarkerWithTransactionConflictResolutionStrategy but also SimpleDirectMarkerConflictResolutionStrategy
+ have extra fs calling for ealy conflict detection.
+
 #### TimelineServerBasedWriteMarkers related strategy
 
 ##### AsyncTimelineMarkerConflictResolutionStrategy
@@ -154,7 +158,7 @@ This design expands the create marker api on timeline server.
 
 ![](figure3.png)
 
-As shown on figure3. For the client side, it will call create marker api, requesting to create marker.
+As shown on figure3. For the client side, it will call create marker api, requesting to create markers.
 
 For the timeline server side, there is a MarkerCheckerRunnable thread, which will check the conflicts between current 
 writer and other active writers at fixed rate. If any conflict was detected, this thread will async update the value 
@@ -190,7 +194,7 @@ Let's take Figure 4 as an example
 Writer1 starts writing data at time t1 and finishes at time t3. Writer2 starts writing at time t2, and will update a 
 file already updated by writer1 at time t4. Since all marker information of writer1 has been deleted at time t4, 
 such conflicts cannot be found in the stage of marker conflict detection until starting to commit. 
-In order to avoid such delay of early conflict detection, it is necessary to add the step of check commit conflict during
+In order to avoid such delay of early conflict detection, it is necessary to add the steps of checking commit conflict during
 detection.
 
 ```
