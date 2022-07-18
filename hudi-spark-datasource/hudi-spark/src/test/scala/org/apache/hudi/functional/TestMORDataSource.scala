@@ -705,6 +705,96 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
   }
 
   @Test
+  def testReadPathsForMergeOnReadTable(): Unit = {
+    // Paths only baseFiles
+    val records1 = dataGen.generateInserts("001", 100)
+    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(recordsToStrings(records1), 2))
+    inputDF1.write.format("org.apache.hudi")
+      .options(commonOpts)
+      .option("hoodie.compact.inline", "false") // else fails due to compaction & deltacommit instant times being same
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+    assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "000"))
+    val baseFilePath = fs.listStatus(new Path(basePath, dataGen.getPartitionPaths.head))
+      .filter(_.getPath.getName.endsWith("parquet"))
+      .map(_.getPath.toString)
+      .mkString(",")
+    val records2 = dataGen.generateUniqueDeleteRecords("002", 100)
+    val inputDF2: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(recordsToStrings(records2), 2))
+    inputDF2.write.format("org.apache.hudi")
+      .options(commonOpts)
+      .mode(SaveMode.Append)
+      .save(basePath)
+    val hudiReadPathDF1 = spark.read.format("org.apache.hudi")
+      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
+      .option(DataSourceReadOptions.READ_PATHS.key, baseFilePath)
+      .load()
+
+    val expectedCount1 = records1.asScala.count(record => record.getPartitionPath == dataGen.getPartitionPaths.head)
+    assertEquals(expectedCount1, hudiReadPathDF1.count())
+
+    // Paths Contains both baseFile and log files
+    val logFilePath = fs.listStatus(new Path(basePath, dataGen.getPartitionPaths.head))
+      .filter(_.getPath.getName.contains("log"))
+      .map(_.getPath.toString)
+      .mkString(",")
+
+    val readPaths = baseFilePath + "," + logFilePath
+    val hudiReadPathDF2 = spark.read.format("org.apache.hudi")
+      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
+      .option(DataSourceReadOptions.READ_PATHS.key, readPaths)
+      .load()
+
+    assertEquals(0, hudiReadPathDF2.count())
+  }
+
+  @Test
+  def testReadPathsForOnlyLogFiles(): Unit = {
+    initMetaClient(HoodieTableType.MERGE_ON_READ)
+    val records1 = dataGen.generateInsertsContainsAllPartitions("000", 20)
+    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(recordsToStrings(records1), 2))
+    inputDF1.write.format("hudi")
+      .options(commonOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
+      // Use InMemoryIndex to generate log only mor table.
+      .option(HoodieIndexConfig.INDEX_TYPE.key, IndexType.INMEMORY.toString)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+    // There should no base file in the file list.
+    assertTrue(DataSourceTestUtils.isLogFileOnly(basePath))
+
+    val logFilePath = fs.listStatus(new Path(basePath, dataGen.getPartitionPaths.head))
+      .filter(_.getPath.getName.contains("log"))
+      .map(_.getPath.toString)
+      .mkString(",")
+
+    val records2 = dataGen.generateInsertsContainsAllPartitions("000", 20)
+    val inputDF2 = spark.read.json(spark.sparkContext.parallelize(recordsToStrings(records2), 2))
+    inputDF2.write.format("hudi")
+      .options(commonOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
+      // Use InMemoryIndex to generate log only mor table.
+      .option(HoodieIndexConfig.INDEX_TYPE.key, IndexType.INMEMORY.toString)
+      .mode(SaveMode.Append)
+      .save(basePath)
+    // There should no base file in the file list.
+    assertTrue(DataSourceTestUtils.isLogFileOnly(basePath))
+
+    val expectedCount1 = records1.asScala.count(record => record.getPartitionPath == dataGen.getPartitionPaths.head)
+
+    val hudiReadPathDF = spark.read.format("org.apache.hudi")
+      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
+      .option(DataSourceReadOptions.READ_PATHS.key, logFilePath)
+      .load()
+
+    assertEquals(expectedCount1, hudiReadPathDF.count())
+  }
+
+  @Test
   def testReadLogOnlyMergeOnReadTable(): Unit = {
     initMetaClient(HoodieTableType.MERGE_ON_READ)
     val records1 = dataGen.generateInsertsContainsAllPartitions("000", 20)
