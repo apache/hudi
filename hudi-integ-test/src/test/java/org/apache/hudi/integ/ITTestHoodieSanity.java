@@ -84,6 +84,7 @@ public class ITTestHoodieSanity extends ITTestBase {
     dropHiveTables(hiveTableName, HoodieTableType.COPY_ON_WRITE.name());
   }
 
+  @Disabled
   @Test
   /**
    * A basic integration test that runs HoodieJavaApp to create a sample MOR Hoodie with single partition key data-set
