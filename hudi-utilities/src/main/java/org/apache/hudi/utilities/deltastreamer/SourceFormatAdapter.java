@@ -27,10 +27,12 @@ import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.AvroSource;
 import org.apache.hudi.utilities.sources.InputBatch;
 import org.apache.hudi.utilities.sources.JsonSource;
+import org.apache.hudi.utilities.sources.ProtoSource;
 import org.apache.hudi.utilities.sources.RowSource;
 import org.apache.hudi.utilities.sources.Source;
 import org.apache.hudi.utilities.sources.helpers.AvroConvertor;
 
+import com.google.protobuf.Message;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
@@ -81,6 +83,12 @@ public final class SourceFormatAdapter {
             })
             .orElse(null)), r.getCheckpointForNextBatch(), r.getSchemaProvider());
       }
+      case PROTO: {
+        InputBatch<JavaRDD<Message>> r = ((ProtoSource) source).fetchNext(lastCkptStr, sourceLimit);
+        AvroConvertor convertor = new AvroConvertor(r.getSchemaProvider().getSourceSchema());
+        return new InputBatch<>(Option.ofNullable(r.getBatch().map(rdd -> rdd.map(convertor::fromProtoMessage)).orElse(null)),
+            r.getCheckpointForNextBatch(), r.getSchemaProvider());
+      }
       default:
         throw new IllegalArgumentException("Unknown source type (" + source.getSourceType() + ")");
     }
@@ -113,6 +121,21 @@ public final class SourceFormatAdapter {
         return new InputBatch<>(
             Option.ofNullable(
                 r.getBatch().map(rdd -> source.getSparkSession().read().schema(dataType).json(rdd)).orElse(null)),
+            r.getCheckpointForNextBatch(), r.getSchemaProvider());
+      }
+      case PROTO: {
+        InputBatch<JavaRDD<Message>> r = ((ProtoSource) source).fetchNext(lastCkptStr, sourceLimit);
+        Schema sourceSchema = r.getSchemaProvider().getSourceSchema();
+        AvroConvertor convertor = new AvroConvertor(r.getSchemaProvider().getSourceSchema());
+        return new InputBatch<>(
+            Option
+                .ofNullable(
+                    r.getBatch()
+                        .map(rdd -> rdd.map(convertor::fromProtoMessage))
+                        .map(rdd -> AvroConversionUtils.createDataFrame(JavaRDD.toRDD(rdd), sourceSchema.toString(),
+                            source.getSparkSession())
+                        )
+                        .orElse(null)),
             r.getCheckpointForNextBatch(), r.getSchemaProvider());
       }
       default:
