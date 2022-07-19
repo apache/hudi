@@ -528,7 +528,9 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
     default StringBuilder<S> append(S s) {
       return appendJava(s.toString());
     }
+
     StringBuilder<S> appendJava(String s);
+
     S build();
   }
 
