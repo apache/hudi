@@ -35,6 +35,11 @@ import static org.apache.hudi.hive.replication.GlobalHiveSyncConfig.META_SYNC_GL
 public class GlobalHiveSyncTool extends HiveSyncTool {
 
   private static final Logger LOG = LogManager.getLogger(GlobalHiveSyncTool.class);
+  /**
+   * NOTE: This member variables could only be used in tests
+   *
+   * @VisibleForTesting
+   */
   protected final GlobalHiveSyncConfig config;
 
   public GlobalHiveSyncTool(Properties props, Configuration hadoopConf) {
