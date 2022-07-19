@@ -26,6 +26,7 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.testutils.KeyGeneratorTestUtilities;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
+import org.apache.spark.unsafe.types.UTF8String;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -106,9 +107,8 @@ public class TestSimpleKeyGenerator extends KeyGeneratorTestUtilities {
   public void testWrongPartitionPathField() {
     SimpleKeyGenerator keyGenerator = new SimpleKeyGenerator(getWrongPartitionPathFieldProps());
     GenericRecord record = getRecord();
-    Assertions.assertEquals(keyGenerator.getPartitionPath(record), KeyGenUtils.HUDI_DEFAULT_PARTITION_PATH);
-    Assertions.assertEquals(keyGenerator.getPartitionPath(KeyGeneratorTestUtilities.getRow(record)),
-        KeyGenUtils.HUDI_DEFAULT_PARTITION_PATH);
+    Assertions.assertEquals(KeyGenUtils.HUDI_DEFAULT_PARTITION_PATH, keyGenerator.getPartitionPath(record));
+    Assertions.assertEquals(KeyGenUtils.HUDI_DEFAULT_PARTITION_PATH, keyGenerator.getPartitionPath(KeyGeneratorTestUtilities.getRow(record)));
   }
 
   @Test
@@ -122,15 +122,15 @@ public class TestSimpleKeyGenerator extends KeyGeneratorTestUtilities {
     SimpleKeyGenerator keyGenerator = new SimpleKeyGenerator(getProps());
     GenericRecord record = getRecord();
     HoodieKey key = keyGenerator.getKey(getRecord());
-    Assertions.assertEquals(key.getRecordKey(), "key1");
-    Assertions.assertEquals(key.getPartitionPath(), "timestamp=4357686");
+    Assertions.assertEquals("key1", key.getRecordKey());
+    Assertions.assertEquals("timestamp=4357686", key.getPartitionPath());
 
     Row row = KeyGeneratorTestUtilities.getRow(record);
-    Assertions.assertEquals(keyGenerator.getRecordKey(row), "key1");
-    Assertions.assertEquals(keyGenerator.getPartitionPath(row), "timestamp=4357686");
+    Assertions.assertEquals("key1", keyGenerator.getRecordKey(row));
+    Assertions.assertEquals("timestamp=4357686", keyGenerator.getPartitionPath(row));
 
     InternalRow internalRow = KeyGeneratorTestUtilities.getInternalRow(row);
-    Assertions.assertEquals(keyGenerator.getPartitionPath(internalRow, row.schema()), "timestamp=4357686");
+    Assertions.assertEquals(UTF8String.fromString("timestamp=4357686"), keyGenerator.getPartitionPath(internalRow, row.schema()));
   }
 
   private static Stream<GenericRecord> nestedColTestRecords() {
