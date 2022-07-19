@@ -20,7 +20,7 @@
 
 ARG HADOOP_VERSION=2.8.4
 ARG TRINO_VERSION=368
-FROM apachehudi/hudi-hadoop_${HADOOP_VERSION}-trinobase_${TRINO_VERSION}:latest as trino-base
+FROM rchertara/hudi-hadoop_${HADOOP_VERSION}-trinobase_${TRINO_VERSION}:image as trino-base
 
 ADD etc /usr/local/trino/etc
 EXPOSE 8092

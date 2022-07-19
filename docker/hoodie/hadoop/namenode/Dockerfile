@@ -17,7 +17,7 @@
 
 ARG HADOOP_VERSION=2.8.4 
 ARG HADOOP_WEBHDFS_PORT=50070
-FROM apachehudi/hudi-hadoop_${HADOOP_VERSION}-base:latest
+FROM rchertara/hudi-hadoop_${HADOOP_VERSION}-base:image
 
 ENV HADOOP_WEBHDFS_PORT ${HADOOP_WEBHDFS_PORT}
 

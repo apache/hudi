@@ -17,7 +17,7 @@
 
 ARG HADOOP_VERSION=2.8.4 
 ARG HIVE_VERSION=2.3.3
-FROM apachehudi/hudi-hadoop_${HADOOP_VERSION}-hive_${HIVE_VERSION}
+FROM rchertara/hudi-hadoop_${HADOOP_VERSION}-hive_${HIVE_VERSION}
 
 ENV ENABLE_INIT_DAEMON true
 ENV INIT_DAEMON_BASE_URI http://identifier/init-daemon
