@@ -34,7 +34,6 @@ import java.util.Locale;
 import java.util.Set;
 
 import static org.apache.flink.table.factories.FactoryUtil.PROPERTY_VERSION;
-import static org.apache.hudi.table.catalog.CatalogOptions.CATALOG_PATH;
 
 /**
  * A catalog factory impl that creates {@link HoodieCatalog}.
@@ -59,6 +58,7 @@ public class HoodieCatalogFactory implements CatalogFactory {
       case "hms":
         return new HoodieHiveCatalog(
             context.getName(),
+            helper.getOptions().get(CatalogOptions.CATALOG_PATH),
             helper.getOptions().get(CatalogOptions.DEFAULT_DATABASE),
             helper.getOptions().get(CatalogOptions.HIVE_CONF_DIR));
       case "dfs":
@@ -82,7 +82,7 @@ public class HoodieCatalogFactory implements CatalogFactory {
     options.add(PROPERTY_VERSION);
     options.add(CatalogOptions.HIVE_CONF_DIR);
     options.add(CatalogOptions.MODE);
-    options.add(CATALOG_PATH);
+    options.add(CatalogOptions.CATALOG_PATH);
     return options;
   }
 }
