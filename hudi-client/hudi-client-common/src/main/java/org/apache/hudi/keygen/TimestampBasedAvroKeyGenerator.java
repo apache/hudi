@@ -111,7 +111,7 @@ public class TimestampBasedAvroKeyGenerator extends SimpleAvroKeyGenerator {
     try {
       return getPartitionPath(partitionVal);
     } catch (Exception e) {
-      throw new HoodieKeyGeneratorException("Unable to parse input partition field :" + partitionVal, e);
+      throw new HoodieKeyGeneratorException("Unable to parse input partition field: " + partitionVal, e);
     }
   }
 
