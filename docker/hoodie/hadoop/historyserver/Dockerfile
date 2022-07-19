@@ -17,7 +17,7 @@
 
 ARG HADOOP_VERSION=2.8.4 
 ARG HADOOP_HISTORY_PORT=8188
-FROM apachehudi/hudi-hadoop_${HADOOP_VERSION}-base:latest
+FROM rchertara/hudi-hadoop_${HADOOP_VERSION}-base:image
 
 ENV HADOOP_HISTORY_PORT ${HADOOP_HISTORY_PORT}
 
