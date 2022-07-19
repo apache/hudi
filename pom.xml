@@ -1776,7 +1776,6 @@
         <fasterxml.jackson.dataformat.yaml.version>${fasterxml.spark3.version}
         </fasterxml.jackson.dataformat.yaml.version>
         <skip.hudi-spark2.unit.tests>true</skip.hudi-spark2.unit.tests>
-        <skipITs>true</skipITs>
       </properties>
       <modules>
         <module>hudi-spark-datasource/hudi-spark3.1.x</module>
