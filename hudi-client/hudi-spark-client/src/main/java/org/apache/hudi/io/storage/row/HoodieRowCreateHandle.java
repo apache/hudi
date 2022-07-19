@@ -56,11 +56,6 @@ public class HoodieRowCreateHandle implements Serializable {
   private static final Logger LOG = LogManager.getLogger(HoodieRowCreateHandle.class);
   private static final AtomicLong GLOBAL_SEQ_NO = new AtomicLong(1);
 
-  private static final Integer RECORD_KEY_META_FIELD_ORD =
-      HoodieRecord.HOODIE_META_COLUMNS_NAME_TO_POS.get(HoodieRecord.RECORD_KEY_METADATA_FIELD);
-  private static final Integer PARTITION_PATH_META_FIELD_ORD =
-      HoodieRecord.HOODIE_META_COLUMNS_NAME_TO_POS.get(HoodieRecord.PARTITION_PATH_METADATA_FIELD);
-
   private final HoodieTable table;
   private final HoodieWriteConfig writeConfig;
 
@@ -145,7 +140,7 @@ public class HoodieRowCreateHandle implements Serializable {
       //         [[UTF8String]] and [[String]])
       //          - Repeated computations (for ex, converting file-path to [[UTF8String]] over and
       //          over again)
-      UTF8String recordKey = row.getUTF8String(RECORD_KEY_META_FIELD_ORD);
+      UTF8String recordKey = row.getUTF8String(HoodieRecord.RECORD_KEY_META_FIELD_ORD);
 
       InternalRow updatedRow;
       // In cases when no meta-fields need to be added we simply relay provided row to
@@ -153,7 +148,7 @@ public class HoodieRowCreateHandle implements Serializable {
       if (!populateMetaFields) {
         updatedRow = row;
       } else {
-        UTF8String partitionPath = row.getUTF8String(PARTITION_PATH_META_FIELD_ORD);
+        UTF8String partitionPath = row.getUTF8String(HoodieRecord.PARTITION_PATH_META_FIELD_ORD);
         // This is the only meta-field that is generated dynamically, hence conversion b/w
         // [[String]] and [[UTF8String]] is unavoidable
         UTF8String seqId = UTF8String.fromString(seqIdGenerator.apply(GLOBAL_SEQ_NO.getAndIncrement()));

@@ -126,7 +126,7 @@ public class HoodieInternalRow extends InternalRow {
 
   @Override
   public UTF8String getUTF8String(int ordinal) {
-    if (ordinal < HoodieRecord.HOODIE_META_COLUMNS.size()) {
+    if (ordinal < metaFields.length) {
       return metaFields[ordinal];
     }
     return row.getUTF8String(rebaseOrdinal(ordinal));
@@ -134,7 +134,7 @@ public class HoodieInternalRow extends InternalRow {
 
   @Override
   public Object get(int ordinal, DataType dataType) {
-    if (ordinal < HoodieRecord.HOODIE_META_COLUMNS.size()) {
+    if (ordinal < metaFields.length) {
       validateMetaFieldDataType(dataType);
       return metaFields[ordinal];
     }

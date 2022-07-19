@@ -169,7 +169,7 @@ public class BulkInsertDataInternalWriterHelper {
       //
       // NOTE: Helper keeps track of [[lastKnownPartitionPath]] as [[UTF8String]] to avoid
       //       conversion from Catalyst internal representation into a [[String]]
-      return row.getUTF8String(HoodieRecord.PARTITION_PATH_META_FIELD_POS);
+      return row.getUTF8String(HoodieRecord.PARTITION_PATH_META_FIELD_ORD);
     } else if (keyGeneratorOpt.isPresent()) {
       return keyGeneratorOpt.get().getPartitionPath(row, structType);
     } else {
