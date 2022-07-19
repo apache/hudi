@@ -411,7 +411,9 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
    * @param value target value to be converted
    */
   private static Object convertToLogicalDataType(DataType dataType, Object value) {
-    if (dataType instanceof TimestampType) {
+    if (value == null) {
+      return null;
+    } else if (dataType instanceof TimestampType) {
       // Provided value have to be [[Long]] in this case, representing micros since epoch
       return new Timestamp((Long) value / 1000);
     } else if (dataType instanceof DateType) {
