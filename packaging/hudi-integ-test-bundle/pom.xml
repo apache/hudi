@@ -171,6 +171,7 @@
                   <include>com.fasterxml.jackson.core:jackson-core</include>
                   <include>com.fasterxml.jackson.core:jackson-databind</include>
                   <include>com.fasterxml.jackson.dataformat:jackson-dataformat-yaml</include>
+                  <include>com.fasterxml.jackson.module:jackson-module-scala_${scala.binary.version}</include>
 
                   <include>org.apache.curator:curator-framework</include>
                   <include>org.apache.curator:curator-client</include>

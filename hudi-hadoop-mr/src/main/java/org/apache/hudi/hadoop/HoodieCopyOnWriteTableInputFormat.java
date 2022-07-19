@@ -49,6 +49,8 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.realtime.HoodieVirtualKeyInfo;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
 import javax.annotation.Nonnull;
 import java.io.IOException;
@@ -76,6 +78,7 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  * NOTE: This class is invariant of the underlying file-format of the files being read
  */
 public class HoodieCopyOnWriteTableInputFormat extends HoodieTableInputFormat {
+  private static final Logger LOG = LogManager.getLogger(HoodieCopyOnWriteTableInputFormat.class);
 
   @Override
   protected boolean isSplitable(FileSystem fs, Path filename) {

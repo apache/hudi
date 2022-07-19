@@ -26,8 +26,10 @@
     <modelVersion>4.0.0</modelVersion>
 
     <artifactId>hudi-spark2-common</artifactId>
+    <packaging>jar</packaging>
 
     <properties>
+        <main.basedir>${project.parent.parent.basedir}</main.basedir>
         <maven.compiler.source>8</maven.compiler.source>
         <maven.compiler.target>8</maven.compiler.target>
     </properties>
