@@ -116,4 +116,9 @@ public class HiveSyncConfigHolder {
       .key("hoodie.datasource.hive_sync.sync_comment")
       .defaultValue("false")
       .withDocumentation("Whether to sync the table column comments while syncing the table.");
+
+  public static final ConfigProperty<Boolean> HIVE_SYNC_PARTITION_CASCADE_WITH_COLUMN_CHANGE = ConfigProperty
+      .key("hoodie.datasource.hive_sync.partition_cascade")
+      .defaultValue(true)
+      .withDocumentation("whether the partition is cascade or not when hive table columns changes");
 }
