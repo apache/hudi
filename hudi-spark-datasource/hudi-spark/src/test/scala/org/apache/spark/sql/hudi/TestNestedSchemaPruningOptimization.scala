@@ -23,12 +23,12 @@ import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.execution.{FileSourceScanExec, ProjectExec, RowDataSourceScanExec, SparkPlan}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{IntegerType, StringType, StructField, StructType}
-import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 
 class TestNestedSchemaPruningOptimization extends HoodieSparkSqlTestBase with SparkAdapterSupport {
 
-  private def explain(df: DataFrame): String = {
-    val explainCommand = sparkAdapter.getCatalystPlanUtils.createExplainCommand(df.queryExecution.logical, extended = true)
+  private def explain(plan: LogicalPlan): String = {
+    val explainCommand = sparkAdapter.getCatalystPlanUtils.createExplainCommand(plan, extended = true)
     executePlan(explainCommand)
       .executeCollect()
       .mkString("\n")
@@ -76,14 +76,15 @@ class TestNestedSchemaPruningOptimization extends HoodieSparkSqlTestBase with Sp
 
           spark.sessionState.conf.setConf(SQLConf.WHOLESTAGE_CODEGEN_ENABLED, false)
 
+          val expectedReadSchemaClause = "ReadSchema: struct<id:int,item:struct<name:string>>"
           val hint =
-            """
+            s"""
               |Following is expected to be present in the plan (where ReadSchema has properly pruned nested structs, which
               |is an optimization performed by NestedSchemaPruning rule):
               |
               |== Physical Plan ==
               |*(1) Project [id#45, item#46.name AS name#55]
-              |+- FileScan parquet default.h0[id#45,item#46] Batched: false, DataFilters: [], Format: Parquet, Location: HoodieFileIndex(1 paths)[file:/private/var/folders/kb/cnff55vj041g2nnlzs5ylqk00000gn/T/spark-7137..., PartitionFilters: [], PushedFilters: [], ReadSchema: struct<id:int,item:struct<name:string>>
+              |+- FileScan parquet default.h0[id#45,item#46] Batched: false, DataFilters: [], Format: Parquet, Location: HoodieFileIndex(1 paths)[file:/private/var/folders/kb/cnff55vj041g2nnlzs5ylqk00000gn/T/spark-7137..., PartitionFilters: [], PushedFilters: [], $expectedReadSchemaClause
               |]
               |""".stripMargin
 
@@ -101,11 +102,16 @@ class TestNestedSchemaPruningOptimization extends HoodieSparkSqlTestBase with Sp
 
             // MOR
             case ProjectExec(_, dataScan: RowDataSourceScanExec) =>
-              val tableIdentifier = dataScan.tableIdentifier
-              val requiredSchema = dataScan.requiredSchema
+              // NOTE: This is temporary solution to assert for Spark 2.4, until it's deprecated
+              val explainedPlan = explain(selectDF.queryExecution.logical)
+              assertTrue(explainedPlan.contains(expectedReadSchemaClause))
 
-              assertEquals(tableName, tableIdentifier.get.table)
-              assertEquals(expectedSchema, requiredSchema, hint)
+              // TODO replace w/ after Spark 2.4 deprecation
+              //val tableIdentifier = dataScan.tableIdentifier
+              //val requiredSchema = dataScan.requiredSchema
+              //
+              //assertEquals(tableName, tableIdentifier.get.table)
+              //assertEquals(expectedSchema, requiredSchema, hint)
           }
         }
       }
