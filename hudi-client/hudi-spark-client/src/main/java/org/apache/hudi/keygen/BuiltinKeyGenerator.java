@@ -135,7 +135,7 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
    *       optimizations, like inlining)
    */
   protected final String combinePartitionPath(Object... partitionPathParts) {
-    checkState(partitionPathParts.length == recordKeyFields.size());
+    checkState(partitionPathParts.length == partitionPathFields.size());
     // Avoid creating [[StringBuilder]] in case there's just one partition-path part,
     // and Hive-style of partitioning is not required
     if (!hiveStylePartitioning && partitionPathParts.length == 1) {
