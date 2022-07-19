@@ -148,6 +148,7 @@ class TestHoodieUnsafeRowUtils {
     }
   }
 
+  // TODO rebase on ScalaAssertionSupport
   private def assertThrows[T <: Throwable](expectedExceptionClass: Class[T])(f: () => Unit): T = {
     try {
       f.apply()
