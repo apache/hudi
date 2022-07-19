@@ -63,19 +63,20 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
     props
   }
 
-  @Test def testSimpleKeyGenerator() = {
+  @Test def testSimpleKeyGenerator(): Unit = {
 
-    // top level, valid fields
-    var keyGen = new SimpleKeyGenerator(getKeyConfig("field1", "name", "false"))
-    val hk1 = keyGen.getKey(baseRecord)
-    assertEquals("field1", hk1.getRecordKey)
-    assertEquals("name1", hk1.getPartitionPath)
+    {
+      // Top level, valid fields
+      val keyGen = new SimpleKeyGenerator(getKeyConfig("field1", "name", "false"))
 
-    assertEquals("field1", keyGen.getRecordKey(baseRow))
-    assertEquals("name1", keyGen.getPartitionPath(baseRow))
+      val expectedKey = new HoodieKey("field1", "name1")
+      assertEquals(expectedKey, keyGen.getKey(baseRecord))
 
-    assertEquals("field1", keyGen.getRecordKey(internalRow, structType))
-    assertEquals("name1", keyGen.getPartitionPath(internalRow, structType))
+      assertEquals(expectedKey.getRecordKey, keyGen.getRecordKey(baseRow))
+      assertEquals(expectedKey.getPartitionPath, keyGen.getPartitionPath(baseRow))
+      assertEquals(UTF8String.fromString(expectedKey.getRecordKey), keyGen.getRecordKey(internalRow, structType))
+      assertEquals(UTF8String.fromString(expectedKey.getPartitionPath), keyGen.getPartitionPath(internalRow, structType))
+    }
 
     {
       // Partition path field not specified
@@ -148,8 +149,8 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
       val keyGen = new SimpleKeyGenerator(getKeyConfig("field1", "name", "true"))
 
       assertEquals("name=name1", keyGen.getKey(baseRecord).getPartitionPath)
-      assertEquals("name=name1", keyGen.getPartitionPath(baseRow))
-      assertEquals("name=name1", keyGen.getPartitionPath(internalRow, structType))
+      assertEquals(UTF8String.fromString("name=name1"), keyGen.getPartitionPath(baseRow))
+      assertEquals(UTF8String.fromString("name=name1"), keyGen.getPartitionPath(internalRow, structType))
     }
 
     {
@@ -161,16 +162,16 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
       internalRow = KeyGeneratorTestUtilities.getInternalRow(baseRow)
 
       assertEquals("default", keyGen.getKey(baseRecord).getPartitionPath)
-      assertEquals("default", keyGen.getPartitionPath(baseRow))
-      assertEquals("default", keyGen.getPartitionPath(internalRow, structType))
+      assertEquals(UTF8String.fromString("default"), keyGen.getPartitionPath(baseRow))
+      assertEquals(UTF8String.fromString("default"), keyGen.getPartitionPath(internalRow, structType))
 
       baseRecord.put("name", null)
       baseRow = KeyGeneratorTestUtilities.getRow(baseRecord, schema, structType)
       internalRow = KeyGeneratorTestUtilities.getInternalRow(baseRow)
 
       assertEquals("default", keyGen.getKey(baseRecord).getPartitionPath)
-      assertEquals("default", keyGen.getPartitionPath(baseRow))
-      assertEquals("default", keyGen.getPartitionPath(internalRow, structType))
+      assertEquals(UTF8String.fromString("default"), keyGen.getPartitionPath(baseRow))
+      assertEquals(UTF8String.fromString("default"), keyGen.getPartitionPath(internalRow, structType))
     }
 
     {
@@ -256,8 +257,8 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
 
       assertEquals(expectedKey.getRecordKey, keyGen.getRecordKey(baseRow))
       assertEquals(expectedKey.getPartitionPath, keyGen.getPartitionPath(baseRow))
-      assertEquals(expectedKey.getRecordKey, keyGen.getRecordKey(internalRow, structType))
-      assertEquals(expectedKey.getPartitionPath, keyGen.getPartitionPath(internalRow, structType))
+      assertEquals(UTF8String.fromString(expectedKey.getRecordKey), keyGen.getRecordKey(internalRow, structType))
+      assertEquals(UTF8String.fromString(expectedKey.getPartitionPath), keyGen.getPartitionPath(internalRow, structType))
     }
 
     // Partition path field not specified
@@ -292,8 +293,8 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
 
       assertEquals(expectedKey.getRecordKey, keyGen.getRecordKey(baseRow))
       assertEquals(expectedKey.getPartitionPath, keyGen.getPartitionPath(baseRow))
-      assertEquals(expectedKey.getRecordKey, keyGen.getRecordKey(internalRow, structType))
-      assertEquals(expectedKey.getPartitionPath, keyGen.getPartitionPath(internalRow, structType))
+      assertEquals(UTF8String.fromString(expectedKey.getRecordKey), keyGen.getRecordKey(internalRow, structType))
+      assertEquals(UTF8String.fromString(expectedKey.getPartitionPath), keyGen.getPartitionPath(internalRow, structType))
     }
 
     {
@@ -327,7 +328,7 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
     }
 
     {
-      // if enable hive style partitioning
+      // If enable hive style partitioning
       val keyGen = new ComplexKeyGenerator(getKeyConfig("field1,name", "field1,name", "true"))
 
       val expectedKey = new HoodieKey("field1:field1,name:name1", "field1=field1/name=name1")
@@ -336,8 +337,8 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
 
       assertEquals(expectedKey.getRecordKey, keyGen.getRecordKey(baseRow))
       assertEquals(expectedKey.getPartitionPath, keyGen.getPartitionPath(baseRow))
-      assertEquals(expectedKey.getRecordKey, keyGen.getRecordKey(internalRow, structType))
-      assertEquals(expectedKey.getPartitionPath, keyGen.getPartitionPath(internalRow, structType))
+      assertEquals(UTF8String.fromString(expectedKey.getRecordKey), keyGen.getRecordKey(internalRow, structType))
+      assertEquals(UTF8String.fromString(expectedKey.getPartitionPath), keyGen.getPartitionPath(internalRow, structType))
     }
 
     {
@@ -354,15 +355,15 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
 
       assertEquals(expectedKey.getRecordKey, keyGen.getRecordKey(baseRow))
       assertEquals(expectedKey.getPartitionPath, keyGen.getPartitionPath(baseRow))
-      assertEquals(expectedKey.getRecordKey, keyGen.getRecordKey(internalRow, structType))
-      assertEquals(expectedKey.getPartitionPath, keyGen.getPartitionPath(internalRow, structType))
+      assertEquals(UTF8String.fromString(expectedKey.getRecordKey), keyGen.getRecordKey(internalRow, structType))
+      assertEquals(UTF8String.fromString(expectedKey.getPartitionPath), keyGen.getPartitionPath(internalRow, structType))
     }
 
     {
       // If one part of the record key is null, replace with "__null__"
       val keyGen = new ComplexKeyGenerator(getKeyConfig("field1,name", "field1,name", "false"))
 
-      baseRecord.put("name", "")
+      baseRecord.put("name", null)
       baseRow = KeyGeneratorTestUtilities.getRow(baseRecord, schema, structType)
       internalRow = KeyGeneratorTestUtilities.getInternalRow(baseRow)
 
@@ -372,8 +373,8 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
 
       assertEquals(expectedKey.getRecordKey, keyGen.getRecordKey(baseRow))
       assertEquals(expectedKey.getPartitionPath, keyGen.getPartitionPath(baseRow))
-      assertEquals(expectedKey.getRecordKey, keyGen.getRecordKey(internalRow, structType))
-      assertEquals(expectedKey.getPartitionPath, keyGen.getPartitionPath(internalRow, structType))
+      assertEquals(UTF8String.fromString(expectedKey.getRecordKey), keyGen.getRecordKey(internalRow, structType))
+      assertEquals(UTF8String.fromString(expectedKey.getPartitionPath), keyGen.getPartitionPath(internalRow, structType))
     }
 
     {
@@ -413,8 +414,8 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
 
       assertEquals(expectedKey.getRecordKey, keyGen.getRecordKey(baseRow))
       assertEquals(expectedKey.getPartitionPath, keyGen.getPartitionPath(baseRow))
-      assertEquals(expectedKey.getRecordKey, keyGen.getRecordKey(internalRow, structType))
-      assertEquals(expectedKey.getPartitionPath, keyGen.getPartitionPath(internalRow, structType))
+      assertEquals(UTF8String.fromString(expectedKey.getRecordKey), keyGen.getRecordKey(internalRow, structType))
+      assertEquals(UTF8String.fromString(expectedKey.getPartitionPath), keyGen.getPartitionPath(internalRow, structType))
     }
 
     {
@@ -426,8 +427,8 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
 
       assertEquals(expectedKey.getRecordKey, keyGen.getRecordKey(baseRow))
       assertEquals(expectedKey.getPartitionPath, keyGen.getPartitionPath(baseRow))
-      assertEquals(expectedKey.getRecordKey, keyGen.getRecordKey(internalRow, structType))
-      assertEquals(expectedKey.getPartitionPath, keyGen.getPartitionPath(internalRow, structType))
+      assertEquals(UTF8String.fromString(expectedKey.getRecordKey), keyGen.getRecordKey(internalRow, structType))
+      assertEquals(UTF8String.fromString(expectedKey.getPartitionPath), keyGen.getPartitionPath(internalRow, structType))
     }
   }
 
@@ -442,8 +443,8 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
 
       assertEquals(expectedKey.getRecordKey, keyGen.getRecordKey(baseRow))
       assertEquals(expectedKey.getPartitionPath, keyGen.getPartitionPath(baseRow))
-      assertEquals(expectedKey.getRecordKey, keyGen.getRecordKey(internalRow, structType))
-      assertEquals(expectedKey.getPartitionPath, keyGen.getPartitionPath(internalRow, structType))
+      assertEquals(UTF8String.fromString(expectedKey.getRecordKey), keyGen.getRecordKey(internalRow, structType))
+      assertEquals(UTF8String.fromString(expectedKey.getPartitionPath), keyGen.getPartitionPath(internalRow, structType))
     }
 
     {
@@ -459,8 +460,8 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
 
       assertEquals(expectedKey.getRecordKey, keyGen.getRecordKey(baseRow))
       assertEquals(expectedKey.getPartitionPath, keyGen.getPartitionPath(baseRow))
-      assertEquals(expectedKey.getRecordKey, keyGen.getRecordKey(internalRow, structType))
-      assertEquals(expectedKey.getPartitionPath, keyGen.getPartitionPath(internalRow, structType))
+      assertEquals(UTF8String.fromString(expectedKey.getRecordKey), keyGen.getRecordKey(internalRow, structType))
+      assertEquals(UTF8String.fromString(expectedKey.getPartitionPath), keyGen.getPartitionPath(internalRow, structType))
     }
 
     {
@@ -475,8 +476,8 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
 
       assertEquals(expectedKey.getRecordKey, keyGen.getRecordKey(baseRow))
       assertEquals(expectedKey.getPartitionPath, keyGen.getPartitionPath(baseRow))
-      assertEquals(expectedKey.getRecordKey, keyGen.getRecordKey(internalRow, structType))
-      assertEquals(expectedKey.getPartitionPath, keyGen.getPartitionPath(internalRow, structType))
+      assertEquals(UTF8String.fromString(expectedKey.getRecordKey), keyGen.getRecordKey(internalRow, structType))
+      assertEquals(UTF8String.fromString(expectedKey.getPartitionPath), keyGen.getPartitionPath(internalRow, structType))
     }
 
     {
@@ -491,8 +492,8 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
 
       assertEquals(expectedKey.getRecordKey, keyGen.getRecordKey(baseRow))
       assertEquals(expectedKey.getPartitionPath, keyGen.getPartitionPath(baseRow))
-      assertEquals(expectedKey.getRecordKey, keyGen.getRecordKey(internalRow, structType))
-      assertEquals(expectedKey.getPartitionPath, keyGen.getPartitionPath(internalRow, structType))
+      assertEquals(UTF8String.fromString(expectedKey.getRecordKey), keyGen.getRecordKey(internalRow, structType))
+      assertEquals(UTF8String.fromString(expectedKey.getPartitionPath), keyGen.getPartitionPath(internalRow, structType))
     }
 
     {
