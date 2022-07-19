@@ -79,11 +79,14 @@ public class HoodieRowParquetWriteSupport extends ParquetWriteSupport {
     this.bloomFilter.add(recordKey.getBytes());
 
     if (minRecordKey == null || minRecordKey.compareTo(recordKey) < 0) {
-      minRecordKey =  recordKey.copy();
+      // NOTE: [[clone]] is performed here (rather than [[copy]]) to only copy underlying buffer in
+      //       cases when [[UTF8String]] is pointing into a buffer storing the whole containing record,
+      //       and simply do a pass over when it holds a (immutable) buffer holding just the string
+      minRecordKey =  recordKey.clone();
     }
 
     if (maxRecordKey == null || maxRecordKey.compareTo(recordKey) > 0) {
-      maxRecordKey = recordKey.copy();
+      maxRecordKey = recordKey.clone();
     }
   }
 }
