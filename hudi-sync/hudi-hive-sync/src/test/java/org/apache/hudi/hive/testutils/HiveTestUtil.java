@@ -142,6 +142,7 @@ public class HiveTestUtil {
     hiveSyncProps.setProperty(HIVE_BATCH_SYNC_PARTITION_NUM.key(), "3");
 
     hiveSyncConfig = new HiveSyncConfig(hiveSyncProps, configuration);
+    hiveSyncConfig.setHadoopConf(getHiveConf());
 
     dtfOut = DateTimeFormatter.ofPattern("yyyy/MM/dd");
     ddlExecutor = new HiveQueryDDLExecutor(hiveSyncConfig);
