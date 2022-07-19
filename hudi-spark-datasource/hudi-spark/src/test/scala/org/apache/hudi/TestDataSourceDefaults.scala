@@ -373,6 +373,9 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
       baseRecord.put("name", "")
       baseRecord.put("field1", null)
 
+      baseRow = KeyGeneratorTestUtilities.getRow(baseRecord, schema, structType)
+      internalRow = KeyGeneratorTestUtilities.getInternalRow(baseRow)
+
       assertThrows(classOf[HoodieKeyException]) {
         keyGen.getKey(baseRecord)
       }
