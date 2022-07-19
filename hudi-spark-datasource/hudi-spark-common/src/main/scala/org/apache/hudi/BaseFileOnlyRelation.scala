@@ -155,13 +155,16 @@ class BaseFileOnlyRelation(sqlContext: SQLContext,
         // the table schema evolution.
         userSpecifiedSchema = userSchema.orElse(Some(tableStructSchema)),
         className = fileFormatClassName,
-        // Since we're reading the table as just collection of files we have to make sure
-        // we only read the latest version of every Hudi's file-group, which might be compacted, clustered, etc.
-        // while keeping previous versions of the files around as well.
-        //
-        // We rely on [[HoodieROTablePathFilter]], to do proper filtering to assure that
         options = optParams ++ Map(
-          "mapreduce.input.pathFilter.class" -> classOf[HoodieROTablePathFilter].getName
+          // Since we're reading the table as just collection of files we have to make sure
+          // we only read the latest version of every Hudi's file-group, which might be compacted, clustered, etc.
+          // while keeping previous versions of the files around as well.
+          //
+          // We rely on [[HoodieROTablePathFilter]], to do proper filtering to assure that
+          "mapreduce.input.pathFilter.class" -> classOf[HoodieROTablePathFilter].getName,
+          // We have to override [[EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH]] setting, since
+          // the relation might have this setting overridden
+          DataSourceReadOptions.EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH.key -> shouldExtractPartitionValuesFromPartitionPath.toString
         ),
         partitionColumns = partitionColumns
       )
