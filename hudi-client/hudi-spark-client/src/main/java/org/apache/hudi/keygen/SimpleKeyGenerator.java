@@ -71,7 +71,7 @@ public class SimpleKeyGenerator extends BuiltinKeyGenerator {
     // NOTE: [[SimpleKeyGenerator]] is restricted to allow only primitive (non-composite)
     //       record-key field
     if (recordKeys[0] == null) {
-      return handleNullRecordKey();
+      return handleNullRecordKey(null);
     } else {
       return requireNonNullNonEmptyKey(recordKeys[0].toString());
     }
@@ -85,7 +85,7 @@ public class SimpleKeyGenerator extends BuiltinKeyGenerator {
     // NOTE: [[SimpleKeyGenerator]] is restricted to allow only primitive (non-composite)
     //       record-key field
     if (recordKeyValues[0] == null) {
-      return handleNullRecordKey();
+      return handleNullRecordKey(null);
     } else if (recordKeyValues[0] instanceof UTF8String) {
       return requireNonNullNonEmptyKey((UTF8String) recordKeyValues[0]);
     } else {

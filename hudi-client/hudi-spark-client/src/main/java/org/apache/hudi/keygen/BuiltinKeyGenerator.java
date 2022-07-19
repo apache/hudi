@@ -26,7 +26,6 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieKeyException;
-import org.apache.hudi.unsafe.UTF8StringBuilder;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.sql.HoodieUnsafeRowUtils;
@@ -45,6 +44,8 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.function.Function;
+import java.util.function.Supplier;
 
 import static org.apache.hudi.common.util.CollectionUtils.tail;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
@@ -135,31 +136,13 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
    *       optimizations, like inlining)
    */
   protected final String combinePartitionPath(Object... partitionPathParts) {
-    checkState(partitionPathParts.length == partitionPathFields.size());
-    // Avoid creating [[StringBuilder]] in case there's just one partition-path part,
-    // and Hive-style of partitioning is not required
-    if (!hiveStylePartitioning && partitionPathParts.length == 1) {
-      return handleNullOrEmptyPartitionPathPart(partitionPathParts[0]);
-    }
-
-    StringBuilder sb = new StringBuilder();
-    for (int i = 0; i < partitionPathParts.length; ++i) {
-      String partitionPathPartStr = tryEncodePartitionPath(handleNullOrEmptyPartitionPathPart(partitionPathParts[i]));
-
-      if (hiveStylePartitioning) {
-        sb.append(partitionPathFields.get(i))
-          .append("=")
-          .append(partitionPathPartStr);
-      } else {
-        sb.append(partitionPathPartStr);
-      }
-
-      if (i < partitionPathParts.length - 1) {
-        sb.append(DEFAULT_PARTITION_PATH_SEPARATOR);
-      }
-    }
-
-    return sb.toString();
+    return combinePartitionPathInternal(
+        JavaStringBuilder::new,
+        Object::toString,
+        this::tryEncodePartitionPath,
+        BuiltinKeyGenerator::handleNullOrEmptyPartitionPathPart,
+        partitionPathParts
+    );
   }
 
   /**
@@ -167,36 +150,13 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
    *       optimizations, like inlining)
    */
   protected final UTF8String combinePartitionPathUnsafe(Object... partitionPathParts) {
-    checkState(partitionPathParts.length == partitionPathFields.size());
-    // Avoid creating [[StringBuilder]] in case there's just one partition-path part,
-    // and Hive-style of partitioning is not required
-    if (!hiveStylePartitioning && partitionPathParts.length == 1) {
-      return handleNullOrEmptyPartitionPathPartUTF8(toUTF8String(partitionPathParts[0]));
-    }
-
-    UTF8StringBuilder sb = new UTF8StringBuilder();
-    for (int i = 0; i < partitionPathParts.length; ++i) {
-      // NOTE: That partition-path part could be of arbitrary type (accepted by Spark), and therefore
-      //       we will have to convert it to [[UTF8String]] prior to constructing final partition path
-      Object partitionPathPart = partitionPathParts[i];
-      UTF8String partitionPathPartStr = tryEncodePartitionPathUTF8(
-          handleNullOrEmptyPartitionPathPartUTF8(toUTF8String(partitionPathPart))
-      );
-
-      if (hiveStylePartitioning) {
-        sb.append(partitionPathFields.get(i));
-        sb.append("=");
-        sb.append(partitionPathPartStr);
-      } else {
-        sb.append(partitionPathPartStr);
-      }
-
-      if (i < partitionPathParts.length - 1) {
-        sb.append(DEFAULT_PARTITION_PATH_SEPARATOR);
-      }
-    }
-
-    return sb.build();
+    return combinePartitionPathInternal(
+        UTF8StringBuilder::new,
+        BuiltinKeyGenerator::toUTF8String,
+        this::tryEncodePartitionPathUTF8,
+        BuiltinKeyGenerator::handleNullOrEmptyPartitionPathPartUTF8,
+        partitionPathParts
+    );
   }
 
   /**
@@ -204,21 +164,12 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
    *       optimizations, like inlining)
    */
   protected final String combineRecordKey(Object... recordKeyParts) {
-    if (recordKeyParts.length == 1) {
-      return requireNonNullNonEmptyKey(recordKeyParts[0].toString());
-    }
-
-    StringBuilder sb = new StringBuilder();
-    for (int i = 0; i < recordKeyParts.length; ++i) {
-      // NOTE: If record-key part has already been a string [[toString]] will be a no-op
-      sb.append(requireNonNullNonEmptyKey(recordKeyParts[i].toString()));
-
-      if (i < recordKeyParts.length - 1) {
-        sb.append(DEFAULT_RECORD_KEY_PARTS_SEPARATOR);
-      }
-    }
-
-    return sb.toString();
+    return combineRecordKeyInternal(
+        JavaStringBuilder::new,
+        Object::toString,
+        BuiltinKeyGenerator::handleNullRecordKey,
+        recordKeyParts
+    );
   }
 
   /**
@@ -226,57 +177,25 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
    *       optimizations, like inlining)
    */
   protected final UTF8String combineRecordKeyUnsafe(Object... recordKeyParts) {
-    if (recordKeyParts.length == 1) {
-      return requireNonNullNonEmptyKey(toUTF8String(recordKeyParts[0]));
-    }
-
-    UTF8StringBuilder sb = new UTF8StringBuilder();
-    for (int i = 0; i < recordKeyParts.length; ++i) {
-      // NOTE: If record-key part has already been a string [[toString]] will be a no-op
-      sb.append(requireNonNullNonEmptyKey(toUTF8String(recordKeyParts[i])));
-
-      if (i < recordKeyParts.length - 1) {
-        sb.append(DEFAULT_RECORD_KEY_PARTS_SEPARATOR);
-      }
-    }
-
-    return sb.build();
+    return combineRecordKeyInternal(
+        UTF8StringBuilder::new,
+        BuiltinKeyGenerator::toUTF8String,
+        BuiltinKeyGenerator::handleNullRecordKey,
+        recordKeyParts
+    );
   }
 
   /**
    * NOTE: This method has to stay final (so that it's easier for JIT compiler to apply certain
    *       optimizations, like inlining)
    */
-  @SuppressWarnings("StringEquality")
   protected final String combineCompositeRecordKey(Object... recordKeyParts) {
-    boolean hasNonNullNonEmptyPart = false;
-    StringBuilder sb = new StringBuilder();
-    for (int i = 0; i < recordKeyParts.length; ++i) {
-      // NOTE: If record-key part has already been a string [[toString]] will be a no-op
-      String convertedKeyPart = handleNullOrEmptyCompositeKeyPart(recordKeyParts[i]);
-
-      sb.append(recordKeyFields.get(i));
-      sb.append(COMPOSITE_KEY_FIELD_VALUE_INFIX);
-      sb.append(convertedKeyPart);
-      // This check is to validate that overall composite-key has at least one non-null, non-empty
-      // segment
-      //
-      // NOTE: Converted key-part is compared against null/empty stub using ref-equality
-      //       for performance reasons (it relies on the fact that we're using internalized
-      //       constants)
-      hasNonNullNonEmptyPart |= convertedKeyPart != NULL_RECORDKEY_PLACEHOLDER
-          && convertedKeyPart != EMPTY_RECORDKEY_PLACEHOLDER;
-
-      if (i < recordKeyParts.length - 1) {
-        sb.append(DEFAULT_RECORD_KEY_PARTS_SEPARATOR);
-      }
-    }
-
-    if (hasNonNullNonEmptyPart) {
-      return sb.toString();
-    } else {
-      throw new HoodieKeyException(String.format("All of the values for (%s) were either null or empty", recordKeyFields));
-    }
+    return combineCompositeRecordKeyInternal(
+        JavaStringBuilder::new,
+        Object::toString,
+        BuiltinKeyGenerator::handleNullOrEmptyCompositeKeyPart,
+        recordKeyParts
+    );
   }
 
   /**
@@ -284,21 +203,65 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
    *       optimizations, like inlining)
    */
   protected final UTF8String combineCompositeRecordKeyUnsafe(Object... recordKeyParts) {
-    boolean hasNonNullNonEmptyPart = false;
-    UTF8StringBuilder sb = new UTF8StringBuilder();
-    for (int i = 0; i < recordKeyParts.length; ++i) {
-      UTF8String convertedKeyPart = handleNullOrEmptyCompositeKeyPartUTF8(toUTF8String(recordKeyParts[i]));
+    return combineCompositeRecordKeyInternal(
+        UTF8StringBuilder::new,
+        BuiltinKeyGenerator::toUTF8String,
+        BuiltinKeyGenerator::handleNullOrEmptyPartitionPathPartUTF8,
+        recordKeyParts
+    );
+  }
 
-      sb.append(recordKeyFields.get(i));
-      sb.append(COMPOSITE_KEY_FIELD_VALUE_INFIX);
+  private <S> S combineRecordKeyInternal(
+      Supplier<StringBuilder<S>> builderFactory,
+      Function<Object, S> converter,
+      Function<S, S> emptyHandler,
+      Object... recordKeyParts
+  ) {
+    if (recordKeyParts.length == 1) {
+      return emptyHandler.apply(converter.apply(recordKeyParts[0]));
+    }
+
+    StringBuilder<S> sb = builderFactory.get();
+    for (int i = 0; i < recordKeyParts.length; ++i) {
+      // NOTE: If record-key part has already been a string [[toString]] will be a no-op
+      sb.append(emptyHandler.apply(converter.apply(recordKeyParts[i])));
+
+      if (i < recordKeyParts.length - 1) {
+        sb.appendJava(DEFAULT_RECORD_KEY_PARTS_SEPARATOR);
+      }
+    }
+
+    return sb.build();
+  }
+
+  private <S> S combineCompositeRecordKeyInternal(
+      Supplier<StringBuilder<S>> builderFactory,
+      Function<Object, S> converter,
+      Function<S, S> emptyHandler,
+      Object... recordKeyParts
+  ) {
+    boolean hasNonNullNonEmptyPart = false;
+
+    StringBuilder<S> sb = builderFactory.get();
+    for (int i = 0; i < recordKeyParts.length; ++i) {
+      // NOTE: If record-key part has already been a string [[toString]] will be a no-op
+      S convertedKeyPart = emptyHandler.apply(converter.apply(recordKeyParts[i]));
+
+      sb.appendJava(recordKeyFields.get(i));
+      sb.appendJava(COMPOSITE_KEY_FIELD_VALUE_INFIX);
       sb.append(convertedKeyPart);
       // This check is to validate that overall composite-key has at least one non-null, non-empty
       // segment
-      hasNonNullNonEmptyPart |= convertedKeyPart != NULL_RECORD_KEY_PLACEHOLDER_UTF8
-          && convertedKeyPart != EMPTY_RECORD_KEY_PLACEHOLDER_UTF8;
+      //
+      // NOTE: Converted key-part is compared against null/empty stub using ref-equality
+      //       for performance reasons (it relies on the fact that we're using internalized
+      //       constants)
+      // TODO fix
+      hasNonNullNonEmptyPart |= convertedKeyPart != NULL_RECORDKEY_PLACEHOLDER
+          && convertedKeyPart != EMPTY_RECORDKEY_PLACEHOLDER;
 
       if (i < recordKeyParts.length - 1) {
-        sb.append(DEFAULT_RECORD_KEY_PARTS_SEPARATOR);
+        sb.appendJava(DEFAULT_RECORD_KEY_PARTS_SEPARATOR);
       }
     }
 
@@ -309,12 +272,55 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
     }
   }
 
-  protected static UTF8String toUTF8String(Object o) {
-    if (o instanceof UTF8String) {
-      return (UTF8String) o;
-    } else {
-      // NOTE: If object is a [[String]], [[toString]] would be a no-op
-      return UTF8String.fromString(o.toString());
+  private <S> S combinePartitionPathInternal(Supplier<StringBuilder<S>> builderFactory,
+                                             Function<Object, S> converter,
+                                             Function<S, S> encoder,
+                                             Function<S, S> emptyHandler,
+                                             Object... partitionPathParts) {
+    checkState(partitionPathParts.length == partitionPathFields.size());
+    // Avoid creating [[StringBuilder]] in case there's just one partition-path part,
+    // and Hive-style of partitioning is not required
+    if (!hiveStylePartitioning && partitionPathParts.length == 1) {
+      return emptyHandler.apply(converter.apply(partitionPathParts[0]));
+    }
+
+    StringBuilder<S> sb = builderFactory.get();
+    for (int i = 0; i < partitionPathParts.length; ++i) {
+      S partitionPathPartStr = encoder.apply(emptyHandler.apply(converter.apply(partitionPathParts[i])));
+
+      if (hiveStylePartitioning) {
+        sb.appendJava(partitionPathFields.get(i))
+            .appendJava("=")
+            .append(partitionPathPartStr);
+      } else {
+        sb.append(partitionPathPartStr);
+      }
+
+      if (i < partitionPathParts.length - 1) {
+        sb.appendJava(DEFAULT_PARTITION_PATH_SEPARATOR);
+      }
+    }
+
+    return sb.build();
+  }
+
+  private String tryEncodePartitionPath(String partitionPathPart) {
+    return encodePartitionPath ? PartitionPathEncodeUtils.escapePathName(partitionPathPart) : partitionPathPart;
+  }
+
+  private UTF8String tryEncodePartitionPathUTF8(UTF8String partitionPathPart) {
+    // NOTE: This method avoids [[UTF8String]] to [[String]] conversion (and back) unless
+    //       partition-path encoding is enabled
+    return encodePartitionPath ? UTF8String.fromString(PartitionPathEncodeUtils.escapePathName(partitionPathPart.toString())) : partitionPathPart;
+  }
+
+  private void tryInitRowConverter(StructType structType) {
+    if (rowConverter == null) {
+      synchronized (this) {
+        if (rowConverter == null) {
+          rowConverter = new SparkRowConverter(structType);
+        }
+      }
     }
   }
 
@@ -334,25 +340,20 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
     }
   }
 
-  protected static <T> T handleNullRecordKey() {
-    throw new HoodieKeyException("Record key has to be non-null!");
+  protected static <S> S handleNullRecordKey(S s) {
+    if (s == null || s.toString().isEmpty()) {
+      throw new HoodieKeyException("Record key has to be non-null!");
+    }
+
+    return s;
   }
 
-  private String tryEncodePartitionPath(String partitionPathPart) {
-    return encodePartitionPath ? PartitionPathEncodeUtils.escapePathName(partitionPathPart) : partitionPathPart;
-  }
-
-  private UTF8String tryEncodePartitionPathUTF8(UTF8String partitionPathPart) {
-    return encodePartitionPath ? UTF8String.fromString(PartitionPathEncodeUtils.escapePathName(partitionPathPart.toString())) : partitionPathPart;
-  }
-
-  private void tryInitRowConverter(StructType structType) {
-    if (rowConverter == null) {
-      synchronized (this) {
-        if (rowConverter == null) {
-          rowConverter = new SparkRowConverter(structType);
-        }
-      }
+  private static UTF8String toUTF8String(Object o) {
+    if (o instanceof UTF8String) {
+      return (UTF8String) o;
+    } else {
+      // NOTE: If object is a [[String]], [[toString]] would be a no-op
+      return UTF8String.fromString(o.toString());
     }
   }
 
@@ -499,6 +500,58 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
         LOG.error(String.format("Failed to resolve nested field-paths (%s) in schema (%s)", fieldPaths, schema), e);
         throw new HoodieException("Failed to resolve nested field-paths", e);
       }
+    }
+  }
+
+  /**
+   * This is a generic interface closing the gap and unifying the {@link java.lang.StringBuilder} with
+   * {@link org.apache.hudi.unsafe.UTF8StringBuilder} implementations, allowing us to avoid code-duplication by performing
+   * most of the key-generation in a generic and unified way
+   *
+   * @param <S> target string type this builder is producing (could either be native {@link String}
+   *           or alternatively {@link UTF8String}
+   */
+  private interface StringBuilder<S> {
+    default StringBuilder<S> append(S s) {
+      return appendJava(s.toString());
+    }
+    StringBuilder<S> appendJava(String s);
+    S build();
+  }
+
+  private static class JavaStringBuilder implements StringBuilder<String> {
+    private final java.lang.StringBuilder sb = new java.lang.StringBuilder();
+
+    @Override
+    public StringBuilder<String> appendJava(String s) {
+      sb.append(s);
+      return this;
+    }
+
+    @Override
+    public String build() {
+      return sb.toString();
+    }
+  }
+
+  private static class UTF8StringBuilder implements StringBuilder<UTF8String> {
+    private final org.apache.hudi.unsafe.UTF8StringBuilder sb = new org.apache.hudi.unsafe.UTF8StringBuilder();
+
+    @Override
+    public StringBuilder<UTF8String> appendJava(String s) {
+      sb.append(s);
+      return this;
+    }
+
+    @Override
+    public StringBuilder<UTF8String> append(UTF8String s) {
+      sb.append(s);
+      return this;
+    }
+
+    @Override
+    public UTF8String build() {
+      return sb.build();
     }
   }
 }
