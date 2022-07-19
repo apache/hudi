@@ -557,8 +557,7 @@ object HoodieSparkSqlWriter {
       false
     }
 
-    val hoodieDF = HoodieDatasetBulkInsertHelper.prepareForBulkInsert(df, writeConfig, bulkInsertPartitionerRows,
-      isGlobalIndex, dropPartitionColumns)
+    val hoodieDF = HoodieDatasetBulkInsertHelper.prepareForBulkInsert(df, writeConfig, bulkInsertPartitionerRows, dropPartitionColumns)
 
     if (HoodieSparkUtils.isSpark2) {
       hoodieDF.write.format("org.apache.hudi.internal")

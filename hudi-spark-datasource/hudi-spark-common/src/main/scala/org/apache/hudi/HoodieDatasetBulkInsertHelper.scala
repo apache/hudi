@@ -22,6 +22,7 @@ import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.util.ReflectionUtils
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.index.SparkHoodieIndexFactory
 import org.apache.hudi.keygen.BuiltinKeyGenerator
 import org.apache.hudi.table.BulkInsertPartitioner
 import org.apache.spark.internal.Logging
@@ -34,6 +35,7 @@ import org.apache.spark.sql.{DataFrame, Dataset, HoodieUnsafeRDDUtils, Row}
 import org.apache.spark.unsafe.types.UTF8String
 
 import scala.collection.JavaConverters.asScalaBufferConverter
+import scala.collection.mutable
 
 object HoodieDatasetBulkInsertHelper extends Logging {
 
@@ -50,8 +52,7 @@ object HoodieDatasetBulkInsertHelper extends Logging {
   def prepareForBulkInsert(df: DataFrame,
                            config: HoodieWriteConfig,
                            partitioner: BulkInsertPartitioner[Dataset[Row]],
-                           isGlobalIndex: Boolean,
-                           dropPartitionColumns: Boolean): Dataset[Row] = {
+                           shouldDropPartitionColumns: Boolean): Dataset[Row] = {
     val populateMetaFields = config.populateMetaFields()
     val schema = df.schema
 
@@ -89,43 +90,30 @@ object HoodieDatasetBulkInsertHelper extends Logging {
       StructField(HoodieRecord.FILENAME_METADATA_FIELD, StringType))
 
     val updatedSchema = StructType(metaFields ++ schema.fields)
-    val updatedDF = HoodieUnsafeRDDUtils.createDataFrame(df.sparkSession, prependedRdd, updatedSchema)
 
-    if (!populateMetaFields) {
-      updatedDF
+    val updatedDF = if (populateMetaFields && config.shouldCombineBeforeInsert) {
+      val dedupedRdd = dedupeRows(prependedRdd, updatedSchema, config.getPreCombineField, SparkHoodieIndexFactory.isGlobalIndex(config))
+      HoodieUnsafeRDDUtils.createDataFrame(df.sparkSession, dedupedRdd, updatedSchema)
     } else {
-      val trimmedDF = if (dropPartitionColumns) {
-        val keyGenerator = ReflectionUtils.loadClass(keyGeneratorClassName, new TypedProperties(config.getProps)).asInstanceOf[BuiltinKeyGenerator]
-        val partitionPathFields = keyGenerator.getPartitionPathFields.asScala
-        val nestedPartitionPathFields = partitionPathFields.filter(f => f.contains('.'))
-        if (nestedPartitionPathFields.nonEmpty) {
-          logWarning(s"Can not drop nested partition path fields: $nestedPartitionPathFields")
-        }
-
-        val partitionPathCols = partitionPathFields -- nestedPartitionPathFields
-        updatedDF.drop(partitionPathCols: _*)
-      } else {
-        updatedDF
-      }
-
-      val dedupedDF = if (config.shouldCombineBeforeInsert) {
-        dedupeRows(trimmedDF, config.getPreCombineField, isGlobalIndex)
-      } else {
-        trimmedDF
-      }
-
-      partitioner.repartitionRecords(dedupedDF, config.getBulkInsertShuffleParallelism)
+      HoodieUnsafeRDDUtils.createDataFrame(df.sparkSession, prependedRdd, updatedSchema)
     }
+
+    val trimmedDF = if (shouldDropPartitionColumns) {
+      dropPartitionColumns(updatedDF, config)
+    } else {
+      updatedDF
+    }
+
+    partitioner.repartitionRecords(trimmedDF, config.getBulkInsertShuffleParallelism)
   }
 
-  private def dedupeRows(df: DataFrame, preCombineFieldRef: String, isGlobalIndex: Boolean): DataFrame = {
-    val recordKeyMetaFieldOrd = df.schema.fieldIndex(HoodieRecord.RECORD_KEY_METADATA_FIELD)
-    val partitionPathMetaFieldOrd = df.schema.fieldIndex(HoodieRecord.PARTITION_PATH_METADATA_FIELD)
+  private def dedupeRows(rdd: RDD[InternalRow], schema: StructType, preCombineFieldRef: String, isGlobalIndex: Boolean): RDD[InternalRow] = {
+    val recordKeyMetaFieldOrd = schema.fieldIndex(HoodieRecord.RECORD_KEY_METADATA_FIELD)
+    val partitionPathMetaFieldOrd = schema.fieldIndex(HoodieRecord.PARTITION_PATH_METADATA_FIELD)
     // NOTE: Pre-combine field could be a nested field
-    val preCombineFieldPath = composeNestedFieldPath(df.schema, preCombineFieldRef)
+    val preCombineFieldPath = composeNestedFieldPath(schema, preCombineFieldRef)
 
-    val dedupedRdd = df.queryExecution.toRdd
-      .map { row =>
+    rdd.map { row =>
         val rowKey = if (isGlobalIndex) {
           row.getString(recordKeyMetaFieldOrd)
         } else {
@@ -147,8 +135,24 @@ object HoodieDatasetBulkInsertHelper extends Logging {
             otherRow
           }
       }
-      .map { case (_, row) => row }
+      .values
+  }
 
-    createDataFrame(df.sparkSession, dedupedRdd, df.schema)
+  private def dropPartitionColumns(df: DataFrame, config: HoodieWriteConfig): DataFrame = {
+    val partitionPathFields = getPartitionPathFields(config).toSet
+    val nestedPartitionPathFields = partitionPathFields.filter(f => f.contains('.'))
+    if (nestedPartitionPathFields.nonEmpty) {
+      logWarning(s"Can not drop nested partition path fields: $nestedPartitionPathFields")
+    }
+
+    val partitionPathCols = (partitionPathFields -- nestedPartitionPathFields).toSeq
+
+    df.drop(partitionPathCols: _*)
+  }
+
+  private def getPartitionPathFields(config: HoodieWriteConfig): Seq[String] = {
+    val keyGeneratorClassName = config.getString(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME)
+    val keyGenerator = ReflectionUtils.loadClass(keyGeneratorClassName, new TypedProperties(config.getProps)).asInstanceOf[BuiltinKeyGenerator]
+    keyGenerator.getPartitionPathFields.asScala
   }
 }
