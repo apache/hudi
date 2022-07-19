@@ -115,6 +115,8 @@ public class HiveSyncConfig extends HoodieSyncConfig {
     public Boolean createManagedTable;
     @Parameter(names = {"--batch-sync-num"}, description = "The number of partitions one batch when synchronous partitions to hive")
     public Integer batchSyncNum;
+    @Parameter(names = {"--partition-cascade"}, description = "Partition cascade when table columns change.")
+    public Boolean partitionCascade;
     @Parameter(names = {"--spark-datasource"}, description = "Whether sync this table as spark data source table.")
     public Boolean syncAsSparkDataSourceTable;
     @Parameter(names = {"--spark-schema-length-threshold"}, description = "The maximum length allowed in a single cell when storing additional schema information in Hive's metastore.")
@@ -150,6 +152,7 @@ public class HiveSyncConfig extends HoodieSyncConfig {
       props.setPropertyIfNonNull(HIVE_SYNC_SCHEMA_STRING_LENGTH_THRESHOLD.key(), sparkSchemaLengthThreshold);
       props.setPropertyIfNonNull(HIVE_CREATE_MANAGED_TABLE.key(), createManagedTable);
       props.setPropertyIfNonNull(HIVE_BATCH_SYNC_PARTITION_NUM.key(), batchSyncNum);
+      props.setPropertyIfNonNull(HIVE_SYNC_PARTITION_CASCADE_WITH_COLUMN_CHANGE.key(), partitionCascade);
       props.setPropertyIfNonNull(HIVE_SYNC_BUCKET_SYNC.key(), bucketSync);
       props.setPropertyIfNonNull(HIVE_SYNC_BUCKET_SYNC_SPEC.key(), bucketSpec);
       props.setPropertyIfNonNull(HIVE_SYNC_COMMENT.key(), syncComment);

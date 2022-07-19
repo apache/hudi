@@ -135,6 +135,11 @@ public class HoodieSyncConfig extends HoodieConfig {
       .defaultValue("")
       .withDocumentation("The spark version used when syncing with a metastore.");
 
+  public static final ConfigProperty<Boolean> HIVE_SYNC_PARTITION_CASCADE_WITH_COLUMN_CHANGE = ConfigProperty
+      .key("hoodie.datasource.hive_sync.partition_cascade")
+      .defaultValue(true)
+      .withDocumentation("whether the partition is cascade or not when hive table columns changes");
+
   private Configuration hadoopConf;
 
   public HoodieSyncConfig(Properties props) {
