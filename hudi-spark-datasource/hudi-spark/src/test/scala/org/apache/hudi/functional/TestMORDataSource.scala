@@ -718,7 +718,7 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
   def testReadPathsForMergeOnReadTable(): Unit = {
     // Paths only baseFiles
     val records1 = dataGen.generateInserts("001", 100)
-    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(recordsToStrings(records1), 2))
+    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(recordsToStrings(records1).asScala, 2))
     inputDF1.write.format("org.apache.hudi")
       .options(commonOpts)
       .option("hoodie.compact.inline", "false") // else fails due to compaction & deltacommit instant times being same
@@ -732,7 +732,7 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
       .map(_.getPath.toString)
       .mkString(",")
     val records2 = dataGen.generateUniqueDeleteRecords("002", 100)
-    val inputDF2: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(recordsToStrings(records2), 2))
+    val inputDF2: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(recordsToStrings(records2).asScala, 2))
     inputDF2.write.format("org.apache.hudi")
       .options(commonOpts)
       .mode(SaveMode.Append)
@@ -764,7 +764,7 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
   def testReadPathsForOnlyLogFiles(): Unit = {
     initMetaClient(HoodieTableType.MERGE_ON_READ)
     val records1 = dataGen.generateInsertsContainsAllPartitions("000", 20)
-    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(recordsToStrings(records1), 2))
+    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(recordsToStrings(records1).asScala, 2))
     inputDF1.write.format("hudi")
       .options(commonOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
@@ -782,7 +782,7 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
       .mkString(",")
 
     val records2 = dataGen.generateInsertsContainsAllPartitions("000", 20)
-    val inputDF2 = spark.read.json(spark.sparkContext.parallelize(recordsToStrings(records2), 2))
+    val inputDF2 = spark.read.json(spark.sparkContext.parallelize(recordsToStrings(records2).asScala, 2))
     inputDF2.write.format("hudi")
       .options(commonOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
