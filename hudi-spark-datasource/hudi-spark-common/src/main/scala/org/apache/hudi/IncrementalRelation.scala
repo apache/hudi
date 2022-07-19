@@ -245,7 +245,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
               .schema(usedSchema).format(formatClassName)
               .load(filteredRegularFullPaths.toList: _*)
               .filter(String.format("%s >= '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
-                commitsToReturn.head.getTimestamp))
+                optParams(DataSourceReadOptions.BEGIN_INSTANTTIME.key)))
               .filter(String.format("%s <= '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
                 commitsToReturn.last.getTimestamp)))
           }
