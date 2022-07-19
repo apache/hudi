@@ -274,7 +274,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
   def canPruneRelationSchema: Boolean =
     (fileFormat.isInstanceOf[ParquetFileFormat] || fileFormat.isInstanceOf[OrcFileFormat]) &&
       // NOTE: Some relations might be disabling sophisticated schema pruning techniques (for ex, nested schema pruning)
-      // TODO(HUDI-XXX) internal schema doesn't supported nested schema pruning currently
+      // TODO(HUDI-XXX) internal schema doesn't support nested schema pruning currently
       !hasSchemaOnRead
 
   override def schema: StructType = {
@@ -666,7 +666,6 @@ object HoodieBaseRelation extends SparkAdapterSupport {
     tableSchema match {
       case Right(internalSchema) =>
         checkState(!internalSchema.isEmptySchema)
-        // TODO extend pruning to leverage optimizer pruned schema
         val prunedInternalSchema = InternalSchemaUtils.pruneInternalSchema(internalSchema, requiredColumns.toList.asJava)
         val requiredAvroSchema = AvroInternalSchemaConverter.convert(prunedInternalSchema, "schema")
         val requiredStructSchema = AvroConversionUtils.convertAvroSchemaToStructType(requiredAvroSchema)
