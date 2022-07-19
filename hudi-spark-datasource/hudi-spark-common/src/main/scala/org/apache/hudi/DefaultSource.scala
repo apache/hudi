@@ -118,11 +118,6 @@ class DefaultSource extends RelationProvider
       Option(schema)
     }
 
-    // NOTE: We have to handle explicitly case of the Metadata Table (MT) since by default all of Hudi
-    //       relations will try to apply schema pruning techniques (like nested schema pruning) which couldn't
-    //       be applied to MT
-    val canPruneRelationSchema = !isMetadataTable(tablePath)
-
     log.info(s"Is bootstrapped table => $isBootstrappedTable, tableType is: $tableType, queryType is: $queryType")
 
     if (metaClient.getCommitsTimeline.filterCompletedInstants.countInstants() == 0) {
@@ -138,7 +133,7 @@ class DefaultSource extends RelationProvider
           new IncrementalRelation(sqlContext, parameters, userSchema, metaClient)
 
         case (MERGE_ON_READ, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) =>
-          new MergeOnReadSnapshotRelation(sqlContext, parameters, userSchema, globPaths, metaClient, canPruneRelationSchema)
+          new MergeOnReadSnapshotRelation(sqlContext, parameters, userSchema, globPaths, metaClient)
 
         case (MERGE_ON_READ, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
           new MergeOnReadIncrementalRelation(sqlContext, parameters, userSchema, metaClient)

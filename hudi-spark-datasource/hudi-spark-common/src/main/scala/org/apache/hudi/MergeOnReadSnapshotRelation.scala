@@ -42,9 +42,8 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
                                   optParams: Map[String, String],
                                   userSchema: Option[StructType],
                                   globPaths: Seq[Path],
-                                  metaClient: HoodieTableMetaClient,
-                                  canPruneSchema: Boolean = true)
-  extends HoodieBaseRelation(sqlContext, metaClient, optParams, userSchema, canPruneSchema) {
+                                  metaClient: HoodieTableMetaClient)
+  extends HoodieBaseRelation(sqlContext, metaClient, optParams, userSchema) {
 
   override type FileSplit = HoodieMergeOnReadFileSplit
 
