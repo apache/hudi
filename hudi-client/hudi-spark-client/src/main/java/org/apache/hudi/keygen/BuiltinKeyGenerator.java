@@ -45,6 +45,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 import static org.apache.hudi.common.util.CollectionUtils.tail;
@@ -194,6 +195,7 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
         JavaStringBuilder::new,
         Object::toString,
         BuiltinKeyGenerator::handleNullOrEmptyCompositeKeyPart,
+        BuiltinKeyGenerator::isNullOrEmptyCompositeKeyPart,
         recordKeyParts
     );
   }
@@ -206,7 +208,8 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
     return combineCompositeRecordKeyInternal(
         UTF8StringBuilder::new,
         BuiltinKeyGenerator::toUTF8String,
-        BuiltinKeyGenerator::handleNullOrEmptyPartitionPathPartUTF8,
+        BuiltinKeyGenerator::handleNullOrEmptyCompositeKeyPartUTF8,
+        BuiltinKeyGenerator::isNullOrEmptyCompositeKeyPartUTF8,
         recordKeyParts
     );
   }
@@ -214,17 +217,17 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
   private <S> S combineRecordKeyInternal(
       Supplier<StringBuilder<S>> builderFactory,
       Function<Object, S> converter,
-      Function<S, S> emptyHandler,
+      Function<S, S> emptyKeyPartHandler,
       Object... recordKeyParts
   ) {
     if (recordKeyParts.length == 1) {
-      return emptyHandler.apply(converter.apply(recordKeyParts[0]));
+      return emptyKeyPartHandler.apply(converter.apply(recordKeyParts[0]));
     }
 
     StringBuilder<S> sb = builderFactory.get();
     for (int i = 0; i < recordKeyParts.length; ++i) {
       // NOTE: If record-key part has already been a string [[toString]] will be a no-op
-      sb.append(emptyHandler.apply(converter.apply(recordKeyParts[i])));
+      sb.append(emptyKeyPartHandler.apply(converter.apply(recordKeyParts[i])));
 
       if (i < recordKeyParts.length - 1) {
         sb.appendJava(DEFAULT_RECORD_KEY_PARTS_SEPARATOR);
@@ -237,7 +240,8 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
   private <S> S combineCompositeRecordKeyInternal(
       Supplier<StringBuilder<S>> builderFactory,
       Function<Object, S> converter,
-      Function<S, S> emptyHandler,
+      Function<S, S> emptyKeyPartHandler,
+      Predicate<S> isNullOrEmptyKeyPartPredicate,
       Object... recordKeyParts
   ) {
     boolean hasNonNullNonEmptyPart = false;
@@ -245,20 +249,14 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
     StringBuilder<S> sb = builderFactory.get();
     for (int i = 0; i < recordKeyParts.length; ++i) {
       // NOTE: If record-key part has already been a string [[toString]] will be a no-op
-      S convertedKeyPart = emptyHandler.apply(converter.apply(recordKeyParts[i]));
+      S convertedKeyPart = emptyKeyPartHandler.apply(converter.apply(recordKeyParts[i]));
 
       sb.appendJava(recordKeyFields.get(i));
       sb.appendJava(COMPOSITE_KEY_FIELD_VALUE_INFIX);
       sb.append(convertedKeyPart);
       // This check is to validate that overall composite-key has at least one non-null, non-empty
       // segment
-      //
-      // NOTE: Converted key-part is compared against null/empty stub using ref-equality
-      //       for performance reasons (it relies on the fact that we're using internalized
-      //       constants)
-      // TODO fix
-      hasNonNullNonEmptyPart |= convertedKeyPart != NULL_RECORDKEY_PLACEHOLDER
-          && convertedKeyPart != EMPTY_RECORDKEY_PLACEHOLDER;
+      hasNonNullNonEmptyPart |= isNullOrEmptyKeyPartPredicate.test(convertedKeyPart);
 
       if (i < recordKeyParts.length - 1) {
         sb.appendJava(DEFAULT_RECORD_KEY_PARTS_SEPARATOR);
@@ -375,6 +373,21 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
     }
 
     return keyPart;
+  }
+
+  @SuppressWarnings("StringEquality")
+  private static boolean isNullOrEmptyCompositeKeyPart(String keyPart) {
+    // NOTE: Converted key-part is compared against null/empty stub using ref-equality
+    //       for performance reasons (it relies on the fact that we're using internalized
+    //       constants)
+    return keyPart != NULL_RECORDKEY_PLACEHOLDER && keyPart != EMPTY_RECORDKEY_PLACEHOLDER;
+  }
+
+  private static boolean isNullOrEmptyCompositeKeyPartUTF8(UTF8String keyPart) {
+    // NOTE: Converted key-part is compared against null/empty stub using ref-equality
+    //       for performance reasons (it relies on the fact that we're using internalized
+    //       constants)
+    return keyPart != NULL_RECORD_KEY_PLACEHOLDER_UTF8 && keyPart != EMPTY_RECORD_KEY_PLACEHOLDER_UTF8;
   }
 
   private static String handleNullOrEmptyPartitionPathPart(Object partitionPathPart) {
