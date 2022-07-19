@@ -139,16 +139,12 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
     // Avoid creating [[StringBuilder]] in case there's just one partition-path part,
     // and Hive-style of partitioning is not required
     if (!hiveStylePartitioning && partitionPathParts.length == 1) {
-      return partitionPathParts[0] != null
-          ? partitionPathParts[0].toString()
-          : HUDI_DEFAULT_PARTITION_PATH;
+      return handleNullOrEmptyPartitionPathPart(partitionPathParts[0]);
     }
 
     StringBuilder sb = new StringBuilder();
     for (int i = 0; i < partitionPathParts.length; ++i) {
-      String partitionPathPartStr = partitionPathParts[i] != null
-          ? tryEncodePartitionPath(partitionPathParts[i]).toString()
-          : HUDI_DEFAULT_PARTITION_PATH;
+      String partitionPathPartStr = tryEncodePartitionPath(handleNullOrEmptyPartitionPathPart(partitionPathParts[i]));
 
       if (hiveStylePartitioning) {
         sb.append(partitionPathFields.get(i))
@@ -175,9 +171,7 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
     // Avoid creating [[StringBuilder]] in case there's just one partition-path part,
     // and Hive-style of partitioning is not required
     if (!hiveStylePartitioning && partitionPathParts.length == 1) {
-      return partitionPathParts[0] != null
-          ? toUTF8String(partitionPathParts[0])
-          : HUDI_DEFAULT_PARTITION_PATH_UTF8;
+      return handleNullOrEmptyPartitionPathPartUTF8(toUTF8String(partitionPathParts[0]));
     }
 
     UTF8StringBuilder sb = new UTF8StringBuilder();
@@ -185,11 +179,9 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
       // NOTE: That partition-path part could be of arbitrary type (accepted by Spark), and therefore
       //       we will have to convert it to [[UTF8String]] prior to constructing final partition path
       Object partitionPathPart = partitionPathParts[i];
-      UTF8String partitionPathPartStr = partitionPathPart != null
-          // NOTE: We first attempt to encode partition-path part prior to converting to [[UTF8String]]
-          //       to avoid unnecessary conversion in case the original path-part is already an [[UTF8String]]
-          ? toUTF8String(tryEncodePartitionPath(partitionPathPart))
-          : HUDI_DEFAULT_PARTITION_PATH_UTF8;
+      UTF8String partitionPathPartStr = tryEncodePartitionPathUTF8(
+          handleNullOrEmptyPartitionPathPartUTF8(toUTF8String(partitionPathPart))
+      );
 
       if (hiveStylePartitioning) {
         sb.append(partitionPathFields.get(i));
@@ -261,7 +253,7 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
     StringBuilder sb = new StringBuilder();
     for (int i = 0; i < recordKeyParts.length; ++i) {
       // NOTE: If record-key part has already been a string [[toString]] will be a no-op
-      String convertedKeyPart = handleEmptyCompositeKeyPart(recordKeyParts[i]);
+      String convertedKeyPart = handleNullOrEmptyCompositeKeyPart(recordKeyParts[i]);
 
       sb.append(recordKeyFields.get(i));
       sb.append(COMPOSITE_KEY_FIELD_VALUE_INFIX);
@@ -295,7 +287,7 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
     boolean hasNonNullNonEmptyPart = false;
     UTF8StringBuilder sb = new UTF8StringBuilder();
     for (int i = 0; i < recordKeyParts.length; ++i) {
-      UTF8String convertedKeyPart = handleEmptyCompositeKeyPartUTF8(toUTF8String(recordKeyParts[i]));
+      UTF8String convertedKeyPart = handleNullOrEmptyCompositeKeyPartUTF8(toUTF8String(recordKeyParts[i]));
 
       sb.append(recordKeyFields.get(i));
       sb.append(COMPOSITE_KEY_FIELD_VALUE_INFIX);
@@ -346,12 +338,12 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
     throw new HoodieKeyException("Record key has to be non-null!");
   }
 
-  private Object tryEncodePartitionPath(Object partitionPathPart) {
-    if (encodePartitionPath) {
-      return PartitionPathEncodeUtils.escapePathName(partitionPathPart.toString());
-    } else {
-      return partitionPathPart;
-    }
+  private String tryEncodePartitionPath(String partitionPathPart) {
+    return encodePartitionPath ? PartitionPathEncodeUtils.escapePathName(partitionPathPart) : partitionPathPart;
+  }
+
+  private UTF8String tryEncodePartitionPathUTF8(UTF8String partitionPathPart) {
+    return encodePartitionPath ? UTF8String.fromString(PartitionPathEncodeUtils.escapePathName(partitionPathPart.toString())) : partitionPathPart;
   }
 
   private void tryInitRowConverter(StructType structType) {
@@ -364,7 +356,7 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
     }
   }
 
-  private static String handleEmptyCompositeKeyPart(Object keyPart) {
+  private static String handleNullOrEmptyCompositeKeyPart(Object keyPart) {
     if (keyPart == null) {
       return NULL_RECORDKEY_PLACEHOLDER;
     } else {
@@ -374,11 +366,29 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
     }
   }
 
-  private static UTF8String handleEmptyCompositeKeyPartUTF8(UTF8String keyPart) {
+  private static UTF8String handleNullOrEmptyCompositeKeyPartUTF8(UTF8String keyPart) {
     if (keyPart == null) {
       return NULL_RECORD_KEY_PLACEHOLDER_UTF8;
     } else if (keyPart.numChars() == 0) {
       return EMPTY_RECORD_KEY_PLACEHOLDER_UTF8;
+    }
+
+    return keyPart;
+  }
+
+  private static String handleNullOrEmptyPartitionPathPart(Object partitionPathPart) {
+    if (partitionPathPart == null) {
+      return HUDI_DEFAULT_PARTITION_PATH;
+    } else {
+      // NOTE: [[toString]] is a no-op if key-part was already a [[String]]
+      String keyPartStr = partitionPathPart.toString();
+      return keyPartStr.isEmpty() ? HUDI_DEFAULT_PARTITION_PATH : keyPartStr;
+    }
+  }
+
+  private static UTF8String handleNullOrEmptyPartitionPathPartUTF8(UTF8String keyPart) {
+    if (keyPart == null || keyPart.numChars() == 0) {
+      return HUDI_DEFAULT_PARTITION_PATH_UTF8;
     }
 
     return keyPart;
