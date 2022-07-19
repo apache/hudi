@@ -139,7 +139,7 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
   protected final String combinePartitionPath(Object... partitionPathParts) {
     return combinePartitionPathInternal(
         JavaStringBuilder::new,
-        Object::toString,
+        BuiltinKeyGenerator::toString,
         this::tryEncodePartitionPath,
         BuiltinKeyGenerator::handleNullOrEmptyPartitionPathPart,
         partitionPathParts
@@ -167,7 +167,7 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
   protected final String combineRecordKey(Object... recordKeyParts) {
     return combineRecordKeyInternal(
         JavaStringBuilder::new,
-        Object::toString,
+        BuiltinKeyGenerator::toString,
         BuiltinKeyGenerator::handleNullRecordKey,
         recordKeyParts
     );
@@ -193,7 +193,7 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
   protected final String combineCompositeRecordKey(Object... recordKeyParts) {
     return combineCompositeRecordKeyInternal(
         JavaStringBuilder::new,
-        Object::toString,
+        BuiltinKeyGenerator::toString,
         BuiltinKeyGenerator::handleNullOrEmptyCompositeKeyPart,
         BuiltinKeyGenerator::isNullOrEmptyCompositeKeyPart,
         recordKeyParts
@@ -347,12 +347,18 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
   }
 
   private static UTF8String toUTF8String(Object o) {
-    if (o instanceof UTF8String) {
+    if (o == null) {
+      return null;
+    } else if (o instanceof UTF8String) {
       return (UTF8String) o;
     } else {
       // NOTE: If object is a [[String]], [[toString]] would be a no-op
       return UTF8String.fromString(o.toString());
     }
+  }
+
+  private static String toString(Object o) {
+    return o == null ? null : o.toString();
   }
 
   private static String handleNullOrEmptyCompositeKeyPart(Object keyPart) {
