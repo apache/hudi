@@ -37,6 +37,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
@@ -515,6 +516,20 @@ public class StreamerUtil {
     return schemaUtil.getTableAvroSchema(includeMetadataFields);
   }
 
+  public static Schema getLatestTableSchema(String path, org.apache.hadoop.conf.Configuration hadoopConf) {
+    if (StringUtils.isNullOrEmpty(path) || !StreamerUtil.tableExists(path, hadoopConf)) {
+      return null;
+    }
+
+    try {
+      HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(path, hadoopConf);
+      return getTableAvroSchema(metaClient, false);
+    } catch (Exception e) {
+      LOG.warn("Error while resolving the latest table schema", e);
+    }
+    return null;
+  }
+    
   public static boolean fileExists(FileSystem fs, Path path) {
     try {
       return fs.exists(path);

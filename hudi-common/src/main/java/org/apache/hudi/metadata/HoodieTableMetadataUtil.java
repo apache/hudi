@@ -1221,9 +1221,16 @@ public class HoodieTableMetadataUtil {
     if (isBootstrapCompleted) {
       final List<FileSlice> latestFileSlices = HoodieTableMetadataUtil
           .getPartitionLatestFileSlices(metaClient.get(), fsView, partitionType.getPartitionPath());
+      if (latestFileSlices.size() == 0 && !partitionType.getPartitionPath().equals(MetadataPartitionType.FILES.getPartitionPath())) {
+        return getFileGroupCount(partitionType, metadataConfig);
+      }
       return Math.max(latestFileSlices.size(), 1);
     }
 
+    return getFileGroupCount(partitionType, metadataConfig);
+  }
+
+  private static int getFileGroupCount(MetadataPartitionType partitionType, final HoodieMetadataConfig metadataConfig) {
     switch (partitionType) {
       case BLOOM_FILTERS:
         return metadataConfig.getBloomFilterIndexFileGroupCount();

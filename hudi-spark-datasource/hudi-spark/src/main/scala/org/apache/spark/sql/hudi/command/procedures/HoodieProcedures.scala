@@ -80,6 +80,7 @@ object HoodieProcedures {
     mapBuilder.put(RepairDeduplicateProcedure.NAME, RepairDeduplicateProcedure.builder)
     mapBuilder.put(RepairMigratePartitionMetaProcedure.NAME, RepairMigratePartitionMetaProcedure.builder)
     mapBuilder.put(RepairOverwriteHoodiePropsProcedure.NAME, RepairOverwriteHoodiePropsProcedure.builder)
+    mapBuilder.put(RunCleanProcedure.NAME, RunCleanProcedure.builder)
     mapBuilder.build
   }
 }
