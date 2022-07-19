@@ -50,6 +50,8 @@ class NestedSchemaPruning extends Rule[LogicalPlan] {
   private def apply0(plan: LogicalPlan): LogicalPlan =
     plan transformDown {
       case op @ PhysicalOperation(projects, filters,
+      // NOTE: This is modified to accommodate for Hudi's custom relations, given that original
+      //       [[NestedSchemaPruning]] rule is tightly coupled w/ [[HadoopFsRelation]]
       // TODO generalize to any file-based relation
       l @ LogicalRelation(relation: HoodieBaseRelation, _, _, _))
         if relation.canPruneRelationSchema =>

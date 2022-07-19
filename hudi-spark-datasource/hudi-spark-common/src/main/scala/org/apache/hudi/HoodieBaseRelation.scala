@@ -163,7 +163,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     (avroSchema, internalSchemaOpt)
   }
 
-  protected val tableStructSchema: StructType = AvroConversionUtils.convertAvroSchemaToStructType(tableAvroSchema)
+  protected lazy val tableStructSchema: StructType = AvroConversionUtils.convertAvroSchemaToStructType(tableAvroSchema)
 
   protected val partitionColumns: Array[String] = tableConfig.getPartitionFields.orElse(Array.empty)
 
@@ -225,9 +225,6 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
   protected lazy val fileIndex: HoodieFileIndex =
     HoodieFileIndex(sparkSession, metaClient, Some(tableStructSchema), optParams,
       FileStatusCache.getOrCreate(sparkSession))
-
-  // TODO inline
-  protected val validCommits: String = timeline.getInstants.toArray().map(_.asInstanceOf[HoodieInstant].getFileName).mkString(",")
 
   /**
    * Columns that relation has to read from the storage to properly execute on its semantic: for ex,
@@ -594,6 +591,8 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     val internalSchema = internalSchemaOpt.getOrElse(InternalSchema.getEmptyInternalSchema)
     val querySchemaString = SerDeHelper.toJson(internalSchema)
     if (!isNullOrEmpty(querySchemaString)) {
+      val validCommits = timeline.getInstants.iterator.asScala.map(_.getFileName).mkString(",")
+
       conf.set(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA, SerDeHelper.toJson(internalSchema))
       conf.set(SparkInternalSchemaConverter.HOODIE_TABLE_PATH, metaClient.getBasePath)
       conf.set(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST, validCommits)
