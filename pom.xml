@@ -152,7 +152,7 @@
     <spark32.version>3.2.1</spark32.version>
     <caffeine.version>2.9.1</caffeine.version>
     <scala11.version>2.11.12</scala11.version>
-    <scala12.version>2.12.14</scala12.version>
+    <scala12.version>2.12.10</scala12.version>
     <scala.version>${scala12.version}</scala.version>
     <spark2.scala.binary.version>2.11</spark2.scala.binary.version>
     <spark3.scala.binary.version>2.12</spark3.scala.binary.version>
@@ -1783,8 +1783,10 @@
         <module>hudi-spark-datasource/hudi-spark3-common</module>
       </modules>
       <activation>
+        <activeByDefault>true</activeByDefault>
         <property>
           <name>spark3.1</name>
+          <value>!disabled</value>
         </property>
       </activation>
     </profile>
