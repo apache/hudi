@@ -163,6 +163,21 @@ public class TestHoodieHFileInputFormat {
   }
 
   @Test
+  public void testInputFormatLoadWithEmptyTable() throws IOException {
+    // initial hoodie table
+    String bathPathStr = "/tmp/test_empty_table";
+    HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), bathPathStr, HoodieTableType.COPY_ON_WRITE,
+            baseFileFormat);
+    // Add the paths
+    FileInputFormat.setInputPaths(jobConf, bathPathStr);
+
+    FileStatus[] files = inputFormat.listStatus(jobConf);
+    assertEquals(0, files.length);
+    InputSplit[] inputSplits = inputFormat.getSplits(jobConf, 0);
+    assertEquals(0, inputSplits.length);
+  }
+
+  @Test
   public void testInputFormatUpdates() throws IOException {
     // initial commit
     File partitionDir = InputFormatTestUtil.prepareTable(basePath, baseFileFormat, 10, "100");

@@ -323,6 +323,10 @@ public class FilePathUtils {
   public static LinkedHashMap<String, String> validateAndReorderPartitions(
       Map<String, String> partitionKVs,
       List<String> partitionKeys) {
+    if (partitionKeys.size() == 0) {
+      // in case the partition fields are not in schema
+      return new LinkedHashMap<>(partitionKVs);
+    }
     LinkedHashMap<String, String> map = new LinkedHashMap<>();
     for (String k : partitionKeys) {
       if (!partitionKVs.containsKey(k)) {
@@ -424,5 +428,18 @@ public class FilePathUtils {
       return new String[0];
     }
     return conf.getString(FlinkOptions.PARTITION_PATH_FIELD).split(",");
+  }
+
+  /**
+   * Extracts the hive sync partition fields with given configuration.
+   *
+   * @param conf The flink configuration
+   * @return array of the hive partition fields
+   */
+  public static String[] extractHivePartitionFields(org.apache.flink.configuration.Configuration conf) {
+    if (FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.HIVE_SYNC_PARTITION_FIELDS)) {
+      return extractPartitionKeys(conf);
+    }
+    return conf.getString(FlinkOptions.HIVE_SYNC_PARTITION_FIELDS).split(",");
   }
 }

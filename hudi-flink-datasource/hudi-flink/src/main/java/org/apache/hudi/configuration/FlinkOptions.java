@@ -18,9 +18,11 @@
 
 package org.apache.hudi.configuration;
 
+import org.apache.hudi.client.clustering.plan.strategy.FlinkSizeBasedClusteringPlanStrategy;
 import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.config.HoodieIndexConfig;
@@ -42,6 +44,11 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
+import static org.apache.hudi.config.HoodieClusteringConfig.DAYBASED_LOOKBACK_PARTITIONS;
+import static org.apache.hudi.config.HoodieClusteringConfig.PARTITION_FILTER_BEGIN_PARTITION;
+import static org.apache.hudi.config.HoodieClusteringConfig.PARTITION_FILTER_END_PARTITION;
+import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SKIP_PARTITIONS_FROM_LATEST;
 
 /**
  * Hoodie Flink config options.
@@ -103,7 +110,7 @@ public class FlinkOptions extends HoodieConfig {
       .key("metadata.compaction.delta_commits")
       .intType()
       .defaultValue(10)
-      .withDescription("Max delta commits for metadata table to trigger compaction, default 24");
+      .withDescription("Max delta commits for metadata table to trigger compaction, default 10");
 
   // ------------------------------------------------------------------------
   //  Index Options
@@ -137,7 +144,7 @@ public class FlinkOptions extends HoodieConfig {
       .key("index.partition.regex")
       .stringType()
       .defaultValue(".*")
-      .withDescription("Whether to load partitions in state if partition path matching， default *");
+      .withDescription("Whether to load partitions in state if partition path matching， default `*`");
 
   // ------------------------------------------------------------------------
   //  Read Options
@@ -228,6 +235,13 @@ public class FlinkOptions extends HoodieConfig {
       .stringType()
       .noDefaultValue()
       .withDescription("End commit instant for reading, the commit time format should be 'yyyyMMddHHmmss'");
+
+  public static final ConfigOption<Boolean> READ_DATA_SKIPPING_ENABLED = ConfigOptions
+      .key("read.data.skipping.enabled")
+      .booleanType()
+      .defaultValue(false)
+      .withDescription("Enables data-skipping allowing queries to leverage indexes to reduce the search space by"
+          + "skipping over files");
 
   // ------------------------------------------------------------------------
   //  Write Options
@@ -356,7 +370,7 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<String> KEYGEN_CLASS_NAME = ConfigOptions
       .key(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key())
       .stringType()
-      .defaultValue("")
+      .noDefaultValue()
       .withDescription("Key generator class, that implements will extract the key out of incoming record");
 
   public static final ConfigOption<String> KEYGEN_TYPE = ConfigOptions
@@ -367,13 +381,14 @@ public class FlinkOptions extends HoodieConfig {
 
   public static final String PARTITION_FORMAT_HOUR = "yyyyMMddHH";
   public static final String PARTITION_FORMAT_DAY = "yyyyMMdd";
+  public static final String PARTITION_FORMAT_DASHED_DAY = "yyyy-MM-dd";
   public static final ConfigOption<String> PARTITION_FORMAT = ConfigOptions
       .key("write.partition.format")
       .stringType()
       .noDefaultValue()
       .withDescription("Partition path format, only valid when 'write.datetime.partitioning' is true, default is:\n"
           + "1) 'yyyyMMddHH' for timestamp(3) WITHOUT TIME ZONE, LONG, FLOAT, DOUBLE, DECIMAL;\n"
-          + "2) 'yyyyMMdd' for DAY and INT.");
+          + "2) 'yyyyMMdd' for DATE and INT.");
 
   public static final ConfigOption<Integer> INDEX_BOOTSTRAP_TASKS = ConfigOptions
       .key("write.index_bootstrap.tasks")
@@ -459,17 +474,17 @@ public class FlinkOptions extends HoodieConfig {
       .withDescription("Timeout limit for a writer task after it finishes a checkpoint and\n"
           + "waits for the instant commit success, only for internal use");
 
-  public static final ConfigOption<Boolean> WRITE_BULK_INSERT_SHUFFLE_BY_PARTITION = ConfigOptions
-      .key("write.bulk_insert.shuffle_by_partition")
+  public static final ConfigOption<Boolean> WRITE_BULK_INSERT_SHUFFLE_INPUT = ConfigOptions
+      .key("write.bulk_insert.shuffle_input")
       .booleanType()
       .defaultValue(true)
-      .withDescription("Whether to shuffle the inputs by partition path for bulk insert tasks, default true");
+      .withDescription("Whether to shuffle the inputs by specific fields for bulk insert tasks, default true");
 
-  public static final ConfigOption<Boolean> WRITE_BULK_INSERT_SORT_BY_PARTITION = ConfigOptions
-      .key("write.bulk_insert.sort_by_partition")
+  public static final ConfigOption<Boolean> WRITE_BULK_INSERT_SORT_INPUT = ConfigOptions
+      .key("write.bulk_insert.sort_input")
       .booleanType()
       .defaultValue(true)
-      .withDescription("Whether to sort the inputs by partition path for bulk insert tasks, default true");
+      .withDescription("Whether to sort the inputs by specific fields for bulk insert tasks, default true");
 
   public static final ConfigOption<Integer> WRITE_SORT_MEMORY = ConfigOptions
       .key("write.sort.memory")
@@ -541,7 +556,7 @@ public class FlinkOptions extends HoodieConfig {
       .key("compaction.target_io")
       .longType()
       .defaultValue(500 * 1024L) // default 500 GB
-      .withDescription("Target IO per compaction (both read and write), default 500 GB");
+      .withDescription("Target IO in MB for per compaction (both read and write), default 500 GB");
 
   public static final ConfigOption<Boolean> CLEAN_ASYNC_ENABLED = ConfigOptions
       .key("clean.async.enabled")
@@ -549,12 +564,25 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(true)
       .withDescription("Whether to cleanup the old commits immediately on new commits, enabled by default");
 
+  public static final ConfigOption<String> CLEAN_POLICY = ConfigOptions
+      .key("clean.policy")
+      .stringType()
+      .defaultValue(HoodieCleaningPolicy.KEEP_LATEST_COMMITS.name())
+      .withDescription("Clean policy to manage the Hudi table. Available option: KEEP_LATEST_COMMITS, KEEP_LATEST_FILE_VERSIONS, KEEP_LATEST_BY_HOURS."
+          +  "Default is KEEP_LATEST_COMMITS.");
+
   public static final ConfigOption<Integer> CLEAN_RETAIN_COMMITS = ConfigOptions
       .key("clean.retain_commits")
       .intType()
       .defaultValue(30)// default 30 commits
       .withDescription("Number of commits to retain. So data will be retained for num_of_commits * time_between_commits (scheduled).\n"
           + "This also directly translates into how much you can incrementally pull on this table, default 30");
+
+  public static final ConfigOption<Integer> CLEAN_RETAIN_FILE_VERSIONS = ConfigOptions
+      .key("clean.retain_file_versions")
+      .intType()
+      .defaultValue(5)// default 5 version
+      .withDescription("Number of file versions to retain. default 5");
 
   public static final ConfigOption<Integer> ARCHIVE_MAX_COMMITS = ConfigOptions
       .key("archive.max_commits")
@@ -567,6 +595,89 @@ public class FlinkOptions extends HoodieConfig {
       .intType()
       .defaultValue(40)// default min 40 commits
       .withDescription("Min number of commits to keep before archiving older commits into a sequential log, default 40");
+
+  // ------------------------------------------------------------------------
+  //  Clustering Options
+  // ------------------------------------------------------------------------
+
+  public static final ConfigOption<Boolean> CLUSTERING_SCHEDULE_ENABLED = ConfigOptions
+      .key("clustering.schedule.enabled")
+      .booleanType()
+      .defaultValue(false) // default false for pipeline
+      .withDescription("Schedule the cluster plan, default false");
+
+  public static final ConfigOption<Boolean> CLUSTERING_ASYNC_ENABLED = ConfigOptions
+      .key("clustering.async.enabled")
+      .booleanType()
+      .defaultValue(false) // default false for pipeline
+      .withDescription("Async Clustering, default false");
+
+  public static final ConfigOption<Integer> CLUSTERING_DELTA_COMMITS = ConfigOptions
+      .key("clustering.delta_commits")
+      .intType()
+      .defaultValue(4)
+      .withDescription("Max delta commits needed to trigger clustering, default 4 commits");
+
+  public static final ConfigOption<Integer> CLUSTERING_TASKS = ConfigOptions
+      .key("clustering.tasks")
+      .intType()
+      .defaultValue(4)
+      .withDescription("Parallelism of tasks that do actual clustering, default is 4");
+
+  public static final ConfigOption<Integer> CLUSTERING_TARGET_PARTITIONS = ConfigOptions
+      .key("clustering.plan.strategy.daybased.lookback.partitions")
+      .intType()
+      .defaultValue(2)
+      .withDescription("Number of partitions to list to create ClusteringPlan, default is 2");
+
+  public static final ConfigOption<String> CLUSTERING_PLAN_STRATEGY_CLASS = ConfigOptions
+      .key("clustering.plan.strategy.class")
+      .stringType()
+      .defaultValue(FlinkSizeBasedClusteringPlanStrategy.class.getName())
+      .withDescription("Config to provide a strategy class (subclass of ClusteringPlanStrategy) to create clustering plan "
+          + "i.e select what file groups are being clustered. Default strategy, looks at the last N (determined by "
+          + CLUSTERING_TARGET_PARTITIONS.key() + ") day based partitions picks the small file slices within those partitions.");
+
+  public static final ConfigOption<String> CLUSTERING_PLAN_PARTITION_FILTER_MODE_NAME = ConfigOptions
+      .key("clustering.plan.partition.filter.mode")
+      .stringType()
+      .defaultValue("NONE")
+      .withDescription("Partition filter mode used in the creation of clustering plan. Available values are - "
+          + "NONE: do not filter table partition and thus the clustering plan will include all partitions that have clustering candidate."
+          + "RECENT_DAYS: keep a continuous range of partitions, worked together with configs '" + DAYBASED_LOOKBACK_PARTITIONS.key() + "' and '"
+          + PLAN_STRATEGY_SKIP_PARTITIONS_FROM_LATEST.key() + "."
+          + "SELECTED_PARTITIONS: keep partitions that are in the specified range ['" + PARTITION_FILTER_BEGIN_PARTITION.key() + "', '"
+          + PARTITION_FILTER_END_PARTITION.key() + "'].");
+
+  public static final ConfigOption<Integer> CLUSTERING_PLAN_STRATEGY_TARGET_FILE_MAX_BYTES = ConfigOptions
+      .key("clustering.plan.strategy.target.file.max.bytes")
+      .intType()
+      .defaultValue(1024 * 1024 * 1024) // default 1 GB
+      .withDescription("Each group can produce 'N' (CLUSTERING_MAX_GROUP_SIZE/CLUSTERING_TARGET_FILE_SIZE) output file groups, default 1 GB");
+
+  public static final ConfigOption<Integer> CLUSTERING_PLAN_STRATEGY_SMALL_FILE_LIMIT = ConfigOptions
+      .key("clustering.plan.strategy.small.file.limit")
+      .intType()
+      .defaultValue(600) // default 600 MB
+      .withDescription("Files smaller than the size specified here are candidates for clustering, default 600 MB");
+
+  public static final ConfigOption<Integer> CLUSTERING_PLAN_STRATEGY_SKIP_PARTITIONS_FROM_LATEST = ConfigOptions
+      .key("clustering.plan.strategy.daybased.skipfromlatest.partitions")
+      .intType()
+      .defaultValue(0)
+      .withDescription("Number of partitions to skip from latest when choosing partitions to create ClusteringPlan");
+
+  public static final ConfigOption<String> CLUSTERING_SORT_COLUMNS = ConfigOptions
+      .key("clustering.plan.strategy.sort.columns")
+      .stringType()
+      .defaultValue("")
+      .withDescription("Columns to sort the data by when clustering");
+
+  public static final ConfigOption<Integer> CLUSTERING_MAX_NUM_GROUPS = ConfigOptions
+      .key("clustering.plan.strategy.max.num.groups")
+      .intType()
+      .defaultValue(30)
+      .withDescription("Maximum number of groups to create as part of ClusteringPlan. Increasing groups will increase parallelism, default is 30");
 
   // ------------------------------------------------------------------------
   //  Hive Sync Options
@@ -644,12 +755,6 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(false)
       .withDescription("Assume partitioning is yyyy/mm/dd, default false");
 
-  public static final ConfigOption<Boolean> HIVE_SYNC_USE_JDBC = ConfigOptions
-      .key("hive_sync.use_jdbc")
-      .booleanType()
-      .defaultValue(true)
-      .withDescription("Use JDBC when hive synchronization is enabled, default true");
-
   public static final ConfigOption<Boolean> HIVE_SYNC_AUTO_CREATE_DB = ConfigOptions
       .key("hive_sync.auto_create_db")
       .booleanType()
@@ -671,7 +776,7 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<Boolean> HIVE_SYNC_SUPPORT_TIMESTAMP = ConfigOptions
       .key("hive_sync.support_timestamp")
       .booleanType()
-      .defaultValue(false)
+      .defaultValue(true)
       .withDescription("INT64 with original type TIMESTAMP_MICROS is converted to hive timestamp type.\n"
           + "Disabled by default for backward compatibility.");
 
@@ -687,6 +792,12 @@ public class FlinkOptions extends HoodieConfig {
       .noDefaultValue()
       .withDescription("Serde properties to hive table, the data format is k1=v1\nk2=v2");
 
+  public static final ConfigOption<String> HIVE_SYNC_CONF_DIR = ConfigOptions
+      .key("hive_sync.conf.dir")
+      .stringType()
+      .noDefaultValue()
+      .withDescription("The hive configuration directory, where the hive-site.xml lies in, the file should be put on the client machine");
+
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
@@ -695,24 +806,16 @@ public class FlinkOptions extends HoodieConfig {
   private static final String PROPERTIES_PREFIX = "properties.";
 
   /**
-   * Collects the config options that start with 'properties.' into a 'key'='value' list.
-   */
-  public static Map<String, String> getHoodieProperties(Map<String, String> options) {
-    return getHoodiePropertiesWithPrefix(options, PROPERTIES_PREFIX);
-  }
-
-  /**
    * Collects the config options that start with specified prefix {@code prefix} into a 'key'='value' list.
    */
-  public static Map<String, String> getHoodiePropertiesWithPrefix(Map<String, String> options, String prefix) {
+  public static Map<String, String> getPropertiesWithPrefix(Map<String, String> options, String prefix) {
     final Map<String, String> hoodieProperties = new HashMap<>();
-
-    if (hasPropertyOptions(options)) {
+    if (hasPropertyOptions(options, prefix)) {
       options.keySet().stream()
-          .filter(key -> key.startsWith(PROPERTIES_PREFIX))
+          .filter(key -> key.startsWith(prefix))
           .forEach(key -> {
             final String value = options.get(key);
-            final String subKey = key.substring((prefix).length());
+            final String subKey = key.substring(prefix.length());
             hoodieProperties.put(subKey, value);
           });
     }
@@ -734,8 +837,8 @@ public class FlinkOptions extends HoodieConfig {
     return fromMap(propsMap);
   }
 
-  private static boolean hasPropertyOptions(Map<String, String> options) {
-    return options.keySet().stream().anyMatch(k -> k.startsWith(PROPERTIES_PREFIX));
+  private static boolean hasPropertyOptions(Map<String, String> options, String prefix) {
+    return options.keySet().stream().anyMatch(k -> k.startsWith(prefix));
   }
 
   /**
@@ -743,7 +846,9 @@ public class FlinkOptions extends HoodieConfig {
    */
   public static Configuration fromMap(Map<String, String> map) {
     final Configuration configuration = new Configuration();
-    map.forEach(configuration::setString);
+    for (Map.Entry<String, String> entry : map.entrySet()) {
+      configuration.setString(entry.getKey().trim(), entry.getValue());
+    }
     return configuration;
   }
 

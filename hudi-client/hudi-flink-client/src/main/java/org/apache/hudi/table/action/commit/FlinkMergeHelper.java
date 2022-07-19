@@ -42,8 +42,7 @@ import org.apache.hadoop.conf.Configuration;
 
 import java.io.IOException;
 import java.util.Iterator;
-
-import scala.collection.immutable.List;
+import java.util.List;
 
 public class FlinkMergeHelper<T extends HoodieRecordPayload> extends BaseMergeHelper<T, List<HoodieRecord<T>>,
     List<HoodieKey>, List<WriteStatus>> {
@@ -102,13 +101,16 @@ public class FlinkMergeHelper<T extends HoodieRecordPayload> extends BaseMergeHe
     } catch (Exception e) {
       throw new HoodieException(e);
     } finally {
+      // HUDI-2875: mergeHandle is not thread safe, we should totally terminate record inputting
+      // and executor firstly and then close mergeHandle.
       if (reader != null) {
         reader.close();
       }
-      mergeHandle.close();
       if (null != wrapper) {
         wrapper.shutdownNow();
+        wrapper.awaitTermination();
       }
+      mergeHandle.close();
     }
   }
 }

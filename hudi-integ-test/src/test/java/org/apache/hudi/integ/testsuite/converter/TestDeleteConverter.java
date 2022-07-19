@@ -76,8 +76,7 @@ public class TestDeleteConverter {
         .collectAsMap();
     List<GenericRecord> deleteRecords = outputRDD.collect();
     deleteRecords.stream().forEach(updateRecord -> {
-      GenericRecord inputRecord = inputRecords.get(updateRecord.get("_row_key").toString());
-      assertTrue((boolean)inputRecord.get(DEFAULT_HOODIE_IS_DELETED_COL));
+      assertTrue((boolean) updateRecord.get(DEFAULT_HOODIE_IS_DELETED_COL));
     });
   }
 }

@@ -21,9 +21,8 @@ package org.apache.hudi.hive.ddl;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncException;
+import org.apache.hudi.hive.util.HivePartitionUtil;
 
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.hadoop.hive.metastore.api.MetaException;
@@ -34,7 +33,6 @@ import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.apache.hadoop.hive.ql.processors.CommandProcessorResponse;
 import org.apache.hadoop.hive.ql.session.SessionState;
 import org.apache.hadoop.security.UserGroupInformation;
-import org.apache.hudi.hive.util.HivePartitionUtil;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -46,26 +44,28 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.sync.common.util.TableUtils.tableId;
+
 /**
- * This class offers DDL executor backed by the hive.ql Driver This class preserves the old useJDBC = false way of doing things.
+ * This class offers DDL executor backed by the HiveQL Driver.
  */
 public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
-  private static final Logger LOG = LogManager.getLogger(HiveQueryDDLExecutor.class);
-  private final HiveSyncConfig config;
-  private final IMetaStoreClient metaStoreClient;
-  private SessionState sessionState = null;
-  private Driver hiveDriver = null;
 
-  public HiveQueryDDLExecutor(HiveSyncConfig config, FileSystem fs, HiveConf configuration) throws HiveException, MetaException {
-    super(config, fs);
-    this.config = config;
-    this.metaStoreClient = Hive.get(configuration).getMSC();
+  private static final Logger LOG = LogManager.getLogger(HiveQueryDDLExecutor.class);
+
+  private final IMetaStoreClient metaStoreClient;
+  private SessionState sessionState;
+  private Driver hiveDriver;
+
+  public HiveQueryDDLExecutor(HiveSyncConfig config) throws HiveException, MetaException {
+    super(config);
+    this.metaStoreClient = Hive.get(config.getHiveConf()).getMSC();
     try {
-      this.sessionState = new SessionState(configuration,
+      this.sessionState = new SessionState(config.getHiveConf(),
           UserGroupInformation.getCurrentUser().getShortUserName());
       SessionState.start(this.sessionState);
-      this.sessionState.setCurrentDatabase(config.databaseName);
-      hiveDriver = new org.apache.hadoop.hive.ql.Driver(configuration);
+      this.sessionState.setCurrentDatabase(databaseName);
+      this.hiveDriver = new org.apache.hadoop.hive.ql.Driver(config.getHiveConf());
     } catch (Exception e) {
       if (sessionState != null) {
         try {
@@ -109,7 +109,7 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
       // HiveMetastoreClient returns partition keys separate from Columns, hence get both and merge to
       // get the Schema of the table.
       final long start = System.currentTimeMillis();
-      Table table = metaStoreClient.getTable(config.databaseName, tableName);
+      Table table = metaStoreClient.getTable(databaseName, tableName);
       Map<String, String> partitionKeysMap =
           table.getPartitionKeys().stream().collect(Collectors.toMap(FieldSchema::getName, f -> f.getType().toUpperCase()));
 
@@ -137,13 +137,17 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
     LOG.info("Drop partitions " + partitionsToDrop.size() + " on " + tableName);
     try {
       for (String dropPartition : partitionsToDrop) {
-        String partitionClause = HivePartitionUtil.getPartitionClauseForDrop(dropPartition, partitionValueExtractor, config);
-        metaStoreClient.dropPartition(config.databaseName, tableName, partitionClause, false);
+        if (HivePartitionUtil.partitionExists(metaStoreClient, tableName, dropPartition, partitionValueExtractor,
+            config)) {
+          String partitionClause =
+              HivePartitionUtil.getPartitionClauseForDrop(dropPartition, partitionValueExtractor, config);
+          metaStoreClient.dropPartition(databaseName, tableName, partitionClause, false);
+        }
         LOG.info("Drop partition " + dropPartition + " on " + tableName);
       }
     } catch (Exception e) {
-      LOG.error(config.databaseName + "." + tableName + " drop partition failed", e);
-      throw new HoodieHiveSyncException(config.databaseName + "." + tableName + " drop partition failed", e);
+      LOG.error(tableId(databaseName, tableName) + " drop partition failed", e);
+      throw new HoodieHiveSyncException(tableId(databaseName, tableName) + " drop partition failed", e);
     }
   }
 

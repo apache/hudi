@@ -22,6 +22,7 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.util.ViewStorageProperties;
 
+import org.apache.flink.configuration.Configuration;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -45,11 +46,12 @@ public class TestViewStorageProperties {
         .withStorageType(FileSystemViewStorageType.SPILLABLE_DISK)
         .withRemoteServerHost("host1")
         .withRemoteServerPort(1234).build();
-    ViewStorageProperties.createProperties(basePath, config);
-    ViewStorageProperties.createProperties(basePath, config);
-    ViewStorageProperties.createProperties(basePath, config);
+    Configuration flinkConfig = new Configuration();
+    ViewStorageProperties.createProperties(basePath, config, flinkConfig);
+    ViewStorageProperties.createProperties(basePath, config, flinkConfig);
+    ViewStorageProperties.createProperties(basePath, config, flinkConfig);
 
-    FileSystemViewStorageConfig readConfig = ViewStorageProperties.loadFromProperties(basePath);
+    FileSystemViewStorageConfig readConfig = ViewStorageProperties.loadFromProperties(basePath, new Configuration());
     assertThat(readConfig.getStorageType(), is(FileSystemViewStorageType.SPILLABLE_DISK));
     assertThat(readConfig.getRemoteViewServerHost(), is("host1"));
     assertThat(readConfig.getRemoteViewServerPort(), is(1234));

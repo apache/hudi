@@ -90,6 +90,7 @@ public class AppendWriteFunction<I> extends AbstractStreamWriteFunction<I> {
    * End input action for batch source.
    */
   public void endInput() {
+    super.endInput();
     flushData(true);
     this.writeStatuses.clear();
   }
@@ -106,30 +107,29 @@ public class AppendWriteFunction<I> extends AbstractStreamWriteFunction<I> {
   //  Utilities
   // -------------------------------------------------------------------------
   private void initWriterHelper() {
-    this.currentInstant = instantToWrite(true);
-    if (this.currentInstant == null) {
+    final String instant = instantToWrite(true);
+    if (instant == null) {
       // in case there are empty checkpoints that has no input data
       throw new HoodieException("No inflight instant when flushing data!");
     }
     this.writerHelper = new BulkInsertWriterHelper(this.config, this.writeClient.getHoodieTable(), this.writeClient.getConfig(),
-        this.currentInstant, this.taskID, getRuntimeContext().getNumberOfParallelSubtasks(), getRuntimeContext().getAttemptNumber(),
+        instant, this.taskID, getRuntimeContext().getNumberOfParallelSubtasks(), getRuntimeContext().getAttemptNumber(),
         this.rowType);
   }
 
   private void flushData(boolean endInput) {
     final List<WriteStatus> writeStatus;
-    final String instant;
     if (this.writerHelper != null) {
       writeStatus = this.writerHelper.getWriteStatuses(this.taskID);
-      instant = this.writerHelper.getInstantTime();
+      this.currentInstant = this.writerHelper.getInstantTime();
     } else {
-      LOG.info("No data to write in subtask [{}] for instant [{}]", taskID, currentInstant);
       writeStatus = Collections.emptyList();
-      instant = instantToWrite(false);
+      this.currentInstant = instantToWrite(false);
+      LOG.info("No data to write in subtask [{}] for instant [{}]", taskID, this.currentInstant);
     }
     final WriteMetadataEvent event = WriteMetadataEvent.builder()
         .taskID(taskID)
-        .instantTime(instant)
+        .instantTime(this.currentInstant)
         .writeStatus(writeStatus)
         .lastBatch(true)
         .endInput(endInput)

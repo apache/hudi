@@ -20,6 +20,7 @@ package org.apache.hudi.utils;
 
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.streamer.FlinkStreamerConfig;
+import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.utils.factory.CollectSinkTableFactory;
 import org.apache.hudi.utils.factory.ContinuousFileSourceFactory;
 
@@ -73,6 +74,15 @@ public class TestConfigurations {
       .notNull();
 
   public static final RowType ROW_TYPE_WIDER = (RowType) ROW_DATA_TYPE_WIDER.getLogicalType();
+
+  public static final DataType ROW_DATA_TYPE_DATE = DataTypes.ROW(
+          DataTypes.FIELD("uuid", DataTypes.VARCHAR(20)),// record key
+          DataTypes.FIELD("name", DataTypes.VARCHAR(10)),
+          DataTypes.FIELD("age", DataTypes.INT()),
+          DataTypes.FIELD("dt", DataTypes.DATE()))
+      .notNull();
+
+  public static final RowType ROW_TYPE_DATE = (RowType) ROW_DATA_TYPE_DATE.getLogicalType();
 
   public static String getCreateHoodieTableDDL(String tableName, Map<String, String> options) {
     return getCreateHoodieTableDDL(tableName, options, true, "partition");
@@ -212,6 +222,15 @@ public class TestConfigurations {
     return conf;
   }
 
+  public static Configuration getDefaultConf(String tablePath, DataType dataType) {
+    Configuration conf = new Configuration();
+    conf.setString(FlinkOptions.PATH, tablePath);
+    conf.setString(FlinkOptions.SOURCE_AVRO_SCHEMA, AvroSchemaConverter.convertToSchema(dataType.getLogicalType()).toString());
+    conf.setString(FlinkOptions.TABLE_NAME, "TestHoodieTable");
+    conf.setString(FlinkOptions.PARTITION_PATH_FIELD, "partition");
+    return conf;
+  }
+
   public static FlinkStreamerConfig getDefaultStreamerConf(String tablePath) {
     FlinkStreamerConfig streamerConf = new FlinkStreamerConfig();
     streamerConf.targetBasePath = tablePath;
@@ -299,6 +318,9 @@ public class TestConfigurations {
     }
   }
 
+  /**
+   * Tool to construct the catalog DDL.
+   */
   public static class Catalog {
     private final String catalogName;
     private String catalogPath = ".";

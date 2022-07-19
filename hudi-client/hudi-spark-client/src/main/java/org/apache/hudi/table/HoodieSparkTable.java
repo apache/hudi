@@ -54,29 +54,18 @@ public abstract class HoodieSparkTable<T extends HoodieRecordPayload>
   }
 
   public static <T extends HoodieRecordPayload> HoodieSparkTable<T> create(HoodieWriteConfig config, HoodieEngineContext context) {
-    return create(config, context, false);
-  }
-
-  public static <T extends HoodieRecordPayload> HoodieSparkTable<T> create(HoodieWriteConfig config, HoodieEngineContext context,
-                                                                           boolean refreshTimeline) {
     HoodieTableMetaClient metaClient =
         HoodieTableMetaClient.builder().setConf(context.getHadoopConf().get()).setBasePath(config.getBasePath())
             .setLoadActiveTimelineOnLoad(true).setConsistencyGuardConfig(config.getConsistencyGuardConfig())
             .setLayoutVersion(Option.of(new TimelineLayoutVersion(config.getTimelineLayoutVersion())))
-            .setFileSystemRetryConfig(config.getFileSystemRetryConfig()).build();
-    return HoodieSparkTable.create(config, (HoodieSparkEngineContext) context, metaClient, refreshTimeline);
+            .setFileSystemRetryConfig(config.getFileSystemRetryConfig())
+            .setProperties(config.getProps()).build();
+    return HoodieSparkTable.create(config, (HoodieSparkEngineContext) context, metaClient);
   }
 
   public static <T extends HoodieRecordPayload> HoodieSparkTable<T> create(HoodieWriteConfig config,
                                                                            HoodieSparkEngineContext context,
                                                                            HoodieTableMetaClient metaClient) {
-    return create(config, context, metaClient, false);
-  }
-
-  public static <T extends HoodieRecordPayload> HoodieSparkTable<T> create(HoodieWriteConfig config,
-                                                                           HoodieSparkEngineContext context,
-                                                                           HoodieTableMetaClient metaClient,
-                                                                           boolean refreshTimeline) {
     HoodieSparkTable<T> hoodieSparkTable;
     switch (metaClient.getTableType()) {
       case COPY_ON_WRITE:
@@ -87,9 +76,6 @@ public abstract class HoodieSparkTable<T extends HoodieRecordPayload>
         break;
       default:
         throw new HoodieException("Unsupported table type :" + metaClient.getTableType());
-    }
-    if (refreshTimeline) {
-      hoodieSparkTable.getHoodieView().sync();
     }
     return hoodieSparkTable;
   }
@@ -113,6 +99,9 @@ public abstract class HoodieSparkTable<T extends HoodieRecordPayload>
       // existence after the creation is needed.
       final HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(
           context.getHadoopConf().get(), config, context, actionMetadata, Option.of(triggeringInstantTimestamp));
+      // even with metadata enabled, some index could have been disabled
+      // delete metadata partitions corresponding to such indexes
+      deleteMetadataIndexIfNecessary();
       try {
         if (isMetadataTableExists || metaClient.getFs().exists(new Path(
             HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath())))) {
@@ -122,6 +111,8 @@ public abstract class HoodieSparkTable<T extends HoodieRecordPayload>
       } catch (IOException e) {
         throw new HoodieMetadataException("Checking existence of metadata table failed", e);
       }
+    } else {
+      maybeDeleteMetadataTable();
     }
 
     return Option.empty();

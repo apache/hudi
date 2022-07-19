@@ -121,6 +121,12 @@ public abstract class AbstractStreamWriteFunction<I>
   private transient CkpMetadata ckpMetadata;
 
   /**
+   * Since flink 1.15, the streaming job with bounded source triggers one checkpoint
+   * after calling #endInput, use this flag to avoid unnecessary data flush.
+   */
+  private transient boolean inputEnded;
+
+  /**
    * Constructs a StreamWriteFunctionBase.
    *
    * @param config The config options
@@ -154,12 +160,20 @@ public abstract class AbstractStreamWriteFunction<I>
 
   @Override
   public void snapshotState(FunctionSnapshotContext functionSnapshotContext) throws Exception {
+    if (inputEnded) {
+      return;
+    }
     snapshotState();
     // Reload the snapshot state as the current state.
     reloadWriteMetaState();
   }
 
   public abstract void snapshotState();
+
+  @Override
+  public void endInput() {
+    this.inputEnded = true;
+  }
 
   // -------------------------------------------------------------------------
   //  Getter/Setter
@@ -182,6 +196,8 @@ public abstract class AbstractStreamWriteFunction<I>
     boolean eventSent = false;
     for (WriteMetadataEvent event : this.writeMetadataState.get()) {
       if (Objects.equals(lastInflight, event.getInstantTime())) {
+        // Reset taskID for event
+        event.setTaskID(taskID);
         // The checkpoint succeed but the meta does not commit,
         // re-commit the inflight instant
         this.eventGateway.sendEventToCoordinator(event);
@@ -228,6 +244,13 @@ public abstract class AbstractStreamWriteFunction<I>
   }
 
   /**
+   * Returns whether the instant is fresh new(not aborted).
+   */
+  protected boolean freshInstant(String instant) {
+    return !this.ckpMetadata.isAborted(instant);
+  }
+
+  /**
    * Prepares the instant time to write with for next checkpoint.
    *
    * @param hasData Whether the task has buffering data
@@ -245,7 +268,7 @@ public abstract class AbstractStreamWriteFunction<I>
       // wait condition:
       // 1. there is no inflight instant
       // 2. the inflight instant does not change and the checkpoint has buffering data
-      if (instant == null || (instant.equals(this.currentInstant) && hasData && !this.ckpMetadata.isAborted(instant))) {
+      if (instant == null || invalidInstant(instant, hasData)) {
         // sleep for a while
         timeWait.waitFor();
         // refresh the inflight instant
@@ -257,5 +280,12 @@ public abstract class AbstractStreamWriteFunction<I>
       }
     }
     return instant;
+  }
+
+  /**
+   * Returns whether the pending instant is invalid to write with.
+   */
+  private boolean invalidInstant(String instant, boolean hasData) {
+    return instant.equals(this.currentInstant) && hasData && freshInstant(instant);
   }
 }

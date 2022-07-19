@@ -18,19 +18,19 @@
 package org.apache.spark.sql.hudi.command
 
 import org.apache.hadoop.fs.Path
-
-import org.apache.hudi.{DataSourceWriteOptions, SparkAdapterSupport}
 import org.apache.hudi.common.model.HoodieFileFormat
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.hadoop.HoodieParquetInputFormat
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils
-import org.apache.spark.sql.catalyst.analysis.{NoSuchDatabaseException, TableAlreadyExistsException}
+import org.apache.hudi.{DataSourceWriteOptions, SparkAdapterSupport}
+import org.apache.spark.sql.catalyst.analysis.NoSuchDatabaseException
 import org.apache.spark.sql.catalyst.catalog._
+import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable.needFilterProps
 import org.apache.spark.sql.hive.HiveClientUtils
 import org.apache.spark.sql.hive.HiveExternalCatalog._
+import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isUsingHiveCatalog
 import org.apache.spark.sql.hudi.{HoodieOptionConfig, HoodieSqlCommonUtils}
-import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isEnableHive
 import org.apache.spark.sql.internal.StaticSQLConf.SCHEMA_STRING_LENGTH_THRESHOLD
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{Row, SparkSession}
@@ -131,8 +131,9 @@ object CreateHoodieTableCommand {
       .copy(table = tableName, database = Some(newDatabaseName))
 
     val partitionColumnNames = hoodieCatalogTable.partitionSchema.map(_.name)
-    // append pk, preCombineKey, type to the properties of table
-    val newTblProperties = hoodieCatalogTable.catalogProperties ++ HoodieOptionConfig.extractSqlOptions(properties)
+    // Remove some properties should not be used;append pk, preCombineKey, type to the properties of table
+    val newTblProperties =
+      hoodieCatalogTable.catalogProperties.--(needFilterProps) ++ HoodieOptionConfig.extractSqlOptions(properties)
     val newTable = table.copy(
       identifier = newTableIdentifier,
       storage = newStorage,
@@ -143,7 +144,7 @@ object CreateHoodieTableCommand {
     )
 
     // Create table in the catalog
-    val enableHive = isEnableHive(sparkSession)
+    val enableHive = isUsingHiveCatalog(sparkSession)
     if (enableHive) {
       createHiveDataSourceTable(sparkSession, newTable, ignoreIfExists)
     } else {
@@ -167,10 +168,6 @@ object CreateHoodieTableCommand {
     if (!dbExists) {
       throw new NoSuchDatabaseException(dbName)
     }
-    // check table exists
-    if (sparkSession.sessionState.catalog.tableExists(table.identifier)) {
-      throw new TableAlreadyExistsException(dbName, table.identifier.table)
-    }
     // append some table properties need for spark data source table.
     val dataSourceProps = tableMetaToTableProps(sparkSession.sparkContext.conf,
       table, table.schema)
@@ -179,7 +176,7 @@ object CreateHoodieTableCommand {
     val client = HiveClientUtils.newClientForMetadata(sparkSession.sparkContext.conf,
       sparkSession.sessionState.newHadoopConf())
     // create hive table.
-    client.createTable(tableWithDataSourceProps, ignoreIfExists)
+    client.createTable(tableWithDataSourceProps, ignoreIfExists = true)
   }
 
   // This code is forked from org.apache.spark.sql.hive.HiveExternalCatalog#tableMetaToTableProps

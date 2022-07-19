@@ -20,6 +20,7 @@ package org.apache.hudi.configuration;
 
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.format.FilePathUtils;
 
@@ -42,7 +43,10 @@ public class OptionsResolver {
    * Returns whether the insert is clustering disabled with given configuration {@code conf}.
    */
   public static boolean isAppendMode(Configuration conf) {
-    return isCowTable(conf) && isInsertOperation(conf) && !conf.getBoolean(FlinkOptions.INSERT_CLUSTER);
+    // 1. inline clustering is supported for COW table;
+    // 2. async clustering is supported for both COW and MOR table
+    return isCowTable(conf) && isInsertOperation(conf) && !conf.getBoolean(FlinkOptions.INSERT_CLUSTER)
+        || needsScheduleClustering(conf);
   }
 
   /**
@@ -114,5 +118,66 @@ public class OptionsResolver {
   public static boolean emitChangelog(Configuration conf) {
     return conf.getBoolean(FlinkOptions.READ_AS_STREAMING)
         && conf.getBoolean(FlinkOptions.CHANGELOG_ENABLED);
+  }
+
+  /**
+   * Returns whether there is need to schedule the async compaction.
+   *
+   * @param conf The flink configuration.
+   */
+  public static boolean needsAsyncCompaction(Configuration conf) {
+    return OptionsResolver.isMorTable(conf)
+        && conf.getBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED);
+  }
+
+  /**
+   * Returns whether there is need to schedule the compaction plan.
+   *
+   * @param conf The flink configuration.
+   */
+  public static boolean needsScheduleCompaction(Configuration conf) {
+    return OptionsResolver.isMorTable(conf)
+        && conf.getBoolean(FlinkOptions.COMPACTION_SCHEDULE_ENABLED);
+  }
+
+  /**
+   * Returns whether there is need to schedule the async clustering.
+   *
+   * @param conf The flink configuration.
+   */
+  public static boolean needsAsyncClustering(Configuration conf) {
+    return isInsertOperation(conf) && conf.getBoolean(FlinkOptions.CLUSTERING_ASYNC_ENABLED);
+  }
+
+  /**
+   * Returns whether there is need to schedule the clustering plan.
+   *
+   * @param conf The flink configuration.
+   */
+  public static boolean needsScheduleClustering(Configuration conf) {
+    return isInsertOperation(conf) && conf.getBoolean(FlinkOptions.CLUSTERING_SCHEDULE_ENABLED);
+  }
+
+  /**
+   * Returns whether the clustering sort is enabled.
+   */
+  public static boolean sortClusteringEnabled(Configuration conf) {
+    return !StringUtils.isNullOrEmpty(conf.getString(FlinkOptions.CLUSTERING_SORT_COLUMNS));
+  }
+
+  /**
+   * Returns whether the operation is INSERT OVERWRITE (table or partition).
+   */
+  public static boolean isInsertOverwrite(Configuration conf) {
+    return conf.getString(FlinkOptions.OPERATION).equals(WriteOperationType.INSERT_OVERWRITE_TABLE.value())
+        || conf.getString(FlinkOptions.OPERATION).equals(WriteOperationType.INSERT_OVERWRITE.value());
+  }
+
+  /**
+   * Returns whether the read start commit is specific commit timestamp.
+   */
+  public static boolean isSpecificStartCommit(Configuration conf) {
+    return conf.getOptional(FlinkOptions.READ_START_COMMIT).isPresent()
+        && !conf.get(FlinkOptions.READ_START_COMMIT).equalsIgnoreCase(FlinkOptions.START_COMMIT_EARLIEST);
   }
 }

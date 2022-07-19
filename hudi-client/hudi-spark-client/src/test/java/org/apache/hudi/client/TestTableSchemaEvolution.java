@@ -291,7 +291,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
     }
 
     // Rollback to the original schema
-    client.restoreToInstant("004");
+    client.restoreToInstant("004", hoodieWriteConfig.isMetadataTableEnabled());
     checkLatestDeltaCommit("004");
 
     // Updates with original schema are now allowed
@@ -432,7 +432,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
 
     // Revert to the older commit and ensure that the original schema can now
     // be used for inserts and inserts.
-    client.restoreToInstant("003");
+    client.restoreToInstant("003", hoodieWriteConfig.isMetadataTableEnabled());
     curTimeline = metaClient.reloadActiveTimeline().getCommitTimeline().filterCompletedInstants();
     assertTrue(curTimeline.lastInstant().get().getTimestamp().equals("003"));
     checkReadRecords("000", numRecords);
@@ -515,7 +515,13 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
     return getConfigBuilder(schema)
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(IndexType.INMEMORY).build())
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().withMaxNumDeltaCommitsBeforeCompaction(1).build())
-        .withAvroSchemaValidate(true);
+        .withAvroSchemaValidate(true)
+        // The test has rollback instants on the timeline,
+        // these rollback instants use real time as instant time, whose instant time is always greater than
+        // the normal commits instant time, this breaks the refresh rule introduced in HUDI-2761:
+        // The last client instant is always the rollback instant but not the normal commit.
+        // Always refresh the timeline when client and server have different timeline.
+        .withRefreshTimelineServerBasedOnLatestCommit(false);
   }
 
   @Override

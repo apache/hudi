@@ -189,7 +189,7 @@ public class TestHoodieTableFactory {
     assertThat(conf1.get(FlinkOptions.KEYGEN_CLASS_NAME), is("dummyKeyGenClass"));
 
     // definition with complex primary keys and partition paths
-    this.conf.setString(FlinkOptions.KEYGEN_CLASS_NAME, FlinkOptions.KEYGEN_CLASS_NAME.defaultValue());
+    this.conf.removeConfig(FlinkOptions.KEYGEN_CLASS_NAME);
     ResolvedSchema schema2 = SchemaBuilder.instance()
         .field("f0", DataTypes.INT().notNull())
         .field("f1", DataTypes.VARCHAR(20).notNull())
@@ -204,7 +204,7 @@ public class TestHoodieTableFactory {
     assertThat(conf2.get(FlinkOptions.KEYGEN_CLASS_NAME), is(ComplexAvroKeyGenerator.class.getName()));
 
     // definition with complex primary keys and empty partition paths
-    this.conf.setString(FlinkOptions.KEYGEN_CLASS_NAME, FlinkOptions.KEYGEN_CLASS_NAME.defaultValue());
+    this.conf.removeConfig(FlinkOptions.KEYGEN_CLASS_NAME);
     final MockContext sourceContext3 = MockContext.getInstance(this.conf, schema2, "");
     final HoodieTableSource tableSource3 = (HoodieTableSource) new HoodieTableFactory().createDynamicTableSource(sourceContext3);
     final Configuration conf3 = tableSource3.getConf();
@@ -328,7 +328,7 @@ public class TestHoodieTableFactory {
     assertThat(conf1.get(FlinkOptions.KEYGEN_CLASS_NAME), is("dummyKeyGenClass"));
 
     // definition with complex primary keys and partition paths
-    this.conf.setString(FlinkOptions.KEYGEN_CLASS_NAME, FlinkOptions.KEYGEN_CLASS_NAME.defaultValue());
+    this.conf.removeConfig(FlinkOptions.KEYGEN_CLASS_NAME);
     ResolvedSchema schema2 = SchemaBuilder.instance()
         .field("f0", DataTypes.INT().notNull())
         .field("f1", DataTypes.VARCHAR(20).notNull())
@@ -343,7 +343,7 @@ public class TestHoodieTableFactory {
     assertThat(conf2.get(FlinkOptions.KEYGEN_CLASS_NAME), is(ComplexAvroKeyGenerator.class.getName()));
 
     // definition with complex primary keys and empty partition paths
-    this.conf.setString(FlinkOptions.KEYGEN_CLASS_NAME, FlinkOptions.KEYGEN_CLASS_NAME.defaultValue());
+    this.conf.removeConfig(FlinkOptions.KEYGEN_CLASS_NAME);
     final MockContext sinkContext3 = MockContext.getInstance(this.conf, schema2, "");
     final HoodieTableSink tableSink3 = (HoodieTableSink) new HoodieTableFactory().createDynamicTableSink(sinkContext3);
     final Configuration conf3 = tableSink3.getConf();
@@ -419,7 +419,6 @@ public class TestHoodieTableFactory {
   @Test
   void testSetupTimestampBasedKeyGenForSink() {
     this.conf.setString(FlinkOptions.RECORD_KEY_FIELD, "dummyField");
-    this.conf.setString(FlinkOptions.KEYGEN_CLASS_NAME, "dummyKeyGenClass");
     // definition with simple primary key and partition path
     ResolvedSchema schema1 = SchemaBuilder.instance()
         .field("f0", DataTypes.INT().notNull())

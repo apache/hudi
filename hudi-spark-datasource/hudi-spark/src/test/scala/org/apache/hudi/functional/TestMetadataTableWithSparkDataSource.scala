@@ -49,17 +49,20 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
   def testReadability(): Unit = {
     val dataGen = new HoodieTestDataGenerator()
 
-    val opts: Map[String, String] = commonOpts ++ Map(
+    val metadataOpts: Map[String, String] = Map(
       HoodieMetadataConfig.ENABLE.key -> "true",
-      HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key -> "1"
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true"
     )
+
+    val combinedOpts: Map[String, String] = commonOpts ++ metadataOpts ++
+      Map(HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key -> "1")
 
     // Insert records
     val newRecords = dataGen.generateInserts("001", 100)
     val newRecordsDF = parseRecords(recordsToStrings(newRecords).asScala)
 
     newRecordsDF.write.format(hudi)
-      .options(opts)
+      .options(combinedOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
       .mode(SaveMode.Append)
       .save(basePath)
@@ -69,27 +72,34 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
     val updatedRecordsDF = parseRecords(recordsToStrings(updatedRecords).asScala)
 
     updatedRecordsDF.write.format(hudi)
-      .options(opts)
+      .options(combinedOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
       .mode(SaveMode.Append)
       .save(basePath)
 
-    val metadataDF = spark.read.format(hudi).load(s"$basePath/.hoodie/metadata")
+    // Files partition of MT
+    val filesPartitionDF = spark.read.format(hudi).load(s"$basePath/.hoodie/metadata/files")
 
     // Smoke test
-    metadataDF.show()
+    filesPartitionDF.show()
 
     // Query w/ 0 requested columns should be working fine
-    assertEquals(4, metadataDF.count())
+    assertEquals(4, filesPartitionDF.count())
 
     val expectedKeys = Seq("2015/03/16", "2015/03/17", "2016/03/15", "__all_partitions__")
-    val keys = metadataDF.select("key")
+    val keys = filesPartitionDF.select("key")
       .collect()
       .map(_.getString(0))
       .toSeq
       .sorted
 
     assertEquals(expectedKeys, keys)
+
+    // Column Stats Index partition of MT
+    val colStatsDF = spark.read.format(hudi).load(s"$basePath/.hoodie/metadata/column_stats")
+
+    // Smoke test
+    colStatsDF.show()
   }
 
   private def parseRecords(records: Seq[String]) = {

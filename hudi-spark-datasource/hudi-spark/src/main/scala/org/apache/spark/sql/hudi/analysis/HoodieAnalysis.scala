@@ -39,45 +39,69 @@ import org.apache.spark.sql.{AnalysisException, SparkSession}
 
 import java.util
 import scala.collection.JavaConverters._
+import scala.collection.mutable.ListBuffer
 
 object HoodieAnalysis {
-  def customResolutionRules(): Seq[SparkSession => Rule[LogicalPlan]] =
-    Seq(
+  type RuleBuilder = SparkSession => Rule[LogicalPlan]
+
+  def customResolutionRules: Seq[RuleBuilder] = {
+    val rules: ListBuffer[RuleBuilder] = ListBuffer(
+      // Default rules
       session => HoodieResolveReferences(session),
       session => HoodieAnalysis(session)
-    ) ++ extraResolutionRules()
+    )
 
-  def customPostHocResolutionRules(): Seq[SparkSession => Rule[LogicalPlan]] =
-    Seq(
-      session => HoodiePostAnalysisRule(session)
-    ) ++ extraPostHocResolutionRules()
-
-  def extraResolutionRules(): Seq[SparkSession => Rule[LogicalPlan]] = {
     if (HoodieSparkUtils.gteqSpark3_2) {
+      val dataSourceV2ToV1FallbackClass = "org.apache.spark.sql.hudi.analysis.HoodieDataSourceV2ToV1Fallback"
+      val dataSourceV2ToV1Fallback: RuleBuilder =
+        session => ReflectionUtils.loadClass(dataSourceV2ToV1FallbackClass, session).asInstanceOf[Rule[LogicalPlan]]
+
       val spark3AnalysisClass = "org.apache.spark.sql.hudi.analysis.HoodieSpark3Analysis"
-      val spark3Analysis: SparkSession => Rule[LogicalPlan] =
+      val spark3Analysis: RuleBuilder =
         session => ReflectionUtils.loadClass(spark3AnalysisClass, session).asInstanceOf[Rule[LogicalPlan]]
 
-      val spark3ResolveReferences = "org.apache.spark.sql.hudi.analysis.HoodieSpark3ResolveReferences"
-      val spark3References: SparkSession => Rule[LogicalPlan] =
-        session => ReflectionUtils.loadClass(spark3ResolveReferences, session).asInstanceOf[Rule[LogicalPlan]]
+      val spark3ResolveReferencesClass = "org.apache.spark.sql.hudi.analysis.HoodieSpark3ResolveReferences"
+      val spark3ResolveReferences: RuleBuilder =
+        session => ReflectionUtils.loadClass(spark3ResolveReferencesClass, session).asInstanceOf[Rule[LogicalPlan]]
 
-      Seq(spark3Analysis, spark3References)
-    } else {
-      Seq.empty
+      val spark32ResolveAlterTableCommandsClass = "org.apache.spark.sql.hudi.ResolveHudiAlterTableCommandSpark32"
+      val spark32ResolveAlterTableCommands: RuleBuilder =
+        session => ReflectionUtils.loadClass(spark32ResolveAlterTableCommandsClass, session).asInstanceOf[Rule[LogicalPlan]]
+
+      // NOTE: PLEASE READ CAREFULLY
+      //
+      // It's critical for this rules to follow in this order, so that DataSource V2 to V1 fallback
+      // is performed prior to other rules being evaluated
+      rules ++= Seq(dataSourceV2ToV1Fallback, spark3Analysis, spark3ResolveReferences, spark32ResolveAlterTableCommands)
+
+    } else if (HoodieSparkUtils.gteqSpark3_1) {
+      val spark31ResolveAlterTableCommandsClass = "org.apache.spark.sql.hudi.ResolveHudiAlterTableCommand312"
+      val spark31ResolveAlterTableCommands: RuleBuilder =
+        session => ReflectionUtils.loadClass(spark31ResolveAlterTableCommandsClass, session).asInstanceOf[Rule[LogicalPlan]]
+
+      rules ++= Seq(spark31ResolveAlterTableCommands)
     }
+
+    rules
   }
 
-  def extraPostHocResolutionRules(): Seq[SparkSession => Rule[LogicalPlan]] =
+  def customPostHocResolutionRules: Seq[RuleBuilder] = {
+    val rules: ListBuffer[RuleBuilder] = ListBuffer(
+      // Default rules
+      session => HoodiePostAnalysisRule(session)
+    )
+
     if (HoodieSparkUtils.gteqSpark3_2) {
       val spark3PostHocResolutionClass = "org.apache.spark.sql.hudi.analysis.HoodieSpark3PostAnalysisRule"
-      val spark3PostHocResolution: SparkSession => Rule[LogicalPlan] =
+      val spark3PostHocResolution: RuleBuilder =
         session => ReflectionUtils.loadClass(spark3PostHocResolutionClass, session).asInstanceOf[Rule[LogicalPlan]]
 
-      Seq(spark3PostHocResolution)
-    } else {
-      Seq.empty
+      rules += spark3PostHocResolution
     }
+
+    rules
+  }
+
 }
 
 /**
@@ -147,6 +171,28 @@ case class HoodieAnalysis(sparkSession: SparkSession) extends Rule[LogicalPlan]
         } else {
           c
         }
+
+      // Convert to CreateIndexCommand
+      case CreateIndex(table, indexName, indexType, ignoreIfExists, columns, properties, output)
+        if table.resolved && sparkAdapter.isHoodieTable(table, sparkSession) =>
+        CreateIndexCommand(
+          getTableIdentifier(table), indexName, indexType, ignoreIfExists, columns, properties, output)
+
+      // Convert to DropIndexCommand
+      case DropIndex(table, indexName, ignoreIfNotExists, output)
+        if table.resolved && sparkAdapter.isHoodieTable(table, sparkSession) =>
+        DropIndexCommand(getTableIdentifier(table), indexName, ignoreIfNotExists, output)
+
+      // Convert to ShowIndexesCommand
+      case ShowIndexes(table, output)
+        if table.resolved && sparkAdapter.isHoodieTable(table, sparkSession) =>
+        ShowIndexesCommand(getTableIdentifier(table), output)
+
+      // Covert to RefreshCommand
+      case RefreshIndex(table, indexName, output)
+        if table.resolved && sparkAdapter.isHoodieTable(table, sparkSession) =>
+        RefreshIndexCommand(getTableIdentifier(table), indexName, output)
+
       case _ => plan
     }
   }
@@ -526,7 +572,7 @@ case class HoodiePostAnalysisRule(sparkSession: SparkSession) extends Rule[Logic
       // Rewrite the AlterTableRenameCommand to AlterHoodieTableRenameCommand
       case AlterTableRenameCommand(oldName, newName, isView)
         if !isView && sparkAdapter.isHoodieTable(oldName, sparkSession) =>
-          new AlterHoodieTableRenameCommand(oldName, newName, isView)
+          AlterHoodieTableRenameCommand(oldName, newName, isView)
       // Rewrite the AlterTableChangeColumnCommand to AlterHoodieTableChangeColumnCommand
       case AlterTableChangeColumnCommand(tableName, columnName, newColumn)
         if sparkAdapter.isHoodieTable(tableName, sparkSession) =>
@@ -539,7 +585,7 @@ case class HoodiePostAnalysisRule(sparkSession: SparkSession) extends Rule[Logic
       // Rewrite TruncateTableCommand to TruncateHoodieTableCommand
       case TruncateTableCommand(tableName, partitionSpec)
         if sparkAdapter.isHoodieTable(tableName, sparkSession) =>
-        new TruncateHoodieTableCommand(tableName, partitionSpec)
+        TruncateHoodieTableCommand(tableName, partitionSpec)
       case _ => plan
     }
   }

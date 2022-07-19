@@ -43,8 +43,8 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.utilities.checkpointing.InitialCheckPointProvider;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerMetrics;
-import org.apache.hudi.utilities.exception.HoodieSourcePostProcessException;
 import org.apache.hudi.utilities.exception.HoodieSchemaPostProcessException;
+import org.apache.hudi.utilities.exception.HoodieSourcePostProcessException;
 import org.apache.hudi.utilities.schema.ChainedSchemaPostProcessor;
 import org.apache.hudi.utilities.schema.DelegatingSchemaProvider;
 import org.apache.hudi.utilities.schema.RowBasedSchemaProvider;
@@ -104,21 +104,26 @@ import java.util.Properties;
  * Bunch of helper methods.
  */
 public class UtilHelpers {
+
+  public static final String EXECUTE = "execute";
+  public static final String SCHEDULE = "schedule";
+  public static final String SCHEDULE_AND_EXECUTE = "scheduleandexecute";
+
   private static final Logger LOG = LogManager.getLogger(UtilHelpers.class);
 
   public static Source createSource(String sourceClass, TypedProperties cfg, JavaSparkContext jssc,
-                                    SparkSession sparkSession, SchemaProvider schemaProvider,
-                                    HoodieDeltaStreamerMetrics metrics) throws IOException {
+      SparkSession sparkSession, SchemaProvider schemaProvider,
+      HoodieDeltaStreamerMetrics metrics) throws IOException {
     try {
       try {
         return (Source) ReflectionUtils.loadClass(sourceClass,
-            new Class<?>[]{TypedProperties.class, JavaSparkContext.class,
+            new Class<?>[] {TypedProperties.class, JavaSparkContext.class,
                 SparkSession.class, SchemaProvider.class,
                 HoodieDeltaStreamerMetrics.class},
             cfg, jssc, sparkSession, schemaProvider, metrics);
       } catch (HoodieException e) {
         return (Source) ReflectionUtils.loadClass(sourceClass,
-            new Class<?>[]{TypedProperties.class, JavaSparkContext.class,
+            new Class<?>[] {TypedProperties.class, JavaSparkContext.class,
                 SparkSession.class, SchemaProvider.class},
             cfg, jssc, sparkSession, schemaProvider);
       }
@@ -238,7 +243,7 @@ public class UtilHelpers {
   /**
    * Parse Schema from file.
    *
-   * @param fs         File System
+   * @param fs File System
    * @param schemaFile Schema File
    */
   public static String parseSchema(FileSystem fs, String schemaFile) throws Exception {
@@ -267,12 +272,14 @@ public class UtilHelpers {
       sparkConf.set("spark.eventLog.overwrite", "true");
       sparkConf.set("spark.eventLog.enabled", "true");
     }
+    sparkConf.set("spark.ui.port", "8090");
     sparkConf.setIfMissing("spark.driver.maxResultSize", "2g");
     sparkConf.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer");
     sparkConf.set("spark.hadoop.mapred.output.compress", "true");
     sparkConf.set("spark.hadoop.mapred.output.compression.codec", "true");
     sparkConf.set("spark.hadoop.mapred.output.compression.codec", "org.apache.hadoop.io.compress.GzipCodec");
     sparkConf.set("spark.hadoop.mapred.output.compression.type", "BLOCK");
+    sparkConf.set("spark.driver.allowMultipleContexts", "true");
 
     additionalConfigs.forEach(sparkConf::set);
     return SparkRDDWriteClient.registerClasses(sparkConf);
@@ -300,13 +307,13 @@ public class UtilHelpers {
   /**
    * Build Hoodie write client.
    *
-   * @param jsc         Java Spark Context
-   * @param basePath    Base Path
-   * @param schemaStr   Schema
+   * @param jsc Java Spark Context
+   * @param basePath Base Path
+   * @param schemaStr Schema
    * @param parallelism Parallelism
    */
   public static SparkRDDWriteClient<HoodieRecordPayload> createHoodieClient(JavaSparkContext jsc, String basePath, String schemaStr,
-                                                                            int parallelism, Option<String> compactionStrategyClass, TypedProperties properties) {
+      int parallelism, Option<String> compactionStrategyClass, TypedProperties properties) {
     HoodieCompactionConfig compactionConfig = compactionStrategyClass
         .map(strategy -> HoodieCompactionConfig.newBuilder().withInlineCompaction(false)
             .withCompactionStrategy(ReflectionUtils.loadClass(strategy)).build())
@@ -396,7 +403,7 @@ public class UtilHelpers {
       statement.setQueryTimeout(Integer.parseInt(options.get(JDBCOptions.JDBC_QUERY_TIMEOUT())));
       statement.executeQuery();
     } catch (SQLException e) {
-      return false;
+      throw new HoodieException(e);
     }
     return true;
   }
@@ -466,8 +473,7 @@ public class UtilHelpers {
         Option.ofNullable(createSchemaPostProcessor(schemaPostProcessorClass, cfg, jssc)));
   }
 
-  public static SchemaProvider createRowBasedSchemaProvider(StructType structType,
-                                                            TypedProperties cfg, JavaSparkContext jssc) {
+  public static SchemaProvider createRowBasedSchemaProvider(StructType structType, TypedProperties cfg, JavaSparkContext jssc) {
     SchemaProvider rowSchemaProvider = new RowBasedSchemaProvider(structType);
     return wrapSchemaProviderWithPostProcessor(rowSchemaProvider, cfg, jssc, null);
   }
@@ -476,13 +482,13 @@ public class UtilHelpers {
    * Create latest schema provider for Target schema.
    *
    * @param structType spark data type of incoming batch.
-   * @param jssc       instance of {@link JavaSparkContext}.
-   * @param fs         instance of {@link FileSystem}.
-   * @param basePath   base path of the table.
+   * @param jssc instance of {@link JavaSparkContext}.
+   * @param fs instance of {@link FileSystem}.
+   * @param basePath base path of the table.
    * @return the schema provider where target schema refers to latest schema(either incoming schema or table schema).
    */
   public static SchemaProvider createLatestSchemaProvider(StructType structType,
-                                                          JavaSparkContext jssc, FileSystem fs, String basePath) {
+      JavaSparkContext jssc, FileSystem fs, String basePath) {
     SchemaProvider rowSchemaProvider = new RowBasedSchemaProvider(structType);
     Schema writeSchema = rowSchemaProvider.getTargetSchema();
     Schema latestTableSchema = writeSchema;
@@ -540,4 +546,12 @@ public class UtilHelpers {
     return ret;
   }
 
+  public static String getSchemaFromLatestInstant(HoodieTableMetaClient metaClient) throws Exception {
+    TableSchemaResolver schemaResolver = new TableSchemaResolver(metaClient);
+    if (metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().countInstants() == 0) {
+      throw new HoodieException("Cannot run clustering without any completed commits");
+    }
+    Schema schema = schemaResolver.getTableAvroSchema(false);
+    return schema.toString();
+  }
 }

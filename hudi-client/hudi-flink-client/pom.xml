@@ -19,15 +19,19 @@
   <parent>
     <artifactId>hudi-client</artifactId>
     <groupId>org.apache.hudi</groupId>
-    <version>0.11.0-SNAPSHOT</version>
+    <version>0.12.0-SNAPSHOT</version>
   </parent>
   <modelVersion>4.0.0</modelVersion>
 
   <artifactId>hudi-flink-client</artifactId>
-  <version>0.11.0-SNAPSHOT</version>
+  <version>0.12.0-SNAPSHOT</version>
 
   <name>hudi-flink-client</name>
   <packaging>jar</packaging>
+
+  <properties>
+    <parquet.version>${flink.format.parquet.version}</parquet.version>
+  </properties>
 
   <dependencies>
     <!-- Hudi  -->
@@ -40,15 +44,15 @@
     <!-- Flink -->
     <dependency>
       <groupId>org.apache.flink</groupId>
-      <artifactId>flink-streaming-java_${scala.binary.version}</artifactId>
+      <artifactId>${flink.streaming.java.artifactId}</artifactId>
     </dependency>
     <dependency>
       <groupId>org.apache.flink</groupId>
-      <artifactId>flink-clients_${scala.binary.version}</artifactId>
+      <artifactId>${flink.clients.artifactId}</artifactId>
     </dependency>
     <dependency>
       <groupId>org.apache.flink</groupId>
-      <artifactId>flink-hadoop-compatibility_${scala.binary.version}</artifactId>
+      <artifactId>${flink.hadoop.compatibility.artifactId}</artifactId>
       <version>${flink.version}</version>
       <scope>provided</scope>
     </dependency>
@@ -66,7 +70,7 @@
     </dependency>
     <dependency>
       <groupId>org.apache.flink</groupId>
-      <artifactId>flink-parquet_${scala.binary.version}</artifactId>
+      <artifactId>${flink.parquet.artifactId}</artifactId>
       <version>${flink.version}</version>
       <scope>provided</scope>
       <exclusions>
@@ -87,6 +91,13 @@
     <dependency>
       <groupId>org.apache.parquet</groupId>
       <artifactId>parquet-avro</artifactId>
+      <version>${parquet.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>org.apache.parquet</groupId>
+      <artifactId>parquet-column</artifactId>
+      <version>${parquet.version}</version>
     </dependency>
 
     <!-- Hoodie - Test -->
@@ -153,7 +164,7 @@
     <!-- Flink - Tests -->
     <dependency>
       <groupId>org.apache.flink</groupId>
-      <artifactId>flink-test-utils_${scala.binary.version}</artifactId>
+      <artifactId>${flink.test.utils.artifactId}</artifactId>
       <version>${flink.version}</version>
       <scope>test</scope>
     </dependency>
@@ -166,7 +177,7 @@
     </dependency>
     <dependency>
       <groupId>org.apache.flink</groupId>
-      <artifactId>flink-streaming-java_${scala.binary.version}</artifactId>
+      <artifactId>${flink.streaming.java.artifactId}</artifactId>
       <version>${flink.version}</version>
       <scope>test</scope>
       <classifier>tests</classifier>

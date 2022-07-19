@@ -58,7 +58,7 @@ public class TestFileIndex {
     conf.setBoolean(FlinkOptions.METADATA_ENABLED, true);
     conf.setBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING, hiveStylePartitioning);
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
-    FileIndex fileIndex = FileIndex.instance(new Path(tempFile.getAbsolutePath()), conf);
+    FileIndex fileIndex = FileIndex.instance(new Path(tempFile.getAbsolutePath()), conf, TestConfigurations.ROW_TYPE);
     List<String> partitionKeys = Collections.singletonList("partition");
     List<Map<String, String>> partitions = fileIndex.getPartitions(partitionKeys, "default", hiveStylePartitioning);
     assertTrue(partitions.stream().allMatch(m -> m.size() == 1));
@@ -79,7 +79,7 @@ public class TestFileIndex {
     conf.setString(FlinkOptions.KEYGEN_CLASS_NAME, NonpartitionedAvroKeyGenerator.class.getName());
     conf.setBoolean(FlinkOptions.METADATA_ENABLED, true);
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
-    FileIndex fileIndex = FileIndex.instance(new Path(tempFile.getAbsolutePath()), conf);
+    FileIndex fileIndex = FileIndex.instance(new Path(tempFile.getAbsolutePath()), conf, TestConfigurations.ROW_TYPE);
     List<String> partitionKeys = Collections.singletonList("");
     List<Map<String, String>> partitions = fileIndex.getPartitions(partitionKeys, "default", false);
     assertThat(partitions.size(), is(0));
@@ -94,7 +94,7 @@ public class TestFileIndex {
   void testFileListingEmptyTable(boolean enableMetadata) {
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
     conf.setBoolean(FlinkOptions.METADATA_ENABLED, enableMetadata);
-    FileIndex fileIndex = FileIndex.instance(new Path(tempFile.getAbsolutePath()), conf);
+    FileIndex fileIndex = FileIndex.instance(new Path(tempFile.getAbsolutePath()), conf, TestConfigurations.ROW_TYPE);
     List<String> partitionKeys = Collections.singletonList("partition");
     List<Map<String, String>> partitions = fileIndex.getPartitions(partitionKeys, "default", false);
     assertThat(partitions.size(), is(0));

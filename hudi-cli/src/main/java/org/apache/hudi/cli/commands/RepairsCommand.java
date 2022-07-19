@@ -24,6 +24,7 @@ import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.HoodieTableHeaderFields;
 import org.apache.hudi.cli.utils.InputStreamConsumer;
 import org.apache.hudi.cli.utils.SparkUtil;
+import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -31,11 +32,13 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CleanerUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.avro.AvroRuntimeException;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.util.StringUtils;
+
 import org.apache.log4j.Logger;
 import org.apache.spark.launcher.SparkLauncher;
 import org.apache.spark.util.Utils;
@@ -133,7 +136,8 @@ public class RepairsCommand implements CommandMarker {
         row[1] = "No";
         if (!dryRun) {
           HoodiePartitionMetadata partitionMetadata =
-              new HoodiePartitionMetadata(HoodieCLI.fs, latestCommit, basePath, partitionPath);
+              new HoodiePartitionMetadata(HoodieCLI.fs, latestCommit, basePath, partitionPath,
+                  client.getTableConfig().getPartitionMetafileFormat());
           partitionMetadata.trySave(0);
           row[2] = "Repaired";
         }
@@ -198,5 +202,65 @@ public class RepairsCommand implements CommandMarker {
         }
       }
     });
+  }
+
+  @CliCommand(value = "repair migrate-partition-meta", help = "Migrate all partition meta file currently stored in text format "
+      + "to be stored in base file format. See HoodieTableConfig#PARTITION_METAFILE_USE_DATA_FORMAT.")
+  public String migratePartitionMeta(
+      @CliOption(key = {"dryrun"}, help = "dry run without modifying anything.", unspecifiedDefaultValue = "true") final boolean dryRun)
+      throws IOException {
+
+    HoodieLocalEngineContext engineContext = new HoodieLocalEngineContext(HoodieCLI.conf);
+    HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
+    List<String> partitionPaths = FSUtils.getAllPartitionPaths(engineContext, client.getBasePath(), false, false);
+    Path basePath = new Path(client.getBasePath());
+
+    String[][] rows = new String[partitionPaths.size()][];
+    int ind = 0;
+    for (String partitionPath : partitionPaths) {
+      Path partition = FSUtils.getPartitionPath(client.getBasePath(), partitionPath);
+      Option<Path> textFormatFile = HoodiePartitionMetadata.textFormatMetaPathIfExists(HoodieCLI.fs, partition);
+      Option<Path> baseFormatFile = HoodiePartitionMetadata.baseFormatMetaPathIfExists(HoodieCLI.fs, partition);
+      String latestCommit = client.getActiveTimeline().getCommitTimeline().lastInstant().get().getTimestamp();
+
+      String[] row = new String[] {
+          partitionPath,
+          String.valueOf(textFormatFile.isPresent()),
+          String.valueOf(baseFormatFile.isPresent()),
+          textFormatFile.isPresent() ? "MIGRATE" : "NONE"
+      };
+
+      if (!dryRun) {
+        if (!baseFormatFile.isPresent()) {
+          HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(HoodieCLI.fs, latestCommit, basePath, partition,
+              Option.of(client.getTableConfig().getBaseFileFormat()));
+          partitionMetadata.trySave(0);
+        }
+
+        // delete it, in case we failed midway last time.
+        textFormatFile.ifPresent(path -> {
+          try {
+            HoodieCLI.fs.delete(path, false);
+          } catch (IOException e) {
+            throw new HoodieIOException(e.getMessage(), e);
+          }
+        });
+
+        row[3] = "MIGRATED";
+      }
+
+      rows[ind++] = row;
+    }
+
+    Properties props = new Properties();
+    props.setProperty(HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT.key(), "true");
+    HoodieTableConfig.update(HoodieCLI.fs, new Path(client.getMetaPath()), props);
+
+    return HoodiePrintHelper.print(new String[] {
+        HoodieTableHeaderFields.HEADER_PARTITION_PATH,
+        HoodieTableHeaderFields.HEADER_TEXT_METAFILE_PRESENT,
+        HoodieTableHeaderFields.HEADER_BASE_METAFILE_PRESENT,
+        HoodieTableHeaderFields.HEADER_ACTION
+    }, rows);
   }
 }

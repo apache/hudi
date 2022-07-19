@@ -32,7 +32,6 @@ exec "${SPARK_HOME}"/bin/spark-submit \
 --conf spark.kryoserializer.buffer.max=128m \
 --conf spark.yarn.queue=root.default \
 --conf spark.yarn.submit.waitAppCompletion=false \
---packages org.apache.spark:spark-avro_2.11:2.4.4 \
 --jars ${EXAMPLES_JARS} \
 --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer \
 "${JAR_FILE}" \

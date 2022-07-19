@@ -50,6 +50,12 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings;
 import static org.apache.hudi.common.testutils.Transformations.randomSelectAsHoodieKeys;
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_PASS;
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_ENABLED;
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_URL;
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_USER;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
 
 /**
  * Sample program that writes & reads hoodie tables via the Spark datasource.
@@ -256,12 +262,12 @@ public class HoodieJavaApp {
   private DataFrameWriter<Row> updateHiveSyncConfig(DataFrameWriter<Row> writer) {
     if (enableHiveSync) {
       LOG.info("Enabling Hive sync to " + hiveJdbcUrl);
-      writer = writer.option(HiveSyncConfig.META_SYNC_TABLE_NAME.key(), hiveTable)
-          .option(HiveSyncConfig.META_SYNC_DATABASE_NAME.key(), hiveDB)
-          .option(HiveSyncConfig.HIVE_URL.key(), hiveJdbcUrl)
-          .option(HiveSyncConfig.HIVE_USER.key(), hiveUser)
-          .option(HiveSyncConfig.HIVE_PASS.key(), hivePass)
-          .option(HiveSyncConfig.HIVE_SYNC_ENABLED.key(), "true");
+      writer = writer.option(META_SYNC_TABLE_NAME.key(), hiveTable)
+          .option(META_SYNC_DATABASE_NAME.key(), hiveDB)
+          .option(HIVE_URL.key(), hiveJdbcUrl)
+          .option(HIVE_USER.key(), hiveUser)
+          .option(HIVE_PASS.key(), hivePass)
+          .option(HIVE_SYNC_ENABLED.key(), "true");
       if (nonPartitionedTable) {
         writer = writer
             .option(HiveSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key(),

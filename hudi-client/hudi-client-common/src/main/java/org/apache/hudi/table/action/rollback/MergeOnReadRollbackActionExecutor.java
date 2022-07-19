@@ -67,7 +67,6 @@ public class MergeOnReadRollbackActionExecutor<T extends HoodieRecordPayload, I,
 
     LOG.info("Rolling back instant " + instantToRollback);
 
-    HoodieInstant resolvedInstant = instantToRollback;
     // Atomically un-publish all non-inflight commits
     if (instantToRollback.isCompleted()) {
       LOG.info("Un-publishing instant " + instantToRollback + ", deleteInstants=" + deleteInstants);
@@ -93,8 +92,6 @@ public class MergeOnReadRollbackActionExecutor<T extends HoodieRecordPayload, I,
 
     dropBootstrapIndexIfNeeded(resolvedInstant);
 
-    // Delete Inflight instants if enabled
-    deleteInflightAndRequestedInstant(deleteInstants, table.getActiveTimeline(), resolvedInstant);
     LOG.info("Time(in ms) taken to finish rollback " + rollbackTimer.endTimer());
     return allRollbackStats;
   }

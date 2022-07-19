@@ -21,9 +21,11 @@ package org.apache.hudi.sink.meta;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.util.StreamerUtil;
 
+import org.apache.flink.configuration.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
@@ -70,8 +72,8 @@ public class CkpMetadata implements Serializable {
   private List<CkpMessage> messages;
   private List<String> instantCache;
 
-  private CkpMetadata(String basePath) {
-    this(FSUtils.getFs(basePath, StreamerUtil.getHadoopConf()), basePath);
+  private CkpMetadata(Configuration config) {
+    this(FSUtils.getFs(config.getString(FlinkOptions.PATH), HadoopConfigurations.getHadoopConf(config)), config.getString(FlinkOptions.PATH));
   }
 
   private CkpMetadata(FileSystem fs, String basePath) {
@@ -95,8 +97,6 @@ public class CkpMetadata implements Serializable {
   public void bootstrap(HoodieTableMetaClient metaClient) throws IOException {
     fs.delete(path, true);
     fs.mkdirs(path);
-    metaClient.getActiveTimeline().getCommitsTimeline().filterPendingExcludingCompaction()
-        .lastInstant().ifPresent(instant -> startInstant(instant.getTimestamp()));
   }
 
   public void startInstant(String instant) {
@@ -104,7 +104,7 @@ public class CkpMetadata implements Serializable {
     try {
       fs.createNewFile(path);
     } catch (IOException e) {
-      throw new HoodieException("Exception while adding checkpoint start metadata for instant: " + instant);
+      throw new HoodieException("Exception while adding checkpoint start metadata for instant: " + instant, e);
     }
     // cleaning
     clean(instant);
@@ -142,7 +142,7 @@ public class CkpMetadata implements Serializable {
     try {
       fs.createNewFile(path);
     } catch (IOException e) {
-      throw new HoodieException("Exception while adding checkpoint commit metadata for instant: " + instant);
+      throw new HoodieException("Exception while adding checkpoint commit metadata for instant: " + instant, e);
     }
   }
 
@@ -166,7 +166,7 @@ public class CkpMetadata implements Serializable {
     try {
       this.messages = scanCkpMetadata(this.path);
     } catch (IOException e) {
-      throw new HoodieException("Exception while scanning the checkpoint meta files under path: " + this.path);
+      throw new HoodieException("Exception while scanning the checkpoint meta files under path: " + this.path, e);
     }
   }
 
@@ -196,8 +196,8 @@ public class CkpMetadata implements Serializable {
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
-  public static CkpMetadata getInstance(String basePath) {
-    return new CkpMetadata(basePath);
+  public static CkpMetadata getInstance(Configuration config) {
+    return new CkpMetadata(config);
   }
 
   public static CkpMetadata getInstance(FileSystem fs, String basePath) {

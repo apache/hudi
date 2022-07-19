@@ -56,7 +56,7 @@ public class UpgradeOrDowngradeCommand implements CommandMarker {
     if (exitCode != 0) {
       return String.format("Failed: Could not Upgrade/Downgrade Hoodie table to \"%s\".", toVersion);
     }
-    return String.format("Hoodie table upgraded/downgraded to ", toVersion);
+    return String.format("Hoodie table upgraded/downgraded to %s", toVersion);
   }
 
   @CliCommand(value = "downgrade table", help = "Downgrades a table")
@@ -78,6 +78,6 @@ public class UpgradeOrDowngradeCommand implements CommandMarker {
     if (exitCode != 0) {
       return String.format("Failed: Could not Upgrade/Downgrade Hoodie table to \"%s\".", toVersion);
     }
-    return String.format("Hoodie table upgraded/downgraded to ", toVersion);
+    return String.format("Hoodie table upgraded/downgraded to %s", toVersion);
   }
 }

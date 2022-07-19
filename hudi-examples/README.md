@@ -42,4 +42,4 @@ To run the demo:
 
       6.1 The configuration files we provided is just the simplest demo, you can change it according to your specific needs.
 
-      6.2 You could also use Intellij to run the example directly by configuring parameters as "Program arguments"
+      6.2 You could also use IntelliJ IDEA to run the example directly by configuring parameters as "Program arguments"

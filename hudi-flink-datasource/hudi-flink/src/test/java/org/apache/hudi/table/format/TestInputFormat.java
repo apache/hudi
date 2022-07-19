@@ -18,10 +18,13 @@
 
 package org.apache.hudi.table.format;
 
+import org.apache.hudi.client.HoodieFlinkWriteClient;
+import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.table.HoodieTableSource;
 import org.apache.hudi.table.format.cow.CopyOnWriteInputFormat;
 import org.apache.hudi.table.format.mor.MergeOnReadInputFormat;
@@ -400,7 +403,7 @@ public class TestInputFormat {
       TestData.writeData(dataset, conf);
     }
 
-    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(tempFile.getAbsolutePath());
+    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(tempFile.getAbsolutePath(), HadoopConfigurations.getHadoopConf(conf));
     List<String> commits = metaClient.getCommitsTimeline().filterCompletedInstants().getInstants()
         .map(HoodieInstant::getTimestamp).collect(Collectors.toList());
 
@@ -446,6 +449,104 @@ public class TestInputFormat {
 
     List<RowData> actual4 = readData(inputFormat4);
     final List<RowData> expected4 = TestData.dataSetInsert(3, 4);
+    TestData.assertRowDataEquals(actual4, expected4);
+
+    // start and end commit: start commit out of range
+    conf.setString(FlinkOptions.READ_START_COMMIT, "000");
+    conf.setString(FlinkOptions.READ_END_COMMIT, commits.get(1));
+    this.tableSource = getTableSource(conf);
+    InputFormat<RowData, ?> inputFormat5 = this.tableSource.getInputFormat();
+    assertThat(inputFormat4, instanceOf(MergeOnReadInputFormat.class));
+
+    List<RowData> actual5 = readData(inputFormat5);
+    final List<RowData> expected5 = TestData.dataSetInsert(1, 2, 3, 4);
+    TestData.assertRowDataEquals(actual5, expected5);
+
+    // start and end commit: both are out of range
+    conf.setString(FlinkOptions.READ_START_COMMIT, "001");
+    conf.setString(FlinkOptions.READ_END_COMMIT, "002");
+    this.tableSource = getTableSource(conf);
+    InputFormat<RowData, ?> inputFormat6 = this.tableSource.getInputFormat();
+    assertThat(inputFormat6, instanceOf(MergeOnReadInputFormat.class));
+
+    List<RowData> actual6 = readData(inputFormat6);
+    TestData.assertRowDataEquals(actual6, Collections.emptyList());
+  }
+
+  @Test
+  void testReadArchivedCommitsIncrementally() throws Exception {
+    Map<String, String> options = new HashMap<>();
+    options.put(FlinkOptions.QUERY_TYPE.key(), FlinkOptions.QUERY_TYPE_INCREMENTAL);
+    options.put(FlinkOptions.ARCHIVE_MIN_COMMITS.key(), "3");
+    options.put(FlinkOptions.ARCHIVE_MAX_COMMITS.key(), "4");
+    options.put(FlinkOptions.CLEAN_RETAIN_COMMITS.key(), "2");
+    options.put("hoodie.commits.archival.batch", "1");
+    beforeEach(HoodieTableType.COPY_ON_WRITE, options);
+
+    // write 10 batches of data set
+    for (int i = 0; i < 20; i += 2) {
+      List<RowData> dataset = TestData.dataSetInsert(i + 1, i + 2);
+      TestData.writeData(dataset, conf);
+    }
+    // cleaning
+    HoodieFlinkWriteClient<?> writeClient = new HoodieFlinkWriteClient<>(
+        HoodieFlinkEngineContext.DEFAULT, StreamerUtil.getHoodieClientConfig(conf));
+    writeClient.clean();
+
+    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(tempFile.getAbsolutePath(), HadoopConfigurations.getHadoopConf(conf));
+    List<String> commits = metaClient.getCommitsTimeline().filterCompletedInstants().getInstants()
+        .map(HoodieInstant::getTimestamp).collect(Collectors.toList());
+
+    assertThat(commits.size(), is(4));
+
+    List<String> archivedCommits = metaClient.getArchivedTimeline().getCommitsTimeline().filterCompletedInstants()
+        .getInstants().map(HoodieInstant::getTimestamp).collect(Collectors.toList());
+
+    assertThat(archivedCommits.size(), is(6));
+
+    // start and end commit: both are archived and cleaned
+    conf.setString(FlinkOptions.READ_START_COMMIT, archivedCommits.get(0));
+    conf.setString(FlinkOptions.READ_END_COMMIT, archivedCommits.get(1));
+    this.tableSource = getTableSource(conf);
+    InputFormat<RowData, ?> inputFormat1 = this.tableSource.getInputFormat();
+    assertThat(inputFormat1, instanceOf(MergeOnReadInputFormat.class));
+
+    List<RowData> actual1 = readData(inputFormat1);
+    final List<RowData> expected1 = TestData.dataSetInsert(1, 2, 3, 4);
+    TestData.assertRowDataEquals(actual1, expected1);
+
+    // only the start commit: is archived and cleaned
+    conf.setString(FlinkOptions.READ_START_COMMIT, archivedCommits.get(1));
+    conf.removeConfig(FlinkOptions.READ_END_COMMIT);
+    this.tableSource = getTableSource(conf);
+    InputFormat<RowData, ?> inputFormat2 = this.tableSource.getInputFormat();
+    assertThat(inputFormat2, instanceOf(MergeOnReadInputFormat.class));
+
+    List<RowData> actual2 = readData(inputFormat2);
+    final List<RowData> expected2 = TestData.dataSetInsert(3, 4, 5, 6, 7, 8, 9, 10,
+        11, 12, 13, 14, 15, 16, 17, 18, 19, 20);
+    TestData.assertRowDataEquals(actual2, expected2);
+
+    // only the end commit: is archived and cleaned
+    conf.removeConfig(FlinkOptions.READ_START_COMMIT);
+    conf.setString(FlinkOptions.READ_END_COMMIT, archivedCommits.get(1));
+    this.tableSource = getTableSource(conf);
+    InputFormat<RowData, ?> inputFormat3 = this.tableSource.getInputFormat();
+    assertThat(inputFormat3, instanceOf(MergeOnReadInputFormat.class));
+
+    List<RowData> actual3 = readData(inputFormat3);
+    final List<RowData> expected3 = TestData.dataSetInsert(3, 4);
+    TestData.assertRowDataEquals(actual3, expected3);
+
+    // start and end commit: start is archived and cleaned, end is active
+    conf.setString(FlinkOptions.READ_START_COMMIT, archivedCommits.get(1));
+    conf.setString(FlinkOptions.READ_END_COMMIT, commits.get(0));
+    this.tableSource = getTableSource(conf);
+    InputFormat<RowData, ?> inputFormat4 = this.tableSource.getInputFormat();
+    assertThat(inputFormat4, instanceOf(MergeOnReadInputFormat.class));
+
+    List<RowData> actual4 = readData(inputFormat4);
+    final List<RowData> expected4 = TestData.dataSetInsert(3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14);
     TestData.assertRowDataEquals(actual4, expected4);
   }
 

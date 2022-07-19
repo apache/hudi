@@ -57,9 +57,9 @@ public class BulkInsertWriterHelper {
   protected final HoodieTable hoodieTable;
   protected final HoodieWriteConfig writeConfig;
   protected final RowType rowType;
-  private final Boolean arePartitionRecordsSorted;
+  protected final Boolean isInputSorted;
   private final List<HoodieInternalWriteStatus> writeStatusList = new ArrayList<>();
-  private HoodieRowDataCreateHandle handle;
+  protected HoodieRowDataCreateHandle handle;
   private String lastKnownPartitionPath = null;
   private final String fileIdPrefix;
   private int numFilesWritten = 0;
@@ -75,7 +75,7 @@ public class BulkInsertWriterHelper {
     this.taskId = taskId;
     this.taskEpochId = taskEpochId;
     this.rowType = addMetadataFields(rowType, writeConfig.allowOperationMetadataField()); // patch up with metadata fields
-    this.arePartitionRecordsSorted = conf.getBoolean(FlinkOptions.WRITE_BULK_INSERT_SORT_BY_PARTITION);
+    this.isInputSorted = conf.getBoolean(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT);
     this.fileIdPrefix = UUID.randomUUID().toString();
     this.keyGen = RowDataKeyGen.instance(conf, rowType);
   }
@@ -112,7 +112,7 @@ public class BulkInsertWriterHelper {
   private HoodieRowDataCreateHandle getRowCreateHandle(String partitionPath) throws IOException {
     if (!handles.containsKey(partitionPath)) { // if there is no handle corresponding to the partition path
       // if records are sorted, we can close all existing handles
-      if (arePartitionRecordsSorted) {
+      if (isInputSorted) {
         close();
       }
       HoodieRowDataCreateHandle rowCreateHandle = new HoodieRowDataCreateHandle(hoodieTable, writeConfig, partitionPath, getNextFileId(),

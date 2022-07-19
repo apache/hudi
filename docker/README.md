@@ -51,9 +51,19 @@ mvn clean pre-integration-test -DskipTests -Ddocker.compose.skip=true -Ddocker.b
 mvn clean pre-integration-test -DskipTests -Ddocker.compose.skip=true -Ddocker.build.skip=false -pl :hudi-hadoop-trinobase-docker -am
 ```
 
-Alternatively, you can use `docker` cli directly under `hoodie/hadoop`. Note that, you need to manually name your local
-image by using `-t` option to match the naming in the `pom.xml`, so that you can update the corresponding image
-repository in Docker Hub (detailed steps in the next section).
+Alternatively, you can use `docker` cli directly under `hoodie/hadoop` to build images in a faster way. If you use this
+approach, make sure you first build Hudi modules with `integration-tests` profile as below so that the latest Hudi jars
+built are copied to the corresponding Hudi docker folder, e.g., `$HUDI_DIR/docker/hoodie/hadoop/hive_base/target`, which
+is required to build each docker image. Otherwise, the `target/` folder can be missing and `docker` cli complains about
+that: `failed to compute cache key: "/target" not found: not found`.
+
+```shell
+mvn -Pintegration-tests clean package -DskipTests
+```
+
+Note that, to build the image with `docker` cli, you need to manually name your local image by using `-t` option to
+match the naming in the `pom.xml`, so that you can update the corresponding image repository in Docker Hub (detailed
+steps in the next section).
 
 ```shell
 # Run under hoodie/hadoop, the <tag> is optional, "latest" by default
@@ -82,7 +92,7 @@ docker push apachehudi/hudi-hadoop_2.8.4-trinobase_368
 You can also easily push the image to the Docker Hub using Docker Desktop app: go to `Images`, search for the image by
 the name, and then click on the three dots and `Push to Hub`.
 
-![Push to Docker Hub](push_to_docker_hub.png)
+![Push to Docker Hub](images/push_to_docker_hub.png)
 
 Note that you need to ask for permission to upload the Hudi Docker Demo images to the repositories.
 

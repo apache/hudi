@@ -107,7 +107,7 @@ public class HoodieSnapshotCopier implements Serializable {
         fs.delete(new Path(outputDir), true);
       }
 
-      context.setJobStatus(this.getClass().getSimpleName(), "Creating a snapshot");
+      context.setJobStatus(this.getClass().getSimpleName(), "Creating a snapshot: " + baseDir);
 
       List<Tuple2<String, String>> filesToCopy = context.flatMap(partitions, partition -> {
         // Only take latest version files <= latestCommit.
@@ -117,8 +117,8 @@ public class HoodieSnapshotCopier implements Serializable {
         dataFiles.forEach(hoodieDataFile -> filePaths.add(new Tuple2<>(partition, hoodieDataFile.getPath())));
 
         // also need to copy over partition metadata
-        Path partitionMetaFile =
-            new Path(FSUtils.getPartitionPath(baseDir, partition), HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE);
+        Path partitionMetaFile = HoodiePartitionMetadata.getPartitionMetafilePath(fs1,
+            FSUtils.getPartitionPath(baseDir, partition)).get();
         if (fs1.exists(partitionMetaFile)) {
           filePaths.add(new Tuple2<>(partition, partitionMetaFile.toString()));
         }

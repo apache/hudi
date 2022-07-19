@@ -80,7 +80,7 @@ public class FileCreateUtils {
   }
 
   public static String baseFileName(String instantTime, String fileId, String fileExtension) {
-    return FSUtils.makeDataFileName(instantTime, WRITE_TOKEN, fileId, fileExtension);
+    return FSUtils.makeBaseFileName(instantTime, WRITE_TOKEN, fileId, fileExtension);
   }
 
   public static String logFileName(String instantTime, String fileId, int version) {
@@ -99,15 +99,6 @@ public class FileCreateUtils {
     return String.format("%s_%s_%s%s%s.%s", fileId, WRITE_TOKEN, instantTime, fileExtension, HoodieTableMetaClient.MARKER_EXTN, ioType);
   }
 
-  private static void createMetaFile(String basePath, String instantTime, String suffix) throws IOException {
-    Path parentPath = Paths.get(basePath, HoodieTableMetaClient.METAFOLDER_NAME);
-    Files.createDirectories(parentPath);
-    Path metaFilePath = parentPath.resolve(instantTime + suffix);
-    if (Files.notExists(metaFilePath)) {
-      Files.createFile(metaFilePath);
-    }
-  }
-
   private static void createMetaFile(String basePath, String instantTime, String suffix, FileSystem fs) throws IOException {
     org.apache.hadoop.fs.Path parentPath = new org.apache.hadoop.fs.Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME);
     if (!fs.exists(parentPath)) {
@@ -119,12 +110,20 @@ public class FileCreateUtils {
     }
   }
 
+  private static void createMetaFile(String basePath, String instantTime, String suffix) throws IOException {
+    createMetaFile(basePath, instantTime, suffix, "".getBytes());
+  }
+
   private static void createMetaFile(String basePath, String instantTime, String suffix, byte[] content) throws IOException {
     Path parentPath = Paths.get(basePath, HoodieTableMetaClient.METAFOLDER_NAME);
     Files.createDirectories(parentPath);
     Path metaFilePath = parentPath.resolve(instantTime + suffix);
     if (Files.notExists(metaFilePath)) {
-      Files.write(metaFilePath, content);
+      if (content.length == 0) {
+        Files.createFile(metaFilePath);
+      } else {
+        Files.write(metaFilePath, content);
+      }
     }
   }
 
@@ -245,6 +244,14 @@ public class FileCreateUtils {
     createMetaFile(basePath, instantTime, HoodieTimeline.REQUESTED_ROLLBACK_EXTENSION, serializeRollbackPlan(plan).get());
   }
 
+  public static void createRequestedRollbackFile(String basePath, String instantTime, byte[] content) throws IOException {
+    createMetaFile(basePath, instantTime, HoodieTimeline.REQUESTED_ROLLBACK_EXTENSION, content);
+  }
+
+  public static void createRequestedRollbackFile(String basePath, String instantTime) throws IOException {
+    createMetaFile(basePath, instantTime, HoodieTimeline.REQUESTED_ROLLBACK_EXTENSION);
+  }
+
   public static void createInflightRollbackFile(String basePath, String instantTime) throws IOException {
     createMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_ROLLBACK_EXTENSION);
   }
@@ -274,10 +281,14 @@ public class FileCreateUtils {
     createAuxiliaryMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_COMPACTION_EXTENSION);
   }
 
+  public static void createPendingInflightCompaction(String basePath, String instantTime) throws IOException {
+    createMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_COMPACTION_EXTENSION);
+  }
+
   public static void createPartitionMetaFile(String basePath, String partitionPath) throws IOException {
     Path parentPath = Paths.get(basePath, partitionPath);
     Files.createDirectories(parentPath);
-    Path metaFilePath = parentPath.resolve(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE);
+    Path metaFilePath = parentPath.resolve(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX);
     if (Files.notExists(metaFilePath)) {
       Files.createFile(metaFilePath);
     }
@@ -392,9 +403,19 @@ public class FileCreateUtils {
     if (Files.notExists(basePath)) {
       return Collections.emptyList();
     }
-    return Files.list(basePath).filter(entry -> (!entry.getFileName().toString().equals(HoodieTableMetaClient.METAFOLDER_NAME)
-        && !entry.getFileName().toString().contains("parquet") && !entry.getFileName().toString().contains("log"))
-        && !entry.getFileName().toString().endsWith(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE)).collect(Collectors.toList());
+    return Files.list(basePath).filter(entry -> !entry.getFileName().toString().equals(HoodieTableMetaClient.METAFOLDER_NAME)
+            && !isBaseOrLogFilename(entry.getFileName().toString())
+            && !entry.getFileName().toString().startsWith(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX))
+        .collect(Collectors.toList());
+  }
+
+  public static boolean isBaseOrLogFilename(String filename) {
+    for (HoodieFileFormat format : HoodieFileFormat.values()) {
+      if (filename.contains(format.getFileExtension())) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**

@@ -29,7 +29,6 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.marker.MarkerType;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig.Builder;
 import org.apache.hudi.index.HoodieIndex;
 
@@ -48,9 +47,10 @@ import java.util.Properties;
 import java.util.function.Function;
 
 import static org.apache.hudi.config.HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE;
-import static org.apache.hudi.config.HoodieCompactionConfig.ASYNC_CLEAN;
-import static org.apache.hudi.config.HoodieCompactionConfig.AUTO_CLEAN;
-import static org.apache.hudi.config.HoodieCompactionConfig.FAILED_WRITES_CLEANER_POLICY;
+import static org.apache.hudi.config.HoodieArchivalConfig.ASYNC_ARCHIVE;
+import static org.apache.hudi.config.HoodieCleanConfig.ASYNC_CLEAN;
+import static org.apache.hudi.config.HoodieCleanConfig.AUTO_CLEAN;
+import static org.apache.hudi.config.HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY;
 import static org.apache.hudi.config.HoodieCompactionConfig.INLINE_COMPACT;
 import static org.apache.hudi.config.HoodieWriteConfig.TABLE_SERVICES_ENABLED;
 import static org.apache.hudi.config.HoodieWriteConfig.WRITE_CONCURRENCY_MODE;
@@ -64,9 +64,9 @@ public class TestHoodieWriteConfig {
   public void testPropertyLoading(boolean withAlternative) throws IOException {
     Builder builder = HoodieWriteConfig.newBuilder().withPath("/tmp");
     Map<String, String> params = new HashMap<>(3);
-    params.put(HoodieCompactionConfig.CLEANER_COMMITS_RETAINED.key(), "1");
-    params.put(HoodieCompactionConfig.MAX_COMMITS_TO_KEEP.key(), "5");
-    params.put(HoodieCompactionConfig.MIN_COMMITS_TO_KEEP.key(), "2");
+    params.put(HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key(), "1");
+    params.put(HoodieArchivalConfig.MAX_COMMITS_TO_KEEP.key(), "5");
+    params.put(HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.key(), "2");
     if (withAlternative) {
       params.put("hoodie.avro.schema.externalTransformation", "true");
     } else {
@@ -136,8 +136,9 @@ public class TestHoodieWriteConfig {
             put(INLINE_COMPACT.key(), "true");
             put(AUTO_CLEAN.key(), "true");
             put(ASYNC_CLEAN.key(), "false");
+            put(HoodieWriteConfig.AUTO_ADJUST_LOCK_CONFIGS.key(), "true");
           }
-        }), true, true, WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL,
+        }), true, true, true, WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL,
         HoodieFailedWritesCleaningPolicy.LAZY, inProcessLockProviderClassName);
 
     // 2. Async clean
@@ -148,8 +149,9 @@ public class TestHoodieWriteConfig {
             put(INLINE_COMPACT.key(), "true");
             put(AUTO_CLEAN.key(), "true");
             put(ASYNC_CLEAN.key(), "true");
+            put(HoodieWriteConfig.AUTO_ADJUST_LOCK_CONFIGS.key(), "true");
           }
-        }), true, true, WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL,
+        }), true, true, true, WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL,
         HoodieFailedWritesCleaningPolicy.LAZY, inProcessLockProviderClassName);
 
     // 3. Async compaction configured
@@ -160,9 +162,10 @@ public class TestHoodieWriteConfig {
             put(INLINE_COMPACT.key(), "false");
             put(AUTO_CLEAN.key(), "true");
             put(ASYNC_CLEAN.key(), "false");
+            put(HoodieWriteConfig.AUTO_ADJUST_LOCK_CONFIGS.key(), "true");
           }
         }), true,
-        tableType == HoodieTableType.MERGE_ON_READ,
+        tableType == HoodieTableType.MERGE_ON_READ, true,
         tableType == HoodieTableType.MERGE_ON_READ
             ? WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL
             : WriteConcurrencyMode.valueOf(WRITE_CONCURRENCY_MODE.defaultValue()),
@@ -181,10 +184,58 @@ public class TestHoodieWriteConfig {
             put(INLINE_COMPACT.key(), "true");
             put(AUTO_CLEAN.key(), "true");
             put(ASYNC_CLEAN.key(), "false");
+            put(HoodieWriteConfig.AUTO_ADJUST_LOCK_CONFIGS.key(), "true");
           }
-        }), Option.of(true), Option.of(false), Option.of(true),
+        }), true, false, true,
         WriteConcurrencyMode.valueOf(WRITE_CONCURRENCY_MODE.defaultValue()),
         HoodieFailedWritesCleaningPolicy.valueOf(FAILED_WRITES_CLEANER_POLICY.defaultValue()),
+        HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.defaultValue());
+
+    // 5. All async services
+    verifyConcurrencyControlRelatedConfigs(createWriteConfig(new HashMap<String, String>() {
+          {
+            put(HoodieTableConfig.TYPE.key(), tableType.name());
+            put(ASYNC_CLUSTERING_ENABLE.key(), "true");
+            put(INLINE_COMPACT.key(), "false");
+            put(AUTO_CLEAN.key(), "true");
+            put(ASYNC_CLEAN.key(), "true");
+            put(ASYNC_ARCHIVE.key(), "true");
+            put(HoodieWriteConfig.AUTO_ADJUST_LOCK_CONFIGS.key(), "true");
+          }
+        }), true, true, false,
+        WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL,
+        HoodieFailedWritesCleaningPolicy.LAZY, inProcessLockProviderClassName);
+  }
+
+  @ParameterizedTest
+  @EnumSource(HoodieTableType.class)
+  public void testAutoAdjustLockConfigs(HoodieTableType tableType) {
+    TypedProperties properties = new TypedProperties();
+    properties.setProperty(HoodieTableConfig.TYPE.key(), tableType.name());
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp")
+        .withAutoAdjustLockConfigs(false)
+        .withClusteringConfig(new HoodieClusteringConfig.Builder().withAsyncClustering(true).build())
+        .withProperties(properties)
+        .build();
+
+    verifyConcurrencyControlRelatedConfigs(writeConfig,
+        true, true, true,
+        WriteConcurrencyMode.valueOf(WRITE_CONCURRENCY_MODE.defaultValue()),
+        HoodieFailedWritesCleaningPolicy.valueOf(FAILED_WRITES_CLEANER_POLICY.defaultValue()),
+        HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.defaultValue());
+
+    writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp")
+        .withAutoAdjustLockConfigs(false)
+        .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
+        .withClusteringConfig(new HoodieClusteringConfig.Builder().withAsyncClustering(true).build())
+        .withProperties(properties)
+        .build();
+
+    verifyConcurrencyControlRelatedConfigs(writeConfig,
+        true, true, true,
+        WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL, HoodieFailedWritesCleaningPolicy.LAZY,
         HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.defaultValue());
   }
 
@@ -199,10 +250,12 @@ public class TestHoodieWriteConfig {
         .withLockConfig(HoodieLockConfig.newBuilder()
             .withLockProvider(FileSystemBasedLockProviderTestClass.class)
             .build())
+        .withAutoAdjustLockConfigs(true)
         .withProperties(properties)
         .build();
+
     verifyConcurrencyControlRelatedConfigs(writeConfig,
-        true, tableType == HoodieTableType.MERGE_ON_READ,
+        true, tableType == HoodieTableType.MERGE_ON_READ, true,
         WriteConcurrencyMode.valueOf(WRITE_CONCURRENCY_MODE.defaultValue()),
         HoodieFailedWritesCleaningPolicy.valueOf(FAILED_WRITES_CLEANER_POLICY.defaultValue()),
         FileSystemBasedLockProviderTestClass.class.getName());
@@ -217,8 +270,9 @@ public class TestHoodieWriteConfig {
             put(ASYNC_CLEAN.key(), "true");
             put(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(),
                 ZookeeperBasedLockProvider.class.getName());
+            put(HoodieWriteConfig.AUTO_ADJUST_LOCK_CONFIGS.key(), "true");
           }
-        }), true, true,
+        }), true, true, true,
         WriteConcurrencyMode.valueOf(WRITE_CONCURRENCY_MODE.defaultValue()),
         HoodieFailedWritesCleaningPolicy.valueOf(FAILED_WRITES_CLEANER_POLICY.defaultValue()),
         ZookeeperBasedLockProvider.class.getName());
@@ -227,17 +281,18 @@ public class TestHoodieWriteConfig {
     writeConfig = createWriteConfig(new HashMap<String, String>() {
       {
         put(HoodieTableConfig.TYPE.key(), tableType.name());
+        put(HoodieWriteConfig.AUTO_ADJUST_LOCK_CONFIGS.key(), "true");
       }
     });
     if (writeConfig.areAnyTableServicesAsync()) {
       verifyConcurrencyControlRelatedConfigs(writeConfig,
-          true, true,
+          true, true, true,
           WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL,
           HoodieFailedWritesCleaningPolicy.LAZY,
           InProcessLockProvider.class.getName());
     } else {
       verifyConcurrencyControlRelatedConfigs(writeConfig,
-          true, false,
+          true, false, true,
           WriteConcurrencyMode.valueOf(WRITE_CONCURRENCY_MODE.defaultValue()),
           HoodieFailedWritesCleaningPolicy.valueOf(FAILED_WRITES_CLEANER_POLICY.defaultValue()),
           HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.defaultValue());
@@ -252,8 +307,9 @@ public class TestHoodieWriteConfig {
           {
             put(HoodieTableConfig.TYPE.key(), tableType.name());
             put(TABLE_SERVICES_ENABLED.key(), "false");
+            put(HoodieWriteConfig.AUTO_ADJUST_LOCK_CONFIGS.key(), "true");
           }
-        }), false, tableType == HoodieTableType.MERGE_ON_READ,
+        }), false, false, false,
         WriteConcurrencyMode.fromValue(WRITE_CONCURRENCY_MODE.defaultValue()),
         HoodieFailedWritesCleaningPolicy.valueOf(FAILED_WRITES_CLEANER_POLICY.defaultValue()),
         HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.defaultValue());
@@ -268,8 +324,9 @@ public class TestHoodieWriteConfig {
                 WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.value());
             put(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(),
                 FileSystemBasedLockProviderTestClass.class.getName());
+            put(HoodieWriteConfig.AUTO_ADJUST_LOCK_CONFIGS.key(), "true");
           }
-        }), false, tableType == HoodieTableType.MERGE_ON_READ,
+        }), false, false, false,
         WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL,
         HoodieFailedWritesCleaningPolicy.LAZY,
         FileSystemBasedLockProviderTestClass.class.getName());
@@ -288,8 +345,9 @@ public class TestHoodieWriteConfig {
             put(INLINE_COMPACT.key(), "true");
             put(AUTO_CLEAN.key(), "true");
             put(ASYNC_CLEAN.key(), "false");
+            put(HoodieWriteConfig.AUTO_ADJUST_LOCK_CONFIGS.key(), "true");
           }
-        }), true, true,
+        }), true, true, true,
         WriteConcurrencyMode.fromValue(WRITE_CONCURRENCY_MODE.defaultValue()),
         HoodieFailedWritesCleaningPolicy.valueOf(FAILED_WRITES_CLEANER_POLICY.defaultValue()),
         HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.defaultValue());
@@ -306,8 +364,10 @@ public class TestHoodieWriteConfig {
                 WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.value());
             put(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(),
                 FileSystemBasedLockProviderTestClass.class.getName());
+            put(HoodieWriteConfig.AUTO_ADJUST_LOCK_CONFIGS.key(), "true");
           }
-        }), true, true, WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL,
+        }), true, true, true,
+        WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL,
         HoodieFailedWritesCleaningPolicy.LAZY, FileSystemBasedLockProviderTestClass.class.getName());
   }
 
@@ -371,32 +431,14 @@ public class TestHoodieWriteConfig {
   private void verifyConcurrencyControlRelatedConfigs(
       HoodieWriteConfig writeConfig, boolean expectedTableServicesEnabled,
       boolean expectedAnyTableServicesAsync,
+      boolean expectedAnyTableServicesExecutedInline,
       WriteConcurrencyMode expectedConcurrencyMode,
       HoodieFailedWritesCleaningPolicy expectedCleanPolicy,
       String expectedLockProviderName) {
-    verifyConcurrencyControlRelatedConfigs(writeConfig, Option.of(expectedTableServicesEnabled),
-        Option.of(expectedAnyTableServicesAsync), Option.empty(), expectedConcurrencyMode,
-        expectedCleanPolicy, expectedLockProviderName);
-  }
-
-  private void verifyConcurrencyControlRelatedConfigs(
-      HoodieWriteConfig writeConfig, Option<Boolean> expectedTableServicesEnabled,
-      Option<Boolean> expectedAnyTableServicesAsync,
-      Option<Boolean> expectedAnyTableServicesExecutedInline,
-      WriteConcurrencyMode expectedConcurrencyMode,
-      HoodieFailedWritesCleaningPolicy expectedCleanPolicy,
-      String expectedLockProviderName) {
-    if (expectedTableServicesEnabled.isPresent()) {
-      assertEquals(expectedTableServicesEnabled.get(), writeConfig.areTableServicesEnabled());
-    }
-    if (expectedAnyTableServicesAsync.isPresent()) {
-      assertEquals(expectedAnyTableServicesAsync.get(), writeConfig.areAnyTableServicesAsync());
-    }
-    if (expectedAnyTableServicesExecutedInline.isPresent()) {
-      assertEquals(expectedAnyTableServicesExecutedInline.get(),
-          writeConfig.areAnyTableServicesExecutedInline());
-    }
-
+    assertEquals(expectedTableServicesEnabled, writeConfig.areTableServicesEnabled());
+    assertEquals(expectedAnyTableServicesAsync, writeConfig.areAnyTableServicesAsync());
+    assertEquals(
+        expectedAnyTableServicesExecutedInline, writeConfig.areAnyTableServicesExecutedInline());
     assertEquals(expectedConcurrencyMode, writeConfig.getWriteConcurrencyMode());
     assertEquals(expectedCleanPolicy, writeConfig.getFailedWritesCleanPolicy());
     assertEquals(expectedLockProviderName, writeConfig.getLockProviderClass());

@@ -19,11 +19,9 @@
 package org.apache.hudi.keygen
 
 import java.sql.Timestamp
-
 import org.apache.spark.sql.Row
-
 import org.apache.hudi.keygen.RowKeyGeneratorHelper._
-
+import org.apache.spark.sql.types.{DataType, DataTypes}
 import org.junit.jupiter.api.{Assertions, Test}
 
 import scala.collection.JavaConverters._
@@ -36,7 +34,9 @@ class TestRowGeneratorHelper {
     /** single plain partition */
     val row1 = Row.fromSeq(Seq(1, "z3", 10.0, "20220108"))
     val ptField1 = List("dt").asJava
-    val ptPos1 = Map("dt" -> List(new Integer(3)).asJava).asJava
+    val mapValue = org.apache.hudi.common.util.collection.Pair.of(List(new Integer(3)).asJava, DataTypes.LongType)
+    val ptPos1 = Map("dt" -> mapValue).asJava
+
     Assertions.assertEquals("20220108",
       getPartitionPathFromRow(row1, ptField1, false, ptPos1))
     Assertions.assertEquals("dt=20220108",
@@ -45,9 +45,9 @@ class TestRowGeneratorHelper {
     /** multiple plain partitions */
     val row2 = Row.fromSeq(Seq(1, "z3", 10.0, "2022", "01", "08"))
     val ptField2 = List("year", "month", "day").asJava
-    val ptPos2 = Map("year" -> List(new Integer(3)).asJava,
-      "month" -> List(new Integer(4)).asJava,
-      "day" -> List(new Integer(5)).asJava
+    val ptPos2 = Map("year" -> org.apache.hudi.common.util.collection.Pair.of(List(new Integer(3)).asJava, DataTypes.StringType),
+      "month" -> org.apache.hudi.common.util.collection.Pair.of(List(new Integer(4)).asJava, DataTypes.StringType),
+      "day" -> org.apache.hudi.common.util.collection.Pair.of(List(new Integer(5)).asJava, DataTypes.StringType)
     ).asJava
     Assertions.assertEquals("2022/01/08",
       getPartitionPathFromRow(row2, ptField2, false, ptPos2))
@@ -58,8 +58,8 @@ class TestRowGeneratorHelper {
     val timestamp = Timestamp.valueOf("2020-01-08 10:00:00")
     val instant = timestamp.toInstant
     val ptField3 = List("event", "event_time").asJava
-    val ptPos3 = Map("event" -> List(new Integer(3)).asJava,
-      "event_time" -> List(new Integer(4)).asJava
+    val ptPos3 = Map("event" -> org.apache.hudi.common.util.collection.Pair.of(List(new Integer(3)).asJava, DataTypes.StringType),
+      "event_time" -> org.apache.hudi.common.util.collection.Pair.of(List(new Integer(4)).asJava, DataTypes.TimestampType)
     ).asJava
 
     // with timeStamp type
@@ -79,7 +79,7 @@ class TestRowGeneratorHelper {
     /** mixed case with plain and nested partitions */
     val nestedRow4 = Row.fromSeq(Seq(instant, "ad"))
     val ptField4 = List("event_time").asJava
-    val ptPos4 = Map("event_time" -> List(new Integer(3), new Integer(0)).asJava).asJava
+    val ptPos4 = Map("event_time" -> org.apache.hudi.common.util.collection.Pair.of(List(new Integer(3), new Integer(0)).asJava, DataTypes.TimestampType)).asJava
     // with instant type
     val row4 = Row.fromSeq(Seq(1, "z3", 10.0, nestedRow4, "click"))
     Assertions.assertEquals("2020-01-08 10:00:00.0",
@@ -90,8 +90,8 @@ class TestRowGeneratorHelper {
     val nestedRow5 = Row.fromSeq(Seq(timestamp, "ad"))
     val ptField5 = List("event", "event_time").asJava
     val ptPos5 = Map(
-      "event_time" -> List(new Integer(3), new Integer(0)).asJava,
-      "event" -> List(new Integer(4)).asJava
+      "event_time" -> org.apache.hudi.common.util.collection.Pair.of(List(new Integer(3), new Integer(0)).asJava, DataTypes.TimestampType),
+      "event" -> org.apache.hudi.common.util.collection.Pair.of(List(new Integer(4)).asJava, DataTypes.StringType)
     ).asJava
     val row5 = Row.fromSeq(Seq(1, "z3", 10.0, nestedRow5, "click"))
     Assertions.assertEquals("click/2020-01-08 10:00:00.0",

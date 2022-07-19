@@ -84,7 +84,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
   public void testMakeDataFileName() {
     String instantTime = HoodieActiveTimeline.formatDate(new Date());
     String fileName = UUID.randomUUID().toString();
-    assertEquals(FSUtils.makeDataFileName(instantTime, TEST_WRITE_TOKEN, fileName), fileName + "_" + TEST_WRITE_TOKEN + "_" + instantTime + BASE_FILE_EXTENSION);
+    assertEquals(FSUtils.makeBaseFileName(instantTime, TEST_WRITE_TOKEN, fileName), fileName + "_" + TEST_WRITE_TOKEN + "_" + instantTime + BASE_FILE_EXTENSION);
   }
 
   @Test
@@ -159,7 +159,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
   public void testGetCommitTime() {
     String instantTime = HoodieActiveTimeline.formatDate(new Date());
     String fileName = UUID.randomUUID().toString();
-    String fullFileName = FSUtils.makeDataFileName(instantTime, TEST_WRITE_TOKEN, fileName);
+    String fullFileName = FSUtils.makeBaseFileName(instantTime, TEST_WRITE_TOKEN, fileName);
     assertEquals(instantTime, FSUtils.getCommitTime(fullFileName));
     // test log file name
     fullFileName = FSUtils.makeLogFileName(fileName, HOODIE_LOG.getFileExtension(), instantTime, 1, TEST_WRITE_TOKEN);
@@ -170,7 +170,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
   public void testGetFileNameWithoutMeta() {
     String instantTime = HoodieActiveTimeline.formatDate(new Date());
     String fileName = UUID.randomUUID().toString();
-    String fullFileName = FSUtils.makeDataFileName(instantTime, TEST_WRITE_TOKEN, fileName);
+    String fullFileName = FSUtils.makeBaseFileName(instantTime, TEST_WRITE_TOKEN, fileName);
     assertEquals(fileName, FSUtils.getFileId(fullFileName));
   }
 
@@ -304,7 +304,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     final String LOG_EXTENTION = "." + LOG_STR;
 
     // data file name
-    String dataFileName = FSUtils.makeDataFileName(instantTime, writeToken, fileId);
+    String dataFileName = FSUtils.makeBaseFileName(instantTime, writeToken, fileId);
     assertEquals(instantTime, FSUtils.getCommitTime(dataFileName));
     assertEquals(fileId, FSUtils.getFileId(dataFileName));
 

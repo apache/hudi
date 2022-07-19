@@ -19,7 +19,7 @@ package org.apache.spark.sql.hudi
 
 import org.apache.spark.sql.Row
 
-class TestShowPartitions extends TestHoodieSqlBase {
+class TestShowPartitions extends HoodieSparkSqlTestBase {
 
   test("Test Show Non Partitioned Table's Partitions") {
     val tableName = generateTableName

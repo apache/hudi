@@ -60,7 +60,7 @@ dag_content:
   first_delete:
     config:
       num_partitions_delete: 50
-      num_records_delete: 8000
+      num_records_delete: 4000
     type: DeleteNode
     deps: first_upsert
   second_hive_sync:
@@ -74,10 +74,12 @@ dag_content:
       validate_once_every_itr : 5
       validate_hive: true
       delete_input_data: true
+      max_wait_time_for_deltastreamer_catch_up_ms: 600000
     type: ValidateDatasetNode
     deps: second_hive_sync
   last_validate:
     config:
       execute_itr_count: 50
+      max_wait_time_for_deltastreamer_catch_up_ms: 600000
     type: ValidateAsyncOperations
     deps: second_validate

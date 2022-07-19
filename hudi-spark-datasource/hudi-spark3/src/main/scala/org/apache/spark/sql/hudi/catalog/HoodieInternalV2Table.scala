@@ -21,7 +21,7 @@ import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, HoodieCatalogTable}
 import org.apache.spark.sql.connector.catalog.TableCapability._
-import org.apache.spark.sql.connector.catalog.{SupportsWrite, Table, TableCapability, V2TableWithV1Fallback}
+import org.apache.spark.sql.connector.catalog.{SupportsWrite, Table, TableCapability, V1Table, V2TableWithV1Fallback}
 import org.apache.spark.sql.connector.expressions.{FieldReference, IdentityTransform, Transform}
 import org.apache.spark.sql.connector.write._
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
@@ -73,6 +73,8 @@ case class HoodieInternalV2Table(spark: SparkSession,
   }
 
   override def v1Table: CatalogTable = hoodieCatalogTable.table
+
+  def v1TableWrapper: V1Table = V1Table(v1Table)
 
   override def partitioning(): Array[Transform] = {
     hoodieCatalogTable.partitionFields.map { col =>

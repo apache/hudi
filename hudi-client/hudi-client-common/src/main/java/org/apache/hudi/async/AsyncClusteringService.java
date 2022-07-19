@@ -21,7 +21,10 @@ package org.apache.hudi.async;
 
 import org.apache.hudi.client.BaseClusterer;
 import org.apache.hudi.client.BaseHoodieWriteClient;
+import org.apache.hudi.common.engine.EngineProperty;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.util.CustomizedThreadFactory;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 
@@ -40,20 +43,22 @@ import java.util.stream.IntStream;
  */
 public abstract class AsyncClusteringService extends HoodieAsyncTableService {
 
+  public static final String CLUSTERING_POOL_NAME = "hoodiecluster";
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LogManager.getLogger(AsyncClusteringService.class);
-
   private final int maxConcurrentClustering;
+  protected transient HoodieEngineContext context;
   private transient BaseClusterer clusteringClient;
 
-  public AsyncClusteringService(BaseHoodieWriteClient writeClient) {
-    this(writeClient, false);
+  public AsyncClusteringService(HoodieEngineContext context, BaseHoodieWriteClient writeClient) {
+    this(context, writeClient, false);
   }
 
-  public AsyncClusteringService(BaseHoodieWriteClient writeClient, boolean runInDaemonMode) {
+  public AsyncClusteringService(HoodieEngineContext context, BaseHoodieWriteClient writeClient, boolean runInDaemonMode) {
     super(writeClient.getConfig(), runInDaemonMode);
     this.clusteringClient = createClusteringClient(writeClient);
     this.maxConcurrentClustering = 1;
+    this.context = context;
   }
 
   protected abstract BaseClusterer createClusteringClient(BaseHoodieWriteClient client);
@@ -64,14 +69,12 @@ public abstract class AsyncClusteringService extends HoodieAsyncTableService {
   @Override
   protected Pair<CompletableFuture, ExecutorService> startService() {
     ExecutorService executor = Executors.newFixedThreadPool(maxConcurrentClustering,
-        r -> {
-          Thread t = new Thread(r, "async_clustering_thread");
-          t.setDaemon(isRunInDaemonMode());
-          return t;
-        });
-
+        new CustomizedThreadFactory("async_clustering_thread", isRunInDaemonMode()));
     return Pair.of(CompletableFuture.allOf(IntStream.range(0, maxConcurrentClustering).mapToObj(i -> CompletableFuture.supplyAsync(() -> {
       try {
+        // Set Compactor Pool Name for allowing users to prioritize compaction
+        LOG.info("Setting pool name for clustering to " + CLUSTERING_POOL_NAME);
+        context.setProperty(EngineProperty.CLUSTERING_POOL_NAME, CLUSTERING_POOL_NAME);
         while (!isShutdownRequested()) {
           final HoodieInstant instant = fetchNextAsyncServiceInstant();
           if (null != instant) {

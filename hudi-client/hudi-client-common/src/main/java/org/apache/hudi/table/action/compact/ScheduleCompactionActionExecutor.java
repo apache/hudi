@@ -71,7 +71,7 @@ public class ScheduleCompactionActionExecutor<T extends HoodieRecordPayload, I, 
     if (!config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()
         && !config.getFailedWritesCleanPolicy().isLazy()) {
       // TODO(yihua): this validation is removed for Java client used by kafka-connect.  Need to revisit this.
-      if (config.getEngineType() != EngineType.JAVA) {
+      if (config.getEngineType() == EngineType.SPARK) {
         // if there are inflight writes, their instantTime must not be less than that of compaction instant time
         table.getActiveTimeline().getCommitsTimeline().filterPendingExcludingCompaction().firstInstant()
             .ifPresent(earliestInflight -> ValidationUtils.checkArgument(
@@ -119,7 +119,7 @@ public class ScheduleCompactionActionExecutor<T extends HoodieRecordPayload, I, 
             .collect(Collectors.toSet());
         // exclude files in pending clustering from compaction.
         fgInPendingCompactionAndClustering.addAll(fileSystemView.getFileGroupsInPendingClustering().map(Pair::getLeft).collect(Collectors.toSet()));
-        context.setJobStatus(this.getClass().getSimpleName(), "Compaction: generating compaction plan");
+        context.setJobStatus(this.getClass().getSimpleName(), "Compaction: generating compaction plan: " + config.getTableName());
         return compactor.generateCompactionPlan(context, table, config, instantTime, fgInPendingCompactionAndClustering);
       } catch (IOException e) {
         throw new HoodieCompactionException("Could not schedule compaction " + config.getBasePath(), e);

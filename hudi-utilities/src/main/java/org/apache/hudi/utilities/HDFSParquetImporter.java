@@ -174,7 +174,7 @@ public class HDFSParquetImporter implements Serializable {
     ParquetInputFormat.setReadSupportClass(job, (AvroReadSupport.class));
 
     HoodieEngineContext context = new HoodieSparkEngineContext(jsc);
-    context.setJobStatus(this.getClass().getSimpleName(), "Build records for import");
+    context.setJobStatus(this.getClass().getSimpleName(), "Build records for import: " + cfg.tableName);
     return jsc.newAPIHadoopFile(cfg.srcPath, ParquetInputFormat.class, Void.class, GenericRecord.class,
             job.getConfiguration())
         // To reduce large number of tasks.

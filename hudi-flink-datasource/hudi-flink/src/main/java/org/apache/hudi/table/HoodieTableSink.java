@@ -18,20 +18,19 @@
 
 package org.apache.hudi.table;
 
+import org.apache.hudi.adapter.DataStreamSinkProviderAdapter;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.sink.utils.Pipelines;
 import org.apache.hudi.util.ChangelogModes;
-import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.table.catalog.ResolvedSchema;
 import org.apache.flink.table.connector.ChangelogMode;
-import org.apache.flink.table.connector.sink.DataStreamSinkProvider;
 import org.apache.flink.table.connector.sink.DynamicTableSink;
 import org.apache.flink.table.connector.sink.abilities.SupportsOverwrite;
 import org.apache.flink.table.connector.sink.abilities.SupportsPartitioning;
@@ -61,24 +60,29 @@ public class HoodieTableSink implements DynamicTableSink, SupportsPartitioning, 
 
   @Override
   public SinkRuntimeProvider getSinkRuntimeProvider(Context context) {
-    return (DataStreamSinkProvider) dataStream -> {
+    return (DataStreamSinkProviderAdapter) dataStream -> {
 
       // setup configuration
       long ckpTimeout = dataStream.getExecutionEnvironment()
           .getCheckpointConfig().getCheckpointTimeout();
       conf.setLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, ckpTimeout);
 
-      RowType rowType = (RowType) schema.toSourceRowDataType().notNull().getLogicalType();
+      RowType rowType = (RowType) schema.toSinkRowDataType().notNull().getLogicalType();
 
       // bulk_insert mode
       final String writeOperation = this.conf.get(FlinkOptions.OPERATION);
       if (WriteOperationType.fromValue(writeOperation) == WriteOperationType.BULK_INSERT) {
-        return context.isBounded() ? Pipelines.bulkInsert(conf, rowType, dataStream) : Pipelines.append(conf, rowType, dataStream);
+        return Pipelines.bulkInsert(conf, rowType, dataStream);
       }
 
       // Append mode
       if (OptionsResolver.isAppendMode(conf)) {
-        return Pipelines.append(conf, rowType, dataStream);
+        DataStream<Object> pipeline = Pipelines.append(conf, rowType, dataStream, context.isBounded());
+        if (OptionsResolver.needsAsyncClustering(conf)) {
+          return Pipelines.cluster(conf, rowType, pipeline);
+        } else {
+          return Pipelines.dummySink(pipeline);
+        }
       }
 
       // default parallelism
@@ -90,7 +94,7 @@ public class HoodieTableSink implements DynamicTableSink, SupportsPartitioning, 
       // write pipeline
       pipeline = Pipelines.hoodieStreamWrite(conf, parallelism, hoodieRecordDataStream);
       // compaction
-      if (StreamerUtil.needsAsyncCompaction(conf)) {
+      if (OptionsResolver.needsAsyncCompaction(conf)) {
         return Pipelines.compact(conf, pipeline);
       } else {
         return Pipelines.clean(conf, pipeline);

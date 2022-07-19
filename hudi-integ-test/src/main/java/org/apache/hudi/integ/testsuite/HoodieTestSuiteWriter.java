@@ -18,37 +18,24 @@
 
 package org.apache.hudi.integ.testsuite;
 
-import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.HoodieReadClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
-import org.apache.hudi.common.model.HoodieAvroRecord;
-import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodiePayloadConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.integ.testsuite.HoodieTestSuiteJob.HoodieTestSuiteConfig;
 import org.apache.hudi.integ.testsuite.dag.nodes.CleanNode;
 import org.apache.hudi.integ.testsuite.dag.nodes.DagNode;
 import org.apache.hudi.integ.testsuite.dag.nodes.RollbackNode;
 import org.apache.hudi.integ.testsuite.dag.nodes.ScheduleCompactNode;
 import org.apache.hudi.integ.testsuite.writer.DeltaWriteStats;
-import org.apache.hudi.table.HoodieSparkTable;
-import org.apache.hudi.table.action.HoodieWriteMetadata;
-import org.apache.hudi.table.action.compact.CompactHelpers;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.api.java.JavaRDD;
@@ -57,38 +44,31 @@ import org.apache.spark.rdd.RDD;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.io.Serializable;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 
-/**
- * A writer abstraction for the Hudi test suite. This class wraps different implementations of writers used to perform write operations into the target hudi dataset. Current supported writers are
- * {@link HoodieDeltaStreamerWrapper} and {@link SparkRDDWriteClient}.
- */
-public class HoodieTestSuiteWriter implements Serializable {
+public abstract class HoodieTestSuiteWriter implements Serializable {
 
   private static Logger log = LoggerFactory.getLogger(HoodieTestSuiteWriter.class);
 
-  private HoodieDeltaStreamerWrapper deltaStreamerWrapper;
-  private HoodieWriteConfig writeConfig;
-  private SparkRDDWriteClient writeClient;
-  protected HoodieTestSuiteConfig cfg;
-  private Option<String> lastCheckpoint;
-  private HoodieReadClient hoodieReadClient;
-  private Properties props;
-  private String schema;
-  private transient Configuration configuration;
-  private transient JavaSparkContext sparkContext;
-  private static Set<String> VALID_DAG_NODES_TO_ALLOW_WRITE_CLIENT_IN_DELTASTREAMER_MODE = new HashSet<>(
+  protected HoodieDeltaStreamerWrapper deltaStreamerWrapper;
+  protected HoodieWriteConfig writeConfig;
+  protected SparkRDDWriteClient writeClient;
+  protected HoodieTestSuiteJob.HoodieTestSuiteConfig cfg;
+  protected Option<String> lastCheckpoint;
+  protected HoodieReadClient hoodieReadClient;
+  protected Properties props;
+  protected String schema;
+  protected transient Configuration configuration;
+  protected transient JavaSparkContext sparkContext;
+  protected static Set<String> VALID_DAG_NODES_TO_ALLOW_WRITE_CLIENT_IN_DELTASTREAMER_MODE = new HashSet<>(
       Arrays.asList(RollbackNode.class.getName(), CleanNode.class.getName(), ScheduleCompactNode.class.getName()));
-  private static final String GENERATED_DATA_PATH = "generated.data.path";
 
-  public HoodieTestSuiteWriter(JavaSparkContext jsc, Properties props, HoodieTestSuiteConfig cfg, String schema) throws Exception {
+  public HoodieTestSuiteWriter(JavaSparkContext jsc, Properties props, HoodieTestSuiteJob.HoodieTestSuiteConfig cfg, String schema) throws Exception {
     // We ensure that only 1 instance of HoodieWriteClient is instantiated for a HoodieTestSuiteWriter
     // This does not instantiate a HoodieWriteClient until a
     // {@link HoodieDeltaStreamer#commit(HoodieWriteClient, JavaRDD, Option)} is invoked.
@@ -110,12 +90,13 @@ public class HoodieTestSuiteWriter implements Serializable {
     return this.writeConfig;
   }
 
-  private HoodieWriteConfig getHoodieClientConfig(HoodieTestSuiteConfig cfg, Properties props, String schema) {
+  private HoodieWriteConfig getHoodieClientConfig(HoodieTestSuiteJob.HoodieTestSuiteConfig cfg, Properties props, String schema) {
     HoodieWriteConfig.Builder builder =
         HoodieWriteConfig.newBuilder().combineInput(true, true).withPath(cfg.targetBasePath)
             .withAutoCommit(false)
-            .withCompactionConfig(HoodieCompactionConfig.newBuilder().withPayloadClass(cfg.payloadClassName).build())
-            .withPayloadConfig(HoodiePayloadConfig.newBuilder().withPayloadOrderingField(cfg.sourceOrderingField)
+            .withPayloadConfig(HoodiePayloadConfig.newBuilder()
+                .withPayloadOrderingField(cfg.sourceOrderingField)
+                .withPayloadClass(cfg.payloadClassName)
                 .build())
             .forTable(cfg.targetTableName)
             .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
@@ -131,159 +112,35 @@ public class HoodieTestSuiteWriter implements Serializable {
     return false;
   }
 
-  public RDD<GenericRecord> getNextBatch() throws Exception {
-    Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> nextBatch = fetchSource();
-    lastCheckpoint = Option.of(nextBatch.getValue().getLeft());
-    JavaRDD<HoodieRecord> inputRDD = nextBatch.getRight().getRight();
-    return inputRDD.map(r -> (GenericRecord) ((HoodieAvroRecord) r).getData()
-        .getInsertValue(new Schema.Parser().parse(schema)).get()).rdd();
-  }
+  public abstract void shutdownResources();
 
-  public void getNextBatchForDeletes() throws Exception {
-    Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> nextBatch = fetchSource();
-    lastCheckpoint = Option.of(nextBatch.getValue().getLeft());
-    JavaRDD<HoodieRecord> inputRDD = nextBatch.getRight().getRight();
-    inputRDD.collect();
-  }
+  public abstract RDD<GenericRecord> getNextBatch() throws Exception;
 
-  public Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> fetchSource() throws Exception {
-    return this.deltaStreamerWrapper.fetchSource();
-  }
+  public abstract Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> fetchSource() throws Exception ;
 
-  public Option<String> startCommit() {
-    if (cfg.useDeltaStreamer) {
-      return Option.of(HoodieActiveTimeline.createNewInstantTime());
-    } else {
-      return Option.of(writeClient.startCommit());
-    }
-  }
+  public abstract Option<String> startCommit();
 
-  public JavaRDD<WriteStatus> upsert(Option<String> instantTime) throws Exception {
-    if (cfg.useDeltaStreamer) {
-      return deltaStreamerWrapper.upsert(WriteOperationType.UPSERT);
-    } else {
-      Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> nextBatch = fetchSource();
-      lastCheckpoint = Option.of(nextBatch.getValue().getLeft());
-      return writeClient.upsert(nextBatch.getRight().getRight(), instantTime.get());
-    }
-  }
+  public abstract JavaRDD<WriteStatus> upsert(Option<String> instantTime) throws Exception;
 
-  public JavaRDD<WriteStatus> insert(Option<String> instantTime) throws Exception {
-    if (cfg.useDeltaStreamer) {
-      return deltaStreamerWrapper.insert();
-    } else {
-      Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> nextBatch = fetchSource();
-      lastCheckpoint = Option.of(nextBatch.getValue().getLeft());
-      return writeClient.insert(nextBatch.getRight().getRight(), instantTime.get());
-    }
-  }
+  public abstract JavaRDD<WriteStatus> insert(Option<String> instantTime) throws Exception;
 
-  public JavaRDD<WriteStatus> insertOverwrite(Option<String> instantTime) throws Exception {
-    if (cfg.useDeltaStreamer) {
-      return deltaStreamerWrapper.insertOverwrite();
-    } else {
-      Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> nextBatch = fetchSource();
-      lastCheckpoint = Option.of(nextBatch.getValue().getLeft());
-      return writeClient.insertOverwrite(nextBatch.getRight().getRight(), instantTime.get()).getWriteStatuses();
-    }
-  }
+  public abstract JavaRDD<WriteStatus> insertOverwrite(Option<String> instantTime) throws Exception;
 
-  public JavaRDD<WriteStatus> insertOverwriteTable(Option<String> instantTime) throws Exception {
-    if (cfg.useDeltaStreamer) {
-      return deltaStreamerWrapper.insertOverwriteTable();
-    } else {
-      Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> nextBatch = fetchSource();
-      lastCheckpoint = Option.of(nextBatch.getValue().getLeft());
-      return writeClient.insertOverwriteTable(nextBatch.getRight().getRight(), instantTime.get()).getWriteStatuses();
-    }
-  }
+  public abstract JavaRDD<WriteStatus> insertOverwriteTable(Option<String> instantTime) throws Exception;
 
-  public JavaRDD<WriteStatus> bulkInsert(Option<String> instantTime) throws Exception {
-    if (cfg.useDeltaStreamer) {
-      return deltaStreamerWrapper.bulkInsert();
-    } else {
-      Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> nextBatch = fetchSource();
-      lastCheckpoint = Option.of(nextBatch.getValue().getLeft());
-      return writeClient.bulkInsert(nextBatch.getRight().getRight(), instantTime.get());
-    }
-  }
+  public abstract JavaRDD<WriteStatus> bulkInsert(Option<String> instantTime) throws Exception;
 
-  public JavaRDD<WriteStatus> compact(Option<String> instantTime) throws Exception {
-    if (cfg.useDeltaStreamer) {
-      return deltaStreamerWrapper.compact();
-    } else {
-      if (!instantTime.isPresent()) {
-        Option<Pair<String, HoodieCompactionPlan>> compactionPlanPair = Option
-            .fromJavaOptional(hoodieReadClient.getPendingCompactions()
-                .stream().findFirst());
-        if (compactionPlanPair.isPresent()) {
-          instantTime = Option.of(compactionPlanPair.get().getLeft());
-        }
-      }
-      if (instantTime.isPresent()) {
-        HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = writeClient.compact(instantTime.get());
-        return compactionMetadata.getWriteStatuses();
-      } else {
-        return null;
-      }
-    }
-  }
+  public abstract JavaRDD<WriteStatus> compact(Option<String> instantTime) throws Exception;
 
-  public void inlineClustering() {
-    if (!cfg.useDeltaStreamer) {
-      Option<String> clusteringInstantOpt = writeClient.scheduleClustering(Option.empty());
-      clusteringInstantOpt.ifPresent(clusteringInstant -> {
-        // inline cluster should auto commit as the user is never given control
-        log.warn("Clustering instant :: " + clusteringInstant);
-        writeClient.cluster(clusteringInstant, true);
-      });
-    } else {
-      // TODO: fix clustering to be done async https://issues.apache.org/jira/browse/HUDI-1590
-      throw new IllegalArgumentException("Clustering cannot be triggered with deltastreamer");
-    }
-  }
+  public abstract void inlineClustering() throws Exception ;
 
-  public Option<String> scheduleCompaction(Option<Map<String, String>> previousCommitExtraMetadata) throws
-      Exception {
-    if (cfg.useDeltaStreamer) {
-      deltaStreamerWrapper.scheduleCompact();
-      return Option.empty();
-    } else {
-      return writeClient.scheduleCompaction(previousCommitExtraMetadata);
-    }
-  }
+  public abstract Option<String> scheduleCompaction(Option<Map<String, String>> previousCommitExtraMetadata) throws Exception;
 
-  public void commit(JavaRDD<WriteStatus> records, JavaRDD<DeltaWriteStats> generatedDataStats,
-      Option<String> instantTime) {
-    if (!cfg.useDeltaStreamer) {
-      Map<String, String> extraMetadata = new HashMap<>();
-      /** Store the checkpoint in the commit metadata just like
-       * {@link HoodieDeltaStreamer#commit(SparkRDDWriteClient, JavaRDD, Option)} **/
-      extraMetadata.put(HoodieDeltaStreamerWrapper.CHECKPOINT_KEY, lastCheckpoint.get());
-      if (generatedDataStats != null && generatedDataStats.count() > 1) {
-        // Just stores the path where this batch of data is generated to
-        extraMetadata.put(GENERATED_DATA_PATH, generatedDataStats.map(s -> s.getFilePath()).collect().get(0));
-      }
-      writeClient.commit(instantTime.get(), records, Option.of(extraMetadata));
-    }
-  }
+  public abstract void commit(JavaRDD<WriteStatus> records, JavaRDD<DeltaWriteStats> generatedDataStats,
+                              Option<String> instantTime);
 
-  public void commitCompaction(JavaRDD<WriteStatus> records, JavaRDD<DeltaWriteStats> generatedDataStats,
-                     Option<String> instantTime) throws IOException {
-    if (!cfg.useDeltaStreamer) {
-      Map<String, String> extraMetadata = new HashMap<>();
-      /** Store the checkpoint in the commit metadata just like
-       * {@link HoodieDeltaStreamer#commit(SparkRDDWriteClient, JavaRDD, Option)} **/
-      extraMetadata.put(HoodieDeltaStreamerWrapper.CHECKPOINT_KEY, lastCheckpoint.get());
-      if (generatedDataStats != null && generatedDataStats.count() > 1) {
-        // Just stores the path where this batch of data is generated to
-        extraMetadata.put(GENERATED_DATA_PATH, generatedDataStats.map(s -> s.getFilePath()).collect().get(0));
-      }
-      HoodieSparkTable<HoodieRecordPayload> table = HoodieSparkTable.create(writeClient.getConfig(), writeClient.getEngineContext());
-      HoodieCommitMetadata metadata = CompactHelpers.getInstance().createCompactionMetadata(table, instantTime.get(), HoodieJavaRDD.of(records), writeClient.getConfig().getSchema());
-      writeClient.commitCompaction(instantTime.get(), metadata, Option.of(extraMetadata));
-    }
-  }
+  public abstract void commitCompaction(JavaRDD<WriteStatus> records, JavaRDD<DeltaWriteStats> generatedDataStats,
+                                        Option<String> instantTime) throws Exception;
 
   public SparkRDDWriteClient getWriteClient(DagNode dagNode) throws IllegalAccessException {
     if (cfg.useDeltaStreamer & !allowWriteClientAccess(dagNode)) {
@@ -301,7 +158,7 @@ public class HoodieTestSuiteWriter implements Serializable {
     return deltaStreamerWrapper;
   }
 
-  public HoodieTestSuiteConfig getCfg() {
+  public HoodieTestSuiteJob.HoodieTestSuiteConfig getCfg() {
     return cfg;
   }
 
@@ -325,3 +182,4 @@ public class HoodieTestSuiteWriter implements Serializable {
     return schema;
   }
 }
+

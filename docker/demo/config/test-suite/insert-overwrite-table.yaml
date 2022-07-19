@@ -56,7 +56,7 @@ dag_content:
   first_insert_overwrite_table:
     config:
       record_size: 1000
-      repeat_count: 10
+      repeat_count: 1
       num_records_insert: 10
     type: SparkInsertOverwriteTableNode
     deps: second_upsert

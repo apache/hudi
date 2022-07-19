@@ -78,6 +78,9 @@ import java.util.stream.Stream;
 import scala.Tuple2;
 
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.deleteMetadataPartition;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.metadataPartitionExists;
+import static org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -127,6 +130,9 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     HoodieIndexConfig.Builder indexBuilder = HoodieIndexConfig.newBuilder().withIndexType(indexType)
         .fromProperties(populateMetaFields ? new Properties() : getPropertiesForKeyGen())
         .withIndexType(indexType);
+    if (indexType == IndexType.BUCKET) {
+      indexBuilder.withBucketIndexEngineType(HoodieIndex.BucketIndexEngineType.SIMPLE);
+    }
     config = getConfigBuilder()
         .withProperties(populateMetaFields ? new Properties() : getPropertiesForKeyGen())
         .withRollbackUsingMarkers(rollbackUsingMarkers)
@@ -177,6 +183,62 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     writeClient.commit(newCommitTime, writeStatues);
     // Now tagLocation for these records, index should tag them correctly
     metaClient = HoodieTableMetaClient.reload(metaClient);
+    hoodieTable = HoodieSparkTable.create(config, context, metaClient);
+    javaRDD = tagLocation(index, writeRecords, hoodieTable);
+    Map<String, String> recordKeyToPartitionPathMap = new HashMap();
+    List<HoodieRecord> hoodieRecords = writeRecords.collect();
+    hoodieRecords.forEach(entry -> recordKeyToPartitionPathMap.put(entry.getRecordKey(), entry.getPartitionPath()));
+
+    assertEquals(totalRecords, javaRDD.filter(record -> record.isCurrentLocationKnown()).collect().size());
+    assertEquals(totalRecords, javaRDD.map(record -> record.getKey().getRecordKey()).distinct().count());
+    assertEquals(totalRecords, javaRDD.filter(record -> (record.getCurrentLocation() != null
+        && record.getCurrentLocation().getInstantTime().equals(newCommitTime))).distinct().count());
+    javaRDD.foreach(entry -> assertEquals(recordKeyToPartitionPathMap.get(entry.getRecordKey()), entry.getPartitionPath(), "PartitionPath mismatch"));
+
+    JavaRDD<HoodieKey> hoodieKeyJavaRDD = writeRecords.map(entry -> entry.getKey());
+    JavaPairRDD<HoodieKey, Option<Pair<String, String>>> recordLocations = getRecordLocations(hoodieKeyJavaRDD, hoodieTable);
+    List<HoodieKey> hoodieKeys = hoodieKeyJavaRDD.collect();
+    assertEquals(totalRecords, recordLocations.collect().size());
+    assertEquals(totalRecords, recordLocations.map(record -> record._1).distinct().count());
+    recordLocations.foreach(entry -> assertTrue(hoodieKeys.contains(entry._1), "Missing HoodieKey"));
+    recordLocations.foreach(entry -> assertEquals(recordKeyToPartitionPathMap.get(entry._1.getRecordKey()), entry._1.getPartitionPath(), "PartitionPath mismatch"));
+  }
+
+  @Test
+  public void testLookupIndexWithOrWithoutColumnStats() throws Exception {
+    setUp(IndexType.BLOOM, true, true);
+    String newCommitTime = "001";
+    int totalRecords = 10 + random.nextInt(20);
+    List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, totalRecords);
+    JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
+
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
+
+    // Test tagLocation without any entries in index
+    JavaRDD<HoodieRecord> javaRDD = tagLocation(index, writeRecords, hoodieTable);
+    assert (javaRDD.filter(record -> record.isCurrentLocationKnown()).collect().size() == 0);
+
+    // Insert totalRecords records
+    writeClient.startCommitWithTime(newCommitTime);
+    JavaRDD<WriteStatus> writeStatues = writeClient.upsert(writeRecords, newCommitTime);
+    Assertions.assertNoWriteErrors(writeStatues.collect());
+
+    // Now tagLocation for these records
+    javaRDD = tagLocation(index, writeRecords, hoodieTable);
+    assert (javaRDD.filter(record -> record.isCurrentLocationKnown()).collect().size() == 0);
+    // Now commit this & update location of records inserted
+    writeClient.commit(newCommitTime, writeStatues);
+
+    // check column_stats partition exists
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    assertTrue(metadataPartitionExists(metaClient.getBasePath(), context, COLUMN_STATS));
+    assertTrue(metaClient.getTableConfig().getMetadataPartitions().contains(COLUMN_STATS.getPartitionPath()));
+
+    // delete the column_stats partition
+    deleteMetadataPartition(metaClient.getBasePath(), context, COLUMN_STATS);
+
+    // Now tagLocation for these records, they should be tagged correctly despite column_stats being enabled but not present
     hoodieTable = HoodieSparkTable.create(config, context, metaClient);
     javaRDD = tagLocation(index, writeRecords, hoodieTable);
     Map<String, String> recordKeyToPartitionPathMap = new HashMap();
