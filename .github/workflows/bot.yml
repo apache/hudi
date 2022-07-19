@@ -11,59 +11,59 @@ on:
       - 'release-*'
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        include:
-          - scalaProfile: "scala-2.11"
-            sparkProfile: "spark2.4"
-            flinkProfile: "flink1.13"
-
-          - scalaProfile: "scala-2.11"
-            sparkProfile: "spark2.4"
-            flinkProfile: "flink1.14"
-
-          - scalaProfile: "scala-2.12"
-            sparkProfile: "spark2.4"
-            flinkProfile: "flink1.13"
-
-          - scalaProfile: "scala-2.12"
-            sparkProfile: "spark3.1"
-            flinkProfile: "flink1.14"
-
-          - scalaProfile: "scala-2.12"
-            sparkProfile: "spark3.2"
-            flinkProfile: "flink1.14"
-
-    steps:
-      - uses: actions/checkout@v2
-      - name: Set up JDK 8
-        uses: actions/setup-java@v2
-        with:
-          java-version: '8'
-          distribution: 'adopt'
-          architecture: x64
-      - name: Build Project
-        env:
-          SCALA_PROFILE: ${{ matrix.scalaProfile }}
-          SPARK_PROFILE: ${{ matrix.sparkProfile }}
-          FLINK_PROFILE: ${{ matrix.flinkProfile }}
-        run:
-          mvn clean install -Pintegration-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -DskipTests=true -B -V
-      - name: Quickstart Test
-        env:
-          SCALA_PROFILE: ${{ matrix.scalaProfile }}
-          SPARK_PROFILE: ${{ matrix.sparkProfile }}
-          FLINK_PROFILE: ${{ matrix.flinkProfile }}
-        if: ${{ !endsWith(env.SPARK_PROFILE, '3.2') }} # skip test spark 3.2 before hadoop upgrade to 3.x
-        run:
-          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -DfailIfNoTests=false -pl hudi-examples/hudi-examples-flink,hudi-examples/hudi-examples-java,hudi-examples/hudi-examples-spark
-      - name: Spark SQL Test
-        env:
-          SCALA_PROFILE: ${{ matrix.scalaProfile }}
-          SPARK_PROFILE: ${{ matrix.sparkProfile }}
-          FLINK_PROFILE: ${{ matrix.flinkProfile }}
-        if: ${{ !endsWith(env.SPARK_PROFILE, '2.4') }} # skip test spark 2.4 as it's covered by Azure CI
-        run:
-          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" '-Dtest=org.apache.spark.sql.hudi.Test*' -pl hudi-spark-datasource/hudi-spark
+#  build:
+#    runs-on: ubuntu-latest
+#    strategy:
+#      matrix:
+#        include:
+#          - scalaProfile: "scala-2.11"
+#            sparkProfile: "spark2.4"
+#            flinkProfile: "flink1.13"
+#
+#          - scalaProfile: "scala-2.11"
+#            sparkProfile: "spark2.4"
+#            flinkProfile: "flink1.14"
+#
+#          - scalaProfile: "scala-2.12"
+#            sparkProfile: "spark2.4"
+#            flinkProfile: "flink1.13"
+#
+#          - scalaProfile: "scala-2.12"
+#            sparkProfile: "spark3.1"
+#            flinkProfile: "flink1.14"
+#
+#          - scalaProfile: "scala-2.12"
+#            sparkProfile: "spark3.2"
+#            flinkProfile: "flink1.14"
+#
+#    steps:
+#      - uses: actions/checkout@v2
+#      - name: Set up JDK 8
+#        uses: actions/setup-java@v2
+#        with:
+#          java-version: '8'
+#          distribution: 'adopt'
+#          architecture: x64
+#      - name: Build Project
+#        env:
+#          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+#          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+#          FLINK_PROFILE: ${{ matrix.flinkProfile }}
+#        run:
+#          mvn clean install -Pintegration-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -DskipTests=true -B -V
+#      - name: Quickstart Test
+#        env:
+#          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+#          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+#          FLINK_PROFILE: ${{ matrix.flinkProfile }}
+#        if: ${{ !endsWith(env.SPARK_PROFILE, '3.2') }} # skip test spark 3.2 before hadoop upgrade to 3.x
+#        run:
+#          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -DfailIfNoTests=false -pl hudi-examples/hudi-examples-flink,hudi-examples/hudi-examples-java,hudi-examples/hudi-examples-spark
+#      - name: Spark SQL Test
+#        env:
+#          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+#          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+#          FLINK_PROFILE: ${{ matrix.flinkProfile }}
+#        if: ${{ !endsWith(env.SPARK_PROFILE, '2.4') }} # skip test spark 2.4 as it's covered by Azure CI
+#        run:
+#          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" '-Dtest=org.apache.spark.sql.hudi.Test*' -pl hudi-spark-datasource/hudi-spark
