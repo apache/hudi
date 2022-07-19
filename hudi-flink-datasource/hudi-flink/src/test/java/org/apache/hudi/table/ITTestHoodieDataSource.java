@@ -1342,7 +1342,6 @@ public class ITTestHoodieDataSource extends AbstractTestBase {
         .field("f_par string")
         .pkField("f_int")
         .partitionField("f_par")
-        .option(FlinkOptions.PATH, tempFile.getAbsolutePath() + "/" + dbName + "/" + "t1")
         .option(FlinkOptions.RECORD_KEY_FIELD, "f_int")
         .option(FlinkOptions.PRECOMBINE_FIELD, "f_date")
         .end();

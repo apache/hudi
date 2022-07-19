@@ -273,8 +273,19 @@ public class StreamerUtil {
    * @throws IOException if errors happens when writing metadata
    */
   public static HoodieTableMetaClient initTableIfNotExists(Configuration conf) throws IOException {
+    return initTableIfNotExists(conf, HadoopConfigurations.getHadoopConf(conf));
+  }
+
+  /**
+   * Initialize the table if it does not exist.
+   *
+   * @param conf the configuration
+   * @throws IOException if errors happens when writing metadata
+   */
+  public static HoodieTableMetaClient initTableIfNotExists(
+      Configuration conf,
+      org.apache.hadoop.conf.Configuration hadoopConf) throws IOException {
     final String basePath = conf.getString(FlinkOptions.PATH);
-    final org.apache.hadoop.conf.Configuration hadoopConf = HadoopConfigurations.getHadoopConf(conf);
     if (!tableExists(basePath, hadoopConf)) {
       HoodieTableMetaClient metaClient = HoodieTableMetaClient.withPropertyBuilder()
           .setTableCreateSchema(conf.getString(FlinkOptions.SOURCE_AVRO_SCHEMA))
@@ -529,7 +540,7 @@ public class StreamerUtil {
     }
     return null;
   }
-    
+
   public static boolean fileExists(FileSystem fs, Path path) {
     try {
       return fs.exists(path);

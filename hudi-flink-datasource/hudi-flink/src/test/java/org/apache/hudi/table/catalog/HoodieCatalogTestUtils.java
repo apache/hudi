@@ -41,6 +41,7 @@ public class HoodieCatalogTestUtils {
     return new HoodieHiveCatalog(
         name,
         null,
+        null,
         createHiveConf(),
         true);
   }

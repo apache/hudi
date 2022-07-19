@@ -54,6 +54,7 @@ import java.util.Map;
 import static org.apache.flink.table.factories.FactoryUtil.CONNECTOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -106,7 +107,7 @@ public class TestHoodieHiveCatalog {
     assertEquals(table1.getOptions().get(CONNECTOR.key()), "hudi");
     assertEquals(table1.getOptions().get(FlinkOptions.TABLE_TYPE.key()), tableType.toString());
     assertEquals(table1.getOptions().get(FlinkOptions.RECORD_KEY_FIELD.key()), "uuid");
-    assertEquals(table1.getOptions().get(FlinkOptions.PRECOMBINE_FIELD.key()), "ts");
+    assertNull(table1.getOptions().get(FlinkOptions.PRECOMBINE_FIELD.key()), "preCombine key is not declared");
     assertEquals(table1.getUnresolvedSchema().getPrimaryKey().get().getColumnNames(), Collections.singletonList("uuid"));
     assertEquals(((CatalogTable)table1).getPartitionKeys(), Collections.singletonList("par1"));
   }
