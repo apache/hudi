@@ -58,7 +58,7 @@ public abstract class BaseBootstrapMetadataHandler implements BootstrapMetadataH
         table, partitionPath, FSUtils.createNewFileIdPfx(), table.getTaskContextSupplier());
     try {
       Schema avroSchema = getAvroSchema(sourceFilePath);
-      List<String> recordKeyColumns = keyGenerator.getRecordKeyFields().stream()
+      List<String> recordKeyColumns = keyGenerator.getRecordKeyFieldNames().stream()
           .map(HoodieAvroUtils::getRootLevelFieldName)
           .collect(Collectors.toList());
       Schema recordKeySchema = HoodieAvroUtils.generateProjectionSchema(avroSchema, recordKeyColumns);

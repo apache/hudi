@@ -470,7 +470,7 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
     private final HoodieUnsafeRowUtils.NestedFieldPath[] partitionPathFieldsPaths;
 
     SparkRowAccessor(StructType schema) {
-      this.recordKeyFieldsPaths = resolveNestedFieldPaths(getRecordKeyFields(), schema);
+      this.recordKeyFieldsPaths = resolveNestedFieldPaths(getRecordKeyFieldNames(), schema);
       this.partitionPathFieldsPaths = resolveNestedFieldPaths(getPartitionPathFields(), schema);
     }
 

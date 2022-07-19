@@ -174,7 +174,7 @@ public class KafkaConnectUtils {
    * @return Returns the record key columns separated by comma.
    */
   public static String getRecordKeyColumns(KeyGenerator keyGenerator) {
-    return keyGenerator.getRecordKeyFields().stream()
+    return keyGenerator.getRecordKeyFieldNames().stream()
         .map(HoodieAvroUtils::getRootLevelFieldName)
         .collect(Collectors.joining(","));
   }

@@ -82,7 +82,7 @@ public class CustomKeyGenerator extends BuiltinKeyGenerator {
 
   @Override
   public String getRecordKey(Row row) {
-    return getRecordKeyFields().size() == 1
+    return getRecordKeyFieldNames().size() == 1
         ? new SimpleKeyGenerator(config).getRecordKey(row)
         : new ComplexKeyGenerator(config).getRecordKey(row);
   }
@@ -153,7 +153,7 @@ public class CustomKeyGenerator extends BuiltinKeyGenerator {
   }
 
   private void validateRecordKeyFields() {
-    if (getRecordKeyFields() == null || getRecordKeyFields().isEmpty()) {
+    if (getRecordKeyFieldNames() == null || getRecordKeyFieldNames().isEmpty()) {
       throw new HoodieKeyException("Unable to find field names for record key in cfg");
     }
   }

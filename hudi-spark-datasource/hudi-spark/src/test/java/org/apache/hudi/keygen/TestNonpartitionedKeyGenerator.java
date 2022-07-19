@@ -102,7 +102,7 @@ public class TestNonpartitionedKeyGenerator extends KeyGeneratorTestUtilities {
     properties.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "timestamp");
     properties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "");
     NonpartitionedKeyGenerator keyGenerator = new NonpartitionedKeyGenerator(properties);
-    assertEquals(keyGenerator.getRecordKeyFields().size(), 1);
+    assertEquals(keyGenerator.getRecordKeyFieldNames().size(), 1);
     assertEquals(keyGenerator.getPartitionPathFields().size(), 0);
 
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
@@ -119,7 +119,7 @@ public class TestNonpartitionedKeyGenerator extends KeyGeneratorTestUtilities {
     properties.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "timestamp,driver");
     properties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "");
     NonpartitionedKeyGenerator keyGenerator = new NonpartitionedKeyGenerator(properties);
-    assertEquals(keyGenerator.getRecordKeyFields().size(), 2);
+    assertEquals(keyGenerator.getRecordKeyFieldNames().size(), 2);
     assertEquals(keyGenerator.getPartitionPathFields().size(), 0);
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
     GenericRecord record = dataGenerator.generateGenericRecords(1).get(0);

@@ -58,14 +58,14 @@ public abstract class BaseKeyGenerator extends KeyGenerator {
    */
   @Override
   public final HoodieKey getKey(GenericRecord record) {
-    if (getRecordKeyFields() == null || getPartitionPathFields() == null) {
+    if (getRecordKeyFieldNames() == null || getPartitionPathFields() == null) {
       throw new HoodieKeyException("Unable to find field names for record key or partition path in cfg");
     }
     return new HoodieKey(getRecordKey(record), getPartitionPath(record));
   }
 
   @Override
-  public List<String> getRecordKeyFields() {
+  public List<String> getRecordKeyFieldNames() {
     return recordKeyFields;
   }
 

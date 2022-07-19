@@ -107,7 +107,7 @@ public class TestComplexKeyGenerator extends KeyGeneratorTestUtilities {
     properties.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key");
     properties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "timestamp");
     ComplexKeyGenerator compositeKeyGenerator = new ComplexKeyGenerator(properties);
-    assertEquals(compositeKeyGenerator.getRecordKeyFields().size(), 1);
+    assertEquals(compositeKeyGenerator.getRecordKeyFieldNames().size(), 1);
     assertEquals(compositeKeyGenerator.getPartitionPathFields().size(), 1);
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
     GenericRecord record = dataGenerator.generateGenericRecords(1).get(0);
@@ -130,7 +130,7 @@ public class TestComplexKeyGenerator extends KeyGeneratorTestUtilities {
     properties.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key,timestamp");
     properties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "rider,driver");
     ComplexKeyGenerator compositeKeyGenerator = new ComplexKeyGenerator(properties);
-    assertEquals(compositeKeyGenerator.getRecordKeyFields().size(), 2);
+    assertEquals(compositeKeyGenerator.getRecordKeyFieldNames().size(), 2);
     assertEquals(compositeKeyGenerator.getPartitionPathFields().size(), 2);
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
     GenericRecord record = dataGenerator.generateGenericRecords(1).get(0);
@@ -156,7 +156,7 @@ public class TestComplexKeyGenerator extends KeyGeneratorTestUtilities {
     properties.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key,timestamp");
     properties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "");
     ComplexKeyGenerator compositeKeyGenerator = new ComplexKeyGenerator(properties);
-    assertEquals(compositeKeyGenerator.getRecordKeyFields().size(), 2);
+    assertEquals(compositeKeyGenerator.getRecordKeyFieldNames().size(), 2);
     assertEquals(compositeKeyGenerator.getPartitionPathFields().size(), 0);
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
     GenericRecord record = dataGenerator.generateGenericRecords(1).get(0);

@@ -59,7 +59,7 @@ public interface SparkKeyGeneratorInterface extends KeyGeneratorInterface {
   /**
    * Extracts partition-path from {@link Row}
    *
-   * @param row instance of {@link Row} from which record-key is extracted
+   * @param row instance of {@link Row} from which partition-path is extracted
    * @return record's partition-path
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
