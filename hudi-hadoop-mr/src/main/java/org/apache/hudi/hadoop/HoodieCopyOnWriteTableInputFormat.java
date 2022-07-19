@@ -78,6 +78,7 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  * NOTE: This class is invariant of the underlying file-format of the files being read
  */
 public class HoodieCopyOnWriteTableInputFormat extends HoodieTableInputFormat {
+  private static final Logger LOG = LogManager.getLogger(HoodieCopyOnWriteTableInputFormat.class);
 
   private static final Logger LOG = LogManager.getLogger(HoodieCopyOnWriteTableInputFormat.class);
 
