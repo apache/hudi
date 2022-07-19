@@ -256,7 +256,7 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
       sb.append(convertedKeyPart);
       // This check is to validate that overall composite-key has at least one non-null, non-empty
       // segment
-      hasNonNullNonEmptyPart |= isNullOrEmptyKeyPartPredicate.test(convertedKeyPart);
+      hasNonNullNonEmptyPart |= !isNullOrEmptyKeyPartPredicate.test(convertedKeyPart);
 
       if (i < recordKeyParts.length - 1) {
         sb.appendJava(DEFAULT_RECORD_KEY_PARTS_SEPARATOR);
@@ -386,14 +386,14 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
     // NOTE: Converted key-part is compared against null/empty stub using ref-equality
     //       for performance reasons (it relies on the fact that we're using internalized
     //       constants)
-    return keyPart != NULL_RECORDKEY_PLACEHOLDER && keyPart != EMPTY_RECORDKEY_PLACEHOLDER;
+    return keyPart == NULL_RECORDKEY_PLACEHOLDER || keyPart == EMPTY_RECORDKEY_PLACEHOLDER;
   }
 
   private static boolean isNullOrEmptyCompositeKeyPartUTF8(UTF8String keyPart) {
     // NOTE: Converted key-part is compared against null/empty stub using ref-equality
     //       for performance reasons (it relies on the fact that we're using internalized
     //       constants)
-    return keyPart != NULL_RECORD_KEY_PLACEHOLDER_UTF8 && keyPart != EMPTY_RECORD_KEY_PLACEHOLDER_UTF8;
+    return keyPart == NULL_RECORD_KEY_PLACEHOLDER_UTF8 || keyPart == EMPTY_RECORD_KEY_PLACEHOLDER_UTF8;
   }
 
   private static String handleNullOrEmptyPartitionPathPart(Object partitionPathPart) {
