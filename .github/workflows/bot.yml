@@ -20,6 +20,22 @@ jobs:
             sparkProfile: "spark2.4"
             flinkProfile: "flink1.13"
 
+          - scalaProfile: "scala-2.11"
+            sparkProfile: "spark2.4"
+            flinkProfile: "flink1.14"
+
+          - scalaProfile: "scala-2.12"
+            sparkProfile: "spark2.4"
+            flinkProfile: "flink1.13"
+
+          - scalaProfile: "scala-2.12"
+            sparkProfile: "spark3.1"
+            flinkProfile: "flink1.14"
+
+          - scalaProfile: "scala-2.12"
+            sparkProfile: "spark3.2"
+            flinkProfile: "flink1.14"
+
     steps:
       - uses: actions/checkout@v2
       - name: Set up JDK 8
