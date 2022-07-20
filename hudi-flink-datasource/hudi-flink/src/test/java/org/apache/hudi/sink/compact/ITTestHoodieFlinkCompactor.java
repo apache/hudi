@@ -102,6 +102,7 @@ public class ITTestHoodieFlinkCompactor {
     tableEnv.getConfig().getConfiguration()
         .setInteger(ExecutionConfigOptions.TABLE_EXEC_RESOURCE_DEFAULT_PARALLELISM, 1);
     Map<String, String> options = new HashMap<>();
+    options.put(FlinkOptions.COMPACTION_SCHEDULE_ENABLED.key(), "false");
     options.put(FlinkOptions.COMPACTION_ASYNC_ENABLED.key(), "false");
     options.put(FlinkOptions.PATH.key(), tempFile.getAbsolutePath());
     options.put(FlinkOptions.TABLE_TYPE.key(), "MERGE_ON_READ");
@@ -214,6 +215,7 @@ public class ITTestHoodieFlinkCompactor {
     tableEnv.getConfig().getConfiguration()
         .setInteger(ExecutionConfigOptions.TABLE_EXEC_RESOURCE_DEFAULT_PARALLELISM, 1);
     Map<String, String> options = new HashMap<>();
+    options.put(FlinkOptions.COMPACTION_SCHEDULE_ENABLED.key(), "false");
     options.put(FlinkOptions.COMPACTION_ASYNC_ENABLED.key(), "false");
     options.put(FlinkOptions.PATH.key(), tempFile.getAbsolutePath());
     options.put(FlinkOptions.TABLE_TYPE.key(), "MERGE_ON_READ");
@@ -222,6 +224,7 @@ public class ITTestHoodieFlinkCompactor {
     tableEnv.executeSql(hoodieTableDDL);
     tableEnv.executeSql(TestSQL.INSERT_T1).await();
 
+    // wait for the asynchronous commit to finish
     TimeUnit.SECONDS.sleep(3);
 
     StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
@@ -247,6 +250,7 @@ public class ITTestHoodieFlinkCompactor {
         + "('id13','Jenny',72,TIMESTAMP '1970-01-01 00:00:10','par5')";
     tableEnv.executeSql(insertT1ForNewPartition).await();
 
+    // wait for the asynchronous commit to finish
     TimeUnit.SECONDS.sleep(3);
 
     compactionInstantTimeList.add(scheduleCompactionPlan(metaClient, writeClient));
