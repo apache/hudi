@@ -71,3 +71,13 @@ In order for Hive to recognize Hudi tables and query correctly,
 In addition to setup above, for beeline cli access, the `hive.input.format` variable needs to be set to the fully qualified path name of the
 inputformat `org.apache.hudi.hadoop.HoodieParquetInputFormat`. For Tez, additionally the `hive.tez.input.format` needs to be set
 to `org.apache.hadoop.hive.ql.io.HiveInputFormat`. Then proceed to query the table like any other Hive table.
+
+## Redshift Spectrum
+Copy on Write Tables in Apache Hudi versions 0.5.2, 0.6.0, 0.7.0, 0.8.0, 0.9.0, and 0.10.0 can be queried via Amazon Redshift Spectrum external tables.
+:::note
+Hudi tables are supported only when AWS Glue Data Catalog is used. It's not supported when you use an Apache Hive metastore as the external catalog.
+:::
+
+Please refer to [Redshift Spectrum Integration with Apache Hudi](https://docs.aws.amazon.com/redshift/latest/dg/c-spectrum-external-tables.html#c-spectrum-column-mapping-hudi)
+for more details.
+
