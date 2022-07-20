@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieInsertException;
 import org.apache.hudi.hadoop.CachingPath;
@@ -134,47 +135,57 @@ public class HoodieRowCreateHandle implements Serializable {
    * @throws IOException
    */
   public void write(InternalRow row) throws IOException {
+    if (populateMetaFields) {
+      writeRow(row);
+    } else {
+      writeRowNoMetaFields(row);
+    }
+  }
+
+  private void writeRow(InternalRow row) {
     try {
       // NOTE: PLEASE READ THIS CAREFULLY BEFORE MODIFYING
       //       This code lays in the hot-path, and substantial caution should be
       //       exercised making changes to it to minimize amount of excessive:
-      //          - Conversions b/w Spark internal (low-level) types and JVM native ones (like
-      //         [[UTF8String]] and [[String]])
+      //          - Conversions b/w Spark internal types and JVM native ones (like [[UTF8String]]
+      //          and [[String]])
       //          - Repeated computations (for ex, converting file-path to [[UTF8String]] over and
       //          over again)
       UTF8String recordKey = row.getUTF8String(HoodieRecord.RECORD_KEY_META_FIELD_ORD);
+      UTF8String partitionPath = row.getUTF8String(HoodieRecord.PARTITION_PATH_META_FIELD_ORD);
+      // This is the only meta-field that is generated dynamically, hence conversion b/w
+      // [[String]] and [[UTF8String]] is unavoidable
+      UTF8String seqId = UTF8String.fromString(seqIdGenerator.apply(GLOBAL_SEQ_NO.getAndIncrement()));
 
-      InternalRow updatedRow;
-      // In cases when no meta-fields need to be added we simply relay provided row to
-      // the writer as is
-      if (!populateMetaFields) {
-        updatedRow = row;
-      } else {
-        UTF8String partitionPath = row.getUTF8String(HoodieRecord.PARTITION_PATH_META_FIELD_ORD);
-        // This is the only meta-field that is generated dynamically, hence conversion b/w
-        // [[String]] and [[UTF8String]] is unavoidable
-        UTF8String seqId = UTF8String.fromString(seqIdGenerator.apply(GLOBAL_SEQ_NO.getAndIncrement()));
-
-        updatedRow = new HoodieInternalRow(commitTime, seqId, recordKey,
-            partitionPath, fileName, row, true);
-      }
+      InternalRow updatedRow = new HoodieInternalRow(commitTime, seqId, recordKey,
+          partitionPath, fileName, row, true);
 
       try {
         fileWriter.writeRow(recordKey, updatedRow);
         // NOTE: To avoid conversion on the hot-path we only convert [[UTF8String]] into [[String]]
         //       in cases when successful records' writes are being tracked
         writeStatus.markSuccess(writeStatus.isTrackingSuccessfulWrites() ? recordKey.toString() : null);
-      } catch (Throwable t) {
+      } catch (Exception t) {
         writeStatus.markFailure(recordKey.toString(), t);
       }
-    } catch (Throwable ge) {
-      writeStatus.setGlobalError(ge);
-      throw ge;
+    } catch (Exception e) {
+      writeStatus.setGlobalError(e);
+      throw e;
+    }
+  }
+
+  private void writeRowNoMetaFields(InternalRow row) {
+    try {
+      fileWriter.writeRow(row);
+      writeStatus.markSuccess();
+    } catch (Exception e) {
+      writeStatus.setGlobalError(e);
+      throw new HoodieException("Exception thrown while writing spark InternalRows to file ", e);
     }
   }
 
   /**
-   * @returns {@code true} if this handle can take in more writes. else {@code false}.
+   * Returns {@code true} if this handle can take in more writes. else {@code false}.
    */
   public boolean canWrite() {
     return fileWriter.canWrite();
@@ -185,7 +196,6 @@ public class HoodieRowCreateHandle implements Serializable {
    * status of the writes to this handle.
    *
    * @return the {@link HoodieInternalWriteStatus} containing the stats and status of the writes to this handle.
-   * @throws IOException
    */
   public HoodieInternalWriteStatus close() throws IOException {
     fileWriter.close();
