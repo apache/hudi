@@ -30,14 +30,12 @@ import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.util.Utils;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
 import java.nio.file.Paths;
 
-@Disabled
 public class TestHoodieSparkQuickstart implements SparkProvider {
   protected static transient HoodieSparkEngineContext context;
 
