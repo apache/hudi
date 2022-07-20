@@ -88,6 +88,8 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
     Object fieldVal;
     if (partitionPathPart == null || Objects.equals(partitionPathPart, HUDI_DEFAULT_PARTITION_PATH)) {
       fieldVal = timestampBasedAvroKeyGenerator.getDefaultPartitionVal();
+    } else if (partitionPathPart instanceof UTF8String) {
+      fieldVal = partitionPathPart.toString();
     } else {
       fieldVal = partitionPathPart;
     }
