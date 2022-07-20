@@ -137,7 +137,9 @@ public class BulkInsertDataInternalWriterHelper {
       if (lastKnownPartitionPath == null || !Objects.equals(lastKnownPartitionPath, partitionPath) || !handle.canWrite()) {
         LOG.info("Creating new file for partition path " + partitionPath);
         handle = getRowCreateHandle(partitionPath.toString());
-        lastKnownPartitionPath = partitionPath;
+        // NOTE: It's crucial to make a copy here, since [[UTF8String]] could be pointing into
+        //       a mutable underlying buffer
+        lastKnownPartitionPath = partitionPath.clone();
       }
 
       handle.write(row);
