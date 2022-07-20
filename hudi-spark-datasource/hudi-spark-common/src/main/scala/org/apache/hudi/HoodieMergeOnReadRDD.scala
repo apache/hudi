@@ -71,9 +71,9 @@ case class HoodieMergeOnReadPartition(index: Int, split: HoodieMergeOnReadFileSp
  *   This could occur, when file-group has no delta-log files</li>
  * </ol>
  */
-private[hudi] class HoodieMergeOnReadBaseFileReaders(val fullSchemaReader: BaseFileReader,
-                                                     val requiredSchemaReader: BaseFileReader,
-                                                     val requiredSchemaReaderSkipMerging: BaseFileReader)
+private[hudi] case class HoodieMergeOnReadBaseFileReaders(fullSchemaReader: BaseFileReader,
+                                                          requiredSchemaReader: BaseFileReader,
+                                                          requiredSchemaReaderSkipMerging: BaseFileReader)
 
 /**
  * RDD enabling Hudi's Merge-on-Read (MOR) semantic

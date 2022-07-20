@@ -643,7 +643,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
 
 object HoodieBaseRelation extends SparkAdapterSupport {
 
-  class BaseFileReader(read: PartitionedFile => Iterator[InternalRow], val schema: StructType) {
+  case class BaseFileReader(read: PartitionedFile => Iterator[InternalRow], schema: StructType) {
     def apply(file: PartitionedFile): Iterator[InternalRow] = read.apply(file)
   }
 
@@ -697,7 +697,7 @@ object HoodieBaseRelation extends SparkAdapterSupport {
     val hadoopConfBroadcast =
       spark.sparkContext.broadcast(new SerializableConfiguration(hadoopConf))
 
-    new BaseFileReader(
+    BaseFileReader(
       read = partitionedFile => {
         val hadoopConf = hadoopConfBroadcast.value.get()
         val reader = new HoodieHFileReader[GenericRecord](hadoopConf, new Path(partitionedFile.filePath),

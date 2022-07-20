@@ -154,7 +154,7 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
     //           in case query-mode is skipping merging
     val mandatoryColumns = mandatoryFieldsForMerging.map(HoodieAvroUtils.getRootLevelFieldName)
     if (mandatoryColumns.forall(requestedColumns.contains)) {
-      new HoodieMergeOnReadBaseFileReaders(
+      HoodieMergeOnReadBaseFileReaders(
         fullSchemaReader = fullSchemaReader,
         requiredSchemaReader = requiredSchemaReader,
         requiredSchemaReaderSkipMerging = requiredSchemaReader
@@ -183,7 +183,7 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
         hadoopConf = embedInternalSchema(new Configuration(conf), requiredDataSchema.internalSchema)
       )
 
-      new HoodieMergeOnReadBaseFileReaders(
+      HoodieMergeOnReadBaseFileReaders(
         fullSchemaReader = fullSchemaReader,
         requiredSchemaReader = requiredSchemaReader,
         requiredSchemaReaderSkipMerging = requiredSchemaReaderSkipMerging
