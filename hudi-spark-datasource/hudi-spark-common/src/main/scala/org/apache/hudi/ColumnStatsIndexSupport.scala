@@ -82,8 +82,7 @@ class ColumnStatsIndexSupport(spark: SparkSession,
    * w/in the Metadata Table
    */
   def isIndexAvailable: Boolean =
-    HoodieTableMetadataUtil.getCompletedMetadataPartitions(metaClient.getTableConfig)
-      .contains(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS)
+    metaClient.getTableConfig.getMetadataPartitions.contains(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS)
 
   /**
    * Determines whether it would be more optimal to read Column Stats Index a) in-memory of the invoking process,
@@ -297,7 +296,7 @@ class ColumnStatsIndexSupport(spark: SparkSession,
       val catalystRows: HoodieData[InternalRow] = colStatsRecords.mapPartitions(it => {
         val converter = AvroConversionUtils.createAvroToInternalRowConverter(HoodieMetadataColumnStats.SCHEMA$, columnStatsRecordStructType)
         it.asScala.map(r => converter(r).orNull).asJava
-      })
+      }, false)
 
       if (shouldReadInMemory) {
         // NOTE: This will instantiate a [[Dataset]] backed by [[LocalRelation]] holding all of the rows
