@@ -33,6 +33,7 @@ import org.apache.spark.unsafe.types.UTF8String;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.stream.Collectors;
 
 /**
@@ -56,15 +57,17 @@ public class CustomKeyGenerator extends BuiltinKeyGenerator {
   private final CustomAvroKeyGenerator customAvroKeyGenerator;
 
   public CustomKeyGenerator(TypedProperties props) {
-    super(props);
+    // NOTE: We have to strip partition-path configuration, since it could only be interpreted by
+    //       this key-gen
+    super(stripPartitionPathConfig(props));
     this.recordKeyFields =
         Arrays.stream(props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()).split(","))
             .map(String::trim)
             .collect(Collectors.toList());
-    this.partitionPathFields =
-        Arrays.stream(props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()).split(","))
-            .map(String::trim)
-            .collect(Collectors.toList());
+    String partitionPathFields = props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key());
+    this.partitionPathFields = partitionPathFields == null
+        ? Collections.emptyList()
+        : Arrays.stream(partitionPathFields.split(",")).map(String::trim).collect(Collectors.toList());
     this.customAvroKeyGenerator = new CustomAvroKeyGenerator(props);
 
     validateRecordKeyFields();
@@ -156,6 +159,12 @@ public class CustomKeyGenerator extends BuiltinKeyGenerator {
     if (getRecordKeyFieldNames() == null || getRecordKeyFieldNames().isEmpty()) {
       throw new HoodieKeyException("Unable to find field names for record key in cfg");
     }
+  }
+
+  private static TypedProperties stripPartitionPathConfig(TypedProperties props) {
+    TypedProperties filtered = new TypedProperties(props);
+    filtered.remove(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key());
+    return filtered;
   }
 }
 
