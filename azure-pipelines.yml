@@ -223,12 +223,12 @@ stages:
               mavenOptions: '-Xmx4g'
       - job: IT
         displayName: IT modules
-        timeoutInMinutes: '150'
+        timeoutInMinutes: '180'
         steps:
           - task: Maven@3
             displayName: maven install
             continueOnError: true
-            retryCountOnTaskFailure: 1
+            retryCountOnTaskFailure: 2
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'clean install'
