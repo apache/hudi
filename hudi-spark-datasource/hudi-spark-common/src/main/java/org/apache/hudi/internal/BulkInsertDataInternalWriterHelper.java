@@ -197,7 +197,7 @@ public class BulkInsertDataInternalWriterHelper {
 
   private HoodieRowCreateHandle createHandle(String partitionPath) {
     return new HoodieRowCreateHandle(hoodieTable, writeConfig, partitionPath, getNextFileId(),
-        instantTime, taskPartitionId, taskId, taskEpochId, structType, populateMetaFields);
+        instantTime, taskPartitionId, taskId, taskEpochId, structType);
   }
 
   private String getNextFileId() {

@@ -82,8 +82,7 @@ public class HoodieRowCreateHandle implements Serializable {
                                int taskPartitionId,
                                long taskId,
                                long taskEpochId,
-                               StructType structType,
-                               boolean populateMetaFields) {
+                               StructType structType) {
     this.partitionPath = partitionPath;
     this.table = table;
     this.writeConfig = writeConfig;
@@ -97,7 +96,7 @@ public class HoodieRowCreateHandle implements Serializable {
     String fileName = FSUtils.makeBaseFileName(instantTime, writeToken, this.fileId, table.getBaseFileExtension());
     this.path = makeNewPath(fs, partitionPath, fileName, writeConfig);
 
-    this.populateMetaFields = populateMetaFields;
+    this.populateMetaFields = writeConfig.populateMetaFields();
     this.fileName = UTF8String.fromString(path.getName());
     this.commitTime = UTF8String.fromString(instantTime);
     this.seqIdGenerator = (id) -> HoodieRecord.generateSequenceId(instantTime, taskPartitionId, id);
@@ -116,12 +115,15 @@ public class HoodieRowCreateHandle implements Serializable {
               FSUtils.getPartitionPath(writeConfig.getBasePath(), partitionPath),
               table.getPartitionMetafileFormat());
       partitionMetadata.trySave(taskPartitionId);
+
       createMarkerFile(partitionPath, fileName, instantTime, table, writeConfig);
-      this.fileWriter = createNewFileWriter(path, table, writeConfig, structType);
+
+      this.fileWriter = HoodieInternalRowFileWriterFactory.getInternalRowFileWriter(path, table, writeConfig, structType);
     } catch (IOException e) {
       throw new HoodieInsertException("Failed to initialize file writer for path " + path, e);
     }
-    LOG.info("New handle created for partition :" + partitionPath + " with fileId " + fileId);
+
+    LOG.info("New handle created for partition: " + partitionPath + " with fileId " + fileId);
   }
 
   /**
@@ -240,10 +242,4 @@ public class HoodieRowCreateHandle implements Serializable {
     return taskPartitionId + "-" + taskId + "-" + taskEpochId;
   }
 
-  protected HoodieInternalRowFileWriter createNewFileWriter(
-      Path path, HoodieTable hoodieTable, HoodieWriteConfig config, StructType schema)
-      throws IOException {
-    return HoodieInternalRowFileWriterFactory.getInternalRowFileWriter(
-        path, hoodieTable, config, schema);
-  }
 }
