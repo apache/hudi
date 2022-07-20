@@ -191,7 +191,6 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
     //runTest(tableState, DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, "null", projectedColumnsReadStatsReadOptimized)
   }
 
-  @Disabled
   @Test
   def testMergeOnReadSnapshotRelationWithDeltaLogsFallback(): Unit = {
     val tablePath = s"$basePath/mor-with-logs-fallback"
@@ -228,12 +227,12 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
     // Stats for the reads fetching _all_ columns (note, how amount of bytes read
     // is invariant of the # of columns)
     val fullColumnsReadStats: Array[(String, Long)] =
-    if (HoodieSparkUtils.isSpark3)
+    if (HoodieSparkUtils.isSpark3_2)
       Array(
         ("rider", 14167),
         ("rider,driver", 14167),
         ("rider,driver,tip_history", 14167))
-    else if (HoodieSparkUtils.isSpark2)
+    else if (HoodieSparkUtils.isSpark2 || HoodieSparkUtils.isSpark3_1)
     // TODO re-enable tests (these tests are very unstable currently)
       Array(
         ("rider", -1),
