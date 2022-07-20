@@ -16,7 +16,7 @@
 # specific language governing permissions and limitations
 # under the License.
 #
-# Trino docker-compose_hadoop284_hive233_spark313.yml setup is adapted from https://github.com/Lewuathe/docker-trino-cluster
+# Trino docker setup is adapted from https://github.com/Lewuathe/docker-trino-cluster
 
 ARG HADOOP_VERSION=2.8.4
 ARG TRINO_VERSION=368
