@@ -401,12 +401,12 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
   }
 
   /**
-   * Gets the latest version < instantTime. This version file could still be used by queries.
+   * Gets the latest version <= instantTime. This version file could still be used by queries.
    */
   private String getLatestVersionBeforeCommit(List<FileSlice> fileSliceList, HoodieInstant instantTime) {
     for (FileSlice file : fileSliceList) {
       String fileCommitTime = file.getBaseInstantTime();
-      if (HoodieTimeline.compareTimestamps(instantTime.getTimestamp(), HoodieTimeline.GREATER_THAN, fileCommitTime)) {
+      if (HoodieTimeline.compareTimestamps(fileCommitTime, HoodieTimeline.LESSER_THAN_OR_EQUALS, instantTime.getTimestamp())) {
         // fileList is sorted on the reverse, so the first commit we find <= instantTime is the
         // one we want
         return fileCommitTime;
