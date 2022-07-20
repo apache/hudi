@@ -205,21 +205,27 @@ After Hudi made a new commit, refresh the Impala table to get the latest results
 REFRESH database.table_name
 ```
 
+## Redshift Spectrum
+To set up Redshift Spectrum for querying Hudi, see the [Query Engine Setup](/docs/next/query_engine_setup#redshift-spectrum) page.
+
+
 ## Support Matrix
 
 Following tables show whether a given query is supported on specific query engine.
 
 ### Copy-On-Write tables
 
-|Query Engine|Snapshot Queries|Incremental Queries|
-|------------|--------|-----------|
-|**Hive**|Y|Y|
-|**Spark SQL**|Y|Y|
-|**Spark Datasource**|Y|Y|
-|**Flink SQL**|Y|N|
-|**PrestoDB**|Y|N|
-|**Trino**|Y|N|
-|**Impala**|Y|N|
+| Query Engine          |Snapshot Queries|Incremental Queries|
+|-----------------------|--------|-----------|
+| **Hive**              |Y|Y|
+| **Spark SQL**         |Y|Y|
+| **Spark Datasource**  |Y|Y|
+| **Flink SQL**         |Y|N|
+| **PrestoDB**          |Y|N|
+| **Trino**             |Y|N|
+| **Impala**            |Y|N|
+| **Redshift Spectrum** |Y|N|
+
 
 
 Note that `Read Optimized` queries are not applicable for COPY_ON_WRITE tables.
