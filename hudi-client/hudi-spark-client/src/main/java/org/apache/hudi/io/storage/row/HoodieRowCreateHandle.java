@@ -89,7 +89,7 @@ public class HoodieRowCreateHandle implements Serializable {
     this.writeConfig = writeConfig;
     this.fileId = fileId;
 
-    this.currTimer = new HoodieTimer(true);
+    this.currTimer = HoodieTimer.start();
 
     FileSystem fs = table.getMetaClient().getFs();
 
@@ -176,6 +176,8 @@ public class HoodieRowCreateHandle implements Serializable {
 
   private void writeRowNoMetaFields(InternalRow row) {
     try {
+      // TODO make sure writing w/ and w/o meta fields is consistent (currently writing w/o
+      //      meta-fields would fail if any record will, while when writing w/ meta-fields it won't)
       fileWriter.writeRow(row);
       writeStatus.markSuccess();
     } catch (Exception e) {
