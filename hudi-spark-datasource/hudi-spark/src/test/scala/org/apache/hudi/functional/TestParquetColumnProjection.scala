@@ -95,18 +95,18 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
     // Stats for the reads fetching only _projected_ columns (note how amount of bytes read
     // increases along w/ the # of columns)
     val projectedColumnsReadStats: Array[(String, Long)] =
-      if (HoodieSparkUtils.isSpark3)
+      if (HoodieSparkUtils.isSpark3_2)
         Array(
           ("rider", 2452),
           ("rider,driver", 2552),
           ("rider,driver,tip_history", 3517))
-      else if (HoodieSparkUtils.isSpark2)
+      else if (HoodieSparkUtils.isSpark2 || HoodieSparkUtils.isSpark3_1)
         Array(
           ("rider", 2595),
           ("rider,driver", 2735),
           ("rider,driver,tip_history", 3750))
       else
-        fail("Only Spark 3 and Spark 2 are currently supported")
+        fail("Only Spark3, Spark3.1 and Spark2 are currently supported")
 
     // Test MOR / Snapshot / Skip-merge
     runTest(tableState, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL, DataSourceReadOptions.REALTIME_SKIP_MERGE_OPT_VAL, projectedColumnsReadStats)
@@ -151,18 +151,18 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
     // Stats for the reads fetching only _projected_ columns (note how amount of bytes read
     // increases along w/ the # of columns)
     val projectedColumnsReadStats: Array[(String, Long)] =
-      if (HoodieSparkUtils.isSpark3)
+      if (HoodieSparkUtils.isSpark3_2)
         Array(
           ("rider", 2452),
           ("rider,driver", 2552),
           ("rider,driver,tip_history", 3517))
-      else if (HoodieSparkUtils.isSpark2)
+      else if (HoodieSparkUtils.isSpark2 || HoodieSparkUtils.isSpark3_1)
         Array(
           ("rider", 2595),
           ("rider,driver", 2735),
           ("rider,driver,tip_history", 3750))
       else
-        fail("Only Spark 3 and Spark 2 are currently supported")
+        fail("Only Spark3, Spark3.1 and Spark2 are currently supported")
 
     // Test MOR / Snapshot / Skip-merge
     runTest(tableState, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL, DataSourceReadOptions.REALTIME_SKIP_MERGE_OPT_VAL, projectedColumnsReadStats)
@@ -213,19 +213,18 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
     // Stats for the reads fetching only _projected_ columns (note how amount of bytes read
     // increases along w/ the # of columns)
     val projectedColumnsReadStats: Array[(String, Long)] =
-    if (HoodieSparkUtils.isSpark3)
+    if (HoodieSparkUtils.isSpark3_2)
       Array(
         ("rider", 2452),
         ("rider,driver", 2552),
         ("rider,driver,tip_history", 3517))
-    else if (HoodieSparkUtils.isSpark2)
+    else if (HoodieSparkUtils.isSpark2 || HoodieSparkUtils.isSpark3_1)
       Array(
         ("rider", 2595),
         ("rider,driver", 2735),
         ("rider,driver,tip_history", 3750))
     else
-      fail("Only Spark 3 and Spark 2 are currently supported")
-
+      fail("Only Spark3, Spark3.1 and Spark2 are currently supported")
     // Stats for the reads fetching _all_ columns (note, how amount of bytes read
     // is invariant of the # of columns)
     val fullColumnsReadStats: Array[(String, Long)] =
@@ -268,19 +267,18 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
     // Stats for the reads fetching only _projected_ columns (note how amount of bytes read
     // increases along w/ the # of columns)
     val projectedColumnsReadStats: Array[(String, Long)] =
-      if (HoodieSparkUtils.isSpark3)
+      if (HoodieSparkUtils.isSpark3_2)
         Array(
           ("rider", 4219),
           ("rider,driver", 4279),
           ("rider,driver,tip_history", 5186))
-      else if (HoodieSparkUtils.isSpark2)
+      else if (HoodieSparkUtils.isSpark2 || HoodieSparkUtils.isSpark3_1)
         Array(
           ("rider", 4430),
           ("rider,driver", 4530),
           ("rider,driver,tip_history", 5487))
       else
-        fail("Only Spark 3 and Spark 2 are currently supported")
-
+        fail("Only Spark3, Spark3.1 and Spark2 are currently supported")
     val incrementalOpts: Map[String, String] = Map(
       DataSourceReadOptions.BEGIN_INSTANTTIME.key -> "001"
     )
