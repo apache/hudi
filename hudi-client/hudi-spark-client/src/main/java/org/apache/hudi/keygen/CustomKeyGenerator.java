@@ -86,7 +86,7 @@ public class CustomKeyGenerator extends BuiltinKeyGenerator {
   @Override
   public String getRecordKey(Row row) {
     return getRecordKeyFieldNames().size() == 1
-        ? new SimpleKeyGenerator(config).getRecordKey(row)
+        ? new SimpleKeyGenerator(config, config.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()), null).getRecordKey(row)
         : new ComplexKeyGenerator(config).getRecordKey(row);
   }
 
@@ -163,7 +163,10 @@ public class CustomKeyGenerator extends BuiltinKeyGenerator {
 
   private static TypedProperties stripPartitionPathConfig(TypedProperties props) {
     TypedProperties filtered = new TypedProperties(props);
-    filtered.remove(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key());
+    // NOTE: We have to stub it out w/ empty string, since we properties are:
+    //         - Expected to bear this config
+    //         - Can't be stubbed out w/ null
+    filtered.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "");
     return filtered;
   }
 }
