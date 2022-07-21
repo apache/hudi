@@ -196,6 +196,12 @@ public class DFSPropertiesConfiguration {
     return globalProps;
   }
 
+  // test only
+  public static TypedProperties addToGlobalProps(String key, String value) {
+    GLOBAL_PROPS.put(key, value);
+    return GLOBAL_PROPS;
+  }
+
   public TypedProperties getProps() {
     return new TypedProperties(hoodieConfig.getProps());
   }
