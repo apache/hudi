@@ -78,7 +78,10 @@ hoodie.write.lock.provider=org.apache.hudi.aws.transaction.lock.DynamoDBBasedLoc
 hoodie.write.lock.dynamodb.table
 hoodie.write.lock.dynamodb.partition_key
 hoodie.write.lock.dynamodb.region
+hoodie.write.lock.dynamodb.endpoint_url
+hoodie.write.lock.dynamodb.billing_mode
 ```
+
 Also, to set up the credentials for accessing AWS resources, customers can pass the following props to Hudi jobs:
 ```
 hoodie.aws.access.key
@@ -86,6 +89,36 @@ hoodie.aws.secret.key
 hoodie.aws.session.token
 ```
 If not configured, Hudi falls back to use [DefaultAWSCredentialsProviderChain](https://docs.aws.amazon.com/AWSJavaSDK/latest/javadoc/com/amazonaws/auth/DefaultAWSCredentialsProviderChain.html).
+
+
+IAM policy for your service instance will need to add the following permissions:
+
+```json
+{
+  "Sid":"DynamoDBLocksTable",
+  "Effect": "Allow",
+  "Action": [
+    "dynamodb:CreateTable",
+    "dynamodb:DeleteItem",
+    "dynamodb:DescribeTable",
+    "dynamodb:GetItem",
+    "dynamodb:PutItem",
+    "dynamodb:Scan",
+    "dynamodb:UpdateItem"
+  ],
+  "Resource": "arn:${Partition}:dynamodb:${Region}:${Account}:table/${TableName}"
+}
+```
+- `TableName` : same as `hoodie.write.lock.dynamodb.partition_key`
+- `Region`: same as `hoodie.write.lock.dynamodb.region`
+
+AWS SDK dependencies are not bundled with Hudi from v0.10.x and will need to be added to your classpath. 
+Add the following Maven packages (check the latest versions at time of install):
+```
+com.amazonaws:dynamodb-lock-client
+com.amazonaws:aws-java-sdk-dynamodb
+com.amazonaws:aws-java-sdk-core
+```
 
 ## Datasource Writer
 
