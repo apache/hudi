@@ -52,6 +52,7 @@ import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV2MigrationHandler;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
@@ -1060,7 +1061,7 @@ public class HoodieTestTable {
             FileCreateUtils.baseFileName(commitTime, fileIdInfo.getKey());
         writeStat.setFileId(fileName);
         writeStat.setPartitionPath(partition);
-        writeStat.setPath(partition + "/" + fileName);
+        writeStat.setPath(StringUtils.isNullOrEmpty(partition) ? fileName : partition + "/" + fileName);
         writeStat.setTotalWriteBytes(fileIdInfo.getValue());
         writeStat.setFileSizeInBytes(fileIdInfo.getValue());
         writeStats.add(writeStat);
@@ -1086,7 +1087,7 @@ public class HoodieTestTable {
             FileCreateUtils.logFileName(commitTime, fileIdInfo.getKey(), fileIdInfo.getValue()[0]);
         writeStat.setFileId(fileName);
         writeStat.setPartitionPath(partition);
-        writeStat.setPath(partition + "/" + fileName);
+        writeStat.setPath(StringUtils.isNullOrEmpty(partition) ? fileName : partition + "/" + fileName);
         writeStat.setTotalWriteBytes(fileIdInfo.getValue()[1]);
         writeStat.setFileSizeInBytes(fileIdInfo.getValue()[1]);
         writeStats.add(writeStat);
