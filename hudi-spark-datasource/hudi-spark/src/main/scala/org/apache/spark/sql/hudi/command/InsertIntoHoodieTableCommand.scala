@@ -154,9 +154,9 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig {
      schemaWithoutMetaFields: Seq[StructField],
      conf: SQLConf): Seq[Alias] = {
     queryOutputWithoutMetaFields.zip(schemaWithoutMetaFields).map { case (dataAttr, dataField) =>
-      val targetFieldOption = schemaWithoutMetaFields.find(_.name.equals(dataAttr.name))
-      val targetField = if (targetFieldOption.isDefined && !dataAttr.name.contains("col"))
-        targetFieldOption.get else dataField
+      val targetFieldOption = if (dataAttr.name.contains("col")) None else
+        schemaWithoutMetaFields.find(_.name.equals(dataAttr.name))
+      val targetField = if (targetFieldOption.isDefined) targetFieldOption.get else dataField
       val castAttr = castIfNeeded(dataAttr.withNullability(targetField.nullable),
         targetField.dataType, conf)
       Alias(castAttr, targetField.name)()
