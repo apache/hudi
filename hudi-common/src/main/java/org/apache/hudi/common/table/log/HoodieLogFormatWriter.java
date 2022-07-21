@@ -94,7 +94,8 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
       Path path = logFile.getPath();
       if (fs.exists(path)) {
         boolean isAppendSupported = StorageSchemes.isAppendSupported(fs.getScheme());
-        if (isAppendSupported) {
+        boolean needRollOverToNewFile = fs.getFileStatus(path).getLen() > sizeThreshold;
+        if (isAppendSupported && !needRollOverToNewFile) {
           LOG.info(logFile + " exists. Appending to existing file");
           try {
             // open the path for append and record the offset
@@ -116,10 +117,12 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
             }
           }
         }
-        if (!isAppendSupported) {
+        if (!isAppendSupported || needRollOverToNewFile) {
           rollOver();
           createNewFile();
-          LOG.info("Append not supported.. Rolling over to " + logFile);
+          if (isAppendSupported) {
+            LOG.info(String.format("current Log file size > %s roll over to a new log file", sizeThreshold));
+          }
         }
       } else {
         LOG.info(logFile + " does not exist. Create a new file");
