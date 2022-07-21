@@ -21,13 +21,7 @@ package org.apache.hudi.execution.bulkinsert;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.table.BulkInsertPartitioner;
-
-import org.apache.spark.Partitioner;
 import org.apache.spark.api.java.JavaRDD;
-import scala.Tuple2;
-
-import java.io.Serializable;
-import java.util.Objects;
 
 /**
  * A built-in partitioner that only does coalesce for input records for bulk insert operation,

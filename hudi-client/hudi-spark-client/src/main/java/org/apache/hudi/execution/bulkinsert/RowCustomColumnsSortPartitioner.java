@@ -74,10 +74,10 @@ public class RowCustomColumnsSortPartitioner extends RepartitioningBulkInsertPar
     }
 
     return repartitionedDataset.sortWithinPartitions(
-        JavaConverters.asScalaBuffer(
+        JavaConverters.asScalaBufferConverter(
             Arrays.stream(orderByColumnNames)
                 .map(Column::new)
-                .collect(Collectors.toList())));
+                .collect(Collectors.toList())).asScala());
   }
 
   @Override
