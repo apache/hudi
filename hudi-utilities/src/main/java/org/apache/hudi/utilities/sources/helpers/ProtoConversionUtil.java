@@ -17,9 +17,13 @@
 
 package org.apache.hudi.utilities.sources.helpers;
 
+import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieException;
+
 import com.google.protobuf.BoolValue;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.BytesValue;
+import com.google.protobuf.DescriptorProtos;
 import com.google.protobuf.Descriptors;
 import com.google.protobuf.DoubleValue;
 import com.google.protobuf.FloatValue;
@@ -29,23 +33,23 @@ import com.google.protobuf.Message;
 import com.google.protobuf.StringValue;
 import com.google.protobuf.UInt32Value;
 import com.google.protobuf.UInt64Value;
-import org.apache.avro.AvroRuntimeException;
-import org.apache.avro.Conversion;
-import org.apache.avro.Conversions;
-import org.apache.avro.LogicalType;
 import org.apache.avro.Schema;
-import org.apache.avro.UnresolvedUnionException;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.protobuf.ProtobufData;
-import org.apache.avro.specific.SpecificData;
+import org.apache.avro.util.Utf8;
 
+import java.io.File;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
 
 /**
  * A utility class to help translate from Proto to Avro.
@@ -59,7 +63,7 @@ public class ProtoConversionUtil {
    * @return An Avro schema
    */
   public static Schema getAvroSchemaForMessageClass(Class clazz, boolean flattenWrappedPrimitives) {
-    return ConvertingProtobufData.getWithFlattening(flattenWrappedPrimitives).getSchema(clazz);
+    return AvroSupport.get().getSchema(clazz, flattenWrappedPrimitives);
   }
 
   /**
@@ -69,20 +73,23 @@ public class ProtoConversionUtil {
    * @return an Avro GenericRecord
    */
   public static GenericRecord convertToAvro(Schema schema, Message message) {
-    return ConvertingProtobufData.convert(schema, message);
+    return AvroSupport.get().convert(schema, message);
   }
 
   /**
-   * This class extends {@link ProtobufData} so we can:
+   * This class provides support for generating schemas and converting from proto to avro. We don't directly use {@link ProtobufData} so we can:
    * 1. Customize how schemas are generated for protobufs. We treat Enums as strings and provide an option to treat wrapped primitives like {@link Int32Value} and {@link StringValue} as messages
    * (default behavior) or as nullable versions of those primitives.
    * 2. Convert directly from a protobuf {@link Message} to a {@link GenericRecord} while properly handling enums and wrapped primitives mentioned above.
    */
-  private static class ConvertingProtobufData extends ProtobufData {
+  private static class AvroSupport {
+    private static final AvroSupport INSTANCE = new AvroSupport();
+    private static final Map<Pair<Class, Boolean>, Schema> SCHEMA_CACHE = new ConcurrentHashMap<>();
+    private static final Map<Pair<Schema, Descriptors.Descriptor>, Descriptors.FieldDescriptor[]> FIELD_CACHE = new ConcurrentHashMap<>();
+
+
     private static final Schema STRINGS = Schema.create(Schema.Type.STRING);
 
-    private static final ConvertingProtobufData NEST_WRAPPER_INSTANCE = new ConvertingProtobufData(false);
-    private static final ConvertingProtobufData FLATTEN_WRAPPER_INSTANCE = new ConvertingProtobufData(true);
     private static final Schema NULL = Schema.create(Schema.Type.NULL);
     private static final Map<Descriptors.Descriptor, Schema.Type> WRAPPER_DESCRIPTORS_TO_TYPE = getWrapperDescriptorsToType();
 
@@ -100,178 +107,176 @@ public class ProtoConversionUtil {
       return wrapperDescriptorsToType;
     }
 
-    private final boolean flattenWrappedPrimitives;
-
-    private ConvertingProtobufData(final boolean flattenWrappers) {
-      this.flattenWrappedPrimitives = flattenWrappers;
+    private AvroSupport() {
     }
 
-    /**
-     * Return one of two singletons based on flattening behavior.
-     */
-    static ConvertingProtobufData getWithFlattening(final boolean shouldFlattenWrappers) {
-      return shouldFlattenWrappers ? FLATTEN_WRAPPER_INSTANCE : NEST_WRAPPER_INSTANCE;
+    public static AvroSupport get() {
+      return INSTANCE;
     }
 
-    /**
-     * Overrides the default behavior to avoid confusion.
-     * @return throws exception
-     */
-    public static ConvertingProtobufData get() {
-      throw new UnsupportedOperationException("Do not directly call `get` on ConvertingProtobufData, use getWithFlattening");
+    public GenericRecord convert(Schema schema, Message message) {
+      return (GenericRecord) convertObject(schema, message);
     }
 
-    static GenericRecord convert(Schema schema, Message message) {
-      // the conversion infers the flattening based on the schema so the singleton used doesn not make a difference
-      return (GenericRecord) FLATTEN_WRAPPER_INSTANCE.deepCopy(schema, (Object) message);
+    public Schema getSchema(Class c, boolean flattenWrappedPrimitives) {
+      return SCHEMA_CACHE.computeIfAbsent(Pair.of(c, flattenWrappedPrimitives), key -> {
+        try {
+          Object descriptor = c.getMethod("getDescriptor").invoke(null);
+          if (c.isEnum()) {
+            return getEnumSchema((Descriptors.EnumDescriptor) descriptor);
+          } else {
+            return getMessageSchema((Descriptors.Descriptor) descriptor, new HashMap<>(), flattenWrappedPrimitives);
+          }
+        } catch (Exception e) {
+          throw new RuntimeException(e);
+        }
+      });
     }
 
-    @Override
-    public Schema getSchema(Descriptors.FieldDescriptor f) {
-      Schema s = this.getFileSchema(f);
-      if (f.isRepeated()) {
-        s = Schema.createArray(s);
+    private Schema getEnumSchema(Descriptors.EnumDescriptor d) {
+      List<String> symbols = new ArrayList<>(d.getValues().size());
+      for (Descriptors.EnumValueDescriptor e : d.getValues()) {
+        symbols.add(e.getName());
       }
-
-      return s;
+      return Schema.createEnum(d.getName(), null, getNamespace(d.getFile(), d.getContainingType()), symbols);
     }
 
-    private Schema getFileSchema(Descriptors.FieldDescriptor f) {
-      Schema result;
+    private Schema getMessageSchema(Descriptors.Descriptor descriptor, Map<Descriptors.Descriptor, Schema> seen, boolean flattenWrappedPrimitives) {
+      if (seen.containsKey(descriptor)) {
+        return seen.get(descriptor);
+      }
+      Schema result = Schema.createRecord(descriptor.getName(), null,
+          getNamespace(descriptor.getFile(), descriptor.getContainingType()), false);
+
+      seen.put(descriptor, result);
+
+      List<Schema.Field> fields = new ArrayList<>(descriptor.getFields().size());
+      for (Descriptors.FieldDescriptor f : descriptor.getFields()) {
+        fields.add(new Schema.Field(f.getName(), getFieldSchema(f, seen, flattenWrappedPrimitives), null, getDefault(f)));
+      }
+      result.setFields(fields);
+      return result;
+    }
+
+    private Schema getFieldSchema(Descriptors.FieldDescriptor f, Map<Descriptors.Descriptor, Schema> seen, boolean flattenWrappedPrimitives) {
+      Function<Schema, Schema> schemaFinalizer =  f.isRepeated() ? Schema::createArray : Function.identity();
       switch (f.getType()) {
         case BOOL:
-          return Schema.create(Schema.Type.BOOLEAN);
+          return schemaFinalizer.apply(Schema.create(Schema.Type.BOOLEAN));
         case FLOAT:
-          return Schema.create(Schema.Type.FLOAT);
+          return schemaFinalizer.apply(Schema.create(Schema.Type.FLOAT));
         case DOUBLE:
-          return Schema.create(Schema.Type.DOUBLE);
+          return schemaFinalizer.apply(Schema.create(Schema.Type.DOUBLE));
         case ENUM:
-          return getSchema(f.getEnumType());
+          return schemaFinalizer.apply(getEnumSchema(f.getEnumType()));
         case STRING:
           Schema s = Schema.create(Schema.Type.STRING);
           GenericData.setStringType(s, GenericData.StringType.String);
-          return s;
+          return schemaFinalizer.apply(s);
         case BYTES:
-          return Schema.create(Schema.Type.BYTES);
+          return schemaFinalizer.apply(Schema.create(Schema.Type.BYTES));
         case INT32:
         case UINT32:
         case SINT32:
         case FIXED32:
         case SFIXED32:
-          return Schema.create(Schema.Type.INT);
+          return schemaFinalizer.apply(Schema.create(Schema.Type.INT));
         case INT64:
         case UINT64:
         case SINT64:
         case FIXED64:
         case SFIXED64:
-          return Schema.create(Schema.Type.LONG);
+          return schemaFinalizer.apply(Schema.create(Schema.Type.LONG));
         case MESSAGE:
           if (flattenWrappedPrimitives && WRAPPER_DESCRIPTORS_TO_TYPE.containsKey(f.getMessageType())) {
             // all wrapper types have a single field so we can get the first field in the message's schema
-            return Schema.createUnion(Arrays.asList(NULL, getSchema(f.getMessageType().getFields().get(0))));
+            return schemaFinalizer.apply(Schema.createUnion(Arrays.asList(NULL, getFieldSchema(f.getMessageType().getFields().get(0), seen, flattenWrappedPrimitives))));
           }
-          result = getSchema(f.getMessageType());
-          if (f.isOptional()) {
-            // wrap optional record fields in a union with null
-            result = Schema.createUnion(Arrays.asList(NULL, result));
+          // if message field is repeated (like a list), elements are non-null
+          if (f.isRepeated()) {
+            return schemaFinalizer.apply(getMessageSchema(f.getMessageType(), seen, flattenWrappedPrimitives));
           }
-          return result;
+          // otherwise we create a nullable field schema
+          return schemaFinalizer.apply(Schema.createUnion(Arrays.asList(NULL, getMessageSchema(f.getMessageType(), seen, flattenWrappedPrimitives))));
         case GROUP: // groups are deprecated
         default:
           throw new RuntimeException("Unexpected type: " + f.getType());
       }
     }
 
-    @Override
-    public Object newRecord(Object old, Schema schema) {
-      // override the default ProtobufData behavior of creating a new proto instance
-      // instead we create a new avro instance and rely on the field indexes matching between the proto and our new generic record's schema
-      return new GenericData.Record(schema);
+    private Object getDefault(Descriptors.FieldDescriptor f) {
+      if (f.isRepeated()) { // empty array as repeated fields' default value
+        return Collections.emptyList();
+      }
+
+      switch (f.getType()) { // generate default for type
+        case BOOL:
+          return false;
+        case FLOAT:
+          return 0.0F;
+        case DOUBLE:
+          return 0.0D;
+        case INT32:
+        case UINT32:
+        case SINT32:
+        case FIXED32:
+        case SFIXED32:
+        case INT64:
+        case UINT64:
+        case SINT64:
+        case FIXED64:
+        case SFIXED64:
+          return 0;
+        case STRING:
+        case BYTES:
+          return "";
+        case ENUM:
+          return f.getEnumType().getValues().get(0).getName();
+        case MESSAGE:
+          return Schema.Field.NULL_VALUE;
+        case GROUP: // groups are deprecated
+        default:
+          throw new RuntimeException("Unexpected type: " + f.getType());
+      }
     }
 
-    @Override
-    protected Object getRecordState(Object r, Schema s) {
-      // get record state is called on the original (proto message) and new (avro generic record) so we need to handle based on the class
-      if (r instanceof Message) {
-        // gets field values in order
-        return super.getRecordState(r, s);
-      }
-      // the record state of the new object is never used for our conversion use case so we return null
-      return null;
+    private Descriptors.FieldDescriptor[] getOrderedFields(Schema schema, Message message) {
+      Descriptors.Descriptor descriptor = message.getDescriptorForType();
+      return FIELD_CACHE.computeIfAbsent(Pair.of(schema, descriptor), key -> {
+        Descriptors.FieldDescriptor[] fields = new Descriptors.FieldDescriptor[key.getLeft().getFields().size()];
+        for (Schema.Field f : key.getLeft().getFields()) {
+          fields[f.pos()] = key.getRight().findFieldByName(f.name());
+        }
+        return fields;
+      });
     }
 
     /**
-     * Overrides the default behavior to handle flattening during conversion.
+     * Finds the index within the union that corresponds to the passed in datum object. Since unions will only exist for nullable fields, we can cast the datum to a Message if it is non-null.
      * @param union Schema for the union
      * @param datum Value corresponding to one of the union types
      * @return the position of the schema for the input datum's type within the union's types
      */
-    @Override
-    public int resolveUnion(Schema union, Object datum) {
-      try {
-        return super.resolveUnion(union, datum);
-      } catch (UnresolvedUnionException ex) {
-        if (datum instanceof Message) {
-          // in the case of flattening we need to try looking for the index of the underlying type
-          Integer i = union.getIndexNamed(WRAPPER_DESCRIPTORS_TO_TYPE.get(((Message) datum).getDescriptorForType()).getName());
-          if (i != null) {
-            return i;
-          }
-        }
-        // if we're not dealing with a nested proto Message or the underlying type wasn't found, allow original exception to be thrown
-        throw ex;
+    public int getIndexForTypeInUnion(Schema union, Object datum) {
+      String schemaName;
+      if (datum == null) {
+        schemaName = Schema.Type.NULL.getName();
+      } else {
+        Message datumMessage = (Message) datum;
+        String namespace = getNamespace(datumMessage.getDescriptorForType().getFile(), datumMessage.getDescriptorForType());
+        schemaName = namespace + "." + datumMessage.getDescriptorForType().getName();
       }
+      Integer i = union.getIndexNamed(schemaName);
+      if (i == null) {
+        i = union.getIndexNamed(WRAPPER_DESCRIPTORS_TO_TYPE.get(((Message) datum).getDescriptorForType()).getName());
+      }
+      if (i != null) {
+        return i;
+      }
+      throw new HoodieException("Unknown datum type during proto to avro conversion: " + datum.getClass());
     }
 
-    @Override
-    protected void setField(Object record, String name, int position, Object value, Object state) {
-      SpecificData.get().setField(record, name, position, value);
-    }
-
-    @Override
-    public Object createString(Object value) {
-      if (value instanceof StringValue) {
-        return ((StringValue) value).getValue();
-      }
-      return super.createString(value);
-    }
-
-    @Override
-    protected boolean isBytes(Object datum) {
-      return datum instanceof ByteBuffer || datum instanceof ByteString;
-    }
-
-    /**
-     * Note this is cloned from {@link GenericData#deepCopy(Schema, Object)} so we can override the copying of the raw values to flatten objects when needed and properly handle proto byte array types.
-     * Makes a deep copy of a value given its schema.
-     * <P>
-     * Logical types are converted to raw types, copied, then converted back.
-     *
-     * @param schema the schema of the value to deep copy.
-     * @param value  the value to deep copy.
-     * @return a deep copy of the given value.
-     */
-    @SuppressWarnings({ "rawtypes", "unchecked" })
-    public <T> T deepCopy(Schema schema, T value) {
-      if (value == null) {
-        return null;
-      }
-      LogicalType logicalType = schema.getLogicalType();
-      if (logicalType == null) { // not a logical type -- use raw copy
-        return (T) deepCopyRaw(schema, value);
-      }
-      Conversion conversion = getConversionByClass(value.getClass(), logicalType);
-      if (conversion == null) { // no conversion defined -- try raw copy
-        return (T) deepCopyRaw(schema, value);
-      }
-      // logical type with conversion: convert to raw, copy, then convert back to
-      // logical
-      Object raw = Conversions.convertToRawType(value, schema, logicalType, conversion);
-      Object copy = deepCopyRaw(schema, raw); // copy raw
-      return (T) Conversions.convertToLogicalType(copy, schema, logicalType, conversion);
-    }
-
-    private Object deepCopyRaw(Schema schema, Object value) {
+    private Object convertObject(Schema schema, Object value) {
       if (value == null) {
         return null;
       }
@@ -281,7 +286,7 @@ public class ProtoConversionUtil {
           List<Object> arrayValue = (List<Object>) value;
           List<Object> arrayCopy = new GenericData.Array<>(arrayValue.size(), schema);
           for (Object obj : arrayValue) {
-            arrayCopy.add(deepCopy(schema.getElementType(), obj));
+            arrayCopy.add(convertObject(schema.getElementType(), obj));
           }
           return arrayCopy;
         case BYTES:
@@ -300,9 +305,9 @@ public class ProtoConversionUtil {
           byteBufferValue.position(start);
           return ByteBuffer.wrap(bytesCopy, 0, length);
         case ENUM:
-          return createEnum(value.toString(), schema);
+          return GenericData.get().createEnum(value.toString(), schema);
         case FIXED:
-          return createFixed(null, ((GenericFixed) value).bytes(), schema);
+          return GenericData.get().createFixed(null, ((GenericFixed) value).bytes(), schema);
         case BOOLEAN:
         case DOUBLE:
         case FLOAT:
@@ -316,27 +321,39 @@ public class ProtoConversionUtil {
           Map<Object, Object> mapValue = (Map) value;
           Map<Object, Object> mapCopy = new HashMap<>(mapValue.size());
           for (Map.Entry<Object, Object> entry : mapValue.entrySet()) {
-            mapCopy.put(deepCopy(STRINGS, entry.getKey()), deepCopy(schema.getValueType(), entry.getValue()));
+            mapCopy.put(convertObject(STRINGS, entry.getKey()), convertObject(schema.getValueType(), entry.getValue()));
           }
           return mapCopy;
         case NULL:
           return null;
         case RECORD:
-          Object oldState = getRecordState(value, schema);
-          Object newRecord = newRecord(null, schema);
+          GenericData.Record newRecord = new GenericData.Record(schema);
+          Message messageValue = (Message) value;
           for (Schema.Field f : schema.getFields()) {
-            int pos = f.pos();
-            String name = f.name();
-            Object newValue = deepCopy(f.schema(), getField(value, name, pos, oldState));
-            setField(newRecord, name, pos, newValue, null);
+            int position = f.pos();
+            Descriptors.FieldDescriptor fieldDescriptor = getOrderedFields(schema, messageValue)[position];
+            Object convertedValue;
+            if (fieldDescriptor.getType() == Descriptors.FieldDescriptor.Type.MESSAGE && !fieldDescriptor.isRepeated() && !messageValue.hasField(fieldDescriptor)) {
+              convertedValue = null;
+            } else {
+              convertedValue = convertObject(f.schema(), messageValue.getField(fieldDescriptor));
+            }
+            newRecord.put(position, convertedValue);
           }
           return newRecord;
         case STRING:
-          return createString(value);
+          if (value instanceof String) {
+            return value;
+          } else if (value instanceof StringValue) {
+            return ((StringValue) value).getValue();
+          } else {
+            return new Utf8(value.toString());
+          }
         case UNION:
-          return deepCopy(schema.getTypes().get(resolveUnion(schema, value)), value);
+          // Unions only occur for nullable fields when working with proto + avro
+          return convertObject(schema.getTypes().get(getIndexForTypeInUnion(schema, value)), value);
         default:
-          throw new AvroRuntimeException("Deep copy failed for schema \"" + schema + "\" and value \"" + value + "\"");
+          throw new HoodieException("Proto to Avro conversion failed for schema \"" + schema + "\" and value \"" + value + "\"");
       }
     }
 
@@ -348,6 +365,46 @@ public class ProtoConversionUtil {
     private Object getWrappedValue(Object value) {
       Message valueAsMessage = (Message) value;
       return valueAsMessage.getField(valueAsMessage.getDescriptorForType().getFields().get(0));
+    }
+
+    private String getNamespace(Descriptors.FileDescriptor fd, Descriptors.Descriptor containing) {
+      DescriptorProtos.FileOptions filedOptions = fd.getOptions();
+      String classPackage = filedOptions.hasJavaPackage() ? filedOptions.getJavaPackage() : fd.getPackage();
+      String outer = "";
+      if (!filedOptions.getJavaMultipleFiles()) {
+        if (filedOptions.hasJavaOuterClassname()) {
+          outer = filedOptions.getJavaOuterClassname();
+        } else {
+          outer = new File(fd.getName()).getName();
+          outer = outer.substring(0, outer.lastIndexOf('.'));
+          outer = toCamelCase(outer);
+        }
+      }
+      StringBuilder inner = new StringBuilder();
+      while (containing != null) {
+        if (inner.length() == 0) {
+          inner.insert(0, containing.getName());
+        } else {
+          inner.insert(0, containing.getName() + "$");
+        }
+        containing = containing.getContainingType();
+      }
+      String d1 = (!outer.isEmpty() || inner.length() != 0 ? "." : "");
+      String d2 = (!outer.isEmpty() && inner.length() != 0 ? "$" : "");
+      return classPackage + d1 + outer + d2 + inner;
+    }
+
+    private String toCamelCase(String s) {
+      String[] parts = s.split("_");
+      StringBuilder camelCaseString = new StringBuilder(s.length());
+      for (String part : parts) {
+        camelCaseString.append(cap(part));
+      }
+      return camelCaseString.toString();
+    }
+
+    private String cap(String s) {
+      return s.substring(0, 1).toUpperCase() + s.substring(1).toLowerCase();
     }
   }
 }

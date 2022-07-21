@@ -101,7 +101,7 @@
     <confluent.version>5.3.4</confluent.version>
     <glassfish.version>2.17</glassfish.version>
     <glassfish.el.version>3.0.1-b12</glassfish.el.version>
-    <parquet.version>1.12.2</parquet.version>
+    <parquet.version>1.10.1</parquet.version>
     <junit.jupiter.version>5.7.2</junit.jupiter.version>
     <junit.vintage.version>5.7.2</junit.vintage.version>
     <junit.platform.version>1.7.2</junit.platform.version>
@@ -144,7 +144,7 @@
     <spark32.version>3.2.1</spark32.version>
     <hudi.spark.module>hudi-spark2</hudi.spark.module>
     <hudi.spark.common.module>hudi-spark2-common</hudi.spark.common.module>
-    <avro.version>1.11.0</avro.version>
+    <avro.version>1.8.2</avro.version>
     <caffeine.version>2.9.1</caffeine.version>
     <scala11.version>2.11.12</scala11.version>
     <scala12.version>2.12.10</scala12.version>
@@ -1679,6 +1679,7 @@
         <scalatest.version>${scalatest.spark3.version}</scalatest.version>
         <kafka.version>${kafka.spark3.version}</kafka.version>
         <parquet.version>1.12.2</parquet.version>
+        <avro.version>1.10.2</avro.version>
         <orc.version>1.6.12</orc.version>
         <antlr.version>4.8</antlr.version>
         <fasterxml.version>${fasterxml.spark3.version}</fasterxml.version>
@@ -1745,6 +1746,7 @@
         <scalatest.version>${scalatest.spark3.version}</scalatest.version>
         <kafka.version>${kafka.spark3.version}</kafka.version>
         <parquet.version>1.12.2</parquet.version>
+        <avro.version>1.10.2</avro.version>
         <orc.version>1.6.12</orc.version>
         <antlr.version>4.8</antlr.version>
         <fasterxml.version>${fasterxml.spark3.version}</fasterxml.version>
