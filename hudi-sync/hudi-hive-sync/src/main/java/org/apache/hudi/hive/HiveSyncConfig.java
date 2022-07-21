@@ -151,9 +151,9 @@ public class HiveSyncConfig extends HoodieSyncConfig {
       props.setPropertyIfNonNull(HIVE_TABLE_SERDE_PROPERTIES.key(), serdeProperties);
       props.setPropertyIfNonNull(HIVE_SYNC_AS_DATA_SOURCE_TABLE.key(), syncAsSparkDataSourceTable);
       props.setPropertyIfNonNull(HIVE_SYNC_SCHEMA_STRING_LENGTH_THRESHOLD.key(), sparkSchemaLengthThreshold);
+      props.setPropertyIfNonNull(HIVE_SYNC_PARTITION_CASCADE_WITH_COLUMN_CHANGE.key(), partitionCascade);
       props.setPropertyIfNonNull(HIVE_CREATE_MANAGED_TABLE.key(), createManagedTable);
       props.setPropertyIfNonNull(HIVE_BATCH_SYNC_PARTITION_NUM.key(), batchSyncNum);
-      props.setPropertyIfNonNull(HIVE_SYNC_PARTITION_CASCADE_WITH_COLUMN_CHANGE.key(), partitionCascade);
       props.setPropertyIfNonNull(HIVE_SYNC_BUCKET_SYNC.key(), bucketSync);
       props.setPropertyIfNonNull(HIVE_SYNC_BUCKET_SYNC_SPEC.key(), bucketSpec);
       props.setPropertyIfNonNull(HIVE_SYNC_COMMENT.key(), syncComment);
