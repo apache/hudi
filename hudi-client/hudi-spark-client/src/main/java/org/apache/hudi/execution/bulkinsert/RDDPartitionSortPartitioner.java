@@ -70,7 +70,7 @@ public class RDDPartitionSortPartitioner<T extends HoodieRecordPayload>
           .values();
     } else {
       JavaPairRDD<String, HoodieRecord<T>> kvPairsRDD =
-          records.mapToPair(record -> new Tuple2<>(record.getRecordKey(), record));
+          records.coalesce(outputSparkPartitions).mapToPair(record -> new Tuple2<>(record.getRecordKey(), record));
 
       // NOTE: [[JavaRDD]] doesn't expose an API to do the sorting w/o (re-)shuffling, as such
       //       we're relying on our own sequence to achieve that
