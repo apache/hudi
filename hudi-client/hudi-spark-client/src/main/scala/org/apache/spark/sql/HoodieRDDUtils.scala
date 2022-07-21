@@ -1,5 +1,6 @@
 package org.apache.spark.sql
 
+import org.apache.hudi.SparkAdapterSupport
 import org.apache.spark.rdd.RDD
 import org.apache.spark.util.collection.ExternalSorter
 import org.apache.spark.{InterruptibleIterator, TaskContext}
@@ -9,7 +10,7 @@ import java.util.Comparator
 /**
  * Suite of utilities helping in handling [[RDD]]
  */
-object HoodieRDDUtils {
+object HoodieRDDUtils extends SparkAdapterSupport {
 
   /**
    * Sorts records of the provided [[RDD]] by their keys using [[Comparator]] w/in individual [[RDD]]'s partitions
@@ -21,10 +22,10 @@ object HoodieRDDUtils {
     val ordering = implicitly[Ordering[K]]
 
     rdd.mapPartitions(iter => {
-      val context = TaskContext.get()
-      val sorter = new ExternalSorter[K, V, V](context, None, None, Some(ordering))
-      new InterruptibleIterator(context,
-        sorter.insertAllAndUpdateMetrics(iter).asInstanceOf[Iterator[(K, V)]])
+      val ctx = TaskContext.get()
+      val sorter = new ExternalSorter[K, V, V](ctx, None, None, Some(ordering))
+      new InterruptibleIterator(ctx,
+        sparkAdapter.insertInto(ctx, iter, sorter).asInstanceOf[Iterator[(K, V)]])
     }, preservesPartitioning = true)
   }
 

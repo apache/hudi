@@ -21,6 +21,7 @@ import org.apache.avro.Schema
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.{AvroConversionUtils, DefaultSource, Spark3RowSerDe}
 import org.apache.hudi.client.utils.SparkRowSerDe
+import org.apache.spark.{SPARK_VERSION, TaskContext}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.avro.{HoodieAvroSchemaConverters, HoodieSparkAvroSchemaConverters}
@@ -38,6 +39,8 @@ import org.apache.spark.sql.sources.BaseRelation
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{HoodieSpark3CatalogUtils, Row, SQLContext, SparkSession}
 import org.apache.spark.storage.StorageLevel
+import org.apache.spark.storage.StorageLevel.{DISK_ONLY, DISK_ONLY_2, DISK_ONLY_3, MEMORY_AND_DISK, MEMORY_AND_DISK_2, MEMORY_AND_DISK_SER, MEMORY_AND_DISK_SER_2, MEMORY_ONLY, MEMORY_ONLY_2, MEMORY_ONLY_SER, MEMORY_ONLY_SER_2, NONE, OFF_HEAP}
+import org.apache.spark.util.collection.ExternalSorter
 import org.apache.spark.storage.StorageLevel._
 
 import scala.collection.JavaConverters.mapAsScalaMapConverter
@@ -102,9 +105,6 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
     DefaultSource.createRelation(sqlContext, metaClient, dataSchema, globPaths, parameters.asScala.toMap)
   }
 
-  /**
-   * Converts instance of [[StorageLevel]] to a corresponding string
-   */
   override def convertStorageLevelToString(level: StorageLevel): String = level match {
     case NONE => "NONE"
     case DISK_ONLY => "DISK_ONLY"
@@ -121,4 +121,8 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
     case OFF_HEAP => "OFF_HEAP"
     case _ => throw new IllegalArgumentException(s"Invalid StorageLevel: $level")
   }
+
+  override def insertInto[K, V, C](ctx: TaskContext,
+                                   records: Iterator[Product2[K, V]],
+                                   sorter: ExternalSorter[K, V, C]): Iterator[Product2[K, C]] = sorter.insertAllAndUpdateMetrics(records)
 }
