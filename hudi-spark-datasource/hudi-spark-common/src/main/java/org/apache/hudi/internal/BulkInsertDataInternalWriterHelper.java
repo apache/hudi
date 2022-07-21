@@ -27,18 +27,17 @@ import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.storage.row.HoodieRowCreateHandle;
-import org.apache.hudi.io.storage.row.HoodieRowCreateHandleWithoutMetaFields;
 import org.apache.hudi.keygen.BuiltinKeyGenerator;
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.table.HoodieTable;
-
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.types.DataType;
 import org.apache.spark.sql.types.StructType;
+import org.apache.spark.unsafe.types.UTF8String;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -64,16 +63,20 @@ public class BulkInsertDataInternalWriterHelper {
   private final StructType structType;
   private final Boolean arePartitionRecordsSorted;
   private final List<HoodieInternalWriteStatus> writeStatusList = new ArrayList<>();
-  private HoodieRowCreateHandle handle;
-  private String lastKnownPartitionPath = null;
-  private String fileIdPrefix;
-  private int numFilesWritten = 0;
-  private Map<String, HoodieRowCreateHandle> handles = new HashMap<>();
+  private final String fileIdPrefix;
+  private final Map<String, HoodieRowCreateHandle> handles = new HashMap<>();
   private final boolean populateMetaFields;
-  private Option<BuiltinKeyGenerator> keyGeneratorOpt = null;
-  private boolean simpleKeyGen = false;
-  private int simplePartitionFieldIndex = -1;
-  private DataType simplePartitionFieldDataType;
+  private final Option<BuiltinKeyGenerator> keyGeneratorOpt;
+  private final boolean simpleKeyGen;
+  private final int simplePartitionFieldIndex;
+  private final DataType simplePartitionFieldDataType;
+  /**
+   * NOTE: This is stored as Catalyst's internal {@link UTF8String} to avoid
+   *       conversion (deserialization) b/w {@link UTF8String} and {@link String}
+   */
+  private String lastKnownPartitionPath = null;
+  private HoodieRowCreateHandle handle;
+  private int numFilesWritten = 0;
 
   public BulkInsertDataInternalWriterHelper(HoodieTable hoodieTable, HoodieWriteConfig writeConfig,
                                             String instantTime, int taskPartitionId, long taskId, long taskEpochId, StructType structType,
@@ -88,13 +91,21 @@ public class BulkInsertDataInternalWriterHelper {
     this.populateMetaFields = populateMetaFields;
     this.arePartitionRecordsSorted = arePartitionRecordsSorted;
     this.fileIdPrefix = UUID.randomUUID().toString();
+
     if (!populateMetaFields) {
       this.keyGeneratorOpt = getKeyGenerator(writeConfig.getProps());
-      if (keyGeneratorOpt.isPresent() && keyGeneratorOpt.get() instanceof SimpleKeyGenerator) {
-        simpleKeyGen = true;
-        simplePartitionFieldIndex = (Integer) structType.getFieldIndex((keyGeneratorOpt.get()).getPartitionPathFields().get(0)).get();
-        simplePartitionFieldDataType = structType.fields()[simplePartitionFieldIndex].dataType();
-      }
+    } else {
+      this.keyGeneratorOpt = Option.empty();
+    }
+
+    if (keyGeneratorOpt.isPresent() && keyGeneratorOpt.get() instanceof SimpleKeyGenerator) {
+      this.simpleKeyGen = true;
+      this.simplePartitionFieldIndex = (Integer) structType.getFieldIndex(keyGeneratorOpt.get().getPartitionPathFields().get(0)).get();
+      this.simplePartitionFieldDataType = structType.fields()[simplePartitionFieldIndex].dataType();
+    } else {
+      this.simpleKeyGen = false;
+      this.simplePartitionFieldIndex = -1;
+      this.simplePartitionFieldDataType = null;
     }
   }
 
@@ -120,32 +131,16 @@ public class BulkInsertDataInternalWriterHelper {
     }
   }
 
-  public void write(InternalRow record) throws IOException {
+  public void write(InternalRow row) throws IOException {
     try {
-      String partitionPath = null;
-      if (populateMetaFields) { // usual path where meta fields are pre populated in prep step.
-        partitionPath = String.valueOf(record.getUTF8String(HoodieRecord.PARTITION_PATH_META_FIELD_POS));
-      } else { // if meta columns are disabled.
-        if (!keyGeneratorOpt.isPresent()) { // NoPartitionerKeyGen
-          partitionPath = "";
-        } else if (simpleKeyGen) { // SimpleKeyGen
-          Object parititionPathValue = record.get(simplePartitionFieldIndex, simplePartitionFieldDataType);
-          partitionPath = parititionPathValue != null ? parititionPathValue.toString() : PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH;
-          if (writeConfig.isHiveStylePartitioningEnabled()) {
-            partitionPath = (keyGeneratorOpt.get()).getPartitionPathFields().get(0) + "=" + partitionPath;
-          }
-        } else {
-          // only BuiltIn key generators are supported if meta fields are disabled.
-          partitionPath = keyGeneratorOpt.get().getPartitionPath(record, structType);
-        }
-      }
-
-      if ((lastKnownPartitionPath == null) || !lastKnownPartitionPath.equals(partitionPath) || !handle.canWrite()) {
+      String partitionPath = extractPartitionPath(row);
+      if (lastKnownPartitionPath == null || !lastKnownPartitionPath.equals(partitionPath) || !handle.canWrite()) {
         LOG.info("Creating new file for partition path " + partitionPath);
         handle = getRowCreateHandle(partitionPath);
         lastKnownPartitionPath = partitionPath;
       }
-      handle.write(record);
+
+      handle.write(row);
     } catch (Throwable t) {
       LOG.error("Global error thrown while trying to write records in HoodieRowCreateHandle ", t);
       throw t;
@@ -157,7 +152,41 @@ public class BulkInsertDataInternalWriterHelper {
     return writeStatusList;
   }
 
-  public void abort() {
+  public void abort() {}
+
+  public void close() throws IOException {
+    for (HoodieRowCreateHandle rowCreateHandle : handles.values()) {
+      writeStatusList.add(rowCreateHandle.close());
+    }
+    handles.clear();
+    handle = null;
+  }
+
+  private String extractPartitionPath(InternalRow row) {
+    String partitionPath;
+    if (populateMetaFields) {
+      // In case meta-fields are materialized w/in the table itself, we can just simply extract
+      // partition path from there
+      //
+      // NOTE: Helper keeps track of [[lastKnownPartitionPath]] as [[UTF8String]] to avoid
+      //       conversion from Catalyst internal representation into a [[String]]
+      partitionPath = row.getString(HoodieRecord.PARTITION_PATH_META_FIELD_POS);
+    } else if (keyGeneratorOpt.isPresent()) {
+      // TODO(HUDI-4039) this should be handled by the SimpleKeyGenerator itself
+      if (simpleKeyGen) {
+        String partitionPathValue = row.get(simplePartitionFieldIndex, simplePartitionFieldDataType).toString();
+        partitionPath = partitionPathValue != null ? partitionPathValue : PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH;
+        if (writeConfig.isHiveStylePartitioningEnabled()) {
+          partitionPath = (keyGeneratorOpt.get()).getPartitionPathFields().get(0) + "=" + partitionPath;
+        }
+      } else {
+        // only BuiltIn key generators are supported if meta fields are disabled.
+        partitionPath = keyGeneratorOpt.get().getPartitionPath(row, structType);
+      }
+    } else {
+      partitionPath = "";
+    }
+    return partitionPath;
   }
 
   private HoodieRowCreateHandle getRowCreateHandle(String partitionPath) throws IOException {
@@ -166,28 +195,21 @@ public class BulkInsertDataInternalWriterHelper {
       if (arePartitionRecordsSorted) {
         close();
       }
-      HoodieRowCreateHandle rowCreateHandle = populateMetaFields ? new HoodieRowCreateHandle(hoodieTable, writeConfig, partitionPath, getNextFileId(),
-          instantTime, taskPartitionId, taskId, taskEpochId, structType) : new HoodieRowCreateHandleWithoutMetaFields(hoodieTable, writeConfig, partitionPath, getNextFileId(),
-          instantTime, taskPartitionId, taskId, taskEpochId, structType);
+      HoodieRowCreateHandle rowCreateHandle = createHandle(partitionPath);
       handles.put(partitionPath, rowCreateHandle);
     } else if (!handles.get(partitionPath).canWrite()) {
       // even if there is a handle to the partition path, it could have reached its max size threshold. So, we close the handle here and
       // create a new one.
       writeStatusList.add(handles.remove(partitionPath).close());
-      HoodieRowCreateHandle rowCreateHandle = populateMetaFields ? new HoodieRowCreateHandle(hoodieTable, writeConfig, partitionPath, getNextFileId(),
-          instantTime, taskPartitionId, taskId, taskEpochId, structType) : new HoodieRowCreateHandleWithoutMetaFields(hoodieTable, writeConfig, partitionPath, getNextFileId(),
-          instantTime, taskPartitionId, taskId, taskEpochId, structType);
+      HoodieRowCreateHandle rowCreateHandle = createHandle(partitionPath);
       handles.put(partitionPath, rowCreateHandle);
     }
     return handles.get(partitionPath);
   }
 
-  public void close() throws IOException {
-    for (HoodieRowCreateHandle rowCreateHandle : handles.values()) {
-      writeStatusList.add(rowCreateHandle.close());
-    }
-    handles.clear();
-    handle = null;
+  private HoodieRowCreateHandle createHandle(String partitionPath) {
+    return new HoodieRowCreateHandle(hoodieTable, writeConfig, partitionPath, getNextFileId(),
+        instantTime, taskPartitionId, taskId, taskEpochId, structType, populateMetaFields);
   }
 
   private String getNextFileId() {

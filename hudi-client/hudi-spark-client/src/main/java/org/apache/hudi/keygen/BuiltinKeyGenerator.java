@@ -18,25 +18,23 @@
 
 package org.apache.hudi.keygen;
 
+import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.ApiMaturityLevel;
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.exception.HoodieIOException;
-
-import org.apache.avro.generic.GenericRecord;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.types.DataType;
 import org.apache.spark.sql.types.StructType;
+import scala.Function1;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
-
-import scala.Function1;
 
 /**
  * Base class for the built-in key generators. Contains methods structured for
@@ -66,18 +64,32 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
   @Override
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public String getRecordKey(Row row) {
+    // TODO avoid conversion to avro
+    //      since converterFn is transient this will be repeatedly initialized over and over again
     if (null == converterFn) {
       converterFn = AvroConversionUtils.createConverterToAvro(row.schema(), STRUCT_NAME, NAMESPACE);
     }
     return getKey(converterFn.apply(row)).getRecordKey();
   }
 
+  @Override
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public String getRecordKey(InternalRow internalRow, StructType schema) {
+    try {
+      // TODO fix
+      buildFieldSchemaInfoIfNeeded(schema);
+      return RowKeyGeneratorHelper.getRecordKeyFromInternalRow(internalRow, getRecordKeyFields(), recordKeySchemaInfo, false);
+    } catch (Exception e) {
+      throw new HoodieException("Conversion of InternalRow to Row failed with exception", e);
+    }
+  }
   /**
    * Fetch partition path from {@link Row}.
    *
    * @param row instance of {@link Row} from which partition path is requested
    * @return the partition path of interest from {@link Row}.
    */
+
   @Override
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public String getPartitionPath(Row row) {
@@ -102,12 +114,13 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
       return RowKeyGeneratorHelper.getPartitionPathFromInternalRow(internalRow, getPartitionPathFields(),
           hiveStylePartitioning, partitionPathSchemaInfo);
     } catch (Exception e) {
-      throw new HoodieIOException("Conversion of InternalRow to Row failed with exception " + e);
+      throw new HoodieException("Conversion of InternalRow to Row failed with exception", e);
     }
   }
 
   void buildFieldSchemaInfoIfNeeded(StructType structType) {
     if (this.structType == null) {
+      this.structType = structType;
       getRecordKeyFields()
           .stream().filter(f -> !f.isEmpty())
           .forEach(f -> recordKeySchemaInfo.put(f, RowKeyGeneratorHelper.getFieldSchemaInfo(structType, f, true)));
@@ -115,7 +128,6 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
         getPartitionPathFields().stream().filter(f -> !f.isEmpty())
             .forEach(f -> partitionPathSchemaInfo.put(f, RowKeyGeneratorHelper.getFieldSchemaInfo(structType, f, false)));
       }
-      this.structType = structType;
     }
   }
 

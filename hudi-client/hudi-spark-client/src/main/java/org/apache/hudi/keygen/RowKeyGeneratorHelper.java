@@ -39,17 +39,55 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import org.apache.spark.sql.types.StructType$;
 import scala.Option;
 
 import static org.apache.hudi.keygen.KeyGenUtils.DEFAULT_PARTITION_PATH_SEPARATOR;
 import static org.apache.hudi.keygen.KeyGenUtils.EMPTY_RECORDKEY_PLACEHOLDER;
 import static org.apache.hudi.keygen.KeyGenUtils.HUDI_DEFAULT_PARTITION_PATH;
 import static org.apache.hudi.keygen.KeyGenUtils.NULL_RECORDKEY_PLACEHOLDER;
+import static org.apache.hudi.keygen.RowKeyGenUtils.convertToLogicalDataType;
 
 /**
  * Helper class to fetch fields from Row.
+ *
+ * TODO cleanup
  */
+@Deprecated
 public class RowKeyGeneratorHelper {
+
+  public static String getRecordKeyFromInternalRow(InternalRow internalRow, List<String> recordKeyFields,
+                                                   Map<String, Pair<List<Integer>, DataType>> recordKeyPositions, boolean prefixFieldName) {
+    AtomicBoolean keyIsNullOrEmpty = new AtomicBoolean(true);
+    String toReturn = recordKeyFields.stream().map(field -> {
+      String val = null;
+      List<Integer> fieldPositions = recordKeyPositions.get(field).getKey();
+      if (fieldPositions.size() == 1) { // simple field
+        Integer fieldPos = fieldPositions.get(0);
+        if (internalRow.isNullAt(fieldPos)) {
+          val = NULL_RECORDKEY_PLACEHOLDER;
+        } else {
+          DataType dataType = recordKeyPositions.get(field).getValue();
+          val = convertToLogicalDataType(dataType, internalRow.get(fieldPos, dataType)).toString();
+          if (val.isEmpty()) {
+            val = EMPTY_RECORDKEY_PLACEHOLDER;
+          } else {
+            keyIsNullOrEmpty.set(false);
+          }
+        }
+      } else { // nested fields
+        val = getNestedFieldVal(internalRow, recordKeyPositions.get(field)).toString();
+        if (!val.contains(NULL_RECORDKEY_PLACEHOLDER) && !val.contains(EMPTY_RECORDKEY_PLACEHOLDER)) {
+          keyIsNullOrEmpty.set(false);
+        }
+      }
+      return prefixFieldName ? (field + ":" + val) : val;
+    }).collect(Collectors.joining(","));
+    if (keyIsNullOrEmpty.get()) {
+      throw new HoodieKeyException("recordKey value: \"" + toReturn + "\" for fields: \"" + Arrays.toString(recordKeyFields.toArray()) + "\" cannot be null or empty.");
+    }
+    return toReturn;
+  }
 
   /**
    * Generates record key for the corresponding {@link Row}.
@@ -146,7 +184,7 @@ public class RowKeyGeneratorHelper {
         if (fieldPos == -1 || internalRow.isNullAt(fieldPos)) {
           val = HUDI_DEFAULT_PARTITION_PATH;
         } else {
-          Object value = internalRow.get(fieldPos, dataType);
+          Object value = convertToLogicalDataType(dataType, internalRow.get(fieldPos, dataType));
           if (value == null || value.toString().isEmpty()) {
             val = HUDI_DEFAULT_PARTITION_PATH;
           } else {
@@ -225,6 +263,35 @@ public class RowKeyGeneratorHelper {
           break;
         }
         toReturn = valueToProcess.getAs(positions.get(index));
+      }
+      index++;
+    }
+    return toReturn;
+  }
+
+  public static Object getNestedFieldVal(InternalRow internalRow, Pair<List<Integer>, DataType> positionsAndType) {
+    if (positionsAndType.getKey().size() == 1 && positionsAndType.getKey().get(0) == -1) {
+      return HUDI_DEFAULT_PARTITION_PATH;
+    }
+    int index = 0;
+    int totalCount = positionsAndType.getKey().size();
+    InternalRow valueToProcess = internalRow;
+    Object toReturn = null;
+
+    while (index < totalCount) {
+      if (valueToProcess.isNullAt(positionsAndType.getKey().get(index))) {
+        toReturn = NULL_RECORDKEY_PLACEHOLDER;
+        break;
+      }
+
+      if (index < totalCount - 1) {
+        valueToProcess = (InternalRow) valueToProcess.get(positionsAndType.getKey().get(index), StructType$.MODULE$.defaultConcreteType());
+      } else { // last index
+        if (valueToProcess.get(positionsAndType.getKey().get(index), positionsAndType.getValue()).toString().isEmpty()) {
+          toReturn = EMPTY_RECORDKEY_PLACEHOLDER;
+          break;
+        }
+        toReturn = valueToProcess.get(positionsAndType.getKey().get(index), positionsAndType.getValue());
       }
       index++;
     }

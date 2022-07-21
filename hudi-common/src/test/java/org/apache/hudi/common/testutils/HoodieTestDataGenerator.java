@@ -898,7 +898,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     return anchorTs + r.nextLong() % 259200000L;
   }
 
-  private static UUID genPseudoRandomUUID(Random r) {
+  public static UUID genPseudoRandomUUID(Random r) {
     byte[] bytes = new byte[16];
     r.nextBytes(bytes);
 
