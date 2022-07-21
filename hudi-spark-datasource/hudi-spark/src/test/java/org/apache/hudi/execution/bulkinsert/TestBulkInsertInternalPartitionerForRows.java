@@ -81,7 +81,7 @@ public class TestBulkInsertInternalPartitionerForRows extends HoodieClientTestHa
     return Stream.of(data).map(Arguments::of);
   }
 
-  @ParameterizedTest(name = "[{index}] {0}")
+  @ParameterizedTest(name = "[{index}] {0} {1}")
   @MethodSource("configParams")
   public void testBulkInsertInternalPartitioner(BulkInsertSortMode sortMode,
                                                 boolean isPartitionedTable,
