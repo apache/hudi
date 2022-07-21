@@ -62,12 +62,14 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import scala.Tuple2;
 
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.genPseudoRandomUUID;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -81,6 +83,7 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
   private static final Schema SCHEMA = getSchemaFromResource(TestHoodieBloomIndex.class, "/exampleSchema.avsc", true);
   private static final String TEST_NAME_WITH_PARAMS =
       "[{index}] Test with rangePruning={0}, treeFiltering={1}, bucketizedChecking={2}, useMetadataTable={3}";
+  private static final Random RANDOM = new Random(0xDEED);
 
   public static Stream<Arguments> configParams() {
     // rangePruning, treeFiltering, bucketizedChecking, useMetadataTable
@@ -125,9 +128,13 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
     // "hoodie.metadata.index.column.stats.enable"
     // "hoodie.metadata.index.bloom.filter.enable"
     return HoodieWriteConfig.newBuilder().withPath(basePath)
-        .withIndexConfig(HoodieIndexConfig.newBuilder().bloomIndexPruneByRanges(rangePruning)
-            .bloomIndexTreebasedFilter(treeFiltering).bloomIndexBucketizedChecking(bucketizedChecking)
-            .bloomIndexKeysPerBucket(2).bloomIndexUseMetadata(useMetadataTable).build())
+        .withIndexConfig(HoodieIndexConfig.newBuilder()
+            .bloomIndexPruneByRanges(rangePruning)
+            .bloomIndexTreebasedFilter(treeFiltering)
+            .bloomIndexBucketizedChecking(bucketizedChecking)
+            .bloomIndexKeysPerBucket(2)
+            .bloomIndexUseMetadata(useMetadataTable)
+            .build())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .withMetadataIndexBloomFilter(useMetadataTable)
             .withMetadataIndexColumnStats(useMetadataTable)
@@ -299,7 +306,7 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
 
     final Map<String, List<Pair<String, Integer>>> partitionToFilesNameLengthMap = new HashMap<>();
     final String commitTime = "0000001";
-    final String fileId = UUID.randomUUID().toString();
+    final String fileId = genRandomUUID();
 
     Path baseFilePath = testTable.forCommit(commitTime)
         .withInserts(partition, fileId, Arrays.asList(record1, record2));
@@ -362,9 +369,9 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
       boolean rangePruning, boolean treeFiltering, boolean bucketizedChecking,
       boolean useMetadataTable) throws Exception {
     // We have some records to be tagged (two different partitions)
-    String rowKey1 = UUID.randomUUID().toString();
-    String rowKey2 = UUID.randomUUID().toString();
-    String rowKey3 = UUID.randomUUID().toString();
+    String rowKey1 = genRandomUUID();
+    String rowKey2 = genRandomUUID();
+    String rowKey3 = genRandomUUID();
     String recordStr1 = "{\"_row_key\":\"" + rowKey1 + "\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}";
     String recordStr2 = "{\"_row_key\":\"" + rowKey2 + "\",\"time\":\"2016-01-31T03:20:41.415Z\",\"number\":100}";
     String recordStr3 = "{\"_row_key\":\"" + rowKey3 + "\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":15}";
@@ -404,7 +411,7 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
     final String partition2 = "2015/01/31";
 
     // We create three parquet file, each having one record. (two different partitions)
-    final String fileId1 = UUID.randomUUID().toString();
+    final String fileId1 = genRandomUUID();
     final String commit1 = "0000001";
     Path baseFilePath = testTable.forCommit(commit1).withInserts(partition1, fileId1, Collections.singletonList(record1));
     long baseFileLength = fs.getFileStatus(baseFilePath).getLen();
@@ -413,7 +420,7 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
     testTable.doWriteOperation(commit1, WriteOperationType.UPSERT, Collections.singletonList(partition1),
         partitionToFilesNameLengthMap, false, false);
 
-    final String fileId2 = UUID.randomUUID().toString();
+    final String fileId2 = genRandomUUID();
     final String commit2 = "0000002";
     baseFilePath = testTable.forCommit(commit2).withInserts(partition1, fileId2, Collections.singletonList(record2));
     baseFileLength = fs.getFileStatus(baseFilePath).getLen();
@@ -423,7 +430,7 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
     testTable.doWriteOperation(commit2, WriteOperationType.UPSERT, Collections.singletonList(partition1),
         partitionToFilesNameLengthMap, false, false);
 
-    final String fileId3 = UUID.randomUUID().toString();
+    final String fileId3 = genRandomUUID();
     final String commit3 = "0000003";
     baseFilePath = testTable.forCommit(commit3).withInserts(partition2, fileId3, Collections.singletonList(record4));
     baseFileLength = fs.getFileStatus(baseFilePath).getLen();
@@ -459,9 +466,9 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
       boolean rangePruning, boolean treeFiltering, boolean bucketizedChecking,
       boolean useMetadataTable) throws Exception {
     // We have some records to be tagged (two different partitions)
-    String rowKey1 = UUID.randomUUID().toString();
-    String rowKey2 = UUID.randomUUID().toString();
-    String rowKey3 = UUID.randomUUID().toString();
+    String rowKey1 = genRandomUUID();
+    String rowKey2 = genRandomUUID();
+    String rowKey3 = genRandomUUID();
     String recordStr1 = "{\"_row_key\":\"" + rowKey1 + "\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}";
     String recordStr2 = "{\"_row_key\":\"" + rowKey2 + "\",\"time\":\"2016-01-31T03:20:41.415Z\",\"number\":100}";
     String recordStr3 = "{\"_row_key\":\"" + rowKey3 + "\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":15}";
@@ -498,7 +505,7 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
     final Map<String, List<Pair<String, Integer>>> partitionToFilesNameLengthMap = new HashMap<>();
 
     // We create three parquet file, each having one record
-    final String fileId1 = UUID.randomUUID().toString();
+    final String fileId1 = genRandomUUID();
     final String commit1 = "0000001";
     Path baseFilePath = testTable.forCommit(commit1).withInserts(emptyPartitionPath, fileId1, Collections.singletonList(record1));
     long baseFileLength = fs.getFileStatus(baseFilePath).getLen();
@@ -507,7 +514,7 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
     testTable.doWriteOperation(commit1, WriteOperationType.UPSERT, Collections.singletonList(emptyPartitionPath),
         partitionToFilesNameLengthMap, false, false);
 
-    final String fileId2 = UUID.randomUUID().toString();
+    final String fileId2 = genRandomUUID();
     final String commit2 = "0000002";
     baseFilePath = testTable.forCommit(commit2).withInserts(emptyPartitionPath, fileId2, Collections.singletonList(record2));
     baseFileLength = fs.getFileStatus(baseFilePath).getLen();
@@ -596,9 +603,9 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
 
     final String partition1 = "2016/01/31";
     final String partition2 = "2015/01/31";
-    final String fileId1 = UUID.randomUUID().toString();
-    final String fileId2 = UUID.randomUUID().toString();
-    final String fileId3 = UUID.randomUUID().toString();
+    final String fileId1 = genRandomUUID();
+    final String fileId2 = genRandomUUID();
+    final String fileId3 = genRandomUUID();
     final Map<String, List<Pair<String, Integer>>> partitionToFilesNameLengthMap = new HashMap<>();
     // We create three parquet file, each having one record. (two different partitions)
     final String commit1 = "0000001";
@@ -700,5 +707,9 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
         assertFalse(record.isCurrentLocationKnown());
       }
     }
+  }
+
+  private static String genRandomUUID() {
+    return genPseudoRandomUUID(RANDOM).toString();
   }
 }
