@@ -49,7 +49,12 @@ public class PartitionSortPartitionerWithRows extends RepartitioningBulkInsertPa
       repartitionedDataset = dataset.coalesce(outputSparkPartitions);
     }
 
-    return repartitionedDataset.sortWithinPartitions(HoodieRecord.RECORD_KEY_METADATA_FIELD);
+    // NOTE: We're sorting by (partition-path, record-key) pair to make sure that in case
+    //       when there are less Spark partitions (requested) than there are physical partitions
+    //       (in which case multiple physical partitions, will be handled w/in single Spark
+    //       partition) records w/in a single Spark partition are still ordered first by
+    //       partition-path, then record's key
+    return repartitionedDataset.sortWithinPartitions(HoodieRecord.PARTITION_PATH_METADATA_FIELD, HoodieRecord.RECORD_KEY_METADATA_FIELD);
   }
 
   @Override

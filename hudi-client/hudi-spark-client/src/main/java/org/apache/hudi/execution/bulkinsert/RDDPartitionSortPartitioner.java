@@ -27,9 +27,7 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.HoodieJavaRDDUtils;
 import scala.Tuple2;
 
-import java.io.Serializable;
 import java.util.Comparator;
-import java.util.function.Function;
 
 /**
  * A built-in partitioner that does local sorting for each RDD partition
@@ -56,9 +54,6 @@ public class RDDPartitionSortPartitioner<T extends HoodieRecordPayload>
     //
     //       Please check out {@code GlobalSortPartitioner} java-doc for more details
     if (isPartitionedTable) {
-      Comparator<Pair<String, String>> recordKeyComparator =
-          Comparator.comparing((Function<Pair<String, String>, String> & Serializable) Pair::getValue);
-
       PartitionPathRDDPartitioner partitioner =
           new PartitionPathRDDPartitioner((pair) -> ((Pair<String, String>) pair).getKey(), outputSparkPartitions);
 
@@ -66,7 +61,12 @@ public class RDDPartitionSortPartitioner<T extends HoodieRecordPayload>
       //    - Partition-path will be used for re-partitioning (as called out above)
       //    - Record-key will be used for sorting the records w/in individual partitions
       return records.mapToPair(record -> new Tuple2<>(Pair.of(record.getPartitionPath(), record.getRecordKey()), record))
-          .repartitionAndSortWithinPartitions(partitioner, recordKeyComparator)
+          // NOTE: We're sorting by (partition-path, record-key) pair to make sure that in case
+          //       when there are less Spark partitions (requested) than there are physical partitions
+          //       (in which case multiple physical partitions, will be handled w/in single Spark
+          //       partition) records w/in a single Spark partition are still ordered first by
+          //       partition-path, then record's key
+          .repartitionAndSortWithinPartitions(partitioner, Comparator.naturalOrder())
           .values();
     } else {
       JavaPairRDD<String, HoodieRecord<T>> kvPairsRDD =
