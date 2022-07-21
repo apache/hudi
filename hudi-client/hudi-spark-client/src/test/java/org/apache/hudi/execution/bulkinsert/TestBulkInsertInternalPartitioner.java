@@ -20,6 +20,7 @@ package org.apache.hudi.execution.bulkinsert;
 
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -31,10 +32,10 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -79,9 +80,14 @@ public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase impl
 
   private static Stream<Arguments> configParams() {
     Object[][] data = new Object[][] {
-        {BulkInsertSortMode.GLOBAL_SORT, true, true},
-        {BulkInsertSortMode.PARTITION_SORT, false, true},
-        {BulkInsertSortMode.NONE, false, false}
+        {BulkInsertSortMode.GLOBAL_SORT, true, true, true},
+        {BulkInsertSortMode.GLOBAL_SORT, false, true, true},
+        {BulkInsertSortMode.PARTITION_SORT, true, false, true},
+        {BulkInsertSortMode.PARTITION_SORT, false, false, true},
+        {BulkInsertSortMode.PARTITION_NO_SORT, true, false, false},
+        {BulkInsertSortMode.PARTITION_NO_SORT, false, false, false},
+        {BulkInsertSortMode.NONE, true, false, false},
+        {BulkInsertSortMode.NONE, false, false, false}
     };
     return Stream.of(data).map(Arguments::of);
   }
@@ -136,38 +142,48 @@ public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase impl
   @ParameterizedTest(name = "[{index}] {0}")
   @MethodSource("configParams")
   public void testBulkInsertInternalPartitioner(BulkInsertSortMode sortMode,
-                                                boolean isGloballySorted, boolean isLocallySorted) {
+                                                boolean isPartitionedTable,
+                                                boolean isGloballySorted,
+                                                boolean isLocallySorted)  {
+    HoodieTableConfig tableConfig = genTableConfig(isPartitionedTable);
     JavaRDD<HoodieRecord> records1 = generateTestRecordsForBulkInsert(jsc);
     JavaRDD<HoodieRecord> records2 = generateTripleTestRecordsForBulkInsert(jsc);
-    testBulkInsertInternalPartitioner(BulkInsertInternalPartitionerFactory.get(sortMode),
+
+    testBulkInsertInternalPartitioner(BulkInsertInternalPartitionerFactory.get(sortMode, tableConfig),
         records1, isGloballySorted, isLocallySorted, generateExpectedPartitionNumRecords(records1));
-    testBulkInsertInternalPartitioner(BulkInsertInternalPartitionerFactory.get(sortMode),
+    testBulkInsertInternalPartitioner(BulkInsertInternalPartitionerFactory.get(sortMode, tableConfig),
         records2, isGloballySorted, isLocallySorted, generateExpectedPartitionNumRecords(records2));
   }
 
-  @Test
-  public void testCustomColumnSortPartitioner() {
+  @ParameterizedTest
+  @ValueSource(booleans = { true, false })
+  public void testCustomColumnSortPartitioner(boolean isPartitionedTable) {
     String sortColumnString = "rider";
     String[] sortColumns = sortColumnString.split(",");
-    Comparator<HoodieRecord<? extends HoodieRecordPayload>> columnComparator = getCustomColumnComparator(HoodieTestDataGenerator.AVRO_SCHEMA, sortColumns);
+
+    Comparator<HoodieRecord<? extends HoodieRecordPayload>> columnComparator =
+        getCustomColumnComparator(HoodieTestDataGenerator.AVRO_SCHEMA, sortColumns);
+
+    HoodieTableConfig tableConfig = genTableConfig(isPartitionedTable);
 
     JavaRDD<HoodieRecord> records1 = generateTestRecordsForBulkInsert(jsc);
     JavaRDD<HoodieRecord> records2 = generateTripleTestRecordsForBulkInsert(jsc);
-    testBulkInsertInternalPartitioner(new RDDCustomColumnsSortPartitioner(sortColumns, HoodieTestDataGenerator.AVRO_SCHEMA, false),
+    testBulkInsertInternalPartitioner(new RDDCustomColumnsSortPartitioner(sortColumns, HoodieTestDataGenerator.AVRO_SCHEMA, false, tableConfig),
         records1, true, true, generateExpectedPartitionNumRecords(records1), Option.of(columnComparator));
-    testBulkInsertInternalPartitioner(new RDDCustomColumnsSortPartitioner(sortColumns, HoodieTestDataGenerator.AVRO_SCHEMA, false),
+    testBulkInsertInternalPartitioner(new RDDCustomColumnsSortPartitioner(sortColumns, HoodieTestDataGenerator.AVRO_SCHEMA, false, tableConfig),
         records2, true, true, generateExpectedPartitionNumRecords(records2), Option.of(columnComparator));
 
-    HoodieWriteConfig config = HoodieWriteConfig
+    HoodieWriteConfig writeConfig = HoodieWriteConfig
             .newBuilder()
             .withPath("/")
             .withSchema(TRIP_EXAMPLE_SCHEMA)
             .withUserDefinedBulkInsertPartitionerClass(RDDCustomColumnsSortPartitioner.class.getName())
             .withUserDefinedBulkInsertPartitionerSortColumns(sortColumnString)
             .build();
-    testBulkInsertInternalPartitioner(new RDDCustomColumnsSortPartitioner(config),
+
+    testBulkInsertInternalPartitioner(new RDDCustomColumnsSortPartitioner(writeConfig, tableConfig),
             records1, true, true, generateExpectedPartitionNumRecords(records1), Option.of(columnComparator));
-    testBulkInsertInternalPartitioner(new RDDCustomColumnsSortPartitioner(config),
+    testBulkInsertInternalPartitioner(new RDDCustomColumnsSortPartitioner(writeConfig, tableConfig),
             records2, true, true, generateExpectedPartitionNumRecords(records2), Option.of(columnComparator));
 
   }
@@ -188,5 +204,13 @@ public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase impl
     });
 
     return comparator;
+  }
+
+  static HoodieTableConfig genTableConfig(boolean isPartitionedTable) {
+    HoodieTableConfig tableConfig = new HoodieTableConfig();
+    if (isPartitionedTable) {
+      tableConfig.setValue(HoodieTableConfig.PARTITION_FIELDS, "partition_path");
+    }
+    return tableConfig;
   }
 }

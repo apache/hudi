@@ -19,22 +19,22 @@
 package org.apache.hudi.execution.bulkinsert;
 
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.testutils.HoodieClientTestHarness;
 import org.apache.hudi.testutils.SparkDatasetTestUtils;
-
 import org.apache.spark.api.java.function.MapPartitionsFunction;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -44,6 +44,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.execution.bulkinsert.TestBulkInsertInternalPartitioner.genTableConfig;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
@@ -53,6 +54,7 @@ public class TestBulkInsertInternalPartitionerForRows extends HoodieClientTestHa
 
   private static final Comparator<Row> KEY_COMPARATOR =
       Comparator.comparing(o -> (o.getAs(HoodieRecord.PARTITION_PATH_METADATA_FIELD) + "+" + o.getAs(HoodieRecord.RECORD_KEY_METADATA_FIELD)));
+
   @BeforeEach
   public void setUp() throws Exception {
     initSparkContexts("TestBulkInsertInternalPartitionerForRows");
@@ -67,9 +69,14 @@ public class TestBulkInsertInternalPartitionerForRows extends HoodieClientTestHa
 
   private static Stream<Arguments> configParams() {
     Object[][] data = new Object[][] {
-        {BulkInsertSortMode.GLOBAL_SORT, true, true},
-        {BulkInsertSortMode.PARTITION_SORT, false, true},
-        {BulkInsertSortMode.NONE, false, false}
+        {BulkInsertSortMode.GLOBAL_SORT, true, true, true},
+        {BulkInsertSortMode.GLOBAL_SORT, false, true, true},
+        {BulkInsertSortMode.PARTITION_SORT, true, false, true},
+        {BulkInsertSortMode.PARTITION_SORT, false, false, true},
+        {BulkInsertSortMode.PARTITION_NO_SORT, true, false, false},
+        {BulkInsertSortMode.PARTITION_NO_SORT, false, false, false},
+        {BulkInsertSortMode.NONE, true, false, false},
+        {BulkInsertSortMode.NONE, false, false, false}
     };
     return Stream.of(data).map(Arguments::of);
   }
@@ -77,27 +84,35 @@ public class TestBulkInsertInternalPartitionerForRows extends HoodieClientTestHa
   @ParameterizedTest(name = "[{index}] {0}")
   @MethodSource("configParams")
   public void testBulkInsertInternalPartitioner(BulkInsertSortMode sortMode,
-      boolean isGloballySorted, boolean isLocallySorted)
-      throws Exception {
+                                                boolean isPartitionedTable,
+                                                boolean isGloballySorted,
+                                                boolean isLocallySorted) throws Exception {
     Dataset<Row> records1 = generateTestRecords();
     Dataset<Row> records2 = generateTestRecords();
-    testBulkInsertInternalPartitioner(BulkInsertInternalPartitionerWithRowsFactory.get(sortMode),
+
+    HoodieTableConfig tableConfig = genTableConfig(isPartitionedTable);
+
+    testBulkInsertInternalPartitioner(BulkInsertInternalPartitionerWithRowsFactory.get(sortMode, tableConfig),
         records1, isGloballySorted, isLocallySorted, generateExpectedPartitionNumRecords(records1), Option.empty());
-    testBulkInsertInternalPartitioner(BulkInsertInternalPartitionerWithRowsFactory.get(sortMode),
+    testBulkInsertInternalPartitioner(BulkInsertInternalPartitionerWithRowsFactory.get(sortMode, tableConfig),
         records2, isGloballySorted, isLocallySorted, generateExpectedPartitionNumRecords(records2), Option.empty());
   }
 
-  @Test
-  public void testCustomColumnSortPartitionerWithRows() {
+  @ParameterizedTest
+  @ValueSource(booleans = { true, false })
+  public void testCustomColumnSortPartitionerWithRows(boolean isPartitionedTable) {
     Dataset<Row> records1 = generateTestRecords();
     Dataset<Row> records2 = generateTestRecords();
+
+    HoodieTableConfig tableConfig = genTableConfig(isPartitionedTable);
+
     String sortColumnString = records1.columns()[5];
     String[] sortColumns = sortColumnString.split(",");
     Comparator<Row> comparator = getCustomColumnComparator(sortColumns);
 
-    testBulkInsertInternalPartitioner(new RowCustomColumnsSortPartitioner(sortColumns),
+    testBulkInsertInternalPartitioner(new RowCustomColumnsSortPartitioner(sortColumns, tableConfig),
         records1, false, true, generateExpectedPartitionNumRecords(records1), Option.of(comparator));
-    testBulkInsertInternalPartitioner(new RowCustomColumnsSortPartitioner(sortColumns),
+    testBulkInsertInternalPartitioner(new RowCustomColumnsSortPartitioner(sortColumns, tableConfig),
         records2, false, true, generateExpectedPartitionNumRecords(records2), Option.of(comparator));
 
     HoodieWriteConfig config = HoodieWriteConfig
@@ -106,9 +121,9 @@ public class TestBulkInsertInternalPartitionerForRows extends HoodieClientTestHa
         .withUserDefinedBulkInsertPartitionerClass(RowCustomColumnsSortPartitioner.class.getName())
         .withUserDefinedBulkInsertPartitionerSortColumns(sortColumnString)
         .build();
-    testBulkInsertInternalPartitioner(new RowCustomColumnsSortPartitioner(config),
+    testBulkInsertInternalPartitioner(new RowCustomColumnsSortPartitioner(config, tableConfig),
         records1, false, true, generateExpectedPartitionNumRecords(records1), Option.of(comparator));
-    testBulkInsertInternalPartitioner(new RowCustomColumnsSortPartitioner(config),
+    testBulkInsertInternalPartitioner(new RowCustomColumnsSortPartitioner(config, tableConfig),
         records2, false, true, generateExpectedPartitionNumRecords(records2), Option.of(comparator));
   }
 

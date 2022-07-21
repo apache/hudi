@@ -19,9 +19,7 @@
 package org.apache.hudi.execution.bulkinsert;
 
 import org.apache.hudi.common.table.HoodieTableConfig;
-import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.BulkInsertPartitioner;
-
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 
