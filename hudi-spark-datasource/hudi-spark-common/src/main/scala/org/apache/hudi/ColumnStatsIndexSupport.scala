@@ -18,7 +18,6 @@
 package org.apache.hudi
 
 import org.apache.avro.Conversions.DecimalConversion
-import org.apache.avro.LogicalTypes
 import org.apache.avro.generic.GenericData
 import org.apache.hudi.ColumnStatsIndexSupport._
 import org.apache.hudi.HoodieCatalystUtils.{withPersistedData, withPersistedDataset}
@@ -35,6 +34,7 @@ import org.apache.hudi.common.util.collection
 import org.apache.hudi.common.util.hash.ColumnIndexID
 import org.apache.hudi.data.HoodieJavaRDD
 import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadata, HoodieTableMetadataUtil, MetadataPartitionType}
+import org.apache.hudi.util.JFunction
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.HoodieUnsafeUtils.{createDataFrameFromInternalRows, createDataFrameFromRDD, createDataFrameFromRows}
 import org.apache.spark.sql.catalyst.InternalRow
@@ -216,8 +216,9 @@ class ColumnStatsIndexSupport(spark: SparkSession,
     // penalty of the [[Dataset]], since it's required to adhere to its schema at all times, while
     // RDDs are not;
     val transposedRows: HoodieData[Row] = colStatsRecords
-      .filter(r => sortedTargetColumnsSet.contains(r.getColumnName))
-      .mapToPair(r => {
+      // NOTE: Explicit conversion is required for Scala 2.11
+      .filter(JFunction.toJavaSerializableFunction(r => sortedTargetColumnsSet.contains(r.getColumnName)))
+      .mapToPair(JFunction.toJavaSerializablePairFunction(r => {
         if (r.getMinValue == null && r.getMaxValue == null) {
           // Corresponding row could be null in either of the 2 cases
           //    - Column contains only null values (in that case both min/max have to be nulls)
@@ -241,9 +242,9 @@ class ColumnStatsIndexSupport(spark: SparkSession,
 
           collection.Pair.of(r.getFileName, r)
         }
-      })
+      }))
       .groupByKey()
-      .map(p => {
+      .map(JFunction.toJavaSerializableFunction(p => {
         val columnRecordsSeq: Seq[HoodieMetadataColumnStats] = p.getValue.asScala.toSeq
         val fileName: String = p.getKey
         val valueCount: Long = columnRecordsSeq.head.getValueCount
@@ -281,7 +282,7 @@ class ColumnStatsIndexSupport(spark: SparkSession,
           }
 
         Row(coalescedRowValuesSeq:_*)
-      })
+      }))
 
     // NOTE: It's crucial to maintain appropriate ordering of the columns
     //       matching table layout: hence, we cherry-pick individual columns
@@ -293,10 +294,11 @@ class ColumnStatsIndexSupport(spark: SparkSession,
   private def loadColumnStatsIndexForColumnsInternal(targetColumns: Seq[String], shouldReadInMemory: Boolean): DataFrame = {
     val colStatsDF = {
       val colStatsRecords: HoodieData[HoodieMetadataColumnStats] = loadColumnStatsIndexRecords(targetColumns, shouldReadInMemory)
-      val catalystRows: HoodieData[InternalRow] = colStatsRecords.mapPartitions(it => {
+      // NOTE: Explicit conversion is required for Scala 2.11
+      val catalystRows: HoodieData[InternalRow] = colStatsRecords.mapPartitions(JFunction.toJavaSerializableFunction(it => {
         val converter = AvroConversionUtils.createAvroToInternalRowConverter(HoodieMetadataColumnStats.SCHEMA$, columnStatsRecordStructType)
         it.asScala.map(r => converter(r).orNull).asJava
-      }, false)
+      }), false)
 
       if (shouldReadInMemory) {
         // NOTE: This will instantiate a [[Dataset]] backed by [[LocalRelation]] holding all of the rows
@@ -326,12 +328,13 @@ class ColumnStatsIndexSupport(spark: SparkSession,
       metadataTable.getRecordsByKeyPrefixes(encodedTargetColumnNames.asJava, HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS, shouldReadInMemory)
 
     val columnStatsRecords: HoodieData[HoodieMetadataColumnStats] =
-      metadataRecords.map(record => {
+      // NOTE: Explicit conversion is required for Scala 2.11
+      metadataRecords.map(JFunction.toJavaSerializableFunction(record => {
         toScalaOption(record.getData.getInsertValue(null, null))
           .map(metadataRecord => metadataRecord.asInstanceOf[HoodieMetadataRecord].getColumnStatsMetadata)
           .orNull
-      })
-        .filter(columnStatsRecord => columnStatsRecord != null)
+      }))
+        .filter(JFunction.toJavaSerializableFunction(columnStatsRecord => columnStatsRecord != null))
 
     columnStatsRecords
   }

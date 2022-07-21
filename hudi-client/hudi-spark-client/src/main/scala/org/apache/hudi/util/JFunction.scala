@@ -17,7 +17,10 @@
 
 package org.apache.hudi.util
 
-import org.apache.hudi.common.function.SerializableFunction
+import org.apache.hudi.common.function.{SerializableFunction, SerializablePairFunction}
+import org.apache.hudi.common.util.collection
+
+import scala.language.implicitConversions
 
 /**
  * Utility allowing for seamless conversion b/w Java/Scala functional primitives
@@ -43,6 +46,11 @@ object JFunction {
   implicit def toJavaSerializableFunction[T, R](f: Function[T, R]): SerializableFunction[T, R] =
     new SerializableFunction[T, R] {
       override def apply(t: T): R = f.apply(t)
+    }
+
+  implicit def toJavaSerializablePairFunction[T, K, V](f: Function[T, collection.Pair[K, V]]): SerializablePairFunction[T, K, V] =
+    new SerializablePairFunction[T, K, V] {
+      override def call(t: T): collection.Pair[K, V] = f.apply(t)
     }
 
   implicit def toJava[T](f: T => Unit): java.util.function.Consumer[T] =
