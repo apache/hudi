@@ -43,6 +43,7 @@ Following tables show whether a given query is supported on specific query engin
 |**Flink SQL**|Y|N|
 |**PrestoDB**|Y|N|
 |**Impala**|Y|N|
+|**Redshift Spectrum**|Y|N|
 
 
 Note that `Read Optimized` queries are not applicable for COPY_ON_WRITE tables.
@@ -262,3 +263,11 @@ After Hudi made a new commit, refresh the Impala table to get the latest results
 ```
 REFRESH database.table_name
 ```
+## Redshift Spectrum
+Copy on Write Tables in Apache Hudi versions 0.5.2, 0.6.0, 0.7.0, 0.8.0, 0.9.0, and 0.10.0 can be queried via Amazon Redshift Spectrum external tables.
+:::note
+Hudi tables are supported only when AWS Glue Data Catalog is used. It's not supported when you use an Apache Hive metastore as the external catalog.
+:::
+
+Please refer to [Redshift Spectrum Integration with Apache Hudi](https://docs.aws.amazon.com/redshift/latest/dg/c-spectrum-external-tables.html#c-spectrum-column-mapping-hudi)
+for more details.
