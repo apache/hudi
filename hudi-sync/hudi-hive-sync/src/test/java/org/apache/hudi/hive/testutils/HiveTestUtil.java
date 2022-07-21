@@ -106,17 +106,12 @@ public class HiveTestUtil {
   public static HiveTestService hiveTestService;
   public static FileSystem fileSystem;
   public static QueryBasedDDLExecutor ddlExecutor;
-  /**
-   * NOTE: This member variables could only be used in tests
-   *
-   * @VisibleForTesting
-   */
-  public static HiveSyncConfig hiveSyncConfig;
 
   private static ZooKeeperServer zkServer;
   private static HiveServer2 hiveServer;
   private static ZookeeperTestService zkService;
   private static Configuration configuration;
+  private static HiveSyncConfig hiveSyncConfig;
   private static DateTimeFormatter dtfOut;
   private static Set<String> createdTablesSet = new HashSet<>();
 
