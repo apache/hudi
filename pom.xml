@@ -376,9 +376,8 @@
             <argLine>@{argLine}</argLine>
             <trimStackTrace>false</trimStackTrace>
             <systemPropertyVariables>
-              <log4j.configuration>
-                ${surefire-log4j.file}
-              </log4j.configuration>
+              <log4j.configuration>${surefire-log4j.file}</log4j.configuration>
+              <log4j1.compatibility>true</log4j1.compatibility>
             </systemPropertyVariables>
             <useSystemClassLoader>false</useSystemClassLoader>
           </configuration>
@@ -394,6 +393,7 @@
             <filereports>TestSuite.txt</filereports>
             <systemProperties>
               <log4j.configuration>${surefire-log4j.file}</log4j.configuration>
+              <log4j1.compatibility>true</log4j1.compatibility>
             </systemProperties>
           </configuration>
           <executions>
