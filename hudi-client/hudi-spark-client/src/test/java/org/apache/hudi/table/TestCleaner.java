@@ -290,7 +290,8 @@ public class TestCleaner extends HoodieClientTestBase {
     cleanInstantTime = "00" + index++;
     HoodieTable table = HoodieSparkTable.create(writeConfig, context);
     Option<HoodieCleanerPlan> cleanPlan = table.scheduleCleaning(context, cleanInstantTime, Option.empty());
-    assertEquals(cleanPlan.get().getFilePathsToBeDeletedPerPartition().get(partition).size(), 1);
+    // We have commits 000, 001,002, and retain 1 commit, we should clean 2 files.
+    assertEquals(2, cleanPlan.get().getFilePathsToBeDeletedPerPartition().get(partition).size());
     assertEquals(metaClient.reloadActiveTimeline().getCleanerTimeline().filterInflightsAndRequested().countInstants(), 1);
 
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(context, writeConfig)) {
@@ -539,9 +540,9 @@ public class TestCleaner extends HoodieClientTestBase {
         metaClient = HoodieTableMetaClient.reload(metaClient);
         HoodieTable table1 = HoodieSparkTable.create(cfg, context, metaClient);
         HoodieTimeline activeTimeline = table1.getCompletedCommitsTimeline();
-        // NOTE: See CleanPlanner#getFilesToCleanKeepingLatestCommits. We explicitly keep one commit before earliest
-        // commit
-        Option<HoodieInstant> earliestRetainedCommit = activeTimeline.nthFromLastInstant(maxCommits);
+        // NOTE: See CleanPlanner#getEarliestCommitToRetain. calculation of earliestRetainedCommit should be consistent
+        // with CleanPlanner#getEarliestCommitToRetain
+        Option<HoodieInstant> earliestRetainedCommit = activeTimeline.nthFromLastInstant(maxCommits - 1);
         Set<HoodieInstant> acceptableCommits = activeTimeline.getInstants().collect(Collectors.toSet());
         if (earliestRetainedCommit.isPresent()) {
           acceptableCommits
@@ -1453,8 +1454,7 @@ public class TestCleaner extends HoodieClientTestBase {
         .withLogFile(partition, "fileId5", 1, 2)
         .addCommit("011")
         .withBaseFilesInPartition(partition, "fileId7")
-        .withLogFile(partition, "fileId7", 1, 2)
-        .addCommit("013");
+        .withLogFile(partition, "fileId7", 1, 2);
 
     // Clean now
     metaClient = HoodieTableMetaClient.reload(metaClient);
