@@ -140,12 +140,6 @@ public class TestHiveSyncTool {
     HiveTestUtil.clear();
   }
 
-  @Test
-  public void testMetaStoreUrisShouldMatchHiveServerConf() {
-    assertEquals(HiveTestUtil.getHiveConf().get("hive.metastore.uris"),
-          HiveTestUtil.hiveSyncConfig.getHiveConf().get("hive.metastore.uris"));
-  }
-
   @ParameterizedTest
   @MethodSource({"syncModeAndSchemaFromCommitMetadata"})
   public void testBasicSync(boolean useSchemaFromCommitMetadata, String syncMode) throws Exception {

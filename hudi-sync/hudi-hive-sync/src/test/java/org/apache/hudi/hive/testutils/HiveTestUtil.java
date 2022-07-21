@@ -146,8 +146,7 @@ public class HiveTestUtil {
     hiveSyncProps.setProperty(META_SYNC_PARTITION_FIELDS.key(), "datestr");
     hiveSyncProps.setProperty(HIVE_BATCH_SYNC_PARTITION_NUM.key(), "3");
 
-    hiveSyncConfig = new HiveSyncConfig(hiveSyncProps, configuration);
-    hiveSyncConfig.setHadoopConf(getHiveConf());
+    hiveSyncConfig = new HiveSyncConfig(hiveSyncProps, getHiveConf());
 
     dtfOut = DateTimeFormatter.ofPattern("yyyy/MM/dd");
     ddlExecutor = new HiveQueryDDLExecutor(hiveSyncConfig);
@@ -176,6 +175,7 @@ public class HiveTestUtil {
     }
     createdTablesSet.clear();
     ddlExecutor.runSQL("drop database if exists " + DB_NAME + " cascade");
+    FileSystem.closeAll();
   }
 
   public static HiveConf getHiveConf() {
