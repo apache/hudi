@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi.command
 
-import org.apache.hudi.{HoodieSparkSqlWriter, HoodieSparkUtils}
+import org.apache.hudi.HoodieSparkSqlWriter
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, HoodieCatalogTable}
 import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, Literal}
@@ -154,7 +154,7 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig {
      schemaWithoutMetaFields: Seq[StructField],
      conf: SQLConf): Seq[Alias] = {
     queryOutputWithoutMetaFields.zip(schemaWithoutMetaFields).map { case (dataAttr, dataField) =>
-      val targetFieldOption = if (dataAttr.name.contains("col")) None else
+      val targetFieldOption = if (dataAttr.name.startsWith("col")) None else
         schemaWithoutMetaFields.find(_.name.equals(dataAttr.name))
       val targetField = if (targetFieldOption.isDefined) targetFieldOption.get else dataField
       val castAttr = castIfNeeded(dataAttr.withNullability(targetField.nullable),
