@@ -349,7 +349,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     if (fileSplits.isEmpty) {
       sparkSession.sparkContext.emptyRDD
     } else {
-      val rdd = composeRDD(fileSplits, partitionSchema, dataSchema, requiredDataSchema, requiredColumns, filters)
+      val rdd = composeRDD(fileSplits, partitionSchema, dataSchema, requiredDataSchema, targetColumns, filters)
 
       // NOTE: In case when partition columns have been pruned from the required schema, we have to project
       //       the rows from the pruned schema back into the one expected by the caller

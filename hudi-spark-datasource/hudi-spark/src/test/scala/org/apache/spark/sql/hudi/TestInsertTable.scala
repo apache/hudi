@@ -633,8 +633,6 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
     }
   }
 
-  /*
-  // TODO(HUDI-4420) re-enable
   test("Test enable hoodie.datasource.write.drop.partition.columns when write") {
     spark.sql("set hoodie.sql.bulk.insert.enable = false")
     Seq("mor", "cow").foreach { tableType =>
@@ -667,7 +665,6 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
       }
     }
   }
-   */
 
   test("Test nested field as primaryKey and preCombineField") {
     withTempDir { tmp =>
