@@ -254,7 +254,7 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
   }
 
   @Override
-  protected void preWrite(String instantTime, WriteOperationType writeOperationType, HoodieTableMetaClient metaClient) {
+  public void preWrite(String instantTime, WriteOperationType writeOperationType, HoodieTableMetaClient metaClient) {
     setOperationType(writeOperationType);
     // Note: the code to read the commit metadata is not thread safe for JSON deserialization,
     // remove the table metadata sync
