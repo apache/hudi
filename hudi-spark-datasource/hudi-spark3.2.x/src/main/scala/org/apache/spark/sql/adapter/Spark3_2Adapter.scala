@@ -19,6 +19,7 @@ package org.apache.spark.sql.adapter
 
 import org.apache.avro.Schema
 import org.apache.hudi.Spark32HoodieFileScanRDD
+import org.apache.spark.TaskContext
 import org.apache.spark.sql._
 import org.apache.spark.sql.avro._
 import org.apache.spark.sql.catalyst.InternalRow
@@ -29,6 +30,7 @@ import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Sp
 import org.apache.spark.sql.execution.datasources.{FilePartition, FileScanRDD, PartitionedFile}
 import org.apache.spark.sql.parser.HoodieSpark3_2ExtendedSqlParser
 import org.apache.spark.sql.types.{DataType, StructType}
+import org.apache.spark.util.collection.ExternalSorter
 
 /**
  * Implementation of [[SparkAdapter]] for Spark 3.2.x branch
@@ -75,4 +77,8 @@ class Spark3_2Adapter extends BaseSpark3Adapter {
   override def extractDeleteCondition(deleteFromTable: Command): Expression = {
     deleteFromTable.asInstanceOf[DeleteFromTable].condition.getOrElse(null)
   }
+
+  override def insertInto[K, V, C](ctx: TaskContext,
+                                   records: Iterator[Product2[K, V]],
+                                   sorter: ExternalSorter[K, V, C]): Iterator[Product2[K, C]] = sorter.insertAllAndUpdateMetrics(records)
 }
