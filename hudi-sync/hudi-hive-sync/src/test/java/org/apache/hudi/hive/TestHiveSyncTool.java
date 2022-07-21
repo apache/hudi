@@ -107,7 +107,7 @@ public class TestHiveSyncTool {
   private HoodieHiveSyncClient hiveClient;
 
   @AfterAll
-  public static void cleanUpClass() {
+  public static void cleanUpClass() throws IOException {
     HiveTestUtil.shutdown();
   }
 

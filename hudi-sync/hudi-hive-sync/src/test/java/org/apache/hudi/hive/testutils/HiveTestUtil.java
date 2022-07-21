@@ -170,14 +170,13 @@ public class HiveTestUtil {
     }
     createdTablesSet.clear();
     ddlExecutor.runSQL("drop database if exists " + DB_NAME + " cascade");
-    FileSystem.closeAll();
   }
 
   public static HiveConf getHiveConf() {
     return hiveServer.getHiveConf();
   }
 
-  public static void shutdown() {
+  public static void shutdown() throws IOException {
     if (hiveServer != null) {
       hiveServer.stop();
     }
@@ -187,6 +186,7 @@ public class HiveTestUtil {
     if (zkServer != null) {
       zkServer.shutdown();
     }
+    FileSystem.closeAll();
   }
 
   public static void createCOWTable(String instantTime, int numberOfPartitions, boolean useSchemaFromCommitMetadata,
