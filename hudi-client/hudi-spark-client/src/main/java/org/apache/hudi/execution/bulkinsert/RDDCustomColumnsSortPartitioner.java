@@ -50,7 +50,7 @@ public class RDDCustomColumnsSortPartitioner<T extends HoodieRecordPayload>
   private final SerializableSchema serializableSchema;
   private final boolean consistentLogicalTimestampEnabled;
 
-  public RDDCustomColumnsSortPartitioner(HoodieTableConfig tableConfig, HoodieWriteConfig config) {
+  public RDDCustomColumnsSortPartitioner(HoodieWriteConfig config, HoodieTableConfig tableConfig) {
     super(tableConfig);
     this.serializableSchema = new SerializableSchema(new Schema.Parser().parse(config.getSchema()));
     this.orderByColumnNames = getOrderByColumnNames(config);

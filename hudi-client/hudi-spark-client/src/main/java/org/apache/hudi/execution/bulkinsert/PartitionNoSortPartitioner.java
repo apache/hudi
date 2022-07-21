@@ -33,10 +33,10 @@ import scala.Tuple2;
  *
  * @param <T> {@link HoodieRecordPayload} type
  */
-public class RepartitionNoSortPartitioner<T extends HoodieRecordPayload>
+public class PartitionNoSortPartitioner<T extends HoodieRecordPayload>
     extends RepartitioningBulkInsertPartitionerBase<JavaRDD<HoodieRecord<T>>> {
 
-  public RepartitionNoSortPartitioner(HoodieTableConfig tableConfig) {
+  public PartitionNoSortPartitioner(HoodieTableConfig tableConfig) {
     super(tableConfig);
   }
 

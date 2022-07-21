@@ -31,9 +31,9 @@ import org.apache.spark.sql.Row;
  *
  * Corresponds to the {@link BulkInsertSortMode#PARTITION_NO_SORT} mode.
  */
-public class RepartitionNoSortPartitionerWithRows extends RepartitioningBulkInsertPartitionerBase<Dataset<Row>> {
+public class PartitionNoSortPartitionerWithRows extends RepartitioningBulkInsertPartitionerBase<Dataset<Row>> {
 
-  public RepartitionNoSortPartitionerWithRows(HoodieTableConfig tableConfig) {
+  public PartitionNoSortPartitionerWithRows(HoodieTableConfig tableConfig) {
     super(tableConfig);
   }
 

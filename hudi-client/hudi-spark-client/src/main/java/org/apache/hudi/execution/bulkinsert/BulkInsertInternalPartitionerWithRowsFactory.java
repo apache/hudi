@@ -31,8 +31,8 @@ import org.apache.spark.sql.Row;
  */
 public abstract class BulkInsertInternalPartitionerWithRowsFactory {
 
-  public static BulkInsertPartitioner<Dataset<Row>> get(HoodieTableConfig tableConfig, HoodieWriteConfig writeConfig) {
-    switch (writeConfig.getBulkInsertSortMode()) {
+  public static BulkInsertPartitioner<Dataset<Row>> get(BulkInsertSortMode bulkInsertMode, HoodieTableConfig tableConfig) {
+    switch (bulkInsertMode) {
       case NONE:
         return new NonSortPartitionerWithRows();
       case GLOBAL_SORT:
@@ -40,9 +40,9 @@ public abstract class BulkInsertInternalPartitionerWithRowsFactory {
       case PARTITION_SORT:
         return new PartitionSortPartitionerWithRows(tableConfig);
       case PARTITION_NO_SORT:
-        return new RepartitionNoSortPartitionerWithRows(tableConfig);
+        return new PartitionNoSortPartitionerWithRows(tableConfig);
       default:
-        throw new UnsupportedOperationException("The bulk insert sort mode \"" + writeConfig.getBulkInsertSortMode().name() + "\" is not supported.");
+        throw new UnsupportedOperationException("The bulk insert sort mode \"" + bulkInsertMode.name() + "\" is not supported.");
     }
   }
 }
