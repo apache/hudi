@@ -23,7 +23,7 @@ import org.apache.spark.sql.Dataset
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.storage.StorageLevel._
 
-object HoodieCatalystUtils {
+object HoodieCatalystUtils extends SparkAdapterSupport {
 
   /**
    * Executes provided function while keeping provided [[Dataset]] instance persisted for the
@@ -55,31 +55,11 @@ object HoodieCatalystUtils {
    * @return execution outcome of the [[f]] function
    */
   def withPersistedData[T](data: HoodieData[_], level: StorageLevel = MEMORY_AND_DISK)(f: => T): T = {
-    data.persist(levelAsString(level))
+    data.persist(sparkAdapter.convertStorageLevelToString(level))
     try {
       f
     } finally {
       data.unpersist()
     }
-  }
-
-  /**
-   * Converts instance of [[StorageLevel]] to a corresponding string
-   */
-  def levelAsString(level: StorageLevel): String = level match {
-    case NONE => "NONE"
-    case DISK_ONLY => "DISK_ONLY"
-    case DISK_ONLY_2 => "DISK_ONLY_2"
-    case DISK_ONLY_3 => "DISK_ONLY_3"
-    case MEMORY_ONLY => "MEMORY_ONLY"
-    case MEMORY_ONLY_2 => "MEMORY_ONLY_2"
-    case MEMORY_ONLY_SER => "MEMORY_ONLY_SER"
-    case MEMORY_ONLY_SER_2 => "MEMORY_ONLY_SER_2"
-    case MEMORY_AND_DISK => "MEMORY_AND_DISK"
-    case MEMORY_AND_DISK_2 => "MEMORY_AND_DISK_2"
-    case MEMORY_AND_DISK_SER => "MEMORY_AND_DISK_SER"
-    case MEMORY_AND_DISK_SER_2 => "MEMORY_AND_DISK_SER_2"
-    case OFF_HEAP => "OFF_HEAP"
-    case _ => throw new IllegalArgumentException(s"Invalid StorageLevel: $level")
   }
 }
