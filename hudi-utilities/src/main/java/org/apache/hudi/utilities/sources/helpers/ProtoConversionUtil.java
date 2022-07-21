@@ -251,31 +251,6 @@ public class ProtoConversionUtil {
       });
     }
 
-    /**
-     * Finds the index within the union that corresponds to the passed in datum object. Since unions will only exist for nullable fields, we can cast the datum to a Message if it is non-null.
-     * @param union Schema for the union
-     * @param datum Value corresponding to one of the union types
-     * @return the position of the schema for the input datum's type within the union's types
-     */
-    public int getIndexForTypeInUnion(Schema union, Object datum) {
-      String schemaName;
-      if (datum == null) {
-        schemaName = Schema.Type.NULL.getName();
-      } else {
-        Message datumMessage = (Message) datum;
-        String namespace = getNamespace(datumMessage.getDescriptorForType().getFile(), datumMessage.getDescriptorForType());
-        schemaName = namespace + "." + datumMessage.getDescriptorForType().getName();
-      }
-      Integer i = union.getIndexNamed(schemaName);
-      if (i == null) {
-        i = union.getIndexNamed(WRAPPER_DESCRIPTORS_TO_TYPE.get(((Message) datum).getDescriptorForType()).getName());
-      }
-      if (i != null) {
-        return i;
-      }
-      throw new HoodieException("Unknown datum type during proto to avro conversion: " + datum.getClass());
-    }
-
     private Object convertObject(Schema schema, Object value) {
       if (value == null) {
         return null;
@@ -350,8 +325,8 @@ public class ProtoConversionUtil {
             return new Utf8(value.toString());
           }
         case UNION:
-          // Unions only occur for nullable fields when working with proto + avro
-          return convertObject(schema.getTypes().get(getIndexForTypeInUnion(schema, value)), value);
+          // Unions only occur for nullable fields when working with proto + avro and null is the first schema in the union
+          return convertObject(schema.getTypes().get(1), value);
         default:
           throw new HoodieException("Proto to Avro conversion failed for schema \"" + schema + "\" and value \"" + value + "\"");
       }
