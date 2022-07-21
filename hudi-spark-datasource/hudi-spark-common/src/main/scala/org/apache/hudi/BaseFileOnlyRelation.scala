@@ -20,14 +20,12 @@ package org.apache.hudi
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
-import org.apache.hudi.common.model.HoodieFileFormat
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.hadoop.HoodieROTablePathFilter
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.catalyst.expressions.Expression
+import org.apache.spark.sql.execution.datasources
 import org.apache.spark.sql.execution.datasources._
-import org.apache.spark.sql.execution.datasources.parquet.HoodieParquetFileFormat
-import org.apache.spark.sql.hive.orc.OrcFileFormat
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
 import org.apache.spark.sql.types.StructType
 
@@ -59,10 +57,8 @@ class BaseFileOnlyRelation(sqlContext: SQLContext,
   //                 For more details please check HUDI-4161
   // NOTE: This override has to mirror semantic of whenever this Relation is converted into [[HadoopFsRelation]],
   //       which is currently done for all cases, except when Schema Evolution is enabled
-  override protected val shouldExtractPartitionValuesFromPartitionPath: Boolean = {
-    val enableSchemaOnRead = !internalSchema.isEmptySchema
-    !enableSchemaOnRead
-  }
+  override protected val shouldExtractPartitionValuesFromPartitionPath: Boolean =
+    internalSchemaOpt.isEmpty
 
   override lazy val mandatoryFields: Seq[String] =
   // TODO reconcile, record's key shouldn't be mandatory for base-file only relation
@@ -88,7 +84,7 @@ class BaseFileOnlyRelation(sqlContext: SQLContext,
       options = optParams,
       // NOTE: We have to fork the Hadoop Config here as Spark will be modifying it
       //       to configure Parquet reader appropriately
-      hadoopConf = HoodieDataSourceHelper.getConfigurationWithInternalSchema(new Configuration(conf), requiredSchema.internalSchema, metaClient.getBasePath, validCommits)
+      hadoopConf = embedInternalSchema(new Configuration(conf), requiredSchema.internalSchema)
     )
 
     new HoodieFileScanRDD(sparkSession, baseFileReader, fileSplits)
@@ -124,16 +120,6 @@ class BaseFileOnlyRelation(sqlContext: SQLContext,
    *       rule; you can find more details in HUDI-3896)
    */
   def toHadoopFsRelation: HadoopFsRelation = {
-      val (tableFileFormat, formatClassName) =
-        metaClient.getTableConfig.getBaseFileFormat match {
-          case HoodieFileFormat.ORC => (new OrcFileFormat, "orc")
-          case HoodieFileFormat.PARQUET =>
-            // We're delegating to Spark to append partition values to every row only in cases
-            // when these corresponding partition-values are not persisted w/in the data file itself
-            val parquetFileFormat = sparkAdapter.createHoodieParquetFileFormat(shouldExtractPartitionValuesFromPartitionPath).get
-            (parquetFileFormat, HoodieParquetFileFormat.FILE_FORMAT_ID)
-        }
-
     if (globPaths.isEmpty) {
       // NOTE: There are currently 2 ways partition values could be fetched:
       //          - Source columns (producing the values used for physical partitioning) will be read
@@ -157,11 +143,20 @@ class BaseFileOnlyRelation(sqlContext: SQLContext,
         partitionSchema = partitionSchema,
         dataSchema = dataSchema,
         bucketSpec = None,
-        fileFormat = tableFileFormat,
+        fileFormat = fileFormat,
         optParams)(sparkSession)
     } else {
       val readPathsStr = optParams.get(DataSourceReadOptions.READ_PATHS.key)
       val extraReadPaths = readPathsStr.map(p => p.split(",").toSeq).getOrElse(Seq())
+
+      // NOTE: Spark is able to infer partitioning values from partition path only when Hive-style partitioning
+      //       scheme is used. Therefore, we fallback to reading the table as non-partitioned (specifying
+      //       partitionColumns = Seq.empty) whenever Hive-style partitioning is not involved
+      val partitionColumns: Seq[String] = if (tableConfig.getHiveStylePartitioningEnable.toBoolean) {
+        this.partitionColumns
+      } else {
+        Seq.empty
+      }
 
       DataSource.apply(
         sparkSession = sparkSession,
@@ -169,15 +164,25 @@ class BaseFileOnlyRelation(sqlContext: SQLContext,
         // Here we should specify the schema to the latest commit schema since
         // the table schema evolution.
         userSpecifiedSchema = userSchema.orElse(Some(tableStructSchema)),
-        className = formatClassName,
-        // Since we're reading the table as just collection of files we have to make sure
-        // we only read the latest version of every Hudi's file-group, which might be compacted, clustered, etc.
-        // while keeping previous versions of the files around as well.
-        //
-        // We rely on [[HoodieROTablePathFilter]], to do proper filtering to assure that
+        className = fileFormatClassName,
         options = optParams ++ Map(
-          "mapreduce.input.pathFilter.class" -> classOf[HoodieROTablePathFilter].getName
-        )
+          // Since we're reading the table as just collection of files we have to make sure
+          // we only read the latest version of every Hudi's file-group, which might be compacted, clustered, etc.
+          // while keeping previous versions of the files around as well.
+          //
+          // We rely on [[HoodieROTablePathFilter]], to do proper filtering to assure that
+          "mapreduce.input.pathFilter.class" -> classOf[HoodieROTablePathFilter].getName,
+
+          // We have to override [[EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH]] setting, since
+          // the relation might have this setting overridden
+          DataSourceReadOptions.EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH.key -> shouldExtractPartitionValuesFromPartitionPath.toString,
+
+          // NOTE: We have to specify table's base-path explicitly, since we're requesting Spark to read it as a
+          //       list of globbed paths which complicates partitioning discovery for Spark.
+          //       Please check [[PartitioningAwareFileIndex#basePaths]] comment for more details.
+          PartitioningAwareFileIndex.BASE_PATH_PARAM -> metaClient.getBasePathV2.toString
+        ),
+        partitionColumns = partitionColumns
       )
         .resolveRelation()
         .asInstanceOf[HadoopFsRelation]

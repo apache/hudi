@@ -53,7 +53,7 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
 
   def getTableIdentifier(table: LogicalPlan): TableIdentifier = {
     table match {
-      case SubqueryAlias(name, _) => sparkAdapter.toTableIdentifier(name)
+      case SubqueryAlias(name, _) => sparkAdapter.getCatalystPlanUtils.toTableIdentifier(name)
       case _ => throw new IllegalArgumentException(s"Illegal table: $table")
     }
   }

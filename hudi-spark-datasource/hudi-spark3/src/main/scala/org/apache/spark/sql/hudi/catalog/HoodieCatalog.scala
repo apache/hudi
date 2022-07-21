@@ -23,17 +23,17 @@ import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.sql.InsertMode
 import org.apache.hudi.sync.common.util.ConfigUtils
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, SparkAdapterSupport}
-import org.apache.spark.sql.HoodieSpark3SqlUtils.convertTransforms
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.{NoSuchTableException, TableAlreadyExistsException, UnresolvedAttribute}
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable.needFilterProps
-import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTableType, CatalogUtils, HoodieCatalogTable}
+import org.apache.spark.sql.catalyst.catalog.{BucketSpec, CatalogTable, CatalogTableType, CatalogUtils, HoodieCatalogTable}
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.IdentifierHelper
 import org.apache.spark.sql.connector.catalog.TableChange.{AddColumn, ColumnChange, UpdateColumnComment, UpdateColumnType}
 import org.apache.spark.sql.connector.catalog._
-import org.apache.spark.sql.connector.expressions.Transform
+import org.apache.spark.sql.connector.expressions.{BucketTransform, FieldReference, IdentityTransform, Transform}
 import org.apache.spark.sql.execution.datasources.DataSource
 import org.apache.spark.sql.hudi.analysis.HoodieV1OrV2Table
+import org.apache.spark.sql.hudi.catalog.HoodieCatalog.convertTransforms
 import org.apache.spark.sql.hudi.command._
 import org.apache.spark.sql.hudi.{HoodieSqlCommonUtils, ProvidesHoodieConfig}
 import org.apache.spark.sql.types.{StructField, StructType}
@@ -42,6 +42,7 @@ import org.apache.spark.sql.{Dataset, SaveMode, SparkSession, _}
 import java.net.URI
 import java.util
 import scala.collection.JavaConverters.{mapAsJavaMapConverter, mapAsScalaMapConverter}
+import scala.collection.mutable
 
 class HoodieCatalog extends DelegatingCatalogExtension
   with StagingTableCatalog
@@ -341,5 +342,26 @@ class HoodieCatalog extends DelegatingCatalogExtension
         .save()
       df
     })
+  }
+}
+
+object HoodieCatalog {
+  def convertTransforms(partitions: Seq[Transform]): (Seq[String], Option[BucketSpec]) = {
+    val identityCols = new mutable.ArrayBuffer[String]
+    var bucketSpec = Option.empty[BucketSpec]
+
+    partitions.map {
+      case IdentityTransform(FieldReference(Seq(col))) =>
+        identityCols += col
+
+
+      case BucketTransform(numBuckets, FieldReference(Seq(col))) =>
+        bucketSpec = Some(BucketSpec(numBuckets, col :: Nil, Nil))
+
+      case _ =>
+        throw new HoodieException(s"Partitioning by expressions is not supported.")
+    }
+
+    (identityCols, bucketSpec)
   }
 }
