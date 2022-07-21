@@ -90,7 +90,6 @@ hoodie.aws.session.token
 ```
 If not configured, Hudi falls back to use [DefaultAWSCredentialsProviderChain](https://docs.aws.amazon.com/AWSJavaSDK/latest/javadoc/com/amazonaws/auth/DefaultAWSCredentialsProviderChain.html).
 
-
 IAM policy for your service instance will need to add the following permissions:
 
 ```json
