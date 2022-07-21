@@ -1696,7 +1696,7 @@ Configs that control DynamoDB based locking mechanisms required for concurrency 
 
 `Config Class`: org.apache.hudi.config.DynamoDbBasedLockConfig<br></br>
 > #### hoodie.write.lock.dynamodb.billing_mode
-> For DynamoDB based lock provider, by default it is PAY_PER_REQUEST mode<br></br>
+> For DynamoDB based lock provider, by default it is PAY_PER_REQUEST mode. Alternative is PROVISIONED<br></br>
 > **Default Value**: PAY_PER_REQUEST (Optional)<br></br>
 > `Config Param: DYNAMODB_LOCK_BILLING_MODE`<br></br>
 > `Since Version: 0.10.0`<br></br>
