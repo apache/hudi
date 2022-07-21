@@ -47,7 +47,7 @@ public abstract class BulkInsertInternalPartitionerFactory {
         return new GlobalSortPartitioner<>();
       case PARTITION_SORT:
         return new RDDPartitionSortPartitioner<>(tableConfig);
-      case REPARTITION_NO_SORT:
+      case PARTITION_NO_SORT:
         return new RepartitionNoSortPartitioner<>(tableConfig);
       default:
         throw new HoodieException("The bulk insert sort mode \"" + writeConfig.getBulkInsertSortMode().name() + "\" is not supported.");

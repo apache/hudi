@@ -25,5 +25,5 @@ public enum BulkInsertSortMode {
     NONE,
     GLOBAL_SORT,
     PARTITION_SORT,
-    REPARTITION_NO_SORT,
+    PARTITION_NO_SORT,
 }

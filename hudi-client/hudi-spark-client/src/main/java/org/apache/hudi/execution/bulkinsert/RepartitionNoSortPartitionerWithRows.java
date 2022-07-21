@@ -29,7 +29,7 @@ import org.apache.spark.sql.Row;
  * of the dataset w/ the "physical" partitioning of the table (effectively a no-op for non-partitioned
  * tables)
  *
- * Corresponds to the {@link BulkInsertSortMode#REPARTITION_NO_SORT} mode.
+ * Corresponds to the {@link BulkInsertSortMode#PARTITION_NO_SORT} mode.
  */
 public class RepartitionNoSortPartitionerWithRows extends RepartitioningBulkInsertPartitionerBase<Dataset<Row>> {
 
