@@ -19,7 +19,7 @@ package org.apache.hudi
 
 import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hudi.BaseHoodieTableFileIndex.PartitionPath
-import org.apache.hudi.DataSourceReadOptions.{QUERY_TYPE, QUERY_TYPE_INCREMENTAL_OPT_VAL, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, QUERY_TYPE_SNAPSHOT_OPT_VAL}
+import org.apache.hudi.DataSourceReadOptions.{PARTITION_FIELD_IS_STRING, PARTITION_FIELD_NAMES, QUERY_TYPE, QUERY_TYPE_INCREMENTAL_OPT_VAL, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, QUERY_TYPE_SNAPSHOT_OPT_VAL}
 import org.apache.hudi.SparkHoodieTableFileIndex.{deduceQueryType, generateFieldMap, toJavaOption}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.TypedProperties
@@ -38,6 +38,7 @@ import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.apache.spark.unsafe.types.UTF8String
 
 import scala.collection.JavaConverters._
+import scala.collection.mutable.ListBuffer
 
 /**
  * Implementation of the [[BaseHoodieTableFileIndex]] for Spark
@@ -87,19 +88,46 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
     val tableConfig = metaClient.getTableConfig
     val partitionColumns = tableConfig.getPartitionFields
     val nameFieldMap = generateFieldMap(schema)
-
+    val isStringType = configProperties.getBoolean(PARTITION_FIELD_IS_STRING.key())
+    val customPartitionFieldNames = configProperties.getString(PARTITION_FIELD_NAMES.key())
+      .split(",")
+      .filter(p => p.nonEmpty)
+      .map(field => field.trim)
     if (partitionColumns.isPresent) {
+      var partitionColumnsValue = partitionColumns.get()
+      if (customPartitionFieldNames.length > 0) {
+        if (partitionColumns.get().length != customPartitionFieldNames.length) {
+          throw new IllegalArgumentException(s"Number of custom partition field names " +
+            s"([${customPartitionFieldNames.mkString(",")})] doesn't match the number of partition columns")
+        }
+        partitionColumnsValue = customPartitionFieldNames
+      }
+
       // Note that key generator class name could be null
       val keyGeneratorClassName = tableConfig.getKeyGeneratorClassName
-      if (classOf[TimestampBasedKeyGenerator].getName.equalsIgnoreCase(keyGeneratorClassName)
+      if (isStringType
+        || classOf[TimestampBasedKeyGenerator].getName.equalsIgnoreCase(keyGeneratorClassName)
         || classOf[TimestampBasedAvroKeyGenerator].getName.equalsIgnoreCase(keyGeneratorClassName)) {
         val partitionFields = partitionColumns.get().map(column => StructField(column, StringType))
         StructType(partitionFields)
       } else {
-        val partitionFields = partitionColumns.get().map(column =>
-          nameFieldMap.getOrElse(column, throw new IllegalArgumentException(s"Cannot find column: '" +
-            s"$column' in the schema[${schema.fields.mkString(",")}]")))
-        StructType(partitionFields)
+        if (customPartitionFieldNames.length == 0) {
+          val partitionFields = partitionColumns.get().map(column =>
+            nameFieldMap.getOrElse(column, throw new IllegalArgumentException(s"Cannot find column: '" +
+              s"$column' in the schema[${schema.fields.mkString(",")}]")))
+          StructType(partitionFields)
+        } else {
+          val fields = ListBuffer[StructField]()
+          for (idx <- customPartitionFieldNames.indices) {
+            val customName = customPartitionFieldNames(idx)
+            val orig = partitionColumns.get()(idx)
+            val structField = nameFieldMap.getOrElse(orig, throw new IllegalArgumentException(s"Cannot find column: '" +
+              s"$orig' in the schema[${schema.fields.mkString(",")}]"))
+            fields += StructField(customName, structField.dataType, structField.nullable, structField.metadata)
+          }
+          StructType(fields)
+        }
+
       }
     } else {
       // If the partition columns have not stored in hoodie.properties(the table that was
