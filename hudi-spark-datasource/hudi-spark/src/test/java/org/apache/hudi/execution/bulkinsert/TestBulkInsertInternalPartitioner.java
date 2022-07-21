@@ -18,6 +18,10 @@
 
 package org.apache.hudi.execution.bulkinsert;
 
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -45,6 +49,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
@@ -54,19 +59,15 @@ public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase impl
   private static final Comparator<HoodieRecord<? extends HoodieRecordPayload>> KEY_COMPARATOR =
       Comparator.comparing(o -> (o.getPartitionPath() + "+" + o.getRecordKey()));
 
-  public static JavaRDD<HoodieRecord> generateTestRecordsForBulkInsert(JavaSparkContext jsc) {
+  private static JavaRDD<HoodieRecord> generateTestRecordsForBulkInsert(JavaSparkContext jsc, boolean isPartitionedTable) {
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
     // RDD partition 1
-    List<HoodieRecord> records1 = dataGenerator.generateInserts("0", 100);
+    List<HoodieRecord> rawRecordsFirstBatch = dataGenerator.generateInserts("0", 100);
     // RDD partition 2
-    List<HoodieRecord> records2 = dataGenerator.generateInserts("0", 150);
-    return jsc.parallelize(records1, 1).union(jsc.parallelize(records2, 1));
-  }
+    List<HoodieRecord> rawRecordsSecondBatch = dataGenerator.generateInserts("0", 150);
 
-  public static JavaRDD<HoodieRecord> generateTestRecordsForBulkInsert(JavaSparkContext jsc, int count) {
-    HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
-    List<HoodieRecord> records = dataGenerator.generateInserts("0", count);
-    return jsc.parallelize(records, 1);
+    return jsc.parallelize(isPartitionedTable ? rawRecordsFirstBatch : stripPartitionPath(rawRecordsFirstBatch), 1)
+        .union(jsc.parallelize(isPartitionedTable ? rawRecordsSecondBatch : stripPartitionPath(rawRecordsSecondBatch), 1));
   }
 
   public static Map<String, Long> generateExpectedPartitionNumRecords(JavaRDD<HoodieRecord> records) {
@@ -146,8 +147,8 @@ public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase impl
                                                 boolean isGloballySorted,
                                                 boolean isLocallySorted)  {
     HoodieTableConfig tableConfig = genTableConfig(isPartitionedTable);
-    JavaRDD<HoodieRecord> records1 = generateTestRecordsForBulkInsert(jsc);
-    JavaRDD<HoodieRecord> records2 = generateTripleTestRecordsForBulkInsert(jsc);
+    JavaRDD<HoodieRecord> records1 = generateTestRecordsForBulkInsert(jsc, isPartitionedTable);
+    JavaRDD<HoodieRecord> records2 = generateTripleTestRecordsForBulkInsert(jsc, isPartitionedTable);
 
     testBulkInsertInternalPartitioner(BulkInsertInternalPartitionerFactory.get(sortMode, tableConfig),
         records1, isGloballySorted, isLocallySorted, generateExpectedPartitionNumRecords(records1));
@@ -166,8 +167,8 @@ public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase impl
 
     HoodieTableConfig tableConfig = genTableConfig(isPartitionedTable);
 
-    JavaRDD<HoodieRecord> records1 = generateTestRecordsForBulkInsert(jsc);
-    JavaRDD<HoodieRecord> records2 = generateTripleTestRecordsForBulkInsert(jsc);
+    JavaRDD<HoodieRecord> records1 = generateTestRecordsForBulkInsert(jsc, isPartitionedTable);
+    JavaRDD<HoodieRecord> records2 = generateTripleTestRecordsForBulkInsert(jsc, isPartitionedTable);
     testBulkInsertInternalPartitioner(new RDDCustomColumnsSortPartitioner(sortColumns, HoodieTestDataGenerator.AVRO_SCHEMA, false, tableConfig),
         records1, true, true, generateExpectedPartitionNumRecords(records1), Option.of(columnComparator));
     testBulkInsertInternalPartitioner(new RDDCustomColumnsSortPartitioner(sortColumns, HoodieTestDataGenerator.AVRO_SCHEMA, false, tableConfig),
@@ -204,6 +205,23 @@ public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase impl
     });
 
     return comparator;
+  }
+
+  private static List<HoodieRecord> stripPartitionPath(List<HoodieRecord> records1) {
+    return records1.stream()
+        .map(r -> new HoodieAvroRecord(new HoodieKey(r.getRecordKey(), ""), (HoodieRecordPayload) r.getData()))
+        .collect(Collectors.toList());
+  }
+
+  private static JavaRDD<HoodieRecord> generateTripleTestRecordsForBulkInsert(JavaSparkContext jsc, boolean isPartitionedTable)
+      throws Exception {
+    return generateTestRecordsForBulkInsert(jsc, isPartitionedTable)
+        .union(generateTestRecordsForBulkInsert(jsc, isPartitionedTable))
+        .union(generateTestRecordsForBulkInsert(jsc, isPartitionedTable));
+  }
+
+  private static Map<String, Long> generateExpectedPartitionNumRecords(JavaRDD<HoodieRecord> records) {
+    return records.map(record -> record.getPartitionPath()).countByValue();
   }
 
   static HoodieTableConfig genTableConfig(boolean isPartitionedTable) {
