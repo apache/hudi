@@ -124,12 +124,12 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
         new LogFileIterator(logFileOnlySplit, getConfig)
 
       case split if mergeType.equals(DataSourceReadOptions.REALTIME_SKIP_MERGE_OPT_VAL) =>
-        val BaseFileReader(read, schema) = fileReaders.requiredSchemaReaderSkipMerging
-        new SkipMergeIterator(split, read(split.dataFile.get), schema, getConfig)
+        val reader = fileReaders.requiredSchemaReaderSkipMerging
+        new SkipMergeIterator(split, reader, getConfig)
 
       case split if mergeType.equals(DataSourceReadOptions.REALTIME_PAYLOAD_COMBINE_OPT_VAL) =>
-        val (baseFileIterator, schema) = readBaseFile(split)
-        new RecordMergingFileIterator(split, baseFileIterator, schema, getConfig)
+        val reader = pickBaseFileReader
+        new RecordMergingFileIterator(split, reader, getConfig)
 
       case _ => throw new HoodieException(s"Unable to select an Iterator to read the Hoodie MOR File Split for " +
         s"file path: ${mergeOnReadPartition.split.dataFile.get.filePath}" +
@@ -148,7 +148,7 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
     iter
   }
 
-  private def readBaseFile(split: HoodieMergeOnReadFileSplit): (Iterator[InternalRow], StructType) = {
+  private def pickBaseFileReader: BaseFileReader = {
     // NOTE: This is an optimization making sure that even for MOR tables we fetch absolute minimum
     //       of the stored data possible, while still properly executing corresponding relation's semantic
     //       and meet the query's requirements.
@@ -157,13 +157,11 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
     //          a) It does use one of the standard (and whitelisted) Record Payload classes
     //       then we can avoid reading and parsing the records w/ _full_ schema, and instead only
     //       rely on projected one, nevertheless being able to perform merging correctly
-    val reader = if (!whitelistedPayloadClasses.contains(tableState.recordPayloadClassName)) {
-      fileReaders.fullSchemaReader
-    } else {
+    if (whitelistedPayloadClasses.contains(tableState.recordPayloadClassName)) {
       fileReaders.requiredSchemaReader
+    } else {
+      fileReaders.fullSchemaReader
     }
-
-    (reader(split.dataFile.get), reader.schema)
   }
 
   override protected def getPartitions: Array[Partition] =
@@ -250,12 +248,13 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
    * performing any combination/merging of the records w/ the same primary keys (ie producing duplicates potentially)
    */
   private class SkipMergeIterator(split: HoodieMergeOnReadFileSplit,
-                                  baseFileIterator: Iterator[InternalRow],
-                                  baseFileReaderSchema: StructType,
+                                  baseFileReader: BaseFileReader,
                                   config: Configuration)
     extends LogFileIterator(split, config) {
 
-    private val requiredSchemaUnsafeProjection = generateUnsafeProjection(baseFileReaderSchema, requiredStructTypeSchema)
+    private val requiredSchemaUnsafeProjection = generateUnsafeProjection(baseFileReader.schema, requiredStructTypeSchema)
+
+    private val baseFileIterator = baseFileReader(split.dataFile.get)
 
     override def hasNext: Boolean = {
       if (baseFileIterator.hasNext) {
@@ -274,8 +273,7 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
    * streams
    */
   private class RecordMergingFileIterator(split: HoodieMergeOnReadFileSplit,
-                                          baseFileIterator: Iterator[InternalRow],
-                                          baseFileReaderSchema: StructType,
+                                          baseFileReader: BaseFileReader,
                                           config: Configuration)
     extends LogFileIterator(split, config) {
 
@@ -284,15 +282,17 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
     //        - Projected schema
     //       As such, no particular schema could be assumed, and therefore we rely on the caller
     //       to correspondingly set the scheme of the expected output of base-file reader
-    private val baseFileReaderAvroSchema = sparkAdapter.getAvroSchemaConverters.toAvroType(baseFileReaderSchema, nullable = false, "record")
+    private val baseFileReaderAvroSchema = sparkAdapter.getAvroSchemaConverters.toAvroType(baseFileReader.schema, nullable = false, "record")
 
-    private val serializer = sparkAdapter.createAvroSerializer(baseFileReaderSchema, baseFileReaderAvroSchema, nullable = false)
+    private val serializer = sparkAdapter.createAvroSerializer(baseFileReader.schema, baseFileReaderAvroSchema, nullable = false)
 
     private val reusableRecordBuilder: GenericRecordBuilder = new GenericRecordBuilder(requiredAvroSchema)
 
-    private val recordKeyOrdinal = baseFileReaderSchema.fieldIndex(tableState.recordKeyField)
+    private val recordKeyOrdinal = baseFileReader.schema.fieldIndex(tableState.recordKeyField)
 
-    private val requiredSchemaUnsafeProjection = generateUnsafeProjection(baseFileReaderSchema, requiredStructTypeSchema)
+    private val requiredSchemaUnsafeProjection = generateUnsafeProjection(baseFileReader.schema, requiredStructTypeSchema)
+
+    private val baseFileIterator = baseFileReader(split.dataFile.get)
 
     override def hasNext: Boolean = hasNextInternal
 
