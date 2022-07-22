@@ -29,7 +29,6 @@ import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.metadata.FlinkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.util.CompactionUtil;
 import org.apache.hudi.util.FlinkTables;
@@ -78,11 +77,6 @@ public class TestCompactionUtil {
 
     this.table = FlinkTables.createTable(conf);
     this.metaClient = table.getMetaClient();
-    // initialize the metadata table path
-    if (conf.getBoolean(FlinkOptions.METADATA_ENABLED)) {
-      FlinkHoodieBackedTableMetadataWriter.create(table.getHadoopConf(), table.getConfig(),
-          table.getContext(), Option.empty(), Option.empty());
-    }
   }
 
   @Test

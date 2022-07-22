@@ -96,7 +96,7 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
   /**
    * Cached metadata writer for coordinator to reuse for each commit.
    */
-  private HoodieBackedTableMetadataWriter metadataWriter;
+  private Option<HoodieBackedTableMetadataWriter> metadataWriterOption = Option.empty();
 
   public HoodieFlinkWriteClient(HoodieEngineContext context, HoodieWriteConfig writeConfig) {
     super(context, writeConfig, FlinkUpgradeDowngradeHelper.getInstance());
@@ -264,17 +264,10 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
 
   @Override
   protected void writeTableMetadata(HoodieTable table, String instantTime, String actionType, HoodieCommitMetadata metadata) {
-    if (this.metadataWriter == null) {
-      initMetadataWriter();
-    }
-    // refresh the timeline
-
-    // Note: the data meta client is not refreshed currently, some code path
-    // relies on the meta client for resolving the latest data schema,
-    // the schema expects to be immutable for SQL jobs but may be not for non-SQL
-    // jobs.
-    this.metadataWriter.initTableMetadata();
-    this.metadataWriter.update(metadata, instantTime, getHoodieTable().isTableServiceAction(actionType));
+    this.metadataWriterOption.ifPresent(w -> {
+      w.initTableMetadata(); // refresh the timeline
+      w.update(metadata, instantTime, getHoodieTable().isTableServiceAction(actionType));
+    });
   }
 
   /**
@@ -282,24 +275,9 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
    * from the filesystem if it does not exist.
    */
   public void initMetadataWriter() {
-    this.metadataWriter = (HoodieBackedTableMetadataWriter) FlinkHoodieBackedTableMetadataWriter.create(
+    HoodieBackedTableMetadataWriter metadataWriter = (HoodieBackedTableMetadataWriter) FlinkHoodieBackedTableMetadataWriter.create(
         FlinkClientUtil.getHadoopConf(), this.config, HoodieFlinkEngineContext.DEFAULT);
-  }
-
-  /**
-   * Initialized the metadata table on start up, should only be called once on driver.
-   */
-  public void initMetadataTable() {
-    HoodieFlinkTable<?> table = getHoodieTable();
-    if (config.isMetadataTableEnabled()) {
-      // initialize the metadata table path
-      initMetadataWriter();
-      // clean the obsolete index stats
-      table.deleteMetadataIndexIfNecessary();
-    } else {
-      // delete the metadata table if it was enabled but is now disabled
-      table.maybeDeleteMetadataTable();
-    }
+    this.metadataWriterOption = Option.of(metadataWriter);
   }
 
   /**

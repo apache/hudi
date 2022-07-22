@@ -51,7 +51,6 @@ import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Collection;
@@ -182,10 +181,8 @@ public class StreamWriteOperatorCoordinator
     this.gateways = new SubtaskGateway[this.parallelism];
     // init table, create if not exists.
     this.metaClient = initTableIfNotExists(this.conf);
-    this.ckpMetadata = initCkpMetadata(this.metaClient);
     // the write client must create after the table creation
     this.writeClient = StreamerUtil.createWriteClient(conf);
-    initMetadataTable(this.writeClient);
     this.tableState = TableState.create(conf);
     // start the executor
     this.executor = NonThrownExecutor.builder(LOG)
@@ -195,6 +192,11 @@ public class StreamWriteOperatorCoordinator
     if (tableState.syncHive) {
       initHiveSync();
     }
+    if (tableState.syncMetadata) {
+      initMetadataSync();
+    }
+    this.ckpMetadata = CkpMetadata.getInstance(this.metaClient.getFs(), metaClient.getBasePath());
+    this.ckpMetadata.bootstrap(this.metaClient);
   }
 
   @Override
@@ -350,14 +352,8 @@ public class StreamWriteOperatorCoordinator
     hiveSyncContext.hiveSyncTool().syncHoodieTable();
   }
 
-  private static void initMetadataTable(HoodieFlinkWriteClient<?> writeClient) {
-    writeClient.initMetadataTable();
-  }
-
-  private static CkpMetadata initCkpMetadata(HoodieTableMetaClient metaClient) throws IOException {
-    CkpMetadata ckpMetadata = CkpMetadata.getInstance(metaClient.getFs(), metaClient.getBasePath());
-    ckpMetadata.bootstrap(metaClient);
-    return ckpMetadata;
+  private void initMetadataSync() {
+    this.writeClient.initMetadataWriter();
   }
 
   private void reset() {

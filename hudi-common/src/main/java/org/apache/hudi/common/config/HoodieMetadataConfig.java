@@ -441,9 +441,9 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
     private boolean getDefaultMetadataEnable(EngineType engineType) {
       switch (engineType) {
-        case FLINK:
         case SPARK:
           return ENABLE.defaultValue();
+        case FLINK:
         case JAVA:
           return false;
         default:

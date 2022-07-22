@@ -87,8 +87,8 @@ public class ExpressionEvaluator {
      * 2. bind the field reference;
      * 3. bind the column stats.
      *
-     * <p>Normalize the expression to simplify the subsequent decision logic:
-     * always put the literal expression in the RHS.
+     * <p>Normalize the expression to simplify the following decision logic:
+     * always put the literal expression in the right.
      */
     public static Evaluator bindCall(CallExpression call, RowData indexRow, RowType.RowField[] queryFields) {
       FunctionDefinition funDef = call.getFunctionDefinition();
