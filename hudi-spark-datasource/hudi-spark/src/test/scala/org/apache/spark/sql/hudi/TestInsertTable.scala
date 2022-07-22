@@ -29,7 +29,7 @@ import java.io.File
 
 class TestInsertTable extends HoodieSparkSqlTestBase {
 
-  test("Test Insert Into") {
+  test("Test Insert Into with values") {
     withTempDir { tmp =>
       val tableName = generateTableName
       // Create a partitioned table
@@ -37,33 +37,173 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         s"""
            |create table $tableName (
            |  id int,
+           |  dt string,
            |  name string,
            |  price double,
-           |  ts long,
-           |  dt string
+           |  ts long
            |) using hudi
            | tblproperties (primaryKey = 'id')
            | partitioned by (dt)
            | location '${tmp.getCanonicalPath}'
        """.stripMargin)
-      // Insert into dynamic partition
+
+      // Note: Do not write the field alias, the partition field must be placed last.
       spark.sql(
         s"""
-           | insert into $tableName
-           | select 1 as id, 'a1' as name, 10 as price, 1000 as ts, '2021-01-05' as dt
-        """.stripMargin)
+           | insert into $tableName values
+           | (1, 'a1', 10, 1000, "2021-01-05"),
+           | (2, 'a2', 20, 2000, "2021-01-06"),
+           | (3, 'a3', 30, 3000, "2021-01-07")
+              """.stripMargin)
+
       checkAnswer(s"select id, name, price, ts, dt from $tableName")(
-        Seq(1, "a1", 10.0, 1000, "2021-01-05")
+        Seq(1, "a1", 10.0, 1000, "2021-01-05"),
+        Seq(2, "a2", 20.0, 2000, "2021-01-06"),
+        Seq(3, "a3", 30.0, 3000, "2021-01-07")
       )
+    }
+  }
+
+  test("Test Insert Into with static partition") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      // Create a partitioned table
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  dt string,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | tblproperties (primaryKey = 'id')
+           | partitioned by (dt)
+           | location '${tmp.getCanonicalPath}'
+       """.stripMargin)
       // Insert into static partition
       spark.sql(
         s"""
            | insert into $tableName partition(dt = '2021-01-05')
-           | select 2 as id, 'a2' as name, 10 as price, 1000 as ts
+           | select 1 as id, 'a1' as name, 10 as price, 1000 as ts
+              """.stripMargin)
+
+      spark.sql(
+        s"""
+           | insert into $tableName partition(dt = '2021-01-06')
+           | select 20 as price, 2000 as ts, 2 as id, 'a2' as name
+              """.stripMargin)
+
+      // Note: Do not write the field alias, the partition field must be placed last.
+      spark.sql(
+        s"""
+           | insert into $tableName
+           | select 3, 'a3', 30, 3000, '2021-01-07'
         """.stripMargin)
+
       checkAnswer(s"select id, name, price, ts, dt from $tableName")(
         Seq(1, "a1", 10.0, 1000, "2021-01-05"),
-        Seq(2, "a2", 10.0, 1000, "2021-01-05")
+        Seq(2, "a2", 20.0, 2000, "2021-01-06"),
+        Seq(3, "a3", 30.0, 3000, "2021-01-07")
+      )
+    }
+  }
+
+  test("Test Insert Into with dynamic partition") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      // Create a partitioned table
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  dt string,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | tblproperties (primaryKey = 'id')
+           | partitioned by (dt)
+           | location '${tmp.getCanonicalPath}'
+       """.stripMargin)
+
+      // Insert into dynamic partition
+      spark.sql(
+        s"""
+           | insert into $tableName partition(dt)
+           | select 1 as id, '2021-01-05' as dt, 'a1' as name, 10 as price, 1000 as ts
+        """.stripMargin)
+
+      spark.sql(
+        s"""
+           | insert into $tableName
+           | select 2 as id, 'a2' as name, 20 as price, 2000 as ts, '2021-01-06' as dt
+        """.stripMargin)
+
+      // Note: Do not write the field alias, the partition field must be placed last.
+      spark.sql(
+        s"""
+           | insert into $tableName
+           | select 3, 'a3', 30, 3000, '2021-01-07'
+        """.stripMargin)
+
+      checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+        Seq(1, "a1", 10.0, 1000, "2021-01-05"),
+        Seq(2, "a2", 20.0, 2000, "2021-01-06"),
+        Seq(3, "a3", 30.0, 3000, "2021-01-07")
+      )
+    }
+  }
+
+  test("Test Insert Into with multi partition") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      // Create a partitioned table
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  dt string,
+           |  name string,
+           |  price double,
+           |  ht string,
+           |  ts long
+           |) using hudi
+           | tblproperties (primaryKey = 'id')
+           | partitioned by (dt, ht)
+           | location '${tmp.getCanonicalPath}'
+       """.stripMargin)
+      spark.sql(
+        s"""
+           | insert into $tableName partition(dt, ht)
+           | select 1 as id, 'a1' as name, 10 as price,'20210101' as dt, 1000 as ts, '01' as ht
+              """.stripMargin)
+
+      // Insert into static partition and dynamic partition
+      spark.sql(
+        s"""
+           | insert into $tableName partition(dt = '20210102', ht)
+           | select 2 as id, 'a2' as name, 20 as price, 2000 as ts, '02' as ht
+              """.stripMargin)
+
+      spark.sql(
+        s"""
+           | insert into $tableName partition(dt, ht = '03')
+           | select 3 as id, 'a3' as name, 30 as price, 3000 as ts, '20210103' as dt
+              """.stripMargin)
+
+      // Note: Do not write the field alias, the partition field must be placed last.
+      spark.sql(
+        s"""
+           | insert into $tableName
+           | select 4, 'a4', 40, 4000, '20210104', '04'
+        """.stripMargin)
+
+      checkAnswer(s"select id, name, price, ts, dt, ht from $tableName")(
+        Seq(1, "a1", 10.0, 1000, "20210101", "01"),
+        Seq(2, "a2", 20.0, 2000, "20210102", "02"),
+        Seq(3, "a3", 30.0, 3000, "20210103", "03"),
+        Seq(4, "a4", 40.0, 4000, "20210104", "04")
       )
     }
   }
