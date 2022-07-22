@@ -657,14 +657,16 @@ object HoodieBaseRelation extends SparkAdapterSupport {
     fileStatus.getPath.getParent
 
   /**
-   * TODO scala-doc
+   * Projects provided file reader's output from its original schema, into a [[requiredSchema]]
    *
-   * @param reader
-   * @param readerSchema
-   * @param requiredSchema
-   * @return
+   * NOTE: [[requiredSchema]] has to be a proper subset of the file reader's schema
+   *
+   * @param reader file reader to be projected
+   * @param requiredSchema target schema for the output of the provided file reader
    */
   def projectReader(reader: BaseFileReader, requiredSchema: StructType): BaseFileReader = {
+    checkState(reader.schema.fields.toSet.intersect(requiredSchema.fields.toSet).size == requiredSchema.size)
+
     if (reader.schema == requiredSchema) {
       reader
     } else {
