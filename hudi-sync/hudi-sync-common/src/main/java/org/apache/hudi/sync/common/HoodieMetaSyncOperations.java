@@ -26,7 +26,6 @@ import org.apache.hudi.sync.common.model.Partition;
 
 import org.apache.parquet.schema.MessageType;
 
-import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
