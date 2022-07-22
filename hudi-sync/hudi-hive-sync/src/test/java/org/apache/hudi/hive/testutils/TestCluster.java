@@ -41,6 +41,7 @@ import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
 import org.apache.hadoop.hive.conf.HiveConf;
+import org.apache.hadoop.hive.conf.HiveConf.ConfVars;
 import org.apache.hadoop.hive.metastore.HiveMetaStoreClient;
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
 import org.apache.hadoop.hive.metastore.RetryingMetaStoreClient;
@@ -56,6 +57,7 @@ import org.junit.jupiter.api.extension.AfterEachCallback;
 import org.junit.jupiter.api.extension.BeforeAllCallback;
 import org.junit.jupiter.api.extension.BeforeEachCallback;
 import org.junit.jupiter.api.extension.ExtensionContext;
+import org.junit.runners.model.InitializationError;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -63,7 +65,6 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
@@ -74,15 +75,16 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.fail;
 
-public class HiveTestCluster implements BeforeAllCallback, AfterAllCallback,
-    BeforeEachCallback, AfterEachCallback {
-  public MiniDFSCluster dfsCluster;
+public class TestCluster implements BeforeAllCallback, AfterAllCallback,
+        BeforeEachCallback, AfterEachCallback {
   private HdfsTestService hdfsTestService;
-  private HiveTestService hiveTestService;
-  private HiveConf conf;
-  private HiveServer2 server2;
-  private DateTimeFormatter dtfOut;
-  private File hiveSiteXml;
+  public HiveTestService hiveTestService;
+  private Configuration conf;
+  public HiveServer2 server2;
+  private static volatile int port = 9083;
+  public MiniDFSCluster dfsCluster;
+  DateTimeFormatter dtfOut;
+  public File hiveSiteXml;
   private IMetaStoreClient client;
 
   @Override
@@ -107,18 +109,24 @@ public class HiveTestCluster implements BeforeAllCallback, AfterAllCallback,
     hdfsTestService = new HdfsTestService();
     dfsCluster = hdfsTestService.start(true);
 
-    Configuration hadoopConf = hdfsTestService.getHadoopConf();
-    hiveTestService = new HiveTestService(hadoopConf);
+    conf = hdfsTestService.getHadoopConf();
+    conf.setInt(ConfVars.METASTORE_SERVER_PORT.varname, port++);
+    conf.setInt(ConfVars.HIVE_SERVER2_THRIFT_PORT.varname, port++);
+    conf.setInt(ConfVars.HIVE_SERVER2_WEBUI_PORT.varname, port++);
+    hiveTestService = new HiveTestService(conf);
     server2 = hiveTestService.start();
     dtfOut = DateTimeFormatter.ofPattern("yyyy/MM/dd");
     hiveSiteXml = File.createTempFile("hive-site", ".xml");
     hiveSiteXml.deleteOnExit();
-    conf = hiveTestService.getHiveConf();
     try (OutputStream os = new FileOutputStream(hiveSiteXml)) {
-      conf.writeXml(os);
+      hiveTestService.getServerConf().writeXml(os);
     }
     client = HiveMetaStoreClient.newSynchronizedClient(
-        RetryingMetaStoreClient.getProxy(conf, true));
+        RetryingMetaStoreClient.getProxy(hiveTestService.getServerConf(), true));
+  }
+
+  public Configuration getConf() {
+    return this.conf;
   }
 
   public String getHiveSiteXmlLocation() {
@@ -130,7 +138,7 @@ public class HiveTestCluster implements BeforeAllCallback, AfterAllCallback,
   }
 
   public String getHiveJdBcUrl() {
-    return hiveTestService.getJdbcHive2Url();
+    return "jdbc:hive2://127.0.0.1:" + conf.get(ConfVars.HIVE_SERVER2_THRIFT_PORT.varname) + "";
   }
 
   public String tablePath(String dbName, String tableName) throws Exception {
@@ -143,12 +151,12 @@ public class HiveTestCluster implements BeforeAllCallback, AfterAllCallback,
 
   public void forceCreateDb(String dbName) throws Exception {
     try {
-      client.dropDatabase(dbName);
-    } catch (NoSuchObjectException ignored) {
-      // expected
+      getHMSClient().dropDatabase(dbName);
+    } catch (NoSuchObjectException e) {
+      System.out.println("db does not exist but its ok " + dbName);
     }
     Database db = new Database(dbName, "", dbPath(dbName), new HashMap<>());
-    client.createDatabase(db);
+    getHMSClient().createDatabase(db);
   }
 
   public void createCOWTable(String commitTime, int numberOfPartitions, String dbName, String tableName)
@@ -161,7 +169,10 @@ public class HiveTestCluster implements BeforeAllCallback, AfterAllCallback,
         .setTableName(tableName)
         .setPayloadClass(HoodieAvroPayload.class)
         .initTable(conf, path.toString());
-    dfsCluster.getFileSystem().mkdirs(path);
+    boolean result = dfsCluster.getFileSystem().mkdirs(path);
+    if (!result) {
+      throw new InitializationError("cannot initialize table");
+    }
     ZonedDateTime dateTime = ZonedDateTime.now();
     HoodieCommitMetadata commitMetadata = createPartitions(numberOfPartitions, true, dateTime, commitTime, path.toString());
     createCommitFile(commitMetadata, commitTime, path.toString());
@@ -228,7 +239,7 @@ public class HiveTestCluster implements BeforeAllCallback, AfterAllCallback,
       try {
         writer.write(s);
       } catch (IOException e) {
-        fail("IOException while writing test records as parquet", e);
+        fail("IOException while writing test records as parquet" + e.toString());
       }
     });
     writer.close();
@@ -248,15 +259,15 @@ public class HiveTestCluster implements BeforeAllCallback, AfterAllCallback,
   public void startHiveServer2() {
     if (server2 == null) {
       server2 = new HiveServer2();
-      server2.init(hiveTestService.getHiveConf());
+      server2.init(hiveTestService.getServerConf());
       server2.start();
     }
   }
 
-  public void shutDown() throws IOException {
-    Files.deleteIfExists(hiveSiteXml.toPath());
+  public void shutDown() {
+    stopHiveServer2();
     Hive.closeCurrent();
-    hiveTestService.stop();
+    hiveTestService.getHiveMetaStore().stop();
     hdfsTestService.stop();
   }
 }
