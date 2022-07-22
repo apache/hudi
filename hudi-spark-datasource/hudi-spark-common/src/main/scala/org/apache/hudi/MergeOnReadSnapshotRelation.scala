@@ -114,7 +114,7 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
       spark = sqlContext.sparkSession,
       partitionSchema = partitionSchema,
       dataSchema = dataSchema,
-      requiredSchema = dataSchema,
+      requiredDataSchema = dataSchema,
       // This file-reader is used to read base file records, subsequently merging them with the records
       // stored in delta-log files. As such, we have to read _all_ records from the base file, while avoiding
       // applying any filtering _before_ we complete combining them w/ delta-log records (to make sure that
@@ -131,7 +131,7 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
       spark = sqlContext.sparkSession,
       partitionSchema = partitionSchema,
       dataSchema = dataSchema,
-      requiredSchema = requiredDataSchema,
+      requiredDataSchema = requiredDataSchema,
       // This file-reader is used to read base file records, subsequently merging them with the records
       // stored in delta-log files. As such, we have to read _all_ records from the base file, while avoiding
       // applying any filtering _before_ we complete combining them w/ delta-log records (to make sure that
@@ -173,7 +173,7 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
         spark = sqlContext.sparkSession,
         partitionSchema = partitionSchema,
         dataSchema = dataSchema,
-        requiredSchema = prunedRequiredSchema,
+        requiredDataSchema = prunedRequiredSchema,
         // This file-reader is only used in cases when no merging is performed, therefore it's safe to push
         // down these filters to the base file readers
         filters = requiredFilters ++ optionalFilters,
@@ -227,7 +227,7 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
       spark = sqlContext.sparkSession,
       partitionSchema = partitionSchema,
       dataSchema = dataSchema,
-      requiredSchema = requiredDataSchema,
+      requiredDataSchema = requiredDataSchema,
       filters = filters,
       options = optParams,
       // NOTE: We have to fork the Hadoop Config here as Spark will be modifying it
@@ -260,7 +260,7 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
         spark = sqlContext.sparkSession,
         partitionSchema = partitionSchema,
         dataSchema = dataSchema,
-        requiredSchema = prunedRequiredSchema,
+        requiredDataSchema = prunedRequiredSchema,
         filters = filters,
         options = optParams,
         // NOTE: We have to fork the Hadoop Config here as Spark will be modifying it

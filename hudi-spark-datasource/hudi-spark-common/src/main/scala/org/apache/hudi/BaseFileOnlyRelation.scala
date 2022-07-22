@@ -80,7 +80,7 @@ class BaseFileOnlyRelation(sqlContext: SQLContext,
       spark = sparkSession,
       partitionSchema = partitionSchema,
       dataSchema = dataSchema,
-      requiredSchema = requiredDataSchema,
+      requiredDataSchema = requiredDataSchema,
       filters = filters,
       options = optParams,
       // NOTE: We have to fork the Hadoop Config here as Spark will be modifying it
