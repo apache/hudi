@@ -24,6 +24,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.config.HoodieClusteringConfig;
@@ -96,7 +97,8 @@ public class TestDataSourceUtils {
 
   @Captor
   private ArgumentCaptor<Option> optionCaptor;
-  private HoodieWriteConfig config;
+  private HoodieWriteConfig writeConfig;
+  private final HoodieTableConfig tableConfig = new HoodieTableConfig();
 
   // There are fields event_date1, event_date2, event_date3 with logical type as Date. event_date1 & event_date3 are
   // of UNION schema type, which is a union of null and date type in different orders. event_date2 is non-union
@@ -118,7 +120,7 @@ public class TestDataSourceUtils {
 
   @BeforeEach
   public void setUp() {
-    config = HoodieWriteConfig.newBuilder().withPath("/").build();
+    writeConfig = HoodieWriteConfig.newBuilder().withPath("/").build();
   }
 
   @Test
@@ -155,7 +157,7 @@ public class TestDataSourceUtils {
 
   @Test
   public void testDoWriteOperationWithoutUserDefinedBulkInsertPartitioner() throws HoodieException {
-    when(hoodieWriteClient.getConfig()).thenReturn(config);
+    when(hoodieWriteClient.getConfig()).thenReturn(writeConfig);
 
     DataSourceUtils.doWriteOperation(hoodieWriteClient, hoodieRecords, "test-time",
             WriteOperationType.BULK_INSERT);
@@ -191,10 +193,10 @@ public class TestDataSourceUtils {
 
   @Test
   public void testCreateUserDefinedBulkInsertPartitionerRowsWithInValidPartitioner() throws HoodieException {
-    config = HoodieWriteConfig.newBuilder().withPath("/").withUserDefinedBulkInsertPartitionerClass("NonExistentUserDefinedClass").build();
+    writeConfig = HoodieWriteConfig.newBuilder().withPath("/").withUserDefinedBulkInsertPartitionerClass("NonExistentUserDefinedClass").build();
 
     Exception exception = assertThrows(HoodieException.class, () -> {
-      DataSourceUtils.createUserDefinedBulkInsertPartitionerWithRows(config);
+      DataSourceUtils.createUserDefinedBulkInsertPartitionerWithRows(writeConfig, tableConfig);
     });
 
     assertThat(exception.getMessage(), containsString("Could not create UserDefinedBulkInsertPartitionerRows"));
@@ -202,15 +204,15 @@ public class TestDataSourceUtils {
 
   @Test
   public void testCreateUserDefinedBulkInsertPartitionerRowsWithValidPartitioner() throws HoodieException {
-    config = HoodieWriteConfig.newBuilder().withPath("/").withUserDefinedBulkInsertPartitionerClass(NoOpBulkInsertPartitionerRows.class.getName()).build();
+    writeConfig = HoodieWriteConfig.newBuilder().withPath("/").withUserDefinedBulkInsertPartitionerClass(NoOpBulkInsertPartitionerRows.class.getName()).build();
 
-    Option<BulkInsertPartitioner<Dataset<Row>>> partitioner = DataSourceUtils.createUserDefinedBulkInsertPartitionerWithRows(config);
+    Option<BulkInsertPartitioner<Dataset<Row>>> partitioner = DataSourceUtils.createUserDefinedBulkInsertPartitionerWithRows(writeConfig, tableConfig);
     assertThat(partitioner.isPresent(), is(true));
   }
 
   @Test
   public void testCreateRDDCustomColumnsSortPartitionerWithValidPartitioner() throws HoodieException {
-    config = HoodieWriteConfig
+    writeConfig = HoodieWriteConfig
             .newBuilder()
             .withPath("/")
             .withUserDefinedBulkInsertPartitionerClass(RDDCustomColumnsSortPartitioner.class.getName())
@@ -218,7 +220,7 @@ public class TestDataSourceUtils {
             .withSchema(avroSchemaString)
             .build();
 
-    Option<BulkInsertPartitioner<Dataset<Row>>> partitioner = DataSourceUtils.createUserDefinedBulkInsertPartitionerWithRows(config);
+    Option<BulkInsertPartitioner<Dataset<Row>>> partitioner = DataSourceUtils.createUserDefinedBulkInsertPartitionerWithRows(writeConfig, tableConfig);
     assertThat(partitioner.isPresent(), is(true));
   }
 
@@ -237,7 +239,7 @@ public class TestDataSourceUtils {
               DataSourceWriteOptions.PAYLOAD_CLASS_NAME().defaultValue());
       params.put(pair.left, pair.right.toString());
       HoodieWriteConfig hoodieConfig = DataSourceUtils
-              .createHoodieConfig(avroSchemaString, config.getBasePath(), "test", params);
+              .createHoodieConfig(avroSchemaString, writeConfig.getBasePath(), "test", params);
       assertEquals(pair.right, hoodieConfig.isAsyncClusteringEnabled());
 
       TypedProperties prop = new TypedProperties();
@@ -247,12 +249,12 @@ public class TestDataSourceUtils {
   }
 
   private void setAndVerifyHoodieWriteClientWith(final String partitionerClassName) {
-    config = HoodieWriteConfig.newBuilder().withPath(config.getBasePath())
+    writeConfig = HoodieWriteConfig.newBuilder().withPath(writeConfig.getBasePath())
         .withUserDefinedBulkInsertPartitionerClass(partitionerClassName)
         .build();
-    when(hoodieWriteClient.getConfig()).thenReturn(config);
+    when(hoodieWriteClient.getConfig()).thenReturn(writeConfig);
 
-    assertThat(config.getUserDefinedBulkInsertPartitionerClass(), is(equalTo(partitionerClassName)));
+    assertThat(writeConfig.getUserDefinedBulkInsertPartitionerClass(), is(equalTo(partitionerClassName)));
   }
 
   public static class NoOpBulkInsertPartitioner<T extends HoodieRecordPayload>
@@ -274,7 +276,7 @@ public class TestDataSourceUtils {
   public static class NoOpBulkInsertPartitionerRows
       implements BulkInsertPartitioner<Dataset<Row>> {
 
-    public NoOpBulkInsertPartitionerRows(HoodieWriteConfig config) {}
+    public NoOpBulkInsertPartitionerRows(HoodieWriteConfig config, HoodieTableConfig tableConfig) {}
 
     @Override
     public Dataset<Row> repartitionRecords(Dataset<Row> records, int outputSparkPartitions) {
