@@ -18,14 +18,18 @@
 
 package org.apache.hudi.hadoop.utils;
 
+import org.apache.avro.Conversions;
 import org.apache.avro.JsonProperties;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericArray;
+import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hive.common.type.HiveDecimal;
 import org.apache.hadoop.hive.serde2.io.DateWritable;
 import org.apache.hadoop.hive.serde2.io.DoubleWritable;
 import org.apache.hadoop.hive.serde2.io.HiveDecimalWritable;
@@ -50,9 +54,12 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -153,6 +160,110 @@ public class HoodieRealtimeRecordReaderUtils {
   public static Map<String, Schema.Field> getNameToFieldMap(Schema schema) {
     return schema.getFields().stream().map(r -> Pair.of(r.name().toLowerCase(), r))
         .collect(Collectors.toMap(Pair::getLeft, Pair::getRight));
+  }
+
+  /**
+   * Convert the arrayWritable to Avro with requiredSchema.
+   */
+  public static Object arrayWritableToAvro(Writable value, Schema schema, Schema requiredSchema) {
+    if (value == null) {
+      return null;
+    }
+    switch (schema.getType()) {
+      case RECORD:
+        GenericRecordBuilder newRecord = new GenericRecordBuilder(requiredSchema);
+        Writable[] recordValues = ((ArrayWritable) value).get();
+        for (Schema.Field field : requiredSchema.getFields()) {
+          int pos = schema.getField(field.name()).pos();
+          Object v = arrayWritableToAvro(recordValues[pos], field.schema());
+          newRecord.set(field.name(), v);
+        }
+        return newRecord.build();
+      default:
+        return null;
+    }
+  }
+
+  /**
+   * Convert the arrayWritable to Avro with schema of arrayWritable.
+   */
+  public static Object arrayWritableToAvro(Writable value, Schema schema) {
+    if (value == null) {
+      return null;
+    }
+    switch (schema.getType()) {
+      case STRING:
+      case ENUM:
+        return value.toString();
+      case BYTES:
+        return ByteBuffer.wrap(((BytesWritable) value).getBytes());
+      case INT:
+        if (schema.getLogicalType() != null && schema.getLogicalType().getName().equals("date")) {
+          return ((DateWritable)value).get();
+        }
+        return ((IntWritable) value).get();
+      case LONG:
+        return ((LongWritable) value).get();
+      case FLOAT:
+        return ((FloatWritable) value).get();
+      case DOUBLE:
+        return ((org.apache.hadoop.io.DoubleWritable) value).get();
+      case BOOLEAN:
+        return ((BooleanWritable) value).get();
+      case NULL:
+        return null;
+      case RECORD:
+        GenericRecordBuilder newRecord = new GenericRecordBuilder(schema);
+        Writable[] recordValues = ((ArrayWritable) value).get();
+        int recordValueIndex = 0;
+        for (Schema.Field field : schema.getFields()) {
+          newRecord.set(field.name(), arrayWritableToAvro(recordValues[recordValueIndex++], field.schema()));
+        }
+        return newRecord.build();
+      case ARRAY:
+        Schema elementSchema = schema.getElementType();
+        Writable[] arrayValues = ((ArrayWritable) value).get();
+        GenericData.Array array = new GenericData.Array(arrayValues.length, schema);
+        for (Writable arrayValue : arrayValues) {
+          array.add(arrayWritableToAvro(arrayValue, elementSchema));
+        }
+        return array;
+      case MAP:
+        Writable[] mapKeyValues = ((ArrayWritable) value).get();
+        Map mapRecord = new HashMap();
+        for (Writable kv: mapKeyValues) {
+          Object mapKey = ((ArrayWritable) kv).get()[0].toString();
+          Object mapValue = arrayWritableToAvro(((ArrayWritable) kv).get()[1], schema.getValueType());
+          mapRecord.put(mapKey, mapValue);
+        }
+        return mapRecord;
+      case UNION:
+        List<Schema> types = schema.getTypes();
+        if (types.size() != 2) {
+          throw new IllegalArgumentException("Only support union with 2 fields");
+        }
+        Schema s1 = types.get(0);
+        Schema s2 = types.get(1);
+        if (s1.getType() == Schema.Type.NULL) {
+          return arrayWritableToAvro(value, s2);
+        } else if (s2.getType() == Schema.Type.NULL) {
+          return arrayWritableToAvro(value, s1);
+        } else {
+          throw new IllegalArgumentException("Only support union with null");
+        }
+      case FIXED:
+        if (schema.getLogicalType() != null && schema.getLogicalType().getName().equals("decimal")) {
+          LogicalTypes.Decimal decimalType = (LogicalTypes.Decimal) LogicalTypes.fromSchema(schema);
+          HiveDecimal hiveDecimal = ((HiveDecimalWritable) value).getHiveDecimal();
+          BigDecimal bigDecimal = new BigDecimal(new BigInteger(hiveDecimal.unscaledValue().toByteArray()), decimalType.getScale());
+          Conversions.DecimalConversion decimalConversions = new Conversions.DecimalConversion();
+          GenericFixed genericFixed = decimalConversions.toFixed(bigDecimal, schema, decimalType);
+          return genericFixed;
+        }
+        return new GenericData.Fixed(schema, ((BytesWritable) value).getBytes());
+      default:
+        return null;
+    }
   }
 
   /**
