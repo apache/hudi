@@ -223,7 +223,7 @@ public abstract class ITTestBase {
 
     boolean completed =
         dockerClient.execStartCmd(createCmdResponse.getId()).withDetach(false).withTty(false).exec(callback)
-            .awaitCompletion(540, SECONDS);
+            .awaitCompletion(600, SECONDS);
     if (!completed) {
       callback.getStderr().flush();
       callback.getStdout().flush();
