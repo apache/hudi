@@ -60,8 +60,6 @@ public class JsonKafkaSource extends JsonSource {
     properties.put("key.deserializer", StringDeserializer.class.getName());
     properties.put("value.deserializer", StringDeserializer.class.getName());
     offsetGen = new KafkaOffsetGen(properties);
-    LOG.info("INFO LOGGING");
-    LOG.error("ERROR LOGGING");
   }
 
   @Override

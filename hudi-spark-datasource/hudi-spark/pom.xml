@@ -142,7 +142,7 @@
           <junitxml>.</junitxml>
           <filereports>TestSuite.txt</filereports>
           <systemProperties>
-            <log4j.configurationFile>${surefire-log4j.file}</log4j.configurationFile>
+            <log4j.configuration>${surefire-log4j.file}</log4j.configuration>
             <log4j1.compatibility>true</log4j1.compatibility>
           </systemProperties>
         </configuration>
