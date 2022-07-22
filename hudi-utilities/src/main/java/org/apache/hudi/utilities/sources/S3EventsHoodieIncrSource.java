@@ -121,7 +121,7 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
     }
     String fileFormat = props.getString(SOURCE_FILE_FORMAT, DEFAULT_SOURCE_FILE_FORMAT);
 
-    // Use begin Instant if set and non-empty
+    // Use begin Instant if set and non-empty.
     Option<String> beginInstant =
         lastCkptStr.isPresent()
             ? lastCkptStr.get().isEmpty() ? Option.empty() : lastCkptStr
