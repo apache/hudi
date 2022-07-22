@@ -30,6 +30,7 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -244,34 +245,37 @@ public class HoodieCommitMetadata implements Serializable {
    * parse the bytes of deltacommit, and get the base file and the log files belonging to this
    * provided file group.
    */
-  public static Pair<String, List<String>> getFileSliceForFileGroupFromDeltaCommit(
-      byte[] bytes, HoodieFileGroupId fileGroupId)
-      throws Exception {
+  public static Option<Pair<String, List<String>>> getFileSliceForFileGroupFromDeltaCommit(
+      byte[] bytes, HoodieFileGroupId fileGroupId) {
     String jsonStr = new String(bytes, StandardCharsets.UTF_8);
     if (jsonStr.isEmpty()) {
-      return null;
+      return Option.empty();
     }
 
-    JsonNode ptToWriteStatsMap = JsonUtils.getObjectMapper().readTree(jsonStr).get("partitionToWriteStats");
-    Iterator<Map.Entry<String, JsonNode>> pts = ptToWriteStatsMap.fields();
-    while (pts.hasNext()) {
-      Map.Entry<String, JsonNode> ptToWriteStats = pts.next();
-      if (ptToWriteStats.getValue().isArray()) {
-        for (JsonNode writeStat : ptToWriteStats.getValue()) {
-          HoodieFileGroupId fgId = new HoodieFileGroupId(ptToWriteStats.getKey(), writeStat.get("fileId").asText());
-          if (fgId.equals(fileGroupId)) {
-            String baseFile = writeStat.get("baseFile").asText();
-            ArrayNode logFilesNode = (ArrayNode) writeStat.get("logFiles");
-            List<String> logFiles = new ArrayList<>();
-            for (JsonNode logFile : logFilesNode) {
-              logFiles.add(logFile.asText());
+    try {
+      JsonNode ptToWriteStatsMap = JsonUtils.getObjectMapper().readTree(jsonStr).get("partitionToWriteStats");
+      Iterator<Map.Entry<String, JsonNode>> pts = ptToWriteStatsMap.fields();
+      while (pts.hasNext()) {
+        Map.Entry<String, JsonNode> ptToWriteStats = pts.next();
+        if (ptToWriteStats.getValue().isArray()) {
+          for (JsonNode writeStat : ptToWriteStats.getValue()) {
+            HoodieFileGroupId fgId = new HoodieFileGroupId(ptToWriteStats.getKey(), writeStat.get("fileId").asText());
+            if (fgId.equals(fileGroupId)) {
+              String baseFile = writeStat.get("baseFile").asText();
+              ArrayNode logFilesNode = (ArrayNode) writeStat.get("logFiles");
+              List<String> logFiles = new ArrayList<>();
+              for (JsonNode logFile : logFilesNode) {
+                logFiles.add(logFile.asText());
+              }
+              return Option.of(Pair.of(baseFile, logFiles));
             }
-            return Pair.of(baseFile, logFiles);
           }
         }
       }
+      return Option.empty();
+    } catch (Exception e) {
+      throw new HoodieException("Fail to parse the base file and log files from DeltaCommit", e);
     }
-    return null;
   }
 
   // Here the functions are named "fetch" instead of "get", to get avoid of the json conversion.

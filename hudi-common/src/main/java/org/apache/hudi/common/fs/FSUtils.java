@@ -513,17 +513,20 @@ public class FSUtils {
   /**
    * Get the path which has a specified commit and file group id.
    */
-  public static FileStatus getBaseFile(FileSystem fs, Path partitionPath, String fileGroupId,
-                                                String commitTime) throws IOException {
+  public static FileStatus getBaseFile(FileSystem fs, Path partitionPath, String fileGroupId, String commitTime) {
     PathFilter pathFilter = path -> path.getName().startsWith(fileGroupId)
         && path.getName().endsWith(commitTime + HoodieFileFormat.PARQUET.getFileExtension());
-    FileStatus[] statuses = fs.listStatus(partitionPath, pathFilter);
-    if (statuses.length == 1) {
-      return statuses[0];
-    } else if (statuses.length > 1) {
-      throw new HoodieIOException("There is more that one file that have the same commit time and file group id");
-    } else {
-      throw new HoodieIOException(String.format("Not found such base file with the commit time(%s) and the file group id(%s).", commitTime, fileGroupId));
+    try {
+      FileStatus[] statuses = fs.listStatus(partitionPath, pathFilter);
+      if (statuses.length == 1) {
+        return statuses[0];
+      } else if (statuses.length > 1) {
+        throw new HoodieIOException("There is more that one file that have the same commit time and file group id");
+      } else {
+        throw new HoodieIOException(String.format("Not found such base file with the commit time(%s) and the file group id(%s).", commitTime, fileGroupId));
+      }
+    } catch (Exception e) {
+      throw new HoodieException("Fail to get the base file", e);
     }
   }
 

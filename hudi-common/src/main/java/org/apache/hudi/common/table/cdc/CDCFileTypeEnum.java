@@ -67,8 +67,8 @@ package org.apache.hudi.common.table.cdc;
 public enum CDCFileTypeEnum {
 
   CDC_LOG_FILE,
-  ADD_BASE_File,
-  REMOVE_BASE_File,
+  ADD_BASE_FILE,
+  REMOVE_BASE_FILE,
   MOR_LOG_FILE,
   REPLACED_FILE_GROUP;
 

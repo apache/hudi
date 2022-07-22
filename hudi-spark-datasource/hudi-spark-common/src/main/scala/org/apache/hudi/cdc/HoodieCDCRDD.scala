@@ -37,7 +37,7 @@ import org.apache.hudi.common.model.{FileSlice, HoodieLogFile, HoodieRecord, Hoo
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.cdc.CDCFileTypeEnum._
 import org.apache.hudi.common.table.cdc.CDCOperationEnum._
-import org.apache.hudi.common.table.cdc.CDCUtils
+import org.apache.hudi.common.table.cdc.{CDCFileSplit, CDCUtils}
 import org.apache.hudi.common.table.log.CDCLogRecordReader
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.util.ValidationUtils.checkState
@@ -66,7 +66,7 @@ import scala.collection.mutable
  * The split that will be processed by spark task.
  */
 case class HoodieCDCFileGroupSplit(
-    commitToChanges: Array[(HoodieInstant, ChangeFileForSingleFileGroupAndCommit)]
+    commitToChanges: Array[(HoodieInstant, CDCFileSplit)]
 )
 
 /**
@@ -194,7 +194,7 @@ class HoodieCDCRDD(
     private var currentInstant: HoodieInstant = _
 
     // The change file that is currently being processed
-    private var currentChangeFile: ChangeFileForSingleFileGroupAndCommit = _
+    private var currentChangeFile: CDCFileSplit = _
 
     /**
      * two cases will use this to iterator the records:
@@ -253,8 +253,8 @@ class HoodieCDCRDD(
       if (currentChangeFile == null) {
         false
       } else {
-        currentChangeFile.cdcFileType match {
-          case ADD_BASE_File | REMOVE_BASE_File | REPLACED_FILE_GROUP =>
+        currentChangeFile.getCdcFileType match {
+          case ADD_BASE_FILE | REMOVE_BASE_FILE | REPLACED_FILE_GROUP =>
             if (recordIter.hasNext && loadNext()) {
               true
             } else {
@@ -284,12 +284,12 @@ class HoodieCDCRDD(
 
     def loadNext(): Boolean = {
       var loaded = false
-      currentChangeFile.cdcFileType match {
-        case ADD_BASE_File =>
+      currentChangeFile.getCdcFileType match {
+        case ADD_BASE_FILE =>
           val originRecord = recordIter.next()
           recordToLoad.update(3, convertRowToJsonString(originRecord))
           loaded = true
-        case REMOVE_BASE_File =>
+        case REMOVE_BASE_FILE =>
           val originRecord = recordIter.next()
           recordToLoad.update(2, convertRowToJsonString(originRecord))
           loaded = true
@@ -390,31 +390,33 @@ class HoodieCDCRDD(
         val pair = cdcFileIter.next()
         currentInstant = pair._1
         currentChangeFile = pair._2
-        currentChangeFile.cdcFileType match {
-          case ADD_BASE_File =>
-            assert(currentChangeFile.cdcFile != null)
-            val absCDCPath = new Path(basePath, currentChangeFile.cdcFile)
+        currentChangeFile.getCdcFileType match {
+          case ADD_BASE_FILE =>
+            assert(currentChangeFile.getCdcFile != null)
+            val absCDCPath = new Path(basePath, currentChangeFile.getCdcFile)
             val fileStatus = fs.getFileStatus(absCDCPath)
             val pf = PartitionedFile(InternalRow.empty, absCDCPath.toUri.toString, 0, fileStatus.getLen)
             recordIter = parquetReader(pf)
-          case REMOVE_BASE_File =>
-            assert(currentChangeFile.beforeFileSlice.nonEmpty)
-            recordIter = loadFileSlice(currentChangeFile.beforeFileSlice.get)
+          case REMOVE_BASE_FILE =>
+            assert(currentChangeFile.getBeforeFileSlice.isPresent)
+            recordIter = loadFileSlice(currentChangeFile.getBeforeFileSlice.get)
           case MOR_LOG_FILE =>
-            assert(currentChangeFile.cdcFile != null && currentChangeFile.beforeFileSlice.nonEmpty)
-            currentChangeFile.beforeFileSlice.foreach(loadBeforeFileSliceIfNeeded)
-            val absLogPath = new Path(basePath, currentChangeFile.cdcFile)
+            assert(currentChangeFile.getCdcFile != null && currentChangeFile.getBeforeFileSlice.isPresent)
+            loadBeforeFileSliceIfNeeded(currentChangeFile.getBeforeFileSlice.get)
+            val absLogPath = new Path(basePath, currentChangeFile.getCdcFile)
             val morSplit = HoodieMergeOnReadFileSplit(None, List(new HoodieLogFile(fs.getFileStatus(absLogPath))))
             val logFileIterator = new LogFileIterator(morSplit, originTableSchema, originTableSchema, tableState, conf)
             logRecordIter = logFileIterator.logRecordsIterator()
           case CDC_LOG_FILE =>
-            assert(currentChangeFile.cdcFile != null)
+            assert(currentChangeFile.getCdcFile != null)
             if (!cdcSupplementalLogging) {
               // load beforeFileSlice to beforeImageRecords
-              currentChangeFile.beforeFileSlice.foreach(loadBeforeFileSliceIfNeeded)
+              if (currentChangeFile.getBeforeFileSlice.isPresent) {
+                loadBeforeFileSliceIfNeeded(currentChangeFile.getBeforeFileSlice.get)
+              }
               // load afterFileSlice to afterImageRecords
-              currentChangeFile.afterFileSlice.foreach { fileSlice =>
-                val iter = loadFileSlice(fileSlice)
+              if (currentChangeFile.getAfterFileSlice.isPresent) {
+                val iter = loadFileSlice(currentChangeFile.getAfterFileSlice.get())
                 afterImageRecords = mutable.Map.empty
                 iter.foreach { row =>
                   val key = row.getString(recordKeyIndex)
@@ -422,10 +424,12 @@ class HoodieCDCRDD(
                 }
               }
             }
-            val absCDCPath = new Path(basePath, currentChangeFile.cdcFile)
+            val absCDCPath = new Path(basePath, currentChangeFile.getCdcFile)
             cdcRecordReader = new CDCLogRecordReader(fs, absCDCPath, cdcSupplementalLogging)
           case REPLACED_FILE_GROUP =>
-            currentChangeFile.beforeFileSlice.foreach(loadBeforeFileSliceIfNeeded)
+            if (currentChangeFile.getBeforeFileSlice.isPresent) {
+              loadBeforeFileSliceIfNeeded(currentChangeFile.getBeforeFileSlice.get)
+            }
             recordIter = beforeImageRecords.values.map { record =>
               deserialize(record)
             }.iterator
@@ -442,12 +446,12 @@ class HoodieCDCRDD(
      * Initialize the partial fields of the data to be returned in advance to speed up.
      */
     private def resetRecordFormat(): Unit = {
-      recordToLoad = currentChangeFile.cdcFileType match {
-        case ADD_BASE_File =>
+      recordToLoad = currentChangeFile.getCdcFileType match {
+        case ADD_BASE_FILE =>
           InternalRow.fromSeq(Array(
             CDCRelation.CDC_OPERATION_INSERT, convertToUTF8String(currentInstant.getTimestamp),
             null, null))
-        case REMOVE_BASE_File =>
+        case REMOVE_BASE_FILE =>
           InternalRow.fromSeq(Array(
             CDCRelation.CDC_OPERATION_DELETE, convertToUTF8String(currentInstant.getTimestamp),
             null, null))
