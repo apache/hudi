@@ -25,10 +25,12 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.sync.common.model.Partition;
 import org.apache.hudi.sync.common.model.PartitionEvent;
@@ -106,20 +108,22 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
     }
   }
 
-  public List<String> getPartitionsWrittenToSince(Option<String> lastCommitTimeSynced) {
+  public Pair<List<String>, Option<HoodieInstant>> getPartitionsWrittenToSince(Option<String> lastCommitTimeSynced) {
     if (!lastCommitTimeSynced.isPresent()) {
       LOG.info("Last commit time synced is not known, listing all partitions in "
           + config.getString(META_SYNC_BASE_PATH)
           + ",FS :" + config.getHadoopFileSystem());
       HoodieLocalEngineContext engineContext = new HoodieLocalEngineContext(metaClient.getHadoopConf());
-      return FSUtils.getAllPartitionPaths(engineContext,
+      return Pair.of(FSUtils.getAllPartitionPaths(engineContext,
           config.getString(META_SYNC_BASE_PATH),
           config.getBoolean(META_SYNC_USE_FILE_LISTING_FROM_METADATA),
-          config.getBoolean(META_SYNC_ASSUME_DATE_PARTITION));
+          config.getBoolean(META_SYNC_ASSUME_DATE_PARTITION)), Option.empty());
     } else {
+      Option<HoodieInstant> hoodieInstantOption = metaClient.getActiveTimeline().getCommitsTimeline().lastInstant();
+      HoodieTimeline instantsInRange = metaClient.getActiveTimeline().getCommitsTimeline()
+          .findInstantsInRange(lastCommitTimeSynced.get(), hoodieInstantOption.get().getTimestamp());
       LOG.info("Last commit time synced is " + lastCommitTimeSynced.get() + ", Getting commits since then");
-      return TimelineUtils.getPartitionsWritten(metaClient.getActiveTimeline().getCommitsTimeline()
-          .findInstantsAfter(lastCommitTimeSynced.get(), Integer.MAX_VALUE));
+      return Pair.of(TimelineUtils.getPartitionsWritten(instantsInRange), hoodieInstantOption);
     }
   }
 

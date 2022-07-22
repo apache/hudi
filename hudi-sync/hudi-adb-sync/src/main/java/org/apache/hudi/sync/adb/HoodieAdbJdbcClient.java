@@ -19,6 +19,7 @@
 package org.apache.hudi.sync.adb;
 
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -259,14 +260,15 @@ public class HoodieAdbJdbcClient extends HoodieSyncClient {
   }
 
   @Override
-  public void updateLastCommitTimeSynced(String tableName) {
+  public void updateLastCommitTimeSynced(String tableName, Option<HoodieInstant> hoodieInstantOption) {
     // Set the last commit time from the TBLProperties
-    String lastCommitSynced = getActiveTimeline().lastInstant().get().getTimestamp();
-    try {
-      String sql = constructUpdateTblPropertiesSql(tableName, lastCommitSynced);
-      executeAdbSql(sql);
-    } catch (Exception e) {
-      throw new HoodieHiveSyncException("Fail to get update last commit time synced:" + lastCommitSynced, e);
+    if (hoodieInstantOption.isPresent()) {
+      try {
+        String sql = constructUpdateTblPropertiesSql(tableName, hoodieInstantOption.get().getTimestamp());
+        executeAdbSql(sql);
+      } catch (Exception e) {
+        throw new HoodieHiveSyncException("Fail to get update last commit time synced:" + hoodieInstantOption.get(), e);
+      }
     }
   }
 

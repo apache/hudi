@@ -22,6 +22,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.testutils.NetworkTestUtils;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.Option;
@@ -188,8 +189,8 @@ public class TestHiveSyncTool {
         + "` PARTITION (`datestr`='2050-01-01') SET LOCATION '/some/new/location'");
 
     List<Partition> hivePartitions = hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME);
-    List<String> writtenPartitionsSince = hiveClient.getPartitionsWrittenToSince(Option.empty());
-    List<PartitionEvent> partitionEvents = hiveClient.getPartitionEvents(hivePartitions, writtenPartitionsSince, false);
+    Pair<List<String>, Option<HoodieInstant>> writtenPartitionsSincePair = hiveClient.getPartitionsWrittenToSince(Option.empty());
+    List<PartitionEvent> partitionEvents = hiveClient.getPartitionEvents(hivePartitions, writtenPartitionsSincePair.getLeft(), false);
     assertEquals(1, partitionEvents.size(), "There should be only one partition event");
     assertEquals(PartitionEventType.UPDATE, partitionEvents.iterator().next().eventType,
         "The one partition event must of type UPDATE");
@@ -466,10 +467,10 @@ public class TestHiveSyncTool {
 
     // Lets do the sync
     reSyncHiveTable();
-    List<String> writtenPartitionsSince = hiveClient.getPartitionsWrittenToSince(Option.of(commitTime1));
-    assertEquals(1, writtenPartitionsSince.size(), "We should have one partition written after 100 commit");
+    Pair<List<String>, Option<HoodieInstant>> writtenPartitionsSincePair = hiveClient.getPartitionsWrittenToSince(Option.of(commitTime1));
+    assertEquals(1, writtenPartitionsSincePair.getLeft().size(), "We should have one partition written after 100 commit");
     List<org.apache.hudi.sync.common.model.Partition> hivePartitions = hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME);
-    List<PartitionEvent> partitionEvents = hiveClient.getPartitionEvents(hivePartitions, writtenPartitionsSince, false);
+    List<PartitionEvent> partitionEvents = hiveClient.getPartitionEvents(hivePartitions, writtenPartitionsSincePair.getLeft(), false);
     assertEquals(1, partitionEvents.size(), "There should be only one partition event");
     assertEquals(PartitionEventType.ADD, partitionEvents.iterator().next().eventType, "The one partition event must of type ADD");
 
@@ -745,10 +746,10 @@ public class TestHiveSyncTool {
     HiveTestUtil.addCOWPartition("2010/01/02", true, true, commitTime2);
 
     reinitHiveSyncClient();
-    List<String> writtenPartitionsSince = hiveClient.getPartitionsWrittenToSince(Option.of(instantTime));
-    assertEquals(1, writtenPartitionsSince.size(), "We should have one partition written after 100 commit");
+    Pair<List<String>, Option<HoodieInstant>> writtenPartitionsSincePair = hiveClient.getPartitionsWrittenToSince(Option.of(instantTime));
+    assertEquals(1, writtenPartitionsSincePair.getLeft().size(), "We should have one partition written after 100 commit");
     List<org.apache.hudi.sync.common.model.Partition> hivePartitions = hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME);
-    List<PartitionEvent> partitionEvents = hiveClient.getPartitionEvents(hivePartitions, writtenPartitionsSince, false);
+    List<PartitionEvent> partitionEvents = hiveClient.getPartitionEvents(hivePartitions, writtenPartitionsSincePair.getLeft(), false);
     assertEquals(1, partitionEvents.size(), "There should be only one partition event");
     assertEquals(PartitionEventType.ADD, partitionEvents.iterator().next().eventType, "The one partition event must of type ADD");
 
@@ -775,7 +776,7 @@ public class TestHiveSyncTool {
         "Table partitions should match the number of partitions we wrote");
     assertEquals(commitTime3, hiveClient.getLastCommitTimeSynced(HiveTestUtil.TABLE_NAME).get(),
         "The last commit that was synced should be updated in the TBLPROPERTIES");
-    assertEquals(1, hiveClient.getPartitionsWrittenToSince(Option.of(commitTime2)).size());
+    assertEquals(1, hiveClient.getPartitionsWrittenToSince(Option.of(commitTime2)).getLeft().size());
   }
 
   @ParameterizedTest

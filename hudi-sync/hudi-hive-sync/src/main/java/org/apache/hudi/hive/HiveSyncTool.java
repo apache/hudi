@@ -20,7 +20,9 @@ package org.apache.hudi.hive;
 
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.InvalidTableException;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
@@ -224,14 +226,14 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
       lastCommitTimeSynced = syncClient.getLastCommitTimeSynced(tableName);
     }
     LOG.info("Last commit time synced was found to be " + lastCommitTimeSynced.orElse("null"));
-    List<String> writtenPartitionsSince = syncClient.getPartitionsWrittenToSince(lastCommitTimeSynced);
-    LOG.info("Storage partitions scan complete. Found " + writtenPartitionsSince.size());
+    Pair<List<String>, Option<HoodieInstant>> writtenPartitionsSincePair = syncClient.getPartitionsWrittenToSince(lastCommitTimeSynced);
+    LOG.info("Storage partitions scan complete. Found " + writtenPartitionsSincePair.getLeft().size());
 
     // Sync the partitions if needed
-    boolean partitionsChanged = syncPartitions(tableName, writtenPartitionsSince, isDropPartition);
+    boolean partitionsChanged = syncPartitions(tableName, writtenPartitionsSincePair.getLeft(), isDropPartition);
     boolean meetSyncConditions = schemaChanged || partitionsChanged;
     if (!config.getBoolean(META_SYNC_CONDITIONAL_SYNC) || meetSyncConditions) {
-      syncClient.updateLastCommitTimeSynced(tableName);
+      syncClient.updateLastCommitTimeSynced(tableName, writtenPartitionsSincePair.getRight());
     }
     LOG.info("Sync complete for " + tableName);
   }

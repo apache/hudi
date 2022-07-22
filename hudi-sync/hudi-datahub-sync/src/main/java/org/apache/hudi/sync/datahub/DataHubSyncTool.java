@@ -19,6 +19,7 @@
 
 package org.apache.hudi.sync.datahub;
 
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.sync.common.HoodieSyncTool;
 import org.apache.hudi.sync.datahub.config.DataHubSyncConfig;
 
@@ -53,7 +54,7 @@ public class DataHubSyncTool extends HoodieSyncTool {
   public void syncHoodieTable() {
     try (DataHubSyncClient syncClient = new DataHubSyncClient(config)) {
       syncClient.updateTableSchema(config.getString(META_SYNC_TABLE_NAME), null);
-      syncClient.updateLastCommitTimeSynced(config.getString(META_SYNC_TABLE_NAME));
+      syncClient.updateLastCommitTimeSynced(config.getString(META_SYNC_TABLE_NAME), Option.empty());
     }
   }
 

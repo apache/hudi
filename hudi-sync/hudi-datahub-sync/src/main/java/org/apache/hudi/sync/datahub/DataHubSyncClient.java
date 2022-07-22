@@ -21,6 +21,7 @@ package org.apache.hudi.sync.datahub;
 
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.sync.common.HoodieSyncClient;
 import org.apache.hudi.sync.common.HoodieSyncException;
@@ -74,8 +75,8 @@ public class DataHubSyncClient extends HoodieSyncClient {
   }
 
   @Override
-  public void updateLastCommitTimeSynced(String tableName) {
-    updateTableProperties(tableName, Collections.singletonMap(HOODIE_LAST_COMMIT_TIME_SYNC, getActiveTimeline().lastInstant().get().getTimestamp()));
+  public void updateLastCommitTimeSynced(String tableName, Option<HoodieInstant> hoodieInstantOption) {
+    updateTableProperties(tableName, Collections.singletonMap(HOODIE_LAST_COMMIT_TIME_SYNC, hoodieInstantOption.get().getTimestamp()));
   }
 
   @Override

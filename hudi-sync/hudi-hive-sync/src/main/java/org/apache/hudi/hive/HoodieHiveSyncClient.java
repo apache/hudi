@@ -251,16 +251,16 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
   }
 
   @Override
-  public void updateLastCommitTimeSynced(String tableName) {
+  public void updateLastCommitTimeSynced(String tableName, Option<HoodieInstant> hoodieInstantOption) {
     // Set the last commit time from the TBLproperties
-    Option<String> lastCommitSynced = getActiveTimeline().lastInstant().map(HoodieInstant::getTimestamp);
-    if (lastCommitSynced.isPresent()) {
+    //Option<String> lastCommitSynced = getActiveTimeline().lastInstant().map(HoodieInstant::getTimestamp);
+    if (hoodieInstantOption.isPresent()) {
       try {
         Table table = client.getTable(databaseName, tableName);
-        table.putToParameters(HOODIE_LAST_COMMIT_TIME_SYNC, lastCommitSynced.get());
+        table.putToParameters(HOODIE_LAST_COMMIT_TIME_SYNC, hoodieInstantOption.get().getTimestamp());
         client.alter_table(databaseName, tableName, table);
       } catch (Exception e) {
-        throw new HoodieHiveSyncException("Failed to get update last commit time synced to " + lastCommitSynced, e);
+        throw new HoodieHiveSyncException("Failed to get update last commit time synced to " + hoodieInstantOption.get(), e);
       }
     }
   }

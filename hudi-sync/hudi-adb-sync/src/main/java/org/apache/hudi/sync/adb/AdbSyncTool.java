@@ -20,7 +20,9 @@ package org.apache.hudi.sync.adb;
 
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.hive.SchemaDifference;
 import org.apache.hudi.hive.util.HiveSchemaUtil;
@@ -190,21 +192,21 @@ public class AdbSyncTool extends HoodieSyncTool {
     LOG.info("Last commit time synced was found:{}", lastCommitTimeSynced.orElse("null"));
 
     // Scan synced partitions
-    List<String> writtenPartitionsSince;
+    Pair<List<String>, Option<HoodieInstant>> writtenPartitionsSincePair;
     if (config.getSplitStrings(META_SYNC_PARTITION_FIELDS).isEmpty()) {
-      writtenPartitionsSince = new ArrayList<>();
+      writtenPartitionsSincePair = Pair.of(new ArrayList<>(), Option.empty());
     } else {
-      writtenPartitionsSince = syncClient.getPartitionsWrittenToSince(lastCommitTimeSynced);
+      writtenPartitionsSincePair = syncClient.getPartitionsWrittenToSince(lastCommitTimeSynced);
     }
-    LOG.info("Scan partitions complete, partitionNum:{}", writtenPartitionsSince.size());
+    LOG.info("Scan partitions complete, partitionNum:{}", writtenPartitionsSincePair.getLeft().size());
 
     // Sync the partitions if needed
-    syncPartitions(tableName, writtenPartitionsSince);
+    syncPartitions(tableName, writtenPartitionsSincePair.getLeft());
 
     // Update sync commit time
     // whether to skip syncing commit time stored in tbl properties, since it is time consuming.
     if (!config.getBoolean(ADB_SYNC_SKIP_LAST_COMMIT_TIME_SYNC)) {
-      syncClient.updateLastCommitTimeSynced(tableName);
+      syncClient.updateLastCommitTimeSynced(tableName, writtenPartitionsSincePair.getRight());
     }
     LOG.info("Sync complete for table:{}", tableName);
   }

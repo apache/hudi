@@ -19,12 +19,14 @@
 
 package org.apache.hudi.sync.common;
 
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.sync.common.model.FieldSchema;
 import org.apache.hudi.sync.common.model.Partition;
 
 import org.apache.parquet.schema.MessageType;
 
+import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -162,7 +164,7 @@ public interface HoodieMetaSyncOperations {
   /**
    * Update the timestamp of last sync.
    */
-  default void updateLastCommitTimeSynced(String tableName) {
+  default void updateLastCommitTimeSynced(String tableName, Option<HoodieInstant> hoodieInstantOption) {
 
   }
 
