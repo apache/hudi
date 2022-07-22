@@ -61,6 +61,7 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
                                     partitionSchema: StructType,
                                     dataSchema: HoodieTableSchema,
                                     requiredSchema: HoodieTableSchema,
+                                    requestedColumns: Array[String],
                                     filters: Array[Filter]): HoodieMergeOnReadRDD = {
     val fullSchemaParquetReader = createBaseFileReader(
       spark = sqlContext.sparkSession,
@@ -81,23 +82,25 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
       hadoopConf = embedInternalSchema(new Configuration(conf), internalSchemaOpt)
     )
 
-    val requiredSchemaParquetReader = createBaseFileReader(
-      spark = sqlContext.sparkSession,
-      partitionSchema = partitionSchema,
-      dataSchema = dataSchema,
-      requiredSchema = requiredSchema,
-      filters = filters ++ incrementalSpanRecordFilters,
-      options = optParams,
-      // NOTE: We have to fork the Hadoop Config here as Spark will be modifying it
-      //       to configure Parquet reader appropriately
-      hadoopConf = embedInternalSchema(new Configuration(conf), requiredSchema.internalSchema)
-    )
+    val (requiredSchemaBaseFileReaderMerging, requiredSchemaBaseFileReaderNoMerging) =
+      createMergeOnReadBaseFileReaders(partitionSchema, dataSchema, requiredSchema, requestedColumns, filters ++ incrementalSpanRecordFilters)
 
     val hoodieTableState = getTableState
     // TODO(HUDI-3639) implement incremental span record filtering w/in RDD to make sure returned iterator is appropriately
     //                 filtered, since file-reader might not be capable to perform filtering
-    new HoodieMergeOnReadRDD(sqlContext.sparkContext, jobConf, fullSchemaParquetReader, requiredSchemaParquetReader,
-      dataSchema, requiredSchema, hoodieTableState, mergeType, fileSplits)
+    new HoodieMergeOnReadRDD(
+      sqlContext.sparkContext,
+      config = jobConf,
+      fileReaders = HoodieMergeOnReadBaseFileReaders(
+        fullSchemaFileReader = fullSchemaParquetReader,
+        requiredSchemaFileReaderForMerging = requiredSchemaBaseFileReaderMerging,
+        requiredSchemaFileReaderForNoMerging = requiredSchemaBaseFileReaderNoMerging
+      ),
+      dataSchema = dataSchema,
+      requiredSchema = requiredSchema,
+      tableState = hoodieTableState,
+      mergeType = mergeType,
+      fileSplits = fileSplits)
   }
 
   override protected def collectFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): List[HoodieMergeOnReadFileSplit] = {

@@ -23,7 +23,7 @@ import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.util.ReflectionUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.index.SparkHoodieIndexFactory
-import org.apache.hudi.keygen.BuiltinKeyGenerator
+import org.apache.hudi.keygen.{BuiltinKeyGenerator, SparkKeyGeneratorInterface}
 import org.apache.hudi.table.BulkInsertPartitioner
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
@@ -63,13 +63,12 @@ object HoodieDatasetBulkInsertHelper extends Logging {
       df.queryExecution.toRdd.mapPartitions { iter =>
         val keyGenerator =
           ReflectionUtils.loadClass(keyGeneratorClassName, new TypedProperties(config.getProps))
-            .asInstanceOf[BuiltinKeyGenerator]
+            .asInstanceOf[SparkKeyGeneratorInterface]
 
         iter.map { row =>
           val (recordKey, partitionPath) =
             if (populateMetaFields) {
-              (UTF8String.fromString(keyGenerator.getRecordKey(row, schema)),
-                UTF8String.fromString(keyGenerator.getPartitionPath(row, schema)))
+              (keyGenerator.getRecordKey(row, schema), keyGenerator.getPartitionPath(row, schema))
             } else {
               (UTF8String.EMPTY_UTF8, UTF8String.EMPTY_UTF8)
             }

@@ -42,6 +42,7 @@ import org.apache.flink.table.api.EnvironmentSettings;
 import org.apache.flink.table.api.TableEnvironment;
 import org.apache.flink.table.api.config.ExecutionConfigOptions;
 import org.apache.flink.table.api.internal.TableEnvironmentImpl;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -165,6 +166,7 @@ public class ITTestHoodieFlinkCompactor {
     TestData.checkWrittenDataCOW(tempFile, EXPECTED1);
   }
 
+  @Disabled
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testHoodieFlinkCompactorService(boolean enableChangelog) throws Exception {
@@ -206,6 +208,7 @@ public class ITTestHoodieFlinkCompactor {
     TestData.checkWrittenDataCOW(tempFile, EXPECTED2);
   }
 
+  @Disabled
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testHoodieFlinkCompactorWithPlanSelectStrategy(boolean enableChangelog) throws Exception {

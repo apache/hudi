@@ -40,6 +40,8 @@ import java.util.stream.IntStream;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
+import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
+
 public class CollectionUtils {
 
   public static final Properties EMPTY_PROPERTIES = new Properties();
@@ -50,6 +52,14 @@ public class CollectionUtils {
 
   public static boolean nonEmpty(Collection<?> c) {
     return !isNullOrEmpty(c);
+  }
+
+  /**
+   * Returns last element of the array of {@code T}
+   */
+  public static <T> T tail(T[] ts) {
+    checkArgument(ts.length > 0);
+    return ts[ts.length - 1];
   }
 
   /**
@@ -143,7 +153,7 @@ public class CollectionUtils {
   }
 
   public static <E> Stream<List<E>> batchesAsStream(List<E> list, int batchSize) {
-    ValidationUtils.checkArgument(batchSize > 0, "batch size must be positive.");
+    checkArgument(batchSize > 0, "batch size must be positive.");
     int total = list.size();
     if (total <= 0) {
       return Stream.empty();
