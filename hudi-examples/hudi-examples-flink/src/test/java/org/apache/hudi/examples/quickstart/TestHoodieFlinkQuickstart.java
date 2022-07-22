@@ -34,7 +34,6 @@ import static org.apache.hudi.examples.quickstart.TestQuickstartData.assertRowsE
 /**
  * IT cases for Hoodie table source and sink.
  */
-
 public class TestHoodieFlinkQuickstart extends AbstractTestBase {
   private final HoodieFlinkQuickstart flinkQuickstart = HoodieFlinkQuickstart.instance();
 
