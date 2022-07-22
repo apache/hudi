@@ -29,9 +29,11 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.types.StructType;
+import org.apache.spark.unsafe.types.UTF8String;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.stream.Collectors;
 
 /**
@@ -46,16 +48,29 @@ import java.util.stream.Collectors;
  * field in the partition path, use field1:simple 3. If you want your table to be non partitioned, simply leave it as blank.
  *
  * RecordKey is internally generated using either SimpleKeyGenerator or ComplexKeyGenerator.
+ *
+ * @deprecated
  */
+@Deprecated
 public class CustomKeyGenerator extends BuiltinKeyGenerator {
 
   private final CustomAvroKeyGenerator customAvroKeyGenerator;
 
   public CustomKeyGenerator(TypedProperties props) {
-    super(props);
-    this.recordKeyFields = Arrays.stream(props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()).split(",")).map(String::trim).collect(Collectors.toList());
-    this.partitionPathFields = Arrays.stream(props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()).split(",")).map(String::trim).collect(Collectors.toList());
-    customAvroKeyGenerator = new CustomAvroKeyGenerator(props);
+    // NOTE: We have to strip partition-path configuration, since it could only be interpreted by
+    //       this key-gen
+    super(stripPartitionPathConfig(props));
+    this.recordKeyFields =
+        Arrays.stream(props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()).split(","))
+            .map(String::trim)
+            .collect(Collectors.toList());
+    String partitionPathFields = props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key());
+    this.partitionPathFields = partitionPathFields == null
+        ? Collections.emptyList()
+        : Arrays.stream(partitionPathFields.split(",")).map(String::trim).collect(Collectors.toList());
+    this.customAvroKeyGenerator = new CustomAvroKeyGenerator(props);
+
+    validateRecordKeyFields();
   }
 
   @Override
@@ -70,9 +85,8 @@ public class CustomKeyGenerator extends BuiltinKeyGenerator {
 
   @Override
   public String getRecordKey(Row row) {
-    validateRecordKeyFields();
-    return getRecordKeyFields().size() == 1
-        ? new SimpleKeyGenerator(config).getRecordKey(row)
+    return getRecordKeyFieldNames().size() == 1
+        ? new SimpleKeyGenerator(config, config.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()), null).getRecordKey(row)
         : new ComplexKeyGenerator(config).getRecordKey(row);
   }
 
@@ -82,8 +96,8 @@ public class CustomKeyGenerator extends BuiltinKeyGenerator {
   }
 
   @Override
-  public String getPartitionPath(InternalRow row, StructType structType) {
-    return getPartitionPath(Option.empty(), Option.empty(), Option.of(Pair.of(row, structType)));
+  public UTF8String getPartitionPath(InternalRow row, StructType schema) {
+    return UTF8String.fromString(getPartitionPath(Option.empty(), Option.empty(), Option.of(Pair.of(row, schema))));
   }
 
   private String getPartitionPath(Option<GenericRecord> record, Option<Row> row, Option<Pair<InternalRow, StructType>> internalRowStructTypePair) {
@@ -99,7 +113,7 @@ public class CustomKeyGenerator extends BuiltinKeyGenerator {
       return "";
     }
     for (String field : getPartitionPathFields()) {
-      String[] fieldWithType = field.split(customAvroKeyGenerator.SPLIT_REGEX);
+      String[] fieldWithType = field.split(CustomAvroKeyGenerator.SPLIT_REGEX);
       if (fieldWithType.length != 2) {
         throw new HoodieKeyGeneratorException("Unable to find field names for partition path in proper format");
       }
@@ -142,9 +156,18 @@ public class CustomKeyGenerator extends BuiltinKeyGenerator {
   }
 
   private void validateRecordKeyFields() {
-    if (getRecordKeyFields() == null || getRecordKeyFields().isEmpty()) {
+    if (getRecordKeyFieldNames() == null || getRecordKeyFieldNames().isEmpty()) {
       throw new HoodieKeyException("Unable to find field names for record key in cfg");
     }
+  }
+
+  private static TypedProperties stripPartitionPathConfig(TypedProperties props) {
+    TypedProperties filtered = new TypedProperties(props);
+    // NOTE: We have to stub it out w/ empty string, since we properties are:
+    //         - Expected to bear this config
+    //         - Can't be stubbed out w/ null
+    filtered.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "");
+    return filtered;
   }
 }
 
