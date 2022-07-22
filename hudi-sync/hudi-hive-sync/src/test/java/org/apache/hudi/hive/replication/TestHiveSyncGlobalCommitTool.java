@@ -19,7 +19,7 @@
 
 package org.apache.hudi.hive.replication;
 
-import org.apache.hudi.hive.testutils.HiveTestCluster;
+import org.apache.hudi.hive.testutils.TestCluster;
 
 import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.AfterEach;
@@ -53,9 +53,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class TestHiveSyncGlobalCommitTool {
 
   @RegisterExtension
-  public static HiveTestCluster localCluster = new HiveTestCluster();
+  public static TestCluster localCluster = new TestCluster();
   @RegisterExtension
-  public static HiveTestCluster remoteCluster = new HiveTestCluster();
+  public static TestCluster remoteCluster = new TestCluster();
 
   private static final String DB_NAME = "foo";
   private static final String TBL_NAME = "bar";

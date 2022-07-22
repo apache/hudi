@@ -55,7 +55,6 @@ import java.util.UUID;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_URL;
-import static org.apache.hudi.hive.testutils.HiveTestService.HS2_JDBC_URL;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_FIELDS;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
@@ -181,7 +180,7 @@ public class TestHoodieTestSuiteJob extends UtilitiesTestBase {
     // Make path selection test suite specific
     props.setProperty("hoodie.deltastreamer.source.input.selector", DFSTestSuitePathSelector.class.getName());
     // Hive Configs
-    props.setProperty(HIVE_URL.key(), HS2_JDBC_URL);
+    props.setProperty(HIVE_URL.key(), "jdbc:hive2://127.0.0.1:9999/");
     props.setProperty(META_SYNC_DATABASE_NAME.key(), "testdb1");
     props.setProperty(META_SYNC_TABLE_NAME.key(), "table1");
     props.setProperty(META_SYNC_PARTITION_FIELDS.key(), "datestr");

@@ -56,6 +56,7 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
+import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hive.service.server.HiveServer2;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
@@ -196,7 +197,7 @@ public class UtilitiesTestBase {
    */
   protected static HiveSyncConfig getHiveSyncConfig(String basePath, String tableName) {
     Properties props = new Properties();
-    props.setProperty(HIVE_URL.key(), hiveTestService.getJdbcHive2Url());
+    props.setProperty(HIVE_URL.key(),"jdbc:hive2://127.0.0.1:9999/");
     props.setProperty(HIVE_USER.key(), "");
     props.setProperty(HIVE_PASS.key(), "");
     props.setProperty(META_SYNC_DATABASE_NAME.key(), "testdb1");
@@ -214,9 +215,11 @@ public class UtilitiesTestBase {
    * @throws IOException
    */
   private static void clearHiveDb() throws Exception {
+    HiveConf hiveConf = new HiveConf();
     // Create Dummy hive sync config
     HiveSyncConfig hiveSyncConfig = getHiveSyncConfig("/dummy", "dummy");
-    hiveSyncConfig.setHadoopConf(hiveTestService.getHiveConf());
+    hiveConf.addResource(hiveServer.getHiveConf());
+    hiveSyncConfig.setHadoopConf(hiveConf);
     HoodieTableMetaClient.withPropertyBuilder()
       .setTableType(HoodieTableType.COPY_ON_WRITE)
       .setTableName(hiveSyncConfig.getString(META_SYNC_TABLE_NAME))
