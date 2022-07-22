@@ -101,6 +101,24 @@
   </build>
 
   <dependencies>
+    <!-- Logging dependencies -->
+    <dependency>
+      <groupId>org.apache.logging.log4j</groupId>
+      <artifactId>log4j-1.2-api</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.logging.log4j</groupId>
+      <artifactId>log4j-api</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.logging.log4j</groupId>
+      <artifactId>log4j-core</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.logging.log4j</groupId>
+      <artifactId>log4j-slf4j-impl</artifactId>
+    </dependency>
+
     <!-- Fasterxml -->
     <dependency>
       <groupId>com.fasterxml.jackson.core</groupId>
@@ -235,6 +253,10 @@
           <groupId>org.slf4j</groupId>
           <artifactId>slf4j-log4j12</artifactId>
         </exclusion>
+        <exclusion>
+          <groupId>log4j</groupId>
+          <artifactId>log4j</artifactId>
+        </exclusion>
       </exclusions>
     </dependency>
     
@@ -276,6 +298,5 @@
       <artifactId>joda-time</artifactId>
       <scope>test</scope>
     </dependency>
-
   </dependencies>
 </project>

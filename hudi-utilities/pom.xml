@@ -73,10 +73,6 @@
   </build>
 
   <dependencies>
-    <dependency>
-      <groupId>org.apache.logging.log4j</groupId>
-      <artifactId>log4j-slf4j-impl</artifactId>
-    </dependency>
     <!-- H2 database for JdbcbaseSchemaProvider -->
     <dependency>
       <groupId>com.h2database</groupId>
