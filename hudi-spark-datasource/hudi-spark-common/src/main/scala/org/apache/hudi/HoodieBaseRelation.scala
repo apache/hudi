@@ -23,7 +23,7 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hadoop.hbase.io.hfile.CacheConfig
 import org.apache.hadoop.mapred.JobConf
-import org.apache.hudi.HoodieBaseRelation.{convertToAvroSchema, createHFileReader, generateUnsafeProjection, getPartitionPath, projectSchema}
+import org.apache.hudi.HoodieBaseRelation.{BaseFileReader, convertToAvroSchema, createHFileReader, generateUnsafeProjection, getPartitionPath, projectSchema}
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
@@ -204,6 +204,10 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     shouldOmitPartitionColumns || shouldExtractPartitionValueFromPath
   }
 
+  /**
+   * NOTE: This fields are accessed by [[NestedSchemaPruning]] component which is only enabled for
+   *       Spark >= 3.1
+   */
   lazy val (fileFormat: FileFormat, fileFormatClassName: String) =
     metaClient.getTableConfig.getBaseFileFormat match {
       case HoodieFileFormat.ORC => (new OrcFileFormat, "orc")
@@ -258,12 +262,11 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
    *
    * Check scala-doc for [[shouldExtractPartitionValuesFromPartitionPath]] for more details
    */
-  def dataSchema: StructType =
-    if (shouldExtractPartitionValuesFromPartitionPath) {
-      prunePartitionColumns(tableStructSchema)
-    } else {
-      tableStructSchema
-    }
+  def dataSchema: StructType = if (shouldExtractPartitionValuesFromPartitionPath) {
+    prunePartitionColumns(tableStructSchema)
+  } else {
+    tableStructSchema
+  }
 
   /**
    * Determines whether relation's schema could be pruned by Spark's Optimizer
@@ -346,7 +349,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     if (fileSplits.isEmpty) {
       sparkSession.sparkContext.emptyRDD
     } else {
-      val rdd = composeRDD(fileSplits, partitionSchema, dataSchema, requiredDataSchema, filters)
+      val rdd = composeRDD(fileSplits, partitionSchema, dataSchema, requiredDataSchema, targetColumns, filters)
 
       // NOTE: In case when partition columns have been pruned from the required schema, we have to project
       //       the rows from the pruned schema back into the one expected by the caller
@@ -369,17 +372,19 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
   /**
    * Composes RDD provided file splits to read from, table and partition schemas, data filters to be applied
    *
-   * @param fileSplits      file splits to be handled by the RDD
-   * @param partitionSchema target table's partition schema
-   * @param dataSchema      target table's data files' schema
-   * @param requiredSchema  projected schema required by the reader
-   * @param filters         data filters to be applied
+   * @param fileSplits       file splits to be handled by the RDD
+   * @param partitionSchema  target table's partition schema
+   * @param dataSchema       target table's data files' schema
+   * @param requiredSchema   projected schema required by the reader
+   * @param requestedColumns columns requested by the query
+   * @param filters          data filters to be applied
    * @return instance of RDD (implementing [[HoodieUnsafeRDD]])
    */
   protected def composeRDD(fileSplits: Seq[FileSplit],
                            partitionSchema: StructType,
                            dataSchema: HoodieTableSchema,
                            requiredSchema: HoodieTableSchema,
+                           requestedColumns: Array[String],
                            filters: Array[Filter]): HoodieUnsafeRDD
 
   /**
@@ -551,37 +556,48 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
                                      requiredSchema: HoodieTableSchema,
                                      filters: Seq[Filter],
                                      options: Map[String, String],
-                                     hadoopConf: Configuration): PartitionedFile => Iterator[InternalRow] = {
-    val hfileReader = createHFileReader(
-      spark = spark,
-      dataSchema = dataSchema,
-      requiredSchema = requiredSchema,
-      filters = filters,
-      options = options,
-      hadoopConf = hadoopConf
-    )
+                                     hadoopConf: Configuration): BaseFileReader = {
+    val tableBaseFileFormat = tableConfig.getBaseFileFormat
 
-    val parquetReader = HoodieDataSourceHelper.buildHoodieParquetReader(
-      sparkSession = spark,
-      dataSchema = dataSchema.structTypeSchema,
-      partitionSchema = partitionSchema,
-      requiredSchema = requiredSchema.structTypeSchema,
-      filters = filters,
-      options = options,
-      hadoopConf = hadoopConf,
-      // We're delegating to Spark to append partition values to every row only in cases
-      // when these corresponding partition-values are not persisted w/in the data file itself
-      appendPartitionValues = shouldExtractPartitionValuesFromPartitionPath
-    )
+    // NOTE: PLEASE READ CAREFULLY
+    //       Lambda returned from this method is going to be invoked on the executor, and therefore
+    //       we have to eagerly initialize all of the readers even though only one specific to the type
+    //       of the file being read will be used. This is required to avoid serialization of the whole
+    //       relation (containing file-index for ex) and passing it to the executor
+    val reader = tableBaseFileFormat match {
+      case HoodieFileFormat.PARQUET =>
+        HoodieDataSourceHelper.buildHoodieParquetReader(
+          sparkSession = spark,
+          dataSchema = dataSchema.structTypeSchema,
+          partitionSchema = partitionSchema,
+          requiredSchema = requiredSchema.structTypeSchema,
+          filters = filters,
+          options = options,
+          hadoopConf = hadoopConf,
+          // We're delegating to Spark to append partition values to every row only in cases
+          // when these corresponding partition-values are not persisted w/in the data file itself
+          appendPartitionValues = shouldExtractPartitionValuesFromPartitionPath
+        )
+
+      case HoodieFileFormat.HFILE =>
+        createHFileReader(
+          spark = spark,
+          dataSchema = dataSchema,
+          requiredSchema = requiredSchema,
+          filters = filters,
+          options = options,
+          hadoopConf = hadoopConf
+        )
+
+      case _ => throw new UnsupportedOperationException(s"Base file format is not currently supported ($tableBaseFileFormat)")
+    }
 
     partitionedFile => {
       val extension = FSUtils.getFileExtension(partitionedFile.filePath)
-      if (HoodieFileFormat.PARQUET.getFileExtension.equals(extension)) {
-        parquetReader.apply(partitionedFile)
-      } else if (HoodieFileFormat.HFILE.getFileExtension.equals(extension)) {
-        hfileReader.apply(partitionedFile)
+      if (tableBaseFileFormat.getFileExtension.equals(extension)) {
+        reader.apply(partitionedFile)
       } else {
-        throw new UnsupportedOperationException(s"Base file format not supported by Spark DataSource ($partitionedFile)")
+        throw new UnsupportedOperationException(s"Invalid base-file format ($extension), expected ($tableBaseFileFormat)")
       }
     }
   }
@@ -628,6 +644,8 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
 }
 
 object HoodieBaseRelation extends SparkAdapterSupport {
+
+  type BaseFileReader = PartitionedFile => Iterator[InternalRow]
 
   private def generateUnsafeProjection(from: StructType, to: StructType) =
     sparkAdapter.getCatalystExpressionUtils().generateUnsafeProjection(from, to)
@@ -676,7 +694,7 @@ object HoodieBaseRelation extends SparkAdapterSupport {
                                 requiredSchema: HoodieTableSchema,
                                 filters: Seq[Filter],
                                 options: Map[String, String],
-                                hadoopConf: Configuration): PartitionedFile => Iterator[InternalRow] = {
+                                hadoopConf: Configuration): BaseFileReader = {
     val hadoopConfBroadcast =
       spark.sparkContext.broadcast(new SerializableConfiguration(hadoopConf))
 

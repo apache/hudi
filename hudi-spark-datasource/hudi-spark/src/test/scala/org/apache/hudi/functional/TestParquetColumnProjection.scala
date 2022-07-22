@@ -54,7 +54,7 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
     DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> classOf[NonpartitionedKeyGenerator].getName
   )
 
-  @Disabled("HUDI-3896")
+  @Disabled("Currently disabled b/c of the fallback to HadoopFsRelation")
   @Test
   def testBaseFileOnlyViewRelation(): Unit = {
     val tablePath = s"$basePath/cow"

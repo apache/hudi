@@ -23,6 +23,7 @@ import org.apache.avro.generic.{GenericRecord, GenericRecordBuilder, IndexedReco
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hadoop.mapred.JobConf
+import org.apache.hudi.HoodieBaseRelation.BaseFileReader
 import org.apache.hudi.HoodieConversionUtils.{toJavaOption, toScalaOption}
 import org.apache.hudi.HoodieMergeOnReadRDD.{AvroDeserializerSupport, collectFieldOrdinals, getPartitionPath, projectAvro, projectAvroUnsafe, projectRowUnsafe, resolveAvroSchemaNullability}
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig}
@@ -55,11 +56,14 @@ import scala.util.Try
 
 case class HoodieMergeOnReadPartition(index: Int, split: HoodieMergeOnReadFileSplit) extends Partition
 
+case class HoodieMergeOnReadBaseFileReaders(fullSchemaFileReader: BaseFileReader,
+                                            requiredSchemaFileReaderForMerging: BaseFileReader,
+                                            requiredSchemaFileReaderForNoMerging: BaseFileReader)
+
 class HoodieMergeOnReadRDD(@transient sc: SparkContext,
                            @transient config: Configuration,
-                           fullSchemaFileReader: PartitionedFile => Iterator[InternalRow],
-                           requiredSchemaFileReader: PartitionedFile => Iterator[InternalRow],
-                           tableSchema: HoodieTableSchema,
+                           fileReaders: HoodieMergeOnReadBaseFileReaders,
+                           dataSchema: HoodieTableSchema,
                            requiredSchema: HoodieTableSchema,
                            tableState: HoodieTableState,
                            mergeType: String,
@@ -86,13 +90,13 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
     val mergeOnReadPartition = split.asInstanceOf[HoodieMergeOnReadPartition]
     val iter = mergeOnReadPartition.split match {
       case dataFileOnlySplit if dataFileOnlySplit.logFiles.isEmpty =>
-        requiredSchemaFileReader.apply(dataFileOnlySplit.dataFile.get)
+        fileReaders.requiredSchemaFileReaderForNoMerging.apply(dataFileOnlySplit.dataFile.get)
 
       case logFileOnlySplit if logFileOnlySplit.dataFile.isEmpty =>
         new LogFileIterator(logFileOnlySplit, getConfig)
 
       case split if mergeType.equals(DataSourceReadOptions.REALTIME_SKIP_MERGE_OPT_VAL) =>
-        val baseFileIterator = requiredSchemaFileReader.apply(split.dataFile.get)
+        val baseFileIterator = fileReaders.requiredSchemaFileReaderForNoMerging.apply(split.dataFile.get)
         new SkipMergeIterator(split, baseFileIterator, getConfig)
 
       case split if mergeType.equals(DataSourceReadOptions.REALTIME_PAYLOAD_COMBINE_OPT_VAL) =>
@@ -126,9 +130,9 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
     //       then we can avoid reading and parsing the records w/ _full_ schema, and instead only
     //       rely on projected one, nevertheless being able to perform merging correctly
     if (!whitelistedPayloadClasses.contains(tableState.recordPayloadClassName))
-      (fullSchemaFileReader(split.dataFile.get), tableSchema)
+      (fileReaders.fullSchemaFileReader(split.dataFile.get), dataSchema)
     else
-      (requiredSchemaFileReader(split.dataFile.get), requiredSchema)
+      (fileReaders.requiredSchemaFileReaderForMerging(split.dataFile.get), requiredSchema)
   }
 
   override protected def getPartitions: Array[Partition] =
@@ -152,7 +156,7 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
     protected override val requiredAvroSchema: Schema = new Schema.Parser().parse(requiredSchema.avroSchemaStr)
     protected override val requiredStructTypeSchema: StructType = requiredSchema.structTypeSchema
 
-    protected val logFileReaderAvroSchema: Schema = new Schema.Parser().parse(tableSchema.avroSchemaStr)
+    protected val logFileReaderAvroSchema: Schema = new Schema.Parser().parse(dataSchema.avroSchemaStr)
 
     protected val recordBuilder: GenericRecordBuilder = new GenericRecordBuilder(requiredAvroSchema)
     protected var recordToLoad: InternalRow = _
@@ -167,7 +171,7 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
     private val requiredSchemaFieldOrdinals: List[Int] = collectFieldOrdinals(requiredAvroSchema, logFileReaderAvroSchema)
 
     private var logScanner = {
-      val internalSchema = tableSchema.internalSchema.getOrElse(InternalSchema.getEmptyInternalSchema)
+      val internalSchema = dataSchema.internalSchema.getOrElse(InternalSchema.getEmptyInternalSchema)
       HoodieMergeOnReadRDD.scanLog(split.logFiles, getPartitionPath(split), logFileReaderAvroSchema, tableState,
         maxCompactionMemoryInBytes, config, internalSchema)
     }
@@ -232,7 +236,7 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
     override def hasNext: Boolean = {
       if (baseFileIterator.hasNext) {
         val curRow = baseFileIterator.next()
-        recordToLoad = unsafeProjection(curRow)
+        recordToLoad = curRow
         true
       } else {
         super[LogFileIterator].hasNext
