@@ -30,10 +30,10 @@ import org.apache.spark.sql.types._
 import java.io.FileNotFoundException
 import java.util.function.Supplier
 
-class MetadataInitProcedure extends BaseProcedure with ProcedureBuilder with SparkAdapterSupport with Logging {
+class InitMetadataTableProcedure extends BaseProcedure with ProcedureBuilder with SparkAdapterSupport with Logging {
   private val PARAMETERS = Array[ProcedureParameter](
     ProcedureParameter.required(0, "table", DataTypes.StringType, None),
-    ProcedureParameter.optional(1, "readOnly", DataTypes.BooleanType, false)
+    ProcedureParameter.optional(1, "read_only", DataTypes.BooleanType, false)
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -71,14 +71,14 @@ class MetadataInitProcedure extends BaseProcedure with ProcedureBuilder with Spa
     Seq(Row(action + " Metadata Table in " + metadataPath + " (duration=" + timer.endTimer / 1000.0 + "sec)"))
   }
 
-  override def build = new MetadataInitProcedure()
+  override def build = new InitMetadataTableProcedure()
 }
 
-object MetadataInitProcedure {
-  val NAME = "metadata_init"
+object InitMetadataTableProcedure {
+  val NAME = "init_metadata_table"
   var metadataBaseDirectory: Option[String] = None
 
   def builder: Supplier[ProcedureBuilder] = new Supplier[ProcedureBuilder] {
-    override def get() = new MetadataInitProcedure()
+    override def get() = new InitMetadataTableProcedure()
   }
 }

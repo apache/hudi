@@ -43,7 +43,7 @@ class TestExportInstantsProcedure extends HoodieSparkSqlTestBase {
       // insert data to table
       spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000")
 
-      val result = spark.sql(s"""call export_instants(table => '$tableName', localFolder => '${tmp.getCanonicalPath}/$tableName')""").limit(1).collect()
+      val result = spark.sql(s"""call export_instants(table => '$tableName', local_folder => '${tmp.getCanonicalPath}/$tableName')""").limit(1).collect()
       assertResult(1) {
         result.length
       }

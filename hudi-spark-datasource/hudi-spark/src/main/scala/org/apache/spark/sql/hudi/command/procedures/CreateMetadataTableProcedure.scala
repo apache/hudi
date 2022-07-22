@@ -19,15 +19,17 @@ package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.SparkAdapterSupport
+import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.metadata.HoodieTableMetadata
+import org.apache.hudi.common.util.HoodieTimer
+import org.apache.hudi.metadata.{HoodieTableMetadata, SparkHoodieBackedTableMetadataWriter}
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types._
 
 import java.io.FileNotFoundException
 import java.util.function.Supplier
 
-class MetadataDeleteProcedure extends BaseProcedure with ProcedureBuilder with SparkAdapterSupport {
+class CreateMetadataTableProcedure extends BaseProcedure with ProcedureBuilder with SparkAdapterSupport {
   private val PARAMETERS = Array[ProcedureParameter](
     ProcedureParameter.required(0, "table", DataTypes.StringType, None)
   )
@@ -44,28 +46,35 @@ class MetadataDeleteProcedure extends BaseProcedure with ProcedureBuilder with S
     super.checkArgs(PARAMETERS, args)
 
     val tableName = getArgValueOrDefault(args, PARAMETERS(0))
+
     val basePath = getBasePath(tableName)
     val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
     val metadataPath = new Path(HoodieTableMetadata.getMetadataTableBasePath(basePath))
 
     try {
       val statuses = metaClient.getFs.listStatus(metadataPath)
-      if (statuses.nonEmpty) metaClient.getFs.delete(metadataPath, true)
+      if (statuses.nonEmpty) {
+        throw new RuntimeException("Metadata directory (" + metadataPath.toString + ") not empty.")
+      }
     } catch {
       case e: FileNotFoundException =>
-      // Metadata directory does not exist
+        // Metadata directory does not exist yet
+        metaClient.getFs.mkdirs(metadataPath)
     }
-    Seq(Row("Removed Metadata Table from " + metadataPath))
+    val timer = new HoodieTimer().startTimer
+    val writeConfig = getWriteConfig(basePath)
+    SparkHoodieBackedTableMetadataWriter.create(metaClient.getHadoopConf, writeConfig, new HoodieSparkEngineContext(jsc))
+    Seq(Row("Created Metadata Table in " +  metadataPath + " (duration=" + timer.endTimer / 1000.0 + "secs)"))
   }
 
-  override def build = new MetadataDeleteProcedure()
+  override def build = new CreateMetadataTableProcedure()
 }
 
-object MetadataDeleteProcedure {
-  val NAME = "metadata_delete"
+object CreateMetadataTableProcedure {
+  val NAME = "create_metadata_table"
   var metadataBaseDirectory: Option[String] = None
 
   def builder: Supplier[ProcedureBuilder] = new Supplier[ProcedureBuilder] {
-    override def get() = new MetadataDeleteProcedure()
+    override def get() = new CreateMetadataTableProcedure()
   }
 }

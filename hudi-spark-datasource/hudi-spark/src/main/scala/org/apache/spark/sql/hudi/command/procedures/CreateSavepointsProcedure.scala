@@ -29,7 +29,7 @@ import java.util.function.Supplier
 class CreateSavepointsProcedure extends BaseProcedure with ProcedureBuilder with Logging {
   private val PARAMETERS = Array[ProcedureParameter](
     ProcedureParameter.required(0, "table", DataTypes.StringType, None),
-    ProcedureParameter.required(1, "commit_Time", DataTypes.StringType, None),
+    ProcedureParameter.required(1, "commit_time", DataTypes.StringType, None),
     ProcedureParameter.optional(2, "user", DataTypes.StringType, ""),
     ProcedureParameter.optional(3, "comments", DataTypes.StringType, "")
   )

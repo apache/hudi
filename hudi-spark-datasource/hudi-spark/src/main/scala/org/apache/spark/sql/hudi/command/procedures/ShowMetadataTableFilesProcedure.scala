@@ -17,8 +17,10 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
-import org.apache.hudi.client.common.HoodieSparkEngineContext
+import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hudi.common.config.HoodieMetadataConfig
+import org.apache.hudi.common.engine.HoodieLocalEngineContext
+import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.HoodieTimer
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.metadata.HoodieBackedTableMetadata
@@ -27,17 +29,16 @@ import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util
-import java.util.Collections
 import java.util.function.Supplier
-import scala.collection.JavaConverters.asScalaIteratorConverter
 
-class ListMetadataPartitionsProcedure() extends BaseProcedure with ProcedureBuilder with Logging {
+class ShowMetadataTableFilesProcedure() extends BaseProcedure with ProcedureBuilder with Logging {
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType, None)
+    ProcedureParameter.required(0, "table", DataTypes.StringType, None),
+    ProcedureParameter.optional(1, "partition", DataTypes.StringType, None)
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
-    StructField("partition", DataTypes.StringType, nullable = true, Metadata.empty)
+    StructField("file_path", DataTypes.StringType, nullable = true, Metadata.empty)
   ))
 
   def parameters: Array[ProcedureParameter] = PARAMETERS
@@ -48,34 +49,35 @@ class ListMetadataPartitionsProcedure() extends BaseProcedure with ProcedureBuil
     super.checkArgs(PARAMETERS, args)
 
     val table = getArgValueOrDefault(args, PARAMETERS(0))
+    val partition = getArgValueOrDefault(args, PARAMETERS(1)).get.asInstanceOf[String]
 
     val basePath = getBasePath(table)
+    val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
     val config = HoodieMetadataConfig.newBuilder.enable(true).build
-    val metadata = new HoodieBackedTableMetadata(new HoodieSparkEngineContext(jsc),
+    val metaReader = new HoodieBackedTableMetadata(new HoodieLocalEngineContext(metaClient.getHadoopConf),
       config, basePath, "/tmp")
-    if (!metadata.enabled){
+    if (!metaReader.enabled){
       throw new HoodieException(s"Metadata Table not enabled/initialized.")
     }
 
     val timer = new HoodieTimer().startTimer
-    val partitions = metadata.getAllPartitionPaths
-    Collections.sort(partitions)
+    val statuses = metaReader.getAllFilesInPartition(new Path(basePath, partition))
     logDebug("Took " + timer.endTimer + " ms")
 
     val rows = new util.ArrayList[Row]
-    partitions.stream.iterator().asScala.foreach((p: String) => {
-        rows.add(Row(p))
+    statuses.toStream.sortBy(p => p.getPath.getName).foreach((f: FileStatus) => {
+        rows.add(Row(f.getPath.getName))
     })
     rows.stream().toArray().map(r => r.asInstanceOf[Row]).toList
   }
 
-  override def build: Procedure = new ListMetadataPartitionsProcedure()
+  override def build: Procedure = new ShowMetadataTableFilesProcedure()
 }
 
-object ListMetadataPartitionsProcedure {
-  val NAME = "list_metadata_partitions"
+object ShowMetadataTableFilesProcedure {
+  val NAME = "show_metadata_table_files"
 
   def builder: Supplier[ProcedureBuilder] = new Supplier[ProcedureBuilder] {
-    override def get() = new ListMetadataPartitionsProcedure()
+    override def get() = new ShowMetadataTableFilesProcedure()
   }
 }

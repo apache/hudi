@@ -36,8 +36,8 @@ class ShowArchivedCommitsProcedure(includeExtraMetadata: Boolean) extends BasePr
   private val PARAMETERS = Array[ProcedureParameter](
     ProcedureParameter.required(0, "table", DataTypes.StringType, None),
     ProcedureParameter.optional(1, "limit", DataTypes.IntegerType, 10),
-    ProcedureParameter.optional(2, "startTs", DataTypes.StringType, ""),
-    ProcedureParameter.optional(3, "endTs", DataTypes.StringType, "")
+    ProcedureParameter.optional(2, "start_ts", DataTypes.StringType, ""),
+    ProcedureParameter.optional(3, "end_ts", DataTypes.StringType, "")
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -63,7 +63,7 @@ class ShowArchivedCommitsProcedure(includeExtraMetadata: Boolean) extends BasePr
     StructField("num_update_writes", DataTypes.LongType, nullable = true, Metadata.empty),
     StructField("total_errors", DataTypes.LongType, nullable = true, Metadata.empty),
     StructField("total_log_blocks", DataTypes.LongType, nullable = true, Metadata.empty),
-    StructField("total_corrupt_logblocks", DataTypes.LongType, nullable = true, Metadata.empty),
+    StructField("total_corrupt_log_blocks", DataTypes.LongType, nullable = true, Metadata.empty),
     StructField("total_rollback_blocks", DataTypes.LongType, nullable = true, Metadata.empty),
     StructField("total_log_records", DataTypes.LongType, nullable = true, Metadata.empty),
     StructField("total_updated_records_compacted", DataTypes.LongType, nullable = true, Metadata.empty),

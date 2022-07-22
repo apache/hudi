@@ -34,7 +34,7 @@ import java.util.function.Supplier
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters.asScalaIteratorConverter
 
-class ValidateMetadataFilesProcedure() extends BaseProcedure with ProcedureBuilder with Logging {
+class ValidateMetadataTableFilesProcedure() extends BaseProcedure with ProcedureBuilder with Logging {
   private val PARAMETERS = Array[ProcedureParameter](
     ProcedureParameter.required(0, "table", DataTypes.StringType, None),
     ProcedureParameter.optional(1, "verbose", DataTypes.BooleanType, false)
@@ -135,13 +135,13 @@ class ValidateMetadataFilesProcedure() extends BaseProcedure with ProcedureBuild
     rows.stream().toArray().map(r => r.asInstanceOf[Row]).toList
   }
 
-  override def build: Procedure = new ValidateMetadataFilesProcedure()
+  override def build: Procedure = new ValidateMetadataTableFilesProcedure()
 }
 
-object ValidateMetadataFilesProcedure {
-  val NAME = "validate_metadata_files"
+object ValidateMetadataTableFilesProcedure {
+  val NAME = "validate_metadata_table_files"
 
   def builder: Supplier[ProcedureBuilder] = new Supplier[ProcedureBuilder] {
-    override def get() = new ValidateMetadataFilesProcedure()
+    override def get() = new ValidateMetadataTableFilesProcedure()
   }
 }

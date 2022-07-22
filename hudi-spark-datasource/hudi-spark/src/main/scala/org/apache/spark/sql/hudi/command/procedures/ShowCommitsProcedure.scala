@@ -61,7 +61,7 @@ class ShowCommitsProcedure(includeExtraMetadata: Boolean) extends BaseProcedure 
     StructField("num_update_writes", DataTypes.LongType, nullable = true, Metadata.empty),
     StructField("total_errors", DataTypes.LongType, nullable = true, Metadata.empty),
     StructField("total_log_blocks", DataTypes.LongType, nullable = true, Metadata.empty),
-    StructField("total_corrupt_logblocks", DataTypes.LongType, nullable = true, Metadata.empty),
+    StructField("total_corrupt_log_blocks", DataTypes.LongType, nullable = true, Metadata.empty),
     StructField("total_rollback_blocks", DataTypes.LongType, nullable = true, Metadata.empty),
     StructField("total_log_records", DataTypes.LongType, nullable = true, Metadata.empty),
     StructField("total_updated_records_compacted", DataTypes.LongType, nullable = true, Metadata.empty),
