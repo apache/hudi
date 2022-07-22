@@ -18,7 +18,7 @@
 package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
+import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.exception.{HoodieException, HoodieSavepointException}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
@@ -26,16 +26,14 @@ import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util.function.Supplier
 
-class CreateSavepointsProcedure extends BaseProcedure with ProcedureBuilder with Logging {
+class RollbackToSavepointProcedure extends BaseProcedure with ProcedureBuilder with Logging {
   private val PARAMETERS = Array[ProcedureParameter](
     ProcedureParameter.required(0, "table", DataTypes.StringType, None),
-    ProcedureParameter.required(1, "commit_time", DataTypes.StringType, None),
-    ProcedureParameter.optional(2, "user", DataTypes.StringType, ""),
-    ProcedureParameter.optional(3, "comments", DataTypes.StringType, "")
+    ProcedureParameter.required(1, "instant_time", DataTypes.StringType, None)
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
-    StructField("create_savepoint_result", DataTypes.BooleanType, nullable = true, Metadata.empty))
+    StructField("rollback_savepoint_result", DataTypes.BooleanType, nullable = true, Metadata.empty))
   )
 
   def parameters: Array[ProcedureParameter] = PARAMETERS
@@ -46,28 +44,29 @@ class CreateSavepointsProcedure extends BaseProcedure with ProcedureBuilder with
     super.checkArgs(PARAMETERS, args)
 
     val tableName = getArgValueOrDefault(args, PARAMETERS(0))
-    val commitTime = getArgValueOrDefault(args, PARAMETERS(1)).get.asInstanceOf[String]
-    val user = getArgValueOrDefault(args, PARAMETERS(2)).get.asInstanceOf[String]
-    val comments = getArgValueOrDefault(args, PARAMETERS(3)).get.asInstanceOf[String]
+    val instantTime = getArgValueOrDefault(args, PARAMETERS(1)).get.asInstanceOf[String]
 
     val basePath: String = getBasePath(tableName)
     val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
 
-    val activeTimeline: HoodieActiveTimeline = metaClient.getActiveTimeline
-    if (!activeTimeline.getCommitsTimeline.filterCompletedInstants.containsInstant(commitTime)) {
-      throw new HoodieException("Commit " + commitTime + " not found in Commits " + activeTimeline)
+    val completedInstants = metaClient.getActiveTimeline.getSavePointTimeline.filterCompletedInstants
+    if (completedInstants.empty) throw new HoodieException("There are no completed savepoint to run delete")
+    val savePoint = new HoodieInstant(false, HoodieTimeline.SAVEPOINT_ACTION, instantTime)
+
+    if (!completedInstants.containsInstant(savePoint)) {
+      throw new HoodieException("Commit " + instantTime + " not found in Commits " + completedInstants)
     }
 
     val client = createHoodieClient(jsc, basePath)
     var result = false
 
     try {
-      client.savepoint(commitTime, user, comments)
-      logInfo(s"The commit $commitTime has been savepointed.")
+      client.restoreToSavepoint(instantTime)
+      logInfo("The commit $instantTime rolled back.")
       result = true
     } catch {
       case _: HoodieSavepointException =>
-        logWarning(s"Failed: Could not create savepoint $commitTime.")
+        logWarning(s"The commit $instantTime failed to roll back.")
     } finally {
       client.close()
     }
@@ -75,16 +74,17 @@ class CreateSavepointsProcedure extends BaseProcedure with ProcedureBuilder with
     Seq(Row(result))
   }
 
-  override def build: Procedure = new CreateSavepointsProcedure()
+  override def build: Procedure = new RollbackToSavepointProcedure()
 }
 
-object CreateSavepointsProcedure {
-  val NAME: String = "create_savepoints"
+object RollbackToSavepointProcedure {
+  val NAME: String = "rollback_to_savepoint"
 
   def builder: Supplier[ProcedureBuilder] = new Supplier[ProcedureBuilder] {
-    override def get(): CreateSavepointsProcedure = new CreateSavepointsProcedure()
+    override def get(): RollbackToSavepointProcedure = new RollbackToSavepointProcedure()
   }
 }
+
 
 
 
