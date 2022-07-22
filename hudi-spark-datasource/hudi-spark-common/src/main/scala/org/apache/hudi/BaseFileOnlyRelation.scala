@@ -20,6 +20,7 @@ package org.apache.hudi
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
+import org.apache.hudi.HoodieBaseRelation.projectReader
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.hadoop.HoodieROTablePathFilter
 import org.apache.spark.rdd.RDD
@@ -88,7 +89,15 @@ class BaseFileOnlyRelation(sqlContext: SQLContext,
       hadoopConf = embedInternalSchema(new Configuration(conf), requiredSchema.internalSchema)
     )
 
-    new HoodieFileScanRDD(sparkSession, baseFileReader.apply, fileSplits)
+    // NOTE: In some case schema of the reader's output (reader's schema) might not match the schema expected by the caller.
+    //       This could occur for ex, when requested schema contains partition columns which might not be persisted w/in the
+    //       data file, but instead would be parsed from the partition path. In that case output of the file-reader will have
+    //       different ordering of the fields than the original required schema (for more details please check out
+    //       [[ParquetFileFormat]] impl). In that case we have to project the rows from the file-reader's schema
+    //       back into the one expected by the caller
+    val projectedReader = projectReader(baseFileReader, requiredSchema.structTypeSchema)
+
+    new HoodieFileScanRDD(sparkSession, projectedReader.apply, fileSplits)
   }
 
   protected def collectFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[HoodieBaseFileSplit] = {

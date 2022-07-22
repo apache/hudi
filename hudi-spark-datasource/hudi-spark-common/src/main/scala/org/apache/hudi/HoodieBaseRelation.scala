@@ -541,7 +541,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     val (read: (PartitionedFile => Iterator[InternalRow]), schema: StructType) =
       tableBaseFileFormat match {
         case HoodieFileFormat.PARQUET =>
-          val rawParquetReader = HoodieDataSourceHelper.buildHoodieParquetReader(
+          val parquetReader = HoodieDataSourceHelper.buildHoodieParquetReader(
             sparkSession = spark,
             dataSchema = dataSchema.structTypeSchema,
             partitionSchema = partitionSchema,
@@ -558,24 +558,9 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
           // the data. As such, actual full schema produced by such reader is composed of
           //    a) Data-file schema (projected or not)
           //    b) Appended partition column values
-          val fileReaderSchema = StructType(requiredDataSchema.structTypeSchema.fields ++ partitionSchema.fields)
+          val readerSchema = StructType(requiredDataSchema.structTypeSchema.fields ++ partitionSchema.fields)
 
-          // NOTE: In case when file reader's schema doesn't match the schema expected by the caller (for ex, if it contains
-          //       partition columns which might not be persisted w/in the data file, and therefore would be pruned from the required
-          //       schema and appended into the resulting one), we have to project the rows from the base file-reader schema
-          //       back into the one expected by the caller
-          val projectedReader = if (fileReaderSchema == requiredDataSchema.structTypeSchema) {
-            rawParquetReader
-          } else {
-            file: PartitionedFile => {
-              // NOTE: Projection is not a serializable object, hence it creation should only happen w/in
-              //       the executor process
-              val unsafeProjection = generateUnsafeProjection(fileReaderSchema, requiredDataSchema.structTypeSchema)
-              rawParquetReader.apply(file).map(unsafeProjection)
-            }
-          }
-
-          (projectedReader, fileReaderSchema)
+          (parquetReader, readerSchema)
 
       case HoodieFileFormat.HFILE =>
         (
@@ -658,7 +643,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
 
 object HoodieBaseRelation extends SparkAdapterSupport {
 
-  case class BaseFileReader(read: PartitionedFile => Iterator[InternalRow], schema: StructType) {
+  case class BaseFileReader(read: PartitionedFile => Iterator[InternalRow], val schema: StructType) {
     def apply(file: PartitionedFile): Iterator[InternalRow] = read.apply(file)
   }
 
@@ -670,6 +655,30 @@ object HoodieBaseRelation extends SparkAdapterSupport {
 
   def getPartitionPath(fileStatus: FileStatus): Path =
     fileStatus.getPath.getParent
+
+  /**
+   * TODO scala-doc
+   *
+   * @param reader
+   * @param readerSchema
+   * @param requiredSchema
+   * @return
+   */
+  def projectReader(reader: BaseFileReader, requiredSchema: StructType): BaseFileReader = {
+    if (reader.schema == requiredSchema) {
+      reader
+    } else {
+      val read = reader.apply(_)
+      val projectedRead: PartitionedFile => Iterator[InternalRow] = (file: PartitionedFile) => {
+        // NOTE: Projection is not a serializable object, hence it creation should only happen w/in
+        //       the executor process
+        val unsafeProjection = generateUnsafeProjection(reader.schema, requiredSchema)
+        read(file).map(unsafeProjection)
+      }
+
+      BaseFileReader(projectedRead, requiredSchema)
+    }
+  }
 
   /**
    * Projects provided schema by picking only required (projected) top-level columns from it
