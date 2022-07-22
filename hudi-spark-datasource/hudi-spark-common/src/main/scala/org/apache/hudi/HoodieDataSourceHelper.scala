@@ -82,23 +82,4 @@ object HoodieDataSourceHelper extends PredicateHelper with SparkAdapterSupport {
       PartitionedFile(partitionValues, filePath.toUri.toString, offset, size)
     }
   }
-
-  /**
-    * Set internalSchema evolution parameters to configuration.
-    * spark will broadcast them to each executor, we use those parameters to do schema evolution.
-    *
-    * @param conf hadoop conf.
-    * @param internalSchema internalschema for query.
-    * @param tablePath hoodie table base path.
-    * @param validCommits valid commits, using give validCommits to validate all legal histroy Schema files, and return the latest one.
-    */
-  def getConfigurationWithInternalSchema(conf: Configuration, internalSchema: InternalSchema, tablePath: String, validCommits: String): Configuration = {
-    val querySchemaString = SerDeHelper.toJson(internalSchema)
-    if (!isNullOrEmpty(querySchemaString)) {
-      conf.set(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA, SerDeHelper.toJson(internalSchema))
-      conf.set(SparkInternalSchemaConverter.HOODIE_TABLE_PATH, tablePath)
-      conf.set(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST, validCommits)
-    }
-    conf
-  }
 }

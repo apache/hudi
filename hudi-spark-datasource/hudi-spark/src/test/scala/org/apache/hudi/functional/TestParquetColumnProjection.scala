@@ -18,6 +18,7 @@
 package org.apache.hudi.functional
 
 import org.apache.avro.Schema
+import org.apache.hudi.HoodieBaseRelation.projectSchema
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.{HoodieRecord, OverwriteNonDefaultsWithLatestAvroPayload}
 import org.apache.hudi.common.table.HoodieTableConfig
@@ -333,7 +334,7 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
       }
 
       val readColumns = targetColumns ++ relation.mandatoryFields
-      val (_, projectedStructType, _) = HoodieSparkUtils.getRequiredSchema(tableState.schema, readColumns)
+      val (_, projectedStructType, _) = projectSchema(Left(tableState.schema), readColumns)
 
       val row: InternalRow = rows.take(1).head
 

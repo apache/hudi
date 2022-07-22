@@ -480,6 +480,8 @@ public class TestInputFormat {
     options.put(FlinkOptions.ARCHIVE_MIN_COMMITS.key(), "3");
     options.put(FlinkOptions.ARCHIVE_MAX_COMMITS.key(), "4");
     options.put(FlinkOptions.CLEAN_RETAIN_COMMITS.key(), "2");
+    // disable the metadata table to make the archiving behavior deterministic
+    options.put(FlinkOptions.METADATA_ENABLED.key(), "false");
     options.put("hoodie.commits.archival.batch", "1");
     beforeEach(HoodieTableType.COPY_ON_WRITE, options);
 

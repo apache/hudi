@@ -18,6 +18,7 @@
 
 package org.apache.hudi.client;
 
+import org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
@@ -50,6 +51,7 @@ import org.apache.hudi.timeline.service.handlers.marker.AsyncTimelineMarkerEarly
 import org.apache.spark.SparkException;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -75,7 +77,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.config.LockConfiguration.FILESYSTEM_LOCK_EXPIRE_PROP_KEY;
 import static org.apache.hudi.common.config.LockConfiguration.FILESYSTEM_LOCK_PATH_PROP_KEY;
+import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_NUM_RETRIES_PROP_KEY;
+import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY;
+import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -85,6 +91,21 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
+
+  private Properties lockProperties = null;
+
+  @BeforeEach
+  public void setup() throws IOException {
+    if (lockProperties == null) {
+      lockProperties = new Properties();
+      lockProperties.setProperty(FILESYSTEM_LOCK_PATH_PROP_KEY, basePath + "/.hoodie/.locks");
+      lockProperties.setProperty(LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY, "3000");
+      lockProperties.setProperty(FILESYSTEM_LOCK_EXPIRE_PROP_KEY, "1");
+      lockProperties.setProperty(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY, "1000");
+      lockProperties.setProperty(LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY, "1000");
+      lockProperties.setProperty(LOCK_ACQUIRE_NUM_RETRIES_PROP_KEY, "3");
+    }
+  }
 
   public void setUpMORTestTable() throws IOException {
     cleanupResources();
@@ -100,6 +121,19 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
   @AfterEach
   public void clean() throws IOException {
     cleanupResources();
+  }
+
+  private static final List<Class> LOCK_PROVIDER_CLASSES = Arrays.asList(
+      InProcessLockProvider.class,
+      FileSystemBasedLockProvider.class);
+
+  private static Iterable<Object[]> providerClassAndTableType() {
+    List<Object[]> opts = new ArrayList<>();
+    for (Object providerClass : LOCK_PROVIDER_CLASSES) {
+      opts.add(new Object[] {HoodieTableType.COPY_ON_WRITE, providerClass});
+      opts.add(new Object[] {HoodieTableType.MERGE_ON_READ, providerClass});
+    }
+    return opts;
   }
 
   /**
@@ -165,14 +199,13 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
   }
 
   @ParameterizedTest
-  @EnumSource(value = HoodieTableType.class, names = {"COPY_ON_WRITE", "MERGE_ON_READ"})
-  public void testHoodieClientBasicMultiWriter(HoodieTableType tableType) throws Exception {
+  @MethodSource("providerClassAndTableType")
+  public void testHoodieClientBasicMultiWriter(HoodieTableType tableType, Class providerClass) throws Exception {
     if (tableType == HoodieTableType.MERGE_ON_READ) {
       setUpMORTestTable();
     }
-    Properties properties = new Properties();
-    properties.setProperty(FILESYSTEM_LOCK_PATH_PROP_KEY, basePath + "/.hoodie/.locks");
-    properties.setProperty(LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY, "3000");
+    lockProperties.setProperty(LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY, "3000");
+
     HoodieWriteConfig writeConfig = getConfigBuilder()
         .withCleanConfig(HoodieCleanConfig.newBuilder()
             .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
@@ -182,8 +215,8 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
         .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
         // Timeline-server-based markers are not used for multi-writer tests
         .withMarkersType(MarkerType.DIRECT.name())
-        .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class)
-            .build()).withAutoCommit(false).withProperties(properties).build();
+        .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(providerClass)
+            .build()).withAutoCommit(false).withProperties(lockProperties).build();
 
     // Create the first commit
     createCommitWithBulkInserts(writeConfig, getHoodieWriteClient(writeConfig), "000", "001", 200, true);
@@ -244,16 +277,6 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     assertTrue(writer1Completed.get() && writer2Completed.get());
   }
 
-  @Test
-  public void testMultiWriterWithAsyncTableServicesWithConflictCOW() throws Exception {
-    testMultiWriterWithAsyncTableServicesWithConflict(HoodieTableType.COPY_ON_WRITE);
-  }
-
-  @Test
-  public void testMultiWriterWithAsyncTableServicesWithConflictMOR() throws Exception {
-    testMultiWriterWithAsyncTableServicesWithConflict(HoodieTableType.MERGE_ON_READ);
-  }
-
   @ParameterizedTest
   @EnumSource(value = HoodieTableType.class, names = {"COPY_ON_WRITE", "MERGE_ON_READ"})
   public void testMultiWriterWithInsertsToDistinctPartitions(HoodieTableType tableType) throws Exception {
@@ -261,11 +284,9 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
       setUpMORTestTable();
     }
 
-    Properties properties = new Properties();
-    properties.setProperty(FILESYSTEM_LOCK_PATH_PROP_KEY, basePath + "/.hoodie/.locks");
-    properties.setProperty(LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY, "3000");
-    properties.setProperty(LockConfiguration.LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY, "3000");
-    properties.setProperty(LockConfiguration.LOCK_ACQUIRE_CLIENT_NUM_RETRIES_PROP_KEY, "20");
+    lockProperties.setProperty(LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY, "3000");
+    lockProperties.setProperty(LockConfiguration.LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY, "3000");
+    lockProperties.setProperty(LockConfiguration.LOCK_ACQUIRE_CLIENT_NUM_RETRIES_PROP_KEY, "20");
 
     HoodieWriteConfig cfg = getConfigBuilder()
         .withCleanConfig(HoodieCleanConfig.newBuilder()
@@ -282,7 +303,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
         .withAutoCommit(false)
         // Timeline-server-based markers are not used for multi-writer tests
         .withMarkersType(MarkerType.DIRECT.name())
-        .withProperties(properties)
+        .withProperties(lockProperties)
         .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder().withStorageType(FileSystemViewStorageType.REMOTE_FIRST)
             .withSecondaryStorageType(FileSystemViewStorageType.MEMORY).build())
         .build();
@@ -332,15 +353,13 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     }
   }
 
-  private void testMultiWriterWithAsyncTableServicesWithConflict(HoodieTableType tableType) throws Exception {
+  @ParameterizedTest
+  @MethodSource("providerClassAndTableType")
+  public void testMultiWriterWithAsyncTableServicesWithConflict(HoodieTableType tableType, Class providerClass) throws Exception {
     // create inserts X 1
     if (tableType == HoodieTableType.MERGE_ON_READ) {
       setUpMORTestTable();
     }
-    Properties properties = new Properties();
-    properties.setProperty(FILESYSTEM_LOCK_PATH_PROP_KEY, basePath + "/.hoodie/.locks");
-    properties.setProperty(FILESYSTEM_LOCK_PATH_PROP_KEY, basePath);
-    properties.setProperty(LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY, "3000");
     // Disabling embedded timeline server, it doesn't work with multiwriter
     HoodieWriteConfig.Builder writeConfigBuilder = getConfigBuilder()
         .withCleanConfig(HoodieCleanConfig.newBuilder()
@@ -356,8 +375,8 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
         .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder().withStorageType(
             FileSystemViewStorageType.MEMORY).build())
         .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
-        .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class)
-            .build()).withAutoCommit(false).withProperties(properties);
+        .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(providerClass)
+            .build()).withAutoCommit(false).withProperties(lockProperties);
     Set<String> validInstants = new HashSet<>();
     // Create the first commit with inserts
     HoodieWriteConfig cfg = writeConfigBuilder.build();
@@ -530,10 +549,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
 
   @Test
   public void testHoodieClientMultiWriterAutoCommitForConflict() throws Exception {
-    Properties properties = new Properties();
-    properties.setProperty(FILESYSTEM_LOCK_PATH_PROP_KEY, basePath + "/.hoodie/.locks");
-    properties.setProperty(LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY, "3000");
-    properties.setProperty(LockConfiguration.LOCK_ACQUIRE_CLIENT_NUM_RETRIES_PROP_KEY, "100");
+    lockProperties.setProperty(LockConfiguration.LOCK_ACQUIRE_CLIENT_NUM_RETRIES_PROP_KEY, "100");
     HoodieWriteConfig.Builder writeConfigBuilder = getConfigBuilder()
         .withCleanConfig(HoodieCleanConfig.newBuilder()
             .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
@@ -542,7 +558,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
         // Timeline-server-based markers are not used for multi-writer tests
         .withMarkersType(MarkerType.DIRECT.name())
         .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class)
-            .build()).withAutoCommit(true).withProperties(properties);
+            .build()).withAutoCommit(true).withProperties(lockProperties);
     HoodieWriteConfig cfg = writeConfigBuilder.build();
     HoodieWriteConfig cfg2 = writeConfigBuilder.build();
 

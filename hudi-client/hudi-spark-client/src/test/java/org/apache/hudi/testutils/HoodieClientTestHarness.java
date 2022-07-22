@@ -199,7 +199,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
 
     if (sparkSessionExtensionsInjector.isPresent()) {
       // In case we need to inject extensions into Spark Session, we have
-      // to stop any session that might still be active and since Spark will try
+      // to stop any session that might still be active, since Spark will try
       // to re-use it
       HoodieConversionUtils.toJavaOption(SparkSession.getActiveSession())
           .ifPresent(SparkSession::stop);

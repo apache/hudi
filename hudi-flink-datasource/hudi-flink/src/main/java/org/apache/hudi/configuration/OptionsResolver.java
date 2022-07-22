@@ -27,6 +27,7 @@ import org.apache.hudi.table.format.FilePathUtils;
 import org.apache.flink.configuration.Configuration;
 
 import java.util.Locale;
+import java.util.Map;
 
 /**
  * Tool helping to resolve the flink options {@link FlinkOptions}.
@@ -64,6 +65,14 @@ public class OptionsResolver {
     return conf.getString(FlinkOptions.TABLE_TYPE)
         .toUpperCase(Locale.ROOT)
         .equals(FlinkOptions.TABLE_TYPE_MERGE_ON_READ);
+  }
+
+  /**
+   * Returns whether it is a MERGE_ON_READ table.
+   */
+  public static boolean isMorTable(Map<String, String> options) {
+    return options.getOrDefault(FlinkOptions.TABLE_TYPE.key(),
+        FlinkOptions.TABLE_TYPE.defaultValue()).equalsIgnoreCase(FlinkOptions.TABLE_TYPE_MERGE_ON_READ);
   }
 
   /**

@@ -44,25 +44,24 @@ import org.apache.hudi.avro.HoodieAvroUtils
 
 import scala.collection.JavaConverters._
 
-object HoodieSparkUtils extends SparkAdapterSupport {
+private[hudi] trait SparkVersionsSupport {
+  def getSparkVersion: String
 
-  def isSpark2: Boolean = SPARK_VERSION.startsWith("2.")
+  def isSpark2: Boolean = getSparkVersion.startsWith("2.")
+  def isSpark3: Boolean = getSparkVersion.startsWith("3.")
+  def isSpark3_0: Boolean = getSparkVersion.startsWith("3.0")
+  def isSpark3_1: Boolean = getSparkVersion.startsWith("3.1")
+  def isSpark3_2: Boolean = getSparkVersion.startsWith("3.2")
 
-  def isSpark3: Boolean = SPARK_VERSION.startsWith("3.")
+  def gteqSpark3_1: Boolean = getSparkVersion >= "3.1"
+  def gteqSpark3_1_3: Boolean = getSparkVersion >= "3.1.3"
+  def gteqSpark3_2: Boolean = getSparkVersion >= "3.2"
+  def gteqSpark3_2_1: Boolean = getSparkVersion >= "3.2.1"
+}
 
-  def isSpark3_0: Boolean = SPARK_VERSION.startsWith("3.0")
+object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport {
 
-  def isSpark3_1: Boolean = SPARK_VERSION.startsWith("3.1")
-
-  def gteqSpark3_1: Boolean = SPARK_VERSION > "3.1"
-
-  def gteqSpark3_1_3: Boolean = SPARK_VERSION >= "3.1.3"
-
-  def isSpark3_2: Boolean = SPARK_VERSION.startsWith("3.2")
-
-  def gteqSpark3_2: Boolean = SPARK_VERSION > "3.2"
-
-  def gteqSpark3_2_1: Boolean = SPARK_VERSION >= "3.2.1"
+  override def getSparkVersion: String = SPARK_VERSION
 
   def getMetaSchema: StructType = {
     StructType(HoodieRecord.HOODIE_META_COLUMNS.asScala.map(col => {
@@ -268,15 +267,15 @@ object HoodieSparkUtils extends SparkAdapterSupport {
         case StringStartsWith(attribute, value) =>
           val leftExp = toAttribute(attribute, tableSchema)
           val rightExp = Literal.create(s"$value%")
-          sparkAdapter.createLike(leftExp, rightExp)
+          sparkAdapter.getCatalystPlanUtils.createLike(leftExp, rightExp)
         case StringEndsWith(attribute, value) =>
           val leftExp = toAttribute(attribute, tableSchema)
           val rightExp = Literal.create(s"%$value")
-          sparkAdapter.createLike(leftExp, rightExp)
+          sparkAdapter.getCatalystPlanUtils.createLike(leftExp, rightExp)
         case StringContains(attribute, value) =>
           val leftExp = toAttribute(attribute, tableSchema)
           val rightExp = Literal.create(s"%$value%")
-          sparkAdapter.createLike(leftExp, rightExp)
+          sparkAdapter.getCatalystPlanUtils.createLike(leftExp, rightExp)
         case _ => null
       }
     )
@@ -317,39 +316,5 @@ object HoodieSparkUtils extends SparkAdapterSupport {
     assert(field.isDefined, s"Cannot find column: $columnName, Table Columns are: " +
       s"${tableSchema.fieldNames.mkString(",")}")
     AttributeReference(columnName, field.get.dataType, field.get.nullable)()
-  }
-
-  def getRequiredSchema(tableAvroSchema: Schema, requiredColumns: Array[String], internalSchema: InternalSchema = InternalSchema.getEmptyInternalSchema): (Schema, StructType, InternalSchema) = {
-    if (internalSchema.isEmptySchema || requiredColumns.isEmpty) {
-      // First get the required avro-schema, then convert the avro-schema to spark schema.
-      val name2Fields = tableAvroSchema.getFields.asScala.map(f => f.name() -> f).toMap
-      // Here have to create a new Schema.Field object
-      // to prevent throwing exceptions like "org.apache.avro.AvroRuntimeException: Field already used".
-      val requiredFields = requiredColumns.map(c => name2Fields(c))
-        .map(f => new Schema.Field(f.name(), f.schema(), f.doc(), f.defaultVal(), f.order())).toList
-      val requiredAvroSchema = Schema.createRecord(tableAvroSchema.getName, tableAvroSchema.getDoc,
-        tableAvroSchema.getNamespace, tableAvroSchema.isError, requiredFields.asJava)
-      val requiredStructSchema = AvroConversionUtils.convertAvroSchemaToStructType(requiredAvroSchema)
-      (requiredAvroSchema, requiredStructSchema, internalSchema)
-    } else {
-      // now we support nested project
-      val prunedInternalSchema = InternalSchemaUtils.pruneInternalSchema(internalSchema, requiredColumns.toList.asJava)
-      val requiredAvroSchema = AvroInternalSchemaConverter.convert(prunedInternalSchema, tableAvroSchema.getName)
-      val requiredStructSchema = AvroConversionUtils.convertAvroSchemaToStructType(requiredAvroSchema)
-      (requiredAvroSchema, requiredStructSchema, prunedInternalSchema)
-    }
-  }
-
-  def toAttribute(tableSchema: StructType): Seq[AttributeReference] = {
-    tableSchema.map { field =>
-      AttributeReference(field.name, field.dataType, field.nullable, field.metadata)()
-    }
-  }
-
-  def collectFieldIndexes(projectedSchema: StructType, originalSchema: StructType): Seq[Int] = {
-    val nameToIndex = originalSchema.fields.zipWithIndex.map{ case (field, index) =>
-      field.name -> index
-    }.toMap
-    projectedSchema.map(field => nameToIndex(field.name))
   }
 }

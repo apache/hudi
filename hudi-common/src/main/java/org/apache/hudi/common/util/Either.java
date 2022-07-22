@@ -20,7 +20,7 @@ package org.apache.hudi.common.util;
 
 import javax.annotation.Nonnull;
 
-import static org.apache.hudi.TypeUtils.unsafeCast;
+import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 
 /**
  * Utility that could hold exclusively only either of (hence the name):

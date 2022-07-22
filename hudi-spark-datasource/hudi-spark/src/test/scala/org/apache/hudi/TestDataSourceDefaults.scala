@@ -256,6 +256,8 @@ class TestDataSourceDefaults {
       getKey(genericRecord).getRecordKey
     }
 
+    override def getRecordKey(row: InternalRow, schema: StructType): String = null
+
     override def getPartitionPath(row: Row): String = {
       if (null == converterFn) converterFn = AvroConversionUtils.createConverterToAvro(row.schema, STRUCT_NAME, NAMESPACE)
       val genericRecord = converterFn.apply(row).asInstanceOf[GenericRecord]

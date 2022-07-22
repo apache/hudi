@@ -55,6 +55,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
+import org.apache.hudi.util.Lazy;
 
 import org.apache.avro.AvroTypeException;
 import org.apache.avro.LogicalTypes;
@@ -63,7 +64,6 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.util.Lazy;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -409,8 +409,11 @@ public class HoodieTableMetadataUtil {
         LOG.error("Failed to find path in write stat to update metadata table " + hoodieWriteStat);
         return Collections.emptyListIterator();
       }
-      int offset = partition.equals(NON_PARTITIONED_NAME) ? (pathWithPartition.startsWith("/") ? 1 : 0) :
-          partition.length() + 1;
+
+      // For partitioned table, "partition" contains the relative partition path;
+      // for non-partitioned table, "partition" is empty
+      int offset = StringUtils.isNullOrEmpty(partition)
+          ? (pathWithPartition.startsWith("/") ? 1 : 0) : partition.length() + 1;
 
       final String fileName = pathWithPartition.substring(offset);
       if (!FSUtils.isBaseFile(new Path(fileName))) {
@@ -1221,9 +1224,16 @@ public class HoodieTableMetadataUtil {
     if (isBootstrapCompleted) {
       final List<FileSlice> latestFileSlices = HoodieTableMetadataUtil
           .getPartitionLatestFileSlices(metaClient.get(), fsView, partitionType.getPartitionPath());
+      if (latestFileSlices.size() == 0 && !partitionType.getPartitionPath().equals(MetadataPartitionType.FILES.getPartitionPath())) {
+        return getFileGroupCount(partitionType, metadataConfig);
+      }
       return Math.max(latestFileSlices.size(), 1);
     }
 
+    return getFileGroupCount(partitionType, metadataConfig);
+  }
+
+  private static int getFileGroupCount(MetadataPartitionType partitionType, final HoodieMetadataConfig metadataConfig) {
     switch (partitionType) {
       case BLOOM_FILTERS:
         return metadataConfig.getBloomFilterIndexFileGroupCount();
