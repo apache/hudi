@@ -56,16 +56,13 @@ class ColumnStatsIndexSupport(spark: SparkSession,
                               @transient metaClient: HoodieTableMetaClient,
                               allowCaching: Boolean = false) {
 
-  checkState(metadataConfig.enabled, "Metadata Table support has to be enabled")
-  checkState(isIndexAvailable, s"Column Stats Index has to be available for ${metaClient.getTableConfig.getTableName}")
-
   @transient private lazy val engineCtx = new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext))
   @transient private lazy val metadataTable: HoodieTableMetadata =
     HoodieTableMetadata.create(engineCtx, metadataConfig, metaClient.getBasePathV2.toString, FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue)
 
   @transient private lazy val cachedColumnStatsIndexViews: ParHashMap[Seq[String], DataFrame] = ParHashMap()
 
-  private val indexedColumns: Set[String] = {
+  private lazy val indexedColumns: Set[String] = {
     val customIndexedColumns = metadataConfig.getColumnsEnabledForColumnStatsIndex
     // Column Stats Index could index either
     //    - The whole table
@@ -81,8 +78,10 @@ class ColumnStatsIndexSupport(spark: SparkSession,
    * Returns true in cases when Column Stats Index is built and available as standalone partition
    * w/in the Metadata Table
    */
-  def isIndexAvailable: Boolean =
+  def isIndexAvailable: Boolean = {
+    checkState(metadataConfig.enabled, "Metadata Table support has to be enabled")
     metaClient.getTableConfig.getMetadataPartitions.contains(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS)
+  }
 
   /**
    * Determines whether it would be more optimal to read Column Stats Index a) in-memory of the invoking process,
