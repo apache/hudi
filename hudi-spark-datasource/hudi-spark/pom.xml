@@ -141,6 +141,10 @@
           <reportsDirectory>${project.build.directory}/surefire-reports</reportsDirectory>
           <junitxml>.</junitxml>
           <filereports>TestSuite.txt</filereports>
+          <systemProperties>
+            <log4j.configurationFile>${surefire-log4j.file}</log4j.configurationFile>
+            <log4j1.compatibility>true</log4j1.compatibility>
+          </systemProperties>
         </configuration>
         <executions>
           <execution>
