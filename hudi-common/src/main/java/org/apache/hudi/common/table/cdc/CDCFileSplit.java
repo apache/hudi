@@ -16,18 +16,20 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.cdc
+package org.apache.hudi.common.table.cdc;
 
-import org.apache.hudi.common.model.FileSlice
-import org.apache.hudi.common.table.cdc.CDCFileTypeEnum
+import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.util.Option;
+
+import java.io.Serializable;
 
 /**
  * This contains all the information that retrieve the change data at a single file group and
  * at a single commit.
  *
- * For [[cdcFileType]] = [[CDCFileTypeEnum.ADD_BASE_File]], [[cdcFile]] is a current version of
+ * For [[cdcFileType]] = [[CDCFileTypeEnum.ADD_BASE_FILE]], [[cdcFile]] is a current version of
  *   the base file in the group, and [[beforeFileSlice]] is None.
- * For [[cdcFileType]] = [[CDCFileTypeEnum.REMOVE_BASE_File]], [[cdcFile]] is null,
+ * For [[cdcFileType]] = [[CDCFileTypeEnum.REMOVE_BASE_FILE]], [[cdcFile]] is null,
  *   [[beforeFileSlice]] is the previous version of the base file in the group.
  * For [[cdcFileType]] = [[CDCFileTypeEnum.CDC_LOG_FILE]], [[cdcFile]] is a log file with cdc blocks.
  *   when enable the supplemental logging, both [[beforeFileSlice]] and [[afterFileSlice]] are None,
@@ -36,17 +38,57 @@ import org.apache.hudi.common.table.cdc.CDCFileTypeEnum
  *   [[beforeFileSlice]] is the previous version of the file slice.
  * For [[cdcFileType]] = [[CDCFileTypeEnum.REPLACED_FILE_GROUP]], [[cdcFile]] is null,
  *   [[beforeFileSlice]] is the current version of the file slice.
- *
- * @param cdcFileType the change type, which decide to how to retrieve the change data.
- *                    more details see: [[CDCFileTypeEnum]]
- * @param cdcFile the file that the change data can be parsed from.
- * @param beforeFileSlice the other files that are required when retrieve the change data.
  */
-case class ChangeFileForSingleFileGroupAndCommit(
-  cdcFileType: CDCFileTypeEnum,
-  cdcFile: String,
-  beforeFileSlice: Option[FileSlice] = None,
-  afterFileSlice: Option[FileSlice] = None
-) {
-  assert(cdcFileType != null && (cdcFile != null || beforeFileSlice.nonEmpty))
+public class CDCFileSplit implements Serializable {
+
+  /**
+   * * the change type, which decide to how to retrieve the change data. more details see: [[CDCFileTypeEnum]]
+   * */
+  private CDCFileTypeEnum cdcFileType;
+
+  /**
+   * the file that the change data can be parsed from.
+   */
+  private String cdcFile;
+
+  /**
+   * the file slice that are required when retrieve the pre_image data.
+   */
+  private Option<FileSlice> beforeFileSlice;
+
+  /**
+   * the file slice that are required when retrieve the post_image data.
+   */
+  private Option<FileSlice> afterFileSlice;
+
+  public CDCFileSplit(CDCFileTypeEnum cdcFileType, String cdcFile) {
+    this(cdcFileType, cdcFile, Option.empty(), Option.empty());
+  }
+
+  public CDCFileSplit(
+      CDCFileTypeEnum cdcFileType,
+      String cdcFile,
+      Option<FileSlice> beforeFileSlice,
+      Option<FileSlice> afterFileSlice) {
+    this.cdcFileType = cdcFileType;
+    this.cdcFile = cdcFile;
+    this.beforeFileSlice = beforeFileSlice;
+    this.afterFileSlice = afterFileSlice;
+  }
+
+  public CDCFileTypeEnum getCdcFileType() {
+    return this.cdcFileType;
+  }
+
+  public String getCdcFile() {
+    return this.cdcFile;
+  }
+
+  public Option<FileSlice> getBeforeFileSlice() {
+    return this.beforeFileSlice;
+  }
+
+  public Option<FileSlice> getAfterFileSlice() {
+    return this.afterFileSlice;
+  }
 }
