@@ -20,18 +20,13 @@ package org.apache.hudi
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
-import org.apache.hudi.HoodieBaseRelation.generateUnsafeProjection
-import org.apache.hudi.common.model.HoodieFileFormat
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.hadoop.HoodieROTablePathFilter
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.Expression
-import org.apache.spark.sql.execution.datasources
 import org.apache.spark.sql.execution.datasources._
-import org.apache.spark.sql.execution.datasources.orc.OrcFileFormat
-import org.apache.spark.sql.execution.datasources.parquet.HoodieParquetFileFormat
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
 import org.apache.spark.sql.types.StructType
 
@@ -93,19 +88,7 @@ class BaseFileOnlyRelation(sqlContext: SQLContext,
       hadoopConf = embedInternalSchema(new Configuration(conf), requiredSchema.internalSchema)
     )
 
-    val rdd = new HoodieFileScanRDD(sparkSession, baseFileReader.apply, fileSplits)
-
-    // NOTE: In case when partition columns have been pruned from the required schema, we have to project
-    //       the rows from the pruned schema back into the one expected by the caller
-    if (requiredDataSchema.structTypeSchema == requiredSchema.structTypeSchema) {
-      rdd
-    } else {
-      rdd.mapPartitions { it =>
-        val fullPrunedSchema = StructType(requiredDataSchema.structTypeSchema.fields ++ partitionSchema.fields)
-        val unsafeProjection = generateUnsafeProjection(fullPrunedSchema, requiredSchema.structTypeSchema)
-        it.map(unsafeProjection)
-      }
-    }
+    new HoodieFileScanRDD(sparkSession, baseFileReader.apply, fileSplits)
   }
 
   protected def collectFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[HoodieBaseFileSplit] = {

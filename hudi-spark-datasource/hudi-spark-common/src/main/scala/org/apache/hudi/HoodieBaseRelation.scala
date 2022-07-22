@@ -541,26 +541,41 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     val (read: (PartitionedFile => Iterator[InternalRow]), schema: StructType) =
       tableBaseFileFormat match {
         case HoodieFileFormat.PARQUET =>
-          (
-            HoodieDataSourceHelper.buildHoodieParquetReader(
-              sparkSession = spark,
-              dataSchema = dataSchema.structTypeSchema,
-              partitionSchema = partitionSchema,
-              requiredSchema = requiredSchema.structTypeSchema,
-              filters = filters,
-              options = options,
-              hadoopConf = hadoopConf,
-              // We're delegating to Spark to append partition values to every row only in cases
-              // when these corresponding partition-values are not persisted w/in the data file itself
-              appendPartitionValues = shouldExtractPartitionValuesFromPartitionPath
-            ),
-            // Since partition values by default are omitted, and not persisted w/in data-files by Spark,
-            // data-file readers (such as [[ParquetFileFormat]]) have to inject partition values while reading
-            // the data. As such, actual full schema produced by such reader is composed of
-            //    a) Prepended partition column values
-            //    b) Data-file schema (projected or not)
-            StructType(partitionSchema.fields ++ requiredSchema.structTypeSchema.fields)
+          val rawParquetReader = HoodieDataSourceHelper.buildHoodieParquetReader(
+            sparkSession = spark,
+            dataSchema = dataSchema.structTypeSchema,
+            partitionSchema = partitionSchema,
+            requiredSchema = requiredSchema.structTypeSchema,
+            filters = filters,
+            options = options,
+            hadoopConf = hadoopConf,
+            // We're delegating to Spark to append partition values to every row only in cases
+            // when these corresponding partition-values are not persisted w/in the data file itself
+            appendPartitionValues = shouldExtractPartitionValuesFromPartitionPath
           )
+          // Since partition values by default are omitted, and not persisted w/in data-files by Spark,
+          // data-file readers (such as [[ParquetFileFormat]]) have to inject partition values while reading
+          // the data. As such, actual full schema produced by such reader is composed of
+          //    a) Data-file schema (projected or not)
+          //    b) Appended partition column values
+          val readerSchema = StructType(requiredSchema.structTypeSchema.fields ++ partitionSchema.fields)
+
+          // NOTE: In case when file reader's schema doesn't match the schema expected by the caller (for ex, if it contains
+          //       partition columns which might not be persisted w/in the data file, and therefore would be pruned from the required
+          //       schema and appended into the resulting one), we have to project the rows from the base file-reader schema
+          //       back into the one expected by the caller
+          val projectedReader = if (readerSchema == requiredSchema.structTypeSchema) {
+            rawParquetReader
+          } else {
+            file: PartitionedFile => {
+              // NOTE: Projection is not a serializable object, hence it creation should only happen w/in
+              //       the executor process
+              val unsafeProjection = generateUnsafeProjection(readerSchema, requiredSchema.structTypeSchema)
+              rawParquetReader.apply(file).map(unsafeProjection)
+            }
+          }
+
+          (projectedReader, readerSchema)
 
       case HoodieFileFormat.HFILE =>
         (
@@ -578,7 +593,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
       case _ => throw new UnsupportedOperationException(s"Base file format is not currently supported ($tableBaseFileFormat)")
     }
 
-    new BaseFileReader(
+    BaseFileReader(
       read = partitionedFile => {
         val extension = FSUtils.getFileExtension(partitionedFile.filePath)
         if (tableBaseFileFormat.getFileExtension.equals(extension)) {
