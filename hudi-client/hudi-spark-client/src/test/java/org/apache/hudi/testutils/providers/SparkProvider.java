@@ -47,7 +47,6 @@ public interface SparkProvider extends org.apache.hudi.testutils.providers.Hoodi
     sparkConf.set("spark.hadoop.mapred.output.compression.codec", "org.apache.hadoop.io.compress.GzipCodec");
     sparkConf.set("spark.hadoop.mapred.output.compression.type", "BLOCK");
     sparkConf.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer");
-    sparkConf.set("log4j.configuration", System.getProperty("log4j.configuration"));
     overwritingConfigs.forEach(sparkConf::set);
     return sparkConf;
   }
