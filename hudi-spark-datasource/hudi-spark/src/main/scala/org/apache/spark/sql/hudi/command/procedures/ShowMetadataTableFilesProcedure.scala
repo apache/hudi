@@ -21,7 +21,7 @@ import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.engine.HoodieLocalEngineContext
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.util.HoodieTimer
+import org.apache.hudi.common.util.{HoodieTimer, StringUtils}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.metadata.HoodieBackedTableMetadata
 import org.apache.spark.internal.Logging
@@ -34,7 +34,7 @@ import java.util.function.Supplier
 class ShowMetadataTableFilesProcedure() extends BaseProcedure with ProcedureBuilder with Logging {
   private val PARAMETERS = Array[ProcedureParameter](
     ProcedureParameter.required(0, "table", DataTypes.StringType, None),
-    ProcedureParameter.optional(1, "partition", DataTypes.StringType, None)
+    ProcedureParameter.optional(1, "partition", DataTypes.StringType, "")
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -60,8 +60,13 @@ class ShowMetadataTableFilesProcedure() extends BaseProcedure with ProcedureBuil
       throw new HoodieException(s"Metadata Table not enabled/initialized.")
     }
 
+    var partitionPath = new Path(basePath)
+    if (!StringUtils.isNullOrEmpty(partition)) {
+      partitionPath = new Path(basePath, partition)
+    }
+
     val timer = new HoodieTimer().startTimer
-    val statuses = metaReader.getAllFilesInPartition(new Path(basePath, partition))
+    val statuses = metaReader.getAllFilesInPartition(partitionPath)
     logDebug("Took " + timer.endTimer + " ms")
 
     val rows = new util.ArrayList[Row]
