@@ -123,8 +123,8 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
         new LogFileIterator(logFileOnlySplit, getConfig)
 
       case split if mergeType.equals(DataSourceReadOptions.REALTIME_SKIP_MERGE_OPT_VAL) =>
-        val baseFileIterator = fileReaders.requiredSchemaReaderSkipMerging.apply(split.dataFile.get)
-        new SkipMergeIterator(split, baseFileIterator, getConfig)
+        val BaseFileReader(read, schema) = fileReaders.requiredSchemaReaderSkipMerging
+        new SkipMergeIterator(split, read(split.dataFile.get), schema, getConfig)
 
       case split if mergeType.equals(DataSourceReadOptions.REALTIME_PAYLOAD_COMBINE_OPT_VAL) =>
         val (baseFileIterator, schema) = readBaseFile(split)
@@ -250,14 +250,16 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
    */
   private class SkipMergeIterator(split: HoodieMergeOnReadFileSplit,
                                   baseFileIterator: Iterator[InternalRow],
+                                  baseFileReaderSchema: StructType,
                                   config: Configuration)
     extends LogFileIterator(split, config) {
 
+    private val requiredSchemaUnsafeProjection = generateUnsafeProjection(baseFileReaderSchema, requiredStructTypeSchema)
+
     override def hasNext: Boolean = {
       if (baseFileIterator.hasNext) {
-        // NOTE: For 'skip-merge' querying mode base-file reader is already expected to read in the
-        //       projected schema
-        recordToLoad = baseFileIterator.next()
+        // No merge is required, simply load current row and project into required schema
+        recordToLoad = requiredSchemaUnsafeProjection(baseFileIterator.next())
         true
       } else {
         super[LogFileIterator].hasNext
