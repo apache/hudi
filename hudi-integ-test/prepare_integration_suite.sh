@@ -42,7 +42,7 @@ get_spark_command() {
   else
     scala=$scala
   fi
-  echo "spark-submit --packages org.apache.spark:spark-avro_${scala}:3.1.3 \
+  echo "spark-submit \
           --master $0 \
           --deploy-mode $1 \
           --properties-file $2 \
