@@ -37,6 +37,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
@@ -272,8 +273,19 @@ public class StreamerUtil {
    * @throws IOException if errors happens when writing metadata
    */
   public static HoodieTableMetaClient initTableIfNotExists(Configuration conf) throws IOException {
+    return initTableIfNotExists(conf, HadoopConfigurations.getHadoopConf(conf));
+  }
+
+  /**
+   * Initialize the table if it does not exist.
+   *
+   * @param conf the configuration
+   * @throws IOException if errors happens when writing metadata
+   */
+  public static HoodieTableMetaClient initTableIfNotExists(
+      Configuration conf,
+      org.apache.hadoop.conf.Configuration hadoopConf) throws IOException {
     final String basePath = conf.getString(FlinkOptions.PATH);
-    final org.apache.hadoop.conf.Configuration hadoopConf = HadoopConfigurations.getHadoopConf(conf);
     if (!tableExists(basePath, hadoopConf)) {
       HoodieTableMetaClient metaClient = HoodieTableMetaClient.withPropertyBuilder()
           .setTableCreateSchema(conf.getString(FlinkOptions.SOURCE_AVRO_SCHEMA))
@@ -513,6 +525,20 @@ public class StreamerUtil {
   public static Schema getTableAvroSchema(HoodieTableMetaClient metaClient, boolean includeMetadataFields) throws Exception {
     TableSchemaResolver schemaUtil = new TableSchemaResolver(metaClient);
     return schemaUtil.getTableAvroSchema(includeMetadataFields);
+  }
+
+  public static Schema getLatestTableSchema(String path, org.apache.hadoop.conf.Configuration hadoopConf) {
+    if (StringUtils.isNullOrEmpty(path) || !StreamerUtil.tableExists(path, hadoopConf)) {
+      return null;
+    }
+
+    try {
+      HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(path, hadoopConf);
+      return getTableAvroSchema(metaClient, false);
+    } catch (Exception e) {
+      LOG.warn("Error while resolving the latest table schema", e);
+    }
+    return null;
   }
 
   public static boolean fileExists(FileSystem fs, Path path) {
