@@ -20,7 +20,6 @@ package org.apache.hudi.connect.utils;
 
 import com.google.protobuf.ByteString;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -174,9 +173,7 @@ public class KafkaConnectUtils {
    * @return Returns the record key columns separated by comma.
    */
   public static String getRecordKeyColumns(KeyGenerator keyGenerator) {
-    return keyGenerator.getRecordKeyFieldNames().stream()
-        .map(HoodieAvroUtils::getRootLevelFieldName)
-        .collect(Collectors.joining(","));
+    return String.join(",", keyGenerator.getRecordKeyFieldNames());
   }
 
   /**
