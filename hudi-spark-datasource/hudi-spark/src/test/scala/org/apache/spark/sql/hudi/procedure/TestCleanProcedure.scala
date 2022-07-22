@@ -52,8 +52,9 @@ class TestCleanProcedure extends HoodieSparkSqlTestBase {
         .collect()
         .map(row => Seq(row.getString(0), row.getLong(1), row.getInt(2), row.getString(3), row.getString(4), row.getInt(5)))
 
+
       assertResult(1)(result1.length)
-      assertResult(2)(result1(0)(2))
+      assertResult(3)(result1(0)(2))
 
       checkAnswer(s"select id, name, price, ts from $tableName order by id") (
         Seq(1, "a1", 13, 1000)
