@@ -85,31 +85,30 @@ class MergeOnReadSnapshotRelation(sqlContext: SQLContext,
                                     requiredSchema: HoodieTableSchema,
                                     requestedColumns: Array[String],
                                     filters: Array[Filter]): RDD[InternalRow] = {
-    val (partitionSchema, dataSchema, requiredDataSchema) =
-      tryPrunePartitionColumns(tableSchema, requiredSchema)
-
     val requiredFilters = Seq.empty
     val optionalFilters = filters
-    val readers = createBaseFileReaders(partitionSchema, dataSchema, requiredDataSchema, requestedColumns, requiredFilters, optionalFilters)
+    val readers = createBaseFileReaders(tableSchema, requiredSchema, requestedColumns, requiredFilters, optionalFilters)
 
     val tableState = getTableState
     new HoodieMergeOnReadRDD(
       sqlContext.sparkContext,
       config = jobConf,
       fileReaders = readers,
-      tableSchema = dataSchema,
+      tableSchema = tableSchema,
       requiredSchema = requiredSchema,
       tableState = tableState,
       mergeType = mergeType,
       fileSplits = fileSplits)
   }
 
-  protected def createBaseFileReaders(partitionSchema: StructType,
-                                      dataSchema: HoodieTableSchema,
-                                      requiredDataSchema: HoodieTableSchema,
+  protected def createBaseFileReaders(tableSchema: HoodieTableSchema,
+                                      requiredSchema: HoodieTableSchema,
                                       requestedColumns: Array[String],
                                       requiredFilters: Seq[Filter],
                                       optionalFilters: Seq[Filter] = Seq.empty): HoodieMergeOnReadBaseFileReaders = {
+    val (partitionSchema, dataSchema, requiredDataSchema) =
+      tryPrunePartitionColumns(tableSchema, requiredSchema)
+
     val fullSchemaReader = createBaseFileReader(
       spark = sqlContext.sparkSession,
       partitionSchema = partitionSchema,

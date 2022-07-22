@@ -63,14 +63,11 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
                                     requiredSchema: HoodieTableSchema,
                                     requestedColumns: Array[String],
                                     filters: Array[Filter]): RDD[InternalRow] = {
-    val (partitionSchema, dataSchema, requiredDataSchema) =
-      tryPrunePartitionColumns(tableSchema, requiredSchema)
-
     // The only required filters are ones that make sure we're only fetching records that
     // fall into incremental span of the timeline being queried
     val requiredFilters = incrementalSpanRecordFilters
     val optionalFilters = filters
-    val readers = createBaseFileReaders(partitionSchema, dataSchema, requiredDataSchema, requestedColumns, requiredFilters, optionalFilters)
+    val readers = createBaseFileReaders(tableSchema, requiredSchema, requestedColumns, requiredFilters, optionalFilters)
 
     val hoodieTableState = getTableState
     // TODO(HUDI-3639) implement incremental span record filtering w/in RDD to make sure returned iterator is appropriately
