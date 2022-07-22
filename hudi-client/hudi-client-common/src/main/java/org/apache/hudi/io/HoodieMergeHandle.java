@@ -21,6 +21,7 @@ package org.apache.hudi.io;
 import org.apache.avro.generic.GenericData;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.avro.SerializableRecord;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
@@ -69,7 +70,6 @@ import org.apache.log4j.Logger;
 import javax.annotation.concurrent.NotThreadSafe;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -79,6 +79,7 @@ import java.util.NoSuchElementException;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.Collectors;
 
 @SuppressWarnings("Duplicates")
 /**
@@ -123,7 +124,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
   // writer for cdc data
   protected HoodieLogFormat.Writer cdcWriter;
   // the cdc data
-  protected List<IndexedRecord> cdcData;
+  protected Map<String, SerializableRecord> cdcData;
   //
   private final AtomicLong writtenRecordCount = new AtomicLong(-1);
   private boolean preserveMetadata = false;
@@ -233,7 +234,11 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
       cdcSupplementalLogging = config.getBoolean(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_ENABLED);
       if (cdcEnabled) {
         cdcWriter = createLogWriter(Option.empty(), instantTime);
-        cdcData = new ArrayList<>();
+        long memoryForMerge = IOUtils.getMaxMemoryPerPartitionMerge(taskContextSupplier, config);
+        cdcData = new ExternalSpillableMap<>(memoryForMerge, config.getSpillableMapBasePath(),
+            new DefaultSizeEstimator(), new DefaultSizeEstimator(),
+            config.getCommonConfig().getSpillableDiskMapType(),
+            config.getCommonConfig().isBitCaskDiskMapCompressionEnabled());
       }
     } catch (IOException io) {
       LOG.error("Error in update task at commit " + instantTime, io);
@@ -315,13 +320,12 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
     }
     boolean result = writeRecord(hoodieRecord, indexedRecord, isDelete);
     if (cdcEnabled) {
+      String recordKey = oldRecord.get(keyField).toString();
       if (indexedRecord.isPresent()) {
         GenericRecord record = (GenericRecord) indexedRecord.get();
-        cdcData.add(cdcRecord(CDCOperationEnum.UPDATE, hoodieRecord.getRecordKey(), hoodieRecord.getPartitionPath(),
-            oldRecord, record));
+        cdcData.put(recordKey, cdcRecord(CDCOperationEnum.UPDATE, recordKey, hoodieRecord.getPartitionPath(), oldRecord, record));
       } else {
-        cdcData.add(cdcRecord(CDCOperationEnum.DELETE, oldRecord.get(keyFiled).toString(), partitionPath,
-            oldRecord, null));
+        cdcData.put(recordKey, cdcRecord(CDCOperationEnum.DELETE, recordKey, partitionPath, oldRecord, null));
       }
     }
     return result;
@@ -336,8 +340,8 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
     }
     if (writeRecord(hoodieRecord, insertRecord, HoodieOperation.isDelete(hoodieRecord.getOperation()))) {
       if (cdcEnabled && insertRecord.isPresent()) {
-        cdcData.add(cdcRecord(CDCOperationEnum.INSERT, hoodieRecord.getRecordKey(), partitionPath,
-            null, (GenericRecord) insertRecord.get()));
+        cdcData.put(hoodieRecord.getRecordKey(), cdcRecord(CDCOperationEnum.INSERT,
+            hoodieRecord.getRecordKey(), partitionPath, null, (GenericRecord) insertRecord.get()));
       }
       insertRecordsWritten++;
     }
@@ -447,14 +451,16 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
     }
   }
 
-  protected GenericData.Record cdcRecord(CDCOperationEnum operation, String recordKey, String partitionPath,
+  protected SerializableRecord cdcRecord(CDCOperationEnum operation, String recordKey, String partitionPath,
                                          GenericRecord oldRecord, GenericRecord newRecord) {
+    GenericData.Record record;
     if (cdcSupplementalLogging) {
-      return CDCUtils.cdcRecord(operation.getValue(), instantTime,
+      record = CDCUtils.cdcRecord(operation.getValue(), instantTime,
           oldRecord, addCommitMetadata(newRecord, recordKey, partitionPath));
     } else {
-      return CDCUtils.cdcRecord(operation.getValue(), recordKey);
+      record = CDCUtils.cdcRecord(operation.getValue(), recordKey);
     }
+    return new SerializableRecord(record);
   }
 
   protected GenericRecord addCommitMetadata(GenericRecord record, String recordKey, String partitionPath) {
@@ -486,7 +492,9 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
       } else {
         header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, CDCUtils.CDC_SCHEMA_ONLY_OP_AND_RECORDKEY_STRING);
       }
-      HoodieLogBlock block = new HoodieCDCDataBlock(cdcData, header, keyField);
+      List<IndexedRecord> records = cdcData.values().stream()
+          .map(SerializableRecord::getRecord).collect(Collectors.toList());
+      HoodieLogBlock block = new HoodieCDCDataBlock(records, header, keyField);
       return cdcWriter.appendBlocks(Collections.singletonList(block));
     } catch (Exception e) {
       throw new HoodieException("Failed to write the cdc data to " + cdcWriter.getLogFile().getPath(), e);
