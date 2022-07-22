@@ -563,17 +563,16 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
           (parquetReader, readerSchema)
 
       case HoodieFileFormat.HFILE =>
-        (
-          createHFileReader(
-            spark = spark,
-            dataSchema = dataSchema,
-            requiredDataSchema = requiredDataSchema,
-            filters = filters,
-            options = options,
-            hadoopConf = hadoopConf
-          ),
-          requiredDataSchema
+        val hfileReader = createHFileReader(
+          spark = spark,
+          dataSchema = dataSchema,
+          requiredDataSchema = requiredDataSchema,
+          filters = filters,
+          options = options,
+          hadoopConf = hadoopConf
         )
+
+        (hfileReader, requiredDataSchema.structTypeSchema)
 
       case _ => throw new UnsupportedOperationException(s"Base file format is not currently supported ($tableBaseFileFormat)")
     }
@@ -719,28 +718,25 @@ object HoodieBaseRelation extends SparkAdapterSupport {
                                 requiredDataSchema: HoodieTableSchema,
                                 filters: Seq[Filter],
                                 options: Map[String, String],
-                                hadoopConf: Configuration): BaseFileReader = {
+                                hadoopConf: Configuration): PartitionedFile => Iterator[InternalRow] = {
     val hadoopConfBroadcast =
       spark.sparkContext.broadcast(new SerializableConfiguration(hadoopConf))
 
-    BaseFileReader(
-      read = partitionedFile => {
-        val hadoopConf = hadoopConfBroadcast.value.get()
-        val reader = new HoodieHFileReader[GenericRecord](hadoopConf, new Path(partitionedFile.filePath),
-          new CacheConfig(hadoopConf))
+    partitionedFile => {
+      val hadoopConf = hadoopConfBroadcast.value.get()
+      val reader = new HoodieHFileReader[GenericRecord](hadoopConf, new Path(partitionedFile.filePath),
+        new CacheConfig(hadoopConf))
 
-        val requiredRowSchema = requiredDataSchema.structTypeSchema
-        // NOTE: Schema has to be parsed at this point, since Avro's [[Schema]] aren't serializable
-        //       to be passed from driver to executor
-        val requiredAvroSchema = new Schema.Parser().parse(requiredDataSchema.avroSchemaStr)
-        val avroToRowConverter = AvroConversionUtils.createAvroToInternalRowConverter(requiredAvroSchema, requiredRowSchema)
+      val requiredRowSchema = requiredDataSchema.structTypeSchema
+      // NOTE: Schema has to be parsed at this point, since Avro's [[Schema]] aren't serializable
+      //       to be passed from driver to executor
+      val requiredAvroSchema = new Schema.Parser().parse(requiredDataSchema.avroSchemaStr)
+      val avroToRowConverter = AvroConversionUtils.createAvroToInternalRowConverter(requiredAvroSchema, requiredRowSchema)
 
-        reader.getRecordIterator(requiredAvroSchema).asScala
-          .map(record => {
-            avroToRowConverter.apply(record).get
-          })
-      },
-      schema = requiredDataSchema.structTypeSchema
-    )
+      reader.getRecordIterator(requiredAvroSchema).asScala
+        .map(record => {
+          avroToRowConverter.apply(record).get
+        })
+    }
   }
 }
