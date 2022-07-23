@@ -20,7 +20,7 @@
 
 ARG HADOOP_VERSION=2.8.4
 ARG HIVE_VERSION=2.3.3
-FROM rchertara/hudi-hadoop_${HADOOP_VERSION}-base-java11:image as hadoop-base
+FROM apachehudi/hudi-hadoop_${HADOOP_VERSION}-base-java11:latest as hadoop-base
 
 ENV TRINO_VERSION=368
 ENV TRINO_HOME=/usr/local/trino
