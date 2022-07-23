@@ -116,7 +116,6 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   public static final String FILEID_PARAM = "fileid";
   public static final String LAST_INSTANT_TS = "lastinstantts";
   public static final String TIMELINE_HASH = "timelinehash";
-  public static final String NUM_INSTANTS = "numinstants";
   public static final String REFRESH_OFF = "refreshoff";
   public static final String INCLUDE_FILES_IN_PENDING_COMPACTION_PARAM = "includependingcompaction";
 
@@ -163,7 +162,6 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
     // Adding mandatory parameters - Last instants affecting file-slice
     timeline.lastInstant().ifPresent(instant -> builder.addParameter(LAST_INSTANT_TS, instant.getTimestamp()));
     builder.addParameter(TIMELINE_HASH, timeline.getTimelineHash());
-    builder.addParameter(NUM_INSTANTS, timeline.countInstants() + "");
 
     String url = builder.toString();
     LOG.info("Sending request : (" + url + ")");
