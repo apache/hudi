@@ -24,6 +24,7 @@ import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.model._
 import org.apache.hudi.common.testutils.SchemaTestUtil
 import org.apache.hudi.common.util.Option
+import org.apache.hudi.common.util.PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH
 import org.apache.hudi.config.HoodiePayloadConfig
 import org.apache.hudi.exception.{HoodieException, HoodieKeyException}
 import org.apache.hudi.keygen._
@@ -146,17 +147,17 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
       baseRow = KeyGeneratorTestUtilities.getRow(baseRecord, schema, structType)
       internalRow = KeyGeneratorTestUtilities.getInternalRow(baseRow)
 
-      assertEquals("default", keyGen.getKey(baseRecord).getPartitionPath)
-      assertEquals("default", keyGen.getPartitionPath(baseRow))
-      assertEquals(UTF8String.fromString("default"), keyGen.getPartitionPath(internalRow, structType))
+      assertEquals(DEFAULT_PARTITION_PATH, keyGen.getKey(baseRecord).getPartitionPath)
+      assertEquals(DEFAULT_PARTITION_PATH, keyGen.getPartitionPath(baseRow))
+      assertEquals(UTF8String.fromString(DEFAULT_PARTITION_PATH), keyGen.getPartitionPath(internalRow, structType))
 
       baseRecord.put("name", null)
       baseRow = KeyGeneratorTestUtilities.getRow(baseRecord, schema, structType)
       internalRow = KeyGeneratorTestUtilities.getInternalRow(baseRow)
 
-      assertEquals("default", keyGen.getKey(baseRecord).getPartitionPath)
-      assertEquals("default", keyGen.getPartitionPath(baseRow))
-      assertEquals(UTF8String.fromString("default"), keyGen.getPartitionPath(internalRow, structType))
+      assertEquals(DEFAULT_PARTITION_PATH, keyGen.getKey(baseRecord).getPartitionPath)
+      assertEquals(DEFAULT_PARTITION_PATH, keyGen.getPartitionPath(baseRow))
+      assertEquals(UTF8String.fromString(DEFAULT_PARTITION_PATH), keyGen.getPartitionPath(internalRow, structType))
     }
 
     {
@@ -335,7 +336,7 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
       baseRow = KeyGeneratorTestUtilities.getRow(baseRecord, schema, structType)
       internalRow = KeyGeneratorTestUtilities.getInternalRow(baseRow)
 
-      val expectedKey = new HoodieKey("field1:field1,name:__empty__", "field1/default")
+      val expectedKey = new HoodieKey("field1:field1,name:__empty__", "field1/" + DEFAULT_PARTITION_PATH)
 
       assertEquals(expectedKey, keyGen.getKey(baseRecord))
 
@@ -353,7 +354,7 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
       baseRow = KeyGeneratorTestUtilities.getRow(baseRecord, schema, structType)
       internalRow = KeyGeneratorTestUtilities.getInternalRow(baseRow)
 
-      val expectedKey = new HoodieKey("field1:field1,name:__null__", "field1/default")
+      val expectedKey = new HoodieKey("field1:field1,name:__null__", "field1/" + DEFAULT_PARTITION_PATH)
 
       assertEquals(expectedKey, keyGen.getKey(baseRecord))
 

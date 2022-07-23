@@ -39,6 +39,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.hudi.common.util.PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH;
 import static org.apache.hudi.configuration.FlinkOptions.PARTITION_FORMAT_DAY;
 
 /**
@@ -178,7 +179,7 @@ public class FlinkStreamerConfig extends Configuration {
 
   @Parameter(names = {"--partition-default-name"},
       description = "The default partition name in case the dynamic partition column value is null/empty string")
-  public String partitionDefaultName = "default";
+  public String partitionDefaultName = DEFAULT_PARTITION_PATH;
 
   @Parameter(names = {"--index-bootstrap-enabled"},
       description = "Whether to bootstrap the index state from existing hoodie table, default false")
