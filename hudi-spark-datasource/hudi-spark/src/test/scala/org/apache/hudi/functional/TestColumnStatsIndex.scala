@@ -119,12 +119,7 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
       .fromProperties(toProperties(metadataOpts))
       .build()
 
-    val requestedColumns: Seq[String] = {
-      // Providing empty seq of columns to [[readColumnStatsIndex]] will lead to the whole
-      // MT to be read, and subsequently filtered
-      if (testCase.readFullMetadataTable) Seq.empty
-      else sourceTableSchema.fieldNames
-    }
+    val requestedColumns: Seq[String] = sourceTableSchema.fieldNames
 
     val columnStatsIndex = new ColumnStatsIndexSupport(spark, sourceTableSchema, metadataConfig, metaClient)
 
@@ -472,12 +467,13 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
 
 object TestColumnStatsIndex {
 
-  case class ColumnStatsTestCase(forceFullLogScan: Boolean, readFullMetadataTable: Boolean, shouldReadInMemory: Boolean)
+  case class ColumnStatsTestCase(forceFullLogScan: Boolean, shouldReadInMemory: Boolean)
 
   def testMetadataColumnStatsIndexParams: java.util.stream.Stream[Arguments] =
     java.util.stream.Stream.of(
-      Arguments.arguments(ColumnStatsTestCase(forceFullLogScan = false, readFullMetadataTable = false, shouldReadInMemory = true)),
-      Arguments.arguments(ColumnStatsTestCase(forceFullLogScan = false, readFullMetadataTable = false, shouldReadInMemory = false)),
-      Arguments.arguments(ColumnStatsTestCase(forceFullLogScan = true, readFullMetadataTable = true, shouldReadInMemory = false))
+      Arguments.arguments(ColumnStatsTestCase(forceFullLogScan = false, shouldReadInMemory = true)),
+      Arguments.arguments(ColumnStatsTestCase(forceFullLogScan = false, shouldReadInMemory = false)),
+      Arguments.arguments(ColumnStatsTestCase(forceFullLogScan = true, shouldReadInMemory = false)),
+      Arguments.arguments(ColumnStatsTestCase(forceFullLogScan = true, shouldReadInMemory = true))
     )
 }
