@@ -236,7 +236,9 @@ public abstract class ITTestBase {
     int exitCode = dockerClient.inspectExecCmd(createCmdResponse.getId()).exec().getExitCode();
     LOG.info("Exit code for command : " + exitCode);
 
-    LOG.error("\n\n ###### Stdout #######\n" + callback.getStdout().toString());
+    if (exitCode != 0) {
+      LOG.error("\n\n ###### Stdout #######\n" + callback.getStdout().toString());
+    }
     LOG.error("\n\n ###### Stderr #######\n" + callback.getStderr().toString());
 
     if (checkIfSucceed) {
