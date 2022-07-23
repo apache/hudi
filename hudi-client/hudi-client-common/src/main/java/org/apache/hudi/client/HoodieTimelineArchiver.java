@@ -85,8 +85,6 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN_OR_EQUALS;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.compareTimestamps;
-import static org.apache.hudi.metadata.HoodieTableMetadata.getDataTableBasePathFromMetadataTable;
-import static org.apache.hudi.metadata.HoodieTableMetadata.getDatasetBasePath;
 
 /**
  * Archiver to bound the growth of files under .hoodie meta path.
@@ -499,37 +497,40 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
       }
     }
 
-    // If this is a metadata table, do not archive the commits that live in data set
-    // active timeline. This is required by metadata table,
-    // see HoodieTableMetadataUtil#processRollbackMetadata for details.
     if (HoodieTableMetadata.isMetadataTable(config.getBasePath())) {
-      HoodieTableMetaClient metadataTableMetaClient = HoodieTableMetaClient.builder()
-          .setBasePath(getDatasetBasePath(config.getBasePath()))
+      HoodieTableMetaClient dataMetaClient = HoodieTableMetaClient.builder()
+          .setBasePath(HoodieTableMetadata.getDatasetBasePath(config.getBasePath()))
           .setConf(metaClient.getHadoopConf())
           .build();
-      Option<HoodieInstant> earliestActiveDatasetCommit = metadataTableMetaClient.getActiveTimeline().firstInstant();
+      Option<HoodieInstant> earliestActiveDatasetCommit = dataMetaClient.getActiveTimeline().firstInstant();
 
-      // There are chances that there could be holes in the timeline due to archival and savepoint interplay.
-      // So, the first non-savepoint commit in the data timeline is considered as beginning of the active timeline.
-      HoodieTableMetaClient dataTableMetaClient = HoodieTableMetaClient.builder()
-          .setBasePath(getDataTableBasePathFromMetadataTable(config.getBasePath()))
-          .setConf(metaClient.getHadoopConf())
-          .build();
-      Set<String> savepointTimestamps = dataTableMetaClient.getActiveTimeline().getInstants()
-          .filter(entry -> entry.getAction().equals(HoodieTimeline.SAVEPOINT_ACTION))
-          .map(HoodieInstant::getTimestamp)
-          .collect(Collectors.toSet());
-      Option<HoodieInstant> firstNonSavepointCommit = earliestActiveDatasetCommit;
-      if (!savepointTimestamps.isEmpty()) {
-        firstNonSavepointCommit = Option.fromJavaOptional(dataTableMetaClient.getActiveTimeline().getInstants()
-            .filter(entry -> !savepointTimestamps.contains(entry.getTimestamp()))
-            .findFirst());
-      }
+      if (config.shouldArchiveBeyondSavepoint()) {
+        // There are chances that there could be holes in the timeline due to archival and savepoint interplay.
+        // So, the first non-savepoint commit in the data timeline is considered as beginning of the active timeline.
+        Set<String> savepointTimestamps = dataMetaClient.getActiveTimeline().getInstants()
+            .filter(entry -> entry.getAction().equals(HoodieTimeline.SAVEPOINT_ACTION))
+            .map(HoodieInstant::getTimestamp)
+            .collect(Collectors.toSet());
+        Option<HoodieInstant> firstNonSavepointCommit = earliestActiveDatasetCommit;
 
-      if (firstNonSavepointCommit.isPresent()) {
-        String firstNonSavepointCommitTime = firstNonSavepointCommit.get().getTimestamp();
-        instants = instants.filter(instant ->
-            compareTimestamps(instant.getTimestamp(), LESSER_THAN, firstNonSavepointCommitTime));
+        if (!savepointTimestamps.isEmpty()) {
+          firstNonSavepointCommit = Option.fromJavaOptional(dataMetaClient.getActiveTimeline().getInstants()
+              .filter(entry -> !savepointTimestamps.contains(entry.getTimestamp()))
+              .findFirst());
+        }
+
+        if (firstNonSavepointCommit.isPresent()) {
+          String firstNonSavepointCommitTime = firstNonSavepointCommit.get().getTimestamp();
+          instants = instants.filter(instant ->
+              compareTimestamps(instant.getTimestamp(), LESSER_THAN, firstNonSavepointCommitTime));
+        }
+      } else {
+        // Do not archive the commits that live in data set active timeline.
+        // This is required by metadata table, see HoodieTableMetadataUtil#processRollbackMetadata for details.
+        if (earliestActiveDatasetCommit.isPresent()) {
+          instants = instants.filter(instant ->
+              compareTimestamps(instant.getTimestamp(), HoodieTimeline.LESSER_THAN, earliestActiveDatasetCommit.get().getTimestamp()));
+        }
       }
     }
 
