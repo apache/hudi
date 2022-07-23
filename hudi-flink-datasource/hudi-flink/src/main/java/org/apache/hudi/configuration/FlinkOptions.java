@@ -45,6 +45,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static org.apache.hudi.common.util.PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH;
 import static org.apache.hudi.config.HoodieClusteringConfig.DAYBASED_LOOKBACK_PARTITIONS;
 import static org.apache.hudi.config.HoodieClusteringConfig.PARTITION_FILTER_BEGIN_PARTITION;
 import static org.apache.hudi.config.HoodieClusteringConfig.PARTITION_FILTER_END_PARTITION;
@@ -81,7 +82,7 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<String> PARTITION_DEFAULT_NAME = ConfigOptions
       .key("partition.default_name")
       .stringType()
-      .defaultValue("default") // keep sync with hoodie style
+      .defaultValue(DEFAULT_PARTITION_PATH) // keep sync with hoodie style
       .withDescription("The default partition name in case the dynamic partition"
           + " column value is null/empty string");
 
@@ -754,6 +755,12 @@ public class FlinkOptions extends HoodieConfig {
       .booleanType()
       .defaultValue(false)
       .withDescription("Assume partitioning is yyyy/mm/dd, default false");
+
+  public static final ConfigOption<Boolean> HIVE_SYNC_USE_JDBC = ConfigOptions
+      .key("hive_sync.use_jdbc")
+      .booleanType()
+      .defaultValue(true)
+      .withDescription("Use JDBC when hive synchronization is enabled, default true");
 
   public static final ConfigOption<Boolean> HIVE_SYNC_AUTO_CREATE_DB = ConfigOptions
       .key("hive_sync.auto_create_db")
