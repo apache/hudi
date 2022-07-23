@@ -138,6 +138,18 @@ object DataSourceReadOptions {
         " read from the data file (in Hudi partition columns are persisted by default)." +
         " This config is a fallback allowing to preserve existing behavior, and should not be used otherwise.")
 
+  val PARTITION_FIELD_IS_STRING: ConfigProperty[Boolean] =
+    ConfigProperty.key("hoodie.datasource.read.partition.field.is.string")
+      .defaultValue(false)
+      .sinceVersion("0.12.0")
+      .withDocumentation("When set to true, the partition field type will always be string")
+
+  val PARTITION_FIELD_NAMES: ConfigProperty[String] =
+    ConfigProperty.key("hoodie.datasource.read.partition.field.names")
+      .noDefaultValue()
+      .sinceVersion("0.12.0")
+      .withDocumentation("The partition field name how it will appear in the selected data")
+
   val INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.incr.fallback.fulltablescan.enable")
     .defaultValue("false")
