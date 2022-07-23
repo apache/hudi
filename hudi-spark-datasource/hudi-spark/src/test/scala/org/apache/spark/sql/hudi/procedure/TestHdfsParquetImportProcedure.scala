@@ -56,15 +56,15 @@ class TestHdfsParquetImportProcedure extends HoodieSparkSqlTestBase {
       val insertData: util.List[GenericRecord] = createInsertRecords(sourcePath)
 
       // Check required fields
-      checkExceptionContain(s"""call hdfs_parquet_import(tableType => 'mor')""")(
+      checkExceptionContain(s"""call hdfs_parquet_import(table_type => 'mor')""")(
         s"Argument: table is required")
 
       checkAnswer(
         s"""call hdfs_parquet_import(
-           |table => '$tableName', tableType => '${HoodieTableType.COPY_ON_WRITE.name}',
-           |srcPath => '$sourcePath', targetPath => '$targetPath',
-           |rowKey => '_row_key', partitionKey => 'timestamp',
-           |schemaFilePath => '$schemaFile')""".stripMargin) {
+           |table => '$tableName', table_type => '${HoodieTableType.COPY_ON_WRITE.name}',
+           |src_path => '$sourcePath', target_path => '$targetPath',
+           |row_key => '_row_key', partition_key => 'timestamp',
+           |schema_file_path => '$schemaFile')""".stripMargin) {
         Seq(0)
       }
 
@@ -89,15 +89,15 @@ class TestHdfsParquetImportProcedure extends HoodieSparkSqlTestBase {
       val insertData: util.List[GenericRecord] = createUpsertRecords(sourcePath)
 
       // Check required fields
-      checkExceptionContain(s"""call hdfs_parquet_import(tableType => 'mor')""")(
+      checkExceptionContain(s"""call hdfs_parquet_import(table_type => 'mor')""")(
         s"Argument: table is required")
 
       checkAnswer(
         s"""call hdfs_parquet_import(
-           |table => '$tableName', tableType => '${HoodieTableType.COPY_ON_WRITE.name}',
-           |srcPath => '$sourcePath', targetPath => '$targetPath',
-           |rowKey => '_row_key', partitionKey => 'timestamp',
-           |schemaFilePath => '$schemaFile', command => 'upsert')""".stripMargin) {
+           |table => '$tableName', table_type => '${HoodieTableType.COPY_ON_WRITE.name}',
+           |src_path => '$sourcePath', target_path => '$targetPath',
+           |row_key => '_row_key', partition_key => 'timestamp',
+           |schema_file_path => '$schemaFile', command => 'upsert')""".stripMargin) {
         Seq(0)
       }
 

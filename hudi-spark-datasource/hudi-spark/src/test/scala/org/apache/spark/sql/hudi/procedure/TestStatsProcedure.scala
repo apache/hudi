@@ -60,7 +60,7 @@ class TestStatsProcedure extends HoodieSparkSqlTestBase {
     }
   }
 
-  test("Test Call stats_filesizes Procedure") {
+  test("Test Call stats_file_sizes Procedure") {
     withTempDir { tmp =>
       val tableName = generateTableName
       val tablePath = s"${tmp.getCanonicalPath}/$tableName"
@@ -85,12 +85,12 @@ class TestStatsProcedure extends HoodieSparkSqlTestBase {
       spark.sql(s"insert into $tableName select 2, 'a2', 20, 1500")
 
       // Check required fields
-      checkExceptionContain(s"""call stats_filesizes(limit => 10)""")(
+      checkExceptionContain(s"""call stats_file_sizes(limit => 10)""")(
         s"Argument: table is required")
 
       // collect result for table
       val result = spark.sql(
-        s"""call stats_filesizes(table => '$tableName', partition_path => '/*')""".stripMargin).collect()
+        s"""call stats_file_sizes(table => '$tableName', partition_path => '/*')""".stripMargin).collect()
       assertResult(3) {
         result.length
       }

@@ -21,7 +21,7 @@ import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase
 
 class TestMetadataProcedure extends HoodieSparkSqlTestBase {
 
-  test("Test Call metadata_delete Procedure") {
+  test("Test Call delete_metadata_table Procedure") {
     withTempDir { tmp =>
       val tableName = generateTableName
       // create table
@@ -44,14 +44,14 @@ class TestMetadataProcedure extends HoodieSparkSqlTestBase {
       spark.sql(s"insert into $tableName select 2, 'a2', 20, 1500")
 
       // delete the metadata
-      val deleteResult = spark.sql(s"""call metadata_delete(table => '$tableName')""").collect()
+      val deleteResult = spark.sql(s"""call delete_metadata_table(table => '$tableName')""").collect()
       assertResult(1) {
         deleteResult.length
       }
     }
   }
 
-  test("Test Call metadata_create Procedure") {
+  test("Test Call create_metadata_table Procedure") {
     withTempDir { tmp =>
       val tableName = generateTableName
       // create table
@@ -74,20 +74,20 @@ class TestMetadataProcedure extends HoodieSparkSqlTestBase {
       spark.sql(s"insert into $tableName select 2, 'a2', 20, 1500")
 
       // The first step is delete the metadata
-      val deleteResult = spark.sql(s"""call metadata_delete(table => '$tableName')""").collect()
+      val deleteResult = spark.sql(s"""call delete_metadata_table(table => '$tableName')""").collect()
       assertResult(1) {
         deleteResult.length
       }
 
       // The second step is create the metadata
-      val createResult = spark.sql(s"""call metadata_create(table => '$tableName')""").collect()
+      val createResult = spark.sql(s"""call create_metadata_table(table => '$tableName')""").collect()
       assertResult(1) {
         createResult.length
       }
     }
   }
 
-  test("Test Call metadata_init Procedure") {
+  test("Test Call init_metadata_table Procedure") {
     withTempDir { tmp =>
       val tableName = generateTableName
       // create table
@@ -110,20 +110,20 @@ class TestMetadataProcedure extends HoodieSparkSqlTestBase {
       spark.sql(s"insert into $tableName select 2, 'a2', 20, 1500")
 
       // read only, no initialize
-      val readResult = spark.sql(s"""call metadata_init(table => '$tableName', readOnly => true)""").collect()
+      val readResult = spark.sql(s"""call init_metadata_table(table => '$tableName', read_only => true)""").collect()
       assertResult(1) {
         readResult.length
       }
 
       // initialize metadata
-      val initResult = spark.sql(s"""call metadata_init(table => '$tableName')""").collect()
+      val initResult = spark.sql(s"""call init_metadata_table(table => '$tableName')""").collect()
       assertResult(1) {
         initResult.length
       }
     }
   }
 
-  test("Test Call show_metadata_stats Procedure") {
+  test("Test Call show_metadata_table_stats Procedure") {
     withTempDir { tmp =>
       val tableName = generateTableName
       // create table
@@ -147,14 +147,14 @@ class TestMetadataProcedure extends HoodieSparkSqlTestBase {
       spark.sql(s"insert into $tableName select 2, 'a2', 20, 1500")
 
       // collect metadata stats for table
-      val metadataStats = spark.sql(s"""call show_metadata_stats(table => '$tableName')""").collect()
+      val metadataStats = spark.sql(s"""call show_metadata_table_stats(table => '$tableName')""").collect()
       assertResult(0) {
         metadataStats.length
       }
     }
   }
 
-  test("Test Call list_metadata_partitions Procedure") {
+  test("Test Call show_metadata_table_partitions Procedure") {
     withTempDir { tmp =>
       val tableName = generateTableName
       // create table
@@ -178,14 +178,14 @@ class TestMetadataProcedure extends HoodieSparkSqlTestBase {
       spark.sql(s"insert into $tableName select 2, 'a2', 20, 1500")
 
       // collect metadata partitions for table
-      val partitions = spark.sql(s"""call list_metadata_partitions(table => '$tableName')""").collect()
+      val partitions = spark.sql(s"""call show_metadata_table_partitions(table => '$tableName')""").collect()
       assertResult(2) {
         partitions.length
       }
     }
   }
 
-  test("Test Call list_metadata_files Procedure") {
+  test("Test Call show_metadata_table_files Procedure") {
     withTempDir { tmp =>
       val tableName = generateTableName
       // create table
@@ -209,21 +209,21 @@ class TestMetadataProcedure extends HoodieSparkSqlTestBase {
       spark.sql(s"insert into $tableName select 2, 'a2', 20, 1500")
 
       // collect metadata partitions for table
-      val partitions = spark.sql(s"""call list_metadata_partitions(table => '$tableName')""").collect()
+      val partitions = spark.sql(s"""call show_metadata_table_partitions(table => '$tableName')""").collect()
       assertResult(2) {
         partitions.length
       }
 
       // collect metadata files for a partition of a table
       val partition = partitions(0).get(0).toString
-      val filesResult = spark.sql(s"""call list_metadata_files(table => '$tableName', partition => '$partition')""").collect()
+      val filesResult = spark.sql(s"""call show_metadata_table_files(table => '$tableName', partition => '$partition')""").collect()
       assertResult(1) {
         filesResult.length
       }
     }
   }
 
-  test("Test Call validate_metadata_files Procedure") {
+  test("Test Call validate_metadata_table_files Procedure") {
     withTempDir { tmp =>
       val tableName = generateTableName
       // create table
@@ -247,13 +247,13 @@ class TestMetadataProcedure extends HoodieSparkSqlTestBase {
       spark.sql(s"insert into $tableName select 2, 'a2', 20, 1500")
 
       // collect validate metadata files result
-      val validateFilesResult = spark.sql(s"""call validate_metadata_files(table => '$tableName')""").collect()
+      val validateFilesResult = spark.sql(s"""call validate_metadata_table_files(table => '$tableName')""").collect()
       assertResult(0) {
         validateFilesResult.length
       }
 
       // collect validate metadata files result with verbose
-      val validateFilesVerboseResult = spark.sql(s"""call validate_metadata_files(table => '$tableName', verbose => true)""").collect()
+      val validateFilesVerboseResult = spark.sql(s"""call validate_metadata_table_files(table => '$tableName', verbose => true)""").collect()
       assertResult(2) {
         validateFilesVerboseResult.length
       }
