@@ -18,6 +18,7 @@
 
 package org.apache.hudi.hive.testutils;
 
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
@@ -264,10 +265,11 @@ public class TestCluster implements BeforeAllCallback, AfterAllCallback,
     }
   }
 
-  public void shutDown() {
+  public void shutDown() throws IOException {
     stopHiveServer2();
     Hive.closeCurrent();
     hiveTestService.getHiveMetaStore().stop();
     hdfsTestService.stop();
+    FileSystem.closeAll();
   }
 }
