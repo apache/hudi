@@ -120,7 +120,7 @@ public class TestHiveSyncTool {
     return opts;
   }
 
-  // (useSchemaFromCommitMetadata, syncAsDataSource, syncMode)
+  // (useJdbc, useSchemaFromCommitMetadata, syncAsDataSource)
   private static Iterable<Object[]> syncDataSourceTableParams() {
     List<Object[]> opts = new ArrayList<>();
     for (Object mode : SYNC_MODES) {
