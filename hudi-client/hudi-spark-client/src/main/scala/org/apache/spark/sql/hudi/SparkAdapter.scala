@@ -45,7 +45,7 @@ trait SparkAdapter extends Serializable {
    * Creates instance of [[HoodieCatalystExpressionUtils]] providing for common utils operating
    * on Catalyst [[Expression]]s
    */
-  def getCatalystExpressionUtils(): HoodieCatalystExpressionUtils
+  def getCatalystExpressionUtils: HoodieCatalystExpressionUtils
 
   /**
    * Creates instance of [[HoodieCatalystPlansUtils]] providing for common utils operating

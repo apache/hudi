@@ -23,9 +23,10 @@ import org.apache.avro.generic.{GenericRecord, GenericRecordBuilder, IndexedReco
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hadoop.mapred.JobConf
-import org.apache.hudi.HoodieBaseRelation.BaseFileReader
+import org.apache.hudi.HoodieBaseRelation.{BaseFileReader, generateUnsafeProjection, projectReader}
 import org.apache.hudi.HoodieConversionUtils.{toJavaOption, toScalaOption}
-import org.apache.hudi.HoodieMergeOnReadRDD.{AvroDeserializerSupport, collectFieldOrdinals, getPartitionPath, projectAvro, projectAvroUnsafe, projectRowUnsafe, resolveAvroSchemaNullability}
+import org.apache.hudi.HoodieMergeOnReadRDD.SafeAvroProjection.collectFieldOrdinals
+import org.apache.hudi.HoodieMergeOnReadRDD._
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig}
 import org.apache.hudi.common.engine.HoodieLocalEngineContext
 import org.apache.hudi.common.fs.FSUtils
@@ -43,8 +44,6 @@ import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadata}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.avro.HoodieAvroDeserializer
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.expressions.{SpecificInternalRow, UnsafeProjection}
-import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.{Partition, SerializableWritable, SparkContext, TaskContext}
 
@@ -56,14 +55,42 @@ import scala.util.Try
 
 case class HoodieMergeOnReadPartition(index: Int, split: HoodieMergeOnReadFileSplit) extends Partition
 
-case class HoodieMergeOnReadBaseFileReaders(fullSchemaFileReader: BaseFileReader,
-                                            requiredSchemaFileReaderForMerging: BaseFileReader,
-                                            requiredSchemaFileReaderForNoMerging: BaseFileReader)
+/**
+ * Class holding base-file readers for 3 different use-cases:
+ *
+ * <ol>
+ *   <li>Full-schema reader: is used when whole row has to be read to perform merging correctly.
+ *   This could occur, when no optimizations could be applied and we have to fallback to read the whole row from
+ *   the base file and the corresponding delta-log file to merge them correctly</li>
+ *
+ *   <li>Required-schema reader: is used when it's fine to only read row's projected columns.
+ *   This could occur, when row could be merged with corresponding delta-log record leveraging while only having
+ *   projected columns</li>
+ *
+ *   <li>Required-schema reader (skip-merging): is used when when no merging will be performed (skip-merged).
+ *   This could occur, when file-group has no delta-log files</li>
+ * </ol>
+ */
+private[hudi] case class HoodieMergeOnReadBaseFileReaders(fullSchemaReader: BaseFileReader,
+                                                          requiredSchemaReader: BaseFileReader,
+                                                          requiredSchemaReaderSkipMerging: BaseFileReader)
 
+/**
+ * RDD enabling Hudi's Merge-on-Read (MOR) semantic
+ *
+ * @param sc spark's context
+ * @param config hadoop configuration
+ * @param fileReaders suite of base file readers
+ * @param tableSchema table's full schema
+ * @param requiredSchema expected (potentially) projected schema
+ * @param tableState table's state
+ * @param mergeType type of merge performed
+ * @param fileSplits target file-splits this RDD will be iterating over
+ */
 class HoodieMergeOnReadRDD(@transient sc: SparkContext,
                            @transient config: Configuration,
                            fileReaders: HoodieMergeOnReadBaseFileReaders,
-                           dataSchema: HoodieTableSchema,
+                           tableSchema: HoodieTableSchema,
                            requiredSchema: HoodieTableSchema,
                            tableState: HoodieTableState,
                            mergeType: String,
@@ -90,18 +117,19 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
     val mergeOnReadPartition = split.asInstanceOf[HoodieMergeOnReadPartition]
     val iter = mergeOnReadPartition.split match {
       case dataFileOnlySplit if dataFileOnlySplit.logFiles.isEmpty =>
-        fileReaders.requiredSchemaFileReaderForNoMerging.apply(dataFileOnlySplit.dataFile.get)
+        val projectedReader = projectReader(fileReaders.requiredSchemaReaderSkipMerging, requiredSchema.structTypeSchema)
+        projectedReader(dataFileOnlySplit.dataFile.get)
 
       case logFileOnlySplit if logFileOnlySplit.dataFile.isEmpty =>
         new LogFileIterator(logFileOnlySplit, getConfig)
 
       case split if mergeType.equals(DataSourceReadOptions.REALTIME_SKIP_MERGE_OPT_VAL) =>
-        val baseFileIterator = fileReaders.requiredSchemaFileReaderForNoMerging.apply(split.dataFile.get)
-        new SkipMergeIterator(split, baseFileIterator, getConfig)
+        val reader = fileReaders.requiredSchemaReaderSkipMerging
+        new SkipMergeIterator(split, reader, getConfig)
 
       case split if mergeType.equals(DataSourceReadOptions.REALTIME_PAYLOAD_COMBINE_OPT_VAL) =>
-        val (baseFileIterator, schema) = readBaseFile(split)
-        new RecordMergingFileIterator(split, baseFileIterator, schema, getConfig)
+        val reader = pickBaseFileReader
+        new RecordMergingFileIterator(split, reader, getConfig)
 
       case _ => throw new HoodieException(s"Unable to select an Iterator to read the Hoodie MOR File Split for " +
         s"file path: ${mergeOnReadPartition.split.dataFile.get.filePath}" +
@@ -120,7 +148,7 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
     iter
   }
 
-  private def readBaseFile(split: HoodieMergeOnReadFileSplit): (Iterator[InternalRow], HoodieTableSchema) = {
+  private def pickBaseFileReader: BaseFileReader = {
     // NOTE: This is an optimization making sure that even for MOR tables we fetch absolute minimum
     //       of the stored data possible, while still properly executing corresponding relation's semantic
     //       and meet the query's requirements.
@@ -129,10 +157,11 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
     //          a) It does use one of the standard (and whitelisted) Record Payload classes
     //       then we can avoid reading and parsing the records w/ _full_ schema, and instead only
     //       rely on projected one, nevertheless being able to perform merging correctly
-    if (!whitelistedPayloadClasses.contains(tableState.recordPayloadClassName))
-      (fileReaders.fullSchemaFileReader(split.dataFile.get), dataSchema)
-    else
-      (fileReaders.requiredSchemaFileReaderForMerging(split.dataFile.get), requiredSchema)
+    if (whitelistedPayloadClasses.contains(tableState.recordPayloadClassName)) {
+      fileReaders.requiredSchemaReader
+    } else {
+      fileReaders.fullSchemaReader
+    }
   }
 
   override protected def getPartitions: Array[Partition] =
@@ -156,38 +185,27 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
     protected override val requiredAvroSchema: Schema = new Schema.Parser().parse(requiredSchema.avroSchemaStr)
     protected override val requiredStructTypeSchema: StructType = requiredSchema.structTypeSchema
 
-    protected val logFileReaderAvroSchema: Schema = new Schema.Parser().parse(dataSchema.avroSchemaStr)
+    protected val logFileReaderAvroSchema: Schema = new Schema.Parser().parse(tableSchema.avroSchemaStr)
 
-    protected val recordBuilder: GenericRecordBuilder = new GenericRecordBuilder(requiredAvroSchema)
     protected var recordToLoad: InternalRow = _
 
-    // TODO validate whether we need to do UnsafeProjection
-    protected val unsafeProjection: UnsafeProjection = UnsafeProjection.create(requiredStructTypeSchema)
-
-    // NOTE: This maps _required_ schema fields onto the _full_ table schema, collecting their "ordinals"
-    //       w/in the record payload. This is required, to project records read from the Delta Log file
-    //       which always reads records in full schema (never projected, due to the fact that DL file might
-    //       be stored in non-columnar formats like Avro, HFile, etc)
-    private val requiredSchemaFieldOrdinals: List[Int] = collectFieldOrdinals(requiredAvroSchema, logFileReaderAvroSchema)
+    private val requiredSchemaSafeAvroProjection = SafeAvroProjection.create(logFileReaderAvroSchema, requiredAvroSchema)
 
     private var logScanner = {
-      val internalSchema = dataSchema.internalSchema.getOrElse(InternalSchema.getEmptyInternalSchema)
+      val internalSchema = tableSchema.internalSchema.getOrElse(InternalSchema.getEmptyInternalSchema)
       HoodieMergeOnReadRDD.scanLog(split.logFiles, getPartitionPath(split), logFileReaderAvroSchema, tableState,
         maxCompactionMemoryInBytes, config, internalSchema)
     }
 
     private val logRecords = logScanner.getRecords.asScala
 
-    // NOTE: This iterator iterates over already projected (in required schema) records
     // NOTE: This have to stay lazy to make sure it's initialized only at the point where it's
     //       going to be used, since we modify `logRecords` before that and therefore can't do it any earlier
     protected lazy val logRecordsIterator: Iterator[Option[GenericRecord]] =
       logRecords.iterator.map {
         case (_, record) =>
-          val avroRecordOpt = toScalaOption(record.getData.getInsertValue(logFileReaderAvroSchema, payloadProps))
-          avroRecordOpt.map {
-            avroRecord => projectAvroUnsafe(avroRecord, requiredAvroSchema, requiredSchemaFieldOrdinals, recordBuilder)
-          }
+          toScalaOption(record.getData.getInsertValue(logFileReaderAvroSchema, payloadProps))
+            .map(_.asInstanceOf[GenericRecord])
       }
 
     protected def removeLogRecord(key: String): Option[HoodieRecord[_ <: HoodieRecordPayload[_]]] =
@@ -205,7 +223,8 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
           // Record has been deleted, skipping
           this.hasNextInternal
         } else {
-          recordToLoad = unsafeProjection(deserialize(avroRecordOpt.get))
+          val projectedAvroRecord = requiredSchemaSafeAvroProjection(avroRecordOpt.get)
+          recordToLoad = deserialize(projectedAvroRecord)
           true
         }
       }
@@ -229,14 +248,18 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
    * performing any combination/merging of the records w/ the same primary keys (ie producing duplicates potentially)
    */
   private class SkipMergeIterator(split: HoodieMergeOnReadFileSplit,
-                                  baseFileIterator: Iterator[InternalRow],
+                                  baseFileReader: BaseFileReader,
                                   config: Configuration)
     extends LogFileIterator(split, config) {
 
+    private val requiredSchemaUnsafeProjection = generateUnsafeProjection(baseFileReader.schema, requiredStructTypeSchema)
+
+    private val baseFileIterator = baseFileReader(split.dataFile.get)
+
     override def hasNext: Boolean = {
       if (baseFileIterator.hasNext) {
-        val curRow = baseFileIterator.next()
-        recordToLoad = curRow
+        // No merge is required, simply load current row and project into required schema
+        recordToLoad = requiredSchemaUnsafeProjection(baseFileIterator.next())
         true
       } else {
         super[LogFileIterator].hasNext
@@ -250,8 +273,7 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
    * streams
    */
   private class RecordMergingFileIterator(split: HoodieMergeOnReadFileSplit,
-                                          baseFileIterator: Iterator[InternalRow],
-                                          baseFileReaderSchema: HoodieTableSchema,
+                                          baseFileReader: BaseFileReader,
                                           config: Configuration)
     extends LogFileIterator(split, config) {
 
@@ -260,13 +282,17 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
     //        - Projected schema
     //       As such, no particular schema could be assumed, and therefore we rely on the caller
     //       to correspondingly set the scheme of the expected output of base-file reader
-    private val baseFileReaderAvroSchema = new Schema.Parser().parse(baseFileReaderSchema.avroSchemaStr)
-    private val requiredSchemaFieldOrdinals: List[Int] = collectFieldOrdinals(requiredAvroSchema, baseFileReaderAvroSchema)
+    private val baseFileReaderAvroSchema = sparkAdapter.getAvroSchemaConverters.toAvroType(baseFileReader.schema, nullable = false, "record")
 
-    private val serializer = sparkAdapter.createAvroSerializer(baseFileReaderSchema.structTypeSchema,
-      baseFileReaderAvroSchema, resolveAvroSchemaNullability(baseFileReaderAvroSchema))
+    private val serializer = sparkAdapter.createAvroSerializer(baseFileReader.schema, baseFileReaderAvroSchema, nullable = false)
 
-    private val recordKeyOrdinal = baseFileReaderSchema.structTypeSchema.fieldIndex(tableState.recordKeyField)
+    private val reusableRecordBuilder: GenericRecordBuilder = new GenericRecordBuilder(requiredAvroSchema)
+
+    private val recordKeyOrdinal = baseFileReader.schema.fieldIndex(tableState.recordKeyField)
+
+    private val requiredSchemaUnsafeProjection = generateUnsafeProjection(baseFileReader.schema, requiredStructTypeSchema)
+
+    private val baseFileIterator = baseFileReader(split.dataFile.get)
 
     override def hasNext: Boolean = hasNextInternal
 
@@ -275,26 +301,22 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
     //       handling records
     @tailrec private def hasNextInternal: Boolean = {
       if (baseFileIterator.hasNext) {
-        val curRowRecord = baseFileIterator.next()
-        val curKey = curRowRecord.getString(recordKeyOrdinal)
+        val curRow = baseFileIterator.next()
+        val curKey = curRow.getString(recordKeyOrdinal)
         val updatedRecordOpt = removeLogRecord(curKey)
         if (updatedRecordOpt.isEmpty) {
-          // No merge needed, load current row with required projected schema
-          recordToLoad = unsafeProjection(projectRowUnsafe(curRowRecord, requiredSchema.structTypeSchema, requiredSchemaFieldOrdinals))
+          // No merge is required, simply load current row and project into required schema
+          recordToLoad = requiredSchemaUnsafeProjection(curRow)
           true
         } else {
-          val mergedAvroRecordOpt = merge(serialize(curRowRecord), updatedRecordOpt.get)
+          val mergedAvroRecordOpt = merge(serialize(curRow), updatedRecordOpt.get)
           if (mergedAvroRecordOpt.isEmpty) {
             // Record has been deleted, skipping
             this.hasNextInternal
           } else {
-            // NOTE: In occurrence of a merge we can't know the schema of the record being returned, b/c
-            //       record from the Delta Log will bear (full) Table schema, while record from the Base file
-            //       might already be read in projected one (as an optimization).
-            //       As such we can't use more performant [[projectAvroUnsafe]], and instead have to fallback
-            //       to [[projectAvro]]
-            val projectedAvroRecord = projectAvro(mergedAvroRecordOpt.get, requiredAvroSchema, recordBuilder)
-            recordToLoad = unsafeProjection(deserialize(projectedAvroRecord))
+            val projectedAvroRecord = projectAvroUnsafe(mergedAvroRecordOpt.get.asInstanceOf[GenericRecord],
+              requiredAvroSchema, reusableRecordBuilder)
+            recordToLoad = deserialize(projectedAvroRecord)
             true
           }
         }
@@ -381,66 +403,10 @@ private object HoodieMergeOnReadRDD {
     }
   }
 
-  /**
-   * Projects provided instance of [[InternalRow]] into provided schema, assuming that the
-   * the schema of the original row is strictly a superset of the given one
-   */
-  private def projectRowUnsafe(row: InternalRow,
-                         projectedSchema: StructType,
-                         ordinals: Seq[Int]): InternalRow = {
-    val projectedRow = new SpecificInternalRow(projectedSchema)
-    var curIndex = 0
-    projectedSchema.zip(ordinals).foreach { case (field, pos) =>
-      val curField = if (row.isNullAt(pos)) {
-        null
-      } else {
-        row.get(pos, field.dataType)
-      }
-      projectedRow.update(curIndex, curField)
-      curIndex += 1
-    }
-    projectedRow
-  }
-
-  /**
-   * Projects provided instance of [[IndexedRecord]] into provided schema, assuming that the
-   * the schema of the original row is strictly a superset of the given one
-   */
-  def projectAvroUnsafe(record: IndexedRecord,
-                        projectedSchema: Schema,
-                        ordinals: List[Int],
-                        recordBuilder: GenericRecordBuilder): GenericRecord = {
+  private def projectAvroUnsafe(record: GenericRecord, projectedSchema: Schema, reusableRecordBuilder: GenericRecordBuilder): GenericRecord = {
     val fields = projectedSchema.getFields.asScala
-    checkState(fields.length == ordinals.length)
-    fields.zip(ordinals).foreach {
-      case (field, pos) => recordBuilder.set(field, record.get(pos))
-    }
-    recordBuilder.build()
-  }
-
-  /**
-   * Projects provided instance of [[IndexedRecord]] into provided schema, assuming that the
-   * the schema of the original row is strictly a superset of the given one
-   *
-   * This is a "safe" counterpart of [[projectAvroUnsafe]]: it does build mapping of the record's
-   * schema into projected one itself (instead of expecting such mapping from the caller)
-   */
-  def projectAvro(record: IndexedRecord,
-                  projectedSchema: Schema,
-                  recordBuilder: GenericRecordBuilder): GenericRecord = {
-    projectAvroUnsafe(record, projectedSchema, collectFieldOrdinals(projectedSchema, record.getSchema), recordBuilder)
-  }
-
-  /**
-   * Maps [[projected]] [[Schema]] onto [[source]] one, collecting corresponding field ordinals w/in it, which
-   * will be subsequently used by either [[projectRowUnsafe]] or [[projectAvroUnsafe()]] method
-   *
-   * @param projected target projected schema (which is a proper subset of [[source]] [[Schema]])
-   * @param source source schema of the record being projected
-   * @return list of ordinals of corresponding fields of [[projected]] schema w/in [[source]] one
-   */
-  private def collectFieldOrdinals(projected: Schema, source: Schema): List[Int] = {
-    projected.getFields.asScala.map(f => source.getField(f.name()).pos()).toList
+    fields.foreach(field => reusableRecordBuilder.set(field, record.get(field.name())))
+    reusableRecordBuilder.build()
   }
 
   private def getPartitionPath(split: HoodieMergeOnReadFileSplit): Path = {
@@ -452,9 +418,48 @@ private object HoodieMergeOnReadRDD {
       .getParent
   }
 
-  private def resolveAvroSchemaNullability(schema: Schema) = {
-    AvroConversionUtils.resolveAvroTypeNullability(schema) match {
-      case (nullable, _) => nullable
+  // TODO extract to HoodieAvroSchemaUtils
+  abstract class AvroProjection extends (GenericRecord => GenericRecord)
+
+  class SafeAvroProjection(sourceSchema: Schema,
+                           projectedSchema: Schema,
+                           reusableRecordBuilder: GenericRecordBuilder = null) extends AvroProjection {
+
+    private val ordinals: List[Int] = collectFieldOrdinals(projectedSchema, sourceSchema)
+    private val recordBuilder: GenericRecordBuilder =
+      if (reusableRecordBuilder != null) {
+        reusableRecordBuilder
+      } else {
+        new GenericRecordBuilder(projectedSchema)
+      }
+
+    override def apply(record: GenericRecord): GenericRecord = {
+      val fields = projectedSchema.getFields.asScala
+      checkState(fields.length == ordinals.length)
+      fields.zip(ordinals).foreach {
+        case (field, pos) => recordBuilder.set(field, record.get(pos))
+      }
+      recordBuilder.build()
+    }
+  }
+
+  object SafeAvroProjection {
+    def create(sourceSchema: Schema, projectedSchema: Schema, reusableRecordBuilder: GenericRecordBuilder = null): SafeAvroProjection =
+      new SafeAvroProjection(
+        sourceSchema = sourceSchema,
+        projectedSchema = projectedSchema,
+        reusableRecordBuilder = reusableRecordBuilder)
+
+    /**
+     * Maps [[projected]] [[Schema]] onto [[source]] one, collecting corresponding field ordinals w/in it, which
+     * will be subsequently used by either [[projectRowUnsafe]] or [[projectAvroUnsafe()]] method
+     *
+     * @param projected target projected schema (which is a proper subset of [[source]] [[Schema]])
+     * @param source source schema of the record being projected
+     * @return list of ordinals of corresponding fields of [[projected]] schema w/in [[source]] one
+     */
+    private def collectFieldOrdinals(projected: Schema, source: Schema): List[Int] = {
+      projected.getFields.asScala.map(f => source.getField(f.name()).pos()).toList
     }
   }
 

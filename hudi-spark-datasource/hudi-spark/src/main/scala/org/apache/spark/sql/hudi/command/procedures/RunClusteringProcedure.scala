@@ -41,7 +41,7 @@ class RunClusteringProcedure extends BaseProcedure
   with Logging
   with SparkAdapterSupport {
 
-  private val exprUtils = sparkAdapter.getCatalystExpressionUtils()
+  private val exprUtils = sparkAdapter.getCatalystExpressionUtils
 
   /**
    * OPTIMIZE table_name|table_path [WHERE predicate]

@@ -17,7 +17,6 @@
 
 package org.apache.hudi
 
-import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{GlobPattern, Path}
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.common.model.{FileSlice, HoodieRecord}
@@ -27,7 +26,9 @@ import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.{getCommitMetadata, getWritePartitionPaths, listAffectedFilesForCommits}
+import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SQLContext
+import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types.StructType
@@ -58,32 +59,15 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
   }
 
   protected override def composeRDD(fileSplits: Seq[HoodieMergeOnReadFileSplit],
-                                    partitionSchema: StructType,
-                                    dataSchema: HoodieTableSchema,
+                                    tableSchema: HoodieTableSchema,
                                     requiredSchema: HoodieTableSchema,
                                     requestedColumns: Array[String],
-                                    filters: Array[Filter]): HoodieMergeOnReadRDD = {
-    val fullSchemaParquetReader = createBaseFileReader(
-      spark = sqlContext.sparkSession,
-      partitionSchema = partitionSchema,
-      dataSchema = dataSchema,
-      requiredSchema = dataSchema,
-      // This file-reader is used to read base file records, subsequently merging them with the records
-      // stored in delta-log files. As such, we have to read _all_ records from the base file, while avoiding
-      // applying any user-defined filtering _before_ we complete combining them w/ delta-log records (to make sure that
-      // we combine them correctly)
-      //
-      // The only filtering applicable here is the filtering to make sure we're only fetching records that
-      // fall into incremental span of the timeline being queried
-      filters = incrementalSpanRecordFilters,
-      options = optParams,
-      // NOTE: We have to fork the Hadoop Config here as Spark will be modifying it
-      //       to configure Parquet reader appropriately
-      hadoopConf = embedInternalSchema(new Configuration(conf), internalSchemaOpt)
-    )
-
-    val (requiredSchemaBaseFileReaderMerging, requiredSchemaBaseFileReaderNoMerging) =
-      createMergeOnReadBaseFileReaders(partitionSchema, dataSchema, requiredSchema, requestedColumns, filters ++ incrementalSpanRecordFilters)
+                                    filters: Array[Filter]): RDD[InternalRow] = {
+    // The only required filters are ones that make sure we're only fetching records that
+    // fall into incremental span of the timeline being queried
+    val requiredFilters = incrementalSpanRecordFilters
+    val optionalFilters = filters
+    val readers = createBaseFileReaders(tableSchema, requiredSchema, requestedColumns, requiredFilters, optionalFilters)
 
     val hoodieTableState = getTableState
     // TODO(HUDI-3639) implement incremental span record filtering w/in RDD to make sure returned iterator is appropriately
@@ -91,12 +75,8 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
     new HoodieMergeOnReadRDD(
       sqlContext.sparkContext,
       config = jobConf,
-      fileReaders = HoodieMergeOnReadBaseFileReaders(
-        fullSchemaFileReader = fullSchemaParquetReader,
-        requiredSchemaFileReaderForMerging = requiredSchemaBaseFileReaderMerging,
-        requiredSchemaFileReaderForNoMerging = requiredSchemaBaseFileReaderNoMerging
-      ),
-      dataSchema = dataSchema,
+      fileReaders = readers,
+      tableSchema = tableSchema,
       requiredSchema = requiredSchema,
       tableState = hoodieTableState,
       mergeType = mergeType,
