@@ -28,8 +28,11 @@ import org.apache.hudi.exception.HoodieException;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.index.ColumnDomain;
+import org.apache.hudi.index.ColumnHandle;
 
 import java.io.IOException;
+import java.util.List;
 
 /**
  * {@code HoodieTableFileSystemView} implementation that retrieved partition listings from the Metadata Table.
@@ -63,6 +66,10 @@ public class HoodieMetadataFileSystemView extends HoodieTableFileSystemView {
   @Override
   protected FileStatus[] listPartition(Path partitionPath) throws IOException {
     return tableMetadata.getAllFilesInPartition(partitionPath);
+  }
+
+  protected FileStatus[] getFilteredFilesUsingCSI(List<String> columns, ColumnDomain<ColumnHandle> columnDomain) throws IOException {
+    return tableMetadata.getFilesToQueryUsingCSI(columns, columnDomain);
   }
 
   @Override

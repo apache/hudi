@@ -41,8 +41,16 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.util.ClosableIterator;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.index.ColumnDomain;
+import org.apache.hudi.index.ColumnHandle;
+import org.apache.hudi.index.Domain;
+import org.apache.hudi.index.Marker;
+import org.apache.hudi.index.Range;
+import org.apache.hudi.index.Type;
+import org.apache.hudi.index.ValueSet;
 import org.apache.hudi.io.storage.HoodieHFileReader;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieMetadataMergedLogRecordReader;
@@ -55,6 +63,7 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.schema.MessageType;
+import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -63,8 +72,11 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.NavigableMap;
+import java.util.TreeMap;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.model.WriteOperationType.INSERT;
@@ -94,6 +106,43 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
 
   private void doWriteInsertAndUpsert(HoodieTestTable testTable) throws Exception {
     doWriteInsertAndUpsert(testTable, "0000001", "0000002", false);
+  }
+
+  @Test
+  public void testColumnStatsIndexFilter() throws Exception {
+    HoodieTableType tableType = HoodieTableType.COPY_ON_WRITE;
+    init(tableType, true, true);
+    String newCommitTime = "001";
+    int totalRecords = 10;
+    List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, totalRecords);
+    JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
+    getHoodieWriteClient(writeConfig);
+    writeClient.startCommitWithTime(newCommitTime);
+    writeClient.upsert(writeRecords, newCommitTime);
+    HoodieBackedTableMetadata tableMetadata = new HoodieBackedTableMetadata(context, writeConfig.getMetadataConfig(), writeConfig.getBasePath(), writeConfig.getSpillableMapBasePath(), false);
+    List<String> metadataPartitions = tableMetadata.getAllPartitionPaths();
+    long allFiles = metadataPartitions.stream().map(partition -> {
+      try {
+        Path partitionPath = new Path(basePath, partition);
+        return tableMetadata.getAllFilesInPartition(partitionPath);
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+    }).count();
+    ColumnDomain<ColumnHandle> columnDomain = new ColumnDomain<>(Option.of(getDomain()));
+    FileStatus[] status = tableMetadata.getFilesToQueryUsingCSI(Arrays.asList("rider", "driver"), columnDomain);
+    // rider-001 is the only value getting written for rider field.
+    assertEquals(status.length, allFiles);
+  }
+
+  private Map<ColumnHandle, Domain> getDomain() {
+    Map<ColumnHandle, Domain> map = new HashMap<>();
+    Range range = new Range(Marker.exactly(Type.VARCHAR, "rider-000"), Marker.upperUnbounded(Type.VARCHAR));
+    NavigableMap<Marker, Range> rangeNavigableMap = new TreeMap<>();
+    rangeNavigableMap.put(range.getLow(), range);
+    map.put(new ColumnHandle("rider", Type.VARCHAR), new Domain(false, new ValueSet(Type.VARCHAR, rangeNavigableMap)));
+    map.put(new ColumnHandle("driver", Type.VARCHAR), Domain.all(Type.VARCHAR));
+    return map;
   }
 
   private void verifyBaseMetadataTable() throws IOException {

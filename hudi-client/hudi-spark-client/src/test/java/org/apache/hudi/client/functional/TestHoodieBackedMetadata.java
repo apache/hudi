@@ -443,7 +443,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
   @ParameterizedTest
   @MethodSource("tableTypeAndEnableOperationArgs")
   public void testTableOperations(HoodieTableType tableType, boolean enableFullScan) throws Exception {
-    init(tableType, true, enableFullScan, false, false);
+    init(tableType, true, enableFullScan, false, false, false);
     doWriteInsertAndUpsert(testTable);
 
     // trigger an upsert
@@ -1296,7 +1296,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
   @ParameterizedTest
   @MethodSource("tableTypeAndEnableOperationArgs")
   public void testMetadataBootstrapLargeCommitList(HoodieTableType tableType, boolean nonPartitionedDataset) throws Exception {
-    init(tableType, true, true, true, false);
+    init(tableType, true, true, true, false, false);
     long baseCommitTime = Long.parseLong(HoodieActiveTimeline.createNewInstantTime());
     for (int i = 1; i < 25; i += 7) {
       long commitTime1 = getNextCommitTime(baseCommitTime);
@@ -1366,7 +1366,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
   @ValueSource(booleans = {true, false})
   public void testMetadataPayloadSpuriousDeletes(boolean ignoreSpuriousDeletes) throws Exception {
     tableType = COPY_ON_WRITE;
-    init(tableType, true, true, false, ignoreSpuriousDeletes);
+    init(tableType, true, true, false, ignoreSpuriousDeletes, false);
     doWriteInsertAndUpsert(testTable);
     // trigger an upsert
     doWriteOperationAndValidate(testTable, "0000003");
@@ -2092,7 +2092,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
 
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext,
-        getWriteConfigBuilder(HoodieFailedWritesCleaningPolicy.EAGER, true, true, false, true, false, false).build(),
+        getWriteConfigBuilder(HoodieFailedWritesCleaningPolicy.EAGER, true, true, false, true, false, false, false).build(),
         true)) {
       String newCommitTime = HoodieActiveTimeline.createNewInstantTime();
       client.startCommitWithTime(newCommitTime);
@@ -2123,7 +2123,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     }
 
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext,
-        getWriteConfigBuilder(HoodieFailedWritesCleaningPolicy.EAGER, true, true, false, true, false, false).build(),
+        getWriteConfigBuilder(HoodieFailedWritesCleaningPolicy.EAGER, true, true, false, true, false, false, false).build(),
         true)) {
       String newCommitTime = client.startCommit();
       // Next insert
@@ -2199,7 +2199,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     // TESTCASE: If commit on the metadata table succeeds but fails on the dataset, then on next init the metadata table
     // should be rolled back to last valid commit.
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext,
-        getWriteConfigBuilder(HoodieFailedWritesCleaningPolicy.EAGER, true, true, false, true, false, false).build(),
+        getWriteConfigBuilder(HoodieFailedWritesCleaningPolicy.EAGER, true, true, false, true, false, false, false).build(),
         true)) {
       String newCommitTime = HoodieActiveTimeline.createNewInstantTime();
       client.startCommitWithTime(newCommitTime);
@@ -2223,7 +2223,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     }
 
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext,
-        getWriteConfigBuilder(HoodieFailedWritesCleaningPolicy.EAGER, true, true, false, true, false, false).build(),
+        getWriteConfigBuilder(HoodieFailedWritesCleaningPolicy.EAGER, true, true, false, true, false, false, false).build(),
         true)) {
       String newCommitTime = client.startCommit();
       // Next insert

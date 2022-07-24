@@ -32,6 +32,8 @@ import org.apache.hudi.common.util.Option;
 
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieMetadataException;
+import org.apache.hudi.index.ColumnDomain;
+import org.apache.hudi.index.ColumnHandle;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -118,6 +120,8 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
    * Fetch all the files at the given partition path, per the latest snapshot of the metadata.
    */
   FileStatus[] getAllFilesInPartition(Path partitionPath) throws IOException;
+
+  FileStatus[] getFilesToQueryUsingCSI(List<String> columns, ColumnDomain<ColumnHandle> columnDomain) throws IOException;
 
   /**
    * Fetch list of all partition paths, per the latest snapshot of the metadata.

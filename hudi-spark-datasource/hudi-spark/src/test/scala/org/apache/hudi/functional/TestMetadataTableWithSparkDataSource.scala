@@ -99,7 +99,7 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
     val colStatsDF = spark.read.format(hudi).load(s"$basePath/.hoodie/metadata/column_stats")
 
     // Smoke test
-    colStatsDF.show()
+    colStatsDF.select("ColumnStatsMetadata").show()
   }
 
   private def parseRecords(records: Seq[String]) = {

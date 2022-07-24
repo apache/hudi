@@ -34,6 +34,8 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.exception.HoodieMetadataException;
+import org.apache.hudi.index.ColumnDomain;
+import org.apache.hudi.index.ColumnHandle;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -64,6 +66,11 @@ public class FileSystemBackedTableMetadata implements HoodieTableMetadata {
   public FileStatus[] getAllFilesInPartition(Path partitionPath) throws IOException {
     FileSystem fs = partitionPath.getFileSystem(hadoopConf.get());
     return FSUtils.getAllDataFilesInPartition(fs, partitionPath);
+  }
+
+  @Override
+  public FileStatus[] getFilesToQueryUsingCSI(List<String> columns, ColumnDomain<ColumnHandle> columnDomain) {
+    throw new HoodieMetadataException("Unsupported Operation: getFilesUsingColumnStats!");
   }
 
   @Override
