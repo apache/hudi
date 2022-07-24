@@ -206,7 +206,7 @@ public class HoodieFlinkClientTestHarness extends HoodieCommonTestHarness implem
   protected void cleanupDFS() throws java.io.IOException {
     if (hdfsTestService != null) {
       hdfsTestService.stop();
-      dfsCluster.shutdown();
+      dfsCluster.shutdown(true, true);
       hdfsTestService = null;
       dfsCluster = null;
       dfs = null;
