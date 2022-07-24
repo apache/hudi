@@ -214,9 +214,10 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
   }
 
   @AfterEach
-  public void closeFilesystem() throws IOException {
+  public void closeFileSystem() throws IOException {
     if (fileSystem != null) {
       fileSystem.close();
+      fileSystem = null;
     }
   }
 
