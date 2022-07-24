@@ -35,15 +35,15 @@ import scala.collection.JavaConverters._
 class ValidateHoodieSyncProcedure extends BaseProcedure with ProcedureBuilder with Logging {
 
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "srcTable", DataTypes.StringType, None),
-    ProcedureParameter.required(1, "dstTable", DataTypes.StringType, None),
+    ProcedureParameter.required(0, "src_table", DataTypes.StringType, None),
+    ProcedureParameter.required(1, "dst_table", DataTypes.StringType, None),
     ProcedureParameter.required(2, "mode", DataTypes.StringType, "complete"),
-    ProcedureParameter.required(3, "hiveServerUrl", DataTypes.StringType, None),
-    ProcedureParameter.required(4, "hivePass", DataTypes.StringType, None),
-    ProcedureParameter.optional(5, "sourceDb", DataTypes.StringType, "rawdata"),
-    ProcedureParameter.optional(6, "targetDb", DataTypes.StringType, "dwh_hoodie"),
-    ProcedureParameter.optional(7, "partitionCount", DataTypes.IntegerType, 5),
-    ProcedureParameter.optional(8, "hiveUser", DataTypes.StringType, "")
+    ProcedureParameter.required(3, "hive_server_url", DataTypes.StringType, None),
+    ProcedureParameter.required(4, "hive_pass", DataTypes.StringType, None),
+    ProcedureParameter.optional(5, "src_db", DataTypes.StringType, "rawdata"),
+    ProcedureParameter.optional(6, "target_db", DataTypes.StringType, "dwh_hoodie"),
+    ProcedureParameter.optional(7, "partition_cnt", DataTypes.IntegerType, 5),
+    ProcedureParameter.optional(8, "hive_user", DataTypes.StringType, "")
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
