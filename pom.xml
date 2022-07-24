@@ -102,8 +102,8 @@
     <glassfish.version>2.17</glassfish.version>
     <glassfish.el.version>3.0.1-b12</glassfish.el.version>
     <parquet.version>1.10.1</parquet.version>
-    <junit.jupiter.version>5.7.2</junit.jupiter.version>
-    <junit.vintage.version>5.7.2</junit.vintage.version>
+    <junit.jupiter.version>5.8.2</junit.jupiter.version>
+    <junit.vintage.version>5.8.2</junit.vintage.version>
     <junit.platform.version>1.7.2</junit.platform.version>
     <mockito.jupiter.version>3.3.3</mockito.jupiter.version>
     <log4j.test.version>2.17.2</log4j.test.version>
