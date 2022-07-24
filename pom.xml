@@ -153,7 +153,7 @@
     <scala-maven-plugin.version>3.3.1</scala-maven-plugin.version>
     <scalatest.version>3.0.1</scalatest.version>
     <scalatest.spark3.version>3.1.0</scalatest.spark3.version>
-    <surefire-log4j.file>file://${project.basedir}/src/test/resources/log4j-surefire.properties</surefire-log4j.file>
+    <surefire-log4j.file>file://${project.basedir}/src/test/resources/log4j2-surefire.properties</surefire-log4j.file>
     <thrift.version>0.12.0</thrift.version>
     <jetty.version>9.4.15.v20190215</jetty.version>
     <htrace.version>3.1.0-incubating</htrace.version>
@@ -407,7 +407,6 @@
             <trimStackTrace>false</trimStackTrace>
             <systemPropertyVariables>
               <log4j.configurationFile>${surefire-log4j.file}</log4j.configurationFile>
-              <log4j1.compatibility>true</log4j1.compatibility>
             </systemPropertyVariables>
             <useSystemClassLoader>false</useSystemClassLoader>
           </configuration>
@@ -422,8 +421,7 @@
             <junitxml>.</junitxml>
             <filereports>TestSuite.txt</filereports>
             <systemProperties>
-              <log4j.configuration>${surefire-log4j.file}</log4j.configuration>
-              <log4j1.compatibility>true</log4j1.compatibility>
+              <log4j.configurationFile>${surefire-log4j.file}</log4j.configurationFile>
             </systemProperties>
           </configuration>
           <executions>
@@ -1463,7 +1461,7 @@
         </property>
       </activation>
       <properties>
-        <surefire-log4j.file>file://${project.basedir}/src/test/resources/log4j-surefire-quiet.properties
+        <surefire-log4j.file>file://${project.basedir}/src/test/resources/log4j2-surefire-quiet.properties
         </surefire-log4j.file>
       </properties>
     </profile>
