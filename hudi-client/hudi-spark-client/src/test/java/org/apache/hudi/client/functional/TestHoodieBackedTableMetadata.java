@@ -133,7 +133,6 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
             }
             FileStatus[] files = tableMetadata.getAllFilesInPartition(new Path(part));
             filesNumber.addAndGet(files.length);
-            LOG.warn(Arrays.toString(files) + " : " + files.length);
             assertEquals(1, files.length);
           } catch (Exception e) {
             flag.set(true);
