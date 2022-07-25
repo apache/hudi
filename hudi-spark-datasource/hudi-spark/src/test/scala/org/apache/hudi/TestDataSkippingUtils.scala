@@ -57,7 +57,7 @@ case class IndexRow(fileName: String,
 
 class TestDataSkippingUtils extends HoodieClientTestBase with SparkAdapterSupport {
 
-  val exprUtils: HoodieCatalystExpressionUtils = sparkAdapter.createCatalystExpressionUtils()
+  val exprUtils: HoodieCatalystExpressionUtils = sparkAdapter.getCatalystExpressionUtils
 
   var spark: SparkSession = _
 

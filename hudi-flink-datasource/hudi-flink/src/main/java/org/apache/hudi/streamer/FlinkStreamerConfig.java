@@ -39,6 +39,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.hudi.common.util.PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH;
 import static org.apache.hudi.configuration.FlinkOptions.PARTITION_FORMAT_DAY;
 
 /**
@@ -178,7 +179,7 @@ public class FlinkStreamerConfig extends Configuration {
 
   @Parameter(names = {"--partition-default-name"},
       description = "The default partition name in case the dynamic partition column value is null/empty string")
-  public String partitionDefaultName = "default";
+  public String partitionDefaultName = DEFAULT_PARTITION_PATH;
 
   @Parameter(names = {"--index-bootstrap-enabled"},
       description = "Whether to bootstrap the index state from existing hoodie table, default false")
@@ -320,6 +321,9 @@ public class FlinkStreamerConfig extends Configuration {
   @Parameter(names = {"--hive-sync-assume-date-partitioning"}, description = "Assume partitioning is yyyy/mm/dd, default false")
   public Boolean hiveSyncAssumeDatePartition = false;
 
+  @Parameter(names = {"--hive-sync-use-jdbc"}, description = "Use JDBC when hive synchronization is enabled, default true")
+  public Boolean hiveSyncUseJdbc = true;
+
   @Parameter(names = {"--hive-sync-auto-create-db"}, description = "Auto create hive database if it does not exists, default true")
   public Boolean hiveSyncAutoCreateDb = true;
 
@@ -416,6 +420,7 @@ public class FlinkStreamerConfig extends Configuration {
     conf.setString(FlinkOptions.HIVE_SYNC_PARTITION_FIELDS, config.hiveSyncPartitionFields);
     conf.setString(FlinkOptions.HIVE_SYNC_PARTITION_EXTRACTOR_CLASS_NAME, config.hiveSyncPartitionExtractorClass);
     conf.setBoolean(FlinkOptions.HIVE_SYNC_ASSUME_DATE_PARTITION, config.hiveSyncAssumeDatePartition);
+    conf.setBoolean(FlinkOptions.HIVE_SYNC_USE_JDBC, config.hiveSyncUseJdbc);
     conf.setBoolean(FlinkOptions.HIVE_SYNC_AUTO_CREATE_DB, config.hiveSyncAutoCreateDb);
     conf.setBoolean(FlinkOptions.HIVE_SYNC_IGNORE_EXCEPTIONS, config.hiveSyncIgnoreExceptions);
     conf.setBoolean(FlinkOptions.HIVE_SYNC_SKIP_RO_SUFFIX, config.hiveSyncSkipRoSuffix);

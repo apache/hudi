@@ -17,27 +17,25 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
-import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
-import org.apache.hudi.common.util.HoodieTimer
-import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.common.engine.HoodieLocalEngineContext
+import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.metadata.HoodieBackedTableMetadata
-import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util
-import java.util.Collections
 import java.util.function.Supplier
-import scala.collection.JavaConverters.asScalaIteratorConverter
+import scala.collection.JavaConversions._
 
-class ListMetadataPartitionsProcedure() extends BaseProcedure with ProcedureBuilder with Logging {
+class ShowMetadataTableStatsProcedure() extends BaseProcedure with ProcedureBuilder {
   private val PARAMETERS = Array[ProcedureParameter](
     ProcedureParameter.required(0, "table", DataTypes.StringType, None)
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
-    StructField("partition", DataTypes.StringType, nullable = true, Metadata.empty)
+    StructField("stat_key", DataTypes.StringType, nullable = true, Metadata.empty),
+    StructField("stat_value", DataTypes.StringType, nullable = true, Metadata.empty)
   ))
 
   def parameters: Array[ProcedureParameter] = PARAMETERS
@@ -50,32 +48,28 @@ class ListMetadataPartitionsProcedure() extends BaseProcedure with ProcedureBuil
     val table = getArgValueOrDefault(args, PARAMETERS(0))
 
     val basePath = getBasePath(table)
+    val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
     val config = HoodieMetadataConfig.newBuilder.enable(true).build
-    val metadata = new HoodieBackedTableMetadata(new HoodieSparkEngineContext(jsc),
+    val metadata = new HoodieBackedTableMetadata(new HoodieLocalEngineContext(metaClient.getHadoopConf),
       config, basePath, "/tmp")
-    if (!metadata.enabled){
-      throw new HoodieException(s"Metadata Table not enabled/initialized.")
-    }
-
-    val timer = new HoodieTimer().startTimer
-    val partitions = metadata.getAllPartitionPaths
-    Collections.sort(partitions)
-    logDebug("Took " + timer.endTimer + " ms")
+    val stats = metadata.stats
 
     val rows = new util.ArrayList[Row]
-    partitions.stream.iterator().asScala.foreach((p: String) => {
-        rows.add(Row(p))
-    })
+    for (entry <- stats.entrySet) {
+      rows.add(Row(entry.getKey, entry.getValue))
+    }
     rows.stream().toArray().map(r => r.asInstanceOf[Row]).toList
   }
 
-  override def build: Procedure = new ListMetadataPartitionsProcedure()
+  override def build: Procedure = new ShowMetadataTableStatsProcedure()
 }
 
-object ListMetadataPartitionsProcedure {
-  val NAME = "list_metadata_partitions"
+object ShowMetadataTableStatsProcedure {
+  val NAME = "show_metadata_table_stats"
 
   def builder: Supplier[ProcedureBuilder] = new Supplier[ProcedureBuilder] {
-    override def get() = new ListMetadataPartitionsProcedure()
+    override def get() = new ShowMetadataTableStatsProcedure()
   }
 }
+
+

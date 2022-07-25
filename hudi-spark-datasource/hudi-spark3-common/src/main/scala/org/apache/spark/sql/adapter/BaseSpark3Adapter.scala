@@ -19,24 +19,20 @@ package org.apache.spark.sql.adapter
 
 import org.apache.hudi.Spark3RowSerDe
 import org.apache.hudi.client.utils.SparkRowSerDe
-import org.apache.hudi.spark3.internal.ReflectUtil
 import org.apache.spark.SPARK_VERSION
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.avro.{HoodieAvroSchemaConverters, HoodieSparkAvroSchemaConverters}
 import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
-import org.apache.spark.sql.catalyst.expressions.{Expression, InterpretedPredicate, Like, Predicate}
+import org.apache.spark.sql.catalyst.expressions.{Expression, InterpretedPredicate, Predicate}
 import org.apache.spark.sql.catalyst.parser.ParserInterface
-import org.apache.spark.sql.catalyst.plans.JoinType
-import org.apache.spark.sql.catalyst.plans.logical.{InsertIntoStatement, Join, JoinHint, LogicalPlan}
-import org.apache.spark.sql.catalyst.{AliasIdentifier, TableIdentifier}
-import org.apache.spark.sql.connector.catalog.CatalogV2Implicits._
+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.connector.catalog.Table
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.{Row, SparkSession}
+import org.apache.spark.sql.{HoodieCatalystPlansUtils, HoodieSpark3CatalystPlanUtils, Row, SparkSession}
 
 import scala.util.control.NonFatal
 
@@ -51,51 +47,8 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
 
   override def getAvroSchemaConverters: HoodieAvroSchemaConverters = HoodieSparkAvroSchemaConverters
 
-  override def toTableIdentifier(aliasId: AliasIdentifier): TableIdentifier = {
-    aliasId match {
-      case AliasIdentifier(name, Seq(database)) =>
-        TableIdentifier(name, Some(database))
-      case AliasIdentifier(name, Seq(_, database)) =>
-        TableIdentifier(name, Some(database))
-      case AliasIdentifier(name, Seq()) =>
-        TableIdentifier(name, None)
-      case _=> throw new IllegalArgumentException(s"Cannot cast $aliasId to TableIdentifier")
-    }
-  }
-
-  override def toTableIdentifier(relation: UnresolvedRelation): TableIdentifier = {
-    relation.multipartIdentifier.asTableIdentifier
-  }
-
-  override def createJoin(left: LogicalPlan, right: LogicalPlan, joinType: JoinType): Join = {
-    Join(left, right, joinType, None, JoinHint.NONE)
-  }
-
-  override def isInsertInto(plan: LogicalPlan): Boolean = {
-    plan.isInstanceOf[InsertIntoStatement]
-  }
-
-  override def getInsertIntoChildren(plan: LogicalPlan):
-    Option[(LogicalPlan, Map[String, Option[String]], LogicalPlan, Boolean, Boolean)] = {
-    plan match {
-      case insert: InsertIntoStatement =>
-        Some((insert.table, insert.partitionSpec, insert.query, insert.overwrite, insert.ifPartitionNotExists))
-      case _ =>
-        None
-    }
-  }
-
-  override def createInsertInto(table: LogicalPlan, partition: Map[String, Option[String]],
-      query: LogicalPlan, overwrite: Boolean, ifPartitionNotExists: Boolean): LogicalPlan = {
-    ReflectUtil.createInsertInto(table, partition, Seq.empty[String], query, overwrite, ifPartitionNotExists)
-  }
-
   override def createSparkParsePartitionUtil(conf: SQLConf): SparkParsePartitionUtil = {
     new Spark3ParsePartitionUtil(conf)
-  }
-
-  override def createLike(left: Expression, right: Expression): Expression = {
-    new Like(left, right)
   }
 
   override def parseMultipartIdentifier(parser: ParserInterface, sqlText: String): Seq[String] = {
@@ -117,7 +70,7 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
       case LogicalRelation(_, _, Some(table), _) => isHoodieTable(table)
       case relation: UnresolvedRelation =>
         try {
-          isHoodieTable(toTableIdentifier(relation), spark)
+          isHoodieTable(getCatalystPlanUtils.toTableIdentifier(relation), spark)
         } catch {
           case NonFatal(e) =>
             logWarning("Failed to determine whether the table is a hoodie table", e)
@@ -128,19 +81,6 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
     }
   }
 
-  /**
-   * if the logical plan is a TimeTravelRelation LogicalPlan.
-   */
-  override def isRelationTimeTravel(plan: LogicalPlan): Boolean = {
-    false
-  }
-
-  /**
-   * Get the member of the TimeTravelRelation LogicalPlan.
-   */
-  override def getRelationTimeTravel(plan: LogicalPlan): Option[(LogicalPlan, Option[Expression], Option[String])] = {
-    throw new IllegalStateException(s"Should not call getRelationTimeTravel for spark3.1.x")
-  }
   override def createExtendedSparkParser: Option[(SparkSession, ParserInterface) => ParserInterface] = {
     // since spark3.2.1 support datasourceV2, so we need to a new SqlParser to deal DDL statment
     if (SPARK_VERSION.startsWith("3.1")) {

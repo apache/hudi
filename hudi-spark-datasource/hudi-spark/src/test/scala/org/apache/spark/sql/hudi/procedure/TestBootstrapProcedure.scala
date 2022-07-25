@@ -55,12 +55,12 @@ class TestBootstrapProcedure extends HoodieSparkSqlTestBase {
       checkAnswer(
         s"""call run_bootstrap(
            |table => '$tableName',
-           |basePath => '$tablePath',
-           |tableType => '${HoodieTableType.COPY_ON_WRITE.name}',
-           |bootstrapPath => '$sourcePath',
-           |rowKeyField => '$RECORD_KEY_FIELD',
-           |partitionPathField => '$PARTITION_FIELD',
-           |bootstrapOverwrite => true)""".stripMargin) {
+           |base_path => '$tablePath',
+           |table_type => '${HoodieTableType.COPY_ON_WRITE.name}',
+           |bootstrap_path => '$sourcePath',
+           |rowKey_field => '$RECORD_KEY_FIELD',
+           |partition_path_field => '$PARTITION_FIELD',
+           |bootstrap_overwrite => true)""".stripMargin) {
         Seq(0)
       }
 

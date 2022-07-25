@@ -21,7 +21,7 @@ import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.engine.HoodieLocalEngineContext
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.util.HoodieTimer
+import org.apache.hudi.common.util.{HoodieTimer, StringUtils}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.metadata.HoodieBackedTableMetadata
 import org.apache.spark.internal.Logging
@@ -31,10 +31,10 @@ import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 import java.util
 import java.util.function.Supplier
 
-class ListMetadataFilesProcedure() extends BaseProcedure with ProcedureBuilder with Logging {
+class ShowMetadataTableFilesProcedure() extends BaseProcedure with ProcedureBuilder with Logging {
   private val PARAMETERS = Array[ProcedureParameter](
     ProcedureParameter.required(0, "table", DataTypes.StringType, None),
-    ProcedureParameter.optional(1, "partition", DataTypes.StringType, None)
+    ProcedureParameter.optional(1, "partition", DataTypes.StringType, "")
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -60,8 +60,13 @@ class ListMetadataFilesProcedure() extends BaseProcedure with ProcedureBuilder w
       throw new HoodieException(s"Metadata Table not enabled/initialized.")
     }
 
+    var partitionPath = new Path(basePath)
+    if (!StringUtils.isNullOrEmpty(partition)) {
+      partitionPath = new Path(basePath, partition)
+    }
+
     val timer = new HoodieTimer().startTimer
-    val statuses = metaReader.getAllFilesInPartition(new Path(basePath, partition))
+    val statuses = metaReader.getAllFilesInPartition(partitionPath)
     logDebug("Took " + timer.endTimer + " ms")
 
     val rows = new util.ArrayList[Row]
@@ -71,13 +76,13 @@ class ListMetadataFilesProcedure() extends BaseProcedure with ProcedureBuilder w
     rows.stream().toArray().map(r => r.asInstanceOf[Row]).toList
   }
 
-  override def build: Procedure = new ListMetadataFilesProcedure()
+  override def build: Procedure = new ShowMetadataTableFilesProcedure()
 }
 
-object ListMetadataFilesProcedure {
-  val NAME = "list_metadata_files"
+object ShowMetadataTableFilesProcedure {
+  val NAME = "show_metadata_table_files"
 
   def builder: Supplier[ProcedureBuilder] = new Supplier[ProcedureBuilder] {
-    override def get() = new ListMetadataFilesProcedure()
+    override def get() = new ShowMetadataTableFilesProcedure()
   }
 }

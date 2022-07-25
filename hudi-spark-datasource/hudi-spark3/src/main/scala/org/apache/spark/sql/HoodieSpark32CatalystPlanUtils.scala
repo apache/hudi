@@ -16,20 +16,23 @@
  * limitations under the License.
  */
 
-package org.apache.hudi;
+package org.apache.spark.sql
 
-public class TypeUtils {
+import org.apache.spark.sql.catalyst.expressions.Expression
+import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, TimeTravelRelation}
 
-  /**
-   * This utility abstracts unsafe type-casting in a way that allows to
-   * <ul>
-   *   <li>Search for such type-casts more easily (just searching for usages of this method)</li>
-   *   <li>Avoid type-cast warnings from the compiler</li>
-   * </ul>
-   */
-  @SuppressWarnings("unchecked")
-  public static <T> T unsafeCast(Object o) {
-    return (T) o;
+object HoodieSpark32CatalystPlanUtils extends HoodieSpark3CatalystPlanUtils {
+
+  override def isRelationTimeTravel(plan: LogicalPlan): Boolean = {
+    plan.isInstanceOf[TimeTravelRelation]
   }
 
+  override def getRelationTimeTravel(plan: LogicalPlan): Option[(LogicalPlan, Option[Expression], Option[String])] = {
+    plan match {
+      case timeTravel: TimeTravelRelation =>
+        Some((timeTravel.table, timeTravel.timestamp, timeTravel.version))
+      case _ =>
+        None
+    }
+  }
 }

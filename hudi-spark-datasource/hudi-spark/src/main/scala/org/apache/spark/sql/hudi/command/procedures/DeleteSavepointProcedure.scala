@@ -26,14 +26,14 @@ import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util.function.Supplier
 
-class RollbackSavepointsProcedure extends BaseProcedure with ProcedureBuilder with Logging {
+class DeleteSavepointProcedure extends BaseProcedure with ProcedureBuilder with Logging {
   private val PARAMETERS = Array[ProcedureParameter](
     ProcedureParameter.required(0, "table", DataTypes.StringType, None),
     ProcedureParameter.required(1, "instant_time", DataTypes.StringType, None)
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
-    StructField("rollback_savepoint_result", DataTypes.BooleanType, nullable = true, Metadata.empty))
+    StructField("delete_savepoint_result", DataTypes.BooleanType, nullable = true, Metadata.empty))
   )
 
   def parameters: Array[ProcedureParameter] = PARAMETERS
@@ -61,12 +61,12 @@ class RollbackSavepointsProcedure extends BaseProcedure with ProcedureBuilder wi
     var result = false
 
     try {
-      client.restoreToSavepoint(instantTime)
-      logInfo("The commit $instantTime rolled back.")
+      client.deleteSavepoint(instantTime)
+      logInfo(s"The commit $instantTime has been deleted savepoint.")
       result = true
     } catch {
       case _: HoodieSavepointException =>
-        logWarning(s"The commit $instantTime failed to roll back.")
+        logWarning(s"Failed: Could not delete savepoint $instantTime.")
     } finally {
       client.close()
     }
@@ -74,14 +74,14 @@ class RollbackSavepointsProcedure extends BaseProcedure with ProcedureBuilder wi
     Seq(Row(result))
   }
 
-  override def build: Procedure = new RollbackSavepointsProcedure()
+  override def build: Procedure = new DeleteSavepointProcedure()
 }
 
-object RollbackSavepointsProcedure {
-  val NAME: String = "rollback_savepoints"
+object DeleteSavepointProcedure {
+  val NAME: String = "delete_savepoint"
 
   def builder: Supplier[ProcedureBuilder] = new Supplier[ProcedureBuilder] {
-    override def get(): RollbackSavepointsProcedure = new RollbackSavepointsProcedure()
+    override def get(): DeleteSavepointProcedure = new DeleteSavepointProcedure()
   }
 }
 

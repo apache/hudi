@@ -515,8 +515,8 @@ object HoodieSparkSqlWriter {
                       instantTime: String,
                       partitionColumns: String): (Boolean, common.util.Option[String]) = {
     val sparkContext = sqlContext.sparkContext
-    val populateMetaFields = java.lang.Boolean.parseBoolean((parameters.getOrElse(HoodieTableConfig.POPULATE_META_FIELDS.key(),
-      String.valueOf(HoodieTableConfig.POPULATE_META_FIELDS.defaultValue()))))
+    val populateMetaFields = java.lang.Boolean.parseBoolean(parameters.getOrElse(HoodieTableConfig.POPULATE_META_FIELDS.key(),
+      String.valueOf(HoodieTableConfig.POPULATE_META_FIELDS.defaultValue())))
     val dropPartitionColumns = parameters.get(DataSourceWriteOptions.DROP_PARTITION_COLUMNS.key()).map(_.toBoolean)
       .getOrElse(DataSourceWriteOptions.DROP_PARTITION_COLUMNS.defaultValue())
     // register classes & schemas
@@ -556,12 +556,9 @@ object HoodieSparkSqlWriter {
     } else {
       false
     }
-    val hoodieDF = if (populateMetaFields) {
-      HoodieDatasetBulkInsertHelper.prepareHoodieDatasetForBulkInsert(sqlContext, writeConfig, df, structName, nameSpace,
-        bulkInsertPartitionerRows, isGlobalIndex, dropPartitionColumns)
-    } else {
-      HoodieDatasetBulkInsertHelper.prepareHoodieDatasetForBulkInsertWithoutMetaFields(df)
-    }
+
+    val hoodieDF = HoodieDatasetBulkInsertHelper.prepareForBulkInsert(df, writeConfig, bulkInsertPartitionerRows, dropPartitionColumns)
+
     if (HoodieSparkUtils.isSpark2) {
       hoodieDF.write.format("org.apache.hudi.internal")
         .option(DataSourceInternalWriterHelper.INSTANT_TIME_OPT_KEY, instantTime)
@@ -638,7 +635,35 @@ object HoodieSparkSqlWriter {
         SyncUtilHelpers.runHoodieMetaSync(impl.trim, properties, fs.getConf, fs, basePath.toString, baseFileFormat)
       })
     }
+
+    // Since Hive tables are now synced as Spark data source tables which are cached after Spark SQL queries
+    // we must invalidate this table in the cache so writes are reflected in later queries
+    if (metaSyncEnabled) {
+      getHiveTableNames(hoodieConfig).foreach(name => {
+        val qualifiedTableName = String.join(".", hoodieConfig.getStringOrDefault(HIVE_DATABASE), name)
+        if (spark.catalog.tableExists(qualifiedTableName)) {
+          spark.catalog.refreshTable(qualifiedTableName)
+        }
+      })
+    }
     true
+  }
+
+  private def getHiveTableNames(hoodieConfig: HoodieConfig): List[String] = {
+    val tableName = hoodieConfig.getStringOrDefault(HIVE_TABLE)
+    val tableType = hoodieConfig.getStringOrDefault(TABLE_TYPE)
+
+    if (tableType.equals(COW_TABLE_TYPE_OPT_VAL)) {
+      List(tableName)
+    } else {
+      val roSuffix = if (hoodieConfig.getBooleanOrDefault(HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE)) {
+        ""
+      } else {
+        HiveSyncTool.SUFFIX_READ_OPTIMIZED_TABLE
+      }
+      List(tableName + roSuffix,
+        tableName + HiveSyncTool.SUFFIX_SNAPSHOT_TABLE)
+    }
   }
 
   /**

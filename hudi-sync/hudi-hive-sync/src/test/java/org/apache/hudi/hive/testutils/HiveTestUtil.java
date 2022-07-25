@@ -141,7 +141,7 @@ public class HiveTestUtil {
     hiveSyncProps.setProperty(META_SYNC_PARTITION_FIELDS.key(), "datestr");
     hiveSyncProps.setProperty(HIVE_BATCH_SYNC_PARTITION_NUM.key(), "3");
 
-    hiveSyncConfig = new HiveSyncConfig(hiveSyncProps, configuration);
+    hiveSyncConfig = new HiveSyncConfig(hiveSyncProps, getHiveConf());
 
     dtfOut = DateTimeFormatter.ofPattern("yyyy/MM/dd");
     ddlExecutor = new HiveQueryDDLExecutor(hiveSyncConfig);
@@ -176,7 +176,7 @@ public class HiveTestUtil {
     return hiveServer.getHiveConf();
   }
 
-  public static void shutdown() {
+  public static void shutdown() throws IOException {
     if (hiveServer != null) {
       hiveServer.stop();
     }
@@ -186,6 +186,7 @@ public class HiveTestUtil {
     if (zkServer != null) {
       zkServer.shutdown();
     }
+    FileSystem.closeAll();
   }
 
   public static void createCOWTable(String instantTime, int numberOfPartitions, boolean useSchemaFromCommitMetadata,

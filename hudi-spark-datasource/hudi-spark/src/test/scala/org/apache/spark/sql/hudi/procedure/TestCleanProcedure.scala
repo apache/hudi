@@ -48,7 +48,7 @@ class TestCleanProcedure extends HoodieSparkSqlTestBase {
       spark.sql(s"update $tableName set price = 12 where id = 1")
       spark.sql(s"update $tableName set price = 13 where id = 1")
 
-      val result1 = spark.sql(s"call run_clean(table => '$tableName', retainCommits => 1)")
+      val result1 = spark.sql(s"call run_clean(table => '$tableName', retain_commits => 1)")
         .collect()
         .map(row => Seq(row.getString(0), row.getLong(1), row.getInt(2), row.getString(3), row.getString(4), row.getInt(5)))
 

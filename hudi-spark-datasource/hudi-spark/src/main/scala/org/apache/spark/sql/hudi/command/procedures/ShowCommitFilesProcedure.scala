@@ -44,7 +44,7 @@ class ShowCommitFilesProcedure() extends BaseProcedure with ProcedureBuilder {
     StructField("file_id", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("previous_commit", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("total_records_updated", DataTypes.LongType, nullable = true, Metadata.empty),
-    StructField("total_tecords_written", DataTypes.LongType, nullable = true, Metadata.empty),
+    StructField("total_records_written", DataTypes.LongType, nullable = true, Metadata.empty),
     StructField("total_bytes_written", DataTypes.LongType, nullable = true, Metadata.empty),
     StructField("total_errors", DataTypes.LongType, nullable = true, Metadata.empty),
     StructField("file_size", DataTypes.LongType, nullable = true, Metadata.empty)

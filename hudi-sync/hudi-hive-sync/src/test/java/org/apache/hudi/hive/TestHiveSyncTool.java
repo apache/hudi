@@ -108,7 +108,7 @@ public class TestHiveSyncTool {
   private HoodieHiveSyncClient hiveClient;
 
   @AfterAll
-  public static void cleanUpClass() {
+  public static void cleanUpClass() throws IOException {
     HiveTestUtil.shutdown();
   }
 
@@ -121,7 +121,7 @@ public class TestHiveSyncTool {
     return opts;
   }
 
-  // (useSchemaFromCommitMetadata, syncAsDataSource, syncMode)
+  // (useJdbc, useSchemaFromCommitMetadata, syncAsDataSource)
   private static Iterable<Object[]> syncDataSourceTableParams() {
     List<Object[]> opts = new ArrayList<>();
     for (Object mode : SYNC_MODES) {
