@@ -86,11 +86,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class TestHiveSyncTool {
 
   private static final List<Object> SYNC_MODES = Arrays.asList(
+      "hiveql",
       "hms",
       "jdbc");
 
   private static Iterable<Object> syncMode() {
-    return SYNC_MODES; // TODO include hiveql; skipped due to CI issue
+    return SYNC_MODES;
   }
 
   // useSchemaFromCommitMetadata, syncMode

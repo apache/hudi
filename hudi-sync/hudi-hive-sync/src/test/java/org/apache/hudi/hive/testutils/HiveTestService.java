@@ -152,9 +152,10 @@ public class HiveTestService {
     HiveConf conf = new HiveConf(hadoopConf, HiveConf.class);
     conf.setBoolVar(ConfVars.HIVE_IN_TEST, true);
     conf.setBoolVar(ConfVars.METASTORE_SCHEMA_VERIFICATION, false);
-    conf.setIntVar(ConfVars.HIVE_SERVER2_THRIFT_PORT, HS2_THRIFT_PORT);
+    final int hs2ThriftPort = hadoopConf.getInt(ConfVars.HIVE_SERVER2_THRIFT_PORT.varname, HS2_THRIFT_PORT);
+    conf.setIntVar(ConfVars.HIVE_SERVER2_THRIFT_PORT, hs2ThriftPort);
     conf.setVar(ConfVars.HIVE_SERVER2_THRIFT_BIND_HOST, BIND_HOST);
-    final int metastoreServerPort = NetworkTestUtils.nextFreePort();
+    final int metastoreServerPort = hadoopConf.getInt(ConfVars.METASTORE_SERVER_PORT.varname, NetworkTestUtils.nextFreePort());
     conf.setIntVar(ConfVars.METASTORE_SERVER_PORT, metastoreServerPort);
     conf.setVar(ConfVars.METASTOREURIS, "thrift://" + BIND_HOST + ":" + metastoreServerPort);
     File localHiveDir = new File(localHiveLocation);
