@@ -31,6 +31,8 @@ import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{StructField, StructType}
 import org.apache.spark.sql.{Dataset, HoodieUnsafeRDDUtils, Row, SaveMode, SparkSession}
 
+import scala.Predef.assert
+
 /**
  * Command for insert into Hudi table.
  *
@@ -84,21 +86,20 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig {
           overwrite: Boolean,
           refreshTable: Boolean = true,
           extraOptions: Map[String, String] = Map.empty): Boolean = {
-    val hoodieCatalogTable = new HoodieCatalogTable(sparkSession, table)
-    val config = buildHoodieInsertConfig(hoodieCatalogTable, sparkSession, overwrite, partitionSpec, extraOptions)
+    val catalogTable = new HoodieCatalogTable(sparkSession, table)
+    val config = buildHoodieInsertConfig(catalogTable, sparkSession, overwrite, partitionSpec, extraOptions)
 
     // NOTE: In case of partitioned table we override specified "overwrite" parameter
     //       to instead append to the dataset
-    val mode = if (overwrite && hoodieCatalogTable.partitionFields.isEmpty) {
+    val mode = if (overwrite && catalogTable.partitionFields.isEmpty) {
       SaveMode.Overwrite
     } else {
       SaveMode.Append
     }
 
-    val alignedQuery = alignOutputFields(query, hoodieCatalogTable, partitionSpec, sparkSession.sessionState.conf)
-    val alignedDF = Dataset.ofRows(sparkSession, alignedQuery)
+    val alignedQuery = alignQueryOutput(query, catalogTable, partitionSpec, sparkSession.sessionState.conf)
 
-    val (success, _, _, _, _, _) = HoodieSparkSqlWriter.write(sparkSession.sqlContext, mode, config, alignedDF)
+    val (success, _, _, _, _, _) = HoodieSparkSqlWriter.write(sparkSession.sqlContext, mode, config, Dataset.ofRows(sparkSession, alignedQuery))
 
     if (success && refreshTable) {
       sparkSession.catalog.refreshTable(table.identifier.unquotedString)
@@ -108,63 +109,91 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig {
   }
 
   /**
-   * Aligned the type and name of query's output fields with the result table's fields.
-   * @param query The insert query which to aligned.
-   * @param hoodieCatalogTable The result hoodie catalog table.
-   * @param partitionsSpec The insert partition map.
-   * @param conf The SQLConf.
-   * @return
+   * Align provided [[query]]'s output with the expected [[catalogTable]] schema by
+   *
+   * <ul>
+   *   <li>Performing type coercion (casting corresponding outputs, where needed)</li>
+   *   <li>Adding aliases (matching column names) to corresponding outputs </li>
+   * </ul>
+   *
+   * @param query target query whose output is to be inserted
+   * @param catalogTable catalog table
+   * @param partitionsSpec partition spec specifying static/dynamic partition values
+   * @param conf Spark's [[SQLConf]]
    */
-  private def alignOutputFields(query: LogicalPlan,
-                                hoodieCatalogTable: HoodieCatalogTable,
-                                partitionsSpec: Map[String, Option[String]],
-                                conf: SQLConf): LogicalPlan = {
+  private def alignQueryOutput(query: LogicalPlan,
+                               catalogTable: HoodieCatalogTable,
+                               partitionsSpec: Map[String, Option[String]],
+                               conf: SQLConf): LogicalPlan = {
 
-    val targetPartitionSchema = hoodieCatalogTable.partitionSchema
-
+    val targetPartitionSchema = catalogTable.partitionSchema
     val staticPartitionValues = partitionsSpec.filter(p => p._2.isDefined).mapValues(_.get)
-    assert(staticPartitionValues.isEmpty ||
-      partitionsSpec.size == targetPartitionSchema.size,
-      s"Required partition schema is: ${targetPartitionSchema.json}, partition spec is: ${staticPartitionValues.mkString(",")}")
 
     val queryOutputWithoutMetaFields = removeMetaFields(query.output)
-    assert(staticPartitionValues.size + queryOutputWithoutMetaFields.size
-      == hoodieCatalogTable.tableSchemaWithoutMetaFields.size,
-      s"Required select columns count: ${hoodieCatalogTable.tableSchemaWithoutMetaFields.size}, " +
-        s"Current select columns(including static partition column) count: " +
-        s"${staticPartitionValues.size + queryOutputWithoutMetaFields.size}，columns: " +
-        s"(${(queryOutputWithoutMetaFields.map(_.name) ++ staticPartitionValues.keys).mkString(",")})")
 
-    val dataAndDynamicPartitionSchemaWithoutMetaFields = StructType(
-      hoodieCatalogTable.tableSchemaWithoutMetaFields.filterNot(f => staticPartitionValues.contains(f.name)))
-    val dataProjectsWithoutMetaFields = getTableFieldsAlias(queryOutputWithoutMetaFields,
-      dataAndDynamicPartitionSchemaWithoutMetaFields.fields, conf)
+    validate(queryOutputWithoutMetaFields, staticPartitionValues, catalogTable)
 
-    val partitionProjects = targetPartitionSchema.fields.filter(f => staticPartitionValues.contains(f.name))
-      .map(f => {
-        val staticPartitionValue = staticPartitionValues.getOrElse(f.name,
-          s"Missing static partition value for: ${f.name}")
-        val castAttr = castIfNeeded(Literal.create(staticPartitionValue), f.dataType, conf)
-        Alias(castAttr, f.name)()
-      })
+    // To validate and align properly output of the query, we simply filter out partition columns with already
+    // provided static values from the table's schema
+    val expectedColumns = catalogTable.tableSchemaWithoutMetaFields.filterNot(f => staticPartitionValues.contains(f.name))
 
-    Project(dataProjectsWithoutMetaFields ++ partitionProjects, query)
+    val transformedQueryOutput = transformQueryOutput(queryOutputWithoutMetaFields, expectedColumns, conf)
+    val staticPartitionValuesExprs = createStaticPartitionValuesExpressions(staticPartitionValues, targetPartitionSchema, conf)
+
+    Project(transformedQueryOutput ++ staticPartitionValuesExprs, query)
   }
 
-  private def getTableFieldsAlias(
-     queryOutputWithoutMetaFields: Seq[Attribute],
-     schemaWithoutMetaFields: Seq[StructField],
-     conf: SQLConf): Seq[Alias] = {
-    queryOutputWithoutMetaFields.zip(schemaWithoutMetaFields).map { case (dataAttr, dataField) =>
-      val targetAttrOption = if (dataAttr.name.startsWith("col")) {
-        None
-      } else {
-        queryOutputWithoutMetaFields.find(_.name.equals(dataField.name))
-      }
-      val targetAttr = targetAttrOption.getOrElse(dataAttr)
-      val castAttr = castIfNeeded(targetAttr.withNullability(dataField.nullable),
-        dataField.dataType, conf)
-      Alias(castAttr, dataField.name)()
+  private def validate(queryOutput: Seq[Attribute], staticPartitionValues: Map[String, String], table: HoodieCatalogTable): Unit = {
+    // Validate that either
+    //    - There's no static-partition values
+    //    - All of the partition columns are provided w/ static values
+    //
+    // NOTE: Dynamic partition-value are not currently supported
+    assert(staticPartitionValues.isEmpty ||
+      staticPartitionValues.size == table.partitionSchema.size,
+      s"Required partition schema is: ${table.partitionSchema.json}, partition spec is: ${staticPartitionValues.mkString(",")}")
+
+    val queryOutputColumnNames = queryOutput.map(_.name)
+    val expectedColumnNames = table.tableSchemaWithoutMetaFields.filterNot(sf => staticPartitionValues.contains(sf.name))
+
+    // Asert that query's output is appropriately ordered
+    assert(queryOutputColumnNames == expectedColumnNames,
+      s"Expected table's columns in the following ordering: $expectedColumnNames, received: $queryOutputColumnNames")
+
+    val fullQueryOutputColumnNames = queryOutputColumnNames ++ staticPartitionValues.keys
+
+    // Assert that query provides all the required columns
+    assert(fullQueryOutputColumnNames.toSet == table.tableSchemaWithoutMetaFields.fieldNames.toSet,
+      s"Expected table's schema: ${table.tableSchemaWithoutMetaFields.json}, query's output (including static partition values): $fullQueryOutputColumnNames"
+  }
+
+  private def createStaticPartitionValuesExpressions(staticPartitionValues: Map[String, String],
+                                                     partitionSchema: StructType,
+                                                     conf: SQLConf) = {
+    partitionSchema.fields
+      .filter(pf => staticPartitionValues.contains(pf.name))
+      .map(pf => {
+        val staticPartitionValue = staticPartitionValues(pf.name)
+        val castExpr = castIfNeeded(Literal.create(staticPartitionValue), pf.dataType, conf)
+
+        Alias(castExpr, pf.name)()
+      })
+  }
+
+  private def transformQueryOutput(queryOutput: Seq[Attribute],
+                                  expectedColumns: Seq[StructField],
+                                  conf: SQLConf): Seq[Alias] = {
+    // NOTE: This code assumes that query's output and corresponding [[StructField]]s
+    //       are properly ordered (which is asserted in the validation step)
+    queryOutput.zip(expectedColumns).map { case (attr, field) =>
+      // Lookup (by name) corresponding column from the table definition. In case there's
+      // no match, assume the column by the relative ordering
+      val targetColumn = expectedColumns.find(_.name.equals(attr.name)).getOrElse(field)
+      // Since query output might be providing data in a different format we might need to wrap
+      // output reference into the cast expression
+      val castExpr = castIfNeeded(attr.withNullability(targetColumn.nullable), targetColumn.dataType, conf)
+
+      Alias(castExpr, targetColumn.name)()
     }
   }
 }
