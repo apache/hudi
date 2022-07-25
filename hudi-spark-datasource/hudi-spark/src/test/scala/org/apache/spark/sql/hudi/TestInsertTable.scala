@@ -481,14 +481,17 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
          | tblproperties (primaryKey = 'id')
          | partitioned by (dt)
        """.stripMargin)
-    checkException(s"insert into $tableName partition(dt = '2021-06-20')" +
-      s" select 1, 'a1', 10, '2021-06-20'") (
-      "assertion failed: Required select columns count: 4, Current select columns(including static partition column)" +
-        " count: 5，columns: (1,a1,10,2021-06-20,dt)"
+    checkException(s"insert into $tableName partition(dt = '2021-06-20') select 1, 'a1', 10, '2021-06-20'") (
+      "Expected table's schema: " +
+        "[StructField(id,IntegerType,true), StructField(name,StringType,true), StructField(price,DoubleType,true), StructField(dt,StringType,true)], " +
+        "query's output (including static partition values): " +
+        "[StructField(1,IntegerType,false), StructField(a1,StringType,false), StructField(10,IntegerType,false), StructField(2021-06-20,StringType,false), StructField(dt,StringType,true)]"
     )
     checkException(s"insert into $tableName select 1, 'a1', 10")(
-      "assertion failed: Required select columns count: 4, Current select columns(including static partition column)" +
-        " count: 3，columns: (1,a1,10)"
+      "Expected table's schema: " +
+        "[StructField(id,IntegerType,true), StructField(name,StringType,true), StructField(price,DoubleType,true), StructField(dt,StringType,true)], " +
+        "query's output (including static partition values): " +
+        "[StructField(1,IntegerType,false), StructField(a1,StringType,false), StructField(10,IntegerType,false)]"
     )
     spark.sql("set hoodie.sql.bulk.insert.enable = true")
     spark.sql("set hoodie.sql.insert.mode = strict")
