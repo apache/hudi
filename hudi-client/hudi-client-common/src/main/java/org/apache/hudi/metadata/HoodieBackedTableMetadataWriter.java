@@ -554,8 +554,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       enabledPartitionTypes = this.enabledPartitionTypes;
     }
     initializeEnabledFileGroups(dataMetaClient, createInstantTime, enabledPartitionTypes);
-    // TODO REVERT
-    //initialCommit(createInstantTime, enabledPartitionTypes);
+    initialCommit(createInstantTime, enabledPartitionTypes);
     updateInitializedPartitionsInTableConfig(enabledPartitionTypes);
     return true;
   }
@@ -1007,13 +1006,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     // finish off any pending compactions if any from previous attempt.
     writeClient.runAnyPendingCompactions();
 
-    // TODO revert
-    HoodieTimeline timeline = metadataMetaClient.reloadActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants();
-    if (timeline.empty()) {
-      return;
-    }
-
-    String latestDeltaCommitTime = timeline.lastInstant()
+    String latestDeltaCommitTime = metadataMetaClient.reloadActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants().lastInstant()
         .get().getTimestamp();
     List<HoodieInstant> pendingInstants = dataMetaClient.reloadActiveTimeline().filterInflightsAndRequested()
         .findInstantsBefore(instantTime).getInstants().collect(Collectors.toList());

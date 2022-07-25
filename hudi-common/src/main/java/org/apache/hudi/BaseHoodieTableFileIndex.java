@@ -274,15 +274,8 @@ public abstract class   BaseHoodieTableFileIndex implements AutoCloseable {
   private void doRefresh() {
     long startTime = System.currentTimeMillis();
 
-    HoodieTableMetadata newTableMetadata;
-
-    // TODO make configurable
-    if (partitionColumns.length > 0) {
-      newTableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, basePath.toString(),
-          FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue());
-    } else {
-      newTableMetadata = HoodieTableMetadata.createFSBackedTableMetadata(engineContext, metadataConfig, basePath.toString());
-    }
+    HoodieTableMetadata newTableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, basePath.toString(),
+        FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue());
 
     resetTableMetadata(newTableMetadata);
 
