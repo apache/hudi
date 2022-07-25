@@ -17,7 +17,7 @@
 
 package org.apache.hudi
 
-import org.apache.hadoop.fs.{GlobPattern, Path}
+import org.apache.hadoop.fs.{FileStatus, GlobPattern, Path}
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.common.model.{FileSlice, HoodieRecord}
 import org.apache.hudi.common.table.HoodieTableMetaClient
@@ -92,14 +92,15 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
       val fileSlices = if (fullTableScan) {
         listLatestFileSlices(Seq(), partitionFilters, dataFilters)
       } else {
-        val fsView = new HoodieTableFileSystemView(metaClient, timeline, affectedFilesInCommits)
-
         val latestCommit = includedCommits.last.getTimestamp
 
-        fsView.getPartitionPaths.asScala.flatMap { partitionPath =>
-          val relativePath = getRelativePartitionPath(new Path(basePath), partitionPath)
-          fsView.getLatestMergedFileSlicesBeforeOrOn(relativePath, latestCommit).iterator().asScala.toSeq
-        }
+        val fsView = new HoodieTableFileSystemView(metaClient, timeline, affectedFilesInCommits)
+
+        val modifiedPartitions = getWritePartitionPaths(commitsMetadata)
+
+        modifiedPartitions.asScala.flatMap { relativePartitionPath =>
+          fsView.getLatestMergedFileSlicesBeforeOrOn(relativePartitionPath, latestCommit).iterator().asScala
+        }.toSeq
       }
 
       buildSplits(filterFileSlices(fileSlices, globPattern))
@@ -154,8 +155,9 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
     }
   }
 
+  protected lazy val commitsMetadata = includedCommits.map(getCommitMetadata(_, super.timeline)).asJava
+
   protected lazy val affectedFilesInCommits: Array[FileStatus] = {
-    val commitsMetadata = includedCommits.map(getCommitMetadata(_, super.timeline)).asJava
     listAffectedFilesForCommits(conf, new Path(metaClient.getBasePath), commitsMetadata)
   }
 

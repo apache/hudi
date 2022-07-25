@@ -186,6 +186,6 @@ class TestIncrementalReadWithFullTableScan extends HoodieClientTestBase {
       .option(DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES.key(), "true")
       .load(basePath)
 
-    assertEquals(100, hoodieIncViewDF.collect().length)
+    assertEquals(100, hoodieIncViewDF.count())
   }
 }
