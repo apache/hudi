@@ -71,6 +71,14 @@ class IncrementalRelation(val sqlContext: SQLContext,
     throw new HoodieException(s"Specify the begin instant time to pull from using " +
       s"option ${DataSourceReadOptions.BEGIN_INSTANTTIME.key}")
   }
+
+  if (optParams.contains(DataSourceReadOptions.END_INSTANTTIME.key())) {
+    val startInstantTime = optParams(DataSourceReadOptions.BEGIN_INSTANTTIME.key)
+    val endInstantTime = optParams(DataSourceReadOptions.END_INSTANTTIME.key())
+    if (endInstantTime.compareTo(startInstantTime) < 0)
+    throw new HoodieException(s"Specify the begin instant time can not be larger than the end instant time")
+  }
+
   if (!metaClient.getTableConfig.populateMetaFields()) {
     throw new HoodieException("Incremental queries are not supported when meta fields are disabled")
   }
@@ -189,6 +197,10 @@ class IncrementalRelation(val sqlContext: SQLContext,
       }
       sqlContext.sparkContext.hadoopConfiguration.unset("mapreduce.input.pathFilter.class")
 
+      // Fallback to full table scan if any of the following conditions matches:
+      //   1. the start commit is archived
+      //   2. the end commit is archived
+      //   3. there are files in metadata be deleted
       val fallbackToFullTableScan = optParams.getOrElse(DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES.key,
         DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES.defaultValue).toBoolean
 

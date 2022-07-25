@@ -191,6 +191,10 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
         s"option ${DataSourceReadOptions.BEGIN_INSTANTTIME.key}")
     }
 
+    if (this.optParams.contains(DataSourceReadOptions.END_INSTANTTIME.key()) && endTimestamp.compareTo(startTimestamp) < 0) {
+      throw new HoodieException(s"Specify the begin instant time can not be larger than the end instant time")
+    }
+
     if (!this.tableConfig.populateMetaFields()) {
       throw new HoodieException("Incremental queries are not supported when meta fields are disabled")
     }
