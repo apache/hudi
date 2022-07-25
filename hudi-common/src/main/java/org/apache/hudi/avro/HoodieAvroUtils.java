@@ -958,6 +958,7 @@ public class HoodieAvroUtils {
   }
 
   // convert days to Date
+  @SuppressWarnings("sunapi")
   private static java.sql.Date toJavaDate(int days) {
     long localMillis = Math.multiplyExact(days, MILLIS_PER_DAY);
     int timeZoneOffset;
