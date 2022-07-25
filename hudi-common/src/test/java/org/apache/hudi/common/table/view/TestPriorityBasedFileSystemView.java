@@ -45,6 +45,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -667,6 +668,10 @@ public class TestPriorityBasedFileSystemView {
 
   class TestLogAppender extends AppenderSkeleton {
     private final List<LoggingEvent> log = new ArrayList<LoggingEvent>();
+
+    public TestLogAppender() {
+      this.name = UUID.randomUUID().toString();
+    }
 
     @Override
     public boolean requiresLayout() {

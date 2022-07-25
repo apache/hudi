@@ -38,6 +38,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.io.IOException;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -70,7 +71,7 @@ public class TestCallbackHttpClient {
 
   @BeforeEach
   void prepareAppender() {
-    when(appender.getName()).thenReturn("MockAppender");
+    when(appender.getName()).thenReturn("MockAppender-" + UUID.randomUUID());
     when(appender.isStarted()).thenReturn(true);
     when(appender.isStopped()).thenReturn(false);
     ((Logger) LogManager.getLogger(HoodieWriteCommitHttpCallbackClient.class)).addAppender(appender);

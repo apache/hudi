@@ -43,6 +43,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -73,7 +74,7 @@ public class TestDatadogHttpClient {
 
   @BeforeEach
   void prepareAppender() {
-    when(appender.getName()).thenReturn("MockAppender");
+    when(appender.getName()).thenReturn("MockAppender-" + UUID.randomUUID());
     when(appender.isStarted()).thenReturn(true);
     when(appender.isStopped()).thenReturn(false);
     ((Logger) LogManager.getLogger(DatadogHttpClient.class)).addAppender(appender);
