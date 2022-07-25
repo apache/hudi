@@ -96,15 +96,12 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig {
       SaveMode.Append
     }
     val conf = sparkSession.sessionState.conf
-    val alignedQuery = alignOutputFields(query, hoodieCatalogTable, insertPartitions, conf)
-    // If we create dataframe using the Dataset.ofRows(sparkSession, alignedQuery),
-    // The nullable attribute of fields will lost.
-    // In order to pass the nullable attribute to the inputDF, we specify the schema
-    // of the rdd.
-    val inputDF = sparkSession.createDataFrame(
-      Dataset.ofRows(sparkSession, alignedQuery).rdd, alignedQuery.schema)
+    val alignedQuery = alignOutputFields(query, hoodieCatalogTable, partitionSpec, conf)
+    val alignedDF = Dataset.ofRows(sparkSession, alignedQuery)
+
     val success =
-      HoodieSparkSqlWriter.write(sparkSession.sqlContext, mode, config, inputDF)._1
+      HoodieSparkSqlWriter.write(sparkSession.sqlContext, mode, config, alignedDF)._1
+
     if (success) {
       if (refreshTable) {
         sparkSession.catalog.refreshTable(table.identifier.unquotedString)
