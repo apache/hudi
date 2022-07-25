@@ -18,7 +18,9 @@
 package org.apache.spark.sql.hudi.command
 
 import org.apache.hudi.HoodieSparkSqlWriter
+import org.apache.hudi.exception.HoodieException
 import org.apache.spark.internal.Logging
+import org.apache.spark.sql.catalyst.analysis.TypeCoercion.canCast
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, HoodieCatalogTable}
 import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, Literal, NamedExpression}
 import org.apache.spark.sql.catalyst.plans.QueryPlan
@@ -27,7 +29,7 @@ import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
 import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.types.{StructField, StructType}
+import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.apache.spark.sql.{Dataset, Row, SaveMode, SparkSession}
 
 /**
@@ -126,13 +128,13 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig {
     val targetPartitionSchema = catalogTable.partitionSchema
     val staticPartitionValues = partitionsSpec.filter(p => p._2.isDefined).mapValues(_.get)
 
-    val queryOutputWithoutMetaFields = removeMetaFields(query.output)
-
-    validate(queryOutputWithoutMetaFields, staticPartitionValues, catalogTable)
+    validate(removeMetaFields(query.schema), staticPartitionValues, catalogTable)
 
     // To validate and align properly output of the query, we simply filter out partition columns with already
     // provided static values from the table's schema
     val expectedColumns = catalogTable.tableSchemaWithoutMetaFields.filterNot(f => staticPartitionValues.contains(f.name))
+
+    val queryOutputWithoutMetaFields = removeMetaFields(query.output)
 
     val transformedQueryOutput = coerceQueryOutput(queryOutputWithoutMetaFields, expectedColumns, conf)
     val staticPartitionValuesExprs = createStaticPartitionValuesExpressions(staticPartitionValues, targetPartitionSchema, conf)
@@ -140,21 +142,24 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig {
     Project(transformedQueryOutput ++ staticPartitionValuesExprs, query)
   }
 
-  private def validate(queryOutput: Seq[Attribute], staticPartitionValues: Map[String, String], table: HoodieCatalogTable): Unit = {
+  private def validate(queryOutputSchema: StructType, staticPartitionValues: Map[String, String], table: HoodieCatalogTable): Unit = {
     // Validate that either
     //    - There's no static-partition values
     //    - All of the partition columns are provided w/ static values
     //
     // NOTE: Dynamic partition-value are not currently supported
-    assert(staticPartitionValues.isEmpty ||
-      staticPartitionValues.size == table.partitionSchema.size,
-      s"Required partition schema is: ${table.partitionSchema.json}, partition spec is: ${staticPartitionValues.mkString(",")}")
+    if (staticPartitionValues.nonEmpty && staticPartitionValues.size != table.partitionSchema.size) {
+      throw new HoodieException(s"Required partition schema is: ${table.partitionSchema.fieldNames.mkString("[", ", ", "]")}, " +
+        s"partition spec is: ${staticPartitionValues.mkString(",")}")
+    }
 
-    val fullQueryOutputColumnNames = queryOutput.map(_.name) ++ staticPartitionValues.keys
+    val fullQueryOutputSchema = StructType(queryOutputSchema.fields ++ staticPartitionValues.keys.map(StructField(_, StringType, nullable = true)))
 
     // Assert that query provides all the required columns
-    assert(fullQueryOutputColumnNames.toSet == table.tableSchemaWithoutMetaFields.fieldNames.toSet,
-      s"Expected table's schema: ${table.tableSchemaWithoutMetaFields.json}, query's output (including static partition values): $fullQueryOutputColumnNames")
+    if (!conforms(fullQueryOutputSchema, table.tableSchemaWithoutMetaFields)) {
+      throw new HoodieException(s"Expected table's schema: ${table.tableSchemaWithoutMetaFields.fields.mkString("[", ", ", "]")}, " +
+        s"query's output (including static partition values): ${fullQueryOutputSchema.fields.mkString("[", ", ", "]")}")
+    }
   }
 
   private def createStaticPartitionValuesExpressions(staticPartitionValues: Map[String, String],
@@ -182,6 +187,20 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig {
       val castExpr = castIfNeeded(attr.withNullability(targetColumn.nullable), targetColumn.dataType, conf)
 
       Alias(castExpr, targetColumn.name)()
+    }
+  }
+
+  private def conforms(sourceSchema: StructType, targetSchema: StructType): Boolean = {
+    if (sourceSchema.fields.length != targetSchema.fields.length) {
+      false
+    } else {
+      targetSchema.fields.zip(sourceSchema).forall {
+        case (targetColumn, correspondingColumn) =>
+          // Determine matching source column by either a name or corresponding ordering
+          val matchingSourceColumn = sourceSchema.find(_.name == targetColumn.name).getOrElse(correspondingColumn)
+          // Make sure we can cast source column to the target column type
+          canCast(matchingSourceColumn.dataType, targetColumn.dataType)
+      }
     }
   }
 }
