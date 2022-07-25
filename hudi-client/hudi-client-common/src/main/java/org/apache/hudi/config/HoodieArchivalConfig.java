@@ -94,7 +94,7 @@ public class HoodieArchivalConfig extends HoodieConfig {
           + " useful when storage scheme doesn't support append operation.");
 
   public static final ConfigProperty<Boolean> ARCHIVE_BEYOND_SAVEPOINT = ConfigProperty
-      .key("hoodie.archive.proceed.savepoint")
+      .key("hoodie.archive.beyond.savepoint")
       .defaultValue(false)
       .sinceVersion("0.12.0")
       .withDocumentation("If enabled, archival will proceed beyond savepoint, skipping savepoint commits. "

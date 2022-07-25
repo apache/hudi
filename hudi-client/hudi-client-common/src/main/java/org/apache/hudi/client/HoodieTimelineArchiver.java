@@ -416,7 +416,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
     // We cannot archive any commits which are made after the first savepoint present,
     // unless HoodieArchivalConfig#ARCHIVE_BEYOND_SAVEPOINT is enabled.
     Option<HoodieInstant> firstSavepoint = table.getCompletedSavepointTimeline().firstInstant();
-    List<String> savepointTimestamps = table.getSavepointTimestamps();
+    Set<String> savepointTimestamps = table.getSavepointTimestamps();
     if (!commitTimeline.empty() && commitTimeline.countInstants() > maxInstantsToKeep) {
       // For Merge-On-Read table, inline or async compaction is enabled
       // We need to make sure that there are enough delta commits in the active timeline
@@ -507,18 +507,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
       if (config.shouldArchiveBeyondSavepoint()) {
         // There are chances that there could be holes in the timeline due to archival and savepoint interplay.
         // So, the first non-savepoint commit in the data timeline is considered as beginning of the active timeline.
-        Set<String> savepointTimestamps = dataMetaClient.getActiveTimeline().getInstants()
-            .filter(entry -> entry.getAction().equals(HoodieTimeline.SAVEPOINT_ACTION))
-            .map(HoodieInstant::getTimestamp)
-            .collect(Collectors.toSet());
-        Option<HoodieInstant> firstNonSavepointCommit = earliestActiveDatasetCommit;
-
-        if (!savepointTimestamps.isEmpty()) {
-          firstNonSavepointCommit = Option.fromJavaOptional(dataMetaClient.getActiveTimeline().getInstants()
-              .filter(entry -> !savepointTimestamps.contains(entry.getTimestamp()))
-              .findFirst());
-        }
-
+        Option<HoodieInstant> firstNonSavepointCommit = dataMetaClient.getActiveTimeline().getFirstNonSavepointCommit();
         if (firstNonSavepointCommit.isPresent()) {
           String firstNonSavepointCommitTime = firstNonSavepointCommit.get().getTimestamp();
           instants = instants.filter(instant ->

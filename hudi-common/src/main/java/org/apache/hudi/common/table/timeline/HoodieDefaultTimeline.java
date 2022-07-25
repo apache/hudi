@@ -363,6 +363,12 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
 
   @Override
   public boolean isBeforeTimelineStarts(String instant) {
+    Option<HoodieInstant> firstNonSavepointCommit = getFirstNonSavepointCommit();
+    return firstNonSavepointCommit.isPresent()
+        && compareTimestamps(instant, LESSER_THAN, firstNonSavepointCommit.get().getTimestamp());
+  }
+
+  public Option<HoodieInstant> getFirstNonSavepointCommit() {
     Option<HoodieInstant> firstCommit = firstInstant();
     Set<String> savepointTimestamps = instants.stream()
         .filter(entry -> entry.getAction().equals(HoodieTimeline.SAVEPOINT_ACTION))
@@ -376,10 +382,9 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
           .filter(entry -> !savepointTimestamps.contains(entry.getTimestamp()))
           .findFirst());
     }
-    return firstNonSavepointCommit.isPresent()
-        && compareTimestamps(instant, LESSER_THAN, firstNonSavepointCommit.get().getTimestamp());
+    return firstNonSavepointCommit;
   }
-
+  
   @Override
   public Option<byte[]> getInstantDetails(HoodieInstant instant) {
     return details.apply(instant);
