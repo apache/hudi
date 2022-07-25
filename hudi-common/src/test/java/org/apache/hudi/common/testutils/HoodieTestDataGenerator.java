@@ -131,6 +131,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
       + "{\"name\":\"timestamp\",\"type\":\"long\"},{\"name\":\"_row_key\",\"type\":\"string\"},{\"name\":\"rider\",\"type\":\"string\"},"
       + "{\"name\":\"driver\",\"type\":\"string\"},{\"name\":\"fare\",\"type\":\"double\"},{\"name\": \"_hoodie_is_deleted\", \"type\": \"boolean\", \"default\": false}]}";
 
+  public static final String S3_EVENTS_SCHEMA = S3EventsSchemaUtils.generateSchemaString();
   public static final String NULL_SCHEMA = Schema.create(Schema.Type.NULL).toString();
   public static final String TRIP_HIVE_COLUMN_TYPES = "bigint,string,string,string,string,double,double,double,double,int,bigint,float,binary,int,bigint,decimal(10,6),"
       + "map<string,string>,struct<amount:double,currency:string>,array<struct<amount:double,currency:string>>,boolean";
@@ -221,6 +222,8 @@ public class HoodieTestDataGenerator implements AutoCloseable {
       return generatePayloadForTripSchema(key, commitTime);
     } else if (SHORT_TRIP_SCHEMA.equals(schemaStr)) {
       return generatePayloadForShortTripSchema(key, commitTime);
+    } else if (S3_EVENTS_SCHEMA.equals(schemaStr)) {
+      return generatePayloadForS3EventsSchema(key, commitTime);
     }
 
     return null;
@@ -272,6 +275,11 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   public RawTripTestPayload generatePayloadForShortTripSchema(HoodieKey key, String commitTime) throws IOException {
     GenericRecord rec = generateRecordForShortTripSchema(key.getRecordKey(), "rider-" + commitTime, "driver-" + commitTime, 0);
     return new RawTripTestPayload(rec.toString(), key.getRecordKey(), key.getPartitionPath(), SHORT_TRIP_SCHEMA);
+  }
+
+  public RawTripTestPayload generatePayloadForS3EventsSchema(HoodieKey key, String commitTime) throws IOException {
+    GenericRecord rec = generateRecordForS3EventSchema(key.getRecordKey(), "file-object-key", 1024L);
+    return new RawTripTestPayload(rec.toString(), key.getRecordKey(), key.getPartitionPath(), S3_EVENTS_SCHEMA);
   }
 
   /**
@@ -378,6 +386,12 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     return rec;
   }
 
+  public GenericRecord generateRecordForS3EventSchema(String rowKey, String objKey, Long objSize) {
+    GenericRecord objRecord = S3EventsSchemaUtils.generateObjInfoRecord(objKey, objSize);
+    return S3EventsSchemaUtils.generateS3EventRecord(rowKey, objRecord);
+  }
+
+
   public static void createCommitFile(String basePath, String instantTime, Configuration configuration) {
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
     createCommitFile(basePath, instantTime, configuration, commitMetadata);
@@ -480,6 +494,14 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   }
 
   /**
+   * Generates new inserts with given schema, uniformly across the partition paths above.
+   * It also updates the list of existing keys.
+   */
+  public List<HoodieRecord> generateInsertsWithSchema(String instantTime, Integer n, String schemaStr) {
+    return generateInserts(instantTime, n, false);
+  }
+
+  /**
    * Generates new inserts, uniformly across the partition paths above.
    * It also updates the list of existing keys.
    *
@@ -490,6 +512,21 @@ public class HoodieTestDataGenerator implements AutoCloseable {
    */
   public List<HoodieRecord> generateInserts(String instantTime, Integer n, boolean isFlattened) {
     return generateInsertsStream(instantTime, n, isFlattened, TRIP_EXAMPLE_SCHEMA).collect(Collectors.toList());
+  }
+
+  /**
+   * Generates new inserts, uniformly across the partition paths above.
+   * It also updates the list of existing keys.
+   *
+   * @param instantTime  Commit time to use.
+   * @param n  Number of records.
+   * @param schemaStr Schema String to generate data for.
+   * @param isFlattened  whether the schema of the generated record is flattened
+   * @return  List of {@link HoodieRecord}s
+   */
+  public List<HoodieRecord> generateInsertsWithSchema(String instantTime, Integer n, String schemaStr,
+                                                      boolean isFlattened) {
+    return generateInsertsStream(instantTime, n, isFlattened, schemaStr).collect(Collectors.toList());
   }
 
   /**

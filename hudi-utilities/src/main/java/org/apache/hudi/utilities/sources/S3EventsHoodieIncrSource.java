@@ -28,7 +28,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.IncrSourceHelper;
 
@@ -40,21 +39,15 @@ import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.apache.spark.sql.Column;
 import org.apache.spark.sql.DataFrameReader;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
-import static org.apache.spark.sql.functions.col;
-import static org.apache.spark.sql.functions.input_file_name;
-import static org.apache.spark.sql.functions.not;
-import static org.apache.spark.sql.functions.split;
 
 import java.io.IOException;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -67,7 +60,6 @@ import static org.apache.hudi.utilities.sources.HoodieIncrSource.Config.HOODIE_S
 import static org.apache.hudi.utilities.sources.HoodieIncrSource.Config.NUM_INSTANTS_PER_FETCH;
 import static org.apache.hudi.utilities.sources.HoodieIncrSource.Config.READ_LATEST_INSTANT_ON_MISSING_CKPT;
 import static org.apache.hudi.utilities.sources.HoodieIncrSource.Config.SOURCE_FILE_FORMAT;
-
 /**
  * This source will use the S3 events meta information from hoodie table generate by {@link S3EventsSource}.
  */
@@ -94,12 +86,6 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
      * - --hoodie-conf hoodie.deltastreamer.source.s3incr.spark.datasource.options={"header":"true","encoding":"UTF-8"}
      */
     static final String SPARK_DATASOURCE_OPTIONS = "hoodie.deltastreamer.source.s3incr.spark.datasource.options";
-
-    // ToDo make it a list of extensions
-    static final String S3_ACTUAL_FILE_EXTENSIONS = "hoodie.deltastreamer.source.s3incr.file.extensions";
-
-    static final String ATTACH_SOURCE_PARTITION_COLUMN = "hoodie.deltastreamer.source.s3incr.source.partition.exists";
-    static final Boolean DEFAULT_ATTACH_SOURCE_PARTITION_COLUMN = true;
   }
 
   public S3EventsHoodieIncrSource(
@@ -124,45 +110,6 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
       dataFrameReader = dataFrameReader.options(sparkOptionsMap);
     }
     return dataFrameReader;
-  }
-
-  private Dataset addPartitionColumn(Dataset ds, List<String> cloudFiles) {
-    if (props.getBoolean(Config.ATTACH_SOURCE_PARTITION_COLUMN, Config.DEFAULT_ATTACH_SOURCE_PARTITION_COLUMN)
-        && !StringUtils.isNullOrEmpty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key())) {
-      String partitionKey = props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()).split(":")[0];
-      String partitionPathPattern = String.format("%s=",partitionKey);
-      String filePath = cloudFiles.get(0);
-      List<String> nestedPartition = Arrays.stream(filePath.split("/"))
-          .filter(level -> level.contains(partitionPathPattern)).collect(Collectors.toList());
-      if (nestedPartition.size() > 1) {
-        throw new HoodieException("More than one level of partitioning exists");
-      }
-      if (nestedPartition.size() == 1) {
-        LOG.info(String.format("adding column name = %s to dataset",partitionKey));
-        ds = ds.withColumn(partitionKey, split(split(input_file_name(),
-            partitionPathPattern).getItem(1), "/").getItem(0));
-      }
-    }
-    return ds;
-  }
-
-  private Column s3EventsColumnFilter(String fileFormat) {
-    Column filterCol = col("s3.object.size").gt(0);
-    if (!StringUtils.isNullOrEmpty(props.getString(Config.S3_KEY_PREFIX, null))) {
-      filterCol = filterCol.and(col("s3.object.key").startsWith(props.getString(Config.S3_KEY_PREFIX)));
-    }
-    if (!StringUtils.isNullOrEmpty(props.getString(Config.S3_IGNORE_KEY_PREFIX, null))) {
-      filterCol = filterCol.and(not(col("s3.object.key").startsWith(props.getString(Config.S3_IGNORE_KEY_PREFIX))));
-    }
-    if (!StringUtils.isNullOrEmpty(props.getString(Config.S3_IGNORE_KEY_SUBSTRING, null))) {
-      filterCol = filterCol.and(not(col("s3.object.key").contains(props.getString(Config.S3_IGNORE_KEY_SUBSTRING))));
-    }
-    // add file format filtering by default
-    // TODO: we need to make this config more formal with a list of extensions
-    String fileExtensionFilter = props.getString(Config.S3_ACTUAL_FILE_EXTENSIONS, fileFormat);
-    filterCol = filterCol.and(col("s3.object.key").endsWith(fileExtensionFilter));
-
-    return filterCol;
   }
 
   @Override
@@ -214,21 +161,36 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
       return Pair.of(Option.empty(), queryTypeAndInstantEndpts.getRight().getRight());
     }
 
-    Column filterColumn = s3EventsColumnFilter(fileFormat);
+    String filter = "s3.object.size > 0";
+    if (!StringUtils.isNullOrEmpty(props.getString(Config.S3_KEY_PREFIX, null))) {
+      filter = filter + " and s3.object.key like '" + props.getString(Config.S3_KEY_PREFIX) + "%'";
+    }
+    if (!StringUtils.isNullOrEmpty(props.getString(Config.S3_IGNORE_KEY_PREFIX, null))) {
+      filter = filter + " and s3.object.key not like '" + props.getString(Config.S3_IGNORE_KEY_PREFIX) + "%'";
+    }
+    if (!StringUtils.isNullOrEmpty(props.getString(Config.S3_IGNORE_KEY_SUBSTRING, null))) {
+      filter = filter + " and s3.object.key not like '%" + props.getString(Config.S3_IGNORE_KEY_SUBSTRING) + "%'";
+    }
+    // add file format filtering by default
+    filter = filter + " and s3.object.key like '%" + fileFormat + "%'";
+
     String s3FS = props.getString(Config.S3_FS_PREFIX, "s3").toLowerCase();
     String s3Prefix = s3FS + "://";
 
-    // Extract distinct file keys from s3 meta hoodie table
     // Create S3 paths
     final boolean checkExists = props.getBoolean(Config.ENABLE_EXISTS_CHECK, Config.DEFAULT_ENABLE_EXISTS_CHECK);
     SerializableConfiguration serializableConfiguration = new SerializableConfiguration(sparkContext.hadoopConfiguration());
     List<String> cloudFiles = source
-        .filter(filterColumn)
+        .filter(filter)
         .select("s3.bucket.name", "s3.object.key")
         .distinct()
-        .rdd().toJavaRDD().mapPartitions(fileListIterator -> {
+        .rdd()
+        // JavaRDD simplifies coding with collect and suitable mapPartitions signature. check if this can be avoided.
+        .toJavaRDD()
+        .mapPartitions(fileListIterator -> {
           List<String> cloudFilesPerPartition = new ArrayList<>();
           fileListIterator.forEachRemaining(row -> {
+            // TODO: configuration is updated in the getFs call. check if new copy is needed w.r.t to getFs.
             final Configuration configuration = serializableConfiguration.newCopy();
             String bucket = row.getString(0);
             String filePath = s3Prefix + bucket + "/" + row.getString(1);
@@ -252,13 +214,13 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
           });
           return cloudFilesPerPartition.iterator();
         }).collect();
+
     Option<Dataset<Row>> dataset = Option.empty();
     if (!cloudFiles.isEmpty()) {
       DataFrameReader dataFrameReader = getDataFrameReader(fileFormat);
-      Dataset ds = addPartitionColumn(dataFrameReader.load(cloudFiles.toArray(new String[0])),cloudFiles);
-      dataset = Option.of(ds);
+      dataset = Option.of(dataFrameReader.load(cloudFiles.toArray(new String[0])));
     }
-    LOG.warn("Extracted distinct files " + cloudFiles.size()
+    LOG.debug("Extracted distinct files " + cloudFiles.size()
         + " and some samples " + cloudFiles.stream().limit(10).collect(Collectors.toList()));
     return Pair.of(dataset, queryTypeAndInstantEndpts.getRight().getRight());
   }
