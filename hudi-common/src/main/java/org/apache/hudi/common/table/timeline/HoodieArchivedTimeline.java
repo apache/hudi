@@ -132,7 +132,7 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
 
   public static Path getArchiveLogPath(String archiveFolder) {
     return new Path(archiveFolder, HOODIE_COMMIT_ARCHIVE_LOG_FILE_PREFIX);
-  }C
+  }
 
   public void loadInstantDetailsInMemory(String startTs, String endTs) {
     loadInstants(startTs, endTs);
