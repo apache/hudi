@@ -20,9 +20,8 @@ package org.apache.spark.sql.hudi.command
 import org.apache.hudi.HoodieSparkSqlWriter
 import org.apache.hudi.exception.HoodieException
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.catalyst.analysis.TypeCoercion.canCast
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, HoodieCatalogTable}
-import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, Literal, NamedExpression}
+import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, Cast, Literal, NamedExpression}
 import org.apache.spark.sql.catalyst.plans.QueryPlan
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, Project}
 import org.apache.spark.sql.execution.datasources.LogicalRelation
@@ -197,7 +196,7 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig {
           // Determine matching source column by either a name or corresponding ordering
           val matchingSourceColumn = sourceSchema.find(_.name == targetColumn.name).getOrElse(correspondingColumn)
           // Make sure we can cast source column to the target column type
-          canCast(matchingSourceColumn.dataType, targetColumn.dataType)
+          Cast.canCast(matchingSourceColumn.dataType, targetColumn.dataType)
       }
     }
   }
