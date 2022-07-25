@@ -126,9 +126,9 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig {
                                conf: SQLConf): LogicalPlan = {
 
     val targetPartitionSchema = catalogTable.partitionSchema
-    val staticPartitionValues = partitionsSpec.filter(p => p._2.isDefined).mapValues(_.get)
+    val staticPartitionValues = filterStaticPartitionValues(partitionsSpec)
 
-    validate(removeMetaFields(query.schema), staticPartitionValues, catalogTable)
+    validate(removeMetaFields(query.schema), partitionsSpec, catalogTable)
 
     // To validate and align properly output of the query, we simply filter out partition columns with already
     // provided static values from the table's schema
@@ -142,22 +142,20 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig {
     Project(transformedQueryOutput ++ staticPartitionValuesExprs, query)
   }
 
-  private def validate(queryOutputSchema: StructType, staticPartitionValues: Map[String, String], table: HoodieCatalogTable): Unit = {
-    // Validate that either
-    //    - There's no static-partition values
-    //    - All of the partition columns are provided w/ static values
-    //
-    // NOTE: Dynamic partition-value are not currently supported
-    if (staticPartitionValues.nonEmpty && staticPartitionValues.size != table.partitionSchema.size) {
-      throw new HoodieException(s"Required partition schema is: ${table.partitionSchema.fieldNames.mkString("[", ", ", "]")}, " +
-        s"partition spec is: ${staticPartitionValues.mkString(",")}")
+  private def validate(queryOutputSchema: StructType, partitionsSpec: Map[String, Option[String]], catalogTable: HoodieCatalogTable): Unit = {
+    // Validate that partition-spec has proper format (it could be empty if all of the partition values are dynamic,
+    // ie there are no static partition-values specified)
+    if (partitionsSpec.nonEmpty && partitionsSpec.size != catalogTable.partitionSchema.size) {
+      throw new HoodieException(s"Required partition schema is: ${catalogTable.partitionSchema.fieldNames.mkString("[", ", ", "]")}, " +
+        s"partition spec is: ${partitionsSpec.mkString("[", ", ", "]")}")
     }
 
-    val fullQueryOutputSchema = StructType(queryOutputSchema.fields ++ staticPartitionValues.keys.map(StructField(_, StringType, nullable = true)))
+    val staticPartitionValues = filterStaticPartitionValues(partitionsSpec)
+    val fullQueryOutputSchema = StructType(queryOutputSchema.fields ++ staticPartitionValues.keys.map(StructField(_, StringType)))
 
     // Assert that query provides all the required columns
-    if (!conforms(fullQueryOutputSchema, table.tableSchemaWithoutMetaFields)) {
-      throw new HoodieException(s"Expected table's schema: ${table.tableSchemaWithoutMetaFields.fields.mkString("[", ", ", "]")}, " +
+    if (!conforms(fullQueryOutputSchema, catalogTable.tableSchemaWithoutMetaFields)) {
+      throw new HoodieException(s"Expected table's schema: ${catalogTable.tableSchemaWithoutMetaFields.fields.mkString("[", ", ", "]")}, " +
         s"query's output (including static partition values): ${fullQueryOutputSchema.fields.mkString("[", ", ", "]")}")
     }
   }
@@ -203,4 +201,7 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig {
       }
     }
   }
+
+  private def filterStaticPartitionValues(partitionsSpec: Map[String, Option[String]]): Map[String, String] =
+    partitionsSpec.filter(p => p._2.isDefined).mapValues(_.get)
 }
