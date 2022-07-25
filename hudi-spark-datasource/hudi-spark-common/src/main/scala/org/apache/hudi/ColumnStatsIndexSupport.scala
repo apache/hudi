@@ -62,6 +62,10 @@ class ColumnStatsIndexSupport(spark: SparkSession,
 
   @transient private lazy val cachedColumnStatsIndexViews: ParHashMap[Seq[String], DataFrame] = ParHashMap()
 
+  // NOTE: Since [[metadataConfig]] is transient this has to be eagerly persisted, before this will be passed
+  //       on to the executor
+  private val inMemoryProjectionThreshold = metadataConfig.getColumnStatsIndexInMemoryProjectionThreshold
+
   private lazy val indexedColumns: Set[String] = {
     val customIndexedColumns = metadataConfig.getColumnsEnabledForColumnStatsIndex
     // Column Stats Index could index either
@@ -92,7 +96,7 @@ class ColumnStatsIndexSupport(spark: SparkSession,
       case Some(mode) =>
         mode == HoodieMetadataConfig.COLUMN_STATS_INDEX_PROCESSING_MODE_IN_MEMORY
       case None =>
-        fileIndex.getFileSlicesCount * queryReferencedColumns.length < columnStatsIndexProjectionSizeInMemoryThreshold
+        fileIndex.getFileSlicesCount * queryReferencedColumns.length < inMemoryProjectionThreshold
     }
   }
 
@@ -355,8 +359,6 @@ class ColumnStatsIndexSupport(spark: SparkSession,
 }
 
 object ColumnStatsIndexSupport {
-
-  private val columnStatsIndexProjectionSizeInMemoryThreshold = 100000
 
   private val expectedAvroSchemaValues = Set("BooleanWrapper", "IntWrapper", "LongWrapper", "FloatWrapper", "DoubleWrapper",
     "BytesWrapper", "StringWrapper", "DateWrapper", "DecimalWrapper", "TimeMicrosWrapper", "TimestampMicrosWrapper")
