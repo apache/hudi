@@ -139,7 +139,7 @@ class TestIncrementalReadWithFullTableScan extends HoodieClientTestBase {
     assertEquals(100, hoodieIncViewDF.count())
 
     //Test out for archived commits
-    val archivedInstants = hoodieMetaClient.getArchivedTimeline.getInstants.distinct().toArray
+    val archivedInstants = hoodieMetaClient.getArchivedTimeline.filterCompletedInstants().getInstants.distinct().toArray
     startTs = archivedInstants(0).asInstanceOf[HoodieInstant].getTimestamp //C0
     endTs = completedCommits.nthInstant(1).get().getTimestamp //C5
 
@@ -174,5 +174,18 @@ class TestIncrementalReadWithFullTableScan extends HoodieClientTestBase {
       .option(DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES.key(), "true")
       .load(basePath)
     assertEquals(500, hoodieIncViewDF.count())
+
+    // Test both start and end commits are archived
+    startTs = archivedInstants(0).asInstanceOf[HoodieInstant].getTimestamp //C0
+    endTs = archivedInstants(1).asInstanceOf[HoodieInstant].getTimestamp //C1
+
+    hoodieIncViewDF = spark.read.format("org.apache.hudi")
+      .option(DataSourceReadOptions.QUERY_TYPE.key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
+      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key(), startTs)
+      .option(DataSourceReadOptions.END_INSTANTTIME.key(), endTs)
+      .option(DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES.key(), "true")
+      .load(basePath)
+
+    assertEquals(100, hoodieIncViewDF.collect().length)
   }
 }
