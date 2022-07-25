@@ -84,32 +84,27 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig {
           overwrite: Boolean,
           refreshTable: Boolean = true,
           extraOptions: Map[String, String] = Map.empty): Boolean = {
-
     val hoodieCatalogTable = new HoodieCatalogTable(sparkSession, table)
     val config = buildHoodieInsertConfig(hoodieCatalogTable, sparkSession, overwrite, partitionSpec, extraOptions)
 
+    // NOTE: In case of partitioned table we override specified "overwrite" parameter
+    //       to instead append to the dataset
     val mode = if (overwrite && hoodieCatalogTable.partitionFields.isEmpty) {
-      // insert overwrite non-partition table
       SaveMode.Overwrite
     } else {
-      // for insert into or insert overwrite partition we use append mode.
       SaveMode.Append
     }
-    val conf = sparkSession.sessionState.conf
-    val alignedQuery = alignOutputFields(query, hoodieCatalogTable, partitionSpec, conf)
+
+    val alignedQuery = alignOutputFields(query, hoodieCatalogTable, partitionSpec, sparkSession.sessionState.conf)
     val alignedDF = Dataset.ofRows(sparkSession, alignedQuery)
 
-    val success =
-      HoodieSparkSqlWriter.write(sparkSession.sqlContext, mode, config, alignedDF)._1
+    val (success, _, _, _, _, _) = HoodieSparkSqlWriter.write(sparkSession.sqlContext, mode, config, alignedDF)
 
-    if (success) {
-      if (refreshTable) {
-        sparkSession.catalog.refreshTable(table.identifier.unquotedString)
-      }
-      true
-    } else {
-      false
+    if (success && refreshTable) {
+      sparkSession.catalog.refreshTable(table.identifier.unquotedString)
     }
+
+    success
   }
 
   /**
