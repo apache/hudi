@@ -101,7 +101,12 @@
         </dependency>
 
         <!-- Test dependencies -->
-
+        <dependency>
+            <groupId>org.apache.hudi</groupId>
+            <artifactId>hudi-tests-common</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
         <!-- Junit 5 dependencies -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>

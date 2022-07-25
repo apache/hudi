@@ -61,6 +61,7 @@
     <module>hudi-kafka-connect</module>
     <module>packaging/hudi-flink-bundle</module>
     <module>packaging/hudi-kafka-connect-bundle</module>
+    <module>hudi-tests-common</module>
   </modules>
 
   <licenses>
@@ -153,7 +154,7 @@
     <scala-maven-plugin.version>3.3.1</scala-maven-plugin.version>
     <scalatest.version>3.0.1</scalatest.version>
     <scalatest.spark3.version>3.1.0</scalatest.spark3.version>
-    <surefire-log4j.file>file://${project.basedir}/src/test/resources/log4j2-surefire.properties</surefire-log4j.file>
+    <surefire-log4j.file>log4j2-surefire.properties</surefire-log4j.file>
     <thrift.version>0.12.0</thrift.version>
     <jetty.version>9.4.15.v20190215</jetty.version>
     <htrace.version>3.1.0-incubating</htrace.version>
@@ -1461,8 +1462,7 @@
         </property>
       </activation>
       <properties>
-        <surefire-log4j.file>file://${project.basedir}/src/test/resources/log4j2-surefire-quiet.properties
-        </surefire-log4j.file>
+        <surefire-log4j.file>log4j2-surefire-quiet.properties</surefire-log4j.file>
       </properties>
     </profile>
     <profile>
