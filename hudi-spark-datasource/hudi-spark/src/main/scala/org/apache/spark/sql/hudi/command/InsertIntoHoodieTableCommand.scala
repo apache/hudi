@@ -19,6 +19,7 @@ package org.apache.spark.sql.hudi.command
 
 import org.apache.hudi.HoodieSparkSqlWriter
 import org.apache.spark.internal.Logging
+import org.apache.spark.sql.HoodieUnsafeRDDUtils.createDataFrame
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, HoodieCatalogTable}
 import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, Literal}
 import org.apache.spark.sql.catalyst.plans.QueryPlan
@@ -28,16 +29,27 @@ import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{StructField, StructType}
-import org.apache.spark.sql.{Dataset, Row, SaveMode, SparkSession}
+import org.apache.spark.sql.{Dataset, HoodieUnsafeRDDUtils, Row, SaveMode, SparkSession}
 
 /**
- * Command for insert into hoodie table.
+ * Command for insert into Hudi table.
+ *
+ * This is correspondent to Spark's native [[InsertIntoStatement]]
+ *
+ * @param logicalRelation the [[LogicalRelation]] representing the table to be writing into.
+ * @param query           the logical plan representing data to be written
+ * @param partitionSpec   a map from the partition key to the partition value (optional).
+ *                        If the value is missing, dynamic partition insert will be performed.
+ *                        As an example, `INSERT INTO tbl PARTITION (a=1, b=2) AS` would have
+ *                        Map('a' -> Some('1'), 'b' -> Some('2')),
+ *                        and `INSERT INTO tbl PARTITION (a=1, b) AS ...`
+ *                        would have Map('a' -> Some('1'), 'b' -> None).
+ * @param overwrite       overwrite existing table or partitions.
  */
-case class InsertIntoHoodieTableCommand(
-    logicalRelation: LogicalRelation,
-    query: LogicalPlan,
-    partition: Map[String, Option[String]],
-    overwrite: Boolean)
+case class InsertIntoHoodieTableCommand(logicalRelation: LogicalRelation,
+                                        query: LogicalPlan,
+                                        partitionSpec: Map[String, Option[String]],
+                                        overwrite: Boolean)
   extends HoodieLeafRunnableCommand {
   override def innerChildren: Seq[QueryPlan[_]] = Seq(query)
 
@@ -45,7 +57,7 @@ case class InsertIntoHoodieTableCommand(
     assert(logicalRelation.catalogTable.isDefined, "Missing catalog table")
 
     val table = logicalRelation.catalogTable.get
-    InsertIntoHoodieTableCommand.run(sparkSession, table, query, partition, overwrite)
+    InsertIntoHoodieTableCommand.run(sparkSession, table, query, partitionSpec, overwrite)
     Seq.empty[Row]
   }
 }
@@ -56,7 +68,7 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig {
    * @param sparkSession The spark session.
    * @param table The insert table.
    * @param query The insert query.
-   * @param insertPartitions The specified insert partition map.
+   * @param partitionSpec The specified insert partition map.
    *                         e.g. "insert into h(dt = '2021') select id, name from src"
    *                         "dt" is the key in the map and "2021" is the partition value. If the
    *                         partition value has not specified(in the case of dynamic partition)
@@ -66,15 +78,15 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig {
    * @param extraOptions Extra options for insert.
    */
   def run(sparkSession: SparkSession,
-      table: CatalogTable,
-      query: LogicalPlan,
-      insertPartitions: Map[String, Option[String]],
-      overwrite: Boolean,
-      refreshTable: Boolean = true,
-      extraOptions: Map[String, String] = Map.empty): Boolean = {
+          table: CatalogTable,
+          query: LogicalPlan,
+          partitionSpec: Map[String, Option[String]],
+          overwrite: Boolean,
+          refreshTable: Boolean = true,
+          extraOptions: Map[String, String] = Map.empty): Boolean = {
 
     val hoodieCatalogTable = new HoodieCatalogTable(sparkSession, table)
-    val config = buildHoodieInsertConfig(hoodieCatalogTable, sparkSession, overwrite, insertPartitions, extraOptions)
+    val config = buildHoodieInsertConfig(hoodieCatalogTable, sparkSession, overwrite, partitionSpec, extraOptions)
 
     val mode = if (overwrite && hoodieCatalogTable.partitionFields.isEmpty) {
       // insert overwrite non-partition table
@@ -107,23 +119,21 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig {
    * Aligned the type and name of query's output fields with the result table's fields.
    * @param query The insert query which to aligned.
    * @param hoodieCatalogTable The result hoodie catalog table.
-   * @param insertPartitions The insert partition map.
+   * @param partitionsSpec The insert partition map.
    * @param conf The SQLConf.
    * @return
    */
-  private def alignOutputFields(
-    query: LogicalPlan,
-    hoodieCatalogTable: HoodieCatalogTable,
-    insertPartitions: Map[String, Option[String]],
-    conf: SQLConf): LogicalPlan = {
+  private def alignOutputFields(query: LogicalPlan,
+                                hoodieCatalogTable: HoodieCatalogTable,
+                                partitionsSpec: Map[String, Option[String]],
+                                conf: SQLConf): LogicalPlan = {
 
     val targetPartitionSchema = hoodieCatalogTable.partitionSchema
 
-    val staticPartitionValues = insertPartitions.filter(p => p._2.isDefined).mapValues(_.get)
+    val staticPartitionValues = partitionsSpec.filter(p => p._2.isDefined).mapValues(_.get)
     assert(staticPartitionValues.isEmpty ||
-      insertPartitions.size == targetPartitionSchema.size,
-      s"Required partition columns is: ${targetPartitionSchema.json}, Current input partitions " +
-        s"is: ${staticPartitionValues.mkString("," + "")}")
+      partitionsSpec.size == targetPartitionSchema.size,
+      s"Required partition schema is: ${targetPartitionSchema.json}, partition spec is: ${staticPartitionValues.mkString(",")}")
 
     val queryOutputWithoutMetaFields = removeMetaFields(query.output)
     assert(staticPartitionValues.size + queryOutputWithoutMetaFields.size
