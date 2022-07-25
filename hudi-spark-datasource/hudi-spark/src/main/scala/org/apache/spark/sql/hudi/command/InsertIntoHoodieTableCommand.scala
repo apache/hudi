@@ -19,9 +19,8 @@ package org.apache.spark.sql.hudi.command
 
 import org.apache.hudi.HoodieSparkSqlWriter
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.HoodieUnsafeRDDUtils.createDataFrame
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, HoodieCatalogTable}
-import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, Literal}
+import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, Literal, NamedExpression}
 import org.apache.spark.sql.catalyst.plans.QueryPlan
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, Project}
 import org.apache.spark.sql.execution.datasources.LogicalRelation
@@ -29,9 +28,7 @@ import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{StructField, StructType}
-import org.apache.spark.sql.{Dataset, HoodieUnsafeRDDUtils, Row, SaveMode, SparkSession}
-
-import scala.Predef.assert
+import org.apache.spark.sql.{Dataset, Row, SaveMode, SparkSession}
 
 /**
  * Command for insert into Hudi table.
@@ -162,7 +159,7 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig {
 
   private def createStaticPartitionValuesExpressions(staticPartitionValues: Map[String, String],
                                                      partitionSchema: StructType,
-                                                     conf: SQLConf) = {
+                                                     conf: SQLConf): Seq[NamedExpression] = {
     partitionSchema.fields
       .filter(pf => staticPartitionValues.contains(pf.name))
       .map(pf => {
