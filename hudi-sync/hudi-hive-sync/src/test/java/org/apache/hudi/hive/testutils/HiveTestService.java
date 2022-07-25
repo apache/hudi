@@ -180,7 +180,7 @@ public class HiveTestService {
       try {
         new HiveMetaStoreClient(serverConf);
         return true;
-      } catch (MetaException e) {
+      } catch (MetaException ignored) {
         // ignore as this is expected
       }
 
@@ -189,8 +189,8 @@ public class HiveTestService {
       }
       try {
         Thread.sleep(CONNECTION_TIMEOUT_MS / 10);
-      } catch (InterruptedException e) {
-        // ignore
+      } catch (InterruptedException ignored) {
+        // no op
       }
     }
     return false;
@@ -281,9 +281,6 @@ public class HiveTestService {
       int maxWorkerThreads = conf.getIntVar(ConfVars.METASTORESERVERMAXTHREADS);
       boolean tcpKeepAlive = conf.getBoolVar(ConfVars.METASTORE_TCP_KEEP_ALIVE);
       boolean useFramedTransport = conf.getBoolVar(ConfVars.METASTORE_USE_THRIFT_FRAMED_TRANSPORT);
-
-      // don't support SASL yet
-      // boolean useSasl = conf.getBoolVar(ConfVars.METASTORE_USE_THRIFT_SASL);
 
       InetSocketAddress address = new InetSocketAddress(host, port);
       TServerTransport serverTransport = tcpKeepAlive ? new TServerSocketKeepAlive(address) : new TServerSocket(address);
