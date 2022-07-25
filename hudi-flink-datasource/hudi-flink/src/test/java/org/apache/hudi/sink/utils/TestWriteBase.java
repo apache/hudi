@@ -38,6 +38,7 @@ import org.hamcrest.MatcherAssert;
 
 import java.io.File;
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -102,6 +103,23 @@ public class TestWriteBase {
         "id1,par1,id1,Danny,23,3,par1",
         "id1,par1,id1,Danny,23,4,par1",
         "id1,par1,id1,Danny,23,4,par1"));
+
+    removeHadoopConf();
+  }
+
+  private static void removeHadoopConf() {
+    Map<String, String> env = System.getenv();
+    Class<?> clazz = env.getClass();
+    Field field = null;
+    try {
+      field = clazz.getDeclaredField("m");
+      field.setAccessible(true);
+      Map<String, String> map = (Map<String, String>) field.get(env);
+      map.remove("HADOOP_CONF_DIR");
+      map.remove("HADOOP_HOME");
+    } catch (NoSuchFieldException | IllegalAccessException e) {
+      throw new IllegalArgumentException(e);
+    }
   }
 
   // -------------------------------------------------------------------------
