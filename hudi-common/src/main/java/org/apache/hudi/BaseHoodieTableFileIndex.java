@@ -63,7 +63,7 @@ import java.util.stream.Collectors;
  *   <li>Query instant/range</li>
  * </ul>
  */
-public abstract class BaseHoodieTableFileIndex {
+public abstract class   BaseHoodieTableFileIndex {
 
   private static final Logger LOG = LogManager.getLogger(BaseHoodieTableFileIndex.class);
 
@@ -169,7 +169,7 @@ public abstract class BaseHoodieTableFileIndex {
 
   public int getFileSlicesCount() {
     return cachedAllInputFileSlices.values().stream()
-        .reduce(0, (count, fileSlices) -> count + fileSlices.size(), Integer::sum);
+        .mapToInt(List::size).sum();
   }
 
   protected List<PartitionPath> getAllQueryPartitionPaths() {
