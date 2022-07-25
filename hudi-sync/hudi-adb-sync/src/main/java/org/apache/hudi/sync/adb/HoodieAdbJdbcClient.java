@@ -262,13 +262,21 @@ public class HoodieAdbJdbcClient extends HoodieSyncClient {
   @Override
   public void updateLastCommitTimeSynced(String tableName, Option<HoodieInstant> hoodieInstantOption) {
     // Set the last commit time from the TBLProperties
+    Option<HoodieInstant> lastCommitSynced;
     if (hoodieInstantOption.isPresent()) {
+      lastCommitSynced = hoodieInstantOption;
+    } else {
+      lastCommitSynced = getActiveTimeline().lastInstant();
+    }
+    if (lastCommitSynced.isPresent()) {
       try {
-        String sql = constructUpdateTblPropertiesSql(tableName, hoodieInstantOption.get().getTimestamp());
+        String sql = constructUpdateTblPropertiesSql(tableName, lastCommitSynced.get().getTimestamp());
         executeAdbSql(sql);
       } catch (Exception e) {
         throw new HoodieHiveSyncException("Fail to get update last commit time synced:" + hoodieInstantOption.get(), e);
       }
+    } else {
+      LOG.warn("No commit in active timeline.");
     }
   }
 

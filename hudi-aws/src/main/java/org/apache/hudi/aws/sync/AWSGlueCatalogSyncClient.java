@@ -382,12 +382,21 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
 
   @Override
   public void updateLastCommitTimeSynced(String tableName, Option<HoodieInstant> hoodieInstantOption) {
+
+    Option<HoodieInstant> lastCommitSynced;
     if (hoodieInstantOption.isPresent()) {
+      lastCommitSynced = hoodieInstantOption;
+    } else {
+      lastCommitSynced = getActiveTimeline().lastInstant();
+    }
+    if (lastCommitSynced.isPresent()) {
       try {
-        updateTableParameters(awsGlue, databaseName, tableName, Collections.singletonMap(HOODIE_LAST_COMMIT_TIME_SYNC, hoodieInstantOption.get().getTimestamp()), false);
+        updateTableParameters(awsGlue, databaseName, tableName, Collections.singletonMap(HOODIE_LAST_COMMIT_TIME_SYNC, lastCommitSynced.get().getTimestamp()), false);
       } catch (Exception e) {
         throw new HoodieGlueSyncException("Fail to update last sync commit time for " + tableId(databaseName, tableName), e);
       }
+    } else {
+      LOG.warn("No commit in active timeline.");
     }
   }
 
