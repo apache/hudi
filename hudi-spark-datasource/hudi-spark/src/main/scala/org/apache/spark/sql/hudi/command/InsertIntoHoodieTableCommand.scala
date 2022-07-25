@@ -137,7 +137,7 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig {
     // provided static values from the table's schema
     val expectedColumns = catalogTable.tableSchemaWithoutMetaFields.filterNot(f => staticPartitionValues.contains(f.name))
 
-    val transformedQueryOutput = transformQueryOutput(queryOutputWithoutMetaFields, expectedColumns, conf)
+    val transformedQueryOutput = coerceQueryOutput(queryOutputWithoutMetaFields, expectedColumns, conf)
     val staticPartitionValuesExprs = createStaticPartitionValuesExpressions(staticPartitionValues, targetPartitionSchema, conf)
 
     Project(transformedQueryOutput ++ staticPartitionValuesExprs, query)
@@ -153,18 +153,11 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig {
       staticPartitionValues.size == table.partitionSchema.size,
       s"Required partition schema is: ${table.partitionSchema.json}, partition spec is: ${staticPartitionValues.mkString(",")}")
 
-    val queryOutputColumnNames = queryOutput.map(_.name)
-    val expectedColumnNames = table.tableSchemaWithoutMetaFields.filterNot(sf => staticPartitionValues.contains(sf.name))
-
-    // Asert that query's output is appropriately ordered
-    assert(queryOutputColumnNames == expectedColumnNames,
-      s"Expected table's columns in the following ordering: $expectedColumnNames, received: $queryOutputColumnNames")
-
-    val fullQueryOutputColumnNames = queryOutputColumnNames ++ staticPartitionValues.keys
+    val fullQueryOutputColumnNames = queryOutput.map(_.name) ++ staticPartitionValues.keys
 
     // Assert that query provides all the required columns
     assert(fullQueryOutputColumnNames.toSet == table.tableSchemaWithoutMetaFields.fieldNames.toSet,
-      s"Expected table's schema: ${table.tableSchemaWithoutMetaFields.json}, query's output (including static partition values): $fullQueryOutputColumnNames"
+      s"Expected table's schema: ${table.tableSchemaWithoutMetaFields.json}, query's output (including static partition values): $fullQueryOutputColumnNames")
   }
 
   private def createStaticPartitionValuesExpressions(staticPartitionValues: Map[String, String],
@@ -180,11 +173,9 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig {
       })
   }
 
-  private def transformQueryOutput(queryOutput: Seq[Attribute],
-                                  expectedColumns: Seq[StructField],
-                                  conf: SQLConf): Seq[Alias] = {
-    // NOTE: This code assumes that query's output and corresponding [[StructField]]s
-    //       are properly ordered (which is asserted in the validation step)
+  private def coerceQueryOutput(queryOutput: Seq[Attribute],
+                                expectedColumns: Seq[StructField],
+                                conf: SQLConf): Seq[Alias] = {
     queryOutput.zip(expectedColumns).map { case (attr, field) =>
       // Lookup (by name) corresponding column from the table definition. In case there's
       // no match, assume the column by the relative ordering
