@@ -368,6 +368,7 @@
                     <exclude>org.sl4fj:slf4j-jdk14</exclude>
                     <exclude>org.sl4fj:slf4j-nop</exclude>
                     <exclude>org.sl4fj:slf4j-jcl</exclude>
+                    <exclude>org.slf4j:jul-to-slf4j</exclude>
                     <exclude>log4j:log4j</exclude>
                     <exclude>ch.qos.logback:logback-classic</exclude>
                   </excludes>
@@ -590,13 +591,13 @@
         <version>${log4j2.version}</version>
       </dependency>
       <dependency>
-        <groupId>org.slf4j</groupId>
-        <artifactId>slf4j-api</artifactId>
-        <version>${slf4j.version}</version>
+        <groupId>org.apache.logging.log4j</groupId>
+        <artifactId>log4j-jul</artifactId>
+        <version>${log4j2.version}</version>
       </dependency>
       <dependency>
         <groupId>org.slf4j</groupId>
-        <artifactId>jul-to-slf4j</artifactId>
+        <artifactId>slf4j-api</artifactId>
         <version>${slf4j.version}</version>
       </dependency>
 
