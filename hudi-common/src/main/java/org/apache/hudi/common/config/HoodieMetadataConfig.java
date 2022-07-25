@@ -188,12 +188,12 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .withDocumentation("Comma-separated list of columns for which column stats index will be built. If not set, all columns will be indexed");
 
   public static final String COLUMN_STATS_INDEX_PROCESSING_MODE_IN_MEMORY = "in-memory";
-  public static final String COLUMN_STATS_INDEX_PROCESSING_MODE_SPARK = "spark";
+  public static final String COLUMN_STATS_INDEX_PROCESSING_MODE_ENGINE = "engine";
 
   public static final ConfigProperty<String> COLUMN_STATS_INDEX_PROCESSING_MODE_OVERRIDE = ConfigProperty
       .key(METADATA_PREFIX + ".index.column.stats.processing.mode.override")
       .noDefaultValue()
-      .withValidValues(COLUMN_STATS_INDEX_PROCESSING_MODE_IN_MEMORY, COLUMN_STATS_INDEX_PROCESSING_MODE_SPARK)
+      .withValidValues(COLUMN_STATS_INDEX_PROCESSING_MODE_IN_MEMORY, COLUMN_STATS_INDEX_PROCESSING_MODE_ENGINE)
       .sinceVersion("0.12.0")
       .withDocumentation("By default Column Stats Index is automatically determining whether it should be read and processed either"
           + "'in-memory' (w/in executing process) or using Spark (on a cluster), based on some factors like the size of the Index "

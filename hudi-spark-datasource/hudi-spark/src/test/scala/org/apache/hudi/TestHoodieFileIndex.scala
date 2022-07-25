@@ -380,7 +380,7 @@ class TestHoodieFileIndex extends HoodieClientTestBase {
       TestCase(enableMetadata = false, enableColumnStats = true, enableDataSkipping = true) ::
       TestCase(enableMetadata = true, enableColumnStats = true, enableDataSkipping = true) ::
       TestCase(enableMetadata = true, enableColumnStats = true, enableDataSkipping = true, columnStatsProcessingModeOverride = HoodieMetadataConfig.COLUMN_STATS_INDEX_PROCESSING_MODE_IN_MEMORY) ::
-      TestCase(enableMetadata = true, enableColumnStats = true, enableDataSkipping = true, columnStatsProcessingModeOverride = HoodieMetadataConfig.COLUMN_STATS_INDEX_PROCESSING_MODE_SPARK) ::
+      TestCase(enableMetadata = true, enableColumnStats = true, enableDataSkipping = true, columnStatsProcessingModeOverride = HoodieMetadataConfig.COLUMN_STATS_INDEX_PROCESSING_MODE_ENGINE) ::
       Nil
 
     for (testCase <- testCases) {
