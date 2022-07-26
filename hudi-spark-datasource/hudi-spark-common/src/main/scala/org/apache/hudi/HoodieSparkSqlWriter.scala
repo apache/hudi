@@ -249,12 +249,19 @@ object HoodieSparkSqlWriter {
             var internalSchemaOpt = getLatestTableInternalSchema(fs, basePath, sparkContext)
 
             if (reconcileSchema) {
+              // In case we need to reconcile the schema and schema evolution is enabled,
+              // we will force-apply schema evolution to the writer's schema.
+              // Otherwise we simply fallback to the latest schema committed
               if (enabledSchemaEvolution && internalSchemaOpt.isEmpty) {
-                // force apply full schema evolution.
                 internalSchemaOpt = Some(AvroInternalSchemaConverter.convert(schema))
               } else {
                 schema = latestSchema
               }
+            } else {
+              // In case reconciliation is disabled, we still have to do nullability attributes
+              // (minor) reconciliation, making sure schema of the incoming batch is in-line with
+              // the data already committed in the table
+              schema = AvroSchemaEvolutionUtils.canonicalizeColumnNullability(schema, latestSchema)
             }
 
             if (internalSchemaOpt.isDefined) {
