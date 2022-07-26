@@ -40,7 +40,6 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.CachingPath;
 import org.apache.hudi.metadata.HoodieTableMetadata;
-import org.apache.hudi.hadoop.CachingPath;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -403,7 +402,7 @@ public abstract class   BaseHoodieTableFileIndex implements AutoCloseable {
         return new CachingPath(basePath, createPathUnsafe(path));
       }
 
-      return new CachingPath(basePath);
+      return basePath;
     }
 
     @Override
