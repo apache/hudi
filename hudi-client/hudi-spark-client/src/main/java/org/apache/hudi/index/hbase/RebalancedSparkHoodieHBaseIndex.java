@@ -21,16 +21,16 @@ package org.apache.hudi.index.hbase;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 /**
- * Extends SparkHoodieHbaseIndex, add random prefix to key for avoiding data skew issue in hbase regions
+ * Extends {@link SparkHoodieHBaseIndex}, add random prefix to key for avoiding data skew issue in hbase regions.
  */
-public class BalanceSparkHoodieHBaseIndex extends SparkHoodieHBaseIndex  {
+public class RebalancedSparkHoodieHBaseIndex extends SparkHoodieHBaseIndex  {
 
-  public BalanceSparkHoodieHBaseIndex(HoodieWriteConfig config) {
+  public RebalancedSparkHoodieHBaseIndex(HoodieWriteConfig config) {
     super(config);
   }
 
   @Override
-  protected String transformToHbaseKey(String originalKey) {
+  protected String getHBaseKey(String originalKey) {
     int bucket = Math.abs(originalKey.hashCode()) % config.getHBaseIndexRegionCount();
     String bucketStr = String.format("%0" + String.valueOf(config.getHBaseIndexRegionCount() - 1).length() + "d", bucket);
     return bucketStr + originalKey;

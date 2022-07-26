@@ -205,7 +205,7 @@ public class SparkHoodieHBaseIndex extends HoodieIndex<Object, Object> {
   }
 
   private Get generateStatement(String key) throws IOException {
-    return new Get(Bytes.toBytes(transformToHbaseKey(key))).setMaxVersions(1).addColumn(SYSTEM_COLUMN_FAMILY, COMMIT_TS_COLUMN)
+    return new Get(Bytes.toBytes(getHBaseKey(key))).setMaxVersions(1).addColumn(SYSTEM_COLUMN_FAMILY, COMMIT_TS_COLUMN)
         .addColumn(SYSTEM_COLUMN_FAMILY, FILE_NAME_COLUMN).addColumn(SYSTEM_COLUMN_FAMILY, PARTITION_PATH_COLUMN);
   }
 
@@ -213,7 +213,7 @@ public class SparkHoodieHBaseIndex extends HoodieIndex<Object, Object> {
     return generateStatement(key).setTimeRange(startTime, endTime);
   }
 
-  protected String transformToHbaseKey(String key) {
+  protected String getHBaseKey(String key) {
     return key;
   }
 
@@ -358,14 +358,14 @@ public class SparkHoodieHBaseIndex extends HoodieIndex<Object, Object> {
                     // This is an update, no need to update index
                     continue;
                   }
-                  Put put = new Put(Bytes.toBytes(transformToHbaseKey(rec.getRecordKey())));
+                  Put put = new Put(Bytes.toBytes(getHBaseKey(rec.getRecordKey())));
                   put.addColumn(SYSTEM_COLUMN_FAMILY, COMMIT_TS_COLUMN, Bytes.toBytes(loc.get().getInstantTime()));
                   put.addColumn(SYSTEM_COLUMN_FAMILY, FILE_NAME_COLUMN, Bytes.toBytes(loc.get().getFileId()));
                   put.addColumn(SYSTEM_COLUMN_FAMILY, PARTITION_PATH_COLUMN, Bytes.toBytes(rec.getPartitionPath()));
                   mutations.add(put);
                 } else {
                   // Delete existing index for a deleted record
-                  Delete delete = new Delete(Bytes.toBytes(transformToHbaseKey(rec.getRecordKey())));
+                  Delete delete = new Delete(Bytes.toBytes(getHBaseKey(rec.getRecordKey())));
                   mutations.add(delete);
                 }
               }
