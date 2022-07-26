@@ -172,6 +172,11 @@ public class HoodieConfig implements Serializable {
             .orElseGet(() -> Boolean.parseBoolean(configProperty.defaultValue().toString()));
   }
 
+  public <T> boolean getBooleanOrDefault(ConfigProperty<T> configProperty, boolean defaultVal) {
+    Option<Object> rawValue = getRawValue(configProperty);
+    return rawValue.map(v -> Boolean.parseBoolean(v.toString())).orElse(defaultVal);
+  }
+
   public <T> Long getLong(ConfigProperty<T> configProperty) {
     Option<Object> rawValue = getRawValue(configProperty);
     return rawValue.map(v -> Long.parseLong(v.toString())).orElse(null);
