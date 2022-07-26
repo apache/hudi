@@ -278,7 +278,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   }
 
   public RawTripTestPayload generatePayloadForS3EventsSchema(HoodieKey key, String commitTime) throws IOException {
-    GenericRecord rec = generateRecordForS3EventSchema(key.getRecordKey(), "file-object-key", 1024L);
+    GenericRecord rec = generateRecordForS3EventSchema(key.getRecordKey(), "file-obj-key-" + commitTime, 1024L);
     return new RawTripTestPayload(rec.toString(), key.getRecordKey(), key.getPartitionPath(), S3_EVENTS_SCHEMA);
   }
 
@@ -390,7 +390,6 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     GenericRecord objRecord = S3EventsSchemaUtils.generateObjInfoRecord(objKey, objSize);
     return S3EventsSchemaUtils.generateS3EventRecord(rowKey, objRecord);
   }
-
 
   public static void createCommitFile(String basePath, String instantTime, Configuration configuration) {
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
