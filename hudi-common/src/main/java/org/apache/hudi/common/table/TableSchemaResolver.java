@@ -372,7 +372,10 @@ public class TableSchemaResolver {
    * @param convertTableSchemaToAddNamespace {@code true} if table schema needs to be converted. {@code false} otherwise.
    * @param converterFn converter function to be called over table schema (to add namespace may be). Each caller can decide if any conversion is required.
    * @return the latest schema.
+   *
+   * @deprecated will be removed (HUDI-4472)
    */
+  @Deprecated
   public Schema getLatestSchema(Schema writeSchema, boolean convertTableSchemaToAddNamespace,
       Function1<Schema, Schema> converterFn) {
     Schema latestSchema = writeSchema;

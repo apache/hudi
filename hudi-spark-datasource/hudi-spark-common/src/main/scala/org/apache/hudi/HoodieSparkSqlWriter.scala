@@ -31,7 +31,7 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model._
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
-import org.apache.hudi.common.util.{CommitUtils, StringUtils}
+import org.apache.hudi.common.util.{CommitUtils, Functions, StringUtils}
 import org.apache.hudi.config.HoodieBootstrapConfig.{BASE_PATH, INDEX_CLASS_NAME}
 import org.apache.hudi.config.{HoodieInternalConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.HoodieException
@@ -240,8 +240,9 @@ object HoodieSparkSqlWriter {
             sparkContext.getConf.registerKryoClasses(
               Array(classOf[org.apache.avro.generic.GenericData],
                 classOf[org.apache.avro.Schema]))
+            // TODO(HUDI-4472) revisit and simplify schema handling
             var schema = AvroConversionUtils.convertStructTypeToAvroSchema(df.schema, structName, nameSpace)
-            val lastestSchema = getLatestTableSchema(fs, basePath, sparkContext, schema)
+            val latestSchema = getLatestTableSchema(fs, basePath, sparkContext, schema)
             var internalSchemaOpt = getLatestTableInternalSchema(fs, basePath, sparkContext)
             if (reconcileSchema && parameters.getOrDefault(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.key(), "false").toBoolean
               && internalSchemaOpt.isEmpty) {
@@ -249,22 +250,22 @@ object HoodieSparkSqlWriter {
               internalSchemaOpt = Some(AvroInternalSchemaConverter.convert(schema))
             }
             if (reconcileSchema) {
-              schema = lastestSchema
+              schema = latestSchema
             }
             if (internalSchemaOpt.isDefined) {
               // Apply schema evolution.
               val mergedSparkSchema = if (!reconcileSchema) {
-                AvroConversionUtils.convertAvroSchemaToStructType(AvroSchemaEvolutionUtils.canonicalizeColumnNullability(schema, lastestSchema))
+                AvroConversionUtils.convertAvroSchemaToStructType(AvroSchemaEvolutionUtils.canonicalizeColumnNullability(schema, latestSchema))
               } else {
                 // Auto merge write schema and read schema.
                 val mergedInternalSchema = AvroSchemaEvolutionUtils.reconcileSchema(schema, internalSchemaOpt.get)
-                AvroConversionUtils.convertAvroSchemaToStructType(AvroInternalSchemaConverter.convert(mergedInternalSchema, lastestSchema.getName))
+                AvroConversionUtils.convertAvroSchemaToStructType(AvroInternalSchemaConverter.convert(mergedInternalSchema, latestSchema.getName))
               }
               schema = AvroConversionUtils.convertStructTypeToAvroSchema(mergedSparkSchema, structName, nameSpace)
             }
 
             if (reconcileSchema && internalSchemaOpt.isEmpty) {
-              schema = lastestSchema
+              schema = latestSchema
             }
             validateSchemaForHoodieIsDeleted(schema)
             sparkContext.getConf.registerAvroSchemas(schema)
@@ -392,7 +393,16 @@ object HoodieSparkSqlWriter {
     if (FSUtils.isTableExists(basePath.toString, fs)) {
       val tableMetaClient = HoodieTableMetaClient.builder.setConf(sparkContext.hadoopConfiguration).setBasePath(basePath.toString).build()
       val tableSchemaResolver = new TableSchemaResolver(tableMetaClient)
-      latestSchema = tableSchemaResolver.getLatestSchema(schema, false, null)
+      // TODO(HUDI-4472): clean up
+      // NOTE: Repackaging schema to override name/namespace of the table's schema is required to workaround
+      //       the issue of this method improperly comparing table schema w/ writer's schema resulting in improper
+      //       discarding of the table's schema (instead proceeding with writer's schema)
+      latestSchema = tableSchemaResolver.getLatestSchema(schema, true, new Functions.Function1[Schema, Schema] {
+        override def apply(tableSchema: Schema): Schema = {
+          val repackagedFields = tableSchema.getFields.map { f => new Schema.Field(f.name, f.schema(), f.doc, f.defaultVal(), f.order()) }
+          Schema.createRecord(schema.getName, tableSchema.getDoc, schema.getNamespace, false, repackagedFields)
+        }
+      })
     }
     latestSchema
   }
