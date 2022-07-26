@@ -24,7 +24,7 @@ import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieMetadata
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstantTimeGenerator}
-import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.PartitionPathEncodeUtils
 import org.apache.hudi.{AvroConversionUtils, SparkAdapterSupport}
 import org.apache.spark.api.java.JavaSparkContext
@@ -227,7 +227,9 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
     val basePath = new Path(tablePath)
     val fs = basePath.getFileSystem(conf)
     val metaPath = new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME)
-    fs.exists(metaPath)
+    val cfgPath = new Path(metaPath, HoodieTableConfig.HOODIE_PROPERTIES_FILE)
+    val backupCfgPath = new Path(metaPath, HoodieTableConfig.HOODIE_PROPERTIES_FILE_BACKUP)
+    fs.exists(metaPath) && (fs.exists(cfgPath) || fs.exists(backupCfgPath))
   }
 
   /**
