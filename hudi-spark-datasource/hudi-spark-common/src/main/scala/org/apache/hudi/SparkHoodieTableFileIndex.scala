@@ -22,6 +22,7 @@ import org.apache.hudi.BaseHoodieTableFileIndex.PartitionPath
 import org.apache.hudi.DataSourceReadOptions.{QUERY_TYPE, QUERY_TYPE_INCREMENTAL_OPT_VAL, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, QUERY_TYPE_SNAPSHOT_OPT_VAL}
 import org.apache.hudi.SparkHoodieTableFileIndex.{deduceQueryType, generateFieldMap, toJavaOption}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
+import org.apache.hudi.common.bootstrap.index.BootstrapIndex
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.model.{FileSlice, HoodieTableQueryType}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
@@ -96,10 +97,24 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
         val partitionFields = partitionColumns.get().map(column => StructField(column, StringType))
         StructType(partitionFields)
       } else {
-        val partitionFields = partitionColumns.get().map(column =>
-          nameFieldMap.getOrElse(column, throw new IllegalArgumentException(s"Cannot find column: '" +
-            s"$column' in the schema[${schema.fields.mkString(",")}]")))
-        StructType(partitionFields)
+        val partitionFields = partitionColumns.get().filter(column => nameFieldMap.contains(column))
+          .map(column => nameFieldMap.apply(column))
+
+        if (partitionFields.size != partitionColumns.get().size) {
+          val isBootstrapTable = BootstrapIndex.getBootstrapIndex(metaClient).useIndex()
+          if (isBootstrapTable) {
+            // For bootstrapped tables its possible the schema does not contain partition field when source table
+            // is hive style partitioned. In this case we would like to treat the table as non-partitioned
+            // as opposed to failing
+            new StructType()
+          } else {
+            throw new IllegalArgumentException(s"Cannot find columns: " +
+              s"'${partitionColumns.get().filter(col => !nameFieldMap.contains(col)).mkString(",")}' " +
+              s"in the schema[${schema.fields.mkString(",")}]")
+          }
+        } else {
+          new StructType(partitionFields)
+        }
       }
     } else {
       // If the partition columns have not stored in hoodie.properties(the table that was

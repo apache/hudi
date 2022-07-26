@@ -18,28 +18,22 @@
 
 package org.apache.hudi
 
-import org.apache.spark.sql.DataFrame
-import org.apache.spark.storage.StorageLevel
-import org.apache.spark.storage.StorageLevel.MEMORY_AND_DISK
+import org.junit.jupiter.api.Assertions.fail
 
-object HoodieDatasetUtils {
+class ScalaAssertionSupport {
 
-  /**
-   * Executes provided function while keeping provided [[DataFrame]] instance persisted for the
-   * duration of the execution
-   *
-   * @param df target [[DataFrame]] to be persisted
-   * @param level desired [[StorageLevel]] of the persistence
-   * @param f target function to be executed while [[DataFrame]] is kept persisted
-   * @tparam T return value of the target function
-   * @return execution outcome of the [[f]] function
-   */
-  def withPersistence[T](df: DataFrame, level: StorageLevel = MEMORY_AND_DISK)(f: => T): T = {
-    df.persist(level)
+  def assertThrows[T <: Throwable, R](expectedExceptionClass: Class[T])(f: => R): T = {
     try {
       f
-    } finally {
-      df.unpersist()
+    } catch {
+      case t: Throwable if expectedExceptionClass.isAssignableFrom(t.getClass) =>
+        // scalastyle:off return
+        return t.asInstanceOf[T]
+      // scalastyle:on return
+      case ot @ _ =>
+        fail(s"Expected exception of class $expectedExceptionClass, but ${ot.getClass} has been thrown")
     }
+
+    fail(s"Expected exception of class $expectedExceptionClass, but nothing has been thrown")
   }
 }

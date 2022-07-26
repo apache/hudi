@@ -39,7 +39,7 @@ import java.util.stream.Collectors;
  * CLI command to display sync options.
  */
 @Component
-public class HoodieSyncCommand implements CommandMarker {
+public class HoodieSyncValidateCommand implements CommandMarker {
 
   @CliCommand(value = "sync validate", help = "Validate the sync by counting the number of records")
   public String validateSync(

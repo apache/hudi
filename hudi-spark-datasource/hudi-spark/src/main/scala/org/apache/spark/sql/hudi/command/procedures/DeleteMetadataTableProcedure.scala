@@ -17,25 +17,23 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
-import org.apache.hudi.common.config.HoodieMetadataConfig
-import org.apache.hudi.common.engine.HoodieLocalEngineContext
+import org.apache.hadoop.fs.Path
+import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.metadata.HoodieBackedTableMetadata
+import org.apache.hudi.metadata.HoodieTableMetadata
 import org.apache.spark.sql.Row
-import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
+import org.apache.spark.sql.types._
 
-import java.util
+import java.io.FileNotFoundException
 import java.util.function.Supplier
-import scala.collection.JavaConversions._
 
-class ShowMetadataStatsProcedure() extends BaseProcedure with ProcedureBuilder {
+class DeleteMetadataTableProcedure extends BaseProcedure with ProcedureBuilder with SparkAdapterSupport {
   private val PARAMETERS = Array[ProcedureParameter](
     ProcedureParameter.required(0, "table", DataTypes.StringType, None)
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
-    StructField("stat_key", DataTypes.StringType, nullable = true, Metadata.empty),
-    StructField("stat_value", DataTypes.StringType, nullable = true, Metadata.empty)
+    StructField("result", DataTypes.StringType, nullable = true, Metadata.empty)
   ))
 
   def parameters: Array[ProcedureParameter] = PARAMETERS
@@ -45,31 +43,29 @@ class ShowMetadataStatsProcedure() extends BaseProcedure with ProcedureBuilder {
   override def call(args: ProcedureArgs): Seq[Row] = {
     super.checkArgs(PARAMETERS, args)
 
-    val table = getArgValueOrDefault(args, PARAMETERS(0))
-
-    val basePath = getBasePath(table)
+    val tableName = getArgValueOrDefault(args, PARAMETERS(0))
+    val basePath = getBasePath(tableName)
     val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
-    val config = HoodieMetadataConfig.newBuilder.enable(true).build
-    val metadata = new HoodieBackedTableMetadata(new HoodieLocalEngineContext(metaClient.getHadoopConf),
-      config, basePath, "/tmp")
-    val stats = metadata.stats
+    val metadataPath = new Path(HoodieTableMetadata.getMetadataTableBasePath(basePath))
 
-    val rows = new util.ArrayList[Row]
-    for (entry <- stats.entrySet) {
-      rows.add(Row(entry.getKey, entry.getValue))
+    try {
+      val statuses = metaClient.getFs.listStatus(metadataPath)
+      if (statuses.nonEmpty) metaClient.getFs.delete(metadataPath, true)
+    } catch {
+      case e: FileNotFoundException =>
+      // Metadata directory does not exist
     }
-    rows.stream().toArray().map(r => r.asInstanceOf[Row]).toList
+    Seq(Row("Removed Metadata Table from " + metadataPath))
   }
 
-  override def build: Procedure = new ShowMetadataStatsProcedure()
+  override def build = new DeleteMetadataTableProcedure()
 }
 
-object ShowMetadataStatsProcedure {
-  val NAME = "show_metadata_stats"
+object DeleteMetadataTableProcedure {
+  val NAME = "delete_metadata_table"
+  var metadataBaseDirectory: Option[String] = None
 
   def builder: Supplier[ProcedureBuilder] = new Supplier[ProcedureBuilder] {
-    override def get() = new ShowMetadataStatsProcedure()
+    override def get() = new DeleteMetadataTableProcedure()
   }
 }
-
-

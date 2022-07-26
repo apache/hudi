@@ -25,9 +25,9 @@ import org.apache.spark.sql.execution.datasources.{FilePartition, FileScanRDD, P
 case class HoodieBaseFileSplit(filePartition: FilePartition) extends HoodieFileSplit
 
 class HoodieFileScanRDD(@transient private val sparkSession: SparkSession,
-                        readFunction: PartitionedFile => Iterator[InternalRow],
+                        read: PartitionedFile => Iterator[InternalRow],
                         @transient fileSplits: Seq[HoodieBaseFileSplit])
-  extends FileScanRDD(sparkSession, readFunction, fileSplits.map(_.filePartition))
+  extends FileScanRDD(sparkSession, read, fileSplits.map(_.filePartition))
     with HoodieUnsafeRDD {
 
   override final def collect(): Array[InternalRow] = super[HoodieUnsafeRDD].collect()

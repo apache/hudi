@@ -18,7 +18,7 @@
 package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
 import org.apache.hudi.exception.{HoodieException, HoodieSavepointException}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
@@ -26,14 +26,16 @@ import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util.function.Supplier
 
-class DeleteSavepointsProcedure extends BaseProcedure with ProcedureBuilder with Logging {
+class CreateSavepointProcedure extends BaseProcedure with ProcedureBuilder with Logging {
   private val PARAMETERS = Array[ProcedureParameter](
     ProcedureParameter.required(0, "table", DataTypes.StringType, None),
-    ProcedureParameter.required(1, "instant_time", DataTypes.StringType, None)
+    ProcedureParameter.required(1, "commit_time", DataTypes.StringType, None),
+    ProcedureParameter.optional(2, "user", DataTypes.StringType, ""),
+    ProcedureParameter.optional(3, "comments", DataTypes.StringType, "")
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
-    StructField("delete_savepoint_result", DataTypes.BooleanType, nullable = true, Metadata.empty))
+    StructField("create_savepoint_result", DataTypes.BooleanType, nullable = true, Metadata.empty))
   )
 
   def parameters: Array[ProcedureParameter] = PARAMETERS
@@ -44,29 +46,28 @@ class DeleteSavepointsProcedure extends BaseProcedure with ProcedureBuilder with
     super.checkArgs(PARAMETERS, args)
 
     val tableName = getArgValueOrDefault(args, PARAMETERS(0))
-    val instantTime = getArgValueOrDefault(args, PARAMETERS(1)).get.asInstanceOf[String]
+    val commitTime = getArgValueOrDefault(args, PARAMETERS(1)).get.asInstanceOf[String]
+    val user = getArgValueOrDefault(args, PARAMETERS(2)).get.asInstanceOf[String]
+    val comments = getArgValueOrDefault(args, PARAMETERS(3)).get.asInstanceOf[String]
 
     val basePath: String = getBasePath(tableName)
     val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
 
-    val completedInstants = metaClient.getActiveTimeline.getSavePointTimeline.filterCompletedInstants
-    if (completedInstants.empty) throw new HoodieException("There are no completed savepoint to run delete")
-    val savePoint = new HoodieInstant(false, HoodieTimeline.SAVEPOINT_ACTION, instantTime)
-
-    if (!completedInstants.containsInstant(savePoint)) {
-      throw new HoodieException("Commit " + instantTime + " not found in Commits " + completedInstants)
+    val activeTimeline: HoodieActiveTimeline = metaClient.getActiveTimeline
+    if (!activeTimeline.getCommitsTimeline.filterCompletedInstants.containsInstant(commitTime)) {
+      throw new HoodieException("Commit " + commitTime + " not found in Commits " + activeTimeline)
     }
 
     val client = createHoodieClient(jsc, basePath)
     var result = false
 
     try {
-      client.deleteSavepoint(instantTime)
-      logInfo(s"The commit $instantTime has been deleted savepoint.")
+      client.savepoint(commitTime, user, comments)
+      logInfo(s"The commit $commitTime has been savepointed.")
       result = true
     } catch {
       case _: HoodieSavepointException =>
-        logWarning(s"Failed: Could not delete savepoint $instantTime.")
+        logWarning(s"Failed: Could not create savepoint $commitTime.")
     } finally {
       client.close()
     }
@@ -74,17 +75,16 @@ class DeleteSavepointsProcedure extends BaseProcedure with ProcedureBuilder with
     Seq(Row(result))
   }
 
-  override def build: Procedure = new DeleteSavepointsProcedure()
+  override def build: Procedure = new CreateSavepointProcedure()
 }
 
-object DeleteSavepointsProcedure {
-  val NAME: String = "delete_savepoints"
+object CreateSavepointProcedure {
+  val NAME: String = "create_savepoint"
 
   def builder: Supplier[ProcedureBuilder] = new Supplier[ProcedureBuilder] {
-    override def get(): DeleteSavepointsProcedure = new DeleteSavepointsProcedure()
+    override def get(): CreateSavepointProcedure = new CreateSavepointProcedure()
   }
 }
-
 
 
 

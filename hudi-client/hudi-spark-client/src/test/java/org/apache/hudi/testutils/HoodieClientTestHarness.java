@@ -433,7 +433,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
   protected void cleanupDFS() throws IOException {
     if (hdfsTestService != null) {
       hdfsTestService.stop();
-      dfsCluster.shutdown();
+      dfsCluster.shutdown(true, true);
       hdfsTestService = null;
       dfsCluster = null;
       dfs = null;

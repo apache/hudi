@@ -21,6 +21,7 @@ package org.apache.hudi.io.storage.row;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.HoodieDynamicBoundedBloomFilter;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.parquet.hadoop.api.WriteSupport;
 import org.apache.spark.sql.execution.datasources.parquet.ParquetWriteSupport;
@@ -45,14 +46,13 @@ public class HoodieRowParquetWriteSupport extends ParquetWriteSupport {
   private UTF8String minRecordKey;
   private UTF8String maxRecordKey;
 
-  public HoodieRowParquetWriteSupport(Configuration conf, StructType structType, BloomFilter bloomFilter, HoodieWriteConfig writeConfig) {
-    super();
+  public HoodieRowParquetWriteSupport(Configuration conf, StructType structType, Option<BloomFilter> bloomFilterOpt, HoodieWriteConfig writeConfig) {
     Configuration hadoopConf = new Configuration(conf);
     hadoopConf.set("spark.sql.parquet.writeLegacyFormat", writeConfig.parquetWriteLegacyFormatEnabled());
     hadoopConf.set("spark.sql.parquet.outputTimestampType", writeConfig.parquetOutputTimestampType());
     this.hadoopConf = hadoopConf;
     setSchema(structType, hadoopConf);
-    this.bloomFilter = bloomFilter;
+    this.bloomFilter = bloomFilterOpt.orElse(null);
   }
 
   public Configuration getHadoopConf() {

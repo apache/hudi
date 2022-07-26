@@ -311,7 +311,7 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> BULK_INSERT_SORT_MODE = ConfigProperty
       .key("hoodie.bulkinsert.sort.mode")
-      .defaultValue(BulkInsertSortMode.GLOBAL_SORT.toString())
+      .defaultValue(BulkInsertSortMode.NONE.toString())
       .withDocumentation("Sorting modes to use for sorting records for bulk insert. This is use when user "
           + BULKINSERT_USER_DEFINED_PARTITIONER_CLASS_NAME.key() + "is not configured. Available values are - "
           + "GLOBAL_SORT: this ensures best file sizes, with lowest memory overhead at cost of sorting. "
@@ -358,11 +358,6 @@ public class HoodieWriteConfig extends HoodieConfig {
       .defaultValue("true")
       .withDocumentation("Timeline archiving removes older instants from the timeline, after each write operation, to minimize metadata overhead. "
           + "Controls whether or not, the write should be failed as well, if such archiving fails.");
-
-  public static final ConfigProperty<Boolean> REFRESH_TIMELINE_SERVER_BASED_ON_LATEST_COMMIT = ConfigProperty
-      .key("hoodie.refresh.timeline.server.based.on.latest.commit")
-      .defaultValue(true)
-      .withDocumentation("Refresh timeline in timeline server based on latest commit apart from timeline hash difference. By default (true).");
 
   public static final ConfigProperty<Long> INITIAL_CONSISTENCY_CHECK_INTERVAL_MS = ConfigProperty
       .key("hoodie.consistency.check.initial_interval_ms")
@@ -1105,10 +1100,6 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(FAIL_ON_TIMELINE_ARCHIVING_ENABLE);
   }
 
-  public boolean isRefreshTimelineServerBasedOnLatestCommit() {
-    return getBoolean(REFRESH_TIMELINE_SERVER_BASED_ON_LATEST_COMMIT);
-  }
-
   public int getMaxConsistencyChecks() {
     return getInt(MAX_CONSISTENCY_CHECKS);
   }
@@ -1218,7 +1209,11 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public boolean getArchiveMergeEnable() {
-    return getBoolean(HoodieArchivalConfig.ARCHIVE_MERGE_ENABLE);
+    return getBooleanOrDefault(HoodieArchivalConfig.ARCHIVE_MERGE_ENABLE);
+  }
+
+  public boolean shouldArchiveBeyondSavepoint() {
+    return getBooleanOrDefault(HoodieArchivalConfig.ARCHIVE_BEYOND_SAVEPOINT);
   }
 
   public long getArchiveMergeSmallFileLimitBytes() {
@@ -2511,11 +2506,6 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withAutoAdjustLockConfigs(boolean autoAdjustLockConfigs) {
       writeConfig.setValue(AUTO_ADJUST_LOCK_CONFIGS, String.valueOf(autoAdjustLockConfigs));
-      return this;
-    }
-
-    public Builder withRefreshTimelineServerBasedOnLatestCommit(boolean refreshTimelineServerBasedOnLatestCommit) {
-      writeConfig.setValue(REFRESH_TIMELINE_SERVER_BASED_ON_LATEST_COMMIT, Boolean.toString(refreshTimelineServerBasedOnLatestCommit));
       return this;
     }
 

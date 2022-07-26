@@ -20,11 +20,13 @@ package org.apache.hudi
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
+import org.apache.hudi.HoodieBaseRelation.projectReader
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.hadoop.HoodieROTablePathFilter
+import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SQLContext
+import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.Expression
-import org.apache.spark.sql.execution.datasources
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
 import org.apache.spark.sql.types.StructType
@@ -60,9 +62,7 @@ class BaseFileOnlyRelation(sqlContext: SQLContext,
   override protected val shouldExtractPartitionValuesFromPartitionPath: Boolean =
     internalSchemaOpt.isEmpty
 
-  override lazy val mandatoryFields: Seq[String] =
-  // TODO reconcile, record's key shouldn't be mandatory for base-file only relation
-    Seq(recordKeyField)
+  override lazy val mandatoryFields: Seq[String] = Seq.empty
 
   override def imbueConfigs(sqlContext: SQLContext): Unit = {
     super.imbueConfigs(sqlContext)
@@ -70,16 +70,18 @@ class BaseFileOnlyRelation(sqlContext: SQLContext,
   }
 
   protected override def composeRDD(fileSplits: Seq[HoodieBaseFileSplit],
-                                    partitionSchema: StructType,
-                                    dataSchema: HoodieTableSchema,
+                                    tableSchema: HoodieTableSchema,
                                     requiredSchema: HoodieTableSchema,
-                                    filters: Array[Filter]): HoodieUnsafeRDD = {
+                                    requestedColumns: Array[String],
+                                    filters: Array[Filter]): RDD[InternalRow] = {
+    val (partitionSchema, dataSchema, requiredDataSchema) =
+      tryPrunePartitionColumns(tableSchema, requiredSchema)
 
     val baseFileReader = createBaseFileReader(
       spark = sparkSession,
       partitionSchema = partitionSchema,
       dataSchema = dataSchema,
-      requiredSchema = requiredSchema,
+      requiredDataSchema = requiredDataSchema,
       filters = filters,
       options = optParams,
       // NOTE: We have to fork the Hadoop Config here as Spark will be modifying it
@@ -87,7 +89,15 @@ class BaseFileOnlyRelation(sqlContext: SQLContext,
       hadoopConf = embedInternalSchema(new Configuration(conf), requiredSchema.internalSchema)
     )
 
-    new HoodieFileScanRDD(sparkSession, baseFileReader, fileSplits)
+    // NOTE: In some case schema of the reader's output (reader's schema) might not match the schema expected by the caller.
+    //       This could occur for ex, when requested schema contains partition columns which might not be persisted w/in the
+    //       data file, but instead would be parsed from the partition path. In that case output of the file-reader will have
+    //       different ordering of the fields than the original required schema (for more details please check out
+    //       [[ParquetFileFormat]] impl). In that case we have to project the rows from the file-reader's schema
+    //       back into the one expected by the caller
+    val projectedReader = projectReader(baseFileReader, requiredSchema.structTypeSchema)
+
+    new HoodieFileScanRDD(sparkSession, projectedReader.apply, fileSplits)
   }
 
   protected def collectFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[HoodieBaseFileSplit] = {

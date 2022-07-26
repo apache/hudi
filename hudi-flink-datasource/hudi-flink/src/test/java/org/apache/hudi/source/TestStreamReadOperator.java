@@ -20,7 +20,6 @@ package org.apache.hudi.source;
 
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
-import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.format.mor.MergeOnReadInputFormat;
@@ -58,6 +57,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.configuration.FlinkOptions.PARTITION_DEFAULT_NAME;
+import static org.apache.hudi.configuration.FlinkOptions.TABLE_TYPE;
+import static org.apache.hudi.configuration.FlinkOptions.TABLE_TYPE_MERGE_ON_READ;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -84,7 +86,7 @@ public class TestStreamReadOperator {
   public void before() throws Exception {
     final String basePath = tempFile.getAbsolutePath();
     conf = TestConfigurations.getDefaultConf(basePath);
-    conf.setString(FlinkOptions.TABLE_TYPE, FlinkOptions.TABLE_TYPE_MERGE_ON_READ);
+    conf.setString(TABLE_TYPE, TABLE_TYPE_MERGE_ON_READ);
 
     StreamerUtil.initTableIfNotExists(conf);
   }
@@ -266,7 +268,7 @@ public class TestStreamReadOperator {
         .config(conf)
         .tableState(hoodieTableState)
         .fieldTypes(rowDataType.getChildren())
-        .defaultPartName("default").limit(1000L)
+        .defaultPartName(PARTITION_DEFAULT_NAME.defaultValue()).limit(1000L)
         .emitDelete(true)
         .build();
 

@@ -167,13 +167,20 @@ class TestHoodieSparkSqlWriter {
    * @param sortMode           Bulk insert sort mode
    * @param populateMetaFields Flag for populating meta fields
    */
-  def testBulkInsertWithSortMode(sortMode: BulkInsertSortMode, populateMetaFields: Boolean = true): Unit = {
+  def testBulkInsertWithSortMode(sortMode: BulkInsertSortMode, populateMetaFields: Boolean = true, enableOCCConfigs: Boolean = false): Unit = {
     //create a new table
-    val fooTableModifier = commonTableModifier.updated("hoodie.bulkinsert.shuffle.parallelism", "4")
+    var fooTableModifier = commonTableModifier.updated("hoodie.bulkinsert.shuffle.parallelism", "4")
       .updated(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL)
       .updated(DataSourceWriteOptions.ENABLE_ROW_WRITER.key, "true")
       .updated(HoodieTableConfig.POPULATE_META_FIELDS.key(), String.valueOf(populateMetaFields))
       .updated(HoodieWriteConfig.BULK_INSERT_SORT_MODE.key(), sortMode.name())
+
+    if (enableOCCConfigs) {
+      fooTableModifier = fooTableModifier
+        .updated("hoodie.write.concurrency.mode","optimistic_concurrency_control")
+        .updated("hoodie.cleaner.policy.failed.writes","LAZY")
+        .updated("hoodie.write.lock.provider","org.apache.hudi.client.transaction.lock.InProcessLockProvider")
+    }
 
     // generate the inserts
     val schema = DataSourceTestUtils.getStructTypeExampleSchema
@@ -304,6 +311,11 @@ class TestHoodieSparkSqlWriter {
   @EnumSource(value = classOf[BulkInsertSortMode])
   def testBulkInsertForSortMode(sortMode: BulkInsertSortMode): Unit = {
     testBulkInsertWithSortMode(sortMode, populateMetaFields = true)
+  }
+
+  @Test
+  def testBulkInsertForSortModeWithOCC(): Unit = {
+    testBulkInsertWithSortMode(BulkInsertSortMode.GLOBAL_SORT, populateMetaFields = true, true)
   }
 
   /**

@@ -19,12 +19,11 @@
 
 package org.apache.hudi.hive.replication;
 
-import org.apache.hudi.hive.testutils.TestCluster;
+import org.apache.hudi.hive.testutils.HiveTestCluster;
 
 import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
@@ -49,13 +48,12 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@Disabled
 public class TestHiveSyncGlobalCommitTool {
 
   @RegisterExtension
-  public static TestCluster localCluster = new TestCluster();
+  public static HiveTestCluster localCluster = new HiveTestCluster();
   @RegisterExtension
-  public static TestCluster remoteCluster = new TestCluster();
+  public static HiveTestCluster remoteCluster = new HiveTestCluster();
 
   private static final String DB_NAME = "foo";
   private static final String TBL_NAME = "bar";

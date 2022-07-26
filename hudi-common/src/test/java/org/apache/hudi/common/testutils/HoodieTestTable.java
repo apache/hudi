@@ -99,6 +99,7 @@ import static org.apache.hudi.common.testutils.FileCreateUtils.createInflightCom
 import static org.apache.hudi.common.testutils.FileCreateUtils.createInflightDeltaCommit;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createInflightReplaceCommit;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createInflightRollbackFile;
+import static org.apache.hudi.common.testutils.FileCreateUtils.createInflightSavepoint;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createMarkerFile;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createReplaceCommit;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createRequestedCleanFile;
@@ -109,6 +110,8 @@ import static org.apache.hudi.common.testutils.FileCreateUtils.createRequestedRe
 import static org.apache.hudi.common.testutils.FileCreateUtils.createRequestedRollbackFile;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createRestoreFile;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createRollbackFile;
+import static org.apache.hudi.common.testutils.FileCreateUtils.createSavepointCommit;
+import static org.apache.hudi.common.testutils.FileCreateUtils.deleteSavepointCommit;
 import static org.apache.hudi.common.testutils.FileCreateUtils.logFileName;
 import static org.apache.hudi.common.util.CleanerUtils.convertCleanMetadata;
 import static org.apache.hudi.common.util.CollectionUtils.createImmutableMap;
@@ -196,6 +199,12 @@ public class HoodieTestTable {
     createInflightCommit(basePath, instantTime);
     createCommit(basePath, instantTime, metadata);
     currentInstantTime = instantTime;
+    return this;
+  }
+
+  public HoodieTestTable addSavepointCommit(String instantTime, HoodieSavepointMetadata savepointMetadata) throws IOException {
+    createInflightSavepoint(basePath, instantTime);
+    createSavepointCommit(basePath, instantTime, savepointMetadata);
     return this;
   }
 
@@ -394,7 +403,7 @@ public class HoodieTestTable {
 
   public HoodieSavepointMetadata getSavepointMetadata(String instant, Map<String, List<String>> partitionToFilesMeta) {
     HoodieSavepointMetadata savepointMetadata = new HoodieSavepointMetadata();
-    savepointMetadata.setSavepointedAt(Long.valueOf(instant));
+    savepointMetadata.setSavepointedAt(12345L);
     Map<String, HoodieSavepointPartitionMetadata> partitionMetadataMap = new HashMap<>();
     for (Map.Entry<String, List<String>> entry : partitionToFilesMeta.entrySet()) {
       HoodieSavepointPartitionMetadata savepointPartitionMetadata = new HoodieSavepointPartitionMetadata();
@@ -404,6 +413,7 @@ public class HoodieTestTable {
     }
     savepointMetadata.setPartitionMetadata(partitionMetadataMap);
     savepointMetadata.setSavepointedBy("test");
+    savepointMetadata.setComments("test_comment");
     return savepointMetadata;
   }
 
@@ -451,6 +461,17 @@ public class HoodieTestTable {
     createCommit(basePath, instantTime, Option.of(metadata));
     inflightCommits.remove(instantTime);
     currentInstantTime = instantTime;
+    return this;
+  }
+
+  public HoodieTestTable addSavepoint(String instantTime, HoodieSavepointMetadata savepointMetadata) throws IOException {
+    createInflightSavepoint(basePath, instantTime);
+    createSavepointCommit(basePath, instantTime, savepointMetadata);
+    return this;
+  }
+
+  public HoodieTestTable deleteSavepoint(String instantTime) throws IOException {
+    deleteSavepointCommit(basePath, instantTime, fs);
     return this;
   }
 

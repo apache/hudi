@@ -21,17 +21,54 @@ package org.apache.spark.sql
 import org.apache.hudi.HoodieUnsafeRDD
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.plans.logical.{LocalRelation, LogicalPlan}
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.util.MutablePair
 
 /**
  * Suite of utilities helping in handling instances of [[HoodieUnsafeRDD]]
  */
-object HoodieUnsafeRDDUtils {
+object HoodieUnsafeUtils {
 
-  // TODO scala-doc
-  def createDataFrame(spark: SparkSession, rdd: RDD[InternalRow], structType: StructType): DataFrame =
-    spark.internalCreateDataFrame(rdd, structType)
+  /**
+   * Creates [[DataFrame]] from the in-memory [[Seq]] of [[Row]]s with provided [[schema]]
+   *
+   * NOTE: [[DataFrame]] is based on [[LocalRelation]], entailing that most computations with it
+   *       will be executed by Spark locally
+   *
+   * @param spark spark's session
+   * @param rows collection of rows to base [[DataFrame]] on
+   * @param schema target [[DataFrame]]'s schema
+   * @return
+   */
+  def createDataFrameFromRows(spark: SparkSession, rows: Seq[Row], schema: StructType): DataFrame =
+    Dataset.ofRows(spark, LocalRelation.fromExternalRows(schema.toAttributes, rows))
+
+  /**
+   * Creates [[DataFrame]] from the in-memory [[Seq]] of [[InternalRow]]s with provided [[schema]]
+   *
+   * NOTE: [[DataFrame]] is based on [[LocalRelation]], entailing that most computations with it
+   *       will be executed by Spark locally
+   *
+   * @param spark spark's session
+   * @param rows collection of rows to base [[DataFrame]] on
+   * @param schema target [[DataFrame]]'s schema
+   * @return
+   */
+  def createDataFrameFromInternalRows(spark: SparkSession, rows: Seq[InternalRow], schema: StructType): DataFrame =
+    Dataset.ofRows(spark, LocalRelation(schema.toAttributes, rows))
+
+
+  /**
+   * Creates [[DataFrame]] from the [[RDD]] of [[Row]]s with provided [[schema]]
+   *
+   * @param spark spark's session
+   * @param rdd RDD w/ [[Row]]s to base [[DataFrame]] on
+   * @param schema target [[DataFrame]]'s schema
+   * @return
+   */
+  def createDataFrameFromRDD(spark: SparkSession, rdd: RDD[InternalRow], schema: StructType): DataFrame =
+    spark.internalCreateDataFrame(rdd, schema)
 
   /**
    * Canonical implementation of the [[RDD#collect]] for [[HoodieUnsafeRDD]], returning a properly

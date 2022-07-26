@@ -1359,7 +1359,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     // Test Hive integration
     HiveSyncConfig hiveSyncConfig = getHiveSyncConfig(tableBasePath, "hive_trips");
     hiveSyncConfig.setValue(META_SYNC_PARTITION_FIELDS, "year,month,day");
-    hiveSyncConfig.setHadoopConf(hiveServer.getHiveConf());
+    hiveSyncConfig.setHadoopConf(hiveTestService.getHiveConf());
     HoodieHiveSyncClient hiveClient = new HoodieHiveSyncClient(hiveSyncConfig);
     final String tableName = hiveSyncConfig.getString(META_SYNC_TABLE_NAME);
     assertTrue(hiveClient.tableExists(tableName), "Table " + tableName + " should exist");
