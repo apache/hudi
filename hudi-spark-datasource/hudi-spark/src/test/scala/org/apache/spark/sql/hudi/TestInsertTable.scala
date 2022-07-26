@@ -396,8 +396,8 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         ("string", "'1000'"),
         ("int", 1000),
         ("bigint", 10000),
-        ("timestamp", "'2021-05-20 00:00:00'"),
-        ("date", "'2021-05-20'")
+        ("timestamp", "TIMESTAMP'2021-05-20 00:00:00'"),
+        ("date", "DATE'2021-05-20'")
       )
       typeAndValue.foreach { case (partitionType, partitionValue) =>
         val tableName = generateTableName
@@ -409,8 +409,8 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
   test("Test TimestampType Partition Column With Consistent Logical Timestamp Enabled") {
     withTempDir { tmp =>
       val typeAndValue = Seq(
-        ("timestamp", "'2021-05-20 00:00:00'"),
-        ("date", "'2021-05-20'")
+        ("timestamp", "TIMESTAMP'2021-05-20 00:00:00'"),
+        ("date", "DATE'2021-05-20'")
       )
       typeAndValue.foreach { case (partitionType, partitionValue) =>
         val tableName = generateTableName
@@ -436,8 +436,8 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
     spark.sql(s"insert into $tableName partition(dt = $partitionValue) select 1, 'a1', 10")
     spark.sql(s"insert into $tableName select 2, 'a2', 10, $partitionValue")
     checkAnswer(s"select id, name, price, cast(dt as string) from $tableName order by id")(
-      Seq(1, "a1", 10, removeQuotes(partitionValue).toString),
-      Seq(2, "a2", 10, removeQuotes(partitionValue).toString)
+      Seq(1, "a1", 10, extractRawValue(partitionValue).toString),
+      Seq(2, "a2", 10, extractRawValue(partitionValue).toString)
     )
   }
 
