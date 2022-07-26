@@ -121,8 +121,4 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
     case OFF_HEAP => "OFF_HEAP"
     case _ => throw new IllegalArgumentException(s"Invalid StorageLevel: $level")
   }
-
-  override def insertInto[K, V, C](ctx: TaskContext,
-                                   records: Iterator[Product2[K, V]],
-                                   sorter: ExternalSorter[K, V, C]): Iterator[Product2[K, C]] = sorter.insertAllAndUpdateMetrics(records)
 }
