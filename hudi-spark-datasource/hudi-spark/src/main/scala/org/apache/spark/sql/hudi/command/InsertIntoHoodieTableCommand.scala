@@ -17,12 +17,11 @@
 
 package org.apache.spark.sql.hudi.command
 
-import org.apache.hudi.HoodieSparkSqlWriter
 import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.{HoodieSparkSqlWriter, SparkAdapterSupport}
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.catalyst.analysis.TableOutputResolver
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, HoodieCatalogTable}
-import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, Cast, Literal, NamedExpression}
+import org.apache.spark.sql.catalyst.expressions.{Alias, Cast, Literal, NamedExpression}
 import org.apache.spark.sql.catalyst.plans.QueryPlan
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, Project}
 import org.apache.spark.sql.execution.datasources.LogicalRelation
@@ -30,7 +29,7 @@ import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
-import org.apache.spark.sql.{AnalysisException, Dataset, Row, SaveMode, SparkSession}
+import org.apache.spark.sql._
 
 /**
  * Command for insert into Hudi table.
@@ -63,7 +62,8 @@ case class InsertIntoHoodieTableCommand(logicalRelation: LogicalRelation,
   }
 }
 
-object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig {
+object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig with SparkAdapterSupport {
+
   /**
    * Run the insert query. We support both dynamic partition insert and static partition insert.
    * @param sparkSession The spark session.
@@ -146,12 +146,13 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig {
                                        query: LogicalPlan,
                                        catalogTable: HoodieCatalogTable,
                                        conf: SQLConf): LogicalPlan = {
+    val planUtils = sparkAdapter.getCatalystPlanUtils
     try {
-      TableOutputResolver.resolveOutputColumns(catalogTable.catalogTableName, expectedSchema.toAttributes, query, byName = true, conf)
+      planUtils.resolveOutputColumns(catalogTable.catalogTableName, expectedSchema.toAttributes, query, byName = true, conf)
     } catch {
       // NOTE: In case matching by name didn't match the query output, we will attempt positional matching
       case ae: AnalysisException if ae.getMessage().startsWith("Cannot write incompatible data to table") =>
-        TableOutputResolver.resolveOutputColumns(catalogTable.catalogTableName, expectedSchema.toAttributes, query, byName = false, conf)
+        planUtils.resolveOutputColumns(catalogTable.catalogTableName, expectedSchema.toAttributes, query, byName = false, conf)
     }
   }
 

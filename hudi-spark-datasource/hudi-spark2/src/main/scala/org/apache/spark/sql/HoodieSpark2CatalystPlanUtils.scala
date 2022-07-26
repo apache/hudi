@@ -18,13 +18,21 @@
 package org.apache.spark.sql
 
 import org.apache.spark.sql.catalyst.{AliasIdentifier, TableIdentifier}
-import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
-import org.apache.spark.sql.catalyst.expressions.{Expression, Like}
+import org.apache.spark.sql.catalyst.analysis.{SimpleAnalyzer, UnresolvedRelation}
+import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression, Like}
 import org.apache.spark.sql.catalyst.plans.JoinType
 import org.apache.spark.sql.catalyst.plans.logical.{InsertIntoTable, Join, LogicalPlan}
 import org.apache.spark.sql.execution.command.ExplainCommand
+import org.apache.spark.sql.internal.SQLConf
 
 object HoodieSpark2CatalystPlanUtils extends HoodieCatalystPlansUtils {
+
+  def resolveOutputColumns(tableName: String,
+                           expected: Seq[Attribute],
+                           query: LogicalPlan,
+                           byName: Boolean,
+                           conf: SQLConf): LogicalPlan =
+    SimpleAnalyzer.ResolveOutputRelation.resolveOutputColumns(tableName, expected, query, byName)
 
   def createExplainCommand(plan: LogicalPlan, extended: Boolean): LogicalPlan =
     ExplainCommand(plan, extended = extended)
