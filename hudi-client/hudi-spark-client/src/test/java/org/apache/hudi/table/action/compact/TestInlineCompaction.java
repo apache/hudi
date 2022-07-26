@@ -46,7 +46,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 public class TestInlineCompaction extends CompactionTestBase {
 
   private HoodieWriteConfig getConfigForInlineCompaction(int maxDeltaCommits, int maxDeltaTime, CompactionTriggerStrategy inlineCompactionType) {
-    return getConfigBuilder(false).withMarkersType("DIRECT")
+    return getConfigBuilder(false)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withInlineCompaction(true)
             .withMaxNumDeltaCommitsBeforeCompaction(maxDeltaCommits)
