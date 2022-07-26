@@ -88,6 +88,7 @@ stages:
   - stage: test
     jobs:
       - job: UT_FT_1
+        condition: false
         displayName: UT FT common & flink & UT client/spark-client
         timeoutInMinutes: '150'
         steps:
@@ -118,6 +119,7 @@ stages:
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g'
       - job: UT_FT_2
+        condition: false
         displayName: FT client/spark-client
         timeoutInMinutes: '150'
         steps:
@@ -139,6 +141,7 @@ stages:
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g'
       - job: UT_FT_3
+        condition: false
         displayName: UT FT clients & cli & utilities & sync
         timeoutInMinutes: '150'
         steps:
@@ -169,6 +172,7 @@ stages:
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g'
       - job: UT_FT_4
+        condition: false
         displayName: UT FT other modules
         timeoutInMinutes: '150'
         steps:
@@ -201,6 +205,9 @@ stages:
       - job: IT
         displayName: IT modules
         timeoutInMinutes: '150'
+        variables:
+          - name: startTime
+            value: $[ format('{0:yyyyMMddHHmmss}', pipeline.startTime) ]
         steps:
           - task: Maven@3
             displayName: maven install
@@ -232,5 +239,10 @@ stages:
                 mkdir /tmp/spark-events/
           - script: |
               export SPARK_HOME=$(Pipeline.Workspace)/$(SPARK_ARCHIVE)
+              export MAVEN_OPTS='-XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=$(Pipeline.Workspace)'
               mvn $(MVN_OPTS_TEST) -Pintegration-tests verify
             displayName: IT
+          - script: |
+              [[ -f $(Pipeline.Workspace)/java_pidpid.hprof ]] && az storage blob upload -c ci-caches -n java_pidpid-$(startTime).hprof -f $(Pipeline.Workspace)/java_pidpid.hprof --account-name apachehudici
+            condition: always()
+            displayName: Upload to AZ blob
