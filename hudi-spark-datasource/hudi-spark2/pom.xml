@@ -203,6 +203,12 @@
       <optional>true</optional>
     </dependency>
 
+    <!-- Extra Logging Bridges -->
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>jul-to-slf4j</artifactId>
+    </dependency>
+
     <!-- Hoodie - Test -->
     <dependency>
       <groupId>org.apache.hudi</groupId>
