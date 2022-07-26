@@ -64,6 +64,10 @@ import java.nio.charset.StandardCharsets;
 import java.sql.Date;
 import java.sql.Timestamp;
 import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
+import java.time.zone.ZoneRules;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -958,17 +962,11 @@ public class HoodieAvroUtils {
   }
 
   // convert days to Date
-  @SuppressWarnings("sunapi")
   private static java.sql.Date toJavaDate(int days) {
-    long localMillis = Math.multiplyExact(days, MILLIS_PER_DAY);
-    int timeZoneOffset;
-    TimeZone defaultTimeZone = TimeZone.getDefault();
-    if (defaultTimeZone instanceof sun.util.calendar.ZoneInfo) {
-      timeZoneOffset = ((sun.util.calendar.ZoneInfo) defaultTimeZone).getOffsetsByWall(localMillis, null);
-    } else {
-      timeZoneOffset = defaultTimeZone.getOffset(localMillis - defaultTimeZone.getRawOffset());
-    }
-    return new java.sql.Date(localMillis - timeZoneOffset);
+    LocalDate date = LocalDate.ofEpochDay(days);
+    ZoneId defaultZoneId = ZoneId.systemDefault();
+    ZonedDateTime zonedDateTime = date.atStartOfDay(defaultZoneId);
+    return new java.sql.Date(zonedDateTime.toInstant().toEpochMilli());
   }
 
   // convert Date to days
