@@ -175,15 +175,12 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig {
   private def coerceQueryOutput(queryOutput: Seq[Attribute],
                                 expectedColumns: Seq[StructField],
                                 conf: SQLConf): Seq[Alias] = {
-    queryOutput.zip(expectedColumns).map { case (attr, field) =>
-      // Lookup (by name) corresponding column from the table definition. In case there's
-      // no match, assume the column by the relative ordering
-      val targetColumn = expectedColumns.find(_.name.equals(attr.name)).getOrElse(field)
+    queryOutput.zip(expectedColumns).map { case (attr, targetField) =>
       // Since query output might be providing data in a different format we might need to wrap
       // output reference into the cast expression
-      val castExpr = castIfNeeded(attr.withNullability(targetColumn.nullable), targetColumn.dataType, conf)
+      val castExpr = castIfNeeded(attr.withNullability(targetField.nullable), targetField.dataType, conf)
 
-      Alias(castExpr, targetColumn.name)()
+      Alias(castExpr, targetField.name)()
     }
   }
 
@@ -192,11 +189,9 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig {
       false
     } else {
       targetSchema.fields.zip(sourceSchema).forall {
-        case (targetColumn, correspondingColumn) =>
-          // Determine matching source column by either a name or corresponding ordering
-          val matchingSourceColumn = sourceSchema.find(_.name == targetColumn.name).getOrElse(correspondingColumn)
+        case (targetColumn, sourceColumn) =>
           // Make sure we can cast source column to the target column type
-          Cast.canCast(matchingSourceColumn.dataType, targetColumn.dataType)
+          Cast.canCast(sourceColumn.dataType, targetColumn.dataType)
       }
     }
   }
