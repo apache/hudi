@@ -130,6 +130,12 @@
       </exclusions>
     </dependency>
 
+    <!-- Extra Logging Bridges -->
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>jul-to-slf4j</artifactId>
+    </dependency>
+
     <!-- Hive - Tests -->
     <dependency>
       <groupId>${hive.groupid}</groupId>
