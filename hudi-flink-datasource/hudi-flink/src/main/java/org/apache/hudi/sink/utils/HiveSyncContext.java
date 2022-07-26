@@ -24,7 +24,6 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.hive.HiveSyncTool;
-import org.apache.hudi.hive.ddl.HiveSyncMode;
 import org.apache.hudi.table.format.FilePathUtils;
 
 import org.apache.flink.annotation.VisibleForTesting;
@@ -65,27 +64,29 @@ public class HiveSyncContext {
 
   private final Properties props;
   private final HiveConf hiveConf;
+  private final String catalogSyncToolClassName;
 
-  private HiveSyncContext(Properties props, HiveConf hiveConf) {
+  private HiveSyncContext(Properties props, HiveConf hiveConf, String catalogSyncToolClassName) {
     this.props = props;
     this.hiveConf = hiveConf;
+    this.catalogSyncToolClassName = catalogSyncToolClassName;
   }
 
   public HiveSyncTool hiveSyncTool() {
-    HiveSyncMode syncMode = HiveSyncMode.of(props.getProperty(HIVE_SYNC_MODE.key()));
-    if (syncMode == HiveSyncMode.GLUE) {
-      return new AWSGlueCatalogSyncTool(props, hiveConf);
+    if (catalogSyncToolClassName.equalsIgnoreCase(AWSGlueCatalogSyncTool.class.getSimpleName())) {
+      return new AWSGlueCatalogSyncTool(props, this.hiveConf);
     }
     return new HiveSyncTool(props, hiveConf);
   }
 
   public static HiveSyncContext create(Configuration conf, SerializableConfiguration serConf) {
     Properties props = buildSyncConfig(conf);
+    String catalogSyncToolClassName = conf.getString(FlinkOptions.CATALOG_SYNC_TOOL_CLASS_NAME);
     org.apache.hadoop.conf.Configuration hadoopConf = HadoopConfigurations.getHadoopConf(conf);
     HiveConf hiveConf = new HiveConf();
     hiveConf.addResource(serConf.get());
     hiveConf.addResource(hadoopConf);
-    return new HiveSyncContext(props, hiveConf);
+    return new HiveSyncContext(props, hiveConf, catalogSyncToolClassName);
   }
 
   @VisibleForTesting
