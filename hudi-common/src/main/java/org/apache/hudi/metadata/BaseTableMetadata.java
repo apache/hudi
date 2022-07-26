@@ -46,6 +46,7 @@ import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.hadoop.CachingPath;
+import org.apache.hudi.hadoop.SerializablePath;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -73,7 +74,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
 
   protected final transient HoodieEngineContext engineContext;
   protected final SerializableConfiguration hadoopConf;
-  protected final Path dataBasePath;
+  protected final SerializablePath dataBasePath;
   protected final HoodieTableMetaClient dataMetaClient;
   protected final Option<HoodieMetadataMetrics> metrics;
   protected final HoodieMetadataConfig metadataConfig;
@@ -88,7 +89,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
                               String dataBasePath, String spillableMapDirectory) {
     this.engineContext = engineContext;
     this.hadoopConf = new SerializableConfiguration(engineContext.getHadoopConf());
-    this.dataBasePath = new CachingPath(dataBasePath);
+    this.dataBasePath = new SerializablePath(new CachingPath(dataBasePath));
     this.dataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf.get()).setBasePath(dataBasePath).build();
     this.spillableMapDirectory = spillableMapDirectory;
     this.metadataConfig = metadataConfig;
@@ -315,7 +316,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
    * @param partitionPath The absolute path of the partition
    */
   FileStatus[] fetchAllFilesInPartition(Path partitionPath) throws IOException {
-    String relativePartitionPath = FSUtils.getRelativePartitionPath(dataBasePath, partitionPath);
+    String relativePartitionPath = FSUtils.getRelativePartitionPath(dataBasePath.get(), partitionPath);
     String recordKey = relativePartitionPath.isEmpty() ? NON_PARTITIONED_NAME : relativePartitionPath;
 
     HoodieTimer timer = new HoodieTimer().startTimer();
@@ -343,7 +344,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
         partitionPaths.parallelStream()
             .collect(
                 Collectors.toMap(partitionPath -> {
-                  String partitionId = FSUtils.getRelativePartitionPath(dataBasePath, partitionPath);
+                  String partitionId = FSUtils.getRelativePartitionPath(dataBasePath.get(), partitionPath);
                   return partitionId.isEmpty() ? NON_PARTITIONED_NAME : partitionId;
                 }, Function.identity())
             );

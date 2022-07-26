@@ -22,7 +22,6 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hudi.exception.HoodieException;
 
 import javax.annotation.concurrent.ThreadSafe;
-import java.io.Serializable;
 import java.net.URI;
 import java.net.URISyntaxException;
 
@@ -34,7 +33,7 @@ import java.net.URISyntaxException;
  * NOTE: This class is thread-safe
  */
 @ThreadSafe
-public class CachingPath extends Path implements Serializable {
+public class CachingPath extends Path {
 
   // NOTE: `volatile` keyword is redundant here and put mostly for reader notice, since all
   //       reads/writes to references are always atomic (including 64-bit JVMs)

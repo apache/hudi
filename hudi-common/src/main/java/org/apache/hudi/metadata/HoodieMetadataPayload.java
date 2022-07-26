@@ -485,7 +485,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     long blockSize = fs.getDefaultBlockSize(partitionPath);
     return filterFileInfoEntries(false)
         .map(e -> {
-          // NOTE: Since we now that the Metadata Table's Payload is simply a file-name we're
+          // NOTE: Since we know that the Metadata Table's Payload is simply a file-name we're
           //       creating Hadoop's Path using more performant unsafe variant
           CachingPath filePath = new CachingPath(partitionPath, createPathUnsafe(e.getKey()));
           return new FileStatus(e.getValue().getSize(), false, 0, blockSize, 0, 0,
