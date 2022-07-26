@@ -30,6 +30,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -45,7 +46,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 public class TestInlineCompaction extends CompactionTestBase {
 
   private HoodieWriteConfig getConfigForInlineCompaction(int maxDeltaCommits, int maxDeltaTime, CompactionTriggerStrategy inlineCompactionType) {
-    return getConfigBuilder(false)
+    return getConfigBuilder(false).withMarkersType("DIRECT")
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withInlineCompaction(true)
             .withMaxNumDeltaCommitsBeforeCompaction(maxDeltaCommits)
@@ -95,7 +96,6 @@ public class TestInlineCompaction extends CompactionTestBase {
     }
   }
 
-
   @Test
   public void testSuccessfulCompactionBasedOnNumAfterCompactionRequest() throws Exception {
     // Given: make 4 commits
@@ -112,32 +112,33 @@ public class TestInlineCompaction extends CompactionTestBase {
 
       cfg.setValue(INLINE_COMPACT_NUM_DELTA_COMMITS,"1");
       String requestInstant = HoodieActiveTimeline.createNewInstantTime();
-      HoodieInstant compactionRequest = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieActiveTimeline.COMPACTION_ACTION,
-            requestInstant);
+      // add one compaction request
       scheduleCompaction(requestInstant, writeClient, cfg);
+      metaClient.getActiveTimeline().reload();
+      assertEquals(metaClient.getActiveTimeline().getInstants().filter(hoodieInstant -> hoodieInstant.getAction().equals(HoodieTimeline.COMPACTION_ACTION)
+            && hoodieInstant.getState() == HoodieInstant.State.REQUESTED).count(), 1);
+      // can not add request second time
+      requestInstant = HoodieActiveTimeline.createNewInstantTime();
+      try {
+        scheduleCompaction(requestInstant, writeClient, cfg);
+        Assertions.fail();
+      } catch (AssertionError error) {
+        //should be here
+      }
       cfg.setValue(INLINE_COMPACT_NUM_DELTA_COMMITS,"4");
 
-      // this commit won't generate another compaction request
+      // this commit won't generate another compaction request only trigger last compaction request
       String finalInstant = HoodieActiveTimeline.createNewInstantTime();
       createNextDeltaCommit(finalInstant, dataGen.generateUpdates(finalInstant, 100), writeClient, metaClient, cfg, false);
 
       metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(cfg.getBasePath()).build();
 
-      assertFalse(HoodieTimeline.COMMIT_ACTION.equals(metaClient.getActiveTimeline().lastInstant().get().getAction()));
-
-      metaClient.getActiveTimeline().deleteCompactionRequested(compactionRequest);
-      metaClient.reloadActiveTimeline();
-
-      // this commit trigger compaction
-      finalInstant = HoodieActiveTimeline.createNewInstantTime();
-      createNextDeltaCommit(finalInstant, dataGen.generateUpdates(finalInstant, 100), writeClient, metaClient, cfg, false);
       assertEquals(metaClient.getActiveTimeline().getCommitsTimeline().filter(instant -> instant.getAction().equals(HoodieTimeline.COMMIT_ACTION))
             .countInstants(), 1);
       assertEquals(metaClient.getActiveTimeline().getCommitsTimeline().filterPendingCompactionTimeline().countInstants(), 0);
       assertEquals(HoodieTimeline.DELTA_COMMIT_ACTION, metaClient.getActiveTimeline().lastInstant().get().getAction());
     }
   }
-
 
   @Test
   public void testSuccessfulCompactionBasedOnTime() throws Exception {
