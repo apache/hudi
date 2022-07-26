@@ -23,6 +23,7 @@ import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -37,6 +38,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static org.apache.hudi.config.HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
@@ -92,6 +94,50 @@ public class TestInlineCompaction extends CompactionTestBase {
       assertFalse(WriteMarkersFactory.get(cfg.getMarkersType(), HoodieSparkTable.create(cfg, context), compactionTime).doesMarkerDirExist());
     }
   }
+
+
+  @Test
+  public void testSuccessfulCompactionBasedOnNumAfterCompactionRequest() throws Exception {
+    // Given: make 4 commits
+    HoodieWriteConfig cfg = getConfigForInlineCompaction(4, 60, CompactionTriggerStrategy.NUM_COMMITS_AFTER_REQUEST);
+
+    List<String> instants = IntStream.range(0, 3).mapToObj(i -> HoodieActiveTimeline.createNewInstantTime()).collect(Collectors.toList());
+
+    try (SparkRDDWriteClient<?> writeClient = getHoodieWriteClient(cfg)) {
+      List<HoodieRecord> records = dataGen.generateInserts(instants.get(0), 100);
+      HoodieReadClient readClient = getHoodieReadClient(cfg.getBasePath());
+      runNextDeltaCommits(writeClient, readClient, instants, records, cfg, true, new ArrayList<>());
+
+      metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(cfg.getBasePath()).build();
+
+      cfg.setValue(INLINE_COMPACT_NUM_DELTA_COMMITS,"1");
+      String requestInstant = HoodieActiveTimeline.createNewInstantTime();
+      HoodieInstant compactionRequest = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieActiveTimeline.COMPACTION_ACTION,
+            requestInstant);
+      scheduleCompaction(requestInstant, writeClient, cfg);
+      cfg.setValue(INLINE_COMPACT_NUM_DELTA_COMMITS,"4");
+
+      // this commit won't generate another compaction request
+      String finalInstant = HoodieActiveTimeline.createNewInstantTime();
+      createNextDeltaCommit(finalInstant, dataGen.generateUpdates(finalInstant, 100), writeClient, metaClient, cfg, false);
+
+      metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(cfg.getBasePath()).build();
+
+      assertFalse(HoodieTimeline.COMMIT_ACTION.equals(metaClient.getActiveTimeline().lastInstant().get().getAction()));
+
+      metaClient.getActiveTimeline().deleteCompactionRequested(compactionRequest);
+      metaClient.reloadActiveTimeline();
+
+      // this commit trigger compaction
+      finalInstant = HoodieActiveTimeline.createNewInstantTime();
+      createNextDeltaCommit(finalInstant, dataGen.generateUpdates(finalInstant, 100), writeClient, metaClient, cfg, false);
+      assertEquals(metaClient.getActiveTimeline().getCommitsTimeline().filter(instant -> instant.getAction().equals(HoodieTimeline.COMMIT_ACTION))
+            .countInstants(), 1);
+      assertEquals(metaClient.getActiveTimeline().getCommitsTimeline().filterPendingCompactionTimeline().countInstants(), 0);
+      assertEquals(HoodieTimeline.DELTA_COMMIT_ACTION, metaClient.getActiveTimeline().lastInstant().get().getAction());
+    }
+  }
+
 
   @Test
   public void testSuccessfulCompactionBasedOnTime() throws Exception {
