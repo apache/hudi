@@ -185,7 +185,7 @@ public class HoodieHBaseIndexConfig extends HoodieConfig {
 
   public static final ConfigProperty<Integer> BUCKET_NUMBER = ConfigProperty
       .key("hoodie.index.hbase.bucket.number")
-      .defaultValue(100)
+      .defaultValue(8)
       .withDocumentation("Only applicable when using RebalancedSparkHoodieHBaseIndex, same as hbase regions count can get the best performance");
 
   /**
