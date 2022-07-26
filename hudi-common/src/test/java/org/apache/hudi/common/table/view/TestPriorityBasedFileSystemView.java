@@ -31,10 +31,11 @@ import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.http.client.HttpResponseException;
-import org.apache.log4j.AppenderSkeleton;
-import org.apache.log4j.Level;
-import org.apache.log4j.Logger;
-import org.apache.log4j.spi.LoggingEvent;
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.core.LogEvent;
+import org.apache.logging.log4j.core.Logger;
+import org.apache.logging.log4j.core.appender.AbstractAppender;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -113,8 +114,9 @@ public class TestPriorityBasedFileSystemView {
   @Test
   public void testBadRequestExceptionWithPrimary() {
     final TestLogAppender appender = new TestLogAppender();
-    final Logger logger = Logger.getRootLogger();
+    final Logger logger = (Logger) LogManager.getLogger(PriorityBasedFileSystemView.class);
     try {
+      appender.start();
       logger.addAppender(appender);
       Stream<HoodieBaseFile> actual;
       Stream<HoodieBaseFile> expected = testBaseFileStream;
@@ -124,10 +126,10 @@ public class TestPriorityBasedFileSystemView {
       when(secondary.getLatestBaseFiles()).thenReturn(testBaseFileStream);
       actual = fsView.getLatestBaseFiles();
       assertEquals(expected, actual);
-      final List<LoggingEvent> logs = appender.getLog();
-      final LoggingEvent firstLogEntry = logs.get(0);
+      final List<LogEvent> logs = appender.getLog();
+      final LogEvent firstLogEntry = logs.get(0);
       assertEquals(firstLogEntry.getLevel(), Level.WARN);
-      assertTrue(((String)firstLogEntry.getMessage()).contains("Got error running preferred function. Likely due to another "
+      assertTrue((firstLogEntry.getMessage().getFormattedMessage()).contains("Got error running preferred function. Likely due to another "
           + "concurrent writer in progress. Trying secondary"));
     } finally {
       logger.removeAppender(appender);
@@ -666,29 +668,20 @@ public class TestPriorityBasedFileSystemView {
     assertEquals(secondary, fsView.getSecondaryView());
   }
 
-  class TestLogAppender extends AppenderSkeleton {
-    private final List<LoggingEvent> log = new ArrayList<LoggingEvent>();
+  class TestLogAppender extends AbstractAppender {
+    private final List<LogEvent> log = new ArrayList<>();
 
-    public TestLogAppender() {
-      this.name = UUID.randomUUID().toString();
+    protected TestLogAppender() {
+      super(UUID.randomUUID().toString(), null, null, false, null);
     }
 
     @Override
-    public boolean requiresLayout() {
-      return false;
+    public void append(LogEvent event) {
+      log.add(event);
     }
 
-    @Override
-    protected void append(final LoggingEvent loggingEvent) {
-      log.add(loggingEvent);
-    }
-
-    @Override
-    public void close() {
-    }
-
-    public List<LoggingEvent> getLog() {
-      return new ArrayList<LoggingEvent>(log);
+    public List<LogEvent> getLog() {
+      return new ArrayList<LogEvent>(log);
     }
   }
 }
