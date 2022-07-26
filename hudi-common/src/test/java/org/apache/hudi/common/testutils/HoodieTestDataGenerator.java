@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -215,7 +216,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     return numOfRecords * BYTES_PER_RECORD + BLOOM_FILTER_BYTES;
   }
 
-  public RawTripTestPayload generateRandomValueAsPerSchema(String schemaStr, HoodieKey key, String commitTime, boolean isFlattened) throws IOException {
+  public HoodieRecordPayload generateRandomValueAsPerSchema(String schemaStr, HoodieKey key, String commitTime, boolean isFlattened) throws IOException {
     if (TRIP_EXAMPLE_SCHEMA.equals(schemaStr)) {
       return generateRandomValue(key, commitTime, isFlattened);
     } else if (TRIP_SCHEMA.equals(schemaStr)) {
@@ -277,9 +278,10 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     return new RawTripTestPayload(rec.toString(), key.getRecordKey(), key.getPartitionPath(), SHORT_TRIP_SCHEMA);
   }
 
-  public RawTripTestPayload generatePayloadForS3EventsSchema(HoodieKey key, String commitTime) throws IOException {
-    GenericRecord rec = generateRecordForS3EventSchema(key.getRecordKey(), "file-obj-key-" + commitTime, 1024L);
-    return new RawTripTestPayload(rec.toString(), key.getRecordKey(), key.getPartitionPath(), S3_EVENTS_SCHEMA);
+  public S3EventTestPayload generatePayloadForS3EventsSchema(HoodieKey key, String commitTime) throws IOException {
+    // S3 filters by file format in default mode.
+    GenericRecord rec = generateRecordForS3EventSchema(key.getRecordKey(), "file-obj-key-" + commitTime + ".parquet", 1024L);
+    return new S3EventTestPayload(rec.toString(), key.getRecordKey(), key.getPartitionPath(), S3_EVENTS_SCHEMA);
   }
 
   /**
@@ -497,7 +499,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
    * It also updates the list of existing keys.
    */
   public List<HoodieRecord> generateInsertsWithSchema(String instantTime, Integer n, String schemaStr) {
-    return generateInserts(instantTime, n, false);
+    return generateInsertsWithSchema(instantTime, n, schemaStr, false);
   }
 
   /**

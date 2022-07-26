@@ -109,7 +109,7 @@ public class TestS3EventsHoodieIncrSource extends SparkClientFunctionalTestHarne
     S3EventsHoodieIncrSource s3IncrSource = new S3EventsHoodieIncrSource(typedProperties, jsc(), spark(), new DummySchemaProvider(S3EventsSchemaUtils.generateS3EventSchema()));
 
     // read everything until latest
-    Pair<Option<Dataset<Row>>, String> batchCheckPoint = s3IncrSource.fetchNextBatch(checkpointToPull, 500);
+    Pair<Option<Dataset<Row>>, String> batchCheckPoint = s3IncrSource.fetchMetadata(checkpointToPull, 500);
     Assertions.assertNotNull(batchCheckPoint.getValue());
     if (expectedCount == 0) {
       assertFalse(batchCheckPoint.getKey().isPresent());

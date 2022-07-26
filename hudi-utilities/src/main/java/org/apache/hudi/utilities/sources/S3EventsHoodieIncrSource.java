@@ -60,6 +60,7 @@ import static org.apache.hudi.utilities.sources.HoodieIncrSource.Config.HOODIE_S
 import static org.apache.hudi.utilities.sources.HoodieIncrSource.Config.NUM_INSTANTS_PER_FETCH;
 import static org.apache.hudi.utilities.sources.HoodieIncrSource.Config.READ_LATEST_INSTANT_ON_MISSING_CKPT;
 import static org.apache.hudi.utilities.sources.HoodieIncrSource.Config.SOURCE_FILE_FORMAT;
+
 /**
  * This source will use the S3 events meta information from hoodie table generate by {@link S3EventsSource}.
  */
@@ -112,8 +113,7 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
     return dataFrameReader;
   }
 
-  @Override
-  public Pair<Option<Dataset<Row>>, String> fetchNextBatch(Option<String> lastCkptStr, long sourceLimit) {
+  public Pair<Option<Dataset<Row>>, String> fetchMetadata(Option<String> lastCkptStr, long sourceLimit) {
     DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(HOODIE_SRC_BASE_PATH));
     String srcPath = props.getString(HOODIE_SRC_BASE_PATH);
     int numInstantsPerFetch = props.getInteger(NUM_INSTANTS_PER_FETCH, DEFAULT_NUM_INSTANTS_PER_FETCH);
@@ -124,7 +124,6 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
     if (readLatestOnMissingCkpt) {
       missingCheckpointStrategy = IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST;
     }
-    String fileFormat = props.getString(SOURCE_FILE_FORMAT, DEFAULT_SOURCE_FILE_FORMAT);
 
     // Use begin Instant if set and non-empty
     Option<String> beginInstant =
@@ -138,7 +137,7 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
 
     if (queryTypeAndInstantEndpts.getValue().getKey().equals(queryTypeAndInstantEndpts.getValue().getValue())) {
       LOG.warn("Already caught up. Begin Checkpoint was :" + queryTypeAndInstantEndpts.getValue().getKey());
-      return Pair.of(Option.empty(), queryTypeAndInstantEndpts.getValue().getKey());
+      return Pair.of(Option.empty(), queryTypeAndInstantEndpts.getRight().getRight());
     }
 
     Dataset<Row> source = null;
@@ -156,11 +155,18 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
           .filter(String.format("%s > '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
               queryTypeAndInstantEndpts.getRight().getLeft()));
     }
+    return Pair.of(Option.of(source), queryTypeAndInstantEndpts.getRight().getRight());
+  }
 
-    if (source.isEmpty()) {
-      return Pair.of(Option.empty(), queryTypeAndInstantEndpts.getRight().getRight());
+  @Override
+  public Pair<Option<Dataset<Row>>, String> fetchNextBatch(Option<String> lastCkptStr, long sourceLimit) {
+    Pair<Option<Dataset<Row>>, String> sourceMetadata = fetchMetadata(lastCkptStr, sourceLimit);
+    if (!sourceMetadata.getKey().isPresent()) {
+      return Pair.of(Option.empty(), sourceMetadata.getRight());
     }
 
+    Dataset<Row> source = sourceMetadata.getKey().get();
+    String fileFormat = props.getString(SOURCE_FILE_FORMAT, DEFAULT_SOURCE_FILE_FORMAT);
     String filter = "s3.object.size > 0";
     if (!StringUtils.isNullOrEmpty(props.getString(Config.S3_KEY_PREFIX, null))) {
       filter = filter + " and s3.object.key like '" + props.getString(Config.S3_KEY_PREFIX) + "%'";
@@ -222,6 +228,6 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
     }
     LOG.debug("Extracted distinct files " + cloudFiles.size()
         + " and some samples " + cloudFiles.stream().limit(10).collect(Collectors.toList()));
-    return Pair.of(dataset, queryTypeAndInstantEndpts.getRight().getRight());
+    return Pair.of(dataset, sourceMetadata.getRight());
   }
 }

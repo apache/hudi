@@ -27,6 +27,12 @@ import org.apache.avro.generic.GenericRecord;
 // Utility for the schema of S3 events listed here (https://docs.aws.amazon.com/AmazonS3/latest/userguide/notification-content-structure.html)
 public class S3EventsSchemaUtils {
   public static final String DEFAULT_STRING_VALUE = "default_string";
+  public static final GenericRecord DEFAULT_S3_BUCKET_RECORD;
+  static {
+    GenericRecord rec = new GenericData.Record(generateBucketInfoSchema());
+    rec.put("name", "default_s3_bucket");
+    DEFAULT_S3_BUCKET_RECORD = rec;
+  }
 
   public static String generateSchemaString() {
     return generateS3EventSchema().toString();
@@ -39,6 +45,14 @@ public class S3EventsSchemaUtils {
         .requiredLong("size")
         .endRecord();
     return objInfo;
+  }
+
+  public static Schema generateBucketInfoSchema() {
+    Schema bucketInfo = SchemaBuilder.record("bucketInfo")
+        .fields()
+        .requiredString("name")
+        .endRecord();
+    return bucketInfo;
   }
 
   public static GenericRecord generateObjInfoRecord(String key, Long size) {
@@ -55,6 +69,9 @@ public class S3EventsSchemaUtils {
         .name("object")
         .type(generateObjInfoSchema())
         .noDefault()
+        .name("bucket")
+        .type(generateBucketInfoSchema())
+        .noDefault()
         .endRecord();
     return s3Metadata;
   }
@@ -63,6 +80,7 @@ public class S3EventsSchemaUtils {
     GenericRecord rec = new GenericData.Record(generateS3MetadataSchema());
     rec.put("configurationId", DEFAULT_STRING_VALUE);
     rec.put("object", objRecord);
+    rec.put("bucket", DEFAULT_S3_BUCKET_RECORD);
     return rec;
   }
 
@@ -71,6 +89,7 @@ public class S3EventsSchemaUtils {
         .fields()
         .requiredString("eventSource")
         .requiredString("eventName")
+        .requiredString("_row_key")
         .name("s3")
         .type(generateS3MetadataSchema())
         .noDefault()

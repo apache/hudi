@@ -23,48 +23,26 @@ import org.apache.hudi.avro.MercifulJsonConverter;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-import java.util.zip.Deflater;
-import java.util.zip.DeflaterOutputStream;
-import java.util.zip.InflaterInputStream;
 
 /**
  * Example row change event based on some example data used by testcases. The data avro schema is
  * src/test/resources/schema1.
  */
-public class RawTripTestPayload implements HoodieRecordPayload<RawTripTestPayload> {
-
-  private static final transient ObjectMapper OBJECT_MAPPER = new ObjectMapper();
-  private String partitionPath;
-  private String rowKey;
-  private byte[] jsonDataCompressed;
-  private int dataSize;
-  private boolean isDeleted;
-  private Comparable orderingVal;
+public class RawTripTestPayload extends GenericTestPayload implements HoodieRecordPayload<RawTripTestPayload> {
 
   public RawTripTestPayload(Option<String> jsonData, String rowKey, String partitionPath, String schemaStr,
       Boolean isDeleted, Comparable orderingVal) throws IOException {
-    if (jsonData.isPresent()) {
-      this.jsonDataCompressed = compressData(jsonData.get());
-      this.dataSize = jsonData.get().length();
-    }
-    this.rowKey = rowKey;
-    this.partitionPath = partitionPath;
-    this.isDeleted = isDeleted;
-    this.orderingVal = orderingVal;
+    super(jsonData, rowKey, partitionPath, schemaStr, isDeleted, orderingVal);
   }
 
   public RawTripTestPayload(String jsonData, String rowKey, String partitionPath, String schemaStr) throws IOException {
@@ -72,12 +50,7 @@ public class RawTripTestPayload implements HoodieRecordPayload<RawTripTestPayloa
   }
 
   public RawTripTestPayload(String jsonData) throws IOException {
-    this.jsonDataCompressed = compressData(jsonData);
-    this.dataSize = jsonData.length();
-    Map<String, Object> jsonRecordMap = OBJECT_MAPPER.readValue(jsonData, Map.class);
-    this.rowKey = jsonRecordMap.get("_row_key").toString();
-    this.partitionPath = jsonRecordMap.get("time").toString().split("T")[0].replace("-", "/");
-    this.isDeleted = false;
+    super(jsonData);
   }
 
   /**
@@ -119,11 +92,6 @@ public class RawTripTestPayload implements HoodieRecordPayload<RawTripTestPayloa
         .collect(Collectors.toList());
   }
 
-  public String getPartitionPath() {
-    return partitionPath;
-  }
-
-  @Override
   public RawTripTestPayload preCombine(RawTripTestPayload oldValue) {
     if (oldValue.orderingVal.compareTo(orderingVal) > 0) {
       // pick the payload with greatest ordering value
@@ -148,11 +116,6 @@ public class RawTripTestPayload implements HoodieRecordPayload<RawTripTestPayloa
     }
   }
 
-  public IndexedRecord getRecordToInsert(Schema schema) throws IOException {
-    MercifulJsonConverter jsonConverter = new MercifulJsonConverter();
-    return jsonConverter.convert(getJsonData(), schema);
-  }
-
   @Override
   public Option<Map<String, String>> getMetadata() {
     // Let's assume we want to count the number of input row change events
@@ -161,31 +124,4 @@ public class RawTripTestPayload implements HoodieRecordPayload<RawTripTestPayloa
     metadataMap.put("InputRecordCount_1506582000", "2");
     return Option.of(metadataMap);
   }
-
-  public String getRowKey() {
-    return rowKey;
-  }
-
-  public String getJsonData() throws IOException {
-    return unCompressData(jsonDataCompressed);
-  }
-
-  private byte[] compressData(String jsonData) throws IOException {
-    ByteArrayOutputStream baos = new ByteArrayOutputStream();
-    DeflaterOutputStream dos = new DeflaterOutputStream(baos, new Deflater(Deflater.BEST_COMPRESSION), true);
-    try {
-      dos.write(jsonData.getBytes());
-    } finally {
-      dos.flush();
-      dos.close();
-    }
-    return baos.toByteArray();
-  }
-
-  private String unCompressData(byte[] data) throws IOException {
-    try (InflaterInputStream iis = new InflaterInputStream(new ByteArrayInputStream(data))) {
-      return FileIOUtils.readAsUTFString(iis, dataSize);
-    }
-  }
-
 }
