@@ -37,9 +37,9 @@ import java.util.Properties;
  *
  * @Experimental
  */
-public class AWSGlueCatalogSyncTool extends HiveSyncTool {
+public class AwsGlueCatalogSyncTool extends HiveSyncTool {
 
-  public AWSGlueCatalogSyncTool(Properties props, Configuration hadoopConf) {
+  public AwsGlueCatalogSyncTool(Properties props, Configuration hadoopConf) {
     super(props, hadoopConf);
   }
 
@@ -56,6 +56,6 @@ public class AWSGlueCatalogSyncTool extends HiveSyncTool {
       cmd.usage();
       System.exit(0);
     }
-    new AWSGlueCatalogSyncTool(params.toProps(), new Configuration()).syncHoodieTable();
+    new AwsGlueCatalogSyncTool(params.toProps(), new Configuration()).syncHoodieTable();
   }
 }
