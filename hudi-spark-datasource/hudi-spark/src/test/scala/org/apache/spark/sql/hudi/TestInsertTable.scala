@@ -24,6 +24,7 @@ import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieDuplicateKeyException
 import org.apache.hudi.keygen.ComplexKeyGenerator
 import org.apache.spark.sql.SaveMode
+import org.apache.spark.sql.internal.SQLConf
 
 import java.io.File
 
@@ -433,7 +434,8 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
          | partitioned by (dt)
          | location '${tmp.getCanonicalPath}/$tableName'
        """.stripMargin)
-    spark.sql(s"insert into $tableName partition(dt = $partitionValue) select 1, 'a1', 10")
+    // NOTE: We have to drop type-literal prefix since Spark doesn't parse type literals appropriately
+    spark.sql(s"insert into $tableName partition(dt = ${dropTypeLiteralPrefix(partitionValue)}) select 1, 'a1', 10")
     spark.sql(s"insert into $tableName select 2, 'a2', 10, $partitionValue")
     checkAnswer(s"select id, name, price, cast(dt as string) from $tableName order by id")(
       Seq(1, "a1", 10, extractRawValue(partitionValue).toString),

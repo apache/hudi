@@ -145,11 +145,22 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
     assertResult(true)(hasException)
   }
 
+  def dropTypeLiteralPrefix(value: Any): Any = {
+    value match {
+      case s: String =>
+        s.stripPrefix("DATE").stripPrefix("TIMESTAMP").stripPrefix("X")
+      case _ => value
+    }
+  }
+
   protected def extractRawValue(value: Any): Any = {
     value match {
       case s: String =>
         // We need to strip out data-type prefixes like "DATE", "TIMESTAMP"
-        s.stripPrefix("DATE").stripPrefix("TIMESTAMP").stripPrefix("'").stripSuffix("'")
+        dropTypeLiteralPrefix(s)
+          .asInstanceOf[String]
+          .stripPrefix("'")
+          .stripSuffix("'")
       case _ => value
     }
   }
