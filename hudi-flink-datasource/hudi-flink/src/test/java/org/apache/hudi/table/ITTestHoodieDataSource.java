@@ -222,7 +222,7 @@ public class ITTestHoodieDataSource extends AbstractTestBase {
   }
 
   @Test
-  void testStreamWriteBatchReadOptimized() {
+  void testStreamWriteBatchReadOptimized() throws Exception {
     // create filesystem table named source
     String createSource = TestConfigurations.getFileSourceDDL("source");
     streamTableEnv.executeSql(createSource);
@@ -236,11 +236,16 @@ public class ITTestHoodieDataSource extends AbstractTestBase {
         .option(FlinkOptions.QUERY_TYPE, FlinkOptions.QUERY_TYPE_READ_OPTIMIZED)
         .option(FlinkOptions.COMPACTION_DELTA_COMMITS, 1)
         .option(FlinkOptions.COMPACTION_TASKS, 1)
+        // disable the metadata table because
+        // the lock conflicts resolution takes time
+        .option(FlinkOptions.METADATA_ENABLED, false)
         .end();
     streamTableEnv.executeSql(hoodieTableDDL);
     String insertInto = "insert into t1 select * from source";
     execInsertSql(streamTableEnv, insertInto);
 
+    // give some buffer time for finishing the async compaction tasks
+    TimeUnit.SECONDS.sleep(5);
     List<Row> rows = CollectionUtil.iterableToList(
         () -> streamTableEnv.sqlQuery("select * from t1").execute().collect());
 
