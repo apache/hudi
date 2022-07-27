@@ -242,46 +242,47 @@ object HoodieSparkSqlWriter {
                 classOf[org.apache.avro.Schema]))
 
             // TODO(HUDI-4472) revisit and simplify schema handling
-            var schema = AvroConversionUtils.convertStructTypeToAvroSchema(df.schema, structName, nameSpace)
-            val latestSchema = getLatestTableSchema(fs, basePath, sparkContext).getOrElse(schema)
+            val sourceSchema = AvroConversionUtils.convertStructTypeToAvroSchema(df.schema, structName, nameSpace)
+            val latestTableSchema = getLatestTableSchema(fs, basePath, sparkContext).getOrElse(sourceSchema)
 
             val enabledSchemaEvolution = parameters.getOrDefault(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.key(), "false").toBoolean
             var internalSchemaOpt = getLatestTableInternalSchema(fs, basePath, sparkContext)
 
-            if (reconcileSchema) {
-              // In case we need to reconcile the schema and schema evolution is enabled,
-              // we will force-apply schema evolution to the writer's schema.
-              // Otherwise we simply fallback to the latest schema committed
-              if (enabledSchemaEvolution && internalSchemaOpt.isEmpty) {
-                internalSchemaOpt = Some(AvroInternalSchemaConverter.convert(schema))
-              } else {
-                schema = latestSchema
-              }
-            } else {
-              // In case reconciliation is disabled, we still have to do nullability attributes
-              // (minor) reconciliation, making sure schema of the incoming batch is in-line with
-              // the data already committed in the table
-              schema = AvroSchemaEvolutionUtils.canonicalizeColumnNullability(schema, latestSchema)
-            }
+            val writerSchema: Schema =
+              if (reconcileSchema) {
+                // In case we need to reconcile the schema and schema evolution is enabled,
+                // we will force-apply schema evolution to the writer's schema
+                if (enabledSchemaEvolution && internalSchemaOpt.isEmpty) {
+                  internalSchemaOpt = Some(AvroInternalSchemaConverter.convert(sourceSchema))
+                }
 
-            if (internalSchemaOpt.isDefined) {
-              // Apply schema evolution
-              schema = if (reconcileSchema) {
-                // Auto merge write schema and read schema.
-                val mergedInternalSchema = AvroSchemaEvolutionUtils.reconcileSchema(schema, internalSchemaOpt.get)
-                AvroInternalSchemaConverter.convert(mergedInternalSchema, latestSchema.getName)
+                if (internalSchemaOpt.isDefined) {
+                  // Apply schema evolution, by auto-merging write schema and read schema
+                  val mergedInternalSchema = AvroSchemaEvolutionUtils.reconcileSchema(sourceSchema, internalSchemaOpt.get)
+                  AvroInternalSchemaConverter.convert(mergedInternalSchema, latestTableSchema.getName)
+                } else if (TableSchemaResolver.isSchemaCompatible(sourceSchema, latestTableSchema)) {
+                  // In case schema reconciliation is enabled and source and latest table schemas
+                  // are compatible (as defined by [[TableSchemaResolver#isSchemaCompatible]], then we will
+                  // pick latest table's schema as the writer's schema
+                  latestTableSchema
+                } else {
+                  // Otherwise fallback to original source's schema
+                  sourceSchema
+                }
               } else {
-                AvroSchemaEvolutionUtils.canonicalizeColumnNullability(schema, latestSchema)
+                // In case reconciliation is disabled, we still have to do nullability attributes
+                // (minor) reconciliation, making sure schema of the incoming batch is in-line with
+                // the data already committed in the table
+                AvroSchemaEvolutionUtils.canonicalizeColumnNullability(sourceSchema, latestTableSchema)
               }
-            }
 
-            validateSchemaForHoodieIsDeleted(schema)
-            sparkContext.getConf.registerAvroSchemas(schema)
-            log.info(s"Registered avro schema : ${schema.toString(true)}")
+            validateSchemaForHoodieIsDeleted(writerSchema)
+            sparkContext.getConf.registerAvroSchemas(writerSchema)
+            log.info(s"Registered avro schema : ${writerSchema.toString(true)}")
 
             // Convert to RDD[HoodieRecord]
             val genericRecords: RDD[GenericRecord] = HoodieSparkUtils.createRdd(df, structName, nameSpace, reconcileSchema,
-              org.apache.hudi.common.util.Option.of(schema))
+              org.apache.hudi.common.util.Option.of(writerSchema))
             val shouldCombine = parameters(INSERT_DROP_DUPS.key()).toBoolean ||
               operation.equals(WriteOperationType.UPSERT) ||
               parameters.getOrElse(HoodieWriteConfig.COMBINE_BEFORE_INSERT.key(),
@@ -303,7 +304,7 @@ object HoodieSparkSqlWriter {
               hoodieRecord
             }).toJavaRDD()
 
-            val writeSchema = if (dropPartitionColumns) generateSchemaWithoutPartitionColumns(partitionColumns, schema) else schema
+            val writeSchema = if (dropPartitionColumns) generateSchemaWithoutPartitionColumns(partitionColumns, writerSchema) else writerSchema
             // Create a HoodieWriteClient & issue the write.
 
             val client = hoodieWriteClient.getOrElse(DataSourceUtils.createHoodieClient(jsc, writeSchema.toString, path,
