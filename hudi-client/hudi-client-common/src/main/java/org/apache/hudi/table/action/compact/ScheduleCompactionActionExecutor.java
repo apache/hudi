@@ -140,7 +140,7 @@ public class ScheduleCompactionActionExecutor<T extends HoodieRecordPayload, I, 
     return Option.empty();
   }
 
-  private Option<Pair<Integer, String>> getLatestDeltaCommitInfoSinceCompactionRequest() {
+  private Option<Pair<Integer, String>> getLatestDeltaCommitInfoSinceLastCompactionRequest() {
     Option<Pair<HoodieTimeline, HoodieInstant>> deltaCommitsInfo =
           CompactionUtils.getDeltaCommitsSinceLatestCompactionRequest(table.getActiveTimeline());
     if (deltaCommitsInfo.isPresent()) {
@@ -168,8 +168,8 @@ public class ScheduleCompactionActionExecutor<T extends HoodieRecordPayload, I, 
           LOG.info(String.format("The delta commits >= %s, trigger compaction scheduler.", inlineCompactDeltaCommitMax));
         }
         break;
-      case NUM_COMMITS_AFTER_REQUEST:
-        latestDeltaCommitInfoOption = getLatestDeltaCommitInfoSinceCompactionRequest();
+      case NUM_COMMITS_AFTER_LAST_REQUEST:
+        latestDeltaCommitInfoOption = getLatestDeltaCommitInfoSinceLastCompactionRequest();
 
         if (!latestDeltaCommitInfoOption.isPresent()) {
           return false;
@@ -177,7 +177,7 @@ public class ScheduleCompactionActionExecutor<T extends HoodieRecordPayload, I, 
         latestDeltaCommitInfo = latestDeltaCommitInfoOption.get();
         compactable = inlineCompactDeltaCommitMax <= latestDeltaCommitInfo.getLeft();
         if (compactable) {
-          LOG.info(String.format("The delta commits >= %s, trigger compaction scheduler.", inlineCompactDeltaCommitMax));
+          LOG.info(String.format("The delta commits >= %s since the last compaction request, trigger compaction scheduler.", inlineCompactDeltaCommitMax));
         }
         break;
       case TIME_ELAPSED:
