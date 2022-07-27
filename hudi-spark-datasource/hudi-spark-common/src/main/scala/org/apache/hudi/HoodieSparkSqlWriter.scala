@@ -405,7 +405,7 @@ object HoodieSparkSqlWriter {
         .build()
       val tableSchemaResolver = new TableSchemaResolver(tableMetaClient)
 
-      toScalaOption(tableSchemaResolver.getTableLatestAvroSchema(false))
+      toScalaOption(tableSchemaResolver.getTableAvroSchemaFromLatestCommit(false))
     } else {
       None
     }

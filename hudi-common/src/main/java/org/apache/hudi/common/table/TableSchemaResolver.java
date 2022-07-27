@@ -135,7 +135,7 @@ public class TableSchemaResolver {
    * @throws Exception
    */
   public Schema getTableAvroSchema(boolean includeMetadataFields) throws Exception {
-    return getTableAvroSchemaInternal(includeMetadataFields, Option.empty()).get();
+    return getTableAvroSchemaInternal(includeMetadataFields, Option.empty());
   }
 
   /**
@@ -144,7 +144,7 @@ public class TableSchemaResolver {
    * @param instant as of which table's schema will be fetched
    */
   public Schema getTableAvroSchema(HoodieInstant instant, boolean includeMetadataFields) throws Exception {
-    return getTableAvroSchemaInternal(includeMetadataFields, Option.of(instant)).get();
+    return getTableAvroSchemaInternal(includeMetadataFields, Option.of(instant));
   }
 
   /**
@@ -169,36 +169,33 @@ public class TableSchemaResolver {
     return getTableAvroSchema(false);
   }
 
-  private Option<Schema> getTableAvroSchemaInternal(boolean includeMetadataFields, Option<HoodieInstant> instantOpt) {
-    if (!metaClient.isTimelineNonEmpty()) {
-      return Option.empty();
-    }
-
-    Option<Schema> schemaFromCommitMetadata = instantOpt.isPresent()
-        ? getTableSchemaFromCommitMetadata(instantOpt.get(), includeMetadataFields)
-        : getTableSchemaFromLatestCommitMetadata(includeMetadataFields);
-
-    Schema schema = schemaFromCommitMetadata.or(() ->
-          metaClient.getTableConfig().getTableCreateSchema()
-              .map(tableSchema ->
-                  includeMetadataFields
-                      ? HoodieAvroUtils.addMetadataFields(tableSchema, hasOperationField.get())
-                      : tableSchema))
-        .orElseGet(() -> {
-          Schema schemaFromDataFile = getTableAvroSchemaFromDataFile();
-          return includeMetadataFields
-              ? schemaFromDataFile
-              : HoodieAvroUtils.removeMetadataFields(schemaFromDataFile);
-        });
+  private Schema getTableAvroSchemaInternal(boolean includeMetadataFields, Option<HoodieInstant> instantOpt) {
+    Schema schema =
+        (instantOpt.isPresent()
+            ? getTableSchemaFromCommitMetadata(instantOpt.get(), includeMetadataFields)
+            : getTableSchemaFromLatestCommitMetadata(includeMetadataFields))
+            .or(() ->
+                metaClient.getTableConfig().getTableCreateSchema()
+                    .map(tableSchema ->
+                        includeMetadataFields
+                            ? HoodieAvroUtils.addMetadataFields(tableSchema, hasOperationField.get())
+                            : tableSchema)
+            )
+            .orElseGet(() -> {
+              Schema schemaFromDataFile = getTableAvroSchemaFromDataFile();
+              return includeMetadataFields
+                  ? schemaFromDataFile
+                  : HoodieAvroUtils.removeMetadataFields(schemaFromDataFile);
+            });
 
     // TODO partition columns have to be appended in all read-paths
     if (metaClient.getTableConfig().shouldDropPartitionColumns()) {
       return metaClient.getTableConfig().getPartitionFields()
           .map(partitionFields -> appendPartitionColumns(schema, partitionFields))
-          .or(() -> Option.of(schema));
+          .orElse(schema);
     }
 
-    return Option.of(schema);
+    return schema;
   }
 
   private Option<Schema> getTableSchemaFromLatestCommitMetadata(boolean includeMetadataFields) {
@@ -373,13 +370,18 @@ public class TableSchemaResolver {
   }
 
   /**
-   * Returns table's latest Avro {@link Schema}
+   * Returns table's latest Avro {@link Schema} iff table is non-empty (ie there's at least
+   * a single commit)
    *
-   * This method is {@link #getTableAvroSchema(boolean)} counterpart that is returning an
-   * {@link Option} instead of failing in case table is empty
+   * This method differs from {@link #getTableAvroSchema(boolean)} in that it won't fallback
+   * to use table's schema used at creation
    */
-  public Option<Schema> getTableLatestAvroSchema(boolean includeMetadataFields) throws Exception {
-    return getTableAvroSchemaInternal(includeMetadataFields, Option.empty());
+  public Option<Schema> getTableAvroSchemaFromLatestCommit(boolean includeMetadataFields) throws Exception {
+    if (metaClient.isTimelineNonEmpty()) {
+      return Option.of(getTableAvroSchemaInternal(includeMetadataFields, Option.empty()));
+    }
+
+    return Option.empty();
   }
 
   /**
