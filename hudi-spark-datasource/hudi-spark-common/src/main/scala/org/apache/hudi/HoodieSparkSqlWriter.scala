@@ -22,7 +22,7 @@ import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hudi.DataSourceWriteOptions._
-import org.apache.hudi.HoodieConversionUtils.toProperties
+import org.apache.hudi.HoodieConversionUtils.{toProperties, toScalaOption}
 import org.apache.hudi.HoodieWriterUtils._
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.client.{HoodieWriteResult, SparkRDDWriteClient}
@@ -243,7 +243,7 @@ object HoodieSparkSqlWriter {
 
             // TODO(HUDI-4472) revisit and simplify schema handling
             var schema = AvroConversionUtils.convertStructTypeToAvroSchema(df.schema, structName, nameSpace)
-            val latestSchema = getLatestTableSchema(fs, basePath, sparkContext, schema)
+            val latestSchema = getLatestTableSchema(fs, basePath, sparkContext).getOrElse(schema)
 
             val enabledSchemaEvolution = parameters.getOrDefault(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.key(), "false").toBoolean
             var internalSchemaOpt = getLatestTableInternalSchema(fs, basePath, sparkContext)
@@ -396,23 +396,18 @@ object HoodieSparkSqlWriter {
    * @param schema       incoming record's schema.
    * @return Pair of(boolean, table schema), where first entry will be true only if schema conversion is required.
    */
-  def getLatestTableSchema(fs: FileSystem, basePath: Path, sparkContext: SparkContext, schema: Schema): Schema = {
-    var latestSchema: Schema = schema
+  def getLatestTableSchema(fs: FileSystem, basePath: Path, sparkContext: SparkContext): Option[Schema] = {
     if (FSUtils.isTableExists(basePath.toString, fs)) {
-      val tableMetaClient = HoodieTableMetaClient.builder.setConf(sparkContext.hadoopConfiguration).setBasePath(basePath.toString).build()
+      val tableMetaClient = HoodieTableMetaClient.builder
+        .setConf(sparkContext.hadoopConfiguration)
+        .setBasePath(basePath.toString)
+        .build()
       val tableSchemaResolver = new TableSchemaResolver(tableMetaClient)
-      // TODO(HUDI-4472): clean up
-      // NOTE: Repackaging schema to override name/namespace of the table's schema is required to workaround
-      //       the issue of this method improperly comparing table schema w/ writer's schema resulting in improper
-      //       discarding of the table's schema (instead proceeding with writer's schema)
-      latestSchema = tableSchemaResolver.getLatestSchema(schema, true, new Functions.Function1[Schema, Schema] {
-        override def apply(tableSchema: Schema): Schema = {
-          val repackagedFields = tableSchema.getFields.map { f => new Schema.Field(f.name, f.schema(), f.doc, f.defaultVal(), f.order()) }
-          Schema.createRecord(schema.getName, tableSchema.getDoc, schema.getNamespace, false, repackagedFields)
-        }
-      })
+
+      toScalaOption(tableSchemaResolver.getTableLatestAvroSchema(false))
+    } else {
+      None
     }
-    latestSchema
   }
 
   def registerKryoClassesAndGetGenericRecords(tblName: String, sparkContext: SparkContext, df: Dataset[Row],
