@@ -86,7 +86,10 @@ public class InputFormatTestUtil {
           baseFileFormat);
     }
 
-    java.nio.file.Path partitionPath = basePath.resolve(Paths.get("2016", "05", "01"));
+    java.nio.file.Path partitionPath = useNonPartitionedKeyGen
+        ? basePath
+        : basePath.resolve(Paths.get("2016", "05", "01"));
+
     setupPartition(basePath, partitionPath);
 
     if (injectData) {
