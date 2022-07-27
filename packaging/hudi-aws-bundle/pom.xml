@@ -279,7 +279,7 @@
             <artifactId>hudi-aws</artifactId>
             <version>${project.version}</version>
         </dependency>
-        <!-- Need parquet and avro to run AWSGlueCatalogSyncTool using run_sync_tool with this bundle.
+        <!-- Need parquet and avro to run AwsGlueCatalogSyncTool using run_sync_tool with this bundle.
         Parquet and avro from other packages have already been shaded above-->
         <dependency>
             <groupId>org.apache.parquet</groupId>
