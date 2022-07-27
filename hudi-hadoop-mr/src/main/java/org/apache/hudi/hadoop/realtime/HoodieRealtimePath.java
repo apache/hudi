@@ -89,7 +89,7 @@ public class HoodieRealtimePath extends Path {
   }
 
   public boolean isSplitable() {
-    return !toString().isEmpty();
+    return !toString().isEmpty() && !includeBootstrapFilePath();
   }
 
   public PathWithBootstrapFileStatus getPathWithBootstrapFileStatus() {
