@@ -129,14 +129,18 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig wi
     val staticPartitionValues = filterStaticPartitionValues(partitionsSpec)
 
     validate(removeMetaFields(query.schema), partitionsSpec, catalogTable)
-
     // Make sure we strip out meta-fields from the incoming dataset (these will have to be discarded anyway)
     val cleanedQuery = stripMetaFields(query)
     // To validate and align properly output of the query, we simply filter out partition columns with already
     // provided static values from the table's schema
+    //
+    // NOTE: This is a crucial step: since coercion might rely on either of a) name-based or b) positional-based
+    //       matching it's important to strip out partition columns, having static values provided in the partition spec,
+    //       since such columns wouldn't be otherwise specified w/in the query itself and therefore couldn't be matched
+    //       positionally for example
     val expectedQueryColumns = catalogTable.tableSchemaWithoutMetaFields.filterNot(f => staticPartitionValues.contains(f.name))
-
     val coercedQueryOutput = coerceQueryOutputColumns(StructType(expectedQueryColumns), cleanedQuery, catalogTable, conf)
+
     val staticPartitionValuesExprs = createStaticPartitionValuesExpressions(staticPartitionValues, targetPartitionSchema, conf)
 
     Project(coercedQueryOutput.output ++ staticPartitionValuesExprs, coercedQueryOutput)
