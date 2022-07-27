@@ -24,7 +24,7 @@
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
-    <artifactId>hudi-flink1.13.x</artifactId>
+    <artifactId>hudi-flink1.14</artifactId>
     <version>0.12.0-SNAPSHOT</version>
     <packaging>jar</packaging>
 
@@ -46,38 +46,56 @@
         </dependency>
         <dependency>
             <groupId>org.apache.flink</groupId>
-            <artifactId>flink-table-runtime-blink_${scala.binary.version}</artifactId>
-            <version>${flink1.13.version}</version>
+            <artifactId>flink-table-api-java</artifactId>
+            <version>${flink1.14.version}</version>
             <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>org.apache.flink</groupId>
-            <artifactId>flink-streaming-java_${scala.binary.version}</artifactId>
-            <version>${flink1.13.version}</version>
+            <artifactId>flink-table-api-java-bridge_${scala.binary.version}</artifactId>
+            <version>${flink1.14.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.flink</groupId>
+            <artifactId>flink-table-runtime_${scala.binary.version}</artifactId>
+            <version>${flink1.14.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.flink</groupId>
+            <artifactId>flink-shaded-guava</artifactId>
+            <version>30.1.1-jre-14.0</version>
             <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>org.apache.flink</groupId>
             <artifactId>flink-core</artifactId>
-            <version>${flink1.13.version}</version>
+            <version>${flink1.14.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.flink</groupId>
+            <artifactId>flink-streaming-java_${scala.binary.version}</artifactId>
+            <version>${flink1.14.version}</version>
             <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>org.apache.flink</groupId>
             <artifactId>flink-parquet_${scala.binary.version}</artifactId>
-            <version>${flink1.13.version}</version>
+            <version>${flink1.14.version}</version>
             <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>org.apache.flink</groupId>
             <artifactId>flink-json</artifactId>
-            <version>${flink1.13.version}</version>
+            <version>${flink1.14.version}</version>
             <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>org.apache.flink</groupId>
-            <artifactId>flink-runtime_${scala.binary.version}</artifactId>
-            <version>${flink1.13.version}</version>
+            <artifactId>flink-runtime</artifactId>
+            <version>${flink1.14.version}</version>
             <scope>test</scope>
             <type>test-jar</type>
         </dependency>
