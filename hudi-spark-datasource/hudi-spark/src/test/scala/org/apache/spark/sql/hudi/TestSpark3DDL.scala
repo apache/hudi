@@ -411,7 +411,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
 
           spark.sql(s"alter table $tableName alter column members.value.a first")
 
-          spark.sql(s"insert into ${tableName} values(1, 'jack', map('k1', struct('v1', 100), 'k2', struct('v2', 200)), struct('jackStruct', 29, 100), 1000)")
+          spark.sql(s"insert into ${tableName} values(1, 'jack', map('k1', struct(100, 'v1'), 'k2', struct(200, 'v2')), struct('jackStruct', 29, 100), 1000)")
 
           // rename column
           spark.sql(s"alter table ${tableName} rename column user to userx")
@@ -433,7 +433,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
           checkAnswer(spark.sql(s"select name, userx.name, userx.score from ${tableName}").collect())(Seq(null, null, null))
 
           // insert again
-          spark.sql(s"insert into ${tableName} values(2 , map('k1', struct('v1', 100), 'k2', struct('v2', 200)), struct('jackStructNew', 291 , 101), 'jacknew', 1000)")
+          spark.sql(s"insert into ${tableName} values(2 , map('k1', struct(100, 'v1'), 'k2', struct(200, 'v2')), struct('jackStructNew', 291 , 101), 'jacknew', 1000)")
 
           // check again
           checkAnswer(spark.sql(s"select name, userx.name as uxname, userx.score as uxs from ${tableName} order by id").collect())(
@@ -449,9 +449,9 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
             Seq(291, 2, "jacknew"))
           // test map value type change
           spark.sql(s"alter table ${tableName} add columns(mxp map<String, int>)")
-          spark.sql(s"insert into ${tableName} values(2 , map('k1', struct('v1', 100), 'k2', struct('v2', 200)), struct('jackStructNew', 291 , 101), 'jacknew', 1000, map('t1', 9))")
+          spark.sql(s"insert into ${tableName} values(2, map('k1', struct(100, 'v1'), 'k2', struct(200, 'v2')), struct('jackStructNew', 291 , 101), 'jacknew', 1000, map('t1', 9))")
           spark.sql(s"alter table ${tableName} alter column mxp.value type double")
-          spark.sql(s"insert into ${tableName} values(2 , map('k1', struct('v1', 100), 'k2', struct('v2', 200)), struct('jackStructNew', 291 , 101), 'jacknew', 1000, map('t1', 10))")
+          spark.sql(s"insert into ${tableName} values(2, map('k1', struct(100, 'v1'), 'k2', struct(200, 'v2')), struct('jackStructNew', 291 , 101), 'jacknew', 1000, map('t1', 10))")
           spark.sql(s"select * from $tableName").show(false)
           checkAnswer(spark.sql(s"select mxp from ${tableName} order by id").collect())(
             Seq(null),
@@ -462,7 +462,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
           spark.sql(s"alter table ${tableName} rename column userx to us")
           spark.sql(s"alter table ${tableName} rename column us.age to age1")
 
-          spark.sql(s"insert into ${tableName} values(2 , map('k1', struct('v1', 100), 'k2', struct('v2', 200)), struct('jackStructNew', 291 , 101), 'jacknew', 1000, map('t1', 10))")
+          spark.sql(s"insert into ${tableName} values(2, map('k1', struct(100, 'v1'), 'k2', struct(200, 'v2')), struct('jackStructNew', 291 , 101), 'jacknew', 1000, map('t1', 10))")
           spark.sql(s"select mem.value.nn, us.age1 from $tableName order by id").show()
           checkAnswer(spark.sql(s"select mem.value.nn, us.age1 from $tableName order by id").collect())(
             Seq(null, 29),
