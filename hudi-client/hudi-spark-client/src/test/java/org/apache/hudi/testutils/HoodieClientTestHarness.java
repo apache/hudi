@@ -341,8 +341,12 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
   }
 
   protected Properties getPropertiesForKeyGen() {
+    return getPropertiesForKeyGen(false);
+  }
+
+  protected Properties getPropertiesForKeyGen(boolean populateMetaFields) {
     Properties properties = new Properties();
-    properties.put(HoodieTableConfig.POPULATE_META_FIELDS.key(), "false");
+    properties.put(HoodieTableConfig.POPULATE_META_FIELDS.key(), populateMetaFields);
     properties.put("hoodie.datasource.write.recordkey.field", "_row_key");
     properties.put("hoodie.datasource.write.partitionpath.field", "partition_path");
     properties.put(HoodieTableConfig.RECORDKEY_FIELDS.key(), "_row_key");
