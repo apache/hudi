@@ -39,10 +39,12 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable
 
 /**
- * Table definition for SQL funcitonalities. Depending on the way of data generation,
+ * Table definition for SQL functionalities. Depending on the way of data generation,
  * meta of Hudi table can be from Spark catalog or meta directory on filesystem.
  * [[HoodieCatalogTable]] takes both meta sources into consideration when handling
  * EXTERNAL and MANAGED tables.
+ *
+ * NOTE: all the meta should be retrieved from meta directory on filesystem first.
  */
 class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) extends Logging {
 
@@ -53,7 +55,7 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
   /**
    * database.table in catalog
    */
-  val catalogTableName = table.qualifiedName
+  val catalogTableName: String = table.qualifiedName
 
   /**
    * properties defined in catalog.
@@ -122,7 +124,7 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
   /**
    * Table schema
    */
-  lazy val tableSchema: StructType = table.schema
+  lazy val tableSchema: StructType = loadTableSchemaByMetaClient().getOrElse(table.schema)
 
   /**
    * The schema without hoodie meta fields
