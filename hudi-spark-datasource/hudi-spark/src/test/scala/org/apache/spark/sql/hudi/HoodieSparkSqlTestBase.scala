@@ -139,9 +139,8 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
     try {
       spark.sql(sql)
     } catch {
-      case e: Throwable =>
-        assertResult(true)(e.getMessage.contains(errorMsg))
-        hasException = true
+      case e: Throwable if e.getMessage.contains(errorMsg) => hasException = true
+      case f: Throwable => fail("Exception should contain: " + errorMsg + ", error message: " + f.getMessage, f)
     }
     assertResult(true)(hasException)
   }

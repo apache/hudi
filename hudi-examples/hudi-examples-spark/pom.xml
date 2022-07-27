@@ -190,6 +190,12 @@
             <artifactId>spark-sql_${scala.binary.version}</artifactId>
         </dependency>
 
+        <!-- Hadoop -->
+        <dependency>
+            <groupId>org.apache.hadoop</groupId>
+            <artifactId>hadoop-auth</artifactId>
+        </dependency>
+
         <!-- Parquet -->
         <dependency>
             <groupId>org.apache.parquet</groupId>
