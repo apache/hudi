@@ -138,7 +138,7 @@ class Spark2Adapter extends SparkAdapter {
     DeleteFromTable(deleteFromTableCommand.table, resolvedCondition)
   }
 
-  override def extractCondition(deleteFromTable: Command): Expression = {
+  override def extractDeleteCondition(deleteFromTable: Command): Expression = {
     deleteFromTable.asInstanceOf[DeleteFromTable].condition.getOrElse(null)
   }
 

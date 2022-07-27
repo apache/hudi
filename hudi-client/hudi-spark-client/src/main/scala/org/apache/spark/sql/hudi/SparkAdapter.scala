@@ -162,7 +162,7 @@ trait SparkAdapter extends Serializable {
    * Extract condition in [[DeleteFromTable]]
    * SPARK-38626 condition is no longer Option in Spark 3.3
    */
-  def extractCondition(deleteFromTable: Command): Expression
+  def extractDeleteCondition(deleteFromTable: Command): Expression
 
   /**
    * Get parseQuery from ExtendedSqlParser, only for Spark 3.3+
