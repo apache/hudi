@@ -1,21 +1,14 @@
 package org.apache.hudi.common.testutils;
 
 import org.apache.hudi.avro.MercifulJsonConverter;
-import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.Option;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.commons.lang.NotImplementedException;
 
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
-import java.util.Properties;
-import java.util.stream.Collectors;
 
 /**
  * Test payload for S3 event here (https://docs.aws.amazon.com/AmazonS3/latest/userguide/notification-content-structure.html).
@@ -35,12 +28,12 @@ public class S3EventTestPayload extends GenericTestPayload implements HoodieReco
   }
 
   public S3EventTestPayload preCombine(S3EventTestPayload oldValue) {
-    throw new NotImplementedException("preCombine not implemented for S3EventTestPayload");
+    throw new UnsupportedOperationException("preCombine not implemented for S3EventTestPayload");
   }
 
   @Override
   public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord oldRec, Schema schema) throws IOException {
-    throw new NotImplementedException("combineAndGetUpdateValue not implemented for S3EventTestPayload");
+    throw new UnsupportedOperationException("combineAndGetUpdateValue not implemented for S3EventTestPayload");
   }
 
   @Override
