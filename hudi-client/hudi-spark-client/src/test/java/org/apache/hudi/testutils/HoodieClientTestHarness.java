@@ -346,7 +346,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
 
   protected Properties getPropertiesForKeyGen(boolean populateMetaFields) {
     Properties properties = new Properties();
-    properties.put(HoodieTableConfig.POPULATE_META_FIELDS.key(), populateMetaFields);
+    properties.put(HoodieTableConfig.POPULATE_META_FIELDS.key(), String.valueOf(populateMetaFields));
     properties.put("hoodie.datasource.write.recordkey.field", "_row_key");
     properties.put("hoodie.datasource.write.partitionpath.field", "partition_path");
     properties.put(HoodieTableConfig.RECORDKEY_FIELDS.key(), "_row_key");

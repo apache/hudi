@@ -127,11 +127,12 @@ public class HoodieTestUtils {
                                            Properties properties)
       throws IOException {
     properties = HoodieTableMetaClient.withPropertyBuilder()
-      .setTableName(RAW_TRIPS_TEST_NAME)
-      .setTableType(tableType)
-      .setPayloadClass(HoodieAvroPayload.class)
-      .fromProperties(properties)
-      .build();
+        .setTableName(RAW_TRIPS_TEST_NAME)
+        .setTableType(tableType)
+        .setPayloadClass(HoodieAvroPayload.class)
+        .setPartitionFields("some_nonexistent_field")
+        .fromProperties(properties)
+        .build();
     return HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf, basePath, properties);
   }
 
