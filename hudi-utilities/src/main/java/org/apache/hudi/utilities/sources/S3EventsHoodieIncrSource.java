@@ -204,8 +204,8 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
               } else {
                 cloudFilesPerPartition.add(decodeUrl);
               }
-            } catch (Exception exception) {
-              LOG.warn("Failed to add cloud file ", exception);
+            } catch (Throwable e) {
+              LOG.warn("Failed to add cloud file ", e);
             }
           });
           return cloudFilesPerPartition.iterator();
