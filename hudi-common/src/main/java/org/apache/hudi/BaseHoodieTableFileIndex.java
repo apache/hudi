@@ -155,7 +155,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
    * Returns table's base-path
    */
   public String getBasePath() {
-    return metaClient.getBasePath();
+    return basePath.toString();
   }
 
   /**
@@ -341,11 +341,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
 
   private List<String> getAllPartitionPathsUnchecked() {
     try {
-      if (partitionColumns.length == 0) {
-        return Collections.singletonList("");
-      }
-
-      return tableMetadata.getAllPartitionPaths();
+      return isPartitionedTable() ? tableMetadata.getAllPartitionPaths() : Collections.singletonList("");
     } catch (IOException e) {
       throw new HoodieIOException("Failed to fetch partition paths for a table", e);
     }
@@ -378,7 +374,12 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     tableMetadata = newTableMetadata;
   }
 
+  private boolean isPartitionedTable() {
+    return partitionColumns.length > 0 || HoodieTableMetadata.isMetadataTable(basePath.toString());
+  }
+
   public static final class PartitionPath {
+
     final String path;
     final Object[] values;
 
