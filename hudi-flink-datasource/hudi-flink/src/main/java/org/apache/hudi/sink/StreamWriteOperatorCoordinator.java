@@ -153,11 +153,6 @@ public class StreamWriteOperatorCoordinator
   private CkpMetadata ckpMetadata;
 
   /**
-   * Current checkpoint.
-   */
-  private long checkpointId = -1;
-
-  /**
    * Constructs a StreamingSinkOperatorCoordinator.
    *
    * @param conf    The config options
@@ -219,7 +214,6 @@ public class StreamWriteOperatorCoordinator
 
   @Override
   public void checkpointCoordinator(long checkpointId, CompletableFuture<byte[]> result) {
-    this.checkpointId = checkpointId;
     executor.execute(
         () -> {
           try {
