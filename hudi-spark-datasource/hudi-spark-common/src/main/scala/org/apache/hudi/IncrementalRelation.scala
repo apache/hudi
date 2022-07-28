@@ -72,13 +72,6 @@ class IncrementalRelation(val sqlContext: SQLContext,
       s"option ${DataSourceReadOptions.BEGIN_INSTANTTIME.key}")
   }
 
-  if (optParams.contains(DataSourceReadOptions.END_INSTANTTIME.key())) {
-    val startInstantTime = optParams(DataSourceReadOptions.BEGIN_INSTANTTIME.key)
-    val endInstantTime = optParams(DataSourceReadOptions.END_INSTANTTIME.key())
-    if (endInstantTime.compareTo(startInstantTime) < 0)
-    throw new HoodieException(s"Specify the begin instant time can not be larger than the end instant time")
-  }
-
   if (!metaClient.getTableConfig.populateMetaFields()) {
     throw new HoodieException("Incremental queries are not supported when meta fields are disabled")
   }
@@ -207,9 +200,9 @@ class IncrementalRelation(val sqlContext: SQLContext,
       val sOpts = optParams.filter(p => !p._1.equalsIgnoreCase("path"))
 
       val startInstantTime = optParams(DataSourceReadOptions.BEGIN_INSTANTTIME.key)
-      val startInstantArchived = startInstantTime.compareTo(commitTimeline.firstInstant().get().getTimestamp) < 0 // True if startInstantTime < activeTimeline.first
+      val startInstantArchived = commitTimeline.isBeforeTimelineStarts(startInstantTime)
       val endInstantTime = optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME.key(), lastInstant.getTimestamp)
-      val endInstantArchived = endInstantTime.compareTo(commitTimeline.firstInstant().get().getTimestamp) < 0
+      val endInstantArchived = commitTimeline.isBeforeTimelineStarts(endInstantTime)
 
       val scanDf = if (fallbackToFullTableScan && (startInstantArchived || endInstantArchived)) {
         log.info(s"Falling back to full table scan as startInstantArchived: $startInstantArchived, endInstantArchived: $endInstantArchived")

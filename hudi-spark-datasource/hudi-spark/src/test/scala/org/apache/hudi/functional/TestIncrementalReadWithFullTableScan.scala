@@ -21,7 +21,8 @@ import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.timeline.HoodieInstant
+import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieInstantTimeGenerator, HoodieTimeline}
+import org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.HoodieClientTestBase
@@ -40,6 +41,9 @@ class TestIncrementalReadWithFullTableScan extends HoodieClientTestBase {
 
   var spark: SparkSession = null
   private val log = LogManager.getLogger(classOf[TestIncrementalReadWithFullTableScan])
+
+  private val perBatchSize = 1
+
   val commonOpts = Map(
     "hoodie.insert.shuffle.parallelism" -> "4",
     "hoodie.upsert.shuffle.parallelism" -> "4",
@@ -74,7 +78,7 @@ class TestIncrementalReadWithFullTableScan extends HoodieClientTestBase {
   def testFailEarlyForIncrViewQueryForNonExistingFiles(tableType: HoodieTableType): Unit = {
     // Create 10 commits
     for (i <- 1 to 10) {
-      val records = recordsToStrings(dataGen.generateInserts("%05d".format(i), 100)).toList
+      val records = recordsToStrings(dataGen.generateInserts("%05d".format(i), perBatchSize)).toList
       val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
       inputDF.write.format("org.apache.hudi")
         .options(commonOpts)
@@ -100,92 +104,84 @@ class TestIncrementalReadWithFullTableScan extends HoodieClientTestBase {
      */
 
     val completedCommits = hoodieMetaClient.getCommitsTimeline.filterCompletedInstants() // C4 to C9
-    //Anything less than 2 is a valid commit in the sense no cleanup has been done for those commit files
-    var startTs = completedCommits.nthInstant(0).get().getTimestamp //C4
-    var endTs = completedCommits.nthInstant(1).get().getTimestamp //C5
+    val archivedInstants = hoodieMetaClient.getArchivedTimeline.filterCompletedInstants()
+      .getInstants.distinct().toArray // C0 to C3
 
-    //Calling without the fallback should result in Path does not exist
-    var hoodieIncViewDF = spark.read.format("org.apache.hudi")
+    //Anything less than 2 is a valid commit in the sense no cleanup has been done for those commit files
+    val startUnarchivedCommitTs = completedCommits.nthInstant(0).get().getTimestamp //C4
+    val endUnarchivedCommitTs = completedCommits.nthInstant(1).get().getTimestamp //C5
+
+    val startArchivedCommitTs = archivedInstants(0).asInstanceOf[HoodieInstant].getTimestamp //C0
+    val endArchivedCommitTs = archivedInstants(1).asInstanceOf[HoodieInstant].getTimestamp //C1
+
+    val startOutOfRangeCommitTs = HoodieInstantTimeGenerator.createNewInstantTime(System.currentTimeMillis() + 1000L)
+    val endOutOfRangeCommitTs = HoodieInstantTimeGenerator.createNewInstantTime(System.currentTimeMillis() + 10000L)
+
+    assertTrue(HoodieTimeline.compareTimestamps(startOutOfRangeCommitTs, GREATER_THAN, completedCommits.lastInstant().get().getTimestamp))
+    assertTrue(HoodieTimeline.compareTimestamps(endOutOfRangeCommitTs, GREATER_THAN, completedCommits.lastInstant().get().getTimestamp))
+
+    // Test both start and end commits are archived
+    runIncrementalQueryAndCompare(startArchivedCommitTs, endArchivedCommitTs, 1, true)
+
+    // Test start commit is archived, end commit is not archived
+    shouldThrowIfFallbackIsFalse(tableType,
+      () => runIncrementalQueryAndCompare(startArchivedCommitTs, endUnarchivedCommitTs, 5, false))
+    runIncrementalQueryAndCompare(startArchivedCommitTs, endUnarchivedCommitTs, 5, true)
+
+    // Test both start commit and end commits are not archived but got cleaned
+    shouldThrowIfFallbackIsFalse(tableType,
+      () => runIncrementalQueryAndCompare(startUnarchivedCommitTs, endUnarchivedCommitTs, 1, false))
+    runIncrementalQueryAndCompare(startUnarchivedCommitTs, endUnarchivedCommitTs, 1, true)
+
+    // Test start commit is not archived, end commits is out of the timeline
+    runIncrementalQueryAndCompare(startUnarchivedCommitTs, endOutOfRangeCommitTs, 5, true)
+
+    // Test both start commit and end commits are out of the timeline
+    runIncrementalQueryAndCompare(startOutOfRangeCommitTs, endOutOfRangeCommitTs, 0, false)
+    runIncrementalQueryAndCompare(startOutOfRangeCommitTs, endOutOfRangeCommitTs, 0, true)
+
+    // Test end commit is smaller than the start commit
+    runIncrementalQueryAndCompare(endUnarchivedCommitTs, startUnarchivedCommitTs, 0, false)
+    runIncrementalQueryAndCompare(endUnarchivedCommitTs, startUnarchivedCommitTs, 0, true)
+
+    // Test both start commit and end commits is not archived and not cleaned
+    val reversedCommits = completedCommits.getReverseOrderedInstants.toArray
+    val startUncleanedCommitTs = reversedCommits.apply(1).asInstanceOf[HoodieInstant].getTimestamp
+    val endUncleanedCommitTs = reversedCommits.apply(0).asInstanceOf[HoodieInstant].getTimestamp
+    runIncrementalQueryAndCompare(startUncleanedCommitTs, endUncleanedCommitTs, 1, true)
+    runIncrementalQueryAndCompare(startUncleanedCommitTs, endUncleanedCommitTs, 1, false)
+  }
+
+  private def runIncrementalQueryAndCompare(
+      startTs: String,
+      endTs: String,
+      batchNum: Int,
+      fallBackFullTableScan: Boolean): Unit = {
+    val hoodieIncViewDF = spark.read.format("org.apache.hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
       .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key(), startTs)
       .option(DataSourceReadOptions.END_INSTANTTIME.key(), endTs)
+      .option(DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES.key(), fallBackFullTableScan)
       .load(basePath)
+    assertEquals(perBatchSize * batchNum, hoodieIncViewDF.count())
+  }
 
+  private def shouldThrowIfFallbackIsFalse(tableType: HoodieTableType, fn: () => Unit): Unit = {
     val msg = "Should fail with Path does not exist"
     tableType match {
       case HoodieTableType.COPY_ON_WRITE =>
         assertThrows(classOf[AnalysisException], new Executable {
           override def execute(): Unit = {
-            hoodieIncViewDF.count()
+            fn()
           }
         }, msg)
       case HoodieTableType.MERGE_ON_READ =>
         val exp = assertThrows(classOf[SparkException], new Executable {
           override def execute(): Unit = {
-            hoodieIncViewDF.count()
+            fn()
           }
         }, msg)
         assertTrue(exp.getMessage.contains("FileNotFoundException"))
     }
-
-
-    //Should work with fallback enabled
-    hoodieIncViewDF = spark.read.format("org.apache.hudi")
-      .option(DataSourceReadOptions.QUERY_TYPE.key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key(), startTs)
-      .option(DataSourceReadOptions.END_INSTANTTIME.key(), endTs)
-      .option(DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES.key(), "true")
-      .load(basePath)
-    assertEquals(100, hoodieIncViewDF.count())
-
-    //Test out for archived commits
-    val archivedInstants = hoodieMetaClient.getArchivedTimeline.filterCompletedInstants().getInstants.distinct().toArray
-    startTs = archivedInstants(0).asInstanceOf[HoodieInstant].getTimestamp //C0
-    endTs = completedCommits.nthInstant(1).get().getTimestamp //C5
-
-    //Calling without the fallback should result in Path does not exist
-    hoodieIncViewDF = spark.read.format("org.apache.hudi")
-      .option(DataSourceReadOptions.QUERY_TYPE.key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key(), startTs)
-      .option(DataSourceReadOptions.END_INSTANTTIME.key(), endTs)
-      .load(basePath)
-
-    tableType match {
-      case HoodieTableType.COPY_ON_WRITE =>
-        assertThrows(classOf[AnalysisException], new Executable {
-          override def execute(): Unit = {
-            hoodieIncViewDF.count()
-          }
-        }, msg)
-      case HoodieTableType.MERGE_ON_READ =>
-        val exp = assertThrows(classOf[SparkException], new Executable {
-          override def execute(): Unit = {
-            hoodieIncViewDF.count()
-          }
-        }, msg)
-        assertTrue(exp.getMessage.contains("FileNotFoundException"))
-    }
-
-    //Should work with fallback enabled
-    hoodieIncViewDF = spark.read.format("org.apache.hudi")
-      .option(DataSourceReadOptions.QUERY_TYPE.key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key(), startTs)
-      .option(DataSourceReadOptions.END_INSTANTTIME.key(), endTs)
-      .option(DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES.key(), "true")
-      .load(basePath)
-    assertEquals(500, hoodieIncViewDF.count())
-
-    // Test both start and end commits are archived
-    startTs = archivedInstants(0).asInstanceOf[HoodieInstant].getTimestamp //C0
-    endTs = archivedInstants(1).asInstanceOf[HoodieInstant].getTimestamp //C1
-
-    hoodieIncViewDF = spark.read.format("org.apache.hudi")
-      .option(DataSourceReadOptions.QUERY_TYPE.key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key(), startTs)
-      .option(DataSourceReadOptions.END_INSTANTTIME.key(), endTs)
-      .option(DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES.key(), "true")
-      .load(basePath)
-
-    assertEquals(100, hoodieIncViewDF.count())
   }
 }

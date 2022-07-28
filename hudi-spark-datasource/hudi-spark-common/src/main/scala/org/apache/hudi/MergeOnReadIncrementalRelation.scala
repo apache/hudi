@@ -131,8 +131,8 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
   protected def startTimestamp: String = optParams(DataSourceReadOptions.BEGIN_INSTANTTIME.key)
   protected def endTimestamp: String = optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME.key, super.timeline.lastInstant().get.getTimestamp)
 
-  protected def startOutOfRange: Boolean = super.timeline.isBeforeTimelineStarts(startTimestamp)
-  protected def endOutOfRange: Boolean = super.timeline.isBeforeTimelineStarts(endTimestamp)
+  protected def startInstantArchived: Boolean = super.timeline.isBeforeTimelineStarts(startTimestamp)
+  protected def endInstantArchived: Boolean = super.timeline.isBeforeTimelineStarts(endTimestamp)
 
   // Fallback to full table scan if any of the following conditions matches:
   //   1. the start commit is archived
@@ -142,11 +142,11 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
     val fallbackToFullTableScan = optParams.getOrElse(DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES.key,
       DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES.defaultValue).toBoolean
 
-    fallbackToFullTableScan && (startOutOfRange || endOutOfRange || affectedFilesInCommits.exists(fileStatus => !metaClient.getFs.exists(fileStatus.getPath)))
+    fallbackToFullTableScan && (startInstantArchived || endInstantArchived || affectedFilesInCommits.exists(fileStatus => !metaClient.getFs.exists(fileStatus.getPath)))
   }
 
   protected lazy val includedCommits: immutable.Seq[HoodieInstant] = {
-    if (!endOutOfRange) {
+    if (!endInstantArchived) {
       // If endTimestamp commit is not archived, will filter instants
       // before endTimestamp.
       super.timeline.findInstantsInRange(startTimestamp, endTimestamp).getInstants.iterator().asScala.toList
@@ -169,7 +169,7 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
     val largerThanFilter = GreaterThan(HoodieRecord.COMMIT_TIME_METADATA_FIELD, startTimestamp)
 
     val lessThanFilter = LessThanOrEqual(HoodieRecord.COMMIT_TIME_METADATA_FIELD,
-      if (endOutOfRange) endTimestamp else includedCommits.last.getTimestamp)
+      if (endInstantArchived) endTimestamp else includedCommits.last.getTimestamp)
 
     Seq(isNotNullFilter, largerThanFilter, lessThanFilter)
   }
@@ -189,10 +189,6 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
     if (!this.optParams.contains(DataSourceReadOptions.BEGIN_INSTANTTIME.key)) {
       throw new HoodieException(s"Specify the begin instant time to pull from using " +
         s"option ${DataSourceReadOptions.BEGIN_INSTANTTIME.key}")
-    }
-
-    if (this.optParams.contains(DataSourceReadOptions.END_INSTANTTIME.key()) && endTimestamp.compareTo(startTimestamp) < 0) {
-      throw new HoodieException(s"Specify the begin instant time can not be larger than the end instant time")
     }
 
     if (!this.tableConfig.populateMetaFields()) {
