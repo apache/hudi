@@ -92,6 +92,8 @@ public class FileSystemBackedTableMetadata implements HoodieTableMetadata {
       // if current dictionary contains PartitionMetadata, add it to result
       // if current dictionary does not contain PartitionMetadata, add it to queue to be processed.
       int fileListingParallelism = Math.min(DEFAULT_LISTING_PARALLELISM, dirToFileListing.size());
+      // result below holds a list of pair. first entry in the pair optionally holds the deduced list of partitions.
+      // and second entry holds optionally a directory path to be processed further. 
       List<Pair<Option<String>, Option<Path>>> result = engineContext.map(dirToFileListing, fileStatus -> {
         FileSystem fileSystem = fileStatus.getPath().getFileSystem(hadoopConf.get());
         if (fileStatus.isDirectory()) {
