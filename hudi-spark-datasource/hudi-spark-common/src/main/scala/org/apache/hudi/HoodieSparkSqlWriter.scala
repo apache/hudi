@@ -245,14 +245,14 @@ object HoodieSparkSqlWriter {
             val sourceSchema = AvroConversionUtils.convertStructTypeToAvroSchema(df.schema, structName, nameSpace)
             val latestTableSchema = getLatestTableSchema(fs, basePath, sparkContext).getOrElse(sourceSchema)
 
-            val enabledSchemaEvolution = parameters.getOrDefault(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.key(), "false").toBoolean
+            val schemaEvolutionEnabled = parameters.getOrDefault(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.key(), "false").toBoolean
             var internalSchemaOpt = getLatestTableInternalSchema(fs, basePath, sparkContext)
 
             val writerSchema: Schema =
               if (reconcileSchema) {
                 // In case we need to reconcile the schema and schema evolution is enabled,
                 // we will force-apply schema evolution to the writer's schema
-                if (enabledSchemaEvolution && internalSchemaOpt.isEmpty) {
+                if (schemaEvolutionEnabled && internalSchemaOpt.isEmpty) {
                   internalSchemaOpt = Some(AvroInternalSchemaConverter.convert(sourceSchema))
                 }
 
@@ -304,10 +304,10 @@ object HoodieSparkSqlWriter {
               hoodieRecord
             }).toJavaRDD()
 
-            val writeSchema = if (dropPartitionColumns) generateSchemaWithoutPartitionColumns(partitionColumns, writerSchema) else writerSchema
+            val writerDataSchema = if (dropPartitionColumns) generateSchemaWithoutPartitionColumns(partitionColumns, writerSchema) else writerSchema
             // Create a HoodieWriteClient & issue the write.
 
-            val client = hoodieWriteClient.getOrElse(DataSourceUtils.createHoodieClient(jsc, writeSchema.toString, path,
+            val client = hoodieWriteClient.getOrElse(DataSourceUtils.createHoodieClient(jsc, writerDataSchema.toString, path,
               tblName, mapAsJavaMap(addSchemaEvolutionParameters(parameters, internalSchemaOpt) - HoodieWriteConfig.AUTO_COMMIT_ENABLE.key)
             )).asInstanceOf[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]]
 
