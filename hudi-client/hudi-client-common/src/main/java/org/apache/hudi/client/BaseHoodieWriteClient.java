@@ -1120,21 +1120,26 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
       HoodieRollbackPlan rollbackPlan;
       try {
         rollbackPlan = RollbackUtils.getRollbackPlan(metaClient, rollbackInstant);
-      } catch (Exception e) {
-        if (rollbackInstant.isRequested()) {
-          LOG.warn("Fetching rollback plan failed for " + rollbackInstant + ", deleting the plan since it's in REQUESTED state", e);
-          try {
-            metaClient.getActiveTimeline().deletePending(rollbackInstant);
-          } catch (HoodieIOException he) {
-            LOG.warn("Cannot delete " + rollbackInstant, he);
-            continue;
+      } catch (IOException ioe) {
+        if (ioe.getMessage().contains("Not an Avro data file")) {
+          // if commit meta file is corrupted, delete the plan if in requested state.
+          if (rollbackInstant.isRequested()) {
+            LOG.warn("Fetching rollback plan failed for " + rollbackInstant + ", deleting the plan since it's in REQUESTED state", ioe);
+            try {
+              metaClient.getActiveTimeline().deletePending(rollbackInstant);
+            } catch (HoodieIOException he) {
+              LOG.warn("Cannot delete " + rollbackInstant, he);
+              continue;
+            }
+          } else {
+            // Here we assume that if the rollback is inflight, the rollback plan is intact
+            // in instant.rollback.requested.
+            LOG.warn("Fetching rollback plan failed for " + rollbackInstant + ", skip the plan", ioe);
           }
-        } else {
-          // Here we assume that if the rollback is inflight, the rollback plan is intact
-          // in instant.rollback.requested.  The exception here can be due to other reasons.
-          LOG.warn("Fetching rollback plan failed for " + rollbackInstant + ", skip the plan", e);
+          continue;
         }
-        continue;
+        // for any other exception, fail fast.
+        throw new HoodieException("Failed to parse rollback plan for " + rollbackInstant.toString());
       }
 
       try {
