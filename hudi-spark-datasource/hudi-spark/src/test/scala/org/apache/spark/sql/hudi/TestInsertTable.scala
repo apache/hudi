@@ -93,6 +93,14 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            | insert into $tableName partition(dt = '2021-01-06')
            | select 20 as price, 2000 as ts, 2 as id, 'a2' as name
               """.stripMargin)
+      // should not mess with the original order after write the out-of-order data.
+      val metaClient = HoodieTableMetaClient.builder()
+        .setBasePath(tmp.getCanonicalPath)
+        .setConf(spark.sessionState.newHadoopConf())
+        .build()
+      val schema = HoodieSqlCommonUtils.getTableSqlSchema(metaClient).get
+      assert(schema.getFieldIndex("id").contains(0))
+      assert(schema.getFieldIndex("price").contains(2))
 
       // Note: Do not write the field alias, the partition field must be placed last.
       spark.sql(
@@ -133,6 +141,14 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            | insert into $tableName partition(dt)
            | select 1 as id, '2021-01-05' as dt, 'a1' as name, 10 as price, 1000 as ts
         """.stripMargin)
+      // should not mess with the original order after write the out-of-order data.
+      val metaClient = HoodieTableMetaClient.builder()
+        .setBasePath(tmp.getCanonicalPath)
+        .setConf(spark.sessionState.newHadoopConf())
+        .build()
+      val schema = HoodieSqlCommonUtils.getTableSqlSchema(metaClient).get
+      assert(schema.getFieldIndex("id").contains(0))
+      assert(schema.getFieldIndex("price").contains(2))
 
       spark.sql(
         s"""
