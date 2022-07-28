@@ -42,7 +42,7 @@ class TestIncrementalReadWithFullTableScan extends HoodieClientTestBase {
   var spark: SparkSession = null
   private val log = LogManager.getLogger(classOf[TestIncrementalReadWithFullTableScan])
 
-  private val perBatchSize = 1
+  private val perBatchSize = 100
 
   val commonOpts = Map(
     "hoodie.insert.shuffle.parallelism" -> "4",
@@ -114,8 +114,8 @@ class TestIncrementalReadWithFullTableScan extends HoodieClientTestBase {
     val startArchivedCommitTs = archivedInstants(0).asInstanceOf[HoodieInstant].getTimestamp //C0
     val endArchivedCommitTs = archivedInstants(1).asInstanceOf[HoodieInstant].getTimestamp //C1
 
-    val startOutOfRangeCommitTs = HoodieInstantTimeGenerator.createNewInstantTime(System.currentTimeMillis() + 1000L)
-    val endOutOfRangeCommitTs = HoodieInstantTimeGenerator.createNewInstantTime(System.currentTimeMillis() + 10000L)
+    val startOutOfRangeCommitTs = HoodieInstantTimeGenerator.createNewInstantTime(0)
+    val endOutOfRangeCommitTs = HoodieInstantTimeGenerator.createNewInstantTime(0)
 
     assertTrue(HoodieTimeline.compareTimestamps(startOutOfRangeCommitTs, GREATER_THAN, completedCommits.lastInstant().get().getTimestamp))
     assertTrue(HoodieTimeline.compareTimestamps(endOutOfRangeCommitTs, GREATER_THAN, completedCommits.lastInstant().get().getTimestamp))
