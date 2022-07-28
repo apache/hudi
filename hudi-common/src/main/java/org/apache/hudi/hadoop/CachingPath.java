@@ -110,7 +110,11 @@ public class CachingPath extends Path {
   }
 
   /**
-   * TODO elaborate
+   * Creates path based on the provided *relative* path
+   *
+   * NOTE: This is an unsafe version that is relying on the fact that the caller is aware
+   *       what they are doing this is not going to work with paths having scheme (which require
+   *       parsing) and is only meant to work w/ relative paths in a few specific cases.
    */
   public static CachingPath createPathUnsafe(String relativePath) {
     try {
@@ -124,7 +128,8 @@ public class CachingPath extends Path {
   }
 
   /**
-   * TODO elaborate
+   * This is {@link Path#getPathWithoutSchemeAndAuthority(Path)} counterpart, instantiating
+   * {@link CachingPath}
    */
   public static Path getPathWithoutSchemeAndAuthority(Path path) {
     // This code depends on Path.toString() to remove the leading slash before

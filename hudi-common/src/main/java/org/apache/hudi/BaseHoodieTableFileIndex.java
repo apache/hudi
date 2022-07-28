@@ -67,13 +67,12 @@ import static org.apache.hudi.hadoop.CachingPath.createPathUnsafe;
  *   <li>Query instant/range</li>
  * </ul>
  */
-public abstract class   BaseHoodieTableFileIndex implements AutoCloseable {
+public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
 
   private static final Logger LOG = LogManager.getLogger(BaseHoodieTableFileIndex.class);
 
   private final String[] partitionColumns;
 
-  private final FileSystemViewStorageConfig fileSystemStorageConfig;
   protected final HoodieMetadataConfig metadataConfig;
 
   private final HoodieTableQueryType queryType;
@@ -123,9 +122,6 @@ public abstract class   BaseHoodieTableFileIndex implements AutoCloseable {
     this.partitionColumns = metaClient.getTableConfig().getPartitionFields()
         .orElse(new String[0]);
 
-    this.fileSystemStorageConfig = FileSystemViewStorageConfig.newBuilder()
-        .fromProperties(configProperties)
-        .build();
     this.metadataConfig = HoodieMetadataConfig.newBuilder()
         .fromProperties(configProperties)
         .build();
