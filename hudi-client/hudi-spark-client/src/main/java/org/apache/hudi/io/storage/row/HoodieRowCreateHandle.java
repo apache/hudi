@@ -160,8 +160,8 @@ public class HoodieRowCreateHandle implements Serializable {
 
       InternalRow updatedRow;
       if (preserveMetadata) {
-        updatedRow = new HoodieInternalRow(row.getUTF8String(HoodieRecord.COMMIT_TIME_METADATA_FIELD_POS),
-            row.getUTF8String(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD_POS),
+        updatedRow = new HoodieInternalRow(row.getUTF8String(HoodieRecord.COMMIT_TIME_METADATA_FIELD_ORD),
+            row.getUTF8String(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD_ORD),
             recordKey,
             partitionPath,
             fileName, row, true);
