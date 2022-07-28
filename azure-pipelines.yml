@@ -27,8 +27,8 @@ parameters:
     default:
       - 'hudi-common'
       - 'hudi-flink-datasource/hudi-flink'
-      - 'hudi-flink-datasource/hudi-flink1.13.x'
-      - 'hudi-flink-datasource/hudi-flink1.14.x'
+      - 'hudi-flink-datasource/hudi-flink1.13'
+      - 'hudi-flink-datasource/hudi-flink1.14'
   - name: job2Modules
     type: object
     default:
@@ -62,8 +62,8 @@ parameters:
       - '!hudi-examples/hudi-examples-spark'
       - '!hudi-flink-datasource'
       - '!hudi-flink-datasource/hudi-flink'
-      - '!hudi-flink-datasource/hudi-flink1.13.x'
-      - '!hudi-flink-datasource/hudi-flink1.14.x'
+      - '!hudi-flink-datasource/hudi-flink1.13'
+      - '!hudi-flink-datasource/hudi-flink1.14'
       - '!hudi-sync'
       - '!hudi-sync/hudi-adb-sync'
       - '!hudi-sync/hudi-datahub-sync'
