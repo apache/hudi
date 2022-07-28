@@ -37,8 +37,7 @@ case class DeleteHoodieTableCommand(deleteTable: DeleteFromTable) extends Hoodie
 
     // Remove meta fields from the data frame
     var df = removeMetaFields(Dataset.ofRows(sparkSession, table))
-    // SPARK-38626 DeleteFromTable.condition is changed from Option[Expression] to Expression in Spark 3.3
-    val condition = sparkAdapter.extractCondition(deleteTable)
+    val condition = sparkAdapter.extractDeleteCondition(deleteTable)
     if (condition != null) df = df.filter(Column(condition))
 
     val hoodieCatalogTable = HoodieCatalogTable(sparkSession, tableId)

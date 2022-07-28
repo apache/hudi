@@ -69,7 +69,7 @@ class Spark3_3Adapter extends BaseSpark3Adapter {
     DeleteFromTable(deleteFromTableCommand.table, resolveExpression(deleteFromTableCommand.condition))
   }
 
-  override def extractCondition(deleteFromTable: Command): Expression = {
+  override def extractDeleteCondition(deleteFromTable: Command): Expression = {
     deleteFromTable.asInstanceOf[DeleteFromTable].condition
   }
 
