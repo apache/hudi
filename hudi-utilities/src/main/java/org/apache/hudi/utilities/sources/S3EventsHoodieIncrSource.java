@@ -186,8 +186,8 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
         .distinct()
         .rdd().toJavaRDD().mapPartitions(fileListIterator -> {
           List<String> cloudFilesPerPartition = new ArrayList<>();
+          final Configuration configuration = serializableConfiguration.newCopy();
           fileListIterator.forEachRemaining(row -> {
-            final Configuration configuration = serializableConfiguration.newCopy();
             String bucket = row.getString(0);
             String filePath = s3Prefix + bucket + "/" + row.getString(1);
             try {
