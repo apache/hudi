@@ -163,7 +163,7 @@
     <scala12.version>2.12.10</scala12.version>
     <scala.version>${scala11.version}</scala.version>
     <scala.collection-compat.version>2.8.1</scala.collection-compat.version>
-    <scala.binary.version>2.11</scala.binary.version>
+    <scala.binary.version>2.12</scala.binary.version>
     <apache-rat-plugin.version>0.13</apache-rat-plugin.version>
     <scala-maven-plugin.version>3.3.1</scala-maven-plugin.version>
     <scalatest.version>3.0.1</scalatest.version>
@@ -828,6 +828,15 @@
             <artifactId>log4j</artifactId>
           </exclusion>
         </exclusions>
+      </dependency>
+
+      <!-- Orc -->
+      <dependency>
+        <groupId>org.apache.orc</groupId>
+        <artifactId>orc-core</artifactId>
+        <version>${orc.version}</version>
+        <scope>provided</scope>
+        <classifier>nohive</classifier>
       </dependency>
 
       <!-- Spark -->
@@ -2109,6 +2118,9 @@
         <hudi.spark.common.modules.1>hudi-spark3-common</hudi.spark.common.modules.1>
         <scalatest.version>${scalatest.spark3.version}</scalatest.version>
         <kafka.version>${kafka.spark3.version}</kafka.version>
+        <parquet.version>1.10.1</parquet.version>
+        <avro.version>1.8.2</avro.version>
+        <orc.version>1.5.13</orc.version>
         <antlr.version>4.8-1</antlr.version>
         <fasterxml.version>${fasterxml.spark3.version}</fasterxml.version>
         <fasterxml.jackson.databind.version>${fasterxml.spark3.version}</fasterxml.jackson.databind.version>

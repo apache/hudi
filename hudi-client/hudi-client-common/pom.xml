@@ -65,6 +65,13 @@
       <artifactId>parquet-avro</artifactId>
     </dependency>
 
+    <!-- Orc -->
+    <dependency>
+      <groupId>org.apache.orc</groupId>
+      <artifactId>orc-core</artifactId>
+      <classifier>nohive</classifier>
+    </dependency>
+
     <!-- Hilbert Curve -->
     <dependency>
       <groupId>com.github.davidmoten</groupId>
