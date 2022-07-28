@@ -18,8 +18,9 @@
 
 package org.apache.hudi.keygen;
 
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.common.config.TypedProperties;
+
+import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.types.StructType;
@@ -27,8 +28,6 @@ import org.apache.spark.unsafe.types.UTF8String;
 
 import java.util.Collections;
 import java.util.List;
-
-import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 
 /**
  * Simple Key generator for non-partitioned Hive Tables.
@@ -57,7 +56,7 @@ public class NonpartitionedKeyGenerator extends BuiltinKeyGenerator {
   @Override
   public String getRecordKey(Row row) {
     if (recordKeyFields.isEmpty()) {
-      return EMPTY_STRING;
+      return emptyKey();
     }
     tryInitRowAccessor(row.schema());
     return combineRecordKey(rowAccessor.getRecordKeyParts(row));
@@ -65,6 +64,9 @@ public class NonpartitionedKeyGenerator extends BuiltinKeyGenerator {
 
   @Override
   public UTF8String getRecordKey(InternalRow internalRow, StructType schema) {
+    if (recordKeyFields.isEmpty()) {
+      return emptyKeyForInternalRow();
+    }
     tryInitRowAccessor(schema);
     return combineRecordKeyUnsafe(rowAccessor.getRecordKeyParts(internalRow));
   }

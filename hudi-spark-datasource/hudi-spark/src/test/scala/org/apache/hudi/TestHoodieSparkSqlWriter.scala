@@ -286,13 +286,13 @@ class TestHoodieSparkSqlWriter {
   def testValidateTableConfigWithOverwriteSaveMode(): Unit = {
     //create a new table
     val tableModifier1 = Map("path" -> tempBasePath, HoodieWriteConfig.TBL_NAME.key -> hoodieFooTableName,
-      "hoodie.datasource.write.recordkey.field" -> "uuid")
+      "hoodie.datasource.write.recordkey.field" -> "uuid", "hoodie.datasource.write.precombine.field" -> "ts")
     val dataFrame = spark.createDataFrame(Seq(StringLongTest(UUID.randomUUID().toString, new Date().getTime)))
     HoodieSparkSqlWriter.write(sqlContext, SaveMode.Overwrite, tableModifier1, dataFrame)
 
     //on same path try write with different RECORDKEY_FIELD_NAME and Append SaveMode should throw an exception
     val tableModifier2 = Map("path" -> tempBasePath, HoodieWriteConfig.TBL_NAME.key -> hoodieFooTableName,
-      "hoodie.datasource.write.recordkey.field" -> "ts")
+      "hoodie.datasource.write.recordkey.field" -> "ts", "hoodie.datasource.write.precombine.field" -> "ts")
     val dataFrame2 = spark.createDataFrame(Seq(StringLongTest(UUID.randomUUID().toString, new Date().getTime)))
     val hoodieException = intercept[HoodieException](HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, tableModifier2, dataFrame2))
     assert(hoodieException.getMessage.contains("Config conflict"))
@@ -628,6 +628,7 @@ class TestHoodieSparkSqlWriter {
     //create a new table
     val fooTableModifier = getCommonParams(tempPath, hoodieFooTableName, tableType)
       .updated(DataSourceWriteOptions.RECONCILE_SCHEMA.key, "true")
+      .updated(DataSourceWriteOptions.PRECOMBINE_FIELD.key, "ts")
 
     // generate the inserts
     val schema = DataSourceTestUtils.getStructTypeExampleSchema
@@ -763,6 +764,7 @@ class TestHoodieSparkSqlWriter {
   @ValueSource(booleans = Array(true, false))
   def testDeletePartitionsV2(usePartitionsToDeleteConfig: Boolean): Unit = {
     val fooTableModifier = getCommonParams(tempPath, hoodieFooTableName, HoodieTableType.COPY_ON_WRITE.name())
+      .updated(DataSourceWriteOptions.PRECOMBINE_FIELD.key, "ts")
     val schema = DataSourceTestUtils.getStructTypeExampleSchema
     val structType = AvroConversionUtils.convertAvroSchemaToStructType(schema)
     val records = DataSourceTestUtils.generateRandomRows(10)
@@ -1100,46 +1102,6 @@ class TestHoodieSparkSqlWriter {
     val df2 = Seq((2, "a2", 20, 1000, "2021-10-16")).toDF("id", "name", "value", "ts", "dt")
     df2.write.format("hudi")
       .option(HoodieWriteConfig.TBL_NAME.key, tableName)
-      .mode(SaveMode.Append).save(tempBasePath)
-
-    val snapshotDF2 = spark.read.format("org.apache.hudi")
-      .load(tempBasePath)
-    assertEquals(6, snapshotDF2.count())
-    assertEquals(2, snapshotDF2.where("id=2").count())
-  }
-
-  @Test
-  def testSimpleWritesPartitioned(): Unit = {
-    val _spark = spark
-    import _spark.implicits._
-    val df = Seq(
-      (1, "a1", 10, 1000, "2021-10-16"),
-      (2, "a2", 11, 1001, "2021-10-16"),
-      (3, "a1", 12, 1002, "2021-10-17"),
-      (4, "a2", 13, 1003, "2021-10-17"),
-      (5, "a2", 14, 1004, "2021-10-17")
-    ).toDF("id", "name", "value", "ts", "dt")
-
-    val tableName = "hudi_simple_table"
-    df.write.format("hudi")
-      .option(HoodieWriteConfig.TBL_NAME.key, tableName)
-      .partitionBy("dt")
-      .mode(SaveMode.Overwrite).save(tempBasePath)
-
-    val tableConfig = HoodieTableMetaClient.builder()
-      .setConf(spark.sparkContext.hadoopConfiguration)
-      .setBasePath(tempBasePath).build().getTableConfig
-    assertFalse(tableConfig.populateMetaFields)
-    assertTrue(tableConfig.isAppendOnlyTable)
-
-    val snapshotDF1 = spark.read.format("org.apache.hudi")
-      .load(tempBasePath)
-    assertEquals(5, snapshotDF1.count())
-
-    val df2 = Seq((2, "a2", 20, 1000, "2021-10-16")).toDF("id", "name", "value", "ts", "dt")
-    df2.write.format("hudi")
-      .option(HoodieWriteConfig.TBL_NAME.key, tableName)
-      .partitionBy("dt")
       .mode(SaveMode.Append).save(tempBasePath)
 
     val snapshotDF2 = spark.read.format("org.apache.hudi")

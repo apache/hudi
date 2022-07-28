@@ -24,8 +24,6 @@ import org.apache.avro.generic.GenericRecord;
 
 import java.util.Collections;
 
-import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
-
 /**
  * Avro simple key generator, which takes names of fields to be used for recordKey and partitionPath as configs.
  */
@@ -51,7 +49,7 @@ public class SimpleAvroKeyGenerator extends BaseKeyGenerator {
   @Override
   public String getRecordKey(GenericRecord record) {
     if (recordKeyFields.isEmpty()) {
-      return EMPTY_STRING;
+      return emptyKey();
     }
     return KeyGenUtils.getRecordKey(record, getRecordKeyFieldNames().get(0), isConsistentLogicalTimestampEnabled());
   }

@@ -24,8 +24,6 @@ import org.apache.avro.generic.GenericRecord;
 import java.util.ArrayList;
 import java.util.List;
 
-import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
-
 /**
  * Avro simple Key generator for unpartitioned Hive Tables.
  */
@@ -53,7 +51,7 @@ public class NonpartitionedAvroKeyGenerator extends BaseKeyGenerator {
   @Override
   public String getRecordKey(GenericRecord record) {
     if (getRecordKeyFieldNames().isEmpty()) {
-      return EMPTY_STRING;
+      return emptyKey();
     }
     // for backward compatibility, we need to use the right format according to the number of record key fields
     // 1. if there is only one record key field, the format of record key is just "<value>"

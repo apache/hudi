@@ -304,7 +304,8 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
 
   @Test
   public void testNoPropsSet() {
-    HoodieWriteConfig config = getConfigBuilder(schemaStr).build();
+    // need to set keygen as we are calling HoodieDatasetBulkInsertHelper.prepareForBulkInsert directly
+    HoodieWriteConfig config = getConfigBuilder(schemaStr).withKeyGenerator(NonpartitionedKeyGenerator.class.getName()).build();
     List<Row> rows = DataSourceTestUtils.generateRandomRows(10);
     Dataset<Row> dataset = sqlContext.createDataFrame(rows, structType);
 
@@ -317,7 +318,9 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
     for (Map.Entry<String, Integer> entry : HoodieRecord.HOODIE_META_COLUMNS_NAME_TO_POS.entrySet()) {
       assertEquals(resultSchema.fieldIndex(entry.getKey()), entry.getValue());
     }
-
+    Dataset<Row> trimmedOutput = result.drop(HoodieRecord.PARTITION_PATH_METADATA_FIELD).drop(HoodieRecord.RECORD_KEY_METADATA_FIELD)
+        .drop(HoodieRecord.FILENAME_METADATA_FIELD).drop(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD).drop(HoodieRecord.COMMIT_TIME_METADATA_FIELD);
+    assertEquals(dataset.schema(), trimmedOutput.schema());
     int metadataRecordKeyIndex = resultSchema.fieldIndex(HoodieRecord.RECORD_KEY_METADATA_FIELD);
     int metadataPartitionPathIndex = resultSchema.fieldIndex(HoodieRecord.PARTITION_PATH_METADATA_FIELD);
 
@@ -326,7 +329,7 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
       assertEquals("", entry.get(metadataPartitionPathIndex));
     });
 
-    config = getConfigBuilder(schemaStr).withProps(getProps(false, false, true, true)).build();
+    config = getConfigBuilder(schemaStr).withProps(getProps(false, true, true, true)).build();
     rows = DataSourceTestUtils.generateRandomRows(10);
     dataset = sqlContext.createDataFrame(rows, structType);
 

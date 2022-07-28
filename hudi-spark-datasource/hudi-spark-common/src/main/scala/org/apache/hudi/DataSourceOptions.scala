@@ -791,7 +791,7 @@ object DataSourceOptionsHelper {
     if (partitionFields != null) {
       val numPartFields = partitionFields.split(",").length
       val numRecordKeyFields =
-        if(props.contains(DataSourceWriteOptions.RECORDKEY_FIELD.key)) props.getString(DataSourceWriteOptions.RECORDKEY_FIELD.key).split(",").length
+        if (props.contains(DataSourceWriteOptions.RECORDKEY_FIELD.key)) props.getString(DataSourceWriteOptions.RECORDKEY_FIELD.key).split(",").length
         else 0
       if (numPartFields == 1 && numRecordKeyFields <= 1) {
         classOf[SimpleKeyGenerator].getName

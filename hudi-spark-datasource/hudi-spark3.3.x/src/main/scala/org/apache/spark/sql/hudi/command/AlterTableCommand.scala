@@ -335,7 +335,6 @@ object AlterTableCommand extends Logging {
   def parametersWithWriteDefaults(parameters: Map[String, String]): Map[String, String] = {
     Map(OPERATION.key -> OPERATION.defaultValue,
       TABLE_TYPE.key -> TABLE_TYPE.defaultValue,
-      PRECOMBINE_FIELD.key -> PRECOMBINE_FIELD.defaultValue,
       HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key -> HoodieWriteConfig.DEFAULT_WRITE_PAYLOAD_CLASS,
       INSERT_DROP_DUPS.key -> INSERT_DROP_DUPS.defaultValue,
       ASYNC_COMPACT_ENABLE.key -> ASYNC_COMPACT_ENABLE.defaultValue,

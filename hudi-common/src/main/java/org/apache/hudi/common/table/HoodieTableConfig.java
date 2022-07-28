@@ -235,12 +235,13 @@ public class HoodieTableConfig extends HoodieConfig {
       .withDocumentation("Comma-separated list of metadata partitions that have been completely built and in-sync with data table. "
           + "These partitions are ready for use by the readers");
 
-  public static final ConfigProperty<Boolean> APPEND_ONLY_TABLE = ConfigProperty
-      .key("hoodie.table.append.only")
-      .defaultValue(false)
+  public static final ConfigProperty<HoodieTableWorkloadType> TABLE_WORKLOAD_TYPE = ConfigProperty
+      .key("hoodie.table.workload.type")
+      .defaultValue(HoodieTableWorkloadType.MUTABLE)
       .sinceVersion("0.12.0")
-      .withDocumentation("When enabled, the writer will simply bulk insert without meta fields assuming that workload is append-only and there are no updates."
-          + " This will be auto-enabled when users have not configured any operation type, record key, or precombine field.");
+      .withDocumentation("There are three types of workloads; MUTABLE and APPEND_ONLY. MUTABLE allows any modification to the table."
+          + " APPEND_ONLY does not allow records to be updates or deleted, however, the table itself can be overwritten."
+          + " This will be automatically set to APPEND_ONLY when users have not configured any operation type, record key, or precombine field.");
 
   private static final String TABLE_CHECKSUM_FORMAT = "%s.%s"; // <database_name>.<table_name>
 
@@ -612,8 +613,12 @@ public class HoodieTableConfig extends HoodieConfig {
     return getBooleanOrDefault(DROP_PARTITION_COLUMNS);
   }
 
+  public HoodieTableWorkloadType getTableWorkloadType() {
+    return HoodieTableWorkloadType.valueOf(getStringOrDefault(TABLE_WORKLOAD_TYPE));
+  }
+
   public boolean isAppendOnlyTable() {
-    return getBooleanOrDefault(APPEND_ONLY_TABLE);
+    return HoodieTableWorkloadType.APPEND_ONLY.name().equalsIgnoreCase(getStringOrDefault(TABLE_WORKLOAD_TYPE));
   }
 
   /**

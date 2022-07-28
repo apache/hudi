@@ -18,17 +18,16 @@
 
 package org.apache.hudi.keygen;
 
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
+
+import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.unsafe.types.UTF8String;
 
 import java.util.Collections;
-
-import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 
 /**
  * Simple key generator, which takes names of fields to be used for recordKey and partitionPath as configs.
@@ -67,7 +66,7 @@ public class SimpleKeyGenerator extends BuiltinKeyGenerator {
   @Override
   public String getRecordKey(Row row) {
     if (recordKeyFields.isEmpty()) {
-      return EMPTY_STRING;
+      return emptyKey();
     }
     tryInitRowAccessor(row.schema());
 
@@ -84,7 +83,7 @@ public class SimpleKeyGenerator extends BuiltinKeyGenerator {
   @Override
   public UTF8String getRecordKey(InternalRow internalRow, StructType schema) {
     if (recordKeyFields.isEmpty()) {
-      return UTF8String.fromString(EMPTY_STRING);
+      return emptyKeyForInternalRow();
     }
     tryInitRowAccessor(schema);
 

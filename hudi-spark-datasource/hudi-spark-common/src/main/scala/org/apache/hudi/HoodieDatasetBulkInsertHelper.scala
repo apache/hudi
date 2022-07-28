@@ -34,7 +34,6 @@ import org.apache.spark.sql.{DataFrame, Dataset, HoodieUnsafeUtils, Row}
 import org.apache.spark.unsafe.types.UTF8String
 
 import scala.collection.JavaConverters.asScalaBufferConverter
-import scala.collection.mutable
 
 object HoodieDatasetBulkInsertHelper extends Logging {
 
@@ -55,7 +54,6 @@ object HoodieDatasetBulkInsertHelper extends Logging {
     val populateMetaFields = config.populateMetaFields()
     val schema = df.schema
 
-    if (!config.contains(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME)) config.setDefaultValue(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME)
     val keyGeneratorClassName = config.getStringOrThrow(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME,
       "Key-generator class name is required")
 

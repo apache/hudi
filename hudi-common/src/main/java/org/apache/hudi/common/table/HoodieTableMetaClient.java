@@ -401,9 +401,6 @@ public class HoodieTableMetaClient implements Serializable {
   public void validateTableProperties(Properties writeConfigProps) {
     // Once table is configured to be append-only, it cannot be mutable or allow setting record key or precombine fields for updates
     if (getTableConfig().isAppendOnlyTable()) {
-      boolean appendOnlyTable = Boolean.parseBoolean(
-          writeConfigProps.getProperty(HoodieTableConfig.APPEND_ONLY_TABLE.key(), String.valueOf(HoodieTableConfig.APPEND_ONLY_TABLE.defaultValue())));
-      checkArgument(appendOnlyTable, String.format("%s is enabled. Please recreate the table with record key to support mutable tables.", HoodieTableConfig.APPEND_ONLY_TABLE.key()));
       checkState(isNullOrEmpty(writeConfigProps.getProperty(HoodieTableConfig.RECORDKEY_FIELDS.key())), String.format("%s set for an append-only table", HoodieTableConfig.RECORDKEY_FIELDS.key()));
       checkState(isNullOrEmpty(writeConfigProps.getProperty("hoodie.datasource.write.recordkey.field")), "hoodie.datasource.write.recordkey.field set for an append-only table");
       checkState(isNullOrEmpty(writeConfigProps.getProperty(HoodieTableConfig.PRECOMBINE_FIELD.key())), String.format("%s set for an append-only table", HoodieTableConfig.PRECOMBINE_FIELD.key()));
@@ -754,7 +751,7 @@ public class HoodieTableMetaClient implements Serializable {
     private Boolean shouldDropPartitionColumns;
     private String metadataPartitions;
     private String inflightMetadataPartitions;
-    private Boolean appendOnlyTable;
+    private HoodieTableWorkloadType appendOnlyTable;
 
     /**
      * Persist the configs that is written at the first time, and should not be changed.
@@ -889,7 +886,7 @@ public class HoodieTableMetaClient implements Serializable {
       return this;
     }
 
-    public PropertyBuilder setAppendOnlyTable(boolean appendOnlyTable) {
+    public PropertyBuilder setAppendOnlyTable(HoodieTableWorkloadType appendOnlyTable) {
       this.appendOnlyTable = appendOnlyTable;
       return this;
     }
@@ -1001,8 +998,8 @@ public class HoodieTableMetaClient implements Serializable {
       if (hoodieConfig.contains(HoodieTableConfig.TABLE_METADATA_PARTITIONS_INFLIGHT)) {
         setInflightMetadataPartitions(hoodieConfig.getString(HoodieTableConfig.TABLE_METADATA_PARTITIONS_INFLIGHT));
       }
-      if (hoodieConfig.contains(HoodieTableConfig.APPEND_ONLY_TABLE)) {
-        setAppendOnlyTable(hoodieConfig.getBoolean(HoodieTableConfig.APPEND_ONLY_TABLE));
+      if (hoodieConfig.contains(HoodieTableConfig.TABLE_WORKLOAD_TYPE)) {
+        setAppendOnlyTable(HoodieTableWorkloadType.valueOf(hoodieConfig.getString(HoodieTableConfig.TABLE_WORKLOAD_TYPE)));
       }
       return this;
     }
@@ -1095,7 +1092,7 @@ public class HoodieTableMetaClient implements Serializable {
         tableConfig.setValue(HoodieTableConfig.TABLE_METADATA_PARTITIONS_INFLIGHT, inflightMetadataPartitions);
       }
       if (null != appendOnlyTable) {
-        tableConfig.setValue(HoodieTableConfig.APPEND_ONLY_TABLE, Boolean.toString(appendOnlyTable));
+        tableConfig.setValue(HoodieTableConfig.TABLE_WORKLOAD_TYPE, appendOnlyTable.name());
       }
       return tableConfig.getProps();
     }
