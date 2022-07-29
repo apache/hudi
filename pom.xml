@@ -127,7 +127,7 @@
     <flink1.14.version>1.14.5</flink1.14.version>
     <flink1.13.version>1.13.6</flink1.13.version>
     <flink.version>${flink1.13.version}</flink.version>
-    <hudi.flink.module>hudi-flink1.13.x</hudi.flink.module>
+    <hudi.flink.module>hudi-flink1.13</hudi.flink.module>
     <flink.bundle.version>1.13</flink.bundle.version>
     <flink.format.parquet.version>1.12.2</flink.format.parquet.version>
     <flink.runtime.artifactId>flink-runtime</flink.runtime.artifactId>
@@ -1674,7 +1674,7 @@
         <sparkbundle.version>3.3</sparkbundle.version>
         <scala.version>${scala12.version}</scala.version>
         <scala.binary.version>2.12</scala.binary.version>
-        <hudi.spark.module>hudi-spark3.3.x</hudi.spark.module>
+        <hudi.spark.module>hudi-spark3.3</hudi.spark.module>
         <hudi.spark.common.module>hudi-spark3-common</hudi.spark.common.module>
         <scalatest.version>${scalatest.spark3.version}</scalatest.version>
         <kafka.version>${kafka.spark3.version}</kafka.version>
@@ -1692,7 +1692,7 @@
         <skipITs>true</skipITs>
       </properties>
       <modules>
-        <module>hudi-spark-datasource/hudi-spark3.3.x</module>
+        <module>hudi-spark-datasource/hudi-spark3.3</module>
         <module>hudi-spark-datasource/hudi-spark3-common</module>
       </modules>
       <activation>
@@ -1710,7 +1710,7 @@
         <sparkbundle.version>3.1</sparkbundle.version>
         <scala.version>${scala12.version}</scala.version>
         <scala.binary.version>2.12</scala.binary.version>
-        <hudi.spark.module>hudi-spark3.1.x</hudi.spark.module>
+        <hudi.spark.module>hudi-spark3.1</hudi.spark.module>
         <hudi.spark.common.module>hudi-spark3-common</hudi.spark.common.module>
         <scalatest.version>${scalatest.spark3.version}</scalatest.version>
         <kafka.version>${kafka.spark3.version}</kafka.version>
@@ -1724,7 +1724,7 @@
         <skipITs>true</skipITs>
       </properties>
       <modules>
-        <module>hudi-spark-datasource/hudi-spark3.1.x</module>
+        <module>hudi-spark-datasource/hudi-spark3.1</module>
         <module>hudi-spark-datasource/hudi-spark3-common</module>
       </modules>
       <activation>
@@ -1742,7 +1742,7 @@
         <sparkbundle.version>3.2</sparkbundle.version>
         <scala.version>${scala12.version}</scala.version>
         <scala.binary.version>2.12</scala.binary.version>
-        <hudi.spark.module>hudi-spark3.2.x</hudi.spark.module>
+        <hudi.spark.module>hudi-spark3.2</hudi.spark.module>
         <hudi.spark.common.module>hudi-spark3-common</hudi.spark.common.module>
         <scalatest.version>${scalatest.spark3.version}</scalatest.version>
         <kafka.version>${kafka.spark3.version}</kafka.version>
@@ -1759,7 +1759,7 @@
         <skipITs>true</skipITs>
       </properties>
       <modules>
-        <module>hudi-spark-datasource/hudi-spark3.2.x</module>
+        <module>hudi-spark-datasource/hudi-spark3.2</module>
         <module>hudi-spark-datasource/hudi-spark3-common</module>
       </modules>
       <activation>
@@ -1777,7 +1777,7 @@
         <sparkbundle.version>3.3</sparkbundle.version>
         <scala.version>${scala12.version}</scala.version>
         <scala.binary.version>2.12</scala.binary.version>
-        <hudi.spark.module>hudi-spark3.3.x</hudi.spark.module>
+        <hudi.spark.module>hudi-spark3.3</hudi.spark.module>
         <hudi.spark.common.module>hudi-spark3-common</hudi.spark.common.module>
         <scalatest.version>${scalatest.spark3.version}</scalatest.version>
         <kafka.version>${kafka.spark3.version}</kafka.version>
@@ -1795,7 +1795,7 @@
         <skipITs>true</skipITs>
       </properties>
       <modules>
-        <module>hudi-spark-datasource/hudi-spark3.3.x</module>
+        <module>hudi-spark-datasource/hudi-spark3.3</module>
         <module>hudi-spark-datasource/hudi-spark3-common</module>
       </modules>
       <activation>
@@ -1818,7 +1818,7 @@
         <flink.connector.kafka.artifactId>flink-connector-kafka</flink.connector.kafka.artifactId>
         <!-- 1.15 only supports scala2.12 -->
         <flink.hadoop.compatibility.artifactId>flink-hadoop-compatibility_2.12</flink.hadoop.compatibility.artifactId>
-        <hudi.flink.module>hudi-flink1.15.x</hudi.flink.module>
+        <hudi.flink.module>hudi-flink1.15</hudi.flink.module>
         <flink.bundle.version>1.15</flink.bundle.version>
       </properties>
       <activation>
@@ -1839,7 +1839,7 @@
         <flink.clients.artifactId>flink-clients_${scala.binary.version}</flink.clients.artifactId>
         <flink.connector.kafka.artifactId>flink-connector-kafka_${scala.binary.version}</flink.connector.kafka.artifactId>
         <flink.hadoop.compatibility.artifactId>flink-hadoop-compatibility_${scala.binary.version}</flink.hadoop.compatibility.artifactId>
-        <hudi.flink.module>hudi-flink1.14.x</hudi.flink.module>
+        <hudi.flink.module>hudi-flink1.14</hudi.flink.module>
         <flink.bundle.version>1.14</flink.bundle.version>
       </properties>
       <activation>
@@ -1866,7 +1866,7 @@
         <flink.clients.artifactId>flink-clients_${scala.binary.version}</flink.clients.artifactId>
         <flink.connector.kafka.artifactId>flink-connector-kafka_${scala.binary.version}</flink.connector.kafka.artifactId>
         <flink.hadoop.compatibility.artifactId>flink-hadoop-compatibility_${scala.binary.version}</flink.hadoop.compatibility.artifactId>
-        <hudi.flink.module>hudi-flink1.13.x</hudi.flink.module>
+        <hudi.flink.module>hudi-flink1.13</hudi.flink.module>
         <flink.bundle.version>1.13</flink.bundle.version>
         <skipITs>true</skipITs>
       </properties>

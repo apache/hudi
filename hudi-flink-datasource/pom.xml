@@ -33,9 +33,9 @@
     </properties>
 
     <modules>
-        <module>hudi-flink1.13.x</module>
-        <module>hudi-flink1.14.x</module>
-        <module>hudi-flink1.15.x</module>
+        <module>hudi-flink1.13</module>
+        <module>hudi-flink1.14</module>
+        <module>hudi-flink1.15</module>
         <module>hudi-flink</module>
     </modules>
 
