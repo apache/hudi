@@ -41,6 +41,7 @@ public class KeyGenUtils {
   protected static final String EMPTY_RECORDKEY_PLACEHOLDER = "__empty__";
 
   protected static final String HUDI_DEFAULT_PARTITION_PATH = PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH;
+  public static final String OLD_DEPRECATED_DEFAULT_PARTITION_PATH = "default";
   public static final String DEFAULT_PARTITION_PATH_SEPARATOR = "/";
   public static final String DEFAULT_RECORD_KEY_PARTS_SEPARATOR = ",";
 
