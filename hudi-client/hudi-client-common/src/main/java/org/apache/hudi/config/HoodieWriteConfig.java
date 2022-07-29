@@ -2447,6 +2447,11 @@ public class HoodieWriteConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withArchiveBeyondSavepoint(boolean allow) {
+      writeConfig.setValue(HoodieArchivalConfig.ARCHIVE_BEYOND_SAVEPOINT, String.valueOf(allow));
+      return this;
+    }
+
     public Builder withExternalSchemaTrasformation(boolean enabled) {
       writeConfig.setValue(AVRO_EXTERNAL_SCHEMA_TRANSFORMATION_ENABLE, String.valueOf(enabled));
       return this;
