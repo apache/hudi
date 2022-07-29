@@ -102,7 +102,6 @@ import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_METADATA_PART
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.deleteMetadataPartition;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.deleteMetadataTable;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getCompletedMetadataPartitions;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.metadataPartitionExists;
 
 /**
@@ -369,10 +368,10 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
   }
 
   /**
-   * Get the list of savepoints in this table.
+   * Get the list of savepoint timestamps in this table.
    */
-  public List<String> getSavepoints() {
-    return getCompletedSavepointTimeline().getInstants().map(HoodieInstant::getTimestamp).collect(Collectors.toList());
+  public Set<String> getSavepointTimestamps() {
+    return getCompletedSavepointTimeline().getInstants().map(HoodieInstant::getTimestamp).collect(Collectors.toSet());
   }
 
   public HoodieActiveTimeline getActiveTimeline() {
@@ -656,7 +655,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
       invalidDataPaths.removeAll(validDataPaths);
 
       if (!invalidDataPaths.isEmpty()) {
-        LOG.info("Removing duplicate data files created due to spark retries before committing. Paths=" + invalidDataPaths);
+        LOG.info("Removing duplicate data files created due to task retries before committing. Paths=" + invalidDataPaths);
         Map<String, List<Pair<String, String>>> invalidPathsByPartition = invalidDataPaths.stream()
             .map(dp -> Pair.of(new Path(basePath, dp).getParent().toString(), new Path(basePath, dp).toString()))
             .collect(Collectors.groupingBy(Pair::getKey));
@@ -900,7 +899,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
         return false;
     }
     return metadataIndexDisabled
-        && getCompletedMetadataPartitions(metaClient.getTableConfig()).contains(partitionType.getPartitionPath());
+        && metaClient.getTableConfig().getMetadataPartitions().contains(partitionType.getPartitionPath());
   }
 
   private boolean shouldExecuteMetadataTableDeletion() {
@@ -919,7 +918,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
    * Clears hoodie.table.metadata.partitions in hoodie.properties
    */
   private void clearMetadataTablePartitionsConfig(Option<MetadataPartitionType> partitionType, boolean clearAll) {
-    Set<String> partitions = getCompletedMetadataPartitions(metaClient.getTableConfig());
+    Set<String> partitions = metaClient.getTableConfig().getMetadataPartitions();
     if (clearAll && partitions.size() > 0) {
       LOG.info("Clear hoodie.table.metadata.partitions in hoodie.properties");
       metaClient.getTableConfig().setValue(TABLE_METADATA_PARTITIONS.key(), EMPTY_STRING);

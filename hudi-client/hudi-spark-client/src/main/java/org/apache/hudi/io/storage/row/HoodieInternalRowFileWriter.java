@@ -19,6 +19,7 @@
 package org.apache.hudi.io.storage.row;
 
 import org.apache.spark.sql.catalyst.InternalRow;
+import org.apache.spark.unsafe.types.UTF8String;
 
 import java.io.IOException;
 
@@ -37,7 +38,7 @@ public interface HoodieInternalRowFileWriter {
    *
    * @throws IOException on any exception while writing.
    */
-  void writeRow(String key, InternalRow row) throws IOException;
+  void writeRow(UTF8String key, InternalRow row) throws IOException;
 
   /**
    * Writes an {@link InternalRow} to the HoodieInternalRowFileWriter.

@@ -18,8 +18,10 @@
 
 package org.apache.hudi.common.fs;
 
+import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -53,5 +55,20 @@ public class TestStorageSchemes {
     assertThrows(IllegalArgumentException.class, () -> {
       StorageSchemes.isAppendSupported("s2");
     }, "Should throw exception for unsupported schemes");
+  }
+
+  @Test
+  public void testConversionToNewSchema() {
+    Path s3TablePath1 = new Path("s3://test.1234/table1");
+    assertEquals(s3TablePath1, HoodieWrapperFileSystem.convertPathWithScheme(s3TablePath1, "s3"));
+
+    Path s3TablePath2 = new Path("s3://1234.test/table1");
+    assertEquals(s3TablePath2, HoodieWrapperFileSystem.convertPathWithScheme(s3TablePath2, "s3"));
+
+    Path s3TablePath3 = new Path("s3://test1234/table1");
+    assertEquals(s3TablePath3, HoodieWrapperFileSystem.convertPathWithScheme(s3TablePath3, "s3"));
+
+    Path hdfsTablePath = new Path("hdfs://sandbox.foo.com:8020/test.1234/table1");
+    System.out.println(HoodieWrapperFileSystem.convertPathWithScheme(hdfsTablePath, "hdfs"));
   }
 }

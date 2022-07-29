@@ -18,7 +18,7 @@
 
 package org.apache.hudi.hive.ddl;
 
-import org.apache.hudi.common.util.collection.ImmutablePair;
+import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.parquet.schema.MessageType;
 
@@ -98,5 +98,5 @@ public interface DDLExecutor extends AutoCloseable {
    * @param tableName
    * @param newSchema Map key: field name, Map value: [field type, field comment]
    */
-  void updateTableComments(String tableName, Map<String, ImmutablePair<String, String>> newSchema);
+  void updateTableComments(String tableName, Map<String, Pair<String, String>> newSchema);
 }

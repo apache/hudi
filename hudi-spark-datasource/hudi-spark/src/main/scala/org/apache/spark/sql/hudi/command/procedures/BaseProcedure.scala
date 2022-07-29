@@ -50,7 +50,6 @@ abstract class BaseProcedure extends Procedure {
     HoodieWriteConfig.newBuilder
       .withPath(basePath)
       .withIndexConfig(HoodieIndexConfig.newBuilder.withIndexType(IndexType.BLOOM).build)
-      .withRollbackUsingMarkers(false)
       .build
   }
 

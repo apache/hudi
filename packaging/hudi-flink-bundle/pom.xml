@@ -25,7 +25,7 @@
     <relativePath>../../pom.xml</relativePath>
   </parent>
   <modelVersion>4.0.0</modelVersion>
-  <artifactId>hudi-flink${flink.bundle.version}-bundle_${scala.binary.version}</artifactId>
+  <artifactId>hudi-flink${flink.bundle.version}-bundle</artifactId>
   <packaging>jar</packaging>
 
   <properties>
@@ -133,14 +133,14 @@
                   <!-- Used for HUDI write handle -->
                   <inclide>com.esotericsoftware:kryo-shaded</inclide>
 
-                  <include>org.apache.flink:flink-hadoop-compatibility_${scala.binary.version}</include>
+                  <include>org.apache.flink:${flink.hadoop.compatibility.artifactId}</include>
                   <include>org.apache.flink:flink-json</include>
-                  <include>org.apache.flink:flink-parquet_${scala.binary.version}</include>
+                  <include>org.apache.flink:${flink.parquet.artifactId}</include>
 
                   <include>org.apache.hive:hive-common</include>
                   <include>org.apache.hive:hive-service</include>
                   <include>org.apache.hive:hive-service-rpc</include>
-		  <include>org.apache.hive:hive-exec</include>
+		          <include>org.apache.hive:hive-exec</include>
                   <include>org.apache.hive:hive-standalone-metastore</include>
                   <include>org.apache.hive:hive-metastore</include>
                   <include>org.apache.hive:hive-jdbc</include>
@@ -416,13 +416,13 @@
     <!-- Flink -->
     <dependency>
       <groupId>org.apache.flink</groupId>
-      <artifactId>flink-hadoop-compatibility_${scala.binary.version}</artifactId>
+      <artifactId>${flink.hadoop.compatibility.artifactId}</artifactId>
       <version>${flink.version}</version>
       <scope>compile</scope>
     </dependency>
     <dependency>
       <groupId>org.apache.flink</groupId>
-      <artifactId>flink-parquet_${scala.binary.version}</artifactId>
+      <artifactId>${flink.parquet.artifactId}</artifactId>
       <version>${flink.version}</version>
       <scope>compile</scope>
     </dependency>

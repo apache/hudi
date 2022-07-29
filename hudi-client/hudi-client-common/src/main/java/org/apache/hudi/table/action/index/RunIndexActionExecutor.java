@@ -74,7 +74,6 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.ROLLBACK_ACTI
 import static org.apache.hudi.config.HoodieWriteConfig.WRITE_CONCURRENCY_MODE;
 import static org.apache.hudi.metadata.HoodieTableMetadata.getMetadataTableBasePath;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.deleteMetadataPartition;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getCompletedMetadataPartitions;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getInflightAndCompletedMetadataPartitions;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getInflightMetadataPartitions;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.metadataPartitionExists;
@@ -192,7 +191,7 @@ public class RunIndexActionExecutor<T extends HoodieRecordPayload, I, K, O> exte
 
   private void abort(HoodieInstant indexInstant, Set<String> requestedPartitions) {
     Set<String> inflightPartitions = getInflightMetadataPartitions(table.getMetaClient().getTableConfig());
-    Set<String> completedPartitions = getCompletedMetadataPartitions(table.getMetaClient().getTableConfig());
+    Set<String> completedPartitions = table.getMetaClient().getTableConfig().getMetadataPartitions();
     // update table config
     requestedPartitions.forEach(partition -> {
       inflightPartitions.remove(partition);
@@ -302,7 +301,7 @@ public class RunIndexActionExecutor<T extends HoodieRecordPayload, I, K, O> exte
   private void updateMetadataPartitionsTableConfig(HoodieTableMetaClient metaClient, Set<String> metadataPartitions) {
     // remove from inflight and update completed indexes
     Set<String> inflightPartitions = getInflightMetadataPartitions(metaClient.getTableConfig());
-    Set<String> completedPartitions = getCompletedMetadataPartitions(metaClient.getTableConfig());
+    Set<String> completedPartitions = metaClient.getTableConfig().getMetadataPartitions();
     inflightPartitions.removeAll(metadataPartitions);
     completedPartitions.addAll(metadataPartitions);
     // update table config

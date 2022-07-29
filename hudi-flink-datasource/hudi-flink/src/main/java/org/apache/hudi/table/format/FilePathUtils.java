@@ -323,6 +323,10 @@ public class FilePathUtils {
   public static LinkedHashMap<String, String> validateAndReorderPartitions(
       Map<String, String> partitionKVs,
       List<String> partitionKeys) {
+    if (partitionKeys.size() == 0) {
+      // in case the partition fields are not in schema
+      return new LinkedHashMap<>(partitionKVs);
+    }
     LinkedHashMap<String, String> map = new LinkedHashMap<>();
     for (String k : partitionKeys) {
       if (!partitionKVs.containsKey(k)) {
@@ -437,5 +441,9 @@ public class FilePathUtils {
       return extractPartitionKeys(conf);
     }
     return conf.getString(FlinkOptions.HIVE_SYNC_PARTITION_FIELDS).split(",");
+  }
+
+  public static boolean isHiveStylePartitioning(String path) {
+    return HIVE_PARTITION_NAME_PATTERN.matcher(path).matches();
   }
 }

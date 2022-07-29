@@ -39,6 +39,7 @@ import org.apache.hudi.client.heartbeat.HeartbeatUtils;
 import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.client.utils.TransactionUtils;
 import org.apache.hudi.common.HoodiePendingRollbackInfo;
+import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
@@ -276,15 +277,21 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
     TableSchemaResolver schemaUtil = new TableSchemaResolver(table.getMetaClient());
     String historySchemaStr = schemaUtil.getTableHistorySchemaStrFromCommitMetadata().orElse("");
     FileBasedInternalSchemaStorageManager schemasManager = new FileBasedInternalSchemaStorageManager(table.getMetaClient());
-    if (!historySchemaStr.isEmpty()) {
-      InternalSchema internalSchema = InternalSchemaUtils.searchSchema(Long.parseLong(instantTime),
-          SerDeHelper.parseSchemas(historySchemaStr));
+    if (!historySchemaStr.isEmpty() || Boolean.parseBoolean(config.getString(HoodieCommonConfig.RECONCILE_SCHEMA.key()))) {
+      InternalSchema internalSchema;
       Schema avroSchema = HoodieAvroUtils.createHoodieWriteSchema(new Schema.Parser().parse(config.getSchema()));
-      InternalSchema evolvedSchema = AvroSchemaEvolutionUtils.evolveSchemaFromNewAvroSchema(avroSchema, internalSchema);
+      if (historySchemaStr.isEmpty()) {
+        internalSchema = AvroInternalSchemaConverter.convert(avroSchema);
+        internalSchema.setSchemaId(Long.parseLong(instantTime));
+      } else {
+        internalSchema = InternalSchemaUtils.searchSchema(Long.parseLong(instantTime),
+            SerDeHelper.parseSchemas(historySchemaStr));
+      }
+      InternalSchema evolvedSchema = AvroSchemaEvolutionUtils.reconcileSchema(avroSchema, internalSchema);
       if (evolvedSchema.equals(internalSchema)) {
         metadata.addMetadata(SerDeHelper.LATEST_SCHEMA, SerDeHelper.toJson(evolvedSchema));
         //TODO save history schema by metaTable
-        schemasManager.persistHistorySchemaStr(instantTime, historySchemaStr);
+        schemasManager.persistHistorySchemaStr(instantTime, historySchemaStr.isEmpty() ? SerDeHelper.inheritSchemas(evolvedSchema, "") : historySchemaStr);
       } else {
         evolvedSchema.setSchemaId(Long.parseLong(instantTime));
         String newSchemaStr = SerDeHelper.toJson(evolvedSchema);
@@ -484,7 +491,7 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
    * @param writeOperationType
    * @param metaClient
    */
-  protected void preWrite(String instantTime, WriteOperationType writeOperationType,
+  public void preWrite(String instantTime, WriteOperationType writeOperationType,
       HoodieTableMetaClient metaClient) {
     setOperationType(writeOperationType);
     this.lastCompletedTxnAndMetadata = TransactionUtils.getLastCompletedTxnInstantAndMetadata(metaClient);

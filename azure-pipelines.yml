@@ -74,7 +74,7 @@ parameters:
 variables:
   BUILD_PROFILES: '-Dscala-2.11 -Dspark2 -Dflink1.14'
   PLUGIN_OPTS: '-Dcheckstyle.skip=true -Drat.skip=true -Djacoco.skip=true'
-  MVN_OPTS_INSTALL: '-T 2.5C -DskipTests $(BUILD_PROFILES) $(PLUGIN_OPTS)'
+  MVN_OPTS_INSTALL: '-DskipTests $(BUILD_PROFILES) $(PLUGIN_OPTS)'
   MVN_OPTS_TEST: '-fae $(BUILD_PROFILES) $(PLUGIN_OPTS)'
   SPARK_VERSION: '2.4.4'
   HADOOP_VERSION: '2.7'
@@ -89,7 +89,7 @@ stages:
     jobs:
       - job: UT_FT_1
         displayName: UT FT common & flink & UT client/spark-client
-        timeoutInMinutes: '120'
+        timeoutInMinutes: '150'
         steps:
           - task: Maven@3
             displayName: maven install
@@ -119,7 +119,7 @@ stages:
               mavenOptions: '-Xmx4g'
       - job: UT_FT_2
         displayName: FT client/spark-client
-        timeoutInMinutes: '120'
+        timeoutInMinutes: '150'
         steps:
           - task: Maven@3
             displayName: maven install
@@ -140,7 +140,7 @@ stages:
               mavenOptions: '-Xmx4g'
       - job: UT_FT_3
         displayName: UT FT clients & cli & utilities & sync
-        timeoutInMinutes: '120'
+        timeoutInMinutes: '150'
         steps:
           - task: Maven@3
             displayName: maven install
@@ -170,7 +170,7 @@ stages:
               mavenOptions: '-Xmx4g'
       - job: UT_FT_4
         displayName: UT FT other modules
-        timeoutInMinutes: '120'
+        timeoutInMinutes: '150'
         steps:
           - task: Maven@3
             displayName: maven install
@@ -200,7 +200,7 @@ stages:
               mavenOptions: '-Xmx4g'
       - job: IT
         displayName: IT modules
-        timeoutInMinutes: '120'
+        timeoutInMinutes: '150'
         steps:
           - task: Maven@3
             displayName: maven install

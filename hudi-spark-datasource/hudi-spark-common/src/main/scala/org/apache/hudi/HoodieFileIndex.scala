@@ -18,7 +18,6 @@
 package org.apache.hudi
 
 import org.apache.hadoop.fs.{FileStatus, Path}
-import org.apache.hudi.HoodieDatasetUtils.withPersistence
 import org.apache.hudi.HoodieFileIndex.{DataSkippingFailureMode, collectReferencedColumns, getConfigProperties}
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.table.HoodieTableMetaClient
@@ -26,7 +25,7 @@ import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.{TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
-import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadataUtil}
+import org.apache.hudi.metadata.HoodieMetadataPayload
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{And, Expression, Literal}
@@ -35,7 +34,7 @@ import org.apache.spark.sql.hudi.DataSkippingUtils.translateIntoColumnStatsIndex
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.{Column, DataFrame, SparkSession}
+import org.apache.spark.sql.{Column, SparkSession}
 import org.apache.spark.unsafe.types.UTF8String
 
 import java.text.SimpleDateFormat
@@ -76,12 +75,13 @@ case class HoodieFileIndex(spark: SparkSession,
     metaClient = metaClient,
     schemaSpec = schemaSpec,
     configProperties = getConfigProperties(spark, options),
-    queryPaths = Seq(HoodieFileIndex.getQueryPath(options)),
+    queryPaths = HoodieFileIndex.getQueryPaths(options),
     specifiedQueryInstant = options.get(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key).map(HoodieSqlCommonUtils.formatQueryInstant),
     fileStatusCache = fileStatusCache
   )
-    with FileIndex
-    with ColumnStatsIndexSupport {
+    with FileIndex {
+
+  @transient private lazy val columnStatsIndex = new ColumnStatsIndexSupport(spark, schema, metadataConfig, metaClient)
 
   override def rootPaths: Seq[Path] = queryPaths.asScala
 
@@ -95,8 +95,9 @@ case class HoodieFileIndex(spark: SparkSession,
    */
   def allFiles: Seq[FileStatus] = {
     cachedAllInputFileSlices.values.asScala.flatMap(_.asScala)
-      .filter(_.getBaseFile.isPresent)
-      .map(_.getBaseFile.get().getFileStatus)
+      .map(fs => fs.getBaseFile.orElse(null))
+      .filter(_ != null)
+      .map(_.getFileStatus)
       .toSeq
   }
 
@@ -162,9 +163,9 @@ case class HoodieFileIndex(spark: SparkSession,
         PartitionDirectory(InternalRow.fromSeq(partition.values), candidateFiles)
       }
 
-      logInfo(s"Total base files: ${totalFileSize}; " +
-        s"candidate files after data skipping : ${candidateFileSize}; " +
-        s"skipping percent ${if (allFiles.nonEmpty) (totalFileSize - candidateFileSize) / totalFileSize.toDouble else 0}")
+      logInfo(s"Total base files: $totalFileSize; " +
+        s"candidate files after data skipping : $candidateFileSize; " +
+        s"skipping percent ${if (allFiles.nonEmpty && totalFileSize > 0) (totalFileSize - candidateFileSize) / totalFileSize.toDouble else 0}")
 
       result
     }
@@ -196,63 +197,62 @@ case class HoodieFileIndex(spark: SparkSession,
     //          nothing CSI in particular could be applied for)
     lazy val queryReferencedColumns = collectReferencedColumns(spark, queryFilters, schema)
 
-    if (!isMetadataTableEnabled || !isColumnStatsIndexAvailable || !isDataSkippingEnabled) {
+    if (!isMetadataTableEnabled || !isDataSkippingEnabled || !columnStatsIndex.isIndexAvailable) {
       validateConfig()
       Option.empty
     } else if (queryFilters.isEmpty || queryReferencedColumns.isEmpty) {
       Option.empty
     } else {
-      val colStatsDF: DataFrame = readColumnStatsIndex(spark, basePath, metadataConfig, queryReferencedColumns)
+      // NOTE: Since executing on-cluster via Spark API has its own non-trivial amount of overhead,
+      //       it's most often preferential to fetch Column Stats Index w/in the same process (usually driver),
+      //       w/o resorting to on-cluster execution.
+      //       For that we use a simple-heuristic to determine whether we should read and process CSI in-memory or
+      //       on-cluster: total number of rows of the expected projected portion of the index has to be below the
+      //       threshold (of 100k records)
+      val shouldReadInMemory = columnStatsIndex.shouldReadInMemory(this, queryReferencedColumns)
 
-      // Persist DF to avoid re-computing column statistics unraveling
-      withPersistence(colStatsDF) {
-        val transposedColStatsDF: DataFrame = transposeColumnStatsIndex(spark, colStatsDF, queryReferencedColumns, schema)
+      columnStatsIndex.loadTransposed(queryReferencedColumns, shouldReadInMemory) { transposedColStatsDF =>
+        val indexSchema = transposedColStatsDF.schema
+        val indexFilter =
+          queryFilters.map(translateIntoColumnStatsIndexFilterExpr(_, indexSchema))
+            .reduce(And)
 
-        // Persist DF to avoid re-computing column statistics unraveling
-        withPersistence(transposedColStatsDF) {
-          val indexSchema = transposedColStatsDF.schema
-          val indexFilter =
-            queryFilters.map(translateIntoColumnStatsIndexFilterExpr(_, indexSchema))
-              .reduce(And)
+        val allIndexedFileNames =
+          transposedColStatsDF.select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
+            .collect()
+            .map(_.getString(0))
+            .toSet
 
-          val allIndexedFileNames =
-            transposedColStatsDF.select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
-              .collect()
-              .map(_.getString(0))
-              .toSet
+        val prunedCandidateFileNames =
+          transposedColStatsDF.where(new Column(indexFilter))
+            .select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
+            .collect()
+            .map(_.getString(0))
+            .toSet
 
-          val prunedCandidateFileNames =
-            transposedColStatsDF.where(new Column(indexFilter))
-              .select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
-              .collect()
-              .map(_.getString(0))
-              .toSet
+        // NOTE: Col-Stats Index isn't guaranteed to have complete set of statistics for every
+        //       base-file: since it's bound to clustering, which could occur asynchronously
+        //       at arbitrary point in time, and is not likely to be touching all of the base files.
+        //
+        //       To close that gap, we manually compute the difference b/w all indexed (by col-stats-index)
+        //       files and all outstanding base-files, and make sure that all base files not
+        //       represented w/in the index are included in the output of this method
+        val notIndexedFileNames = lookupFileNamesMissingFromIndex(allIndexedFileNames)
 
-          // NOTE: Col-Stats Index isn't guaranteed to have complete set of statistics for every
-          //       base-file: since it's bound to clustering, which could occur asynchronously
-          //       at arbitrary point in time, and is not likely to be touching all of the base files.
-          //
-          //       To close that gap, we manually compute the difference b/w all indexed (by col-stats-index)
-          //       files and all outstanding base-files, and make sure that all base files not
-          //       represented w/in the index are included in the output of this method
-          val notIndexedFileNames = lookupFileNamesMissingFromIndex(allIndexedFileNames)
-
-          Some(prunedCandidateFileNames ++ notIndexedFileNames)
-        }
+        Some(prunedCandidateFileNames ++ notIndexedFileNames)
       }
     }
   }
 
-  override def refresh(): Unit = super.refresh()
+  override def refresh(): Unit = {
+    super.refresh()
+    columnStatsIndex.invalidateCaches()
+  }
 
   override def inputFiles: Array[String] =
     allFiles.map(_.getPath.toString).toArray
 
   override def sizeInBytes: Long = cachedFileSize
-
-  private def isColumnStatsIndexAvailable =
-    HoodieTableMetadataUtil.getCompletedMetadataPartitions(metaClient.getTableConfig)
-      .contains(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS)
 
   private def isDataSkippingEnabled: Boolean =
     options.getOrElse(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key(),
@@ -264,7 +264,7 @@ case class HoodieFileIndex(spark: SparkSession,
   private def validateConfig(): Unit = {
     if (isDataSkippingEnabled && (!isMetadataTableEnabled || !isColumnStatsIndexEnabled)) {
       logWarning("Data skipping requires both Metadata Table and Column Stats Index to be enabled as well! " +
-        s"(isMetadataTableEnabled = ${isMetadataTableEnabled}, isColumnStatsIndexEnabled = ${isColumnStatsIndexEnabled}")
+        s"(isMetadataTableEnabled = $isMetadataTableEnabled, isColumnStatsIndexEnabled = $isColumnStatsIndexEnabled")
     }
   }
 }
@@ -341,10 +341,15 @@ object HoodieFileIndex extends Logging {
     }
   }
 
-  private def getQueryPath(options: Map[String, String]) = {
-    new Path(options.get("path") match {
-      case Some(p) => p
-      case None => throw new IllegalArgumentException("'path' option required")
-    })
+  private def getQueryPaths(options: Map[String, String]): Seq[Path] = {
+    options.get("path") match {
+      case Some(p) => Seq(new Path(p))
+      case None =>
+        options.getOrElse("glob.paths",
+          throw new IllegalArgumentException("'path' or 'glob paths' option required"))
+          .split(",")
+          .map(new Path(_))
+          .toSeq
+    }
   }
 }

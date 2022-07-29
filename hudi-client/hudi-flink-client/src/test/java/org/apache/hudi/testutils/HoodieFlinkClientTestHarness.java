@@ -21,7 +21,8 @@ package org.apache.hudi.testutils;
 import org.apache.hudi.client.FlinkTaskContextSupplier;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
-import org.apache.hudi.common.data.HoodieList;
+import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -133,7 +134,7 @@ public class HoodieFlinkClientTestHarness extends HoodieCommonTestHarness implem
 
   protected List<HoodieRecord> tagLocation(
       HoodieIndex index, List<HoodieRecord> records, HoodieTable table) {
-    return HoodieList.getList(index.tagLocation(HoodieList.of(records), context, table));
+    return ((HoodieData<HoodieRecord>) index.tagLocation(HoodieListData.eager(records), context, table)).collectAsList();
   }
 
   /**
@@ -205,7 +206,7 @@ public class HoodieFlinkClientTestHarness extends HoodieCommonTestHarness implem
   protected void cleanupDFS() throws java.io.IOException {
     if (hdfsTestService != null) {
       hdfsTestService.stop();
-      dfsCluster.shutdown();
+      dfsCluster.shutdown(true, true);
       hdfsTestService = null;
       dfsCluster = null;
       dfs = null;

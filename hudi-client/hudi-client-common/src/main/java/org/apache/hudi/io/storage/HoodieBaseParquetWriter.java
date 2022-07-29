@@ -43,7 +43,7 @@ public abstract class HoodieBaseParquetWriter<R> extends ParquetWriter<R> {
   private long lastCachedDataSize = -1;
 
   public HoodieBaseParquetWriter(Path file,
-                                 HoodieBaseParquetConfig<? extends WriteSupport<R>> parquetConfig) throws IOException {
+                                 HoodieParquetConfig<? extends WriteSupport<R>> parquetConfig) throws IOException {
     super(HoodieWrapperFileSystem.convertToHoodiePath(file, parquetConfig.getHadoopConf()),
         ParquetFileWriter.Mode.CREATE,
         parquetConfig.getWriteSupport(),

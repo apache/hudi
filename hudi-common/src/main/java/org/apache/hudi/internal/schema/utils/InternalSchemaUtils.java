@@ -273,7 +273,7 @@ public class InternalSchemaUtils {
    *
    * @param oldSchema oldSchema
    * @param newSchema newSchema which modified from oldSchema
-   * @return renameCols Map. (k, v) -> (colNameFromNewSchema, colNameFromOldSchema)
+   * @return renameCols Map. (k, v) -> (colNameFromNewSchema, colNameLastPartFromOldSchema)
    */
   public static Map<String, String> collectRenameCols(InternalSchema oldSchema, InternalSchema newSchema) {
     List<String> colNamesFromWriteSchema = oldSchema.getAllColsFullName();
@@ -281,6 +281,9 @@ public class InternalSchemaUtils {
       int filedIdFromWriteSchema = oldSchema.findIdByName(f);
       // try to find the cols which has the same id, but have different colName;
       return newSchema.getAllIds().contains(filedIdFromWriteSchema) && !newSchema.findfullName(filedIdFromWriteSchema).equalsIgnoreCase(f);
-    }).collect(Collectors.toMap(e -> newSchema.findfullName(oldSchema.findIdByName(e)), e -> e));
+    }).collect(Collectors.toMap(e -> newSchema.findfullName(oldSchema.findIdByName(e)), e -> {
+      int lastDotIndex = e.lastIndexOf(".");
+      return e.substring(lastDotIndex == -1 ? 0 : lastDotIndex + 1);
+    }));
   }
 }
