@@ -39,8 +39,10 @@ import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.api.java.function.MapPartitionsFunction;
 import org.apache.spark.sql.DataFrameReader;
 import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Encoders;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 
@@ -184,32 +186,31 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
         .filter(filter)
         .select("s3.bucket.name", "s3.object.key")
         .distinct()
-        .rdd().toJavaRDD().mapPartitions(fileListIterator -> {
+        .mapPartitions((MapPartitionsFunction<Row, String>)  fileListIterator -> {
           List<String> cloudFilesPerPartition = new ArrayList<>();
           final Configuration configuration = serializableConfiguration.newCopy();
           fileListIterator.forEachRemaining(row -> {
             String bucket = row.getString(0);
             String filePath = s3Prefix + bucket + "/" + row.getString(1);
+            String decodeUrl = null;
             try {
-              String decodeUrl = URLDecoder.decode(filePath, StandardCharsets.UTF_8.name());
+              decodeUrl = URLDecoder.decode(filePath, StandardCharsets.UTF_8.name());
               if (checkExists) {
                 FileSystem fs = FSUtils.getFs(s3Prefix + bucket, configuration);
-                try {
-                  if (fs.exists(new Path(decodeUrl))) {
-                    cloudFilesPerPartition.add(decodeUrl);
-                  }
-                } catch (IOException e) {
-                  LOG.error(String.format("Error while checking path exists for %s ", decodeUrl), e);
+                if (fs.exists(new Path(decodeUrl))) {
+                  cloudFilesPerPartition.add(decodeUrl);
                 }
               } else {
                 cloudFilesPerPartition.add(decodeUrl);
               }
+            } catch (IOException e) {
+              LOG.error(String.format("Error while checking path exists for %s ", decodeUrl), e);
             } catch (Throwable e) {
               LOG.warn("Failed to add cloud file ", e);
             }
           });
           return cloudFilesPerPartition.iterator();
-        }).collect();
+        }, Encoders.STRING()).collectAsList();
 
     Option<Dataset<Row>> dataset = Option.empty();
     if (!cloudFiles.isEmpty()) {
