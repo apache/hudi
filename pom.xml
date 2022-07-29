@@ -835,8 +835,7 @@
         <groupId>org.apache.orc</groupId>
         <artifactId>orc-core</artifactId>
         <version>${orc.version}</version>
-        <scope>provided</scope>
-        <classifier>nohive</classifier>
+        <scope>compile</scope>
       </dependency>
 
       <!-- Spark -->

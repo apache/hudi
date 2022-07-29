@@ -639,7 +639,6 @@
       <groupId>org.apache.orc</groupId>
       <artifactId>orc-core</artifactId>
       <version>${orc.version}</version>
-      <classifier>nohive</classifier>
       <scope>${flink.bundle.hive.scope}</scope>
     </dependency>
 
