@@ -152,6 +152,20 @@ public class TestHoodieTableFactory {
     HoodieTableSink tableSink5 = (HoodieTableSink) new HoodieTableFactory().createDynamicTableSink(sourceContext5);
     assertThat(tableSource5.getConf().getString(FlinkOptions.PAYLOAD_CLASS_NAME), is(EventTimeAvroPayload.class.getName()));
     assertThat(tableSink5.getConf().getString(FlinkOptions.PAYLOAD_CLASS_NAME), is(EventTimeAvroPayload.class.getName()));
+
+    // given pk and set pre combine key to no_precombine will be ok
+    ResolvedSchema schema5 = SchemaBuilder.instance()
+            .field("f0", DataTypes.INT().notNull())
+            .field("f1", DataTypes.VARCHAR(20))
+            .field("f2", DataTypes.TIMESTAMP(3))
+            .field("ts", DataTypes.TIMESTAMP(3))
+            .primaryKey("f0")
+            .build();
+    this.conf.setString(FlinkOptions.PRECOMBINE_FIELD, FlinkOptions.NO_PRE_COMBINE);
+    final MockContext sourceContext6 = MockContext.getInstance(this.conf, schema5, "f2");
+
+    assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSource(sourceContext6));
+    assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSink(sourceContext6));
   }
 
   @Test
