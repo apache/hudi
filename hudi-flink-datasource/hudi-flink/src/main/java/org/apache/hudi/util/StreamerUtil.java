@@ -225,6 +225,7 @@ public class StreamerUtil {
                 .withLockProvider(FileSystemBasedLockProvider.class)
                 .withLockWaitTimeInMillis(2000L) // 2s
                 .withFileSystemLockExpire(1) // 1 minute
+                .withClientNumRetries(30)
                 .withFileSystemLockPath(StreamerUtil.getAuxiliaryPath(conf))
                 .build())
             .withPayloadConfig(HoodiePayloadConfig.newBuilder()
