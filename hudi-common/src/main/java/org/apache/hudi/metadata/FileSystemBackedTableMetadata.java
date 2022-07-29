@@ -92,28 +92,30 @@ public class FileSystemBackedTableMetadata implements HoodieTableMetadata {
       // if current dictionary contains PartitionMetadata, add it to result
       // if current dictionary does not contain PartitionMetadata, add it to queue to be processed.
       int fileListingParallelism = Math.min(DEFAULT_LISTING_PARALLELISM, dirToFileListing.size());
-      // result below holds a list of pair. first entry in the pair optionally holds the deduced list of partitions.
-      // and second entry holds optionally a directory path to be processed further. 
-      List<Pair<Option<String>, Option<Path>>> result = engineContext.map(dirToFileListing, fileStatus -> {
-        FileSystem fileSystem = fileStatus.getPath().getFileSystem(hadoopConf.get());
-        if (fileStatus.isDirectory()) {
-          if (HoodiePartitionMetadata.hasPartitionMetadata(fileSystem, fileStatus.getPath())) {
-            return Pair.of(Option.of(FSUtils.getRelativePartitionPath(new Path(datasetBasePath), fileStatus.getPath())), Option.empty());
-          } else if (!fileStatus.getPath().getName().equals(HoodieTableMetaClient.METAFOLDER_NAME)) {
-            return Pair.of(Option.empty(), Option.of(fileStatus.getPath()));
+      if (!dirToFileListing.isEmpty()) {
+        // result below holds a list of pair. first entry in the pair optionally holds the deduced list of partitions.
+        // and second entry holds optionally a directory path to be processed further.
+        List<Pair<Option<String>, Option<Path>>> result = engineContext.map(dirToFileListing, fileStatus -> {
+          FileSystem fileSystem = fileStatus.getPath().getFileSystem(hadoopConf.get());
+          if (fileStatus.isDirectory()) {
+            if (HoodiePartitionMetadata.hasPartitionMetadata(fileSystem, fileStatus.getPath())) {
+              return Pair.of(Option.of(FSUtils.getRelativePartitionPath(new Path(datasetBasePath), fileStatus.getPath())), Option.empty());
+            } else if (!fileStatus.getPath().getName().equals(HoodieTableMetaClient.METAFOLDER_NAME)) {
+              return Pair.of(Option.empty(), Option.of(fileStatus.getPath()));
+            }
+          } else if (fileStatus.getPath().getName().startsWith(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX)) {
+            String partitionName = FSUtils.getRelativePartitionPath(new Path(datasetBasePath), fileStatus.getPath().getParent());
+            return Pair.of(Option.of(partitionName), Option.empty());
           }
-        } else if (fileStatus.getPath().getName().startsWith(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX)) {
-          String partitionName = FSUtils.getRelativePartitionPath(new Path(datasetBasePath), fileStatus.getPath().getParent());
-          return Pair.of(Option.of(partitionName), Option.empty());
-        }
-        return Pair.of(Option.empty(), Option.empty());
-      }, fileListingParallelism);
+          return Pair.of(Option.empty(), Option.empty());
+        }, fileListingParallelism);
 
-      partitionPaths.addAll(result.stream().filter(entry -> entry.getKey().isPresent()).map(entry -> entry.getKey().get())
-          .collect(Collectors.toList()));
+        partitionPaths.addAll(result.stream().filter(entry -> entry.getKey().isPresent()).map(entry -> entry.getKey().get())
+            .collect(Collectors.toList()));
 
-      pathsToList.addAll(result.stream().filter(entry -> entry.getValue().isPresent()).map(entry -> entry.getValue().get())
-          .collect(Collectors.toList()));
+        pathsToList.addAll(result.stream().filter(entry -> entry.getValue().isPresent()).map(entry -> entry.getValue().get())
+            .collect(Collectors.toList()));
+      }
     }
     return partitionPaths;
   }
