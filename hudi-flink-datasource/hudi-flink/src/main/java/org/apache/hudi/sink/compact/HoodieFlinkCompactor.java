@@ -134,21 +134,6 @@ public class HoodieFlinkCompactor {
     private final Configuration conf;
 
     /**
-     * Meta Client.
-     */
-    private final HoodieTableMetaClient metaClient;
-
-    /**
-     * Write Client.
-     */
-    private final HoodieFlinkWriteClient<?> writeClient;
-
-    /**
-     * The hoodie table.
-     */
-    private final HoodieFlinkTable<?> table;
-
-    /**
      * Flink Execution Environment.
      */
     private final StreamExecutionEnvironment env;
@@ -165,7 +150,7 @@ public class HoodieFlinkCompactor {
       this.executor = Executors.newFixedThreadPool(1);
 
       // create metaClient
-      this.metaClient = StreamerUtil.createMetaClient(conf);
+      HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
 
       // get the table name
       conf.setString(FlinkOptions.TABLE_NAME, metaClient.getTableConfig().getTableName());
@@ -176,9 +161,7 @@ public class HoodieFlinkCompactor {
       // infer changelog mode
       CompactionUtil.inferChangelogMode(conf, metaClient);
 
-      this.writeClient = StreamerUtil.createWriteClient(conf);
-      this.writeConfig = writeClient.getConfig();
-      this.table = writeClient.getHoodieTable();
+      this.writeConfig = StreamerUtil.getHoodieClientConfig(conf);
     }
 
     @Override
@@ -205,11 +188,14 @@ public class HoodieFlinkCompactor {
     }
 
     private void compact() throws Exception {
+      HoodieFlinkWriteClient<?> writeClient = StreamerUtil.createWriteClient(conf);
+      HoodieFlinkTable<?> table = writeClient.getHoodieTable();
+
       table.getMetaClient().reloadActiveTimeline();
 
       // checks the compaction plan and do compaction.
       if (cfg.schedule) {
-        Option<String> compactionInstantTimeOption = CompactionUtil.getCompactionInstantTime(metaClient);
+        Option<String> compactionInstantTimeOption = CompactionUtil.getCompactionInstantTime(table.getMetaClient());
         if (compactionInstantTimeOption.isPresent()) {
           boolean scheduled = writeClient.scheduleCompactionAtInstant(compactionInstantTimeOption.get(), Option.empty());
           if (!scheduled) {
@@ -301,6 +287,8 @@ public class HoodieFlinkCompactor {
           .setParallelism(1);
 
       env.execute("flink_hudi_compaction_" + String.join(",", compactionInstantTimes));
+      LOG.info("Finished to compaction for instant " + compactionInstantTimes);
+      writeClient.close();
     }
 
     /**
@@ -309,7 +297,6 @@ public class HoodieFlinkCompactor {
     public void shutdownAsyncService(boolean error) {
       LOG.info("Gracefully shutting down compactor. Error ?" + error);
       executor.shutdown();
-      writeClient.close();
     }
 
     @VisibleForTesting
