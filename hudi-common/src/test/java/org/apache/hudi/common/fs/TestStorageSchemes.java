@@ -69,6 +69,11 @@ public class TestStorageSchemes {
     assertEquals(s3TablePath3, HoodieWrapperFileSystem.convertPathWithScheme(s3TablePath3, "s3"));
 
     Path hdfsTablePath = new Path("hdfs://sandbox.foo.com:8020/test.1234/table1");
-    System.out.println(HoodieWrapperFileSystem.convertPathWithScheme(hdfsTablePath, "hdfs"));
+    assertEquals(hdfsTablePath, HoodieWrapperFileSystem.convertPathWithScheme(hdfsTablePath, "hdfs"));
+
+    Path localTablePath = new Path("file:/var/table1");
+    Path localTablePathNoPrefix = new Path("/var/table1");
+    assertEquals(localTablePath, HoodieWrapperFileSystem.convertPathWithScheme(localTablePath, "file"));
+    assertEquals(localTablePath, HoodieWrapperFileSystem.convertPathWithScheme(localTablePathNoPrefix, "file"));
   }
 }
