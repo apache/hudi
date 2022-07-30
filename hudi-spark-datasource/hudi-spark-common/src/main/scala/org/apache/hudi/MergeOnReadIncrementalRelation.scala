@@ -91,6 +91,7 @@ class MergeOnReadIncrementalRelation(sqlContext: SQLContext,
       val commitsMetadata = includedCommits.map(getCommitMetadata(_, timeline)).asJava
 
       val modifiedFiles = listAffectedFilesForCommits(conf, new Path(metaClient.getBasePath), commitsMetadata)
+        .filter(file => metaClient.getFs.exists(file.getPath))
       val fsView = new HoodieTableFileSystemView(metaClient, timeline, modifiedFiles)
 
       val modifiedPartitions = getWritePartitionPaths(commitsMetadata)
