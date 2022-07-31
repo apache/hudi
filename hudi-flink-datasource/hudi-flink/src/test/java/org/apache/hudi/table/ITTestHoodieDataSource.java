@@ -1362,6 +1362,34 @@ public class ITTestHoodieDataSource extends AbstractTestBase {
     assertRowsEquals(partitionResult, "[+I[1, 2022-02-02, 1]]");
   }
 
+  @Test
+  void testWriteReadWithComputedColumns() {
+    TableEnvironment tableEnv = batchTableEnv;
+    String createTable = sql("t1")
+        .field("f0 int")
+        .field("f1 varchar(10)")
+        .field("f2 bigint")
+        .field("f3 as f0 + f2")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.PRECOMBINE_FIELD, "f1")
+        .pkField("f0")
+        .noPartition()
+        .end();
+    tableEnv.executeSql(createTable);
+
+    String insertInto = "insert into t1 values\n"
+        + "(1, 'abc', 2)";
+    execInsertSql(tableEnv, insertInto);
+
+    List<Row> result1 = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1").execute().collect());
+    assertRowsEquals(result1, "[+I[1, abc, 2, 3]]");
+
+    List<Row> result2 = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select f3 from t1").execute().collect());
+    assertRowsEquals(result2, "[+I[3]]");
+  }
+
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------

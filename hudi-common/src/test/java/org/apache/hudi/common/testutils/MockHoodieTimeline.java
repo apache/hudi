@@ -23,6 +23,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 
 import java.util.Comparator;
+import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -37,5 +38,10 @@ public class MockHoodieTimeline extends HoodieActiveTimeline {
         .concat(completed.map(s -> new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, s)),
             inflights.map(s -> new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, s)))
         .sorted(Comparator.comparing(HoodieInstant::getFileName)).collect(Collectors.toList()));
+  }
+
+  public MockHoodieTimeline(List<HoodieInstant> instants) {
+    super();
+    this.setInstants(instants);
   }
 }

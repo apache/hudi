@@ -31,7 +31,7 @@ import org.apache.hudi.hadoop.realtime.RealtimeSplit;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
-import static org.apache.hudi.TypeUtils.unsafeCast;
+import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 
 public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
 

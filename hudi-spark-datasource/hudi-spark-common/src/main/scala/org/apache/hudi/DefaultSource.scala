@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_REA
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.metadata.HoodieTableMetadata.isMetadataTable
 import org.apache.log4j.LogManager
 import org.apache.spark.sql.execution.streaming.{Sink, Source}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isUsingHiveCatalog
@@ -56,6 +57,9 @@ class DefaultSource extends RelationProvider
       // Enable "passPartitionByAsOptions" to support "write.partitionBy(...)"
       spark.conf.set("spark.sql.legacy.sources.write.passPartitionByAsOptions", "true")
     }
+    // Revisit EMR Spark and EMRFS incompatibilities, for now disable
+    spark.conf.set("spark.sql.dataPrefetch.enabled", "false")
+    spark.sparkContext.hadoopConfiguration.set("fs.s3.metadata.cache.expiration.seconds", "0")
   }
 
   private val log = LogManager.getLogger(classOf[DefaultSource])
@@ -127,6 +131,7 @@ class DefaultSource extends RelationProvider
              (COPY_ON_WRITE, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, false) |
              (MERGE_ON_READ, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, false) =>
           resolveBaseFileOnlyRelation(sqlContext, globPaths, userSchema, metaClient, parameters)
+
         case (COPY_ON_WRITE, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
           new IncrementalRelation(sqlContext, parameters, userSchema, metaClient)
 

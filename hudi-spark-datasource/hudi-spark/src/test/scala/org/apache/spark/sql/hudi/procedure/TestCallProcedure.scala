@@ -156,7 +156,7 @@ class TestCallProcedure extends HoodieSparkSqlTestBase {
 
       // Check required fields
       checkExceptionContain(s"""call delete_marker(table => '$tableName')""")(
-        s"Argument: instant_Time is required")
+        s"Argument: instant_time is required")
 
       val instantTime = "101"
       FileCreateUtils.createMarkerFile(tablePath, "", instantTime, "f0", IOType.APPEND)
@@ -164,7 +164,7 @@ class TestCallProcedure extends HoodieSparkSqlTestBase {
         FileCreateUtils.getTotalMarkerFileCount(tablePath, "", instantTime, IOType.APPEND)
       }
 
-      checkAnswer(s"""call delete_marker(table => '$tableName', instant_Time => '$instantTime')""")(Seq(true))
+      checkAnswer(s"""call delete_marker(table => '$tableName', instant_time => '$instantTime')""")(Seq(true))
 
       assertResult(0) {
         FileCreateUtils.getTotalMarkerFileCount(tablePath, "", instantTime, IOType.APPEND)

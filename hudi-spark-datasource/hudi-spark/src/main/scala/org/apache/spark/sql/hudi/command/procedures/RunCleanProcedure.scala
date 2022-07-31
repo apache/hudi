@@ -30,10 +30,10 @@ class RunCleanProcedure extends BaseProcedure with ProcedureBuilder with Logging
 
   private val PARAMETERS = Array[ProcedureParameter](
     ProcedureParameter.required(0, "table", DataTypes.StringType, None),
-    ProcedureParameter.optional(1, "skipLocking", DataTypes.BooleanType, false),
-    ProcedureParameter.optional(2, "scheduleInLine", DataTypes.BooleanType, true),
-    ProcedureParameter.optional(3, "cleanPolicy", DataTypes.StringType, None),
-    ProcedureParameter.optional(4, "retainCommits", DataTypes.IntegerType, 10)
+    ProcedureParameter.optional(1, "skip_locking", DataTypes.BooleanType, false),
+    ProcedureParameter.optional(2, "schedule_in_line", DataTypes.BooleanType, true),
+    ProcedureParameter.optional(3, "clean_policy", DataTypes.StringType, None),
+    ProcedureParameter.optional(4, "retain_commits", DataTypes.IntegerType, 10)
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](

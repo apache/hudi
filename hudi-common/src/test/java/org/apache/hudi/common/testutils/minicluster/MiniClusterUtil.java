@@ -50,10 +50,10 @@ public class MiniClusterUtil {
 
   public static void shutdown() {
     if (dfsCluster != null) {
-      dfsCluster.shutdown();
+      dfsCluster.shutdown(true, true);
     }
     if (zkServer != null) {
-      zkServer.shutdown();
+      zkServer.shutdown(true);
     }
   }
 }

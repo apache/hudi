@@ -324,12 +324,14 @@
       <classifier>tests</classifier>
       <scope>test</scope>
     </dependency>
+
     <dependency>
       <groupId>org.apache.spark</groupId>
       <artifactId>spark-core_${scala.binary.version}</artifactId>
       <classifier>tests</classifier>
       <scope>test</scope>
     </dependency>
+
     <dependency>
       <groupId>org.apache.spark</groupId>
       <artifactId>spark-catalyst_${scala.binary.version}</artifactId>

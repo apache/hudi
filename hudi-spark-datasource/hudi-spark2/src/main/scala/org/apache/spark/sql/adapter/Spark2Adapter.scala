@@ -21,14 +21,13 @@ package org.apache.spark.sql.adapter
 import org.apache.avro.Schema
 import org.apache.hudi.Spark2RowSerDe
 import org.apache.hudi.client.utils.SparkRowSerDe
-import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSchemaConverters, HoodieAvroSerializer, HoodieSpark2_4AvroDeserializer, HoodieSpark2_4AvroSerializer, HoodieSparkAvroSchemaConverters}
+import org.apache.spark.sql.avro._
 import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
-import org.apache.spark.sql.catalyst.expressions.{Expression, InterpretedPredicate, Like}
+import org.apache.spark.sql.catalyst.expressions.{Expression, InterpretedPredicate}
 import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.catalyst.plans.JoinType
 import org.apache.spark.sql.catalyst.plans.logical.{InsertIntoTable, Join, LogicalPlan}
-import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.catalyst.{AliasIdentifier, TableIdentifier}
 import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark24HoodieParquetFileFormat}
 import org.apache.spark.sql.execution.datasources.{FilePartition, PartitionedFile, Spark2ParsePartitionUtil, SparkParsePartitionUtil}
@@ -36,7 +35,9 @@ import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.hudi.parser.HoodieSpark2ExtendedSqlParser
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.DataType
-import org.apache.spark.sql.{HoodieCatalystExpressionUtils, HoodieSpark2CatalystExpressionUtils, Row, SparkSession}
+import org.apache.spark.sql.{HoodieCatalystExpressionUtils, HoodieCatalystPlansUtils, HoodieSpark2CatalystExpressionUtils, HoodieSpark2CatalystPlanUtils, Row, SparkSession}
+import org.apache.spark.storage.StorageLevel
+import org.apache.spark.storage.StorageLevel._
 
 import scala.collection.mutable.ArrayBuffer
 
@@ -45,7 +46,9 @@ import scala.collection.mutable.ArrayBuffer
  */
 class Spark2Adapter extends SparkAdapter {
 
-  override def createCatalystExpressionUtils(): HoodieCatalystExpressionUtils = HoodieSpark2CatalystExpressionUtils
+  override def getCatalystExpressionUtils: HoodieCatalystExpressionUtils = HoodieSpark2CatalystExpressionUtils
+
+  override def getCatalystPlanUtils: HoodieCatalystPlansUtils = HoodieSpark2CatalystPlanUtils
 
   override def createAvroSerializer(rootCatalystType: DataType, rootAvroType: Schema, nullable: Boolean): HoodieAvroSerializer =
     new HoodieSpark2_4AvroSerializer(rootCatalystType, rootAvroType, nullable)
@@ -59,36 +62,6 @@ class Spark2Adapter extends SparkAdapter {
     new Spark2RowSerDe(encoder)
   }
 
-  override def toTableIdentifier(aliasId: AliasIdentifier): TableIdentifier = {
-    TableIdentifier(aliasId.identifier, aliasId.database)
-  }
-
-  override def toTableIdentifier(relation: UnresolvedRelation): TableIdentifier = {
-    relation.tableIdentifier
-  }
-
-  override def createJoin(left: LogicalPlan, right: LogicalPlan, joinType: JoinType): Join = {
-    Join(left, right, joinType, None)
-  }
-
-  override def isInsertInto(plan: LogicalPlan): Boolean = {
-    plan.isInstanceOf[InsertIntoTable]
-  }
-
-  override def getInsertIntoChildren(plan: LogicalPlan):
-    Option[(LogicalPlan, Map[String, Option[String]], LogicalPlan, Boolean, Boolean)] = {
-    plan match {
-      case InsertIntoTable(table, partition, query, overwrite, ifPartitionNotExists) =>
-        Some((table, partition, query, overwrite, ifPartitionNotExists))
-      case _=> None
-    }
-  }
-
-  override def createInsertInto(table: LogicalPlan, partition: Map[String, Option[String]],
-      query: LogicalPlan, overwrite: Boolean, ifPartitionNotExists: Boolean): LogicalPlan = {
-    InsertIntoTable(table, partition, query, overwrite, ifPartitionNotExists)
-  }
-
   override def createExtendedSparkParser: Option[(SparkSession, ParserInterface) => ParserInterface] = {
     Some(
       (spark: SparkSession, delegate: ParserInterface) => new HoodieSpark2ExtendedSqlParser(spark, delegate)
@@ -96,10 +69,6 @@ class Spark2Adapter extends SparkAdapter {
   }
 
   override def createSparkParsePartitionUtil(conf: SQLConf): SparkParsePartitionUtil = new Spark2ParsePartitionUtil
-
-  override def createLike(left: Expression, right: Expression): Expression = {
-    Like(left, right)
-  }
 
   override def parseMultipartIdentifier(parser: ParserInterface, sqlText: String): Seq[String] = {
     throw new IllegalStateException(s"Should not call ParserInterface#parseMultipartIdentifier for spark2")
@@ -145,25 +114,27 @@ class Spark2Adapter extends SparkAdapter {
     partitions.toSeq
   }
 
-  /**
-   * if the logical plan is a TimeTravelRelation LogicalPlan.
-   */
-  override def isRelationTimeTravel(plan: LogicalPlan): Boolean = {
-    false
-  }
-
-  /**
-   * Get the member of the TimeTravelRelation LogicalPlan.
-   */
-  override def getRelationTimeTravel(plan: LogicalPlan): Option[(LogicalPlan, Option[Expression], Option[String])] = {
-    throw new IllegalStateException(s"Should not call getRelationTimeTravel for spark2")
-  }
-
   override def createHoodieParquetFileFormat(appendPartitionValues: Boolean): Option[ParquetFileFormat] = {
     Some(new Spark24HoodieParquetFileFormat(appendPartitionValues))
   }
 
   override def createInterpretedPredicate(e: Expression): InterpretedPredicate = {
     InterpretedPredicate.create(e)
+  }
+
+  override def convertStorageLevelToString(level: StorageLevel): String = level match {
+    case NONE => "NONE"
+    case DISK_ONLY => "DISK_ONLY"
+    case DISK_ONLY_2 => "DISK_ONLY_2"
+    case MEMORY_ONLY => "MEMORY_ONLY"
+    case MEMORY_ONLY_2 => "MEMORY_ONLY_2"
+    case MEMORY_ONLY_SER => "MEMORY_ONLY_SER"
+    case MEMORY_ONLY_SER_2 => "MEMORY_ONLY_SER_2"
+    case MEMORY_AND_DISK => "MEMORY_AND_DISK"
+    case MEMORY_AND_DISK_2 => "MEMORY_AND_DISK_2"
+    case MEMORY_AND_DISK_SER => "MEMORY_AND_DISK_SER"
+    case MEMORY_AND_DISK_SER_2 => "MEMORY_AND_DISK_SER_2"
+    case OFF_HEAP => "OFF_HEAP"
+    case _ => throw new IllegalArgumentException(s"Invalid StorageLevel: $level")
   }
 }

@@ -37,22 +37,22 @@ import java.util.function.Supplier
 class RunBootstrapProcedure extends BaseProcedure with ProcedureBuilder with Logging {
   private val PARAMETERS = Array[ProcedureParameter](
     ProcedureParameter.required(0, "table", DataTypes.StringType, None),
-    ProcedureParameter.required(1, "tableType", DataTypes.StringType, None),
-    ProcedureParameter.required(2, "bootstrapPath", DataTypes.StringType, None),
-    ProcedureParameter.required(3, "basePath", DataTypes.StringType, None),
-    ProcedureParameter.required(4, "rowKeyField", DataTypes.StringType, None),
-    ProcedureParameter.optional(5, "baseFileFormat", DataTypes.StringType, "PARQUET"),
-    ProcedureParameter.optional(6, "partitionPathField", DataTypes.StringType, ""),
-    ProcedureParameter.optional(7, "bootstrapIndexClass", DataTypes.StringType, "org.apache.hudi.common.bootstrap.index.HFileBootstrapIndex"),
-    ProcedureParameter.optional(8, "selectorClass", DataTypes.StringType, "org.apache.hudi.client.bootstrap.selector.MetadataOnlyBootstrapModeSelector"),
-    ProcedureParameter.optional(9, "keyGeneratorClass", DataTypes.StringType, "org.apache.hudi.keygen.SimpleKeyGenerator"),
-    ProcedureParameter.optional(10, "fullBootstrapInputProvider", DataTypes.StringType, "org.apache.hudi.bootstrap.SparkParquetBootstrapDataProvider"),
-    ProcedureParameter.optional(11, "schemaProviderClass", DataTypes.StringType, ""),
-    ProcedureParameter.optional(12, "payloadClass", DataTypes.StringType, "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload"),
+    ProcedureParameter.required(1, "table_type", DataTypes.StringType, None),
+    ProcedureParameter.required(2, "bootstrap_path", DataTypes.StringType, None),
+    ProcedureParameter.required(3, "base_path", DataTypes.StringType, None),
+    ProcedureParameter.required(4, "rowKey_field", DataTypes.StringType, None),
+    ProcedureParameter.optional(5, "base_file_format", DataTypes.StringType, "PARQUET"),
+    ProcedureParameter.optional(6, "partition_path_field", DataTypes.StringType, ""),
+    ProcedureParameter.optional(7, "bootstrap_index_class", DataTypes.StringType, "org.apache.hudi.common.bootstrap.index.HFileBootstrapIndex"),
+    ProcedureParameter.optional(8, "selector_class", DataTypes.StringType, "org.apache.hudi.client.bootstrap.selector.MetadataOnlyBootstrapModeSelector"),
+    ProcedureParameter.optional(9, "key_generator_glass", DataTypes.StringType, "org.apache.hudi.keygen.SimpleKeyGenerator"),
+    ProcedureParameter.optional(10, "full_bootstrap_input_provider", DataTypes.StringType, "org.apache.hudi.bootstrap.SparkParquetBootstrapDataProvider"),
+    ProcedureParameter.optional(11, "schema_provider_class", DataTypes.StringType, ""),
+    ProcedureParameter.optional(12, "payload_class", DataTypes.StringType, "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload"),
     ProcedureParameter.optional(13, "parallelism", DataTypes.IntegerType, 1500),
-    ProcedureParameter.optional(14, "enableHiveSync", DataTypes.BooleanType, false),
-    ProcedureParameter.optional(15, "propsFilePath", DataTypes.StringType, ""),
-    ProcedureParameter.optional(16, "bootstrapOverwrite", DataTypes.BooleanType, false)
+    ProcedureParameter.optional(14, "enable_hive_sync", DataTypes.BooleanType, false),
+    ProcedureParameter.optional(15, "props_file_path", DataTypes.StringType, ""),
+    ProcedureParameter.optional(16, "bootstrap_overwrite", DataTypes.BooleanType, false)
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](

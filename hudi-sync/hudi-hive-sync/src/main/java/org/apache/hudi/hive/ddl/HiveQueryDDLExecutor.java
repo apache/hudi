@@ -47,7 +47,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.sync.common.util.TableUtils.tableId;
 
 /**
- * This class offers DDL executor backed by the HiveQL Driver.
+ * This class offers DDL executor backed by the hive.ql Driver This class preserves the old useJDBC = false way of doing things.
  */
 public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
 

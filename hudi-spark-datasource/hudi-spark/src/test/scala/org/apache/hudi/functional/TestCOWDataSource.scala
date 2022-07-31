@@ -26,6 +26,7 @@ import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, T
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.{deleteRecordsToStrings, recordsToStrings}
 import org.apache.hudi.common.util
+import org.apache.hudi.common.util.PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.{HoodieException, HoodieUpsertException}
 import org.apache.hudi.keygen._
@@ -41,7 +42,7 @@ import org.joda.time.DateTime
 import org.joda.time.format.DateTimeFormat
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue, fail}
 import org.junit.jupiter.api.function.Executable
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
 
@@ -614,13 +615,14 @@ class TestCOWDataSource extends HoodieClientTestBase {
       .load(basePath)
     assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= col("driver")).count() == 0)
 
-    // Use the `driver,rider` field as the partition key, If no such field exists, the default value `default` is used
+    // Use the `driver,rider` field as the partition key, If no such field exists,
+    // the default value [[PartitionPathEncodeUtils#DEFAULT_PARTITION_PATH]] is used
     writer = getDataFrameWriter(classOf[SimpleKeyGenerator].getName)
     writer.partitionBy("driver", "rider")
       .save(basePath)
     recordsReadDF = spark.read.format("org.apache.hudi")
       .load(basePath)
-    assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= lit("default")).count() == 0)
+    assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= lit(DEFAULT_PARTITION_PATH)).count() == 0)
   }
 
   @Test def testSparkPartitionByWithComplexKeyGenerator() {

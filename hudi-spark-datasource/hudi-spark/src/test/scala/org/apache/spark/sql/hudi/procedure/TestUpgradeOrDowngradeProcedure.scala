@@ -48,7 +48,7 @@ class TestUpgradeOrDowngradeProcedure extends HoodieSparkSqlTestBase {
        """.stripMargin)
       // Check required fields
       checkExceptionContain(s"""call downgrade_table(table => '$tableName')""")(
-        s"Argument: toVersion is required")
+        s"Argument: to_version is required")
 
       var metaClient = HoodieTableMetaClient.builder
         .setConf(new JavaSparkContext(spark.sparkContext).hadoopConfiguration())
@@ -62,7 +62,7 @@ class TestUpgradeOrDowngradeProcedure extends HoodieSparkSqlTestBase {
       assertTableVersionFromPropertyFile(metaClient, HoodieTableVersion.FOUR.versionCode)
 
       // downgrade table to ZERO
-      checkAnswer(s"""call downgrade_table(table => '$tableName', toVersion => 'ZERO')""")(Seq(true))
+      checkAnswer(s"""call downgrade_table(table => '$tableName', to_version => 'ZERO')""")(Seq(true))
 
       // verify the downgraded hoodie.table.version
       metaClient = HoodieTableMetaClient.reload(metaClient)
@@ -72,7 +72,7 @@ class TestUpgradeOrDowngradeProcedure extends HoodieSparkSqlTestBase {
       assertTableVersionFromPropertyFile(metaClient, HoodieTableVersion.ZERO.versionCode)
 
       // upgrade table to ONE
-      checkAnswer(s"""call upgrade_table(table => '$tableName', toVersion => 'ONE')""")(Seq(true))
+      checkAnswer(s"""call upgrade_table(table => '$tableName', to_version => 'ONE')""")(Seq(true))
 
       // verify the upgraded hoodie.table.version
       metaClient = HoodieTableMetaClient.reload(metaClient)

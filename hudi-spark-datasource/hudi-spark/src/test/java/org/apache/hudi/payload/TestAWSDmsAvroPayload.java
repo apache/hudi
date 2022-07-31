@@ -18,6 +18,7 @@
 
 package org.apache.hudi.payload;
 
+import org.apache.hudi.common.model.AWSDmsAvroPayload;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.util.Option;
 
