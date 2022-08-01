@@ -1165,6 +1165,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS);
   }
 
+  public boolean bulkInsertPreserverMetadata() {
+    return getBooleanOrDefault(HoodieWriteConfig.BULKINSERT_PRESERVE_METADATA);
+  }
+
   /**
    * compaction properties.
    */

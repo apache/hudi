@@ -106,7 +106,7 @@ public class HoodieRowCreateHandle implements Serializable {
 
     this.writeStatus = new HoodieInternalWriteStatus(!table.getIndex().isImplicitWithStorage(),
         writeConfig.getWriteStatusFailureFraction());
-    this.preserveMetadata = writeConfig.getBoolean(HoodieWriteConfig.BULKINSERT_PRESERVE_METADATA);
+    this.preserveMetadata = writeConfig.bulkInsertPreserverMetadata();
 
     writeStatus.setPartitionPath(partitionPath);
     writeStatus.setFileId(fileId);

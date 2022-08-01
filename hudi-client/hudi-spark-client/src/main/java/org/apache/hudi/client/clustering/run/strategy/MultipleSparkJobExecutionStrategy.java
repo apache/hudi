@@ -198,7 +198,12 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
     params.compute(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), (k, v) -> writeConfig.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME));
     params.put("hoodie.datasource.write.operation", "bulk_insert");
     params.put("hoodie.instant.time", instantTime);
-    params.put(HoodieWriteConfig.BULKINSERT_PRESERVE_METADATA.key(), String.valueOf(preserveHoodieMetadata));
+    if (!writeConfig.populateMetaFields() && preserveHoodieMetadata) {
+      LOG.warn("Will setting preserveHoodieMetadata to false as populateMetaFields is false");
+      params.put(HoodieWriteConfig.BULKINSERT_PRESERVE_METADATA.key(), "false");
+    } else {
+      params.put(HoodieWriteConfig.BULKINSERT_PRESERVE_METADATA.key(), String.valueOf(preserveHoodieMetadata));
+    }
     configRowPartitioner(strategyParams, params);
     return params;
   }
