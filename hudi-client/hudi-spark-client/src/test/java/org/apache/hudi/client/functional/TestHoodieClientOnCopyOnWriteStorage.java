@@ -681,7 +681,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     HoodieWriteConfig config = getConfigBuilder().withRollbackUsingMarkers(true).build();
     HoodieWriteConfig hoodieWriteConfig = getConfigBuilder(EAGER)
         .withRollbackUsingMarkers(true)
-        .withArchiveBeyondSavepoint(true)
+        .withArchivalConfig(HoodieArchivalConfig.newBuilder().withArchiveBeyondSavepoint(true).build())
         .withProps(config.getProps()).withTimelineLayoutVersion(
             VERSION_0).build();
 
