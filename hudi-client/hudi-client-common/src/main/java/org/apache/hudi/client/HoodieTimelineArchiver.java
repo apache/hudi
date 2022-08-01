@@ -553,7 +553,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
     Map<String, Boolean> resultDeleteInstantFiles = deleteFilesParallelize(metaClient, files, context, false);
 
     for (Map.Entry<String, Boolean> result : resultDeleteInstantFiles.entrySet()) {
-      LOG.info("Archived and deleted instant file " + result.getKey() + " : " + result.getValue());
+      LOG.debug("Archived and deleted instant file " + result.getKey() + " : " + result.getValue());
       success &= result.getValue();
     }
     return success;

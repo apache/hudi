@@ -150,7 +150,7 @@ public class MarkerHandler extends Handler {
    * @return the {@code CompletableFuture} instance for the request
    */
   public CompletableFuture<String> createMarker(Context context, String markerDir, String markerName) {
-    LOG.info("Request: create marker " + markerDir + " " + markerName);
+    LOG.info("Request: create marker: " + markerName);
     MarkerCreationFuture future = new MarkerCreationFuture(context, markerDir, markerName);
     // Add the future to the list
     MarkerDirState markerDirState = getMarkerDirState(markerDir);
