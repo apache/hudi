@@ -19,12 +19,15 @@ package org.apache.spark.sql
 
 import org.apache.spark.sql.catalyst.{AliasIdentifier, TableIdentifier}
 import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
+import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression}
 import org.apache.spark.sql.catalyst.plans.JoinType
 import org.apache.spark.sql.catalyst.plans.logical.{Join, LogicalPlan}
 import org.apache.spark.sql.internal.SQLConf
 
 trait HoodieCatalystPlansUtils {
+
+  protected val spark: SparkSession = SparkSession.active
 
   /**
    * Resolves output of the provided [[query]] against the [[expected]] list of [[Attribute]],
@@ -54,9 +57,9 @@ trait HoodieCatalystPlansUtils {
   def toTableIdentifier(aliasId: AliasIdentifier): TableIdentifier
 
   /**
-   * Convert a UnresolvedRelation to TableIdentifier.
+   * resolve UnresolvedRelation to CatalogTable.
    */
-  def toTableIdentifier(relation: UnresolvedRelation): TableIdentifier
+  def resolve(relation: UnresolvedRelation): Option[CatalogTable]
 
   /**
    * Create Join logical plan.

@@ -180,6 +180,14 @@
   </build>
 
   <dependencies>
+    <!-- H2 database for TestSpark3Catalog -->
+    <dependency>
+      <groupId>com.h2database</groupId>
+      <artifactId>h2</artifactId>
+      <version>${h2.version}</version>
+      <scope>test</scope>
+    </dependency>
+
     <!-- Scala -->
     <dependency>
       <groupId>org.scala-lang</groupId>

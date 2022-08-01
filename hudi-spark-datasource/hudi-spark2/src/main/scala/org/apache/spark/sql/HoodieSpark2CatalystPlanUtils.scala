@@ -19,6 +19,7 @@ package org.apache.spark.sql
 
 import org.apache.spark.sql.catalyst.{AliasIdentifier, TableIdentifier}
 import org.apache.spark.sql.catalyst.analysis.{SimpleAnalyzer, UnresolvedRelation}
+import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression, Like}
 import org.apache.spark.sql.catalyst.plans.JoinType
 import org.apache.spark.sql.catalyst.plans.logical.{InsertIntoTable, Join, LogicalPlan}
@@ -41,8 +42,8 @@ object HoodieSpark2CatalystPlanUtils extends HoodieCatalystPlansUtils {
     TableIdentifier(aliasId.identifier, aliasId.database)
   }
 
-  override def toTableIdentifier(relation: UnresolvedRelation): TableIdentifier = {
-    relation.tableIdentifier
+  override def resolve(relation: UnresolvedRelation): Option[CatalogTable] = {
+    Some(spark.sessionState.catalog.getTableMetadata(relation.tableIdentifier))
   }
 
   override def createJoin(left: LogicalPlan, right: LogicalPlan, joinType: JoinType): Join = {

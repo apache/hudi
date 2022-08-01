@@ -473,9 +473,9 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
           "version expression is not supported for time travel")
       }
 
-      val tableIdentifier = sparkAdapter.getCatalystPlanUtils.toTableIdentifier(plan)
-      if (sparkAdapter.isHoodieTable(tableIdentifier, sparkSession)) {
-        val hoodieCatalogTable = HoodieCatalogTable(sparkSession, tableIdentifier)
+      val catalogTable = sparkAdapter.getCatalystPlanUtils.resolve(plan)
+      if (catalogTable.isDefined && sparkAdapter.isHoodieTable(catalogTable.get)) {
+        val hoodieCatalogTable = HoodieCatalogTable(sparkSession, catalogTable.get)
         val table = hoodieCatalogTable.table
         val pathOption = table.storage.locationUri.map("path" -> CatalogUtils.URIToString(_))
         val instantOption = Map(

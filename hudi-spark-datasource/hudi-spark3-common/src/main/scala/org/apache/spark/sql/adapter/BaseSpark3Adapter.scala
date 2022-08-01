@@ -71,7 +71,7 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
       case LogicalRelation(_, _, Some(table), _) => isHoodieTable(table)
       case relation: UnresolvedRelation =>
         try {
-          isHoodieTable(getCatalystPlanUtils.toTableIdentifier(relation), spark)
+          getCatalystPlanUtils.resolve(relation).exists(isHoodieTable)
         } catch {
           case NonFatal(e) =>
             logWarning("Failed to determine whether the table is a hoodie table", e)

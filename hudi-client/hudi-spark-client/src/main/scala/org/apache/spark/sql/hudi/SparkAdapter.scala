@@ -102,7 +102,7 @@ trait SparkAdapter extends Serializable {
     unfoldSubqueryAliases(table) match {
       case LogicalRelation(_, _, Some(table), _) => isHoodieTable(table)
       case relation: UnresolvedRelation =>
-        isHoodieTable(getCatalystPlanUtils.toTableIdentifier(relation), spark)
+        getCatalystPlanUtils.resolve(relation).exists(isHoodieTable)
       case _=> false
     }
   }
