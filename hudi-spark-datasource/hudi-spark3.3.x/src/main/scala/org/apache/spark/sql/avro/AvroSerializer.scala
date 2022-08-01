@@ -21,7 +21,7 @@ import java.nio.ByteBuffer
 import scala.collection.JavaConverters._
 import org.apache.avro.Conversions.DecimalConversion
 import org.apache.avro.LogicalTypes
-import org.apache.avro.LogicalTypes.{TimestampMicros, TimestampMillis}
+import org.apache.avro.LogicalTypes.{LocalTimestampMicros, LocalTimestampMillis, TimestampMicros, TimestampMillis}
 import org.apache.avro.Schema
 import org.apache.avro.Schema.Type
 import org.apache.avro.Schema.Type._
@@ -188,6 +188,18 @@ private[sql] class AvroSerializer(rootCatalystType: DataType,
           s"SQL type ${TimestampType.sql} cannot be converted to Avro logical type $other")
       }
 
+      case (TimestampNTZType, LONG) => avroType.getLogicalType match {
+        // To keep consistent with TimestampType, if the Avro type is Long and it is not
+        // logical type (the `null` case), output the TimestampNTZ as long value
+        // in millisecond precision.
+        case null | _: LocalTimestampMillis => (getter, ordinal) =>
+          DateTimeUtils.microsToMillis(getter.getLong(ordinal))
+        case _: LocalTimestampMicros => (getter, ordinal) =>
+          getter.getLong(ordinal)
+        case other => throw new IncompatibleSchemaException(errorPrefix +
+          s"SQL type ${TimestampNTZType.sql} cannot be converted to Avro logical type $other")
+      }
+
       case (ArrayType(et, containsNull), ARRAY) =>
         val elementConverter = newConverter(
           et, resolveNullableType(avroType.getElementType, containsNull),
@@ -250,6 +262,12 @@ private[sql] class AvroSerializer(rootCatalystType: DataType,
             i += 1
           }
           result
+
+      case (_: YearMonthIntervalType, INT) =>
+        (getter, ordinal) => getter.getInt(ordinal)
+
+      case (_: DayTimeIntervalType, LONG) =>
+        (getter, ordinal) => getter.getLong(ordinal)
 
       case _ =>
         throw new IncompatibleSchemaException(errorPrefix +
