@@ -39,7 +39,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.keygen.TimestampBasedKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
@@ -84,6 +83,7 @@ import static org.apache.hudi.common.table.HoodieTableConfig.TYPE;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH;
 import static org.apache.hudi.common.util.MarkerUtils.MARKERS_FILENAME_PREFIX;
+import static org.apache.hudi.common.util.PartitionPathEncodeUtils.DEPRECATED_DEFAULT_PARTITION_PATH;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -409,7 +409,7 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
 
   private void doInsertWithDefaultPartition(SparkRDDWriteClient client) {
     // Write 1 (only inserts)
-    dataGen = new HoodieTestDataGenerator(new String[]{KeyGenUtils.OLD_DEPRECATED_DEFAULT_PARTITION_PATH});
+    dataGen = new HoodieTestDataGenerator(new String[]{DEPRECATED_DEFAULT_PARTITION_PATH});
     String commit1 = "005";
     client.startCommitWithTime(commit1);
     List<HoodieRecord> records = dataGen.generateInserts(commit1, 100);

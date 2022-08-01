@@ -32,7 +32,8 @@ import org.apache.log4j.Logger;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.apache.hudi.keygen.KeyGenUtils.OLD_DEPRECATED_DEFAULT_PARTITION_PATH;
+import static org.apache.hudi.common.util.PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH;
+import static org.apache.hudi.common.util.PartitionPathEncodeUtils.DEPRECATED_DEFAULT_PARTITION_PATH;
 
 /**
  * Upgrade handler to upgrade Hudi's table version from 4 to 5.
@@ -44,16 +45,23 @@ public class FourToFiveUpgradeHandler implements UpgradeHandler {
   @Override
   public Map<ConfigProperty, String> upgrade(HoodieWriteConfig config, HoodieEngineContext context, String instantTime, SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     if (FSUtils.getAllPartitionPaths(context, HoodieMetadataConfig.newBuilder().enable(false).build(), config.getBasePath())
-        .contains(OLD_DEPRECATED_DEFAULT_PARTITION_PATH)) {
-      LOG.error("\"default\" partition detected. From 0.12, we are changing the default partition in hudi to \"__HIVE_DEFAULT_PARTITION__\". "
-          + " Please read and write back the data in \"default\" partition in hudi to new partition path \"__HIVE_DEFAULT_PARTITION__\". "
-          + "Sample spark command to use: \n"
-          + "val df = spark.read.format(\"hudi\").load(HUDI_TABLE_PATH); \t \n"
-          + "df.drop(\"_hoodie_commit_time\").drop(\"_hoodie_commit_seqno\").drop(\"_hoodie_record_key\")"
-          + ".drop(\"_hoodie_partition_path\").drop(\"_hoodie_file_name\").withColumn(PARTITION_PATH_COLUMN,\"__HIVE_DEFAULT_PARTITION__\")"
-          + ".write.options(writeOptions).mode(Append).save(HUDI_TABLE_PATH);\t\n"
-          + "Please fix values for PARTITION_PATH_COLUMN, HUDI_TABLE_PATH and set all write configs in above command before running ");
-      throw new HoodieException("Old deprecated \"default\" partition found in hudi table. This needs a migration step before we can upgrade ");
+        .contains(DEPRECATED_DEFAULT_PARTITION_PATH)) {
+      LOG.error(String.format("\"%s\" partition detected. From 0.12, we are changing the default partition in hudi to %s "
+              + " Please read and write back the data in \"%s\" partition in hudi to new partition path \"%s\". \"\n"
+              + " Sample spark command to use to re-write the data: \n\n"
+              + " val df = spark.read.format(\"hudi\").load(HUDI_TABLE_PATH).filter(col(\"PARTITION_PATH_COLUMN\") === \"%s\"); \t \n\n"
+              + " df.drop(\"_hoodie_commit_time\").drop(\"_hoodie_commit_seqno\").drop(\"_hoodie_record_key\")\"\n"
+              + " .drop(\"_hoodie_partition_path\").drop(\"_hoodie_file_name\").withColumn(PARTITION_PATH_COLUMN,\"%s\")\"\n"
+              + " .write.options(writeOptions).mode(Append).save(HUDI_TABLE_PATH);\t\n\"\n"
+              + " Please fix values for PARTITION_PATH_COLUMN, HUDI_TABLE_PATH and set all write configs in above command before running. "
+              + " Also do delete the records in old partition once above command succeeds. "
+              + " Sample spark command to delete old partition records: \n\n"
+              + " val df = spark.read.format(\"hudi\").load(HUDI_TABLE_PATH).filter(col(\"PARTITION_PATH_COLUMN\") === \"%s\"); \t \n\n"
+              + " df.write.option(\"hoodie.datasource.write.operation\",\"delete\").options(writeOptions).mode(Append).save(HUDI_TABLE_PATH);\t\n\"\n",
+          DEPRECATED_DEFAULT_PARTITION_PATH, DEFAULT_PARTITION_PATH, DEPRECATED_DEFAULT_PARTITION_PATH, DEFAULT_PARTITION_PATH,
+          DEPRECATED_DEFAULT_PARTITION_PATH, DEFAULT_PARTITION_PATH));
+      throw new HoodieException(String.format("Old deprecated \"%s\" partition found in hudi table. This needs a migration step before we can upgrade ",
+          DEPRECATED_DEFAULT_PARTITION_PATH));
     }
     return new HashMap<>();
   }
