@@ -58,6 +58,8 @@ dag_content:
     deps: first_upsert
   first_presto_query:
     config:
+      presto_props:
+        prop1: "SET SESSION hive.parquet_use_column_names = true"
       presto_queries:
         query1: "select count(*) from testdb.table1"
         result1: 400
