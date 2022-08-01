@@ -95,7 +95,7 @@ public class HoodieTableServiceManagerClient {
     queryParameters.forEach(builder::addParameter);
 
     String url = builder.toString();
-    LOG.info("Sending request to table management service : (" + url + ")");
+    LOG.info("Sending request to table table service manager : (" + url + ")");
     int timeoutMs = this.config.getConnectionTimeoutSec() * 1000;
     int requestRetryLimit = config.getConnectionRetryLimit();
     int connectionRetryDelay = config.getConnectionRetryDelay();

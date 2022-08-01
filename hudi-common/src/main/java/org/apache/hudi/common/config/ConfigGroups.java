@@ -35,7 +35,8 @@ public class ConfigGroups {
     METRICS("Metrics Configs"),
     RECORD_PAYLOAD("Record Payload Config"),
     KAFKA_CONNECT("Kafka Connect Configs"),
-    AWS("Amazon Web Services Configs");
+    AWS("Amazon Web Services Configs"),
+    PLATFORM_SERVICE("Platform Service Configs");
 
     public final String name;
 
