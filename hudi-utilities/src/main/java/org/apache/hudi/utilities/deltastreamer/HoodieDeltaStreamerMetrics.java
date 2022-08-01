@@ -101,6 +101,12 @@ public class HoodieDeltaStreamerMetrics implements Serializable {
     }
   }
 
+  public void updateDeltaStreamerKafkaAvroMessagesToProcess(long totalNewMsgs) {
+    if (config.isMetricsOn()) {
+      Metrics.registerGauge(getMetricsName("deltastreamer", "kafka_avro_messages_in"), totalNewMsgs);
+    }
+  }
+
   public long getDurationInMs(long ctxDuration) {
     return ctxDuration / 1000000;
   }

@@ -57,6 +57,7 @@ abstract class KafkaSource<T> extends Source<JavaRDD<T>> {
       long totalNewMsgs = KafkaOffsetGen.CheckpointUtils.totalNewMessages(offsetRanges);
       LOG.info("About to read " + totalNewMsgs + " from Kafka for topic :" + offsetGen.getTopicName());
       if (totalNewMsgs <= 0) {
+        // TODO
         return new InputBatch<>(Option.empty(), KafkaOffsetGen.CheckpointUtils.offsetsToStr(offsetRanges));
       }
       JavaRDD<T> newDataRDD = toRDD(offsetRanges);
