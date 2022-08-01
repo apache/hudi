@@ -156,26 +156,19 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
     // 1. prepare data
     HoodieTestDataGenerator.writePartitionMetadataDeprecated(fs, new String[] {DEFAULT_FIRST_PARTITION_PATH, DEFAULT_SECOND_PARTITION_PATH}, basePath);
     SparkRDDWriteClient client = getHoodieWriteClient(cfg);
-    /**
-     * Write 1 (only inserts)
-     */
+
     String newCommitTime = "001";
     client.startCommitWithTime(newCommitTime);
     List<HoodieRecord> records = dataGen.generateInsertsContainsAllPartitions(newCommitTime, 3);
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
     JavaRDD<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime);
     Assertions.assertNoWriteErrors(statuses.collect());
-    //client.commit(newCommitTime, statuses);
 
-    /**
-     * Write 2 (updates)
-     */
     newCommitTime = "002";
     client.startCommitWithTime(newCommitTime);
     records = dataGen.generateUpdates(newCommitTime, records);
     statuses = client.upsert(jsc.parallelize(records, 1), newCommitTime);
     Assertions.assertNoWriteErrors(statuses.collect());
-    //client.commit(newCommitTime, statuses);
 
     context = new HoodieSparkEngineContext(jsc);
     metaClient = HoodieTableMetaClient.reload(metaClient);
