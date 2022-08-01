@@ -42,6 +42,11 @@ public class PrestoQueryNode extends BaseQueryNode {
     }
     String user = context.getHoodieTestSuiteWriter().getCfg().prestoUsername;
     String pass = context.getHoodieTestSuiteWriter().getCfg().prestoPassword;
+    try {
+      Class.forName("com.facebook.presto.jdbc.PrestoDriver");
+    } catch (ClassNotFoundException e) {
+      throw new HoodieValidationException("Presto query validation failed due to " + e.getMessage(), e);
+    }
     try (Connection connection = DriverManager.getConnection(url, user, pass)) {
       Statement stmt = connection.createStatement();
       setSessionProperties(this.config.getPrestoProperties(), stmt);

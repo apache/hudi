@@ -76,6 +76,8 @@ public class DeltaConfig implements Serializable {
     public static final String HIVE_PROPERTIES = "hive_props";
     public static final String PRESTO_QUERIES = "presto_queries";
     public static final String PRESTO_PROPERTIES = "presto_props";
+    public static final String TRINO_QUERIES = "trino_queries";
+    public static final String TRINO_PROPERTIES = "trino_props";
     private static String NUM_RECORDS_INSERT = "num_records_insert";
     private static String NUM_RECORDS_UPSERT = "num_records_upsert";
     private static String NUM_RECORDS_DELETE = "num_records_delete";
@@ -339,11 +341,23 @@ public class DeltaConfig implements Serializable {
       return (List<String>) this.configsMap.getOrDefault(PRESTO_PROPERTIES, new ArrayList<>());
     }
 
+    public List<String> getTrinoProperties() {
+      return (List<String>) this.configsMap.getOrDefault(TRINO_PROPERTIES, new ArrayList<>());
+    }
+
     public List<Pair<String, Integer>> getPrestoQueries() {
       try {
         return (List<Pair<String, Integer>>) this.configsMap.getOrDefault(PRESTO_QUERIES, new ArrayList<>());
       } catch (Exception e) {
         throw new RuntimeException("unable to get presto queries from configs");
+      }
+    }
+
+    public List<Pair<String, Integer>> getTrinoQueries() {
+      try {
+        return (List<Pair<String, Integer>>) this.configsMap.getOrDefault(TRINO_QUERIES, new ArrayList<>());
+      } catch (Exception e) {
+        throw new RuntimeException("unable to get trino queries from configs");
       }
     }
 
@@ -468,8 +482,18 @@ public class DeltaConfig implements Serializable {
         return this;
       }
 
+      public Builder withTrinoProperties(List<String> trinoProperties) {
+        this.configsMap.put(TRINO_PROPERTIES, trinoProperties);
+        return this;
+      }
+
       public Builder withPrestoQueryAndResults(List<Pair<String, Integer>> prestoQueries) {
         this.configsMap.put(PRESTO_QUERIES, prestoQueries);
+        return this;
+      }
+
+      public Builder withTrinoQueryAndResults(List<Pair<String, Integer>> trinoQueries) {
+        this.configsMap.put(TRINO_QUERIES, trinoQueries);
         return this;
       }
 

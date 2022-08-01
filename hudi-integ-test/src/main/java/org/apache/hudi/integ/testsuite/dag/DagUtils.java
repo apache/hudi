@@ -58,6 +58,8 @@ import static org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config.H
 import static org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config.NO_DEPENDENCY_VALUE;
 import static org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config.PRESTO_PROPERTIES;
 import static org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config.PRESTO_QUERIES;
+import static org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config.TRINO_PROPERTIES;
+import static org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config.TRINO_QUERIES;
 
 /**
  * Utility class to SerDe workflow dag.
@@ -209,6 +211,12 @@ public class DagUtils {
         case PRESTO_PROPERTIES:
           configsMap.put(PRESTO_PROPERTIES, getQuerySessionProperties(entry));
           break;
+        case TRINO_QUERIES:
+          configsMap.put(TRINO_QUERIES, getQueries(entry));
+          break;
+        case TRINO_PROPERTIES:
+          configsMap.put(TRINO_PROPERTIES, getQuerySessionProperties(entry));
+          break;
         default:
           configsMap.put(entry.getKey(), getValue(entry.getValue()));
           break;
@@ -285,6 +293,14 @@ public class DagUtils {
           break;
         case PRESTO_PROPERTIES:
           ((ObjectNode) configNode).put(PRESTO_PROPERTIES,
+              MAPPER.readTree(getQueryEnginePropertyMapper().writeValueAsString(node.getConfig().getHiveProperties())));
+          break;
+        case TRINO_QUERIES:
+          ((ObjectNode) configNode).put(TRINO_QUERIES,
+              MAPPER.readTree(getQueryMapper().writeValueAsString(node.getConfig().getHiveQueries())));
+          break;
+        case TRINO_PROPERTIES:
+          ((ObjectNode) configNode).put(TRINO_PROPERTIES,
               MAPPER.readTree(getQueryEnginePropertyMapper().writeValueAsString(node.getConfig().getHiveProperties())));
           break;
         default:

@@ -329,5 +329,16 @@ public class HoodieTestSuiteJob {
 
     @Parameter(names = {"--presto-jdbc-password"}, description = "Password corresponding to the username to use for authentication")
     public String prestoPassword;
+
+    @Parameter(names = {"--trino-jdbc-url"}, description = "Trino JDBC URL in the format jdbc:trino://<host>:<port>/<catalog>/<schema>  "
+        + "e.g. URL to connect to Trino running on localhost port 8080 with the catalog `hive` and the schema `sales`: "
+        + "jdbc:trino://localhost:8080/hive/sales")
+    public String trinoJdbcUrl = EMPTY_STRING;
+
+    @Parameter(names = {"--trino-jdbc-username"}, description = "Username to use for authentication")
+    public String trinoUsername = "test";
+
+    @Parameter(names = {"--trino-jdbc-password"}, description = "Password corresponding to the username to use for authentication")
+    public String trinoPassword;
   }
 }
