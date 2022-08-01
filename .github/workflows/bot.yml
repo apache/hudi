@@ -36,6 +36,10 @@ jobs:
             sparkProfile: "spark3.2"
             flinkProfile: "flink1.14"
 
+          - scalaProfile: "scala-2.12"
+            sparkProfile: "spark3.3"
+            flinkProfile: "flink1.14"
+
     steps:
       - uses: actions/checkout@v2
       - name: Set up JDK 8
@@ -56,7 +60,6 @@ jobs:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
-        if: ${{ !endsWith(env.SPARK_PROFILE, '3.2') }} # skip test spark 3.2 before hadoop upgrade to 3.x
         run:
           mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -DfailIfNoTests=false -pl hudi-examples/hudi-examples-flink,hudi-examples/hudi-examples-java,hudi-examples/hudi-examples-spark
       - name: Spark SQL Test

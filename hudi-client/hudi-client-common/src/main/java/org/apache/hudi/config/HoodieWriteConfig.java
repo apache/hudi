@@ -1681,6 +1681,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getString(HoodieStorageConfig.PARQUET_OUTPUT_TIMESTAMP_TYPE);
   }
 
+  public String parquetFieldIdWriteEnabled() {
+    return getString(HoodieStorageConfig.PARQUET_FIELD_ID_WRITE_ENABLED);
+  }
+
   public Option<HoodieLogBlock.HoodieLogBlockType> getLogDataBlockFormat() {
     return Option.ofNullable(getString(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT))
         .map(HoodieLogBlock.HoodieLogBlockType::fromId);

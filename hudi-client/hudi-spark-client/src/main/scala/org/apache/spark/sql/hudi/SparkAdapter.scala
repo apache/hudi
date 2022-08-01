@@ -24,17 +24,15 @@ import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSchemaConver
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
+import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
-import org.apache.spark.sql.catalyst.expressions.{Expression, InterpretedPredicate}
+import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, InterpretedPredicate}
 import org.apache.spark.sql.catalyst.parser.ParserInterface
-import org.apache.spark.sql.catalyst.plans.JoinType
-import org.apache.spark.sql.catalyst.plans.logical.{Join, LogicalPlan, SubqueryAlias}
-import org.apache.spark.sql.catalyst.{AliasIdentifier, TableIdentifier}
-import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, SubqueryAlias}
+import org.apache.spark.sql.catalyst.plans.logical.{Command, LogicalPlan, SubqueryAlias}
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
-import org.apache.spark.sql.execution.datasources.{FilePartition, LogicalRelation, PartitionedFile, SparkParsePartitionUtil}
+import org.apache.spark.sql.execution.datasources.{FilePartition, FileScanRDD, LogicalRelation, PartitionedFile, SparkParsePartitionUtil}
 import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.types.DataType
+import org.apache.spark.sql.types.{DataType, StructType}
 import org.apache.spark.sql.{HoodieCatalystExpressionUtils, HoodieCatalystPlansUtils, Row, SparkSession}
 import org.apache.spark.storage.StorageLevel
 
@@ -132,8 +130,8 @@ trait SparkAdapter extends Serializable {
   }
 
   /**
-    * Create instance of [[ParquetFileFormat]]
-    */
+   * Create instance of [[ParquetFileFormat]]
+   */
   def createHoodieParquetFileFormat(appendPartitionValues: Boolean): Option[ParquetFileFormat]
 
   /**
@@ -142,6 +140,38 @@ trait SparkAdapter extends Serializable {
    * TODO move to HoodieCatalystExpressionUtils
    */
   def createInterpretedPredicate(e: Expression): InterpretedPredicate
+
+  /**
+   * Create instance of [[HoodieFileScanRDD]]
+   * SPARK-37273 FileScanRDD constructor changed in SPARK 3.3
+   */
+  def createHoodieFileScanRDD(sparkSession: SparkSession,
+                              readFunction: PartitionedFile => Iterator[InternalRow],
+                              filePartitions: Seq[FilePartition],
+                              readDataSchema: StructType,
+                              metadataColumns: Seq[AttributeReference] = Seq.empty): FileScanRDD
+
+  /**
+   * Resolve [[DeleteFromTable]]
+   * SPARK-38626 condition is no longer Option in Spark 3.3
+   */
+  def resolveDeleteFromTable(deleteFromTable: Command,
+                             resolveExpression: Expression => Expression): LogicalPlan
+
+  /**
+   * Extract condition in [[DeleteFromTable]]
+   * SPARK-38626 condition is no longer Option in Spark 3.3
+   */
+  def extractDeleteCondition(deleteFromTable: Command): Expression
+
+  /**
+   * Get parseQuery from ExtendedSqlParser, only for Spark 3.3+
+   */
+  def getQueryParserFromExtendedSqlParser(session: SparkSession, delegate: ParserInterface,
+                                          sqlText: String): LogicalPlan = {
+    // unsupported by default
+    throw new UnsupportedOperationException(s"Unsupported parseQuery method in Spark earlier than Spark 3.3.0")
+  }
 
   /**
    * Converts instance of [[StorageLevel]] to a corresponding string
