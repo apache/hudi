@@ -56,10 +56,16 @@ public class MarkerBasedRollbackUtils {
     FileSystem fileSystem = table.getMetaClient().getFs();
     Option<MarkerType> markerTypeOption = MarkerUtils.readMarkerType(fileSystem, markerDir);
 
-    // If there is no marker type file "MARKERS.type", we assume "DIRECT" markers are used
+    // If there is no marker type file "MARKERS.type", first assume "DIRECT" markers are used.
+    // If not, then fallback to "TIMELINE_SERVER_BASED" markers.
     if (!markerTypeOption.isPresent()) {
       WriteMarkers writeMarkers = WriteMarkersFactory.get(MarkerType.DIRECT, table, instant);
-      return new ArrayList<>(writeMarkers.allMarkerFilePaths());
+      try {
+        return new ArrayList<>(writeMarkers.allMarkerFilePaths());
+      } catch (Exception e) {
+        writeMarkers = WriteMarkersFactory.get(MarkerType.TIMELINE_SERVER_BASED, table, instant);
+        return new ArrayList<>(writeMarkers.allMarkerFilePaths());
+      }
     }
 
     switch (markerTypeOption.get()) {
