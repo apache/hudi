@@ -85,7 +85,7 @@ public class TestHoodieReadClient extends HoodieClientTestBase {
 
   @Test
   public void testReadROViewFailsWithoutSqlContext() {
-    HoodieReadClient readClient = new HoodieReadClient(context, getConfig());
+    SparkRDDReadClient readClient = new SparkRDDReadClient(context, getConfig());
     JavaRDD<HoodieKey> recordsRDD = jsc.parallelize(new ArrayList<>(), 1);
     assertThrows(IllegalStateException.class, () -> {
       readClient.readROView(recordsRDD, 1);
@@ -103,7 +103,7 @@ public class TestHoodieReadClient extends HoodieClientTestBase {
   private void testReadFilterExist(HoodieWriteConfig config,
       Function3<JavaRDD<WriteStatus>, SparkRDDWriteClient, JavaRDD<HoodieRecord>, String> writeFn) throws Exception {
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(config);) {
-      HoodieReadClient readClient = getHoodieReadClient(config.getBasePath());
+      SparkRDDReadClient readClient = getHoodieReadClient(config.getBasePath());
       String newCommitTime = writeClient.startCommit();
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
       JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 1);
@@ -119,7 +119,7 @@ public class TestHoodieReadClient extends HoodieClientTestBase {
       // Verify there are no errors
       assertNoWriteErrors(statuses);
 
-      HoodieReadClient anotherReadClient = getHoodieReadClient(config.getBasePath());
+      SparkRDDReadClient anotherReadClient = getHoodieReadClient(config.getBasePath());
       filteredRDD = anotherReadClient.filterExists(recordsRDD);
       List<HoodieRecord> result = filteredRDD.collect();
       // Check results
@@ -212,7 +212,7 @@ public class TestHoodieReadClient extends HoodieClientTestBase {
           jsc.parallelize(result.collect().stream().map(WriteStatus::getWrittenRecords).flatMap(Collection::stream)
               .map(record -> new HoodieAvroRecord(record.getKey(), null)).collect(Collectors.toList()));
       // Should have 100 records in table (check using Index), all in locations marked at commit
-      HoodieReadClient readClient = getHoodieReadClient(hoodieWriteConfig.getBasePath());
+      SparkRDDReadClient readClient = getHoodieReadClient(hoodieWriteConfig.getBasePath());
       List<HoodieRecord> taggedRecords = readClient.tagLocation(recordRDD).collect();
       checkTaggedRecords(taggedRecords, newCommitTime);
 
