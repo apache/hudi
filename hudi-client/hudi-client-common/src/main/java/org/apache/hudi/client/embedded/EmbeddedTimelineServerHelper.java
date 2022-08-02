@@ -27,6 +27,10 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.IdentityHashMap;
+import java.util.Map;
+import java.util.Objects;
 
 /**
  * Helper class to instantiate embedded timeline service.
@@ -34,8 +38,8 @@ import java.io.IOException;
 public class EmbeddedTimelineServerHelper {
 
   private static final Logger LOG = LogManager.getLogger(EmbeddedTimelineService.class);
-
-  private static Option<EmbeddedTimelineService> TIMELINE_SERVER = Option.empty();
+  private static final Map<String, EmbeddedTimelineService> PATH_TO_SERVER = new HashMap<>();
+  private static final Map<EmbeddedTimelineService, Integer> SERVER_TO_COUNTER = new IdentityHashMap<>();
 
   /**
    * Instantiate Embedded Timeline Server.
@@ -44,15 +48,23 @@ public class EmbeddedTimelineServerHelper {
    * @return TimelineServer if configured to run
    * @throws IOException
    */
-  public static synchronized Option<EmbeddedTimelineService> createEmbeddedTimelineService(
+  public static Option<EmbeddedTimelineService> createEmbeddedTimelineService(
       HoodieEngineContext context, HoodieWriteConfig config) throws IOException {
     if (config.isEmbeddedTimelineServerReuseEnabled()) {
-      if (!TIMELINE_SERVER.isPresent() || !TIMELINE_SERVER.get().canReuseFor(config.getBasePath())) {
-        TIMELINE_SERVER = Option.of(startTimelineService(context, config));
-      } else {
-        updateWriteConfigWithTimelineServer(TIMELINE_SERVER.get(), config);
+      synchronized (PATH_TO_SERVER) {
+        String path = config.getBasePath();
+        EmbeddedTimelineService timelineServer = PATH_TO_SERVER.get(path);
+        if (timelineServer == null || !timelineServer.canReuse()) {
+          timelineServer = EmbeddedTimelineServerHelper.startTimelineService(context, config);
+          PATH_TO_SERVER.put(path, timelineServer);
+        }
+        int serverCounter = 1 + SERVER_TO_COUNTER.getOrDefault(timelineServer, 0);
+        SERVER_TO_COUNTER.put(timelineServer, serverCounter);
+        if (serverCounter > 1) {
+          updateWriteConfigWithTimelineServer(timelineServer, config);
+        }
+        return Option.of(timelineServer);
       }
-      return TIMELINE_SERVER;
     }
     if (config.isEmbeddedTimelineServerEnabled()) {
       return Option.of(startTimelineService(context, config));
@@ -71,6 +83,27 @@ public class EmbeddedTimelineServerHelper {
     timelineService.startServer();
     updateWriteConfigWithTimelineServer(timelineService, config);
     return timelineService;
+  }
+
+  /**
+   * Stops Embedded Timeline Server.
+   * @param timelineServer Embedded Timeline Server
+   * @throws NullPointerException if timelineServer is null
+   */
+  public static void stopEmbeddedTimelineService(EmbeddedTimelineService timelineServer) {
+    Objects.requireNonNull(timelineServer);
+    synchronized (PATH_TO_SERVER) {
+      Integer serverCounter = SERVER_TO_COUNTER.get(timelineServer);
+      if (serverCounter == null) {
+        timelineServer.stop();
+      } else if (serverCounter == 1) {
+        PATH_TO_SERVER.values().removeIf(s -> s == timelineServer);
+        SERVER_TO_COUNTER.remove(timelineServer);
+        timelineServer.stop();
+      } else {
+        SERVER_TO_COUNTER.put(timelineServer, serverCounter - 1);
+      }
+    }
   }
 
   /**

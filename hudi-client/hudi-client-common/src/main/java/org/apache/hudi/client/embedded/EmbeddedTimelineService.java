@@ -124,10 +124,8 @@ public class EmbeddedTimelineService {
     return viewManager;
   }
 
-  public boolean canReuseFor(String basePath) {
-    return this.server != null
-        && this.viewManager != null
-        && this.basePath.equals(basePath);
+  public boolean canReuse() {
+    return this.server != null && this.viewManager != null;
   }
 
   public void stop() {

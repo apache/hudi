@@ -901,7 +901,7 @@ public class DeltaSync implements Serializable {
 
     LOG.info("Shutting down embedded timeline server");
     if (embeddedTimelineService.isPresent()) {
-      embeddedTimelineService.get().stop();
+      EmbeddedTimelineServerHelper.stopEmbeddedTimelineService(embeddedTimelineService.get());
     }
   }
 

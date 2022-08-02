@@ -20,6 +20,7 @@ package org.apache.hudi.sink;
 
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.sink.transform.ChainedTransformer;
@@ -47,25 +48,40 @@ import org.apache.flink.streaming.api.CheckpointingMode;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.source.FileProcessingMode;
+import org.apache.flink.table.api.EnvironmentSettings;
+import org.apache.flink.table.api.TableEnvironment;
+import org.apache.flink.table.api.TableResult;
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.runtime.typeutils.InternalTypeInfo;
 import org.apache.flink.table.types.logical.RowType;
+import org.apache.flink.types.Row;
+import org.apache.flink.util.CloseableIterator;
 import org.apache.flink.util.TestLogger;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  * Integration test for Flink Hoodie stream sink.
@@ -430,5 +446,52 @@ public class ITTestDataStreamWrite extends TestLogger {
 
     execute(execEnv, true, "Api_Sink_Test");
     TestData.checkWrittenDataCOW(tempFile, EXPECTED);
+  }
+
+  @Test
+  @Timeout(180)
+  public void testConcurrentSink() throws Exception {
+    TableEnvironment tEnv = TableEnvironment.create(EnvironmentSettings.inStreamingMode());
+    tEnv.executeSql("create table t1 (uuid int) with (" + prepareOptions() + ")");
+    TableResult r1 = tEnv.executeSql("insert into t1 values (0)");
+    waitForFirstCommit();
+    // submit the second job when the value "0" is already written but the first job is still running
+    TableResult r2 = tEnv.executeSql("insert into t1 values (1), (2)");
+    r1.await();
+    r2.await();
+    assertTableResult(tEnv.executeSql("select uuid from t1"), 0, 1, 2);
+  }
+
+  private String prepareOptions() {
+    HashMap<Object, Object> options = new HashMap<>();
+    options.put("connector", "hudi");
+    options.put("path", tempFile.getAbsolutePath());
+    options.put(FlinkOptions.WRITE_BATCH_SIZE.key(), "0.00000000001");
+    options.put(FlinkOptions.METADATA_ENABLED.key(), true);
+    options.put(FileSystemViewStorageConfig.REMOTE_BACKUP_VIEW_ENABLE.key(), false);
+    return options.entrySet().stream()
+        .map(e -> String.format("'%s'='%s'", e.getKey(), e.getValue()))
+        .collect(Collectors.joining(","));
+  }
+
+  private void waitForFirstCommit() throws IOException {
+    Pattern commitPattern = Pattern.compile("^\\d{17}\\.commit$");
+    java.nio.file.Path hoodiePath = Paths.get(tempFile.getAbsolutePath(), ".hoodie");
+    boolean isCommitted = false;
+    while (!isCommitted) {
+      try (Stream<java.nio.file.Path> list = Files.list(hoodiePath)) {
+        isCommitted = list
+            .map(p -> p.getFileName().toString())
+            .anyMatch(f -> commitPattern.matcher(f).find());
+      }
+    }
+  }
+
+  private void assertTableResult(TableResult actualResult, Object... expected) throws Exception {
+    HashSet<Object> actual = new HashSet<>();
+    try (CloseableIterator<Row> result = actualResult.collect()) {
+      result.forEachRemaining(r -> actual.add(r.getField(0)));
+    }
+    assertEquals(new HashSet<>(Arrays.asList(expected)), actual);
   }
 }
