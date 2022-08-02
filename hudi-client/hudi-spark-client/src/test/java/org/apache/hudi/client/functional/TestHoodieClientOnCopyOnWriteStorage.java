@@ -71,6 +71,7 @@ import org.apache.hudi.common.util.MarkerUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieClusteringConfig;
@@ -673,6 +674,62 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
       }
       return true;
     }).collect();
+  }
+
+  @Test
+  public void testRestoreWithSavepointBeyondArchival() throws Exception {
+    HoodieWriteConfig config = getConfigBuilder().withRollbackUsingMarkers(true).build();
+    HoodieWriteConfig hoodieWriteConfig = getConfigBuilder(EAGER)
+        .withRollbackUsingMarkers(true)
+        .withArchivalConfig(HoodieArchivalConfig.newBuilder().withArchiveBeyondSavepoint(true).build())
+        .withProps(config.getProps()).withTimelineLayoutVersion(
+            VERSION_0).build();
+
+    HoodieTableMetaClient.withPropertyBuilder()
+        .fromMetaClient(metaClient)
+        .setTimelineLayoutVersion(VERSION_0)
+        .setPopulateMetaFields(config.populateMetaFields())
+        .initTable(metaClient.getHadoopConf(), metaClient.getBasePath());
+
+    SparkRDDWriteClient client = getHoodieWriteClient(hoodieWriteConfig);
+
+    // Write 1 (only inserts)
+    String newCommitTime = "001";
+    String initCommitTime = "000";
+    int numRecords = 200;
+    insertFirstBatch(hoodieWriteConfig, client, newCommitTime, initCommitTime, numRecords, SparkRDDWriteClient::insert,
+        false, true, numRecords, config.populateMetaFields());
+
+    // Write 2 (updates)
+    String prevCommitTime = newCommitTime;
+    newCommitTime = "004";
+    numRecords = 100;
+    String commitTimeBetweenPrevAndNew = "002";
+    updateBatch(hoodieWriteConfig, client, newCommitTime, prevCommitTime,
+        Option.of(Arrays.asList(commitTimeBetweenPrevAndNew)), initCommitTime, numRecords, SparkRDDWriteClient::upsert, false, true,
+        numRecords, 200, 2, config.populateMetaFields());
+
+    // Delete 1
+    prevCommitTime = newCommitTime;
+    newCommitTime = "005";
+    numRecords = 50;
+
+    deleteBatch(hoodieWriteConfig, client, newCommitTime, prevCommitTime,
+        initCommitTime, numRecords, SparkRDDWriteClient::delete, false, true,
+        0, 150, config.populateMetaFields());
+
+    HoodieWriteConfig newConfig = getConfigBuilder().withProps(config.getProps()).withTimelineLayoutVersion(
+        TimelineLayoutVersion.CURR_VERSION)
+        .withArchivalConfig(HoodieArchivalConfig.newBuilder().withArchiveBeyondSavepoint(true).build()).build();
+    client = getHoodieWriteClient(newConfig);
+
+    client.savepoint("004", "user1", "comment1");
+
+    // verify that restore fails when "hoodie.archive.beyond.savepoint" is enabled.
+    SparkRDDWriteClient finalClient = client;
+    assertThrows(IllegalArgumentException.class, () -> {
+      finalClient.restoreToSavepoint("004");
+    }, "Restore should not be supported when " + HoodieArchivalConfig.ARCHIVE_BEYOND_SAVEPOINT.key() + " is enabled");
   }
 
   /**
