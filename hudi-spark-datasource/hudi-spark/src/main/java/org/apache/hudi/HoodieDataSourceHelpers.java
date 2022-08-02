@@ -18,12 +18,14 @@
 
 package org.apache.hudi;
 
+import org.apache.hudi.avro.model.HoodieBuildPlan;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.BuildUtils;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
@@ -93,6 +95,30 @@ public class HoodieDataSourceHelpers {
     Option<Pair<HoodieInstant, HoodieClusteringPlan>> clusteringPlan = ClusteringUtils.getClusteringPlan(metaClient, hoodieInstant);
     if (clusteringPlan.isPresent()) {
       return Option.of(clusteringPlan.get().getValue());
+    } else {
+      return Option.empty();
+    }
+  }
+
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public static HoodieTimeline allBuildCommits(FileSystem fs, String basePath) {
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
+        .setConf(fs.getConf())
+        .setBasePath(basePath)
+        .setLoadActiveTimelineOnLoad(true)
+        .build();
+    return metaClient.getActiveTimeline()
+        .getTimelineOfActions(CollectionUtils.createSet(HoodieActiveTimeline.BUILD_ACTION));
+  }
+
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public static Option<HoodieBuildPlan> getBuildPlan(FileSystem fs, String basePath, String instantTime) {
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(fs.getConf())
+        .setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
+    HoodieInstant hoodieInstant = HoodieTimeline.getBuildRequestedInstant(instantTime);
+    Option<Pair<HoodieInstant, HoodieBuildPlan>> buildPlan = BuildUtils.getBuildPlan(metaClient, hoodieInstant);
+    if (buildPlan.isPresent()) {
+      return Option.of(buildPlan.get().getValue());
     } else {
       return Option.empty();
     }

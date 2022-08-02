@@ -79,6 +79,8 @@ object HoodieProcedures {
       ,(RunCleanProcedure.NAME, RunCleanProcedure.builder)
       ,(ValidateHoodieSyncProcedure.NAME, ValidateHoodieSyncProcedure.builder)
       ,(ShowInvalidParquetProcedure.NAME, ShowInvalidParquetProcedure.builder)
+      ,(RunBuildProcedure.NAME, RunBuildProcedure.builder)
+      ,(ShowBuildProcedure.NAME, ShowBuildProcedure.builder)
     )
   }
 }
