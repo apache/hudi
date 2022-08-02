@@ -53,7 +53,13 @@ import java.util.Map.Entry;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config.CONFIG_NAME;
+import static org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config.HIVE_PROPERTIES;
+import static org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config.HIVE_QUERIES;
 import static org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config.NO_DEPENDENCY_VALUE;
+import static org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config.PRESTO_PROPERTIES;
+import static org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config.PRESTO_QUERIES;
+import static org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config.TRINO_PROPERTIES;
+import static org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config.TRINO_QUERIES;
 
 /**
  * Utility class to SerDe workflow dag.
@@ -172,7 +178,8 @@ public class DagUtils {
       DeltaConfig.Config config = DeltaConfig.Config.newBuilder().withConfigsMap(convertJsonNodeToMap(node))
           .withName(name).build();
       return (DagNode) ReflectionUtils.loadClass(generateFQN(type), config);
-    } catch (ClassNotFoundException e) {
+    }
+    catch (ClassNotFoundException e) {
       throw new RuntimeException(e);
     }
   }
@@ -192,11 +199,23 @@ public class DagUtils {
     while (itr.hasNext()) {
       Entry<String, JsonNode> entry = itr.next();
       switch (entry.getKey()) {
-        case DeltaConfig.Config.HIVE_QUERIES:
-          configsMap.put(DeltaConfig.Config.HIVE_QUERIES, getHiveQueries(entry));
+        case HIVE_QUERIES:
+          configsMap.put(HIVE_QUERIES, getQueries(entry));
           break;
-        case DeltaConfig.Config.HIVE_PROPERTIES:
-          configsMap.put(DeltaConfig.Config.HIVE_PROPERTIES, getProperties(entry));
+        case HIVE_PROPERTIES:
+          configsMap.put(HIVE_PROPERTIES, getQuerySessionProperties(entry));
+          break;
+        case PRESTO_QUERIES:
+          configsMap.put(PRESTO_QUERIES, getQueries(entry));
+          break;
+        case PRESTO_PROPERTIES:
+          configsMap.put(PRESTO_PROPERTIES, getQuerySessionProperties(entry));
+          break;
+        case TRINO_QUERIES:
+          configsMap.put(TRINO_QUERIES, getQueries(entry));
+          break;
+        case TRINO_PROPERTIES:
+          configsMap.put(TRINO_PROPERTIES, getQuerySessionProperties(entry));
           break;
         default:
           configsMap.put(entry.getKey(), getValue(entry.getValue()));
@@ -206,25 +225,27 @@ public class DagUtils {
     return configsMap;
   }
 
-  private static List<Pair<String, Integer>> getHiveQueries(Entry<String, JsonNode> entry) {
+  private static List<Pair<String, Integer>> getQueries(Entry<String, JsonNode> entry) {
     List<Pair<String, Integer>> queries = new ArrayList<>();
     try {
       List<JsonNode> flattened = new ArrayList<>();
       flattened.add(entry.getValue());
-      queries = (List<Pair<String, Integer>>)getHiveQueryMapper().readValue(flattened.toString(), List.class);
-    } catch (Exception e) {
+      queries = (List<Pair<String, Integer>>) getQueryMapper().readValue(flattened.toString(), List.class);
+    }
+    catch (Exception e) {
       e.printStackTrace();
     }
     return queries;
   }
 
-  private static List<String> getProperties(Entry<String, JsonNode> entry) {
+  private static List<String> getQuerySessionProperties(Entry<String, JsonNode> entry) {
     List<String> properties = new ArrayList<>();
     try {
       List<JsonNode> flattened = new ArrayList<>();
       flattened.add(entry.getValue());
-      properties = (List<String>)getHivePropertyMapper().readValue(flattened.toString(), List.class);
-    } catch (Exception e) {
+      properties = (List<String>) getQueryEnginePropertyMapper().readValue(flattened.toString(), List.class);
+    }
+    catch (Exception e) {
       e.printStackTrace();
     }
     return properties;
@@ -233,15 +254,20 @@ public class DagUtils {
   private static Object getValue(JsonNode node) {
     if (node.isInt()) {
       return node.asInt();
-    } else if (node.isLong()) {
+    }
+    else if (node.isLong()) {
       return node.asLong();
-    } else if (node.isShort()) {
+    }
+    else if (node.isShort()) {
       return node.asInt();
-    } else if (node.isBoolean()) {
+    }
+    else if (node.isBoolean()) {
       return node.asBoolean();
-    } else if (node.isDouble()) {
+    }
+    else if (node.isDouble()) {
       return node.asDouble();
-    } else if (node.isFloat()) {
+    }
+    else if (node.isFloat()) {
       return node.asDouble();
     }
     return node.textValue();
@@ -254,13 +280,28 @@ public class DagUtils {
     while (itr.hasNext()) {
       Entry<String, JsonNode> entry = itr.next();
       switch (entry.getKey()) {
-        case DeltaConfig.Config.HIVE_QUERIES:
-          ((ObjectNode) configNode).put(DeltaConfig.Config.HIVE_QUERIES,
-              MAPPER.readTree(getHiveQueryMapper().writeValueAsString(node.getConfig().getHiveQueries())));
+        case HIVE_QUERIES:
+          ((ObjectNode) configNode).put(HIVE_QUERIES,
+              MAPPER.readTree(getQueryMapper().writeValueAsString(node.getConfig().getHiveQueries())));
           break;
-        case DeltaConfig.Config.HIVE_PROPERTIES:
-          ((ObjectNode) configNode).put(DeltaConfig.Config.HIVE_PROPERTIES,
-              MAPPER.readTree(getHivePropertyMapper().writeValueAsString(node.getConfig().getHiveProperties())));
+        case HIVE_PROPERTIES:
+          ((ObjectNode) configNode).put(HIVE_PROPERTIES,
+              MAPPER.readTree(getQueryEnginePropertyMapper().writeValueAsString(node.getConfig().getHiveProperties())));
+        case PRESTO_QUERIES:
+          ((ObjectNode) configNode).put(PRESTO_QUERIES,
+              MAPPER.readTree(getQueryMapper().writeValueAsString(node.getConfig().getHiveQueries())));
+          break;
+        case PRESTO_PROPERTIES:
+          ((ObjectNode) configNode).put(PRESTO_PROPERTIES,
+              MAPPER.readTree(getQueryEnginePropertyMapper().writeValueAsString(node.getConfig().getHiveProperties())));
+          break;
+        case TRINO_QUERIES:
+          ((ObjectNode) configNode).put(TRINO_QUERIES,
+              MAPPER.readTree(getQueryMapper().writeValueAsString(node.getConfig().getHiveQueries())));
+          break;
+        case TRINO_PROPERTIES:
+          ((ObjectNode) configNode).put(TRINO_PROPERTIES,
+              MAPPER.readTree(getQueryEnginePropertyMapper().writeValueAsString(node.getConfig().getHiveProperties())));
           break;
         default:
           break;
@@ -293,21 +334,22 @@ public class DagUtils {
     return result.toString("utf-8");
   }
 
-  private static ObjectMapper getHiveQueryMapper() {
+  private static ObjectMapper getQueryMapper() {
     SimpleModule module = new SimpleModule();
     ObjectMapper queryMapper = new ObjectMapper();
-    module.addSerializer(List.class, new HiveQuerySerializer());
-    module.addDeserializer(List.class, new HiveQueryDeserializer());
+    module.addSerializer(List.class, new QuerySerializer());
+    module.addDeserializer(List.class, new QueryDeserializer());
     queryMapper.registerModule(module);
     return queryMapper;
   }
 
-  private static final class HiveQuerySerializer extends JsonSerializer<List> {
+  private static final class QuerySerializer extends JsonSerializer<List> {
     Integer index = 0;
+
     @Override
     public void serialize(List pairs, JsonGenerator gen, SerializerProvider serializers) throws IOException {
       gen.writeStartObject();
-      for (Pair pair : (List<Pair>)pairs) {
+      for (Pair pair : (List<Pair>) pairs) {
         gen.writeStringField("query" + index, pair.getLeft().toString());
         gen.writeNumberField("result" + index, Integer.parseInt(pair.getRight().toString()));
         index++;
@@ -316,7 +358,7 @@ public class DagUtils {
     }
   }
 
-  private static final class HiveQueryDeserializer extends JsonDeserializer<List> {
+  private static final class QueryDeserializer extends JsonDeserializer<List> {
     @Override
     public List deserialize(JsonParser parser, DeserializationContext context) throws IOException {
       List<Pair<String, Integer>> pairs = new ArrayList<>();
@@ -334,7 +376,8 @@ public class DagUtils {
 
           if (fieldName.contains("query")) {
             query = parser.getValueAsString();
-          } else if (fieldName.contains("result")) {
+          }
+          else if (fieldName.contains("result")) {
             result = parser.getValueAsInt();
             pairs.add(Pair.of(query, result));
           }
@@ -344,21 +387,22 @@ public class DagUtils {
     }
   }
 
-  private static ObjectMapper getHivePropertyMapper() {
+  private static ObjectMapper getQueryEnginePropertyMapper() {
     SimpleModule module = new SimpleModule();
     ObjectMapper propMapper = new ObjectMapper();
-    module.addSerializer(List.class, new HivePropertySerializer());
-    module.addDeserializer(List.class, new HivePropertyDeserializer());
+    module.addSerializer(List.class, new QueryEnginePropertySerializer());
+    module.addDeserializer(List.class, new QueryEnginePropertyDeserializer());
     propMapper.registerModule(module);
     return propMapper;
   }
 
-  private static final class HivePropertySerializer extends JsonSerializer<List> {
+  private static final class QueryEnginePropertySerializer extends JsonSerializer<List> {
     Integer index = 0;
+
     @Override
     public void serialize(List props, JsonGenerator gen, SerializerProvider serializers) throws IOException {
       gen.writeStartObject();
-      for (String prop : (List<String>)props) {
+      for (String prop : (List<String>) props) {
         gen.writeStringField("prop" + index, prop);
         index++;
       }
@@ -366,7 +410,7 @@ public class DagUtils {
     }
   }
 
-  private static final class HivePropertyDeserializer extends JsonDeserializer<List> {
+  private static final class QueryEnginePropertyDeserializer extends JsonDeserializer<List> {
     @Override
     public List deserialize(JsonParser parser, DeserializationContext context) throws IOException {
       List<String> props = new ArrayList<>();

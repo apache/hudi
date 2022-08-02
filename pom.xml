@@ -113,6 +113,8 @@
     <hadoop.version>2.10.1</hadoop.version>
     <hive.groupid>org.apache.hive</hive.groupid>
     <hive.version>2.3.1</hive.version>
+    <presto.version>0.273</presto.version>
+    <trino.version>390</trino.version>
     <hive.exec.classifier>core</hive.exec.classifier>
     <metrics.version>4.1.1</metrics.version>
     <orc.version>1.6.0</orc.version>
@@ -1067,6 +1069,18 @@
             <artifactId>*</artifactId>
           </exclusion>
         </exclusions>
+      </dependency>
+
+      <dependency>
+        <groupId>com.facebook.presto</groupId>
+        <artifactId>presto-jdbc</artifactId>
+        <version>${presto.version}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>io.trino</groupId>
+        <artifactId>trino-jdbc</artifactId>
+        <version>${trino.version}</version>
       </dependency>
 
       <!-- Zookeeper -->
