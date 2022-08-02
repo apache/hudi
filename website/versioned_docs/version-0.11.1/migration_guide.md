@@ -38,7 +38,8 @@ There are a few options when choosing this approach.
 **Option 1**
 Use the HoodieDeltaStreamer tool. HoodieDeltaStreamer supports bootstrap with --run-bootstrap command line option. There are two types of bootstrap, 
 METADATA_ONLY and FULL_RECORD. METADATA_ONLY will generate just skeleton base files with keys/footers, avoiding full cost of rewriting the dataset. 
-FULL_RECORD will perform a full copy/rewrite of the data as a Hudi table. 
+FULL_RECORD will perform a full copy/rewrite of the data as a Hudi table.    
+
 Here is an example for running FULL_RECORD bootstrap and keeping hive style partition with HoodieDeltaStreamer.
 ```
 spark-submit --master local \
