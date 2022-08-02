@@ -100,6 +100,8 @@
                   <include>org.apache.hbase.thirdparty:hbase-shaded-protobuf</include>
                   <include>org.apache.htrace:htrace-core4</include>
                   <include>commons-io:commons-io</include>
+                  <include>com.facebook.presto:presto-jdbc</include>
+                  <include>io.trino:trino-jdbc</include>
 
                   <include>org.jetbrains.kotlin:kotlin-stdlib-jdk8</include>
                   <include>org.jetbrains.kotlin:kotlin-stdlib</include>
