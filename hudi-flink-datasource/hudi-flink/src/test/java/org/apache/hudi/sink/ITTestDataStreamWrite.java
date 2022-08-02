@@ -451,7 +451,8 @@ public class ITTestDataStreamWrite extends TestLogger {
   @Test
   @Timeout(180)
   public void testConcurrentSink() throws Exception {
-    TableEnvironment tEnv = TableEnvironment.create(EnvironmentSettings.inStreamingMode());
+    EnvironmentSettings settings = EnvironmentSettings.newInstance().build();
+    TableEnvironment tEnv = TableEnvironment.create(settings);
     tEnv.executeSql("create table t1 (uuid int) with (" + prepareOptions() + ")");
     TableResult r1 = tEnv.executeSql("insert into t1 values (0)");
     waitForFirstCommit();

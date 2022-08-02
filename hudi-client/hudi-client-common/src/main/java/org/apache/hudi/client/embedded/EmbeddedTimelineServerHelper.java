@@ -38,6 +38,7 @@ import java.util.Objects;
 public class EmbeddedTimelineServerHelper {
 
   private static final Logger LOG = LogManager.getLogger(EmbeddedTimelineService.class);
+
   private static final Map<String, EmbeddedTimelineService> PATH_TO_SERVER = new HashMap<>();
   private static final Map<EmbeddedTimelineService, Integer> SERVER_TO_COUNTER = new IdentityHashMap<>();
 
