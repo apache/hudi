@@ -719,7 +719,8 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
         0, 150, config.populateMetaFields());
 
     HoodieWriteConfig newConfig = getConfigBuilder().withProps(config.getProps()).withTimelineLayoutVersion(
-        TimelineLayoutVersion.CURR_VERSION).build();
+        TimelineLayoutVersion.CURR_VERSION)
+        .withArchivalConfig(HoodieArchivalConfig.newBuilder().withArchiveBeyondSavepoint(true).build()).build();
     client = getHoodieWriteClient(newConfig);
 
     client.savepoint("004", "user1", "comment1");
