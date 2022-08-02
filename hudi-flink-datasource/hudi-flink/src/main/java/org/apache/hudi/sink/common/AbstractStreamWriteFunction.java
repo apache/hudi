@@ -193,20 +193,25 @@ public abstract class AbstractStreamWriteFunction<I>
 
   private void restoreWriteMetadata() throws Exception {
     String lastInflight = lastPendingInstant();
-    boolean eventSent = false;
+    List<WriteMetadataEvent> events = new ArrayList<>();
     for (WriteMetadataEvent event : this.writeMetadataState.get()) {
       if (Objects.equals(lastInflight, event.getInstantTime())) {
+        int originTaskId = event.getTaskID();
         // Reset taskID for event
         event.setTaskID(taskID);
         // The checkpoint succeed but the meta does not commit,
         // re-commit the inflight instant
-        this.eventGateway.sendEventToCoordinator(event);
-        LOG.info("Send uncommitted write metadata event to coordinator, task[{}].", taskID);
-        eventSent = true;
+        events.add(event);
+        LOG.info("Prepare sending uncommitted write metadata event to coordinator, originTaskId:[{}], task[{}].", originTaskId, taskID);
       }
     }
-    if (!eventSent) {
+    if (events.isEmpty()) {
       sendBootstrapEvent();
+    } else {
+      events.forEach(event -> {
+        event.setEventNumOfTask(events.size());
+        this.eventGateway.sendEventToCoordinator(event);
+      });
     }
   }
 
@@ -222,6 +227,7 @@ public abstract class AbstractStreamWriteFunction<I>
     this.writeMetadataState.clear();
     WriteMetadataEvent event = WriteMetadataEvent.builder()
         .taskID(taskID)
+        .parallelism(this.config.getInteger(FlinkOptions.WRITE_TASKS))
         .instantTime(currentInstant)
         .writeStatus(new ArrayList<>(writeStatuses))
         .bootstrap(true)
@@ -230,6 +236,7 @@ public abstract class AbstractStreamWriteFunction<I>
     writeStatuses.clear();
   }
 
+  @Override
   public void handleOperatorEvent(OperatorEvent event) {
     ValidationUtils.checkArgument(event instanceof CommitAckEvent,
         "The write function can only handle CommitAckEvent");

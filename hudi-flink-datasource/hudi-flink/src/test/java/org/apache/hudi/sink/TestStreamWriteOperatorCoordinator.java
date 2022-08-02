@@ -60,6 +60,8 @@ import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -72,14 +74,11 @@ public class TestStreamWriteOperatorCoordinator {
 
   @TempDir
   File tempFile;
+  NonThrownExecutor executor;
 
   @BeforeEach
   public void before() throws Exception {
-    OperatorCoordinator.Context context = new MockOperatorCoordinatorContext(new OperatorID(), 2);
-    coordinator = new StreamWriteOperatorCoordinator(
-        TestConfigurations.getDefaultConf(tempFile.getAbsolutePath()), context);
-    coordinator.start();
-    coordinator.setExecutor(new MockCoordinatorExecutor(context));
+    constructCoordinator(2);
 
     coordinator.handleEventFromOperator(0, WriteMetadataEvent.emptyBootstrap(0));
     coordinator.handleEventFromOperator(1, WriteMetadataEvent.emptyBootstrap(1));
@@ -88,6 +87,15 @@ public class TestStreamWriteOperatorCoordinator {
   @AfterEach
   public void after() throws Exception {
     coordinator.close();
+  }
+
+  private void constructCoordinator(int taskNum) throws Exception {
+    OperatorCoordinator.Context context = new MockOperatorCoordinatorContext(new OperatorID(), taskNum);
+    coordinator = new StreamWriteOperatorCoordinator(
+        TestConfigurations.getDefaultConf(tempFile.getAbsolutePath()), context);
+    coordinator.start();
+    executor = new MockCoordinatorExecutor(context);
+    coordinator.setExecutor(executor);
   }
 
   @Test
@@ -334,6 +342,71 @@ public class TestStreamWriteOperatorCoordinator {
       // there should be no events after endInput
       assertNull(coordinator.getEventBuffer()[0]);
     }
+  }
+
+  @Test
+  public void testInstantFromBootstrapEvents() throws Exception {
+    // Test fresh start
+    constructCoordinator(2);
+    coordinator.handleEventFromOperator(0, WriteMetadataEvent.emptyBootstrap(0));
+    coordinator.handleEventFromOperator(1, WriteMetadataEvent.emptyBootstrap(1));
+    executor.execute(() -> assertFalse(coordinator.bootstrapInstantFromEventBuffer().isPresent()), "");
+
+    // Test valid commit with same write.task.num = 2
+    constructCoordinator(2);
+    coordinator.handleEventFromOperator(0, new WriteMetadataEvent.Builder().bootstrap(true).instantTime("instant1")
+        .taskID(0).eventNumOfTask(1).parallelism(2).writeStatus(Collections.emptyList()).lastBatch(false).endInput(false).build());
+    coordinator.handleEventFromOperator(1, new WriteMetadataEvent.Builder().bootstrap(true).instantTime("instant1")
+        .taskID(1).eventNumOfTask(1).parallelism(2).writeStatus(Collections.emptyList()).lastBatch(false).endInput(false).build());
+    executor.execute(() -> assertEquals(coordinator.bootstrapInstantFromEventBuffer().get(), "instant1"), "");
+
+    // Test invalid commit with same write.task.num = 2
+    constructCoordinator(2);
+    coordinator.handleEventFromOperator(0, new WriteMetadataEvent.Builder().bootstrap(true).instantTime("instant1")
+        .taskID(0).eventNumOfTask(1).parallelism(2).writeStatus(Collections.emptyList()).lastBatch(false).endInput(false).build());
+    coordinator.handleEventFromOperator(1, WriteMetadataEvent.emptyBootstrap(1));
+    executor.execute(() -> assertFalse(coordinator.bootstrapInstantFromEventBuffer().isPresent()), "");
+
+    // Test valid commit with increasing write.task.num, 2 -> 4
+    constructCoordinator(4);
+    coordinator.handleEventFromOperator(0, new WriteMetadataEvent.Builder().bootstrap(true).instantTime("instant1")
+        .taskID(0).eventNumOfTask(1).parallelism(2).writeStatus(Collections.emptyList()).lastBatch(false).endInput(false).build());
+    coordinator.handleEventFromOperator(1, new WriteMetadataEvent.Builder().bootstrap(true).instantTime("instant1")
+        .taskID(1).eventNumOfTask(1).parallelism(2).writeStatus(Collections.emptyList()).lastBatch(false).endInput(false).build());
+    coordinator.handleEventFromOperator(2, WriteMetadataEvent.emptyBootstrap(2));
+    coordinator.handleEventFromOperator(3, WriteMetadataEvent.emptyBootstrap(3));
+    executor.execute(() -> assertEquals(coordinator.bootstrapInstantFromEventBuffer().get(), "instant1"), "");
+
+    // Test invalid commit with increasing write.task.num, 2 -> 4
+    constructCoordinator(4);
+    coordinator.handleEventFromOperator(0, new WriteMetadataEvent.Builder().bootstrap(true).instantTime("instant1")
+        .taskID(0).eventNumOfTask(1).parallelism(2).writeStatus(Collections.emptyList()).lastBatch(false).endInput(false).build());
+    coordinator.handleEventFromOperator(1, WriteMetadataEvent.emptyBootstrap(1));
+    coordinator.handleEventFromOperator(2, WriteMetadataEvent.emptyBootstrap(2));
+    coordinator.handleEventFromOperator(3, WriteMetadataEvent.emptyBootstrap(3));
+    executor.execute(() -> assertFalse(coordinator.bootstrapInstantFromEventBuffer().isPresent()), "");
+
+    // Test valid commit with decreasing write.task.num, 4 -> 2
+    constructCoordinator(2);
+    coordinator.handleEventFromOperator(0, new WriteMetadataEvent.Builder().bootstrap(true).instantTime("instant1")
+        .taskID(0).eventNumOfTask(2).parallelism(4).writeStatus(Collections.emptyList()).lastBatch(false).endInput(false).build());
+    coordinator.handleEventFromOperator(0, new WriteMetadataEvent.Builder().bootstrap(true).instantTime("instant1")
+        .taskID(0).eventNumOfTask(2).parallelism(4).writeStatus(Collections.emptyList()).lastBatch(false).endInput(false).build());
+    coordinator.handleEventFromOperator(1, new WriteMetadataEvent.Builder().bootstrap(true).instantTime("instant1")
+        .taskID(1).eventNumOfTask(2).parallelism(4).writeStatus(Collections.emptyList()).lastBatch(false).endInput(false).build());
+    coordinator.handleEventFromOperator(1, new WriteMetadataEvent.Builder().bootstrap(true).instantTime("instant1")
+        .taskID(1).eventNumOfTask(2).parallelism(4).writeStatus(Collections.emptyList()).lastBatch(false).endInput(false).build());
+    executor.execute(() -> assertEquals(coordinator.bootstrapInstantFromEventBuffer().get(), "instant1"), "");
+
+    // Test invalid commit with decreasing write.task.num, 4 -> 2
+    constructCoordinator(2);
+    coordinator.handleEventFromOperator(0, new WriteMetadataEvent.Builder().bootstrap(true).instantTime("instant1")
+        .taskID(0).eventNumOfTask(2).parallelism(4).writeStatus(Collections.emptyList()).lastBatch(false).endInput(false).build());
+    coordinator.handleEventFromOperator(0, new WriteMetadataEvent.Builder().bootstrap(true).instantTime("instant1")
+        .taskID(0).eventNumOfTask(2).parallelism(4).writeStatus(Collections.emptyList()).lastBatch(false).endInput(false).build());
+    coordinator.handleEventFromOperator(1, new WriteMetadataEvent.Builder().bootstrap(true).instantTime("instant1")
+        .taskID(1).eventNumOfTask(1).parallelism(4).writeStatus(Collections.emptyList()).lastBatch(false).endInput(false).build());
+    executor.execute(() -> assertFalse(coordinator.bootstrapInstantFromEventBuffer().isPresent()), "");
   }
 
   // -------------------------------------------------------------------------

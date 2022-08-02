@@ -364,6 +364,7 @@ public class StreamWriteOperatorCoordinator
     if (this.eventBuffer[event.getTaskID()] != null) {
       this.eventBuffer[event.getTaskID()].mergeWith(event);
     } else {
+      event.setMergeCount(1);
       this.eventBuffer[event.getTaskID()] = event;
     }
   }
@@ -379,6 +380,28 @@ public class StreamWriteOperatorCoordinator
   }
 
   /**
+   * Get the valid instant time of last batch from bootstrap events
+   * Return Option.empty() to indicate the instant is invalid from last batch
+   */
+  protected Option<String> bootstrapInstantFromEventBuffer() {
+    ValidationUtils.checkArgument(Arrays.stream(eventBuffer).allMatch(evt -> evt != null && evt.isBootstrap()));
+    List<WriteMetadataEvent> events = Arrays.stream(eventBuffer).filter(evt -> !evt.getInstantTime().equals("")).collect(Collectors.toList());
+    String instant = events.stream().map(WriteMetadataEvent::getInstantTime).reduce((a, b) -> a.equals(b) ? a : "").orElse("");
+    // instant and parallelism should be unique
+    if (instant.equals("")) {
+      return Option.empty();
+    }
+    int parallelism = events.stream().map(WriteMetadataEvent::getParallelism).reduce((a, b) -> a.equals(b) ? a : -1).orElse(-1);
+    if (parallelism == -1) {
+      return Option.empty();
+    }
+
+    int totalMergeCount = events.stream().mapToInt(WriteMetadataEvent::getMergeCount).sum();
+    ValidationUtils.checkArgument(totalMergeCount == events.stream().mapToInt(WriteMetadataEvent::getEventNumOfTask).sum());
+    return totalMergeCount == parallelism ? Option.of(instant) : Option.empty();
+  }
+
+  /**
    * Initializes the instant.
    *
    * <p>Recommits the last inflight instant if the write metadata checkpoint successfully
@@ -387,29 +410,32 @@ public class StreamWriteOperatorCoordinator
    * <p>Starts a new instant, a writer can not flush data buffer
    * until it finds a new inflight instant on the timeline.
    */
-  private void initInstant(String instant) {
+  private void initInstant() {
     HoodieTimeline completedTimeline =
         StreamerUtil.createMetaClient(conf).getActiveTimeline().filterCompletedInstants();
+    Option<String> bootstrapInstant = bootstrapInstantFromEventBuffer();
     executor.execute(() -> {
-      if (instant.equals("") || completedTimeline.containsInstant(instant)) {
+      if (!bootstrapInstant.isPresent() || completedTimeline.containsInstant(bootstrapInstant.get())) {
         // the last instant committed successfully
         reset();
       } else {
-        LOG.info("Recommit instant {}", instant);
-        commitInstant(instant);
+        LOG.info("Recommit instant {}", bootstrapInstant);
+        commitInstant(bootstrapInstant.get());
       }
       // starts a new instant
       startInstant();
       // upgrade downgrade
       this.writeClient.upgradeDowngrade(this.instant, this.metaClient);
-    }, "initialize instant %s", instant);
+    }, "initialize instant %s", bootstrapInstant);
   }
 
   private void handleBootstrapEvent(WriteMetadataEvent event) {
-    this.eventBuffer[event.getTaskID()] = event;
-    if (Arrays.stream(eventBuffer).allMatch(evt -> evt != null && evt.isBootstrap())) {
+    addEventToBuffer(event);
+    boolean isAllBootstrapEventReceived = Arrays.stream(eventBuffer)
+        .allMatch(e -> e != null && e.isBootstrap() && e.getEventNumOfTask() == e.getMergeCount());
+    if (isAllBootstrapEventReceived) {
       // start to initialize the instant.
-      initInstant(event.getInstantTime());
+      initInstant();
     }
   }
 
