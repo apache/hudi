@@ -242,11 +242,11 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
     return fs.listStatus(Arrays.stream(filePaths).filter(entry -> {
       try {
         return fs.exists(entry);
-      } catch (IOException e) {
+      } catch (Exception e) {
         LOG.error("Exists check failed for " + entry.toString(), e);
       }
-      // if IOException is thrown, do not ignore. lets try to add the file of interest to be deleted. we can't miss any files to be rolled back.
-      return false;
+      // if any Exception is thrown, do not ignore. let's try to add the file of interest to be deleted. we can't miss any files to be rolled back.
+      return true;
     }).toArray(Path[]::new), pathFilter);
   }
 
