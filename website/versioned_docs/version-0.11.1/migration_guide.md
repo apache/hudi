@@ -59,9 +59,6 @@ spark-submit --master local \
 --hoodie-conf hoodie.datasource.write.hive_style_partitioning=true
 ``` 
 
-
-This tool essentially starts a Spark Job to read the existing parquet table and converts it into a HUDI managed table by re-writing all the data.
-
 **Option 2**
 For huge tables, this could be as simple as : 
 ```java
