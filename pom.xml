@@ -1685,7 +1685,7 @@
       <properties>
         <spark3.version>3.3.0</spark3.version>
         <spark.version>${spark3.version}</spark.version>
-        <sparkbundle.version>3.3</sparkbundle.version>
+        <sparkbundle.version>3</sparkbundle.version>
         <scala.version>${scala12.version}</scala.version>
         <scala.binary.version>2.12</scala.binary.version>
         <hudi.spark.module>hudi-spark3.3.x</hudi.spark.module>
