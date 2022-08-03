@@ -146,7 +146,7 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
   }
 
   protected lazy val includedCommits: immutable.Seq[HoodieInstant] = {
-    if (!endInstantArchived) {
+    if (!startInstantArchived || !endInstantArchived) {
       // If endTimestamp commit is not archived, will filter instants
       // before endTimestamp.
       super.timeline.findInstantsInRange(startTimestamp, endTimestamp).getInstants.iterator().asScala.toList
