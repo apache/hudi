@@ -475,15 +475,12 @@ public class TestInputFormat {
   }
 
   @Test
-  void testMergeOnReadInputFormatWithEventTimeAvroPayload() throws Exception {
+  void testMergeOnReadDisorderUpdateAfterCompaction() throws Exception {
     Map<String, String> options = new HashMap<>();
-    options.put(FlinkOptions.CHANGELOG_ENABLED.key(), "true");
-    options.put(FlinkOptions.PRE_COMBINE.key(), "true");
-    options.put(FlinkOptions.PRECOMBINE_FIELD.key(), "ts");
     options.put(FlinkOptions.PAYLOAD_CLASS_NAME.key(), EventTimeAvroPayload.class.getName());
     beforeEach(HoodieTableType.MERGE_ON_READ, options);
 
-    // write base first with compaction.
+    // write base file first with compaction.
     conf.setBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED, true);
     conf.setInteger(FlinkOptions.COMPACTION_DELTA_COMMITS, 1);
     TestData.writeData(TestData.DATA_SET_DISORDER_INSERT, conf);

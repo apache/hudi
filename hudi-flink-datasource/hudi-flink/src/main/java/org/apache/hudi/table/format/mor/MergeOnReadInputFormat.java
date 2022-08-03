@@ -636,7 +636,7 @@ public class MergeOnReadInputFormat
 
     private final Set<String> keyToSkip = new HashSet<>();
 
-    private Properties payloadProps;
+    private final Properties payloadProps;
 
     private RowData currentRecord;
 
@@ -655,8 +655,8 @@ public class MergeOnReadInputFormat
       this.tableSchema = tableSchema;
       this.reader = reader;
       this.scanner = FormatUtils.logScanner(split, tableSchema, flinkConf, hadoopConf);
+      this.payloadProps = StreamerUtil.getPayloadConfig(flinkConf).getProps();
       this.logKeysIterator = scanner.getRecords().keySet().iterator();
-      this.payloadProps = StreamerUtil.getHoodieClientConfig(flinkConf).getPayloadConfig().getProps();
       this.requiredSchema = requiredSchema;
       this.requiredPos = requiredPos;
       this.emitDelete = emitDelete;
