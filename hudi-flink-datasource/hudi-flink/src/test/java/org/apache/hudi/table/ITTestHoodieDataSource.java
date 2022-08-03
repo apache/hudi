@@ -1287,6 +1287,57 @@ public class ITTestHoodieDataSource extends AbstractTestBase {
         + "+I[id8, Han, 56, 1970-01-01T00:00:08, par4]]");
   }
 
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableType.class)
+  void testWriteAndCompactAndRead(HoodieTableType tableType) {
+    TableEnvironment tableEnv = streamTableEnv;
+    String hoodieTableDDL = sql("t1")
+        .field("uuid int")
+        .field("ts int")
+        .noPartition()
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.READ_DATA_SKIPPING_ENABLED, true)
+        .option(FlinkOptions.COMPACTION_DELTA_COMMITS, 3)
+        .option("hoodie.compact.inline", true)
+        .option(FlinkOptions.PRE_COMBINE, true)
+        .option(FlinkOptions.RECORD_KEY_FIELD, "uuid")
+        .option(FlinkOptions.TABLE_TYPE, tableType.name())
+        .end();
+    tableEnv.executeSql(hoodieTableDDL);
+
+    System.out.println(hoodieTableDDL);
+
+    execInsertSql(tableEnv, "INSERT INTO t1 values (1, 1)");
+    List<Row> result1 = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1").execute().collect());
+    assertRowsEquals(result1, "[+I[1, 1]]");
+
+    execInsertSql(tableEnv, "INSERT INTO t1 values (1, 100)");
+    List<Row> result2 = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1").execute().collect());
+    assertRowsEquals(result2, "[+I[1, 100]]");
+
+    execInsertSql(tableEnv, "INSERT INTO t1 values (1, 50)");
+    List<Row> result3 = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1").execute().collect());
+    assertRowsEquals(result3, "[+I[1, 100]]");
+
+    execInsertSql(tableEnv, "INSERT INTO t1 values (1, 2)");
+    List<Row> result4 = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1").execute().collect());
+    assertRowsEquals(result4, "[+I[1, 100]]");
+
+    execInsertSql(tableEnv, "INSERT INTO t1 values (1, 80)");
+    List<Row> result5 = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1").execute().collect());
+    assertRowsEquals(result5, "[+I[1, 100]]");
+
+    execInsertSql(tableEnv, "INSERT INTO t1 values (1, 180)");
+    List<Row> result6 = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1").execute().collect());
+    assertRowsEquals(result6, "[+I[1, 180]]");
+  }
+
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------

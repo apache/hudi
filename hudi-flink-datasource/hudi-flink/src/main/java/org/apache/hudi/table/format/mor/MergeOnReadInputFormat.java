@@ -38,6 +38,7 @@ import org.apache.hudi.util.AvroToRowDataConverters;
 import org.apache.hudi.util.DataTypeUtils;
 import org.apache.hudi.util.RowDataProjection;
 import org.apache.hudi.util.RowDataToAvroConverters;
+import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.util.StringToRowDataConverter;
 
 import org.apache.avro.Schema;
@@ -63,6 +64,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Properties;
 import java.util.Set;
 import java.util.stream.IntStream;
 
@@ -634,6 +636,8 @@ public class MergeOnReadInputFormat
 
     private final Set<String> keyToSkip = new HashSet<>();
 
+    private Properties payloadProps;
+
     private RowData currentRecord;
 
     MergeIterator(
@@ -651,6 +655,7 @@ public class MergeOnReadInputFormat
       this.tableSchema = tableSchema;
       this.reader = reader;
       this.scanner = FormatUtils.logScanner(split, tableSchema, finkConf, hadoopConf);
+      this.payloadProps = StreamerUtil.getHoodieClientConfig(finkConf).getPayloadConfig().getProps();
       this.logKeysIterator = scanner.getRecords().keySet().iterator();
       this.requiredSchema = requiredSchema;
       this.requiredPos = requiredPos;
@@ -751,7 +756,7 @@ public class MergeOnReadInputFormat
         String curKey) throws IOException {
       final HoodieAvroRecord<?> record = (HoodieAvroRecord) scanner.getRecords().get(curKey);
       GenericRecord historyAvroRecord = (GenericRecord) rowDataToAvroConverter.convert(tableSchema, curRow);
-      return record.getData().combineAndGetUpdateValue(historyAvroRecord, tableSchema);
+      return record.getData().combineAndGetUpdateValue(historyAvroRecord, tableSchema, payloadProps);
     }
   }
 
