@@ -19,9 +19,7 @@
 
 package org.apache.spark.sql.hudi.procedure
 
-import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase
-
-class TestCleanProcedure extends HoodieSparkSqlTestBase {
+class TestCleanProcedure extends HoodieSparkProcedureTestBase {
 
   test("Test Call run_clean Procedure by Table") {
     withTempDir { tmp =>

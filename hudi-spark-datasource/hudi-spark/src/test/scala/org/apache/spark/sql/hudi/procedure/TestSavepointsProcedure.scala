@@ -17,9 +17,7 @@
 
 package org.apache.spark.sql.hudi.procedure
 
-import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase
-
-class TestSavepointsProcedure extends HoodieSparkSqlTestBase {
+class TestSavepointsProcedure extends HoodieSparkProcedureTestBase {
 
   test("Test Call create_savepoint Procedure") {
     withTempDir { tmp =>
