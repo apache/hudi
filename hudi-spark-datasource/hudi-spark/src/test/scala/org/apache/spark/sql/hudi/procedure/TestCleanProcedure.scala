@@ -55,6 +55,10 @@ class TestCleanProcedure extends HoodieSparkSqlTestBase {
       assertResult(1)(result1.length)
       assertResult(2)(result1(0)(2))
 
+      val result2 = spark.sql(s"call run_clean(table => '$tableName', retain_commits => 1)")
+        .collect()
+      assertResult(0)(result2.length)
+
       checkAnswer(s"select id, name, price, ts from $tableName order by id") (
         Seq(1, "a1", 13, 1000)
       )
