@@ -164,12 +164,16 @@ public class TableOptionProperties {
     return copied;
   }
 
-  public static Map<String, String> translateFlinkTableProperties2Spark(CatalogTable catalogTable, Configuration hadoopConf, Map<String, String> properties) {
+  public static Map<String, String> translateFlinkTableProperties2Spark(
+      CatalogTable catalogTable,
+      Configuration hadoopConf,
+      Map<String, String> properties,
+      List<String> partitionKeys) {
     Schema schema = AvroSchemaConverter.convertToSchema(catalogTable.getSchema().toPhysicalRowDataType().getLogicalType());
     MessageType messageType = TableSchemaResolver.convertAvroSchemaToParquet(schema, hadoopConf);
     String sparkVersion = catalogTable.getOptions().getOrDefault(SPARK_VERSION, DEFAULT_SPARK_VERSION);
     Map<String, String> sparkTableProperties = SparkDataSourceTableUtils.getSparkTableProperties(
-        catalogTable.getPartitionKeys(),
+        partitionKeys,
         sparkVersion,
         4000,
         messageType);
