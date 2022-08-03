@@ -61,7 +61,6 @@ variables:
   JOB1_MODULES: ${{ join(',',parameters.job1Modules) }}
   JOB2_MODULES: ${{ join(',',parameters.job2Modules) }}
   JOB3_MODULES: ${{ join(',',parameters.job3Modules) }}
-  JOB4_MODULES: ${{ join(',',parameters.job4Modules) }}
 
 stages:
   - stage: test
@@ -167,7 +166,7 @@ stages:
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
-              options: $(MVN_OPTS_TEST) -Punit-tests -pl $(JOB4_MODULES)
+              options: $(MVN_OPTS_TEST) -Punit-tests -pl hudi-spark_2.11
               publishJUnitResults: false
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g'
@@ -176,7 +175,7 @@ stages:
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
-              options: $(MVN_OPTS_TEST) -Pfunctional-tests -pl $(JOB4_MODULES)
+              options: $(MVN_OPTS_TEST) -Pfunctional-tests -pl hudi-spark_2.11
               publishJUnitResults: false
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g'
