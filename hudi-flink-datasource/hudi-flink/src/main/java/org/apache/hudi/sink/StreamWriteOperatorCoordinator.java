@@ -364,7 +364,6 @@ public class StreamWriteOperatorCoordinator
     if (this.eventBuffer[event.getTaskID()] != null) {
       this.eventBuffer[event.getTaskID()].mergeWith(event);
     } else {
-      event.setMergeCount(1);
       this.eventBuffer[event.getTaskID()] = event;
     }
   }
@@ -396,9 +395,8 @@ public class StreamWriteOperatorCoordinator
       return Option.empty();
     }
 
-    int totalMergeCount = events.stream().mapToInt(WriteMetadataEvent::getMergeCount).sum();
-    ValidationUtils.checkArgument(totalMergeCount == events.stream().mapToInt(WriteMetadataEvent::getEventNumOfTask).sum());
-    return totalMergeCount == parallelism ? Option.of(instant) : Option.empty();
+    int totalNumOfMetadataStates = events.stream().mapToInt(WriteMetadataEvent::getNumOfMetadataState).sum();
+    return totalNumOfMetadataStates == parallelism ? Option.of(instant) : Option.empty();
   }
 
   /**
@@ -430,10 +428,8 @@ public class StreamWriteOperatorCoordinator
   }
 
   private void handleBootstrapEvent(WriteMetadataEvent event) {
-    addEventToBuffer(event);
-    boolean isAllBootstrapEventReceived = Arrays.stream(eventBuffer)
-        .allMatch(e -> e != null && e.isBootstrap() && e.getEventNumOfTask() == e.getMergeCount());
-    if (isAllBootstrapEventReceived) {
+    this.eventBuffer[event.getTaskID()] = event;
+    if (Arrays.stream(eventBuffer).allMatch(evt -> evt != null && evt.isBootstrap())) {
       // start to initialize the instant.
       initInstant();
     }

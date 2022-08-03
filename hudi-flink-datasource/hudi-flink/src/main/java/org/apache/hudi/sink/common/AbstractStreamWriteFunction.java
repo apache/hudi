@@ -208,10 +208,12 @@ public abstract class AbstractStreamWriteFunction<I>
     if (events.isEmpty()) {
       sendBootstrapEvent();
     } else {
-      events.forEach(event -> {
-        event.setEventNumOfTask(events.size());
-        this.eventGateway.sendEventToCoordinator(event);
-      });
+      WriteMetadataEvent eventToSend = events.get(0);
+      for (int i = 1; i < events.size(); ++i) {
+        eventToSend.mergeWith(events.get(i));
+      }
+      eventToSend.setNumOfMetadataState(events.size());
+      this.eventGateway.sendEventToCoordinator(eventToSend);
     }
   }
 

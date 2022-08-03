@@ -39,7 +39,7 @@ public class WriteMetadataEvent implements OperatorEvent {
   private List<WriteStatus> writeStatuses;
   private int taskID;
   private int parallelism;
-  private int eventNumOfTask;
+  private int numOfMetadataState;
   private String instantTime;
   private boolean lastBatch;
 
@@ -57,11 +57,6 @@ public class WriteMetadataEvent implements OperatorEvent {
   private boolean bootstrap;
 
   /**
-   * To indicate the current event is the merge result of how many events.
-   */
-  private transient int mergeCount;
-
-  /**
    * Creates an event.
    *
    * @param taskID        The task ID
@@ -76,7 +71,7 @@ public class WriteMetadataEvent implements OperatorEvent {
   private WriteMetadataEvent(
       int taskID,
       int parallelism,
-      int eventNumOfTask,
+      int numOfMetadataState,
       String instantTime,
       List<WriteStatus> writeStatuses,
       boolean lastBatch,
@@ -84,7 +79,7 @@ public class WriteMetadataEvent implements OperatorEvent {
       boolean bootstrap) {
     this.taskID = taskID;
     this.instantTime = instantTime;
-    this.eventNumOfTask = eventNumOfTask;
+    this.numOfMetadataState = numOfMetadataState;
     this.parallelism = parallelism;
     this.writeStatuses = new ArrayList<>(writeStatuses);
     this.lastBatch = lastBatch;
@@ -127,20 +122,12 @@ public class WriteMetadataEvent implements OperatorEvent {
     this.parallelism = parallelism;
   }
 
-  public int getMergeCount() {
-    return mergeCount;
+  public int getNumOfMetadataState() {
+    return numOfMetadataState;
   }
 
-  public void setMergeCount(int mergeCount) {
-    this.mergeCount = mergeCount;
-  }
-
-  public int getEventNumOfTask() {
-    return eventNumOfTask;
-  }
-
-  public void setEventNumOfTask(int eventNumOfTask) {
-    this.eventNumOfTask = eventNumOfTask;
+  public void setNumOfMetadataState(int numOfMetadataState) {
+    this.numOfMetadataState = numOfMetadataState;
   }
 
   public String getInstantTime() {
@@ -189,7 +176,6 @@ public class WriteMetadataEvent implements OperatorEvent {
     statusList.addAll(this.writeStatuses);
     statusList.addAll(other.writeStatuses);
     this.writeStatuses = statusList;
-    this.mergeCount += 1;
   }
 
   /**
@@ -225,7 +211,7 @@ public class WriteMetadataEvent implements OperatorEvent {
     return WriteMetadataEvent.builder()
         .taskID(taskId)
         .instantTime(BOOTSTRAP_INSTANT)
-        .eventNumOfTask(1)
+        .numOfMetadataState(1)
         .writeStatus(Collections.emptyList())
         .bootstrap(true)
         .build();
@@ -242,7 +228,7 @@ public class WriteMetadataEvent implements OperatorEvent {
     private List<WriteStatus> writeStatus;
     private Integer taskID;
     private int parallelism = 0;
-    private int eventNumOfTask = 0;
+    private int numOfMetadataState = 1;
     private String instantTime;
     private boolean lastBatch = false;
     private boolean endInput = false;
@@ -252,7 +238,7 @@ public class WriteMetadataEvent implements OperatorEvent {
       Objects.requireNonNull(taskID);
       Objects.requireNonNull(instantTime);
       Objects.requireNonNull(writeStatus);
-      return new WriteMetadataEvent(taskID, parallelism, eventNumOfTask, instantTime, writeStatus, lastBatch, endInput, bootstrap);
+      return new WriteMetadataEvent(taskID, parallelism, numOfMetadataState, instantTime, writeStatus, lastBatch, endInput, bootstrap);
     }
 
     public Builder taskID(int taskID) {
@@ -275,8 +261,8 @@ public class WriteMetadataEvent implements OperatorEvent {
       return this;
     }
 
-    public Builder eventNumOfTask(int eventNumOfTask) {
-      this.eventNumOfTask = eventNumOfTask;
+    public Builder numOfMetadataState(int numOfMetadataState) {
+      this.numOfMetadataState = numOfMetadataState;
       return this;
     }
 
