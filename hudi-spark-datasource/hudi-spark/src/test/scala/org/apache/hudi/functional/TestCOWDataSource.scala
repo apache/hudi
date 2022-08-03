@@ -33,7 +33,7 @@ import org.apache.hudi.keygen._
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions.Config
 import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.hudi.util.JFunction
-import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
+import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers, HoodieSparkUtils}
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions.{col, concat, lit, udf}
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
@@ -978,9 +978,6 @@ class TestCOWDataSource extends HoodieClientTestBase {
 
     df.write.format("hudi")
       .options(commonOpts)
-      .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "id")
-      .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "id")
-      .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "id")
       .option("hoodie.insert.shuffle.parallelism", "4")
       .option("hoodie.upsert.shuffle.parallelism", "4")
       .option("hoodie.bulkinsert.shuffle.parallelism", "2")
@@ -1044,5 +1041,70 @@ class TestCOWDataSource extends HoodieClientTestBase {
         secondDF.select("_hoodie_partition_path").map(_.get(0).toString).collect().sorted.toSeq
       )
     }
+  }
+
+  @Test
+  def testSaveAsTableInDifferentModes(): Unit = {
+    val options = scala.collection.mutable.Map.empty ++ commonOpts ++ Map("path" -> basePath)
+
+    // first use the Overwrite mode
+    val records1 = recordsToStrings(dataGen.generateInserts("001", 5)).toList
+    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
+    inputDF1.write.format("org.apache.hudi")
+      .partitionBy("partition")
+      .options(options)
+      .mode(SaveMode.Append)
+      .saveAsTable("hoodie_test")
+
+    // init metaClient
+    metaClient = HoodieTableMetaClient.builder()
+      .setBasePath(basePath)
+      .setConf(spark.sessionState.newHadoopConf)
+      .build()
+    assertEquals(spark.read.format("hudi").load(basePath).count(), 5)
+
+    // use the Append mode
+    val records2 = recordsToStrings(dataGen.generateInserts("002", 6)).toList
+    val inputDF2 = spark.read.json(spark.sparkContext.parallelize(records2, 2))
+    inputDF2.write.format("org.apache.hudi")
+      .partitionBy("partition")
+      .options(options)
+      .mode(SaveMode.Append)
+      .saveAsTable("hoodie_test")
+    assertEquals(spark.read.format("hudi").load(basePath).count(), 11)
+
+    // use the Ignore mode
+    val records3 = recordsToStrings(dataGen.generateInserts("003", 7)).toList
+    val inputDF3 = spark.read.json(spark.sparkContext.parallelize(records3, 2))
+    inputDF3.write.format("org.apache.hudi")
+      .partitionBy("partition")
+      .options(options)
+      .mode(SaveMode.Ignore)
+      .saveAsTable("hoodie_test")
+    // nothing to do for the ignore mode
+    assertEquals(spark.read.format("hudi").load(basePath).count(), 11)
+
+    // use the ErrorIfExists mode
+    val records4 = recordsToStrings(dataGen.generateInserts("004", 8)).toList
+    val inputDF4 = spark.read.json(spark.sparkContext.parallelize(records4, 2))
+    try {
+      inputDF4.write.format("org.apache.hudi")
+        .partitionBy("partition")
+        .options(options)
+        .mode(SaveMode.ErrorIfExists)
+        .saveAsTable("hoodie_test")
+    } catch {
+      case e: Throwable => // do nothing
+    }
+
+    // use the Overwrite mode
+    val records5 = recordsToStrings(dataGen.generateInserts("005", 9)).toList
+    val inputDF5 = spark.read.json(spark.sparkContext.parallelize(records5, 2))
+    inputDF5.write.format("org.apache.hudi")
+      .partitionBy("partition")
+      .options(options)
+      .mode(SaveMode.Overwrite)
+      .saveAsTable("hoodie_test")
+    assertEquals(spark.read.format("hudi").load(basePath).count(), 9)
   }
 }
