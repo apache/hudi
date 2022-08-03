@@ -166,7 +166,7 @@ stages:
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
-              options: $(MVN_OPTS_TEST) -Punit-tests -pl hudi-spark_2.11
+              options: $(MVN_OPTS_TEST) -Punit-tests -pl hudi-spark-datasource/hudi-spark
               publishJUnitResults: false
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g'
@@ -175,7 +175,7 @@ stages:
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
-              options: $(MVN_OPTS_TEST) -Pfunctional-tests -pl hudi-spark_2.11
+              options: $(MVN_OPTS_TEST) -Pfunctional-tests -pl hudi-spark-datasource/hudi-spark
               publishJUnitResults: false
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g'
