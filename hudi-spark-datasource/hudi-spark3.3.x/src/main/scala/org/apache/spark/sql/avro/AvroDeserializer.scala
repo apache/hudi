@@ -48,17 +48,15 @@ import java.util.TimeZone
  *
  * PLEASE REFRAIN MAKING ANY CHANGES TO THIS CODE UNLESS ABSOLUTELY NECESSARY
  */
-private[sql] class AvroDeserializer(
-                                     rootAvroType: Schema,
-                                     rootCatalystType: DataType,
-                                     positionalFieldMatch: Boolean,
-                                     datetimeRebaseSpec: RebaseSpec,
-                                     filters: StructFilters) {
+private[sql] class AvroDeserializer(rootAvroType: Schema,
+                                    rootCatalystType: DataType,
+                                    positionalFieldMatch: Boolean,
+                                    datetimeRebaseSpec: RebaseSpec,
+                                    filters: StructFilters) {
 
-  def this(
-            rootAvroType: Schema,
-            rootCatalystType: DataType,
-            datetimeRebaseMode: String) = {
+  def this(rootAvroType: Schema,
+           rootCatalystType: DataType,
+           datetimeRebaseMode: String) = {
     this(
       rootAvroType,
       rootCatalystType,
@@ -69,11 +67,9 @@ private[sql] class AvroDeserializer(
 
   private lazy val decimalConversions = new DecimalConversion()
 
-  private val dateRebaseFunc = createDateRebaseFuncInRead(
-    datetimeRebaseSpec.mode, "Avro")
+  private val dateRebaseFunc = createDateRebaseFuncInRead(datetimeRebaseSpec.mode, "Avro")
 
-  private val timestampRebaseFunc = createTimestampRebaseFuncInRead(
-    datetimeRebaseSpec, "Avro")
+  private val timestampRebaseFunc = createTimestampRebaseFuncInRead(datetimeRebaseSpec, "Avro")
 
   private val converter: Any => Option[Any] = try {
     rootCatalystType match {
@@ -112,11 +108,10 @@ private[sql] class AvroDeserializer(
    * Creates a writer to write avro values to Catalyst values at the given ordinal with the given
    * updater.
    */
-  private def newWriter(
-                         avroType: Schema,
-                         catalystType: DataType,
-                         avroPath: Seq[String],
-                         catalystPath: Seq[String]): (CatalystDataUpdater, Int, Any) => Unit = {
+  private def newWriter(avroType: Schema,
+                        catalystType: DataType,
+                        avroPath: Seq[String],
+                        catalystPath: Seq[String]): (CatalystDataUpdater, Int, Any) => Unit = {
     val errorPrefix = s"Cannot convert Avro ${toFieldStr(avroPath)} to " +
       s"SQL ${toFieldStr(catalystPath)} because "
     val incompatibleMsg = errorPrefix +
