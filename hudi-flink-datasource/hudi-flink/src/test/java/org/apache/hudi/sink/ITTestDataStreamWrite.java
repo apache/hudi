@@ -248,21 +248,8 @@ public class ITTestDataStreamWrite extends TestLogger {
       Pipelines.clean(conf, pipeline);
       Pipelines.compact(conf, pipeline);
     }
-    JobClient client = execEnv.executeAsync(jobName);
-    if (isMor) {
-      if (client.getJobStatus().get() != JobStatus.FAILED) {
-        try {
-          TimeUnit.SECONDS.sleep(20); // wait long enough for the compaction to finish
-          client.cancel();
-        } catch (Throwable var1) {
-          // ignored
-        }
-      }
-    } else {
-      // wait for the streaming job to finish
-      client.getJobExecutionResult().get();
-    }
 
+    execute(execEnv, isMor, jobName);
     TestData.checkWrittenDataCOW(tempFile, expected);
   }
 
@@ -322,17 +309,14 @@ public class ITTestDataStreamWrite extends TestLogger {
     execEnv.addOperator(pipeline.getTransformation());
 
     Pipelines.cluster(conf, rowType, pipeline);
-    JobClient client = execEnv.executeAsync(jobName);
-
-    // wait for the streaming job to finish
-    client.getJobExecutionResult().get();
+    execEnv.execute(jobName);
 
     TestData.checkWrittenDataCOW(tempFile, expected);
   }
 
   public void execute(StreamExecutionEnvironment execEnv, boolean isMor, String jobName) throws Exception {
-    JobClient client = execEnv.executeAsync(jobName);
     if (isMor) {
+      JobClient client = execEnv.executeAsync(jobName);
       if (client.getJobStatus().get() != JobStatus.FAILED) {
         try {
           TimeUnit.SECONDS.sleep(20); // wait long enough for the compaction to finish
@@ -343,7 +327,7 @@ public class ITTestDataStreamWrite extends TestLogger {
       }
     } else {
       // wait for the streaming job to finish
-      client.getJobExecutionResult().get();
+      execEnv.execute(jobName);
     }
   }
 
@@ -398,13 +382,9 @@ public class ITTestDataStreamWrite extends TestLogger {
     execEnv.enableCheckpointing(4000, CheckpointingMode.EXACTLY_ONCE);
     execEnv.getCheckpointConfig().setMaxConcurrentCheckpoints(1);
 
-    options.put(FlinkOptions.INDEX_TYPE.key(), "FLINK_STATE");
     options.put(FlinkOptions.PATH.key(), tempFile.getAbsolutePath());
-    options.put(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS.key(), "4");
-    options.put("table.type", HoodieTableType.MERGE_ON_READ.name());
-    options.put(FlinkOptions.INDEX_KEY_FIELD.key(), "id");
-    options.put(FlinkOptions.COMPACTION_DELTA_COMMITS.key(), "1");
     options.put(FlinkOptions.TABLE_TYPE.key(), HoodieTableType.MERGE_ON_READ.name());
+    options.put(FlinkOptions.COMPACTION_DELTA_COMMITS.key(), "1");
     options.put(FlinkOptions.SOURCE_AVRO_SCHEMA_PATH.key(), Objects.requireNonNull(Thread.currentThread().getContextClassLoader().getResource("test_read_schema.avsc")).toString());
     Configuration conf = Configuration.fromMap(options);
     // Read from file source
@@ -451,5 +431,4 @@ public class ITTestDataStreamWrite extends TestLogger {
     execute(execEnv, true, "Api_Sink_Test");
     TestData.checkWrittenDataCOW(tempFile, EXPECTED);
   }
-
 }

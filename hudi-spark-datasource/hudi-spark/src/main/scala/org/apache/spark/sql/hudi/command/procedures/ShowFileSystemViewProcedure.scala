@@ -37,7 +37,7 @@ class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure wit
     ProcedureParameter.required(0, "table", DataTypes.StringType, None),
     ProcedureParameter.optional(1, "max_instant", DataTypes.StringType, ""),
     ProcedureParameter.optional(2, "include_max", DataTypes.BooleanType, false),
-    ProcedureParameter.optional(3, "include_inflight", DataTypes.BooleanType, false),
+    ProcedureParameter.optional(3, "include_in_flight", DataTypes.BooleanType, false),
     ProcedureParameter.optional(4, "exclude_compaction", DataTypes.BooleanType, false),
     ProcedureParameter.optional(5, "limit", DataTypes.IntegerType, 10),
     ProcedureParameter.optional(6, "path_regex", DataTypes.StringType, "*/*/*")

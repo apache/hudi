@@ -168,7 +168,7 @@ public class ParquetUtils extends BaseFileUtils {
       conf.addResource(FSUtils.getFs(filePath.toString(), conf).getConf());
       Schema readSchema = keyGeneratorOpt.map(keyGenerator -> {
         List<String> fields = new ArrayList<>();
-        fields.addAll(keyGenerator.getRecordKeyFields());
+        fields.addAll(keyGenerator.getRecordKeyFieldNames());
         fields.addAll(keyGenerator.getPartitionPathFields());
         return HoodieAvroUtils.getSchemaForFields(readAvroSchema(conf, filePath), fields);
       })

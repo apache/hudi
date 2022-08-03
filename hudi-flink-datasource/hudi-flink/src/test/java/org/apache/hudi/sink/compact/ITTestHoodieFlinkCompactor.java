@@ -102,6 +102,7 @@ public class ITTestHoodieFlinkCompactor {
     tableEnv.getConfig().getConfiguration()
         .setInteger(ExecutionConfigOptions.TABLE_EXEC_RESOURCE_DEFAULT_PARALLELISM, 1);
     Map<String, String> options = new HashMap<>();
+    options.put(FlinkOptions.COMPACTION_SCHEDULE_ENABLED.key(), "false");
     options.put(FlinkOptions.COMPACTION_ASYNC_ENABLED.key(), "false");
     options.put(FlinkOptions.PATH.key(), tempFile.getAbsolutePath());
     options.put(FlinkOptions.TABLE_TYPE.key(), "MERGE_ON_READ");
@@ -198,7 +199,7 @@ public class ITTestHoodieFlinkCompactor {
     asyncCompactionService.start(null);
 
     // wait for the asynchronous commit to finish
-    TimeUnit.SECONDS.sleep(5);
+    TimeUnit.SECONDS.sleep(10);
 
     asyncCompactionService.shutDown();
 
@@ -221,8 +222,6 @@ public class ITTestHoodieFlinkCompactor {
     String hoodieTableDDL = TestConfigurations.getCreateHoodieTableDDL("t1", options);
     tableEnv.executeSql(hoodieTableDDL);
     tableEnv.executeSql(TestSQL.INSERT_T1).await();
-
-    TimeUnit.SECONDS.sleep(3);
 
     StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
     FlinkCompactionConfig cfg = new FlinkCompactionConfig();
@@ -247,8 +246,13 @@ public class ITTestHoodieFlinkCompactor {
         + "('id13','Jenny',72,TIMESTAMP '1970-01-01 00:00:10','par5')";
     tableEnv.executeSql(insertT1ForNewPartition).await();
 
-    TimeUnit.SECONDS.sleep(3);
+    writeClient.close();
+    // re-create the write client/fs view server
+    // or there is low probability that connection refused occurs then
+    // the reader metadata view is not complete
+    writeClient = StreamerUtil.createWriteClient(conf);
 
+    metaClient.reloadActiveTimeline();
     compactionInstantTimeList.add(scheduleCompactionPlan(metaClient, writeClient));
 
     HoodieFlinkTable<?> table = writeClient.getHoodieTable();

@@ -34,6 +34,7 @@ import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.GenericRowWithSchema;
 import org.apache.spark.sql.types.StructType;
+import org.apache.spark.unsafe.types.UTF8String;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -138,7 +139,7 @@ public class TestTimestampBasedKeyGenerator {
     baseRow = genericRecordToRow(baseRecord);
     assertEquals("2020-01-06 12", keyGen.getPartitionPath(baseRow));
     internalRow = KeyGeneratorTestUtilities.getInternalRow(baseRow);
-    assertEquals("2020-01-06 12", keyGen.getPartitionPath(internalRow, baseRow.schema()));
+    assertEquals(UTF8String.fromString("2020-01-06 12"), keyGen.getPartitionPath(internalRow, baseRow.schema()));
 
     // timezone is GMT+8:00, createTime is BigDecimal
     BigDecimal decimal = new BigDecimal("1578283932000.0001");
@@ -186,7 +187,7 @@ public class TestTimestampBasedKeyGenerator {
     baseRow = genericRecordToRow(baseRecord);
     assertEquals("1970-01-01 08", keyGen.getPartitionPath(baseRow));
     internalRow = KeyGeneratorTestUtilities.getInternalRow(baseRow);
-    assertEquals("1970-01-01 08", keyGen.getPartitionPath(internalRow, baseRow.schema()));
+    assertEquals(UTF8String.fromString("1970-01-01 08"), keyGen.getPartitionPath(internalRow, baseRow.schema()));
 
     // timestamp is DATE_STRING, timezone is GMT, createTime is null
     baseRecord.put("createTimeString", null);
@@ -198,7 +199,7 @@ public class TestTimestampBasedKeyGenerator {
     baseRow = genericRecordToRow(baseRecord);
     assertEquals("1970-01-01 12:00:00", keyGen.getPartitionPath(baseRow));
     internalRow = KeyGeneratorTestUtilities.getInternalRow(baseRow);
-    assertEquals("1970-01-01 12:00:00", keyGen.getPartitionPath(internalRow, baseRow.schema()));
+    assertEquals(UTF8String.fromString("1970-01-01 12:00:00"), keyGen.getPartitionPath(internalRow, baseRow.schema()));
   }
 
   @Test
@@ -216,7 +217,7 @@ public class TestTimestampBasedKeyGenerator {
     baseRow = genericRecordToRow(baseRecord);
     assertEquals("2024-10-04 12", keyGen.getPartitionPath(baseRow));
     internalRow = KeyGeneratorTestUtilities.getInternalRow(baseRow);
-    assertEquals("2024-10-04 12", keyGen.getPartitionPath(internalRow, baseRow.schema()));
+    assertEquals(UTF8String.fromString("2024-10-04 12"), keyGen.getPartitionPath(internalRow, baseRow.schema()));
 
     // timezone is GMT, createTime is null
     baseRecord.put("createTime", null);
@@ -229,7 +230,7 @@ public class TestTimestampBasedKeyGenerator {
     baseRow = genericRecordToRow(baseRecord);
     assertEquals("1970-01-02 12", keyGen.getPartitionPath(baseRow));
     internalRow = KeyGeneratorTestUtilities.getInternalRow(baseRow);
-    assertEquals("1970-01-02 12", keyGen.getPartitionPath(internalRow, baseRow.schema()));
+    assertEquals(UTF8String.fromString("1970-01-02 12"), keyGen.getPartitionPath(internalRow, baseRow.schema()));
 
     // timezone is GMT. number of days store integer in mysql
     baseRecord.put("createTime", 18736L);
@@ -260,7 +261,7 @@ public class TestTimestampBasedKeyGenerator {
     baseRow = genericRecordToRow(baseRecord);
     assertEquals("2021/12/03", keyGen.getPartitionPath(baseRow));
     internalRow = KeyGeneratorTestUtilities.getInternalRow(baseRow);
-    assertEquals("2021/12/03", keyGen.getPartitionPath(internalRow, baseRow.schema()));
+    assertEquals(UTF8String.fromString("2021/12/03"), keyGen.getPartitionPath(internalRow, baseRow.schema()));
 
     // timezone is GMT, createTime is null
     baseRecord.put("createTime", null);
@@ -274,7 +275,7 @@ public class TestTimestampBasedKeyGenerator {
     baseRow = genericRecordToRow(baseRecord);
     assertEquals("1970/01/01", keyGen.getPartitionPath(baseRow));
     internalRow = KeyGeneratorTestUtilities.getInternalRow(baseRow);
-    assertEquals("1970/01/01", keyGen.getPartitionPath(internalRow, baseRow.schema()));
+    assertEquals(UTF8String.fromString("1970/01/01"), keyGen.getPartitionPath(internalRow, baseRow.schema()));
   }
 
   @Test

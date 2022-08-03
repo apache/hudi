@@ -85,6 +85,29 @@ public class WriteProfiles {
   /**
    * Returns all the incremental write file statuses with the given commits metadata.
    *
+   * <p> Different with {@link #getWritePathsOfInstants}, the files are not filtered by
+   * existence.
+   *
+   * @param basePath     Table base path
+   * @param hadoopConf   The hadoop conf
+   * @param metadataList The commits metadata
+   * @param tableType    The table type
+   * @return the file status array
+   */
+  public static FileStatus[] getRawWritePathsOfInstants(
+      Path basePath,
+      Configuration hadoopConf,
+      List<HoodieCommitMetadata> metadataList,
+      HoodieTableType tableType) {
+    Map<String, FileStatus> uniqueIdToFileStatus = new HashMap<>();
+    metadataList.forEach(metadata ->
+        uniqueIdToFileStatus.putAll(getFilesToReadOfInstant(basePath, metadata, hadoopConf, tableType)));
+    return uniqueIdToFileStatus.values().toArray(new FileStatus[0]);
+  }
+
+  /**
+   * Returns all the incremental write file statuses with the given commits metadata.
+   *
    * @param basePath     Table base path
    * @param hadoopConf   The hadoop conf
    * @param metadataList The commits metadata
@@ -101,6 +124,25 @@ public class WriteProfiles {
     metadataList.forEach(metadata ->
         uniqueIdToFileStatus.putAll(getFilesToReadOfInstant(basePath, metadata, fs, tableType)));
     return uniqueIdToFileStatus.values().toArray(new FileStatus[0]);
+  }
+
+  /**
+   * Returns the commit file status info with given metadata.
+   *
+   * @param basePath   Table base path
+   * @param metadata   The metadata
+   * @param hadoopConf The filesystem
+   * @param tableType  The table type
+   * @return the commit file status info grouping by specific ID
+   */
+  private static Map<String, FileStatus> getFilesToReadOfInstant(
+      Path basePath,
+      HoodieCommitMetadata metadata,
+      Configuration hadoopConf,
+      HoodieTableType tableType) {
+    return getFilesToRead(hadoopConf, metadata, basePath.toString(), tableType).entrySet().stream()
+        .filter(entry -> StreamerUtil.isValidFile(entry.getValue()))
+        .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
   }
 
   /**

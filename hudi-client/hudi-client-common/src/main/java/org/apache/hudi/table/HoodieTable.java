@@ -368,10 +368,10 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
   }
 
   /**
-   * Get the list of savepoints in this table.
+   * Get the list of savepoint timestamps in this table.
    */
-  public List<String> getSavepoints() {
-    return getCompletedSavepointTimeline().getInstants().map(HoodieInstant::getTimestamp).collect(Collectors.toList());
+  public Set<String> getSavepointTimestamps() {
+    return getCompletedSavepointTimeline().getInstants().map(HoodieInstant::getTimestamp).collect(Collectors.toSet());
   }
 
   public HoodieActiveTimeline getActiveTimeline() {
@@ -655,7 +655,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
       invalidDataPaths.removeAll(validDataPaths);
 
       if (!invalidDataPaths.isEmpty()) {
-        LOG.info("Removing duplicate data files created due to spark retries before committing. Paths=" + invalidDataPaths);
+        LOG.info("Removing duplicate data files created due to task retries before committing. Paths=" + invalidDataPaths);
         Map<String, List<Pair<String, String>>> invalidPathsByPartition = invalidDataPaths.stream()
             .map(dp -> Pair.of(new Path(basePath, dp).getParent().toString(), new Path(basePath, dp).toString()))
             .collect(Collectors.groupingBy(Pair::getKey));
