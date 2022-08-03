@@ -26,6 +26,8 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
+import java.util
+
 class RunCleanProcedure extends BaseProcedure with ProcedureBuilder with Logging {
 
   private val PARAMETERS = Array[ProcedureParameter](
@@ -75,14 +77,18 @@ class RunCleanProcedure extends BaseProcedure with ProcedureBuilder with Logging
     }
     val client = HoodieCLIUtils.createHoodieClientFromPath(sparkSession, basePath, props)
     val hoodieCleanMeta = client.clean(cleanInstantTime, scheduleInLine, skipLocking)
+    val rows = new util.ArrayList[Row]
 
-    if (hoodieCleanMeta == null) Seq(Row.empty)
-    else Seq(Row(hoodieCleanMeta.getStartCleanTime,
-      hoodieCleanMeta.getTimeTakenInMillis,
-      hoodieCleanMeta.getTotalFilesDeleted,
-      hoodieCleanMeta.getEarliestCommitToRetain,
-      JsonUtils.getObjectMapper.writeValueAsString(hoodieCleanMeta.getBootstrapPartitionMetadata),
-      hoodieCleanMeta.getVersion))
+    if (hoodieCleanMeta != null) {
+      rows.add(Row(hoodieCleanMeta.getStartCleanTime,
+        hoodieCleanMeta.getTimeTakenInMillis,
+        hoodieCleanMeta.getTotalFilesDeleted,
+        hoodieCleanMeta.getEarliestCommitToRetain,
+        JsonUtils.getObjectMapper.writeValueAsString(hoodieCleanMeta.getBootstrapPartitionMetadata),
+        hoodieCleanMeta.getVersion))
+    }
+
+    rows.stream().toArray().map(r => r.asInstanceOf[Row]).toList
   }
 }
 
