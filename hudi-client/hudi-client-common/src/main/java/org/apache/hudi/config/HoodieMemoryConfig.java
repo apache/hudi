@@ -22,9 +22,10 @@ import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.common.util.Option;
 
 import javax.annotation.concurrent.Immutable;
-
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
@@ -80,7 +81,11 @@ public class HoodieMemoryConfig extends HoodieConfig {
   public static final ConfigProperty<String> SPILLABLE_MAP_BASE_PATH = ConfigProperty
       .key("hoodie.memory.spillable.map.path")
       .defaultValue("/tmp/")
-      .withDocumentation("Default file path prefix for spillable map");
+      .withInferFunction(cfg -> {
+        String[] localDirs = FileIOUtils.getConfiguredLocalDirs();
+        return (localDirs != null && localDirs.length > 0) ? Option.of(localDirs[0]) : Option.empty();
+      })
+      .withDocumentation("Default file path for spillable map");
 
   public static final ConfigProperty<Double> WRITESTATUS_FAILURE_FRACTION = ConfigProperty
       .key("hoodie.memory.writestatus.failure.fraction")
