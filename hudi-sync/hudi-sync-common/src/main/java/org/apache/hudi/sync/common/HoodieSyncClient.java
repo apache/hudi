@@ -107,10 +107,20 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
   }
 
   public List<String> getPartitionsWrittenToSince(Option<String> lastCommitTimeSynced) {
+    boolean fullPathScan = false;
     if (!lastCommitTimeSynced.isPresent()) {
+      fullPathScan = true;
       LOG.info("Last commit time synced is not known, listing all partitions in "
-          + config.getString(META_SYNC_BASE_PATH)
-          + ",FS :" + config.getHadoopFileSystem());
+            + config.getString(META_SYNC_BASE_PATH)
+            + ",FS :" + config.getHadoopFileSystem());
+    } else if (lastCommitTimeSynced.get()
+          .compareTo(metaClient.getActiveTimeline().getCommitsTimeline().firstInstant().get().getTimestamp()) < 0) {
+      fullPathScan = true;
+      LOG.info("Last commit time synced is earlier than the first instant in the timeline, listing all partitions in "
+            + config.getString(META_SYNC_BASE_PATH)
+            + ",FS :" + config.getHadoopFileSystem());
+    }
+    if (fullPathScan) {
       HoodieLocalEngineContext engineContext = new HoodieLocalEngineContext(metaClient.getHadoopConf());
       return FSUtils.getAllPartitionPaths(engineContext,
           config.getString(META_SYNC_BASE_PATH),
