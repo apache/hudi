@@ -424,6 +424,11 @@ public class StreamWriteOperatorCoordinator
         Thread.currentThread().setContextClassLoader(getClass().getClassLoader());
         // sync Hive synchronously if it is enabled in batch mode.
         syncHive();
+        // schedules the compaction plan in batch execution mode
+        if (tableState.scheduleCompaction) {
+          // if async compaction is on, schedule the compaction
+          CompactionUtil.scheduleCompaction(metaClient, writeClient, tableState.isDeltaTimeCompaction, true);
+        }
       }
     }
   }

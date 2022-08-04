@@ -18,6 +18,7 @@
 
 package org.apache.hudi.sink.compact;
 
+import org.apache.flink.streaming.api.operators.BoundedOneInput;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -47,7 +48,7 @@ import static java.util.stream.Collectors.toList;
  * <p>It should be singleton to avoid conflicts.
  */
 public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPlanEvent>
-    implements OneInputStreamOperator<Object, CompactionPlanEvent> {
+    implements OneInputStreamOperator<Object, CompactionPlanEvent>, BoundedOneInput {
 
   /**
    * Config options.
@@ -140,5 +141,11 @@ public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPla
   @VisibleForTesting
   public void setOutput(Output<StreamRecord<CompactionPlanEvent>> output) {
     this.output = output;
+  }
+
+  @Override
+  public void endInput() throws Exception {
+    // Called when the input data ends, only used in batch mode.
+    notifyCheckpointComplete(-1);
   }
 }
