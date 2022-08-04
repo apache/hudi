@@ -17,9 +17,7 @@
 
 package org.apache.spark.sql.hudi.procedure
 
-import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase
-
-class TestShowFsPathDetailProcedure extends HoodieSparkSqlTestBase {
+class TestShowFsPathDetailProcedure extends HoodieSparkProcedureTestBase {
   test("Test Call show_fs_path_detail Procedure") {
     withTempDir { tmp =>
       val tableName = generateTableName
