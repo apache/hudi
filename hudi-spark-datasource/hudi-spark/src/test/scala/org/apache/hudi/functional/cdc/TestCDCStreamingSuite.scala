@@ -198,7 +198,7 @@ class TestCDCStreamingSuite extends TestCDCBase {
       Row("Canada", 1),
       Row("China", 50),
       Row("Singapore", 22),
-      Row("US", 205)
+      Row("US", 204)
     )
     currentCP = spark.read.format("hudi")
       .load(countryToPopulationTblPath)
