@@ -56,10 +56,10 @@ class TestUpgradeOrDowngradeProcedure extends HoodieSparkSqlTestBase {
         .build
 
       // verify hoodie.table.version of the original table
-      assertResult(HoodieTableVersion.FOUR.versionCode) {
+      assertResult(HoodieTableVersion.FIVE.versionCode) {
         metaClient.getTableConfig.getTableVersion.versionCode()
       }
-      assertTableVersionFromPropertyFile(metaClient, HoodieTableVersion.FOUR.versionCode)
+      assertTableVersionFromPropertyFile(metaClient, HoodieTableVersion.FIVE.versionCode)
 
       // downgrade table to ZERO
       checkAnswer(s"""call downgrade_table(table => '$tableName', to_version => 'ZERO')""")(Seq(true))
