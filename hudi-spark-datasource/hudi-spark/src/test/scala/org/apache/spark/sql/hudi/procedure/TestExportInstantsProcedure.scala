@@ -17,9 +17,7 @@
 
 package org.apache.spark.sql.hudi.procedure
 
-import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase
-
-class TestExportInstantsProcedure extends HoodieSparkSqlTestBase {
+class TestExportInstantsProcedure extends HoodieSparkProcedureTestBase {
 
   test("Test Call export_instants Procedure") {
     withTempDir { tmp =>

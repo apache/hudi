@@ -29,7 +29,6 @@ import org.apache.parquet.hadoop.ParquetWriter
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.catalyst.parser.ParseException
-import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase
 import org.junit.jupiter.api.Assertions.assertTrue
 
 import java.io.IOException
@@ -37,7 +36,7 @@ import java.util
 import java.util.Objects
 import java.util.concurrent.TimeUnit
 
-class TestHdfsParquetImportProcedure extends HoodieSparkSqlTestBase {
+class TestHdfsParquetImportProcedure extends HoodieSparkProcedureTestBase {
 
   test("Test Call hdfs_parquet_import Procedure with insert operation") {
     withTempDir { tmp =>

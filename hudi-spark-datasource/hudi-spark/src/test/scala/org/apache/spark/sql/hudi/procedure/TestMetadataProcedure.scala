@@ -17,9 +17,7 @@
 
 package org.apache.spark.sql.hudi.procedure
 
-import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase
-
-class TestMetadataProcedure extends HoodieSparkSqlTestBase {
+class TestMetadataProcedure extends HoodieSparkProcedureTestBase {
 
   test("Test Call delete_metadata_table Procedure") {
     withTempDir { tmp =>
