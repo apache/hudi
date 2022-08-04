@@ -106,18 +106,23 @@ public class TestInlineCompaction extends CompactionTestBase {
     try (SparkRDDWriteClient<?> writeClient = getHoodieWriteClient(cfg)) {
       List<HoodieRecord> records = dataGen.generateInserts(instants.get(0), 100);
       HoodieReadClient readClient = getHoodieReadClient(cfg.getBasePath());
+
+      // step 1: create and complete 3 commit
       runNextDeltaCommits(writeClient, readClient, instants, records, cfg, true, new ArrayList<>());
 
       metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(cfg.getBasePath()).build();
 
-      cfg.setValue(INLINE_COMPACT_NUM_DELTA_COMMITS,"1");
+      // step 2: force create a compaction request, but won't run it
+      cfg.setValue(INLINE_COMPACT_NUM_DELTA_COMMITS, "1");
       String requestInstant = HoodieActiveTimeline.createNewInstantTime();
       // add one compaction request
       scheduleCompaction(requestInstant, writeClient, cfg);
       metaClient.getActiveTimeline().reload();
-      assertEquals(metaClient.getActiveTimeline().getInstants().filter(hoodieInstant -> hoodieInstant.getAction().equals(HoodieTimeline.COMPACTION_ACTION)
+      assertEquals(metaClient.getActiveTimeline().getInstants()
+            .filter(hoodieInstant -> hoodieInstant.getAction().equals(HoodieTimeline.COMPACTION_ACTION)
             && hoodieInstant.getState() == HoodieInstant.State.REQUESTED).count(), 1);
-      // can not add request second time
+      // step 3: try to create another, but this one should fail because the NUM_COMMITS_AFTER_LAST_REQUEST strategy ,
+      // and will throw a AssertionError due to scheduleCompaction will check if the last instant is a compaction request
       requestInstant = HoodieActiveTimeline.createNewInstantTime();
       try {
         scheduleCompaction(requestInstant, writeClient, cfg);
@@ -125,14 +130,17 @@ public class TestInlineCompaction extends CompactionTestBase {
       } catch (AssertionError error) {
         //should be here
       }
-      cfg.setValue(INLINE_COMPACT_NUM_DELTA_COMMITS,"4");
+      cfg.setValue(INLINE_COMPACT_NUM_DELTA_COMMITS, "4");
 
-      // this commit won't generate another compaction request only trigger last compaction request
+      // step 4: complete the last commit, and this commit also won't generate another compaction request
+      // only trigger last compaction request
       String finalInstant = HoodieActiveTimeline.createNewInstantTime();
       createNextDeltaCommit(finalInstant, dataGen.generateUpdates(finalInstant, 100), writeClient, metaClient, cfg, false);
 
       metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(cfg.getBasePath()).build();
 
+      // step 5: there should be only one .commit, and no pending compaction.
+      // the last instant should be delta commit since the compaction request is earlier.
       assertEquals(metaClient.getActiveTimeline().getCommitsTimeline().filter(instant -> instant.getAction().equals(HoodieTimeline.COMMIT_ACTION))
             .countInstants(), 1);
       assertEquals(metaClient.getActiveTimeline().getCommitsTimeline().filterPendingCompactionTimeline().countInstants(), 0);
