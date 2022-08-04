@@ -128,6 +128,67 @@ when querying the table, a Flink streaming pipeline starts and never ends until 
 You can specify the start commit with option `read.streaming.start-commit` and source monitoring interval with option
 `read.streaming.check-interval`.
 
+### Streaming Query
+By default, the hoodie table is read as batch, that is to read the latest snapshot data set and returns. Turns on the streaming read
+mode by setting option `read.streaming.enabled` as `true`. Sets up option `read.start-commit` to specify the read start offset, specifies the
+value as `earliest` if you want to consume all the history data set.
+
+#### Options
+|  Option Name  | Required | Default | Remarks |
+|  -----------  | -------  | ------- | ------- |
+| `read.streaming.enabled` | false | `false` | Specify `true` to read as streaming |
+| `read.start-commit` | false | the latest commit | Start commit time in format 'yyyyMMddHHmmss', use `earliest` to consume from the start commit |
+| `read.streaming.skip_compaction` | false | `false` | Whether to skip compaction commits while reading, generally for two purposes: 1) Avoid consuming duplications from the compaction instants 2) When change log mode is enabled, to only consume change logs for right semantics. |
+| `clean.retain_commits` | false | `10` | The max number of commits to retain before cleaning, when change log mode is enabled, tweaks this option to adjust the change log live time. For example, the default strategy keeps 50 minutes of change logs if the checkpoint interval is set up as 5 minutes. |
+
+:::note
+When option `read.streaming.skip_compaction` turns on and the streaming reader lags behind by commits of number
+`clean.retain_commits`, the data loss may occur. The compaction keeps the original instant time as the per-record metadata,
+the streaming reader would read and skip the whole base files if the log has been consumed. For efficiency, option `read.streaming.skip_compaction`
+is till suggested being `true`.
+:::
+
+### Incremental Query
+There are 3 use cases for incremental query:
+1. Streaming query: specify the start commit with option `read.start-commit`;
+2. Batch query: specify the start commit with option `read.start-commit` and end commit with option `read.end-commit`,
+   the interval is a closed one: both start commit and end commit are inclusive;
+3. TimeTravel: consume as batch for an instant time, specify the `read.end-commit` is enough because the start commit is latest by default.
+
+#### Options
+|  Option Name  | Required | Default | Remarks |
+|  -----------  | -------  | ------- | ------- |
+| `read.start-commit` | `false` | the latest commit | Specify `earliest` to consume from the start commit |
+| `read.end-commit` | `false` | the latest commit | -- |
+
+### Metadata Table
+The metadata table holds the metadata index per hudi table, it holds the file list and all kinds of indexes that we called multi-model index.
+Current these indexes are supported:
+
+1. partition -> files mapping
+2. column max/min statistics for each file
+3. bloom filter for each file
+
+The partition -> files mappings can be used for fetching the file list for writing/reading path, it is cost friendly for object storage that charges per visit,
+for HDFS, it can ease the access burden of the NameNode.
+
+The column max/min statistics per file is used for query acceleration, in the writing path, when enable this feature, hudi would
+book-keep the max/min values for each column in real-time, thus would decrease the writing throughput. In the reading path, hudi uses
+this statistics to filter out the useless files first before scanning.
+
+The bloom filter index is currently only used for spark bloom filter index, not for query acceleration yet.
+
+In general, enable the metadata table would increase the commit time, it is not very friendly for the use cases for very short checkpoint interval (say 30s).
+And for these use cases you should test the stability first.
+
+#### Options
+|  Option Name  | Required | Default | Remarks |
+|  -----------  | -------  | ------- | ------- |
+| `metadata.enabled` | `false` | false | Set to `true` to enable |
+| `read.data.skipping.enabled` | `false` | false | Whether to enable data skipping for batch snapshot read, by default disabled |
+| `hoodie.metadata.index.column.stats.enable` | `false` | false | Whether to enable column statistics (max/min) |
+| `hoodie.metadata.index.column.stats.column.list` | `false` | N/A | Columns(separated by comma) to collect the column statistics  |
+
 ## Hive
 To setup Hive for querying Hudi, see the [Query Engine Setup](/docs/query_engine_setup#hive) page.
 

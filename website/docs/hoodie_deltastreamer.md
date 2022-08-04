@@ -472,14 +472,67 @@ the compaction options: [`compaction.delta_commits`](#compaction) and [`compacti
 
 ### Append Mode
 
-If INSERT operation is used for ingestion, for COW table, there is no merging of small files by default; for MOR table, the small file strategy is applied always: MOR appends delta records to log files.
+For `INSERT` mode write operation, the current work flow is:
 
-The small file strategy lead to performance degradation. If you want to apply the behavior of file merge for COW table, turns on option `write.insert.cluster`, there is no record key combining by the way.
+- For Merge_On_Read table, the small file strategies are by default applied: tries to append to the small avro log files first
+- For Copy_On_Write table, write new parquet files directly, no small file strategies are applied
 
-#### Options
+Hudi supports rich clustering strategies to optimize the files layout for `INSERT` mode:
+
+#### Inline Clustering
+
+:::note
+Only Copy_On_Write table is supported. 
+:::
+
 |  Option Name  | Required | Default | Remarks |
 |  -----------  | -------  | ------- | ------- |
 | `write.insert.cluster` | `false` | `false` | Whether to merge small files while ingesting, for COW table, open the option to enable the small file merging strategy(no deduplication for keys but the throughput will be affected) |
+
+#### Async Clustering
+
+|  Option Name  | Required | Default | Remarks |
+|  -----------  | -------  | ------- | ------- |
+| `clustering.schedule.enabled` | `false` | `false` | Whether to schedule clustering plan during write process, by default false |
+| `clustering.delta_commits` | `false` | `4` | Delta commits to schedule the clustering plan, only valid when `clustering.schedule.enabled` is true |
+| `clustering.async.enabled` | `false` | `false` | Whether to execute clustering plan asynchronously, by default false |
+| `clustering.tasks` | `false` | `4` | Parallelism of the clustering tasks |
+| `clustering.plan.strategy.target.file.max.bytes` | `false` | `1024*1024*1024` | The target file size for clustering group, by default 1GB |
+| `clustering.plan.strategy.small.file.limit` | `false` | `600` | The file that has less size than the threshold (unit MB) are candidates for clustering |
+| `clustering.plan.strategy.sort.columns` | `false` | `N/A` | The columns to sort by when clustering |
+
+#### Clustering Plan Strategy
+
+Custom clustering strategy is supported.
+
+|  Option Name  | Required | Default | Remarks |
+|  -----------  | -------  | ------- | ------- |
+| `clustering.plan.partition.filter.mode` | `false` | `NONE` | Valid options 1) `NONE`: no limit; 2) `RECENT_DAYS`: choose partitions that represent recent days; 3) `SELECTED_PARTITIONS`: specific partitions |
+| `clustering.plan.strategy.daybased.lookback.partitions` | `false` | `2` | Valid for `RECENT_DAYS` mode |
+| `clustering.plan.strategy.cluster.begin.partition` | `false` | `N/A` | Valid for `SELECTED_PARTITIONS` mode, specify the partition to begin with(inclusive) |
+| `clustering.plan.strategy.cluster.end.partition` | `false` | `N/A` | Valid for `SELECTED_PARTITIONS` mode, specify the partition to end with(inclusive) |
+| `clustering.plan.strategy.partition.regex.pattern` | `false` | `N/A` | The regex to filter the partitions |
+| `clustering.plan.strategy.partition.selected` | `false` | `N/A` | Specific partitions separated by comma `,` |
+
+### Bucket Index
+
+By default, flink uses the state-backend to keep the file index: the mapping from primary key to fileId. When the input data set is large,
+there is possibility the cost of the state be a bottleneck, the bucket index use deterministic hash algorithm for shuffling the records into
+buckets, thus can avoid the storage and query overhead of indexes.
+
+#### Options
+
+|  Option Name  | Required | Default | Remarks |
+|  -----------  | -------  | ------- | ------- |
+| `index.type` | `false` | `FLINK_STATE` | Set up as `BUCKET` to use bucket index |
+| `hoodie.bucket.index.hash.field` | `false` | Primary key | Can be a subset of the primary key |
+| `hoodie.bucket.index.num.buckets` | `false` | `4` | The number of buckets per-partition, it is immutable once set up |
+
+Comparing to state index:
+
+- Bucket index has no computing and storage cost of state-backend index, thus has better performance
+- Bucket index can not expand the buckets dynamically, the state-backend index can expand the buckets dynamically based on current file layout
+- Bucket index can not handle changes among partitions(no limit if the input itself is CDC stream), state-backend index has no limit 
 
 ### Rate Limit
 There are many use cases that user put the full history data set onto the message queue together with the realtime incremental data. Then they consume the data from the queue into the hudi from the earliest offset using flink. Consuming history data set has these characteristics:
@@ -489,39 +542,6 @@ There are many use cases that user put the full history data set onto the messag
 |  Option Name  | Required | Default | Remarks |
 |  -----------  | -------  | ------- | ------- |
 | `write.rate.limit` | `false` | `0` | Default disable the rate limit |
-
-### Streaming Query
-By default, the hoodie table is read as batch, that is to read the latest snapshot data set and returns. Turns on the streaming read
-mode by setting option `read.streaming.enabled` as `true`. Sets up option `read.start-commit` to specify the read start offset, specifies the
-value as `earliest` if you want to consume all the history data set.
-
-#### Options
-|  Option Name  | Required | Default | Remarks |
-|  -----------  | -------  | ------- | ------- |
-| `read.streaming.enabled` | false | `false` | Specify `true` to read as streaming |
-| `read.start-commit` | false | the latest commit | Start commit time in format 'yyyyMMddHHmmss', use `earliest` to consume from the start commit |
-| `read.streaming.skip_compaction` | false | `false` | Whether to skip compaction commits while reading, generally for two purposes: 1) Avoid consuming duplications from the compaction instants 2) When change log mode is enabled, to only consume change logs for right semantics. |
-| `clean.retain_commits` | false | `10` | The max number of commits to retain before cleaning, when change log mode is enabled, tweaks this option to adjust the change log live time. For example, the default strategy keeps 50 minutes of change logs if the checkpoint interval is set up as 5 minutes. |
-
-:::note
-When option `read.streaming.skip_compaction` turns on and the streaming reader lags behind by commits of number
-`clean.retain_commits`, the data loss may occur. The compaction keeps the original instant time as the per-record metadata,
-the streaming reader would read and skip the whole base files if the log has been consumed. For efficiency, option `read.streaming.skip_compaction`
-is till suggested being `true`.
-:::
-
-### Incremental Query
-There are 3 use cases for incremental query:
-1. Streaming query: specify the start commit with option `read.start-commit`;
-2. Batch query: specify the start commit with option `read.start-commit` and end commit with option `read.end-commit`,
-   the interval is a closed one: both start commit and end commit are inclusive;
-3. TimeTravel: consume as batch for an instant time, specify the `read.end-commit` is enough because the start commit is latest by default.
-
-#### Options
-|  Option Name  | Required | Default | Remarks |
-|  -----------  | -------  | ------- | ------- |
-| `read.start-commit` | `false` | the latest commit | Specify `earliest` to consume from the start commit |
-| `read.end-commit` | `false` | the latest commit | -- |
 
 ## Kafka Connect Sink
 If you want to perform streaming ingestion into Hudi format similar to `HoodieDeltaStreamer`, but you don't want to depend on Spark,
