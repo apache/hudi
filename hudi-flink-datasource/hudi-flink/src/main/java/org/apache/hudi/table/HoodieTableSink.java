@@ -95,7 +95,7 @@ public class HoodieTableSink implements DynamicTableSink, SupportsPartitioning, 
       pipeline = Pipelines.hoodieStreamWrite(conf, parallelism, hoodieRecordDataStream);
       // compaction
       if (OptionsResolver.needsAsyncCompaction(conf)) {
-        // batch mode write must use syncCompaction.
+        // use synchronous compaction for bounded source.
         if (context.isBounded()) {
           conf.setBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED, false);
         }

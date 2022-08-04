@@ -42,6 +42,7 @@ import org.apache.flink.table.api.EnvironmentSettings;
 import org.apache.flink.table.api.TableEnvironment;
 import org.apache.flink.table.api.config.ExecutionConfigOptions;
 import org.apache.flink.table.api.internal.TableEnvironmentImpl;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -288,10 +289,8 @@ public class ITTestHoodieFlinkCompactor {
     TestData.checkWrittenDataCOW(tempFile, EXPECTED3);
   }
 
-  @ParameterizedTest
-  @ValueSource(booleans = {true, false})
-  public void testHoodieFlinkCompactorInBatchModeWrite(boolean compactionOnBatchModeEnable) throws Exception {
-    // Create hoodie table and insert into data.
+  @Test
+  public void testCompactionInBatchExecutionMode() throws Exception {
     EnvironmentSettings settings = EnvironmentSettings.newInstance().inBatchMode().build();
     TableEnvironment tableEnv = TableEnvironmentImpl.create(settings);
     tableEnv.getConfig().getConfiguration()
@@ -300,15 +299,11 @@ public class ITTestHoodieFlinkCompactor {
     options.put(FlinkOptions.COMPACTION_DELTA_COMMITS.key(), "2");
     options.put(FlinkOptions.PATH.key(), tempFile.getAbsolutePath());
     options.put(FlinkOptions.TABLE_TYPE.key(), "MERGE_ON_READ");
-    options.put(FlinkOptions.COMPACTION_SCHEDULE_ENABLED.key(), String.valueOf(compactionOnBatchModeEnable));
     String hoodieTableDDL = TestConfigurations.getCreateHoodieTableDDL("t1", options);
     tableEnv.executeSql(hoodieTableDDL);
     tableEnv.executeSql(TestSQL.INSERT_T1).await();
     tableEnv.executeSql(TestSQL.UPDATE_INSERT_T1).await();
-    Map<String, List<String>> expected = compactionOnBatchModeEnable ? EXPECTED2 : new HashMap<>();
-    // wait for the asynchronous commit to finish
-    TimeUnit.SECONDS.sleep(3);
-    TestData.checkWrittenDataCOW(tempFile, expected);
+    TestData.checkWrittenDataCOW(tempFile, EXPECTED2);
   }
 
   private String scheduleCompactionPlan(HoodieTableMetaClient metaClient, HoodieFlinkWriteClient<?> writeClient) {
