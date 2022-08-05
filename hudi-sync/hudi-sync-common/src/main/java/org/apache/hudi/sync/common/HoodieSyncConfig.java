@@ -90,7 +90,7 @@ public class HoodieSyncConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> META_SYNC_PARTITION_EXTRACTOR_CLASS = ConfigProperty
       .key("hoodie.datasource.hive_sync.partition_extractor_class")
-      .defaultValue("org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor")
+      .defaultValue("org.apache.hudi.hive.MultiPartKeysValueExtractor")
       .withInferFunction(cfg -> {
         if (StringUtils.nonEmpty(cfg.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME))) {
           int numOfPartFields = cfg.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME).split(",").length;
