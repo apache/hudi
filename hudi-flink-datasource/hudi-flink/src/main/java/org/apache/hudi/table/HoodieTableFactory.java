@@ -147,7 +147,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
         throw new HoodieValidationException("Option '" + FlinkOptions.PRECOMBINE_FIELD.key()
             + "' is required for payload class: " + DefaultHoodieRecordPayload.class.getName());
       }
-      if (preCombineField.equals(FlinkOptions.PRECOMBINE_FIELD.defaultValue())){
+      if (preCombineField.equals(FlinkOptions.PRECOMBINE_FIELD.defaultValue())) {
         conf.setString(FlinkOptions.PRECOMBINE_FIELD, FlinkOptions.NO_PRE_COMBINE);
       } else if (!preCombineField.equals(FlinkOptions.NO_PRE_COMBINE)) {
         throw new HoodieValidationException("Field " + preCombineField + " does not exist in the table schema."
