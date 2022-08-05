@@ -171,6 +171,13 @@
       </exclusions>
     </dependency>
 
+    <!-- Pulsar Spark Connector -->
+    <dependency>
+      <groupId>io.streamnative.connectors</groupId>
+      <artifactId>pulsar-spark-connector_${scala.binary.version}</artifactId>
+      <version>${pulsar.spark.version}</version>
+    </dependency>
+
     <!-- Logging -->
     <dependency>
       <groupId>org.apache.logging.log4j</groupId>

@@ -97,7 +97,8 @@
     <fasterxml.spark3.version>2.10.0</fasterxml.spark3.version>
     <kafka.version>2.0.0</kafka.version>
     <kafka.spark3.version>2.4.1</kafka.spark3.version>
-    <pulsar.version>2.8.1</pulsar.version>
+    <pulsar.version>2.10.1</pulsar.version>
+    <pulsar.spark.version>3.1.1.4</pulsar.spark.version>
     <confluent.version>5.3.4</confluent.version>
     <glassfish.version>2.17</glassfish.version>
     <glassfish.el.version>3.0.1-b12</glassfish.el.version>
