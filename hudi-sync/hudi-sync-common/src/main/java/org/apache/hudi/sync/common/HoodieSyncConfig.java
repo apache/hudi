@@ -32,9 +32,13 @@ import org.apache.hudi.sync.common.util.ConfigUtils;
 import com.beust.jcommander.Parameter;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.Properties;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS;
 import static org.apache.hudi.common.table.HoodieTableConfig.DATABASE_NAME;
@@ -45,6 +49,8 @@ import static org.apache.hudi.common.table.HoodieTableConfig.HOODIE_WRITE_TABLE_
  * Configs needed to sync data into external meta stores, catalogs, etc.
  */
 public class HoodieSyncConfig extends HoodieConfig {
+
+  private static final Logger LOG = LogManager.getLogger(HoodieSyncConfig.class);
 
   public static final ConfigProperty<String> META_SYNC_BASE_PATH = ConfigProperty
       .key("hoodie.datasource.meta.sync.base.path")
@@ -138,7 +144,12 @@ public class HoodieSyncConfig extends HoodieConfig {
 
   public HoodieSyncConfig(Properties props, Configuration hadoopConf) {
     super(props);
-    setDefaults(getClass().getName());
+    LOG.debug("Passed in properties:\n" + props.entrySet()
+        .stream()
+        .sorted(Comparator.comparing(e -> e.getKey().toString()))
+        .map(e -> e.getKey() + "=" + e.getValue())
+        .collect(Collectors.joining("\n")));
+    setDefaults(HoodieSyncConfig.class.getName());
     this.hadoopConf = hadoopConf;
   }
 
