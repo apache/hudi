@@ -158,7 +158,6 @@ public class TestInlineCompaction extends CompactionTestBase {
       }
 
       metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(cfg.getBasePath()).build();
-
       // step 5: there should be only 2 .commit, and no pending compaction.
       // the last instant should be delta commit since the compaction request is earlier.
       assertEquals(metaClient.getActiveTimeline().getCommitsTimeline().filter(instant -> instant.getAction().equals(HoodieTimeline.COMMIT_ACTION))
