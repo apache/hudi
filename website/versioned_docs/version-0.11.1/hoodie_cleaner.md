@@ -23,6 +23,9 @@ disk for at least 5 hours, thereby preventing the longest running query from fai
 This policy is useful when it is known how many MAX versions of the file does one want to keep at any given time. 
 To achieve the same behaviour as before of preventing long running queries from failing, one should do their calculations 
 based on data patterns. Alternatively, this policy is also useful if a user just wants to maintain 1 latest version of the file.
+- **KEEP_LATEST_BY_HOURS**: This policy clean up based on hours.It is simple and useful when knowing that you want to keep files at any given time.
+  Corresponding to commits with commit times older than the configured number of hours to be retained are cleaned.
+  Currently you can configure by parameter 'hoodie.cleaner.hours.retained'.
 
 ### Configurations
 For details about all possible configurations and their default values see the [configuration docs](https://hudi.apache.org/docs/configurations#Compaction-Configs).
