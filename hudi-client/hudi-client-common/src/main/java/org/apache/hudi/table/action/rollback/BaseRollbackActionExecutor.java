@@ -57,7 +57,6 @@ public abstract class BaseRollbackActionExecutor<T extends HoodieRecordPayload, 
   protected final HoodieInstant instantToRollback;
   protected final boolean deleteInstants;
   protected final boolean skipTimelinePublish;
-  protected final boolean useMarkerBasedStrategy;
   private final TransactionManager txnManager;
   private final boolean skipLocking;
 
@@ -70,8 +69,7 @@ public abstract class BaseRollbackActionExecutor<T extends HoodieRecordPayload, 
                                     HoodieInstant instantToRollback,
                                     boolean deleteInstants,
                                     boolean skipLocking) {
-    this(context, config, table, instantTime, instantToRollback, deleteInstants,
-        false, config.shouldRollbackUsingMarkers(), skipLocking);
+    this(context, config, table, instantTime, instantToRollback, deleteInstants, false, skipLocking);
   }
 
   public BaseRollbackActionExecutor(HoodieEngineContext context,
@@ -81,18 +79,12 @@ public abstract class BaseRollbackActionExecutor<T extends HoodieRecordPayload, 
       HoodieInstant instantToRollback,
       boolean deleteInstants,
       boolean skipTimelinePublish,
-      boolean useMarkerBasedStrategy,
       boolean skipLocking) {
     super(context, config, table, instantTime);
     this.instantToRollback = instantToRollback;
     this.resolvedInstant = instantToRollback;
     this.deleteInstants = deleteInstants;
     this.skipTimelinePublish = skipTimelinePublish;
-    this.useMarkerBasedStrategy = useMarkerBasedStrategy;
-    if (useMarkerBasedStrategy) {
-      ValidationUtils.checkArgument(!instantToRollback.isCompleted(),
-          "Cannot use marker based rollback strategy on completed instant:" + instantToRollback);
-    }
     this.skipLocking = skipLocking;
     this.txnManager = new TransactionManager(config, table.getMetaClient().getFs());
   }
