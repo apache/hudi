@@ -579,6 +579,14 @@ public class FlinkOptions extends HoodieConfig {
       .withDescription("Number of commits to retain. So data will be retained for num_of_commits * time_between_commits (scheduled).\n"
           + "This also directly translates into how much you can incrementally pull on this table, default 30");
 
+  public static final ConfigOption<Integer> CLEAN_RETAIN_HOURS = ConfigOptions
+          .key("clean.retain_hours")
+          .intType()
+          .defaultValue(24)// default 24 hours
+          .withDescription("Number of hours for which commits need to be retained. This config provides a more flexible option as"
+                  + "compared to number of commits retained for cleaning service. Setting this property ensures all the files, but the latest in a file group,"
+                  + " corresponding to commits with commit times older than the configured number of hours to be retained are cleaned.");
+
   public static final ConfigOption<Integer> CLEAN_RETAIN_FILE_VERSIONS = ConfigOptions
       .key("clean.retain_file_versions")
       .intType()
