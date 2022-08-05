@@ -241,7 +241,7 @@ public class CompactionUtils {
         HoodieActiveTimeline activeTimeline) {
     Option<HoodieInstant> lastCompaction = activeTimeline.getCommitTimeline()
           .filterCompletedInstants().lastInstant();
-    Option<HoodieInstant> lastRequestCompaction = activeTimeline.getCommitTimeline()
+    Option<HoodieInstant> lastRequestCompaction = activeTimeline.getAllCommitsTimeline()
           .filterPendingCompactionTimeline().lastInstant();
     if (lastRequestCompaction.isPresent()) {
       lastCompaction = lastRequestCompaction;

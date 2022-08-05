@@ -20,6 +20,7 @@ package org.apache.hudi.table.action.compact;
 
 import org.apache.hudi.client.HoodieReadClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -39,7 +40,6 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import static org.apache.hudi.config.HoodieWriteConfig.TABLE_SERVICES_ENABLED;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
@@ -53,6 +53,18 @@ public class TestInlineCompaction extends CompactionTestBase {
             .withMaxDeltaSecondsBeforeCompaction(maxDeltaTime)
             .withInlineCompactionTriggerStrategy(inlineCompactionType).build())
         .build();
+  }
+
+  private HoodieWriteConfig getConfigDisableComapction(int maxDeltaCommits, int maxDeltaTime, CompactionTriggerStrategy inlineCompactionType) {
+    return getConfigBuilder(false)
+          .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
+          .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+                .withInlineCompaction(false)
+                .withScheduleInlineCompaction(false)
+                .withMaxNumDeltaCommitsBeforeCompaction(maxDeltaCommits)
+                .withMaxDeltaSecondsBeforeCompaction(maxDeltaTime)
+                .withInlineCompactionTriggerStrategy(inlineCompactionType).build())
+          .build();
   }
 
   @Test
@@ -99,17 +111,19 @@ public class TestInlineCompaction extends CompactionTestBase {
   @Test
   public void testSuccessfulCompactionBasedOnNumAfterCompactionRequest() throws Exception {
     // Given: make 4 commits
-    HoodieWriteConfig cfg = getConfigForInlineCompaction(4, 60, CompactionTriggerStrategy.NUM_COMMITS_AFTER_LAST_REQUEST);
-    // turn off table service to mock compaction service is down or very slow
-    cfg.setValue(TABLE_SERVICES_ENABLED, "false");
+    HoodieWriteConfig cfg = getConfigDisableComapction(4, 60, CompactionTriggerStrategy.NUM_COMMITS_AFTER_LAST_REQUEST);
+    // turn off compaction table service to mock compaction service is down or very slow
     List<String> instants = IntStream.range(0, 4).mapToObj(i -> HoodieActiveTimeline.createNewInstantTime()).collect(Collectors.toList());
 
     try (SparkRDDWriteClient<?> writeClient = getHoodieWriteClient(cfg)) {
       List<HoodieRecord> records = dataGen.generateInserts(instants.get(0), 100);
       HoodieReadClient readClient = getHoodieReadClient(cfg.getBasePath());
 
-      // step 1: create and complete 4 delta commit, should be 1 compaction request after this
+      // step 1: create and complete 4 delta commit, then create 1 compaction request after this
       runNextDeltaCommits(writeClient, readClient, instants, records, cfg, true, new ArrayList<>());
+
+      String requestInstant = HoodieActiveTimeline.createNewInstantTime();
+      scheduleCompaction(requestInstant, writeClient, cfg);
 
       metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(cfg.getBasePath()).build();
       assertEquals(metaClient.getActiveTimeline().getInstants()
@@ -118,7 +132,7 @@ public class TestInlineCompaction extends CompactionTestBase {
 
       // step 2: try to create another, but this one should fail because the NUM_COMMITS_AFTER_LAST_REQUEST strategy ,
       // and will throw a AssertionError due to scheduleCompaction will check if the last instant is a compaction request
-      String requestInstant = HoodieActiveTimeline.createNewInstantTime();
+      requestInstant = HoodieActiveTimeline.createNewInstantTime();
       try {
         scheduleCompaction(requestInstant, writeClient, cfg);
         Assertions.fail();
@@ -128,12 +142,20 @@ public class TestInlineCompaction extends CompactionTestBase {
 
       // step 3: compelete another 4 delta commit should be 2 compaction request after this
       instants = IntStream.range(0, 4).mapToObj(i -> HoodieActiveTimeline.createNewInstantTime()).collect(Collectors.toList());
-      runNextDeltaCommits(writeClient, readClient, instants, records, cfg, true, new ArrayList<>());
+      records = dataGen.generateInsertsForPartition(instants.get(0), 100, "2022/03/15");
+      for (String instant : instants) {
+        createNextDeltaCommit(instant, records, writeClient, metaClient, cfg, false);
+      }
+      // runNextDeltaCommits(writeClient, readClient, instants, records, cfg, true, gotPendingCompactionInstants);
+      requestInstant = HoodieActiveTimeline.createNewInstantTime();
+      scheduleCompaction(requestInstant, writeClient, cfg);
 
       // step 4: restore the table service, complete the last commit, and this commit will trigger all compaction requests
-      cfg.setValue(TABLE_SERVICES_ENABLED, "true");
-      String finalInstant = HoodieActiveTimeline.createNewInstantTime();
-      createNextDeltaCommit(finalInstant, dataGen.generateUpdates(finalInstant, 100), writeClient, metaClient, cfg, false);
+      cfg = getConfigForInlineCompaction(4, 60, CompactionTriggerStrategy.NUM_COMMITS_AFTER_LAST_REQUEST);
+      try (SparkRDDWriteClient<?> newWriteClient = getHoodieWriteClient(cfg)) {
+        String finalInstant = HoodieActiveTimeline.createNewInstantTime();
+        createNextDeltaCommit(finalInstant, dataGen.generateUpdates(finalInstant, 100), newWriteClient, metaClient, cfg, false);
+      }
 
       metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(cfg.getBasePath()).build();
 
