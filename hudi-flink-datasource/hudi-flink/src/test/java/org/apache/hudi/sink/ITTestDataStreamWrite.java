@@ -22,6 +22,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.OptionsInference;
 import org.apache.hudi.sink.transform.ChainedTransformer;
 import org.apache.hudi.sink.transform.Transformer;
 import org.apache.hudi.sink.utils.Pipelines;
@@ -239,9 +240,9 @@ public class ITTestDataStreamWrite extends TestLogger {
       dataStream = transformer.get().apply(dataStream);
     }
 
-    int parallelism = execEnv.getParallelism();
-    DataStream<HoodieRecord> hoodieRecordDataStream = Pipelines.bootstrap(conf, rowType, parallelism, dataStream);
-    DataStream<Object> pipeline = Pipelines.hoodieStreamWrite(conf, parallelism, hoodieRecordDataStream);
+    OptionsInference.setupSinkTasks(conf, execEnv.getParallelism());
+    DataStream<HoodieRecord> hoodieRecordDataStream = Pipelines.bootstrap(conf, rowType, dataStream);
+    DataStream<Object> pipeline = Pipelines.hoodieStreamWrite(conf, hoodieRecordDataStream);
     execEnv.addOperator(pipeline.getTransformation());
 
     if (isMor) {
@@ -305,6 +306,7 @@ public class ITTestDataStreamWrite extends TestLogger {
           .setParallelism(4);
     }
 
+    OptionsInference.setupSinkTasks(conf, execEnv.getParallelism());
     DataStream<Object> pipeline = Pipelines.append(conf, rowType, dataStream, true);
     execEnv.addOperator(pipeline.getTransformation());
 
