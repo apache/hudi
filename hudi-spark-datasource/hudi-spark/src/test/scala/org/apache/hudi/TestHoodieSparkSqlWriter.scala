@@ -22,6 +22,7 @@ import java.time.Instant
 import java.util.{Collections, Date, UUID}
 import org.apache.commons.io.FileUtils
 import org.apache.hudi.DataSourceWriteOptions._
+import org.apache.hudi.HoodieSparkUtils.gteqSpark3_0
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.common.model._
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
@@ -41,7 +42,8 @@ import org.apache.spark.{SparkConf, SparkContext}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue, fail}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{CsvSource, EnumSource, ValueSource}
+import org.junit.jupiter.params.provider.Arguments.arguments
+import org.junit.jupiter.params.provider.{Arguments, CsvSource, EnumSource, MethodSource, ValueSource}
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.{spy, times, verify}
 import org.scalatest.Assertions.assertThrows
@@ -485,11 +487,8 @@ class TestHoodieSparkSqlWriter {
    * @param populateMetaFields Flag for populating meta fields
    */
   @ParameterizedTest
-  @CsvSource(
-    Array("COPY_ON_WRITE,parquet,true", "COPY_ON_WRITE,parquet,false", "MERGE_ON_READ,parquet,true", "MERGE_ON_READ,parquet,false",
-      "COPY_ON_WRITE,orc,true", "COPY_ON_WRITE,orc,false", "MERGE_ON_READ,orc,true", "MERGE_ON_READ,orc,false"
-    ))
-  def testDatasourceInsertForTableTypeBaseFileMetaFields(tableType: String, baseFileFormat: String, populateMetaFields: Boolean): Unit = {
+  @MethodSource(Array("testDatasourceInsert"))
+  def testDatasourceInsertForTableTypeBaseFileMetaFields(tableType: String, populateMetaFields: Boolean, baseFileFormat: String): Unit = {
     val hoodieFooTableName = "hoodie_foo_tbl"
     val fooTableModifier = Map("path" -> tempBasePath,
       HoodieWriteConfig.TBL_NAME.key -> hoodieFooTableName,
@@ -1067,5 +1066,28 @@ class TestHoodieSparkSqlWriter {
     )
     val kg2 = HoodieWriterUtils.getOriginKeyGenerator(m2)
     assertTrue(kg2 == classOf[SimpleKeyGenerator].getName)
+  }
+}
+
+object TestHoodieSparkSqlWriter {
+  def testDatasourceInsert: java.util.stream.Stream[Arguments] = {
+    val scenarios = Array(
+      Seq("COPY_ON_WRITE", true),
+      Seq("COPY_ON_WRITE", false),
+      Seq("MERGE_ON_READ", true),
+      Seq("MERGE_ON_READ", false)
+    )
+
+    val parquetScenarios = scenarios.map { _ :+ "parquet" }
+    val orcScenarios = scenarios.map { _ :+ "orc" }
+
+    // TODO(HUDI-4496) Fix Orc support in Spark 3.x
+    val targetScenarios = if (gteqSpark3_0) {
+      parquetScenarios
+    } else {
+      parquetScenarios ++ orcScenarios
+    }
+
+    java.util.Arrays.stream(targetScenarios.map(as => arguments(as.map(_.asInstanceOf[AnyRef]):_*)))
   }
 }

@@ -21,13 +21,12 @@ import org.apache.hadoop.fs.Path
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.functional.TestBootstrap
 import org.apache.spark.api.java.JavaSparkContext
-import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase
 import org.apache.spark.sql.{Dataset, Row}
 
 import java.time.Instant
 import java.util
 
-class TestBootstrapProcedure extends HoodieSparkSqlTestBase {
+class TestBootstrapProcedure extends HoodieSparkProcedureTestBase {
 
   test("Test Call run_bootstrap Procedure") {
     withTempDir { tmp =>

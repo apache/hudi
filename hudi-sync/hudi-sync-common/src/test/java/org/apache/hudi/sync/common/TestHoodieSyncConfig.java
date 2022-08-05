@@ -100,6 +100,12 @@ class TestHoodieSyncConfig {
     HoodieSyncConfig config3 = new HoodieSyncConfig(new Properties(), new Configuration());
     assertEquals("org.apache.hudi.hive.NonPartitionedExtractor",
         config3.getStringOrDefault(META_SYNC_PARTITION_EXTRACTOR_CLASS));
+
+    Properties props4 = new Properties();
+    props4.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "");
+    HoodieSyncConfig config4 = new HoodieSyncConfig(props4, new Configuration());
+    assertEquals("org.apache.hudi.hive.NonPartitionedExtractor",
+        config4.getStringOrDefault(META_SYNC_PARTITION_EXTRACTOR_CLASS));
   }
 
   @Test

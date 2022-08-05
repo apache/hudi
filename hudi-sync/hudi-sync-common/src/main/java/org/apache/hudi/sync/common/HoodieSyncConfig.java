@@ -86,7 +86,7 @@ public class HoodieSyncConfig extends HoodieConfig {
       .key("hoodie.datasource.hive_sync.partition_extractor_class")
       .defaultValue("org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor")
       .withInferFunction(cfg -> {
-        if (cfg.contains(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME)) {
+        if (StringUtils.nonEmpty(cfg.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME))) {
           int numOfPartFields = cfg.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME).split(",").length;
           if (numOfPartFields == 1
               && cfg.contains(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE)

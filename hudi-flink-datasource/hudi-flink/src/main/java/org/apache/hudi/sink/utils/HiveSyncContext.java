@@ -84,6 +84,9 @@ public class HiveSyncContext {
     org.apache.hadoop.conf.Configuration hadoopConf = HadoopConfigurations.getHadoopConf(conf);
     HiveConf hiveConf = new HiveConf();
     hiveConf.addResource(serConf.get());
+    if (!FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.HIVE_SYNC_METASTORE_URIS)) {
+      hadoopConf.set(HiveConf.ConfVars.METASTOREURIS.varname, conf.getString(FlinkOptions.HIVE_SYNC_METASTORE_URIS));
+    }
     hiveConf.addResource(hadoopConf);
     return new HiveSyncContext(props, hiveConf);
   }

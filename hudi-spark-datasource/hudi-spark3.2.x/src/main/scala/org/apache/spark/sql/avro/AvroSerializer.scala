@@ -45,8 +45,13 @@ import java.util.TimeZone
  * A serializer to serialize data in catalyst format to data in avro format.
  *
  * NOTE: This code is borrowed from Spark 3.2.1
- * This code is borrowed, so that we can better control compatibility w/in Spark minor
- * branches (3.2.x, 3.1.x, etc)
+ *       This code is borrowed, so that we can better control compatibility w/in Spark minor
+ *       branches (3.2.x, 3.1.x, etc)
+ *
+ * NOTE: THIS IMPLEMENTATION HAS BEEN MODIFIED FROM ITS ORIGINAL VERSION WITH THE MODIFICATION
+ *       BEING EXPLICITLY ANNOTATED INLINE. PLEASE MAKE SURE TO UNDERSTAND PROPERLY ALL THE
+ *       MODIFICATIONS.
+ *
  *
  * PLEASE REFRAIN MAKING ANY CHANGES TO THIS CODE UNLESS ABSOLUTELY NECESSARY
  */
@@ -211,10 +216,19 @@ private[sql] class AvroSerializer(rootCatalystType: DataType,
         val numFields = st.length
         (getter, ordinal) => structConverter(getter.getStruct(ordinal, numFields))
 
+      ////////////////////////////////////////////////////////////////////////////////////////////
+      // Following section is amended to the original (Spark's) implementation
+      // >>> BEGINS
+      ////////////////////////////////////////////////////////////////////////////////////////////
+
       case (st: StructType, UNION) =>
         val unionConverter = newUnionConverter(st, avroType, catalystPath, avroPath)
         val numFields = st.length
         (getter, ordinal) => unionConverter(getter.getStruct(ordinal, numFields))
+
+      ////////////////////////////////////////////////////////////////////////////////////////////
+      // <<< ENDS
+      ////////////////////////////////////////////////////////////////////////////////////////////
 
       case (MapType(kt, vt, valueContainsNull), MAP) if kt == StringType =>
         val valueConverter = newConverter(
@@ -293,6 +307,11 @@ private[sql] class AvroSerializer(rootCatalystType: DataType,
       result
   }
 
+  ////////////////////////////////////////////////////////////////////////////////////////////
+  // Following section is amended to the original (Spark's) implementation
+  // >>> BEGINS
+  ////////////////////////////////////////////////////////////////////////////////////////////
+
   private def newUnionConverter(catalystStruct: StructType,
                                 avroUnion: Schema,
                                 catalystPath: Seq[String],
@@ -336,6 +355,10 @@ private[sql] class AvroSerializer(rootCatalystType: DataType,
       avroStruct.getTypes.get(0).getType == Type.NULL &&
       avroStruct.getTypes.size() - 1 == catalystStruct.length) || avroStruct.getTypes.size() == catalystStruct.length
   }
+
+  ////////////////////////////////////////////////////////////////////////////////////////////
+  // <<< ENDS
+  ////////////////////////////////////////////////////////////////////////////////////////////
 
   /**
    * Resolve a possibly nullable Avro Type.
