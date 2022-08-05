@@ -52,7 +52,7 @@ import java.util.stream.Stream;
  * map may occupy more memory than is available, resulting in OOM. However, if the spill threshold is too low, we spill
  * frequently and incur unnecessary disk writes.
  */
-public class ExternalSpillableMap<T extends Serializable, R extends Serializable> implements Map<T, R> {
+public class ExternalSpillableMap<T extends Serializable, R extends Serializable> implements Map<T, R>, Serializable {
 
   // Find the actual estimated payload size after inserting N records
   private static final int NUMBER_OF_RECORDS_TO_ESTIMATE_PAYLOAD_SIZE = 100;

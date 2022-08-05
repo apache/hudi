@@ -19,9 +19,7 @@
 
 package org.apache.spark.sql.hudi.procedure
 
-import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase
-
-class TestStatsProcedure extends HoodieSparkSqlTestBase {
+class TestStatsProcedure extends HoodieSparkProcedureTestBase {
   test("Test Call stats_wa Procedure") {
     withTempDir { tmp =>
       val tableName = generateTableName

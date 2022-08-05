@@ -19,9 +19,7 @@
 
 package org.apache.spark.sql.hudi.procedure
 
-import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase
-
-class TestCleanProcedure extends HoodieSparkSqlTestBase {
+class TestCleanProcedure extends HoodieSparkProcedureTestBase {
 
   test("Test Call run_clean Procedure by Table") {
     withTempDir { tmp =>
@@ -58,6 +56,10 @@ class TestCleanProcedure extends HoodieSparkSqlTestBase {
       checkAnswer(s"select id, name, price, ts from $tableName order by id") (
         Seq(1, "a1", 13, 1000)
       )
+
+      val result2 = spark.sql(s"call run_clean(table => '$tableName', retain_commits => 1)")
+        .collect()
+      assertResult(0)(result2.length)
     }
   }
 

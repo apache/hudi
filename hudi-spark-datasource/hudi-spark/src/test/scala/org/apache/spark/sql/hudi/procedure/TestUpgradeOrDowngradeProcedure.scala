@@ -21,11 +21,10 @@ import org.apache.hadoop.fs.Path
 import org.apache.hudi.common.config.HoodieConfig
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion}
 import org.apache.spark.api.java.JavaSparkContext
-import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase
 
 import java.io.IOException
 
-class TestUpgradeOrDowngradeProcedure extends HoodieSparkSqlTestBase {
+class TestUpgradeOrDowngradeProcedure extends HoodieSparkProcedureTestBase {
 
   test("Test Call downgrade_table and upgrade_table Procedure") {
     withTempDir { tmp =>

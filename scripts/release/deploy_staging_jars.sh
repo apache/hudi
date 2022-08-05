@@ -43,6 +43,7 @@ declare -a ALL_VERSION_OPTS=(
 "-Dscala-2.11 -Dspark2.4 -Dflink1.13"
 "-Dscala-2.11 -Dspark2.4 -Dflink1.14"
 "-Dscala-2.12 -Dspark2.4 -Dflink1.13"
+"-Dscala-2.12 -Dspark3.3 -Dflink1.14"
 "-Dscala-2.12 -Dspark3.2 -Dflink1.14"
 "-Dscala-2.12 -Dspark3.1 -Dflink1.14" # run this last to make sure utilities bundle has spark 3.1
 )

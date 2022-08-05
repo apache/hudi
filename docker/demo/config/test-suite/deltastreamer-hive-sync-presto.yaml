@@ -13,6 +13,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 dag_name: unit-test-cow-dag
 dag_rounds: 1
 dag_intermittent_delay_mins: 10
@@ -33,10 +34,6 @@ dag_content:
       num_records_insert: 100
     type: InsertNode
     deps: first_insert
-  first_rollback:
-    config:
-    deps: second_insert
-    type: RollbackNode
   third_insert:
     config:
       record_size: 70000
@@ -44,7 +41,7 @@ dag_content:
       repeat_count: 1
       num_records_insert: 100
     type: InsertNode
-    deps: first_rollback
+    deps: second_insert
   first_upsert:
     config:
       record_size: 70000
@@ -59,36 +56,23 @@ dag_content:
       engine: "mr"
     type: HiveSyncNode
     deps: first_upsert
-  first_hive_query:
-    config:
-      hive_props:
-        prop2: "set spark.yarn.queue="
-        prop3: "set hive.strict.checks.large.query=false"
-        prop4: "set hive.stats.autogather=false"
-      hive_queries:
-        query1: "select count(*) from testdb1.table1"
-        result1: 300
-        query2: "select count(*) from testdb1.table1 group   by `_row_key` having count(*) > 1"
-        result2: 0
-    type: HiveQueryNode
-    deps: first_hive_sync
   first_presto_query:
     config:
       presto_props:
         prop1: "SET SESSION hive.parquet_use_column_names = true"
       presto_queries:
-        query1: "select count(*) from testdb1.table1"
-        result1: 300
-        query2: "select count(*) from testdb1.table1 group   by `_row_key` having count(*) > 1"
+        query1: "select count(*) from testdb.table1"
+        result1: 400
+        query2: "select count(*) from testdb.table1 group by _row_key having count(*) > 1"
         result2: 0
     type: PrestoQueryNode
-    deps: first_hive_query
-  first_trino_query:
-    config:
-      trino_queries:
-        query1: "select count(*) from testdb1.table1"
-        result1: 300
-        query2: "select count(*) from testdb1.table1 group   by `_row_key` having count(*) > 1"
-        result2: 0
-    type: TrinoQueryNode
-    deps: first_presto_query
+    deps: first_hive_sync
+#  first_trino_query:
+#    config:
+#      trino_queries:
+#        query1: "select count(*) from testdb1.table1"
+#        result1: 300
+#        query2: "select count(*) from testdb1.table1 group   by `_row_key` having count(*) > 1"
+#        result2: 0
+#    type: TrinoQueryNode
+#    deps: first_presto_query
