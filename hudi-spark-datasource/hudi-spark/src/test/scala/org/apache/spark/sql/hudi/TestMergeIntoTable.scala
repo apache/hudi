@@ -372,7 +372,8 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
              | tblproperties (
              |  type = '$tableType',
              |  primaryKey = 'id',
-             |  preCombineField = 'v'
+             |  preCombineField = 'v',
+             |  hoodie.compaction.payload.class = 'org.apache.hudi.common.model.DefaultHoodieRecordPayload'
              | )
              | partitioned by(dt)
              | location '${tmp.getCanonicalPath}/$tableName1'
