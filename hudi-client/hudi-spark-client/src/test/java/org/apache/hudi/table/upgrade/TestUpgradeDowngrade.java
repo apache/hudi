@@ -331,15 +331,20 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
 
   @Test
   public void testUpgradeFourtoFive() throws Exception {
-    testUpgradeFourToFiveInternal(false);
+    testUpgradeFourToFiveInternal(false, false);
   }
 
   @Test
   public void testUpgradeFourtoFiveWithDefaultPartition() throws Exception {
-    testUpgradeFourToFiveInternal(true);
+    testUpgradeFourToFiveInternal(true, false);
   }
 
-  private void testUpgradeFourToFiveInternal(boolean assertDefaultPartition) throws Exception {
+  @Test
+  public void testUpgradeFourtoFiveWithDefaultPartitionWithSkipValidation() throws Exception {
+    testUpgradeFourToFiveInternal(true, true);
+  }
+
+  private void testUpgradeFourToFiveInternal(boolean assertDefaultPartition, boolean skipDefaultPartitionValidation) throws Exception {
     String tableName = metaClient.getTableConfig().getTableName();
     // clean up and re instantiate meta client w/ right table props
     cleanUp();
@@ -354,7 +359,8 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
 
     initMetaClient(getTableType(), properties);
     // init config, table and client.
-    HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(false).withRollbackUsingMarkers(false).withProps(params).build();
+    HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(false).withRollbackUsingMarkers(false)
+        .doSkipDefaultPartitionValidation(skipDefaultPartitionValidation).withProps(params).build();
     SparkRDDWriteClient client = getHoodieWriteClient(cfg);
     // Write inserts
     doInsert(client);
@@ -367,7 +373,11 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
     downgradeTableConfigsFromFiveToFour(cfg);
 
     // perform upgrade
-    if (!assertDefaultPartition) {
+    if (assertDefaultPartition && !skipDefaultPartitionValidation) {
+      // if "default" partition is present, upgrade should fail
+      assertThrows(HoodieException.class, () -> new UpgradeDowngrade(metaClient, cfg, context, SparkUpgradeDowngradeHelper.getInstance())
+          .run(HoodieTableVersion.FIVE, null), "Upgrade from 4 to 5 is expected to fail if \"default\" partition is present.");
+    } else {
       new UpgradeDowngrade(metaClient, cfg, context, SparkUpgradeDowngradeHelper.getInstance())
           .run(HoodieTableVersion.FIVE, null);
 
@@ -378,10 +388,6 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
 
       // verify table props
       assertTableProps(cfg);
-    } else {
-      // if "default" partition is present, upgrade should fail
-      assertThrows(HoodieException.class, () -> new UpgradeDowngrade(metaClient, cfg, context, SparkUpgradeDowngradeHelper.getInstance())
-          .run(HoodieTableVersion.FIVE, null), "Upgrade from 4 to 5 is expected to fail if \"default\" partition is present.");
     }
   }
 

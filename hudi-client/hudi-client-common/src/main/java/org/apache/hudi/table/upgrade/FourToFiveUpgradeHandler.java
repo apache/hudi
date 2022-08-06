@@ -47,7 +47,7 @@ public class FourToFiveUpgradeHandler implements UpgradeHandler {
   public Map<ConfigProperty, String> upgrade(HoodieWriteConfig config, HoodieEngineContext context, String instantTime, SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     try {
       FileSystem fs = new Path(config.getBasePath()).getFileSystem(context.getHadoopConf().get());
-      if (fs.exists(new Path(config.getBasePath() + "/" + DEPRECATED_DEFAULT_PARTITION_PATH))) {
+      if (!config.doSkipDefaultPartitionValidation() && fs.exists(new Path(config.getBasePath() + "/" + DEPRECATED_DEFAULT_PARTITION_PATH))) {
         LOG.error(String.format("\"%s\" partition detected. From 0.12, we are changing the default partition in hudi to %s "
                 + " Please read and write back the data in \"%s\" partition in hudi to new partition path \"%s\". \"\n"
                 + " Sample spark command to use to re-write the data: \n\n"
