@@ -216,6 +216,7 @@ public class ITTestHoodieDemo extends ITTestBase {
             + " --user hive"
             + " --pass hive"
             + " --jdbc-url jdbc:hive2://hiveserver:10000"
+            + " --partition-value-extractor org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor"
             + " --partitioned-by dt",
         ("spark-submit"
             + " --conf \'spark.executor.extraJavaOptions=-Dlog4jspark.root.logger=WARN,console\'"
