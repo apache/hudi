@@ -72,19 +72,18 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieArchivalConfig;
+import org.apache.hudi.config.HoodieCleanConfig;
+import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
-import org.apache.hudi.config.HoodieClusteringConfig;
+import org.apache.hudi.config.HoodiePreCommitValidatorConfig;
 import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.config.HoodiePreCommitValidatorConfig;
-import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieCorruptedDataException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieInsertException;
-import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.execution.bulkinsert.RDDCustomColumnsSortPartitioner;
@@ -2297,20 +2296,9 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
           "With optimistic CG, first commit should succeed. commit file should be present");
       // Marker directory must be removed after rollback
       assertFalse(metaClient.getFs().exists(new Path(metaClient.getMarkerFolderPath(instantTime))));
-      if (rollbackUsingMarkers) {
-        // rollback of a completed commit should fail if marked based rollback is used.
-        try {
-          client.rollback(instantTime);
-          fail("Rollback of completed commit should throw exception");
-        } catch (HoodieRollbackException e) {
-          // ignore
-        }
-      } else {
-        // rollback of a completed commit should succeed if using list based rollback
-        client.rollback(instantTime);
-        assertFalse(testTable.commitExists(instantTime),
-            "After explicit rollback, commit file should not be present");
-      }
+      client.rollback(instantTime);
+      assertFalse(testTable.commitExists(instantTime),
+          "After explicit rollback, commit file should not be present");
     }
   }
 

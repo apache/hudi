@@ -62,7 +62,6 @@ public class MergeOnReadRestoreActionExecutor<T extends HoodieRecordPayload, I, 
         instantToRollback,
         true,
         true,
-        false,
         false);
 
     // TODO : Get file status and create a rollback stat and file

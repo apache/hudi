@@ -58,7 +58,6 @@ public class CopyOnWriteRestoreActionExecutor<T extends HoodieRecordPayload, I, 
         instantToRollback,
         true,
         true,
-        false,
         false);
     return rollbackActionExecutor.execute();
   }
