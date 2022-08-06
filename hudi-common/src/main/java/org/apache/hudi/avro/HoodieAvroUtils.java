@@ -959,16 +959,28 @@ public class HoodieAvroUtils {
     throw new AvroRuntimeException(String.format("cannot support rewrite value for schema type: %s since the old schema type is: %s", newSchema, oldSchema));
   }
 
-  // convert days to Date
-  private static java.sql.Date toJavaDate(int days) {
+  /**
+   * convert days to Date
+   *
+   * NOTE: This method could only be used in tests
+   *
+   * @VisibleForTesting
+   */
+  public static java.sql.Date toJavaDate(int days) {
     LocalDate date = LocalDate.ofEpochDay(days);
     ZoneId defaultZoneId = ZoneId.systemDefault();
     ZonedDateTime zonedDateTime = date.atStartOfDay(defaultZoneId);
     return new java.sql.Date(zonedDateTime.toInstant().toEpochMilli());
   }
 
-  // convert Date to days
-  private static int fromJavaDate(Date date) {
+  /**
+   * convert Date to days
+   *
+   * NOTE: This method could only be used in tests
+   *
+   * @VisibleForTesting
+   */
+  public static int fromJavaDate(Date date) {
     long millisUtc = date.getTime();
     long millisLocal = millisUtc + TimeZone.getDefault().getOffset(millisUtc);
     int julianDays = Math.toIntExact(Math.floorDiv(millisLocal, MILLIS_PER_DAY));
