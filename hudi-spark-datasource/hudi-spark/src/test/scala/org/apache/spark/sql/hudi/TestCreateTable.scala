@@ -670,7 +670,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
         assertResult(true)(properties.contains(HoodieTableConfig.CREATE_SCHEMA.key))
         assertResult("dt")(properties(HoodieTableConfig.PARTITION_FIELDS.key))
         assertResult("ts")(properties(HoodieTableConfig.PRECOMBINE_FIELD.key))
-        assertResult("")(metaClient.getTableConfig.getDatabaseName)
+        assertResult("hudi_database")(metaClient.getTableConfig.getDatabaseName)
         assertResult(s"original_$tableName")(metaClient.getTableConfig.getTableName)
 
         // Test insert into
