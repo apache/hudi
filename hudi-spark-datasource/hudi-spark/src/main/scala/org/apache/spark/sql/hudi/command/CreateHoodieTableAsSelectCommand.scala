@@ -29,7 +29,6 @@ import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable.needFilterProps
 import org.apache.spark.sql.catalyst.catalog.{CatalogStorageFormat, CatalogTable, CatalogTableType, HoodieCatalogTable}
 import org.apache.spark.sql.catalyst.plans.QueryPlan
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, Project}
-import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.{AnalysisException, Row, SaveMode, SparkSession}
 
 import scala.collection.JavaConverters._
@@ -62,8 +61,9 @@ case class CreateHoodieTableAsSelectCommand(
         s"Expect the table $tableName has been dropped when the save mode is Overwrite")
 
       if (mode == SaveMode.ErrorIfExists) {
-        throw new RuntimeException(s"Table $tableName already exists. You need to drop it first.")
+        throw new AnalysisException(s"Table $tableName already exists. You need to drop it first.")
       }
+
       if (mode == SaveMode.Ignore) {
         // Since the table already exists and the save mode is Ignore, we will just return.
         // scalastyle:off
@@ -92,8 +92,6 @@ case class CreateHoodieTableAsSelectCommand(
     val hoodieCatalogTable = HoodieCatalogTable(sparkSession, newTable)
     val tablePath = hoodieCatalogTable.tableLocation
     val hadoopConf = sparkSession.sessionState.newHadoopConf()
-    assert(HoodieSqlCommonUtils.isEmptyPath(tablePath, hadoopConf),
-      s"Path '$tablePath' should be empty for CTAS")
 
     // Execute the insert query
     try {
@@ -108,7 +106,8 @@ case class CreateHoodieTableAsSelectCommand(
         DataSourceWriteOptions.SQL_INSERT_MODE.key -> InsertMode.NON_STRICT.value(),
         DataSourceWriteOptions.SQL_ENABLE_BULK_INSERT.key -> "true"
       )
-      val success = InsertIntoHoodieTableCommand.run(sparkSession, newTable, reOrderedQuery, Map.empty,
+      val partitionSpec = newTable.partitionColumnNames.map((_, None)).toMap
+      val success = InsertIntoHoodieTableCommand.run(sparkSession, newTable, reOrderedQuery, partitionSpec,
         mode == SaveMode.Overwrite, refreshTable = false, extraOptions = options)
       if (success) {
         // If write success, create the table in catalog if it has not synced to the
