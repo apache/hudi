@@ -69,17 +69,17 @@ public class TestRemoteHoodieTableFileSystemView extends TestHoodieTableFileSyst
 
   @Test
   public void testRemoteHoodieTableFileSystemViewWithRetry() {
-    // The server is normal.
+    // Service is available.
     view.getLatestBaseFiles();
-    // Shut down service.
+    // Shut down the service.
     server.close();
-    // Default behavior.
     try {
+      // Immediately fails and throws a connection refused exception.
       view.getLatestBaseFiles();
     } catch (HoodieRemoteException e) {
       assert e.getMessage().contains("Connection refused (Connection refused)");
     }
-    // Open remote request retry.
+    // Enable API request retry for remote file system view.
     view =  new RemoteHoodieTableFileSystemView(metaClient, FileSystemViewStorageConfig
             .newBuilder()
             .withRemoteServerHost("localhost")
