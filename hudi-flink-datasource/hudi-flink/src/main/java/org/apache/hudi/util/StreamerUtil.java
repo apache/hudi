@@ -187,6 +187,7 @@ public class StreamerUtil {
             .withCleanConfig(HoodieCleanConfig.newBuilder()
                 .withAsyncClean(conf.getBoolean(FlinkOptions.CLEAN_ASYNC_ENABLED))
                 .retainCommits(conf.getInteger(FlinkOptions.CLEAN_RETAIN_COMMITS))
+                .cleanerNumHoursRetained(conf.getInteger(FlinkOptions.CLEAN_RETAIN_HOURS))
                 .retainFileVersions(conf.getInteger(FlinkOptions.CLEAN_RETAIN_FILE_VERSIONS))
                 // override and hardcode to 20,
                 // actually Flink cleaning is always with parallelism 1 now
