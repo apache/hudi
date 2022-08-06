@@ -235,6 +235,11 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
       conf.setString(FlinkOptions.KEYGEN_CLASS_NAME, ComplexAvroKeyGenerator.class.getName());
       LOG.info("Table option [{}] is reset to {} because record key or partition path has two or more fields",
           FlinkOptions.KEYGEN_CLASS_NAME.key(), ComplexAvroKeyGenerator.class.getName());
+    } else if (!conf.getOptional(FlinkOptions.KEYGEN_CLASS_NAME).isPresent()) {
+      String keyGenName = FlinkOptions.getKeyGenClassNameByType(conf);
+      conf.setString(FlinkOptions.KEYGEN_CLASS_NAME, keyGenName);
+      LOG.info("Table option [{}] is reset to {} because of {}",
+          FlinkOptions.KEYGEN_CLASS_NAME.key(), keyGenName, FlinkOptions.KEYGEN_TYPE);
     }
   }
 

@@ -28,10 +28,17 @@ import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieKeyGeneratorException;
 import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
+import org.apache.hudi.keygen.CustomAvroKeyGenerator;
+import org.apache.hudi.keygen.GlobalAvroDeleteKeyGenerator;
+import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
+import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
+import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.ConfigOptions;
@@ -42,6 +49,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -570,7 +578,7 @@ public class FlinkOptions extends HoodieConfig {
       .stringType()
       .defaultValue(HoodieCleaningPolicy.KEEP_LATEST_COMMITS.name())
       .withDescription("Clean policy to manage the Hudi table. Available option: KEEP_LATEST_COMMITS, KEEP_LATEST_FILE_VERSIONS, KEEP_LATEST_BY_HOURS."
-          +  "Default is KEEP_LATEST_COMMITS.");
+          + "Default is KEEP_LATEST_COMMITS.");
 
   public static final ConfigOption<Integer> CLEAN_RETAIN_COMMITS = ConfigOptions
       .key("clean.retain_commits")
@@ -580,12 +588,12 @@ public class FlinkOptions extends HoodieConfig {
           + "This also directly translates into how much you can incrementally pull on this table, default 30");
 
   public static final ConfigOption<Integer> CLEAN_RETAIN_HOURS = ConfigOptions
-          .key("clean.retain_hours")
-          .intType()
-          .defaultValue(24)// default 24 hours
-          .withDescription("Number of hours for which commits need to be retained. This config provides a more flexible option as"
-                  + "compared to number of commits retained for cleaning service. Setting this property ensures all the files, but the latest in a file group,"
-                  + " corresponding to commits with commit times older than the configured number of hours to be retained are cleaned.");
+      .key("clean.retain_hours")
+      .intType()
+      .defaultValue(24)// default 24 hours
+      .withDescription("Number of hours for which commits need to be retained. This config provides a more flexible option as"
+          + "compared to number of commits retained for cleaning service. Setting this property ensures all the files, but the latest in a file group,"
+          + " corresponding to commits with commit times older than the configured number of hours to be retained are cleaned.");
 
   public static final ConfigOption<Integer> CLEAN_RETAIN_FILE_VERSIONS = ConfigOptions
       .key("clean.retain_file_versions")
@@ -873,6 +881,33 @@ public class FlinkOptions extends HoodieConfig {
   public static <T> boolean isDefaultValueDefined(Configuration conf, ConfigOption<T> option) {
     return !conf.getOptional(option).isPresent()
         || conf.get(option).equals(option.defaultValue());
+  }
+
+  public static String getKeyGenClassNameByType(Configuration conf) {
+    String genType = conf.get(FlinkOptions.KEYGEN_TYPE);
+    KeyGeneratorType typeEnum;
+
+    try {
+      typeEnum = KeyGeneratorType.valueOf(genType.toUpperCase(Locale.ROOT));
+    } catch (IllegalArgumentException e) {
+      throw new HoodieKeyGeneratorException("Unsupported keyGenerator Type " + genType);
+    }
+    switch (typeEnum) {
+      case SIMPLE:
+        return SimpleAvroKeyGenerator.class.getName();
+      case COMPLEX:
+        return ComplexAvroKeyGenerator.class.getName();
+      case TIMESTAMP:
+        return TimestampBasedAvroKeyGenerator.class.getName();
+      case CUSTOM:
+        return CustomAvroKeyGenerator.class.getName();
+      case NON_PARTITION:
+        return NonpartitionedAvroKeyGenerator.class.getName();
+      case GLOBAL_DELETE:
+        return GlobalAvroDeleteKeyGenerator.class.getName();
+      default:
+        throw new HoodieKeyGeneratorException("Unsupported keyGenerator Type " + genType);
+    }
   }
 
   /**
