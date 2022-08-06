@@ -87,6 +87,7 @@ public class RetryHelper<T> implements Serializable {
           if (e instanceof IOException) {
             throw new IOException(message, e);
           }
+          throw e;
         }
         LOG.warn("Catch Exception for " + taskInfo + ", will retry after " + waitTime + " ms.", e);
         try {
