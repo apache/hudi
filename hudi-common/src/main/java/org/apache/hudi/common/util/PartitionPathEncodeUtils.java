@@ -25,6 +25,7 @@ import java.util.BitSet;
  */
 public class PartitionPathEncodeUtils {
 
+  public static final String DEPRECATED_DEFAULT_PARTITION_PATH = "default";
   public static final String DEFAULT_PARTITION_PATH = "__HIVE_DEFAULT_PARTITION__";
 
   static BitSet charToEscape = new BitSet(128);
