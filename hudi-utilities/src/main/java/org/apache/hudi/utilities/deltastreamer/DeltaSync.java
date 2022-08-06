@@ -705,6 +705,7 @@ public class DeltaSync implements Serializable {
 
       TypedProperties metaProps = new TypedProperties();
       metaProps.putAll(props);
+      metaProps.putAll(writeClient.getConfig().getProps());
       if (props.getBoolean(HIVE_SYNC_BUCKET_SYNC.key(), HIVE_SYNC_BUCKET_SYNC.defaultValue())) {
         metaProps.put(HIVE_SYNC_BUCKET_SYNC_SPEC.key(), HiveSyncConfig.getBucketSpec(props.getString(HoodieIndexConfig.BUCKET_INDEX_HASH_FIELD.key()),
             props.getInteger(HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS.key())));
