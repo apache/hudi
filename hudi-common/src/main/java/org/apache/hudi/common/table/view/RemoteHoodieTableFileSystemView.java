@@ -508,25 +508,25 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   private class HttpRequestCheckedFunction implements RetryHelper.CheckedFunction<Response> {
     private String url;
     private RequestMethod method;
-    private final int timeout;
+    private final int timeoutMs;
 
     public void setUrlAndMethod(String url, RequestMethod method) {
       this.method = method;
       this.url = url;
     }
     
-    public HttpRequestCheckedFunction(int timeout) {
-      this.timeout = timeout;
+    public HttpRequestCheckedFunction(int timeoutMs) {
+      this.timeoutMs = timeoutMs;
     }
 
     @Override
     public Response get() throws IOException {
       switch (method) {
         case GET:
-          return Request.Get(url).connectTimeout(timeout).socketTimeout(timeout).execute();
+          return Request.Get(url).connectTimeout(timeoutMs).socketTimeout(timeoutMs).execute();
         case POST:
         default:
-          return Request.Post(url).connectTimeout(timeout).socketTimeout(timeout).execute();
+          return Request.Post(url).connectTimeout(timeoutMs).socketTimeout(timeoutMs).execute();
       }
     }
   }
