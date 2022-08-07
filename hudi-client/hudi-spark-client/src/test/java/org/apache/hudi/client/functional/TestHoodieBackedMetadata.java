@@ -2082,6 +2082,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
         .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class).build())
         .withProperties(properties)
+        .withEmbeddedTimelineServerEnabled(false)
         .build();
 
     // With next commit the table should be re-bootstrapped and partial commit should be rolled back.
