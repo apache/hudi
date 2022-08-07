@@ -273,7 +273,7 @@ public class HoodieCopyOnWriteTableInputFormat extends HoodieTableInputFormat {
       // It happens when reading optimized query to mor.
       return false;
     } else {
-      throw new IllegalStateException("Invalid state: either base-file or log-file has to be present");
+      throw new IllegalStateException("Invalid state: base-file has to be present for " + fileSlice.getFileId());
     }
   }
 

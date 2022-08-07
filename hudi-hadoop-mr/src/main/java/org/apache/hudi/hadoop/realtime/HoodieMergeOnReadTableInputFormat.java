@@ -111,7 +111,7 @@ public class HoodieMergeOnReadTableInputFormat extends HoodieCopyOnWriteTableInp
     if (baseFileOpt.isPresent() || latestLogFileOpt.isPresent()) {
       return true;
     } else {
-      throw new IllegalStateException("Invalid state: either base-file or log-file has to be present");
+      throw new IllegalStateException("Invalid state: either base-file or log-file has to be present for " + fileSlice.getFileId());
     }
   }
 
