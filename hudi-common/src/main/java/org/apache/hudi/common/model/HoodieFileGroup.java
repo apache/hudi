@@ -182,7 +182,8 @@ public class HoodieFileGroup implements Serializable {
    * Obtain the file slice, instantTime i.e >= maxInstantTime.
    */
   public Option<FileSlice> getLatestFileSliceAfterOrOn(String maxInstantTime) {
-    return Option.fromJavaOptional(getAllFileSlices().sorted(Comparator.comparing(FileSlice::getBaseInstantTime)).filter(slice -> compareTimestamps(slice.getBaseInstantTime(), GREATER_THAN_OR_EQUALS, maxInstantTime)).findFirst());
+    return Option.fromJavaOptional(getAllFileSlices().sorted(Comparator.comparing(FileSlice::getBaseInstantTime))
+        .filter(slice -> compareTimestamps(slice.getBaseInstantTime(), GREATER_THAN_OR_EQUALS, maxInstantTime)).findFirst());
   }
 
   /**
