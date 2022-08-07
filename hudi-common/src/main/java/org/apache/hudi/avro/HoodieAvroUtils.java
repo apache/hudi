@@ -64,6 +64,8 @@ import java.nio.charset.StandardCharsets;
 import java.sql.Date;
 import java.sql.Timestamp;
 import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -957,21 +959,28 @@ public class HoodieAvroUtils {
     throw new AvroRuntimeException(String.format("cannot support rewrite value for schema type: %s since the old schema type is: %s", newSchema, oldSchema));
   }
 
-  // convert days to Date
-  private static java.sql.Date toJavaDate(int days) {
-    long localMillis = Math.multiplyExact(days, MILLIS_PER_DAY);
-    int timeZoneOffset;
-    TimeZone defaultTimeZone = TimeZone.getDefault();
-    if (defaultTimeZone instanceof sun.util.calendar.ZoneInfo) {
-      timeZoneOffset = ((sun.util.calendar.ZoneInfo) defaultTimeZone).getOffsetsByWall(localMillis, null);
-    } else {
-      timeZoneOffset = defaultTimeZone.getOffset(localMillis - defaultTimeZone.getRawOffset());
-    }
-    return new java.sql.Date(localMillis - timeZoneOffset);
+  /**
+   * convert days to Date
+   *
+   * NOTE: This method could only be used in tests
+   *
+   * @VisibleForTesting
+   */
+  public static java.sql.Date toJavaDate(int days) {
+    LocalDate date = LocalDate.ofEpochDay(days);
+    ZoneId defaultZoneId = ZoneId.systemDefault();
+    ZonedDateTime zonedDateTime = date.atStartOfDay(defaultZoneId);
+    return new java.sql.Date(zonedDateTime.toInstant().toEpochMilli());
   }
 
-  // convert Date to days
-  private static int fromJavaDate(Date date) {
+  /**
+   * convert Date to days
+   *
+   * NOTE: This method could only be used in tests
+   *
+   * @VisibleForTesting
+   */
+  public static int fromJavaDate(Date date) {
     long millisUtc = date.getTime();
     long millisLocal = millisUtc + TimeZone.getDefault().getOffset(millisUtc);
     int julianDays = Math.toIntExact(Math.floorDiv(millisLocal, MILLIS_PER_DAY));
