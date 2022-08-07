@@ -29,9 +29,9 @@ import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.IdentifierHelpe
 import org.apache.spark.sql.connector.catalog.{Table, V1Table}
 import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.execution.datasources.PreWriteCheck.failAnalysis
-import org.apache.spark.sql.execution.datasources.v2.{DataSourceV2Relation, V2SessionCatalog}
+import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{castIfNeeded, getTableLocation, removeMetaFields, tableExistsInPath}
-import org.apache.spark.sql.hudi.catalog.{HoodieCatalog, HoodieInternalV2Table}
+import org.apache.spark.sql.hudi.catalog.HoodieInternalV2Table
 import org.apache.spark.sql.hudi.command.{AlterHoodieTableDropPartitionCommand, ShowHoodieTablePartitionsCommand, TruncateHoodieTableCommand}
 import org.apache.spark.sql.hudi.{HoodieSqlCommonUtils, ProvidesHoodieConfig}
 import org.apache.spark.sql.types.StructType
@@ -145,14 +145,11 @@ case class HoodieSpark3ResolveReferences(sparkSession: SparkSession) extends Rul
           "not defined. When the table schema is not provided, schema and partition columns " +
           "will be inferred.")
       }
-      val hoodieCatalog = tableCatalog match {
-        case catalog: HoodieCatalog => catalog
-        case _ => tableCatalog.asInstanceOf[V2SessionCatalog]
-      }
+
       val tablePath = getTableLocation(properties,
         TableIdentifier(tableName.name(), tableName.namespace().lastOption), sparkSession)
 
-      val tableExistInCatalog = hoodieCatalog.tableExists(tableName)
+      val tableExistInCatalog = tableCatalog.tableExists(tableName)
       // Only when the table has not exist in catalog, we need to fill the schema info for creating table.
       if (!tableExistInCatalog && tableExistsInPath(tablePath, sparkSession.sessionState.newHadoopConf())) {
         val metaClient = HoodieTableMetaClient.builder()
