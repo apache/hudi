@@ -209,15 +209,10 @@ public class IncrementalInputSplits implements Serializable {
           .rangeType(InstantRange.RangeType.CLOSE_CLOSE).nullableBoundary(true).build();
     }
 
-    // Step3: decides the read end commit
-    final String endInstant = fullTableScan
-        ? commitTimeline.lastInstant().get().getTimestamp()
-        : instants.get(instants.size() - 1).getTimestamp();
-
     List<MergeOnReadInputSplit> inputSplits = getInputSplits(metaClient, commitTimeline,
-        fileStatuses, readPartitions, endInstant, instantRange);
+        fileStatuses, readPartitions, instantRange);
 
-    return Result.instance(inputSplits, endInstant);
+    return Result.instance(inputSplits, instantRange.getEndInstant());
   }
 
   /**
@@ -335,6 +330,31 @@ public class IncrementalInputSplits implements Serializable {
               String basePath = fileSlice.getBaseFile().map(BaseFile::getPath).orElse(null);
               return new MergeOnReadInputSplit(cnt.getAndAdd(1),
                   basePath, logPaths, endInstant,
+                  metaClient.getBasePath(), maxCompactionMemoryInBytes, mergeType, instantRange, fileSlice.getFileId());
+            }).collect(Collectors.toList()))
+        .flatMap(Collection::stream)
+        .collect(Collectors.toList());
+  }
+
+  private List<MergeOnReadInputSplit> getInputSplits(
+      HoodieTableMetaClient metaClient,
+      HoodieTimeline commitTimeline,
+      FileStatus[] fileStatuses,
+      Set<String> readPartitions,
+      InstantRange instantRange) {
+    final HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient, commitTimeline, fileStatuses);
+    final AtomicInteger cnt = new AtomicInteger(0);
+    final String mergeType = this.conf.getString(FlinkOptions.MERGE_TYPE);
+    return readPartitions.stream()
+        .map(relPartitionPath -> fsView.getLatestMergedFileSlicesAfterOrOnThenBefore(relPartitionPath, instantRange.getStartInstant(), instantRange.getEndInstant())
+            .map(fileSlice -> {
+              Option<List<String>> logPaths = Option.ofNullable(fileSlice.getLogFiles()
+                  .sorted(HoodieLogFile.getLogFileComparator())
+                  .map(logFile -> logFile.getPath().toString())
+                  .collect(Collectors.toList()));
+              String basePath = fileSlice.getBaseFile().map(BaseFile::getPath).orElse(null);
+              return new MergeOnReadInputSplit(cnt.getAndAdd(1),
+                  basePath, logPaths, instantRange.getEndInstant(),
                   metaClient.getBasePath(), maxCompactionMemoryInBytes, mergeType, instantRange, fileSlice.getFileId());
             }).collect(Collectors.toList()))
         .flatMap(Collection::stream)

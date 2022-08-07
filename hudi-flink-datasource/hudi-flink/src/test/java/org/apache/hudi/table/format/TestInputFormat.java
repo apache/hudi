@@ -457,7 +457,7 @@ public class TestInputFormat {
     conf.setString(FlinkOptions.READ_END_COMMIT, commits.get(1));
     this.tableSource = getTableSource(conf);
     InputFormat<RowData, ?> inputFormat5 = this.tableSource.getInputFormat();
-    assertThat(inputFormat4, instanceOf(MergeOnReadInputFormat.class));
+    assertThat(inputFormat5, instanceOf(MergeOnReadInputFormat.class));
 
     List<RowData> actual5 = readData(inputFormat5);
     final List<RowData> expected5 = TestData.dataSetInsert(1, 2, 3, 4);
@@ -576,6 +576,51 @@ public class TestInputFormat {
     List<RowData> actual4 = readData(inputFormat4);
     final List<RowData> expected4 = TestData.dataSetInsert(3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14);
     TestData.assertRowDataEquals(actual4, expected4);
+
+    // insert 1 batches of data set to par2 for later use
+    for (int i = 20; i < 22; i += 2) {
+      int[] intArray = {i + 1, i + 2};
+      List<RowData> dataset = TestData.dataSetInsertWithPartitionAndAge(intArray, "par2", 24);
+      TestData.writeData(dataset, conf);
+    }
+
+    // upsert 1 batches of data set
+    for (int i = 0; i < 2; i += 2) {
+      int[] intArray = {i + 1, i + 2};
+      List<RowData> dataset = TestData.dataSetInsertWithPartitionAndAge(intArray, "par1", 25);
+      TestData.writeData(dataset, conf);
+    }
+
+    // start and end commit: start is archived and cleaned, end is active
+    conf.setString(FlinkOptions.READ_START_COMMIT, archivedCommits.get(0));
+    conf.setString(FlinkOptions.READ_END_COMMIT, commits.get(0));
+    this.tableSource = getTableSource(conf);
+    InputFormat<RowData, ?> inputFormat5 = this.tableSource.getInputFormat();
+    assertThat(inputFormat5, instanceOf(MergeOnReadInputFormat.class));
+
+    List<RowData> actual5 = readData(inputFormat5);
+    final List<RowData> expected5 = TestData.dataSetInsert(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14);
+    TestData.assertRowDataEquals(actual5, expected5);
+
+    metaClient.reloadActiveTimeline();
+    commits = metaClient.getCommitsTimeline().filterCompletedInstants().getInstants()
+        .map(HoodieInstant::getTimestamp).collect(Collectors.toList());
+    assertThat(commits.size(), is(4));
+
+    // start and end commit: start is earliest, end is latest
+    conf.setString(FlinkOptions.READ_START_COMMIT, FlinkOptions.START_COMMIT_EARLIEST);
+    conf.setString(FlinkOptions.READ_END_COMMIT, commits.get(3));
+    this.tableSource = getTableSource(conf);
+    InputFormat<RowData, ?> inputFormat6 = this.tableSource.getInputFormat();
+    assertThat(inputFormat6, instanceOf(MergeOnReadInputFormat.class));
+
+    List<RowData> actual6 = readData(inputFormat6);
+    List<RowData> expected6 = TestData.dataSetInsert(3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20);
+    int[] intArray = {1, 2};
+    expected6.addAll(TestData.dataSetInsertWithPartitionAndAge(intArray, "par1", 25));
+    int[] intArray1 = {21, 22};
+    expected6.addAll(TestData.dataSetInsertWithPartitionAndAge(intArray1, "par2", 24));
+    TestData.assertRowDataEquals(actual6, expected6);
   }
 
   @ParameterizedTest

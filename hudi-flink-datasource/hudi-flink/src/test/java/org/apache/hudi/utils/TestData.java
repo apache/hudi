@@ -328,6 +328,14 @@ public class TestData {
     return inserts;
   }
 
+  public static List<RowData> dataSetInsertWithPartitionAndAge(int[] ids, String partition, int age) {
+    List<RowData> inserts = new ArrayList<>();
+    Arrays.stream(ids).forEach(i -> inserts.add(
+        insertRow(StringData.fromString("id" + i), StringData.fromString("Danny"), age,
+            TimestampData.fromEpochMillis(i), StringData.fromString(partition))));
+    return inserts;
+  }
+
   public static List<RowData> filterOddRows(List<RowData> rows) {
     return filterRowsByIndexPredicate(rows, i -> i % 2 != 0);
   }

@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.TreeMap;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN_OR_EQUALS;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN_OR_EQUALS;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.compareTimestamps;
@@ -175,6 +176,13 @@ public class HoodieFileGroup implements Serializable {
    */
   public Option<FileSlice> getLatestFileSliceBeforeOrOn(String maxInstantTime) {
     return Option.fromJavaOptional(getAllFileSlices().filter(slice -> compareTimestamps(slice.getBaseInstantTime(), LESSER_THAN_OR_EQUALS, maxInstantTime)).findFirst());
+  }
+
+  /**
+   * Obtain the file slice, instantTime i.e >= maxInstantTime.
+   */
+  public Option<FileSlice> getLatestFileSliceAfterOrOn(String maxInstantTime) {
+    return Option.fromJavaOptional(getAllFileSlices().sorted(Comparator.comparing(FileSlice::getBaseInstantTime)).filter(slice -> compareTimestamps(slice.getBaseInstantTime(), GREATER_THAN_OR_EQUALS, maxInstantTime)).findFirst());
   }
 
   /**

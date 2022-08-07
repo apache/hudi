@@ -66,7 +66,9 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN_OR_EQUALS;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.compareTimestamps;
 
 /**
  * Common thread-safe implementation for multiple TableFileSystemView Implementations. Provides uniform handling of (a)
@@ -690,6 +692,37 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
             // if the file-group is under construction, pick the latest before compaction instant time.
             if (fileSlice.isPresent()) {
               fileSlice = Option.of(fetchMergedFileSlice(fileGroup, fileSlice.get()));
+            }
+            return fileSlice;
+          }).filter(Option::isPresent).map(Option::get).map(this::addBootstrapBaseFileIfPresent);
+    } finally {
+      readLock.unlock();
+    }
+  }
+
+  public final Stream<FileSlice> getLatestMergedFileSlicesAfterOrOnThenBefore(String partitionStr, String minInstantTime, String maxInstantTime) {
+    try {
+      readLock.lock();
+      String partition = formatPartitionKey(partitionStr);
+      ensurePartitionLoadedCorrectly(partition);
+      return fetchAllStoredFileGroups(partition)
+          .filter(fg -> !isFileGroupReplacedBeforeOrOn(fg.getFileGroupId(), maxInstantTime))
+          .map(fileGroup -> {
+            Option<FileSlice> fileSlice = fileGroup.getLatestFileSliceAfterOrOn(maxInstantTime);
+            // if the file-group is under construction, pick the latest before compaction instant time.
+            if (fileSlice.isPresent()) {
+              fileSlice = Option.of(fetchMergedFileSlice(fileGroup, fileSlice.get()));
+            } else {
+              fileSlice = fileGroup.getLatestFileSliceBefore(maxInstantTime);
+              if (fileSlice.isPresent()) {
+                if (minInstantTime == null) {
+                  fileSlice = Option.of(fetchMergedFileSlice(fileGroup, fileSlice.get()));
+                } else if (compareTimestamps(fileSlice.get().getBaseInstantTime(), LESSER_THAN, minInstantTime)) {
+                  fileSlice = Option.empty();
+                } else {
+                  fileSlice = Option.of(fetchMergedFileSlice(fileGroup, fileSlice.get()));
+                }
+              }
             }
             return fileSlice;
           }).filter(Option::isPresent).map(Option::get).map(this::addBootstrapBaseFileIfPresent);
