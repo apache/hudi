@@ -73,7 +73,12 @@ class TestSpark3Catalog extends HoodieSparkSqlTestBase {
 
   test("Test Read And Write Cross Multi Spark Catalog") {
     if (HoodieSparkUtils.gteqSpark3_1) {
-      checkAnswer("SHOW TABLES IN h2.test")(Seq("test", "people", false))
+      if (HoodieSparkUtils.gteqSpark3_2) {
+        // [SPARK-34157] Unify the output of SHOW TABLES since Spark3.2.0
+        checkAnswer("SHOW TABLES IN h2.test")(Seq("test", "people", false))
+      } else {
+        checkAnswer("SHOW TABLES IN h2.test")(Seq("test", "people"))
+      }
       // Read table from other spark catalog
       checkAnswer("SELECT * FROM h2.test.people")(Seq(1, "US"))
 
