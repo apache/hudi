@@ -432,7 +432,9 @@ public class Pipelines {
   }
 
   public static DataStreamSink<Object> dummySink(DataStream<Object> dataStream) {
-    return dataStream.addSink(Pipelines.DummySink.INSTANCE).name("dummy");
+    return dataStream.addSink(Pipelines.DummySink.INSTANCE)
+        .setParallelism(1)
+        .name("dummy");
   }
 
   public static String opIdentifier(String operatorN, Configuration conf) {
