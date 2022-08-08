@@ -61,7 +61,7 @@ Some examples to run the cleaner.
 Keep the latest 10 commits
 ```
 spark-submit --master local --class org.apache.hudi.utilities.HoodieCleaner `ls packaging/hudi-utilities-bundle/target/hudi-utilities-bundle-*.jar`\
-  --target-base-path /tmp/hoodie/xicm \
+  --target-base-path /path/to/hoodie_table \
   --hoodie-conf hoodie.cleaner.policy=KEEP_LATEST_COMMITS \
   --hoodie-conf hoodie.cleaner.commits.retained=10 \
   --hoodie-conf hoodie.cleaner.parallelism=200
@@ -69,7 +69,7 @@ spark-submit --master local --class org.apache.hudi.utilities.HoodieCleaner `ls 
 Keep the latest 3 file versions
 ```
 spark-submit --master local --class org.apache.hudi.utilities.HoodieCleaner `ls packaging/hudi-utilities-bundle/target/hudi-utilities-bundle-*.jar`\
-  --target-base-path /tmp/hoodie/xicm \
+  --target-base-path /path/to/hoodie_table \
   --hoodie-conf hoodie.cleaner.policy=KEEP_LATEST_FILE_VERSIONS \
   --hoodie-conf hoodie.cleaner.fileversions.retained=3 \
   --hoodie-conf hoodie.cleaner.parallelism=200
@@ -77,7 +77,7 @@ spark-submit --master local --class org.apache.hudi.utilities.HoodieCleaner `ls 
 Clean commits older than 24 hours
 ```
 spark-submit --master local --class org.apache.hudi.utilities.HoodieCleaner `ls packaging/hudi-utilities-bundle/target/hudi-utilities-bundle-*.jar`\
-  --target-base-path /tmp/hoodie/xicm \
+  --target-base-path /path/to/hoodie_table \
   --hoodie-conf hoodie.cleaner.policy=KEEP_LATEST_BY_HOURS \
   --hoodie-conf hoodie.cleaner.hours.retained=24 \
   --hoodie-conf hoodie.cleaner.parallelism=200
