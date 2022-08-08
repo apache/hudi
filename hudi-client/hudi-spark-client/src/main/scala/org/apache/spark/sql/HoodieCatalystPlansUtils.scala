@@ -27,8 +27,6 @@ import org.apache.spark.sql.internal.SQLConf
 
 trait HoodieCatalystPlansUtils {
 
-  protected val spark: SparkSession = SparkSession.active
-
   /**
    * Resolves output of the provided [[query]] against the [[expected]] list of [[Attribute]],
    * and returns new (reshaped) instance of the [[LogicalPlan]]
@@ -57,9 +55,9 @@ trait HoodieCatalystPlansUtils {
   def toTableIdentifier(aliasId: AliasIdentifier): TableIdentifier
 
   /**
-   * resolve UnresolvedRelation to CatalogTable.
+   * Resolve UnresolvedRelation to CatalogTable.
    */
-  def resolve(relation: UnresolvedRelation): Option[CatalogTable]
+  def resolve(spark: SparkSession, relation: UnresolvedRelation): Option[CatalogTable]
 
   /**
    * Create Join logical plan.

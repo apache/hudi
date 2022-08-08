@@ -26,20 +26,13 @@ import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression, Like}
 import org.apache.spark.sql.catalyst.plans.JoinType
 import org.apache.spark.sql.catalyst.plans.logical.{InsertIntoStatement, Join, JoinHint, LogicalPlan}
 import org.apache.spark.sql.catalyst.{AliasIdentifier, TableIdentifier}
-import org.apache.spark.sql.connector.catalog.{CatalogManager, CatalogV2Util, LookupCatalog, V1Table, V2TableWithV1Fallback}
+import org.apache.spark.sql.connector.catalog.CatalogV2Implicits._
+import org.apache.spark.sql.connector.catalog.{CatalogV2Util, HoodieCatalogAndIdentifier, V1Table, V2TableWithV1Fallback}
 import org.apache.spark.sql.execution.command.ExplainCommand
-import org.apache.spark.sql.execution.datasources.v2.V2SessionCatalog
 import org.apache.spark.sql.execution.{ExtendedMode, SimpleMode}
 import org.apache.spark.sql.internal.SQLConf
 
-abstract class HoodieSpark3CatalystPlanUtils extends HoodieCatalystPlansUtils
-  with LookupCatalog with Logging {
-
-  override protected val catalogManager: CatalogManager = {
-    val catalog = spark.sessionState.catalog
-    val v2SessionCatalog = new V2SessionCatalog(catalog)
-    new CatalogManager(v2SessionCatalog, catalog)
-  }
+abstract class HoodieSpark3CatalystPlanUtils extends HoodieCatalystPlansUtils with Logging {
 
   def resolveOutputColumns(
       tableName: String,
@@ -64,10 +57,12 @@ abstract class HoodieSpark3CatalystPlanUtils extends HoodieCatalystPlansUtils
     }
   }
 
-  override def resolve(relation: UnresolvedRelation): Option[CatalogTable] = {
+  override def resolve(spark: SparkSession, relation: UnresolvedRelation): Option[CatalogTable] = {
+    val catalogManager = spark.sessionState.catalogManager
     val nameParts = relation.multipartIdentifier
-    nameParts match {
-      case CatalogAndIdentifier(catalog, ident) =>
+    val expandedNameParts = expandIdentifier(spark, nameParts)
+    HoodieCatalogAndIdentifier.parse(catalogManager, expandedNameParts) match {
+      case Some((catalog, ident)) =>
         CatalogV2Util.loadTable(catalog, ident) match {
           case Some(table) =>
             table match {
@@ -76,24 +71,27 @@ abstract class HoodieSpark3CatalystPlanUtils extends HoodieCatalystPlansUtils
               case withFallback: V2TableWithV1Fallback =>
                 Some(withFallback.v1Table)
               case _ =>
-                logWarning("It's not a hoodie table: " + table.getClass.getName)
+                logWarning(s"It's not a hoodie table: $table")
                 None
             }
+          case _ =>
+            logWarning(s"Can not load this catalog and identifier: ${catalog.name()}, $ident")
+            None
         }
       case _ =>
-        import org.apache.spark.sql.connector.catalog.CatalogV2Implicits._
+        logWarning(s"Can not parse this name parts: ${expandedNameParts.mkString(",")}")
         Some(spark.sessionState.catalog.getTableMetadata(nameParts.asTableIdentifier))
     }
   }
 
-  protected def expandIdentifier(nameParts: Seq[String]): Seq[String] = {
+  protected def expandIdentifier(spark: SparkSession, nameParts: Seq[String]): Seq[String] = {
     // scalastyle:off return
-    if (!isResolvingView || isReferredTempViewName(nameParts)) return nameParts
+    if (!isResolvingView || isReferredTempViewName(spark, nameParts)) return nameParts
     // scalastyle:on return
 
     if (nameParts.length == 1) {
       AnalysisContext.get.catalogAndNamespace :+ nameParts.head
-    } else if (catalogManager.isCatalogRegistered(nameParts.head)) {
+    } else if (spark.sessionState.catalogManager.isCatalogRegistered(nameParts.head)) {
       nameParts
     } else {
       AnalysisContext.get.catalogAndNamespace.head +: nameParts
@@ -102,7 +100,7 @@ abstract class HoodieSpark3CatalystPlanUtils extends HoodieCatalystPlansUtils
 
   private def isResolvingView: Boolean = AnalysisContext.get.catalogAndNamespace.nonEmpty
 
-  private def isReferredTempViewName(nameParts: Seq[String]): Boolean = {
+  private def isReferredTempViewName(spark: SparkSession, nameParts: Seq[String]): Boolean = {
     val resolver = spark.sessionState.conf.resolver
     AnalysisContext.get.referredTempViewNames.exists { n =>
       (n.length == nameParts.length) && n.zip(nameParts).forall {
@@ -129,12 +127,11 @@ abstract class HoodieSpark3CatalystPlanUtils extends HoodieCatalystPlansUtils
     }
   }
 
-  override def createInsertInto(
-      table: LogicalPlan,
-      partition: Map[String, Option[String]],
-      query: LogicalPlan,
-      overwrite: Boolean,
-      ifPartitionNotExists: Boolean): LogicalPlan = {
+  override def createInsertInto(table: LogicalPlan,
+                                partition: Map[String, Option[String]],
+                                query: LogicalPlan,
+                                overwrite: Boolean,
+                                ifPartitionNotExists: Boolean): LogicalPlan = {
     ReflectUtil.createInsertInto(table, partition, Seq.empty[String], query, overwrite, ifPartitionNotExists)
   }
 

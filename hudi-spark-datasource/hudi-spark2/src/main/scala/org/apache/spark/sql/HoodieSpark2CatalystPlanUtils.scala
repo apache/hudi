@@ -42,7 +42,7 @@ object HoodieSpark2CatalystPlanUtils extends HoodieCatalystPlansUtils {
     TableIdentifier(aliasId.identifier, aliasId.database)
   }
 
-  override def resolve(relation: UnresolvedRelation): Option[CatalogTable] = {
+  override def resolve(spark: SparkSession, relation: UnresolvedRelation): Option[CatalogTable] = {
     Some(spark.sessionState.catalog.getTableMetadata(relation.tableIdentifier))
   }
 

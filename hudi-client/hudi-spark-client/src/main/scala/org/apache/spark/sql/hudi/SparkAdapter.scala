@@ -19,7 +19,9 @@
 package org.apache.spark.sql.hudi
 
 import org.apache.avro.Schema
+
 import org.apache.hudi.client.utils.SparkRowSerDe
+
 import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSchemaConverters, HoodieAvroSerializer}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
@@ -102,7 +104,7 @@ trait SparkAdapter extends Serializable {
     unfoldSubqueryAliases(table) match {
       case LogicalRelation(_, _, Some(table), _) => isHoodieTable(table)
       case relation: UnresolvedRelation =>
-        getCatalystPlanUtils.resolve(relation).exists(isHoodieTable)
+        getCatalystPlanUtils.resolve(spark, relation).exists(isHoodieTable)
       case _=> false
     }
   }

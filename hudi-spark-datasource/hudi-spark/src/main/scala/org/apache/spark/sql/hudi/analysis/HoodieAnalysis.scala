@@ -473,26 +473,25 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
           "version expression is not supported for time travel")
       }
 
-      val catalogTable = sparkAdapter.getCatalystPlanUtils.resolve(plan)
-      if (catalogTable.isDefined && sparkAdapter.isHoodieTable(catalogTable.get)) {
-        val hoodieCatalogTable = HoodieCatalogTable(sparkSession, catalogTable.get)
-        val table = hoodieCatalogTable.table
-        val pathOption = table.storage.locationUri.map("path" -> CatalogUtils.URIToString(_))
-        val instantOption = Map(
-          DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key -> timestamp.get.toString())
-        val dataSource =
-          DataSource(
-            sparkSession,
-            userSpecifiedSchema = if (table.schema.isEmpty) None else Some(table.schema),
-            partitionColumns = table.partitionColumnNames,
-            bucketSpec = table.bucketSpec,
-            className = table.provider.get,
-            options = table.storage.properties ++ pathOption ++ instantOption,
-            catalogTable = Some(table))
+      val catalogTableOpt = sparkAdapter.getCatalystPlanUtils.resolve(sparkSession, plan)
+      catalogTableOpt match {
+        case Some(table) if sparkAdapter.isHoodieTable(table) =>
+          val pathOption = table.storage.locationUri.map("path" -> CatalogUtils.URIToString(_))
+          val instantOption = Map(
+            DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key -> timestamp.get.toString())
+          val dataSource =
+            DataSource(
+              sparkSession,
+              userSpecifiedSchema = if (table.schema.isEmpty) None else Some(table.schema),
+              partitionColumns = table.partitionColumnNames,
+              bucketSpec = table.bucketSpec,
+              className = table.provider.get,
+              options = table.storage.properties ++ pathOption ++ instantOption,
+              catalogTable = Some(table))
 
-        LogicalRelation(dataSource.resolveRelation(checkFilesExist = false), table)
-      } else {
-        l
+          LogicalRelation(dataSource.resolveRelation(checkFilesExist = false), table)
+        case _ =>
+          l
       }
 
     case p => p
