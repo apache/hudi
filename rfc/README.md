@@ -35,7 +35,7 @@ The list of all RFCs can be found here.
 > Older RFC content is still [here](https://cwiki.apache.org/confluence/display/HUDI/RFC+Process).
 
 | RFC Number | Title                                                                                                                                                                                                                | Status |
-| ---|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------| --- |
+| --|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------| --- |
 | 1 | [CSV Source Support for Delta Streamer](https://cwiki.apache.org/confluence/display/HUDI/RFC+-+01+%3A+CSV+Source+Support+for+Delta+Streamer)                                                                         | `COMPLETED` |
 | 2 | [ORC Storage in Hudi](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=113708439)                                                                                                                    | `ONGOING` |
 | 3 | [Timeline Service with Incremental File System View Syncing](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=113708965)                                                                             | `COMPLETED` |
@@ -92,4 +92,5 @@ The list of all RFCs can be found here.
 | 54 | [New Table APIs and Streamline Hudi Configs](./rfc-54/rfc-54.md) | `UNDER REVIEW` | 
 | 55 | [Improve Hive/Meta sync class design and hierachies](./rfc-55/rfc-55.md) | `ONGOING` | 
 | 56 | [Early Conflict Detection For Multi-Writer](./rfc-56/rfc-56.md) | `UNDER REVIEW` | 
-| 57 | [DeltaStreamer Protobuf Support](./rfc-57/rfc-57.md)                                                                                                                                                                | `UNDER REVIEW` | 
+| 57 | [DeltaStreamer Protobuf Support](./rfc-57/rfc-57.md)                                                                                                                                                                | `UNDER REVIEW` |
+| 58 | [Multiple event_time Fields Latest Verification in a Single Table](./rfc-58/rfc-58.md) | `UNDER REVIEW` | 
