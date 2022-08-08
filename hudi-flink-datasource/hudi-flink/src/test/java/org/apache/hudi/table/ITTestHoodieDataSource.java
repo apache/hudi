@@ -1297,14 +1297,16 @@ public class ITTestHoodieDataSource extends AbstractTestBase {
     assertRowsEquals(partitionResult, "[+I[1, 2022-02-02]]");
   }
 
-  @Test
-  void testWriteAndReadWithDataSkipping() {
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableType.class)
+  void testWriteAndReadWithDataSkipping(HoodieTableType tableType) {
     TableEnvironment tableEnv = batchTableEnv;
     String hoodieTableDDL = sql("t1")
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
         .option(FlinkOptions.METADATA_ENABLED, true)
         .option("hoodie.metadata.index.column.stats.enable", true)
         .option(FlinkOptions.READ_DATA_SKIPPING_ENABLED, true)
+        .option(FlinkOptions.TABLE_TYPE,tableType)
         .end();
     tableEnv.executeSql(hoodieTableDDL);
 
