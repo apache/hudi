@@ -715,7 +715,9 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
             } else {
               fileSlice = fileGroup.getLatestFileSliceBefore(maxInstantTime);
               if (fileSlice.isPresent()) {
-                if (minInstantTime == null) {
+                // if it is a baseFile + logFile fileSlice, as we can not get the logFile's commitTime easily, so
+                // logFile maybe in the search range, so just add this fileSlice
+                if (minInstantTime == null || fileSlice.get().getLogFiles().count() != 0) {
                   fileSlice = Option.of(fetchMergedFileSlice(fileGroup, fileSlice.get()));
                 } else if (compareTimestamps(fileSlice.get().getBaseInstantTime(), LESSER_THAN, minInstantTime)) {
                   fileSlice = Option.empty();

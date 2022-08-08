@@ -201,9 +201,6 @@ public class IncrementalInputSplits implements Serializable {
     if (!fullTableScan) {
       instantRange = InstantRange.builder().startInstant(rangeStart).endInstant(rangeEnd)
           .rangeType(InstantRange.RangeType.CLOSE_CLOSE).build();
-    } else if (startFromEarliest && endCommit == null) {
-      // short-cut for snapshot read
-      instantRange = null;
     } else {
       instantRange = InstantRange.builder().startInstant(rangeStart).endInstant(rangeEnd)
           .rangeType(InstantRange.RangeType.CLOSE_CLOSE).nullableBoundary(true).build();
