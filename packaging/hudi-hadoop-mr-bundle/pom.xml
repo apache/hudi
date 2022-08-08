@@ -30,6 +30,7 @@
     <checkstyle.skip>true</checkstyle.skip>
     <main.basedir>${project.parent.basedir}</main.basedir>
     <skipTests>true</skipTests>
+    <parquet.version>${parquet.hadoop-mr.version}</parquet.version>
   </properties>
 
   <build>
@@ -68,9 +69,8 @@
                 <includes>
                   <include>org.apache.hudi:hudi-common</include>
                   <include>org.apache.hudi:hudi-hadoop-mr</include>
-                  <!-- Parquet -->
+
                   <include>org.apache.parquet:parquet-avro</include>
-                  <include>org.apache.parquet:parquet-hadoop-bundle</include>
                   <include>org.apache.avro:avro</include>
                   <include>com.esotericsoftware:kryo-shaded</include>
                   <include>org.objenesis:objenesis</include>
@@ -134,12 +134,8 @@
                   <shadedPattern>org.apache.hudi.org.apache.htrace.</shadedPattern>
                 </relocation>
                 <relocation>
-                  <pattern>org.apache.parquet.</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.parquet.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>shaded.parquet.</pattern>
-                  <shadedPattern>org.apache.hudi.shaded.parquet.</shadedPattern>
+                  <pattern>org.apache.parquet.avro.</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.parquet.avro.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>com.google.common.</pattern>
@@ -261,13 +257,6 @@
     <dependency>
       <groupId>org.apache.parquet</groupId>
       <artifactId>parquet-avro</artifactId>
-      <version>${parquet.version}</version>
-      <scope>compile</scope>
-    </dependency>
-
-    <dependency>
-      <groupId>org.apache.parquet</groupId>
-      <artifactId>parquet-hadoop-bundle</artifactId>
       <version>${parquet.version}</version>
       <scope>compile</scope>
     </dependency>
