@@ -113,7 +113,6 @@
                                     <include>io.prometheus:simpleclient_dropwizard</include>
                                     <include>io.prometheus:simpleclient_pushgateway</include>
                                     <include>io.prometheus:simpleclient_common</include>
-                                    <include>com.yammer.metrics:metrics-core</include>
                                     <include>com.google.protobuf:protobuf-java</include>
                                     <include>org.objenesis:objenesis</include>
                                     <include>com.esotericsoftware:kryo-shaded</include>
