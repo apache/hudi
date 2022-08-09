@@ -19,20 +19,38 @@ package org.apache.spark.sql
 
 import org.apache.spark.sql.catalyst.analysis.{UnresolvedAttribute, UnresolvedFunction}
 import org.apache.spark.sql.catalyst.expressions.codegen.GenerateUnsafeProjection
-import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, SubqueryExpression, UnsafeProjection}
-import org.apache.spark.sql.catalyst.plans.logical.{Filter, LocalRelation, LogicalPlan}
+import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, Like, Literal, SubqueryExpression, UnsafeProjection}
+import org.apache.spark.sql.catalyst.plans.logical.{LocalRelation, LogicalPlan}
+import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types.StructType
 
 trait HoodieCatalystExpressionUtils {
 
   /**
+   * Matches an expression iff
+   *
+   * <ol>
+   *   <li>It references exactly one [[AttributeReference]]</li>
+   *   <li>It contains only whitelisted transformations that preserve ordering of the source column [1]</li>
+   * </ol>
+   *
+   * [1] Preserving ordering is defined as following: transformation T is defined as ordering preserving in case
+   *     values of the source column A values being ordered as a1, a2, a3 ..., will map into column B = T(A) which
+   *     will keep the same ordering b1, b2, b3, ... with b1 = T(a1), b2 = T(a2), ...
+   */
+  def tryMatchAttributeOrderingPreservingTransformation(expr: Expression): Option[AttributeReference]
+}
+
+object HoodieCatalystExpressionUtils {
+
+  /**
    * Generates instance of [[UnsafeProjection]] projecting row of one [[StructType]] into another [[StructType]]
    *
    * NOTE: No safety checks are executed to validate that this projection is actually feasible,
-   *       it's up to the caller to make sure that such projection is possible.
+   * it's up to the caller to make sure that such projection is possible.
    *
    * NOTE: Projection of the row from [[StructType]] A to [[StructType]] B is only possible, if
-   *       B is a subset of A
+   * B is a subset of A
    */
   def generateUnsafeProjection(from: StructType, to: StructType): UnsafeProjection = {
     val attrs = from.toAttributes
@@ -40,6 +58,29 @@ trait HoodieCatalystExpressionUtils {
     val targetExprs = to.fields.map(f => attrsMap(f.name))
 
     GenerateUnsafeProjection.generate(targetExprs, attrs)
+  }
+
+  /**
+   * Split the given predicates into two sequence predicates:
+   * - predicates that references partition columns only(and involves no sub-query);
+   * - other predicates.
+   *
+   * @param sparkSession     The spark session
+   * @param predicates       The predicates to be split
+   * @param partitionColumns The partition columns
+   * @return (partitionFilters, dataFilters)
+   */
+  def splitPartitionAndDataPredicates(sparkSession: SparkSession,
+                                      predicates: Array[Expression],
+                                      partitionColumns: Array[String]): (Array[Expression], Array[Expression]) = {
+    // Validates that the provided names both resolve to the same entity
+    val resolvedNameEquals = sparkSession.sessionState.analyzer.resolver
+
+    predicates.partition(expr => {
+      // Checks whether given expression only references partition columns(and involves no sub-query)
+      expr.references.forall(r => partitionColumns.exists(resolvedNameEquals(r.name, _))) &&
+        !SubqueryExpression.hasSubquery(expr)
+    })
   }
 
   /**
@@ -89,6 +130,7 @@ trait HoodieCatalystExpressionUtils {
     val analyzer = spark.sessionState.analyzer
     val schemaFields = tableSchema.fields
 
+    import org.apache.spark.sql.catalyst.plans.logical.Filter
     val resolvedExpr = {
       val plan: LogicalPlan = Filter(expr, LocalRelation(schemaFields.head, schemaFields.drop(1): _*))
       analyzer.execute(plan).asInstanceOf[Filter].condition
@@ -102,44 +144,80 @@ trait HoodieCatalystExpressionUtils {
   }
 
   /**
-   * Split the given predicates into two sequence predicates:
-   * - predicates that references partition columns only(and involves no sub-query);
-   * - other predicates.
-   *
-   * @param sparkSession     The spark session
-   * @param predicates       The predicates to be split
-   * @param partitionColumns The partition columns
-   * @return (partitionFilters, dataFilters)
+   * Converts [[Filter]] to Catalyst [[Expression]]
    */
-  def splitPartitionAndDataPredicates(sparkSession: SparkSession,
-                                      predicates: Array[Expression],
-                                      partitionColumns: Array[String]): (Array[Expression], Array[Expression]) = {
-    // Validates that the provided names both resolve to the same entity
-    val resolvedNameEquals = sparkSession.sessionState.analyzer.resolver
-
-    predicates.partition(expr => {
-      // Checks whether given expression only references partition columns(and involves no sub-query)
-      expr.references.forall(r => partitionColumns.exists(resolvedNameEquals(r.name, _))) &&
-        !SubqueryExpression.hasSubquery(expr)
-    })
+  def convertToCatalystExpression(filter: Filter, tableSchema: StructType): Option[Expression] = {
+    Option(
+      filter match {
+        case EqualTo(attribute, value) =>
+          org.apache.spark.sql.catalyst.expressions.EqualTo(toAttribute(attribute, tableSchema), Literal.create(value))
+        case EqualNullSafe(attribute, value) =>
+          org.apache.spark.sql.catalyst.expressions.EqualNullSafe(toAttribute(attribute, tableSchema), Literal.create(value))
+        case GreaterThan(attribute, value) =>
+          org.apache.spark.sql.catalyst.expressions.GreaterThan(toAttribute(attribute, tableSchema), Literal.create(value))
+        case GreaterThanOrEqual(attribute, value) =>
+          org.apache.spark.sql.catalyst.expressions.GreaterThanOrEqual(toAttribute(attribute, tableSchema), Literal.create(value))
+        case LessThan(attribute, value) =>
+          org.apache.spark.sql.catalyst.expressions.LessThan(toAttribute(attribute, tableSchema), Literal.create(value))
+        case LessThanOrEqual(attribute, value) =>
+          org.apache.spark.sql.catalyst.expressions.LessThanOrEqual(toAttribute(attribute, tableSchema), Literal.create(value))
+        case In(attribute, values) =>
+          val attrExp = toAttribute(attribute, tableSchema)
+          val valuesExp = values.map(v => Literal.create(v))
+          org.apache.spark.sql.catalyst.expressions.In(attrExp, valuesExp)
+        case IsNull(attribute) =>
+          org.apache.spark.sql.catalyst.expressions.IsNull(toAttribute(attribute, tableSchema))
+        case IsNotNull(attribute) =>
+          org.apache.spark.sql.catalyst.expressions.IsNotNull(toAttribute(attribute, tableSchema))
+        case And(left, right) =>
+          val leftExp = convertToCatalystExpression(left, tableSchema)
+          val rightExp = convertToCatalystExpression(right, tableSchema)
+          if (leftExp.isEmpty || rightExp.isEmpty) {
+            null
+          } else {
+            org.apache.spark.sql.catalyst.expressions.And(leftExp.get, rightExp.get)
+          }
+        case Or(left, right) =>
+          val leftExp = convertToCatalystExpression(left, tableSchema)
+          val rightExp = convertToCatalystExpression(right, tableSchema)
+          if (leftExp.isEmpty || rightExp.isEmpty) {
+            null
+          } else {
+            org.apache.spark.sql.catalyst.expressions.Or(leftExp.get, rightExp.get)
+          }
+        case Not(child) =>
+          val childExp = convertToCatalystExpression(child, tableSchema)
+          if (childExp.isEmpty) {
+            null
+          } else {
+            org.apache.spark.sql.catalyst.expressions.Not(childExp.get)
+          }
+        case StringStartsWith(attribute, value) =>
+          val leftExp = toAttribute(attribute, tableSchema)
+          val rightExp = Literal.create(s"$value%")
+          new Like(leftExp, rightExp)
+        case StringEndsWith(attribute, value) =>
+          val leftExp = toAttribute(attribute, tableSchema)
+          val rightExp = Literal.create(s"%$value")
+          new Like(leftExp, rightExp)
+        case StringContains(attribute, value) =>
+          val leftExp = toAttribute(attribute, tableSchema)
+          val rightExp = Literal.create(s"%$value%")
+          new Like(leftExp, rightExp)
+        case _ => null
+      }
+    )
   }
-
-  /**
-   * Matches an expression iff
-   *
-   * <ol>
-   *   <li>It references exactly one [[AttributeReference]]</li>
-   *   <li>It contains only whitelisted transformations that preserve ordering of the source column [1]</li>
-   * </ol>
-   *
-   * [1] Preserving ordering is defined as following: transformation T is defined as ordering preserving in case
-   *     values of the source column A values being ordered as a1, a2, a3 ..., will map into column B = T(A) which
-   *     will keep the same ordering b1, b2, b3, ... with b1 = T(a1), b2 = T(a2), ...
-   */
-  def tryMatchAttributeOrderingPreservingTransformation(expr: Expression): Option[AttributeReference]
 
   private def hasUnresolvedRefs(resolvedExpr: Expression): Boolean =
     resolvedExpr.collectFirst {
       case _: UnresolvedAttribute | _: UnresolvedFunction => true
     }.isDefined
+
+  private def toAttribute(columnName: String, tableSchema: StructType): AttributeReference = {
+    val field = tableSchema.find(p => p.name == columnName)
+    assert(field.isDefined, s"Cannot find column: $columnName, Table Columns are: " +
+      s"${tableSchema.fieldNames.mkString(",")}")
+    AttributeReference(columnName, field.get.dataType, field.get.nullable)()
+  }
 }
