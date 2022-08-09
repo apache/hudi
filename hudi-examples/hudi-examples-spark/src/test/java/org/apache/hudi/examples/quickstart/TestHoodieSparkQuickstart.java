@@ -36,6 +36,15 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.File;
 import java.nio.file.Paths;
 
+import static org.apache.hudi.examples.quickstart.HoodieSparkQuickstart.delete;
+import static org.apache.hudi.examples.quickstart.HoodieSparkQuickstart.deleteByPartition;
+import static org.apache.hudi.examples.quickstart.HoodieSparkQuickstart.incrementalQuery;
+import static org.apache.hudi.examples.quickstart.HoodieSparkQuickstart.insertData;
+import static org.apache.hudi.examples.quickstart.HoodieSparkQuickstart.insertOverwriteData;
+import static org.apache.hudi.examples.quickstart.HoodieSparkQuickstart.pointInTimeQuery;
+import static org.apache.hudi.examples.quickstart.HoodieSparkQuickstart.queryData;
+import static org.apache.hudi.examples.quickstart.HoodieSparkQuickstart.updateData;
+
 public class TestHoodieSparkQuickstart implements SparkProvider {
   protected static transient HoodieSparkEngineContext context;
 
@@ -100,15 +109,25 @@ public class TestHoodieSparkQuickstart implements SparkProvider {
     String tablePath = tablePath(tableName);
 
     try {
-      HoodieSparkQuickstart.insertData(spark, jsc, tablePath, tableName, DATA_GEN);
-      HoodieSparkQuickstart.updateData(spark, jsc, tablePath, tableName, DATA_GEN);
+      final HoodieExampleDataGenerator<HoodieAvroPayload> dataGen = new HoodieExampleDataGenerator<>();
 
-      HoodieSparkQuickstart.queryData(spark, jsc, tablePath, tableName, DATA_GEN);
-      HoodieSparkQuickstart.incrementalQuery(spark, tablePath, tableName);
-      HoodieSparkQuickstart.pointInTimeQuery(spark, tablePath, tableName);
+      insertData(spark, jsc, tablePath, tableName, dataGen);
+      queryData(spark, jsc, tablePath, tableName, dataGen);
 
-      HoodieSparkQuickstart.delete(spark, tablePath, tableName);
-      HoodieSparkQuickstart.deleteByPartition(spark, tablePath, tableName);
+      updateData(spark, jsc, tablePath, tableName, dataGen);
+      queryData(spark, jsc, tablePath, tableName, dataGen);
+
+      incrementalQuery(spark, tablePath, tableName);
+      pointInTimeQuery(spark, tablePath, tableName);
+
+      delete(spark, tablePath, tableName);
+      queryData(spark, jsc, tablePath, tableName, dataGen);
+
+      insertOverwriteData(spark, jsc, tablePath, tableName, dataGen);
+      queryData(spark, jsc, tablePath, tableName, dataGen);
+
+      deleteByPartition(spark, tablePath, tableName);
+      queryData(spark, jsc, tablePath, tableName, dataGen);
     } finally {
       Utils.deleteRecursively(new File(tablePath));
     }
