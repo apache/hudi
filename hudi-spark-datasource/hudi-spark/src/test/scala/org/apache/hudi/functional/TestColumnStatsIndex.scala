@@ -400,6 +400,7 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
     val columnStatsIndex = new ColumnStatsIndexSupport(spark, sourceTableSchema, metadataConfig, metaClient)
 
     val expectedColStatsSchema = composeIndexSchema(sourceTableSchema.fieldNames, sourceTableSchema)
+    val validationSortColumns = Seq("c1_maxValue", "c1_minValue", "c2_maxValue", "c2_minValue")
 
     columnStatsIndex.loadTransposed(sourceTableSchema.fieldNames, testCase.shouldReadInMemory) { transposedColStatsDF =>
       // Match against expected column stats table
@@ -412,7 +413,8 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
       // NOTE: We have to drop the `fileName` column as it contains semi-random components
       //       that we can't control in this test. Nevertheless, since we manually verify composition of the
       //       ColStats Index by reading Parquet footers from individual Parquet files, this is not an issue
-      assertEquals(asJson(sort(expectedColStatsIndexTableDf)), asJson(sort(transposedColStatsDF.drop("fileName"))))
+      assertEquals(asJson(sort(expectedColStatsIndexTableDf, validationSortColumns)),
+        asJson(sort(transposedColStatsDF.drop("fileName"), validationSortColumns)))
 
       if (validateColumnStatsAgainstDataFiles) {
         // TODO(HUDI-4557): support validation of column stats of avro log files
@@ -420,7 +422,8 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
         val manualColStatsTableDF =
         buildColumnStatsTableManually(basePath, sourceTableSchema.fieldNames, sourceTableSchema.fieldNames, expectedColStatsSchema)
 
-        assertEquals(asJson(sort(manualColStatsTableDF)), asJson(sort(transposedColStatsDF)))
+        assertEquals(asJson(sort(manualColStatsTableDF, validationSortColumns)),
+          asJson(sort(transposedColStatsDF, validationSortColumns)))
       }
     }
   }
@@ -470,13 +473,16 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
       .mkString("\n")
 
   private def sort(df: DataFrame): DataFrame = {
-    val sortedCols = df.columns.sorted
-    // Sort dataset by 4 columns (to minimize non-determinism in case multiple files have the same
-    // value of the first column)
-    df.select(sortedCols.head, sortedCols.tail: _*)
-      .sort("c1_maxValue", "c1_minValue", "c2_maxValue", "c2_minValue")
+    sort(df, Seq("c1_maxValue", "c1_minValue"))
   }
 
+  private def sort(df: DataFrame, sortColumns: Seq[String]): DataFrame = {
+    val sortedCols = df.columns.sorted
+    // Sort dataset by specified columns (to minimize non-determinism in case multiple files have the same
+    // value of the first column)
+    df.select(sortedCols.head, sortedCols.tail: _*)
+      .sort(sortColumns.head, sortColumns.tail: _*)
+  }
 }
 
 object TestColumnStatsIndex {
