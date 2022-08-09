@@ -113,7 +113,7 @@ public class TimelineArchiverV1<T extends HoodieAvroPayload, I, K, O> implements
       if (this.writer == null) {
         return HoodieLogFormat.newWriterBuilder().onParentPath(archivePath).withInstantTime("")
             .withFileId(archiveFilePath.getName()).withFileExtension(HoodieArchivedLogFile.ARCHIVE_EXTENSION)
-            .withStorage(metaClient.getStorage()).build();
+            .withStorage(metaClient.getStorage()).withAppendDisabled(config.isLogFileAppendDisabled()).build();
       } else {
         return this.writer;
       }
