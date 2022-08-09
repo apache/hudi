@@ -85,7 +85,7 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
       HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true"
     )
 
-    val hudiOpts = Map(
+    val commonOpts = Map(
       "hoodie.insert.shuffle.parallelism" -> "4",
       "hoodie.upsert.shuffle.parallelism" -> "4",
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
@@ -99,25 +99,28 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
       HoodieTableConfig.POPULATE_META_FIELDS.key -> "true"
     ) ++ metadataOpts
 
-    doWriteAndValidateColumnStats(testCase, metadataOpts, hudiOpts,
+    doWriteAndValidateColumnStats(testCase, metadataOpts, commonOpts,
       dataSourcePath = "index/colstats/input-table-json",
       expectedColStatsSourcePath = "index/colstats/column-stats-index-table.json",
-      operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL, SaveMode.Overwrite)
+      operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Overwrite)
 
-    doWriteAndValidateColumnStats(testCase, metadataOpts, hudiOpts,
+    doWriteAndValidateColumnStats(testCase, metadataOpts, commonOpts,
       dataSourcePath = "index/colstats/another-input-table-json",
       expectedColStatsSourcePath = "index/colstats/updated-column-stats-index-table.json",
-      operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL, SaveMode.Append)
+      operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Append)
 
     val expectedColStatsSourcePath = if (testCase.tableType == HoodieTableType.COPY_ON_WRITE) {
       "index/colstats/cow-updated2-column-stats-index-table.json"
     } else {
       "index/colstats/mor-updated2-column-stats-index-table.json"
     }
-    doWriteAndValidateColumnStats(testCase, metadataOpts, hudiOpts,
+    doWriteAndValidateColumnStats(testCase, metadataOpts, commonOpts,
       dataSourcePath = "index/colstats/update-input-table-json",
-      expectedColStatsSourcePath,
-      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL, SaveMode.Append)
+      expectedColStatsSourcePath = expectedColStatsSourcePath,
+      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Append)
   }
 
   @ParameterizedTest
@@ -329,9 +332,15 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
 
     metaClient = HoodieTableMetaClient.reload(metaClient)
 
-    validateColumnStatsIndex(testCase, metadataOpts, expectedColStatsSourcePath,
-      testCase.tableType == HoodieTableType.COPY_ON_WRITE
-        || !operation.equals(DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL))
+    // Only parquet files are supported for the validation against the generated column stats,
+    // constructing the column stats  from parquet data files using Spark SQL and comparing that
+    // with column stats index. This means that the following operations are support for such
+    // validation: (1) COW: all operations; (2) MOR: insert only.
+    val validateColumnStatsAgainstDataFiles =
+    (testCase.tableType == HoodieTableType.COPY_ON_WRITE
+      || operation.equals(DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL))
+    validateColumnStatsIndex(
+      testCase, metadataOpts, expectedColStatsSourcePath, validateColumnStatsAgainstDataFiles)
   }
 
   private def buildColumnStatsTableManually(tablePath: String,
