@@ -7,7 +7,7 @@ last_modified_at: 2022-04-27T15:59:57-04:00
 ---
 
 Schema evolution allows users to easily change the current schema of a Hudi table to adapt to the data that is changing over time.
-As of 0.11.0 release, Spark SQL(spark3.1.x and spark3.2.1) DDL support for Schema  evolution has been added and is experimental.
+As of 0.11.0 release, Spark SQL (Spark 3.1.x, 3.2.1 and above) DDL support for Schema  evolution has been added and is experimental.
 
 ### Scenarios
 
@@ -17,21 +17,21 @@ As of 0.11.0 release, Spark SQL(spark3.1.x and spark3.2.1) DDL support for Schem
 
 ## SparkSQL Schema Evolution and Syntax Description
 
-Before using schema evolution, pls set `spark.sql.extensions`. For spark3.2.1 `spark.sql.catalog.spark_catalog` also need to be set.
+Before using schema evolution, pls set `spark.sql.extensions`. For Spark 3.2.1 and above, `spark.sql.catalog.spark_catalog` also need to be set.
 ```shell
 # Spark SQL for spark 3.1.x
-spark-sql --packages org.apache.hudi:hudi-spark3.1.2-bundle_2.12:0.11.1,org.apache.spark:spark-avro_2.12:3.1.2 \
+spark-sql --packages org.apache.hudi:hudi-spark3.1.2-bundle_2.12:0.11.1 \
 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
 --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension'
 
-# Spark SQL for spark 3.2.1
-spark-sql --packages org.apache.hudi:hudi-spark3-bundle_2.12:0.11.1,org.apache.spark:spark-avro_2.12:3.2.1 \
+# Spark SQL for spark 3.2.1 and above
+spark-sql --packages org.apache.hudi:hudi-spark3-bundle_2.12:0.11.1 \
 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
 --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' \
 --conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog'
 
 ```
-After start spark-app,  pls exec `set schema.on.read.enable=true` to enable schema evolution.
+After start spark-app,  pls exec `set hoodie.schema.on.read.enable=true` to enable schema evolution.
 
 :::note
 Currently, Schema evolution cannot disabled once being enabled.
@@ -41,7 +41,7 @@ Currently, Schema evolution cannot disabled once being enabled.
 **Syntax**
 ```sql
 -- add columns
-ALTER TABLE Table name ADD COLUMNS(col_spec[, col_spec ...])
+ALTER TABLE tableName ADD COLUMNS(col_spec[, col_spec ...])
 ```
 **Parameter Description**
 
@@ -75,16 +75,16 @@ For example:
 **Examples**
 
 ```sql
-alter table h0 add columns(ext0 string);
-alter table h0 add columns(new_col int not null comment 'add new column' after col1);
-alter table complex_table add columns(col_struct.col_name string comment 'add new column to a struct col' after col_from_col_struct);
+ALTER TABLE h0 ADD COLUMNS(ext0 string);
+ALTER TABLE h0 ADD COLUMNS(new_col int not null comment 'add new column' AFTER col1);
+ALTER TABLE complex_table ADD COLUMNS(col_struct.col_name string comment 'add new column to a struct col' AFTER col_from_col_struct);
 ```
 
 ### Altering Columns
 **Syntax**
 ```sql
 -- alter table ... alter column
-ALTER TABLE Table name ALTER [COLUMN] col_old_name TYPE column_type [COMMENT] col_comment[FIRST|AFTER] column_name
+ALTER TABLE tableName ALTER [COLUMN] col_old_name TYPE column_type [COMMENT] col_comment[FIRST|AFTER] column_name
 ```
 
 **Parameter Description**
@@ -154,7 +154,7 @@ ALTER TABLE table1 RENAME COLUMN a.b.c TO x
 **Syntax**
 ```sql
 -- alter table ... set|unset
-ALTER TABLE Table name SET|UNSET tblproperties
+ALTER TABLE tableName SET|UNSET tblproperties
 ```
 
 **Examples**
