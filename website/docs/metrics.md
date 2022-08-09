@@ -201,3 +201,23 @@ These `HoodieMetrics` can then be plotted on a standard tool like grafana. Below
 <figure>
     <img className="docimage" src={require("/assets/images/hudi_commit_duration.png").default} alt="hudi_commit_duration.png"  />
 </figure>
+
+## List of metrics:
+
+1. totalPartitionsWritten
+2. totalFilesInsert
+3. totalFilesUpdate
+4. totalRecordsWritten
+5. totalUpdateRecordsWritten
+6. totalInsertRecordsWritten
+8. totalBytesWritten
+8. totalScanTime
+9. totalCreateTime
+10. totalUpsertTime
+11. totalCompactedRecordsUpdated
+12. totalLogFilesCompacted
+13. totalLogFilesSize
+14. commitTime (Epoch in milliseconds)
+15. duration (Milliseconds)
+
+_Note:_ These metrics are available for all the timeline operations
