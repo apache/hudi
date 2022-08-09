@@ -46,11 +46,11 @@ import static org.apache.hudi.examples.quickstart.HoodieSparkQuickstart.queryDat
 import static org.apache.hudi.examples.quickstart.HoodieSparkQuickstart.updateData;
 
 public class TestHoodieSparkQuickstart implements SparkProvider {
-  protected static transient HoodieSparkEngineContext context;
+  protected static HoodieSparkEngineContext context;
 
-  private static transient SparkSession spark;
-  private static transient SQLContext sqlContext;
-  private static transient JavaSparkContext jsc;
+  private static SparkSession spark;
+  private static SQLContext sqlContext;
+  private static JavaSparkContext jsc;
 
   /**
    * An indicator of the initialization status.
@@ -58,8 +58,6 @@ public class TestHoodieSparkQuickstart implements SparkProvider {
   protected boolean initialized = false;
   @TempDir
   protected java.nio.file.Path tempDir;
-
-  private static final HoodieExampleDataGenerator<HoodieAvroPayload> DATA_GEN = new HoodieExampleDataGenerator<>();
 
   @Override
   public SparkSession spark() {
