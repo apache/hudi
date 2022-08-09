@@ -55,26 +55,33 @@ public final class HoodieSparkQuickstart {
     SparkConf sparkConf = HoodieExampleSparkUtils.defaultSparkConf("hoodie-client-example");
 
     try (JavaSparkContext jsc = new JavaSparkContext(sparkConf)) {
-      final HoodieExampleDataGenerator<HoodieAvroPayload> dataGen = new HoodieExampleDataGenerator<>();
-
-      insertData(spark, jsc, tablePath, tableName, dataGen);
-      queryData(spark, jsc, tablePath, tableName, dataGen);
-
-      updateData(spark, jsc, tablePath, tableName, dataGen);
-      queryData(spark, jsc, tablePath, tableName, dataGen);
-
-      incrementalQuery(spark, tablePath, tableName);
-      pointInTimeQuery(spark, tablePath, tableName);
-
-      delete(spark, tablePath, tableName);
-      queryData(spark, jsc, tablePath, tableName, dataGen);
-
-      insertOverwriteData(spark, jsc, tablePath, tableName, dataGen);
-      queryData(spark, jsc, tablePath, tableName, dataGen);
-
-      deleteByPartition(spark, tablePath, tableName);
-      queryData(spark, jsc, tablePath, tableName, dataGen);
+      runQuickstart(jsc, spark, tableName, tablePath);
     }
+  }
+
+  /**
+   * Visible for testing
+   */
+  public static void runQuickstart(JavaSparkContext jsc, SparkSession spark, String tableName, String tablePath) {
+    final HoodieExampleDataGenerator<HoodieAvroPayload> dataGen = new HoodieExampleDataGenerator<>();
+
+    insertData(spark, jsc, tablePath, tableName, dataGen);
+    queryData(spark, jsc, tablePath, tableName, dataGen);
+
+    updateData(spark, jsc, tablePath, tableName, dataGen);
+    queryData(spark, jsc, tablePath, tableName, dataGen);
+
+    incrementalQuery(spark, tablePath, tableName);
+    pointInTimeQuery(spark, tablePath, tableName);
+
+    delete(spark, tablePath, tableName);
+    queryData(spark, jsc, tablePath, tableName, dataGen);
+
+    insertOverwriteData(spark, jsc, tablePath, tableName, dataGen);
+    queryData(spark, jsc, tablePath, tableName, dataGen);
+
+    deleteByPartition(spark, tablePath, tableName);
+    queryData(spark, jsc, tablePath, tableName, dataGen);
   }
 
   /**

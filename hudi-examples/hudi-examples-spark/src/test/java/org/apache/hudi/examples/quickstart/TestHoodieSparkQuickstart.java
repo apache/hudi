@@ -43,6 +43,7 @@ import static org.apache.hudi.examples.quickstart.HoodieSparkQuickstart.insertDa
 import static org.apache.hudi.examples.quickstart.HoodieSparkQuickstart.insertOverwriteData;
 import static org.apache.hudi.examples.quickstart.HoodieSparkQuickstart.pointInTimeQuery;
 import static org.apache.hudi.examples.quickstart.HoodieSparkQuickstart.queryData;
+import static org.apache.hudi.examples.quickstart.HoodieSparkQuickstart.runQuickstart;
 import static org.apache.hudi.examples.quickstart.HoodieSparkQuickstart.updateData;
 
 public class TestHoodieSparkQuickstart implements SparkProvider {
@@ -107,25 +108,7 @@ public class TestHoodieSparkQuickstart implements SparkProvider {
     String tablePath = tablePath(tableName);
 
     try {
-      final HoodieExampleDataGenerator<HoodieAvroPayload> dataGen = new HoodieExampleDataGenerator<>();
-
-      insertData(spark, jsc, tablePath, tableName, dataGen);
-      queryData(spark, jsc, tablePath, tableName, dataGen);
-
-      updateData(spark, jsc, tablePath, tableName, dataGen);
-      queryData(spark, jsc, tablePath, tableName, dataGen);
-
-      incrementalQuery(spark, tablePath, tableName);
-      pointInTimeQuery(spark, tablePath, tableName);
-
-      delete(spark, tablePath, tableName);
-      queryData(spark, jsc, tablePath, tableName, dataGen);
-
-      insertOverwriteData(spark, jsc, tablePath, tableName, dataGen);
-      queryData(spark, jsc, tablePath, tableName, dataGen);
-
-      deleteByPartition(spark, tablePath, tableName);
-      queryData(spark, jsc, tablePath, tableName, dataGen);
+      runQuickstart(jsc, spark, tableName, tablePath);
     } finally {
       Utils.deleteRecursively(new File(tablePath));
     }
