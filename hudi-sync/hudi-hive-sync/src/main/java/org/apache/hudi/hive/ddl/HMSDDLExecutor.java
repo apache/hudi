@@ -47,12 +47,14 @@ import org.apache.log4j.Logger;
 import org.apache.parquet.schema.MessageType;
 import org.apache.thrift.TException;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_BATCH_SYNC_PARTITION_NUM;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_CREATE_MANAGED_TABLE;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SUPPORT_TIMESTAMP_TYPE;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
@@ -192,18 +194,31 @@ public class HMSDDLExecutor implements DDLExecutor {
     LOG.info("Adding partitions " + partitionsToAdd.size() + " to table " + tableName);
     try {
       StorageDescriptor sd = client.getTable(databaseName, tableName).getSd();
-      List<Partition> partitionList = partitionsToAdd.stream().map(partition -> {
+      if (syncConfig.getIntOrDefault(HIVE_BATCH_SYNC_PARTITION_NUM) <= 0) {
+        throw new HoodieHiveSyncException("batch-sync-num for sync hive table must be greater than 0, pls check your parameter");
+      }
+      List<Partition> partitionList = new ArrayList<>();
+      int batchSyncPartitionNum = syncConfig.getIntOrDefault(HIVE_BATCH_SYNC_PARTITION_NUM);
+      for (int idx = 0; idx < partitionsToAdd.size(); idx++) {
         StorageDescriptor partitionSd = new StorageDescriptor();
         partitionSd.setCols(sd.getCols());
         partitionSd.setInputFormat(sd.getInputFormat());
         partitionSd.setOutputFormat(sd.getOutputFormat());
         partitionSd.setSerdeInfo(sd.getSerdeInfo());
-        String fullPartitionPath = FSUtils.getPartitionPath(syncConfig.getString(META_SYNC_BASE_PATH), partition).toString();
-        List<String> partitionValues = partitionValueExtractor.extractPartitionValuesInPath(partition);
+        String fullPartitionPath = FSUtils.getPartitionPath(syncConfig.getString(META_SYNC_BASE_PATH), partitionsToAdd.get(idx)).toString();
+        List<String> partitionValues = partitionValueExtractor.extractPartitionValuesInPath(partitionsToAdd.get(idx));
         partitionSd.setLocation(fullPartitionPath);
-        return new Partition(partitionValues, databaseName, tableName, 0, 0, partitionSd, null);
-      }).collect(Collectors.toList());
-      client.add_partitions(partitionList, true, false);
+        partitionList.add(new Partition(partitionValues, databaseName, tableName, 0, 0, partitionSd, null));
+        if (partitionList.size() % batchSyncPartitionNum == 0) {
+          client.add_partitions(partitionList, true, false);
+          LOG.info("add-partitions done: " + partitionList.size());
+          partitionList.clear();
+        }
+      }
+      if (!partitionList.isEmpty()) {
+        client.add_partitions(partitionList, true, false);
+        LOG.info("add-partitions done: " + partitionList.size());
+      }
     } catch (TException e) {
       LOG.error(databaseName + "." + tableName + " add partition failed", e);
       throw new HoodieHiveSyncException(databaseName + "." + tableName + " add partition failed", e);
