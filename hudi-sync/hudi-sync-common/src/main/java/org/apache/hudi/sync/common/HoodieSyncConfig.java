@@ -23,8 +23,10 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.sync.common.util.ConfigUtils;
 
 import com.beust.jcommander.Parameter;
@@ -44,9 +46,7 @@ import static org.apache.hudi.common.table.HoodieTableConfig.DATABASE_NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE;
 import static org.apache.hudi.common.table.HoodieTableConfig.HOODIE_TABLE_NAME_KEY;
 import static org.apache.hudi.common.table.HoodieTableConfig.HOODIE_WRITE_TABLE_NAME_KEY;
-import static org.apache.hudi.common.table.HoodieTableConfig.PARTITION_FIELDS;
 import static org.apache.hudi.common.table.HoodieTableConfig.URL_ENCODE_PARTITIONING;
-import static org.apache.hudi.keygen.constant.KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME;
 
 /**
  * Configs needed to sync data into external meta stores, catalogs, etc.
@@ -88,16 +88,16 @@ public class HoodieSyncConfig extends HoodieConfig {
   public static final ConfigProperty<String> META_SYNC_PARTITION_FIELDS = ConfigProperty
       .key("hoodie.datasource.hive_sync.partition_fields")
       .defaultValue("")
-      .withInferFunction(cfg -> Option.ofNullable(cfg.getString(PARTITION_FIELDS))
-          .or(() -> Option.ofNullable(cfg.getString(PARTITIONPATH_FIELD_NAME))))
+      .withInferFunction(cfg -> Option.ofNullable(cfg.getString(HoodieTableConfig.PARTITION_FIELDS))
+          .or(() -> Option.ofNullable(cfg.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME))))
       .withDocumentation("Field in the table to use for determining hive partition columns.");
 
   public static final ConfigProperty<String> META_SYNC_PARTITION_EXTRACTOR_CLASS = ConfigProperty
       .key("hoodie.datasource.hive_sync.partition_extractor_class")
       .defaultValue("org.apache.hudi.hive.MultiPartKeysValueExtractor")
       .withInferFunction(cfg -> {
-        Option<String> partitionFieldsOpt = Option.ofNullable(cfg.getString(PARTITION_FIELDS))
-            .or(() -> Option.ofNullable(cfg.getString(PARTITIONPATH_FIELD_NAME)));
+        Option<String> partitionFieldsOpt = Option.ofNullable(cfg.getString(HoodieTableConfig.PARTITION_FIELDS))
+            .or(() -> Option.ofNullable(cfg.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME)));
         if (!partitionFieldsOpt.isPresent()) {
           return Option.empty();
         }
