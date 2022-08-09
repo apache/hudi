@@ -207,7 +207,7 @@ public class IncrementalInputSplits implements Serializable {
     }
 
     List<MergeOnReadInputSplit> inputSplits = getInputSplits(metaClient, commitTimeline,
-        fileStatuses, readPartitions, instantRange);
+        fileStatuses, readPartitions, fullTableScan, instantRange);
 
     return Result.instance(inputSplits, instantRange.getEndInstant());
   }
@@ -338,12 +338,14 @@ public class IncrementalInputSplits implements Serializable {
       HoodieTimeline commitTimeline,
       FileStatus[] fileStatuses,
       Set<String> readPartitions,
+      boolean fullTableScan,
       InstantRange instantRange) {
     final HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient, commitTimeline, fileStatuses);
     final AtomicInteger cnt = new AtomicInteger(0);
     final String mergeType = this.conf.getString(FlinkOptions.MERGE_TYPE);
     return readPartitions.stream()
-        .map(relPartitionPath -> fsView.getLatestMergedFileSlicesAfterOrOnThenBefore(relPartitionPath, instantRange.getStartInstant(), instantRange.getEndInstant())
+        .map(relPartitionPath -> (fullTableScan ? fsView.getLatestMergedFileSlicesAfterOrOnThenBefore(relPartitionPath, instantRange.getStartInstant(), instantRange.getEndInstant()) :
+            fsView.getLatestMergedFileSlicesBeforeOrOn(relPartitionPath, instantRange.getEndInstant()))
             .map(fileSlice -> {
               Option<List<String>> logPaths = Option.ofNullable(fileSlice.getLogFiles()
                   .sorted(HoodieLogFile.getLogFileComparator())
