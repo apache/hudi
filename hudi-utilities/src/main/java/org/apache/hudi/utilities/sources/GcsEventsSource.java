@@ -22,7 +22,6 @@ import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.HttpURLConnection;
@@ -34,7 +33,6 @@ import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.stream.Collectors;
 
 public class GcsEventsSource extends RowSource {
@@ -55,27 +53,12 @@ public class GcsEventsSource extends RowSource {
     @Override
     protected Pair<Option<Dataset<Row>>, String> fetchNextBatch(Option<String> lastCkptStr, long sourceLimit) {
         LOG.info("Fetching next batch");
-//        StreamingContext ssc = new StreamingContext(sparkContext.sc(), Durations.minutes(1));
-//        JavaStreamingContext jsc = new JavaStreamingContext(ssc);
 
-//        GPubsubMessageReceiver receiver = new GPubsubMessageReceiver(
-//                "redacted","redacted", "redacted");
-//
-//        JavaDStream<String> istream = jsc.receiverStream(receiver);
-//        istream.foreachRDD(rdd -> rdd.foreach(x -> System.out.println("output: " + x)));
-        Pair<List<String>, String> messagesAndMaxTime = pull("redacted", "redacted", "redacted");
+        Pair<List<String>, String> messagesAndMaxTime = pull("redacted", "redacted",
+                "redacted");
 
-//        try {
-//            jsc.start();
-//            try {
-//                jsc.awaitTerminationOrTimeout(TimeUnit.SECONDS.toMillis(1000L));
-//            } catch (InterruptedException e) {
-//                LOG.info("Error", e);
-//            }
-//        } finally {
-//            jsc.stop(true, true);
-//        }
         Dataset<String> eventRecords = sparkSession.createDataset(messagesAndMaxTime.getLeft(), Encoders.STRING());
+
         return Pair.of(
             Option.of(sparkSession.read().json(eventRecords)),
             messagesAndMaxTime.getRight()
@@ -91,7 +74,6 @@ public class GcsEventsSource extends RowSource {
 
         try {
             Subscription subscription = new Subscription().setTopic(topicFullName);
-
             try {
                 subscription =
                         client.projects().subscriptions().create(subscriptionFullName, subscription).execute();
@@ -111,20 +93,12 @@ public class GcsEventsSource extends RowSource {
                 client.projects().subscriptions().pull(subscriptionFullName, pullRequest).execute();
 
             List<ReceivedMessage> receivedMessages = pullResponse.getReceivedMessages();
-            if (receivedMessages != null) {
-                List<String> messages = extractMessages(receivedMessages);
-                ObjectMapper mapper = new ObjectMapper();
-                List<Map<String, Object>> messageMaps = new ArrayList<>();
-                for (String msg : messages) {
-                    LOG.info("msg: " + msg);
-                    messageMaps.add((Map<String, Object>) mapper.readValue(msg, Map.class));
-                }
-
-                String maxTime = new Long(messageMaps.stream().mapToLong(m -> Date.from(Instant.from(
-                        DateTimeFormatter.ISO_INSTANT.parse((String) m.get("timeCreated"))))
-                        .getTime()).max().orElse(0L)).toString();
-                return Pair.of(messages, maxTime);
+            if (receivedMessages == null) {
+                return Pair.of(Collections.emptyList(), "0");
             }
+
+            return processMessages(receivedMessages);
+
         } catch (GoogleJsonResponseException e) {
             // TODO: Check if this catch block is needed
             LOG.error("Error", e);
@@ -135,11 +109,23 @@ public class GcsEventsSource extends RowSource {
         return Pair.of(Collections.emptyList(), "0");
     }
 
-    public void onStop() {
-        System.out.println("Stopping GPubsubMessageReceiver");
+    private Pair<List<String>, String> processMessages(List<ReceivedMessage> receivedMessages) throws IOException {
+        List<String> messages = mapToString(receivedMessages);
+        ObjectMapper mapper = new ObjectMapper();
+        List<Map<String, Object>> messageMaps = new ArrayList<>();
+        for (String msg : messages) {
+            LOG.info("msg: " + msg);
+            messageMaps.add((Map<String, Object>) mapper.readValue(msg, Map.class));
+        }
+
+        String maxTime = new Long(messageMaps.stream().mapToLong(m -> Date.from(Instant.from(
+                DateTimeFormatter.ISO_INSTANT.parse((String) m.get("timeCreated"))))
+                .getTime()).max().orElse(0L)).toString();
+
+        return Pair.of(messages, maxTime);
     }
 
-    private List<String> extractMessages(List<ReceivedMessage> messages) {
+    private List<String> mapToString(List<ReceivedMessage> messages) {
         List<String> msgTxt = messages
                 .stream()
                 .filter(m -> m.getMessage() != null)
@@ -160,6 +146,7 @@ public class GcsEventsSource extends RowSource {
         return msgTxt;
     }
 
+    // TODO: Fix hardcoded auths
     private Pubsub createAuthorizedClient() {
         try {
             HttpTransport httpTransport = Utils.getDefaultTransport();
