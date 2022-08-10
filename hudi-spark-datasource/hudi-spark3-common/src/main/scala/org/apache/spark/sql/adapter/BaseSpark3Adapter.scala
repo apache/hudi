@@ -23,7 +23,8 @@ import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.{AvroConversionUtils, DefaultSource, Spark3RowSerDe}
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.avro.HoodieAvroSchemaConverters
+import org.apache.spark.sql.avro.{HoodieAvroSchemaConverters, HoodieSparkAvroSchemaConverters}
+import org.apache.spark.sql.catalyst.analysis.EliminateSubqueryAliases
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.catalyst.expressions.{Expression, InterpretedPredicate, Predicate}
@@ -72,7 +73,7 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
   }
 
   override def resolveHoodieTable(plan: LogicalPlan): Option[CatalogTable] = {
-    unfoldSubqueryAliases(plan) match {
+    EliminateSubqueryAliases(plan) match {
       case LogicalRelation(_, _, Some(table), _) if isHoodieTable(table) => Some(table)
       case DataSourceV2Relation(v2Table: V2TableWithV1Fallback, _, _, _, _) if isHoodieTable(v2Table.v1Table) => Some(v2Table.v1Table)
       case _ => None

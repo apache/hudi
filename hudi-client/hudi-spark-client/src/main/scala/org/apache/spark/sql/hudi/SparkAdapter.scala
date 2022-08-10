@@ -24,7 +24,7 @@ import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSchemaConverters, HoodieAvroSerializer}
 import org.apache.spark.sql.catalyst.TableIdentifier
-import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
+import org.apache.spark.sql.catalyst.analysis.{EliminateSubqueryAliases, UnresolvedRelation}
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
@@ -121,7 +121,7 @@ trait SparkAdapter extends Serializable {
   def resolvesToHoodieTable(plan: LogicalPlan, spark: SparkSession): Boolean = resolveHoodieTable(plan).nonEmpty
 
   def resolveHoodieTable(plan: LogicalPlan): Option[CatalogTable] = {
-    unfoldSubqueryAliases(plan) match {
+    EliminateSubqueryAliases(plan) match {
       case LogicalRelation(_, _, Some(table), _) if isHoodieTable(table) => Some(table)
       case _ => None
     }
@@ -138,15 +138,6 @@ trait SparkAdapter extends Serializable {
   def isHoodieTable(tableId: TableIdentifier, spark: SparkSession): Boolean = {
     val table = spark.sessionState.catalog.getTableMetadata(tableId)
     isHoodieTable(table)
-  }
-
-  protected def unfoldSubqueryAliases(plan: LogicalPlan): LogicalPlan = {
-    plan match {
-      case SubqueryAlias(_, relation: LogicalPlan) =>
-        unfoldSubqueryAliases(relation)
-      case other =>
-        other
-    }
   }
 
   /**
