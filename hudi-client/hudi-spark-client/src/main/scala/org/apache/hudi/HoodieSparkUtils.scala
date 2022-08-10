@@ -182,9 +182,8 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport {
     }
   }
 
-  def getDeserializer(structType: StructType) : SparkRowSerDe = {
-    val encoder = RowEncoder.apply(structType).resolveAndBind()
-    sparkAdapter.createSparkRowSerDe(encoder)
+  def getCatalystRowSerDe(structType: StructType) : SparkRowSerDe = {
+    sparkAdapter.createSparkRowSerDe(structType)
   }
 
   /**
