@@ -19,29 +19,27 @@ package org.apache.spark.sql.adapter
 
 import org.apache.avro.Schema
 import org.apache.hadoop.fs.Path
-import org.apache.hudi.{AvroConversionUtils, DefaultSource, Spark3RowSerDe}
 import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.{AvroConversionUtils, DefaultSource, Spark3RowSerDe}
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.avro.{HoodieAvroSchemaConverters, HoodieSparkAvroSchemaConverters}
-import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
+import org.apache.spark.sql.avro.HoodieAvroSchemaConverters
+import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.catalyst.expressions.{Expression, InterpretedPredicate, Predicate}
 import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
-import org.apache.spark.sql.connector.catalog.Table
+import org.apache.spark.sql.connector.catalog.V2TableWithV1Fallback
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.hudi.SparkAdapter
-import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources.BaseRelation
 import org.apache.spark.sql.types.StructType
-import org.apache.spark.sql.{HoodieSpark3CatalogUtils, Row, SQLContext, SparkSession}
+import org.apache.spark.sql.{HoodieSpark3CatalogUtils, SQLContext, SparkSession}
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.storage.StorageLevel._
 
 import scala.collection.JavaConverters.mapAsScalaMapConverter
-import scala.util.control.NonFatal
 
 /**
  * Base implementation of [[SparkAdapter]] for Spark 3.x branch
@@ -73,19 +71,11 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
     FilePartition.getFilePartitions(sparkSession, partitionedFiles, maxSplitBytes)
   }
 
-  override def resolvesToHoodieTable(table: LogicalPlan, spark: SparkSession): Boolean = {
-    unfoldSubqueryAliases(table) match {
-      case LogicalRelation(_, _, Some(table), _) => isHoodieTable(table)
-      case relation: UnresolvedRelation =>
-        try {
-          isHoodieTable(getCatalystPlanUtils.toTableIdentifier(relation), spark)
-        } catch {
-          case NonFatal(e) =>
-            logWarning("Failed to determine whether the table is a hoodie table", e)
-            false
-        }
-      case DataSourceV2Relation(table: Table, _, _, _, _) => isHoodieTable(table.properties())
-      case _=> false
+  override def resolveHoodieTable(plan: LogicalPlan): Option[CatalogTable] = {
+    unfoldSubqueryAliases(plan) match {
+      case LogicalRelation(_, _, Some(table), _) if isHoodieTable(table) => Some(table)
+      case DataSourceV2Relation(v2Table: V2TableWithV1Fallback, _, _, _, _) if isHoodieTable(v2Table.v1Table) => Some(v2Table.v1Table)
+      case _ => None
     }
   }
 
