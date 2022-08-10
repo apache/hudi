@@ -18,6 +18,13 @@ import java.io.UnsupportedEncodingException;
 import java.net.HttpURLConnection;
 import java.util.List;
 
+/**
+ * Implements Spark Streaming's Receiver interface. Can be used within a Spark Streaming
+ * job to receive messages from a Cloud Pubsub topic
+ *
+ * TODO: Can be removed if GcsEventsSource can be made to work without using
+ * Spark's StreamingContext
+ */
 public class GPubsubMessageReceiver extends Receiver<String> {
 
     private final int BATCH_SIZE = 2;
