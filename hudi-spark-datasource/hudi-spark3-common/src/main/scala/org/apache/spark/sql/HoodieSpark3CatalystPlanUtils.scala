@@ -27,7 +27,7 @@ import org.apache.spark.sql.catalyst.plans.JoinType
 import org.apache.spark.sql.catalyst.plans.logical.{InsertIntoStatement, Join, JoinHint, LogicalPlan}
 import org.apache.spark.sql.catalyst.{AliasIdentifier, TableIdentifier}
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits._
-import org.apache.spark.sql.connector.catalog.{CatalogV2Util, HoodieCatalogAndIdentifier, V1Table, V2TableWithV1Fallback}
+import org.apache.spark.sql.connector.catalog.{CatalogV2Util, V1Table, V2TableWithV1Fallback}
 import org.apache.spark.sql.execution.command.ExplainCommand
 import org.apache.spark.sql.execution.{ExtendedMode, SimpleMode}
 import org.apache.spark.sql.internal.SQLConf
@@ -58,11 +58,10 @@ abstract class HoodieSpark3CatalystPlanUtils extends HoodieCatalystPlansUtils wi
   }
 
   override def resolve(spark: SparkSession, relation: UnresolvedRelation): Option[CatalogTable] = {
-    val catalogManager = spark.sessionState.catalogManager
+    import spark.sessionState.analyzer.CatalogAndIdentifier
     val nameParts = relation.multipartIdentifier
-    val expandedNameParts = expandIdentifier(spark, nameParts)
-    HoodieCatalogAndIdentifier.parse(catalogManager, expandedNameParts) match {
-      case Some((catalog, ident)) =>
+    expandIdentifier(spark, nameParts) match {
+      case CatalogAndIdentifier(catalog, ident) =>
         CatalogV2Util.loadTable(catalog, ident) match {
           case Some(table) =>
             table match {
@@ -71,7 +70,7 @@ abstract class HoodieSpark3CatalystPlanUtils extends HoodieCatalystPlansUtils wi
               case withFallback: V2TableWithV1Fallback =>
                 Some(withFallback.v1Table)
               case _ =>
-                logWarning(s"It's not a hoodie table: $table")
+                logWarning(s"Can not find CatalogTable for $table")
                 None
             }
           case _ =>
@@ -79,7 +78,7 @@ abstract class HoodieSpark3CatalystPlanUtils extends HoodieCatalystPlansUtils wi
             None
         }
       case _ =>
-        logWarning(s"Can not parse this name parts: ${expandedNameParts.mkString(",")}")
+        logWarning(s"Can not parse this name parts: ${nameParts.mkString("[", ".", "]")}")
         Some(spark.sessionState.catalog.getTableMetadata(nameParts.asTableIdentifier))
     }
   }
