@@ -50,7 +50,9 @@ public class HoodieParquetReader<R extends IndexedRecord> implements HoodieFileR
   private List<ParquetReaderIterator> readerIterators = new ArrayList<>();
 
   public HoodieParquetReader(Configuration configuration, Path path) {
-    this.conf = configuration;
+    // We have to clone the Hadoop Config as it might be subsequently modified
+    // by the Reader (for proper config propagation to Parquet components)
+    this.conf = new Configuration(configuration);
     this.path = path;
     this.parquetUtils = BaseFileUtils.getInstance(HoodieFileFormat.PARQUET);
   }
@@ -72,7 +74,12 @@ public class HoodieParquetReader<R extends IndexedRecord> implements HoodieFileR
 
   @Override
   public ClosableIterator<R> getRecordIterator(Schema schema) throws IOException {
+    // NOTE: We have to set both Avro read-schema and projection schema to make
+    //       sure that in case the file-schema is not equal to read-schema we'd still
+    //       be able to read that file (in case projection is a proper one)
     AvroReadSupport.setAvroReadSchema(conf, schema);
+    AvroReadSupport.setRequestedProjection(conf, schema);
+
     ParquetReader<R> reader = AvroParquetReader.<R>builder(path).withConf(conf).build();
     ParquetReaderIterator<R> parquetReaderIterator = new ParquetReaderIterator<>(reader);
     readerIterators.add(parquetReaderIterator);
