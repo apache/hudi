@@ -84,8 +84,7 @@ class HoodieSpark3_2ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
     table.optionalMap(ctx.sample)(withSample)
   }
 
-  private def withTimeTravel(
-                              ctx: TemporalClauseContext, plan: LogicalPlan): LogicalPlan = withOrigin(ctx) {
+  private def withTimeTravel(ctx: TemporalClauseContext, plan: LogicalPlan): LogicalPlan = withOrigin(ctx) {
     val v = ctx.version
     val version = if (ctx.INTEGER_VALUE != null) {
       Some(v.getText)

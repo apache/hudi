@@ -476,35 +476,34 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
         l
       }
 
-    case l if sparkAdapter.getCatalystPlanUtils.isRelationTimeTravel(l) =>
-      val (plan: UnresolvedRelation, timestamp, version) =
-        sparkAdapter.getCatalystPlanUtils.getRelationTimeTravel(l).get
-
+    // TODO extract to Spark 3.x module
+    case TimeTravelRelation(plan, timestamp, version) =>
       if (timestamp.isEmpty && version.nonEmpty) {
         throw new AnalysisException(
-          "version expression is not supported for time travel")
+          "Version expression is not supported for time travel")
       }
 
-      val tableIdentifier = sparkAdapter.getCatalystPlanUtils.toTableIdentifier(plan)
-      if (sparkAdapter.isHoodieTable(tableIdentifier, sparkSession)) {
-        val hoodieCatalogTable = HoodieCatalogTable(sparkSession, tableIdentifier)
-        val table = hoodieCatalogTable.table
-        val pathOption = table.storage.locationUri.map("path" -> CatalogUtils.URIToString(_))
-        val instantOption = Map(
-          DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key -> timestamp.get.toString())
-        val dataSource =
-          DataSource(
-            sparkSession,
-            userSpecifiedSchema = if (table.schema.isEmpty) None else Some(table.schema),
-            partitionColumns = table.partitionColumnNames,
-            bucketSpec = table.bucketSpec,
-            className = table.provider.get,
-            options = table.storage.properties ++ pathOption ++ instantOption,
-            catalogTable = Some(table))
+      // Resolve [[TimeTravelRelation]]s inner plan
+      val resolvedPlan = sparkSession.sessionState.analyzer.ResolveReferences.apply(plan)
 
-        LogicalRelation(dataSource.resolveRelation(checkFilesExist = false), table)
-      } else {
-        l
+      sparkAdapter.resolveHoodieTable(resolvedPlan) match {
+        case Some(table) =>
+          val pathOption = table.storage.locationUri.map("path" -> CatalogUtils.URIToString(_))
+          val instantOption = Map(
+            DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key -> timestamp.get.toString())
+          val dataSource =
+            DataSource(
+              sparkSession,
+              userSpecifiedSchema = if (table.schema.isEmpty) None else Some(table.schema),
+              partitionColumns = table.partitionColumnNames,
+              bucketSpec = table.bucketSpec,
+              className = table.provider.get,
+              options = table.storage.properties ++ pathOption ++ instantOption,
+              catalogTable = Some(table))
+
+          LogicalRelation(dataSource.resolveRelation(checkFilesExist = false), table)
+
+        case None => resolvedPlan
       }
 
     case p => p
