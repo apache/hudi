@@ -29,19 +29,6 @@ import org.apache.spark.sql.types.StructType
 
 object HoodieSpark32CatalystPlanUtils extends HoodieSpark3CatalystPlanUtils {
 
-  override def isRelationTimeTravel(plan: LogicalPlan): Boolean = {
-    plan.isInstanceOf[TimeTravelRelation]
-  }
-
-  override def getRelationTimeTravel(plan: LogicalPlan): Option[(LogicalPlan, Option[Expression], Option[String])] = {
-    plan match {
-      case timeTravel: TimeTravelRelation =>
-        Some((timeTravel.table, timeTravel.timestamp, timeTravel.version))
-      case _ =>
-        None
-    }
-  }
-
   override def projectOverSchema(schema: StructType, output: AttributeSet): ProjectionOverSchema = {
     val klass = classOf[ProjectionOverSchema]
     checkArgument(klass.getConstructors.length == 1)

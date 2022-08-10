@@ -54,11 +54,6 @@ trait HoodieCatalystPlansUtils {
   def toTableIdentifier(aliasId: AliasIdentifier): TableIdentifier
 
   /**
-   * Convert a UnresolvedRelation to TableIdentifier.
-   */
-  def toTableIdentifier(relation: UnresolvedRelation): TableIdentifier
-
-  /**
    * Create Join logical plan.
    */
   def createJoin(left: LogicalPlan, right: LogicalPlan, joinType: JoinType): Join
@@ -73,16 +68,6 @@ trait HoodieCatalystPlansUtils {
    */
   def getInsertIntoChildren(plan: LogicalPlan):
     Option[(LogicalPlan, Map[String, Option[String]], LogicalPlan, Boolean, Boolean)]
-
-  /**
-   * if the logical plan is a TimeTravelRelation LogicalPlan.
-   */
-  def isRelationTimeTravel(plan: LogicalPlan): Boolean
-
-  /**
-   * Get the member of the TimeTravelRelation LogicalPlan.
-   */
-  def getRelationTimeTravel(plan: LogicalPlan): Option[(LogicalPlan, Option[Expression], Option[String])]
 
   /**
    * Create a Insert Into LogicalPlan.

@@ -48,10 +48,6 @@ object HoodieSpark2CatalystPlanUtils extends HoodieCatalystPlansUtils {
     TableIdentifier(aliasId.identifier, aliasId.database)
   }
 
-  override def toTableIdentifier(relation: UnresolvedRelation): TableIdentifier = {
-    relation.tableIdentifier
-  }
-
   override def createJoin(left: LogicalPlan, right: LogicalPlan, joinType: JoinType): Join = {
     Join(left, right, joinType, None)
   }
@@ -74,12 +70,8 @@ object HoodieSpark2CatalystPlanUtils extends HoodieCatalystPlansUtils {
     InsertIntoTable(table, partition, query, overwrite, ifPartitionNotExists)
   }
 
-  override def isRelationTimeTravel(plan: LogicalPlan): Boolean = {
-    false
-  }
-
-  override def getRelationTimeTravel(plan: LogicalPlan): Option[(LogicalPlan, Option[Expression], Option[String])] = {
-    throw new IllegalStateException(s"Should not call getRelationTimeTravel for spark2")
+  override def createLike(left: Expression, right: Expression): Expression = {
+    Like(left, right)
   }
 
   override def isRepairTable(plan: LogicalPlan): Boolean = {

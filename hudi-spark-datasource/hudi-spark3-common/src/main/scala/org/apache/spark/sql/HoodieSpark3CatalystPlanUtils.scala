@@ -58,10 +58,6 @@ trait HoodieSpark3CatalystPlanUtils extends HoodieCatalystPlansUtils {
     }
   }
 
-  override def toTableIdentifier(relation: UnresolvedRelation): TableIdentifier = {
-    relation.multipartIdentifier.asTableIdentifier
-  }
-
   override def createJoin(left: LogicalPlan, right: LogicalPlan, joinType: JoinType): Join = {
     Join(left, right, joinType, None, JoinHint.NONE)
   }
