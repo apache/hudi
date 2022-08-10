@@ -20,7 +20,7 @@ package org.apache.spark.sql.adapter
 
 import org.apache.avro.Schema
 import org.apache.hudi.client.utils.SparkRowSerDe
-import org.apache.hudi.{HoodieFileScanRDD, Spark2RowSerDe}
+import org.apache.hudi.{Spark2HoodieFileScanRDD, Spark2RowSerDe}
 import org.apache.spark.sql.avro._
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
@@ -126,7 +126,7 @@ class Spark2Adapter extends SparkAdapter {
                                        filePartitions: Seq[FilePartition],
                                        readDataSchema: StructType,
                                        metadataColumns: Seq[AttributeReference] = Seq.empty): FileScanRDD = {
-    new HoodieFileScanRDD(sparkSession, readFunction, filePartitions)
+    new Spark2HoodieFileScanRDD(sparkSession, readFunction, filePartitions)
   }
 
   override def resolveDeleteFromTable(deleteFromTable: Command,
