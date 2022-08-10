@@ -25,7 +25,7 @@ import org.apache.hudi.AvroConversionUtils.{convertStructTypeToAvroSchema, getAv
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieConversionUtils.{toProperties, toScalaOption}
 import org.apache.hudi.HoodieWriterUtils._
-import org.apache.hudi.avro.AvroSchemaUtils.{canProject, isCompatibleProjectionOf, isSchemaCompatible}
+import org.apache.hudi.avro.AvroSchemaUtils.{canProject, isCompatibleProjectionOf, isSchemaCompatible, resolveNullableSchema}
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.avro.HoodieAvroUtils.removeMetadataFields
 import org.apache.hudi.client.common.HoodieSparkEngineContext
@@ -47,6 +47,7 @@ import org.apache.hudi.hive.{HiveSyncConfigHolder, HiveSyncTool}
 import org.apache.hudi.internal.DataSourceInternalWriterHelper
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
+import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils.reconcileNullability
 import org.apache.hudi.internal.schema.utils.{AvroSchemaEvolutionUtils, SerDeHelper}
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.keygen.{SparkKeyGeneratorInterface, TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
@@ -419,7 +420,7 @@ object HoodieSparkSqlWriter {
           SQL_MERGE_INTO_WRITES.defaultValue.toString).toBoolean
 
         val canonicalizedSourceSchema = if (shouldCanonicalizeNullable) {
-          AvroSchemaEvolutionUtils.canonicalizeColumnNullability(sourceSchema, latestTableSchema)
+          canonicalizeSchema(sourceSchema, latestTableSchema)
         } else {
           sourceSchema
         }
@@ -598,6 +599,21 @@ object HoodieSparkSqlWriter {
   }
 
   /**
+   * Canonicalizes [[sourceSchema]] by reconciling it w/ [[latestTableSchema]] in following
+   *
+   * <ol>
+   *  <li>Nullability: making sure that nullability of the fields in the source schema is matching
+   *  that of the latest table's ones</li>
+   * </ol>
+   *
+   * TODO support casing reconciliation
+   */
+  private def canonicalizeSchema(sourceSchema: Schema, latestTableSchema: Schema): Schema = {
+    reconcileNullability(sourceSchema, latestTableSchema)
+  }
+
+
+  /**
    * get latest internalSchema from table
    *
    * @param config instance of {@link HoodieConfig}
@@ -743,7 +759,7 @@ object HoodieSparkSqlWriter {
 
   def validateSchemaForHoodieIsDeleted(schema: Schema): Unit = {
     if (schema.getField(HoodieRecord.HOODIE_IS_DELETED_FIELD) != null &&
-      AvroConversionUtils.resolveAvroTypeNullability(schema.getField(HoodieRecord.HOODIE_IS_DELETED_FIELD).schema())._2.getType != Schema.Type.BOOLEAN) {
+      resolveNullableSchema(schema.getField(HoodieRecord.HOODIE_IS_DELETED_FIELD).schema()).getType != Schema.Type.BOOLEAN) {
       throw new HoodieException(HoodieRecord.HOODIE_IS_DELETED_FIELD + " has to be BOOLEAN type. Passed in dataframe's schema has type "
         + schema.getField(HoodieRecord.HOODIE_IS_DELETED_FIELD).schema().getType)
     }

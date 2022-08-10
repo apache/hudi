@@ -51,6 +51,10 @@ class HoodieSparkSessionExtension extends (SparkSessionExtensions => Unit)
     }
     */
 
+    HoodieAnalysis.customOptimizerRules.foreach { ruleBuilder =>
+      extensions.injectOptimizerRule(ruleBuilder(_))
+    }
+
     sparkAdapter.injectTableFunctions(extensions)
   }
 }

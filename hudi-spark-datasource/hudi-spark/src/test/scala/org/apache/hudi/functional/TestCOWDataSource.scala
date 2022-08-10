@@ -36,7 +36,7 @@ import org.apache.hudi.functional.TestCOWDataSource.convertColumnsToNullable
 import org.apache.hudi.keygen._
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions.Config
 import org.apache.hudi.metrics.Metrics
-import org.apache.hudi.testutils.HoodieClientTestBase
+import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.util.JFunction
 import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers, HoodieSparkRecordMerger, QuickstartUtils, ScalaAssertionSupport}
 import org.apache.spark.sql._
@@ -46,7 +46,7 @@ import org.apache.spark.sql.types._
 import org.joda.time.DateTime
 import org.joda.time.format.DateTimeFormat
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue, fail}
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, EnumSource, ValueSource}
 
@@ -59,7 +59,7 @@ import scala.collection.JavaConverters._
 /**
  * Basic tests on the spark datasource for COW table.
  */
-class TestCOWDataSource extends HoodieClientTestBase with ScalaAssertionSupport {
+class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSupport {
   var spark: SparkSession = null
   val commonOpts = Map(
     "hoodie.insert.shuffle.parallelism" -> "4",
@@ -962,7 +962,6 @@ class TestCOWDataSource extends HoodieClientTestBase with ScalaAssertionSupport 
   @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
   def testWriteSmallPrecisionDecimalTable(recordType: HoodieRecordType): Unit = {
     val (writeOpts, readOpts) = getWriterReaderOpts(recordType)
-
     val records1 = recordsToStrings(dataGen.generateInserts("001", 5)).toList
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
       .withColumn("shortDecimal", lit(new java.math.BigDecimal(s"2090.0000"))) // create decimalType(8, 4)
