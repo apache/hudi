@@ -92,4 +92,6 @@ Data Summit Connect, May, 2021
 
 39. ["Apache Hudi Meetup at Uber with talks from Philips, Moveworks & Uber (including Hudi OSS roadmap 2022)"](https://youtu.be/8Q0kM-emMyo) - By Felix Kizhakkel Jose (Philips), Bhavani Sudha (Moveworks), Prashant Wason (Uber), March 2022
 
-40. ["Apache Hudi with Vinoth Chandar"](https://softwareengineeringdaily.com/2022/03/08/apache-hudi-with-vinoth-chandar/) By Software Engineering Daily. Mar 5, 2022 
+40. ["Apache Hudi with Vinoth Chandar"](https://softwareengineeringdaily.com/2022/03/08/apache-hudi-with-vinoth-chandar/) By Software Engineering Daily. Mar 5, 2022
+
+41. ["PrestoDB and Apache Hudi for the Lakehouse"](https://www.youtube.com/watch?v=3zQJR-IGH0Y&list=PLJVeO1NMmyqXHoLuUJtulMDU0yBgSL0GH&index=11) - By Sagar Sumit and Bhavani Sudha Saktheeswaran. PrestoCon Day. Jul 21, 2022 
