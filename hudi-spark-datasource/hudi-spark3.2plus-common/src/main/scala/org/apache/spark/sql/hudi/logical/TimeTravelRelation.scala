@@ -22,7 +22,9 @@ import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression}
 /** TODO scala-doc  */
 case class TimeTravelRelation(relation: LogicalPlan,
                               timestamp: Option[Expression],
-                              version: Option[String]) extends LeafNode {
-  override def output: Seq[Attribute] = Nil
-  override lazy val resolved: Boolean = false
+                              version: Option[String]) extends UnaryNode {
+  override def output: Seq[Attribute] = relation.output
+  override def child: LogicalPlan = relation
+  override protected def withNewChildInternal(newChild: LogicalPlan): LogicalPlan =
+    copy(relation = newChild)
 }

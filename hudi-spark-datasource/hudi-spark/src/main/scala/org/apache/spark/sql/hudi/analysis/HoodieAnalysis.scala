@@ -477,16 +477,13 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
       }
 
     // TODO extract to Spark 3.x module
-    case TimeTravelRelation(plan, timestamp, version) =>
+    case TimeTravelRelation(plan, timestamp, version) if sparkAdapter.resolvesToHoodieTable(plan, sparkSession) =>
       if (timestamp.isEmpty && version.nonEmpty) {
         throw new AnalysisException(
           "Version expression is not supported for time travel")
       }
 
-      // Resolve [[TimeTravelRelation]]s inner plan
-      val resolvedPlan = sparkSession.sessionState.analyzer.ResolveReferences.apply(plan)
-
-      sparkAdapter.resolveHoodieTable(resolvedPlan) match {
+      sparkAdapter.resolveHoodieTable(plan) match {
         case Some(table) =>
           val pathOption = table.storage.locationUri.map("path" -> CatalogUtils.URIToString(_))
           val instantOption = Map(
@@ -503,7 +500,7 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
 
           LogicalRelation(dataSource.resolveRelation(checkFilesExist = false), table)
 
-        case None => resolvedPlan
+        case None => plan
       }
 
     case p => p
