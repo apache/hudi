@@ -21,6 +21,7 @@ import org.apache.hudi.HoodieCLIUtils
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
 import org.apache.hudi.common.util.JsonUtils
 import org.apache.hudi.config.HoodieCleanConfig
+import org.apache.hudi.table.action.clean.CleaningTriggerStrategy
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
@@ -33,8 +34,12 @@ class RunCleanProcedure extends BaseProcedure with ProcedureBuilder with Logging
     ProcedureParameter.required(0, "table", DataTypes.StringType, None),
     ProcedureParameter.optional(1, "skip_locking", DataTypes.BooleanType, false),
     ProcedureParameter.optional(2, "schedule_in_line", DataTypes.BooleanType, true),
-    ProcedureParameter.optional(3, "clean_policy", DataTypes.StringType, None),
-    ProcedureParameter.optional(4, "retain_commits", DataTypes.IntegerType, 10)
+    ProcedureParameter.optional(3, "clean_policy", DataTypes.StringType, HoodieCleanConfig.CLEANER_POLICY.defaultValue()),
+    ProcedureParameter.optional(4, "retain_commits", DataTypes.IntegerType, HoodieCleanConfig.CLEANER_COMMITS_RETAINED.defaultValue().toInt),
+    ProcedureParameter.optional(5, "hours_retained", DataTypes.IntegerType, HoodieCleanConfig.CLEANER_HOURS_RETAINED.defaultValue().toInt),
+    ProcedureParameter.optional(6, "file_versions_retained", DataTypes.IntegerType, HoodieCleanConfig.CLEANER_FILE_VERSIONS_RETAINED.defaultValue().toInt),
+    ProcedureParameter.optional(7, "trigger_strategy", DataTypes.StringType, HoodieCleanConfig.CLEAN_TRIGGER_STRATEGY.defaultValue()),
+    ProcedureParameter.optional(8, "trigger_max_commits", DataTypes.IntegerType, HoodieCleanConfig.CLEAN_MAX_COMMITS.defaultValue().toInt)
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -64,16 +69,16 @@ class RunCleanProcedure extends BaseProcedure with ProcedureBuilder with Logging
     val tableName = getArgValueOrDefault(args, PARAMETERS(0))
     val skipLocking = getArgValueOrDefault(args, PARAMETERS(1)).get.asInstanceOf[Boolean]
     val scheduleInLine = getArgValueOrDefault(args, PARAMETERS(2)).get.asInstanceOf[Boolean]
-    val cleanPolicy = getArgValueOrDefault(args, PARAMETERS(3))
-    val retainCommits = getArgValueOrDefault(args, PARAMETERS(4)).get.asInstanceOf[Integer]
     val basePath = getBasePath(tableName, Option.empty)
     val cleanInstantTime = HoodieActiveTimeline.createNewInstantTime()
-    var props: Map[String, String] = Map(
-      HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key() -> String.valueOf(retainCommits)
+    val props: Map[String, String] = Map(
+      HoodieCleanConfig.CLEANER_POLICY.key() -> getArgValueOrDefault(args, PARAMETERS(3)).get.toString,
+      HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key() -> getArgValueOrDefault(args, PARAMETERS(4)).get.toString,
+      HoodieCleanConfig.CLEANER_HOURS_RETAINED.key() -> getArgValueOrDefault(args, PARAMETERS(5)).get.toString,
+      HoodieCleanConfig.CLEANER_FILE_VERSIONS_RETAINED.key() -> getArgValueOrDefault(args, PARAMETERS(6)).get.toString,
+      HoodieCleanConfig.CLEAN_TRIGGER_STRATEGY.key() -> getArgValueOrDefault(args, PARAMETERS(7)).get.toString,
+      HoodieCleanConfig.CLEAN_MAX_COMMITS.key() -> getArgValueOrDefault(args, PARAMETERS(8)).get.toString
     )
-    if (cleanPolicy.isDefined) {
-      props += (HoodieCleanConfig.CLEANER_POLICY.key() -> String.valueOf(cleanPolicy.get))
-    }
     val client = HoodieCLIUtils.createHoodieClientFromPath(sparkSession, basePath, props)
     val hoodieCleanMeta = client.clean(cleanInstantTime, scheduleInLine, skipLocking)
 
