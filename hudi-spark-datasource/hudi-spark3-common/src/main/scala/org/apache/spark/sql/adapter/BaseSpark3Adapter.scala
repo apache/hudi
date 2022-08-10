@@ -73,7 +73,7 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
     FilePartition.getFilePartitions(sparkSession, partitionedFiles, maxSplitBytes)
   }
 
-  override def isHoodieTable(table: LogicalPlan, spark: SparkSession): Boolean = {
+  override def resolvesToHoodieTable(table: LogicalPlan, spark: SparkSession): Boolean = {
     unfoldSubqueryAliases(table) match {
       case LogicalRelation(_, _, Some(table), _) => isHoodieTable(table)
       case relation: UnresolvedRelation =>

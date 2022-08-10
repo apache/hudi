@@ -134,24 +134,24 @@ case class HoodieAnalysis(sparkSession: SparkSession) extends Rule[LogicalPlan]
     plan match {
       // Convert to MergeIntoHoodieTableCommand
       case m @ MergeIntoTable(target, _, _, _, _)
-        if m.resolved && sparkAdapter.isHoodieTable(target, sparkSession) =>
+        if sparkAdapter.resolvesToHoodieTable(target, sparkSession) =>
           MergeIntoHoodieTableCommand(m)
 
       // Convert to UpdateHoodieTableCommand
       case u @ UpdateTable(table, _, _)
-        if u.resolved && sparkAdapter.isHoodieTable(table, sparkSession) =>
+        if sparkAdapter.resolvesToHoodieTable(table, sparkSession) =>
           UpdateHoodieTableCommand(u)
 
       // Convert to DeleteHoodieTableCommand
       case d @ DeleteFromTable(table, _)
-        if d.resolved && sparkAdapter.isHoodieTable(table, sparkSession) =>
+        if sparkAdapter.resolvesToHoodieTable(table, sparkSession) =>
           DeleteHoodieTableCommand(d)
 
       // Convert to InsertIntoHoodieTableCommand
       case l if sparkAdapter.getCatalystPlanUtils.isInsertInto(l) =>
         val (table, partition, query, overwrite, _) = sparkAdapter.getCatalystPlanUtils.getInsertIntoChildren(l).get
         table match {
-          case relation: LogicalRelation if sparkAdapter.isHoodieTable(relation, sparkSession) =>
+          case relation: LogicalRelation if sparkAdapter.resolvesToHoodieTable(relation, sparkSession) =>
             new InsertIntoHoodieTableCommand(relation, query, partition, overwrite)
           case _ =>
             l
@@ -164,7 +164,7 @@ case class HoodieAnalysis(sparkSession: SparkSession) extends Rule[LogicalPlan]
 
       // Convert to CompactionHoodieTableCommand
       case CompactionTable(table, operation, options)
-        if table.resolved && sparkAdapter.isHoodieTable(table, sparkSession) =>
+        if sparkAdapter.resolvesToHoodieTable(table, sparkSession) =>
         val tableId = getTableIdentifier(table)
         val catalogTable = sparkSession.sessionState.catalog.getTableMetadata(tableId)
         CompactionHoodieTableCommand(catalogTable, operation, options)
@@ -173,7 +173,7 @@ case class HoodieAnalysis(sparkSession: SparkSession) extends Rule[LogicalPlan]
         CompactionHoodiePathCommand(path, operation, options)
       // Convert to CompactionShowOnTable
       case CompactionShowOnTable(table, limit)
-        if sparkAdapter.isHoodieTable(table, sparkSession) =>
+        if sparkAdapter.resolvesToHoodieTable(table, sparkSession) =>
         val tableId = getTableIdentifier(table)
         val catalogTable = sparkSession.sessionState.catalog.getTableMetadata(tableId)
         CompactionShowHoodieTableCommand(catalogTable, limit)
@@ -192,23 +192,23 @@ case class HoodieAnalysis(sparkSession: SparkSession) extends Rule[LogicalPlan]
 
       // Convert to CreateIndexCommand
       case CreateIndex(table, indexName, indexType, ignoreIfExists, columns, options, output)
-        if table.resolved && sparkAdapter.isHoodieTable(table, sparkSession) =>
+        if sparkAdapter.resolvesToHoodieTable(table, sparkSession) =>
         CreateIndexCommand(
           getTableIdentifier(table), indexName, indexType, ignoreIfExists, columns, options, output)
 
       // Convert to DropIndexCommand
       case DropIndex(table, indexName, ignoreIfNotExists, output)
-        if table.resolved && sparkAdapter.isHoodieTable(table, sparkSession) =>
+        if sparkAdapter.resolvesToHoodieTable(table, sparkSession) =>
         DropIndexCommand(getTableIdentifier(table), indexName, ignoreIfNotExists, output)
 
       // Convert to ShowIndexesCommand
       case ShowIndexes(table, output)
-        if table.resolved && sparkAdapter.isHoodieTable(table, sparkSession) =>
+        if sparkAdapter.resolvesToHoodieTable(table, sparkSession) =>
         ShowIndexesCommand(getTableIdentifier(table), output)
 
       // Covert to RefreshCommand
       case RefreshIndex(table, indexName, output)
-        if table.resolved && sparkAdapter.isHoodieTable(table, sparkSession) =>
+        if sparkAdapter.resolvesToHoodieTable(table, sparkSession) =>
         RefreshIndexCommand(getTableIdentifier(table), indexName, output)
 
       case _ => plan
@@ -261,7 +261,7 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
   def apply(plan: LogicalPlan): LogicalPlan = plan resolveOperatorsUp {
     // Resolve merge into
     case mergeInto @ MergeIntoTable(target, source, mergeCondition, matchedActions, notMatchedActions)
-      if sparkAdapter.isHoodieTable(target, sparkSession) && target.resolved =>
+      if sparkAdapter.resolvesToHoodieTable(target, sparkSession) =>
       val resolver = sparkSession.sessionState.conf.resolver
       val resolvedSource = analyzer.execute(source)
       try {
@@ -432,7 +432,7 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
 
     // Resolve update table
     case UpdateTable(table, assignments, condition)
-      if sparkAdapter.isHoodieTable(table, sparkSession) && table.resolved =>
+      if sparkAdapter.resolvesToHoodieTable(table, sparkSession) =>
       // Resolve condition
       val resolvedCondition = condition.map(resolveExpressionFrom(table)(_))
       // Resolve assignments
@@ -445,8 +445,8 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
       UpdateTable(table, resolvedAssignments, resolvedCondition)
 
     // Resolve Delete Table
-    case dft @ DeleteFromTable(table, condition)
-      if sparkAdapter.isHoodieTable(table, sparkSession) && table.resolved =>
+    case dft @ DeleteFromTable(table, _)
+      if sparkAdapter.resolvesToHoodieTable(table, sparkSession) =>
       val resolveExpression = resolveExpressionFrom(table, None)(_)
       sparkAdapter.resolveDeleteFromTable(dft, resolveExpression)
 
@@ -456,7 +456,7 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
       val (table, partition, query, overwrite, ifPartitionNotExists) =
         sparkAdapter.getCatalystPlanUtils.getInsertIntoChildren(l).get
 
-      if (sparkAdapter.isHoodieTable(table, sparkSession) && query.resolved &&
+      if (sparkAdapter.resolvesToHoodieTable(table, sparkSession) && query.resolved &&
         !containUnResolvedStar(query) &&
         !checkAlreadyAppendMetaField(query)) {
         val metaFields = HoodieRecord.HOODIE_META_COLUMNS.asScala.map(
