@@ -31,10 +31,16 @@ spark-sql --packages org.apache.hudi:hudi-spark3-bundle_2.12:0.11.1,org.apache.s
 --conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog'
 
 ```
-After start spark-app,  pls exec `set schema.on.read.enable=true` to enable schema evolution.
+After start spark-app,  pls exec `set hoodie.schema.on.read.enable=true` to enable schema evolution.
 
 :::note
 Currently, Schema evolution cannot disabled once being enabled.
+:::
+
+:::tip
+When use hive metastore, may encounter a problem: `org.apache.hadoop.hive.ql.metadata.HiveException`: Unable to alter table. The following columns have types incompatible with the existing columns in their respective positions.
+
+Make sure disable `hive.metastore.disallow.incompatible.col.type.changes` in hive side.
 :::
 
 ### Adding Columns
