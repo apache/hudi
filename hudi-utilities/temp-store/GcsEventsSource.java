@@ -1,6 +1,19 @@
 package org.apache.hudi.utilities.sources;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+//import com.google.api.client.googleapis.auth.oauth2.GoogleCredential;
+//import com.google.api.client.googleapis.json.GoogleJsonResponseException;
+//import com.google.api.client.googleapis.util.Utils;
+//import com.google.api.client.http.HttpTransport;
+//import com.google.api.client.json.JsonFactory;
+
+/** TODO: See if api-services-pubsub is needed at all
+import com.google.api.services.pubsub.Pubsub;
+import com.google.api.services.pubsub.model.PullRequest;
+import com.google.api.services.pubsub.model.PullResponse;
+import com.google.api.services.pubsub.model.ReceivedMessage;
+import com.google.api.services.pubsub.model.Subscription;
+*/
 import com.google.cloud.pubsub.v1.stub.GrpcSubscriberStub;
 import com.google.cloud.pubsub.v1.stub.SubscriberStub;
 import com.google.cloud.pubsub.v1.stub.SubscriberStubSettings;
@@ -21,6 +34,8 @@ import org.apache.spark.sql.SparkSession;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
+import java.net.HttpURLConnection;
 import java.time.Instant;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -31,38 +46,11 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
-/*
- * Launch in spark-submit as follows:
- *
- bin/spark-submit \
---packages org.apache.spark:spark-avro_2.11:2.4.4 \
---packages com.google.api:gax-grpc:2.18.2 \
---packages com.google.cloud:google-cloud-pubsub:1.120.0 \
---driver-memory 4g \
---executor-memory 4g \
---class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer \
-<path_to_hudi>/packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.11-0.11.0-SNAPSHOT.jar \
---hoodie-conf hoodie.datasource.write.recordkey.field="id,metageneration" \
---hoodie-conf hoodie.datasource.write.keygenerator.class=org.apache.hudi.keygen.ComplexKeyGenerator \
---hoodie-conf hoodie.datasource.write.partitionpath.field=bucket \
---source-class org.apache.hudi.utilities.sources.GcsEventsSource \
---table-type COPY_ON_WRITE \
---source-ordering-field timeCreated \
---target-base-path file:\/\/\/home/pramod/2tmp/dl-try/gcs-data \
---target-table gcs_tbl \
---op UPSERT \
---continuous \
---source-limit 100 \
---min-sync-interval-seconds 180
- * Needs spark-defaults.conf to look like this:
-spark.driver.extraClassPath <path_to_maven_repo_dir>/com/google/protobuf/protobuf-java/3.21.1/protobuf-java-3.21.1.jar:<path_to_maven_repo_dir>/com/google/guava/failureaccess/1.0.1/failureaccess-1.0.1.jar:<path_to_maven_repo_dir>/com/google/guava/guava/31.1-jre/guava-31.1-jre.jar
-spark.executor.extraClassPath <path_to_maven_repo_dir>/com/google/protobuf/protobuf-java/3.21.1/protobuf-java-3.21.1.jar:<path_to_maven_repo_dir>/com/google/guava/failureaccess/1.0.1/failureaccess-1.0.1.jar:<path_to_maven_repo_dir>/com/google/guava/guava/31.1-jre/guava-31.1-jre.jar
- */
 public class GcsEventsSource extends RowSource {
 
     private static final Logger LOG = LogManager.getLogger(GcsEventsSource.class);
 
-    private final int BATCH_SIZE = 100;
+    private final int BATCH_SIZE = 10;
 
     public GcsEventsSource(
             TypedProperties props,
@@ -77,7 +65,10 @@ public class GcsEventsSource extends RowSource {
     protected Pair<Option<Dataset<Row>>, String> fetchNextBatch(Option<String> lastCkptStr, long sourceLimit) {
         LOG.info("Fetching next batch");
 
-        Pair<List<String>, String> messagesAndMaxTime = pull2("redacted", "redacted");
+//        Pair<List<String>, String> messagesAndMaxTime = pull("redacted", "redacted",
+//                "redacted");
+
+        Pair<List<String>, String> messagesAndMaxTime = pull2("infra-dev-358110", "gcs-obj-1-sub");
 
         Dataset<String> eventRecords = sparkSession.createDataset(messagesAndMaxTime.getLeft(), Encoders.STRING());
 
@@ -92,19 +83,19 @@ public class GcsEventsSource extends RowSource {
 
         try {
             subscriberStubSettings = SubscriberStubSettings.newBuilder()
-                .setTransportChannelProvider(
-                    SubscriberStubSettings.defaultGrpcTransportProviderBuilder()
-                            .setMaxInboundMessageSize(20 * 1024 * 1024) // 20MB (maximum message size).
-                            .build())
-                .build();
+                    .setTransportChannelProvider(
+                            SubscriberStubSettings.defaultGrpcTransportProviderBuilder()
+                                    .setMaxInboundMessageSize(20 * 1024 * 1024) // 20MB (maximum message size).
+                                    .build())
+                    .build();
 
             try (SubscriberStub subscriber = GrpcSubscriberStub.create(subscriberStubSettings)) {
                 String subscriptionName = ProjectSubscriptionName.format(projectId, subscriptionId);
                 PullRequest pullRequest =
-                    PullRequest.newBuilder()
-                        .setMaxMessages(BATCH_SIZE)
-                        .setSubscription(subscriptionName)
-                        .build();
+                        PullRequest.newBuilder()
+                                .setMaxMessages(BATCH_SIZE)
+                                .setSubscription(subscriptionName)
+                                .build();
 
                 // Use pullCallable().futureCall to asynchronously perform this operation.
                 PullResponse pullResponse = subscriber.pullCallable().call(pullRequest);
@@ -117,7 +108,9 @@ public class GcsEventsSource extends RowSource {
                     System.out.println("No message was pulled. Exiting.");
                     return null;
                 }
+
 //                ackMessages(subscriber, subscriptionName, receivedMessages);
+
                 return processMessages(receivedMessages);
             }
         } catch (IOException e) {
@@ -135,14 +128,59 @@ public class GcsEventsSource extends RowSource {
             }
 
             AcknowledgeRequest acknowledgeRequest =
-                AcknowledgeRequest.newBuilder()
-                    .setSubscription(subscriptionName)
-                    .addAllAckIds(ackIds)
-                    .build();
+                    AcknowledgeRequest.newBuilder()
+                            .setSubscription(subscriptionName)
+                            .addAllAckIds(ackIds)
+                            .build();
 
             // Use acknowledgeCallable().futureCall to asynchronously perform this operation.
             subscriber.acknowledgeCallable().call(acknowledgeRequest);
     }
+
+
+//    public Pair<List<String>, String> pull(String projectName, String topicName, String subscriptionName) {
+//        String projectFullName = "projects/" + projectName;
+//        String topicFullName = projectFullName + "/topics/" + topicName;
+//        String subscriptionFullName = projectFullName + "/subscriptions/" + subscriptionName;
+//
+//        Pubsub client = createAuthorizedClient();
+//
+//        try {
+//            Subscription subscription = new Subscription().setTopic(topicFullName);
+//            try {
+//                subscription =
+//                        client.projects().subscriptions().create(subscriptionFullName, subscription).execute();
+//            } catch (GoogleJsonResponseException e) {
+//                if (e.getDetails().getCode() == HttpURLConnection.HTTP_CONFLICT) {
+//                    // Subscription already exists, but that's the expected behavior with multiple receivers.
+//                } else {
+//                   throw e;
+//                }
+//            }
+//
+//            // TODO: Timeouts etc
+//            PullRequest pullRequest =
+//                new PullRequest().setReturnImmediately(false).setMaxMessages(BATCH_SIZE);
+//
+//            PullResponse pullResponse =
+//                client.projects().subscriptions().pull(subscriptionFullName, pullRequest).execute();
+//
+//            List<ReceivedMessage> receivedMessages = pullResponse.getReceivedMessages();
+//            if (receivedMessages == null) {
+//                return Pair.of(Collections.emptyList(), "0");
+//            }
+//
+//            return processMessages(receivedMessages);
+//
+//        } catch (GoogleJsonResponseException e) {
+//            // TODO: Check if this catch block is needed
+//            LOG.error("Error", e);
+//        } catch (IOException e) {
+//            LOG.error("Error", e);
+//        }
+//
+//        return Pair.of(Collections.emptyList(), "0");
+//    }
 
     private Pair<List<String>, String> processMessages(List<ReceivedMessage> receivedMessages) throws IOException {
         List<String> messages = mapToString(receivedMessages);
@@ -161,14 +199,18 @@ public class GcsEventsSource extends RowSource {
     }
 
     private List<String> mapToString(List<ReceivedMessage> messages) {
-        // TODO: Return iterator instead. But realistically, batch sizes are small so it shouldn't matter
         List<String> msgTxt = messages
                 .stream()
                 .filter(m -> m.getMessage() != null)
                 .filter(m -> m.getMessage().getData() != null)
                 .map(
                     m -> {
-                        return m.getMessage().getData().toStringUtf8();
+//                        try {
+                            return m.getMessage().getData().toStringUtf8();
+//                        } catch (UnsupportedEncodingException e) {
+//                            // Wrong encode
+//                            return null;
+//                        }
                     })
                 .filter(Objects::nonNull)
                 .collect(Collectors.toList());
@@ -176,4 +218,23 @@ public class GcsEventsSource extends RowSource {
         return msgTxt;
     }
 
+    // TODO: Fix hardcoded auths
+//    private Pubsub createAuthorizedClient() {
+//        try {
+//            HttpTransport httpTransport = Utils.getDefaultTransport();
+//            JsonFactory jsonFactory = Utils.getDefaultJsonFactory();
+//            GoogleCredential creds =
+//                    GoogleCredential.getApplicationDefault(httpTransport, jsonFactory);
+//
+//            return new Pubsub.Builder(httpTransport, jsonFactory, req -> req.setInterceptor(creds)).
+//                    setApplicationName("spark-pubsub-receiver").
+//                    setHttpRequestInitializer(req -> req.setInterceptor(creds))
+//                    .build();
+//
+//        } catch (IOException e) {
+//            LOG.error("Error", e);
+//        }
+//
+//        return null;
+//    }
 }
