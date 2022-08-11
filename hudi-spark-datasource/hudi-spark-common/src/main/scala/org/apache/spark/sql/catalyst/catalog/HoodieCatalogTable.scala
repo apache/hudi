@@ -23,7 +23,7 @@ import org.apache.hudi.HoodieWriterUtils._
 import org.apache.hudi.common.config.DFSPropertiesConfiguration
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
-import org.apache.hudi.common.util.ValidationUtils
+import org.apache.hudi.common.util.{StringUtils, ValidationUtils}
 import org.apache.hudi.keygen.ComplexKeyGenerator
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.spark.internal.Logging
@@ -39,10 +39,12 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable
 
 /**
- * Table definition for SQL funcitonalities. Depending on the way of data generation,
+ * Table definition for SQL functionalities. Depending on the way of data generation,
  * meta of Hudi table can be from Spark catalog or meta directory on filesystem.
  * [[HoodieCatalogTable]] takes both meta sources into consideration when handling
  * EXTERNAL and MANAGED tables.
+ *
+ * NOTE: all the meta should be retrieved from meta directory on filesystem first.
  */
 class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) extends Logging {
 
@@ -53,7 +55,7 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
   /**
    * database.table in catalog
    */
-  val catalogTableName = table.qualifiedName
+  val catalogTableName: String = table.qualifiedName
 
   /**
    * properties defined in catalog.
@@ -88,6 +90,11 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
    * the name of table
    */
   lazy val tableName: String = tableConfig.getTableName
+
+  /**
+   * the name of dabase
+   */
+  lazy val databaseName: String = tableConfig.getDatabaseName
 
   /**
    * The name of type of table
@@ -169,19 +176,23 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
     val properties = new Properties()
     properties.putAll(tableConfigs.asJava)
 
+    val catalogDatabaseName = formatName(spark,
+      table.identifier.database.getOrElse(spark.sessionState.catalog.getCurrentDatabase))
     if (hoodieTableExists) {
+      assert(StringUtils.isNullOrEmpty(databaseName) || databaseName == catalogDatabaseName,
+        "The database names from this hoodie path and this catalog table is not same.")
       // just persist hoodie.table.create.schema
       HoodieTableMetaClient.withPropertyBuilder()
         .fromProperties(properties)
+        .setDatabaseName(catalogDatabaseName)
         .setTableCreateSchema(SchemaConverters.toAvroType(finalSchema).toString())
         .initTable(hadoopConf, tableLocation)
     } else {
       val (recordName, namespace) = AvroConversionUtils.getAvroRecordNameAndNamespace(table.identifier.table)
       val schema = SchemaConverters.toAvroType(finalSchema, false, recordName, namespace)
-      val hoodieDatabaseName = formatName(spark, table.identifier.database.getOrElse(spark.sessionState.catalog.getCurrentDatabase))
       HoodieTableMetaClient.withPropertyBuilder()
         .fromProperties(properties)
-        .setDatabaseName(hoodieDatabaseName)
+        .setDatabaseName(catalogDatabaseName)
         .setTableName(table.identifier.table)
         .setTableCreateSchema(schema.toString())
         .setPartitionFields(table.partitionColumnNames.mkString(","))

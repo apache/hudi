@@ -19,12 +19,33 @@ package org.apache.spark.sql
 
 import org.apache.spark.sql.catalyst.{AliasIdentifier, TableIdentifier}
 import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
-import org.apache.spark.sql.catalyst.expressions.Expression
+import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression}
 import org.apache.spark.sql.catalyst.plans.JoinType
 import org.apache.spark.sql.catalyst.plans.logical.{Join, LogicalPlan}
+import org.apache.spark.sql.internal.SQLConf
 
 trait HoodieCatalystPlansUtils {
 
+  /**
+   * Resolves output of the provided [[query]] against the [[expected]] list of [[Attribute]],
+   * and returns new (reshaped) instance of the [[LogicalPlan]]
+   *
+   * @param tableName used purely for more human-readable error output (if any)
+   * @param expected list of attributes output of the query has to adhere to
+   * @param query query whose output has to be reshaped
+   * @param byName whether the matching should occur by-name or positionally
+   * @param conf instance of [[SQLConf]]
+   * @return [[LogicalPlan]] which output is aligned to match to that of [[expected]]
+   */
+  def resolveOutputColumns(tableName: String,
+                           expected: Seq[Attribute],
+                           query: LogicalPlan,
+                           byName: Boolean,
+                           conf: SQLConf): LogicalPlan
+
+  /**
+   * Instantiates an [[Explain]] command
+   */
   def createExplainCommand(plan: LogicalPlan, extended: Boolean): LogicalPlan
 
   /**

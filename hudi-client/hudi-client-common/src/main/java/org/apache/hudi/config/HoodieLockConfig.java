@@ -311,6 +311,16 @@ public class HoodieLockConfig extends HoodieConfig {
       return this;
     }
 
+    public HoodieLockConfig.Builder withFileSystemLockPath(String path) {
+      lockConfig.setValue(FILESYSTEM_LOCK_PATH, path);
+      return this;
+    }
+
+    public HoodieLockConfig.Builder withFileSystemLockExpire(Integer expireTime) {
+      lockConfig.setValue(FILESYSTEM_LOCK_EXPIRE, String.valueOf(expireTime));
+      return this;
+    }
+
     public HoodieLockConfig build() {
       lockConfig.setDefaults(HoodieLockConfig.class.getName());
       return lockConfig;

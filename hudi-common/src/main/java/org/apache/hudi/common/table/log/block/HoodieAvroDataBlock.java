@@ -308,7 +308,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     DataOutputStream output = new DataOutputStream(baos);
 
-    // 2. Compress and Write schema out
+    // 1. Compress and Write schema out
     byte[] schemaContent = compress(schema.toString());
     output.writeInt(schemaContent.length);
     output.write(schemaContent);
@@ -318,10 +318,10 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
       recordItr.forEachRemaining(records::add);
     }
 
-    // 3. Write total number of records
+    // 2. Write total number of records
     output.writeInt(records.size());
 
-    // 4. Write the records
+    // 3. Write the records
     Iterator<IndexedRecord> itr = records.iterator();
     while (itr.hasNext()) {
       IndexedRecord s = itr.next();

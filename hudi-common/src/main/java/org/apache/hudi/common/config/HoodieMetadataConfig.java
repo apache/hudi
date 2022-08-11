@@ -187,6 +187,26 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .sinceVersion("0.11.0")
       .withDocumentation("Comma-separated list of columns for which column stats index will be built. If not set, all columns will be indexed");
 
+  public static final String COLUMN_STATS_INDEX_PROCESSING_MODE_IN_MEMORY = "in-memory";
+  public static final String COLUMN_STATS_INDEX_PROCESSING_MODE_ENGINE = "engine";
+
+  public static final ConfigProperty<String> COLUMN_STATS_INDEX_PROCESSING_MODE_OVERRIDE = ConfigProperty
+      .key(METADATA_PREFIX + ".index.column.stats.processing.mode.override")
+      .noDefaultValue()
+      .withValidValues(COLUMN_STATS_INDEX_PROCESSING_MODE_IN_MEMORY, COLUMN_STATS_INDEX_PROCESSING_MODE_ENGINE)
+      .sinceVersion("0.12.0")
+      .withDocumentation("By default Column Stats Index is automatically determining whether it should be read and processed either"
+          + "'in-memory' (w/in executing process) or using Spark (on a cluster), based on some factors like the size of the Index "
+          + "and how many columns are read. This config allows to override this behavior.");
+
+  public static final ConfigProperty<Integer> COLUMN_STATS_INDEX_IN_MEMORY_PROJECTION_THRESHOLD = ConfigProperty
+      .key(METADATA_PREFIX + ".index.column.stats.inMemory.projection.threshold")
+      .defaultValue(100000)
+      .sinceVersion("0.12.0")
+      .withDocumentation("When reading Column Stats Index, if the size of the expected resulting projection is below the in-memory"
+          + " threshold (counted by the # of rows), it will be attempted to be loaded \"in-memory\" (ie not using the execution engine"
+          + " like Spark, Flink, etc). If the value is above the threshold execution engine will be used to compose the projection.");
+
   public static final ConfigProperty<String> BLOOM_FILTER_INDEX_FOR_COLUMNS = ConfigProperty
       .key(METADATA_PREFIX + ".index.bloom.filter.column.list")
       .noDefaultValue()
@@ -244,6 +264,14 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public List<String> getColumnsEnabledForColumnStatsIndex() {
     return StringUtils.split(getString(COLUMN_STATS_INDEX_FOR_COLUMNS), CONFIG_VALUES_DELIMITER);
+  }
+
+  public String getColumnStatsIndexProcessingModeOverride() {
+    return getString(COLUMN_STATS_INDEX_PROCESSING_MODE_OVERRIDE);
+  }
+
+  public Integer getColumnStatsIndexInMemoryProjectionThreshold() {
+    return getIntOrDefault(COLUMN_STATS_INDEX_IN_MEMORY_PROJECTION_THRESHOLD);
   }
 
   public List<String> getColumnsEnabledForBloomFilterIndex() {

@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
@@ -31,11 +32,15 @@ import org.apache.hudi.sync.common.util.ConfigUtils;
 import com.beust.jcommander.Parameter;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.Properties;
-import java.util.function.Function;
+import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS;
 import static org.apache.hudi.common.table.HoodieTableConfig.DATABASE_NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.HOODIE_TABLE_NAME_KEY;
 import static org.apache.hudi.common.table.HoodieTableConfig.HOODIE_WRITE_TABLE_NAME_KEY;
@@ -44,6 +49,8 @@ import static org.apache.hudi.common.table.HoodieTableConfig.HOODIE_WRITE_TABLE_
  * Configs needed to sync data into external meta stores, catalogs, etc.
  */
 public class HoodieSyncConfig extends HoodieConfig {
+
+  private static final Logger LOG = LogManager.getLogger(HoodieSyncConfig.class);
 
   public static final ConfigProperty<String> META_SYNC_BASE_PATH = ConfigProperty
       .key("hoodie.datasource.meta.sync.base.path")
@@ -72,57 +79,51 @@ public class HoodieSyncConfig extends HoodieConfig {
   public static final ConfigProperty<String> META_SYNC_BASE_FILE_FORMAT = ConfigProperty
       .key("hoodie.datasource.hive_sync.base_file_format")
       .defaultValue("PARQUET")
+      .withInferFunction(cfg -> Option.ofNullable(cfg.getString(HoodieTableConfig.BASE_FILE_FORMAT)))
       .withDocumentation("Base file format for the sync.");
 
-  // If partition fields are not explicitly provided, obtain from the KeyGeneration Configs
-  public static final Function<HoodieConfig, Option<String>> PARTITION_FIELDS_INFERENCE_FUNCTION = cfg -> {
-    if (cfg.contains(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME)) {
-      return Option.of(cfg.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME));
-    } else {
-      return Option.empty();
-    }
-  };
   public static final ConfigProperty<String> META_SYNC_PARTITION_FIELDS = ConfigProperty
       .key("hoodie.datasource.hive_sync.partition_fields")
       .defaultValue("")
-      .withInferFunction(PARTITION_FIELDS_INFERENCE_FUNCTION)
+      .withInferFunction(cfg -> Option.ofNullable(cfg.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME)))
       .withDocumentation("Field in the table to use for determining hive partition columns.");
 
-  // If partition value extraction class is not explicitly provided, configure based on the partition fields.
-  public static final Function<HoodieConfig, Option<String>> PARTITION_EXTRACTOR_CLASS_FUNCTION = cfg -> {
-    if (!cfg.contains(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME)) {
-      return Option.of("org.apache.hudi.hive.NonPartitionedExtractor");
-    } else {
-      int numOfPartFields = cfg.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME).split(",").length;
-      if (numOfPartFields == 1
-          && cfg.contains(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE)
-          && cfg.getString(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE).equals("true")) {
-        return Option.of("org.apache.hudi.hive.HiveStylePartitionValueExtractor");
-      } else {
-        return Option.of("org.apache.hudi.hive.MultiPartKeysValueExtractor");
-      }
-    }
-  };
   public static final ConfigProperty<String> META_SYNC_PARTITION_EXTRACTOR_CLASS = ConfigProperty
       .key("hoodie.datasource.hive_sync.partition_extractor_class")
-      .defaultValue("org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor")
-      .withInferFunction(PARTITION_EXTRACTOR_CLASS_FUNCTION)
+      .defaultValue("org.apache.hudi.hive.MultiPartKeysValueExtractor")
+      .withInferFunction(cfg -> {
+        if (StringUtils.nonEmpty(cfg.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME))) {
+          int numOfPartFields = cfg.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME).split(",").length;
+          if (numOfPartFields == 1
+              && cfg.contains(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE)
+              && cfg.getString(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE).equals("true")) {
+            return Option.of("org.apache.hudi.hive.HiveStylePartitionValueExtractor");
+          } else {
+            return Option.of("org.apache.hudi.hive.MultiPartKeysValueExtractor");
+          }
+        } else {
+          return Option.of("org.apache.hudi.hive.NonPartitionedExtractor");
+        }
+      })
       .withDocumentation("Class which implements PartitionValueExtractor to extract the partition values, "
           + "default 'SlashEncodedDayPartitionValueExtractor'.");
 
   public static final ConfigProperty<String> META_SYNC_ASSUME_DATE_PARTITION = ConfigProperty
       .key("hoodie.datasource.hive_sync.assume_date_partitioning")
-      .defaultValue("false")
-      .withDocumentation("Assume partitioning is yyyy/mm/dd");
+      .defaultValue(HoodieMetadataConfig.ASSUME_DATE_PARTITIONING.defaultValue())
+      .withInferFunction(cfg -> Option.ofNullable(cfg.getString(HoodieMetadataConfig.ASSUME_DATE_PARTITIONING)))
+      .withDocumentation("Assume partitioning is yyyy/MM/dd");
 
   public static final ConfigProperty<Boolean> META_SYNC_DECODE_PARTITION = ConfigProperty
       .key("hoodie.meta.sync.decode_partition")
-      .defaultValue(false) // TODO infer from url encode option
-      .withDocumentation("");
+      .defaultValue(false)
+      .withInferFunction(cfg -> Option.ofNullable(cfg.getBoolean(HoodieTableConfig.URL_ENCODE_PARTITIONING)))
+      .withDocumentation("If true, meta sync will url-decode the partition path, as it is deemed as url-encoded. Default to false.");
 
   public static final ConfigProperty<Boolean> META_SYNC_USE_FILE_LISTING_FROM_METADATA = ConfigProperty
       .key("hoodie.meta.sync.metadata_file_listing")
-      .defaultValue(HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS)
+      .defaultValue(DEFAULT_METADATA_ENABLE_FOR_READERS)
+      .withInferFunction(cfg -> Option.of(cfg.getBooleanOrDefault(HoodieMetadataConfig.ENABLE, DEFAULT_METADATA_ENABLE_FOR_READERS)))
       .withDocumentation("Enable the internal metadata table for file listing for syncing with metastores");
 
   public static final ConfigProperty<String> META_SYNC_CONDITIONAL_SYNC = ConfigProperty
@@ -143,7 +144,12 @@ public class HoodieSyncConfig extends HoodieConfig {
 
   public HoodieSyncConfig(Properties props, Configuration hadoopConf) {
     super(props);
-    setDefaults(getClass().getName());
+    LOG.debug("Passed in properties:\n" + props.entrySet()
+        .stream()
+        .sorted(Comparator.comparing(e -> e.getKey().toString()))
+        .map(e -> e.getKey() + "=" + e.getValue())
+        .collect(Collectors.joining("\n")));
+    setDefaults(HoodieSyncConfig.class.getName());
     this.hadoopConf = hadoopConf;
   }
 

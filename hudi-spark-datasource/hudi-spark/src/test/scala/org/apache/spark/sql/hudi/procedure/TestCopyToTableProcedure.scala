@@ -18,11 +18,10 @@
 package org.apache.spark.sql.hudi.procedure
 
 import org.apache.spark.sql.Row
-import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase
 
 import java.util
 
-class TestCopyToTableProcedure extends HoodieSparkSqlTestBase {
+class TestCopyToTableProcedure extends HoodieSparkProcedureTestBase {
 
   test("Test Call copy_to_table Procedure with default params") {
     withTempDir { tmp =>

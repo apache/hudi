@@ -587,4 +587,59 @@ public class TestClientRollback extends HoodieClientTestBase {
       }
     }
   }
+
+  @Test
+  public void testFallbackToListingBasedRollbackForCompletedInstant() throws Exception {
+    // Let's create some commit files and base files
+    final String p1 = "2016/05/01";
+    final String p2 = "2016/05/02";
+    final String p3 = "2016/05/06";
+    final String commitTime1 = "20160501010101";
+    final String commitTime2 = "20160502020601";
+    final String commitTime3 = "20160506030611";
+    Map<String, String> partitionAndFileId1 = new HashMap<String, String>() {
+      {
+        put(p1, "id11");
+        put(p2, "id12");
+        put(p3, "id13");
+      }
+    };
+    Map<String, String> partitionAndFileId2 = new HashMap<String, String>() {
+      {
+        put(p1, "id21");
+        put(p2, "id22");
+        put(p3, "id23");
+      }
+    };
+    Map<String, String> partitionAndFileId3 = new HashMap<String, String>() {
+      {
+        put(p1, "id31");
+        put(p2, "id32");
+        put(p3, "id33");
+      }
+    };
+
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
+        .withRollbackUsingMarkers(true) // rollback using markers to test fallback to listing based rollback for completed instant
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY).build())
+        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build()).build();
+
+    // create test table with all commits completed
+    HoodieTestTable testTable = HoodieMetadataTestTable.of(metaClient, SparkHoodieBackedTableMetadataWriter.create(metaClient.getHadoopConf(), config, context));
+    testTable.withPartitionMetaFiles(p1, p2, p3)
+        .addCommit(commitTime1)
+        .withBaseFilesInPartitions(partitionAndFileId1)
+        .addCommit(commitTime2)
+        .withBaseFilesInPartitions(partitionAndFileId2)
+        .addCommit(commitTime3)
+        .withBaseFilesInPartitions(partitionAndFileId3);
+
+    try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
+      client.rollback(commitTime3);
+      assertFalse(testTable.inflightCommitExists(commitTime3));
+      assertFalse(testTable.baseFilesExist(partitionAndFileId3, commitTime3));
+      assertTrue(testTable.baseFilesExist(partitionAndFileId2, commitTime2));
+    }
+  }
 }

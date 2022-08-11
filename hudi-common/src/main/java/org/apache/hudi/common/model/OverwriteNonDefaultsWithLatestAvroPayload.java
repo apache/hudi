@@ -20,6 +20,7 @@ package org.apache.hudi.common.model;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.avro.generic.IndexedRecord;
 
 import org.apache.hudi.common.util.Option;
@@ -60,16 +61,19 @@ public class OverwriteNonDefaultsWithLatestAvroPayload extends OverwriteWithLate
     if (isDeleteRecord(insertRecord)) {
       return Option.empty();
     } else {
+      final GenericRecordBuilder builder = new GenericRecordBuilder(schema);
       List<Schema.Field> fields = schema.getFields();
       fields.forEach(field -> {
         Object value = insertRecord.get(field.name());
         value = field.schema().getType().equals(Schema.Type.STRING) && value != null ? value.toString() : value;
         Object defaultValue = field.defaultVal();
         if (!overwriteField(value, defaultValue)) {
-          currentRecord.put(field.name(), value);
+          builder.set(field, value);
+        } else {
+          builder.set(field, currentRecord.get(field.pos()));
         }
       });
-      return Option.of(currentRecord);
+      return Option.of(builder.build());
     }
   }
 }

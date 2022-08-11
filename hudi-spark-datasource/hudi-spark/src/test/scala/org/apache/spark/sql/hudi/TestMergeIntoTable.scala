@@ -372,7 +372,8 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
              | tblproperties (
              |  type = '$tableType',
              |  primaryKey = 'id',
-             |  preCombineField = 'v'
+             |  preCombineField = 'v',
+             |  hoodie.compaction.payload.class = 'org.apache.hudi.common.model.DefaultHoodieRecordPayload'
              | )
              | partitioned by(dt)
              | location '${tmp.getCanonicalPath}/$tableName1'
@@ -908,7 +909,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
              | when not matched then insert *
              |""".stripMargin)
         checkAnswer(s"select id, name, cast(value as string), ts from $tableName")(
-          Seq(1, "a1", removeQuotes(dataValue), 1000)
+          Seq(1, "a1", extractRawValue(dataValue), 1000)
         )
       }
     }

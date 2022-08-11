@@ -294,7 +294,12 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     builder.withProperties(properties);
 
     if (writeConfig.isMetricsOn()) {
+      // Table Name is needed for metric reporters prefix
+      Properties commonProperties = new Properties();
+      commonProperties.put(HoodieWriteConfig.TBL_NAME.key(), tableName);
+
       builder.withMetricsConfig(HoodieMetricsConfig.newBuilder()
+          .fromProperties(commonProperties)
           .withReporterType(writeConfig.getMetricsReporterType().toString())
           .withExecutorMetrics(writeConfig.isExecutorMetricsEnabled())
           .on(true).build());

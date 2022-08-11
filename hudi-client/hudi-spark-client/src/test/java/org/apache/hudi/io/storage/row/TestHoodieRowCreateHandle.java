@@ -80,9 +80,11 @@ public class TestHoodieRowCreateHandle extends HoodieClientTestHarness {
   @ValueSource(booleans = { true, false })
   public void testRowCreateHandle(boolean populateMetaFields) throws Exception {
     // init config and table
-    HoodieWriteConfig cfg =
-        SparkDatasetTestUtils.getConfigBuilder(basePath, timelineServicePort).build();
-    HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
+    HoodieWriteConfig config = SparkDatasetTestUtils.getConfigBuilder(basePath, timelineServicePort)
+        .withPopulateMetaFields(populateMetaFields)
+        .build();
+
+    HoodieTable table = HoodieSparkTable.create(config, context, metaClient);
     List<String> fileNames = new ArrayList<>();
     List<String> fileAbsPaths = new ArrayList<>();
 
@@ -95,8 +97,8 @@ public class TestHoodieRowCreateHandle extends HoodieClientTestHarness {
       String fileId = UUID.randomUUID().toString();
       String instantTime = "000";
 
-      HoodieRowCreateHandle handle = new HoodieRowCreateHandle(table, cfg, partitionPath, fileId, instantTime,
-          RANDOM.nextInt(100000), RANDOM.nextLong(), RANDOM.nextLong(), SparkDatasetTestUtils.STRUCT_TYPE, populateMetaFields);
+      HoodieRowCreateHandle handle = new HoodieRowCreateHandle(table, config, partitionPath, fileId, instantTime,
+          RANDOM.nextInt(100000), RANDOM.nextLong(), RANDOM.nextLong(), SparkDatasetTestUtils.STRUCT_TYPE);
       int size = 10 + RANDOM.nextInt(1000);
       // Generate inputs
       Dataset<Row> inputRows = SparkDatasetTestUtils.getRandomRows(sqlContext, size, partitionPath, false);
@@ -133,7 +135,7 @@ public class TestHoodieRowCreateHandle extends HoodieClientTestHarness {
     String instantTime = "000";
 
     HoodieRowCreateHandle handle =
-        new HoodieRowCreateHandle(table, cfg, partitionPath, fileId, instantTime, RANDOM.nextInt(100000), RANDOM.nextLong(), RANDOM.nextLong(), SparkDatasetTestUtils.STRUCT_TYPE, true);
+        new HoodieRowCreateHandle(table, cfg, partitionPath, fileId, instantTime, RANDOM.nextInt(100000), RANDOM.nextLong(), RANDOM.nextLong(), SparkDatasetTestUtils.STRUCT_TYPE);
     int size = 10 + RANDOM.nextInt(1000);
     int totalFailures = 5;
     // Generate first batch of valid rows
@@ -186,7 +188,7 @@ public class TestHoodieRowCreateHandle extends HoodieClientTestHarness {
 
     try {
       HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
-      new HoodieRowCreateHandle(table, cfg, " def", UUID.randomUUID().toString(), "001", RANDOM.nextInt(100000), RANDOM.nextLong(), RANDOM.nextLong(), SparkDatasetTestUtils.STRUCT_TYPE, true);
+      new HoodieRowCreateHandle(table, cfg, " def", UUID.randomUUID().toString(), "001", RANDOM.nextInt(100000), RANDOM.nextLong(), RANDOM.nextLong(), SparkDatasetTestUtils.STRUCT_TYPE);
       fail("Should have thrown exception");
     } catch (HoodieInsertException ioe) {
       // expected without metadata table

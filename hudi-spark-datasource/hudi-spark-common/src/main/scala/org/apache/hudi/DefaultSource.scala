@@ -57,8 +57,7 @@ class DefaultSource extends RelationProvider
       // Enable "passPartitionByAsOptions" to support "write.partitionBy(...)"
       spark.conf.set("spark.sql.legacy.sources.write.passPartitionByAsOptions", "true")
     }
-    // Revisit EMR Spark and EMRFS incompatibilities, for now disable
-    spark.conf.set("spark.sql.dataPrefetch.enabled", "false")
+    // Revisit EMRFS incompatibilities, for now disable
     spark.sparkContext.hadoopConfiguration.set("fs.s3.metadata.cache.expiration.seconds", "0")
   }
 

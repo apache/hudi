@@ -22,6 +22,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieCatalogException;
@@ -86,7 +87,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -539,25 +539,19 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     List<FieldSchema> allColumns = HiveSchemaUtils.createHiveColumns(table.getSchema());
 
     // Table columns and partition keys
-    if (table instanceof CatalogTable) {
-      CatalogTable catalogTable = (CatalogTable) table;
+    CatalogTable catalogTable = (CatalogTable) table;
 
-      if (catalogTable.isPartitioned()) {
-        int partitionKeySize = catalogTable.getPartitionKeys().size();
-        List<FieldSchema> regularColumns =
-            allColumns.subList(0, allColumns.size() - partitionKeySize);
-        List<FieldSchema> partitionColumns =
-            allColumns.subList(
-                allColumns.size() - partitionKeySize, allColumns.size());
+    final List<String> partitionKeys = HoodieCatalogUtil.getPartitionKeys(catalogTable);
+    if (partitionKeys.size() > 0) {
+      Pair<List<FieldSchema>, List<FieldSchema>> splitSchemas = HiveSchemaUtils.splitSchemaByPartitionKeys(allColumns, partitionKeys);
+      List<FieldSchema> regularColumns = splitSchemas.getLeft();
+      List<FieldSchema> partitionColumns = splitSchemas.getRight();
 
-        sd.setCols(regularColumns);
-        hiveTable.setPartitionKeys(partitionColumns);
-      } else {
-        sd.setCols(allColumns);
-        hiveTable.setPartitionKeys(new ArrayList<>());
-      }
+      sd.setCols(regularColumns);
+      hiveTable.setPartitionKeys(partitionColumns);
     } else {
       sd.setCols(allColumns);
+      hiveTable.setPartitionKeys(Collections.emptyList());
     }
 
     HoodieFileFormat baseFileFormat = HoodieFileFormat.PARQUET;
@@ -572,7 +566,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     serdeProperties.put(ConfigUtils.IS_QUERY_AS_RO_TABLE, String.valueOf(!useRealTimeInputFormat));
     serdeProperties.put("serialization.format", "1");
 
-    serdeProperties.putAll(TableOptionProperties.translateFlinkTableProperties2Spark((CatalogTable)table, hiveConf, properties));
+    serdeProperties.putAll(TableOptionProperties.translateFlinkTableProperties2Spark(catalogTable, hiveConf, properties, partitionKeys));
 
     sd.setSerdeInfo(new SerDeInfo(null, serDeClassName, serdeProperties));
 

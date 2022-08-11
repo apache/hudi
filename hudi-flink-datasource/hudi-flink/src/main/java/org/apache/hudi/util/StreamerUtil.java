@@ -21,6 +21,7 @@ package org.apache.hudi.util;
 import org.apache.hudi.client.FlinkTaskContextSupplier;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
+import org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider;
 import org.apache.hudi.common.config.DFSPropertiesConfiguration;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
@@ -43,6 +44,7 @@ import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
+import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.config.HoodieMemoryConfig;
 import org.apache.hudi.config.HoodieStorageConfig;
@@ -88,6 +90,7 @@ import static org.apache.hudi.common.model.HoodieFileFormat.HOODIE_LOG;
 import static org.apache.hudi.common.model.HoodieFileFormat.ORC;
 import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
 import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
+import static org.apache.hudi.common.table.HoodieTableMetaClient.AUXILIARYFOLDER_NAME;
 
 /**
  * Utilities for Flink stream read and write.
@@ -170,7 +173,7 @@ public class StreamerUtil {
             .withMergeAllowDuplicateOnInserts(OptionsResolver.insertClustering(conf))
             .withClusteringConfig(
                 HoodieClusteringConfig.newBuilder()
-                    .withAsyncClustering(conf.getBoolean(FlinkOptions.CLUSTERING_SCHEDULE_ENABLED))
+                    .withAsyncClustering(conf.getBoolean(FlinkOptions.CLUSTERING_ASYNC_ENABLED))
                     .withClusteringPlanStrategyClass(conf.getString(FlinkOptions.CLUSTERING_PLAN_STRATEGY_CLASS))
                     .withClusteringPlanPartitionFilterMode(
                         ClusteringPlanPartitionFilterMode.valueOf(conf.getString(FlinkOptions.CLUSTERING_PLAN_PARTITION_FILTER_MODE_NAME)))
@@ -184,6 +187,7 @@ public class StreamerUtil {
             .withCleanConfig(HoodieCleanConfig.newBuilder()
                 .withAsyncClean(conf.getBoolean(FlinkOptions.CLEAN_ASYNC_ENABLED))
                 .retainCommits(conf.getInteger(FlinkOptions.CLEAN_RETAIN_COMMITS))
+                .cleanerNumHoursRetained(conf.getInteger(FlinkOptions.CLEAN_RETAIN_HOURS))
                 .retainFileVersions(conf.getInteger(FlinkOptions.CLEAN_RETAIN_FILE_VERSIONS))
                 // override and hardcode to 20,
                 // actually Flink cleaning is always with parallelism 1 now
@@ -218,12 +222,14 @@ public class StreamerUtil {
                 .enable(conf.getBoolean(FlinkOptions.METADATA_ENABLED))
                 .withMaxNumDeltaCommitsBeforeCompaction(conf.getInteger(FlinkOptions.METADATA_COMPACTION_DELTA_COMMITS))
                 .build())
-            .withPayloadConfig(HoodiePayloadConfig.newBuilder()
-                .withPayloadClass(conf.getString(FlinkOptions.PAYLOAD_CLASS_NAME))
-                .withPayloadOrderingField(conf.getString(FlinkOptions.PRECOMBINE_FIELD))
-                .withPayloadEventTimeField(conf.getString(FlinkOptions.PRECOMBINE_FIELD))
-                .withPayloadClass(conf.getString(FlinkOptions.PAYLOAD_CLASS_NAME))
+            .withLockConfig(HoodieLockConfig.newBuilder()
+                .withLockProvider(FileSystemBasedLockProvider.class)
+                .withLockWaitTimeInMillis(2000L) // 2s
+                .withFileSystemLockExpire(1) // 1 minute
+                .withClientNumRetries(30)
+                .withFileSystemLockPath(StreamerUtil.getAuxiliaryPath(conf))
                 .build())
+            .withPayloadConfig(getPayloadConfig(conf))
             .withEmbeddedTimelineServerEnabled(enableEmbeddedTimelineService)
             .withEmbeddedTimelineServerReuseEnabled(true) // make write client embedded timeline service singleton
             .withAutoCommit(false)
@@ -231,6 +237,7 @@ public class StreamerUtil {
             .withProps(flinkConf2TypedProperties(conf))
             .withSchema(getSourceSchema(conf).toString());
 
+    // do not configure cleaning strategy as LAZY until multi-writers is supported.
     HoodieWriteConfig writeConfig = builder.build();
     if (loadFsViewStorageConfig) {
       // do not use the builder to give a change for recovering the original fs view storage config
@@ -238,6 +245,18 @@ public class StreamerUtil {
       writeConfig.setViewStorageConfig(viewStorageConfig);
     }
     return writeConfig;
+  }
+
+  /**
+   * Returns the payload config with given configuration.
+   */
+  public static HoodiePayloadConfig getPayloadConfig(Configuration conf) {
+    return HoodiePayloadConfig.newBuilder()
+        .withPayloadClass(conf.getString(FlinkOptions.PAYLOAD_CLASS_NAME))
+        .withPayloadOrderingField(conf.getString(FlinkOptions.PRECOMBINE_FIELD))
+        .withPayloadEventTimeField(conf.getString(FlinkOptions.PRECOMBINE_FIELD))
+        .withPayloadClass(conf.getString(FlinkOptions.PAYLOAD_CLASS_NAME))
+        .build();
   }
 
   /**
@@ -547,5 +566,12 @@ public class StreamerUtil {
     } catch (IOException e) {
       throw new HoodieException("Exception while checking file " + path + " existence", e);
     }
+  }
+
+  /**
+   * Returns the auxiliary path.
+   */
+  public static String getAuxiliaryPath(Configuration conf) {
+    return conf.getString(FlinkOptions.PATH) + Path.SEPARATOR + AUXILIARYFOLDER_NAME;
   }
 }

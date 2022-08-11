@@ -17,7 +17,6 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
-import java.util.function.Supplier
 import org.apache.hudi.HoodieCLIUtils
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
 import org.apache.hudi.common.util.JsonUtils
@@ -26,14 +25,16 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
+import java.util.function.Supplier
+
 class RunCleanProcedure extends BaseProcedure with ProcedureBuilder with Logging {
 
   private val PARAMETERS = Array[ProcedureParameter](
     ProcedureParameter.required(0, "table", DataTypes.StringType, None),
-    ProcedureParameter.optional(1, "skipLocking", DataTypes.BooleanType, false),
-    ProcedureParameter.optional(2, "scheduleInLine", DataTypes.BooleanType, true),
-    ProcedureParameter.optional(3, "cleanPolicy", DataTypes.StringType, None),
-    ProcedureParameter.optional(4, "retainCommits", DataTypes.IntegerType, 10)
+    ProcedureParameter.optional(1, "skip_locking", DataTypes.BooleanType, false),
+    ProcedureParameter.optional(2, "schedule_in_line", DataTypes.BooleanType, true),
+    ProcedureParameter.optional(3, "clean_policy", DataTypes.StringType, None),
+    ProcedureParameter.optional(4, "retain_commits", DataTypes.IntegerType, 10)
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -76,7 +77,7 @@ class RunCleanProcedure extends BaseProcedure with ProcedureBuilder with Logging
     val client = HoodieCLIUtils.createHoodieClientFromPath(sparkSession, basePath, props)
     val hoodieCleanMeta = client.clean(cleanInstantTime, scheduleInLine, skipLocking)
 
-    if (hoodieCleanMeta == null) Seq(Row.empty)
+    if (hoodieCleanMeta == null) Seq.empty
     else Seq(Row(hoodieCleanMeta.getStartCleanTime,
       hoodieCleanMeta.getTimeTakenInMillis,
       hoodieCleanMeta.getTotalFilesDeleted,

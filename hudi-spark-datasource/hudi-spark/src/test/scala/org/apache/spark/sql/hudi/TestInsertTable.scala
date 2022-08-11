@@ -17,13 +17,14 @@
 
 package org.apache.spark.sql.hudi
 
-import org.apache.hudi.DataSourceWriteOptions.{KEYGENERATOR_CLASS_NAME, MOR_TABLE_TYPE_OPT_VAL, PARTITIONPATH_FIELD, PRECOMBINE_FIELD, RECORDKEY_FIELD, TABLE_TYPE}
+import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieDuplicateKeyException
 import org.apache.hudi.keygen.ComplexKeyGenerator
 import org.apache.spark.sql.SaveMode
+import org.apache.spark.sql.internal.SQLConf
 
 import java.io.File
 
@@ -93,6 +94,14 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            | insert into $tableName partition(dt = '2021-01-06')
            | select 20 as price, 2000 as ts, 2 as id, 'a2' as name
               """.stripMargin)
+      // should not mess with the original order after write the out-of-order data.
+      val metaClient = HoodieTableMetaClient.builder()
+        .setBasePath(tmp.getCanonicalPath)
+        .setConf(spark.sessionState.newHadoopConf())
+        .build()
+      val schema = HoodieSqlCommonUtils.getTableSqlSchema(metaClient).get
+      assert(schema.getFieldIndex("id").contains(0))
+      assert(schema.getFieldIndex("price").contains(2))
 
       // Note: Do not write the field alias, the partition field must be placed last.
       spark.sql(
@@ -133,6 +142,14 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            | insert into $tableName partition(dt)
            | select 1 as id, '2021-01-05' as dt, 'a1' as name, 10 as price, 1000 as ts
         """.stripMargin)
+      // should not mess with the original order after write the out-of-order data.
+      val metaClient = HoodieTableMetaClient.builder()
+        .setBasePath(tmp.getCanonicalPath)
+        .setConf(spark.sessionState.newHadoopConf())
+        .build()
+      val schema = HoodieSqlCommonUtils.getTableSqlSchema(metaClient).get
+      assert(schema.getFieldIndex("id").contains(0))
+      assert(schema.getFieldIndex("price").contains(2))
 
       spark.sql(
         s"""
@@ -380,8 +397,8 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         ("string", "'1000'"),
         ("int", 1000),
         ("bigint", 10000),
-        ("timestamp", "'2021-05-20 00:00:00'"),
-        ("date", "'2021-05-20'")
+        ("timestamp", "TIMESTAMP'2021-05-20 00:00:00'"),
+        ("date", "DATE'2021-05-20'")
       )
       typeAndValue.foreach { case (partitionType, partitionValue) =>
         val tableName = generateTableName
@@ -393,8 +410,8 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
   test("Test TimestampType Partition Column With Consistent Logical Timestamp Enabled") {
     withTempDir { tmp =>
       val typeAndValue = Seq(
-        ("timestamp", "'2021-05-20 00:00:00'"),
-        ("date", "'2021-05-20'")
+        ("timestamp", "TIMESTAMP'2021-05-20 00:00:00'"),
+        ("date", "DATE'2021-05-20'")
       )
       typeAndValue.foreach { case (partitionType, partitionValue) =>
         val tableName = generateTableName
@@ -417,11 +434,12 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
          | partitioned by (dt)
          | location '${tmp.getCanonicalPath}/$tableName'
        """.stripMargin)
-    spark.sql(s"insert into $tableName partition(dt = $partitionValue) select 1, 'a1', 10")
+    // NOTE: We have to drop type-literal prefix since Spark doesn't parse type literals appropriately
+    spark.sql(s"insert into $tableName partition(dt = ${dropTypeLiteralPrefix(partitionValue)}) select 1, 'a1', 10")
     spark.sql(s"insert into $tableName select 2, 'a2', 10, $partitionValue")
     checkAnswer(s"select id, name, price, cast(dt as string) from $tableName order by id")(
-      Seq(1, "a1", 10, removeQuotes(partitionValue).toString),
-      Seq(2, "a2", 10, removeQuotes(partitionValue).toString)
+      Seq(1, "a1", 10, extractRawValue(partitionValue).toString),
+      Seq(2, "a2", 10, extractRawValue(partitionValue).toString)
     )
   }
 
@@ -465,14 +483,17 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
          | tblproperties (primaryKey = 'id')
          | partitioned by (dt)
        """.stripMargin)
-    checkException(s"insert into $tableName partition(dt = '2021-06-20')" +
-      s" select 1, 'a1', 10, '2021-06-20'") (
-      "assertion failed: Required select columns count: 4, Current select columns(including static partition column)" +
-        " count: 5，columns: (1,a1,10,2021-06-20,dt)"
+    checkException(s"insert into $tableName partition(dt = '2021-06-20') select 1, 'a1', 10, '2021-06-20'") (
+      "Expected table's schema: " +
+        "[StructField(id,IntegerType,true), StructField(name,StringType,true), StructField(price,DoubleType,true), StructField(dt,StringType,true)], " +
+        "query's output (including static partition values): " +
+        "[StructField(1,IntegerType,false), StructField(a1,StringType,false), StructField(10,IntegerType,false), StructField(2021-06-20,StringType,false), StructField(dt,StringType,true)]"
     )
     checkException(s"insert into $tableName select 1, 'a1', 10")(
-      "assertion failed: Required select columns count: 4, Current select columns(including static partition column)" +
-        " count: 3，columns: (1,a1,10)"
+      "Expected table's schema: " +
+        "[StructField(id,IntegerType,true), StructField(name,StringType,true), StructField(price,DoubleType,true), StructField(dt,StringType,true)], " +
+        "query's output (including static partition values): " +
+        "[StructField(1,IntegerType,false), StructField(a1,StringType,false), StructField(10,IntegerType,false)]"
     )
     spark.sql("set hoodie.sql.bulk.insert.enable = true")
     spark.sql("set hoodie.sql.insert.mode = strict")
