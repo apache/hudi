@@ -19,7 +19,10 @@ package org.apache.spark.sql.catalyst.plans.logical
 
 import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression}
 
-/** TODO scala-doc  */
+/**
+ * TODO scala-doc
+ * TODO support in spark 3.3
+ */
 case class TimeTravelRelation(relation: LogicalPlan,
                               timestamp: Option[Expression],
                               version: Option[String]) extends UnaryNode {
