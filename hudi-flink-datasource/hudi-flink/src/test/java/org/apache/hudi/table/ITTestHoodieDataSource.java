@@ -18,13 +18,8 @@
 
 package org.apache.hudi.table;
 
-import com.google.common.collect.Lists;
-import org.apache.flink.table.api.ValidationException;
 import org.apache.flink.table.types.DataType;
-import org.apache.flink.table.types.logical.LogicalType;
-import org.apache.flink.table.types.logical.LogicalTypeFamily;
 import org.apache.flink.table.types.logical.RowType;
-import org.apache.flink.util.CloseableIterator;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.adapter.TestTableEnvs;
@@ -66,9 +61,9 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -78,14 +73,11 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.flink.table.api.DataTypes.FIELD;
-import static org.apache.flink.table.types.logical.LogicalTypeRoot.INTEGER;
 import static org.apache.hudi.configuration.FlinkOptions.PARTITION_DEFAULT_NAME;
 import static org.apache.hudi.utils.TestConfigurations.catalog;
 import static org.apache.hudi.utils.TestConfigurations.sql;
 import static org.apache.hudi.utils.TestData.assertRowsEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -1430,17 +1422,19 @@ public class ITTestHoodieDataSource extends AbstractTestBase {
     tableEnv.executeSql(createSql);
 
     execInsertSql(tableEnv, "insert into t1 values (1, TIMESTAMP '2022-08-11 10:05:59')");
-    ArrayList<Row> result1 = Lists.newArrayList(tableEnv.sqlQuery("select * from t1").execute().collect());
+    List<Row> result1 = CollectionUtil.iterableToList(() -> tableEnv.sqlQuery("select * from t1").execute().collect());
 
     execInsertSql(tableEnv, "insert into t1 values (2, TIMESTAMP '2022-08-11 11:05:59')");
-    ArrayList<Row> result2 = Lists.newArrayList(tableEnv.sqlQuery("select * from t1").execute().collect());
+    List<Row> result2 = CollectionUtil.iterableToList(() -> tableEnv.sqlQuery("select * from t1").execute().collect());
 
     ObjectPath objectPath = ObjectPath.fromString(tableEnv.getCurrentDatabase() + ".t1");
     String currentCatalog = tableEnv.getCurrentCatalog();
     DataType dataType = tableEnv.getCatalog(currentCatalog).get().getTable(objectPath).getSchema().toRowDataType();
     RowType rowType = (RowType) dataType.getLogicalType();
-    FileIndex fileIndex = FileIndex.instance(new Path(tempFile.getAbsolutePath()), tableEnv.getConfig().getConfiguration(), rowType);
-    List<Map<String, String>> partitions = fileIndex.getPartitions(Lists.newArrayList("ts"), PARTITION_DEFAULT_NAME.defaultValue(), false);
+    FileIndex fileIndex = FileIndex.instance(
+        new Path(tempFile.getAbsolutePath()), tableEnv.getConfig().getConfiguration(), rowType);
+    List<Map<String, String>> partitions =
+        fileIndex.getPartitions(Collections.singletonList("ts"), PARTITION_DEFAULT_NAME.defaultValue(), false);
     assertEquals(1, partitions.size());
     assertEquals("2022-08-11", partitions.get(0).get("ts"));
 
@@ -1448,19 +1442,12 @@ public class ITTestHoodieDataSource extends AbstractTestBase {
     // should have two log files and one parquet file
     assertEquals(3, fileStatuses.length);
     assertEquals(1,
-      Arrays.stream(fileStatuses).filter(file -> file.getPath().getName().endsWith("parquet")).count()
+        Arrays.stream(fileStatuses).filter(file -> file.getPath().getName().endsWith("parquet")).count()
     );
 
     assertRowsEquals(result1, "[+I[1, 2022-08-11T10:05:59]]");
     assertRowsEquals(result2, "[+I[1, 2022-08-11T10:05:59], +I[2, 2022-08-11T11:05:59]]");
   }
-
-  public void sqlRead(String select) {
-    CloseableIterator<Row> collect = streamTableEnv.sqlQuery(select).execute().collect();
-    ArrayList<Row> rows = Lists.newArrayList(collect);
-    rows.forEach(System.out::println);
-  }
-
 
   // -------------------------------------------------------------------------
   //  Utilities
