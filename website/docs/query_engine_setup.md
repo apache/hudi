@@ -13,25 +13,34 @@ If your Spark environment does not have the Hudi jars installed, add `--jars <pa
 and executors. Alternatively, hudi-spark-bundle can also fetched via the `--packages` options (e.g: `--packages org.apache.hudi:hudi-spark-bundle_2.11:0.5.3`).
 
 ## PrestoDB
-PrestoDB is a popular query engine, providing interactive query performance. PrestoDB currently supports snapshot querying on COPY_ON_WRITE tables.
-Both snapshot and read optimized queries are supported on MERGE_ON_READ Hudi tables. Since PrestoDB-Hudi integration has evolved over time, the installation
-instructions for PrestoDB would vary based on versions. Please check the below table for query types supported and installation instructions
+PrestoDB is a popular query engine, providing interactive query performance.
+One can use both Hive or Hudi connector (Presto version 0.275 onwards) for querying Hudi tables.
+Both connectors currently support snapshot querying on COPY_ON_WRITE tables, and
+snapshot and read optimized queries on MERGE_ON_READ Hudi tables. 
+
+Since PrestoDB-Hudi integration has evolved over time, the installation
+instructions for PrestoDB would vary based on versions. 
+Please check the below table for query types supported and installation instructions
 for different versions of PrestoDB.
 
 | **PrestoDB Version** | **Installation description** | **Query types supported** |
 |----------------------|------------------------------|---------------------------|
 | < 0.233              | Requires the `hudi-presto-bundle` jar to be placed into `<presto_install>/plugin/hive-hadoop2/`, across the installation. | Snapshot querying on COW tables. Read optimized querying on MOR tables. |
 | >= 0.233             | No action needed. Hudi (0.5.1-incubating) is a compile time dependency. | Snapshot querying on COW tables. Read optimized querying on MOR tables. |
-| >= 0.240             | No action needed. Hudi 0.5.3 version is a compile time dependency. | Snapshot querying on both COW and MOR tables |
+| >= 0.240             | No action needed. Hudi 0.5.3 version is a compile time dependency. | Snapshot querying on both COW and MOR tables. |
+| >= 0.268             | No action needed. Hudi 0.9.0 version is a compile time dependency. | Snapshot querying on bootstrap tables. |
+| >= 0.272             | No action needed. Hudi 0.10.1 version is a compile time dependency. | File listing optimizations. Improved query performance. |
+| >= 0.275             | No action needed. Hudi 0.11.0 version is a compile time dependency. | All of the above. Native Hudi connector that is on par with Hive connector. |
+
+To learn more about the usage of Hudi connector, please checkout [prestodb documentation](https://prestodb.io/docs/current/connector/hudi.html).
 
 :::note
-We upgraded Hudi version from 0.5.3 to 0.9.0 in Presto 0.265 but that introduced a breaking dependency change in 
-another presto module. See [this issue](https://github.com/prestodb/presto/issues/17164) for more details. Since then, 
-we have [fixed the hudi-presto-bundle](https://github.com/apache/hudi/pull/4551) in version 0.10.1. Now, we need to 
-upgrade Hudi in Presto again. This is being tracked by [HUDI-3010](https://issues.apache.org/jira/browse/HUDI-3010). 
-Our suggestion is to avoid upgrading Presto until the issue is fixed. However, if this is not an option, then the 
-workaround is to download the hudi-presto-bundle jar from our [maven repo](https://mvnrepository.com/artifact/org.apache.hudi/hudi-presto-bundle) 
-and place it in `<presto_install>/plugin/hive-hadoop2/`.
+Incremental queries and point in time queries are not supported either through the Hive connector or Hudi connector.
+However, it is in our roadmap and you can track the development under [HUDI-3210](https://issues.apache.org/jira/browse/HUDI-3210).
+
+There is a known issue ([HUDI-4290](https://issues.apache.org/jira/browse/HUDI-4290)) for a clustered Hudi table. Presto query using version 0.272 or later
+may contain duplicates in results if clustering is enabled. This issue has been fixed in Hudi version 0.12.0 and we need to upgrade `hudi-presto-bundle`
+in presto to version 0.12.0. It is tracked in [HUDI-4605](https://issues.apache.org/jira/browse/HUDI-4605).
 :::
 
 ### Presto Environment
@@ -43,13 +52,21 @@ connector.name=hive-hadoop2
 hive.metastore.uri=thrift://xxx.xxx.xxx.xxx:9083
 hive.config.resources=.../hadoop-2.x/etc/hadoop/core-site.xml,.../hadoop-2.x/etc/hadoop/hdfs-site.xml
 ```
+3. Alternatively, configure hudi catalog in ` /presto-server-0.2xxx/etc/catalog/hudi.properties` as follows:
+
+```properties
+connector.name=hudi
+hive.metastore.uri=thrift://xxx.xxx.xxx.xxx:9083
+hive.config.resources=.../hadoop-2.x/etc/hadoop/core-site.xml,.../hadoop-2.x/etc/hadoop/hdfs-site.xml
+```
 
 ### Query
 Beginning query by connecting hive metastore with presto client. The presto client connection command is as follows:
 
 ```bash
-# The presto client connection command
-./presto --server xxx.xxx.xxx.xxx:9999 --catalog hive --schema default
+# The presto client connection command where <catalog_name> is either hudi or hive,
+# and <schema_name> is the database name used in hive sync.
+./presto --server xxx.xxx.xxx.xxx:9999 --catalog <catalog_name> --schema <schema_name>
 ```
 
 ## Trino
