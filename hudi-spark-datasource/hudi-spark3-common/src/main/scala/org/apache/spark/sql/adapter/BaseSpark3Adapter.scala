@@ -19,7 +19,6 @@ package org.apache.spark.sql.adapter
 
 import org.apache.hudi.Spark3RowSerDe
 import org.apache.hudi.client.utils.SparkRowSerDe
-import org.apache.spark.SPARK_VERSION
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.avro.{HoodieAvroSchemaConverters, HoodieSparkAvroSchemaConverters}
 import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
@@ -80,22 +79,6 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
         }
       case DataSourceV2Relation(table: Table, _, _, _, _) => isHoodieTable(table.properties())
       case _=> false
-    }
-  }
-
-  override def createExtendedSparkParser: Option[(SparkSession, ParserInterface) => ParserInterface] = {
-    // since spark3.2.1 support datasourceV2, so we need to a new SqlParser to deal DDL statment
-    if (SPARK_VERSION.startsWith("3.1")) {
-      val loadClassName = "org.apache.spark.sql.parser.HoodieSpark312ExtendedSqlParser"
-      Some {
-        (spark: SparkSession, delegate: ParserInterface) => {
-          val clazz = Class.forName(loadClassName, true, Thread.currentThread().getContextClassLoader)
-          val ctor = clazz.getConstructors.head
-          ctor.newInstance(spark, delegate).asInstanceOf[ParserInterface]
-        }
-      }
-    } else {
-      None
     }
   }
 

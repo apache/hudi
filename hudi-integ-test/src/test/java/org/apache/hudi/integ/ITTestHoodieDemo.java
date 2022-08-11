@@ -92,7 +92,8 @@ public class ITTestHoodieDemo extends ITTestBase {
   private HoodieFileFormat baseFileFormat;
 
   private static String HIVE_SYNC_CMD_FMT =
-      " --enable-hive-sync --hoodie-conf hoodie.datasource.hive_sync.jdbcurl=jdbc:hive2://hiveserver:10000 "
+      " --enable-hive-sync --hoodie-conf hoodie.datasource.hive_sync.jdbcurl=jdbc:hive2://hiveserver:10000/ "
+          + " --hoodie-conf hoodie.datasource.hive_sync.partition_extractor_class=org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor "
           + " --hoodie-conf hoodie.datasource.hive_sync.username=hive "
           + " --hoodie-conf hoodie.datasource.hive_sync.password=hive "
           + " --hoodie-conf hoodie.datasource.hive_sync.partition_fields=%s "
@@ -214,6 +215,7 @@ public class ITTestHoodieDemo extends ITTestBase {
             + " --user hive"
             + " --pass hive"
             + " --jdbc-url jdbc:hive2://hiveserver:10000"
+            + " --partition-value-extractor org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor"
             + " --partitioned-by dt",
         ("spark-submit"
             + " --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer " + HUDI_UTILITIES_BUNDLE

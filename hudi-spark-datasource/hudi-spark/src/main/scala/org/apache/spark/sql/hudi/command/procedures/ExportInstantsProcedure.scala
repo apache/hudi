@@ -20,6 +20,7 @@ package org.apache.spark.sql.hudi.command.procedures
 import org.apache.avro.generic.GenericRecord
 import org.apache.avro.specific.SpecificData
 import org.apache.hadoop.fs.{FileStatus, FileSystem, Path}
+import org.apache.hudi.HoodieCLIUtils
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.avro.model.HoodieArchivedMetaEntry
 import org.apache.hudi.common.fs.FSUtils
@@ -72,7 +73,7 @@ class ExportInstantsProcedure extends BaseProcedure with ProcedureBuilder with L
     val actions: String = getArgValueOrDefault(args, PARAMETERS(3)).get.asInstanceOf[String]
     val desc = getArgValueOrDefault(args, PARAMETERS(4)).get.asInstanceOf[Boolean]
 
-    val hoodieCatalogTable = HoodieCatalogTable(sparkSession, new TableIdentifier(table))
+    val hoodieCatalogTable = HoodieCLIUtils.getHoodieCatalogTable(sparkSession, table)
     val basePath = hoodieCatalogTable.tableLocation
     val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
     val archivePath = new Path(basePath + "/.hoodie/.commits_.archive*")

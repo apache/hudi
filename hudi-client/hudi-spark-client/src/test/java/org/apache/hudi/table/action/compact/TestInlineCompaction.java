@@ -20,15 +20,18 @@ package org.apache.hudi.table.action.compact;
 
 import org.apache.hudi.client.HoodieReadClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -50,6 +53,18 @@ public class TestInlineCompaction extends CompactionTestBase {
             .withMaxDeltaSecondsBeforeCompaction(maxDeltaTime)
             .withInlineCompactionTriggerStrategy(inlineCompactionType).build())
         .build();
+  }
+
+  private HoodieWriteConfig getConfigDisableComapction(int maxDeltaCommits, int maxDeltaTime, CompactionTriggerStrategy inlineCompactionType) {
+    return getConfigBuilder(false)
+          .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
+          .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+                .withInlineCompaction(false)
+                .withScheduleInlineCompaction(false)
+                .withMaxNumDeltaCommitsBeforeCompaction(maxDeltaCommits)
+                .withMaxDeltaSecondsBeforeCompaction(maxDeltaTime)
+                .withInlineCompactionTriggerStrategy(inlineCompactionType).build())
+          .build();
   }
 
   @Test
@@ -90,6 +105,65 @@ public class TestInlineCompaction extends CompactionTestBase {
       assertEquals(HoodieTimeline.COMMIT_ACTION, metaClient.getActiveTimeline().lastInstant().get().getAction());
       String compactionTime = metaClient.getActiveTimeline().lastInstant().get().getTimestamp();
       assertFalse(WriteMarkersFactory.get(cfg.getMarkersType(), HoodieSparkTable.create(cfg, context), compactionTime).doesMarkerDirExist());
+    }
+  }
+
+  @Test
+  public void testSuccessfulCompactionBasedOnNumAfterCompactionRequest() throws Exception {
+    // Given: make 4 commits
+    HoodieWriteConfig cfg = getConfigDisableComapction(4, 60, CompactionTriggerStrategy.NUM_COMMITS_AFTER_LAST_REQUEST);
+    // turn off compaction table service to mock compaction service is down or very slow
+    List<String> instants = IntStream.range(0, 4).mapToObj(i -> HoodieActiveTimeline.createNewInstantTime()).collect(Collectors.toList());
+
+    try (SparkRDDWriteClient<?> writeClient = getHoodieWriteClient(cfg)) {
+      List<HoodieRecord> records = dataGen.generateInserts(instants.get(0), 100);
+      HoodieReadClient readClient = getHoodieReadClient(cfg.getBasePath());
+
+      // step 1: create and complete 4 delta commit, then create 1 compaction request after this
+      runNextDeltaCommits(writeClient, readClient, instants, records, cfg, true, new ArrayList<>());
+
+      String requestInstant = HoodieActiveTimeline.createNewInstantTime();
+      scheduleCompaction(requestInstant, writeClient, cfg);
+
+      metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(cfg.getBasePath()).build();
+      assertEquals(metaClient.getActiveTimeline().getInstants()
+            .filter(hoodieInstant -> hoodieInstant.getAction().equals(HoodieTimeline.COMPACTION_ACTION)
+                  && hoodieInstant.getState() == HoodieInstant.State.REQUESTED).count(), 1);
+
+      // step 2: try to create another, but this one should fail because the NUM_COMMITS_AFTER_LAST_REQUEST strategy ,
+      // and will throw a AssertionError due to scheduleCompaction will check if the last instant is a compaction request
+      requestInstant = HoodieActiveTimeline.createNewInstantTime();
+      try {
+        scheduleCompaction(requestInstant, writeClient, cfg);
+        Assertions.fail();
+      } catch (AssertionError error) {
+        //should be here
+      }
+
+      // step 3: compelete another 4 delta commit should be 2 compaction request after this
+      instants = IntStream.range(0, 4).mapToObj(i -> HoodieActiveTimeline.createNewInstantTime()).collect(Collectors.toList());
+      records = dataGen.generateInsertsForPartition(instants.get(0), 100, "2022/03/15");
+      for (String instant : instants) {
+        createNextDeltaCommit(instant, records, writeClient, metaClient, cfg, false);
+      }
+      // runNextDeltaCommits(writeClient, readClient, instants, records, cfg, true, gotPendingCompactionInstants);
+      requestInstant = HoodieActiveTimeline.createNewInstantTime();
+      scheduleCompaction(requestInstant, writeClient, cfg);
+
+      // step 4: restore the table service, complete the last commit, and this commit will trigger all compaction requests
+      cfg = getConfigForInlineCompaction(4, 60, CompactionTriggerStrategy.NUM_COMMITS_AFTER_LAST_REQUEST);
+      try (SparkRDDWriteClient<?> newWriteClient = getHoodieWriteClient(cfg)) {
+        String finalInstant = HoodieActiveTimeline.createNewInstantTime();
+        createNextDeltaCommit(finalInstant, dataGen.generateUpdates(finalInstant, 100), newWriteClient, metaClient, cfg, false);
+      }
+
+      metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(cfg.getBasePath()).build();
+      // step 5: there should be only 2 .commit, and no pending compaction.
+      // the last instant should be delta commit since the compaction request is earlier.
+      assertEquals(metaClient.getActiveTimeline().getCommitsTimeline().filter(instant -> instant.getAction().equals(HoodieTimeline.COMMIT_ACTION))
+            .countInstants(), 2);
+      assertEquals(metaClient.getActiveTimeline().getCommitsTimeline().filterPendingCompactionTimeline().countInstants(), 0);
+      assertEquals(HoodieTimeline.DELTA_COMMIT_ACTION, metaClient.getActiveTimeline().lastInstant().get().getAction());
     }
   }
 

@@ -480,6 +480,13 @@ public class HoodieWriteConfig extends HoodieConfig {
       .sinceVersion("0.11.0")
       .withDocumentation("Auto adjust lock configurations when metadata table is enabled and for async table services.");
 
+  public static final ConfigProperty<Boolean> SKIP_DEFAULT_PARTITION_VALIDATION = ConfigProperty
+      .key("hoodie.skip.default.partition.validation")
+      .defaultValue(false)
+      .sinceVersion("0.12.0")
+      .withDocumentation("When table is upgraded from pre 0.12 to 0.12, we check for \"default\" partition and fail if found one. "
+          + "Users are expected to rewrite the data in those partitions. Enabling this config will bypass this validation");
+
   private ConsistencyGuardConfig consistencyGuardConfig;
   private FileSystemRetryConfig fileSystemRetryConfig;
 
@@ -1553,6 +1560,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBooleanOrDefault(HoodieHBaseIndexConfig.UPDATE_PARTITION_PATH_ENABLE);
   }
 
+  public int getHBaseIndexRegionCount() {
+    return getInt(HoodieHBaseIndexConfig.BUCKET_NUMBER);
+  }
+
   public int getBloomIndexParallelism() {
     return getInt(HoodieIndexConfig.BLOOM_INDEX_PARALLELISM);
   }
@@ -1675,6 +1686,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public String parquetOutputTimestampType() {
     return getString(HoodieStorageConfig.PARQUET_OUTPUT_TIMESTAMP_TYPE);
+  }
+
+  public String parquetFieldIdWriteEnabled() {
+    return getString(HoodieStorageConfig.PARQUET_FIELD_ID_WRITE_ENABLED);
   }
 
   public Option<HoodieLogBlock.HoodieLogBlockType> getLogDataBlockFormat() {
@@ -2028,6 +2043,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public WriteConcurrencyMode getWriteConcurrencyMode() {
     return WriteConcurrencyMode.fromValue(getString(WRITE_CONCURRENCY_MODE));
+  }
+
+  // misc configs
+  public Boolean doSkipDefaultPartitionValidation() {
+    return getBoolean(SKIP_DEFAULT_PARTITION_VALIDATION);
   }
 
   /**
@@ -2506,6 +2526,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withAutoAdjustLockConfigs(boolean autoAdjustLockConfigs) {
       writeConfig.setValue(AUTO_ADJUST_LOCK_CONFIGS, String.valueOf(autoAdjustLockConfigs));
+      return this;
+    }
+
+    public Builder doSkipDefaultPartitionValidation(boolean skipDefaultPartitionValidation) {
+      writeConfig.setValue(SKIP_DEFAULT_PARTITION_VALIDATION, String.valueOf(skipDefaultPartitionValidation));
       return this;
     }
 

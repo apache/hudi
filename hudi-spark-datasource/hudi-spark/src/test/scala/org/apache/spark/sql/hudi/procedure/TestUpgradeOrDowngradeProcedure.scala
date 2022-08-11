@@ -21,11 +21,10 @@ import org.apache.hadoop.fs.Path
 import org.apache.hudi.common.config.HoodieConfig
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion}
 import org.apache.spark.api.java.JavaSparkContext
-import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase
 
 import java.io.IOException
 
-class TestUpgradeOrDowngradeProcedure extends HoodieSparkSqlTestBase {
+class TestUpgradeOrDowngradeProcedure extends HoodieSparkProcedureTestBase {
 
   test("Test Call downgrade_table and upgrade_table Procedure") {
     withTempDir { tmp =>
@@ -56,10 +55,10 @@ class TestUpgradeOrDowngradeProcedure extends HoodieSparkSqlTestBase {
         .build
 
       // verify hoodie.table.version of the original table
-      assertResult(HoodieTableVersion.FOUR.versionCode) {
+      assertResult(HoodieTableVersion.FIVE.versionCode) {
         metaClient.getTableConfig.getTableVersion.versionCode()
       }
-      assertTableVersionFromPropertyFile(metaClient, HoodieTableVersion.FOUR.versionCode)
+      assertTableVersionFromPropertyFile(metaClient, HoodieTableVersion.FIVE.versionCode)
 
       // downgrade table to ZERO
       checkAnswer(s"""call downgrade_table(table => '$tableName', to_version => 'ZERO')""")(Seq(true))

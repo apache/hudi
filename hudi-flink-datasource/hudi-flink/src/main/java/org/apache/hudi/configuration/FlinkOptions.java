@@ -104,8 +104,8 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<Boolean> METADATA_ENABLED = ConfigOptions
       .key("metadata.enabled")
       .booleanType()
-      .defaultValue(true)
-      .withDescription("Enable the internal metadata table which serves table metadata like level file listings, default enabled");
+      .defaultValue(false)
+      .withDescription("Enable the internal metadata table which serves table metadata like level file listings, default disabled");
 
   public static final ConfigOption<Integer> METADATA_COMPACTION_DELTA_COMMITS = ConfigOptions
       .key("metadata.compaction.delta_commits")
@@ -578,6 +578,14 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(30)// default 30 commits
       .withDescription("Number of commits to retain. So data will be retained for num_of_commits * time_between_commits (scheduled).\n"
           + "This also directly translates into how much you can incrementally pull on this table, default 30");
+
+  public static final ConfigOption<Integer> CLEAN_RETAIN_HOURS = ConfigOptions
+          .key("clean.retain_hours")
+          .intType()
+          .defaultValue(24)// default 24 hours
+          .withDescription("Number of hours for which commits need to be retained. This config provides a more flexible option as"
+                  + "compared to number of commits retained for cleaning service. Setting this property ensures all the files, but the latest in a file group,"
+                  + " corresponding to commits with commit times older than the configured number of hours to be retained are cleaned.");
 
   public static final ConfigOption<Integer> CLEAN_RETAIN_FILE_VERSIONS = ConfigOptions
       .key("clean.retain_file_versions")

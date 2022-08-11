@@ -42,7 +42,7 @@ import org.apache.flink.table.api.EnvironmentSettings;
 import org.apache.flink.table.api.TableEnvironment;
 import org.apache.flink.table.api.config.ExecutionConfigOptions;
 import org.apache.flink.table.api.internal.TableEnvironmentImpl;
-import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -166,7 +166,6 @@ public class ITTestHoodieFlinkCompactor {
     TestData.checkWrittenDataCOW(tempFile, EXPECTED1);
   }
 
-  @Disabled
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testHoodieFlinkCompactorService(boolean enableChangelog) throws Exception {
@@ -201,14 +200,13 @@ public class ITTestHoodieFlinkCompactor {
     asyncCompactionService.start(null);
 
     // wait for the asynchronous commit to finish
-    TimeUnit.SECONDS.sleep(5);
+    TimeUnit.SECONDS.sleep(10);
 
     asyncCompactionService.shutDown();
 
     TestData.checkWrittenDataCOW(tempFile, EXPECTED2);
   }
 
-  @Disabled
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testHoodieFlinkCompactorWithPlanSelectStrategy(boolean enableChangelog) throws Exception {
@@ -218,7 +216,6 @@ public class ITTestHoodieFlinkCompactor {
     tableEnv.getConfig().getConfiguration()
         .setInteger(ExecutionConfigOptions.TABLE_EXEC_RESOURCE_DEFAULT_PARALLELISM, 1);
     Map<String, String> options = new HashMap<>();
-    options.put(FlinkOptions.COMPACTION_SCHEDULE_ENABLED.key(), "false");
     options.put(FlinkOptions.COMPACTION_ASYNC_ENABLED.key(), "false");
     options.put(FlinkOptions.PATH.key(), tempFile.getAbsolutePath());
     options.put(FlinkOptions.TABLE_TYPE.key(), "MERGE_ON_READ");
@@ -226,9 +223,6 @@ public class ITTestHoodieFlinkCompactor {
     String hoodieTableDDL = TestConfigurations.getCreateHoodieTableDDL("t1", options);
     tableEnv.executeSql(hoodieTableDDL);
     tableEnv.executeSql(TestSQL.INSERT_T1).await();
-
-    // wait for the asynchronous commit to finish
-    TimeUnit.SECONDS.sleep(3);
 
     StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
     FlinkCompactionConfig cfg = new FlinkCompactionConfig();
@@ -253,9 +247,13 @@ public class ITTestHoodieFlinkCompactor {
         + "('id13','Jenny',72,TIMESTAMP '1970-01-01 00:00:10','par5')";
     tableEnv.executeSql(insertT1ForNewPartition).await();
 
-    // wait for the asynchronous commit to finish
-    TimeUnit.SECONDS.sleep(3);
+    writeClient.close();
+    // re-create the write client/fs view server
+    // or there is low probability that connection refused occurs then
+    // the reader metadata view is not complete
+    writeClient = StreamerUtil.createWriteClient(conf);
 
+    metaClient.reloadActiveTimeline();
     compactionInstantTimeList.add(scheduleCompactionPlan(metaClient, writeClient));
 
     HoodieFlinkTable<?> table = writeClient.getHoodieTable();
@@ -289,6 +287,23 @@ public class ITTestHoodieFlinkCompactor {
     env.execute("flink_hudi_compaction");
     writeClient.close();
     TestData.checkWrittenDataCOW(tempFile, EXPECTED3);
+  }
+
+  @Test
+  public void testCompactionInBatchExecutionMode() throws Exception {
+    EnvironmentSettings settings = EnvironmentSettings.newInstance().inBatchMode().build();
+    TableEnvironment tableEnv = TableEnvironmentImpl.create(settings);
+    tableEnv.getConfig().getConfiguration()
+            .setInteger(ExecutionConfigOptions.TABLE_EXEC_RESOURCE_DEFAULT_PARALLELISM, 1);
+    Map<String, String> options = new HashMap<>();
+    options.put(FlinkOptions.COMPACTION_DELTA_COMMITS.key(), "2");
+    options.put(FlinkOptions.PATH.key(), tempFile.getAbsolutePath());
+    options.put(FlinkOptions.TABLE_TYPE.key(), "MERGE_ON_READ");
+    String hoodieTableDDL = TestConfigurations.getCreateHoodieTableDDL("t1", options);
+    tableEnv.executeSql(hoodieTableDDL);
+    tableEnv.executeSql(TestSQL.INSERT_T1).await();
+    tableEnv.executeSql(TestSQL.UPDATE_INSERT_T1).await();
+    TestData.checkWrittenDataCOW(tempFile, EXPECTED2);
   }
 
   private String scheduleCompactionPlan(HoodieTableMetaClient metaClient, HoodieFlinkWriteClient<?> writeClient) {

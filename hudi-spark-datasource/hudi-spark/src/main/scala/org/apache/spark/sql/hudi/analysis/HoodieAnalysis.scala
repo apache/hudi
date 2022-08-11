@@ -44,15 +44,24 @@ import scala.collection.mutable.ListBuffer
 object HoodieAnalysis {
   type RuleBuilder = SparkSession => Rule[LogicalPlan]
 
-  def customOptimizerRules: Seq[RuleBuilder] =
+  def customOptimizerRules: Seq[RuleBuilder] = {
     if (HoodieSparkUtils.gteqSpark3_1) {
-      val nestedSchemaPruningClass = "org.apache.spark.sql.execution.datasources.NestedSchemaPruning"
-      val nestedSchemaPruningRule = ReflectionUtils.loadClass(nestedSchemaPruningClass).asInstanceOf[Rule[LogicalPlan]]
+      val nestedSchemaPruningClass =
+        if (HoodieSparkUtils.gteqSpark3_3) {
+          "org.apache.spark.sql.execution.datasources.Spark33NestedSchemaPruning"
+        } else if (HoodieSparkUtils.gteqSpark3_2) {
+          "org.apache.spark.sql.execution.datasources.Spark32NestedSchemaPruning"
+        } else {
+          // spark 3.1
+          "org.apache.spark.sql.execution.datasources.Spark31NestedSchemaPruning"
+        }
 
+      val nestedSchemaPruningRule = ReflectionUtils.loadClass(nestedSchemaPruningClass).asInstanceOf[Rule[LogicalPlan]]
       Seq(_ => nestedSchemaPruningRule)
     } else {
       Seq.empty
     }
+  }
 
   def customResolutionRules: Seq[RuleBuilder] = {
     val rules: ListBuffer[RuleBuilder] = ListBuffer(
@@ -74,18 +83,21 @@ object HoodieAnalysis {
       val spark3ResolveReferences: RuleBuilder =
         session => ReflectionUtils.loadClass(spark3ResolveReferencesClass, session).asInstanceOf[Rule[LogicalPlan]]
 
-      val spark32ResolveAlterTableCommandsClass = "org.apache.spark.sql.hudi.ResolveHudiAlterTableCommandSpark32"
-      val spark32ResolveAlterTableCommands: RuleBuilder =
-        session => ReflectionUtils.loadClass(spark32ResolveAlterTableCommandsClass, session).asInstanceOf[Rule[LogicalPlan]]
+      val resolveAlterTableCommandsClass =
+        if (HoodieSparkUtils.gteqSpark3_3)
+          "org.apache.spark.sql.hudi.Spark33ResolveHudiAlterTableCommand"
+        else "org.apache.spark.sql.hudi.Spark32ResolveHudiAlterTableCommand"
+      val resolveAlterTableCommands: RuleBuilder =
+        session => ReflectionUtils.loadClass(resolveAlterTableCommandsClass, session).asInstanceOf[Rule[LogicalPlan]]
 
       // NOTE: PLEASE READ CAREFULLY
       //
       // It's critical for this rules to follow in this order, so that DataSource V2 to V1 fallback
       // is performed prior to other rules being evaluated
-      rules ++= Seq(dataSourceV2ToV1Fallback, spark3Analysis, spark3ResolveReferences, spark32ResolveAlterTableCommands)
+      rules ++= Seq(dataSourceV2ToV1Fallback, spark3Analysis, spark3ResolveReferences, resolveAlterTableCommands)
 
     } else if (HoodieSparkUtils.gteqSpark3_1) {
-      val spark31ResolveAlterTableCommandsClass = "org.apache.spark.sql.hudi.ResolveHudiAlterTableCommand312"
+      val spark31ResolveAlterTableCommandsClass = "org.apache.spark.sql.hudi.Spark312ResolveHudiAlterTableCommand"
       val spark31ResolveAlterTableCommands: RuleBuilder =
         session => ReflectionUtils.loadClass(spark31ResolveAlterTableCommandsClass, session).asInstanceOf[Rule[LogicalPlan]]
 
@@ -421,12 +433,10 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
       UpdateTable(table, resolvedAssignments, resolvedCondition)
 
     // Resolve Delete Table
-    case DeleteFromTable(table, condition)
+    case dft @ DeleteFromTable(table, condition)
       if sparkAdapter.isHoodieTable(table, sparkSession) && table.resolved =>
-      // Resolve condition
-      val resolvedCondition = condition.map(resolveExpressionFrom(table)(_))
-      // Return the resolved DeleteTable
-      DeleteFromTable(table, resolvedCondition)
+      val resolveExpression = resolveExpressionFrom(table, None)(_)
+      sparkAdapter.resolveDeleteFromTable(dft, resolveExpression)
 
     // Append the meta field to the insert query to walk through the validate for the
     // number of insert fields with the number of the target table fields.

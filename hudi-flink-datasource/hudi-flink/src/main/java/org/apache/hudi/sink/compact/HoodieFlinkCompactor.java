@@ -173,6 +173,8 @@ public class HoodieFlinkCompactor {
       // set table schema
       CompactionUtil.setAvroSchema(conf, metaClient);
 
+      CompactionUtil.setPreCombineField(conf, metaClient);
+
       // infer changelog mode
       CompactionUtil.inferChangelogMode(conf, metaClient);
 

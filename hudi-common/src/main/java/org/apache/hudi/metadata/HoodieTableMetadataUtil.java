@@ -325,16 +325,13 @@ public class HoodieTableMetadataUtil {
                           return map;
                         }
 
-                        int offset = partition.equals(NON_PARTITIONED_NAME)
-                            ? (pathWithPartition.startsWith("/") ? 1 : 0)
-                            : partition.length() + 1;
-                        String filename = pathWithPartition.substring(offset);
+                        String fileName = FSUtils.getFileName(pathWithPartition, partitionStatName);
 
                         // Since write-stats are coming in no particular order, if the same
                         // file have previously been appended to w/in the txn, we simply pick max
                         // of the sizes as reported after every write, since file-sizes are
                         // monotonically increasing (ie file-size never goes down, unless deleted)
-                        map.merge(filename, stat.getFileSizeInBytes(), Math::max);
+                        map.merge(fileName, stat.getFileSizeInBytes(), Math::max);
 
                         return map;
                       },
@@ -410,12 +407,7 @@ public class HoodieTableMetadataUtil {
         return Collections.emptyListIterator();
       }
 
-      // For partitioned table, "partition" contains the relative partition path;
-      // for non-partitioned table, "partition" is empty
-      int offset = StringUtils.isNullOrEmpty(partition)
-          ? (pathWithPartition.startsWith("/") ? 1 : 0) : partition.length() + 1;
-
-      final String fileName = pathWithPartition.substring(offset);
+      String fileName = FSUtils.getFileName(pathWithPartition, partition);
       if (!FSUtils.isBaseFile(new Path(fileName))) {
         return Collections.emptyListIterator();
       }
@@ -1162,13 +1154,8 @@ public class HoodieTableMetadataUtil {
                                                             HoodieTableMetaClient datasetMetaClient,
                                                             List<String> columnsToIndex,
                                                             boolean isDeleted) {
-    String partitionName = getPartitionIdentifier(partitionPath);
-    // NOTE: We have to chop leading "/" to make sure Hadoop does not treat it like
-    //       absolute path
     String filePartitionPath = filePath.startsWith("/") ? filePath.substring(1) : filePath;
-    String fileName = partitionName.equals(NON_PARTITIONED_NAME)
-        ? filePartitionPath
-        : filePartitionPath.substring(partitionName.length() + 1);
+    String fileName = FSUtils.getFileName(filePath, partitionPath);
 
     if (isDeleted) {
       // TODO we should delete records instead of stubbing them
@@ -1336,6 +1323,8 @@ public class HoodieTableMetadataUtil {
         return (Long) val;
 
       case STRING:
+        // unpack the avro Utf8 if possible
+        return val.toString();
       case FLOAT:
       case DOUBLE:
       case BOOLEAN:

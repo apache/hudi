@@ -29,7 +29,7 @@
   <groupId>org.apache.hudi</groupId>
   <artifactId>hudi</artifactId>
   <packaging>pom</packaging>
-  <version>0.12.0-SNAPSHOT</version>
+  <version>0.13.0-SNAPSHOT</version>
   <description>Apache Hudi brings stream style processing on big data</description>
   <url>https://github.com/apache/hudi</url>
   <name>Hudi</name>
@@ -113,6 +113,8 @@
     <hadoop.version>2.10.1</hadoop.version>
     <hive.groupid>org.apache.hive</hive.groupid>
     <hive.version>2.3.1</hive.version>
+    <presto.version>0.273</presto.version>
+    <trino.version>390</trino.version>
     <hive.exec.classifier>core</hive.exec.classifier>
     <metrics.version>4.1.1</metrics.version>
     <orc.version>1.6.0</orc.version>
@@ -121,7 +123,7 @@
     <http.version>4.4.1</http.version>
     <spark.version>${spark2.version}</spark.version>
     <spark2.version>2.4.4</spark2.version>
-    <spark3.version>3.2.1</spark3.version>
+    <spark3.version>3.3.0</spark3.version>
     <sparkbundle.version></sparkbundle.version>
     <flink1.15.version>1.15.1</flink1.15.version>
     <flink1.14.version>1.14.5</flink1.14.version>
@@ -142,6 +144,7 @@
     <flink.hadoop.compatibility.artifactId>flink-hadoop-compatibility_${scala.binary.version}</flink.hadoop.compatibility.artifactId>
     <spark31.version>3.1.3</spark31.version>
     <spark32.version>3.2.1</spark32.version>
+    <spark33.version>3.3.0</spark33.version>
     <hudi.spark.module>hudi-spark2</hudi.spark.module>
     <hudi.spark.common.module>hudi-spark2-common</hudi.spark.common.module>
     <avro.version>1.8.2</avro.version>
@@ -1257,6 +1260,18 @@
         </exclusions>
       </dependency>
 
+      <dependency>
+        <groupId>com.facebook.presto</groupId>
+        <artifactId>presto-jdbc</artifactId>
+        <version>${presto.version}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>io.trino</groupId>
+        <artifactId>trino-jdbc</artifactId>
+        <version>${trino.version}</version>
+      </dependency>
+
       <!-- Zookeeper -->
       <dependency>
         <groupId>org.apache.curator</groupId>
@@ -1840,23 +1855,24 @@
       </activation>
     </profile>
 
-    <!-- spark3 is an alias of spark3.2 -->
+    <!-- spark3 is an alias of spark3.3 -->
     <profile>
       <id>spark3</id>
       <properties>
-        <spark3.version>3.2.1</spark3.version>
+        <spark3.version>3.3.0</spark3.version>
         <spark.version>${spark3.version}</spark.version>
         <sparkbundle.version>3</sparkbundle.version>
         <scala.version>${scala12.version}</scala.version>
         <scala.binary.version>2.12</scala.binary.version>
-        <hudi.spark.module>hudi-spark3</hudi.spark.module>
+        <hudi.spark.module>hudi-spark3.3.x</hudi.spark.module>
         <hudi.spark.common.module>hudi-spark3-common</hudi.spark.common.module>
         <scalatest.version>${scalatest.spark3.version}</scalatest.version>
         <kafka.version>${kafka.spark3.version}</kafka.version>
         <parquet.version>1.12.2</parquet.version>
-        <avro.version>1.10.2</avro.version>
-        <orc.version>1.6.12</orc.version>
+        <avro.version>1.11.0</avro.version>
+        <orc.version>1.7.4</orc.version>
         <antlr.version>4.8</antlr.version>
+        <fasterxml.spark3.version>2.13.3</fasterxml.spark3.version>
         <fasterxml.version>${fasterxml.spark3.version}</fasterxml.version>
         <fasterxml.jackson.databind.version>${fasterxml.spark3.version}</fasterxml.jackson.databind.version>
         <fasterxml.jackson.module.scala.version>${fasterxml.spark3.version}</fasterxml.jackson.module.scala.version>
@@ -1866,7 +1882,7 @@
         <skipITs>true</skipITs>
       </properties>
       <modules>
-        <module>hudi-spark-datasource/hudi-spark3</module>
+        <module>hudi-spark-datasource/hudi-spark3.3.x</module>
         <module>hudi-spark-datasource/hudi-spark3-common</module>
       </modules>
       <activation>
@@ -1916,7 +1932,7 @@
         <sparkbundle.version>3.2</sparkbundle.version>
         <scala.version>${scala12.version}</scala.version>
         <scala.binary.version>2.12</scala.binary.version>
-        <hudi.spark.module>hudi-spark3</hudi.spark.module>
+        <hudi.spark.module>hudi-spark3.2.x</hudi.spark.module>
         <hudi.spark.common.module>hudi-spark3-common</hudi.spark.common.module>
         <scalatest.version>${scalatest.spark3.version}</scalatest.version>
         <kafka.version>${kafka.spark3.version}</kafka.version>
@@ -1933,12 +1949,48 @@
         <skipITs>true</skipITs>
       </properties>
       <modules>
-        <module>hudi-spark-datasource/hudi-spark3</module>
+        <module>hudi-spark-datasource/hudi-spark3.2.x</module>
         <module>hudi-spark-datasource/hudi-spark3-common</module>
       </modules>
       <activation>
         <property>
           <name>spark3.2</name>
+        </property>
+      </activation>
+    </profile>
+
+    <profile>
+      <id>spark3.3</id>
+      <properties>
+        <spark3.version>3.3.0</spark3.version>
+        <spark.version>${spark3.version}</spark.version>
+        <sparkbundle.version>3.3</sparkbundle.version>
+        <scala.version>${scala12.version}</scala.version>
+        <scala.binary.version>2.12</scala.binary.version>
+        <hudi.spark.module>hudi-spark3.3.x</hudi.spark.module>
+        <hudi.spark.common.module>hudi-spark3-common</hudi.spark.common.module>
+        <scalatest.version>${scalatest.spark3.version}</scalatest.version>
+        <kafka.version>${kafka.spark3.version}</kafka.version>
+        <parquet.version>1.12.2</parquet.version>
+        <avro.version>1.11.0</avro.version>
+        <orc.version>1.7.4</orc.version>
+        <antlr.version>4.8</antlr.version>
+        <fasterxml.spark3.version>2.13.3</fasterxml.spark3.version>
+        <fasterxml.version>${fasterxml.spark3.version}</fasterxml.version>
+        <fasterxml.jackson.databind.version>${fasterxml.spark3.version}</fasterxml.jackson.databind.version>
+        <fasterxml.jackson.module.scala.version>${fasterxml.spark3.version}</fasterxml.jackson.module.scala.version>
+        <fasterxml.jackson.dataformat.yaml.version>${fasterxml.spark3.version}
+        </fasterxml.jackson.dataformat.yaml.version>
+        <skip.hudi-spark2.unit.tests>true</skip.hudi-spark2.unit.tests>
+        <skipITs>true</skipITs>
+      </properties>
+      <modules>
+        <module>hudi-spark-datasource/hudi-spark3.3.x</module>
+        <module>hudi-spark-datasource/hudi-spark3-common</module>
+      </modules>
+      <activation>
+        <property>
+          <name>spark3.3</name>
         </property>
       </activation>
     </profile>
