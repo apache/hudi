@@ -76,35 +76,69 @@ class TestHoodieSyncConfig {
 
   @Test
   void testInferPartitionFields() {
+    Properties props0 = new Properties();
+    HoodieSyncConfig config0 = new HoodieSyncConfig(props0, new Configuration());
+    assertEquals("", config0.getStringOrDefault(META_SYNC_PARTITION_FIELDS),
+        String.format("should get default value due to absence of both %s and %s",
+            HoodieTableConfig.PARTITION_FIELDS.key(), KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()));
+
     Properties props1 = new Properties();
-    props1.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "foo,bar");
+    props1.setProperty(HoodieTableConfig.PARTITION_FIELDS.key(), "foo,bar,baz");
     HoodieSyncConfig config1 = new HoodieSyncConfig(props1, new Configuration());
-    assertEquals("foo,bar", config1.getStringOrDefault(META_SYNC_PARTITION_FIELDS));
+    assertEquals("foo,bar,baz", config1.getStringOrDefault(META_SYNC_PARTITION_FIELDS),
+        String.format("should infer from %s", HoodieTableConfig.PARTITION_FIELDS.key()));
+
+    Properties props2 = new Properties();
+    props2.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "foo,bar");
+    HoodieSyncConfig config2 = new HoodieSyncConfig(props2, new Configuration());
+    assertEquals("foo,bar", config2.getStringOrDefault(META_SYNC_PARTITION_FIELDS),
+        String.format("should infer from %s", KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()));
+
+    Properties props3 = new Properties();
+    props3.setProperty(HoodieTableConfig.PARTITION_FIELDS.key(), "foo,bar,baz");
+    props3.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "foo,bar");
+    HoodieSyncConfig config3 = new HoodieSyncConfig(props3, new Configuration());
+    assertEquals("foo,bar,baz", config3.getStringOrDefault(META_SYNC_PARTITION_FIELDS),
+        String.format("should infer from %s, which has higher precedence.", HoodieTableConfig.PARTITION_FIELDS.key()));
+
   }
 
   @Test
   void testInferPartitonExtractorClass() {
-    Properties props1 = new Properties();
-    props1.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "foo,bar");
-    HoodieSyncConfig config1 = new HoodieSyncConfig(props1, new Configuration());
+    Properties props0 = new Properties();
+    HoodieSyncConfig config0 = new HoodieSyncConfig(props0, new Configuration());
     assertEquals("org.apache.hudi.hive.MultiPartKeysValueExtractor",
-        config1.getStringOrDefault(META_SYNC_PARTITION_EXTRACTOR_CLASS));
+        config0.getStringOrDefault(META_SYNC_PARTITION_EXTRACTOR_CLASS),
+        String.format("should get default value due to absence of both %s and %s",
+            HoodieTableConfig.PARTITION_FIELDS.key(), KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()));
+
+    Properties props1 = new Properties();
+    props1.setProperty(HoodieTableConfig.PARTITION_FIELDS.key(), "");
+    HoodieSyncConfig config1 = new HoodieSyncConfig(props1, new Configuration());
+    assertEquals("org.apache.hudi.hive.NonPartitionedExtractor",
+        config1.getStringOrDefault(META_SYNC_PARTITION_EXTRACTOR_CLASS),
+        String.format("should infer from %s", HoodieTableConfig.PARTITION_FIELDS.key()));
 
     Properties props2 = new Properties();
-    props2.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "foo");
-    props2.setProperty(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE.key(), "true");
+    props2.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "foo,bar");
     HoodieSyncConfig config2 = new HoodieSyncConfig(props2, new Configuration());
-    assertEquals("org.apache.hudi.hive.HiveStylePartitionValueExtractor",
-        config2.getStringOrDefault(META_SYNC_PARTITION_EXTRACTOR_CLASS));
+    assertEquals("org.apache.hudi.hive.MultiPartKeysValueExtractor",
+        config2.getStringOrDefault(META_SYNC_PARTITION_EXTRACTOR_CLASS),
+        String.format("should infer from %s", KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()));
 
-    HoodieSyncConfig config3 = new HoodieSyncConfig(new Properties(), new Configuration());
+    Properties props3 = new Properties();
+    props3.setProperty(HoodieTableConfig.PARTITION_FIELDS.key(), "");
+    props3.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "foo,bar");
+    HoodieSyncConfig config3 = new HoodieSyncConfig(props3, new Configuration());
     assertEquals("org.apache.hudi.hive.NonPartitionedExtractor",
-        config3.getStringOrDefault(META_SYNC_PARTITION_EXTRACTOR_CLASS));
+        config3.getStringOrDefault(META_SYNC_PARTITION_EXTRACTOR_CLASS),
+        String.format("should infer from %s, which has higher precedence.", HoodieTableConfig.PARTITION_FIELDS.key()));
 
     Properties props4 = new Properties();
-    props4.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "");
+    props4.setProperty(HoodieTableConfig.PARTITION_FIELDS.key(), "foo");
+    props4.setProperty(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE.key(), "true");
     HoodieSyncConfig config4 = new HoodieSyncConfig(props4, new Configuration());
-    assertEquals("org.apache.hudi.hive.NonPartitionedExtractor",
+    assertEquals("org.apache.hudi.hive.HiveStylePartitionValueExtractor",
         config4.getStringOrDefault(META_SYNC_PARTITION_EXTRACTOR_CLASS));
   }
 

@@ -91,7 +91,7 @@ stages:
         displayName: UT FT common & flink & UT client/spark-client
         timeoutInMinutes: '150'
         steps:
-          - task: Maven@3
+          - task: Maven@3.205.1
             displayName: maven install
             inputs:
               mavenPomFile: 'pom.xml'
@@ -99,7 +99,7 @@ stages:
               options: $(MVN_OPTS_INSTALL)
               publishJUnitResults: false
               jdkVersionOption: '1.8'
-          - task: Maven@3
+          - task: Maven@3.205.1
             displayName: UT common flink client/spark-client
             inputs:
               mavenPomFile: 'pom.xml'
@@ -108,7 +108,7 @@ stages:
               publishJUnitResults: false
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g'
-          - task: Maven@3
+          - task: Maven@3.205.1
             displayName: FT common flink
             inputs:
               mavenPomFile: 'pom.xml'
@@ -121,7 +121,7 @@ stages:
         displayName: FT client/spark-client
         timeoutInMinutes: '150'
         steps:
-          - task: Maven@3
+          - task: Maven@3.205.1
             displayName: maven install
             inputs:
               mavenPomFile: 'pom.xml'
@@ -129,7 +129,7 @@ stages:
               options: $(MVN_OPTS_INSTALL)
               publishJUnitResults: false
               jdkVersionOption: '1.8'
-          - task: Maven@3
+          - task: Maven@3.205.1
             displayName: FT client/spark-client
             inputs:
               mavenPomFile: 'pom.xml'
@@ -142,7 +142,7 @@ stages:
         displayName: UT FT clients & cli & utilities & sync
         timeoutInMinutes: '150'
         steps:
-          - task: Maven@3
+          - task: Maven@3.205.1
             displayName: maven install
             inputs:
               mavenPomFile: 'pom.xml'
@@ -150,7 +150,7 @@ stages:
               options: $(MVN_OPTS_INSTALL)
               publishJUnitResults: false
               jdkVersionOption: '1.8'
-          - task: Maven@3
+          - task: Maven@3.205.1
             displayName: UT clients & cli & utilities & sync
             inputs:
               mavenPomFile: 'pom.xml'
@@ -159,7 +159,7 @@ stages:
               publishJUnitResults: false
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g'
-          - task: Maven@3
+          - task: Maven@3.205.1
             displayName: FT clients & cli & utilities & sync
             inputs:
               mavenPomFile: 'pom.xml'
@@ -172,7 +172,7 @@ stages:
         displayName: UT FT other modules
         timeoutInMinutes: '150'
         steps:
-          - task: Maven@3
+          - task: Maven@3.205.1
             displayName: maven install
             inputs:
               mavenPomFile: 'pom.xml'
@@ -180,7 +180,7 @@ stages:
               options: $(MVN_OPTS_INSTALL)
               publishJUnitResults: false
               jdkVersionOption: '1.8'
-          - task: Maven@3
+          - task: Maven@3.205.1
             displayName: UT other modules
             inputs:
               mavenPomFile: 'pom.xml'
@@ -189,7 +189,7 @@ stages:
               publishJUnitResults: false
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g'
-          - task: Maven@3
+          - task: Maven@3.205.1
             displayName: FT other modules
             inputs:
               mavenPomFile: 'pom.xml'
@@ -202,7 +202,7 @@ stages:
         displayName: IT modules
         timeoutInMinutes: '150'
         steps:
-          - task: Maven@3
+          - task: Maven@3.205.1
             displayName: maven install
             inputs:
               mavenPomFile: 'pom.xml'
@@ -210,7 +210,7 @@ stages:
               options: $(MVN_OPTS_INSTALL) -Pintegration-tests
               publishJUnitResults: false
               jdkVersionOption: '1.8'
-          - task: Maven@3
+          - task: Maven@3.205.1
             displayName: UT integ-test
             inputs:
               mavenPomFile: 'pom.xml'
