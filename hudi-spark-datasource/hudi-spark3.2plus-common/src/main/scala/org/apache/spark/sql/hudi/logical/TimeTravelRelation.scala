@@ -21,11 +21,11 @@ import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression}
 
 /**
  * TODO scala-doc
- * TODO support in spark 3.3
  */
 case class TimeTravelRelation(relation: LogicalPlan,
                               timestamp: Option[Expression],
-                              version: Option[String]) extends UnaryNode {
+                              version: Option[String]) extends UnaryNode with HoodieUnaryLikeSham[LogicalPlan] {
+
   override def output: Seq[Attribute] = relation.output
   override def child: LogicalPlan = relation
   override protected def withNewChildInternal(newChild: LogicalPlan): LogicalPlan =
