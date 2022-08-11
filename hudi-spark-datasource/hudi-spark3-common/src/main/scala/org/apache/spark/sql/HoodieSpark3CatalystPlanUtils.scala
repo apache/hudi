@@ -81,3 +81,5 @@ trait HoodieSpark3CatalystPlanUtils extends HoodieCatalystPlansUtils {
     ReflectUtil.createInsertInto(table, partition, Seq.empty[String], query, overwrite, ifPartitionNotExists)
   }
 }
+
+object HoodieSpark3CatalystPlanUtils extends HoodieSpark3CatalystPlanUtils {}

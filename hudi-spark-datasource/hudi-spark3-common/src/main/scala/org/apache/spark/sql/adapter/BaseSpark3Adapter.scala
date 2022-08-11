@@ -36,7 +36,7 @@ import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.sources.BaseRelation
 import org.apache.spark.sql.types.StructType
-import org.apache.spark.sql.{HoodieSpark3CatalogUtils, SQLContext, SparkSession}
+import org.apache.spark.sql.{HoodieCatalystPlansUtils, HoodieSpark3CatalogUtils, HoodieSpark3CatalystPlanUtils, SparkSession}
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.storage.StorageLevel._
 
@@ -53,6 +53,8 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
     val encoder = RowEncoder(schema).resolveAndBind()
     new Spark3RowSerDe(encoder)
   }
+
+  def getCatalystPlanUtils: HoodieCatalystPlansUtils = HoodieSpark3CatalystPlanUtils
 
   override def getAvroSchemaConverters: HoodieAvroSchemaConverters = HoodieSparkAvroSchemaConverters
 
