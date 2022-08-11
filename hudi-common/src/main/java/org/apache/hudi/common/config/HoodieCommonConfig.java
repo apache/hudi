@@ -40,15 +40,21 @@ public class HoodieCommonConfig extends HoodieConfig {
       .key("hoodie.datasource.write.reconcile.schema")
       .defaultValue(false)
       .withDocumentation("When a new batch of write has records with old schema, but latest table schema got "
-        + "evolved, this config will upgrade the records to leverage latest table schema(default values will be "
-        + "injected to missing fields). If not, the write batch would fail.");
+          + "evolved, this config will upgrade the records to leverage latest table schema(default values will be "
+          + "injected to missing fields). If not, the write batch would fail.");
 
   public static final ConfigProperty<ExternalSpillableMap.DiskMapType> SPILLABLE_DISK_MAP_TYPE = ConfigProperty
       .key("hoodie.common.spillable.diskmap.type")
       .defaultValue(ExternalSpillableMap.DiskMapType.BITCASK)
-      .withDocumentation("When handling input data that cannot be held in memory, to merge with a file on storage, a spillable diskmap is employed.  "
-          + "By default, we use a persistent hashmap based loosely on bitcask, that offers O(1) inserts, lookups. "
-          + "Change this to `ROCKS_DB` to prefer using rocksDB, for handling the spill.");
+      .withDocumentation(
+          "When handling input data that cannot be held in memory, to merge with a file on storage, a spillable diskmap is employed.  "
+              + "By default, we use a persistent hashmap based loosely on bitcask, that offers O(1) inserts, lookups. "
+              + "Change this to `ROCKS_DB` to prefer using rocksDB, for handling the spill.");
+
+  public static final ConfigProperty<Long> LOG_FILE_BLOCK_SIZE = ConfigProperty
+      .key("hoodie.log.file.block.size")
+      .defaultValue(128 * 1024 * 1024L)
+      .withDocumentation("Log file block size");
 
   public static final ConfigProperty<Boolean> DISK_MAP_BITCASK_COMPRESSION_ENABLED = ConfigProperty
       .key("hoodie.common.diskmap.compression.enabled")
@@ -89,6 +95,11 @@ public class HoodieCommonConfig extends HoodieConfig {
 
     public Builder withSpillableDiskMapType(ExternalSpillableMap.DiskMapType diskMapType) {
       commonConfig.setValue(SPILLABLE_DISK_MAP_TYPE, diskMapType.name());
+      return this;
+    }
+
+    public Builder withLogFileBlockSize(Long logFileBlockSize) {
+      commonConfig.setValue(LOG_FILE_BLOCK_SIZE, String.valueOf(logFileBlockSize));
       return this;
     }
 
