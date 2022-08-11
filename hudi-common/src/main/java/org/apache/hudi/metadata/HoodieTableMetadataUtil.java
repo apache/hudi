@@ -1323,6 +1323,8 @@ public class HoodieTableMetadataUtil {
         return (Long) val;
 
       case STRING:
+        // unpack the avro Utf8 if possible
+        return val.toString();
       case FLOAT:
       case DOUBLE:
       case BOOLEAN:

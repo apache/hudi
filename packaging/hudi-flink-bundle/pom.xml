@@ -123,7 +123,6 @@
                   <include>io.prometheus:simpleclient_dropwizard</include>
                   <include>io.prometheus:simpleclient_pushgateway</include>
                   <include>io.prometheus:simpleclient_common</include>
-                  <include>com.yammer.metrics:metrics-core</include>
 
                   <!-- Used for HUDI TimelineService -->
                   <include>org.eclipse.jetty:*</include>
@@ -348,6 +347,11 @@
           <groupId>com.google.guava</groupId>
         </exclusion>
       </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-aws</artifactId>
+      <version>${project.version}</version>
     </dependency>
     <dependency>
       <groupId>org.apache.hudi</groupId>
