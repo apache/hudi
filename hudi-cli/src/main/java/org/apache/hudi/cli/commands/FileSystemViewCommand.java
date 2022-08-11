@@ -61,7 +61,7 @@ public class FileSystemViewCommand implements CommandMarker {
   @CliCommand(value = "show fsview all", help = "Show entire file-system view")
   public String showAllFileSlices(
       @CliOption(key = {"pathRegex"}, help = "regex to select files, eg: 2016/08/02",
-          unspecifiedDefaultValue = "*/*/*") String globRegex,
+          unspecifiedDefaultValue = "") String globRegex,
       @CliOption(key = {"baseFileOnly"}, help = "Only display base files view",
           unspecifiedDefaultValue = "false") boolean baseFileOnly,
       @CliOption(key = {"maxInstant"}, help = "File-Slices upto this instant are displayed",
@@ -78,6 +78,12 @@ public class FileSystemViewCommand implements CommandMarker {
       @CliOption(key = {"headeronly"}, help = "Print Header Only",
           unspecifiedDefaultValue = "false") final boolean headerOnly)
       throws IOException {
+
+    globRegex = globRegex == null ? "" : globRegex;
+    // TODO: There is a bug in spring shell, if we pass */*/* to pathRegex, the last '/' will be lost, pathRegex will be */**
+    if (globRegex.endsWith("**")) {
+      globRegex = globRegex.replace("**", "*/*");
+    }
 
     HoodieTableFileSystemView fsView = buildFileSystemView(globRegex, maxInstant, baseFileOnly, includeMaxInstant,
         includeInflight, excludeCompaction);
