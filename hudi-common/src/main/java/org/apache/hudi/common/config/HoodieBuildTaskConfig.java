@@ -22,6 +22,7 @@ package org.apache.hudi.common.config;
 import org.apache.hudi.secondary.index.SecondaryIndexType;
 
 import org.apache.avro.Schema;
+import org.apache.hadoop.conf.Configuration;
 
 import java.util.LinkedList;
 import java.util.Properties;
@@ -57,13 +58,16 @@ public class HoodieBuildTaskConfig extends HoodieConfig {
   private String indexSaveDir;
   private SecondaryIndexType indexType;
   private LinkedList<Schema.Field> indexFields;
+  private Configuration conf;
 
   public HoodieBuildTaskConfig(String indexSaveDir,
                                SecondaryIndexType indexType,
-                               LinkedList<Schema.Field> indexFields) {
+                               LinkedList<Schema.Field> indexFields,
+                               Configuration conf) {
     this.indexSaveDir = indexSaveDir;
     this.indexType = indexType;
     this.indexFields = indexFields;
+    this.conf = conf;
   }
 
   public HoodieBuildTaskConfig(Properties props) {
@@ -98,6 +102,10 @@ public class HoodieBuildTaskConfig extends HoodieConfig {
     return indexFields;
   }
 
+  public Configuration getConf() {
+    return conf;
+  }
+
   public static Builder builder() {
     return new Builder();
   }
@@ -106,6 +114,7 @@ public class HoodieBuildTaskConfig extends HoodieConfig {
     private String indexSaveDir;
     private SecondaryIndexType indexType;
     private LinkedList<Schema.Field> indexFields;
+    private Configuration conf;
 
     public Builder setIndexSaveDir(String indexSaveDir) {
       this.indexSaveDir = indexSaveDir;
@@ -122,8 +131,13 @@ public class HoodieBuildTaskConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder setConf(Configuration conf) {
+      this.conf = conf;
+      return this;
+    }
+
     public HoodieBuildTaskConfig build() {
-      return new HoodieBuildTaskConfig(indexSaveDir, indexType, indexFields);
+      return new HoodieBuildTaskConfig(indexSaveDir, indexType, indexFields, conf);
     }
   }
 }

@@ -217,6 +217,7 @@ public class BuildTaskExecutor {
         .setIndexSaveDir(indexSaveDir.toString())
         .setIndexType(indexType)
         .setIndexFields(indexFields)
+        .setConf(conf)
         .build();
 
     return SecondaryIndexFactory.getIndexBuilder(config);

@@ -20,13 +20,20 @@
 package org.apache.hudi.secondary.index.lucene;
 
 import org.apache.hudi.common.config.HoodieBuildTaskConfig;
-import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.exception.HoodieBuildException;
 import org.apache.hudi.exception.HoodieSecondaryIndexException;
+import org.apache.hudi.internal.schema.Type;
+import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
 import org.apache.hudi.secondary.index.SecondaryIndexBuilder;
+import org.apache.hudi.secondary.index.lucene.hadoop.HdfsDirectory;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.util.Utf8;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.DoublePoint;
 import org.apache.lucene.document.Field;
@@ -40,40 +47,55 @@ import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
 import org.apache.lucene.index.KeepOnlyLastCommitDeletionPolicy;
 import org.apache.lucene.index.LogByteSizeMergePolicy;
-import org.apache.lucene.store.FSDirectory;
+import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.BytesRef;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 public class LuceneIndexBuilder implements SecondaryIndexBuilder {
   private static final Logger LOG = LoggerFactory.getLogger(LuceneIndexBuilder.class);
 
   private final String name;
   private final LinkedList<Schema.Field> indexFields;
-  private final FSDirectory indexSaveDir;
+  private final Configuration conf;
+  private final Type.TypeID[] fieldTypes;
+  private final String indexSaveDir;
+  private final Directory directory;
   private IndexWriter indexWriter;
   private final Document reusedDoc = new Document();
 
   public LuceneIndexBuilder(HoodieBuildTaskConfig indexConfig) {
     this.name = "lucene-index-builder-" + System.nanoTime();
     this.indexFields = indexConfig.getIndexFields();
+    this.conf = indexConfig.getConf();
+    this.indexSaveDir = indexConfig.getIndexSaveDir();
     try {
-      this.indexSaveDir = FSDirectory.open(Paths.get(indexConfig.getIndexSaveDir()));
+      Path path = new Path(indexConfig.getIndexSaveDir());
+      String scheme = path.toUri().getScheme();
+      if (!StringUtils.isNullOrEmpty(scheme)) {
+        String disableCacheName = String.format("fs.%s.impl.disable.cache", scheme);
+        conf.set(disableCacheName, "true");
+      }
+      this.directory = new HdfsDirectory(path, conf);
       IndexWriterConfig indexWriteConfig = getIndexWriteConfig(indexConfig);
-      this.indexWriter = new IndexWriter(indexSaveDir, indexWriteConfig);
-    } catch (IOException e) {
-      throw new HoodieIOException("Init lucene index builder failed", e);
+      this.indexWriter = new IndexWriter(directory, indexWriteConfig);
+    } catch (Exception e) {
+      throw new HoodieBuildException("Init lucene index builder failed", e);
     }
 
-    List<String> fieldNames = indexFields.stream()
-        .map(Schema.Field::name)
-        .collect(Collectors.toList());
+    List<String> fieldNames = new ArrayList<>();
+    fieldTypes = new Type.TypeID[indexFields.size()];
+    IntStream.range(0, indexFields.size()).forEach(i -> {
+      Schema.Field field = indexFields.get(i);
+      fieldTypes[i] = AvroInternalSchemaConverter.buildTypeFromAvroSchema(field.schema()).typeId();
+      fieldNames.add(field.name());
+    });
     LOG.info("Init lucene index builder ok, name: {}, indexFields: {}", name, fieldNames);
   }
 
@@ -195,13 +217,12 @@ public class LuceneIndexBuilder implements SecondaryIndexBuilder {
     config.setInfoStream(new LuceneIndexInfoStream(secondaryIndexConfig, name));
 
     try {
-      if (DirectoryReader.indexExists(indexSaveDir)) {
-        boolean success = indexSaveDir.getDirectory().toFile().delete();
-        LOG.info("Delete index dir: {}", success);
+      if (DirectoryReader.indexExists(directory)) {
+        FSUtils.getFs(indexSaveDir, conf).delete(new Path(indexSaveDir), true);
+        LOG.info("Delete index dir: {}", indexSaveDir);
       }
     } catch (IOException e) {
-      throw new HoodieSecondaryIndexException(
-          "Fail to delete lucene index dir: " + indexSaveDir.getDirectory().toFile().getPath(), e);
+      throw new HoodieSecondaryIndexException("Fail to delete lucene index dir: " + indexSaveDir, e);
     }
 
     config.setOpenMode(IndexWriterConfig.OpenMode.CREATE);

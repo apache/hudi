@@ -17,14 +17,11 @@
  * under the License.
  */
 
-package org.apache.hudi.secondary.index;
+package org.apache.hudi.secondary.index.lucene.hadoop;
 
-import org.roaringbitmap.RoaringBitmap;
+public interface Store {
 
-public interface SecondaryIndexReader {
-  SecondaryIndexReader open(HoodieSecondaryIndex secondaryIndex, String indexPath);
+  byte[] takeBuffer(int bufferSize);
 
-  RoaringBitmap queryTerm();
-
-  void close();
+  void putBuffer(byte[] buffer);
 }
