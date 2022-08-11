@@ -19,29 +19,45 @@
 
 package org.apache.hudi.secondary.index.lucene;
 
+import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.exception.HoodieSecondaryIndexException;
 import org.apache.hudi.secondary.index.HoodieSecondaryIndex;
 import org.apache.hudi.secondary.index.SecondaryIndexReader;
+import org.apache.hudi.secondary.index.lucene.hadoop.HdfsDirectory;
 
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
 import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.search.IndexSearcher;
-import org.apache.lucene.store.FSDirectory;
+import org.apache.lucene.store.Directory;
 import org.roaringbitmap.RoaringBitmap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.nio.file.Paths;
 
 public class LuceneIndexReader implements SecondaryIndexReader {
   private static final Logger LOG = LoggerFactory.getLogger(LuceneIndexReader.class);
 
   private String indexPath;
-  private IndexSearcher indexSearcher;
+  private DirectoryReader reader;
+  private IndexSearcher searcher;
 
-  public LuceneIndexReader(String indexPath) throws IOException {
+  public LuceneIndexReader(String indexPath, Configuration conf) {
     this.indexPath = indexPath;
-    FSDirectory directory = FSDirectory.open(Paths.get(indexPath));
-    indexSearcher = new IndexSearcher(DirectoryReader.open(directory));
+    try {
+      Path path = new Path(indexPath);
+      String scheme = path.toUri().getScheme();
+      if (!StringUtils.isNullOrEmpty(scheme)) {
+        String disableCacheName = String.format("fs.%s.impl.disable.cache", scheme);
+        conf.set(disableCacheName, "true");
+      }
+      Directory directory = new HdfsDirectory(path, conf);
+      reader = DirectoryReader.open(directory);
+    } catch (Exception e) {
+      throw new HoodieSecondaryIndexException("Init lucene index reader failed", e);
+    }
+    searcher = new IndexSearcher(reader);
   }
 
   @Override
@@ -52,5 +68,17 @@ public class LuceneIndexReader implements SecondaryIndexReader {
   @Override
   public RoaringBitmap queryTerm() {
     return null;
+  }
+
+  @Override
+  public void close() {
+    searcher = null;
+    if (reader != null) {
+      try {
+        reader.close();
+      } catch (IOException e) {
+        LOG.error("Fail to close lucene index reader");
+      }
+    }
   }
 }
