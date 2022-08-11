@@ -565,10 +565,13 @@
       <artifactId>reload4j</artifactId>
       <scope>provided</scope>
     </dependency>
-    <dependency>
-      <groupId>com.google.apis</groupId>
-      <artifactId>google-api-services-pubsub</artifactId>
-    </dependency>
+
+    <!-- TODO: remove this after eliminiating GPubsubMessageReceiver -->
+<!--    <dependency>-->
+<!--      <groupId>com.google.apis</groupId>-->
+<!--      <artifactId>google-api-services-pubsub</artifactId>-->
+<!--    </dependency>-->
+
     <!-- End: Google Cloud Pubsub -->
     
     <!-- Hive - Test -->
