@@ -809,9 +809,9 @@ object HoodieSparkSqlWriter {
   }
 
   private def extractConfigsRelatedToTimestampBasedKeyGenerator(keyGenerator: String,
-      params: Map[String, String]): Map[String, String] = {
-    if (keyGenerator.equals(classOf[TimestampBasedKeyGenerator].getCanonicalName) ||
-        keyGenerator.equals(classOf[TimestampBasedAvroKeyGenerator].getCanonicalName)) {
+                                                                params: Map[String, String]): Map[String, String] = {
+    if (classOf[TimestampBasedKeyGenerator].getCanonicalName.equals(keyGenerator) ||
+      classOf[TimestampBasedAvroKeyGenerator].getCanonicalName.equals(keyGenerator)) {
       params.filterKeys(HoodieTableConfig.PERSISTED_CONFIG_LIST.contains)
     } else {
       Map.empty
