@@ -68,6 +68,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.stream.IntStream;
 
+import static org.apache.flink.table.types.logical.LogicalTypeRoot.TIMESTAMP_WITHOUT_TIME_ZONE;
 import static org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.HOODIE_COMMIT_TIME_COL_POS;
 import static org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.HOODIE_RECORD_KEY_COL_POS;
 import static org.apache.hudi.table.format.FormatUtils.buildAvroRecordBySchema;
@@ -298,8 +299,14 @@ public class MergeOnReadInputFormat
         new org.apache.hadoop.fs.Path(path).getParent(),
         this.conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING),
         FilePathUtils.extractPartitionKeys(this.conf));
-    LinkedHashMap<String, Object> partObjects = new LinkedHashMap<>();
-    partSpec.forEach((k, v) -> partObjects.put(k, DataTypeUtils.resolvePartition(
+
+    // can't convert data by partition value if timestamp is used to partition key.
+    partSpec.entrySet().removeIf(entry ->
+        fieldTypes.get(fieldNames.indexOf(entry.getKey()))
+            .getLogicalType().getTypeRoot() == TIMESTAMP_WITHOUT_TIME_ZONE);
+
+    LinkedHashMap<String, Object> needReadFromFileInPartitionCols = new LinkedHashMap<>();
+    partSpec.forEach((k, v) -> needReadFromFileInPartitionCols.put(k, DataTypeUtils.resolvePartition(
         defaultPartName.equals(v) ? null : v,
         fieldTypes.get(fieldNames.indexOf(k)))));
 
@@ -309,7 +316,7 @@ public class MergeOnReadInputFormat
         HadoopConfigurations.getParquetConf(this.conf, hadoopConf),
         fieldNames.toArray(new String[0]),
         fieldTypes.toArray(new DataType[0]),
-        partObjects,
+        needReadFromFileInPartitionCols,
         requiredPos,
         2048,
         new org.apache.flink.core.fs.Path(path),
