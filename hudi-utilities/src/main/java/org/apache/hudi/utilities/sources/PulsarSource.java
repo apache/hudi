@@ -51,11 +51,9 @@ public class PulsarSource extends RowSource {
   @Override
   protected Pair<Option<Dataset<Row>>, String> fetchNextBatch(Option<String> lastCheckpointStr, long sourceLimit) {
     Pair<MessageId, MessageId> startingEndingOffsetsPair = computeOffsets(lastCheckpointStr, sourceLimit);
-    MessageId startingOffset = MessageId.earliest;
-    MessageId endingOffset = MessageId.latest;
 
-    String startingOffsets = convertToOffsetString(topicName, startingOffset);
-    String endingOffsets = convertToOffsetString(topicName, endingOffset);
+    MessageId startingOffset = startingEndingOffsetsPair.getLeft();
+    MessageId endingOffset = startingEndingOffsetsPair.getRight();
 
     //
     // TODO
@@ -68,11 +66,11 @@ public class PulsarSource extends RowSource {
         .format("pulsar")
         .option("service.url", endpointURL)
         .option("topics", topicName)
-        .option("startingOffsets", startingOffsets)
-        .option("endingOffsets", endingOffsets)
+        .option("startingOffsets", convertToOffsetString(topicName, startingOffset))
+        .option("endingOffsets", convertToOffsetString(topicName, endingOffset))
         .load();
 
-    return Pair.of(Option.of(transform(sourceRows)), endingOffsets);
+    return Pair.of(Option.of(transform(sourceRows)), convertToOffsetString(topicName, endingOffset));
   }
 
   private Dataset<Row> transform(Dataset<Row> rows) {
@@ -85,13 +83,12 @@ public class PulsarSource extends RowSource {
     MessageId endingOffset;
     Long maxRecordsLimit = computeTargetRecordLimit(sourceLimit, props);
 
-    return null;
+    return Pair.of(startingOffset, endingOffset);
   }
 
   private MessageId fetchStartingOffset(Option<String> lastCheckpointStrOpt) {
-    return lastCheckpointStrOpt.map(lastCheckpoint -> {
-      lastCheckpoint
-    })
+    return lastCheckpointStrOpt
+        .map(lastCheckpoint -> JsonUtils.topicOffsets(lastCheckpoint).apply(topicName))
         .orElseGet(() -> {
           Config.OffsetAutoResetStrategy autoResetStrategy = Config.OffsetAutoResetStrategy.valueOf(
               props.getString(Config.PULSAR_SOURCE_OFFSET_AUTO_RESET_STRATEGY.key(),
