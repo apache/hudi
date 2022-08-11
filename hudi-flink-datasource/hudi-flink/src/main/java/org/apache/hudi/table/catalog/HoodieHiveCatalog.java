@@ -893,7 +893,13 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     } else {
       Map<String, String> newOptions = new HashMap<>(options);
       // set up hive sync options
-      newOptions.put(FlinkOptions.HIVE_SYNC_ENABLED.key(), "true");
+      if (!newOptions.containsKey(FlinkOptions.HIVE_SYNC_ENABLED.key())) {
+        newOptions.put(FlinkOptions.HIVE_SYNC_ENABLED.key(), "true");
+      }
+      if (newOptions.containsKey(FlinkOptions.HIVE_STYLE_PARTITIONING.key())
+          && "true".equals(newOptions.get(FlinkOptions.HIVE_STYLE_PARTITIONING.key()))) {
+        newOptions.put(FlinkOptions.HIVE_SYNC_PARTITION_EXTRACTOR_CLASS_NAME.key(), "org.apache.hudi.hive.HiveStylePartitionValueExtractor");
+      }
       newOptions.put(FlinkOptions.HIVE_SYNC_METASTORE_URIS.key(), hiveConf.getVar(HiveConf.ConfVars.METASTOREURIS));
       newOptions.put(FlinkOptions.HIVE_SYNC_MODE.key(), "hms");
       newOptions.putIfAbsent(FlinkOptions.HIVE_SYNC_SUPPORT_TIMESTAMP.key(), "true");
