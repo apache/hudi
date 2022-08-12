@@ -136,9 +136,6 @@
                   <include>io.prometheus:simpleclient_dropwizard</include>
                   <include>io.prometheus:simpleclient_pushgateway</include>
                   <include>io.prometheus:simpleclient_common</include>
-                  <include>org.apache.pulsar:pulsar-client</include>
-                  <include>org.apache.pulsar:pulsar-client-api</include>
-                  <include>org.apache.pulsar:pulsar-client-admin-api</include>
                   <include>org.apache.spark:spark-streaming-kafka-0-10_${scala.binary.version}</include>
                   <include>org.apache.spark:spark-token-provider-kafka-0-10_${scala.binary.version}</include>
                   <include>org.apache.kafka:kafka_${scala.binary.version}</include>
