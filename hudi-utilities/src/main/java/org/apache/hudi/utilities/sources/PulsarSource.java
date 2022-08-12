@@ -32,7 +32,8 @@ public class PulsarSource extends RowSource {
   };
 
   private final String topicName;
-  private final String endpointURL;
+  private final String serviceEndpointURL;
+  private final String adminEndpointURL;
 
   public PulsarSource(TypedProperties props,
                       JavaSparkContext sparkContext,
@@ -43,11 +44,12 @@ public class PulsarSource extends RowSource {
     DataSourceUtils.checkRequiredProperties(props,
         Arrays.asList(
             Config.PULSAR_SOURCE_TOPIC_NAME.key(),
-            Config.PULSAR_SOURCE_ENDPOINT_URL.key()));
+            Config.PULSAR_SOURCE_SERVICE_ENDPOINT_URL.key()));
 
     this.topicName = props.getString(Config.PULSAR_SOURCE_TOPIC_NAME.key());
-    // TODO validate endpoint provided in the appropriate format
-    this.endpointURL = props.getString(Config.PULSAR_SOURCE_ENDPOINT_URL.key());
+    // TODO validate endpoints provided in the appropriate format
+    this.serviceEndpointURL = props.getString(Config.PULSAR_SOURCE_SERVICE_ENDPOINT_URL.key());
+    this.adminEndpointURL = props.getString(Config.PULSAR_SOURCE_ADMIN_ENDPOINT_URL.key());
   }
 
   @Override
@@ -66,7 +68,8 @@ public class PulsarSource extends RowSource {
 
     Dataset<Row> sourceRows = sparkSession.read()
         .format("pulsar")
-        .option("service.url", endpointURL)
+        .option("service.url", serviceEndpointURL)
+        .option("admin.url", adminEndpointURL)
         .option("topics", topicName)
         .option("startingOffsets", convertToOffsetString(topicName, startingOffset))
         .option("endingOffsets", convertToOffsetString(topicName, endingOffset))
@@ -82,8 +85,8 @@ public class PulsarSource extends RowSource {
   private Pair<MessageId, MessageId> computeOffsets(Option<String> lastCheckpointStrOpt, long sourceLimit) {
     MessageId startingOffset = fetchStartingOffset(lastCheckpointStrOpt);
 
-    MessageId endingOffset;
     Long maxRecordsLimit = computeTargetRecordLimit(sourceLimit, props);
+    MessageId endingOffset = MessageId.latest;
 
     return Pair.of(startingOffset, endingOffset);
   }
@@ -119,7 +122,9 @@ public class PulsarSource extends RowSource {
   }
 
   private static String convertToOffsetString(String topic, MessageId startingOffset) {
-    return JsonUtils.topicOffsets(HoodieConversionUtils.mapAsScalaImmutableMap(Collections.singletonMap(topic, startingOffset)));
+    return JsonUtils.topicOffsets(
+        HoodieConversionUtils.mapAsScalaImmutableMap(
+            Collections.singletonMap(topic, startingOffset)));
   }
 
   // TODO unify w/ Kafka
@@ -129,9 +134,14 @@ public class PulsarSource extends RowSource {
         .noDefaultValue()
         .withDocumentation("Name of the target Pulsar topic to source data from");
 
-    private static final ConfigProperty<String> PULSAR_SOURCE_ENDPOINT_URL = ConfigProperty
-        .key("hoodie.deltastreamer.source.pulsar.endpointUrl")
-        .noDefaultValue()
+    private static final ConfigProperty<String> PULSAR_SOURCE_SERVICE_ENDPOINT_URL = ConfigProperty
+        .key("hoodie.deltastreamer.source.pulsar.endpoint.service.url")
+        .defaultValue("pulsar://localhost:6650")
+        .withDocumentation("URL of the target Pulsar endpoint (of the form 'pulsar://host:port'");
+
+    private static final ConfigProperty<String> PULSAR_SOURCE_ADMIN_ENDPOINT_URL = ConfigProperty
+        .key("hoodie.deltastreamer.source.pulsar.endpoint.admin.url")
+        .defaultValue("http://localhost:8080")
         .withDocumentation("URL of the target Pulsar endpoint (of the form 'pulsar://host:port'");
 
     public enum OffsetAutoResetStrategy {
