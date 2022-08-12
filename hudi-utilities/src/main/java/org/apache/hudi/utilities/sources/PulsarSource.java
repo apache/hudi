@@ -120,16 +120,25 @@ public class PulsarSource extends RowSource {
   }
 
   private Pair<MessageId, MessageId> computeOffsets(Option<String> lastCheckpointStrOpt, long sourceLimit) {
-    MessageId startingOffset = fetchStartingOffset(lastCheckpointStrOpt);
+    MessageId startingOffset = decodeStartingOffset(lastCheckpointStrOpt);
 
     Long maxRecordsLimit = computeTargetRecordLimit(sourceLimit, props);
 
-    MessageId endingOffset = fetchEndingOffset();
+    MessageId endingOffset = fetchLatestOffset();
 
     return Pair.of(startingOffset, endingOffset);
   }
 
-  private MessageId fetchEndingOffset() {
+  private void ackOffset(MessageId latestConsumedOffset) {
+    try {
+      pulsarConsumer.get().acknowledgeCumulative(latestConsumedOffset);
+    } catch (PulsarClientException e) {
+      LOG.error(String.format("Failed to ack messageId (%s) for topic '%s'", latestConsumedOffset, topicName), e);
+      throw new HoodieIOException("Failed to ack message for topic", e);
+    }
+  }
+
+  private MessageId fetchLatestOffset() {
     try {
       return pulsarConsumer.get().getLastMessageId();
     } catch (PulsarClientException e) {
@@ -138,7 +147,7 @@ public class PulsarSource extends RowSource {
     }
   }
 
-  private MessageId fetchStartingOffset(Option<String> lastCheckpointStrOpt) {
+  private MessageId decodeStartingOffset(Option<String> lastCheckpointStrOpt) {
     return lastCheckpointStrOpt
         .map(lastCheckpoint -> JsonUtils.topicOffsets(lastCheckpoint).apply(topicName))
         .orElseGet(() -> {
@@ -148,7 +157,7 @@ public class PulsarSource extends RowSource {
 
           switch (autoResetStrategy) {
             case LATEST:
-              return MessageId.latest;
+              return fetchLatestOffset();
             case EARLIEST:
               return MessageId.earliest;
             case FAIL:
