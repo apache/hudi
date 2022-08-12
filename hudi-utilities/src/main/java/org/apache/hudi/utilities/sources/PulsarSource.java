@@ -127,6 +127,7 @@ public class PulsarSource extends RowSource {
   private Pair<MessageId, MessageId> computeOffsets(Option<String> lastCheckpointStrOpt, long sourceLimit) {
     MessageId startingOffset = decodeStartingOffset(lastCheckpointStrOpt);
 
+    // TODO support capping the amount of records fetched
     Long maxRecordsLimit = computeTargetRecordLimit(sourceLimit, props);
 
     MessageId endingOffset = fetchLatestOffset();
@@ -179,7 +180,7 @@ public class PulsarSource extends RowSource {
           .newConsumer()
           .topic(topicName)
           .subscriptionName("hudi-pulsar-consumer")
-          .subscriptionType(SubscriptionType.Shared)
+          .subscriptionType(SubscriptionType.Exclusive)
           .subscribe();
     } catch (PulsarClientException e) {
       LOG.error(String.format("Failed to subscribe to Pulsar topic '%s'", topicName), e);
