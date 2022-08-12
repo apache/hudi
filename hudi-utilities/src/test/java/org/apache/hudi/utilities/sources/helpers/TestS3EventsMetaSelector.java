@@ -45,6 +45,7 @@ import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelector.Con
 import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelector.Config.S3_SOURCE_QUEUE_URL;
 import static org.apache.hudi.utilities.sources.helpers.TestCloudObjectsSelector.REGION_NAME;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 public class TestS3EventsMetaSelector extends HoodieClientTestHarness {
 
@@ -101,5 +102,19 @@ public class TestS3EventsMetaSelector extends HoodieClientTestHarness {
             .getJSONObject("object")
             .getString("key"));
     assertEquals("1627376736755", eventFromQueue.getRight());
+  }
+
+  @ParameterizedTest
+  @ValueSource(classes = {S3EventsMetaSelector.class})
+  public void testEventsFromQueueNoMessages(Class<?> clazz) {
+    S3EventsMetaSelector selector = (S3EventsMetaSelector) ReflectionUtils.loadClass(clazz.getName(), props);
+    List<Message> processed = new ArrayList<>();
+
+    Pair<List<String>, String> eventFromQueue =
+        selector.getNextEventsFromQueue(sqs, Option.empty(), processed);
+
+    assertEquals(0, eventFromQueue.getLeft().size());
+    assertEquals(0, processed.size());
+    assertNull(eventFromQueue.getRight());
   }
 }
