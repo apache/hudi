@@ -42,6 +42,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -138,6 +139,19 @@ public class TestUpgradeDowngradeCommand extends CLIFunctionalTestHarness {
         assertEquals(0, FileCreateUtils.getTotalMarkerFileCount(tablePath, partitionPath, "101", IOType.MERGE));
       }
     }
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testGetHoodieTableVersionName(boolean overrideWithDefault) {
+    assertEquals(overrideWithDefault ? HoodieTableVersion.current().name() : null,
+        UpgradeOrDowngradeCommand.getHoodieTableVersionName(null, overrideWithDefault));
+    assertEquals(overrideWithDefault ? HoodieTableVersion.current().name() : "",
+        UpgradeOrDowngradeCommand.getHoodieTableVersionName("", overrideWithDefault));
+    assertEquals("FIVE",
+        UpgradeOrDowngradeCommand.getHoodieTableVersionName("FIVE", overrideWithDefault));
+    assertEquals("FIVE",
+        UpgradeOrDowngradeCommand.getHoodieTableVersionName("5", overrideWithDefault));
   }
 
   private void verifyTableVersion(HoodieTableVersion expectedVersion) throws IOException {
