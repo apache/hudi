@@ -48,13 +48,13 @@ import java.util.Arrays;
 import java.util.Collections;
 
 /**
- * TODO java-doc
+ * Source fetching data from Pulsar topics
  */
 public class PulsarSource extends RowSource implements Closeable {
 
   private static final Logger LOG = LogManager.getLogger(PulsarSource.class);
 
-  private static final String HUDI_PULSAR_CONSUMER_ID = "hudi-pulsar-consumer";
+  private static final String HUDI_PULSAR_CONSUMER_ID_FORMAT = "hudi-pulsar-consumer-%d";
   private static final String[] PULSAR_META_FIELDS = new String[] {
       "__key",
       "__topic",
@@ -102,12 +102,6 @@ public class PulsarSource extends RowSource implements Closeable {
     MessageId startingOffset = startingEndingOffsetsPair.getLeft();
     MessageId endingOffset = startingEndingOffsetsPair.getRight();
 
-    //
-    // TODO
-    //    - [P0] Add support for schema-provider
-    //    - [P1] Add support for auth
-    //
-
     String startingOffsetStr = convertToOffsetString(topicName, startingOffset);
     String endingOffsetStr = convertToOffsetString(topicName, endingOffset);
 
@@ -135,11 +129,10 @@ public class PulsarSource extends RowSource implements Closeable {
 
   private Pair<MessageId, MessageId> computeOffsets(Option<String> lastCheckpointStrOpt, long sourceLimit) {
     MessageId startingOffset = decodeStartingOffset(lastCheckpointStrOpt);
+    MessageId endingOffset = fetchLatestOffset();
 
     // TODO support capping the amount of records fetched
     Long maxRecordsLimit = computeTargetRecordLimit(sourceLimit, props);
-
-    MessageId endingOffset = fetchLatestOffset();
 
     return Pair.of(startingOffset, endingOffset);
   }
@@ -185,10 +178,13 @@ public class PulsarSource extends RowSource implements Closeable {
 
   private Consumer<byte[]> subscribeToTopic() {
     try {
+      // NOTE: We're generating unique subscription-id to make sure that subsequent invocation
+      //       of the DS, do not interfere w/ each other
+      String subscriptionId = String.format(HUDI_PULSAR_CONSUMER_ID_FORMAT, System.currentTimeMillis());
       return pulsarClient.get()
           .newConsumer()
           .topic(topicName)
-          .subscriptionName(HUDI_PULSAR_CONSUMER_ID)
+          .subscriptionName(subscriptionId)
           .subscriptionType(SubscriptionType.Exclusive)
           .subscribe();
     } catch (PulsarClientException e) {
@@ -241,7 +237,6 @@ public class PulsarSource extends RowSource implements Closeable {
     }
   }
 
-  // TODO unify w/ Kafka
   public static class Config {
     private static final ConfigProperty<String> PULSAR_SOURCE_TOPIC_NAME = ConfigProperty
         .key("hoodie.deltastreamer.source.pulsar.topic")
