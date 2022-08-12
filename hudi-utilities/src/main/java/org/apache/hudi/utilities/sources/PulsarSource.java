@@ -34,6 +34,7 @@ import org.apache.pulsar.client.api.MessageId;
 import org.apache.pulsar.client.api.PulsarClient;
 import org.apache.pulsar.client.api.PulsarClientException;
 import org.apache.pulsar.client.api.SubscriptionType;
+import org.apache.pulsar.common.naming.TopicName;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -50,6 +51,7 @@ public class PulsarSource extends RowSource {
 
   private static final Logger LOG = LogManager.getLogger(PulsarSource.class);
 
+  private static final String HUDI_PULSAR_CONSUMER_ID = "hudi-pulsar-consumer";
   private static final String[] PULSAR_META_FIELDS = new String[] {
       "__key",
       "__topic",
@@ -79,7 +81,8 @@ public class PulsarSource extends RowSource {
             Config.PULSAR_SOURCE_TOPIC_NAME.key(),
             Config.PULSAR_SOURCE_SERVICE_ENDPOINT_URL.key()));
 
-    this.topicName = props.getString(Config.PULSAR_SOURCE_TOPIC_NAME.key());
+    // Converting to a descriptor allows us to canonicalize the topic's name properly
+    this.topicName = TopicName.get(props.getString(Config.PULSAR_SOURCE_TOPIC_NAME.key())).toString();
 
     // TODO validate endpoints provided in the appropriate format
     this.serviceEndpointURL = props.getString(Config.PULSAR_SOURCE_SERVICE_ENDPOINT_URL.key());
@@ -102,16 +105,19 @@ public class PulsarSource extends RowSource {
     //    - [P1] Add support for auth
     //
 
+    String startingOffsetStr = convertToOffsetString(topicName, startingOffset);
+    String endingOffsetStr = convertToOffsetString(topicName, endingOffset);
+
     Dataset<Row> sourceRows = sparkSession.read()
         .format("pulsar")
         .option("service.url", serviceEndpointURL)
         .option("admin.url", adminEndpointURL)
         .option("topics", topicName)
-        .option("startingOffsets", convertToOffsetString(topicName, startingOffset))
-        .option("endingOffsets", convertToOffsetString(topicName, endingOffset))
+        .option("startingOffsets", startingOffsetStr)
+        .option("endingOffsets", endingOffsetStr)
         .load();
 
-    return Pair.of(Option.of(transform(sourceRows)), convertToOffsetString(topicName, endingOffset));
+    return Pair.of(Option.of(transform(sourceRows)), endingOffsetStr);
   }
 
   @Override
@@ -179,7 +185,7 @@ public class PulsarSource extends RowSource {
       return pulsarClient.get()
           .newConsumer()
           .topic(topicName)
-          .subscriptionName("hudi-pulsar-consumer")
+          .subscriptionName(HUDI_PULSAR_CONSUMER_ID)
           .subscriptionType(SubscriptionType.Exclusive)
           .subscribe();
     } catch (PulsarClientException e) {
