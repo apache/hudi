@@ -98,7 +98,6 @@ public class PulsarSource extends RowSource {
 
     //
     // TODO
-    //    - [P0] Commit offsets (to Pulsar)
     //    - [P0] Add support for schema-provider
     //    - [P1] Add support for auth
     //
@@ -113,6 +112,12 @@ public class PulsarSource extends RowSource {
         .load();
 
     return Pair.of(Option.of(transform(sourceRows)), convertToOffsetString(topicName, endingOffset));
+  }
+
+  @Override
+  public void onCommit(String lastCheckpointStr) {
+    MessageId latestConsumedOffset = JsonUtils.topicOffsets(lastCheckpointStr).apply(topicName);
+    ackOffset(latestConsumedOffset);
   }
 
   private Dataset<Row> transform(Dataset<Row> rows) {
