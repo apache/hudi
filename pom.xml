@@ -98,7 +98,8 @@
     <kafka.version>2.0.0</kafka.version>
     <kafka.spark3.version>2.4.1</kafka.spark3.version>
     <pulsar.version>2.10.1</pulsar.version>
-    <pulsar.spark.version>3.1.1.4</pulsar.spark.version>
+    <pulsar.spark2.version>2.4.5</pulsar.spark2.version>
+    <pulsar.spark3.version>3.1.1.4</pulsar.spark3.version>
     <confluent.version>5.3.4</confluent.version>
     <glassfish.version>2.17</glassfish.version>
     <glassfish.el.version>3.0.1-b12</glassfish.el.version>
@@ -1651,6 +1652,7 @@
         <module>hudi-spark-datasource/hudi-spark2-common</module>
       </modules>
       <properties>
+        <pulsar.spark.version>${pulsar.spark2.version}</pulsar.spark.version>
         <skip.hudi-spark3.unit.tests>true</skip.hudi-spark3.unit.tests>
       </properties>
       <activation>
@@ -1671,6 +1673,7 @@
       </modules>
       <properties>
         <sparkbundle.version>2.4</sparkbundle.version>
+        <pulsar.spark.version>${pulsar.spark2.version}</pulsar.spark.version>
         <skip.hudi-spark3.unit.tests>true</skip.hudi-spark3.unit.tests>
       </properties>
       <activation>
@@ -1697,6 +1700,7 @@
         <avro.version>1.11.0</avro.version>
         <orc.version>1.7.4</orc.version>
         <antlr.version>4.8</antlr.version>
+        <pulsar.spark.version>${pulsar.spark3.version}</pulsar.spark.version>
         <fasterxml.spark3.version>2.13.3</fasterxml.spark3.version>
         <fasterxml.version>${fasterxml.spark3.version}</fasterxml.version>
         <fasterxml.jackson.databind.version>${fasterxml.spark3.version}</fasterxml.jackson.databind.version>
@@ -1730,6 +1734,7 @@
         <scalatest.version>${scalatest.spark3.version}</scalatest.version>
         <kafka.version>${kafka.spark3.version}</kafka.version>
         <antlr.version>4.8-1</antlr.version>
+        <pulsar.spark.version>${pulsar.spark3.version}</pulsar.spark.version>
         <fasterxml.version>${fasterxml.spark3.version}</fasterxml.version>
         <fasterxml.jackson.databind.version>${fasterxml.spark3.version}</fasterxml.jackson.databind.version>
         <fasterxml.jackson.module.scala.version>${fasterxml.spark3.version}</fasterxml.jackson.module.scala.version>
@@ -1765,6 +1770,7 @@
         <avro.version>1.10.2</avro.version>
         <orc.version>1.6.12</orc.version>
         <antlr.version>4.8</antlr.version>
+        <pulsar.spark.version>${pulsar.spark3.version}</pulsar.spark.version>
         <fasterxml.version>${fasterxml.spark3.version}</fasterxml.version>
         <fasterxml.jackson.databind.version>${fasterxml.spark3.version}</fasterxml.jackson.databind.version>
         <fasterxml.jackson.module.scala.version>${fasterxml.spark3.version}</fasterxml.jackson.module.scala.version>
@@ -1800,6 +1806,7 @@
         <avro.version>1.11.0</avro.version>
         <orc.version>1.7.4</orc.version>
         <antlr.version>4.8</antlr.version>
+        <pulsar.spark.version>${pulsar.spark3.version}</pulsar.spark.version>
         <fasterxml.spark3.version>2.13.3</fasterxml.spark3.version>
         <fasterxml.version>${fasterxml.spark3.version}</fasterxml.version>
         <fasterxml.jackson.databind.version>${fasterxml.spark3.version}</fasterxml.jackson.databind.version>
