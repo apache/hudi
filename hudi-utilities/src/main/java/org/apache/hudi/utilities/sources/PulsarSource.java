@@ -33,6 +33,7 @@ import org.apache.pulsar.client.api.Consumer;
 import org.apache.pulsar.client.api.MessageId;
 import org.apache.pulsar.client.api.PulsarClient;
 import org.apache.pulsar.client.api.PulsarClientException;
+import org.apache.pulsar.client.api.SubscriptionInitialPosition;
 import org.apache.pulsar.client.api.SubscriptionType;
 import org.apache.pulsar.client.impl.PulsarClientImpl;
 import org.apache.pulsar.common.naming.TopicName;
@@ -185,6 +186,7 @@ public class PulsarSource extends RowSource implements Closeable {
           .newConsumer()
           .topic(topicName)
           .subscriptionName(subscriptionId)
+          .subscriptionInitialPosition(SubscriptionInitialPosition.Earliest)
           .subscriptionType(SubscriptionType.Exclusive)
           .subscribe();
     } catch (PulsarClientException e) {
@@ -232,6 +234,20 @@ public class PulsarSource extends RowSource implements Closeable {
       ((PulsarClientImpl) client).eventLoopGroup()
           .shutdownGracefully()
           .await();
+
+      ThreadGroup threadGroup = Thread.currentThread().getThreadGroup();
+      while (threadGroup.getParent() != null) {
+        threadGroup = threadGroup.getParent();
+      }
+
+      Thread[] activeThreads = new Thread[threadGroup.activeCount()];
+      threadGroup.enumerate(activeThreads);
+
+      for (Thread activeThread : activeThreads) {
+        if (activeThread.getName().startsWith("pulsar-client-io")) {
+          activeThread.interrupt();
+        }
+      }
     } catch (InterruptedException e) {
       // No-op
     }
