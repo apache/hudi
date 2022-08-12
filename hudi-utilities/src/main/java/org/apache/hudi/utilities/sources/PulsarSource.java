@@ -41,13 +41,15 @@ import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.pulsar.JsonUtils;
 
+import java.io.Closeable;
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
 
 /**
  * TODO java-doc
  */
-public class PulsarSource extends RowSource {
+public class PulsarSource extends RowSource implements Closeable {
 
   private static final Logger LOG = LogManager.getLogger(PulsarSource.class);
 
@@ -66,7 +68,7 @@ public class PulsarSource extends RowSource {
   private final String serviceEndpointURL;
   private final String adminEndpointURL;
 
-  // TODO dedupe
+  // NOTE: We're keeping the client so that we can shut it down properly
   private final Lazy<PulsarClient> pulsarClient;
   private final Lazy<Consumer<byte[]>> pulsarConsumer;
 
@@ -141,24 +143,6 @@ public class PulsarSource extends RowSource {
     return Pair.of(startingOffset, endingOffset);
   }
 
-  private void ackOffset(MessageId latestConsumedOffset) {
-    try {
-      pulsarConsumer.get().acknowledgeCumulative(latestConsumedOffset);
-    } catch (PulsarClientException e) {
-      LOG.error(String.format("Failed to ack messageId (%s) for topic '%s'", latestConsumedOffset, topicName), e);
-      throw new HoodieIOException("Failed to ack message for topic", e);
-    }
-  }
-
-  private MessageId fetchLatestOffset() {
-    try {
-      return pulsarConsumer.get().getLastMessageId();
-    } catch (PulsarClientException e) {
-      LOG.error(String.format("Failed to fetch latest messageId for topic '%s'", topicName), e);
-      throw new HoodieIOException("Failed to fetch latest messageId for topic", e);
-    }
-  }
-
   private MessageId decodeStartingOffset(Option<String> lastCheckpointStrOpt) {
     return lastCheckpointStrOpt
         .map(lastCheckpoint -> JsonUtils.topicOffsets(lastCheckpoint).apply(topicName))
@@ -178,6 +162,24 @@ public class PulsarSource extends RowSource {
               throw new UnsupportedOperationException("Unsupported offset auto-reset strategy");
           }
         });
+  }
+
+  private void ackOffset(MessageId latestConsumedOffset) {
+    try {
+      pulsarConsumer.get().acknowledgeCumulative(latestConsumedOffset);
+    } catch (PulsarClientException e) {
+      LOG.error(String.format("Failed to ack messageId (%s) for topic '%s'", latestConsumedOffset, topicName), e);
+      throw new HoodieIOException("Failed to ack message for topic", e);
+    }
+  }
+
+  private MessageId fetchLatestOffset() {
+    try {
+      return pulsarConsumer.get().getLastMessageId();
+    } catch (PulsarClientException e) {
+      LOG.error(String.format("Failed to fetch latest messageId for topic '%s'", topicName), e);
+      throw new HoodieIOException("Failed to fetch latest messageId for topic", e);
+    }
   }
 
   private Consumer<byte[]> subscribeToTopic() {
@@ -203,6 +205,11 @@ public class PulsarSource extends RowSource {
       LOG.error(String.format("Failed to init Pulsar client connecting to '%s'", serviceEndpointURL), e);
       throw new HoodieIOException("Failed to init Pulsar client", e);
     }
+  }
+
+  @Override
+  public void close() throws IOException {
+    pulsarClient.get().close();
   }
 
   private static Long computeTargetRecordLimit(long sourceLimit, TypedProperties props) {
