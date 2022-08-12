@@ -161,7 +161,7 @@ public class TestFileSystemViewCommand extends CLIFunctionalTestHarness {
   @Test
   public void testShowCommits() {
     // Test default show fsview all
-    CommandResult cr = shell().executeCommand("show fsview all");
+    CommandResult cr = shell().executeCommand("show fsview all --pathRegex */*/*");
     assertTrue(cr.isSuccess());
 
     // Get all file groups
@@ -209,7 +209,7 @@ public class TestFileSystemViewCommand extends CLIFunctionalTestHarness {
   @Test
   public void testShowCommitsWithSpecifiedValues() {
     // Test command with options, baseFileOnly and maxInstant is 2
-    CommandResult cr = shell().executeCommand("show fsview all --baseFileOnly true --maxInstant 2");
+    CommandResult cr = shell().executeCommand("show fsview all --pathRegex */*/* --baseFileOnly true --maxInstant 2");
     assertTrue(cr.isSuccess());
 
     List<Comparable[]> rows = new ArrayList<>();
