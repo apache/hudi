@@ -17,7 +17,9 @@ import org.apache.spark.sql.pulsar.JsonUtils;
 import java.util.Arrays;
 import java.util.Collections;
 
-
+/**
+ * TODO java-doc
+ */
 public class PulsarSource extends RowSource {
 
   private static final String[] PULSAR_META_FIELDS = new String[] {
@@ -74,7 +76,7 @@ public class PulsarSource extends RowSource {
   }
 
   private Dataset<Row> transform(Dataset<Row> rows) {
-   return rows.drop(PULSAR_META_FIELDS);
+    return rows.drop(PULSAR_META_FIELDS);
   }
 
   private Pair<MessageId, MessageId> computeOffsets(Option<String> lastCheckpointStrOpt, long sourceLimit) {
@@ -139,8 +141,8 @@ public class PulsarSource extends RowSource {
     private static final ConfigProperty<OffsetAutoResetStrategy> PULSAR_SOURCE_OFFSET_AUTO_RESET_STRATEGY = ConfigProperty
         .key("hoodie.deltastreamer.source.pulsar.offset.autoResetStrategy")
         .defaultValue(OffsetAutoResetStrategy.LATEST)
-        .withDocumentation("Policy determining how offsets shall be automatically reset in case there's " +
-            "no checkpoint information present");
+        .withDocumentation("Policy determining how offsets shall be automatically reset in case there's "
+            + "no checkpoint information present");
 
     public static final ConfigProperty<Long> PULSAR_SOURCE_MAX_RECORDS_PER_BATCH_THRESHOLD_PROP = ConfigProperty
         .key("hoodie.deltastreamer.source.pulsar.maxRecords")
