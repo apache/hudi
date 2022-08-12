@@ -69,12 +69,12 @@ public class HoodieFlinkStreamer {
     TypedProperties kafkaProps = DFSPropertiesConfiguration.getGlobalProps();
     kafkaProps.putAll(StreamerUtil.appendKafkaProps(cfg));
 
+    Configuration conf = FlinkStreamerConfig.toFlinkConfig(cfg);
     // Read from kafka source
     RowType rowType =
-        (RowType) AvroSchemaConverter.convertToDataType(StreamerUtil.getSourceSchema(cfg))
+        (RowType) AvroSchemaConverter.convertToDataType(StreamerUtil.getSourceSchema(conf))
             .getLogicalType();
 
-    Configuration conf = FlinkStreamerConfig.toFlinkConfig(cfg);
     long ckpTimeout = env.getCheckpointConfig().getCheckpointTimeout();
     int parallelism = env.getParallelism();
     conf.setLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, ckpTimeout);
