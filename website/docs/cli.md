@@ -91,34 +91,102 @@ Metadata for table trips loaded
 ```
 
 Once connected to the table, a lot of other commands become available. The shell has contextual autocomplete help (press TAB) and below is a list of all commands, few of which are reviewed in this section
-are reviewed
 
-```java
+```shell
 hudi:trips->help
 * ! - Allows execution of operating system (OS) commands
 * // - Inline comment markers (start of line only)
 * ; - Inline comment markers (start of line only)
-* addpartitionmeta - Add partition metadata to a table, if not present
+* bootstrap index showmapping - Show bootstrap index mapping
+* bootstrap index showpartitions - Show bootstrap indexed partitions
+* bootstrap run - Run a bootstrap action for current Hudi table
+* clean showpartitions - Show partition level details of a clean
+* cleans refresh - Refresh table metadata
+* cleans run - run clean
+* cleans show - Show the cleans
 * clear - Clears the console
 * cls - Clears the console
+* clustering run - Run Clustering
+* clustering schedule - Schedule Clustering
+* clustering scheduleAndExecute - Run Clustering. Make a cluster plan first and execute that plan immediately
 * commit rollback - Rollback a commit
 * commits compare - Compare commits with another Hoodie table
+* commit show_write_stats - Show write stats of a commit
 * commit showfiles - Show file level details of a commit
 * commit showpartitions - Show partition level details of a commit
-* commits refresh - Refresh the commits
+* commits refresh - Refresh table metadata
 * commits show - Show the commits
-* commits sync - Compare commits with another Hoodie table
+* commits showarchived - Show the archived commits
+* commits sync - Sync commits with another Hoodie table
+* compaction repair - Renames the files to make them consistent with the timeline as dictated by Hoodie metadata. Use when compaction unschedule fails partially.
+* compaction run - Run Compaction for given instant time
+* compaction schedule - Schedule Compaction
+* compaction scheduleAndExecute - Schedule compaction plan and execute this plan
+* compaction show - Shows compaction details for a specific compaction instant
+* compaction showarchived - Shows compaction details for a specific compaction instant
+* compactions show all - Shows all compactions that are in active timeline
+* compactions showarchived - Shows compaction details for specified time window
+* compaction unschedule - Unschedule Compaction
+* compaction unscheduleFileId - UnSchedule Compaction for a fileId
+* compaction validate - Validate Compaction
 * connect - Connect to a hoodie table
+* create - Create a hoodie table if not present
 * date - Displays the local date and time
+* desc - Describe Hoodie Table properties
+* downgrade table - Downgrades a table
 * exit - Exits the shell
+* export instants - Export Instants and their metadata from the Timeline
+* fetch table schema - Fetches latest table schema
+* hdfsparquetimport - Imports Parquet table to a hoodie table
 * help - List all commands usage
+* marker delete - Delete the marker
+* metadata create - Create the Metadata Table if it does not exist
+* metadata delete - Remove the Metadata Table
+* metadata init - Update the metadata table from commits since the creation
+* metadata list-files - Print a list of all files in a partition from the metadata
+* metadata list-partitions - List all partitions from metadata
+* metadata refresh - Refresh table metadata
+* metadata set - Set options for Metadata Table
+* metadata stats - Print stats about the metadata
+* metadata validate-files - Validate all files in all partitions from the metadata
 * quit - Exits the shell
-* records deduplicate - De-duplicate a partition path contains duplicates & produce repaired files to replace with
+* refresh - Refresh table metadata
+* repair addpartitionmeta - Add partition metadata to a table, if not present
+* repair corrupted clean files - repair corrupted clean files
+* repair deduplicate - De-duplicate a partition path contains duplicates & produce repaired files to replace with
+* repair migrate-partition-meta - Migrate all partition meta file currently stored in text format to be stored in base file format. See HoodieTableConfig#PARTITION_METAFILE_USE_DATA_FORMAT.
+* repair overwrite-hoodie-props - Overwrite hoodie.properties with provided file. Risky operation. Proceed with caution!
+* savepoint create - Savepoint a commit
+* savepoint delete - Delete the savepoint
+* savepoint rollback - Savepoint a commit
+* savepoints refresh - Refresh table metadata
+* savepoints show - Show the savepoints
 * script - Parses the specified resource file and executes its commands
+* set - Set spark launcher env to cli
+* show archived commits - Read commits from archived files and show details
+* show archived commit stats - Read commits from archived files and show details
+* show env - Show spark launcher env by key
+* show envs all - Show spark launcher envs
+* show fsview all - Show entire file-system view
+* show fsview latest - Show latest file-system view
+* show logfile metadata - Read commit metadata from log files
+* show logfile records - Read records from log files
+* show rollback - Show details of a rollback instant
+* show rollbacks - List all rollback instants
 * stats filesizes - File Sizes. Display summary stats on sizes of files
 * stats wa - Write Amplification. Ratio of how many records were upserted to how many records were actually written
 * sync validate - Validate the sync by counting the number of records
 * system properties - Shows the shell's properties
+* table delete-configs - Delete the supplied table configs from the table.
+* table recover-configs - Recover table configs, from update/delete that failed midway.
+* table update-configs - Update the table configs with configs with provided file.
+* temp_delete - Delete view name
+* temp_query - query against created temp view
+* temp delete - Delete view name
+* temp query - query against created temp view
+* temps_show - Show all views name
+* temps show - Show all views name
+* upgrade table - Upgrades a table
 * utils loadClass - Load a class
 * version - Displays shell version
 
@@ -392,7 +460,7 @@ Compaction successfully repaired
 .....
 ```
 
-## Savepoint and Restore 
+### Savepoint and Restore 
 As the name suggest, "savepoint" saves the table as of the commit time, so that it lets you restore the table to this 
 savepoint at a later point in time if need be. You can read more about savepoints and restore [here](/docs/next/disaster_recovery)
 
@@ -419,4 +487,66 @@ savepoints show
 savepoint rollback --savepoint 20220128160245447 --sparkMaster local[2]
 ```
 
+### Upgrade and Downgrade Table
+In case the user needs to downgrade the version of Hudi library used, the Hudi table needs to be manually downgraded
+on the newer version of Hudi CLI before library downgrade.  To downgrade a Hudi table through CLI, user needs to specify
+the target Hudi table version as follows:
 
+```shell
+connect --path <table_path>
+downgrade table --toVersion <target_version>
+```
+
+The following table shows the Hudi table versions corresponding to the Hudi release versions:
+
+| Hudi Table Version | Hudi Release Version(s) |
+|:-------------------|:------------------------|
+| `FIVE` or `5`      | 0.12.0 and above        |
+| `FOUR` or `4`      | 0.11.x                  |
+| `THREE` or `3`     | 0.10.x                  |
+| `TWO` or `2`       | 0.9.x                   |
+| `ONE` or `1`       | 0.6.x - 0.8.x           |
+| `ZERO` or `0`      | 0.5.x and below         |
+
+For example, to downgrade a table from version `FIVE`(`5`) (current version) to `TWO`(`2`), you should run (use proper Spark master based
+on your environment)
+
+```shell
+downgrade table --toVersion TWO --sparkMaster local[2]
+```
+
+or
+
+```shell
+downgrade table --toVersion 2 --sparkMaster local[2]
+```
+
+You can verify the table version by looking at the `hoodie.table.version` property in `.hoodie/hoodie.properties` under
+the table path:
+
+```properties
+hoodie.table.version=2
+```
+
+Hudi CLI also provides the ability to manually upgrade a Hudi table.  To upgrade a Hudi table through CLI:
+
+```shell
+upgrade table --toVersion <target_version>
+```
+
+:::note
+Table upgrade is automatically handled by the Hudi write client in different deployment modes such as DeltaStreamer
+after upgrading the Hudi library so that the user does not have to do manual upgrade.
+
+Table upgrade from table version ONE to TWO requires key generator related configs such as
+"hoodie.datasource.write.recordkey.field", which is only available when user configures the write job. So the table
+upgrade from version ONE to TWO through CLI is not supported, and user should rely on the automatic upgrade in the write
+client instead.
+:::
+
+You may also run the upgrade command without specifying the target version.  In such a case, the latest table version
+corresponding to the library release version is used:
+
+```shell
+upgrade table
+```
