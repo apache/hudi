@@ -24,8 +24,16 @@ import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.util.Lazy;
 import org.apache.hudi.utilities.schema.SchemaProvider;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
+import org.apache.pulsar.client.api.Consumer;
 import org.apache.pulsar.client.api.MessageId;
+import org.apache.pulsar.client.api.PulsarClient;
+import org.apache.pulsar.client.api.PulsarClientException;
+import org.apache.pulsar.client.api.SubscriptionType;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -40,6 +48,8 @@ import java.util.Collections;
  */
 public class PulsarSource extends RowSource {
 
+  private static final Logger LOG = LogManager.getLogger(PulsarSource.class);
+
   private static final String[] PULSAR_META_FIELDS = new String[] {
       "__key",
       "__topic",
@@ -50,8 +60,13 @@ public class PulsarSource extends RowSource {
   };
 
   private final String topicName;
+
   private final String serviceEndpointURL;
   private final String adminEndpointURL;
+
+  // TODO dedupe
+  private final Lazy<PulsarClient> pulsarClient;
+  private final Lazy<Consumer<byte[]>> pulsarConsumer;
 
   public PulsarSource(TypedProperties props,
                       JavaSparkContext sparkContext,
@@ -65,9 +80,13 @@ public class PulsarSource extends RowSource {
             Config.PULSAR_SOURCE_SERVICE_ENDPOINT_URL.key()));
 
     this.topicName = props.getString(Config.PULSAR_SOURCE_TOPIC_NAME.key());
+
     // TODO validate endpoints provided in the appropriate format
     this.serviceEndpointURL = props.getString(Config.PULSAR_SOURCE_SERVICE_ENDPOINT_URL.key());
     this.adminEndpointURL = props.getString(Config.PULSAR_SOURCE_ADMIN_ENDPOINT_URL.key());
+
+    this.pulsarClient = Lazy.lazily(this::initPulsarClient);
+    this.pulsarConsumer = Lazy.lazily(this::subscribeToTopic);
   }
 
   @Override
@@ -79,9 +98,9 @@ public class PulsarSource extends RowSource {
 
     //
     // TODO
-    //    - Handle checkpoints/offsets
-    //      - From --checkpoint param
-    //      - From persistence?
+    //    - [P0] Commit offsets (to Pulsar)
+    //    - [P0] Add support for schema-provider
+    //    - [P1] Add support for auth
     //
 
     Dataset<Row> sourceRows = sparkSession.read()
@@ -104,9 +123,19 @@ public class PulsarSource extends RowSource {
     MessageId startingOffset = fetchStartingOffset(lastCheckpointStrOpt);
 
     Long maxRecordsLimit = computeTargetRecordLimit(sourceLimit, props);
-    MessageId endingOffset = MessageId.latest;
+
+    MessageId endingOffset = fetchEndingOffset();
 
     return Pair.of(startingOffset, endingOffset);
+  }
+
+  private MessageId fetchEndingOffset() {
+    try {
+      return pulsarConsumer.get().getLastMessageId();
+    } catch (PulsarClientException e) {
+      LOG.error(String.format("Failed to fetch latest messageId for topic '%s'", topicName), e);
+      throw new HoodieIOException("Failed to fetch latest messageId for topic", e);
+    }
   }
 
   private MessageId fetchStartingOffset(Option<String> lastCheckpointStrOpt) {
@@ -128,6 +157,31 @@ public class PulsarSource extends RowSource {
               throw new UnsupportedOperationException("Unsupported offset auto-reset strategy");
           }
         });
+  }
+
+  private Consumer<byte[]> subscribeToTopic() {
+    try {
+      return pulsarClient.get()
+          .newConsumer()
+          .topic(topicName)
+          .subscriptionName("hudi-pulsar-consumer")
+          .subscriptionType(SubscriptionType.Shared)
+          .subscribe();
+    } catch (PulsarClientException e) {
+      LOG.error(String.format("Failed to subscribe to Pulsar topic '%s'", topicName), e);
+      throw new HoodieIOException("Failed to subscribe to Pulsar topic", e);
+    }
+  }
+
+  private PulsarClient initPulsarClient() {
+    try {
+      return PulsarClient.builder()
+          .serviceUrl(serviceEndpointURL)
+          .build();
+    } catch (PulsarClientException e) {
+      LOG.error(String.format("Failed to init Pulsar client connecting to '%s'", serviceEndpointURL), e);
+      throw new HoodieIOException("Failed to init Pulsar client", e);
+    }
   }
 
   private static Long computeTargetRecordLimit(long sourceLimit, TypedProperties props) {
