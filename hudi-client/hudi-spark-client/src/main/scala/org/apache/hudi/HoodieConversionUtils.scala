@@ -26,7 +26,8 @@ import scala.collection.JavaConverters
 object HoodieConversionUtils {
 
   /**
-   * TODO scala-doc
+   * Converts Java's [[ju.Map]] into Scala's (immutable) [[Map]] (by defautl [[JavaConverters]] convert to
+   * a mutable one)
    */
   def mapAsScalaImmutableMap[K, V](map: ju.Map[K, V]): Map[K, V] =
     JavaConverters.mapAsScalaMap(map).toMap
