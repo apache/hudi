@@ -34,7 +34,7 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
-import java.util.HashMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -74,7 +74,7 @@ public class MarkerHandler extends Handler {
   // Parallelism for reading and deleting marker files
   private final int parallelism;
   // Marker directory states, {markerDirPath -> MarkerDirState instance}
-  private final Map<String, MarkerDirState> markerDirStateMap = new HashMap<>();
+  private final Map<String, MarkerDirState> markerDirStateMap = new ConcurrentHashMap<>();
   // A thread to dispatch marker creation requests to batch processing threads
   private final MarkerCreationDispatchingRunnable markerCreationDispatchingRunnable;
   private final Object firstCreationRequestSeenLock = new Object();
