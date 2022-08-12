@@ -34,6 +34,7 @@ import org.apache.pulsar.client.api.MessageId;
 import org.apache.pulsar.client.api.PulsarClient;
 import org.apache.pulsar.client.api.PulsarClientException;
 import org.apache.pulsar.client.api.SubscriptionType;
+import org.apache.pulsar.client.impl.PulsarClientImpl;
 import org.apache.pulsar.common.naming.TopicName;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
@@ -209,7 +210,7 @@ public class PulsarSource extends RowSource implements Closeable {
 
   @Override
   public void close() throws IOException {
-    pulsarClient.get().close();
+    shutdownPulsarClient(pulsarClient.get());
   }
 
   private static Long computeTargetRecordLimit(long sourceLimit, TypedProperties props) {
@@ -225,6 +226,19 @@ public class PulsarSource extends RowSource implements Closeable {
     return JsonUtils.topicOffsets(
         HoodieConversionUtils.mapAsScalaImmutableMap(
             Collections.singletonMap(topic, startingOffset)));
+  }
+
+  private static void shutdownPulsarClient(PulsarClient client) throws PulsarClientException {
+    client.close();
+    // NOTE: Current version of Pulsar's client (in Pulsar Spark Connector 3.1.1.4) is not
+    //       shutting down event-loop group properly, so we had to shut it down manually
+    try {
+      ((PulsarClientImpl) client).eventLoopGroup()
+          .shutdownGracefully()
+          .await();
+    } catch (InterruptedException e) {
+      // No-op
+    }
   }
 
   // TODO unify w/ Kafka
