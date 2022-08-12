@@ -60,7 +60,6 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE;
-import static org.apache.hudi.common.util.CollectionUtils.combine;
 import static org.apache.hudi.hadoop.CachingPath.createRelativePathUnsafe;
 
 /**
@@ -245,12 +244,12 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
       return Collections.emptyMap();
     }
 
-    FileStatus[] allFiles = listPartitionPathFiles(partitions);
+    Map<String, FileStatus[]> partitionedFiles = listPartitionPathFiles(partitions);
     HoodieTimeline activeTimeline = getActiveTimeline();
     Option<HoodieInstant> latestInstant = activeTimeline.lastInstant();
 
     HoodieTableFileSystemView fileSystemView =
-        new HoodieTableFileSystemView(metaClient, activeTimeline, allFiles);
+        new HoodieTableFileSystemView(metaClient, activeTimeline, partitionedFiles);
 
     Option<String> queryInstant = specifiedQueryInstant.or(() -> latestInstant.map(HoodieInstant::getTimestamp));
 
@@ -325,7 +324,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   /**
    * Load partition paths and it's files under the query table path.
    */
-  private FileStatus[] listPartitionPathFiles(List<PartitionPath> partitions) {
+  private Map<String, FileStatus[]> listPartitionPathFiles(List<PartitionPath> partitions) {
     List<Path> partitionPaths = partitions.stream()
         // NOTE: We're using [[createPathUnsafe]] to create Hadoop's [[Path]] objects
         //       instances more efficiently, provided that
@@ -362,8 +361,15 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
         fileStatusCache.put(relativePath, files);
       });
 
-      return combine(flatMap(cachedPartitionPaths.values()),
-          flatMap(fetchedPartitionsMap.values()));
+      // return a map of (partitionPath, file statuses of the partition)
+      Map<String, FileStatus[]> partitionedFiles = new HashMap<>();
+      fetchedPartitionsMap.forEach((absolutePath, statuses) ->
+          partitionedFiles.put(FSUtils.getRelativePartitionPath(basePath, absolutePath), statuses));
+
+      cachedPartitionPaths.forEach((relativePath, statuses) ->
+          partitionedFiles.put(relativePath.toString(), statuses));
+
+      return partitionedFiles;
     } catch (IOException e) {
       throw new HoodieIOException("Failed to list partition paths", e);
     }

@@ -389,7 +389,7 @@ public class HoodieRepairTool {
    * @throws IOException upon errors.
    */
   boolean undoRepair() throws IOException {
-    FileSystem fs = metaClient.getFs();
+    FileSystem fs = metaClient.getRawFs();
     String backupPathStr = cfg.backupPath;
     Path backupPath = new Path(backupPathStr);
     if (!fs.exists(backupPath)) {
@@ -439,8 +439,8 @@ public class HoodieRepairTool {
     }
 
     Path backupPath = new Path(cfg.backupPath);
-    if (metaClient.getFs().exists(backupPath)
-        && metaClient.getFs().listStatus(backupPath).length > 0) {
+    if (metaClient.getRawFs().exists(backupPath)
+        && metaClient.getRawFs().listStatus(backupPath).length > 0) {
       LOG.error(String.format("Cannot use backup path %s: it is not empty", cfg.backupPath));
       return -1;
     }

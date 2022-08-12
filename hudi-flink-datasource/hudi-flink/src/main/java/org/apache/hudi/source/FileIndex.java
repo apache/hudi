@@ -49,6 +49,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
@@ -176,6 +177,32 @@ public class FileIndex {
         .toArray(FileStatus[]::new);
     logPruningMsg(allFiles.length, results.length, "data skipping");
     return results;
+  }
+
+  public Map<String, FileStatus[]> getPartitionToFiles() {
+    if (!tableExists) {
+      return new HashMap<>();
+    }
+
+    String[] partitions = getOrBuildPartitionPaths().stream().map(p -> fullPartitionPath(path, p)).toArray(String[]::new);
+    Map<String, FileStatus[]> partitionToFiles = FSUtils.getFilesInPartitions(HoodieFlinkEngineContext.DEFAULT, metadataConfig, path.toString(), partitions);
+    FileStatus[] allFileStatus = partitionToFiles.values().stream().flatMap(Arrays::stream).toArray(FileStatus[]::new);
+    Set<String> candidateFiles = candidateFilesInMetadataTable(allFileStatus);
+    if (candidateFiles == null) {
+      // no need to filter by col stats or error occurs.
+      return partitionToFiles;
+    }
+
+    partitionToFiles = partitionToFiles.entrySet().stream()
+        .collect(Collectors.toMap(
+            Map.Entry::getKey,
+            e -> Arrays.stream(e.getValue())
+                .filter(fileStatus -> candidateFiles.contains(fileStatus.getPath().getName()))
+                .toArray(FileStatus[]::new)
+        ));
+    partitionToFiles.entrySet().removeIf(e -> e.getValue().length == 0);
+
+    return partitionToFiles;
   }
 
   /**

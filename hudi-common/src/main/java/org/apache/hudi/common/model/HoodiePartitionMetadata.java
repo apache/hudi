@@ -20,6 +20,7 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
+import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.util.AvroOrcUtils;
 import org.apache.hudi.common.util.BaseFileUtils;
 import org.apache.hudi.common.util.Option;
@@ -79,7 +80,8 @@ public class HoodiePartitionMetadata {
    * Construct metadata from existing partition.
    */
   public HoodiePartitionMetadata(FileSystem fs, Path partitionPath) {
-    this.fs = fs;
+    // partition metadata should use raw FS
+    this.fs = fs instanceof HoodieWrapperFileSystem ? ((HoodieWrapperFileSystem) fs).getTableFileSystem() : fs;
     this.props = new Properties();
     this.partitionPath = partitionPath;
     this.format = Option.empty();

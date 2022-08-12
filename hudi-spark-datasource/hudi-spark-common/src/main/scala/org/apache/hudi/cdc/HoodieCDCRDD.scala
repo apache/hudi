@@ -117,7 +117,7 @@ class HoodieCDCRDD(
       metaClient: HoodieTableMetaClient
     ) extends Iterator[InternalRow] with SparkAdapterSupport with AvroDeserializerSupport with Closeable {
 
-    private lazy val fs = metaClient.getFs.getFileSystem
+    private lazy val fs = metaClient.getFs.getTableFileSystem()
 
     private lazy val conf = confBroadcast.value.value
 
@@ -146,6 +146,7 @@ class HoodieCDCRDD(
         .fromProperties(props)
         .build()
       HoodieTableState(
+        metaClient.getTableConfig.getTableName,
         pathToString(basePath),
         Some(split.changes.last.getInstant),
         recordKeyField,

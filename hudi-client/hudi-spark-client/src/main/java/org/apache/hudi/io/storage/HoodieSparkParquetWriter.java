@@ -19,6 +19,7 @@
 package org.apache.hudi.io.storage;
 
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -51,8 +52,9 @@ public class HoodieSparkParquetWriter extends HoodieBaseParquetWriter<InternalRo
                                   HoodieRowParquetConfig parquetConfig,
                                   String instantTime,
                                   TaskContextSupplier taskContextSupplier,
-                                  boolean populateMetaFields) throws IOException {
-    super(file, parquetConfig);
+                                  boolean populateMetaFields,
+                                  HoodieConfig hoodieConfig) throws IOException {
+    super(file, parquetConfig, hoodieConfig);
     this.writeSupport = parquetConfig.getWriteSupport();
     this.fileName = UTF8String.fromString(file.getName());
     this.instantTime = UTF8String.fromString(instantTime);

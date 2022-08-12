@@ -23,6 +23,7 @@ import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -42,6 +43,7 @@ import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
@@ -377,8 +379,14 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
       List<String> paths) {
     if (isPartitionAvailableInStore(partition)) {
       LOG.info("Removing file slices for partition (" + partition + ") for instant (" + instant + ")");
+      HoodieWrapperFileSystem fs = metaClient.getFs();
       FileStatus[] statuses = paths.stream().map(p -> {
         FileStatus status = new FileStatus();
+        try {
+          fs.getFileStatus(new Path(p));
+        } catch (IOException e) {
+          throw new HoodieIOException("Failed to get file status", e);
+        }
         status.setPath(new Path(p));
         return status;
       }).toArray(FileStatus[]::new);

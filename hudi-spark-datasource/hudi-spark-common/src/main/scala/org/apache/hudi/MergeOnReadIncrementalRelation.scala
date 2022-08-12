@@ -163,7 +163,7 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
   protected lazy val commitsMetadata = includedCommits.map(getCommitMetadata(_, super.timeline)).asJava
 
   protected lazy val affectedFilesInCommits: Array[FileStatus] = {
-    listAffectedFilesForCommits(conf, new Path(metaClient.getBasePath), commitsMetadata)
+    listAffectedFilesForCommits(metaClient.getFs, commitsMetadata, metaClient.getBasePath)
   }
 
   // Record filters making sure that only records w/in the requested bounds are being fetched as part of the

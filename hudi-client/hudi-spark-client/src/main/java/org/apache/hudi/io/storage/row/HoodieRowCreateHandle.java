@@ -21,6 +21,7 @@ package org.apache.hudi.io.storage.row;
 import org.apache.hudi.client.HoodieInternalWriteStatus;
 import org.apache.hudi.client.model.HoodieInternalRow;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
@@ -28,13 +29,11 @@ import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieInsertException;
 import org.apache.hudi.hadoop.CachingPath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.types.StructType;
@@ -59,6 +58,7 @@ public class HoodieRowCreateHandle implements Serializable {
 
   private final HoodieTable table;
   private final HoodieWriteConfig writeConfig;
+  private final HoodieWrapperFileSystem fs;
 
   private final String partitionPath;
   private final Path path;
@@ -107,11 +107,10 @@ public class HoodieRowCreateHandle implements Serializable {
 
     this.currTimer = HoodieTimer.start();
 
-    FileSystem fs = table.getMetaClient().getFs();
-
+    this.fs = table.getMetaClient().getFs();
     String writeToken = getWriteToken(taskPartitionId, taskId, taskEpochId);
     String fileName = FSUtils.makeBaseFileName(instantTime, writeToken, this.fileId, table.getBaseFileExtension());
-    this.path = makeNewPath(fs, partitionPath, fileName, writeConfig);
+    this.path = makeNewPath(partitionPath, fileName);
 
     this.populateMetaFields = writeConfig.populateMetaFields();
     this.fileName = UTF8String.fromString(path.getName());
@@ -228,7 +227,7 @@ public class HoodieRowCreateHandle implements Serializable {
     stat.setNumInserts(writeStatus.getTotalRecords());
     stat.setPrevCommit(HoodieWriteStat.NULL_COMMIT);
     stat.setFileId(fileId);
-    stat.setPath(new Path(writeConfig.getBasePath()), path);
+    stat.setPath(FSUtils.getRelativeFilePathStr(partitionPath, path.getName()));
     long fileSizeInBytes = FSUtils.getFileSize(table.getMetaClient().getFs(), path);
     stat.setTotalWriteBytes(fileSizeInBytes);
     stat.setFileSizeInBytes(fileSizeInBytes);
@@ -243,14 +242,11 @@ public class HoodieRowCreateHandle implements Serializable {
     return path.getName();
   }
 
-  private static Path makeNewPath(FileSystem fs, String partitionPath, String fileName, HoodieWriteConfig writeConfig) {
+  private Path makeNewPath(String partitionPath, String fileName) {
     Path path = FSUtils.getPartitionPath(writeConfig.getBasePath(), partitionPath);
-    try {
-      if (!fs.exists(path)) {
-        fs.mkdirs(path); // create a new partition as needed.
-      }
-    } catch (IOException e) {
-      throw new HoodieIOException("Failed to make dir " + path, e);
+
+    if (!fs.dirExists(partitionPath, fileId)) {
+      fs.mkPath(partitionPath, fileId); // create a new partition as needed.
     }
     return new CachingPath(path.toString(), fileName);
   }

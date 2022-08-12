@@ -292,10 +292,10 @@ public class CompactionAdminClient extends BaseHoodieClient {
           Option<HoodieBaseFile> df = fs.getBaseFile();
           if (operation.getDataFileName().isPresent()) {
             String expPath = metaClient.getFs()
-                .getFileStatus(
-                    new Path(FSUtils.getPartitionPath(metaClient.getBasePath(), operation.getPartitionPath()),
-                        new Path(operation.getDataFileName().get())))
-                .getPath().toString();
+                    .getFileStatus(
+                        new Path(FSUtils.getPartitionPath(metaClient.getBasePathV2(), operation.getPartitionPath()),
+                            new Path(operation.getDataFileName().get())))
+                        .getPath().toString();
             ValidationUtils.checkArgument(df.isPresent(),
                 "Data File must be present. File Slice was : " + fs + ", operation :" + operation);
             ValidationUtils.checkArgument(df.get().getPath().equals(expPath),
@@ -305,7 +305,7 @@ public class CompactionAdminClient extends BaseHoodieClient {
           Set<HoodieLogFile> logFilesInCompactionOp = operation.getDeltaFileNames().stream().map(dp -> {
             try {
               FileStatus[] fileStatuses = metaClient.getFs().listStatus(new Path(
-                  FSUtils.getPartitionPath(metaClient.getBasePath(), operation.getPartitionPath()), new Path(dp)));
+                  FSUtils.getPartitionPath(metaClient.getBasePathV2(), operation.getPartitionPath()), new Path(dp)));
               ValidationUtils.checkArgument(fileStatuses.length == 1, "Expect only 1 file-status");
               return new HoodieLogFile(fileStatuses[0]);
             } catch (FileNotFoundException fe) {

@@ -220,6 +220,13 @@ public class TestFSUtils extends HoodieCommonTestHarness {
   }
 
   @Test
+  public void testGetRelativePartitionPathWithScheme() {
+    Path basePath = new Path("s3://bucket/table");
+    Path partitionPath = new Path("s3://bucket/table/2023/03/01/");
+    assertEquals("2023/03/01", FSUtils.getRelativePartitionPath(basePath, partitionPath));
+  }
+
+  @Test
   public void testOldLogFileName() {
     // Check if old log file names are still parsable by FSUtils method
     String partitionPath = "2019/01/01/";
@@ -387,9 +394,9 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     String log3 = FSUtils.makeLogFileName(fileId, LOG_EXTENSION, instantTime, 3, writeToken);
     Files.createFile(partitionPath.resolve(log3));
 
-    assertEquals(3, (int) FSUtils.getLatestLogVersion(FSUtils.getFs(basePath, new Configuration()),
+    assertEquals(3, (int) FSUtils.getLatestLogVersion((HoodieWrapperFileSystem) FSUtils.getFs(basePath, new Configuration()),
         new Path(partitionPath.toString()), fileId, LOG_EXTENSION, instantTime).get().getLeft());
-    assertEquals(4, FSUtils.computeNextLogVersion(FSUtils.getFs(basePath, new Configuration()),
+    assertEquals(4, FSUtils.computeNextLogVersion((HoodieWrapperFileSystem) FSUtils.getFs(basePath, new Configuration()),
         new Path(partitionPath.toString()), fileId, LOG_EXTENSION, instantTime));
   }
 

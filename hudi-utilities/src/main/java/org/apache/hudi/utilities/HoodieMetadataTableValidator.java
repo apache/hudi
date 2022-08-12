@@ -1149,7 +1149,12 @@ public class HoodieMetadataTableValidator implements Serializable {
     private Option<BloomFilterData> readBloomFilterFromFile(String partitionPath, String filename) {
       Path path = new Path(FSUtils.getPartitionPath(metaClient.getBasePathV2(), partitionPath), filename);
       BloomFilter bloomFilter;
-      try (HoodieFileReader fileReader = HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO).getFileReader(metaClient.getHadoopConf(), path)) {
+      try (HoodieFileReader fileReader = HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO)
+          .getFileReader(
+              metaClient.getHadoopConf(),
+              metaClient.getFs(),
+              path,
+              metaClient.getTableConfig())) {
         bloomFilter = fileReader.readBloomFilter();
         if (bloomFilter == null) {
           LOG.error("Failed to read bloom filter for " + path);

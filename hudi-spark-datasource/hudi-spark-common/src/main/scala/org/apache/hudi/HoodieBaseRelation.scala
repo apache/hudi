@@ -71,7 +71,8 @@ trait HoodieFileSplit {}
 
 case class HoodieTableSchema(structTypeSchema: StructType, avroSchemaStr: String, internalSchema: Option[InternalSchema] = None)
 
-case class HoodieTableState(tablePath: String,
+case class HoodieTableState(tableName: String,
+                            tablePath: String,
                             latestCommitTimestamp: Option[String],
                             recordKeyField: String,
                             preCombineFieldOpt: Option[String],
@@ -260,6 +261,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
 
     // Subset of the state of table's configuration as of at the time of the query
     HoodieTableState(
+      tableConfig.getTableName,
       tablePath = basePath.toString,
       latestCommitTimestamp = queryTimestamp,
       recordKeyField = recordKeyField,
@@ -730,7 +732,10 @@ object HoodieBaseRelation extends SparkAdapterSupport {
 
     partitionedFile => {
       val hadoopConf = hadoopConfBroadcast.value.get()
-      val reader = new HoodieAvroHFileReader(hadoopConf, new Path(partitionedFile.filePath),
+      val reader = new HoodieAvroHFileReader(
+        hadoopConf,
+        FSUtils.getFs(partitionedFile.filePath, hadoopConf),
+        new Path(partitionedFile.filePath),
         new CacheConfig(hadoopConf))
 
       val requiredRowSchema = requiredDataSchema.structTypeSchema

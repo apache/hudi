@@ -23,6 +23,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -36,7 +37,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 
@@ -107,16 +107,14 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
   }
 
   public Path makeNewPath(String partitionPath) {
-    Path path = FSUtils.getPartitionPath(config.getBasePath(), partitionPath);
-    try {
-      if (!fs.exists(path)) {
-        fs.mkdirs(path); // create a new partition as needed.
-      }
-    } catch (IOException e) {
-      throw new HoodieIOException("Failed to make dir " + path, e);
+    Path logicalPath = FSUtils.getPartitionPath(config.getBasePath(), partitionPath);
+
+    if (!fs.dirExists(partitionPath, fileId)) {
+      fs.mkPath(partitionPath, fileId); // create a new partition as needed.
     }
 
-    return new Path(path.toString(), FSUtils.makeBaseFileName(instantTime, writeToken, fileId,
+    // return logical path
+    return new Path(logicalPath.toString(), FSUtils.makeBaseFileName(instantTime, writeToken, fileId,
         hoodieTable.getMetaClient().getTableConfig().getBaseFileFormat().getFileExtension()));
   }
 
@@ -188,7 +186,7 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
   public abstract IOType getIOType();
 
   @Override
-  public FileSystem getFileSystem() {
+  public HoodieWrapperFileSystem getFileSystem() {
     return hoodieTable.getMetaClient().getFs();
   }
 
@@ -199,7 +197,7 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
   public HoodieTableMetaClient getHoodieTableMetaClient() {
     return hoodieTable.getMetaClient();
   }
-  
+
   public String getFileId() {
     return this.fileId;
   }

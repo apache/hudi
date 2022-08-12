@@ -53,9 +53,9 @@ public class CleanPlanV2MigrationHandler extends AbstractMigratorBase<HoodieClea
   public HoodieCleanerPlan upgradeFrom(HoodieCleanerPlan plan) {
     Map<String, List<HoodieCleanFileInfo>> filePathsPerPartition =
         plan.getFilesToBeDeletedPerPartition().entrySet().stream().map(e -> Pair.of(e.getKey(), e.getValue().stream()
-            .map(v -> new HoodieCleanFileInfo(
-                new Path(FSUtils.getPartitionPath(metaClient.getBasePath(), e.getKey()), v).toString(), false))
-            .collect(Collectors.toList()))).collect(Collectors.toMap(Pair::getKey, Pair::getValue));
+          .map(v -> new HoodieCleanFileInfo(
+             new Path(FSUtils.getPartitionPath(metaClient.getBasePath(), e.getKey()), v).toString(), false))
+          .collect(Collectors.toList()))).collect(Collectors.toMap(Pair::getKey, Pair::getValue));
     return new HoodieCleanerPlan(plan.getEarliestInstantToRetain(), plan.getLastCompletedCommitTimestamp(),
         plan.getPolicy(), new HashMap<>(), VERSION, filePathsPerPartition, new ArrayList<>());
   }

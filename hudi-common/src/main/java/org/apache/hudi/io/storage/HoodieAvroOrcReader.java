@@ -19,6 +19,9 @@
 package org.apache.hudi.io.storage;
 
 import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.util.AvroOrcUtils;
 import org.apache.hudi.common.util.BaseFileUtils;
@@ -51,9 +54,9 @@ public class HoodieAvroOrcReader extends HoodieAvroFileReaderBase {
   private final Configuration conf;
   private final BaseFileUtils orcUtils;
 
-  public HoodieAvroOrcReader(Configuration configuration, Path path) {
-    this.conf = configuration;
-    this.path = path;
+  public HoodieAvroOrcReader(Configuration configuration, Path path, HoodieConfig hoodieConfig) {
+    this.conf = FSUtils.registerFileSystemWithStorageStrategy(path, configuration, hoodieConfig);
+    this.path = HoodieWrapperFileSystem.convertToHoodiePath(path, configuration);
     this.orcUtils = BaseFileUtils.getInstance(HoodieFileFormat.ORC);
   }
 

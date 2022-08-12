@@ -301,7 +301,12 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
 
           Option<HoodieFileReader> baseFileReader = StringUtils.isNullOrEmpty(clusteringOp.getDataFilePath())
               ? Option.empty()
-              : Option.of(HoodieFileReaderFactory.getReaderFactory(recordType).getFileReader(table.getHadoopConf(), new Path(clusteringOp.getDataFilePath())));
+              : Option.of(HoodieFileReaderFactory.getReaderFactory(recordType)
+                  .getFileReader(
+                      table.getHadoopConf(),
+                      table.getMetaClient().getFs(),
+                      new Path(clusteringOp.getDataFilePath()),
+                      config));
           HoodieTableConfig tableConfig = table.getMetaClient().getTableConfig();
           recordIterators.add(getFileSliceReader(baseFileReader, scanner, readerSchema,
               tableConfig.getProps(),
@@ -333,7 +338,12 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
           clusteringOpsPartition.forEachRemaining(clusteringOp -> {
             try {
               Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(writeConfig.getSchema()));
-              HoodieFileReader baseFileReader = HoodieFileReaderFactory.getReaderFactory(recordType).getFileReader(hadoopConf.get(), new Path(clusteringOp.getDataFilePath()));
+              HoodieFileReader baseFileReader = HoodieFileReaderFactory.getReaderFactory(recordType)
+                  .getFileReader(
+                      hadoopConf.get(),
+                      getHoodieTable().getMetaClient().getFs(),
+                      new Path(clusteringOp.getDataFilePath()),
+                      writeConfig);
               Option<BaseKeyGenerator> keyGeneratorOp =
                   writeConfig.populateMetaFields() ? Option.empty() : Option.of((BaseKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(writeConfig.getProps()));
               // NOTE: Record have to be cloned here to make sure if it holds low-level engine-specific

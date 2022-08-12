@@ -37,6 +37,7 @@ public class HoodieCommonTestHarness {
 
   protected String tableName;
   protected String basePath;
+  protected String storagePath;
   protected URI baseUri;
   protected HoodieTestDataGenerator dataGen;
   protected HoodieTableMetaClient metaClient;
@@ -55,6 +56,9 @@ public class HoodieCommonTestHarness {
       java.nio.file.Path basePath = tempDir.resolve("dataset");
       java.nio.file.Files.createDirectories(basePath);
       this.basePath = basePath.toAbsolutePath().toString();
+      java.nio.file.Path storagePath = tempDir.resolve("storage");
+      java.nio.file.Files.createDirectories(storagePath);
+      this.storagePath = storagePath.toAbsolutePath().toString();
       this.baseUri = basePath.toUri();
     } catch (IOException ioe) {
       throw new HoodieIOException(ioe.getMessage(), ioe);

@@ -194,7 +194,12 @@ public abstract class JavaExecutionStrategy<T>
 
         baseFileReader = StringUtils.isNullOrEmpty(clusteringOp.getDataFilePath())
             ? Option.empty()
-            : Option.of(HoodieFileReaderFactory.getReaderFactory(recordType).getFileReader(table.getHadoopConf(), new Path(clusteringOp.getDataFilePath())));
+            : Option.of(HoodieFileReaderFactory.getReaderFactory(recordType)
+                .getFileReader(
+                    table.getHadoopConf(),
+                    table.getMetaClient().getFs(),
+                    new Path(clusteringOp.getDataFilePath()),
+                    config));
         HoodieTableConfig tableConfig = table.getMetaClient().getTableConfig();
         Iterator<HoodieRecord<T>> fileSliceReader = getFileSliceReader(baseFileReader, scanner, readerSchema,
             tableConfig.getProps(),
@@ -222,7 +227,13 @@ public abstract class JavaExecutionStrategy<T>
   private List<HoodieRecord<T>> readRecordsForGroupBaseFiles(List<ClusteringOperation> clusteringOps) {
     List<HoodieRecord<T>> records = new ArrayList<>();
     clusteringOps.forEach(clusteringOp -> {
-      try (HoodieFileReader baseFileReader = HoodieFileReaderFactory.getReaderFactory(recordType).getFileReader(getHoodieTable().getHadoopConf(), new Path(clusteringOp.getDataFilePath()))) {
+      try (HoodieFileReader baseFileReader =
+          HoodieFileReaderFactory.getReaderFactory(recordType)
+              .getFileReader(
+                  getHoodieTable().getHadoopConf(),
+                  getHoodieTable().getMetaClient().getFs(),
+                  new Path(clusteringOp.getDataFilePath()),
+                  writeConfig)) {
         Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(getWriteConfig().getSchema()));
         Iterator<HoodieRecord> recordIterator = baseFileReader.getRecordIterator(readerSchema);
         // NOTE: Record have to be cloned here to make sure if it holds low-level engine-specific

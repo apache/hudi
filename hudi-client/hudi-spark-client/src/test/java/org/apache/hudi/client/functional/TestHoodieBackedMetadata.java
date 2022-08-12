@@ -729,7 +729,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     table.getHoodieView().sync();
     List<FileSlice> fileSlices = table.getSliceView().getLatestFileSlices("files").collect(Collectors.toList());
     HoodieBaseFile baseFile = fileSlices.get(0).getBaseFile().get();
-    HoodieAvroHFileReader hoodieHFileReader = new HoodieAvroHFileReader(context.getHadoopConf().get(), new Path(baseFile.getPath()),
+    HoodieAvroHFileReader hoodieHFileReader = new HoodieAvroHFileReader(context.getHadoopConf().get(), metadataMetaClient.getFs(), new Path(baseFile.getPath()),
         new CacheConfig(context.getHadoopConf().get()));
     List<IndexedRecord> records = HoodieAvroHFileReader.readAllRecords(hoodieHFileReader);
     records.forEach(entry -> {
@@ -1155,6 +1155,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     final HoodieBaseFile baseFile = fileSlices.get(0).getBaseFile().get();
 
     HoodieAvroHFileReader hoodieHFileReader = new HoodieAvroHFileReader(context.getHadoopConf().get(),
+        table.getMetaClient().getFs(),
         new Path(baseFile.getPath()),
         new CacheConfig(context.getHadoopConf().get()));
     List<IndexedRecord> records = HoodieAvroHFileReader.readAllRecords(hoodieHFileReader);

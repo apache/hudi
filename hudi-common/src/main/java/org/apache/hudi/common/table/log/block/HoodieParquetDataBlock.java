@@ -157,7 +157,13 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
 
     Schema writerSchema = new Schema.Parser().parse(this.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
 
-    ClosableIterator<HoodieRecord<T>> iterator = HoodieFileReaderFactory.getReaderFactory(type).getFileReader(inlineConf, inlineLogFilePath, PARQUET)
+    // TODO: Revisit this to integrate inlineFS with storage strategy
+    ClosableIterator<HoodieRecord<T>> iterator = HoodieFileReaderFactory.getReaderFactory(type)
+        .getFileReader(
+            inlineConf,
+            inlineLogFilePath,
+            PARQUET,
+            new HoodieConfig())
         .getRecordIterator(writerSchema, readerSchema);
     return iterator;
   }

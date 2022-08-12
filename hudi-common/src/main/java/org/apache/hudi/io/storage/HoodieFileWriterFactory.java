@@ -33,6 +33,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 
 import java.io.IOException;
@@ -60,11 +61,11 @@ public class HoodieFileWriterFactory {
   }
 
   public static <T, I, K, O> HoodieFileWriter getFileWriter(
-      String instantTime, Path path, Configuration conf, HoodieConfig config, Schema schema,
+      String instantTime, FileSystem fs, Path path, Configuration conf, HoodieConfig config, Schema schema,
       TaskContextSupplier taskContextSupplier, HoodieRecordType recordType) throws IOException {
     final String extension = FSUtils.getFileExtension(path.getName());
     HoodieFileWriterFactory factory = getWriterFactory(recordType);
-    return factory.getFileWriterByFormat(extension, instantTime, path, conf, config, schema, taskContextSupplier);
+    return factory.getFileWriterByFormat(extension, instantTime, fs, path, conf, config, schema, taskContextSupplier);
   }
 
   public static <T, I, K, O> HoodieFileWriter getFileWriter(HoodieFileFormat format,
@@ -74,16 +75,16 @@ public class HoodieFileWriterFactory {
   }
 
   protected <T, I, K, O> HoodieFileWriter getFileWriterByFormat(
-      String extension, String instantTime, Path path, Configuration conf, HoodieConfig config, Schema schema,
+      String extension, String instantTime, FileSystem fs, Path path, Configuration conf, HoodieConfig config, Schema schema,
       TaskContextSupplier taskContextSupplier) throws IOException {
     if (PARQUET.getFileExtension().equals(extension)) {
-      return newParquetFileWriter(instantTime, path, conf, config, schema, taskContextSupplier);
+      return newParquetFileWriter(instantTime, fs, path, conf, config, schema, taskContextSupplier);
     }
     if (HFILE.getFileExtension().equals(extension)) {
-      return newHFileFileWriter(instantTime, path, conf, config, schema, taskContextSupplier);
+      return newHFileFileWriter(instantTime, fs, path, conf, config, schema, taskContextSupplier);
     }
     if (ORC.getFileExtension().equals(extension)) {
-      return newOrcFileWriter(instantTime, path, conf, config, schema, taskContextSupplier);
+      return newOrcFileWriter(instantTime, fs, path, conf, config, schema, taskContextSupplier);
     }
     throw new UnsupportedOperationException(extension + " format not supported yet.");
   }
@@ -99,7 +100,7 @@ public class HoodieFileWriterFactory {
   }
 
   protected HoodieFileWriter newParquetFileWriter(
-      String instantTime, Path path, Configuration conf, HoodieConfig config, Schema schema,
+      String instantTime, FileSystem fs, Path path, Configuration conf, HoodieConfig config, Schema schema,
       TaskContextSupplier taskContextSupplier) throws IOException {
     throw new UnsupportedOperationException();
   }
@@ -110,13 +111,13 @@ public class HoodieFileWriterFactory {
   }
 
   protected HoodieFileWriter newHFileFileWriter(
-      String instantTime, Path path, Configuration conf, HoodieConfig config, Schema schema,
+      String instantTime, FileSystem fs, Path path, Configuration conf, HoodieConfig config, Schema schema,
       TaskContextSupplier taskContextSupplier) throws IOException {
     throw new UnsupportedOperationException();
   }
 
   protected HoodieFileWriter newOrcFileWriter(
-      String instantTime, Path path, Configuration conf, HoodieConfig config, Schema schema,
+      String instantTime, FileSystem fs, Path path, Configuration conf, HoodieConfig config, Schema schema,
       TaskContextSupplier taskContextSupplier) throws IOException {
     throw new UnsupportedOperationException();
   }

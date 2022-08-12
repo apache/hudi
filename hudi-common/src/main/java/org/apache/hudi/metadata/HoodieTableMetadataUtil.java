@@ -437,7 +437,11 @@ public class HoodieTableMetadataUtil {
 
       final Path writeFilePath = new Path(recordsGenerationParams.getDataMetaClient().getBasePath(), pathWithPartition);
       try (HoodieFileReader fileReader =
-               HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO).getFileReader(recordsGenerationParams.getDataMetaClient().getHadoopConf(), writeFilePath)) {
+               HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO).getFileReader(
+                   recordsGenerationParams.getDataMetaClient().getHadoopConf(),
+                   recordsGenerationParams.getDataMetaClient().getFs(),
+                   writeFilePath,
+                   recordsGenerationParams.getDataMetaClient().getTableConfig())) {
         try {
           final BloomFilter fileBloomFilter = fileReader.readBloomFilter();
           if (fileBloomFilter == null) {
@@ -897,7 +901,11 @@ public class HoodieTableMetadataUtil {
         final String pathWithPartition = partitionName + "/" + appendedFile;
         final Path appendedFilePath = new Path(recordsGenerationParams.getDataMetaClient().getBasePath(), pathWithPartition);
         try (HoodieFileReader fileReader =
-                 HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO).getFileReader(recordsGenerationParams.getDataMetaClient().getHadoopConf(), appendedFilePath)) {
+                 HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO).getFileReader(
+                     recordsGenerationParams.getDataMetaClient().getHadoopConf(),
+                     recordsGenerationParams.getDataMetaClient().getFs(),
+                     appendedFilePath,
+                     recordsGenerationParams.getDataMetaClient().getTableConfig())) {
           final BloomFilter fileBloomFilter = fileReader.readBloomFilter();
           if (fileBloomFilter == null) {
             LOG.error("Failed to read bloom filter for " + appendedFilePath);

@@ -196,7 +196,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
     Collections.sort(sortedKeys);
 
     final HoodieAvroHFileReader reader =
-             new HoodieAvroHFileReader(inlineConf, inlinePath, new CacheConfig(inlineConf), inlinePath.getFileSystem(inlineConf));
+             new HoodieAvroHFileReader(inlineConf, inlinePath.getFileSystem(inlineConf), inlinePath, new CacheConfig(inlineConf));
 
     // Get writer's schema from the header
     final ClosableIterator<HoodieRecord<IndexedRecord>> recordIterator =

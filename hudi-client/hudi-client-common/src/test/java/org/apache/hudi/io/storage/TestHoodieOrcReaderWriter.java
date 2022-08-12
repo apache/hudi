@@ -23,11 +23,14 @@ import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.engine.TaskContextSupplier;
+import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.orc.CompressionKind;
 import org.apache.orc.OrcFile;
@@ -64,13 +67,16 @@ public class TestHoodieOrcReaderWriter extends TestHoodieReaderWriterBase {
     when(mockTaskContextSupplier.getPartitionIdSupplier()).thenReturn(partitionSupplier);
     when(partitionSupplier.get()).thenReturn(10);
     String instantTime = "000";
-    return new HoodieAvroOrcWriter(instantTime, getFilePath(), config, avroSchema, mockTaskContextSupplier);
+    return new HoodieAvroOrcWriter(instantTime, (HoodieWrapperFileSystem) getFilePath().getFileSystem(conf),
+        getFilePath(), config, avroSchema, mockTaskContextSupplier);
   }
 
   @Override
   protected HoodieAvroFileReader createReader(
       Configuration conf) throws Exception {
-    return (HoodieAvroFileReader) HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO).getFileReader(conf, getFilePath());
+    HoodieTableConfig config = new HoodieTableConfig();
+    config.setValue(HoodieTableConfig.HOODIE_BASE_PATH, tempDir.toString());
+    return (HoodieAvroFileReader) HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO).getFileReader(conf, FileSystem.get(conf), getFilePath(), config);
   }
 
   @Override

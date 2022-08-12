@@ -22,6 +22,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.HoodieBloomFilterWriteSupport;
 import org.apache.hudi.common.bloom.BloomFilter;
@@ -64,12 +65,12 @@ public class HoodieAvroOrcWriter implements HoodieAvroFileWriter, Closeable {
   private String minRecordKey;
   private String maxRecordKey;
 
-  public HoodieAvroOrcWriter(String instantTime, Path file, HoodieOrcConfig config, Schema schema,
+  public HoodieAvroOrcWriter(String instantTime, FileSystem fs, Path file, HoodieOrcConfig config, Schema schema,
                              TaskContextSupplier taskContextSupplier) throws IOException {
 
     Configuration conf = FSUtils.registerFileSystem(file, config.getHadoopConf());
     this.file = HoodieWrapperFileSystem.convertToHoodiePath(file, conf);
-    this.fs = (HoodieWrapperFileSystem) this.file.getFileSystem(conf);
+    this.fs = (HoodieWrapperFileSystem) fs;
     this.instantTime = instantTime;
     this.taskContextSupplier = taskContextSupplier;
 

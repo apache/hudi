@@ -18,6 +18,7 @@
 
 package org.apache.hudi.index;
 
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
@@ -37,6 +38,7 @@ import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -147,12 +149,12 @@ public class HoodieIndexUtils {
    * @param candidateRecordKeys - Candidate keys to filter
    * @return List of candidate keys that are available in the file
    */
-  public static List<String> filterKeysFromFile(Path filePath, List<String> candidateRecordKeys,
-                                                Configuration configuration) throws HoodieIndexException {
+  public static List<String> filterKeysFromFile(FileSystem fs, Path filePath, List<String> candidateRecordKeys,
+                                                Configuration configuration, HoodieConfig hoodieConfig) throws HoodieIndexException {
     ValidationUtils.checkArgument(FSUtils.isBaseFile(filePath));
     List<String> foundRecordKeys = new ArrayList<>();
     try (HoodieFileReader fileReader = HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO)
-        .getFileReader(configuration, filePath)) {
+        .getFileReader(configuration, fs, filePath, hoodieConfig)) {
       // Load all rowKeys from the file, to double-confirm
       if (!candidateRecordKeys.isEmpty()) {
         HoodieTimer timer = HoodieTimer.start();

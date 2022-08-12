@@ -24,6 +24,7 @@ import org.apache.hudi.avro.HoodieBloomFilterWriteSupport;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
+import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
@@ -91,7 +92,10 @@ public class TestHoodieInternalRowParquetWriter extends HoodieClientTestHarness 
 
     Path filePath = new Path(basePath + "/internal_row_writer.parquet");
 
-    try (HoodieInternalRowParquetWriter writer = new HoodieInternalRowParquetWriter(filePath, parquetConfig)) {
+    try (HoodieInternalRowParquetWriter writer = new HoodieInternalRowParquetWriter(
+          filePath,
+          parquetConfig,
+          cfg)) {
       for (InternalRow row : rows) {
         writer.writeRow(row.getUTF8String(schema.fieldIndex("record_key")), row);
       }

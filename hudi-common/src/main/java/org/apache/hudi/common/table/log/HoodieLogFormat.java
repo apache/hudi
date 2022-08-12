@@ -19,6 +19,7 @@
 package org.apache.hudi.common.table.log;
 
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.util.Option;
@@ -123,7 +124,7 @@ public interface HoodieLogFormat {
     // Replication for the log file
     private Short replication;
     // FileSystem
-    private FileSystem fs;
+    private HoodieWrapperFileSystem fs;
     // Size threshold for the log file. Useful when used with a rolling log appender
     private Long sizeThreshold;
     // Log File extension. Could be .avro.delta or .avro.commits etc
@@ -172,7 +173,7 @@ public interface HoodieLogFormat {
     }
 
     public WriterBuilder withFs(FileSystem fs) {
-      this.fs = fs;
+      this.fs = (HoodieWrapperFileSystem) fs;
       return this;
     }
 

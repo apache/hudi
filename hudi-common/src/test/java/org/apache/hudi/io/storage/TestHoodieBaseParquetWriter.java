@@ -26,6 +26,8 @@ import org.apache.hudi.avro.HoodieAvroWriteSupport;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
+import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.parquet.avro.AvroSchemaConverter;
@@ -36,6 +38,8 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 
+import static org.apache.hudi.common.table.HoodieTableConfig.HOODIE_BASE_PATH_KEY;
+import static org.apache.hudi.common.table.HoodieTableConfig.HOODIE_BASE_PATH_KEY;
 import static org.apache.parquet.column.ParquetProperties.DEFAULT_MAXIMUM_RECORD_COUNT_FOR_CHECK;
 import static org.apache.parquet.column.ParquetProperties.DEFAULT_MINIMUM_RECORD_COUNT_FOR_CHECK;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -49,8 +53,8 @@ public class TestHoodieBaseParquetWriter {
     long writtenRecordCount = 0L;
     long currentDataSize = 0L;
 
-    public MockHoodieParquetWriter(Path file, HoodieParquetConfig<HoodieAvroWriteSupport> parquetConfig) throws IOException {
-      super(file, (HoodieParquetConfig) parquetConfig);
+    public MockHoodieParquetWriter(Path file, HoodieParquetConfig<HoodieAvroWriteSupport> parquetConfig, HoodieConfig config) throws IOException {
+      super(file, (HoodieParquetConfig) parquetConfig, config);
     }
 
     @Override
@@ -91,7 +95,9 @@ public class TestHoodieBaseParquetWriter {
             ParquetWriter.DEFAULT_PAGE_SIZE, maxFileSize, hadoopConf, 0, true);
 
     Path filePath = new Path(new Path(tempDir.toUri()), "test_fileSize.parquet");
-    try (MockHoodieParquetWriter writer = new MockHoodieParquetWriter(filePath, parquetConfig)) {
+    HoodieConfig config = new HoodieConfig();
+    config.setValue(HoodieTableConfig.HOODIE_BASE_PATH_KEY, tempDir.toString());
+    try (MockHoodieParquetWriter writer = new MockHoodieParquetWriter(filePath, parquetConfig, config)) {
       // doesn't start write, should return true
       assertTrue(writer.canWrite());
       // recordCountForNextSizeCheck should be DEFAULT_MINIMUM_RECORD_COUNT_FOR_CHECK

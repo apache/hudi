@@ -98,7 +98,7 @@ public class HoodieCDCExtractor {
       InstantRange range) {
     this.metaClient = metaClient;
     this.basePath = metaClient.getBasePathV2();
-    this.fs = metaClient.getFs().getFileSystem();
+    this.fs = metaClient.getFs().getTableFileSystem();
     this.supplementalLoggingMode = metaClient.getTableConfig().cdcSupplementalLoggingMode();
     this.instantRange = range;
     init();
@@ -246,7 +246,7 @@ public class HoodieCDCExtractor {
       HoodieWriteStat writeStat,
       WriteOperationType operation) {
     final Path basePath = metaClient.getBasePathV2();
-    final FileSystem fs = metaClient.getFs().getFileSystem();
+    final FileSystem fs = metaClient.getFs().getTableFileSystem();
     final String instantTs = instant.getTimestamp();
 
     HoodieCDCFileSplit cdcFileSplit;

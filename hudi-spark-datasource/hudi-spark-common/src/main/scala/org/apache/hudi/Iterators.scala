@@ -29,7 +29,7 @@ import org.apache.hudi.HoodieDataSourceHelper.AvroDeserializerSupport
 import org.apache.hudi.LogFileIterator._
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.engine.{EngineType, HoodieLocalEngineContext}
-import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.common.fs.{FSUtils, HoodieWrapperFileSystem}
 import org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model._
@@ -316,8 +316,13 @@ object LogFileIterator {
             HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue()))
 
       if (logFiles.nonEmpty) {
-        logRecordScannerBuilder.withPartition(
-          getRelativePartitionPath(new Path(tableState.tablePath), logFiles.head.getPath.getParent))
+        val logFilePath = logFiles.head.getPath
+        val partitionName = if (logFilePath.toString.startsWith(tablePath)) {
+          FSUtils.getRelativePartitionPath(new Path(tablePath), logFilePath.getParent)
+        } else {
+          HoodieWrapperFileSystem.getPartitionPath(tableState.tableName, new Path(tablePath), logFilePath.getParent)
+        }
+        logRecordScannerBuilder.withPartition(partitionName)
       }
 
       logRecordScannerBuilder.withRecordMerger(

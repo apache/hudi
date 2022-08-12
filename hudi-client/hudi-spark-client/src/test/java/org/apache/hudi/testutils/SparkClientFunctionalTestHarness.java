@@ -107,6 +107,8 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
   protected boolean initialized = false;
   @TempDir
   protected java.nio.file.Path tempDir;
+  @TempDir
+  protected java.nio.file.Path tempStorageDir;
 
   public static Map<String, String> getSparkSqlConf() {
     Map<String, String> sqlConf = new HashMap<>();
@@ -120,7 +122,11 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
   }
 
   public String basePath() {
-    return tempDir.toAbsolutePath().toUri().toString();
+    return tempDir.resolve("table").toAbsolutePath().toUri().toString();
+  }
+
+  public String storagePath() {
+    return tempStorageDir.resolve("storage").toAbsolutePath().toUri().toString();
   }
 
   @Override

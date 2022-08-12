@@ -18,10 +18,13 @@
 
 package org.apache.hudi.io.storage;
 
+import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.fs.FSUtils;
+
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.ReflectionUtils;
@@ -54,33 +57,33 @@ public class HoodieFileReaderFactory {
     }
   }
 
-  public HoodieFileReader getFileReader(Configuration conf, Path path) throws IOException {
+  public HoodieFileReader getFileReader(Configuration conf, FileSystem fs, Path path, HoodieConfig hoodieConfig) throws IOException {
     final String extension = FSUtils.getFileExtension(path.toString());
     if (PARQUET.getFileExtension().equals(extension)) {
-      return newParquetFileReader(conf, path);
+      return newParquetFileReader(conf, path, hoodieConfig);
     }
     if (HFILE.getFileExtension().equals(extension)) {
-      return newHFileFileReader(conf, path);
+      return newHFileFileReader(conf, fs, path);
     }
     if (ORC.getFileExtension().equals(extension)) {
-      return newOrcFileReader(conf, path);
+      return newOrcFileReader(conf, path, hoodieConfig);
     }
     throw new UnsupportedOperationException(extension + " format not supported yet.");
   }
 
-  public HoodieFileReader getFileReader(Configuration conf, Path path, HoodieFileFormat format) throws IOException {
-    return this.newParquetFileReader(conf, path);
+  public HoodieFileReader getFileReader(Configuration conf, Path path, HoodieFileFormat format, HoodieConfig hoodieConfig) throws IOException {
+    return this.newParquetFileReader(conf, path, hoodieConfig);
   }
 
-  protected HoodieFileReader newParquetFileReader(Configuration conf, Path path) {
+  protected HoodieFileReader newParquetFileReader(Configuration conf, Path path, HoodieConfig hoodieConfig) {
     throw new UnsupportedOperationException();
   }
 
-  protected HoodieFileReader newHFileFileReader(Configuration conf, Path path) throws IOException {
+  protected HoodieFileReader newHFileFileReader(Configuration conf, FileSystem fs, Path path) throws IOException {
     throw new UnsupportedOperationException();
   }
 
-  protected HoodieFileReader newOrcFileReader(Configuration conf, Path path) {
+  protected HoodieFileReader newOrcFileReader(Configuration conf, Path path, HoodieConfig hoodieConfig) {
     throw new UnsupportedOperationException();
   }
 }

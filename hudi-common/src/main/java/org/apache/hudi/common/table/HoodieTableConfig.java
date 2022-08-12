@@ -30,6 +30,8 @@ import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieTimelineTimeZone;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
+import org.apache.hudi.common.storage.HoodieDefaultStorageStrategy;
+import org.apache.hudi.common.storage.HoodieObjectStoreStorageStrategy;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
@@ -81,6 +83,20 @@ public class HoodieTableConfig extends HoodieConfig {
   public static final String HOODIE_PROPERTIES_FILE_BACKUP = "hoodie.properties.backup";
   public static final String HOODIE_WRITE_TABLE_NAME_KEY = "hoodie.datasource.write.table.name";
   public static final String HOODIE_TABLE_NAME_KEY = "hoodie.table.name";
+  public static final String HOODIE_BASE_PATH_KEY = "hoodie.base.path";
+  public static final String HOODIE_STORAGE_PATH_KEY = "hoodie.storage.path";
+  public static final String HOODIE_STORAGE_STRATEGY_CLASS_NAME_KEY = "hoodie.storage.strategy.class";
+
+  public enum StorageStrategy {
+    DEFAULT(HoodieDefaultStorageStrategy.class.getName()),
+    OBJECT_STORE(HoodieObjectStoreStorageStrategy.class.getName());
+
+    public final String value;
+
+    StorageStrategy(String strategy) {
+      this.value = strategy;
+    }
+  }
 
   public static final ConfigProperty<String> DATABASE_NAME = ConfigProperty
       .key("hoodie.database.name")
@@ -97,6 +113,24 @@ public class HoodieTableConfig extends HoodieConfig {
       .key("hoodie.table.type")
       .defaultValue(HoodieTableType.COPY_ON_WRITE)
       .withDocumentation("The table type for the underlying data, for this write. This can’t change between writes.");
+
+  public static final ConfigProperty<String> HOODIE_BASE_PATH = ConfigProperty
+      .key(HOODIE_BASE_PATH_KEY)
+      .noDefaultValue()
+      .withDocumentation("Base path on lake storage, under which all the table data is stored. "
+          + "Always prefix it explicitly with the storage scheme (e.g hdfs://, s3:// etc). "
+          + "Hudi stores all the main meta-data about commits, savepoints, cleaning audit logs "
+          + "etc in .hoodie directory under this base path directory.");
+
+  public static final ConfigProperty<String> HOODIE_STORAGE_PATH = ConfigProperty
+      .key(HOODIE_STORAGE_PATH_KEY)
+      .noDefaultValue()
+      .withDocumentation("Base storage path for Hudi table.");
+
+  public static final ConfigProperty<String> HOODIE_STORAGE_STRATEGY_CLASS_NAME = ConfigProperty
+      .key(HOODIE_STORAGE_STRATEGY_CLASS_NAME_KEY)
+      .defaultValue(StorageStrategy.DEFAULT.value)
+      .withDocumentation("Class that provides storage file locations");
 
   public static final ConfigProperty<HoodieTableVersion> VERSION = ConfigProperty
       .key("hoodie.table.version")
@@ -607,6 +641,18 @@ public class HoodieTableConfig extends HoodieConfig {
    */
   public String getTableName() {
     return getString(NAME);
+  }
+
+  public String getBasePath() {
+    return getString(HOODIE_BASE_PATH);
+  }
+
+  public String getStoragePath() {
+    return getString(HOODIE_STORAGE_PATH);
+  }
+
+  public String getStorageStrategy() {
+    return getStringOrDefault(HOODIE_STORAGE_STRATEGY_CLASS_NAME);
   }
 
   /**

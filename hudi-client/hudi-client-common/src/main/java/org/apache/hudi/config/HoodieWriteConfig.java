@@ -44,6 +44,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableConfig.StorageStrategy;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.marker.MarkerType;
@@ -222,6 +223,16 @@ public class HoodieWriteConfig extends HoodieConfig {
           + "Always prefix it explicitly with the storage scheme (e.g hdfs://, s3:// etc). "
           + "Hudi stores all the main meta-data about commits, savepoints, cleaning audit logs "
           + "etc in .hoodie directory under this base path directory.");
+
+  public static final ConfigProperty<String> STORAGE_PATH = ConfigProperty
+      .key(HoodieTableConfig.HOODIE_STORAGE_PATH_KEY)
+      .noDefaultValue()
+      .withDocumentation("Base storage path for Hudi table");
+
+  public static final ConfigProperty<String> STORAGE_STRATEGY_CLASS_NAME = ConfigProperty
+      .key(HoodieTableConfig.HOODIE_STORAGE_STRATEGY_CLASS_NAME_KEY)
+      .defaultValue(HoodieTableConfig.StorageStrategy.DEFAULT.value)
+      .withDocumentation("Class that provides storage file locations");
 
   public static final ConfigProperty<String> AVRO_SCHEMA_STRING = ConfigProperty
       .key("hoodie.avro.schema")
@@ -1159,6 +1170,18 @@ public class HoodieWriteConfig extends HoodieConfig {
         .collect(Collectors.toList());
     String recordMergerStrategy = getString(RECORD_MERGER_STRATEGY);
     return HoodieRecordUtils.createRecordMerger(getString(BASE_PATH), engineType, mergers, recordMergerStrategy);
+  }
+
+  public String getStoragePath() {
+    String storagePath = getString(STORAGE_PATH);
+
+    return StringUtils.isNullOrEmpty(storagePath)
+        || StorageStrategy.DEFAULT.value.equals(getStorageStrategyClass())
+        ? this.getBasePath() : storagePath;
+  }
+
+  public String getStorageStrategyClass() {
+    return getString(STORAGE_STRATEGY_CLASS_NAME);
   }
 
   public String getSchema() {
@@ -2577,6 +2600,16 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withPath(String basePath) {
       writeConfig.setValue(BASE_PATH, basePath);
+      return this;
+    }
+
+    public Builder withStoragePath(String storagePath) {
+      writeConfig.setValue(STORAGE_PATH, storagePath);
+      return this;
+    }
+
+    public Builder withStorageStrategyClass(String storageStrategyClass) {
+      writeConfig.setValue(STORAGE_STRATEGY_CLASS_NAME, storageStrategyClass);
       return this;
     }
 

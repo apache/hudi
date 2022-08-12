@@ -412,7 +412,9 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
     }
     final HoodieBaseFile baseFile = fileSlices.get(0).getBaseFile().get();
 
-    HoodieAvroHFileReader hoodieHFileReader = new HoodieAvroHFileReader(context.getHadoopConf().get(),
+    HoodieAvroHFileReader hoodieHFileReader = new HoodieAvroHFileReader(
+        context.getHadoopConf().get(),
+        table.getMetaClient().getFs(),
         new Path(baseFile.getPath()),
         new CacheConfig(context.getHadoopConf().get()));
     List<IndexedRecord> records = HoodieAvroHFileReader.readAllRecords(hoodieHFileReader);

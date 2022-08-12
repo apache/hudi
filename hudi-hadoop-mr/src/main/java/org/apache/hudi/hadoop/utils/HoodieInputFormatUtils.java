@@ -20,6 +20,7 @@ package org.apache.hudi.hadoop.utils;
 
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -475,12 +476,12 @@ public class HoodieInputFormatUtils {
    *
    * @return the affected file status array
    */
-  public static FileStatus[] listAffectedFilesForCommits(Configuration hadoopConf, Path basePath, List<HoodieCommitMetadata> metadataList) {
+  public static FileStatus[] listAffectedFilesForCommits(HoodieWrapperFileSystem fs, List<HoodieCommitMetadata> metadataList, String basePath) {
     // TODO: Use HoodieMetaTable to extract affected file directly.
     HashMap<String, FileStatus> fullPathToFileStatus = new HashMap<>();
     // Iterate through the given commits.
     for (HoodieCommitMetadata metadata: metadataList) {
-      fullPathToFileStatus.putAll(metadata.getFullPathToFileStatus(hadoopConf, basePath.toString()));
+      fullPathToFileStatus.putAll(metadata.getFullPathToFileStatus(fs, basePath));
     }
     return fullPathToFileStatus.values().toArray(new FileStatus[0]);
   }

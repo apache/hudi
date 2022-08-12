@@ -105,14 +105,14 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
     when(partitionSupplier.get()).thenReturn(10);
 
     return (HoodieAvroHFileWriter)HoodieFileWriterFactory.getFileWriter(
-        instantTime, getFilePath(), conf, writeConfig.getStorageConfig(), avroSchema, mockTaskContextSupplier, writeConfig.getRecordMerger().getRecordType());
+        instantTime, getFilePath().getFileSystem(conf), getFilePath(), conf, writeConfig.getStorageConfig(), avroSchema, mockTaskContextSupplier, writeConfig.getRecordMerger().getRecordType());
   }
 
   @Override
   protected HoodieAvroFileReader createReader(
       Configuration conf) throws Exception {
     CacheConfig cacheConfig = new CacheConfig(conf);
-    return new HoodieAvroHFileReader(conf, getFilePath(), cacheConfig, getFilePath().getFileSystem(conf));
+    return new HoodieAvroHFileReader(conf, getFilePath().getFileSystem(conf), getFilePath(), cacheConfig);
   }
 
   @Override

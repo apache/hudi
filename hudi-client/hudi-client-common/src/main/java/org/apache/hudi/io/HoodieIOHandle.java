@@ -18,6 +18,7 @@
 
 package org.apache.hudi.io;
 
+import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -29,7 +30,7 @@ public abstract class HoodieIOHandle<T, I, K, O> {
 
   protected final String instantTime;
   protected final HoodieWriteConfig config;
-  protected final FileSystem fs;
+  protected final HoodieWrapperFileSystem fs;
   protected final HoodieTable<T, I, K, O> hoodieTable;
 
   HoodieIOHandle(HoodieWriteConfig config, Option<String> instantTime, HoodieTable<T, I, K, O> hoodieTable) {
@@ -39,5 +40,5 @@ public abstract class HoodieIOHandle<T, I, K, O> {
     this.fs = getFileSystem();
   }
 
-  public abstract FileSystem getFileSystem();
+  public abstract HoodieWrapperFileSystem getFileSystem();
 }

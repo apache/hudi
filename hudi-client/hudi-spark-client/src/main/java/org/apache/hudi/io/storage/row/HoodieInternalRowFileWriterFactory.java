@@ -80,7 +80,8 @@ public class HoodieInternalRowFileWriterFactory {
             writeSupport.getHadoopConf(),
             writeConfig.getParquetCompressionRatio(),
             writeConfig.parquetDictionaryEnabled()
-        ));
+        ),
+        writeConfig);
   }
 
   private static Option<BloomFilter> tryInstantiateBloomFilter(HoodieWriteConfig writeConfig) {

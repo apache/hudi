@@ -163,7 +163,7 @@ public class FlinkMergeHandle<T, I, K, O>
   @Override
   protected void setWriteStatusPath() {
     // if there was rollover, should set up the path as the initial new file path.
-    writeStatus.getStat().setPath(new Path(config.getBasePath()), getWritePath());
+    writeStatus.getStat().setPath(FSUtils.getRelativeFilePathStr(partitionPath, getWritePath().getName()));
   }
 
   @Override

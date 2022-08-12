@@ -21,7 +21,7 @@ package org.apache.hudi.sink.partitioner.profile;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
@@ -89,19 +89,17 @@ public class WriteProfiles {
    * existence.
    *
    * @param basePath     Table base path
-   * @param hadoopConf   The hadoop conf
    * @param metadataList The commits metadata
-   * @param tableType    The table type
+   * @param metaClient    The table metadata client
    * @return the file status array
    */
   public static FileStatus[] getRawWritePathsOfInstants(
       Path basePath,
-      Configuration hadoopConf,
       List<HoodieCommitMetadata> metadataList,
-      HoodieTableType tableType) {
+      HoodieTableMetaClient metaClient) {
     Map<String, FileStatus> uniqueIdToFileStatus = new HashMap<>();
     metadataList.forEach(metadata ->
-        uniqueIdToFileStatus.putAll(getFilesToReadOfInstant(basePath, metadata, hadoopConf, tableType)));
+        uniqueIdToFileStatus.putAll(getFilesToReadOfInstant(basePath, metadata, metaClient)));
     return uniqueIdToFileStatus.values().toArray(new FileStatus[0]);
   }
 
@@ -111,18 +109,18 @@ public class WriteProfiles {
    * @param basePath     Table base path
    * @param hadoopConf   The hadoop conf
    * @param metadataList The commits metadata
-   * @param tableType    The table type
+   * @param metaClient    The table metadata client
    * @return the file status array
    */
   public static FileStatus[] getWritePathsOfInstants(
       Path basePath,
       Configuration hadoopConf,
       List<HoodieCommitMetadata> metadataList,
-      HoodieTableType tableType) {
+      HoodieTableMetaClient metaClient) {
     FileSystem fs = FSUtils.getFs(basePath.toString(), hadoopConf);
     Map<String, FileStatus> uniqueIdToFileStatus = new HashMap<>();
     metadataList.forEach(metadata ->
-        uniqueIdToFileStatus.putAll(getFilesToReadOfInstant(basePath, metadata, fs, tableType)));
+        uniqueIdToFileStatus.putAll(getFilesToReadOfInstant(basePath, metadata, fs, metaClient)));
     return uniqueIdToFileStatus.values().toArray(new FileStatus[0]);
   }
 
@@ -131,16 +129,14 @@ public class WriteProfiles {
    *
    * @param basePath   Table base path
    * @param metadata   The metadata
-   * @param hadoopConf The filesystem
-   * @param tableType  The table type
+   * @param metaClient  The table metadata client
    * @return the commit file status info grouping by specific ID
    */
   private static Map<String, FileStatus> getFilesToReadOfInstant(
       Path basePath,
       HoodieCommitMetadata metadata,
-      Configuration hadoopConf,
-      HoodieTableType tableType) {
-    return getFilesToRead(hadoopConf, metadata, basePath.toString(), tableType).entrySet().stream()
+      HoodieTableMetaClient metaClient) {
+    return getFilesToRead(metadata, basePath.toString(), metaClient).entrySet().stream()
         .filter(entry -> StreamerUtil.isValidFile(entry.getValue()))
         .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
   }
@@ -151,15 +147,15 @@ public class WriteProfiles {
    * @param basePath  Table base path
    * @param metadata  The metadata
    * @param fs        The filesystem
-   * @param tableType The table type
+   * @param metaClient The table metadata client
    * @return the commit file status info grouping by specific ID
    */
   private static Map<String, FileStatus> getFilesToReadOfInstant(
       Path basePath,
       HoodieCommitMetadata metadata,
       FileSystem fs,
-      HoodieTableType tableType) {
-    return getFilesToRead(fs.getConf(), metadata, basePath.toString(), tableType).entrySet().stream()
+      HoodieTableMetaClient metaClient) {
+    return getFilesToRead(metadata, basePath.toString(), metaClient).entrySet().stream()
         // filter out the file paths that does not exist, some files may be cleaned by
         // the cleaner.
         .filter(entry -> {
@@ -175,16 +171,15 @@ public class WriteProfiles {
   }
 
   private static Map<String, FileStatus> getFilesToRead(
-      Configuration hadoopConf,
       HoodieCommitMetadata metadata,
       String basePath,
-      HoodieTableType tableType
+      HoodieTableMetaClient metaClient
   ) {
-    switch (tableType) {
+    switch (metaClient.getTableType()) {
       case COPY_ON_WRITE:
-        return metadata.getFileIdToFileStatus(hadoopConf, basePath);
+        return metadata.getFileIdToFileStatus(metaClient.getFs(), basePath);
       case MERGE_ON_READ:
-        return metadata.getFullPathToFileStatus(hadoopConf, basePath);
+        return metadata.getFullPathToFileStatus(metaClient.getFs(), basePath);
       default:
         throw new AssertionError();
     }

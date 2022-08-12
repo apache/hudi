@@ -695,7 +695,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
   private void shouldAllowTempCommit(boolean allowTempCommit, Consumer<HoodieTableMetaClient> fun) {
     if (allowTempCommit) {
       HoodieWrapperFileSystem fs = metaClient.getFs();
-      HoodieWrapperFileSystem newFs = new HoodieWrapperFileSystem(fs.getFileSystem(), new NoOpConsistencyGuard()) {
+      HoodieWrapperFileSystem newFs = new HoodieWrapperFileSystem(fs.getTableFileSystem(), new NoOpConsistencyGuard()) {
         @Override
         protected boolean needCreateTempFile() {
           return true;

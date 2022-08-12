@@ -196,6 +196,8 @@ object HoodieSparkSqlWriter {
           .setTableType(tableType)
           .setDatabaseName(databaseName)
           .setTableName(tblName)
+          .setStoragePath(hoodieConfig.getString(HoodieTableConfig.HOODIE_STORAGE_PATH))
+          .setStorageStrategyClass(hoodieConfig.getString(HoodieTableConfig.HOODIE_STORAGE_STRATEGY_CLASS_NAME))
           .setBaseFileFormat(baseFileFormat)
           .setArchiveLogFolder(archiveLogFolder)
           .setPayloadClassName(hoodieConfig.getString(PAYLOAD_CLASS_NAME))
