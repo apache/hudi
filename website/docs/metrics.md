@@ -204,20 +204,24 @@ These `HoodieMetrics` can then be plotted on a standard tool like grafana. Below
 
 ## List of metrics:
 
-1. totalPartitionsWritten
-2. totalFilesInsert
-3. totalFilesUpdate
-4. totalRecordsWritten
-5. totalUpdateRecordsWritten
-6. totalInsertRecordsWritten
-8. totalBytesWritten
-8. totalScanTime
-9. totalCreateTime
-10. totalUpsertTime
-11. totalCompactedRecordsUpdated
-12. totalLogFilesCompacted
-13. totalLogFilesSize
-14. commitTime (Epoch in milliseconds)
-15. duration (Milliseconds)
+The below metrics are available in all timeline operations that involves a commit such as deltacommit, compaction and clustering.
 
-_Note:_ These metrics are available for all the timeline operations
+Name  |  Description
+--- | ---
+commitTime  | Time of commit in epoch milliseconds
+duration  | Total time taken for the commit in epoch milliseconds
+totalBytesWritten | Bytes written in a HoodieCommit
+totalCompactedRecordsUpdated  | Number of records updated in a compaction operation
+totalCreateTime | Time taken for file creation during a Hoodie Insert operation
+totalFilesInsert  | Number of newly written files in a HoodieCommit
+totalFilesUpdate  | Number of files updated in a HoodieCommit
+totalInsertRecordsWritten | Number of records inserted or converted to updates(for small file handling) in a HoodieCommit
+totalLogFilesCompacted  | Number of log files under a base file in a file group compacted
+totalLogFilesSize | Total size in bytes of all log files under a base file in a file group
+totalPartitionsWritten  | Number of partitions that took writes in a HoodieCommit
+totalRecordsWritten | Number of records written in a HoodieCommit. For inserts, it is the total numbers of records inserted. And for updates, it the total number of records in the file.
+totalScanTime | Time taken for reading and merging logblocks in a log file
+totalUpdateRecordsWritten | Number of records that got changed in a HoodieCommit
+totalUpsertTime | Time taken for Hoodie Merge
+
+These metrics can be found at org.apache.hudi.metrics.HoodieMetrics and referenced from org.apache.hudi.common.model.HoodieWriteStat
