@@ -24,6 +24,7 @@ import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.util.Lazy;
 import org.apache.hudi.utilities.schema.SchemaProvider;
@@ -34,6 +35,7 @@ import org.apache.pulsar.client.api.MessageId;
 import org.apache.pulsar.client.api.PulsarClient;
 import org.apache.pulsar.client.api.PulsarClientException;
 import org.apache.pulsar.client.api.SubscriptionInitialPosition;
+import org.apache.pulsar.client.api.SubscriptionMode;
 import org.apache.pulsar.client.api.SubscriptionType;
 import org.apache.pulsar.client.impl.PulsarClientImpl;
 import org.apache.pulsar.common.naming.TopicName;
@@ -42,6 +44,7 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.pulsar.JsonUtils;
+import org.apache.thrift.protocol.TMessage;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -132,6 +135,12 @@ public class PulsarSource extends RowSource implements Closeable {
     MessageId startingOffset = decodeStartingOffset(lastCheckpointStrOpt);
     MessageId endingOffset = fetchLatestOffset();
 
+    if (endingOffset.compareTo(startingOffset) < 0) {
+      String message = String.format("Ending offset (%s) is preceding starting offset (%s) for '%s'",
+          endingOffset, startingOffset, topicName);
+      throw new HoodieException(message);
+    }
+
     // TODO support capping the amount of records fetched
     Long maxRecordsLimit = computeTargetRecordLimit(sourceLimit, props);
 
@@ -188,6 +197,9 @@ public class PulsarSource extends RowSource implements Closeable {
           .subscriptionName(subscriptionId)
           .subscriptionInitialPosition(SubscriptionInitialPosition.Earliest)
           .subscriptionType(SubscriptionType.Exclusive)
+          // We're using [[SubscriptionMode.Durable]] subscription to make sure that messages
+          // are retained until they are ack'd as consumed
+          .subscriptionMode(SubscriptionMode.Durable)
           .subscribe();
     } catch (PulsarClientException e) {
       LOG.error(String.format("Failed to subscribe to Pulsar topic '%s'", topicName), e);
