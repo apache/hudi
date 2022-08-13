@@ -35,7 +35,6 @@ import org.apache.pulsar.client.api.MessageId;
 import org.apache.pulsar.client.api.PulsarClient;
 import org.apache.pulsar.client.api.PulsarClientException;
 import org.apache.pulsar.client.api.SubscriptionInitialPosition;
-import org.apache.pulsar.client.api.SubscriptionMode;
 import org.apache.pulsar.client.api.SubscriptionType;
 import org.apache.pulsar.client.impl.PulsarClientImpl;
 import org.apache.pulsar.common.naming.TopicName;
@@ -61,7 +60,7 @@ public class PulsarSource extends RowSource implements Closeable {
   private static final Logger LOG = LogManager.getLogger(PulsarSource.class);
 
   private static final String HUDI_PULSAR_CONSUMER_ID_FORMAT = "hudi-pulsar-consumer-%d";
-  private static final String[] PULSAR_META_FIELDS = new String[] {
+  private static final String[] PULSAR_META_FIELDS = new String[]{
       "__key",
       "__topic",
       "__messageId",
@@ -199,9 +198,6 @@ public class PulsarSource extends RowSource implements Closeable {
           .subscriptionName(subscriptionId)
           .subscriptionInitialPosition(SubscriptionInitialPosition.Earliest)
           .subscriptionType(SubscriptionType.Exclusive)
-          // We're using [[SubscriptionMode.Durable]] subscription to make sure that messages
-          // are retained until they are ack'd as consumed
-          .subscriptionMode(SubscriptionMode.Durable)
           .subscribe();
     } catch (PulsarClientException e) {
       LOG.error(String.format("Failed to subscribe to Pulsar topic '%s'", topicName), e);
