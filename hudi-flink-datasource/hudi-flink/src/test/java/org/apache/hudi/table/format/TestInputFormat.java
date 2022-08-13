@@ -18,6 +18,8 @@
 
 package org.apache.hudi.table.format;
 
+import org.apache.flink.table.data.StringData;
+import org.apache.flink.table.data.TimestampData;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
@@ -48,12 +50,15 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.utils.TestData.deleteRow;
+import static org.apache.hudi.utils.TestData.insertRow;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -288,6 +293,62 @@ public class TestInputFormat {
         + "-D[id5, Sophia, 18, 1970-01-01T00:00:00.005, par3], "
         + "-D[id9, Jane, 19, 1970-01-01T00:00:00.006, par3]]";
     assertThat(actual, is(expected));
+  }
+
+  @Test
+  void testReadWithDisorderDeletesMORWithChangeLogDisabled() throws Exception {
+    Map<String, String> options = new HashMap<>();
+    options.put(FlinkOptions.CHANGELOG_ENABLED.key(), "false");
+    beforeEach(HoodieTableType.MERGE_ON_READ, options);
+
+    // write commit to read
+    TestData.writeData(Arrays.asList(
+        insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 24,
+                  TimestampData.fromEpochMillis(3), StringData.fromString("par1")),
+        deleteRow(StringData.fromString("id1"), StringData.fromString("Danny"), 53,
+                  TimestampData.fromEpochMillis(2), StringData.fromString("par1"))), conf);
+
+    InputFormat<RowData, ?> inputFormat = this.tableSource.getInputFormat();
+    assertThat(inputFormat, instanceOf(MergeOnReadInputFormat.class));
+    ((MergeOnReadInputFormat) inputFormat).isEmitDelete(true);
+
+    List<RowData> result = readData(inputFormat);
+
+    final String actual = TestData.rowDataToString(result);
+    final String expected = "[+I[id1, Danny, 24, 1970-01-01T00:00:00.003, par1]]";
+    assertThat(actual, is(expected));
+
+    // write another commit to read again
+    TestData.writeData(Arrays.asList(
+        deleteRow(StringData.fromString("id1"), StringData.fromString("Danny"), 58,
+                  TimestampData.fromEpochMillis(4), StringData.fromString("par1"))), conf);
+
+    this.tableSource = getTableSource(conf);
+    InputFormat<RowData, ?> inputFormat1 = this.tableSource.getInputFormat();
+    assertThat(inputFormat1, instanceOf(MergeOnReadInputFormat.class));
+    ((MergeOnReadInputFormat) inputFormat1).isEmitDelete(true);
+
+    List<RowData> result1 = readData(inputFormat1);
+
+    final String actual1 = TestData.rowDataToString(result1);
+    final String expected1 = "[-D[id1, null, null, null, null]]";
+    assertThat(actual1, is(expected1));
+
+    // write another commit to read again
+    TestData.writeData(Arrays.asList(
+        insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 66,
+                  TimestampData.fromEpochMillis(3), StringData.fromString("par1"))), conf);
+
+    this.tableSource = getTableSource(conf);
+    InputFormat<RowData, ?> inputFormat2 = this.tableSource.getInputFormat();
+    assertThat(inputFormat2, instanceOf(MergeOnReadInputFormat.class));
+    ((MergeOnReadInputFormat) inputFormat2).isEmitDelete(true);
+
+    List<RowData> result2 = readData(inputFormat2);
+
+    final String actual2 = TestData.rowDataToString(result2);
+    final String expected2 = "[-D[id1, null, null, null, null]]";
+    assertThat(actual2, is(expected2));
   }
 
   @Test

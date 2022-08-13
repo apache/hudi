@@ -815,7 +815,7 @@ public class TestData {
     return row;
   }
 
-  private static BinaryRowData deleteRow(Object... fields) {
+  public static BinaryRowData deleteRow(Object... fields) {
     BinaryRowData rowData = insertRow(fields);
     rowData.setRowKind(RowKind.DELETE);
     return rowData;
