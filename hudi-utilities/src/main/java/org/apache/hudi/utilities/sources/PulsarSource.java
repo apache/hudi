@@ -39,17 +39,19 @@ import org.apache.pulsar.client.api.SubscriptionMode;
 import org.apache.pulsar.client.api.SubscriptionType;
 import org.apache.pulsar.client.impl.PulsarClientImpl;
 import org.apache.pulsar.common.naming.TopicName;
+import org.apache.pulsar.shade.io.netty.channel.EventLoopGroup;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.pulsar.JsonUtils;
-import org.apache.thrift.protocol.TMessage;
 
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
+
+import static org.apache.hudi.common.util.ThreadUtils.collectActiveThreads;
 
 /**
  * Source fetching data from Pulsar topics
@@ -243,26 +245,21 @@ public class PulsarSource extends RowSource implements Closeable {
     // NOTE: Current version of Pulsar's client (in Pulsar Spark Connector 3.1.1.4) is not
     //       shutting down event-loop group properly, so we had to shut it down manually
     try {
-      ((PulsarClientImpl) client).eventLoopGroup()
-          .shutdownGracefully()
-          .await();
-
-      ThreadGroup threadGroup = Thread.currentThread().getThreadGroup();
-      while (threadGroup.getParent() != null) {
-        threadGroup = threadGroup.getParent();
-      }
-
-      Thread[] activeThreads = new Thread[threadGroup.activeCount()];
-      threadGroup.enumerate(activeThreads);
-
-      for (Thread activeThread : activeThreads) {
-        if (activeThread.getName().startsWith("pulsar-client-io")) {
-          activeThread.interrupt();
-        }
+      EventLoopGroup eventLoopGroup = ((PulsarClientImpl) client).eventLoopGroup();
+      if (eventLoopGroup != null) {
+        eventLoopGroup.shutdownGracefully().await();
       }
     } catch (InterruptedException e) {
       // No-op
     }
+
+    // NOTE: Pulsar clients initialized by the spark-connector, might be left not shutdown
+    //       properly (see above). To work this around we employ "nuclear" option of
+    //       fetching all Pulsar client threads and interrupting them forcibly (to make them
+    //       shutdown)
+    collectActiveThreads().stream().sequential()
+        .filter(t -> t.getName().startsWith("pulsar-client-io"))
+        .forEach(Thread::interrupt);
   }
 
   public static class Config {
