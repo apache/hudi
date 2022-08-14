@@ -204,12 +204,16 @@ These `HoodieMetrics` can then be plotted on a standard tool like grafana. Below
 
 ## List of metrics:
 
-The below metrics are available in all timeline operations that involves a commit such as deltacommit, compaction and clustering.
+The below metrics are available in all timeline operations that involves a commit such as deltacommit, compaction, clustering and rollback.
 
 Name  |  Description
 --- | ---
+commitFreshnessInMs | Milliseconds from the commit end time and the maximum event time of the incoming records
+commitLatencyInMs | Milliseconds from the commit end time and the minimum event time of incoming records
 commitTime  | Time of commit in epoch milliseconds
-duration  | Total time taken for the commit in epoch milliseconds
+duration  | Total time taken for the commit/rollback in milliseconds
+numFilesDeleted | Number of files deleted during a clean/rollback
+numFilesFinalized | Number of files finalized in a write
 totalBytesWritten | Bytes written in a HoodieCommit
 totalCompactedRecordsUpdated  | Number of records updated in a compaction operation
 totalCreateTime | Time taken for file creation during a Hoodie Insert operation
@@ -224,4 +228,5 @@ totalScanTime | Time taken for reading and merging logblocks in a log file
 totalUpdateRecordsWritten | Number of records that got changed in a HoodieCommit
 totalUpsertTime | Time taken for Hoodie Merge
 
-These metrics can be found at org.apache.hudi.metrics.HoodieMetrics and referenced from org.apache.hudi.common.model.HoodieWriteStat
+These metrics can be found at org.apache.hudi.metrics.HoodieMetrics and referenced from 
+org.apache.hudi.common.model.HoodieCommitMetadata and org.apache.hudi.common.model.HoodieWriteStat
