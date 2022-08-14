@@ -221,7 +221,7 @@ module.exports = {
           'aria-label': 'Hudi Twitter Handle',
         },
         {
-          href: 'https://join.slack.com/t/apache-hudi/shared_invite/zt-1d5zjsfl3-d_TefVaGyvEe16EANrxz6Q',
+          href: 'https://join.slack.com/t/apache-hudi/shared_invite/zt-1e94d3xro-JvlNO1kSeIHJBTVfLPlI5w',
           position: 'right',
           className: 'header-slack-link',
           'aria-label': 'Hudi Slack Channel',
@@ -327,7 +327,7 @@ module.exports = {
             },
             {
               label: 'Slack',
-              href: 'https://join.slack.com/t/apache-hudi/shared_invite/zt-1d5zjsfl3-d_TefVaGyvEe16EANrxz6Q',
+              href: 'https://join.slack.com/t/apache-hudi/shared_invite/zt-1e94d3xro-JvlNO1kSeIHJBTVfLPlI5w',
             },
             {
               label: 'GitHub',

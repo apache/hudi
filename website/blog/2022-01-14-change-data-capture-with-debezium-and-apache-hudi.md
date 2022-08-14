@@ -185,4 +185,4 @@ spark-submit \\
 
 This post introduced the Debezium Source for Hudi Deltastreamer to ingest Debezium changelogs into Hudi tables. Database data can now be ingested into data lakes to provide a cost-effective way to store and analyze database data.
 
-Please follow this [JIRA](https://issues.apache.org/jira/browse/HUDI-1290) to learn more about active development on this new feature. I look forward to more contributions and feedback from the community. Come join our [Hudi Slack](https://join.slack.com/t/apache-hudi/shared_invite/zt-1c44wsfgl-gX_6f50DezdnWVrGsxC~Ug) channel or attend one of our [community events](https://hudi.apache.org/community/syncs) to learn more.
+Please follow this [JIRA](https://issues.apache.org/jira/browse/HUDI-1290) to learn more about active development on this new feature. I look forward to more contributions and feedback from the community. Come join our [Hudi Slack](https://join.slack.com/t/apache-hudi/shared_invite/zt-1e94d3xro-JvlNO1kSeIHJBTVfLPlI5w) channel or attend one of our [community events](https://hudi.apache.org/community/syncs) to learn more.
