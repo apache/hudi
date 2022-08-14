@@ -300,15 +300,20 @@ public class MergeOnReadInputFormat
         this.conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING),
         FilePathUtils.extractPartitionKeys(this.conf));
 
-    // can't convert data by partition value if timestamp is used to partition key.
-    partSpec.entrySet().removeIf(entry ->
-        fieldTypes.get(fieldNames.indexOf(entry.getKey()))
-            .getLogicalType().getTypeRoot() == TIMESTAMP_WITHOUT_TIME_ZONE);
+    LinkedHashMap<String, Object> partObjects = new LinkedHashMap<>();
 
-    LinkedHashMap<String, Object> needReadFromFileInPartitionCols = new LinkedHashMap<>();
-    partSpec.forEach((k, v) -> needReadFromFileInPartitionCols.put(k, DataTypeUtils.resolvePartition(
-        defaultPartName.equals(v) ? null : v,
-        fieldTypes.get(fieldNames.indexOf(k)))));
+    // can't convert data by partition value if timestamp is used to partition key.
+    partSpec.entrySet().stream()
+        .filter(entry -> fieldTypes
+            .get(fieldNames.indexOf(entry.getKey()))
+            .getLogicalType().getTypeRoot() != TIMESTAMP_WITHOUT_TIME_ZONE)
+        .forEach(entry -> {
+          String k = entry.getKey();
+          String v = entry.getValue();
+          partObjects.put(k, DataTypeUtils.resolvePartition(
+              defaultPartName.equals(v) ? null : v,
+              fieldTypes.get(fieldNames.indexOf(k))));
+        });
 
     return ParquetSplitReaderUtil.genPartColumnarRowReader(
         this.conf.getBoolean(FlinkOptions.UTC_TIMEZONE),
@@ -316,7 +321,7 @@ public class MergeOnReadInputFormat
         HadoopConfigurations.getParquetConf(this.conf, hadoopConf),
         fieldNames.toArray(new String[0]),
         fieldTypes.toArray(new DataType[0]),
-        needReadFromFileInPartitionCols,
+        partObjects,
         requiredPos,
         2048,
         new org.apache.flink.core.fs.Path(path),
