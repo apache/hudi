@@ -29,7 +29,7 @@
   },
   "link.item.label.Slack": {
     "message": "Slack",
-    "description": "The label of footer link with label=Slack linking to https://join.slack.com/t/apache-hudi/shared_invite/zt-1c44wsfgl-gX_6f50DezdnWVrGsxC~Ug"
+    "description": "The label of footer link with label=Slack linking to https://join.slack.com/t/apache-hudi/shared_invite/zt-1e94d3xro-JvlNO1kSeIHJBTVfLPlI5w"
   },
   "link.item.label.GitHub": {
     "message": "GitHub",
