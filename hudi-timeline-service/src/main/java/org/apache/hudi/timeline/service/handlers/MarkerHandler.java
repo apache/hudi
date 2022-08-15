@@ -74,6 +74,7 @@ public class MarkerHandler extends Handler {
   // Parallelism for reading and deleting marker files
   private final int parallelism;
   // Marker directory states, {markerDirPath -> MarkerDirState instance}
+  // Use ConcurrentHashMap to ensure thread safety in dispatchingExecutorService
   private final Map<String, MarkerDirState> markerDirStateMap = new ConcurrentHashMap<>();
   // A thread to dispatch marker creation requests to batch processing threads
   private final MarkerCreationDispatchingRunnable markerCreationDispatchingRunnable;

@@ -66,6 +66,7 @@ public class MarkerCreationDispatchingRunnable implements Runnable {
 
     // Only fetch pending marker creation requests that can be processed,
     // i.e., that markers can be written to a underlying file
+    // markerDirStateMap is used in other thread, need to ensure thread safety
     for (Map.Entry<String, MarkerDirState> entry : markerDirStateMap.entrySet()) {
       String markerDir = entry.getKey();
       MarkerDirState markerDirState = entry.getValue();
