@@ -30,6 +30,35 @@ the conventional alternatives for achieving these tasks.
 
 ### Write Path
 
+#### Bulk Insert
+
+Write configurations in Hudi are optimized for incremental upserts by default. In fact, the default write operation type is UPSERT as well.
+For simple append-only use case to bulk load the data, following set of configurations are recommended for optimal writing:
+```
+-- Use “bulk-insert” write-operation instead of default “upsert”
+hoodie.datasource.write.operation = BULK_INSERT
+-- Disable populating meta columns and metadata, and enable virtual keys
+hoodie.populate.meta.fields = false
+hoodie.metadata.enable = false
+-- Enable snappy compression codec for lesser CPU cycles (but more storage overhead)
+hoodie.parquet.compression.codec = snappy
+```
+
+For ingesting via spark-sql
+```
+-- Use “bulk-insert” write-operation instead of default “upsert”
+hoodie.sql.insert.mode = non-strict,
+hoodie.sql.bulk.insert.enable = true,
+-- Disable populating meta columns and metadata, and enable virtual keys
+hoodie.populate.meta.fields = false
+hoodie.metadata.enable = false
+-- Enable snappy compression codec for lesser CPU cycles (but more storage overhead)
+hoodie.parquet.compression.codec = snappy
+```
+
+We recently benchmarked Hudi against TPC-DS workload. 
+Please check out [our blog](/blog/2022/06/29/Apache-Hudi-vs-Delta-Lake-transparent-tpc-ds-lakehouse-performance-benchmarks) for more details.
+
 #### Upserts
 
 Following shows the speed up obtained for NoSQL database ingestion, from incrementally upserting on a Hudi table on the copy-on-write storage,
