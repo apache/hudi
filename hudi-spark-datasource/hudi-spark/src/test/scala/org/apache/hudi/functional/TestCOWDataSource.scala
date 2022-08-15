@@ -31,6 +31,7 @@ import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.config.metrics.HoodieMetricsConfig
 import org.apache.hudi.exception.ExceptionUtil.getRootCause
 import org.apache.hudi.exception.{HoodieException, HoodieUpsertException}
+import org.apache.hudi.functional.TestCOWDataSource.{dropColumn, injectColumnAt}
 import org.apache.hudi.keygen._
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions.Config
 import org.apache.hudi.metrics.Metrics
@@ -137,6 +138,7 @@ class TestCOWDataSource extends HoodieClientTestBase with ScalaAssertionSupport 
     val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
     val df = inputDF.withColumn(HoodieRecord.HOODIE_IS_DELETED, lit("abc"))
 
+    // Should have failed since _hoodie_is_deleted is not a BOOLEAN data type
     assertThrows(classOf[HoodieException]) {
       df.write.format("hudi")
         .options(commonOpts)
@@ -754,62 +756,142 @@ class TestCOWDataSource extends HoodieClientTestBase with ScalaAssertionSupport 
     assertEquals(false, Metrics.isInitialized)
   }
 
-  @Test def testSchemaEvolution(): Unit = {
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testBasicSchemaEvolution(shouldReconcileSchema: Boolean): Unit = {
     // open the schema validate
-    val  opts = commonOpts ++ Map("hoodie.avro.schema.validate" -> "true") ++
-      Map(DataSourceWriteOptions.RECONCILE_SCHEMA.key() -> "true")
-    // 1. write records with schema1
-    val schema1 = StructType(StructField("_row_key", StringType, true) :: StructField("name", StringType, false)::
-      StructField("timestamp", IntegerType, true) :: StructField("partition", IntegerType, true)::Nil)
-    val records1 = Seq(Row("1", "Andy", 1, 1),
-      Row("2", "lisi", 1, 1),
-      Row("3", "zhangsan", 1, 1))
-    val rdd = jsc.parallelize(records1)
-    val  recordsDF = spark.createDataFrame(rdd, schema1)
-    recordsDF.write.format("org.apache.hudi")
+    val  opts = commonOpts ++
+      Map("hoodie.avro.schema.validate" -> "true") ++
+      Map(DataSourceWriteOptions.RECONCILE_SCHEMA.key() -> shouldReconcileSchema.toString)
+
+    // 1. Write 1st batch with schema A
+    val firstSchema = StructType(
+      StructField("_row_key", StringType, true) ::
+      StructField("name", StringType, false) ::
+      StructField("timestamp", IntegerType, true) ::
+      StructField("partition", IntegerType, true) :: Nil)
+
+    val firstBatch = Seq(
+      Row("1", "Andy", 1, 1),
+      Row("2", "Lisi", 1, 1),
+      Row("3", "Zhangsan", 1, 1))
+
+    HoodieUnsafeUtils.createDataFrameFromRows(spark, firstBatch, firstSchema)
+      .write
+      .format("org.apache.hudi")
       .options(opts)
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
-    // 2. write records with schema2 add column age
-    val schema2 = StructType(StructField("_row_key", StringType, true) :: StructField("name", StringType, false) ::
-      StructField("age", StringType, true) :: StructField("timestamp", IntegerType, true) ::
-      StructField("partition", IntegerType, true)::Nil)
-    val records2 = Seq(Row("11", "Andy", "10", 1, 1),
-      Row("22", "lisi", "11",1, 1),
-      Row("33", "zhangsan", "12", 1, 1))
-    val rdd2 = jsc.parallelize(records2)
-    val  recordsDF2 = spark.createDataFrame(rdd2, schema2)
-    recordsDF2.write.format("org.apache.hudi")
+    // 2. Write 2d batch with another schema (added column `age`)
+
+    val secondSchema = StructType(
+      StructField("_row_key", StringType, true) ::
+      StructField("name", StringType, false) ::
+      StructField("age", StringType, true) ::
+      StructField("timestamp", IntegerType, true) ::
+      StructField("partition", IntegerType, true) :: Nil)
+
+    val secondBatch = Seq(
+      Row("4", "John", "10", 1, 1),
+      Row("5", "Jack", "11", 1, 1),
+      Row("6", "Jill", "12", 1, 1))
+
+    HoodieUnsafeUtils.createDataFrameFromRows(spark, secondBatch, secondSchema)
+      .write
+      .format("org.apache.hudi")
       .options(opts)
       .mode(SaveMode.Append)
       .save(basePath)
-    val recordsReadDF = spark.read.format("org.apache.hudi")
-      .load(basePath + "/*/*")
-    val tableMetaClient = HoodieTableMetaClient.builder().setConf(spark.sparkContext.hadoopConfiguration).setBasePath(basePath).build()
-    val actualSchema = new TableSchemaResolver(tableMetaClient).getTableAvroSchemaWithoutMetadataFields
-    assertTrue(actualSchema != null)
-    val actualStructType = AvroConversionUtils.convertAvroSchemaToStructType(actualSchema)
-    assertEquals(actualStructType, schema2)
 
-    // 3. write records with schema4 by omitting a non nullable column(name). should fail
-    try {
-      val schema4 = StructType(StructField("_row_key", StringType, true) ::
-        StructField("age", StringType, true) :: StructField("timestamp", IntegerType, true) ::
-        StructField("partition", IntegerType, true)::Nil)
-      val records4 = Seq(Row("11", "10", 1, 1),
-        Row("22", "11",1, 1),
-        Row("33", "12", 1, 1))
-      val rdd4 = jsc.parallelize(records4)
-      val  recordsDF4 = spark.createDataFrame(rdd4, schema4)
-      recordsDF4.write.format("org.apache.hudi")
+    val totalRecords =
+      spark.read.format("org.apache.hudi")
+        .load(basePath + "/*/*")
+        .count()
+
+    assertEquals(firstBatch.length + secondBatch.length, totalRecords)
+
+    val tableMetaClient = HoodieTableMetaClient.builder()
+      .setConf(spark.sparkContext.hadoopConfiguration)
+      .setBasePath(basePath)
+      .build()
+
+    def getLatestTableSchema: StructType = {
+      val tableAvroSchema = new TableSchemaResolver(tableMetaClient).getTableAvroSchema(false)
+      AvroConversionUtils.convertAvroSchemaToStructType(tableAvroSchema)
+    }
+
+    var latestTableSchema = getLatestTableSchema
+
+    assertEquals(secondSchema, latestTableSchema)
+
+    // 3. Write 3d batch with another schema (w/ omitted a _nullable_ column `age`, expected to succeed)
+
+    val thirdSchema = StructType(
+      StructField("_row_key", StringType, true) ::
+      StructField("name", StringType, false) ::
+      StructField("timestamp", IntegerType, true) ::
+      StructField("partition", IntegerType, true) :: Nil)
+
+    val thirdBatch = Seq(
+      Row("7", "Rando", 1, 1),
+      Row("8", "Randy", 1, 1),
+      Row("9", "Randalph", 1, 1))
+
+    HoodieUnsafeUtils.createDataFrameFromRows(spark, thirdBatch, thirdSchema)
+      .write
+      .format("org.apache.hudi")
+      .options(opts)
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    latestTableSchema = getLatestTableSchema
+
+    val df = spark.read.format("org.apache.hudi")
+      .load(basePath + "/*/*")
+      .orderBy("_row_key")
+      .drop(HoodieRecord.HOODIE_META_COLUMNS.asScala: _*)
+
+    // NOTE: In case schema reconciliation is ENABLED, final schema after dropping the column
+    //       will actually stay the same, however requiring new records to bear nulls in lieu of the
+    //       dropped columns.
+    //       In case schema reconciliation is DISABLED, table will be overwritten in the latest schema,
+    //       entailing that that the data in the dropped columns for existing records will be dropped
+    //       and these records will be re-written as if this columns never existed
+    if (shouldReconcileSchema) {
+      assertEquals(secondSchema, latestTableSchema)
+
+      val expectedRecords = injectColumnAt(firstBatch, 2, null) ++ secondBatch ++ injectColumnAt(thirdBatch, 2, null)
+
+      assertEquals(expectedRecords, df.collectAsList().toSeq)
+    } else {
+      assertEquals(thirdSchema, latestTableSchema)
+
+      val expectedRecords = firstBatch ++ dropColumn(secondBatch, 2) ++ thirdBatch
+
+      assertEquals(expectedRecords, df.collectAsList().toSeq)
+    }
+
+    // 4. Write 4th batch with another schema (w/ omitted a _non-nullable_ column `name`, expected to fail)
+
+    val fourthSchema = StructType(
+      StructField("_row_key", StringType, true) ::
+      StructField("age", StringType, true) ::
+      StructField("timestamp", IntegerType, true) ::
+      StructField("partition", IntegerType, true) :: Nil)
+
+    val fourthBatch = Seq(
+      Row("11", "10", 1, 1),
+      Row("22", "11",1, 1),
+      Row("33", "12", 1, 1))
+
+    assertThrows(classOf[HoodieUpsertException]) {
+      HoodieUnsafeUtils.createDataFrameFromRows(spark, fourthBatch, fourthSchema)
+        .write
+        .format("org.apache.hudi")
         .options(opts)
         .mode(SaveMode.Append)
         .save(basePath)
-      fail("Delete column should fail")
-    } catch {
-      case ex: HoodieUpsertException =>
-        assertTrue(ex.getMessage.equals("Failed upsert schema compatibility check."))
     }
   }
 
@@ -1060,4 +1142,23 @@ class TestCOWDataSource extends HoodieClientTestBase with ScalaAssertionSupport 
     assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "000"))
     assertEquals(false, Metrics.isInitialized, "Metrics should be shutdown")
   }
+}
+
+object TestCOWDataSource {
+
+  def dropColumn(rows: Seq[Row], idx: Int): Seq[Row] =
+    rows.map { r =>
+      val values = r.toSeq.zipWithIndex
+        .filterNot { case (_, cidx) => cidx == idx }
+        .map { case (c, _) => c }
+      Row(values: _*)
+    }
+
+  def injectColumnAt(rows: Seq[Row], idx: Int, value: Any): Seq[Row] =
+    rows.map { r =>
+      val (left, right) = r.toSeq.splitAt(idx)
+      val values = (left :+ value) ++ right
+      Row(values: _*)
+    }
+
 }
