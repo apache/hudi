@@ -22,6 +22,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
@@ -214,8 +215,14 @@ public class IncrementalInputSplits implements Serializable {
         ? commitTimeline.lastInstant().get().getTimestamp()
         : instants.get(instants.size() - 1).getTimestamp();
 
-    List<MergeOnReadInputSplit> inputSplits = getInputSplits(metaClient, commitTimeline,
+    List<MergeOnReadInputSplit> inputSplits;
+    if (fullTableScan || this.conf.getString(FlinkOptions.TABLE_TYPE).equals(HoodieTableType.COPY_ON_WRITE.name()) || !this.conf.getBoolean(FlinkOptions.READ_BATCH_INCREMENTAL_CHANGELOG_ENABLED)) {
+      inputSplits = getInputSplits(metaClient, commitTimeline,
         fileStatuses, readPartitions, endInstant, instantRange);
+    } else {
+      inputSplits = getInputSplitsUsingLogFiles(metaClient, commitTimeline,
+        fileStatuses, readPartitions, endInstant, instantRange);
+    }
 
     return Result.instance(inputSplits, endInstant);
   }
@@ -335,6 +342,31 @@ public class IncrementalInputSplits implements Serializable {
               String basePath = fileSlice.getBaseFile().map(BaseFile::getPath).orElse(null);
               return new MergeOnReadInputSplit(cnt.getAndAdd(1),
                   basePath, logPaths, endInstant,
+                  metaClient.getBasePath(), maxCompactionMemoryInBytes, mergeType, instantRange, fileSlice.getFileId());
+            }).collect(Collectors.toList()))
+        .flatMap(Collection::stream)
+        .collect(Collectors.toList());
+  }
+
+  private List<MergeOnReadInputSplit> getInputSplitsUsingLogFiles(
+      HoodieTableMetaClient metaClient,
+      HoodieTimeline commitTimeline,
+      FileStatus[] fileStatuses,
+      Set<String> readPartitions,
+      String endInstant,
+      InstantRange instantRange) {
+    final HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient, commitTimeline, fileStatuses);
+    final AtomicInteger cnt = new AtomicInteger(0);
+    final String mergeType = this.conf.getString(FlinkOptions.MERGE_TYPE);
+    return readPartitions.stream()
+        .map(relPartitionPath -> fsView.getMergedFileSlicesUsingLogFiles(relPartitionPath, endInstant)
+            .map(fileSlice -> {
+              Option<List<String>> logPaths = Option.ofNullable(fileSlice.getLogFiles()
+                  .sorted(HoodieLogFile.getLogFileComparator())
+                  .map(logFile -> logFile.getPath().toString())
+                  .collect(Collectors.toList()));
+              return new MergeOnReadInputSplit(cnt.getAndAdd(1),
+                  null, logPaths, endInstant,
                   metaClient.getBasePath(), maxCompactionMemoryInBytes, mergeType, instantRange, fileSlice.getFileId());
             }).collect(Collectors.toList()))
         .flatMap(Collection::stream)

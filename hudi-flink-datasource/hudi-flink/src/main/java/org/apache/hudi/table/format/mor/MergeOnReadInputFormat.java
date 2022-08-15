@@ -328,10 +328,15 @@ public class MergeOnReadInputFormat
     final int[] pkOffset = tableState.getPkOffsetsInRequired();
     // flag saying whether the pk semantics has been dropped by user specified
     // projections. For e.g, if the pk fields are [a, b] but user only select a,
-    // then the pk semantics is lost.
+    // then the pk semantics is lost.final boolean pkSemanticLost = Arrays.stream(pkOffset).anyMatch(offset -> offset == -1);
     final boolean pkSemanticLost = Arrays.stream(pkOffset).anyMatch(offset -> offset == -1);
-    final LogicalType[] pkTypes = pkSemanticLost ? null : tableState.getPkTypes(pkOffset);
+    final LogicalType[] pkTypes = pkSemanticLost ? null : tableState.getColumnTypes(pkOffset);
     final StringToRowDataConverter converter = pkSemanticLost ? null : new StringToRowDataConverter(pkTypes);
+    final int[] partitionOffset = tableState.getColumnsOffsetsInRequired(conf.getString(FlinkOptions.PARTITION_PATH_FIELD).split(","));
+    final boolean partitionSemanticLost = Arrays.stream(pkOffset).anyMatch(offset -> offset == -1);
+    final LogicalType[] partitionTypes = partitionSemanticLost ? null : tableState.getColumnTypes(partitionOffset);
+    final StringToRowDataConverter partitionConverter = partitionSemanticLost ? null : new StringToRowDataConverter(partitionTypes);
+    final int preCombineOffset = tableState.getRequiredPosition(conf.getString(FlinkOptions.PRECOMBINE_FIELD));
 
     return new ClosableIterator<RowData>() {
       private RowData currentRecord;
@@ -340,10 +345,12 @@ public class MergeOnReadInputFormat
       public boolean hasNext() {
         while (logRecordsKeyIterator.hasNext()) {
           String curAvroKey = logRecordsKeyIterator.next();
-          Option<IndexedRecord> curAvroRecord = null;
+          Option<IndexedRecord> curAvroRecord;
+          Comparable preCombineValue;
           final HoodieAvroRecord<?> hoodieRecord = (HoodieAvroRecord) scanner.getRecords().get(curAvroKey);
           try {
             curAvroRecord = hoodieRecord.getData().getInsertValue(tableSchema);
+            preCombineValue = hoodieRecord.getData().getOrderingValue();
           } catch (IOException e) {
             throw new HoodieException("Get avro insert value error for key: " + curAvroKey, e);
           }
@@ -357,6 +364,20 @@ public class MergeOnReadInputFormat
               final Object[] converted = converter.convert(pkFields);
               for (int i = 0; i < pkOffset.length; i++) {
                 delete.setField(pkOffset[i], converted[i]);
+              }
+              if (preCombineOffset != -1) {
+                final AvroToRowDataConverters.AvroToRowDataConverter preCombineConverter =
+                    AvroToRowDataConverters.createConverter(tableState.getRequiredRowType().getTypeAt(preCombineOffset));
+                delete.setField(preCombineOffset, preCombineConverter.convert(preCombineValue));
+              }
+              if (!partitionSemanticLost) {
+                final String partitionPath = hoodieRecord.getPartitionPath();
+                final String[] partitionFields =
+                    KeyGenUtils.extractPartitionPath(partitionPath, conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING), conf.getBoolean(FlinkOptions.URL_ENCODE_PARTITIONING));
+                final Object[] partitionConverted = partitionConverter.convert(partitionFields);
+                for (int i = 0; i < partitionOffset.length; i++) {
+                  delete.setField(partitionOffset[i], partitionConverted[i]);
+                }
               }
               delete.setRowKind(RowKind.DELETE);
 

@@ -201,6 +201,13 @@ public class HoodieFileGroup implements Serializable {
     return getAllFileSlices().filter(slice -> slice.getBaseFile().isPresent()).map(slice -> slice.getBaseFile().get());
   }
 
+  /**
+   * Stream of committed log files, sorted reverse commit time.
+   */
+  public Stream<HoodieLogFile> getAllLogFiles() {
+    return getAllFileSlices().flatMap(slice -> slice.getLogFiles());
+  }
+
   @Override
   public String toString() {
     final StringBuilder sb = new StringBuilder("HoodieFileGroup {");
