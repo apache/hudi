@@ -286,7 +286,7 @@ public class PulsarSource extends RowSource implements Closeable {
 
     public static final ConfigProperty<Long> PULSAR_SOURCE_MAX_RECORDS_PER_BATCH_THRESHOLD_PROP = ConfigProperty
         .key("hoodie.deltastreamer.source.pulsar.maxRecords")
-        .defaultValue(10_000_000L)
+        .defaultValue(5_000_000L)
         .withDocumentation("Max number of records obtained in a single each batch");
   }
 }
