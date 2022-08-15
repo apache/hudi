@@ -536,7 +536,8 @@ upgrade table --toVersion <target_version>
 
 :::note
 Table upgrade is automatically handled by the Hudi write client in different deployment modes such as DeltaStreamer
-after upgrading the Hudi library so that the user does not have to do manual upgrade.
+after upgrading the Hudi library so that the user does not have to do manual upgrade.  Such automatic table upgrade
+is the **recommended** way in general, instead of using `upgrade` CLI command.
 
 Table upgrade from table version ONE to TWO requires key generator related configs such as
 "hoodie.datasource.write.recordkey.field", which is only available when user configures the write job. So the table
