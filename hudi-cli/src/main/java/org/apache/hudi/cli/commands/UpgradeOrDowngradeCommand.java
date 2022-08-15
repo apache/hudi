@@ -23,6 +23,8 @@ import org.apache.hudi.cli.commands.SparkMain.SparkCommand;
 import org.apache.hudi.cli.utils.InputStreamConsumer;
 import org.apache.hudi.cli.utils.SparkUtil;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.util.StringUtils;
 
 import org.apache.spark.launcher.SparkLauncher;
 import org.springframework.shell.core.CommandMarker;
@@ -48,15 +50,16 @@ public class UpgradeOrDowngradeCommand implements CommandMarker {
     HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
 
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
-    sparkLauncher.addAppArgs(SparkCommand.UPGRADE.toString(), master, sparkMemory, metaClient.getBasePath(), toVersion);
+    String toVersionName = getHoodieTableVersionName(toVersion, true);
+    sparkLauncher.addAppArgs(SparkCommand.UPGRADE.toString(), master, sparkMemory, metaClient.getBasePath(), toVersionName);
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);
     int exitCode = process.waitFor();
     HoodieCLI.refreshTableMetadata();
     if (exitCode != 0) {
-      return String.format("Failed: Could not Upgrade/Downgrade Hoodie table to \"%s\".", toVersion);
+      return String.format("Failed: Could not Upgrade/Downgrade Hoodie table to \"%s\".", toVersionName);
     }
-    return String.format("Hoodie table upgraded/downgraded to %s", toVersion);
+    return String.format("Hoodie table upgraded/downgraded to %s", toVersionName);
   }
 
   @CliCommand(value = "downgrade table", help = "Downgrades a table")
@@ -70,14 +73,29 @@ public class UpgradeOrDowngradeCommand implements CommandMarker {
 
     HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
-    sparkLauncher.addAppArgs(SparkCommand.DOWNGRADE.toString(), master, sparkMemory, metaClient.getBasePath(), toVersion);
+    String toVersionName = getHoodieTableVersionName(toVersion, false);
+    sparkLauncher.addAppArgs(SparkCommand.DOWNGRADE.toString(), master, sparkMemory, metaClient.getBasePath(), toVersionName);
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);
     int exitCode = process.waitFor();
     HoodieCLI.refreshTableMetadata();
     if (exitCode != 0) {
-      return String.format("Failed: Could not Upgrade/Downgrade Hoodie table to \"%s\".", toVersion);
+      return String.format("Failed: Could not Upgrade/Downgrade Hoodie table to \"%s\".", toVersionName);
     }
-    return String.format("Hoodie table upgraded/downgraded to %s", toVersion);
+    return String.format("Hoodie table upgraded/downgraded to %s", toVersionName);
+  }
+
+  static String getHoodieTableVersionName(String versionOption, boolean overrideWithDefault) {
+    if (StringUtils.isNullOrEmpty(versionOption) && overrideWithDefault) {
+      return HoodieTableVersion.current().name();
+    }
+
+    try {
+      int versionCode = Integer.parseInt(versionOption);
+      return HoodieTableVersion.versionFromCode(versionCode).name();
+    } catch (NumberFormatException e) {
+      // The version option from the CLI is not a number, returns the original String
+      return versionOption;
+    }
   }
 }
