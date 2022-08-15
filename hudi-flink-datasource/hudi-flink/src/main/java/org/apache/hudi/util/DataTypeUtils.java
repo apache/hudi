@@ -28,14 +28,20 @@ import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.table.types.logical.TimestampType;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 
 /**
  * Utilities for {@link org.apache.flink.table.types.DataType}.
  */
 public class DataTypeUtils {
+
+  public static final OffsetDateTime EPOCH = Instant.ofEpochSecond(0).atOffset(ZoneOffset.UTC);
+
   /**
    * Returns whether the given type is TIMESTAMP type.
    */
@@ -85,11 +91,15 @@ public class DataTypeUtils {
    * Resolves the partition path string into value obj with given data type.
    */
   public static Object resolvePartition(String partition, DataType type) {
+    return resolvePartition(partition, type.getLogicalType());
+  }
+
+  public static Object resolvePartition(String partition, LogicalType type) {
     if (partition == null) {
       return null;
     }
 
-    LogicalTypeRoot typeRoot = type.getLogicalType().getTypeRoot();
+    LogicalTypeRoot typeRoot = type.getTypeRoot();
     switch (typeRoot) {
       case CHAR:
       case VARCHAR:
@@ -111,7 +121,13 @@ public class DataTypeUtils {
       case DATE:
         return LocalDate.parse(partition);
       case TIMESTAMP_WITHOUT_TIME_ZONE:
-        return LocalDateTime.parse(partition);
+        long time = Long.parseLong(partition);
+        int timestampPrecision = ((TimestampType) type).getPrecision();
+        if (timestampPrecision <= 3) {
+          return ChronoUnit.MILLIS.addTo(EPOCH, time).toLocalDateTime();
+        } else {
+          return ChronoUnit.MICROS.addTo(EPOCH, time).toLocalDateTime();
+        }
       case DECIMAL:
         return new BigDecimal(partition);
       default:

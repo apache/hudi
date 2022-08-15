@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.source.FileIndex;
 import org.apache.hudi.table.catalog.HoodieHiveCatalog;
 import org.apache.hudi.table.catalog.HoodieCatalogTestUtils;
@@ -1405,7 +1406,7 @@ public class ITTestHoodieDataSource extends AbstractTestBase {
   }
 
   @Test
-  public void testReadMorTableWithCompactionAndTimestampPartition() throws TableNotExistException, InterruptedException {
+  public void testReadMorTableWithCompactionAndTimestampPartitionStringFormat() throws TableNotExistException {
     TableEnvironment tableEnv = batchTableEnv;
     String createSql = sql("t1")
         .field("id int")
@@ -1447,6 +1448,52 @@ public class ITTestHoodieDataSource extends AbstractTestBase {
 
     assertRowsEquals(result1, "[+I[1, 2022-08-11T10:05:59]]");
     assertRowsEquals(result2, "[+I[1, 2022-08-11T10:05:59], +I[2, 2022-08-11T11:05:59]]");
+  }
+
+  @Test
+  public void testReadMorTableWithCompactionAndTimestampPartitionLongFormat() throws TableNotExistException {
+    TableEnvironment tableEnv = batchTableEnv;
+    String createSql = sql("t1")
+        .field("id int")
+        .field("ts timestamp(3)")
+        .pkField("id")
+        .partitionField("ts")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.TABLE_TYPE, FlinkOptions.TABLE_TYPE_MERGE_ON_READ)
+        .option(FlinkOptions.PARTITION_PATH_FIELD, "ts")
+        .option("hoodie.compact.inline", true)
+        .option(FlinkOptions.COMPACTION_DELTA_COMMITS, 2)
+        .option(FlinkOptions.KEYGEN_CLASS_NAME, SimpleAvroKeyGenerator.class.getName())
+        .option(FlinkOptions.PARTITION_FORMAT, FlinkOptions.PARTITION_FORMAT_DASHED_DAY)
+        .end();
+    tableEnv.executeSql(createSql);
+
+    execInsertSql(tableEnv, "insert into t1 values (1, TIMESTAMP '2022-08-11 10:05:59.123')");
+    List<Row> result1 = CollectionUtil.iterableToList(() -> tableEnv.sqlQuery("select * from t1").execute().collect());
+
+    execInsertSql(tableEnv, "insert into t1 values (2, TIMESTAMP '2022-08-11 10:05:59.123')");
+    List<Row> result2 = CollectionUtil.iterableToList(() -> tableEnv.sqlQuery("select * from t1").execute().collect());
+
+    ObjectPath objectPath = ObjectPath.fromString(tableEnv.getCurrentDatabase() + ".t1");
+    String currentCatalog = tableEnv.getCurrentCatalog();
+    DataType dataType = tableEnv.getCatalog(currentCatalog).get().getTable(objectPath).getSchema().toRowDataType();
+    RowType rowType = (RowType) dataType.getLogicalType();
+    FileIndex fileIndex = FileIndex.instance(
+        new Path(tempFile.getAbsolutePath()), tableEnv.getConfig().getConfiguration(), rowType);
+    List<Map<String, String>> partitions =
+        fileIndex.getPartitions(Collections.singletonList("ts"), PARTITION_DEFAULT_NAME.defaultValue(), false);
+    assertEquals(1, partitions.size());
+    assertEquals("1660212359123", partitions.get(0).get("ts"));
+
+    FileStatus[] fileStatuses = fileIndex.getFilesInPartitions();
+    // should have two log files and one parquet file
+    assertEquals(3, fileStatuses.length);
+    assertEquals(1,
+        Arrays.stream(fileStatuses).filter(file -> file.getPath().getName().endsWith("parquet")).count()
+    );
+
+    assertRowsEquals(result1, "[+I[1, 2022-08-11T10:05:59.123]]");
+    assertRowsEquals(result2, "[+I[1, 2022-08-11T10:05:59.123], +I[2, 2022-08-11T10:05:59.123]]");
   }
 
   // -------------------------------------------------------------------------
