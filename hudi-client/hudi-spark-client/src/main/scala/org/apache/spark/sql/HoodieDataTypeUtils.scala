@@ -5,6 +5,14 @@ import org.apache.spark.sql.types._
 object HoodieDataTypeUtils {
 
   /**
+   * Parses provided [[jsonSchema]] into [[StructType]].
+   *
+   * Throws [[RuntimeException]] in case it's unable to parse it as such.
+   */
+  def parseStructTypeFromJson(jsonSchema: String): StructType =
+    StructType.fromString(jsonSchema)
+
+  /**
    * Checks whether provided {@link DataType} contains {@link DecimalType} whose scale is less than
    * {@link Decimal# MAX_LONG_DIGITS ( )}
    */

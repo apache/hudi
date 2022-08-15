@@ -628,7 +628,7 @@ object HoodieSparkSqlWriter {
     } else if (HoodieSparkUtils.isSpark3) {
       hoodieDF.write.format("org.apache.hudi.spark3.internal")
         .option(DataSourceInternalWriterHelper.INSTANT_TIME_OPT_KEY, instantTime)
-        .option(HoodieInternalConfig.BULKINSERT_INPUT_DATA_SCHEMA_DDL.key, hoodieDF.schema.toDDL)
+        .option(HoodieInternalConfig.BULKINSERT_INPUT_DATA_SCHEMA_DDL.key, hoodieDF.schema.json)
         .options(params)
         .mode(SaveMode.Append)
         .save()
