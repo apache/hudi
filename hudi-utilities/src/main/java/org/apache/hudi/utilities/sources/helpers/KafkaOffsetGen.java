@@ -292,7 +292,7 @@ public class KafkaOffsetGen {
       numEvents = sourceLimit;
     }
 
-    // TODO remove
+    // TODO(HUDI-4625) remove
     if (numEvents < toOffsets.size()) {
       throw new HoodieException("sourceLimit should not be less than the number of kafka partitions");
     }
@@ -312,7 +312,7 @@ public class KafkaOffsetGen {
 
     List<PartitionInfo> partitionInfos;
     do {
-      // TODO cleanup, introduce retrying client
+      // TODO(HUDI-4625) cleanup, introduce retrying client
       partitionInfos = consumer.partitionsFor(topicName);
       try {
         TimeUnit.SECONDS.sleep(10);
