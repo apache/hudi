@@ -457,12 +457,12 @@ public class FSUtils {
 
   public static String makeLogFileName(String fileId, String logFileExtension, String baseCommitTime, int version,
       String writeToken) {
-    return makeLogFileName(fileId, logFileExtension, baseCommitTime, version, writeToken);
+    return makeLogFileName(fileId, logFileExtension, baseCommitTime, version, writeToken, "");
   }
 
   public static String makeLogFileName(String fileId, String logFileExtension, String baseCommitTime, int version,
       String writeToken, String logSuffix) {
-    String hoodieLogSuffix = (logSuffix == null) ? "" : "_" + logSuffix;
+    String hoodieLogSuffix = (logSuffix == null || logSuffix.isEmpty()) ? "" : "_" + logSuffix;
     String suffix = (writeToken == null)
         ? String.format("%s_%s%s.%d%s", fileId, baseCommitTime, logFileExtension, version, hoodieLogSuffix)
         : String.format("%s_%s%s.%d_%s%s", fileId, baseCommitTime, logFileExtension, version, writeToken, hoodieLogSuffix);
