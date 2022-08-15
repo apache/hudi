@@ -209,20 +209,20 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
     }
     // set index key for bucket index if not defined
     if (conf.getString(FlinkOptions.INDEX_TYPE).equals(HoodieIndex.IndexType.BUCKET.name())) {
-        if (conf.getString(FlinkOptions.INDEX_KEY_FIELD).isEmpty()) {
-          conf.setString(FlinkOptions.INDEX_KEY_FIELD, conf.getString(FlinkOptions.RECORD_KEY_FIELD));
-        } else {
-          HashSet<String> recordKeySet = new HashSet<>(Arrays.asList(
-              conf.getString(FlinkOptions.RECORD_KEY_FIELD).split(",")
-          ));
-          HashSet<String> indexKeySet = new HashSet<>(Arrays.asList(
-              conf.getString(FlinkOptions.INDEX_KEY_FIELD).split(",")
-          ));
-          if (!recordKeySet.containsAll(indexKeySet)) {
-            throw new HoodieValidationException(
-                FlinkOptions.INDEX_KEY_FIELD + " should be a subset of or equal to the recordKey fields");
-          }
+      if (conf.getString(FlinkOptions.INDEX_KEY_FIELD).isEmpty()) {
+        conf.setString(FlinkOptions.INDEX_KEY_FIELD, conf.getString(FlinkOptions.RECORD_KEY_FIELD));
+      } else {
+        HashSet<String> recordKeySet = new HashSet<>(Arrays.asList(
+            conf.getString(FlinkOptions.RECORD_KEY_FIELD).split(",")
+        ));
+        HashSet<String> indexKeySet = new HashSet<>(Arrays.asList(
+            conf.getString(FlinkOptions.INDEX_KEY_FIELD).split(",")
+        ));
+        if (!recordKeySet.containsAll(indexKeySet)) {
+          throw new HoodieValidationException(
+              FlinkOptions.INDEX_KEY_FIELD + " should be a subset of or equal to the recordKey fields");
         }
+      }
     }
 
     // tweak the key gen class if possible
