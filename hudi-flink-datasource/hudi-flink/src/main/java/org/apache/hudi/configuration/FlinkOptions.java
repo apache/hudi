@@ -440,6 +440,12 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(1024L)
       .withDescription("Maximum size allowed in MB for a log file before it is rolled over to the next version, default 1GB");
 
+  public static final ConfigOption<String> WRITE_LOG_SUFFIX = ConfigOptions
+      .key(HoodieWriteConfig.WRITE_LOG_SUFFIX_VALUE.key())
+      .stringType()
+      .defaultValue("")
+      .withDescription("Distinguish the log files written by different jobs by suffixes");
+
   public static final ConfigOption<Integer> WRITE_PARQUET_BLOCK_SIZE = ConfigOptions
       .key("write.parquet.block.size")
       .intType()

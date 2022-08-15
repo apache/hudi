@@ -117,6 +117,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
       if (this.writer == null) {
         return HoodieLogFormat.newWriterBuilder().onParentPath(archiveFilePath.getParent())
             .withFileId(archiveFilePath.getName()).withFileExtension(HoodieArchivedLogFile.ARCHIVE_EXTENSION)
+            .withLogSuffix(config.getWriteLogSuffix())
             .withFs(metaClient.getFs()).overBaseCommit("").build();
       } else {
         return this.writer;

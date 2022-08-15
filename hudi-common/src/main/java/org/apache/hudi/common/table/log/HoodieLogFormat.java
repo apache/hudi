@@ -143,6 +143,8 @@ public interface HoodieLogFormat {
     private String logWriteToken;
     // Rollover Log file write token
     private String rolloverLogWriteToken;
+    // The suffix is used to identify different jobs, For example: job1, job2 etc.
+    private String logSuffix;
 
     public WriterBuilder withBufferSize(int bufferSize) {
       this.bufferSize = bufferSize;
@@ -204,6 +206,11 @@ public interface HoodieLogFormat {
       return this;
     }
 
+    public WriterBuilder withLogSuffix(String logSuffix) {
+      this.logSuffix = logSuffix;
+      return this;
+    }
+
     public Writer build() throws IOException {
       LOG.info("Building HoodieLogFormat Writer");
       if (fs == null) {
@@ -251,7 +258,7 @@ public interface HoodieLogFormat {
       }
 
       Path logPath = new Path(parentPath,
-          FSUtils.makeLogFileName(logFileId, fileExtension, instantTime, logVersion, logWriteToken));
+          FSUtils.makeLogFileName(logFileId, fileExtension, instantTime, logVersion, logWriteToken, logSuffix));
       LOG.info("HoodieLogFile on path " + logPath);
       HoodieLogFile logFile = new HoodieLogFile(logPath, fileLen);
 

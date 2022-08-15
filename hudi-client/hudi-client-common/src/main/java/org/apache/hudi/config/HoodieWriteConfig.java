@@ -232,6 +232,11 @@ public class HoodieWriteConfig extends HoodieConfig {
       .defaultValue(String.valueOf(4 * 1024 * 1024))
       .withDocumentation("Size of in-memory buffer used for parallelizing network reads and lake storage writes.");
 
+  public static final ConfigProperty<String> WRITE_LOG_SUFFIX_VALUE = ConfigProperty
+      .key("hoodie.write.log.suffix")
+      .defaultValue("")
+      .withDocumentation("Distinguish the log files written by different jobs by suffixes.");
+
   public static final ConfigProperty<String> COMBINE_BEFORE_INSERT = ConfigProperty
       .key("hoodie.combine.before.insert")
       .defaultValue("false")
@@ -1032,6 +1037,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public int getWriteBufferLimitBytes() {
     return Integer.parseInt(getStringOrDefault(WRITE_BUFFER_LIMIT_BYTES_VALUE));
+  }
+
+  public String getWriteLogSuffix() {
+    return getString(WRITE_LOG_SUFFIX_VALUE);
   }
 
   public boolean shouldCombineBeforeInsert() {
@@ -2266,6 +2275,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withWriteBufferLimitBytes(int writeBufferLimit) {
       writeConfig.setValue(WRITE_BUFFER_LIMIT_BYTES_VALUE, String.valueOf(writeBufferLimit));
+      return this;
+    }
+
+    public Builder withWriteLogSuffix(String writeLogSuffix) {
+      writeConfig.setValue(WRITE_LOG_SUFFIX_VALUE, writeLogSuffix);
       return this;
     }
 

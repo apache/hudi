@@ -129,6 +129,7 @@ public class BaseRollbackHelper implements Serializable {
               .withFileId(fileId)
               .overBaseCommit(latestBaseInstant)
               .withFs(metaClient.getFs())
+              .withLogSuffix(config.getWriteLogSuffix())
               .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();
 
           // generate metadata

@@ -478,6 +478,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
         .withSizeThreshold(config.getLogFileMaxSize())
         .withFs(fs)
         .withRolloverLogWriteToken(writeToken)
+        .withLogSuffix(config.getWriteLogSuffix())
         .withLogWriteToken(latestLogFile.map(x -> FSUtils.getWriteTokenFromLogPath(x.getPath())).orElse(writeToken))
         .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();
   }
