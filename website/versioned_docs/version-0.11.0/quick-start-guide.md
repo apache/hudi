@@ -299,16 +299,8 @@ We can create a table on an existing hudi table(created with spark-shell or delt
 read/write to/from a pre-existing hudi table.
 
 ```sql
--- create an external hudi table based on an existing path
-
--- for non-partitioned table
-create table hudi_existing_tbl0 using hudi
-location 'file:///tmp/hudi/dataframe_hudi_nonpt_table';
-
--- for partitioned table
-create table hudi_existing_tbl1 using hudi
-partitioned by (dt, hh)
-location 'file:///tmp/hudi/dataframe_hudi_pt_table';
+create table hudi_existing_tbl using hudi
+location '/tmp/hudi/hudi_existing_table';
 ```
 
 :::tip

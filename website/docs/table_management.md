@@ -98,12 +98,7 @@ You can create an External table using the `location` statement. If an external 
 An external table is useful if you need to read/write to/from a pre-existing hudi table.
 
 ```sql
- create table h_p1 using hudi 
- options (
-    primaryKey = 'id',
-    preCombineField = 'ts'
- )
- partitioned by (dt)
+ create table h_p1 using hudi
  location '/path/to/hudi';
 ```
 
