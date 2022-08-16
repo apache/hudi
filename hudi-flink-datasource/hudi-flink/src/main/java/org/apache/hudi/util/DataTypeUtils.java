@@ -36,7 +36,6 @@ import java.util.Arrays;
  * Utilities for {@link org.apache.flink.table.types.DataType}.
  */
 public class DataTypeUtils {
-
   /**
    * Returns whether the given type is TIMESTAMP type.
    */
@@ -86,15 +85,11 @@ public class DataTypeUtils {
    * Resolves the partition path string into value obj with given data type.
    */
   public static Object resolvePartition(String partition, DataType type) {
-    return resolvePartition(partition, type.getLogicalType());
-  }
-
-  public static Object resolvePartition(String partition, LogicalType type) {
     if (partition == null) {
       return null;
     }
 
-    LogicalTypeRoot typeRoot = type.getTypeRoot();
+    LogicalTypeRoot typeRoot = type.getLogicalType().getTypeRoot();
     switch (typeRoot) {
       case CHAR:
       case VARCHAR:
