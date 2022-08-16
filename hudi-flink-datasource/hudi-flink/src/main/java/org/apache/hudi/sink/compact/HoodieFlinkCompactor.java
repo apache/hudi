@@ -18,6 +18,7 @@
 
 package org.apache.hudi.sink.compact;
 
+import org.apache.flink.streaming.api.functions.sink.DiscardingSink;
 import org.apache.hudi.async.HoodieAsyncTableService;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
@@ -121,6 +122,7 @@ public class HoodieFlinkCompactor {
    * Schedules compaction in service.
    */
   public static class AsyncCompactionService extends HoodieAsyncTableService {
+
     private static final long serialVersionUID = 1L;
 
     /**
@@ -217,6 +219,7 @@ public class HoodieFlinkCompactor {
           if (!scheduled) {
             // do nothing.
             LOG.info("No compaction plan for this job ");
+            executeDummyPipeline();
             return;
           }
           table.getMetaClient().reloadActiveTimeline();
@@ -229,6 +232,7 @@ public class HoodieFlinkCompactor {
       if (requested.isEmpty()) {
         // do nothing.
         LOG.info("No compaction plan scheduled, turns on the compaction plan schedule with --schedule option");
+        executeDummyPipeline();
         return;
       }
 
@@ -259,6 +263,7 @@ public class HoodieFlinkCompactor {
       if (compactionPlans.isEmpty()) {
         // No compaction plan, do nothing and return.
         LOG.info("No compaction plan for instant " + String.join(",", compactionInstantTimes));
+        executeDummyPipeline();
         return;
       }
 
@@ -272,6 +277,7 @@ public class HoodieFlinkCompactor {
           LOG.warn("The compaction plan was fetched through the auxiliary path(.tmp) but not the meta path(.hoodie).\n"
               + "Clean the compaction plan in auxiliary path and cancels the compaction");
           CompactionUtil.cleanInstant(table.getMetaClient(), instant);
+          executeDummyPipeline();
           return;
         }
       }
@@ -317,6 +323,18 @@ public class HoodieFlinkCompactor {
     @VisibleForTesting
     public void shutDown() {
       shutdownAsyncService(false);
+    }
+
+    /**
+     * Execute a dummy pipeline to prevent "no execute() calls" exceptions from being thrown if compaction is not
+     * performed. i.e. The `compact()` method is terminated prematurely before `execute()` is invoked.
+     */
+    private void executeDummyPipeline() throws Exception {
+      env.fromElements(0, 0)
+          .addSink(new DiscardingSink<>())
+          .setParallelism(1)
+          .name("dummy_sink");
+      env.execute();
     }
   }
 

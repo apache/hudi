@@ -18,6 +18,7 @@
 
 package org.apache.hudi.sink.clustering;
 
+import org.apache.flink.streaming.api.functions.sink.DiscardingSink;
 import org.apache.hudi.async.HoodieAsyncTableService;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
@@ -30,6 +31,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.sink.compact.HoodieFlinkCompactor;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.ClusteringUtil;
@@ -53,7 +55,6 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.stream.Collectors;
 
 /**
  * Flink hudi clustering program that can be executed manually.
@@ -126,6 +127,7 @@ public class HoodieFlinkClusteringJob {
    * Schedules clustering in service.
    */
   public static class AsyncClusteringService extends HoodieAsyncTableService {
+
     private static final long serialVersionUID = 1L;
 
     /**
@@ -215,35 +217,61 @@ public class HoodieFlinkClusteringJob {
       }, executor), executor);
     }
 
+    /**
+     * Follows the same execution methodology of HoodieFlinkCompactor, where only one clustering job is allowed to be
+     * executed at any point in time.
+     * <p>
+     * If there is an inflight clustering job, it will be rolled back and re-attempted.
+     * <p>
+     * A clustering plan will be generated if `schedule` is true.
+     *
+     * @throws Exception
+     * @see HoodieFlinkCompactor
+     */
     private void cluster() throws Exception {
       table.getMetaClient().reloadActiveTimeline();
 
-      // judges whether there are operations
-      // to compute the clustering instant time and exec clustering.
       if (cfg.schedule) {
+        // create a clustering plan on the timeline
         ClusteringUtil.validateClusteringScheduling(conf);
-        String clusteringInstantTime = HoodieActiveTimeline.createNewInstantTime();
+
+        String clusteringInstantTime = cfg.clusteringInstantTime != null ? cfg.clusteringInstantTime
+            : HoodieActiveTimeline.createNewInstantTime();
+
+        LOG.info("Creating a clustering plan for instant [" + clusteringInstantTime + "]");
         boolean scheduled = writeClient.scheduleClusteringAtInstant(clusteringInstantTime, Option.empty());
         if (!scheduled) {
           // do nothing.
           LOG.info("No clustering plan for this job");
+          executeDummyPipeline();
           return;
         }
         table.getMetaClient().reloadActiveTimeline();
       }
 
       // fetch the instant based on the configured execution sequence
-      List<HoodieInstant> instants = ClusteringUtils.getPendingClusteringInstantTimes(table.getMetaClient()).stream()
-          .filter(instant -> instant.getState() == HoodieInstant.State.REQUESTED).collect(Collectors.toList());
+      List<HoodieInstant> instants = ClusteringUtils.getPendingClusteringInstantTimes(table.getMetaClient());
       if (instants.isEmpty()) {
         // do nothing.
         LOG.info("No clustering plan scheduled, turns on the clustering plan schedule with --schedule option");
+        executeDummyPipeline();
         return;
       }
 
-      HoodieInstant clusteringInstant = CompactionUtil.isLIFO(cfg.clusteringSeq) ? instants.get(instants.size() - 1) : instants.get(0);
+      final HoodieInstant clusteringInstant;
+      if (cfg.clusteringInstantTime != null) {
+        clusteringInstant = instants.stream()
+            .filter(i -> i.getTimestamp().equals(cfg.clusteringInstantTime))
+            .findFirst()
+            .orElseThrow(() -> new HoodieException("Clustering instant [" + cfg.clusteringInstantTime + "] not found"));
+      } else {
+        // check for inflight clustering plans and roll them back if required
+        clusteringInstant =
+            CompactionUtil.isLIFO(cfg.clusteringSeq) ? instants.get(instants.size() - 1) : instants.get(0);
+      }
 
-      HoodieInstant inflightInstant = HoodieTimeline.getReplaceCommitInflightInstant(clusteringInstant.getTimestamp());
+      HoodieInstant inflightInstant = HoodieTimeline.getReplaceCommitInflightInstant(
+          clusteringInstant.getTimestamp());
       if (table.getMetaClient().getActiveTimeline().containsInstant(inflightInstant)) {
         LOG.info("Rollback inflight clustering instant: [" + clusteringInstant + "]");
         table.rollbackInflightClustering(inflightInstant,
@@ -259,6 +287,7 @@ public class HoodieFlinkClusteringJob {
       if (!clusteringPlanOption.isPresent()) {
         // do nothing.
         LOG.info("No clustering plan scheduled, turns on the clustering plan schedule with --schedule option");
+        executeDummyPipeline();
         return;
       }
 
@@ -266,8 +295,9 @@ public class HoodieFlinkClusteringJob {
 
       if (clusteringPlan == null || (clusteringPlan.getInputGroups() == null)
           || (clusteringPlan.getInputGroups().isEmpty())) {
-        // No clustering plan, do nothing and return.
+        // no clustering plan, do nothing and return.
         LOG.info("No clustering plan for instant " + clusteringInstant.getTimestamp());
+        executeDummyPipeline();
         return;
       }
 
@@ -279,10 +309,10 @@ public class HoodieFlinkClusteringJob {
         // exceptionally.
 
         // clean the clustering plan in auxiliary path and cancels the clustering.
-
         LOG.warn("The clustering plan was fetched through the auxiliary path(.tmp) but not the meta path(.hoodie).\n"
             + "Clean the clustering plan in auxiliary path and cancels the clustering");
         CompactionUtil.cleanInstant(table.getMetaClient(), instant);
+        executeDummyPipeline();
         return;
       }
 
@@ -334,6 +364,18 @@ public class HoodieFlinkClusteringJob {
     @VisibleForTesting
     public void shutDown() {
       shutdownAsyncService(false);
+    }
+
+    /**
+     * Execute a dummy pipeline to prevent "no execute() calls" exceptions from being thrown if clustering is not
+     * performed. i.e. The `cluster()` method is terminated prematurely before `execute()` is invoked.
+     */
+    private void executeDummyPipeline() throws Exception {
+      env.fromElements(0, 0)
+          .addSink(new DiscardingSink<>())
+          .setParallelism(1)
+          .name("dummy_sink");
+      env.execute();
     }
   }
 }

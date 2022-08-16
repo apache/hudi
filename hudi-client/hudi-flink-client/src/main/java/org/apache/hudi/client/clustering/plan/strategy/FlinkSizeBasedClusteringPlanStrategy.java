@@ -112,18 +112,10 @@ public class FlinkSizeBasedClusteringPlanStrategy<T extends HoodieRecordPayload<
   }
 
   @Override
-  protected List<String> filterPartitionPaths(List<String> partitionPaths) {
-    return partitionPaths;
-  }
-
-  @Override
   protected Stream<FileSlice> getFileSlicesEligibleForClustering(final String partition) {
     return super.getFileSlicesEligibleForClustering(partition)
         // Only files that have basefile size smaller than small file size are eligible.
         .filter(slice -> slice.getBaseFile().map(HoodieBaseFile::getFileSize).orElse(0L) < getWriteConfig().getClusteringSmallFileLimit());
   }
 
-  private int getNumberOfOutputFileGroups(long groupSize, long targetFileSize) {
-    return (int) Math.ceil(groupSize / (double) targetFileSize);
-  }
 }
