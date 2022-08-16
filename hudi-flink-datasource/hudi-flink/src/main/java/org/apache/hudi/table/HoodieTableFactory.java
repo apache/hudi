@@ -54,6 +54,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 
@@ -207,10 +208,21 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
       conf.setString(FlinkOptions.PARTITION_PATH_FIELD, String.join(",", partitionKeys));
     }
     // set index key for bucket index if not defined
-    if (conf.getString(FlinkOptions.INDEX_TYPE).equals(HoodieIndex.IndexType.BUCKET.name())
-        && conf.getString(FlinkOptions.INDEX_KEY_FIELD).isEmpty()) {
-      conf.setString(FlinkOptions.INDEX_KEY_FIELD, conf.getString(FlinkOptions.RECORD_KEY_FIELD));
+    if (conf.getString(FlinkOptions.INDEX_TYPE).equals(HoodieIndex.IndexType.BUCKET.name())) {
+      if (conf.getString(FlinkOptions.INDEX_KEY_FIELD).isEmpty()) {
+        conf.setString(FlinkOptions.INDEX_KEY_FIELD, conf.getString(FlinkOptions.RECORD_KEY_FIELD));
+      } else {
+        Set<String> recordKeySet =
+            Arrays.stream(conf.getString(FlinkOptions.RECORD_KEY_FIELD).split(",")).collect(Collectors.toSet());
+        Set<String> indexKeySet =
+            Arrays.stream(conf.getString(FlinkOptions.INDEX_KEY_FIELD).split(",")).collect(Collectors.toSet());
+        if (!recordKeySet.containsAll(indexKeySet)) {
+          throw new HoodieValidationException(
+              FlinkOptions.INDEX_KEY_FIELD + " should be a subset of or equal to the recordKey fields");
+        }
+      }
     }
+
     // tweak the key gen class if possible
     final String[] partitions = conf.getString(FlinkOptions.PARTITION_PATH_FIELD).split(",");
     final String[] pks = conf.getString(FlinkOptions.RECORD_KEY_FIELD).split(",");
