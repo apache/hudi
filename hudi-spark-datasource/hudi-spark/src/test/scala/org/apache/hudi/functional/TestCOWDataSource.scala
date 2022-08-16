@@ -757,14 +757,18 @@ class TestCOWDataSource extends HoodieClientTestBase with ScalaAssertionSupport 
   }
 
   @ParameterizedTest
-  @ValueSource(booleans = Array(true, false))
-  def testBasicSchemaEvolution(shouldReconcileSchema: Boolean): Unit = {
+  @CsvSource(value = Array(
+    "bulk_insert,true", "bulk_insert,false",
+    "insert,true", "insert,false",
+    "upsert,true", "upsert,false"
+  ))
+  def testBasicSchemaEvolution(opType: String, shouldReconcileSchema: Boolean): Unit = {
     // open the schema validate
     val opts = commonOpts ++
       Map(
-        // TODO validate all operations are handled here
         HoodieWriteConfig.AVRO_SCHEMA_VALIDATE_ENABLE.key -> "true",
-        DataSourceWriteOptions.RECONCILE_SCHEMA.key -> shouldReconcileSchema.toString
+        DataSourceWriteOptions.RECONCILE_SCHEMA.key -> shouldReconcileSchema.toString,
+        DataSourceWriteOptions.OPERATION.key-> opType
       )
 
     //
