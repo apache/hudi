@@ -51,10 +51,10 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 
@@ -212,12 +212,10 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
       if (conf.getString(FlinkOptions.INDEX_KEY_FIELD).isEmpty()) {
         conf.setString(FlinkOptions.INDEX_KEY_FIELD, conf.getString(FlinkOptions.RECORD_KEY_FIELD));
       } else {
-        HashSet<String> recordKeySet = new HashSet<>(Arrays.asList(
-            conf.getString(FlinkOptions.RECORD_KEY_FIELD).split(",")
-        ));
-        HashSet<String> indexKeySet = new HashSet<>(Arrays.asList(
-            conf.getString(FlinkOptions.INDEX_KEY_FIELD).split(",")
-        ));
+        Set<String> recordKeySet =
+            Arrays.stream(conf.getString(FlinkOptions.RECORD_KEY_FIELD).split(",")).collect(Collectors.toSet());
+        Set<String> indexKeySet =
+            Arrays.stream(conf.getString(FlinkOptions.INDEX_KEY_FIELD).split(",")).collect(Collectors.toSet());
         if (!recordKeySet.containsAll(indexKeySet)) {
           throw new HoodieValidationException(
               FlinkOptions.INDEX_KEY_FIELD + " should be a subset of or equal to the recordKey fields");

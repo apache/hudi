@@ -328,7 +328,7 @@ public class TestHoodieTableFactory {
     final Configuration conf4 = tableSink4.getConf();
     assertThat(conf4.getString(FlinkOptions.INDEX_KEY_FIELD), is("f0,f1"));
 
-    // index key field is not a subset of or equal to the recordKey fields, will be throw exception
+    // index key field is not a subset of or equal to the recordKey fields, will throw exception
     this.conf.setString(FlinkOptions.INDEX_KEY_FIELD, "f2");
     final MockContext context5 = MockContext.getInstance(this.conf, schema1, "f2");
     assertThrows(HoodieValidationException.class, () -> new HoodieTableFactory().createDynamicTableSource(context5));
