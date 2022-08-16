@@ -37,6 +37,12 @@ After start spark-app,  pls exec `set hoodie.schema.on.read.enable=true` to enab
 Currently, Schema evolution cannot disabled once being enabled.
 :::
 
+:::tip
+When use hive metastore, may encounter a problem: `org.apache.hadoop.hive.ql.metadata.HiveException`: Unable to alter table. The following columns have types incompatible with the existing columns in their respective positions.
+
+Make sure disable `hive.metastore.disallow.incompatible.col.type.changes` in hive side.
+:::
+
 ### Adding Columns
 **Syntax**
 ```sql
