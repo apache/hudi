@@ -630,7 +630,7 @@ public class DeltaSync implements Serializable {
           scheduledCompactionInstant = writeClient.scheduleCompaction(Option.empty());
         }
 
-        if (!isEmpty) {
+        if (!isEmpty || cfg.forceEmptyMetaSync) {
           runMetaSync();
         }
       } else {
