@@ -57,7 +57,8 @@ import java.util.stream.Collectors;
 public class CommitsCommand implements CommandMarker {
 
   private String printCommits(HoodieDefaultTimeline timeline,
-                              final Integer limit, final String sortByField,
+                              final Integer limit,
+                              final String sortByField,
                               final boolean descending,
                               final boolean headerOnly,
                               final String tempTableName) throws IOException {
@@ -105,7 +106,8 @@ public class CommitsCommand implements CommandMarker {
                                           final Integer limit, final String sortByField,
                                           final boolean descending,
                                           final boolean headerOnly,
-                                          final String tempTableName) throws IOException {
+                                          final String tempTableName,
+                                          final String partition) throws IOException {
     final List<Comparable[]> rows = new ArrayList<>();
 
     final List<HoodieInstant> commits = timeline.getCommitsTimeline().filterCompletedInstants()
@@ -119,14 +121,26 @@ public class CommitsCommand implements CommandMarker {
       for (Map.Entry<String, List<HoodieWriteStat>> partitionWriteStat :
           commitMetadata.getPartitionToWriteStats().entrySet()) {
         for (HoodieWriteStat hoodieWriteStat : partitionWriteStat.getValue()) {
-          rows.add(new Comparable[] {commit.getAction(), commit.getTimestamp(), hoodieWriteStat.getPartitionPath(),
-              hoodieWriteStat.getFileId(), hoodieWriteStat.getPrevCommit(), hoodieWriteStat.getNumWrites(),
-              hoodieWriteStat.getNumInserts(), hoodieWriteStat.getNumDeletes(),
-              hoodieWriteStat.getNumUpdateWrites(), hoodieWriteStat.getTotalWriteErrors(),
-              hoodieWriteStat.getTotalLogBlocks(), hoodieWriteStat.getTotalCorruptLogBlock(),
-              hoodieWriteStat.getTotalRollbackBlocks(), hoodieWriteStat.getTotalLogRecords(),
-              hoodieWriteStat.getTotalUpdatedRecordsCompacted(), hoodieWriteStat.getTotalWriteBytes()
-          });
+          if (StringUtils.nonEmpty(partition) && partition.equals(hoodieWriteStat.getPartitionPath())) {
+            rows.add(new Comparable[] {commit.getAction(), commit.getTimestamp(), hoodieWriteStat.getPartitionPath(),
+                hoodieWriteStat.getFileId(), hoodieWriteStat.getPrevCommit(), hoodieWriteStat.getNumWrites(),
+                hoodieWriteStat.getNumInserts(), hoodieWriteStat.getNumDeletes(),
+                hoodieWriteStat.getNumUpdateWrites(), hoodieWriteStat.getTotalWriteErrors(),
+                hoodieWriteStat.getTotalLogBlocks(), hoodieWriteStat.getTotalCorruptLogBlock(),
+                hoodieWriteStat.getTotalRollbackBlocks(), hoodieWriteStat.getTotalLogRecords(),
+                hoodieWriteStat.getTotalUpdatedRecordsCompacted(), hoodieWriteStat.getTotalWriteBytes()
+            });
+            break;
+          } else {
+            rows.add(new Comparable[] {commit.getAction(), commit.getTimestamp(), hoodieWriteStat.getPartitionPath(),
+                hoodieWriteStat.getFileId(), hoodieWriteStat.getPrevCommit(), hoodieWriteStat.getNumWrites(),
+                hoodieWriteStat.getNumInserts(), hoodieWriteStat.getNumDeletes(),
+                hoodieWriteStat.getNumUpdateWrites(), hoodieWriteStat.getTotalWriteErrors(),
+                hoodieWriteStat.getTotalLogBlocks(), hoodieWriteStat.getTotalCorruptLogBlock(),
+                hoodieWriteStat.getTotalRollbackBlocks(), hoodieWriteStat.getTotalLogRecords(),
+                hoodieWriteStat.getTotalUpdatedRecordsCompacted(), hoodieWriteStat.getTotalWriteBytes()
+            });
+          }
         }
       }
     }
@@ -168,7 +182,8 @@ public class CommitsCommand implements CommandMarker {
       @CliOption(key = {"sortBy"}, help = "Sorting Field", unspecifiedDefaultValue = "") final String sortByField,
       @CliOption(key = {"desc"}, help = "Ordering", unspecifiedDefaultValue = "false") final boolean descending,
       @CliOption(key = {"headeronly"}, help = "Print Header Only",
-          unspecifiedDefaultValue = "false") final boolean headerOnly)
+          unspecifiedDefaultValue = "false") final boolean headerOnly,
+      @CliOption(key = {"partition"}, help = "Partition value") final String partition)
       throws IOException {
 
     HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
@@ -176,7 +191,7 @@ public class CommitsCommand implements CommandMarker {
     HoodieArchivedTimeline archivedTimeline = metaClient.getArchivedTimeline();
     HoodieDefaultTimeline timeline = archivedTimeline.mergeTimeline(activeTimeline);
     if (includeExtraMetadata) {
-      return printCommitsWithMetadata(timeline, limit, sortByField, descending, headerOnly, exportTableName);
+      return printCommitsWithMetadata(timeline, limit, sortByField, descending, headerOnly, exportTableName, partition);
     } else {
       return printCommits(timeline, limit, sortByField, descending, headerOnly, exportTableName);
     }
@@ -195,7 +210,8 @@ public class CommitsCommand implements CommandMarker {
       @CliOption(key = {"limit"}, mandatory = false, help = "Limit commits", unspecifiedDefaultValue = "-1") final Integer limit,
       @CliOption(key = {"sortBy"}, help = "Sorting Field", unspecifiedDefaultValue = "") final String sortByField,
       @CliOption(key = {"desc"}, help = "Ordering", unspecifiedDefaultValue = "false") final boolean descending,
-      @CliOption(key = {"headeronly"}, help = "Print Header Only", unspecifiedDefaultValue = "false") final boolean headerOnly)
+      @CliOption(key = {"headeronly"}, help = "Print Header Only", unspecifiedDefaultValue = "false") final boolean headerOnly,
+      @CliOption(key = {"partition"}, help = "Partition value") final String partition)
       throws IOException {
     if (StringUtils.isNullOrEmpty(startTs)) {
       startTs = CommitUtil.getTimeDaysAgo(10);
@@ -208,7 +224,7 @@ public class CommitsCommand implements CommandMarker {
       archivedTimeline.loadInstantDetailsInMemory(startTs, endTs);
       HoodieDefaultTimeline timelineRange = archivedTimeline.findInstantsInRange(startTs, endTs);
       if (includeExtraMetadata) {
-        return printCommitsWithMetadata(timelineRange, limit, sortByField, descending, headerOnly, exportTableName);
+        return printCommitsWithMetadata(timelineRange, limit, sortByField, descending, headerOnly, exportTableName, partition);
       } else {
         return printCommits(timelineRange, limit, sortByField, descending, headerOnly, exportTableName);
       }
@@ -414,15 +430,13 @@ public class CommitsCommand implements CommandMarker {
   /*
   Checks whether a commit or replacecommit action exists in the timeline.
   * */
-  private Option<HoodieInstant> getCommitForInstant(HoodieTimeline timeline, String instantTime) throws IOException {
+  private Option<HoodieInstant> getCommitForInstant(HoodieTimeline timeline, String instantTime) {
     List<HoodieInstant> instants = Arrays.asList(
         new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, instantTime),
         new HoodieInstant(false, HoodieTimeline.REPLACE_COMMIT_ACTION, instantTime),
         new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, instantTime));
 
-    Option<HoodieInstant> hoodieInstant = Option.fromJavaOptional(instants.stream().filter(timeline::containsInstant).findAny());
-
-    return hoodieInstant;
+    return Option.fromJavaOptional(instants.stream().filter(timeline::containsInstant).findAny());
   }
 
   private Option<HoodieCommitMetadata> getHoodieCommitMetadata(HoodieTimeline timeline, Option<HoodieInstant> hoodieInstant) throws IOException {

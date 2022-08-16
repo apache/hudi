@@ -115,7 +115,8 @@ public class CompactionCommand implements CommandMarker {
       @CliOption(key = {"sortBy"}, help = "Sorting Field", unspecifiedDefaultValue = "") final String sortByField,
       @CliOption(key = {"desc"}, help = "Ordering", unspecifiedDefaultValue = "false") final boolean descending,
       @CliOption(key = {"headeronly"}, help = "Print Header Only",
-          unspecifiedDefaultValue = "false") final boolean headerOnly)
+          unspecifiedDefaultValue = "false") final boolean headerOnly,
+      @CliOption(key = {"partition"}, help = "Partition value") final String partition)
       throws Exception {
     HoodieTableMetaClient client = checkAndGetMetaClient();
     HoodieActiveTimeline activeTimeline = client.getActiveTimeline();
@@ -123,7 +124,7 @@ public class CompactionCommand implements CommandMarker {
         activeTimeline.readCompactionPlanAsBytes(
             HoodieTimeline.getCompactionRequestedInstant(compactionInstantTime)).get());
 
-    return printCompaction(compactionPlan, sortByField, descending, limit, headerOnly);
+    return printCompaction(compactionPlan, sortByField, descending, limit, headerOnly, partition);
   }
 
   @CliCommand(value = "compactions showarchived", help = "Shows compaction details for specified time window")
@@ -168,7 +169,8 @@ public class CompactionCommand implements CommandMarker {
       @CliOption(key = {"sortBy"}, help = "Sorting Field", unspecifiedDefaultValue = "") final String sortByField,
       @CliOption(key = {"desc"}, help = "Ordering", unspecifiedDefaultValue = "false") final boolean descending,
       @CliOption(key = {"headeronly"}, help = "Print Header Only",
-          unspecifiedDefaultValue = "false") final boolean headerOnly)
+          unspecifiedDefaultValue = "false") final boolean headerOnly,
+      @CliOption(key = {"partition"}, help = "Partition value") final String partition)
       throws Exception {
     HoodieTableMetaClient client = checkAndGetMetaClient();
     HoodieArchivedTimeline archivedTimeline = client.getArchivedTimeline();
@@ -178,7 +180,7 @@ public class CompactionCommand implements CommandMarker {
       archivedTimeline.loadCompactionDetailsInMemory(compactionInstantTime);
       HoodieCompactionPlan compactionPlan = TimelineMetadataUtils.deserializeAvroRecordMetadata(
           archivedTimeline.getInstantDetails(instant).get(), HoodieCompactionPlan.getClassSchema());
-      return printCompaction(compactionPlan, sortByField, descending, limit, headerOnly);
+      return printCompaction(compactionPlan, sortByField, descending, limit, headerOnly, partition);
     } finally {
       archivedTimeline.clearInstantDetailsFromMemory(compactionInstantTime);
     }
@@ -409,12 +411,19 @@ public class CompactionCommand implements CommandMarker {
                                    String sortByField,
                                    boolean descending,
                                    int limit,
-                                   boolean headerOnly) {
+                                   boolean headerOnly,
+                                   final String partition) {
     List<Comparable[]> rows = new ArrayList<>();
     if ((null != compactionPlan) && (null != compactionPlan.getOperations())) {
       for (HoodieCompactionOperation op : compactionPlan.getOperations()) {
-        rows.add(new Comparable[] {op.getPartitionPath(), op.getFileId(), op.getBaseInstantTime(), op.getDataFilePath(),
-            op.getDeltaFilePaths().size(), op.getMetrics() == null ? "" : op.getMetrics().toString()});
+        if (StringUtils.nonEmpty(partition) && partition.equals(op.getPartitionPath())) {
+          rows.add(new Comparable[] {op.getPartitionPath(), op.getFileId(), op.getBaseInstantTime(), op.getDataFilePath(),
+              op.getDeltaFilePaths().size(), op.getMetrics() == null ? "" : op.getMetrics().toString()});
+          break;
+        } else {
+          rows.add(new Comparable[] {op.getPartitionPath(), op.getFileId(), op.getBaseInstantTime(), op.getDataFilePath(),
+              op.getDeltaFilePaths().size(), op.getMetrics() == null ? "" : op.getMetrics().toString()});
+        }
       }
     }
 
