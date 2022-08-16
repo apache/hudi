@@ -66,6 +66,7 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport {
   /**
    * @deprecated please use other overload [[createRdd]]
    */
+  @Deprecated
   def createRdd(df: DataFrame, structName: String, recordNamespace: String, reconcileToLatestSchema: Boolean,
                 latestTableSchema: org.apache.hudi.common.util.Option[Schema] = org.apache.hudi.common.util.Option.empty()): RDD[GenericRecord] = {
     var latestTableSchemaConverted : Option[Schema] = None
