@@ -302,25 +302,24 @@ public class TableSchemaResolver {
   }
 
   /**
-   * HUDI specific validation of schema evolution. Ensures that a newer schema can be used for the dataset by
-   * checking if the data written using the old schema can be read using the new schema.
+   * Hudi-specific validation of (basic) schema evolution. Ensures that a newer schema can be applied
+   * to the dataset by checking if the data written using the old schema can be read using the new schema.
    *
    * HUDI requires a Schema to be specified in HoodieWriteConfig and is used by the HoodieWriteClient to
    * create the records. The schema is also saved in the data files (parquet format) and log files (avro format).
    * Since a schema is required each time new data is ingested into a HUDI dataset, schema can be evolved over time.
    *
-   * New Schema is compatible only if:
+   * New Schema is compatible iff:
    * A1. There is no change in schema
-   * A2. A field has been added and it has a default value specified
+   * A2. A field has been added, and it has a default value specified
    *
    * New Schema is incompatible if:
-   * B1. A field has been deleted
-   * B2. A field has been renamed (treated as delete + add)
-   * B3. A field's type has changed to be incompatible with the older type
+   * B1. A field has been renamed
+   * B2. A field's type has changed to be incompatible with the older type
    *
    * Issue with org.apache.avro.SchemaCompatibility:
    *  org.apache.avro.SchemaCompatibility checks schema compatibility between a writer schema (which originally wrote
-   *  the AVRO record) and a readerSchema (with which we are reading the record). It ONLY guarantees that that each
+   *  the AVRO record) and a readerSchema (with which we are reading the record). It ONLY guarantees that each
    *  field in the reader record can be populated from the writer record. Hence, if the reader schema is missing a
    *  field, it is still compatible with the writer schema.
    *
@@ -332,9 +331,9 @@ public class TableSchemaResolver {
    *
    * Checks:
    * C1. If there is no change in schema: success
-   * C2. If a field has been deleted in new schema: failure
+   * C2. If a field has been deleted in new schema: success
    * C3. If a field has been added in new schema: it should have default value specified
-   * C4. If a field has been renamed(treated as delete + add): failure
+   * C4. If a field has been renamed: failure
    * C5. If a field type has changed: failure
    *
    * @param oldSchema Older schema to check.
@@ -351,17 +350,12 @@ public class TableSchemaResolver {
         return false;
       }
 
-      // Check that each field in the oldSchema can populated the newSchema
-      for (final Field oldSchemaField : oldSchema.getFields()) {
+      // Check that each field in the oldSchema can populate the newSchema
+      for (final Field oldSchemaField: oldSchema.getFields()) {
         final Field newSchemaField = SchemaCompatibility.lookupWriterField(newSchema, oldSchemaField);
-        if (newSchemaField == null) {
-          // C4 or C2: newSchema does not correspond to any field in the oldSchema
+        if (newSchemaField != null && !isSchemaCompatible(oldSchemaField.schema(), newSchemaField.schema())) {
+          // C5: The fields do not have a compatible type
           return false;
-        } else {
-          if (!isSchemaCompatible(oldSchemaField.schema(), newSchemaField.schema())) {
-            // C5: The fields do not have a compatible type
-            return false;
-          }
         }
       }
 
