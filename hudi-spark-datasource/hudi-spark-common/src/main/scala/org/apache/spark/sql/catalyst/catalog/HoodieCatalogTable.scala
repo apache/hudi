@@ -129,7 +129,17 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
   /**
    * Table schema
    */
-  lazy val tableSchema: StructType = table.schema
+  lazy val tableSchema: StructType = if (table.schema.nonEmpty) {
+    table.schema
+  } else {
+    val schemaFromMetaOpt = loadTableSchemaByMetaClient()
+    if (schemaFromMetaOpt.nonEmpty) {
+      schemaFromMetaOpt.get
+    } else {
+      throw new AnalysisException(
+        s"Missing schema fields when applying CREATE TABLE clause for $catalogTableName")
+    }
+  }
 
   /**
    * The schema without hoodie meta fields
