@@ -4,7 +4,7 @@ keywords: [ configurations, default, flink options, spark, configs, parameters ]
 permalink: /docs/configurations.html
 summary: This page covers the different ways of configuring your job to write/read Hudi tables. At a high level, you can control behaviour at few levels.
 toc: true
-last_modified_at: 2022-04-30T18:29:54.348
+last_modified_at: 2022-08-12T13:18:38.885
 ---
 
 This page covers the different ways of configuring your job to write/read Hudi tables. At a high level, you can control behaviour at few levels.
@@ -112,6 +112,13 @@ Options useful for reading tables via `read.format.option(...)`
 
 ---
 
+> #### hoodie.schema.on.read.enable
+> Enables support for Schema Evolution feature<br></br>
+> **Default Value**: false (Optional)<br></br>
+> `Config Param: SCHEMA_EVOLUTION_ENABLED`<br></br>
+
+---
+
 > #### hoodie.datasource.read.begin.instanttime
 > Instant time to start incrementally pulling data from. The instanttime here need not necessarily correspond to an instant on the timeline. New data written with an instant_time > BEGIN_INSTANTTIME are fetched out. For e.g: ‘20170901080000’ will get all new data written after Sep 1, 2017 08:00AM.<br></br>
 > **Default Value**: N/A (Required)<br></br>
@@ -199,8 +206,8 @@ the dot notation eg: `a.b.c`<br></br>
 ---
 
 > #### hoodie.datasource.hive_sync.partition_extractor_class
-> Class which implements PartitionValueExtractor to extract the partition values, default 'SlashEncodedDayPartitionValueExtractor'.<br></br>
-> **Default Value**: org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor (Optional)<br></br>
+> Class which implements PartitionValueExtractor to extract the partition values, default 'org.apache.hudi.hive.MultiPartKeysValueExtractor'.<br></br>
+> **Default Value**: org.apache.hudi.hive.MultiPartKeysValueExtractor (Optional)<br></br>
 > `Config Param: HIVE_PARTITION_EXTRACTOR_CLASS`<br></br>
 
 ---
@@ -376,7 +383,7 @@ the dot notation eg: `a.b.c`<br></br>
 ---
 
 > #### hoodie.datasource.hive_sync.assume_date_partitioning
-> Assume partitioning is yyyy/mm/dd<br></br>
+> Assume partitioning is yyyy/MM/dd<br></br>
 > **Default Value**: false (Optional)<br></br>
 > `Config Param: HIVE_ASSUME_DATE_PARTITION`<br></br>
 
@@ -580,20 +587,6 @@ These configs control the Hudi Flink SQL source/sink connectors, providing abili
 Flink jobs using the SQL can be configured through the options in WITH clause. The actual datasource level configs are listed below.
 
 `Config Class`: org.apache.hudi.configuration.FlinkOptions<br></br>
-> #### read.streaming.enabled
-> Whether to read as streaming source, default false<br></br>
-> **Default Value**: false (Optional)<br></br>
-> `Config Param: READ_AS_STREAMING`<br></br>
-
----
-
-> #### hoodie.datasource.write.keygenerator.type
-> Key generator type, that implements will extract the key out of incoming record<br></br>
-> **Default Value**: SIMPLE (Optional)<br></br>
-> `Config Param: KEYGEN_TYPE`<br></br>
-
----
-
 > #### compaction.trigger.strategy
 > Strategy to trigger compaction, options are 'num_commits': trigger compaction when reach N delta commits;
 'time_elapsed': trigger compaction when time elapsed &gt; N seconds since last compaction;
@@ -612,54 +605,11 @@ Default is 'num_commits'<br></br>
 
 ---
 
-> #### compaction.max_memory
-> Max memory in MB for compaction spillable map, default 100MB<br></br>
-> **Default Value**: 100 (Optional)<br></br>
-> `Config Param: COMPACTION_MAX_MEMORY`<br></br>
-
----
-
-> #### hive_sync.support_timestamp
-> INT64 with original type TIMESTAMP_MICROS is converted to hive timestamp type.
-Disabled by default for backward compatibility.<br></br>
-> **Default Value**: true (Optional)<br></br>
-> `Config Param: HIVE_SYNC_SUPPORT_TIMESTAMP`<br></br>
-
----
-
 > #### hive_sync.serde_properties
 > Serde properties to hive table, the data format is k1=v1
 k2=v2<br></br>
 > **Default Value**: N/A (Required)<br></br>
 > `Config Param: HIVE_SYNC_TABLE_SERDE_PROPERTIES`<br></br>
-
----
-
-> #### hive_sync.skip_ro_suffix
-> Skip the _ro suffix for Read optimized table when registering, default false<br></br>
-> **Default Value**: false (Optional)<br></br>
-> `Config Param: HIVE_SYNC_SKIP_RO_SUFFIX`<br></br>
-
----
-
-> #### metadata.compaction.delta_commits
-> Max delta commits for metadata table to trigger compaction, default 10<br></br>
-> **Default Value**: 10 (Optional)<br></br>
-> `Config Param: METADATA_COMPACTION_DELTA_COMMITS`<br></br>
-
----
-
-> #### hive_sync.assume_date_partitioning
-> Assume partitioning is yyyy/mm/dd, default false<br></br>
-> **Default Value**: false (Optional)<br></br>
-> `Config Param: HIVE_SYNC_ASSUME_DATE_PARTITION`<br></br>
-
----
-
-> #### write.parquet.block.size
-> Parquet RowGroup size. It's recommended to make this large enough that scan costs can be amortized by packing enough column values into a single row group.<br></br>
-> **Default Value**: 120 (Optional)<br></br>
-> `Config Param: WRITE_PARQUET_BLOCK_SIZE`<br></br>
 
 ---
 
@@ -729,45 +679,10 @@ By default false (the names of partition folders are only partition values)<br><
 
 ---
 
-> #### hive_sync.enable
-> Asynchronously sync Hive meta to HMS, default false<br></br>
-> **Default Value**: false (Optional)<br></br>
-> `Config Param: HIVE_SYNC_ENABLED`<br></br>
-
----
-
-> #### changelog.enabled
-> Whether to keep all the intermediate changes, we try to keep all the changes of a record when enabled:
-1). The sink accept the UPDATE_BEFORE message;
-2). The source try to emit every changes of a record.
-The semantics is best effort because the compaction job would finally merge all changes of a record into one.
- default false to have UPSERT semantics<br></br>
-> **Default Value**: false (Optional)<br></br>
-> `Config Param: CHANGELOG_ENABLED`<br></br>
-
----
-
-> #### read.streaming.check-interval
-> Check interval for streaming read of SECOND, default 1 minute<br></br>
-> **Default Value**: 60 (Optional)<br></br>
-> `Config Param: READ_STREAMING_CHECK_INTERVAL`<br></br>
-
----
-
 > #### write.bulk_insert.shuffle_input
 > Whether to shuffle the inputs by specific fields for bulk insert tasks, default true<br></br>
 > **Default Value**: true (Optional)<br></br>
 > `Config Param: WRITE_BULK_INSERT_SHUFFLE_INPUT`<br></br>
-
----
-
-> #### hoodie.datasource.merge.type
-> For Snapshot query on merge on read table. Use this key to define how the payloads are merged, in
-1) skip_merge: read the base file records plus the log file records;
-2) payload_combine: read the base file records first, for each record in base file, checks whether the key is in the
-   log file records(combines the two records with same key for base and log file records), then read the left log file records<br></br>
-> **Default Value**: payload_combine (Optional)<br></br>
-> `Config Param: MERGE_TYPE`<br></br>
 
 ---
 
@@ -780,16 +695,9 @@ By default 3<br></br>
 ---
 
 > #### metadata.enabled
-> Enable the internal metadata table which serves table metadata like level file listings, default false<br></br>
+> Enable the internal metadata table which serves table metadata like level file listings, default disabled<br></br>
 > **Default Value**: false (Optional)<br></br>
 > `Config Param: METADATA_ENABLED`<br></br>
-
----
-
-> #### read.tasks
-> Parallelism of tasks that do actual read, default is 4<br></br>
-> **Default Value**: 4 (Optional)<br></br>
-> `Config Param: READ_TASKS`<br></br>
 
 ---
 
@@ -797,6 +705,13 @@ By default 3<br></br>
 > Target size for parquet files produced by Hudi write phases. For DFS, this needs to be aligned with the underlying filesystem block size for optimal performance.<br></br>
 > **Default Value**: 120 (Optional)<br></br>
 > `Config Param: WRITE_PARQUET_MAX_FILE_SIZE`<br></br>
+
+---
+
+> #### clustering.plan.strategy.daybased.skipfromlatest.partitions
+> Number of partitions to skip from latest when choosing partitions to create ClusteringPlan<br></br>
+> **Default Value**: 0 (Optional)<br></br>
+> `Config Param: CLUSTERING_PLAN_STRATEGY_SKIP_PARTITIONS_FROM_LATEST`<br></br>
 
 ---
 
@@ -812,27 +727,6 @@ Actual value will be obtained by invoking .toString() on the field value. Nested
 > Hudi bucket number per partition. Only affected if using Hudi bucket index.<br></br>
 > **Default Value**: 4 (Optional)<br></br>
 > `Config Param: BUCKET_INDEX_NUM_BUCKETS`<br></br>
-
----
-
-> #### read.end-commit
-> End commit instant for reading, the commit time format should be 'yyyyMMddHHmmss'<br></br>
-> **Default Value**: N/A (Required)<br></br>
-> `Config Param: READ_END_COMMIT`<br></br>
-
----
-
-> #### write.log.max.size
-> Maximum size allowed in MB for a log file before it is rolled over to the next version, default 1GB<br></br>
-> **Default Value**: 1024 (Optional)<br></br>
-> `Config Param: WRITE_LOG_MAX_SIZE`<br></br>
-
----
-
-> #### hive_sync.file_format
-> File format for hive sync, default 'PARQUET'<br></br>
-> **Default Value**: PARQUET (Optional)<br></br>
-> `Config Param: HIVE_SYNC_FILE_FORMAT`<br></br>
 
 ---
 
@@ -860,6 +754,20 @@ By default 2000 and it will be doubled by every retry<br></br>
 
 ---
 
+> #### clustering.async.enabled
+> Async Clustering, default false<br></br>
+> **Default Value**: false (Optional)<br></br>
+> `Config Param: CLUSTERING_ASYNC_ENABLED`<br></br>
+
+---
+
+> #### clustering.plan.partition.filter.mode
+> Partition filter mode used in the creation of clustering plan. Available values are - NONE: do not filter table partition and thus the clustering plan will include all partitions that have clustering candidate.RECENT_DAYS: keep a continuous range of partitions, worked together with configs 'hoodie.clustering.plan.strategy.daybased.lookback.partitions' and 'hoodie.clustering.plan.strategy.daybased.skipfromlatest.partitions.SELECTED_PARTITIONS: keep partitions that are in the specified range ['hoodie.clustering.plan.strategy.cluster.begin.partition', 'hoodie.clustering.plan.strategy.cluster.end.partition'].<br></br>
+> **Default Value**: NONE (Optional)<br></br>
+> `Config Param: CLUSTERING_PLAN_PARTITION_FILTER_MODE_NAME`<br></br>
+
+---
+
 > #### hive_sync.db
 > Database name for hive sync, default 'default'<br></br>
 > **Default Value**: default (Optional)<br></br>
@@ -867,24 +775,10 @@ By default 2000 and it will be doubled by every retry<br></br>
 
 ---
 
-> #### index.type
-> Index type of Flink write job, default is using state backed index.<br></br>
-> **Default Value**: FLINK_STATE (Optional)<br></br>
-> `Config Param: INDEX_TYPE`<br></br>
-
----
-
-> #### hive_sync.password
-> Password for hive sync, default 'hive'<br></br>
-> **Default Value**: hive (Optional)<br></br>
-> `Config Param: HIVE_SYNC_PASSWORD`<br></br>
-
----
-
-> #### hive_sync.use_jdbc
-> Use JDBC when hive synchronization is enabled, default true<br></br>
-> **Default Value**: true (Optional)<br></br>
-> `Config Param: HIVE_SYNC_USE_JDBC`<br></br>
+> #### clustering.plan.strategy.sort.columns
+> Columns to sort the data by when clustering<br></br>
+> **Default Value**:  (Optional)<br></br>
+> `Config Param: CLUSTERING_SORT_COLUMNS`<br></br>
 
 ---
 
@@ -895,24 +789,10 @@ By default 2000 and it will be doubled by every retry<br></br>
 
 ---
 
-> #### hive_sync.jdbc_url
-> Jdbc URL for hive sync, default 'jdbc:hive2://localhost:10000'<br></br>
-> **Default Value**: jdbc:hive2://localhost:10000 (Optional)<br></br>
-> `Config Param: HIVE_SYNC_JDBC_URL`<br></br>
-
----
-
 > #### hive_sync.partition_extractor_class
 > Tool to extract the partition value from HDFS path, default 'SlashEncodedDayPartitionValueExtractor'<br></br>
 > **Default Value**: org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor (Optional)<br></br>
 > `Config Param: HIVE_SYNC_PARTITION_EXTRACTOR_CLASS_NAME`<br></br>
-
----
-
-> #### read.start-commit
-> Start commit instant for reading, the commit time format should be 'yyyyMMddHHmmss', by default reading from the latest instant for streaming read<br></br>
-> **Default Value**: N/A (Required)<br></br>
-> `Config Param: READ_START_COMMIT`<br></br>
 
 ---
 
@@ -933,16 +813,9 @@ By default these cases will accept duplicates, to gain extra performance:
 
 ---
 
-> #### archive.min_commits
-> Min number of commits to keep before archiving older commits into a sequential log, default 40<br></br>
-> **Default Value**: 40 (Optional)<br></br>
-> `Config Param: ARCHIVE_MIN_COMMITS`<br></br>
-
----
-
 > #### hoodie.datasource.write.keygenerator.class
 > Key generator class, that implements will extract the key out of incoming record<br></br>
-> **Default Value**:  (Optional)<br></br>
+> **Default Value**: N/A (Required)<br></br>
 > `Config Param: KEYGEN_CLASS_NAME`<br></br>
 
 ---
@@ -955,17 +828,10 @@ if same key record with different partition path came in, default true<br></br>
 
 ---
 
-> #### index.partition.regex
-> Whether to load partitions in state if partition path matching， default `*`<br></br>
-> **Default Value**: .* (Optional)<br></br>
-> `Config Param: INDEX_PARTITION_REGEX`<br></br>
-
----
-
-> #### hoodie.table.name
-> Table name to register to Hive metastore<br></br>
-> **Default Value**: N/A (Required)<br></br>
-> `Config Param: TABLE_NAME`<br></br>
+> #### clustering.delta_commits
+> Max delta commits needed to trigger clustering, default 4 commits<br></br>
+> **Default Value**: 4 (Optional)<br></br>
+> `Config Param: CLUSTERING_DELTA_COMMITS`<br></br>
 
 ---
 
@@ -992,13 +858,6 @@ there are two cases that this option can be used to avoid reading duplicates:
 2) changelog mode is enabled, this option is a solution to keep data integrity<br></br>
 > **Default Value**: false (Optional)<br></br>
 > `Config Param: READ_STREAMING_SKIP_COMPACT`<br></br>
-
----
-
-> #### hoodie.datasource.write.partitionpath.urlencode
-> Whether to encode the partition path url, default false<br></br>
-> **Default Value**: false (Optional)<br></br>
-> `Config Param: URL_ENCODE_PARTITIONING`<br></br>
 
 ---
 
@@ -1062,13 +921,6 @@ Actual value obtained by invoking .toString(), default ''<br></br>
 
 ---
 
-> #### source.avro-schema.path
-> Source avro schema file path, the parsed schema is used for deserialization<br></br>
-> **Default Value**: N/A (Required)<br></br>
-> `Config Param: SOURCE_AVRO_SCHEMA_PATH`<br></br>
-
----
-
 > #### compaction.delta_commits
 > Max delta commits needed to trigger compaction, default 5 commits<br></br>
 > **Default Value**: 5 (Optional)<br></br>
@@ -1076,16 +928,9 @@ Actual value obtained by invoking .toString(), default ''<br></br>
 
 ---
 
-> #### write.insert.cluster
-> Whether to merge small files for insert mode, if true, the write throughput will decrease because the read/write of existing small file, only valid for COW table, default false<br></br>
-> **Default Value**: false (Optional)<br></br>
-> `Config Param: INSERT_CLUSTER`<br></br>
-
----
-
 > #### partition.default_name
 > The default partition name in case the dynamic partition column value is null/empty string<br></br>
-> **Default Value**: default (Optional)<br></br>
+> **Default Value**: __HIVE_DEFAULT_PARTITION__ (Optional)<br></br>
 > `Config Param: PARTITION_DEFAULT_NAME`<br></br>
 
 ---
@@ -1097,10 +942,17 @@ Actual value obtained by invoking .toString(), default ''<br></br>
 
 ---
 
-> #### source.avro-schema
-> Source avro schema string, the parsed schema is used for deserialization<br></br>
-> **Default Value**: N/A (Required)<br></br>
-> `Config Param: SOURCE_AVRO_SCHEMA`<br></br>
+> #### clustering.plan.strategy.small.file.limit
+> Files smaller than the size specified here are candidates for clustering, default 600 MB<br></br>
+> **Default Value**: 600 (Optional)<br></br>
+> `Config Param: CLUSTERING_PLAN_STRATEGY_SMALL_FILE_LIMIT`<br></br>
+
+---
+
+> #### clustering.schedule.enabled
+> Schedule the cluster plan, default false<br></br>
+> **Default Value**: false (Optional)<br></br>
+> `Config Param: CLUSTERING_SCHEDULE_ENABLED`<br></br>
 
 ---
 
@@ -1111,10 +963,10 @@ Actual value obtained by invoking .toString(), default ''<br></br>
 
 ---
 
-> #### write.rate.limit
-> Write record rate limit per second to prevent traffic jitter and improve stability, default 0 (no limit)<br></br>
-> **Default Value**: 0 (Optional)<br></br>
-> `Config Param: WRITE_RATE_LIMIT`<br></br>
+> #### clustering.plan.strategy.class
+> Config to provide a strategy class (subclass of ClusteringPlanStrategy) to create clustering plan i.e select what file groups are being clustered. Default strategy, looks at the last N (determined by clustering.plan.strategy.daybased.lookback.partitions) day based partitions picks the small file slices within those partitions.<br></br>
+> **Default Value**: org.apache.hudi.client.clustering.plan.strategy.FlinkSizeBasedClusteringPlanStrategy (Optional)<br></br>
+> `Config Param: CLUSTERING_PLAN_STRATEGY_CLASS`<br></br>
 
 ---
 
@@ -1147,37 +999,10 @@ This also directly translates into how much you can incrementally pull on this t
 
 ---
 
-> #### read.utc-timezone
-> Use UTC timezone or local timezone to the conversion between epoch time and LocalDateTime. Hive 0.x/1.x/2.x use local timezone. But Hive 3.x use UTC timezone, by default true<br></br>
-> **Default Value**: true (Optional)<br></br>
-> `Config Param: UTC_TIMEZONE`<br></br>
-
----
-
 > #### archive.max_commits
 > Max number of commits to keep before archiving older commits into a sequential log, default 50<br></br>
 > **Default Value**: 50 (Optional)<br></br>
 > `Config Param: ARCHIVE_MAX_COMMITS`<br></br>
-
----
-
-> #### hoodie.datasource.query.type
-> Decides how data files need to be read, in
-1) Snapshot mode (obtain latest view, based on row &amp; columnar data);
-2) incremental mode (new data since an instantTime);
-3) Read Optimized mode (obtain latest view, based on columnar data)
-.Default: snapshot<br></br>
-> **Default Value**: snapshot (Optional)<br></br>
-> `Config Param: QUERY_TYPE`<br></br>
-
----
-
-> #### write.precombine.field
-> Field used in preCombining before actual write. When two records have the same
-key value, we will pick the one with the largest value for the precombine field,
-determined by Object.compareTo(..)<br></br>
-> **Default Value**: ts (Optional)<br></br>
-> `Config Param: PRECOMBINE_FIELD`<br></br>
 
 ---
 
@@ -1204,13 +1029,6 @@ Actual value will be obtained by invoking .toString() on the field value. Nested
 
 ---
 
-> #### write.parquet.page.size
-> Parquet page size. Page is the unit of read within a parquet file. Within a block, pages are compressed separately.<br></br>
-> **Default Value**: 1 (Optional)<br></br>
-> `Config Param: WRITE_PARQUET_PAGE_SIZE`<br></br>
-
----
-
 > #### compaction.delta_seconds
 > Max delta seconds time needed to trigger compaction, default 1 hour<br></br>
 > **Default Value**: 3600 (Optional)<br></br>
@@ -1218,17 +1036,325 @@ Actual value will be obtained by invoking .toString() on the field value. Nested
 
 ---
 
-> #### hive_sync.metastore.uris
-> Metastore uris for hive sync, default ''<br></br>
-> **Default Value**:  (Optional)<br></br>
-> `Config Param: HIVE_SYNC_METASTORE_URIS`<br></br>
-
----
-
 > #### hive_sync.partition_fields
 > Partition fields for hive sync, default ''<br></br>
 > **Default Value**:  (Optional)<br></br>
 > `Config Param: HIVE_SYNC_PARTITION_FIELDS`<br></br>
+
+---
+
+> #### read.streaming.enabled
+> Whether to read as streaming source, default false<br></br>
+> **Default Value**: false (Optional)<br></br>
+> `Config Param: READ_AS_STREAMING`<br></br>
+
+---
+
+> #### hoodie.datasource.write.keygenerator.type
+> Key generator type, that implements will extract the key out of incoming record<br></br>
+> **Default Value**: SIMPLE (Optional)<br></br>
+> `Config Param: KEYGEN_TYPE`<br></br>
+
+---
+
+> #### clean.retain_file_versions
+> Number of file versions to retain. default 5<br></br>
+> **Default Value**: 5 (Optional)<br></br>
+> `Config Param: CLEAN_RETAIN_FILE_VERSIONS`<br></br>
+
+---
+
+> #### compaction.max_memory
+> Max memory in MB for compaction spillable map, default 100MB<br></br>
+> **Default Value**: 100 (Optional)<br></br>
+> `Config Param: COMPACTION_MAX_MEMORY`<br></br>
+
+---
+
+> #### hive_sync.support_timestamp
+> INT64 with original type TIMESTAMP_MICROS is converted to hive timestamp type.
+Disabled by default for backward compatibility.<br></br>
+> **Default Value**: true (Optional)<br></br>
+> `Config Param: HIVE_SYNC_SUPPORT_TIMESTAMP`<br></br>
+
+---
+
+> #### hive_sync.skip_ro_suffix
+> Skip the _ro suffix for Read optimized table when registering, default false<br></br>
+> **Default Value**: false (Optional)<br></br>
+> `Config Param: HIVE_SYNC_SKIP_RO_SUFFIX`<br></br>
+
+---
+
+> #### metadata.compaction.delta_commits
+> Max delta commits for metadata table to trigger compaction, default 10<br></br>
+> **Default Value**: 10 (Optional)<br></br>
+> `Config Param: METADATA_COMPACTION_DELTA_COMMITS`<br></br>
+
+---
+
+> #### hive_sync.assume_date_partitioning
+> Assume partitioning is yyyy/mm/dd, default false<br></br>
+> **Default Value**: false (Optional)<br></br>
+> `Config Param: HIVE_SYNC_ASSUME_DATE_PARTITION`<br></br>
+
+---
+
+> #### write.parquet.block.size
+> Parquet RowGroup size. It's recommended to make this large enough that scan costs can be amortized by packing enough column values into a single row group.<br></br>
+> **Default Value**: 120 (Optional)<br></br>
+> `Config Param: WRITE_PARQUET_BLOCK_SIZE`<br></br>
+
+---
+
+> #### clustering.plan.strategy.target.file.max.bytes
+> Each group can produce 'N' (CLUSTERING_MAX_GROUP_SIZE/CLUSTERING_TARGET_FILE_SIZE) output file groups, default 1 GB<br></br>
+> **Default Value**: 1073741824 (Optional)<br></br>
+> `Config Param: CLUSTERING_PLAN_STRATEGY_TARGET_FILE_MAX_BYTES`<br></br>
+
+---
+
+> #### clustering.tasks
+> Parallelism of tasks that do actual clustering, default is 4<br></br>
+> **Default Value**: 4 (Optional)<br></br>
+> `Config Param: CLUSTERING_TASKS`<br></br>
+
+---
+
+> #### hive_sync.enable
+> Asynchronously sync Hive meta to HMS, default false<br></br>
+> **Default Value**: false (Optional)<br></br>
+> `Config Param: HIVE_SYNC_ENABLED`<br></br>
+
+---
+
+> #### changelog.enabled
+> Whether to keep all the intermediate changes, we try to keep all the changes of a record when enabled:
+1). The sink accept the UPDATE_BEFORE message;
+2). The source try to emit every changes of a record.
+The semantics is best effort because the compaction job would finally merge all changes of a record into one.
+ default false to have UPSERT semantics<br></br>
+> **Default Value**: false (Optional)<br></br>
+> `Config Param: CHANGELOG_ENABLED`<br></br>
+
+---
+
+> #### read.streaming.check-interval
+> Check interval for streaming read of SECOND, default 1 minute<br></br>
+> **Default Value**: 60 (Optional)<br></br>
+> `Config Param: READ_STREAMING_CHECK_INTERVAL`<br></br>
+
+---
+
+> #### hoodie.datasource.merge.type
+> For Snapshot query on merge on read table. Use this key to define how the payloads are merged, in
+1) skip_merge: read the base file records plus the log file records;
+2) payload_combine: read the base file records first, for each record in base file, checks whether the key is in the
+   log file records(combines the two records with same key for base and log file records), then read the left log file records<br></br>
+> **Default Value**: payload_combine (Optional)<br></br>
+> `Config Param: MERGE_TYPE`<br></br>
+
+---
+
+> #### read.tasks
+> Parallelism of tasks that do actual read, default is 4<br></br>
+> **Default Value**: 4 (Optional)<br></br>
+> `Config Param: READ_TASKS`<br></br>
+
+---
+
+> #### read.end-commit
+> End commit instant for reading, the commit time format should be 'yyyyMMddHHmmss'<br></br>
+> **Default Value**: N/A (Required)<br></br>
+> `Config Param: READ_END_COMMIT`<br></br>
+
+---
+
+> #### write.log.max.size
+> Maximum size allowed in MB for a log file before it is rolled over to the next version, default 1GB<br></br>
+> **Default Value**: 1024 (Optional)<br></br>
+> `Config Param: WRITE_LOG_MAX_SIZE`<br></br>
+
+---
+
+> #### clustering.plan.strategy.daybased.lookback.partitions
+> Number of partitions to list to create ClusteringPlan, default is 2<br></br>
+> **Default Value**: 2 (Optional)<br></br>
+> `Config Param: CLUSTERING_TARGET_PARTITIONS`<br></br>
+
+---
+
+> #### hive_sync.file_format
+> File format for hive sync, default 'PARQUET'<br></br>
+> **Default Value**: PARQUET (Optional)<br></br>
+> `Config Param: HIVE_SYNC_FILE_FORMAT`<br></br>
+
+---
+
+> #### clustering.plan.strategy.max.num.groups
+> Maximum number of groups to create as part of ClusteringPlan. Increasing groups will increase parallelism, default is 30<br></br>
+> **Default Value**: 30 (Optional)<br></br>
+> `Config Param: CLUSTERING_MAX_NUM_GROUPS`<br></br>
+
+---
+
+> #### index.type
+> Index type of Flink write job, default is using state backed index.<br></br>
+> **Default Value**: FLINK_STATE (Optional)<br></br>
+> `Config Param: INDEX_TYPE`<br></br>
+
+---
+
+> #### read.data.skipping.enabled
+> Enables data-skipping allowing queries to leverage indexes to reduce the search space byskipping over files<br></br>
+> **Default Value**: false (Optional)<br></br>
+> `Config Param: READ_DATA_SKIPPING_ENABLED`<br></br>
+
+---
+
+> #### clean.policy
+> Clean policy to manage the Hudi table. Available option: KEEP_LATEST_COMMITS, KEEP_LATEST_FILE_VERSIONS, KEEP_LATEST_BY_HOURS.Default is KEEP_LATEST_COMMITS.<br></br>
+> **Default Value**: KEEP_LATEST_COMMITS (Optional)<br></br>
+> `Config Param: CLEAN_POLICY`<br></br>
+
+---
+
+> #### hive_sync.password
+> Password for hive sync, default 'hive'<br></br>
+> **Default Value**: hive (Optional)<br></br>
+> `Config Param: HIVE_SYNC_PASSWORD`<br></br>
+
+---
+
+> #### hive_sync.use_jdbc
+> Use JDBC when hive synchronization is enabled, default true<br></br>
+> **Default Value**: true (Optional)<br></br>
+> `Config Param: HIVE_SYNC_USE_JDBC`<br></br>
+
+---
+
+> #### hive_sync.jdbc_url
+> Jdbc URL for hive sync, default 'jdbc:hive2://localhost:10000'<br></br>
+> **Default Value**: jdbc:hive2://localhost:10000 (Optional)<br></br>
+> `Config Param: HIVE_SYNC_JDBC_URL`<br></br>
+
+---
+
+> #### read.start-commit
+> Start commit instant for reading, the commit time format should be 'yyyyMMddHHmmss', by default reading from the latest instant for streaming read<br></br>
+> **Default Value**: N/A (Required)<br></br>
+> `Config Param: READ_START_COMMIT`<br></br>
+
+---
+
+> #### archive.min_commits
+> Min number of commits to keep before archiving older commits into a sequential log, default 40<br></br>
+> **Default Value**: 40 (Optional)<br></br>
+> `Config Param: ARCHIVE_MIN_COMMITS`<br></br>
+
+---
+
+> #### index.partition.regex
+> Whether to load partitions in state if partition path matching， default `*`<br></br>
+> **Default Value**: .* (Optional)<br></br>
+> `Config Param: INDEX_PARTITION_REGEX`<br></br>
+
+---
+
+> #### hoodie.table.name
+> Table name to register to Hive metastore<br></br>
+> **Default Value**: N/A (Required)<br></br>
+> `Config Param: TABLE_NAME`<br></br>
+
+---
+
+> #### hoodie.datasource.write.partitionpath.urlencode
+> Whether to encode the partition path url, default false<br></br>
+> **Default Value**: false (Optional)<br></br>
+> `Config Param: URL_ENCODE_PARTITIONING`<br></br>
+
+---
+
+> #### source.avro-schema.path
+> Source avro schema file path, the parsed schema is used for deserialization<br></br>
+> **Default Value**: N/A (Required)<br></br>
+> `Config Param: SOURCE_AVRO_SCHEMA_PATH`<br></br>
+
+---
+
+> #### write.insert.cluster
+> Whether to merge small files for insert mode, if true, the write throughput will decrease because the read/write of existing small file, only valid for COW table, default false<br></br>
+> **Default Value**: false (Optional)<br></br>
+> `Config Param: INSERT_CLUSTER`<br></br>
+
+---
+
+> #### source.avro-schema
+> Source avro schema string, the parsed schema is used for deserialization<br></br>
+> **Default Value**: N/A (Required)<br></br>
+> `Config Param: SOURCE_AVRO_SCHEMA`<br></br>
+
+---
+
+> #### hive_sync.conf.dir
+> The hive configuration directory, where the hive-site.xml lies in, the file should be put on the client machine<br></br>
+> **Default Value**: N/A (Required)<br></br>
+> `Config Param: HIVE_SYNC_CONF_DIR`<br></br>
+
+---
+
+> #### write.rate.limit
+> Write record rate limit per second to prevent traffic jitter and improve stability, default 0 (no limit)<br></br>
+> **Default Value**: 0 (Optional)<br></br>
+> `Config Param: WRITE_RATE_LIMIT`<br></br>
+
+---
+
+> #### clean.retain_hours
+> Number of hours for which commits need to be retained. This config provides a more flexible option ascompared to number of commits retained for cleaning service. Setting this property ensures all the files, but the latest in a file group, corresponding to commits with commit times older than the configured number of hours to be retained are cleaned.<br></br>
+> **Default Value**: 24 (Optional)<br></br>
+> `Config Param: CLEAN_RETAIN_HOURS`<br></br>
+
+---
+
+> #### read.utc-timezone
+> Use UTC timezone or local timezone to the conversion between epoch time and LocalDateTime. Hive 0.x/1.x/2.x use local timezone. But Hive 3.x use UTC timezone, by default true<br></br>
+> **Default Value**: true (Optional)<br></br>
+> `Config Param: UTC_TIMEZONE`<br></br>
+
+---
+
+> #### hoodie.datasource.query.type
+> Decides how data files need to be read, in
+1) Snapshot mode (obtain latest view, based on row &amp; columnar data);
+2) incremental mode (new data since an instantTime);
+3) Read Optimized mode (obtain latest view, based on columnar data)
+.Default: snapshot<br></br>
+> **Default Value**: snapshot (Optional)<br></br>
+> `Config Param: QUERY_TYPE`<br></br>
+
+---
+
+> #### write.precombine.field
+> Field used in preCombining before actual write. When two records have the same
+key value, we will pick the one with the largest value for the precombine field,
+determined by Object.compareTo(..)<br></br>
+> **Default Value**: ts (Optional)<br></br>
+> `Config Param: PRECOMBINE_FIELD`<br></br>
+
+---
+
+> #### write.parquet.page.size
+> Parquet page size. Page is the unit of read within a parquet file. Within a block, pages are compressed separately.<br></br>
+> **Default Value**: 1 (Optional)<br></br>
+> `Config Param: WRITE_PARQUET_PAGE_SIZE`<br></br>
+
+---
+
+> #### hive_sync.metastore.uris
+> Metastore uris for hive sync, default ''<br></br>
+> **Default Value**:  (Optional)<br></br>
+> `Config Param: HIVE_SYNC_METASTORE_URIS`<br></br>
 
 ---
 
@@ -1303,6 +1429,136 @@ Controls callback behavior into HTTP endpoints, to push  notifications on commit
 > **Default Value**: hudi_write_commit_http_callback (Optional)<br></br>
 > `Config Param: CALLBACK_HTTP_API_KEY_VALUE`<br></br>
 > `Since Version: 0.6.0`<br></br>
+
+---
+
+### Clean Configs {#Clean-Configs}
+
+Cleaning (reclamation of older/unused file groups/slices).
+
+`Config Class`: org.apache.hudi.config.HoodieCleanConfig<br></br>
+> #### hoodie.cleaner.fileversions.retained
+> When KEEP_LATEST_FILE_VERSIONS cleaning policy is used,  the minimum number of file slices to retain in each file group, during cleaning.<br></br>
+> **Default Value**: 3 (Optional)<br></br>
+> `Config Param: CLEANER_FILE_VERSIONS_RETAINED`<br></br>
+
+---
+
+> #### hoodie.clean.max.commits
+> Number of commits after the last clean operation, before scheduling of a new clean is attempted.<br></br>
+> **Default Value**: 1 (Optional)<br></br>
+> `Config Param: CLEAN_MAX_COMMITS`<br></br>
+
+---
+
+> #### hoodie.clean.allow.multiple
+> Allows scheduling/executing multiple cleans by enabling this config. If users prefer to strictly ensure clean requests should be mutually exclusive, .i.e. a 2nd clean will not be scheduled if another clean is not yet completed to avoid repeat cleaning of same files, they might want to disable this config.<br></br>
+> **Default Value**: true (Optional)<br></br>
+> `Config Param: ALLOW_MULTIPLE_CLEANS`<br></br>
+> `Since Version: 0.11.0`<br></br>
+
+---
+
+> #### hoodie.clean.automatic
+> When enabled, the cleaner table service is invoked immediately after each commit, to delete older file slices. It's recommended to enable this, to ensure metadata and data storage growth is bounded.<br></br>
+> **Default Value**: true (Optional)<br></br>
+> `Config Param: AUTO_CLEAN`<br></br>
+
+---
+
+> #### hoodie.cleaner.parallelism
+> Parallelism for the cleaning operation. Increase this if cleaning becomes slow.<br></br>
+> **Default Value**: 200 (Optional)<br></br>
+> `Config Param: CLEANER_PARALLELISM_VALUE`<br></br>
+
+---
+
+> #### hoodie.cleaner.incremental.mode
+> When enabled, the plans for each cleaner service run is computed incrementally off the events  in the timeline, since the last cleaner run. This is much more efficient than obtaining listings for the full table for each planning (even with a metadata table).<br></br>
+> **Default Value**: true (Optional)<br></br>
+> `Config Param: CLEANER_INCREMENTAL_MODE_ENABLE`<br></br>
+
+---
+
+> #### hoodie.clean.async
+> Only applies when hoodie.clean.automatic is turned on. When turned on runs cleaner async with writing, which can speed up overall write performance.<br></br>
+> **Default Value**: false (Optional)<br></br>
+> `Config Param: ASYNC_CLEAN`<br></br>
+
+---
+
+> #### hoodie.clean.trigger.strategy
+> Controls how cleaning is scheduled. Valid options: NUM_COMMITS<br></br>
+> **Default Value**: NUM_COMMITS (Optional)<br></br>
+> `Config Param: CLEAN_TRIGGER_STRATEGY`<br></br>
+
+---
+
+> #### hoodie.cleaner.delete.bootstrap.base.file
+> When set to true, cleaner also deletes the bootstrap base file when it's skeleton base file is  cleaned. Turn this to true, if you want to ensure the bootstrap dataset storage is reclaimed over time, as the table receives updates/deletes. Another reason to turn this on, would be to ensure data residing in bootstrap  base files are also physically deleted, to comply with data privacy enforcement processes.<br></br>
+> **Default Value**: false (Optional)<br></br>
+> `Config Param: CLEANER_BOOTSTRAP_BASE_FILE_ENABLE`<br></br>
+
+---
+
+> #### hoodie.cleaner.hours.retained
+> Number of hours for which commits need to be retained. This config provides a more flexible option ascompared to number of commits retained for cleaning service. Setting this property ensures all the files, but the latest in a file group, corresponding to commits with commit times older than the configured number of hours to be retained are cleaned.<br></br>
+> **Default Value**: 24 (Optional)<br></br>
+> `Config Param: CLEANER_HOURS_RETAINED`<br></br>
+
+---
+
+> #### hoodie.cleaner.commits.retained
+> Number of commits to retain, without cleaning. This will be retained for num_of_commits * time_between_commits (scheduled). This also directly translates into how much data retention the table supports for incremental queries.<br></br>
+> **Default Value**: 10 (Optional)<br></br>
+> `Config Param: CLEANER_COMMITS_RETAINED`<br></br>
+
+---
+
+> #### hoodie.cleaner.policy.failed.writes
+> Cleaning policy for failed writes to be used. Hudi will delete any files written by failed writes to re-claim space. Choose to perform this rollback of failed writes eagerly before every writer starts (only supported for single writer) or lazily by the cleaner (required for multi-writers)<br></br>
+> **Default Value**: EAGER (Optional)<br></br>
+> `Config Param: FAILED_WRITES_CLEANER_POLICY`<br></br>
+
+---
+
+> #### hoodie.cleaner.policy
+> Cleaning policy to be used. The cleaner service deletes older file slices files to re-claim space. By default, cleaner spares the file slices written by the last N commits, determined by  hoodie.cleaner.commits.retained Long running query plans may often refer to older file slices and will break if those are cleaned, before the query has had   a chance to run. So, it is good to make sure that the data is retained for more than the maximum query execution time<br></br>
+> **Default Value**: KEEP_LATEST_COMMITS (Optional)<br></br>
+> `Config Param: CLEANER_POLICY`<br></br>
+
+---
+
+### Metastore Configs {#Metastore-Configs}
+
+Configurations used by the Hudi Metastore.
+
+`Config Class`: org.apache.hudi.common.config.HoodieMetastoreConfig<br></br>
+> #### hoodie.metastore.uris
+> Metastore server uris<br></br>
+> **Default Value**: thrift://localhost:9090 (Optional)<br></br>
+> `Config Param: METASTORE_URLS`<br></br>
+
+---
+
+> #### hoodie.metastore.enable
+> Use metastore server to store hoodie table metadata<br></br>
+> **Default Value**: false (Optional)<br></br>
+> `Config Param: METASTORE_ENABLE`<br></br>
+
+---
+
+> #### hoodie.metastore.connect.retries
+> Number of retries while opening a connection to metastore<br></br>
+> **Default Value**: 3 (Optional)<br></br>
+> `Config Param: METASTORE_CONNECTION_RETRIES`<br></br>
+
+---
+
+> #### hoodie.metastore.connect.retry.delay
+> Number of seconds for the client to wait between consecutive connection attempts<br></br>
+> **Default Value**: 1 (Optional)<br></br>
+> `Config Param: METASTORE_CONNECTION_RETRY_DELAY`<br></br>
 
 ---
 
@@ -1552,6 +1808,75 @@ Controls memory usage for compaction and merges, performed internally by Hudi.
 
 ---
 
+### DynamoDB based Locks Configurations {#DynamoDB-based-Locks-Configurations}
+
+Configs that control DynamoDB based locking mechanisms required for concurrency control  between writers to a Hudi table. Concurrency between Hudi's own table services  are auto managed internally.
+
+`Config Class`: org.apache.hudi.config.DynamoDbBasedLockConfig<br></br>
+> #### hoodie.write.lock.dynamodb.billing_mode
+> For DynamoDB based lock provider, by default it is PAY_PER_REQUEST mode<br></br>
+> **Default Value**: PAY_PER_REQUEST (Optional)<br></br>
+> `Config Param: DYNAMODB_LOCK_BILLING_MODE`<br></br>
+> `Since Version: 0.10.0`<br></br>
+
+---
+
+> #### hoodie.write.lock.dynamodb.table
+> For DynamoDB based lock provider, the name of the DynamoDB table acting as lock table<br></br>
+> **Default Value**: N/A (Required)<br></br>
+> `Config Param: DYNAMODB_LOCK_TABLE_NAME`<br></br>
+> `Since Version: 0.10.0`<br></br>
+
+---
+
+> #### hoodie.write.lock.dynamodb.region
+> For DynamoDB based lock provider, the region used in endpoint for Amazon DynamoDB service. Would try to first get it from AWS_REGION environment variable. If not find, by default use us-east-1<br></br>
+> **Default Value**: us-east-1 (Optional)<br></br>
+> `Config Param: DYNAMODB_LOCK_REGION`<br></br>
+> `Since Version: 0.10.0`<br></br>
+
+---
+
+> #### hoodie.write.lock.dynamodb.partition_key
+> For DynamoDB based lock provider, the partition key for the DynamoDB lock table. Each Hudi dataset should has it's unique key so concurrent writers could refer to the same partition key. By default we use the Hudi table name specified to be the partition key<br></br>
+> **Default Value**: N/A (Required)<br></br>
+> `Config Param: DYNAMODB_LOCK_PARTITION_KEY`<br></br>
+> `Since Version: 0.10.0`<br></br>
+
+---
+
+> #### hoodie.write.lock.dynamodb.write_capacity
+> For DynamoDB based lock provider, write capacity units when using PROVISIONED billing mode<br></br>
+> **Default Value**: 10 (Optional)<br></br>
+> `Config Param: DYNAMODB_LOCK_WRITE_CAPACITY`<br></br>
+> `Since Version: 0.10.0`<br></br>
+
+---
+
+> #### hoodie.write.lock.dynamodb.table_creation_timeout
+> For DynamoDB based lock provider, the maximum number of milliseconds to wait for creating DynamoDB table<br></br>
+> **Default Value**: 600000 (Optional)<br></br>
+> `Config Param: DYNAMODB_LOCK_TABLE_CREATION_TIMEOUT`<br></br>
+> `Since Version: 0.10.0`<br></br>
+
+---
+
+> #### hoodie.write.lock.dynamodb.read_capacity
+> For DynamoDB based lock provider, read capacity units when using PROVISIONED billing mode<br></br>
+> **Default Value**: 20 (Optional)<br></br>
+> `Config Param: DYNAMODB_LOCK_READ_CAPACITY`<br></br>
+> `Since Version: 0.10.0`<br></br>
+
+---
+
+> #### hoodie.write.lock.dynamodb.endpoint_url
+> For DynamoDB based lock provider, the url endpoint used for Amazon DynamoDB service. Useful for development with a local dynamodb instance.<br></br>
+> **Default Value**: N/A (Required)<br></br>
+> `Config Param: DYNAMODB_ENDPOINT_URL`<br></br>
+> `Since Version: 0.10.1`<br></br>
+
+---
+
 ### Storage Configs {#Storage-Configs}
 
 Configurations that control aspects around writing, sizing, reading base and log files.
@@ -1641,6 +1966,14 @@ Configurations that control aspects around writing, sizing, reading base and log
 
 ---
 
+> #### hoodie.parquet.field_id.write.enabled
+> Would only be effective with Spark 3.3+. Sets spark.sql.parquet.fieldId.write.enabled. If enabled, Spark will write out parquet native field ids that are stored inside StructField's metadata as parquet.field.id to parquet files.<br></br>
+> **Default Value**: true (Optional)<br></br>
+> `Config Param: PARQUET_FIELD_ID_WRITE_ENABLED`<br></br>
+> `Since Version: 0.12.0`<br></br>
+
+---
+
 > #### hoodie.parquet.page.size
 > Parquet page size in bytes. Page is the unit of read within a parquet file. Within a block, pages are compressed separately.<br></br>
 > **Default Value**: 1048576 (Optional)<br></br>
@@ -1690,72 +2023,80 @@ Configurations that control aspects around writing, sizing, reading base and log
 
 ---
 
-### DynamoDB based Locks Configurations {#DynamoDB-based-Locks-Configurations}
+### Archival Configs {#Archival-Configs}
 
-Configs that control DynamoDB based locking mechanisms required for concurrency control  between writers to a Hudi table. Concurrency between Hudi's own table services  are auto managed internally.
+Configurations that control archival.
 
-`Config Class`: org.apache.hudi.config.DynamoDbBasedLockConfig<br></br>
-> #### hoodie.write.lock.dynamodb.billing_mode
-> For DynamoDB based lock provider, by default it is PAY_PER_REQUEST mode. Alternative is PROVISIONED<br></br>
-> **Default Value**: PAY_PER_REQUEST (Optional)<br></br>
-> `Config Param: DYNAMODB_LOCK_BILLING_MODE`<br></br>
-> `Since Version: 0.10.0`<br></br>
-
----
-
-> #### hoodie.write.lock.dynamodb.table
-> For DynamoDB based lock provider, the name of the DynamoDB table acting as lock table<br></br>
-> **Default Value**: N/A (Required)<br></br>
-> `Config Param: DYNAMODB_LOCK_TABLE_NAME`<br></br>
-> `Since Version: 0.10.0`<br></br>
+`Config Class`: org.apache.hudi.config.HoodieArchivalConfig<br></br>
+> #### hoodie.archive.merge.small.file.limit.bytes
+> This config sets the archive file size limit below which an archive file becomes a candidate to be selected as such a small file.<br></br>
+> **Default Value**: 20971520 (Optional)<br></br>
+> `Config Param: ARCHIVE_MERGE_SMALL_FILE_LIMIT_BYTES`<br></br>
 
 ---
 
-> #### hoodie.write.lock.dynamodb.region
-> For DynamoDB based lock provider, the region used in endpoint for Amazon DynamoDB service. Would try to first get it from AWS_REGION environment variable. If not find, by default use us-east-1<br></br>
-> **Default Value**: us-east-1 (Optional)<br></br>
-> `Config Param: DYNAMODB_LOCK_REGION`<br></br>
-> `Since Version: 0.10.0`<br></br>
+> #### hoodie.keep.max.commits
+> Archiving service moves older entries from timeline into an archived log after each write, to  keep the metadata overhead constant, even as the table size grows.This config controls the maximum number of instants to retain in the active timeline. <br></br>
+> **Default Value**: 30 (Optional)<br></br>
+> `Config Param: MAX_COMMITS_TO_KEEP`<br></br>
 
 ---
 
-> #### hoodie.write.lock.dynamodb.partition_key
-> For DynamoDB based lock provider, the partition key for the DynamoDB lock table. Each Hudi dataset should has it's unique key so concurrent writers could refer to the same partition key. By default we use the Hudi table name specified to be the partition key<br></br>
-> **Default Value**: N/A (Required)<br></br>
-> `Config Param: DYNAMODB_LOCK_PARTITION_KEY`<br></br>
-> `Since Version: 0.10.0`<br></br>
+> #### hoodie.archive.merge.enable
+> When enable, hoodie will auto merge several small archive files into larger one. It's useful when storage scheme doesn't support append operation.<br></br>
+> **Default Value**: false (Optional)<br></br>
+> `Config Param: ARCHIVE_MERGE_ENABLE`<br></br>
 
 ---
 
-> #### hoodie.write.lock.dynamodb.write_capacity
-> For DynamoDB based lock provider, write capacity units when using PROVISIONED billing mode<br></br>
+> #### hoodie.archive.automatic
+> When enabled, the archival table service is invoked immediately after each commit, to archive commits if we cross a maximum value of commits. It's recommended to enable this, to ensure number of active commits is bounded.<br></br>
+> **Default Value**: true (Optional)<br></br>
+> `Config Param: AUTO_ARCHIVE`<br></br>
+
+---
+
+> #### hoodie.archive.delete.parallelism
+> Parallelism for deleting archived hoodie commits.<br></br>
+> **Default Value**: 100 (Optional)<br></br>
+> `Config Param: DELETE_ARCHIVED_INSTANT_PARALLELISM_VALUE`<br></br>
+
+---
+
+> #### hoodie.archive.beyond.savepoint
+> If enabled, archival will proceed beyond savepoint, skipping savepoint commits. If disabled, archival will stop at the earliest savepoint commit.<br></br>
+> **Default Value**: false (Optional)<br></br>
+> `Config Param: ARCHIVE_BEYOND_SAVEPOINT`<br></br>
+> `Since Version: 0.12.0`<br></br>
+
+---
+
+> #### hoodie.commits.archival.batch
+> Archiving of instants is batched in best-effort manner, to pack more instants into a single archive log. This config controls such archival batch size.<br></br>
 > **Default Value**: 10 (Optional)<br></br>
-> `Config Param: DYNAMODB_LOCK_WRITE_CAPACITY`<br></br>
-> `Since Version: 0.10.0`<br></br>
+> `Config Param: COMMITS_ARCHIVAL_BATCH_SIZE`<br></br>
 
 ---
 
-> #### hoodie.write.lock.dynamodb.table_creation_timeout
-> For DynamoDB based lock provider, the maximum number of milliseconds to wait for creating DynamoDB table<br></br>
-> **Default Value**: 600000 (Optional)<br></br>
-> `Config Param: DYNAMODB_LOCK_TABLE_CREATION_TIMEOUT`<br></br>
-> `Since Version: 0.10.0`<br></br>
+> #### hoodie.archive.async
+> Only applies when hoodie.archive.automatic is turned on. When turned on runs archiver async with writing, which can speed up overall write performance.<br></br>
+> **Default Value**: false (Optional)<br></br>
+> `Config Param: ASYNC_ARCHIVE`<br></br>
+> `Since Version: 0.11.0`<br></br>
 
 ---
 
-> #### hoodie.write.lock.dynamodb.read_capacity
-> For DynamoDB based lock provider, read capacity units when using PROVISIONED billing mode<br></br>
+> #### hoodie.keep.min.commits
+> Similar to hoodie.keep.max.commits, but controls the minimum number ofinstants to retain in the active timeline.<br></br>
 > **Default Value**: 20 (Optional)<br></br>
-> `Config Param: DYNAMODB_LOCK_READ_CAPACITY`<br></br>
-> `Since Version: 0.10.0`<br></br>
+> `Config Param: MIN_COMMITS_TO_KEEP`<br></br>
 
 ---
 
-> #### hoodie.write.lock.dynamodb.endpoint_url
-> For DynamoDB based lock provider, the url endpoint used for Amazon DynamoDB service. Useful for development with a local dynamodb instance.<br></br>
-> **Default Value**: N/A (Required)<br></br>
-> `Config Param: DYNAMODB_ENDPOINT_URL`<br></br>
-> `Since Version: 0.10.1`<br></br>
+> #### hoodie.archive.merge.files.batch.size
+> The number of small archive files to be merged at once.<br></br>
+> **Default Value**: 10 (Optional)<br></br>
+> `Config Param: ARCHIVE_MERGE_FILES_BATCH_SIZE`<br></br>
 
 ---
 
@@ -1788,22 +2129,6 @@ Configurations used by the Hudi Metadata Table. This table maintains the metadat
 
 ---
 
-> #### hoodie.metadata.index.column.stats.enable
-> Enable indexing column ranges of user data files under metadata table key lookups. When enabled, metadata table will have a partition to store the column ranges and will be used for pruning files during the index lookups.<br></br>
-> **Default Value**: false (Optional)<br></br>
-> `Config Param: ENABLE_METADATA_INDEX_COLUMN_STATS`<br></br>
-> `Since Version: 0.11.0`<br></br>
-
----
-
-> #### hoodie.metadata.index.bloom.filter.column.list
-> Comma-separated list of columns for which bloom filter index will be built. If not set, only record key will be indexed.<br></br>
-> **Default Value**: N/A (Required)<br></br>
-> `Config Param: BLOOM_FILTER_INDEX_FOR_COLUMNS`<br></br>
-> `Since Version: 0.11.0`<br></br>
-
----
-
 > #### hoodie.metadata.metrics.enable
 > Enable publishing of metrics around metadata table.<br></br>
 > **Default Value**: false (Optional)<br></br>
@@ -1816,22 +2141,6 @@ Configurations used by the Hudi Metadata Table. This table maintains the metadat
 > Metadata bloom filter index partition file group count. This controls the size of the base and log files and read parallelism in the bloom filter index partition. The recommendation is to size the file group count such that the base files are under 1GB.<br></br>
 > **Default Value**: 4 (Optional)<br></br>
 > `Config Param: METADATA_INDEX_BLOOM_FILTER_FILE_GROUP_COUNT`<br></br>
-> `Since Version: 0.11.0`<br></br>
-
----
-
-> #### hoodie.metadata.cleaner.commits.retained
-> Number of commits to retain, without cleaning, on metadata table.<br></br>
-> **Default Value**: 3 (Optional)<br></br>
-> `Config Param: CLEANER_COMMITS_RETAINED`<br></br>
-> `Since Version: 0.7.0`<br></br>
-
----
-
-> #### hoodie.metadata.index.check.timeout.seconds
-> After the async indexer has finished indexing upto the base instant, it will ensure that all inflight writers reliably write index updates as well. If this timeout expires, then the indexer will abort itself safely.<br></br>
-> **Default Value**: 900 (Optional)<br></br>
-> `Config Param: METADATA_INDEX_CHECK_TIMEOUT_SECONDS`<br></br>
 > `Since Version: 0.11.0`<br></br>
 
 ---
@@ -1849,14 +2158,6 @@ Configurations used by the Hudi Metadata Table. This table maintains the metadat
 > **Default Value**: 200 (Optional)<br></br>
 > `Config Param: FILE_LISTING_PARALLELISM_VALUE`<br></br>
 > `Since Version: 0.7.0`<br></br>
-
----
-
-> #### hoodie.metadata.populate.meta.fields
-> When enabled, populates all meta fields. When disabled, no meta fields are populated.<br></br>
-> **Default Value**: false (Optional)<br></br>
-> `Config Param: POPULATE_META_FIELDS`<br></br>
-> `Since Version: 0.10.0`<br></br>
 
 ---
 
@@ -1884,34 +2185,10 @@ Configurations used by the Hudi Metadata Table. This table maintains the metadat
 
 ---
 
-> #### hoodie.metadata.index.column.stats.file.group.count
-> Metadata column stats partition file group count. This controls the size of the base and log files and read parallelism in the column stats index partition. The recommendation is to size the file group count such that the base files are under 1GB.<br></br>
-> **Default Value**: 2 (Optional)<br></br>
-> `Config Param: METADATA_INDEX_COLUMN_STATS_FILE_GROUP_COUNT`<br></br>
-> `Since Version: 0.11.0`<br></br>
-
----
-
-> #### hoodie.metadata.enable
-> Enable the internal metadata table which serves table metadata like level file listings<br></br>
-> **Default Value**: true (Optional)<br></br>
-> `Config Param: ENABLE`<br></br>
-> `Since Version: 0.7.0`<br></br>
-
----
-
 > #### hoodie.metadata.index.bloom.filter.enable
 > Enable indexing bloom filters of user data files under metadata table. When enabled, metadata table will have a partition to store the bloom filter index and will be used during the index lookups.<br></br>
 > **Default Value**: false (Optional)<br></br>
 > `Config Param: ENABLE_METADATA_INDEX_BLOOM_FILTER`<br></br>
-> `Since Version: 0.11.0`<br></br>
-
----
-
-> #### hoodie.metadata.index.bloom.filter.parallelism
-> Parallelism to use for generating bloom filter index in metadata table.<br></br>
-> **Default Value**: 200 (Optional)<br></br>
-> `Config Param: BLOOM_FILTER_INDEX_PARALLELISM`<br></br>
 > `Since Version: 0.11.0`<br></br>
 
 ---
@@ -1948,11 +2225,91 @@ Configurations used by the Hudi Metadata Table. This table maintains the metadat
 
 ---
 
+> #### hoodie.metadata.index.column.stats.processing.mode.override
+> By default Column Stats Index is automatically determining whether it should be read and processed either'in-memory' (w/in executing process) or using Spark (on a cluster), based on some factors like the size of the Index and how many columns are read. This config allows to override this behavior.<br></br>
+> **Default Value**: N/A (Required)<br></br>
+> `Config Param: COLUMN_STATS_INDEX_PROCESSING_MODE_OVERRIDE`<br></br>
+> `Since Version: 0.12.0`<br></br>
+
+---
+
 > #### hoodie.metadata.keep.min.commits
 > Archiving service moves older entries from metadata table’s timeline into an archived log after each write, to keep the overhead constant, even as the metadata table size grows.  This config controls the minimum number of instants to retain in the active timeline.<br></br>
 > **Default Value**: 20 (Optional)<br></br>
 > `Config Param: MIN_COMMITS_TO_KEEP`<br></br>
 > `Since Version: 0.7.0`<br></br>
+
+---
+
+> #### hoodie.metadata.index.column.stats.inMemory.projection.threshold
+> When reading Column Stats Index, if the size of the expected resulting projection is below the in-memory threshold (counted by the # of rows), it will be attempted to be loaded "in-memory" (ie not using the execution engine like Spark, Flink, etc). If the value is above the threshold execution engine will be used to compose the projection.<br></br>
+> **Default Value**: 100000 (Optional)<br></br>
+> `Config Param: COLUMN_STATS_INDEX_IN_MEMORY_PROJECTION_THRESHOLD`<br></br>
+> `Since Version: 0.12.0`<br></br>
+
+---
+
+> #### hoodie.metadata.index.column.stats.enable
+> Enable indexing column ranges of user data files under metadata table key lookups. When enabled, metadata table will have a partition to store the column ranges and will be used for pruning files during the index lookups.<br></br>
+> **Default Value**: false (Optional)<br></br>
+> `Config Param: ENABLE_METADATA_INDEX_COLUMN_STATS`<br></br>
+> `Since Version: 0.11.0`<br></br>
+
+---
+
+> #### hoodie.metadata.index.bloom.filter.column.list
+> Comma-separated list of columns for which bloom filter index will be built. If not set, only record key will be indexed.<br></br>
+> **Default Value**: N/A (Required)<br></br>
+> `Config Param: BLOOM_FILTER_INDEX_FOR_COLUMNS`<br></br>
+> `Since Version: 0.11.0`<br></br>
+
+---
+
+> #### hoodie.metadata.cleaner.commits.retained
+> Number of commits to retain, without cleaning, on metadata table.<br></br>
+> **Default Value**: 3 (Optional)<br></br>
+> `Config Param: CLEANER_COMMITS_RETAINED`<br></br>
+> `Since Version: 0.7.0`<br></br>
+
+---
+
+> #### hoodie.metadata.index.check.timeout.seconds
+> After the async indexer has finished indexing upto the base instant, it will ensure that all inflight writers reliably write index updates as well. If this timeout expires, then the indexer will abort itself safely.<br></br>
+> **Default Value**: 900 (Optional)<br></br>
+> `Config Param: METADATA_INDEX_CHECK_TIMEOUT_SECONDS`<br></br>
+> `Since Version: 0.11.0`<br></br>
+
+---
+
+> #### hoodie.metadata.populate.meta.fields
+> When enabled, populates all meta fields. When disabled, no meta fields are populated.<br></br>
+> **Default Value**: false (Optional)<br></br>
+> `Config Param: POPULATE_META_FIELDS`<br></br>
+> `Since Version: 0.10.0`<br></br>
+
+---
+
+> #### hoodie.metadata.index.column.stats.file.group.count
+> Metadata column stats partition file group count. This controls the size of the base and log files and read parallelism in the column stats index partition. The recommendation is to size the file group count such that the base files are under 1GB.<br></br>
+> **Default Value**: 2 (Optional)<br></br>
+> `Config Param: METADATA_INDEX_COLUMN_STATS_FILE_GROUP_COUNT`<br></br>
+> `Since Version: 0.11.0`<br></br>
+
+---
+
+> #### hoodie.metadata.enable
+> Enable the internal metadata table which serves table metadata like level file listings<br></br>
+> **Default Value**: true (Optional)<br></br>
+> `Config Param: ENABLE`<br></br>
+> `Since Version: 0.7.0`<br></br>
+
+---
+
+> #### hoodie.metadata.index.bloom.filter.parallelism
+> Parallelism to use for generating bloom filter index in metadata table.<br></br>
+> **Default Value**: 200 (Optional)<br></br>
+> `Config Param: BLOOM_FILTER_INDEX_PARALLELISM`<br></br>
+> `Since Version: 0.11.0`<br></br>
 
 ---
 
@@ -2097,13 +2454,6 @@ Configurations that control write behavior on Hudi tables. These can be directly
 > **Default Value**: false (Optional)<br></br>
 > `Config Param: AUTO_ADJUST_LOCK_CONFIGS`<br></br>
 > `Since Version: 0.11.0`<br></br>
-
----
-
-> #### hoodie.schema.on.read.enable
-> enable full schema evolution for hoodie<br></br>
-> **Default Value**: false (Optional)<br></br>
-> `Config Param: SCHEMA_EVOLUTION_ENABLE`<br></br>
 
 ---
 
@@ -2257,6 +2607,14 @@ Configurations that control write behavior on Hudi tables. These can be directly
 
 ---
 
+> #### hoodie.skip.default.partition.validation
+> When table is upgraded from pre 0.12 to 0.12, we check for "default" partition and fail if found one. Users are expected to rewrite the data in those partitions. Enabling this config will bypass this validation<br></br>
+> **Default Value**: false (Optional)<br></br>
+> `Config Param: SKIP_DEFAULT_PARTITION_VALIDATION`<br></br>
+> `Since Version: 0.12.0`<br></br>
+
+---
+
 > #### hoodie.markers.timeline_server_based.batch.num_threads
 > Number of threads to use for batch processing marker creation requests at the timeline server<br></br>
 > **Default Value**: 20 (Optional)<br></br>
@@ -2330,7 +2688,7 @@ Configurations that control write behavior on Hudi tables. These can be directly
 
 > #### hoodie.bulkinsert.sort.mode
 > Sorting modes to use for sorting records for bulk insert. This is use when user hoodie.bulkinsert.user.defined.partitioner.classis not configured. Available values are - GLOBAL_SORT: this ensures best file sizes, with lowest memory overhead at cost of sorting. PARTITION_SORT: Strikes a balance by only sorting within a partition, still keeping the memory overhead of writing lowest and best effort file sizing. NONE: No sorting. Fastest and matches `spark.write.parquet()` in terms of number of files, overheads<br></br>
-> **Default Value**: GLOBAL_SORT (Optional)<br></br>
+> **Default Value**: NONE (Optional)<br></br>
 > `Config Param: BULK_INSERT_SORT_MODE`<br></br>
 
 ---
@@ -2368,13 +2726,6 @@ Configurations that control write behavior on Hudi tables. These can be directly
 > cache query internalSchemas in driver/executor side<br></br>
 > **Default Value**: false (Optional)<br></br>
 > `Config Param: ENABLE_INTERNAL_SCHEMA_CACHE`<br></br>
-
----
-
-> #### hoodie.refresh.timeline.server.based.on.latest.commit
-> Refresh timeline in timeline server based on latest commit apart from timeline hash difference. By default (false), <br></br>
-> **Default Value**: false (Optional)<br></br>
-> `Config Param: REFRESH_TIMELINE_SERVER_BASED_ON_LATEST_COMMIT`<br></br>
 
 ---
 
@@ -2548,24 +2899,17 @@ Configurations that control indexing behavior (when HBase based indexing is enab
 
 ---
 
-> #### hoodie.hbase.index.update.partition.path
-> Only applies if index type is HBASE. When an already existing record is upserted to a new partition compared to whats in storage, this config when set, will delete old record in old partition and will insert it as new record in new partition.<br></br>
-> **Default Value**: false (Optional)<br></br>
-> `Config Param: UPDATE_PARTITION_PATH_ENABLE`<br></br>
-
----
-
-> #### hoodie.index.hbase.qps.allocator.class
-> Property to set which implementation of HBase QPS resource allocator to be used, whichcontrols the batching rate dynamically.<br></br>
-> **Default Value**: org.apache.hudi.index.hbase.DefaultHBaseQPSResourceAllocator (Optional)<br></br>
-> `Config Param: QPS_ALLOCATOR_CLASS_NAME`<br></br>
-
----
-
 > #### hoodie.index.hbase.put.batch.size.autocompute
 > Property to set to enable auto computation of put batch size<br></br>
 > **Default Value**: false (Optional)<br></br>
 > `Config Param: PUT_BATCH_SIZE_AUTO_COMPUTE`<br></br>
+
+---
+
+> #### hoodie.index.hbase.bucket.number
+> Only applicable when using RebalancedSparkHoodieHBaseIndex, same as hbase regions count can get the best performance<br></br>
+> **Default Value**: 8 (Optional)<br></br>
+> `Config Param: BUCKET_NUMBER`<br></br>
 
 ---
 
@@ -2576,20 +2920,6 @@ Configurations that control indexing behavior (when HBase based indexing is enab
 
 ---
 
-> #### hoodie.index.hbase.get.batch.size
-> Controls the batch size for performing gets against HBase. Batching improves throughput, by saving round trips.<br></br>
-> **Default Value**: 100 (Optional)<br></br>
-> `Config Param: GET_BATCH_SIZE`<br></br>
-
----
-
-> #### hoodie.index.hbase.zkpath.qps_root
-> chroot in zookeeper, to use for all qps allocation co-ordination.<br></br>
-> **Default Value**: /QPS_ROOT (Optional)<br></br>
-> `Config Param: ZKPATH_QPS_ROOT`<br></br>
-
----
-
 > #### hoodie.index.hbase.max.qps.per.region.server
 > Property to set maximum QPS allowed per Region Server. This should be same across various jobs. This is intended to
  limit the aggregate QPS generated across various jobs to an Hbase Region Server. It is recommended to set this
@@ -2597,13 +2927,6 @@ Configurations that control indexing behavior (when HBase based indexing is enab
  able to tolerate without Region Servers going down.<br></br>
 > **Default Value**: 1000 (Optional)<br></br>
 > `Config Param: MAX_QPS_PER_REGION_SERVER`<br></br>
-
----
-
-> #### hoodie.index.hbase.max.qps.fraction
-> Maximum for HBASE_QPS_FRACTION_PROP to stabilize skewed write workloads<br></br>
-> **Default Value**: N/A (Required)<br></br>
-> `Config Param: MAX_QPS_FRACTION`<br></br>
 
 ---
 
@@ -2628,17 +2951,17 @@ Configurations that control indexing behavior (when HBase based indexing is enab
 
 ---
 
-> #### hoodie.index.hbase.dynamic_qps
-> Property to decide if HBASE_QPS_FRACTION_PROP is dynamically calculated based on write volume.<br></br>
-> **Default Value**: false (Optional)<br></br>
-> `Config Param: COMPUTE_QPS_DYNAMICALLY`<br></br>
-
----
-
 > #### hoodie.index.hbase.zknode.path
 > Only applies if index type is HBASE. This is the root znode that will contain all the znodes created/used by HBase<br></br>
 > **Default Value**: N/A (Required)<br></br>
 > `Config Param: ZK_NODE_PATH`<br></br>
+
+---
+
+> #### hoodie.index.hbase.kerberos.user.keytab
+> File name of the kerberos keytab file for connecting to the hbase cluster.<br></br>
+> **Default Value**: N/A (Required)<br></br>
+> `Config Param: KERBEROS_USER_KEYTAB`<br></br>
 
 ---
 
@@ -2667,6 +2990,76 @@ Configurations that control indexing behavior (when HBase based indexing is enab
 > Controls the batch size for performing puts against HBase. Batching improves throughput, by saving round trips.<br></br>
 > **Default Value**: 100 (Optional)<br></br>
 > `Config Param: PUT_BATCH_SIZE`<br></br>
+
+---
+
+> #### hoodie.hbase.index.update.partition.path
+> Only applies if index type is HBASE. When an already existing record is upserted to a new partition compared to whats in storage, this config when set, will delete old record in old partition and will insert it as new record in new partition.<br></br>
+> **Default Value**: false (Optional)<br></br>
+> `Config Param: UPDATE_PARTITION_PATH_ENABLE`<br></br>
+
+---
+
+> #### hoodie.index.hbase.security.authentication
+> Property to decide if the hbase cluster secure authentication is enabled or not. Possible values are 'simple' (no authentication), and 'kerberos'.<br></br>
+> **Default Value**: simple (Optional)<br></br>
+> `Config Param: SECURITY_AUTHENTICATION`<br></br>
+
+---
+
+> #### hoodie.index.hbase.qps.allocator.class
+> Property to set which implementation of HBase QPS resource allocator to be used, whichcontrols the batching rate dynamically.<br></br>
+> **Default Value**: org.apache.hudi.index.hbase.DefaultHBaseQPSResourceAllocator (Optional)<br></br>
+> `Config Param: QPS_ALLOCATOR_CLASS_NAME`<br></br>
+
+---
+
+> #### hoodie.index.hbase.get.batch.size
+> Controls the batch size for performing gets against HBase. Batching improves throughput, by saving round trips.<br></br>
+> **Default Value**: 100 (Optional)<br></br>
+> `Config Param: GET_BATCH_SIZE`<br></br>
+
+---
+
+> #### hoodie.index.hbase.zkpath.qps_root
+> chroot in zookeeper, to use for all qps allocation co-ordination.<br></br>
+> **Default Value**: /QPS_ROOT (Optional)<br></br>
+> `Config Param: ZKPATH_QPS_ROOT`<br></br>
+
+---
+
+> #### hoodie.index.hbase.max.qps.fraction
+> Maximum for HBASE_QPS_FRACTION_PROP to stabilize skewed write workloads<br></br>
+> **Default Value**: N/A (Required)<br></br>
+> `Config Param: MAX_QPS_FRACTION`<br></br>
+
+---
+
+> #### hoodie.index.hbase.regionserver.kerberos.principal
+> The value of hbase.regionserver.kerberos.principal in hbase cluster.<br></br>
+> **Default Value**: N/A (Required)<br></br>
+> `Config Param: REGIONSERVER_PRINCIPAL`<br></br>
+
+---
+
+> #### hoodie.index.hbase.dynamic_qps
+> Property to decide if HBASE_QPS_FRACTION_PROP is dynamically calculated based on write volume.<br></br>
+> **Default Value**: false (Optional)<br></br>
+> `Config Param: COMPUTE_QPS_DYNAMICALLY`<br></br>
+
+---
+
+> #### hoodie.index.hbase.master.kerberos.principal
+> The value of hbase.master.kerberos.principal in hbase cluster.<br></br>
+> **Default Value**: N/A (Required)<br></br>
+> `Config Param: MASTER_PRINCIPAL`<br></br>
+
+---
+
+> #### hoodie.index.hbase.kerberos.user.principal
+> The kerberos principal name for connecting to the hbase cluster.<br></br>
+> **Default Value**: N/A (Required)<br></br>
+> `Config Param: KERBEROS_USER_PRINCIPAL`<br></br>
 
 ---
 
@@ -2914,8 +3307,16 @@ Configs that control locking mechanisms required for concurrency control  betwee
 
 ---
 
+> #### hoodie.write.lock.filesystem.expire
+> For DFS based lock providers, expire time in minutes, must be a nonnegative number, default means no expire<br></br>
+> **Default Value**: 0 (Optional)<br></br>
+> `Config Param: FILESYSTEM_LOCK_EXPIRE`<br></br>
+> `Since Version: 0.12.0`<br></br>
+
+---
+
 > #### hoodie.write.lock.filesystem.path
-> For DFS based lock providers, path to store the locks under.<br></br>
+> For DFS based lock providers, path to store the locks under. use Table's meta path as default<br></br>
 > **Default Value**: N/A (Required)<br></br>
 > `Config Param: FILESYSTEM_LOCK_PATH`<br></br>
 > `Since Version: 0.8.0`<br></br>
@@ -2980,155 +3381,13 @@ Configs that control locking mechanisms required for concurrency control  betwee
 
 ### Compaction Configs {#Compaction-Configs}
 
-Configurations that control compaction (merging of log files onto a new base files) as well as  cleaning (reclamation of older/unused file groups/slices).
+Configurations that control compaction (merging of log files onto a new base files).
 
 `Config Class`: org.apache.hudi.config.HoodieCompactionConfig<br></br>
-> #### hoodie.compaction.payload.class
-> This needs to be same as class used during insert/upserts. Just like writing, compaction also uses the record payload class to merge records in the log against each other, merge again with the base file and produce the final record to be written after compaction.<br></br>
-> **Default Value**: org.apache.hudi.common.model.OverwriteWithLatestAvroPayload (Optional)<br></br>
-> `Config Param: PAYLOAD_CLASS_NAME`<br></br>
-
----
-
-> #### hoodie.copyonwrite.record.size.estimate
-> The average record size. If not explicitly specified, hudi will compute the record size estimate compute dynamically based on commit metadata.  This is critical in computing the insert parallelism and bin-packing inserts into small files.<br></br>
-> **Default Value**: 1024 (Optional)<br></br>
-> `Config Param: COPY_ON_WRITE_RECORD_SIZE_ESTIMATE`<br></br>
-
----
-
-> #### hoodie.cleaner.policy
-> Cleaning policy to be used. The cleaner service deletes older file slices files to re-claim space. By default, cleaner spares the file slices written by the last N commits, determined by  hoodie.cleaner.commits.retained Long running query plans may often refer to older file slices and will break if those are cleaned, before the query has had   a chance to run. So, it is good to make sure that the data is retained for more than the maximum query execution time<br></br>
-> **Default Value**: KEEP_LATEST_COMMITS (Optional)<br></br>
-> `Config Param: CLEANER_POLICY`<br></br>
-
----
-
-> #### hoodie.compact.inline.max.delta.seconds
-> Number of elapsed seconds after the last compaction, before scheduling a new one.<br></br>
-> **Default Value**: 3600 (Optional)<br></br>
-> `Config Param: INLINE_COMPACT_TIME_DELTA_SECONDS`<br></br>
-
----
-
-> #### hoodie.cleaner.delete.bootstrap.base.file
-> When set to true, cleaner also deletes the bootstrap base file when it's skeleton base file is  cleaned. Turn this to true, if you want to ensure the bootstrap dataset storage is reclaimed over time, as the table receives updates/deletes. Another reason to turn this on, would be to ensure data residing in bootstrap  base files are also physically deleted, to comply with data privacy enforcement processes.<br></br>
-> **Default Value**: false (Optional)<br></br>
-> `Config Param: CLEANER_BOOTSTRAP_BASE_FILE_ENABLE`<br></br>
-
----
-
-> #### hoodie.archive.merge.enable
-> When enable, hoodie will auto merge several small archive files into larger one. It's useful when storage scheme doesn't support append operation.<br></br>
-> **Default Value**: false (Optional)<br></br>
-> `Config Param: ARCHIVE_MERGE_ENABLE`<br></br>
-
----
-
-> #### hoodie.cleaner.commits.retained
-> Number of commits to retain, without cleaning. This will be retained for num_of_commits * time_between_commits (scheduled). This also directly translates into how much data retention the table supports for incremental queries.<br></br>
-> **Default Value**: 10 (Optional)<br></br>
-> `Config Param: CLEANER_COMMITS_RETAINED`<br></br>
-
----
-
-> #### hoodie.cleaner.policy.failed.writes
-> Cleaning policy for failed writes to be used. Hudi will delete any files written by failed writes to re-claim space. Choose to perform this rollback of failed writes eagerly before every writer starts (only supported for single writer) or lazily by the cleaner (required for multi-writers)<br></br>
-> **Default Value**: EAGER (Optional)<br></br>
-> `Config Param: FAILED_WRITES_CLEANER_POLICY`<br></br>
-
----
-
-> #### hoodie.compaction.logfile.size.threshold
-> Only if the log file size is greater than the threshold in bytes, the file group will be compacted.<br></br>
-> **Default Value**: 0 (Optional)<br></br>
-> `Config Param: COMPACTION_LOG_FILE_SIZE_THRESHOLD`<br></br>
-
----
-
-> #### hoodie.clean.async
-> Only applies when hoodie.clean.automatic is turned on. When turned on runs cleaner async with writing, which can speed up overall write performance.<br></br>
-> **Default Value**: false (Optional)<br></br>
-> `Config Param: ASYNC_CLEAN`<br></br>
-
----
-
-> #### hoodie.clean.automatic
-> When enabled, the cleaner table service is invoked immediately after each commit, to delete older file slices. It's recommended to enable this, to ensure metadata and data storage growth is bounded.<br></br>
-> **Default Value**: true (Optional)<br></br>
-> `Config Param: AUTO_CLEAN`<br></br>
-
----
-
-> #### hoodie.commits.archival.batch
-> Archiving of instants is batched in best-effort manner, to pack more instants into a single archive log. This config controls such archival batch size.<br></br>
-> **Default Value**: 10 (Optional)<br></br>
-> `Config Param: COMMITS_ARCHIVAL_BATCH_SIZE`<br></br>
-
----
-
-> #### hoodie.compaction.reverse.log.read
-> HoodieLogFormatReader reads a logfile in the forward direction starting from pos=0 to pos=file_length. If this config is set to true, the reader reads the logfile in reverse direction, from pos=file_length to pos=0<br></br>
-> **Default Value**: false (Optional)<br></br>
-> `Config Param: COMPACTION_REVERSE_LOG_READ_ENABLE`<br></br>
-
----
-
-> #### hoodie.clean.allow.multiple
-> Allows scheduling/executing multiple cleans by enabling this config. If users prefer to strictly ensure clean requests should be mutually exclusive, .i.e. a 2nd clean will not be scheduled if another clean is not yet completed to avoid repeat cleaning of same files, they might want to disable this config.<br></br>
-> **Default Value**: true (Optional)<br></br>
-> `Config Param: ALLOW_MULTIPLE_CLEANS`<br></br>
-> `Since Version: 0.11.0`<br></br>
-
----
-
-> #### hoodie.archive.merge.small.file.limit.bytes
-> This config sets the archive file size limit below which an archive file becomes a candidate to be selected as such a small file.<br></br>
-> **Default Value**: 20971520 (Optional)<br></br>
-> `Config Param: ARCHIVE_MERGE_SMALL_FILE_LIMIT_BYTES`<br></br>
-
----
-
-> #### hoodie.cleaner.fileversions.retained
-> When KEEP_LATEST_FILE_VERSIONS cleaning policy is used,  the minimum number of file slices to retain in each file group, during cleaning.<br></br>
-> **Default Value**: 3 (Optional)<br></br>
-> `Config Param: CLEANER_FILE_VERSIONS_RETAINED`<br></br>
-
----
-
-> #### hoodie.compact.inline
-> When set to true, compaction service is triggered after each write. While being  simpler operationally, this adds extra latency on the write path.<br></br>
-> **Default Value**: false (Optional)<br></br>
-> `Config Param: INLINE_COMPACT`<br></br>
-
----
-
-> #### hoodie.clean.max.commits
-> Number of commits after the last clean operation, before scheduling of a new clean is attempted.<br></br>
-> **Default Value**: 1 (Optional)<br></br>
-> `Config Param: CLEAN_MAX_COMMITS`<br></br>
-
----
-
 > #### hoodie.compaction.lazy.block.read
 > When merging the delta log files, this config helps to choose whether the log blocks should be read lazily or not. Choose true to use lazy block reading (low memory usage, but incurs seeks to each block header) or false for immediate block read (higher memory usage)<br></br>
 > **Default Value**: true (Optional)<br></br>
 > `Config Param: COMPACTION_LAZY_BLOCK_READ_ENABLE`<br></br>
-
----
-
-> #### hoodie.archive.merge.files.batch.size
-> The number of small archive files to be merged at once.<br></br>
-> **Default Value**: 10 (Optional)<br></br>
-> `Config Param: ARCHIVE_MERGE_FILES_BATCH_SIZE`<br></br>
-
----
-
-> #### hoodie.archive.async
-> Only applies when hoodie.archive.automatic is turned on. When turned on runs archiver async with writing, which can speed up overall write performance.<br></br>
-> **Default Value**: false (Optional)<br></br>
-> `Config Param: ASYNC_ARCHIVE`<br></br>
-> `Since Version: 0.11.0`<br></br>
 
 ---
 
@@ -3146,10 +3405,17 @@ Configurations that control compaction (merging of log files onto a new base fil
 
 ---
 
-> #### hoodie.cleaner.hours.retained
-> Number of hours for which commits need to be retained. This config provides a more flexible option ascompared to number of commits retained for cleaning service. Setting this property ensures all the files, but the latest in a file group, corresponding to commits with commit times older than the configured number of hours to be retained are cleaned.<br></br>
-> **Default Value**: 24 (Optional)<br></br>
-> `Config Param: CLEANER_HOURS_RETAINED`<br></br>
+> #### hoodie.copyonwrite.record.size.estimate
+> The average record size. If not explicitly specified, hudi will compute the record size estimate compute dynamically based on commit metadata.  This is critical in computing the insert parallelism and bin-packing inserts into small files.<br></br>
+> **Default Value**: 1024 (Optional)<br></br>
+> `Config Param: COPY_ON_WRITE_RECORD_SIZE_ESTIMATE`<br></br>
+
+---
+
+> #### hoodie.compact.inline.max.delta.seconds
+> Number of elapsed seconds after the last compaction, before scheduling a new one.<br></br>
+> **Default Value**: 3600 (Optional)<br></br>
+> `Config Param: INLINE_COMPACT_TIME_DELTA_SECONDS`<br></br>
 
 ---
 
@@ -3160,17 +3426,10 @@ Configurations that control compaction (merging of log files onto a new base fil
 
 ---
 
-> #### hoodie.archive.automatic
-> When enabled, the archival table service is invoked immediately after each commit, to archive commits if we cross a maximum value of commits. It's recommended to enable this, to ensure number of active commits is bounded.<br></br>
-> **Default Value**: true (Optional)<br></br>
-> `Config Param: AUTO_ARCHIVE`<br></br>
-
----
-
-> #### hoodie.clean.trigger.strategy
-> Controls how cleaning is scheduled. Valid options: NUM_COMMITS<br></br>
-> **Default Value**: NUM_COMMITS (Optional)<br></br>
-> `Config Param: CLEAN_TRIGGER_STRATEGY`<br></br>
+> #### hoodie.compaction.logfile.size.threshold
+> Only if the log file size is greater than the threshold in bytes, the file group will be compacted.<br></br>
+> **Default Value**: 0 (Optional)<br></br>
+> `Config Param: COMPACTION_LOG_FILE_SIZE_THRESHOLD`<br></br>
 
 ---
 
@@ -3196,27 +3455,6 @@ Configurations that control compaction (merging of log files onto a new base fil
 
 ---
 
-> #### hoodie.keep.min.commits
-> Similar to hoodie.keep.max.commits, but controls the minimum number ofinstants to retain in the active timeline.<br></br>
-> **Default Value**: 20 (Optional)<br></br>
-> `Config Param: MIN_COMMITS_TO_KEEP`<br></br>
-
----
-
-> #### hoodie.cleaner.parallelism
-> Parallelism for the cleaning operation. Increase this if cleaning becomes slow.<br></br>
-> **Default Value**: 200 (Optional)<br></br>
-> `Config Param: CLEANER_PARALLELISM_VALUE`<br></br>
-
----
-
-> #### hoodie.cleaner.incremental.mode
-> When enabled, the plans for each cleaner service run is computed incrementally off the events  in the timeline, since the last cleaner run. This is much more efficient than obtaining listings for the full table for each planning (even with a metadata table).<br></br>
-> **Default Value**: true (Optional)<br></br>
-> `Config Param: CLEANER_INCREMENTAL_MODE_ENABLE`<br></br>
-
----
-
 > #### hoodie.record.size.estimation.threshold
 > We use the previous commits' metadata to calculate the estimated record size and use it  to bin pack records into partitions. If the previous commit is too small to make an accurate estimation,  Hudi will search commits in the reverse order, until we find a commit that has totalBytesWritten  larger than (PARQUET_SMALL_FILE_LIMIT_BYTES * this_threshold)<br></br>
 > **Default Value**: 1.0 (Optional)<br></br>
@@ -3225,23 +3463,16 @@ Configurations that control compaction (merging of log files onto a new base fil
 ---
 
 > #### hoodie.compact.inline.trigger.strategy
-> Controls how compaction scheduling is triggered, by time or num delta commits or combination of both. Valid options: NUM_COMMITS,TIME_ELAPSED,NUM_AND_TIME,NUM_OR_TIME<br></br>
+> Controls how compaction scheduling is triggered, by time or num delta commits or combination of both. Valid options: NUM_COMMITS,NUM_COMMITS_AFTER_LAST_REQUEST,TIME_ELAPSED,NUM_AND_TIME,NUM_OR_TIME<br></br>
 > **Default Value**: NUM_COMMITS (Optional)<br></br>
 > `Config Param: INLINE_COMPACT_TRIGGER_STRATEGY`<br></br>
 
 ---
 
-> #### hoodie.keep.max.commits
-> Archiving service moves older entries from timeline into an archived log after each write, to  keep the metadata overhead constant, even as the table size grows.This config controls the maximum number of instants to retain in the active timeline. <br></br>
-> **Default Value**: 30 (Optional)<br></br>
-> `Config Param: MAX_COMMITS_TO_KEEP`<br></br>
-
----
-
-> #### hoodie.archive.delete.parallelism
-> Parallelism for deleting archived hoodie commits.<br></br>
-> **Default Value**: 100 (Optional)<br></br>
-> `Config Param: DELETE_ARCHIVED_INSTANT_PARALLELISM_VALUE`<br></br>
+> #### hoodie.compaction.reverse.log.read
+> HoodieLogFormatReader reads a logfile in the forward direction starting from pos=0 to pos=file_length. If this config is set to true, the reader reads the logfile in reverse direction, from pos=file_length to pos=0<br></br>
+> **Default Value**: false (Optional)<br></br>
+> `Config Param: COMPACTION_REVERSE_LOG_READ_ENABLE`<br></br>
 
 ---
 
@@ -3266,11 +3497,34 @@ Configurations that control compaction (merging of log files onto a new base fil
 
 ---
 
+> #### hoodie.compact.inline
+> When set to true, compaction service is triggered after each write. While being  simpler operationally, this adds extra latency on the write path.<br></br>
+> **Default Value**: false (Optional)<br></br>
+> `Config Param: INLINE_COMPACT`<br></br>
+
+---
+
 ### File System View Storage Configurations {#File-System-View-Storage-Configurations}
 
 Configurations that control how file metadata is stored by Hudi, for transaction processing and queries.
 
 `Config Class`: org.apache.hudi.common.table.view.FileSystemViewStorageConfig<br></br>
+> #### hoodie.filesystem.view.remote.retry.exceptions
+> The class name of the Exception that needs to be re-tryed, separated by commas. Default is empty which means retry all the IOException and RuntimeException from Remote Request.<br></br>
+> **Default Value**:  (Optional)<br></br>
+> `Config Param: RETRY_EXCEPTIONS`<br></br>
+> `Since Version: 0.12.0`<br></br>
+
+---
+
+> #### hoodie.filesystem.view.remote.retry.initial_interval_ms
+> Amount of time (in ms) to wait, before retry to do operations on storage.<br></br>
+> **Default Value**: 100 (Optional)<br></br>
+> `Config Param: REMOTE_INITIAL_RETRY_INTERVAL_MS`<br></br>
+> `Since Version: 0.12.0`<br></br>
+
+---
+
 > #### hoodie.filesystem.view.spillable.replaced.mem.fraction
 > Fraction of the file system view memory, to be used for holding replace commit related metadata.<br></br>
 > **Default Value**: 0.01 (Optional)<br></br>
@@ -3299,6 +3553,14 @@ Configurations that control how file metadata is stored by Hudi, for transaction
 
 ---
 
+> #### hoodie.filesystem.view.remote.retry.max_numbers
+> Maximum number of retry for API requests against a remote file system view. e.g timeline server.<br></br>
+> **Default Value**: 3 (Optional)<br></br>
+> `Config Param: REMOTE_MAX_RETRY_NUMBERS`<br></br>
+> `Since Version: 0.12.0`<br></br>
+
+---
+
 > #### hoodie.filesystem.view.spillable.mem
 > Amount of memory to be used in bytes for holding file system view, before spilling to disk.<br></br>
 > **Default Value**: 104857600 (Optional)<br></br>
@@ -3313,10 +3575,26 @@ Configurations that control how file metadata is stored by Hudi, for transaction
 
 ---
 
+> #### hoodie.filesystem.view.remote.retry.enable
+> Whether to enable API request retry for remote file system view.<br></br>
+> **Default Value**: false (Optional)<br></br>
+> `Config Param: REMOTE_RETRY_ENABLE`<br></br>
+> `Since Version: 0.12.0`<br></br>
+
+---
+
 > #### hoodie.filesystem.view.remote.host
 > We expect this to be rarely hand configured.<br></br>
 > **Default Value**: localhost (Optional)<br></br>
 > `Config Param: REMOTE_HOST_NAME`<br></br>
+
+---
+
+> #### hoodie.filesystem.view.remote.retry.max_interval_ms
+> Maximum amount of time (in ms), to wait for next retry.<br></br>
+> **Default Value**: 2000 (Optional)<br></br>
+> `Config Param: REMOTE_MAX_RETRY_INTERVAL_MS`<br></br>
+> `Since Version: 0.12.0`<br></br>
 
 ---
 
@@ -3417,7 +3695,7 @@ Configurations that control indexing behavior, which tags incoming records as ei
 ---
 
 > #### hoodie.bucket.index.num.buckets
-> Only applies if index type is BUCKET_INDEX. Determine the number of buckets in the hudi table, and each partition is divided to N buckets.<br></br>
+> Only applies if index type is BUCKET. Determine the number of buckets in the hudi table, and each partition is divided to N buckets.<br></br>
 > **Default Value**: 256 (Optional)<br></br>
 > `Config Param: BUCKET_INDEX_NUM_BUCKETS`<br></br>
 
@@ -3491,6 +3769,14 @@ Configurations that control indexing behavior, which tags incoming records as ei
 > Only applies if index type is BLOOM. This is the amount of parallelism for index lookup, which involves a shuffle. By default, this is auto computed based on input workload characteristics.<br></br>
 > **Default Value**: 0 (Optional)<br></br>
 > `Config Param: BLOOM_INDEX_PARALLELISM`<br></br>
+
+---
+
+> #### hoodie.index.bucket.engine
+> Type of bucket index engine to use. Default is SIMPLE bucket index, with fixed number of bucket.Possible options are [SIMPLE | CONSISTENT_HASHING].Consistent hashing supports dynamic resizing of the number of bucket, solving potential data skew and file size issues of the SIMPLE hashing engine.<br></br>
+> **Default Value**: SIMPLE (Optional)<br></br>
+> `Config Param: BUCKET_INDEX_ENGINE_TYPE`<br></br>
+> `Since Version: 0.11.0`<br></br>
 
 ---
 
@@ -3763,10 +4049,24 @@ The following set of configurations are common across Hudi.
 
 ---
 
+> #### hoodie.datasource.write.reconcile.schema
+> When a new batch of write has records with old schema, but latest table schema got evolved, this config will upgrade the records to leverage latest table schema(default values will be injected to missing fields). If not, the write batch would fail.<br></br>
+> **Default Value**: false (Optional)<br></br>
+> `Config Param: RECONCILE_SCHEMA`<br></br>
+
+---
+
 > #### hoodie.common.spillable.diskmap.type
 > When handling input data that cannot be held in memory, to merge with a file on storage, a spillable diskmap is employed.  By default, we use a persistent hashmap based loosely on bitcask, that offers O(1) inserts, lookups. Change this to `ROCKS_DB` to prefer using rocksDB, for handling the spill.<br></br>
 > **Default Value**: BITCASK (Optional)<br></br>
 > `Config Param: SPILLABLE_DISK_MAP_TYPE`<br></br>
+
+---
+
+> #### hoodie.schema.on.read.enable
+> Enables support for Schema Evolution feature<br></br>
+> **Default Value**: false (Optional)<br></br>
+> `Config Param: SCHEMA_EVOLUTION_ENABLE`<br></br>
 
 ---
 
@@ -3935,6 +4235,43 @@ Enables reporting on Hudi metrics using the Datadog reporter type. Hudi publishe
 
 ---
 
+### Metrics Configurations for Amazon CloudWatch {#Metrics-Configurations-for-Amazon-CloudWatch}
+
+Enables reporting on Hudi metrics using Amazon CloudWatch.  Hudi publishes metrics on every commit, clean, rollback etc.
+
+`Config Class`: org.apache.hudi.config.metrics.HoodieMetricsCloudWatchConfig<br></br>
+> #### hoodie.metrics.cloudwatch.report.period.seconds
+> Reporting interval in seconds<br></br>
+> **Default Value**: 60 (Optional)<br></br>
+> `Config Param: REPORT_PERIOD_SECONDS`<br></br>
+> `Since Version: 0.10.0`<br></br>
+
+---
+
+> #### hoodie.metrics.cloudwatch.namespace
+> Namespace of reporter<br></br>
+> **Default Value**: Hudi (Optional)<br></br>
+> `Config Param: METRIC_NAMESPACE`<br></br>
+> `Since Version: 0.10.0`<br></br>
+
+---
+
+> #### hoodie.metrics.cloudwatch.metric.prefix
+> Metric prefix of reporter<br></br>
+> **Default Value**:  (Optional)<br></br>
+> `Config Param: METRIC_PREFIX`<br></br>
+> `Since Version: 0.10.0`<br></br>
+
+---
+
+> #### hoodie.metrics.cloudwatch.maxDatumsPerRequest
+> Max number of Datums per request<br></br>
+> **Default Value**: 20 (Optional)<br></br>
+> `Config Param: MAX_DATUMS_PER_REQUEST`<br></br>
+> `Since Version: 0.10.0`<br></br>
+
+---
+
 ### Metrics Configurations {#Metrics-Configurations}
 
 Enables reporting on Hudi metrics. Hudi publishes metrics on every commit, clean, rollback etc. The following sections list the supported reporters.
@@ -4062,43 +4399,6 @@ Enables reporting on Hudi metrics using Prometheus.  Hudi publishes metrics on e
 
 ---
 
-### Metrics Configurations for Amazon CloudWatch {#Metrics-Configurations-for-Amazon-CloudWatch}
-
-Enables reporting on Hudi metrics using Amazon CloudWatch.  Hudi publishes metrics on every commit, clean, rollback etc.
-
-`Config Class`: org.apache.hudi.config.HoodieMetricsCloudWatchConfig<br></br>
-> #### hoodie.metrics.cloudwatch.report.period.seconds
-> Reporting interval in seconds<br></br>
-> **Default Value**: 60 (Optional)<br></br>
-> `Config Param: REPORT_PERIOD_SECONDS`<br></br>
-> `Since Version: 0.10.0`<br></br>
-
----
-
-> #### hoodie.metrics.cloudwatch.namespace
-> Namespace of reporter<br></br>
-> **Default Value**: Hudi (Optional)<br></br>
-> `Config Param: METRIC_NAMESPACE`<br></br>
-> `Since Version: 0.10.0`<br></br>
-
----
-
-> #### hoodie.metrics.cloudwatch.metric.prefix
-> Metric prefix of reporter<br></br>
-> **Default Value**:  (Optional)<br></br>
-> `Config Param: METRIC_PREFIX`<br></br>
-> `Since Version: 0.10.0`<br></br>
-
----
-
-> #### hoodie.metrics.cloudwatch.maxDatumsPerRequest
-> Max number of Datums per request<br></br>
-> **Default Value**: 20 (Optional)<br></br>
-> `Config Param: MAX_DATUMS_PER_REQUEST`<br></br>
-> `Since Version: 0.10.0`<br></br>
-
----
-
 ### Metrics Configurations for Graphite {#Metrics-Configurations-for-Graphite}
 
 Enables reporting on Hudi metrics using Graphite.  Hudi publishes metrics on every commit, clean, rollback etc.
@@ -4144,6 +4444,13 @@ This is the lowest level of customization offered by Hudi. Record payloads defin
 Payload related configs, that can be leveraged to control merges based on specific business fields in the data.
 
 `Config Class`: org.apache.hudi.config.HoodiePayloadConfig<br></br>
+> #### hoodie.compaction.payload.class
+> This needs to be same as class used during insert/upserts. Just like writing, compaction also uses the record payload class to merge records in the log against each other, merge again with the base file and produce the final record to be written after compaction.<br></br>
+> **Default Value**: org.apache.hudi.common.model.OverwriteWithLatestAvroPayload (Optional)<br></br>
+> `Config Param: PAYLOAD_CLASS_NAME`<br></br>
+
+---
+
 > #### hoodie.payload.event.time.field
 > Table column/field name to derive timestamp associated with the records. This canbe useful for e.g, determining the freshness of the table.<br></br>
 > **Default Value**: ts (Optional)<br></br>

@@ -145,8 +145,8 @@ By default false (the names of partition folders are only partition values)<br><
 ---
 
 > #### hoodie.datasource.hive_sync.partition_extractor_class
-> Class which implements PartitionValueExtractor to extract the partition values, default 'SlashEncodedDayPartitionValueExtractor'.<br></br>
-> **Default Value**: org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor (Optional)<br></br>
+> Class which implements PartitionValueExtractor to extract the partition values, default 'MultiPartKeysValueExtractor'.<br></br>
+> **Default Value**: org.apache.hudi.hive.MultiPartKeysValueExtractor (Optional)<br></br>
 > `Config Param: HIVE_PARTITION_EXTRACTOR_CLASS`<br></br>
 
 ---
@@ -428,19 +428,32 @@ Configurations that control write behavior on Hudi tables. These can be directly
 
 ### Compaction Configs {#Compaction-Configs}
 
-Configurations that control compaction (merging of log files onto new base files) as well as cleaning (reclamation of older/unused file groups/slices).
+Configurations that control compaction (merging of log files onto a new base files).
 
 `Config Class`: org.apache.hudi.config.HoodieCompactionConfig<br></br>
+> #### hoodie.compaction.lazy.block.read
+> When merging the delta log files, this config helps to choose whether the log blocks should be read lazily or not. Choose true to use lazy block reading (low memory usage, but incurs seeks to each block header) or false for immediate block read (higher memory usage)<br></br>
+> **Default Value**: true (Optional)<br></br>
+> `Config Param: COMPACTION_LAZY_BLOCK_READ_ENABLE`<br></br>
 
-> #### hoodie.cleaner.policy
-> Cleaning policy to be used. The cleaner service deletes older file slices files to re-claim space. By default, cleaner spares the file slices written by the last N commits, determined by hoodie.cleaner.commits.retained Long running query plans may often refer to older file slices and will break if those are cleaned, before the query has had a chance to run. So, it is good to make sure that the data is retained for more than the maximum query execution time<br></br>
-> **Default Value**: KEEP_LATEST_COMMITS (Optional)<br></br>
-> `Config Param: CLEANER_POLICY`<br></br>
+---
+
+> #### hoodie.parquet.small.file.limit
+> During upsert operation, we opportunistically expand existing small files on storage, instead of writing new files, to keep number of files to an optimum. This config sets the file size limit below which a file on storage  becomes a candidate to be selected as such a `small file`. By default, treat any file <= 100MB as a small file. Also note that if this set <= 0, will not try to get small files and directly write new files<br></br>
+> **Default Value**: 104857600 (Optional)<br></br>
+> `Config Param: PARQUET_SMALL_FILE_LIMIT`<br></br>
+
+---
+
+> #### hoodie.compaction.strategy
+> Compaction strategy decides which file groups are picked up for compaction during each compaction run. By default. Hudi picks the log file with most accumulated unmerged data<br></br>
+> **Default Value**: org.apache.hudi.table.action.compact.strategy.LogFileSizeBasedCompactionStrategy (Optional)<br></br>
+> `Config Param: COMPACTION_STRATEGY`<br></br>
 
 ---
 
 > #### hoodie.copyonwrite.record.size.estimate
-> The average record size. If not explicitly specified, hudi will compute the record size estimate dynamically based on commit metadata. This is critical in computing the insert parallelism and bin-packing inserts into small files.<br></br>
+> The average record size. If not explicitly specified, hudi will compute the record size estimate compute dynamically based on commit metadata.  This is critical in computing the insert parallelism and bin-packing inserts into small files.<br></br>
 > **Default Value**: 1024 (Optional)<br></br>
 > `Config Param: COPY_ON_WRITE_RECORD_SIZE_ESTIMATE`<br></br>
 
@@ -453,59 +466,25 @@ Configurations that control compaction (merging of log files onto new base files
 
 ---
 
-> #### hoodie.cleaner.commits.retained
-> Number of commit to retain when cleaner is triggered with KEEP_LATEST_COMMITS cleaning policy. Make sure to configure this property properly so that the longest running query is able to succeed. This also directly translates into how much data retention the table supports for incremental queries.
-> **Default Value**: 10 (Optional)<br></br>
-> `Config Param: CLEANER_COMMITS_RETAINED`<br></br>
+> #### hoodie.compaction.target.io
+> Amount of MBs to spend during compaction run for the LogFileSizeBasedCompactionStrategy. This value helps bound ingestion latency while compaction is run inline mode.<br></br>
+> **Default Value**: 512000 (Optional)<br></br>
+> `Config Param: TARGET_IO_PER_COMPACTION_IN_MB`<br></br>
 
 ---
 
-> #### hoodie.clean.async
-> Only applies when hoodie.clean.automatic is turned on. When turned on runs cleaner async with writing, which can speed up overall write performance.<br></br>
-> **Default Value**: false (Optional)<br></br>
-> `Config Param: ASYNC_CLEAN`<br></br>
+> #### hoodie.compaction.logfile.size.threshold
+> Only if the log file size is greater than the threshold in bytes, the file group will be compacted.<br></br>
+> **Default Value**: 0 (Optional)<br></br>
+> `Config Param: COMPACTION_LOG_FILE_SIZE_THRESHOLD`<br></br>
 
 ---
 
-> #### hoodie.clean.automatic
-> When enabled, the cleaner table service is invoked immediately after each commit, to delete older file slices. It's recommended to enable this, to ensure metadata and data storage growth is bounded.<br></br>
+> #### hoodie.compaction.preserve.commit.metadata
+> When rewriting data, preserves existing hoodie_commit_time<br></br>
 > **Default Value**: true (Optional)<br></br>
-> `Config Param: AUTO_CLEAN`<br></br>
-
----
-
-> #### hoodie.commits.archival.batch
-> Archiving of instants is batched in best-effort manner, to pack more instants into a single archive log. This config controls such archival batch size.<br></br>
-> **Default Value**: 10 (Optional)<br></br>
-> `Config Param: COMMITS_ARCHIVAL_BATCH_SIZE`<br></br>
-
----
-
-> #### hoodie.compact.inline
-> When set to true, compaction service is triggered after each write. While being simpler operationally, this adds extra latency on the write path.<br></br>
-> **Default Value**: false (Optional)<br></br>
-> `Config Param: INLINE_COMPACT`<br></br>
-
----
-
-> #### hoodie.parquet.small.file.limit
-> During upsert operation, we opportunistically expand existing small files on storage, instead of writing new files, to keep number of files to an optimum. This config sets the file size limit below which a file on storage becomes a candidate to be selected as such a `small file`. By default, treat any file <= 100MB as a small file.<br></br>
-> **Default Value**: 104857600 (Optional)<br></br>
-> `Config Param: PARQUET_SMALL_FILE_LIMIT`<br></br>
-
----
-
-> #### hoodie.compaction.strategy
-> Compaction strategy decides which file groups are picked up for compaction during each compaction run. By default, Hudi picks the log file with most accumulated unmerged data<br></br>
-> **Default Value**: org.apache.hudi.table.action.compact.strategy.LogFileSizeBasedCompactionStrategy (Optional)<br></br>
-> `Config Param: COMPACTION_STRATEGY`<br></br>
-
----
-
-> #### hoodie.archive.automatic
-> When enabled, the archival table service is invoked immediately after each commit, to archive commits if we cross a maximum value of commits. It's recommended to enable this, to ensure number of active commits is bounded.<br></br>
-> **Default Value**: true (Optional)<br></br>
-> `Config Param: AUTO_ARCHIVE`<br></br>
+> `Config Param: PRESERVE_COMMIT_METADATA`<br></br>
+> `Since Version: 0.11.0`<br></br>
 
 ---
 
@@ -517,16 +496,92 @@ Configurations that control compaction (merging of log files onto new base files
 ---
 
 > #### hoodie.compact.inline.max.delta.commits
-> Number of delta commits after the last compaction, before scheduling of a new compaction is attempted. This is used when the [compaction trigger strategy](/docs/configurations/#hoodiecompactinlinetriggerstrategy) involves number of commits. For example NUM_COMMITS,NUM_AND_TIME,NUM_OR_TIME <br></br>
+> Number of delta commits after the last compaction, before scheduling of a new compaction is attempted.<br></br>
 > **Default Value**: 5 (Optional)<br></br>
 > `Config Param: INLINE_COMPACT_NUM_DELTA_COMMITS`<br></br>
 
 ---
 
-> #### hoodie.keep.min.commits
-> Similar to hoodie.keep.max.commits, but controls the minimum number of instants to retain in the active timeline.<br></br>
-> **Default Value**: 20 (Optional)<br></br>
-> `Config Param: MIN_COMMITS_TO_KEEP`<br></br>
+> #### hoodie.record.size.estimation.threshold
+> We use the previous commits' metadata to calculate the estimated record size and use it  to bin pack records into partitions. If the previous commit is too small to make an accurate estimation,  Hudi will search commits in the reverse order, until we find a commit that has totalBytesWritten  larger than (PARQUET_SMALL_FILE_LIMIT_BYTES * this_threshold)<br></br>
+> **Default Value**: 1.0 (Optional)<br></br>
+> `Config Param: RECORD_SIZE_ESTIMATION_THRESHOLD`<br></br>
+
+---
+
+> #### hoodie.compact.inline.trigger.strategy
+> Controls how compaction scheduling is triggered, by time or num delta commits or combination of both. Valid options: NUM_COMMITS,NUM_COMMITS_AFTER_LAST_REQUEST,TIME_ELAPSED,NUM_AND_TIME,NUM_OR_TIME<br></br>
+> **Default Value**: NUM_COMMITS (Optional)<br></br>
+> `Config Param: INLINE_COMPACT_TRIGGER_STRATEGY`<br></br>
+
+---
+
+> #### hoodie.compaction.reverse.log.read
+> HoodieLogFormatReader reads a logfile in the forward direction starting from pos=0 to pos=file_length. If this config is set to true, the reader reads the logfile in reverse direction, from pos=file_length to pos=0<br></br>
+> **Default Value**: false (Optional)<br></br>
+> `Config Param: COMPACTION_REVERSE_LOG_READ_ENABLE`<br></br>
+
+---
+
+> #### hoodie.copyonwrite.insert.split.size
+> Number of inserts assigned for each partition/bucket for writing. We based the default on writing out 100MB files, with at least 1kb records (100K records per file), and   over provision to 500K. As long as auto-tuning of splits is turned on, this only affects the first   write, where there is no history to learn record sizes from.<br></br>
+> **Default Value**: 500000 (Optional)<br></br>
+> `Config Param: COPY_ON_WRITE_INSERT_SPLIT_SIZE`<br></br>
+
+---
+
+> #### hoodie.compact.schedule.inline
+> When set to true, compaction service will be attempted for inline scheduling after each write. Users have to ensure they have a separate job to run async compaction(execution) for the one scheduled by this writer. Users can choose to set both `hoodie.compact.inline` and `hoodie.compact.schedule.inline` to false and have both scheduling and execution triggered by any async process. But if `hoodie.compact.inline` is set to false, and `hoodie.compact.schedule.inline` is set to true, regular writers will schedule compaction inline, but users are expected to trigger async job for execution. If `hoodie.compact.inline` is set to true, regular writers will do both scheduling and execution inline for compaction<br></br>
+> **Default Value**: false (Optional)<br></br>
+> `Config Param: SCHEDULE_INLINE_COMPACT`<br></br>
+
+---
+
+> #### hoodie.compaction.daybased.target.partitions
+> Used by org.apache.hudi.io.compact.strategy.DayBasedCompactionStrategy to denote the number of latest partitions to compact during a compaction run.<br></br>
+> **Default Value**: 10 (Optional)<br></br>
+> `Config Param: TARGET_PARTITIONS_PER_DAYBASED_COMPACTION`<br></br>
+
+---
+
+> #### hoodie.compact.inline
+> When set to true, compaction service is triggered after each write. While being  simpler operationally, this adds extra latency on the write path.<br></br>
+> **Default Value**: false (Optional)<br></br>
+> `Config Param: INLINE_COMPACT`<br></br>
+
+---
+
+### Clean Configs {#Clean-Configs}
+
+Cleaning (reclamation of older/unused file groups/slices).
+
+`Config Class`: org.apache.hudi.config.HoodieCleanConfig<br></br>
+> #### hoodie.cleaner.fileversions.retained
+> When KEEP_LATEST_FILE_VERSIONS cleaning policy is used,  the minimum number of file slices to retain in each file group, during cleaning.<br></br>
+> **Default Value**: 3 (Optional)<br></br>
+> `Config Param: CLEANER_FILE_VERSIONS_RETAINED`<br></br>
+
+---
+
+> #### hoodie.clean.max.commits
+> Number of commits after the last clean operation, before scheduling of a new clean is attempted.<br></br>
+> **Default Value**: 1 (Optional)<br></br>
+> `Config Param: CLEAN_MAX_COMMITS`<br></br>
+
+---
+
+> #### hoodie.clean.allow.multiple
+> Allows scheduling/executing multiple cleans by enabling this config. If users prefer to strictly ensure clean requests should be mutually exclusive, .i.e. a 2nd clean will not be scheduled if another clean is not yet completed to avoid repeat cleaning of same files, they might want to disable this config.<br></br>
+> **Default Value**: true (Optional)<br></br>
+> `Config Param: ALLOW_MULTIPLE_CLEANS`<br></br>
+> `Since Version: 0.11.0`<br></br>
+
+---
+
+> #### hoodie.clean.automatic
+> When enabled, the cleaner table service is invoked immediately after each commit, to delete older file slices. It's recommended to enable this, to ensure metadata and data storage growth is bounded.<br></br>
+> **Default Value**: true (Optional)<br></br>
+> `Config Param: AUTO_CLEAN`<br></br>
 
 ---
 
@@ -537,51 +592,136 @@ Configurations that control compaction (merging of log files onto new base files
 
 ---
 
-> #### hoodie.record.size.estimation.threshold
-> We use the previous commits' metadata to calculate the estimated record size and use it to bin pack records into partitions. If the previous commit is too small to make an accurate estimation, Hudi will search commits in the reverse order, until we find a commit that has totalBytesWritten larger than (PARQUET_SMALL_FILE_LIMIT_BYTES * this_threshold)<br></br>
-> **Default Value**: 1.0 (Optional)<br></br>
-> `Config Param: RECORD_SIZE_ESTIMATION_THRESHOLD`<br></br>
+> #### hoodie.cleaner.incremental.mode
+> When enabled, the plans for each cleaner service run is computed incrementally off the events  in the timeline, since the last cleaner run. This is much more efficient than obtaining listings for the full table for each planning (even with a metadata table).<br></br>
+> **Default Value**: true (Optional)<br></br>
+> `Config Param: CLEANER_INCREMENTAL_MODE_ENABLE`<br></br>
 
 ---
 
-> #### hoodie.compact.inline.trigger.strategy
-> Controls how compaction scheduling is triggered, by time or num delta commits or combination of both. Valid options: NUM_COMMITS,TIME_ELAPSED,NUM_AND_TIME,NUM_OR_TIME<br></br>
+> #### hoodie.clean.async
+> Only applies when hoodie.clean.automatic is turned on. When turned on runs cleaner async with writing, which can speed up overall write performance.<br></br>
+> **Default Value**: false (Optional)<br></br>
+> `Config Param: ASYNC_CLEAN`<br></br>
+
+---
+
+> #### hoodie.clean.trigger.strategy
+> Controls how cleaning is scheduled. Valid options: NUM_COMMITS<br></br>
 > **Default Value**: NUM_COMMITS (Optional)<br></br>
-> `Config Param: INLINE_COMPACT_TRIGGER_STRATEGY`<br></br>
+> `Config Param: CLEAN_TRIGGER_STRATEGY`<br></br>
+
+---
+
+> #### hoodie.cleaner.delete.bootstrap.base.file
+> When set to true, cleaner also deletes the bootstrap base file when it's skeleton base file is  cleaned. Turn this to true, if you want to ensure the bootstrap dataset storage is reclaimed over time, as the table receives updates/deletes. Another reason to turn this on, would be to ensure data residing in bootstrap  base files are also physically deleted, to comply with data privacy enforcement processes.<br></br>
+> **Default Value**: false (Optional)<br></br>
+> `Config Param: CLEANER_BOOTSTRAP_BASE_FILE_ENABLE`<br></br>
+
+---
+
+> #### hoodie.cleaner.hours.retained
+> Number of hours for which commits need to be retained. This config provides a more flexible option ascompared to number of commits retained for cleaning service. Setting this property ensures all the files, but the latest in a file group, corresponding to commits with commit times older than the configured number of hours to be retained are cleaned.<br></br>
+> **Default Value**: 24 (Optional)<br></br>
+> `Config Param: CLEANER_HOURS_RETAINED`<br></br>
+
+---
+
+> #### hoodie.cleaner.commits.retained
+> Number of commits to retain, without cleaning. This will be retained for num_of_commits * time_between_commits (scheduled). This also directly translates into how much data retention the table supports for incremental queries.<br></br>
+> **Default Value**: 10 (Optional)<br></br>
+> `Config Param: CLEANER_COMMITS_RETAINED`<br></br>
+
+---
+
+> #### hoodie.cleaner.policy.failed.writes
+> Cleaning policy for failed writes to be used. Hudi will delete any files written by failed writes to re-claim space. Choose to perform this rollback of failed writes eagerly before every writer starts (only supported for single writer) or lazily by the cleaner (required for multi-writers)<br></br>
+> **Default Value**: EAGER (Optional)<br></br>
+> `Config Param: FAILED_WRITES_CLEANER_POLICY`<br></br>
+
+---
+
+> #### hoodie.cleaner.policy
+> Cleaning policy to be used. The cleaner service deletes older file slices files to re-claim space. By default, cleaner spares the file slices written by the last N commits, determined by  hoodie.cleaner.commits.retained Long running query plans may often refer to older file slices and will break if those are cleaned, before the query has had   a chance to run. So, it is good to make sure that the data is retained for more than the maximum query execution time<br></br>
+> **Default Value**: KEEP_LATEST_COMMITS (Optional)<br></br>
+> `Config Param: CLEANER_POLICY`<br></br>
+
+---
+
+### Archival Configs {#Archival-Configs}
+
+Configurations that control archival.
+
+`Config Class`: org.apache.hudi.config.HoodieArchivalConfig<br></br>
+> #### hoodie.archive.merge.small.file.limit.bytes
+> This config sets the archive file size limit below which an archive file becomes a candidate to be selected as such a small file.<br></br>
+> **Default Value**: 20971520 (Optional)<br></br>
+> `Config Param: ARCHIVE_MERGE_SMALL_FILE_LIMIT_BYTES`<br></br>
 
 ---
 
 > #### hoodie.keep.max.commits
-> Archiving service moves older entries from timeline into an archived log after each write, to keep the metadata overhead constant, even as the table size grows.This config controls the maximum number of instants to retain in the active timeline. <br></br>
+> Archiving service moves older entries from timeline into an archived log after each write, to  keep the metadata overhead constant, even as the table size grows.This config controls the maximum number of instants to retain in the active timeline. <br></br>
 > **Default Value**: 30 (Optional)<br></br>
 > `Config Param: MAX_COMMITS_TO_KEEP`<br></br>
 
 ---
 
-> #### hoodie.copyonwrite.insert.split.size
-> Number of inserts assigned for each partition/bucket for writing. We based the default on writing out 100MB files, with at least 1kb records (100K records per file), and over provision to 500K. As long as auto-tuning of splits is turned on, this only affects the first write, where there is no history to learn record sizes from.<br></br>
-> **Default Value**: 500000 (Optional)<br></br>
-> `Config Param: COPY_ON_WRITE_INSERT_SPLIT_SIZE`<br></br>
+> #### hoodie.archive.merge.enable
+> When enable, hoodie will auto merge several small archive files into larger one. It's useful when storage scheme doesn't support append operation.<br></br>
+> **Default Value**: false (Optional)<br></br>
+> `Config Param: ARCHIVE_MERGE_ENABLE`<br></br>
 
 ---
 
-### File System View Storage Configurations {#File-System-View-Storage-Configurations}
-
-Configurations that control how file metadata is stored by Hudi, for transaction processing and queries.
-
-`Config Class`: org.apache.hudi.common.table.view.FileSystemViewStorageConfig<br></br>
-
-> #### hoodie.filesystem.view.type
-> File system view provides APIs for viewing the files on the underlying lake storage, as file groups and file slices. This config controls how such a view is held. Options include MEMORY,SPILLABLE_DISK,EMBEDDED_KV_STORE,REMOTE_ONLY,REMOTE_FIRST which provide different trade offs for memory usage and API request performance.<br></br>
-> **Default Value**: MEMORY (Optional)<br></br>
-> `Config Param: VIEW_TYPE`<br></br>
+> #### hoodie.archive.automatic
+> When enabled, the archival table service is invoked immediately after each commit, to archive commits if we cross a maximum value of commits. It's recommended to enable this, to ensure number of active commits is bounded.<br></br>
+> **Default Value**: true (Optional)<br></br>
+> `Config Param: AUTO_ARCHIVE`<br></br>
 
 ---
 
-> #### hoodie.filesystem.view.secondary.type
-> Specifies the secondary form of storage for file system view, if the primary (e.g timeline server) is unavailable.<br></br>
-> **Default Value**: MEMORY (Optional)<br></br>
-> `Config Param: SECONDARY_VIEW_TYPE`<br></br>
+> #### hoodie.archive.delete.parallelism
+> Parallelism for deleting archived hoodie commits.<br></br>
+> **Default Value**: 100 (Optional)<br></br>
+> `Config Param: DELETE_ARCHIVED_INSTANT_PARALLELISM_VALUE`<br></br>
+
+---
+
+> #### hoodie.archive.beyond.savepoint
+> If enabled, archival will proceed beyond savepoint, skipping savepoint commits. If disabled, archival will stop at the earliest savepoint commit.<br></br>
+> **Default Value**: false (Optional)<br></br>
+> `Config Param: ARCHIVE_BEYOND_SAVEPOINT`<br></br>
+> `Since Version: 0.12.0`<br></br>
+
+---
+
+> #### hoodie.commits.archival.batch
+> Archiving of instants is batched in best-effort manner, to pack more instants into a single archive log. This config controls such archival batch size.<br></br>
+> **Default Value**: 10 (Optional)<br></br>
+> `Config Param: COMMITS_ARCHIVAL_BATCH_SIZE`<br></br>
+
+---
+
+> #### hoodie.archive.async
+> Only applies when hoodie.archive.automatic is turned on. When turned on runs archiver async with writing, which can speed up overall write performance.<br></br>
+> **Default Value**: false (Optional)<br></br>
+> `Config Param: ASYNC_ARCHIVE`<br></br>
+> `Since Version: 0.11.0`<br></br>
+
+---
+
+> #### hoodie.keep.min.commits
+> Similar to hoodie.keep.max.commits, but controls the minimum number ofinstants to retain in the active timeline.<br></br>
+> **Default Value**: 20 (Optional)<br></br>
+> `Config Param: MIN_COMMITS_TO_KEEP`<br></br>
+
+---
+
+> #### hoodie.archive.merge.files.batch.size
+> The number of small archive files to be merged at once.<br></br>
+> **Default Value**: 10 (Optional)<br></br>
+> `Config Param: ARCHIVE_MERGE_FILES_BATCH_SIZE`<br></br>
 
 ---
 

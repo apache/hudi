@@ -23,9 +23,12 @@ If not, execute `mvn install -DskipTests` in your hudi repo  <br/>
 mvn clean
 mvn install
 ```
-Set the appropriate SNAPSHOT version and execute the below commands
+
+When new config classes are added, or existing ones are moved to a separate module, 
+please add the corresponding bundle for configurations of that module to be picked up.
+Set the appropriate SNAPSHOT version and execute the below commands. Below commands are in the [generate_configs.sh](generate_config.sh) script.
 ```shell
-VERSION=0.12.0
+VERSION=0.13.0
 
 JARS=(
 "$HOME/.m2/repository/org/apache/hudi/hudi-utilities-bundle_2.11/$VERSION-SNAPSHOT/hudi-utilities-bundle_2.11-$VERSION-SNAPSHOT.jar"
@@ -34,6 +37,7 @@ JARS=(
 "$HOME/.m2/repository/org/apache/hudi/hudi-kafka-connect-bundle/$VERSION-SNAPSHOT/hudi-kafka-connect-bundle-$VERSION-SNAPSHOT.jar"
 "$HOME/.m2/repository/org/apache/hudi/hudi-datahub-sync-bundle/$VERSION-SNAPSHOT/hudi-datahub-sync-bundle-$VERSION-SNAPSHOT.jar"
 "$HOME/.m2/repository/org/apache/hudi/hudi-gcp-bundle/$VERSION-SNAPSHOT/hudi-gcp-bundle-$VERSION-SNAPSHOT.jar"
+"$HOME/.m2/repository/org/apache/hudi/hudi-aws-bundle/$VERSION-SNAPSHOT/hudi-aws-bundle-$VERSION-SNAPSHOT.jar"
 )
 
 printf -v CLASSPATH ':%s' "${JARS[@]}"
