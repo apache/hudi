@@ -27,7 +27,6 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.keygen.CustomAvroKeyGenerator;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -36,7 +35,6 @@ import java.util.BitSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -429,13 +427,7 @@ public class FilePathUtils {
     if (FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.PARTITION_PATH_FIELD)) {
       return new String[0];
     }
-    String[] parKeys = conf.getString(FlinkOptions.PARTITION_PATH_FIELD).split(",");
-    if (Objects.equals(conf.getString(FlinkOptions.KEYGEN_CLASS_NAME), CustomAvroKeyGenerator.class.getName())) {
-      return Arrays.stream(parKeys)
-          .map(par -> par.split(CustomAvroKeyGenerator.SPLIT_REGEX)[0])
-          .toArray(none -> new String[parKeys.length]);
-    }
-    return parKeys;
+    return conf.getString(FlinkOptions.PARTITION_PATH_FIELD).split(",");
   }
 
   /**

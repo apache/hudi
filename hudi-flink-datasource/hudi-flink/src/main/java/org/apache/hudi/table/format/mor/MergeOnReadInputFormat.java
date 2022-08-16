@@ -29,9 +29,7 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.keygen.CustomAvroKeyGenerator;
 import org.apache.hudi.keygen.KeyGenUtils;
-import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator;
 import org.apache.hudi.table.format.FilePathUtils;
 import org.apache.hudi.table.format.FormatUtils;
 import org.apache.hudi.table.format.cow.ParquetSplitReaderUtil;
@@ -62,20 +60,16 @@ import org.apache.flink.types.RowKind;
 
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
 import java.util.stream.IntStream;
 
-import static org.apache.flink.table.types.logical.LogicalTypeRoot.TIMESTAMP_WITHOUT_TIME_ZONE;
 import static org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.HOODIE_COMMIT_TIME_COL_POS;
 import static org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.HOODIE_RECORD_KEY_COL_POS;
-import static org.apache.hudi.keygen.CustomAvroKeyGenerator.SPLIT_REGEX;
 import static org.apache.hudi.table.format.FormatUtils.buildAvroRecordBySchema;
 
 /**
@@ -304,35 +298,15 @@ public class MergeOnReadInputFormat
         new org.apache.hadoop.fs.Path(path).getParent(),
         this.conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING),
         FilePathUtils.extractPartitionKeys(this.conf));
-
-    // Determine if a partition field is converted
-    String kenGenClassConf = conf.getString(FlinkOptions.KEYGEN_CLASS_NAME);
-    HashMap<String, String> partTypeConf = new HashMap<>();
-    if (Objects.equals(kenGenClassConf, CustomAvroKeyGenerator.class.getName())) {
-      Arrays.stream(conf.getString(FlinkOptions.PARTITION_PATH_FIELD).split(","))
-          .map(String::trim)
-          .forEach(conf -> {
-            String[] split = conf.split(SPLIT_REGEX);
-            partTypeConf.put(split[0], split[1].toUpperCase());
-          });
-    }
-
     LinkedHashMap<String, Object> partObjects = new LinkedHashMap<>();
-
-    // can't convert data by partition value if timestamp is used to partition key.
-    partSpec.entrySet().stream()
-        .filter(entry ->
-            !(fieldTypes.get(fieldNames.indexOf(entry.getKey()))
-                .getLogicalType().getTypeRoot() == TIMESTAMP_WITHOUT_TIME_ZONE
-                && (Objects.equals(kenGenClassConf, TimestampBasedAvroKeyGenerator.class.getName())
-                || Objects.equals(partTypeConf.get(entry.getKey()),
-                CustomAvroKeyGenerator.PartitionKeyType.TIMESTAMP.name()))))
-        .forEach(entry -> {
-          String k = entry.getKey();
-          String v = entry.getValue();
-          LogicalType logicalType = fieldTypes.get(fieldNames.indexOf(k)).getLogicalType();
-          partObjects.put(k, DataTypeUtils.resolvePartition(defaultPartName.equals(v) ? null : v, logicalType));
-        });
+    partSpec.forEach((k, v) -> {
+      DataType fieldType = fieldTypes.get(fieldNames.indexOf(k));
+      if (!DataTypeUtils.isDatetimeType(fieldType)) {
+        // date time type partition field is formatted specifically,
+        // read directly from the data file to avoid format mismatch or precision loss
+        partObjects.put(k, DataTypeUtils.resolvePartition(defaultPartName.equals(v) ? null : v, fieldType));
+      }
+    });
 
     return ParquetSplitReaderUtil.genPartColumnarRowReader(
         this.conf.getBoolean(FlinkOptions.UTC_TIMEZONE),

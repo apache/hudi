@@ -28,19 +28,14 @@ import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.table.types.logical.TimestampType;
 
 import java.math.BigDecimal;
-import java.time.Instant;
 import java.time.LocalDate;
-import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
-import java.time.temporal.ChronoUnit;
+import java.time.LocalDateTime;
 import java.util.Arrays;
 
 /**
  * Utilities for {@link org.apache.flink.table.types.DataType}.
  */
 public class DataTypeUtils {
-
-  public static final OffsetDateTime EPOCH = Instant.ofEpochSecond(0).atOffset(ZoneOffset.UTC);
 
   /**
    * Returns whether the given type is TIMESTAMP type.
@@ -121,13 +116,7 @@ public class DataTypeUtils {
       case DATE:
         return LocalDate.parse(partition);
       case TIMESTAMP_WITHOUT_TIME_ZONE:
-        long time = Long.parseLong(partition);
-        int timestampPrecision = ((TimestampType) type).getPrecision();
-        if (timestampPrecision <= 3) {
-          return ChronoUnit.MILLIS.addTo(EPOCH, time).toLocalDateTime();
-        } else {
-          return ChronoUnit.MICROS.addTo(EPOCH, time).toLocalDateTime();
-        }
+        return LocalDateTime.parse(partition);
       case DECIMAL:
         return new BigDecimal(partition);
       default:
