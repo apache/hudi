@@ -80,6 +80,19 @@ public class AvroSchemaUtils {
   }
 
   /**
+   * Returns true in case provided {@link Schema} is nullable (ie accepting null values),
+   * returns false otherwise
+   */
+  public static boolean isNullable(Schema schema) {
+    if (schema.getType() != Schema.Type.UNION) {
+      return false;
+    }
+
+    List<Schema> innerTypes = schema.getTypes();
+    return innerTypes.size() > 1 && innerTypes.stream().anyMatch(it -> it.getType() == Schema.Type.NULL);
+  }
+
+  /**
    * Resolves typical Avro's nullable schema definition: {@code Union(Schema.Type.NULL, <NonNullType>)},
    * decomposing union and returning the target non-null type
    */
