@@ -1,6 +1,5 @@
 package org.apache.hudi.utilities.sources;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.cloud.pubsub.v1.stub.GrpcSubscriberStub;
 import com.google.cloud.pubsub.v1.stub.SubscriberStub;
 import com.google.cloud.pubsub.v1.stub.SubscriberStubSettings;
@@ -12,6 +11,7 @@ import com.google.pubsub.v1.ReceivedMessage;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
@@ -27,9 +27,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.stream.Collectors;
 
 /*
  * Launch in spark-submit as follows:
@@ -60,9 +57,15 @@ spark.executor.extraClassPath <path_to_maven_repo_dir>/com/google/protobuf/proto
  */
 public class GcsEventsSource extends RowSource {
 
-    private static final Logger LOG = LogManager.getLogger(GcsEventsSource.class);
+    private final String googleProjectId;
+    private final String pubsubSubscriptionId;
 
-    private final int BATCH_SIZE = 100;
+    private SubscriberStubSettings subscriberStubSettings;
+    private final List<String> messagesToAck = new ArrayList<>();
+
+    private static final int BATCH_SIZE = 100;
+
+    private static final Logger LOG = LogManager.getLogger(GcsEventsSource.class);
 
     public GcsEventsSource(
             TypedProperties props,
@@ -70,14 +73,28 @@ public class GcsEventsSource extends RowSource {
             SparkSession sparkSession,
             SchemaProvider schemaProvider) {
         super(props, sparkContext, sparkSession, schemaProvider);
-        LOG.info("Creating GcsEventsSource");
+        try {
+            subscriberStubSettings = SubscriberStubSettings.newBuilder()
+                .setTransportChannelProvider(
+                    SubscriberStubSettings.defaultGrpcTransportProviderBuilder()
+                        .setMaxInboundMessageSize(20 * 1024 * 1024) // 20MB (maximum message size).
+                        .build())
+                .build();
+        } catch (IOException e) {
+            throw new HoodieException("Error creating subscriber stub settings", e);
+        }
+
+        this.googleProjectId = "redacted";
+        this.pubsubSubscriptionId = "redacted";
+
+        LOG.info("Created GcsEventsSource");
     }
 
     @Override
     protected Pair<Option<Dataset<Row>>, String> fetchNextBatch(Option<String> lastCkptStr, long sourceLimit) {
         LOG.info("Fetching next batch");
 
-        Pair<List<String>, String> messagesAndMaxTime = pull2("redacted", "redacted");
+        Pair<List<String>, String> messagesAndMaxTime = fetchMetadata(lastCkptStr);
 
         Dataset<String> eventRecords = sparkSession.createDataset(messagesAndMaxTime.getLeft(), Encoders.STRING());
 
@@ -87,38 +104,33 @@ public class GcsEventsSource extends RowSource {
         );
     }
 
-    public Pair<List<String>, String> pull2(String projectId, String subscriptionId) {
-        SubscriberStubSettings subscriberStubSettings = null;
+    @Override
+    public void onCommit(String lastCkptStr) {
+        LOG.info("GcsEventsSource.onCommit()");
+        ackOutstandingMessages();
+    }
 
+    public Pair<List<String>, String> fetchMetadata(Option<String> lastCheckpoint) {
         try {
-            subscriberStubSettings = SubscriberStubSettings.newBuilder()
-                .setTransportChannelProvider(
-                    SubscriberStubSettings.defaultGrpcTransportProviderBuilder()
-                            .setMaxInboundMessageSize(20 * 1024 * 1024) // 20MB (maximum message size).
-                            .build())
-                .build();
-
             try (SubscriberStub subscriber = GrpcSubscriberStub.create(subscriberStubSettings)) {
-                String subscriptionName = ProjectSubscriptionName.format(projectId, subscriptionId);
-                PullRequest pullRequest =
-                    PullRequest.newBuilder()
-                        .setMaxMessages(BATCH_SIZE)
-                        .setSubscription(subscriptionName)
-                        .build();
+                String subscriptionName = ProjectSubscriptionName.format(googleProjectId, pubsubSubscriptionId);
 
-                // Use pullCallable().futureCall to asynchronously perform this operation.
+                PullRequest pullRequest = PullRequest.newBuilder()
+                    .setMaxMessages(BATCH_SIZE)
+                    .setSubscription(subscriptionName)
+                    .build();
+
+                // TODO: Timeout and retry
                 PullResponse pullResponse = subscriber.pullCallable().call(pullRequest);
 
-                // Stop the program if the pull response is empty to avoid acknowledging
-                // an empty list of ack IDs.
                 List<ReceivedMessage> receivedMessages = pullResponse.getReceivedMessagesList();
 
                 if (receivedMessages.isEmpty()) {
                     System.out.println("No message was pulled. Exiting.");
                     return null;
                 }
-//                ackMessages(subscriber, subscriptionName, receivedMessages);
-                return processMessages(receivedMessages);
+
+                return processMessages(receivedMessages, lastCheckpoint);
             }
         } catch (IOException e) {
             LOG.error("Error", e);
@@ -127,53 +139,39 @@ public class GcsEventsSource extends RowSource {
         return Pair.of(Collections.emptyList(), "0");
     }
 
-    private void ackMessages(SubscriberStub subscriber, String subscriptionName,
-                             List<ReceivedMessage> receivedMessages) {
-            List<String> ackIds = new ArrayList<>();
-            for (ReceivedMessage message : receivedMessages) {
-                ackIds.add(message.getAckId());
-            }
+    private Pair<List<String>, String> processMessages(List<ReceivedMessage> receivedMessages,
+                                                       Option<String> lastCheckpoint) throws IOException {
+        List<String> messages = new ArrayList<>();
 
-            AcknowledgeRequest acknowledgeRequest =
-                AcknowledgeRequest.newBuilder()
-                    .setSubscription(subscriptionName)
-                    .addAllAckIds(ackIds)
-                    .build();
+        for (ReceivedMessage message: receivedMessages) {
+            String msgStr = message.getMessage().getData().toStringUtf8();
+            LOG.info("msg: " + msgStr);
 
-            // Use acknowledgeCallable().futureCall to asynchronously perform this operation.
-            subscriber.acknowledgeCallable().call(acknowledgeRequest);
-    }
-
-    private Pair<List<String>, String> processMessages(List<ReceivedMessage> receivedMessages) throws IOException {
-        List<String> messages = mapToString(receivedMessages);
-        ObjectMapper mapper = new ObjectMapper();
-        List<Map<String, Object>> messageMaps = new ArrayList<>();
-        for (String msg : messages) {
-            LOG.info("msg: " + msg);
-            messageMaps.add((Map<String, Object>) mapper.readValue(msg, Map.class));
+            messages.add(msgStr);
+            messagesToAck.add(message.getAckId());
         }
 
-        String maxTime = new Long(messageMaps.stream().mapToLong(m -> Date.from(Instant.from(
-                DateTimeFormatter.ISO_INSTANT.parse((String) m.get("timeCreated"))))
-                .getTime()).max().orElse(0L)).toString();
+        String maxTime = new Long(receivedMessages.stream().mapToLong(m -> Date.from(Instant.from(
+                DateTimeFormatter.ISO_INSTANT.parse((String) m.getMessage().getAttributesMap().get("eventTime"))))
+                .getTime()).max().orElse(lastCheckpoint.map(Long::parseLong).orElse(0L))).toString();
 
         return Pair.of(messages, maxTime);
     }
 
-    private List<String> mapToString(List<ReceivedMessage> messages) {
-        // TODO: Return iterator instead. But realistically, batch sizes are small so it shouldn't matter
-        List<String> msgTxt = messages
-                .stream()
-                .filter(m -> m.getMessage() != null)
-                .filter(m -> m.getMessage().getData() != null)
-                .map(
-                    m -> {
-                        return m.getMessage().getData().toStringUtf8();
-                    })
-                .filter(Objects::nonNull)
-                .collect(Collectors.toList());
+    private void ackOutstandingMessages() {
+        try (SubscriberStub subscriber = GrpcSubscriberStub.create(subscriberStubSettings)) {
+            String subscriptionName = ProjectSubscriptionName.format(googleProjectId, pubsubSubscriptionId);
 
-        return msgTxt;
+            AcknowledgeRequest acknowledgeRequest = AcknowledgeRequest.newBuilder()
+                .setSubscription(subscriptionName)
+                .addAllAckIds(messagesToAck)
+                .build();
+
+            // TODO: Timeout and retry
+            subscriber.acknowledgeCallable().call(acknowledgeRequest);
+            LOG.info("Acknowledged messages: " + messagesToAck);
+        } catch (IOException e) {
+            throw new HoodieException("Error when acknowledging messages from Pubsub", e);
+        }
     }
-
 }
