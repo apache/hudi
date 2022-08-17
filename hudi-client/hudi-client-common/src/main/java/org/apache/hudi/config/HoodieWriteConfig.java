@@ -1648,6 +1648,18 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getString(HoodieIndexConfig.BUCKET_INDEX_HASH_FIELD);
   }
 
+  public int getNonIndexPartitionFileGroupCacheIntervalMinute() {
+    return getIntOrDefault(HoodieIndexConfig.NON_INDEX_PARTITION_FILE_GROUP_CACHE_INTERVAL_MINUTE);
+  }
+
+  public String getNonIndexPartitionFileGroupStorageType() {
+    return getString(HoodieIndexConfig.NON_INDEX_PARTITION_FILE_GROUP_STORAGE_TYPE);
+  }
+
+  public long getNonIndexPartitionFileGroupCacheSize() {
+    return getLong(HoodieIndexConfig.NON_INDEX_PARTITION_FILE_GROUP_CACHE_SIZE);
+  }
+
   /**
    * storage properties.
    */

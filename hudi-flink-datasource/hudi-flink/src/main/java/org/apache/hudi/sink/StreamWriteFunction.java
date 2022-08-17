@@ -202,7 +202,7 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
    * <p>A {@link HoodieRecord} was firstly transformed into a {@link DataItem}
    * for buffering, it then transforms back to the {@link HoodieRecord} before flushing.
    */
-  private static class DataItem {
+  protected static class DataItem {
     private final String key; // record key
     private final String instant; // 'U' or 'I'
     private final HoodieRecordPayload<?> data; // record payload
@@ -283,7 +283,7 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
    * Tool to detect if to flush out the existing buffer.
    * Sampling the record to compute the size with 0.01 percentage.
    */
-  private static class BufferSizeDetector {
+  protected static class BufferSizeDetector {
     private final Random random = new Random(47);
     private static final int DENOMINATOR = 100;
 
@@ -292,11 +292,11 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
     private long lastRecordSize = -1L;
     private long totalSize = 0L;
 
-    BufferSizeDetector(double batchSizeMb) {
+    public BufferSizeDetector(double batchSizeMb) {
       this.batchSizeBytes = batchSizeMb * 1024 * 1024;
     }
 
-    boolean detect(Object record) {
+    public boolean detect(Object record) {
       if (lastRecordSize == -1 || sampling()) {
         lastRecordSize = ObjectSizeCalculator.getObjectSize(record);
       }
@@ -304,14 +304,28 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
       return totalSize > this.batchSizeBytes;
     }
 
-    boolean sampling() {
+    public boolean detect(long recordSize) {
+      lastRecordSize = recordSize;
+      totalSize += lastRecordSize;
+      return totalSize > this.batchSizeBytes;
+    }
+
+    public boolean sampling() {
       // 0.01 sampling percentage
       return random.nextInt(DENOMINATOR) == 1;
     }
 
-    void reset() {
+    public void reset() {
       this.lastRecordSize = -1L;
       this.totalSize = 0L;
+    }
+
+    public void setTotalSize(long totalSize) {
+      this.totalSize = totalSize;
+    }
+
+    public long getLastRecordSize() {
+      return lastRecordSize;
     }
   }
 
@@ -381,7 +395,7 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
 
     bucket.records.add(item);
 
-    boolean flushBucket = bucket.detector.detect(item);
+    boolean flushBucket = shouldFlushBucket(bucket.detector, item, value.getPartitionPath());
     boolean flushBuffer = this.tracer.trace(bucket.detector.lastRecordSize);
     if (flushBucket) {
       if (flushBucket(bucket)) {
@@ -483,5 +497,9 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
     this.writeStatuses.addAll(writeStatus);
     // blocks flushing until the coordinator starts a new instant
     this.confirming = true;
+  }
+
+  protected boolean shouldFlushBucket(BufferSizeDetector detector, DataItem item, String partitionPath) {
+    return detector.detect(item);
   }
 }

@@ -20,7 +20,13 @@ package org.apache.hudi.sink;
 
 import org.apache.hudi.common.model.EventTimeAvroPayload;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
+import org.apache.hudi.config.HoodieIndexConfig;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.keygen.EmptyAvroKeyGenerator;
 import org.apache.hudi.utils.TestData;
 
 import org.apache.flink.configuration.Configuration;
@@ -139,6 +145,54 @@ public class TestWriteMergeOnRead extends TestWriteCopyOnWrite {
             .checkpointComplete(1)
             .checkWrittenData(EXPECTED1, 4)
             .end();
+  }
+
+  @Test
+  public void testInsertNonIndexOnMemoryMode() throws Exception {
+    testInsertNonIndex("IN_MEMORY");
+  }
+
+  @Test
+  public void testInsertNonIndexOnFileSystemMode() throws Exception {
+    testInsertNonIndex("FILE_SYSTEM");
+  }
+
+  public void testInsertNonIndex(String storageType) throws Exception {
+    // open the function and ingest data
+    conf.setString(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.NON_INDEX.name());
+    conf.setString(FlinkOptions.OPERATION, WriteOperationType.INSERT.name());
+    conf.setString(FlinkOptions.KEYGEN_CLASS_NAME, EmptyAvroKeyGenerator.class.getName());
+    conf.setLong(HoodieIndexConfig.NON_INDEX_PARTITION_FILE_GROUP_CACHE_SIZE.key(), 2000L);
+    conf.setInteger(HoodieIndexConfig.NON_INDEX_PARTITION_FILE_GROUP_CACHE_INTERVAL_MINUTE.key(), 0);
+    conf.setString(HoodieIndexConfig.NON_INDEX_PARTITION_FILE_GROUP_STORAGE_TYPE.key(), storageType);
+    conf.setString(FileSystemViewStorageConfig.VIEW_TYPE.key(), FileSystemViewStorageConfig.VIEW_TYPE.defaultValue().name());
+    conf.setString(HoodieWriteConfig.EMBEDDED_TIMELINE_SERVER_ENABLE.key(),"false");
+
+    TestHarness harness = TestHarness.instance().preparePipeline(tempFile, conf)
+        .consume(TestData.DATA_SET_INSERT_NOM_INDEX)
+        .emptyEventBuffer()
+        .checkpoint(1)
+        .assertPartitionFileGroups("par1", 2)
+        .assertPartitionFileGroups("par2", 1)
+        .assertNextEvent()
+        .checkpointComplete(1)
+        .consume(TestData.DATA_SET_INSERT_NOM_INDEX)
+        .emptyEventBuffer()
+        .checkpoint(2);
+
+    if (storageType.equals("FILE_SYSTEM")) {
+      harness = harness.assertPartitionFileGroups("par2", 1);
+    } else if (storageType.equals("IN_MEMORY")) {
+      harness = harness
+          .assertPartitionFileGroups("par1", 4)
+          .assertPartitionFileGroups("par2", 2);
+    }
+
+    harness
+        .assertNextEvent()
+        .checkpointComplete(2)
+        .checkWrittenData(EXPECTED6, 4)
+        .end();
   }
 
   @Override

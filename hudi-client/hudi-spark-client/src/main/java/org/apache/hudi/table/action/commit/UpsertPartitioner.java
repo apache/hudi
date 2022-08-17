@@ -33,6 +33,7 @@ import org.apache.hudi.common.util.NumericUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.index.nonindex.SparkHoodieNonIndex;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
 import org.apache.hudi.table.WorkloadStat;
@@ -84,6 +85,8 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends SparkHo
 
   protected final HoodieWriteConfig config;
 
+  private int recordCnt;
+
   public UpsertPartitioner(WorkloadProfile profile, HoodieEngineContext context, HoodieTable table,
       HoodieWriteConfig config) {
     super(profile, table);
@@ -106,7 +109,7 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends SparkHo
       WorkloadStat outputWorkloadStats = profile.getOutputPartitionPathStatMap().getOrDefault(partitionStat.getKey(), new WorkloadStat());
       for (Map.Entry<String, Pair<String, Long>> updateLocEntry :
           partitionStat.getValue().getUpdateLocationToCount().entrySet()) {
-        addUpdateBucket(partitionStat.getKey(), updateLocEntry.getKey());
+        addNewBucket(partitionStat.getKey(), updateLocEntry.getKey());
         if (profile.hasOutputWorkLoadStats()) {
           HoodieRecordLocation hoodieRecordLocation = new HoodieRecordLocation(updateLocEntry.getValue().getKey(), updateLocEntry.getKey());
           outputWorkloadStats.addUpdates(hoodieRecordLocation, updateLocEntry.getValue().getValue());
@@ -118,10 +121,16 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends SparkHo
     }
   }
 
-  private int addUpdateBucket(String partitionPath, String fileIdHint) {
+  private int addNewBucket(String partitionPath, String fileIdHint) {
+    BucketInfo bucketInfo;
+    if (table.getIndex() instanceof SparkHoodieNonIndex) {
+      bucketInfo = new BucketInfo(BucketType.APPEND, fileIdHint, partitionPath);
+    } else {
+      bucketInfo = new BucketInfo(BucketType.UPDATE, fileIdHint, partitionPath);
+    }
+
     int bucket = totalBuckets;
     updateLocationToBucket.put(fileIdHint, bucket);
-    BucketInfo bucketInfo = new BucketInfo(BucketType.UPDATE, fileIdHint, partitionPath);
     bucketInfoMap.put(totalBuckets, bucketInfo);
     totalBuckets++;
     return bucket;
@@ -196,7 +205,7 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends SparkHo
               bucket = updateLocationToBucket.get(smallFile.location.getFileId());
               LOG.info("Assigning " + recordsToAppend + " inserts to existing update bucket " + bucket);
             } else {
-              bucket = addUpdateBucket(partitionPath, smallFile.location.getFileId());
+              bucket = addNewBucket(partitionPath, smallFile.location.getFileId());
               LOG.info("Assigning " + recordsToAppend + " inserts to new update bucket " + bucket);
             }
             if (profile.hasOutputWorkLoadStats()) {
@@ -336,12 +345,18 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends SparkHo
     } else {
       String partitionPath = keyLocation._1().getPartitionPath();
       List<InsertBucketCumulativeWeightPair> targetBuckets = partitionPathToInsertBucketInfos.get(partitionPath);
-      // pick the target bucket to use based on the weights.
-      final long totalInserts = Math.max(1, profile.getWorkloadStat(partitionPath).getNumInserts());
-      final long hashOfKey = NumericUtils.getMessageDigestHash("MD5", keyLocation._1().getRecordKey());
-      final double r = 1.0 * Math.floorMod(hashOfKey, totalInserts) / totalInserts;
+      int index;
+      if (keyLocation._1.getRecordKey().equals(HoodieKey.EMPTY_RECORD_KEY)) {
+        // round robing
+        index = (++recordCnt) % targetBuckets.size();
+      } else {
+        // pick the target bucket to use based on the weights.
+        final long totalInserts = Math.max(1, profile.getWorkloadStat(partitionPath).getNumInserts());
+        final long hashOfKey = NumericUtils.getMessageDigestHash("MD5", keyLocation._1().getRecordKey());
+        final double r = 1.0 * Math.floorMod(hashOfKey, totalInserts) / totalInserts;
 
-      int index = Collections.binarySearch(targetBuckets, new InsertBucketCumulativeWeightPair(new InsertBucket(), r));
+        index = Collections.binarySearch(targetBuckets, new InsertBucketCumulativeWeightPair(new InsertBucket(), r));
+      }
 
       if (index >= 0) {
         return targetBuckets.get(index).getKey().bucketNumber;

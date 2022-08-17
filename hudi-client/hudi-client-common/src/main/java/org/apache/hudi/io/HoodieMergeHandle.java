@@ -333,8 +333,9 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
    */
   public void write(GenericRecord oldRecord) {
     String key = KeyGenUtils.getRecordKeyFromGenericRecord(oldRecord, keyGeneratorOpt);
+    boolean isEmptyRecordKey = key.equals(HoodieKey.EMPTY_RECORD_KEY);
     boolean copyOldRecord = true;
-    if (keyToNewRecords.containsKey(key)) {
+    if (!isEmptyRecordKey && keyToNewRecords.containsKey(key)) {
       // If we have duplicate records that we are updating, then the hoodie record will be deflated after
       // writing the first record. So make a copy of the record to be merged
       HoodieRecord<T> hoodieRecord = keyToNewRecords.get(key).newInstance();

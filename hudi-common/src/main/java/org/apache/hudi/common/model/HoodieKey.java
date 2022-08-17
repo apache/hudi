@@ -29,6 +29,8 @@ import java.util.Objects;
  */
 public class HoodieKey implements Serializable {
 
+  public static final String EMPTY_RECORD_KEY = "_hoodie_empty_record_key_";
+
   private String recordKey;
   private String partitionPath;
 

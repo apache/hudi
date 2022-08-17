@@ -51,6 +51,8 @@ public final class FlinkHoodieIndexFactory {
         return new HoodieBloomIndex(config, ListBasedHoodieBloomIndexHelper.getInstance());
       case SIMPLE:
         return new HoodieSimpleIndex(config, Option.empty());
+      case NON_INDEX:
+        return new FlinkHoodieNonIndex(config);
       default:
         throw new HoodieIndexException("Unsupported index type " + config.getIndexType());
     }

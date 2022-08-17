@@ -151,7 +151,10 @@ public class HoodieRowCreateHandle implements Serializable {
       //          and [[String]])
       //          - Repeated computations (for ex, converting file-path to [[UTF8String]] over and
       //          over again)
-      UTF8String recordKey = row.getUTF8String(HoodieRecord.RECORD_KEY_META_FIELD_ORD);
+      UTF8String recordKey = null;
+      if (!row.isNullAt(HoodieRecord.RECORD_KEY_META_FIELD_ORD)) {
+        recordKey = row.getUTF8String(HoodieRecord.RECORD_KEY_META_FIELD_ORD);
+      }
       UTF8String partitionPath = row.getUTF8String(HoodieRecord.PARTITION_PATH_META_FIELD_ORD);
       // This is the only meta-field that is generated dynamically, hence conversion b/w
       // [[String]] and [[UTF8String]] is unavoidable

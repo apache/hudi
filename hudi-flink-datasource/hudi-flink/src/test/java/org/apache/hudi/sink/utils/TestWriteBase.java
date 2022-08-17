@@ -18,12 +18,15 @@
 
 package org.apache.hudi.sink.utils;
 
+import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
@@ -69,6 +72,8 @@ public class TestWriteBase {
 
   protected static final Map<String, List<String>> EXPECTED5 = new HashMap<>();
 
+  protected static final Map<String, String> EXPECTED6 = new HashMap<>();
+
   static {
     EXPECTED1.put("par1", "[id1,par1,id1,Danny,23,1,par1, id2,par1,id2,Stephen,33,2,par1]");
     EXPECTED1.put("par2", "[id3,par2,id3,Julian,53,3,par2, id4,par2,id4,Fabian,31,4,par2]");
@@ -102,6 +107,38 @@ public class TestWriteBase {
         "id1,par1,id1,Danny,23,3,par1",
         "id1,par1,id1,Danny,23,4,par1",
         "id1,par1,id1,Danny,23,4,par1"));
+
+    EXPECTED6.put("par1", "["
+        + "_hoodie_empty_record_key_,par1,id1,Danny,23,1,par1, "
+        + "_hoodie_empty_record_key_,par1,id1,Danny,23,1,par1, "
+        + "_hoodie_empty_record_key_,par1,id2,Stephen,33,2,par1, "
+        + "_hoodie_empty_record_key_,par1,id2,Stephen,33,2,par1, "
+        + "_hoodie_empty_record_key_,par1,id2,Stephen,33,2,par1, "
+        + "_hoodie_empty_record_key_,par1,id2,Stephen,33,2,par1, "
+        + "_hoodie_empty_record_key_,par1,id2,Stephen,33,2,par1, "
+        + "_hoodie_empty_record_key_,par1,id2,Stephen,33,2,par1, "
+        + "_hoodie_empty_record_key_,par1,id2,Stephen,33,2,par1, "
+        + "_hoodie_empty_record_key_,par1,id2,Stephen,33,2,par1, "
+        + "_hoodie_empty_record_key_,par1,id2,Stephen,33,2,par1, "
+        + "_hoodie_empty_record_key_,par1,id2,Stephen,33,2,par1, "
+        + "_hoodie_empty_record_key_,par1,id2,Stephen,33,2,par1, "
+        + "_hoodie_empty_record_key_,par1,id2,Stephen,33,2,par1, "
+        + "_hoodie_empty_record_key_,par1,id2,Stephen,33,2,par1, "
+        + "_hoodie_empty_record_key_,par1,id2,Stephen,33,2,par1, "
+        + "_hoodie_empty_record_key_,par1,id2,Stephen,33,2,par1, "
+        + "_hoodie_empty_record_key_,par1,id2,Stephen,33,2,par1]");
+
+    EXPECTED6.put("par2", "["
+        + "_hoodie_empty_record_key_,par2,id3,Julian,53,3,par2, "
+        + "_hoodie_empty_record_key_,par2,id3,Julian,53,3,par2]");
+
+    EXPECTED6.put("par3", "["
+        + "_hoodie_empty_record_key_,par3,id5,Sophia,18,5,par3, "
+        + "_hoodie_empty_record_key_,par3,id5,Sophia,18,5,par3]");
+
+    EXPECTED6.put("par4", "["
+        + "_hoodie_empty_record_key_,par4,id7,Bob,44,7,par4, "
+        + "_hoodie_empty_record_key_,par4,id7,Bob,44,7,par4]");
   }
 
   // -------------------------------------------------------------------------
@@ -221,6 +258,17 @@ public class TestWriteBase {
       assertThat(numRecords + " records expect to flush out as a mini-batch",
           dataBuffer.values().stream().findFirst().map(List::size).orElse(-1),
           is(numRecords));
+      return this;
+    }
+
+    public TestHarness assertPartitionFileGroups(String partitionPath, int numFileGroups) {
+      HoodieFlinkWriteClient writeClient = this.pipeline.getWriteClient();
+      SyncableFileSystemView fileSystemView = writeClient.getHoodieTable().getHoodieView();
+      fileSystemView.sync();
+      //check part1
+      List<HoodieFileGroup> fileGroups = fileSystemView.getAllFileGroups(partitionPath).collect(
+          Collectors.toList());
+      assertEquals(numFileGroups, fileGroups.size());
       return this;
     }
 
