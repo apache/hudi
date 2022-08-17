@@ -19,17 +19,17 @@ package org.apache.hudi.functional
 
 import org.apache.hadoop.fs.FileSystem
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
-import org.apache.hudi.common.model.HoodieRecord
+import org.apache.hudi.common.model.{HoodieRecord, HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.exception.{HoodieUpsertException, SchemaCompatibilityException}
+import org.apache.hudi.exception.SchemaCompatibilityException
 import org.apache.hudi.functional.TestBasicSchemaEvolution.{dropColumn, injectColumnAt}
 import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.hudi.util.JFunction
 import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, ScalaAssertionSupport}
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
-import org.apache.spark.sql.types.{DateType, IntegerType, StringType, StructField, StructType}
+import org.apache.spark.sql.types.{IntegerType, StringType, StructField, StructType}
 import org.apache.spark.sql.{HoodieUnsafeUtils, Row, SaveMode, SparkSession, SparkSessionExtensions, functions}
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
@@ -64,7 +64,7 @@ class TestBasicSchemaEvolution extends HoodieClientTestBase with ScalaAssertionS
         JFunction.toJava((receiver: SparkSessionExtensions) => new HoodieSparkSessionExtension().apply(receiver)))
     )
 
-  @BeforeEach override def setUp() {
+  @BeforeEach override def setUp(): Unit = {
     initPath()
     initSparkContexts()
     spark = sqlContext.sparkSession
@@ -72,7 +72,7 @@ class TestBasicSchemaEvolution extends HoodieClientTestBase with ScalaAssertionS
     initFileSystem()
   }
 
-  @AfterEach override def tearDown() = {
+  @AfterEach override def tearDown(): Unit = {
     cleanupSparkContexts()
     cleanupTestDataGenerator()
     cleanupFileSystem()
@@ -82,17 +82,26 @@ class TestBasicSchemaEvolution extends HoodieClientTestBase with ScalaAssertionS
 
   @ParameterizedTest
   @CsvSource(value = Array(
-    "bulk_insert,true",
-    "bulk_insert,false",
-    "insert,true",
-    "insert,false",
-    "upsert,true",
-    "upsert,false"
+    // COW
+    "COPY_ON_WRITE,bulk_insert,true",
+    "COPY_ON_WRITE,bulk_insert,false",
+    "COPY_ON_WRITE,insert,true",
+    "COPY_ON_WRITE,insert,false",
+    "COPY_ON_WRITE,upsert,true",
+    "COPY_ON_WRITE,upsert,false",
+    // MOR
+    "MERGE_ON_READ,bulk_insert,true",
+    "MERGE_ON_READ,bulk_insert,false",
+    "MERGE_ON_READ,insert,true",
+    "MERGE_ON_READ,insert,false",
+    "MERGE_ON_READ,upsert,true",
+    "MERGE_ON_READ,upsert,false"
   ))
-  def testBasicSchemaEvolution(opType: String, shouldReconcileSchema: Boolean): Unit = {
+  def testBasicSchemaEvolution(tableType: HoodieTableType, opType: String, shouldReconcileSchema: Boolean): Unit = {
     // open the schema validate
     val opts = commonOpts ++
       Map(
+        DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name,
         HoodieWriteConfig.AVRO_SCHEMA_VALIDATE_ENABLE.key -> "true",
         DataSourceWriteOptions.RECONCILE_SCHEMA.key -> shouldReconcileSchema.toString,
         DataSourceWriteOptions.OPERATION.key -> opType
@@ -299,6 +308,8 @@ class TestBasicSchemaEvolution extends HoodieClientTestBase with ScalaAssertionS
     assertThrows(classOf[SchemaCompatibilityException]) {
       appendData(fifthSchema, fifthBatch)
     }
+
+    // TODO add test w/ overlapping updates
   }
 }
 
