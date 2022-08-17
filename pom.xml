@@ -97,7 +97,7 @@
     <fasterxml.spark3.version>2.10.0</fasterxml.spark3.version>
     <kafka.version>2.0.0</kafka.version>
     <kafka.spark3.version>2.4.1</kafka.spark3.version>
-    <pulsar.version>2.10.1</pulsar.version>
+    <pulsar.version>2.8.1</pulsar.version>
     <pulsar.spark.version>${pulsar.spark.scala11.version}</pulsar.spark.version>
     <pulsar.spark.scala11.version>2.4.5</pulsar.spark.scala11.version>
     <pulsar.spark.scala12.version>3.1.1.4</pulsar.spark.scala12.version>
