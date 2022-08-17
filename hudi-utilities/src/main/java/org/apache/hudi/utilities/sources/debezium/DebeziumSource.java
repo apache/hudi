@@ -239,13 +239,5 @@ public abstract class DebeziumSource extends RowSource {
 
     return dataset;
   }
-
-  @Override
-  public void onCommit(String lastCkptStr) {
-    if (this.props.getBoolean(KafkaOffsetGen.Config.ENABLE_KAFKA_COMMIT_OFFSET.key(),
-        KafkaOffsetGen.Config.ENABLE_KAFKA_COMMIT_OFFSET.defaultValue())) {
-      offsetGen.commitOffsetToKafka(lastCkptStr);
-    }
-  }
 }
 

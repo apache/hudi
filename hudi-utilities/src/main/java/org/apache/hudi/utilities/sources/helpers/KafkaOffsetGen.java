@@ -110,13 +110,11 @@ public class KafkaOffsetGen {
       Comparator<OffsetRange> byPartition = Comparator.comparing(OffsetRange::partition);
 
       // Create initial offset ranges for each 'to' partition, with from = to offsets.
-      OffsetRange[] ranges = toOffsetMap.keySet().stream().map(tp -> {
+      OffsetRange[] ranges = new OffsetRange[toOffsetMap.size()];
+      toOffsetMap.keySet().stream().map(tp -> {
         long fromOffset = fromOffsetMap.getOrDefault(tp, 0L);
         return OffsetRange.create(tp, fromOffset, fromOffset);
-      })
-          .sorted(byPartition)
-          .collect(Collectors.toList())
-          .toArray(new OffsetRange[toOffsetMap.size()]);
+      }).sorted(byPartition).collect(Collectors.toList()).toArray(ranges);
 
       long allocedEvents = 0;
       Set<Integer> exhaustedPartitions = new HashSet<>();
@@ -292,7 +290,6 @@ public class KafkaOffsetGen {
       numEvents = sourceLimit;
     }
 
-    // TODO(HUDI-4625) remove
     if (numEvents < toOffsets.size()) {
       throw new HoodieException("sourceLimit should not be less than the number of kafka partitions");
     }
@@ -312,7 +309,6 @@ public class KafkaOffsetGen {
 
     List<PartitionInfo> partitionInfos;
     do {
-      // TODO(HUDI-4625) cleanup, introduce retrying client
       partitionInfos = consumer.partitionsFor(topicName);
       try {
         TimeUnit.SECONDS.sleep(10);
