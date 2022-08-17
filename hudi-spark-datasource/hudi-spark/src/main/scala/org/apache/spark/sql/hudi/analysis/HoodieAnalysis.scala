@@ -160,50 +160,54 @@ case class HoodieAnalysis(sparkSession: SparkSession) extends Rule[LogicalPlan]
         }
 
       // Convert to UpdateHoodieTableCommand
-      case u @ UpdateTable(table, _, _)
-        if sparkAdapter.resolvesToHoodieTable(table, sparkSession) =>
-          UpdateHoodieTableCommand(u)
+      case ut @ UpdateTable(table, _, _)
+        if sparkAdapter.resolvesToHoodieTable(table, sparkSession) && ut.resolved =>
+          UpdateHoodieTableCommand(ut)
 
       // Convert to DeleteHoodieTableCommand
-      case d @ DeleteFromTable(table, _)
-        if sparkAdapter.resolvesToHoodieTable(table, sparkSession) =>
-          DeleteHoodieTableCommand(d)
+      case dft @ DeleteFromTable(table, _)
+        if sparkAdapter.resolvesToHoodieTable(table, sparkSession) && dft.resolved =>
+          DeleteHoodieTableCommand(dft)
 
       // Convert to InsertIntoHoodieTableCommand
-      case l if sparkAdapter.getCatalystPlanUtils.isInsertInto(l) =>
-        val (table, partition, query, overwrite, _) = sparkAdapter.getCatalystPlanUtils.getInsertIntoChildren(l).get
+      case iis if sparkAdapter.getCatalystPlanUtils.isInsertInto(iis) && iis.childrenResolved =>
+        val (table, partition, query, overwrite, _) = sparkAdapter.getCatalystPlanUtils.getInsertIntoChildren(iis).get
         table match {
           case relation: LogicalRelation if sparkAdapter.resolvesToHoodieTable(relation, sparkSession) =>
             new InsertIntoHoodieTableCommand(relation, query, partition, overwrite)
           case _ =>
-            l
+            iis
         }
 
       // Convert to CreateHoodieTableAsSelectCommand
-      case CreateTable(table, mode, Some(query))
-        if query.resolved && sparkAdapter.isHoodieTable(table) =>
-          CreateHoodieTableAsSelectCommand(table, mode, query)
+      case ct @ CreateTable(catalogTable, mode, Some(query))
+        if sparkAdapter.isHoodieTable(catalogTable) && ct.query.forall(_.resolved) =>
+          CreateHoodieTableAsSelectCommand(catalogTable, mode, query)
 
       // Convert to CompactionHoodieTableCommand
-      case CompactionTable(table, operation, options)
-        if sparkAdapter.resolvesToHoodieTable(table, sparkSession) =>
+      case ct @ CompactionTable(table, operation, options)
+        if sparkAdapter.resolvesToHoodieTable(table, sparkSession) && ct.resolved =>
         val tableId = getTableIdentifier(table)
         val catalogTable = sparkSession.sessionState.catalog.getTableMetadata(tableId)
         CompactionHoodieTableCommand(catalogTable, operation, options)
+
       // Convert to CompactionHoodiePathCommand
-      case CompactionPath(path, operation, options) =>
+      case cp @ CompactionPath(path, operation, options) if cp.resolved =>
         CompactionHoodiePathCommand(path, operation, options)
+
       // Convert to CompactionShowOnTable
-      case CompactionShowOnTable(table, limit)
-        if sparkAdapter.resolvesToHoodieTable(table, sparkSession) =>
+      case csot @ CompactionShowOnTable(table, limit)
+        if sparkAdapter.resolvesToHoodieTable(table, sparkSession) && csot.resolved =>
         val tableId = getTableIdentifier(table)
         val catalogTable = sparkSession.sessionState.catalog.getTableMetadata(tableId)
         CompactionShowHoodieTableCommand(catalogTable, limit)
+
       // Convert to CompactionShowHoodiePathCommand
-      case CompactionShowOnPath(path, limit) =>
+      case csop @ CompactionShowOnPath(path, limit) if csop.resolved =>
         CompactionShowHoodiePathCommand(path, limit)
+
       // Convert to HoodieCallProcedureCommand
-      case c@CallCommand(_, _) =>
+      case c @ CallCommand(_, _) =>
         val procedure: Option[Procedure] = loadProcedure(c.name)
         val input = buildProcedureArgs(c.args)
         if (procedure.nonEmpty) {
@@ -213,24 +217,24 @@ case class HoodieAnalysis(sparkSession: SparkSession) extends Rule[LogicalPlan]
         }
 
       // Convert to CreateIndexCommand
-      case CreateIndex(table, indexName, indexType, ignoreIfExists, columns, options, output)
-        if sparkAdapter.resolvesToHoodieTable(table, sparkSession) =>
+      case ci @ CreateIndex(table, indexName, indexType, ignoreIfExists, columns, options, output)
+        if sparkAdapter.resolvesToHoodieTable(table, sparkSession) && ci.resolved =>
         CreateIndexCommand(
           getTableIdentifier(table), indexName, indexType, ignoreIfExists, columns, options, output)
 
       // Convert to DropIndexCommand
-      case DropIndex(table, indexName, ignoreIfNotExists, output)
-        if sparkAdapter.resolvesToHoodieTable(table, sparkSession) =>
+      case di @ DropIndex(table, indexName, ignoreIfNotExists, output)
+        if sparkAdapter.resolvesToHoodieTable(table, sparkSession) && di.resolved =>
         DropIndexCommand(getTableIdentifier(table), indexName, ignoreIfNotExists, output)
 
       // Convert to ShowIndexesCommand
-      case ShowIndexes(table, output)
-        if sparkAdapter.resolvesToHoodieTable(table, sparkSession) =>
+      case si @ ShowIndexes(table, output)
+        if sparkAdapter.resolvesToHoodieTable(table, sparkSession) && si.resolved =>
         ShowIndexesCommand(getTableIdentifier(table), output)
 
       // Covert to RefreshCommand
-      case RefreshIndex(table, indexName, output)
-        if sparkAdapter.resolvesToHoodieTable(table, sparkSession) =>
+      case ri @ RefreshIndex(table, indexName, output)
+        if sparkAdapter.resolvesToHoodieTable(table, sparkSession) && ri.resolved =>
         RefreshIndexCommand(getTableIdentifier(table), indexName, output)
 
       case _ => plan
