@@ -27,9 +27,9 @@ However, if this feature is enabled, restore cannot be supported. This limitatio
 and the development of this feature can be tracked in [HUDI-4500](https://issues.apache.org/jira/browse/HUDI-4500).
 :::
 
-### Post Write Termination Strategy with Deltastreamer
+### Deltastreamer Termination Strategy
 
-Users can now configure a post write termination strategy with deltastreamer `continuous` mode if need be. For instance,
+Users can now configure a post-write termination strategy with deltastreamer `continuous` mode if need be. For instance,
 users can configure graceful shutdown if there is no new data from source for 5 consecutive times. Here is the interface
 for the termination strategy.
 ```java
@@ -54,6 +54,29 @@ terminate, once all data has been bootstrapped. This way, each batch could be sm
 to bootstrap data. We have one concrete implementation out of the box, [NoNewDataTerminationStrategy](https://github.com/apache/hudi/blob/0d0a4152cfd362185066519ae926ac4513c7a152/hudi-utilities/src/main/java/org/apache/hudi/utilities/deltastreamer/NoNewDataTerminationStrategy.java).
 Users can feel free to implement their own strategy as they see fit.
 
+### Spark 3.3 Support
+
+Spark 3.3 support is added; users who are on Spark 3.3 can use `hudi-spark3.3-bundle` or `hudi-spark3-bundle`. Spark 3.2,
+Spark 3.1 and Spark 2.4 will continue to be supported. Please check the migration guide for [bundle updates](#bundle-updates).
+
+### Spark SQL Support Improvements
+
+- Support for upgrade, downgrade, bootstrap, clean, rollback and repair through `Call Procedure` command.
+- Support for `analyze table`.
+- Support for `Create/Drop/Show/Refresh Index` syntax through Spark SQL.
+
+### Flink 1.15 Support
+
+Flink 1.15.x is integrated with Hudi, use profile param `-Pflink1.15` when compiling the codes to adapt the version. 
+Alternatively, use `hudi-flink1.15-bundle`. Flink 1.14 and Flink 1.13 will continue to be supported. Please check the 
+migration guide for [bundle updates](#bundle-updates).
+
+### Flink Integration Improvements
+
+- **Data skipping** is supported for batch mode read, set up SQL option `metadata.enabled`, `hoodie.metadata.index.column.stats.enable`  and `read.data.skipping.enabled` as true to enable it.
+- A **HMS-based Flink catalog** is added with catalog identifier as `hudi`. You can instantiate the catalog through API directly or use the `CREATE CATALOG`  syntax to create it. Specifies catalog option `'mode' = 'hms'`  to switch to the HMS catalog. By default, the catalog is in `dfs` mode.
+- **Async clustering** is supported for Flink `INSERT` operation, set up SQL option `clustering.schedule.enabled` and `clustering.async.enabled` as true to enable it. When enabling this feature, a clustering sub-pipeline is scheduled asynchronously continuously to merge the small files continuously into larger ones.
+
 ### Performance Improvements
 
 This version brings more improvements to make Hudi the most performant lake storage format. Some notable improvements are:
@@ -65,19 +88,6 @@ This version brings more improvements to make Hudi the most performant lake stor
 We recently benchmarked Hudi against TPC-DS workload.
 Please check out [our blog](/blog/2022/06/29/Apache-Hudi-vs-Delta-Lake-transparent-tpc-ds-lakehouse-performance-benchmarks) for more details.
 
-### SQL Support Improvements
-
-- Support for upgrade, downgrade, bootstrap, clean, rollback and repair through `Call Procedure` command.
-- Support for `analyze table`.
-- Support for `Create/Drop/Show/Refresh Index` syntax through Spark SQL.
-
-### Flink Integration Improvements
-
-- Flink 1.15.x is integrated, use profile param `-Pflink1.15` when compiling the codes to adapt the version. Alternatively, use `hudi-flink1.15-bundle`.
-- Data skipping is supported for batch mode read, set up SQL option `metadata.enabled`, `hoodie.metadata.index.column.stats.enable`  and `read.data.skipping.enabled` as true to enable it.
-- A HMS-based Flink catalog is added with catalog identifier as `hudi`. You can instantiate the catalog through API directly or use the `CREATE CATALOG`  syntax to create it. Specifies catalog option `'mode' = 'hms'`  to switch to the HMS catalog. By default, the catalog is in `dfs` mode.
-- Async clustering is supported for Flink `INSERT` operation, set up SQL option `clustering.schedule.enabled` and `clustering.async.enabled` as true to enable it. When enabling this feature, a clustering sub-pipeline is scheduled asynchronously continuously to merge the small files continuously into larger ones.
-
 ### Migration Guide
 
 #### Bundle Updates
@@ -88,14 +98,16 @@ Please check out [our blog](/blog/2022/06/29/Apache-Hudi-vs-Delta-Lake-transpare
 - Spark 3.1 will continue to be supported via `hudi-spark3.1-bundle`.
 - Spark 2.4 will continue to be supported via `hudi-spark2.4-bundle` or `hudi-spark-bundle` (legacy bundle name).
 - Flink 1.15 support is added; users who are on Flink 1.15 can use `hudi-flink1.15-bundle`.
+- Flink 1.14 will continue to be supported via `hudi-flink1.14-bundle`.
+- Flink 1.13 will continue to be supported via `hudi-flink1.13-bundle`.
 
 #### Configuration Updates
 
 In this release, the default value for a few configurations have been changed. They are as follows:
 
-- `hoodie.datasource.hive_sync.partition_value_extractor`: This config is used to extract and transform partition value during Hive sync. Its default value has been changed from `SlashEncodedDayPartitionValueExtractor` to `MultiPartKeysValueExtractor`. If you relied on the previous default value (i.e., have not set it explicitly), you are required to set the config to `org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor`. From this release, if this config is not set and Hive sync is enabled, then partition value extractor class will be **automatically inferred** on the basis of number of partition fields and whether or not hive style partitioning is enabled.
 - `hoodie.bulkinsert.sort.mode`: This config is used to determine mode for sorting records for bulk insert. Its default value has been changed from `GLOBAL_SORT` to `NONE`, which means no sorting is done and it matches `spark.write.parquet()` in terms of overhead.
-- The following configs will be inferred from other configs' values:
+- `hoodie.datasource.hive_sync.partition_value_extractor`: This config is used to extract and transform partition value during Hive sync. Its default value has been changed from `SlashEncodedDayPartitionValueExtractor` to `MultiPartKeysValueExtractor`. If you relied on the previous default value (i.e., have not set it explicitly), you are required to set the config to `org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor`. From this release, if this config is not set and Hive sync is enabled, then partition value extractor class will be **automatically inferred** on the basis of number of partition fields and whether or not hive style partitioning is enabled.
+- The following configs will be inferred, if not set manually, from other configs' values:
   - `META_SYNC_BASE_FILE_FORMAT`: infer from `org.apache.hudi.common.table.HoodieTableConfig.BASE_FILE_FORMAT`
 
   - `META_SYNC_ASSUME_DATE_PARTITION`: infer from `org.apache.hudi.common.config.HoodieMetadataConfig.ASSUME_DATE_PARTITIONING`
