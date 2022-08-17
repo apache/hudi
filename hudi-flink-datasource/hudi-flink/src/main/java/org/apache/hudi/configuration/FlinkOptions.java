@@ -22,13 +22,13 @@ import org.apache.hudi.client.clustering.plan.strategy.FlinkSizeBasedClusteringP
 import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.model.EventTimeAvroPayload;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
+import org.apache.hudi.hive.MultiPartKeysValueExtractor;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
@@ -287,7 +287,7 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<String> PAYLOAD_CLASS_NAME = ConfigOptions
       .key("write.payload.class")
       .stringType()
-      .defaultValue(OverwriteWithLatestAvroPayload.class.getName())
+      .defaultValue(EventTimeAvroPayload.class.getName())
       .withDescription("Payload class used. Override this, if you like to roll your own merge logic, when upserting/inserting.\n"
           + "This will render any value set for the option in-effective");
 
@@ -718,7 +718,7 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<String> HIVE_SYNC_MODE = ConfigOptions
       .key("hive_sync.mode")
       .stringType()
-      .defaultValue("jdbc")
+      .defaultValue("hms")
       .withDescription("Mode to choose for Hive ops. Valid values are hms, jdbc and hiveql, default 'jdbc'");
 
   public static final ConfigOption<String> HIVE_SYNC_USERNAME = ConfigOptions
@@ -754,7 +754,7 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<String> HIVE_SYNC_PARTITION_EXTRACTOR_CLASS_NAME = ConfigOptions
       .key("hive_sync.partition_extractor_class")
       .stringType()
-      .defaultValue(SlashEncodedDayPartitionValueExtractor.class.getCanonicalName())
+      .defaultValue(MultiPartKeysValueExtractor.class.getName())
       .withDescription("Tool to extract the partition value from HDFS path, "
           + "default 'SlashEncodedDayPartitionValueExtractor'");
 
