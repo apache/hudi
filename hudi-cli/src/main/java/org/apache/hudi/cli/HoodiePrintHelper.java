@@ -58,30 +58,76 @@ public class HoodiePrintHelper {
    * @param rows List of rows
    * @return Serialized form for printing
    */
-  public static String print(TableHeader rowHeader, Map<String, Function<Object, String>> fieldNameToConverterMap,
+  public static String print(
+      TableHeader rowHeader, Map<String, Function<Object, String>> fieldNameToConverterMap,
       String sortByField, boolean isDescending, Integer limit, boolean headerOnly, List<Comparable[]> rows) {
-    return print(rowHeader, fieldNameToConverterMap, sortByField, isDescending, limit, headerOnly, rows, "");
+    return print(rowHeader, fieldNameToConverterMap, false, sortByField, isDescending, limit, headerOnly, rows);
+  }
+
+  /**
+   * Serialize Table to printable string.
+   *
+   * @param rowHeader               Row Header
+   * @param fieldNameToConverterMap Field Specific Converters
+   * @param withRowNo               Whether to add row number
+   * @param sortByField             Sorting field
+   * @param isDescending            Order
+   * @param limit                   Limit
+   * @param headerOnly              Headers only
+   * @param rows                    List of rows
+   * @return Serialized form for printing
+   */
+  public static String print(
+      TableHeader rowHeader, Map<String, Function<Object, String>> fieldNameToConverterMap, boolean withRowNo,
+      String sortByField, boolean isDescending, Integer limit, boolean headerOnly, List<Comparable[]> rows) {
+    return print(rowHeader, fieldNameToConverterMap, withRowNo, sortByField, isDescending, limit, headerOnly, rows, "");
   }
 
   /**
    * Serialize Table to printable string and also export a temporary view to easily write sql queries.
-   *
+   * <p>
    * Ideally, exporting view needs to be outside PrintHelper, but all commands use this. So this is easy
    * way to add support for all commands
    *
-   * @param rowHeader Row Header
+   * @param rowHeader               Row Header
    * @param fieldNameToConverterMap Field Specific Converters
-   * @param sortByField Sorting field
-   * @param isDescending Order
-   * @param limit Limit
-   * @param headerOnly Headers only
-   * @param rows List of rows
-   * @param tempTableName table name to export
+   * @param sortByField             Sorting field
+   * @param isDescending            Order
+   * @param limit                   Limit
+   * @param headerOnly              Headers only
+   * @param rows                    List of rows
+   * @param tempTableName           table name to export
    * @return Serialized form for printing
    */
-  public static String print(TableHeader rowHeader, Map<String, Function<Object, String>> fieldNameToConverterMap,
-      String sortByField, boolean isDescending, Integer limit, boolean headerOnly, List<Comparable[]> rows,
-      String tempTableName) {
+  public static String print(
+      TableHeader rowHeader, Map<String, Function<Object, String>> fieldNameToConverterMap,
+      String sortByField, boolean isDescending, Integer limit, boolean headerOnly,
+      List<Comparable[]> rows, String tempTableName) {
+    return print(rowHeader, fieldNameToConverterMap, false, sortByField, isDescending, limit,
+        headerOnly, rows, tempTableName);
+  }
+
+  /**
+   * Serialize Table to printable string and also export a temporary view to easily write sql queries.
+   * <p>
+   * Ideally, exporting view needs to be outside PrintHelper, but all commands use this. So this is easy
+   * way to add support for all commands
+   *
+   * @param rowHeader               Row Header
+   * @param fieldNameToConverterMap Field Specific Converters
+   * @param withRowNo               Whether to add row number
+   * @param sortByField             Sorting field
+   * @param isDescending            Order
+   * @param limit                   Limit
+   * @param headerOnly              Headers only
+   * @param rows                    List of rows
+   * @param tempTableName           table name to export
+   * @return Serialized form for printing
+   */
+  public static String print(
+      TableHeader rowHeader, Map<String, Function<Object, String>> fieldNameToConverterMap,
+      boolean withRowNo, String sortByField, boolean isDescending, Integer limit, boolean headerOnly,
+      List<Comparable[]> rows, String tempTableName) {
 
     if (headerOnly) {
       return HoodiePrintHelper.print(rowHeader);
@@ -97,7 +143,8 @@ public class HoodiePrintHelper {
     }
 
     Table table =
-        new Table(rowHeader, fieldNameToConverterMap, Option.ofNullable(sortByField.isEmpty() ? null : sortByField),
+        new Table(rowHeader, fieldNameToConverterMap, withRowNo,
+            Option.ofNullable(sortByField.isEmpty() ? null : sortByField),
             Option.ofNullable(isDescending), Option.ofNullable(limit <= 0 ? null : limit)).addAllRows(rows).flip();
 
     return HoodiePrintHelper.print(table);
