@@ -116,6 +116,9 @@ object HoodieAnalysis {
     rules
   }
 
+  private[sql] def failAnalysis(msg: String): Nothing = {
+    throw new AnalysisException(msg)
+  }
 }
 
 /**
@@ -133,21 +136,14 @@ case class HoodieAnalysis(sparkSession: SparkSession) extends Rule[LogicalPlan]
         if (mit.resolved) {
           MergeIntoHoodieTableCommand(mit)
         } else {
-          // TODO relocate, abstract
-          val reshapedSource = if (mit.sourceTable.output.exists(attr => isMetaField(attr.name))) {
-            val sourceOutputSet = mit.sourceTable.output
-            val filteredSourceOutputSet = sourceOutputSet.filterNot(attr => isMetaField(attr.name))
-            Project(filteredSourceOutputSet, mit.sourceTable)
-          } else {
-            mit.sourceTable
-          }
-
+          // TODO elaborate
+          // TODO relocate?
           val reshapedTarget = if (mit.targetTable.output.exists(attr => isMetaField(attr.name))) {
             val targetOutputSet = mit.targetTable.output
             val filteredTargetOutputSet = targetOutputSet.filterNot(attr => isMetaField(attr.name))
 
             mit.targetTable match {
-              case sa@SubqueryAlias(_, UnfoldSubqueryAlias(lr: LogicalRelation)) =>
+              case sa @ SubqueryAlias(_, UnfoldSubqueryAlias(lr: LogicalRelation)) =>
                 sa.copy(child = lr.copy(output = filteredTargetOutputSet.map(_.asInstanceOf[AttributeReference])))
               case lr: LogicalRelation => lr.copy(output =
                 filteredTargetOutputSet.map(_.asInstanceOf[AttributeReference]))
@@ -156,7 +152,7 @@ case class HoodieAnalysis(sparkSession: SparkSession) extends Rule[LogicalPlan]
             mit.targetTable
           }
 
-          mit.copy(targetTable = reshapedTarget, sourceTable = reshapedSource)
+          mit.copy(targetTable = reshapedTarget)
         }
 
       // Convert to UpdateHoodieTableCommand

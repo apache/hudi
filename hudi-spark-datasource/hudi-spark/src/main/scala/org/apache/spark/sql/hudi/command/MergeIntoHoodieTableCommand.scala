@@ -31,13 +31,12 @@ import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, HoodieSparkSqlWriter, SparkAdapterSupport}
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.MatchCast
 import org.apache.spark.sql._
-import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, BoundReference, Cast, EqualTo, Expression, Literal}
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
-import org.apache.spark.sql.hudi.HoodieSqlUtils.getMergeIntoTargetTableId
+import org.apache.spark.sql.hudi.analysis.HoodieAnalysis.failAnalysis
 import org.apache.spark.sql.hudi.command.MergeIntoHoodieTableCommand.CoercedAttributeReference
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload._
@@ -70,11 +69,6 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
   private var sparkSession: SparkSession = _
 
   /**
-    * The target table identify.
-    */
-  private lazy val targetTableIdentify: TableIdentifier = getMergeIntoTargetTableId(mergeInto)
-
-  /**
    * The target table schema without hoodie meta fields.
    */
   private var sourceDFOutput = mergeInto.sourceTable.output.filter(attr => !isMetaField(attr.name))
@@ -85,7 +79,11 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
   private lazy val targetTableSchemaWithoutMetaFields =
     removeMetaFields(mergeInto.targetTable.schema).fields
 
-  private lazy val hoodieCatalogTable = HoodieCatalogTable(sparkSession, targetTableIdentify)
+  private lazy val hoodieCatalogTable = sparkAdapter.resolveHoodieTable(mergeInto.targetTable) match {
+    case Some(catalogTable) => HoodieCatalogTable(sparkSession, catalogTable)
+    case _ =>
+      failAnalysis(s"Failed to resolve MERGE INTO statement into the Hudi table. Got instead: ${mergeInto.targetTable}")
+  }
 
   private lazy val targetTableType = hoodieCatalogTable.tableTypeName
 
@@ -192,7 +190,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     val parametersWithAvroRecordMerger = parameters ++ Map(HoodieWriteConfig.MERGER_IMPLS.key -> classOf[HoodieAvroRecordMerger].getName)
     executeUpsert(sourceDF, parametersWithAvroRecordMerger)
 
-    sparkSession.catalog.refreshTable(targetTableIdentify.unquotedString)
+    sparkSession.catalog.refreshTable(hoodieCatalogTable.table.qualifiedName)
     Seq.empty[Row]
   }
 
@@ -391,7 +389,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
 
   private def getTableSchema: Schema = {
     val (structName, nameSpace) = AvroConversionUtils
-      .getAvroRecordNameAndNamespace(targetTableIdentify.identifier)
+      .getAvroRecordNameAndNamespace(hoodieCatalogTable.tableName)
     AvroConversionUtils.convertStructTypeToAvroSchema(
       new StructType(targetTableSchemaWithoutMetaFields), structName, nameSpace)
   }
@@ -487,9 +485,9 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
    * Create the config for hoodie writer.
    */
   private def buildMergeIntoConfig(hoodieCatalogTable: HoodieCatalogTable): Map[String, String] = {
-
-    val targetTableDb = targetTableIdentify.database.getOrElse("default")
-    val targetTableName = targetTableIdentify.identifier
+    val tableId = hoodieCatalogTable.table.identifier
+    val targetTableDb = tableId.database.getOrElse("default")
+    val targetTableName = tableId.identifier
     val path = hoodieCatalogTable.tableLocation
     // force to use ExpressionPayload as WRITE_PAYLOAD_CLASS_NAME in MergeIntoHoodieTableCommand
     val catalogProperties = hoodieCatalogTable.catalogProperties + (PAYLOAD_CLASS_NAME.key -> classOf[ExpressionPayload].getCanonicalName)

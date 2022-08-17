@@ -18,23 +18,9 @@
 package org.apache.spark.sql.hudi
 
 import org.apache.hudi.SparkAdapterSupport
-import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.expressions.{And, Expression}
-import org.apache.spark.sql.catalyst.plans.logical.{MergeIntoTable, SubqueryAlias}
 
 object HoodieSqlUtils extends SparkAdapterSupport {
-
-  /**
-   * Get the TableIdentifier of the target table in MergeInto.
-   */
-  def getMergeIntoTargetTableId(mergeInto: MergeIntoTable): TableIdentifier = {
-    val aliaId = mergeInto.targetTable match {
-      case SubqueryAlias(_, SubqueryAlias(tableId, _)) => tableId
-      case SubqueryAlias(tableId, _) => tableId
-      case plan => throw new IllegalArgumentException(s"Illegal plan $plan in target")
-    }
-    sparkAdapter.getCatalystPlanUtils.toTableIdentifier(aliaId)
-  }
 
   /**
    * Split the expression to a sub expression seq by the AND operation.
