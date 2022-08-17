@@ -36,10 +36,9 @@ import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, T
 import org.apache.hudi.common.util.{CommitUtils, StringUtils}
 import org.apache.hudi.config.HoodieBootstrapConfig.{BASE_PATH, INDEX_CLASS_NAME, KEYGEN_CLASS_NAME}
 import org.apache.hudi.config.{HoodieInternalConfig, HoodieWriteConfig}
-import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.exception.{HoodieException, SchemaCompatibilityException}
 import org.apache.hudi.execution.bulkinsert.{BulkInsertInternalPartitionerWithRowsFactory, NonSortPartitionerWithRows}
 import org.apache.hudi.hive.{HiveSyncConfigHolder, HiveSyncTool}
-import org.apache.hudi.index.SparkHoodieIndexFactory
 import org.apache.hudi.internal.DataSourceInternalWriterHelper
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
@@ -206,8 +205,12 @@ object HoodieSparkSqlWriter {
             // pick latest table's schema as preferred over the writer's schema
             latestTableSchema
           } else {
-            // Otherwise fallback to original source's schema
-            sourceSchema
+            log.error(s"""
+               |Failed to reconcile incoming batch schema with the table's one.
+               |Incoming schema ${sourceSchema.toString(true)}
+               |Table's schema ${latestTableSchema.toString(true)}
+               |""".stripMargin)
+            throw new SchemaCompatibilityException("Failed to reconcile incoming schema with the table's one")
           }
         } else {
           // In case reconciliation is disabled, we still have to do nullability attributes
