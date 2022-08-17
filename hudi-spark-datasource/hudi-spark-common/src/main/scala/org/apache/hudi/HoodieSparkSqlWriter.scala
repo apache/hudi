@@ -201,8 +201,12 @@ object HoodieSparkSqlWriter {
             AvroInternalSchemaConverter.convert(mergedInternalSchema, latestTableSchema.getName)
           } else if (TableSchemaResolver.isSchemaCompatible(sourceSchema, latestTableSchema)) {
             // In case schema reconciliation is enabled and source and latest table schemas
-            // are compatible (as defined by [[TableSchemaResolver#isSchemaCompatible]], then we will
-            // pick latest table's schema as preferred over the writer's schema
+            // are compatible (as defined by [[TableSchemaResolver#isSchemaCompatible]]), then we
+            // will rebase incoming batch onto the table's latest schema (ie, reconcile them)
+            //
+            // NOTE: Since we'll be converting incoming batch from [[sourceSchema]] into [[latestTableSchema]]
+            //       we're validating in that order (where [[sourceSchema]] is treated as a reader's schema,
+            //       and [[latestTableSchema]] is treated as a writer's schema)
             latestTableSchema
           } else {
             log.error(s"""
@@ -213,10 +217,26 @@ object HoodieSparkSqlWriter {
             throw new SchemaCompatibilityException("Failed to reconcile incoming schema with the table's one")
           }
         } else {
-          // In case reconciliation is disabled, we still have to do nullability attributes
-          // (minor) reconciliation, making sure schema of the incoming batch is in-line with
-          // the data already committed in the table
-          AvroSchemaEvolutionUtils.canonicalizeColumnNullability(sourceSchema, latestTableSchema)
+          // Before validating whether schemas are compatible, we need to "canonicalize" source's schema
+          // relative to the table's one, by doing a (minor) reconciliation of the nullability constraints:
+          // for ex, if in incoming schema column A is designated as non-null, but it's designated as nullable
+          // in the table's one we want to proceed w/ such operation, simply relaxing such constraint in the
+          // source schema.
+          val canonicalizedSourceSchema = AvroSchemaEvolutionUtils.canonicalizeColumnNullability(sourceSchema, latestTableSchema)
+          // In case reconciliation is disabled, we have to validate that the source's schema
+          // is compatible w/ the table's latest schema, such that we're able to read existing table's
+          // records using [[sourceSchema]].
+          if (TableSchemaResolver.isSchemaCompatible(latestTableSchema, canonicalizedSourceSchema)) {
+            canonicalizedSourceSchema
+          } else {
+            log.error(
+              s"""
+                 |Incoming batch schema is not compatible with the table's one.
+                 |Incoming schema ${sourceSchema.toString(true)}
+                 |Table's schema ${latestTableSchema.toString(true)}
+                 |""".stripMargin)
+            throw new SchemaCompatibilityException("Incoming batch schema is not compatible with the table's one")
+          }
         }
 
       validateSchemaForHoodieIsDeleted(writerSchema)
