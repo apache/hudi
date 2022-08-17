@@ -47,6 +47,37 @@ hoodie.deltastreamer.ingestion.db1.table1.configFile=s3:///tmp/config_table1.pro
 hoodie.deltastreamer.ingestion.db2.table2.configFile=s3:///tmp/config_table2.properties
 ``` 
 
+### Configuring schema providers
+
+It is possible to configure different schema providers for different tables or same schema provider class for all tables. All you need to do is configure the property `hoodie.deltastreamer.schemaprovider.class` accordingly as per your use case as below - 
+
+```java
+hoodie.deltastreamer.schemaprovider.class=org.apache.hudi.utilities.schema.FilebasedSchemaProvider
+```
+
+Further it is also possible to configure different source and target schema registry urls with `SchemaRegistryProvider` as the schemaprovider class. Originally HoodieMultiTableDeltaStreamer was designed to cater to use cases where subject naming strategy is set to [TopicNameStrategy](https://docs.confluent.io/platform/current/schema-registry/serdes-develop/index.html#subject-name-strategy) which is the default provided by Confluent. 
+With this default strategy in place, the subject name is same as the topic name being used in kafka. Source and target schema registry urls can be configured as below with TopicNameStrategy - 
+
+```java
+hoodie.deltastreamer.schemaprovider.registry.baseUrl=http://localhost:8081/subjects/
+hoodie.deltastreamer.schemaprovider.registry.urlSuffix=-value/versions/latest
+```
+
+If you want to consume different versions of your source and target subjects, you can configure as below - 
+
+```java
+hoodie.deltastreamer.schemaprovider.registry.baseUrl=http://localhost:8081/subjects/
+hoodie.deltastreamer.schemaprovider.registry.sourceUrlSuffix=-value/versions/latest
+hoodie.deltastreamer.schemaprovider.registry.targetUrlSuffix=-value/versions/1
+```
+
+If you are looking to configure the schema registry urls in the most straight forward way, you can do that as below
+
+```java
+hoodie.deltastreamer.schemaprovider.registry.url=http://localhost:8081/subjects/random-value/versions/latest
+hoodie.deltastreamer.schemaprovider.registry.targetUrl=http://localhost:8081/subjects/random-value/versions/latest
+```
+
 ### Run Command
 
 `HoodieMultiTableDeltaStreamer` can be run similar to how one runs `HoodieDeltaStreamer`. Please refer to the example given below for the command. 
