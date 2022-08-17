@@ -1860,8 +1860,6 @@
         <activeByDefault>true</activeByDefault>
         <property>
           <name>flink1.14</name>
-          <!-- add flink1.14 module to all profile -->
-          <value>!disabled</value>
         </property>
       </activation>
     </profile>
