@@ -32,6 +32,7 @@ import org.apache.hudi.sink.transform.RowDataToHoodieFunction;
 import org.apache.hudi.utils.TestConfigurations;
 
 import org.apache.flink.api.common.ExecutionConfig;
+import org.apache.flink.api.common.functions.AggregateFunction;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.io.disk.iomanager.IOManager;
 import org.apache.flink.runtime.io.disk.iomanager.IOManagerAsync;
@@ -41,6 +42,7 @@ import org.apache.flink.runtime.operators.coordination.MockOperatorCoordinatorCo
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 import org.apache.flink.runtime.operators.testutils.MockEnvironment;
 import org.apache.flink.runtime.operators.testutils.MockEnvironmentBuilder;
+import org.apache.flink.runtime.taskexecutor.TestGlobalAggregateManager;
 import org.apache.flink.streaming.api.graph.StreamConfig;
 import org.apache.flink.streaming.api.operators.StreamingRuntimeContext;
 import org.apache.flink.streaming.api.operators.collect.utils.MockFunctionSnapshotContext;
@@ -50,6 +52,8 @@ import org.apache.flink.streaming.util.MockStreamTaskBuilder;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.util.Collector;
 
+import java.io.IOException;
+import java.lang.reflect.Field;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -111,6 +115,7 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
         .setManagedMemorySize(4 * MemoryManager.DEFAULT_PAGE_SIZE)
         .setIOManager(ioManager)
         .build();
+    setAggregateManager(environment);
     this.runtimeContext = new MockStreamingRuntimeContext(false, 1, 0, environment);
     this.gateway = new MockOperatorEventGateway();
     this.conf = conf;
@@ -299,6 +304,32 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
 
     public T getVal() {
       return val;
+    }
+  }
+
+  public void setAggregateManager(MockEnvironment environment) throws NoSuchFieldException, IllegalAccessException {
+    TestGlobalAggregateManager aggregateManager = new TestGlobalAggregateManager() {
+      private Object accumulator = null;
+
+      @Override
+      public Object updateGlobalAggregate(String aggregateName, Object aggregand, AggregateFunction aggregateFunction) throws IOException {
+        if (accumulator == null) {
+          accumulator = aggregateFunction.createAccumulator();
+        }
+        aggregateFunction.add(aggregand, accumulator);
+        return aggregateFunction.getResult(accumulator);
+      }
+    };
+
+    Field field = null;
+    try {
+      field = environment.getClass().getDeclaredField("aggregateManager");
+      field.setAccessible(true);
+      field.set(environment, aggregateManager);
+    } finally {
+      if (field != null) {
+        field.setAccessible(false);
+      }
     }
   }
 }

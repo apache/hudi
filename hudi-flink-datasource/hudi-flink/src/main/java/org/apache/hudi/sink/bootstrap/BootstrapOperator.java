@@ -37,7 +37,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.sink.bootstrap.aggregate.BootstrapAggFunction;
+import org.apache.hudi.sink.bootstrap.aggregate.IndexAlignmentAggFunction;
 import org.apache.hudi.sink.meta.CkpMetadata;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.format.FormatUtils;
@@ -49,6 +49,8 @@ import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.common.state.ListState;
 import org.apache.flink.api.common.state.ListStateDescriptor;
 import org.apache.flink.api.common.typeinfo.Types;
+import org.apache.flink.api.java.tuple.Tuple2;
+import org.apache.flink.api.java.tuple.Tuple4;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.state.KeyGroupRangeAssignment;
 import org.apache.flink.runtime.state.StateInitializationContext;
@@ -65,6 +67,7 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.regex.Pattern;
 
 import static java.util.stream.Collectors.toList;
@@ -80,8 +83,8 @@ import static org.apache.hudi.util.StreamerUtil.isValidFile;
  */
 public class BootstrapOperator<I, O extends HoodieRecord<?>>
     extends AbstractStreamOperator<O> implements OneInputStreamOperator<I, O> {
-
   private static final Logger LOG = LoggerFactory.getLogger(BootstrapOperator.class);
+  public static final String BOOTSTRAP_NAME = "index_bootstrap";
 
   protected HoodieTable<?, ?, ?, ?> hoodieTable;
 
@@ -97,6 +100,9 @@ public class BootstrapOperator<I, O extends HoodieRecord<?>>
   private transient ListState<String> instantState;
   private final Pattern pattern;
   private String lastInstantTime;
+
+  private transient AtomicLong loadIndexCount;
+  private transient boolean indexAlignment;
 
   public BootstrapOperator(Configuration conf) {
     this.conf = conf;
@@ -129,6 +135,8 @@ public class BootstrapOperator<I, O extends HoodieRecord<?>>
     this.hoodieTable = FlinkTables.createTable(writeConfig, hadoopConf, getRuntimeContext());
     this.ckpMetadata = CkpMetadata.getInstance(hoodieTable.getMetaClient().getFs(), this.writeConfig.getBasePath());
     this.aggregateManager = getRuntimeContext().getGlobalAggregateManager();
+    this.loadIndexCount = new AtomicLong(0);
+    this.indexAlignment = conf.get(FlinkOptions.INDEX_ALIGNMENT);
 
     preLoadIndexRecords();
   }
@@ -157,10 +165,13 @@ public class BootstrapOperator<I, O extends HoodieRecord<?>>
    */
   private void waitForBootstrapReady(int taskID) {
     int taskNum = getRuntimeContext().getNumberOfParallelSubtasks();
-    int readyTaskNum = 1;
-    while (taskNum != readyTaskNum) {
+    Tuple4<String, Integer, Integer, Long> taskDetail = new Tuple4<>(BOOTSTRAP_NAME, taskNum, taskID, loadIndexCount.get());
+    while (true) {
       try {
-        readyTaskNum = aggregateManager.updateGlobalAggregate(BootstrapAggFunction.NAME, taskID, new BootstrapAggFunction());
+        Tuple2<Integer, Boolean> result = aggregateManager.updateGlobalAggregate(IndexAlignmentAggFunction.NAME, taskDetail, new IndexAlignmentAggFunction());
+        if (result.f1 || result.f0.equals(taskNum) && !indexAlignment) {
+          break;
+        }
         LOG.info("Waiting for other bootstrap tasks to complete, taskId = {}.", taskID);
 
         TimeUnit.SECONDS.sleep(5);
@@ -217,6 +228,7 @@ public class BootstrapOperator<I, O extends HoodieRecord<?>>
           }
           try (ClosableIterator<HoodieKey> iterator = fileUtils.getHoodieKeyIterator(this.hadoopConf, new Path(baseFile.getPath()))) {
             iterator.forEachRemaining(hoodieKey -> {
+              loadIndexCount.incrementAndGet();
               output.collect(new StreamRecord(new IndexRecord(generateHoodieRecord(hoodieKey, fileSlice))));
             });
           }
@@ -234,6 +246,7 @@ public class BootstrapOperator<I, O extends HoodieRecord<?>>
 
         try {
           for (String recordKey : scanner.getRecords().keySet()) {
+            loadIndexCount.incrementAndGet();
             output.collect(new StreamRecord(new IndexRecord(generateHoodieRecord(new HoodieKey(recordKey, partitionPath), fileSlice))));
           }
         } catch (Exception e) {

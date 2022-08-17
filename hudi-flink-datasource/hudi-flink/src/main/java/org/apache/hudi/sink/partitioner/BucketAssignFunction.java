@@ -33,6 +33,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.sink.bootstrap.IndexRecord;
+import org.apache.hudi.sink.bootstrap.aggregate.IndexAlignmentAggFunction;
 import org.apache.hudi.sink.utils.PayloadCreation;
 import org.apache.hudi.table.action.commit.BucketInfo;
 import org.apache.hudi.util.StreamerUtil;
@@ -43,14 +44,25 @@ import org.apache.flink.api.common.state.ValueState;
 import org.apache.flink.api.common.state.ValueStateDescriptor;
 import org.apache.flink.api.common.time.Time;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
+import org.apache.flink.api.java.tuple.Tuple4;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.state.FunctionInitializationContext;
 import org.apache.flink.runtime.state.FunctionSnapshotContext;
+import org.apache.flink.runtime.taskexecutor.GlobalAggregateManager;
 import org.apache.flink.streaming.api.checkpoint.CheckpointedFunction;
 import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
+import org.apache.flink.streaming.api.operators.StreamingRuntimeContext;
 import org.apache.flink.util.Collector;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.Objects;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * The function to build the write profile incrementally for records within a checkpoint,
@@ -70,6 +82,7 @@ import java.util.Objects;
 public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
     extends KeyedProcessFunction<K, I, O>
     implements CheckpointedFunction, CheckpointListener {
+  private static final Logger LOG = LoggerFactory.getLogger(BucketAssignFunction.class);
 
   /**
    * Index cache(speed-up) state for the underneath file based(BloomFilter) indices.
@@ -103,6 +116,13 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
    * if same key record with different partition path came in.
    */
   private final boolean globalIndex;
+
+  private transient GlobalAggregateManager aggregateManager;
+
+  private transient AtomicLong loadIndexCount;
+
+  private transient ScheduledExecutorService executor;
+  private transient ScheduledFuture scheduledFuture;
 
   public BucketAssignFunction(Configuration conf) {
     this.conf = conf;
@@ -151,6 +171,29 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
       indexStateDesc.enableTimeToLive(StateTtlConfig.newBuilder(Time.milliseconds((long) ttl)).build());
     }
     indexState = context.getKeyedStateStore().getState(indexStateDesc);
+    this.aggregateManager = ((StreamingRuntimeContext) getRuntimeContext()).getGlobalAggregateManager();
+    this.loadIndexCount = new AtomicLong(0);
+    this.executor = Executors.newScheduledThreadPool(1);
+    this.scheduledFuture = this.executor.scheduleWithFixedDelay(
+        () -> {
+          Tuple4 taskDetail = new Tuple4(getRuntimeContext().getTaskName(),
+              getRuntimeContext().getNumberOfParallelSubtasks(),
+              getRuntimeContext().getIndexOfThisSubtask(), loadIndexCount.get());
+          try {
+            aggregateManager.updateGlobalAggregate(IndexAlignmentAggFunction.NAME, taskDetail, new IndexAlignmentAggFunction());
+          } catch (Exception e) {
+            LOG.warn("Update buckAssign summary error.", e);
+          }
+        }, 5, 5, TimeUnit.SECONDS);
+  }
+
+  private void closeReportIndexThread() {
+    if (this.scheduledFuture != null) {
+      this.scheduledFuture.cancel(false);
+      this.executor.shutdown();
+      this.scheduledFuture = null;
+      this.executor = null;
+    }
   }
 
   @Override
@@ -158,7 +201,9 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
     if (value instanceof IndexRecord) {
       IndexRecord<?> indexRecord = (IndexRecord<?>) value;
       this.indexState.update((HoodieRecordGlobalLocation) indexRecord.getCurrentLocation());
+      this.loadIndexCount.incrementAndGet();
     } else {
+      closeReportIndexThread();
       processRecord((HoodieRecord<?>) value, out);
     }
   }

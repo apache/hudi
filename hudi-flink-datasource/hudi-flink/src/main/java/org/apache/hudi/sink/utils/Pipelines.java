@@ -239,6 +239,9 @@ public class Pipelines {
     } else if (bounded && !globalIndex && OptionsResolver.isPartitionedTable(conf)) {
       return boundedBootstrap(conf, rowType, defaultParallelism, dataStream);
     } else {
+      if (!bounded) {
+        conf.setBoolean(FlinkOptions.INDEX_ALIGNMENT, true);
+      }
       return streamBootstrap(conf, rowType, defaultParallelism, dataStream, bounded);
     }
   }
@@ -254,7 +257,7 @@ public class Pipelines {
     if (conf.getBoolean(FlinkOptions.INDEX_BOOTSTRAP_ENABLED) || bounded) {
       dataStream1 = dataStream1
           .transform(
-              "index_bootstrap",
+              BootstrapOperator.BOOTSTRAP_NAME,
               TypeInformation.of(HoodieRecord.class),
               new BootstrapOperator<>(conf))
           .setParallelism(conf.getOptional(FlinkOptions.INDEX_BOOTSTRAP_TASKS).orElse(defaultParallelism))

@@ -19,35 +19,45 @@
 package org.apache.hudi.sink.bootstrap.aggregate;
 
 import java.io.Serializable;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
- * Bootstrap ready task id accumulator.
+ * Data volume of ready tasks.
  */
-public class BootstrapAccumulator implements Serializable {
+public class IndexAlignmentTaskDetails implements Serializable {
   private static final long serialVersionUID = 1L;
+  private final int paralleTasks;
+  private Map<Integer, Long> subTaskCount = new HashMap<>();
 
-  private final Set<Integer> readyTaskSet;
-
-  public BootstrapAccumulator() {
-    this.readyTaskSet = new HashSet<>();
+  public IndexAlignmentTaskDetails(int paralleTasks) {
+    this.paralleTasks = paralleTasks;
   }
 
-  public void update(int taskId) {
-    readyTaskSet.add(taskId);
+  public void addSubTaskCount(Integer taskId, Long count) {
+    this.subTaskCount.put(taskId, count);
   }
 
-  public int readyTaskNum() {
-    return readyTaskSet.size();
+  public int getParalleTasks() {
+    return paralleTasks;
   }
 
-  public BootstrapAccumulator merge(BootstrapAccumulator acc) {
-    if (acc == null) {
-      return this;
-    }
+  public Map<Integer, Long> getSubTaskCount() {
+    return subTaskCount;
+  }
 
-    readyTaskSet.addAll(acc.readyTaskSet);
-    return this;
+  public long getCount() {
+    return subTaskCount.values().stream().reduce(Long::sum).orElse(0L);
+  }
+
+  @Override
+  public String toString() {
+    StringBuffer sb = new StringBuffer("IndexAlignmentTaskDetails {");
+    sb.append("paralleTasks=");
+    sb.append(paralleTasks);
+    sb.append(", subTaskCount=");
+    sb.append(subTaskCount);
+    sb.append("}");
+    return sb.toString();
   }
 }
