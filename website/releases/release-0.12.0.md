@@ -56,8 +56,7 @@ Users can feel free to implement their own strategy as they see fit.
 
 ### Performance Improvements
 
-While some performance regressions were addressed in [0.11.1 release](/releases/release-0.11.1#addressing-performance-regression-in-0110), 
-this version brings more improvements to make Hudi the most performant lake storage format. Some notable improvements are:
+This version brings more improvements to make Hudi the most performant lake storage format. Some notable improvements are:
 - Closed the performance gap in writing through Spark datasource vs sql. Previously, datasource writes were faster.
 - All built-in key generators implement more performant Spark-specific APIs.
 - Replaced UDF in bulk insert operation with RDD transformation to cut down serde cost.
