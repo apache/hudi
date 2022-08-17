@@ -19,12 +19,13 @@ package org.apache.spark.sql.hudi.analysis
 
 import org.apache.hudi.common.util.ReflectionUtils
 import org.apache.hudi.{HoodieSparkUtils, SparkAdapterSupport}
-import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
+import org.apache.spark.sql.catalyst.analysis.EliminateSubqueryAliases
+import org.apache.spark.sql.catalyst.expressions.{AttributeReference, GenericInternalRow}
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.execution.command._
 import org.apache.spark.sql.execution.datasources.{CreateTable, LogicalRelation}
-import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.getTableIdentifier
+import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{getTableIdentifier, isMetaField}
 import org.apache.spark.sql.hudi.HoodieSqlUtils._
 import org.apache.spark.sql.hudi.command._
 import org.apache.spark.sql.hudi.command.procedures.{HoodieProcedures, Procedure, ProcedureArgs}
@@ -128,9 +129,35 @@ case class HoodieAnalysis(sparkSession: SparkSession) extends Rule[LogicalPlan]
   override def apply(plan: LogicalPlan): LogicalPlan = {
     plan match {
       // Convert to MergeIntoHoodieTableCommand
-      case m @ MergeIntoTable(target, _, _, _, _)
-        if sparkAdapter.resolvesToHoodieTable(target, sparkSession) =>
-          MergeIntoHoodieTableCommand(m)
+      case mit @ MergeIntoTable(target, _, _, _, _) if sparkAdapter.resolvesToHoodieTable(target, sparkSession) =>
+        if (mit.resolved) {
+          MergeIntoHoodieTableCommand(mit)
+        } else {
+          // TODO relocate, abstract
+          val reshapedSource = if (mit.sourceTable.output.exists(attr => isMetaField(attr.name))) {
+            val sourceOutputSet = mit.sourceTable.output
+            val filteredSourceOutputSet = sourceOutputSet.filterNot(attr => isMetaField(attr.name))
+            Project(filteredSourceOutputSet, mit.sourceTable)
+          } else {
+            mit.sourceTable
+          }
+
+          val reshapedTarget = if (mit.targetTable.output.exists(attr => isMetaField(attr.name))) {
+            val targetOutputSet = mit.targetTable.output
+            val filteredTargetOutputSet = targetOutputSet.filterNot(attr => isMetaField(attr.name))
+
+            mit.targetTable match {
+              case sa@SubqueryAlias(_, UnfoldSubqueryAlias(lr: LogicalRelation)) =>
+                sa.copy(child = lr.copy(output = filteredTargetOutputSet.map(_.asInstanceOf[AttributeReference])))
+              case lr: LogicalRelation => lr.copy(output =
+                filteredTargetOutputSet.map(_.asInstanceOf[AttributeReference]))
+            }
+          } else {
+            mit.targetTable
+          }
+
+          mit.copy(targetTable = reshapedTarget, sourceTable = reshapedSource)
+        }
 
       // Convert to UpdateHoodieTableCommand
       case u @ UpdateTable(table, _, _)
@@ -242,6 +269,10 @@ case class HoodieAnalysis(sparkSession: SparkSession) extends Rule[LogicalPlan]
     }
     ProcedureArgs(isNamedArgs, map, new GenericInternalRow(values))
   }
+}
+
+object UnfoldSubqueryAlias {
+  def unapply(plan: LogicalPlan): Option[LogicalPlan] = Some(EliminateSubqueryAliases(plan))
 }
 
 /**
