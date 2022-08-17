@@ -10,7 +10,7 @@ on:
       - master
       - 'release-*'
 env:
-  MVN_ARGS: -ntp -B -V -Pwarn-log
+  MVN_ARGS: -ntp -B -V -Pwarn-log -Dorg.slf4j.simpleLogger.logFile=conf/logging/simplelogger.properties
 
 jobs:
   build:
