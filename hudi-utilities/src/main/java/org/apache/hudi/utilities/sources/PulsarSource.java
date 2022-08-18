@@ -47,8 +47,10 @@ import org.apache.spark.sql.pulsar.JsonUtils;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.concurrent.TimeUnit;
 
 import static org.apache.hudi.common.util.ThreadUtils.collectActiveThreads;
 
@@ -58,6 +60,8 @@ import static org.apache.hudi.common.util.ThreadUtils.collectActiveThreads;
 public class PulsarSource extends RowSource implements Closeable {
 
   private static final Logger LOG = LogManager.getLogger(PulsarSource.class);
+
+  private static final Duration GRACEFUL_SHUTDOWN_TIMEOUT = Duration.ofSeconds(20);
 
   private static final String HUDI_PULSAR_CONSUMER_ID_FORMAT = "hudi-pulsar-consumer-%d";
   private static final String[] PULSAR_META_FIELDS = new String[]{
@@ -243,7 +247,8 @@ public class PulsarSource extends RowSource implements Closeable {
     try {
       EventLoopGroup eventLoopGroup = ((PulsarClientImpl) client).eventLoopGroup();
       if (eventLoopGroup != null) {
-        eventLoopGroup.shutdownGracefully().await();
+        eventLoopGroup.shutdownGracefully()
+            .await(GRACEFUL_SHUTDOWN_TIMEOUT.getSeconds(), TimeUnit.SECONDS);
       }
     } catch (InterruptedException e) {
       // No-op
