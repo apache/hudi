@@ -50,8 +50,8 @@ public class SparkEnvCommand implements CommandMarker {
   public String showAllEnv() {
     String[][] rows = new String[env.size()][2];
     int i = 0;
-    for (Map.Entry<String, String> entry: env.entrySet()) {
-      rows[i] = new String[]{entry.getKey(), entry.getValue()};
+    for (Map.Entry<String, String> entry : env.entrySet()) {
+      rows[i] = new String[] {entry.getKey(), entry.getValue()};
       i++;
     }
     return HoodiePrintHelper.print(new String[] {"key", "value"}, rows);
@@ -62,7 +62,7 @@ public class SparkEnvCommand implements CommandMarker {
     if (key == null || key.isEmpty()) {
       return showAllEnv();
     } else {
-      return HoodiePrintHelper.print(new String[] {"key", "value"}, new String[][]{new String[]{key, env.get(key)}});
+      return HoodiePrintHelper.print(new String[] {"key", "value"}, new String[][] {new String[] {key, env.get(key)}});
     }
   }
 }
