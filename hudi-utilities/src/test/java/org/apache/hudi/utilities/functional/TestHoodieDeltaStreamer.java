@@ -745,12 +745,12 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
   @Test
   public void testUpsertsCOW_ContinuousModeDisabled() throws Exception {
-    testUpsertsContinuousMode(HoodieTableType.COPY_ON_WRITE, "continuous_cow", false, false);
+    testUpsertsContinuousMode(HoodieTableType.COPY_ON_WRITE, "non_continuous_cow", false, false);
   }
 
   @Test
   public void testUpsertsCOWContinuousModeShutdownGracefully() throws Exception {
-    testUpsertsContinuousMode(HoodieTableType.COPY_ON_WRITE, "continuous_cow", true, true);
+    testUpsertsContinuousMode(HoodieTableType.COPY_ON_WRITE, "continuous_cow_shutdown_gracefully", true, true);
   }
 
   @Test
@@ -760,7 +760,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
   @Test
   public void testUpsertsMOR_ContinuousModeDisabled() throws Exception {
-    testUpsertsContinuousMode(HoodieTableType.MERGE_ON_READ, "continuous_mor", false, false);
+    testUpsertsContinuousMode(HoodieTableType.MERGE_ON_READ, "non_continuous_mor", false, false);
   }
 
   private void testUpsertsContinuousMode(HoodieTableType tableType, String tempDir, boolean testShutdownGracefully, boolean continuousMode) throws Exception {
