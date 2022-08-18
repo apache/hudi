@@ -229,18 +229,18 @@ public class FileSystemViewCommand implements CommandMarker {
 
   /**
    * Build File System View.
-   * 
-   * @param globRegex Path Regex
-   * @param maxInstant Max Instants to be used for displaying file-instants
-   * @param basefileOnly Include only base file view
+   *
+   * @param globRegex         Path Regex
+   * @param maxInstant        Max Instants to be used for displaying file-instants
+   * @param basefileOnly      Include only base file view
    * @param includeMaxInstant Include Max instant
-   * @param includeInflight Include inflight instants
+   * @param includeInflight   Include inflight instants
    * @param excludeCompaction Exclude Compaction instants
    * @return
    * @throws IOException
    */
   private HoodieTableFileSystemView buildFileSystemView(String globRegex, String maxInstant, boolean basefileOnly,
-      boolean includeMaxInstant, boolean includeInflight, boolean excludeCompaction) throws IOException {
+                                                        boolean includeMaxInstant, boolean includeInflight, boolean excludeCompaction) throws IOException {
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
     HoodieTableMetaClient metaClient =
         HoodieTableMetaClient.builder().setConf(client.getHadoopConf()).setBasePath(client.getBasePath()).setLoadActiveTimelineOnLoad(true).build();
