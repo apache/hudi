@@ -276,7 +276,8 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
            |  select 2 as s_id, 'a2' as s_name, 15 as s_price, 1001 as s_ts, '2021-03-21' as dt
            | ) s0
            | on t0.id = s0.s_id
-           | when matched and s_ts = 1001 then update set *
+           | when matched and s_ts = 1001
+           | then update set id = s_id, name = s_name, price = s_price, ts = s_ts, t0.dt = s0.dt
          """.stripMargin
       )
       checkAnswer(s"select id,name,price,dt from $tableName order by id")(
@@ -595,9 +596,9 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
            | merge into $targetTable as t0
            | using $sourceTable as s0
            | on t0.id = s0.id
-           | when matched and id = 10 then delete
-           | when matched and id < 10 then update set name='sxx', price=s0.price*2, ts=s0.ts+10000, dt=s0.dt
-           | when not matched and id > 10 then insert *
+           | when matched and s0.id = 10 then delete
+           | when matched and s0.id < 10 then update set id=s0.id, name='sxx', price=s0.price*2, ts=s0.ts+10000, dt=s0.dt
+           | when not matched and s0.id > 10 then insert *
          """.stripMargin)
       checkAnswer(s"select id,name,price,ts,dt from $targetTable order by id")(
         Seq(7, "a7", 70, 1007, "2021-03-21"),
@@ -746,11 +747,10 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
           s"""
              | merge into $tableName
              | using (
-             |  select 1 as id, 'a1' as name, 10 as price, $dataValue as c0, '1' as flag
+             |  select 1 as id, 'a1' as name, 10 as price, $dataValue as c, '1' as flag
              | ) s0
              | on s0.id = $tableName.id
-             | when matched and flag = '1' then update set
-             | id = s0.id, name = s0.name, price = s0.price, c = s0.c0
+             | when matched and flag = '1' then update set *
              | when not matched and flag = '1' then insert *
        """.stripMargin)
         checkAnswer(s"select id, name, price from $tableName")(

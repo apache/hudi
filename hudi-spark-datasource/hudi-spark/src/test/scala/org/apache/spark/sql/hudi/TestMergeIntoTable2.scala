@@ -163,9 +163,9 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
         s"""
            |merge into $tableName h0
            |using (
-           | select 1 as s_id, 'a1_1' as name
+           | select 1 as id, 'a1_1' as name
            |) s0
-           |on h0.id = s0.s_id
+           |on h0.id = s0.id
            |when matched then update set *
            |""".stripMargin
       )
@@ -390,8 +390,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
            |  select 1 as ID, 'a1' as NAME, 10 as PRICE, 1000 as TS, '1' as FLAG
            | ) s0
            | on s0.ID = $tableName.id
-           | when matched and FLAG = '1' then update set
-           | id = s0.ID, name = s0.NAME, price = s0.PRICE, ts = s0.TS
+           | when matched and FLAG = '1' then update set *
            | when not matched and FLAG = '1' then insert *
            |""".stripMargin)
       checkAnswer(s"select id, name, price, ts from $tableName")(
@@ -406,8 +405,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
            |  select 1 as ID, 'a1' as NAME, 11 as PRICE, 1001 as TS, '1' as FLAG
            | ) s0
            | on s0.id = $tableName.id
-           | when matched and FLAG = '1' then update set
-           | id = s0.id, name = s0.NAME, price = s0.PRICE, ts = s0.ts
+           | when matched and FLAG = '1' then update set id = s0.id, name = s0.NAME, price = s0.PRICE, ts = s0.ts
            | when not matched and FLAG = '1' then insert *
            |""".stripMargin)
       checkAnswer(s"select id, name, price, ts from $tableName")(
@@ -422,8 +420,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
            |  select 2 as ID, 'a2' as NAME, 12 as PRICE, 1002 as TS, '1' as FLAG
            | ) s0
            | on cast(s0.id as int) = $tableName.id
-           | when matched and FLAG = '1' then update set
-           | id = s0.id, name = s0.NAME, price = s0.PRICE, ts = s0.ts
+           | when matched and FLAG = '1' then update set id = s0.id, name = s0.NAME, price = s0.PRICE, ts = s0.ts
            | when not matched and FLAG = '1' then insert *
            |""".stripMargin)
       checkAnswer(s"select id, name, price, ts from $tableName")(
