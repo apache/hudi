@@ -91,6 +91,7 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -124,7 +125,7 @@ import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_REC
 /**
  * Sync's one batch of data to hoodie table.
  */
-public class DeltaSync implements Serializable {
+public class DeltaSync implements Serializable, Closeable {
 
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LogManager.getLogger(DeltaSync.class);
@@ -895,9 +896,13 @@ public class DeltaSync implements Serializable {
    * Close all resources.
    */
   public void close() {
-    if (null != writeClient) {
+    if (writeClient != null) {
       writeClient.close();
       writeClient = null;
+    }
+
+    if (formatAdapter != null) {
+      formatAdapter.close();
     }
 
     LOG.info("Shutting down embedded timeline server");

@@ -98,6 +98,9 @@
     <kafka.version>2.0.0</kafka.version>
     <kafka.spark3.version>2.4.1</kafka.spark3.version>
     <pulsar.version>2.8.1</pulsar.version>
+    <pulsar.spark.version>${pulsar.spark.scala11.version}</pulsar.spark.version>
+    <pulsar.spark.scala11.version>2.4.5</pulsar.spark.scala11.version>
+    <pulsar.spark.scala12.version>3.1.1.4</pulsar.spark.scala12.version>
     <confluent.version>5.3.4</confluent.version>
     <glassfish.version>2.17</glassfish.version>
     <glassfish.el.version>3.0.1-b12</glassfish.el.version>
@@ -1602,12 +1605,16 @@
     <!-- Exists for backwards compatibility; profile doesn't do anything -->
     <profile>
       <id>scala-2.11</id>
+      <properties>
+        <pulsar.spark.version>${pulsar.spark.scala11.version}</pulsar.spark.version>
+      </properties>
     </profile>
     <profile>
       <id>scala-2.12</id>
       <properties>
         <scala.version>${scala12.version}</scala.version>
         <scala.binary.version>2.12</scala.binary.version>
+        <pulsar.spark.version>${pulsar.spark.scala12.version}</pulsar.spark.version>
       </properties>
       <activation>
         <property>

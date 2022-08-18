@@ -21,6 +21,7 @@ package org.apache.hudi.utilities.deltastreamer;
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProvider;
@@ -38,13 +39,16 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.types.StructType;
 
+import java.io.Closeable;
+import java.io.IOException;
+
 import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_NAMESPACE;
 import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_STRUCT_NAME;
 
 /**
  * Adapts data-format provided by the source to the data-format required by the client (DeltaStreamer).
  */
-public final class SourceFormatAdapter {
+public final class SourceFormatAdapter implements Closeable {
 
   private final Source source;
 
@@ -122,5 +126,16 @@ public final class SourceFormatAdapter {
 
   public Source getSource() {
     return source;
+  }
+
+  @Override
+  public void close() {
+    if (source instanceof Closeable) {
+      try {
+        ((Closeable) source).close();
+      } catch (IOException e) {
+        throw new HoodieIOException(String.format("Failed to shutdown the source (%s)", source.getClass().getName()), e);
+      }
+    }
   }
 }
