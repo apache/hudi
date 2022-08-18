@@ -4,9 +4,17 @@
         <title>Apache Hudi: User-Facing Analytics</title>
         <link>https://hudi.apache.org/cn/blog</link>
         <description>Apache Hudi Blog</description>
-        <lastBuildDate>Mon, 11 Jul 2022 00:00:00 GMT</lastBuildDate>
+        <lastBuildDate>Thu, 18 Aug 2022 00:00:00 GMT</lastBuildDate>
         <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
         <generator>https://github.com/jpmonette/feed</generator>
+        <item>
+            <title><![CDATA[Apache Hudi vs Delta Lake vs Apache Iceberg - Lakehouse Feature Comparison]]></title>
+            <link>https://hudi.apache.org/cn/blog/2022/08/18/Apache-Hudi-vs-Delta-Lake-vs-Apache-Iceberg-Lakehouse-Feature-Comparison</link>
+            <guid>/2022/08/18/Apache-Hudi-vs-Delta-Lake-vs-Apache-Iceberg-Lakehouse-Feature-Comparison</guid>
+            <pubDate>Thu, 18 Aug 2022 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://www.onehouse.ai/blog/apache-hudi-vs-delta-lake-vs-apache-iceberg-lakehouse-feature-comparison">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
         <item>
             <title><![CDATA[Build Open Lakehouse using Apache Hudi & dbt]]></title>
             <link>https://hudi.apache.org/cn/blog/2022/07/11/build-open-lakehouse-using-apache-hudi-and-dbt</link>
