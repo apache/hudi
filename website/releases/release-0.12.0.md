@@ -17,10 +17,14 @@ please checkout [prestodb documentation](https://prestodb.io/docs/current/connec
 
 ### Archival Beyond Savepoint
 
-Users can now archive Hudi table beyond savepoint commit. Just enable `hoodie.archive.beyond.savepoint` write 
+Hudi supports savepoint and restore feature that is useful for backup and disaster recovery scenarios. More info can be 
+found [here](https://hudi.apache.org/docs/disaster_recovery). Until 0.12.0, archival for a given table will not make 
+progress beyond the first savepointed commit. But there has been ask from the community to relax this constraint so that 
+some coarse grained commits can be retained in the active timeline and execute point in time queries. So, with 0.12.0, 
+users can now let archival proceed beyond savepoint commits by enabling `hoodie.archive.beyond.savepoint` write 
 configuration. This unlocks new opportunities for Hudi users. For example, one can retain commits for years, by adding 
-one savepoint per day for older commits (say > 30 days old). And they can query hudi using `as.of.instant` semantics for
-old data. In previous versions, one would have to retain every commit and let archival stop at the first commit.
+one savepoint per day for older commits (lets say > 30 days). And query hudi table using "as.of.instant" with any older 
+savepointed commit. By this, Hudi does not need to retain every commit in the active timeline for older commits.
 
 :::note
 However, if this feature is enabled, restore cannot be supported. This limitation would be relaxed in a future release 
@@ -90,16 +94,10 @@ Please check out [our blog](/blog/2022/06/29/Apache-Hudi-vs-Delta-Lake-transpare
 
 ### Migration Guide
 
-#### Bundle Updates
-
-- `hudi-aws-bundle` extracts away aws-related dependencies from hudi-utilities-bundle or hudi-spark-bundle. In order to use features such as Glue sync, Cloudwatch metrics reporter or DynamoDB lock provider, users need to provide hudi-aws-bundle jar along with hudi-utilities-bundle or hudi-spark-bundle jars.
-- Spark 3.3 support is added; users who are on Spark 3.3 can use `hudi-spark3.3-bundle` or `hudi-spark3-bundle` (legacy bundle name).
-- Spark 3.2 will continue to be supported via `hudi-spark3.2-bundle`.
-- Spark 3.1 will continue to be supported via `hudi-spark3.1-bundle`.
-- Spark 2.4 will continue to be supported via `hudi-spark2.4-bundle` or `hudi-spark-bundle` (legacy bundle name).
-- Flink 1.15 support is added; users who are on Flink 1.15 can use `hudi-flink1.15-bundle`.
-- Flink 1.14 will continue to be supported via `hudi-flink1.14-bundle`.
-- Flink 1.13 will continue to be supported via `hudi-flink1.13-bundle`.
+In this release, there have been a few API and configuration updates listed below that warranted a new table version.
+Hence, the latest [table version](https://github.com/apache/hudi/blob/bf86efef719b7760ea379bfa08c537431eeee09a/hudi-common/src/main/java/org/apache/hudi/common/table/HoodieTableVersion.java#L41) 
+is `5`. For existing Hudi tables on older version, a one-time upgrade step will be executed automatically. Please take 
+note of the following updates before upgrading to Hudi 0.12.0.
 
 #### Configuration Updates
 
@@ -135,8 +133,19 @@ If partition field value was null, Hudi has a fallback mechanism instead of fail
 partition changed to `default`. This default partition does not sit well with some of the query engines. So, we are 
 switching the fallback partition to `__HIVE_DEFAULT_PARTITION__`  from 0.12.0. We have added an upgrade step where in, 
 we fail the upgrade if the existing Hudi table has a partition named `default`. Users are expected to rewrite the data 
-in this partition to a partition named `__HIVE_DEFAULT_PARTITION__`. [Reference link](https://github.com/apache/hudi/blob/0d0a4152cfd362185066519ae926ac4513c7a152/hudi-common/src/main/java/org/apache/hudi/common/util/PartitionPathEncodeUtils.java#L29). 
+in this partition to a partition named [\_\_HIVE_DEFAULT_PARTITION\_\_](https://github.com/apache/hudi/blob/0d0a4152cfd362185066519ae926ac4513c7a152/hudi-common/src/main/java/org/apache/hudi/common/util/PartitionPathEncodeUtils.java#L29). 
 However, if you had intentionally named your partition as `default`, you can bypass this using the config `hoodie.skip.default.partition.validation`.
+
+#### Bundle Updates
+
+- `hudi-aws-bundle` extracts away aws-related dependencies from hudi-utilities-bundle or hudi-spark-bundle. In order to use features such as Glue sync, Cloudwatch metrics reporter or DynamoDB lock provider, users need to provide hudi-aws-bundle jar along with hudi-utilities-bundle or hudi-spark-bundle jars.
+- Spark 3.3 support is added; users who are on Spark 3.3 can use `hudi-spark3.3-bundle` or `hudi-spark3-bundle` (legacy bundle name).
+- Spark 3.2 will continue to be supported via `hudi-spark3.2-bundle`.
+- Spark 3.1 will continue to be supported via `hudi-spark3.1-bundle`.
+- Spark 2.4 will continue to be supported via `hudi-spark2.4-bundle` or `hudi-spark-bundle` (legacy bundle name).
+- Flink 1.15 support is added; users who are on Flink 1.15 can use `hudi-flink1.15-bundle`.
+- Flink 1.14 will continue to be supported via `hudi-flink1.14-bundle`.
+- Flink 1.13 will continue to be supported via `hudi-flink1.13-bundle`.
 
 ## Raw Release Notes
 
