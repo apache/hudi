@@ -49,7 +49,17 @@
         <dependency>
             <groupId>org.apache.logging.log4j</groupId>
             <artifactId>log4j-core</artifactId>
-            <version>${log4j2.version}</version>
+            <scope>compile</scope>
+        </dependency>
+        <!-- Add some logging bridges that are needed at runtime for tests -->
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-slf4j-impl</artifactId>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>jul-to-slf4j</artifactId>
             <scope>compile</scope>
         </dependency>
         <!-- Required for groups/excludeGroups support in the maven surefire plugin -->
