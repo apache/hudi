@@ -153,8 +153,8 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<Integer> READ_TASKS = ConfigOptions
       .key("read.tasks")
       .intType()
-      .defaultValue(4)
-      .withDescription("Parallelism of tasks that do actual read, default is 4");
+      .noDefaultValue()
+      .withDescription("Parallelism of tasks that do actual read, default is the parallelism of the execution environment");
 
   public static final ConfigOption<String> SOURCE_AVRO_SCHEMA_PATH = ConfigOptions
       .key("source.avro-schema.path")
@@ -395,19 +395,19 @@ public class FlinkOptions extends HoodieConfig {
       .key("write.index_bootstrap.tasks")
       .intType()
       .noDefaultValue()
-      .withDescription("Parallelism of tasks that do index bootstrap, default is the parallelism of the execution environment");
+      .withDescription("Parallelism of tasks that do index bootstrap, default same as the sink parallelism");
 
   public static final ConfigOption<Integer> BUCKET_ASSIGN_TASKS = ConfigOptions
       .key("write.bucket_assign.tasks")
       .intType()
       .noDefaultValue()
-      .withDescription("Parallelism of tasks that do bucket assign, default is the parallelism of the execution environment");
+      .withDescription("Parallelism of tasks that do bucket assign, default same as the write task parallelism");
 
   public static final ConfigOption<Integer> WRITE_TASKS = ConfigOptions
       .key("write.tasks")
       .intType()
-      .defaultValue(4)
-      .withDescription("Parallelism of tasks that do actual write, default is 4");
+      .noDefaultValue()
+      .withDescription("Parallelism of tasks that do actual write, default is the parallelism of the execution environment");
 
   public static final ConfigOption<Double> WRITE_TASK_MAX_SIZE = ConfigOptions
       .key("write.task.max.size")
@@ -512,8 +512,8 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<Integer> COMPACTION_TASKS = ConfigOptions
       .key("compaction.tasks")
       .intType()
-      .defaultValue(4) // default WRITE_TASKS * COMPACTION_DELTA_COMMITS * 0.2 (assumes 5 commits generate one bucket)
-      .withDescription("Parallelism of tasks that do actual compaction, default is 4");
+      .noDefaultValue()
+      .withDescription("Parallelism of tasks that do actual compaction, default same as the write task parallelism");
 
   public static final String NUM_COMMITS = "num_commits";
   public static final String TIME_ELAPSED = "time_elapsed";
@@ -630,8 +630,8 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<Integer> CLUSTERING_TASKS = ConfigOptions
       .key("clustering.tasks")
       .intType()
-      .defaultValue(4)
-      .withDescription("Parallelism of tasks that do actual clustering, default is 4");
+      .noDefaultValue()
+      .withDescription("Parallelism of tasks that do actual clustering, default same as the write task parallelism");
 
   public static final ConfigOption<Integer> CLUSTERING_TARGET_PARTITIONS = ConfigOptions
       .key("clustering.plan.strategy.daybased.lookback.partitions")
