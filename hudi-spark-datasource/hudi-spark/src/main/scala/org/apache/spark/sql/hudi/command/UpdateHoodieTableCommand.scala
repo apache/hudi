@@ -19,6 +19,7 @@ package org.apache.spark.sql.hudi.command
 
 import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.common.model.HoodieRecord
+import org.apache.hudi.exception.HoodieCatalogException
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.catalyst.expressions.{Alias, AttributeReference, Expression}
@@ -30,21 +31,26 @@ import org.apache.spark.sql.types.StructField
 
 import scala.collection.JavaConverters._
 
-case class UpdateHoodieTableCommand(updateTable: UpdateTable) extends HoodieLeafRunnableCommand
+case class UpdateHoodieTableCommand(ut: UpdateTable) extends HoodieLeafRunnableCommand
   with SparkAdapterSupport with ProvidesHoodieConfig {
 
-  private val table = updateTable.table
-  private val tableId = getTableIdentifier(table)
-
   override def run(sparkSession: SparkSession): Seq[Row] = {
+    val catalogTable = sparkAdapter.resolveHoodieTable(ut.table) match {
+      case Some(table) => HoodieCatalogTable(sparkSession, table)
+      case _ =>
+        throw new HoodieCatalogException("Unable to resolve Hudi table in Delete Command")
+    }
+    val tableId = catalogTable.table.qualifiedName
+
     logInfo(s"start execute update command for $tableId")
+
     val sqlConf = sparkSession.sessionState.conf
-    val name2UpdateValue = updateTable.assignments.map {
+    val name2UpdateValue = ut.assignments.map {
       case Assignment(attr: AttributeReference, value) =>
         attr.name -> value
     }.toMap
 
-    val updateExpressions = table.output
+    val updateExpressions = ut.table.output
       .map(attr => {
         val UpdateValueOption = name2UpdateValue.find(f => sparkSession.sessionState.conf.resolver(f._1, attr.name))
         if(UpdateValueOption.isEmpty) attr else UpdateValueOption.get._2
@@ -55,25 +61,25 @@ case class UpdateHoodieTableCommand(updateTable: UpdateTable) extends HoodieLeaf
         case _=> true
       }
 
-    val projects = updateExpressions.zip(removeMetaFields(table.schema).fields).map {
+    val projects = updateExpressions.zip(removeMetaFields(ut.table.schema).fields).map {
       case (attr: AttributeReference, field) =>
         Column(cast(attr, field, sqlConf))
       case (exp, field) =>
         Column(Alias(cast(exp, field, sqlConf), field.name)())
     }
 
-    var df = Dataset.ofRows(sparkSession, table)
-    if (updateTable.condition.isDefined) {
-      df = df.filter(Column(updateTable.condition.get))
+    var df = Dataset.ofRows(sparkSession, ut.table)
+    if (ut.condition.isDefined) {
+      df = df.filter(Column(ut.condition.get))
     }
     df = df.select(projects: _*)
-    val config = buildHoodieConfig(HoodieCatalogTable(sparkSession, tableId))
+    val config = buildHoodieConfig(catalogTable)
     df.write
       .format("hudi")
       .mode(SaveMode.Append)
       .options(config)
       .save()
-    sparkSession.catalog.refreshTable(tableId.unquotedString)
+    sparkSession.catalog.refreshTable(tableId)
     logInfo(s"Finish execute update command for $tableId")
     Seq.empty[Row]
   }

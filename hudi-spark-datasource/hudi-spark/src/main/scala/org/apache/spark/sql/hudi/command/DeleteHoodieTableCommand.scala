@@ -18,36 +18,42 @@
 package org.apache.spark.sql.hudi.command
 
 import org.apache.hudi.SparkAdapterSupport
+import org.apache.hudi.exception.HoodieCatalogException
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.catalyst.plans.logical.DeleteFromTable
-import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
 
-case class DeleteHoodieTableCommand(deleteTable: DeleteFromTable) extends HoodieLeafRunnableCommand
+case class DeleteHoodieTableCommand(dft: DeleteFromTable) extends HoodieLeafRunnableCommand
   with SparkAdapterSupport with ProvidesHoodieConfig {
 
-  private val table = deleteTable.table
-
-  private val tableId = getTableIdentifier(table)
-
   override def run(sparkSession: SparkSession): Seq[Row] = {
+    val catalogTable = sparkAdapter.resolveHoodieTable(dft.table) match {
+      case Some(table) => HoodieCatalogTable(sparkSession, table)
+      case _ =>
+        throw new HoodieCatalogException("Unable to resolve Hudi table in Delete Command")
+    }
+
+    val tableId = catalogTable.table.qualifiedName
+
     logInfo(s"start execute delete command for $tableId")
 
     // Remove meta fields from the data frame
-    var df = removeMetaFields(Dataset.ofRows(sparkSession, table))
-    val condition = sparkAdapter.extractDeleteCondition(deleteTable)
+    var df = removeMetaFields(Dataset.ofRows(sparkSession, dft.table))
+    val condition = sparkAdapter.extractDeleteCondition(dft)
     if (condition != null) df = df.filter(Column(condition))
 
-    val hoodieCatalogTable = HoodieCatalogTable(sparkSession, tableId)
-    val config = buildHoodieDeleteTableConfig(hoodieCatalogTable, sparkSession)
+    val config = buildHoodieDeleteTableConfig(catalogTable, sparkSession)
+
     df.write
       .format("hudi")
       .mode(SaveMode.Append)
       .options(config)
       .save()
-    sparkSession.catalog.refreshTable(tableId.unquotedString)
+
+    sparkSession.catalog.refreshTable(tableId)
+
     logInfo(s"Finish execute delete command for $tableId")
     Seq.empty[Row]
   }

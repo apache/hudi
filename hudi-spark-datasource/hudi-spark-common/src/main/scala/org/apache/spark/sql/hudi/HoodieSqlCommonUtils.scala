@@ -51,13 +51,6 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
     override def get() = new SimpleDateFormat("yyyy-MM-dd")
   })
 
-  def getTableIdentifier(table: LogicalPlan): TableIdentifier = {
-    table match {
-      case SubqueryAlias(name, _) => sparkAdapter.getCatalystPlanUtils.toTableIdentifier(name)
-      case _ => throw new IllegalArgumentException(s"Illegal table: $table")
-    }
-  }
-
   def getTableSqlSchema(metaClient: HoodieTableMetaClient,
                         includeMetadataFields: Boolean = false): Option[StructType] = {
     val schemaResolver = new TableSchemaResolver(metaClient)
@@ -127,15 +120,6 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
       partitionPaths.forall(partitionPath => partitionPath.split("/").length == table.partitionColumnNames.size)
     } else {
       false
-    }
-  }
-
-  private def tripAlias(plan: LogicalPlan): LogicalPlan = {
-    plan match {
-      case SubqueryAlias(_, relation: LogicalPlan) =>
-        tripAlias(relation)
-      case other =>
-        other
     }
   }
 

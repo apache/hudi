@@ -206,11 +206,8 @@ case class HoodieAnalysis(sparkSession: SparkSession) extends Rule[LogicalPlan] 
 
       // Convert to CreateIndexCommand
       case ci @ CreateIndex(plan @ ResolvesToHudiTable(table), indexName, indexType, ignoreIfExists, columns, options, output) =>
-        if (ci.resolved) {
-          CreateIndexCommand(table, indexName, indexType, ignoreIfExists, columns, options, output)
-        } else {
-          ci
-        }
+        // TODO need to resolve columns
+        CreateIndexCommand(table, indexName, indexType, ignoreIfExists, columns, options, output)
 
       // Convert to DropIndexCommand
       case di @ DropIndex(plan @ ResolvesToHudiTable(table), indexName, ignoreIfNotExists, output) if di.resolved =>
