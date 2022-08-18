@@ -95,3 +95,4 @@ The list of all RFCs can be found here.
 | 57 | [DeltaStreamer Protobuf Support](./rfc-57/rfc-57.md)                                                                                                                                                                 | `UNDER REVIEW` | 
 | 58 | [Integrate column stats index with all query engines](./rfc-58/rfc-58.md)                                                                                                                                            | `UNDER REVIEW` |
 | 59 | [Multiple event_time Fields Latest Verification in a Single Table](./rfc-59/rfc-59.md)                                                                                                                               | `UNDER REVIEW` |
+| 60 | [Federated Storage Layer](./rfc-60/rfc-60.md) | `UNDER REVIEW` |
