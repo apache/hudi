@@ -46,18 +46,6 @@ trait HoodieSpark3CatalystPlanUtils extends HoodieCatalystPlansUtils {
   override def createExplainCommand(plan: LogicalPlan, extended: Boolean): LogicalPlan =
     ExplainCommand(plan, mode = if (extended) ExtendedMode else SimpleMode)
 
-  override def toTableIdentifier(aliasId: AliasIdentifier): TableIdentifier = {
-    aliasId match {
-      case AliasIdentifier(name, Seq(database)) =>
-        TableIdentifier(name, Some(database))
-      case AliasIdentifier(name, Seq(_, database)) =>
-        TableIdentifier(name, Some(database))
-      case AliasIdentifier(name, Seq()) =>
-        TableIdentifier(name, None)
-      case _ => throw new IllegalArgumentException(s"Cannot cast $aliasId to TableIdentifier")
-    }
-  }
-
   override def createJoin(left: LogicalPlan, right: LogicalPlan, joinType: JoinType): Join = {
     Join(left, right, joinType, None, JoinHint.NONE)
   }

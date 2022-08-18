@@ -49,11 +49,6 @@ trait HoodieCatalystPlansUtils {
   def createExplainCommand(plan: LogicalPlan, extended: Boolean): LogicalPlan
 
   /**
-   * Convert a AliasIdentifier to TableIdentifier.
-   */
-  def toTableIdentifier(aliasId: AliasIdentifier): TableIdentifier
-
-  /**
    * Create Join logical plan.
    */
   def createJoin(left: LogicalPlan, right: LogicalPlan, joinType: JoinType): Join

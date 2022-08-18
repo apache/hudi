@@ -44,10 +44,6 @@ object HoodieSpark2CatalystPlanUtils extends HoodieCatalystPlansUtils {
   def createExplainCommand(plan: LogicalPlan, extended: Boolean): LogicalPlan =
     ExplainCommand(plan, extended = extended)
 
-  override def toTableIdentifier(aliasId: AliasIdentifier): TableIdentifier = {
-    TableIdentifier(aliasId.identifier, aliasId.database)
-  }
-
   override def createJoin(left: LogicalPlan, right: LogicalPlan, joinType: JoinType): Join = {
     Join(left, right, joinType, None)
   }
