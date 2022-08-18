@@ -56,6 +56,7 @@ import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncClient;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
+import org.apache.hudi.metrics.Metrics;
 import org.apache.hudi.utilities.DummySchemaProvider;
 import org.apache.hudi.utilities.HoodieClusteringJob;
 import org.apache.hudi.utilities.HoodieIndexer;
@@ -739,30 +740,36 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
   @Test
   public void testUpsertsCOWContinuousMode() throws Exception {
-    testUpsertsContinuousMode(HoodieTableType.COPY_ON_WRITE, "continuous_cow");
+    testUpsertsContinuousMode(HoodieTableType.COPY_ON_WRITE, "continuous_cow", false, true);
+  }
+
+  @Test
+  public void testUpsertsCOW_ContinuousModeDisabled() throws Exception {
+    testUpsertsContinuousMode(HoodieTableType.COPY_ON_WRITE, "continuous_cow", false, false);
   }
 
   @Test
   public void testUpsertsCOWContinuousModeShutdownGracefully() throws Exception {
-    testUpsertsContinuousMode(HoodieTableType.COPY_ON_WRITE, "continuous_cow", true);
+    testUpsertsContinuousMode(HoodieTableType.COPY_ON_WRITE, "continuous_cow", true, true);
   }
 
   @Test
   public void testUpsertsMORContinuousMode() throws Exception {
-    testUpsertsContinuousMode(HoodieTableType.MERGE_ON_READ, "continuous_mor");
+    testUpsertsContinuousMode(HoodieTableType.MERGE_ON_READ, "continuous_mor", false, true);
   }
 
-  private void testUpsertsContinuousMode(HoodieTableType tableType, String tempDir) throws Exception {
-    testUpsertsContinuousMode(tableType, tempDir, false);
+  @Test
+  public void testUpsertsMOR_ContinuousModeDisabled() throws Exception {
+    testUpsertsContinuousMode(HoodieTableType.MERGE_ON_READ, "continuous_mor", false, false);
   }
 
-  private void testUpsertsContinuousMode(HoodieTableType tableType, String tempDir, boolean testShutdownGracefully) throws Exception {
+  private void testUpsertsContinuousMode(HoodieTableType tableType, String tempDir, boolean testShutdownGracefully, boolean continuousMode) throws Exception {
     String tableBasePath = dfsBasePath + "/" + tempDir;
     // Keep it higher than batch-size to test continuous mode
     int totalRecords = 3000;
     // Initial bulk insert
     HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT);
-    cfg.continuousMode = true;
+    cfg.continuousMode = continuousMode;
     if (testShutdownGracefully) {
       cfg.postWriteTerminationStrategyClass = NoNewDataTerminationStrategy.class.getName();
     }
@@ -779,6 +786,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       }
       TestHelpers.assertRecordCount(totalRecords, tableBasePath, sqlContext);
       TestHelpers.assertDistanceCount(totalRecords, tableBasePath, sqlContext);
+      assertFalse(Metrics.isInitialized());
       if (testShutdownGracefully) {
         TestDataSource.returnEmptyBatch = true;
       }
