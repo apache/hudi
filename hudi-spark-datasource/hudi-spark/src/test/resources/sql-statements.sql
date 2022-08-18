@@ -208,7 +208,7 @@ using (
   select 5 as _id, 'a5' as _name, 10 as _price, 1000 as _ts, '2021-05-08' as dt
 ) s0
 on s0._id = t0.id
-when matched then update set *
+when matched then update set id = _id, name = _name, price = _price, ts = _ts, dt = s0.dt
 when not matched then insert (id, name, price, ts, dt) values(_id, _name, _price, _ts, s0.dt);
 +----------+
 | ok       |
