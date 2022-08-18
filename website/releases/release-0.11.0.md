@@ -1,6 +1,6 @@
 ---
 title: "Release 0.11.0"
-sidebar_position: 3
+sidebar_position: 4
 layout: releases
 toc: true
 last_modified_at: 2022-01-27T22:07:00+08:00
