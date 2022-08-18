@@ -53,6 +53,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.hive.HiveSyncTool;
+import org.apache.hudi.metrics.Metrics;
 import org.apache.hudi.utilities.HiveIncrementalPuller;
 import org.apache.hudi.utilities.IdentitySplitter;
 import org.apache.hudi.utilities.UtilHelpers;
@@ -208,6 +209,7 @@ public class HoodieDeltaStreamer implements Serializable {
           throw ex;
         } finally {
           deltaSyncService.ifPresent(DeltaSyncService::close);
+          Metrics.shutdown();
           LOG.info("Shut down delta streamer");
         }
       }
