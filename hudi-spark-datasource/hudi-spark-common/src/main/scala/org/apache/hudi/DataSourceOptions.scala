@@ -152,6 +152,8 @@ object DataSourceReadOptions {
 
   val SCHEMA_EVOLUTION_ENABLED: ConfigProperty[Boolean] = HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE
 
+  val READ_SUPPORT_V2_ENABLE: ConfigProperty[Boolean] = HoodieCommonConfig.READ_SUPPORT_V2_ENABLE
+
   /** @deprecated Use {@link QUERY_TYPE} and its methods instead */
   @Deprecated
   val QUERY_TYPE_OPT_KEY = QUERY_TYPE.key()

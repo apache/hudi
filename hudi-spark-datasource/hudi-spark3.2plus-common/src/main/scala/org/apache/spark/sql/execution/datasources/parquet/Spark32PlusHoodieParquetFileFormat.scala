@@ -402,7 +402,7 @@ object Spark32PlusHoodieParquetFileFormat {
   /**
    * NOTE: This method is specific to Spark 3.2.0
    */
-  private def createParquetFilters(args: Any*): ParquetFilters = {
+  def createParquetFilters(args: Any*): ParquetFilters = {
     // NOTE: ParquetFilters ctor args contain Scala enum, therefore we can't look it
     //       up by arg types, and have to instead rely on the number of args based on individual class;
     //       the ctor order is not guaranteed
@@ -414,7 +414,7 @@ object Spark32PlusHoodieParquetFileFormat {
   /**
    * NOTE: This method is specific to Spark 3.2.0
    */
-  private def createParquetReadSupport(args: Any*): ParquetReadSupport = {
+  def createParquetReadSupport(args: Any*): ParquetReadSupport = {
     // NOTE: ParquetReadSupport ctor args contain Scala enum, therefore we can't look it
     //       up by arg types, and have to instead rely on the number of args based on individual class;
     //       the ctor order is not guaranteed
@@ -426,7 +426,7 @@ object Spark32PlusHoodieParquetFileFormat {
   /**
    * NOTE: This method is specific to Spark 3.2.0
    */
-  private def createVectorizedParquetRecordReader(args: Any*): VectorizedParquetRecordReader = {
+  def createVectorizedParquetRecordReader(args: Any*): VectorizedParquetRecordReader = {
     // NOTE: ParquetReadSupport ctor args contain Scala enum, therefore we can't look it
     //       up by arg types, and have to instead rely on the number of args based on individual class;
     //       the ctor order is not guaranteed
@@ -445,7 +445,7 @@ object Spark32PlusHoodieParquetFileFormat {
     }
   }
 
-  private def rebuildFilterFromParquet(oldFilter: Filter, fileSchema: InternalSchema, querySchema: InternalSchema): Filter = {
+  def rebuildFilterFromParquet(oldFilter: Filter, fileSchema: InternalSchema, querySchema: InternalSchema): Filter = {
     if (fileSchema == null || querySchema == null) {
       oldFilter
     } else {

@@ -17,8 +17,8 @@
 
 package org.apache.spark.sql.hudi.analysis
 
+import org.apache.hudi.{DataSourceReadOptions, DefaultSource, SparkAdapterSupport}
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.{DefaultSource, SparkAdapterSupport}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.{ResolvedTable, UnresolvedPartitionSpec}
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, HoodieCatalogTable}
@@ -52,12 +52,13 @@ class HoodieDataSourceV2ToV1Fallback(sparkSession: SparkSession) extends Rule[Lo
   with ProvidesHoodieConfig {
 
   override def apply(plan: LogicalPlan): LogicalPlan = plan.resolveOperatorsDown {
-    case v2r @ DataSourceV2Relation(v2Table: HoodieInternalV2Table, _, _, _, _) =>
+    case v2r @ DataSourceV2Relation(v2Table: HoodieInternalV2Table, _, _, _, _)
+      if !(sparkSession.conf.get(DataSourceReadOptions.READ_SUPPORT_V2_ENABLE.key,
+        DataSourceReadOptions.READ_SUPPORT_V2_ENABLE.defaultValue.toString).toBoolean) =>
       val output = v2r.output
       val catalogTable = v2Table.catalogTable.map(_ => v2Table.v1Table)
       val relation = new DefaultSource().createRelation(new SQLContext(sparkSession),
         buildHoodieConfig(v2Table.hoodieCatalogTable), v2Table.hoodieCatalogTable.tableSchema)
-
       LogicalRelation(relation, output, catalogTable, isStreaming = false)
   }
 }

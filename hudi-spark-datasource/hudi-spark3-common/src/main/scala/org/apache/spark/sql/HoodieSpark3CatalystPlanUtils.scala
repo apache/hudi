@@ -19,7 +19,7 @@ package org.apache.spark.sql
 
 import org.apache.hudi.spark3.internal.ReflectUtil
 import org.apache.spark.sql.catalyst.analysis.{TableOutputResolver, UnresolvedRelation}
-import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeSet, ProjectionOverSchema}
+import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeSet, Expression, Like, ProjectionOverSchema}
 import org.apache.spark.sql.catalyst.plans.JoinType
 import org.apache.spark.sql.catalyst.plans.logical.{InsertIntoStatement, Join, JoinHint, LogicalPlan}
 import org.apache.spark.sql.catalyst.{AliasIdentifier, TableIdentifier}
@@ -83,5 +83,9 @@ trait HoodieSpark3CatalystPlanUtils extends HoodieCatalystPlansUtils {
   override def createInsertInto(table: LogicalPlan, partition: Map[String, Option[String]],
                                 query: LogicalPlan, overwrite: Boolean, ifPartitionNotExists: Boolean): LogicalPlan = {
     ReflectUtil.createInsertInto(table, partition, Seq.empty[String], query, overwrite, ifPartitionNotExists)
+  }
+
+  override def createLike(left: Expression, right: Expression): Expression = {
+    new Like(left, right)
   }
 }
