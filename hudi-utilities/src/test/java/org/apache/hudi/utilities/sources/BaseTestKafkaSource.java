@@ -20,7 +20,6 @@ package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
@@ -49,7 +48,6 @@ import java.util.Map;
 import java.util.Properties;
 
 import static org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.Config.ENABLE_KAFKA_COMMIT_OFFSET;
-import static org.apache.hudi.utilities.testutils.UtilitiesTestBase.Helpers.jsonifyRecords;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -78,9 +76,10 @@ abstract class BaseTestKafkaSource extends SparkClientFunctionalTestHarness {
   }
 
   abstract TypedProperties createPropsForKafkaSource(String topic, Long maxEventsToReadFromKafkaSource, String resetStrategy);
-  abstract SourceFormatAdapter createSource(TypedProperties props);
-  abstract void sendMessagesToKafka(String topic, int count, int numPartitions);
 
+  abstract SourceFormatAdapter createSource(TypedProperties props);
+
+  abstract void sendMessagesToKafka(String topic, int count, int numPartitions);
 
   @Test
   public void testKafkaSource() {

@@ -170,7 +170,6 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
     assertEquals(Option.empty(), fetch6.getBatch());
   }
 
-
   @Override
   void sendMessagesToKafka(String topic, int count, int numPartitions) {
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
