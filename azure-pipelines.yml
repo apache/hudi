@@ -73,7 +73,7 @@ parameters:
 
 variables:
   BUILD_PROFILES: '-Dscala-2.11 -Dspark2 -Dflink1.14'
-  PLUGIN_OPTS: '-Dcheckstyle.skip=true -Drat.skip=true -Djacoco.skip=true -ntp -B -V -Pwarn-log -Djava.util.logging.config.file=conf/logging/simplelogger.properties'
+  PLUGIN_OPTS: '-Dcheckstyle.skip=true -Drat.skip=true -Djacoco.skip=true -ntp -B -V -Pwarn-log -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.shade=warn -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.dependency=warn'
   MVN_OPTS_INSTALL: '-DskipTests $(BUILD_PROFILES) $(PLUGIN_OPTS)'
   MVN_OPTS_TEST: '-fae -Pwarn-log $(BUILD_PROFILES) $(PLUGIN_OPTS)'
   SPARK_VERSION: '2.4.4'
