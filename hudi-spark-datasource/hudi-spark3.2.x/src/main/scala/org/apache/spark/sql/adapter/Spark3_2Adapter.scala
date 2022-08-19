@@ -28,7 +28,7 @@ import org.apache.spark.sql.catalyst.plans.logical.{Command, DeleteFromTable}
 import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark32PlusHoodieParquetFileFormat}
 import org.apache.spark.sql.execution.datasources.{FilePartition, FileScanRDD, PartitionedFile}
 import org.apache.spark.sql.hudi.analysis.TableValuedFunctions
-import org.apache.spark.sql.parser.HoodieSpark3_2ExtendedSqlParser
+import org.apache.spark.sql.parser.{HoodieExtendedParserInterface, HoodieSpark3_2ExtendedSqlParser}
 import org.apache.spark.sql.types.{DataType, StructType}
 import org.apache.spark.sql.vectorized.ColumnarUtils
 
@@ -49,11 +49,8 @@ class Spark3_2Adapter extends BaseSpark3Adapter {
   override def createAvroDeserializer(rootAvroType: Schema, rootCatalystType: DataType): HoodieAvroDeserializer =
     new HoodieSpark3_2AvroDeserializer(rootAvroType, rootCatalystType)
 
-  override def createExtendedSparkParser: Option[(SparkSession, ParserInterface) => ParserInterface] = {
-    Some(
-      (spark: SparkSession, delegate: ParserInterface) => new HoodieSpark3_2ExtendedSqlParser(spark, delegate)
-    )
-  }
+  override def createExtendedSparkParser(spark: SparkSession, delegate: ParserInterface): HoodieExtendedParserInterface =
+    new HoodieSpark3_2ExtendedSqlParser(spark, delegate)
 
   override def createHoodieParquetFileFormat(appendPartitionValues: Boolean): Option[ParquetFileFormat] = {
     Some(new Spark32PlusHoodieParquetFileFormat(appendPartitionValues))
@@ -65,13 +62,6 @@ class Spark3_2Adapter extends BaseSpark3Adapter {
                                        readDataSchema: StructType,
                                        metadataColumns: Seq[AttributeReference] = Seq.empty): FileScanRDD = {
     new Spark32HoodieFileScanRDD(sparkSession, readFunction, filePartitions)
-  }
-
-  override def resolveDeleteFromTable(deleteFromTable: Command,
-                                      resolveExpression: Expression => Expression): DeleteFromTable = {
-    val deleteFromTableCommand = deleteFromTable.asInstanceOf[DeleteFromTable]
-    val resolvedCondition = deleteFromTableCommand.condition.map(resolveExpression)
-    DeleteFromTable(deleteFromTableCommand.table, resolvedCondition)
   }
 
   override def extractDeleteCondition(deleteFromTable: Command): Expression = {

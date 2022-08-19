@@ -60,10 +60,6 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
 
   override def getSparkParsePartitionUtil: SparkParsePartitionUtil = Spark3ParsePartitionUtil
 
-  override def parseMultipartIdentifier(parser: ParserInterface, sqlText: String): Seq[String] = {
-    parser.parseMultipartIdentifier(sqlText)
-  }
-
   /**
    * Combine [[PartitionedFile]] to [[FilePartition]] according to `maxSplitBytes`.
    */

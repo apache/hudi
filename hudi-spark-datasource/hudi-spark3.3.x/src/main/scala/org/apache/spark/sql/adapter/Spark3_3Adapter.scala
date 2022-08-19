@@ -28,7 +28,7 @@ import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark32PlusHoodieParquetFileFormat}
 import org.apache.spark.sql.execution.datasources.{FilePartition, FileScanRDD, PartitionedFile}
 import org.apache.spark.sql.hudi.analysis.TableValuedFunctions
-import org.apache.spark.sql.parser.HoodieSpark3_3ExtendedSqlParser
+import org.apache.spark.sql.parser.{HoodieExtendedParserInterface, HoodieSpark3_3ExtendedSqlParser}
 import org.apache.spark.sql.types.{DataType, StructType}
 import org.apache.spark.sql.vectorized.ColumnarBatchRow
 import org.apache.spark.sql._
@@ -50,11 +50,8 @@ class Spark3_3Adapter extends BaseSpark3Adapter {
   override def createAvroDeserializer(rootAvroType: Schema, rootCatalystType: DataType): HoodieAvroDeserializer =
     new HoodieSpark3_3AvroDeserializer(rootAvroType, rootCatalystType)
 
-  override def createExtendedSparkParser: Option[(SparkSession, ParserInterface) => ParserInterface] = {
-    Some(
-      (spark: SparkSession, delegate: ParserInterface) => new HoodieSpark3_3ExtendedSqlParser(spark, delegate)
-    )
-  }
+  override def createExtendedSparkParser(spark: SparkSession, delegate: ParserInterface): HoodieExtendedParserInterface =
+    new HoodieSpark3_3ExtendedSqlParser(spark, delegate)
 
   override def createHoodieParquetFileFormat(appendPartitionValues: Boolean): Option[ParquetFileFormat] = {
     Some(new Spark32PlusHoodieParquetFileFormat(appendPartitionValues))
@@ -68,19 +65,8 @@ class Spark3_3Adapter extends BaseSpark3Adapter {
     new Spark33HoodieFileScanRDD(sparkSession, readFunction, filePartitions, readDataSchema, metadataColumns)
   }
 
-  override def resolveDeleteFromTable(deleteFromTable: Command,
-                                      resolveExpression: Expression => Expression): DeleteFromTable = {
-    val deleteFromTableCommand = deleteFromTable.asInstanceOf[DeleteFromTable]
-    DeleteFromTable(deleteFromTableCommand.table, resolveExpression(deleteFromTableCommand.condition))
-  }
-
   override def extractDeleteCondition(deleteFromTable: Command): Expression = {
     deleteFromTable.asInstanceOf[DeleteFromTable].condition
-  }
-
-  override def getQueryParserFromExtendedSqlParser(session: SparkSession, delegate: ParserInterface,
-                                                   sqlText: String): LogicalPlan = {
-    new HoodieSpark3_3ExtendedSqlParser(session, delegate).parseQuery(sqlText)
   }
 
   override def injectTableFunctions(extensions: SparkSessionExtensions): Unit = {

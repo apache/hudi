@@ -28,7 +28,7 @@ import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark31HoodieParquetFileFormat}
 import org.apache.spark.sql.execution.datasources.{FilePartition, FileScanRDD, PartitionedFile}
 import org.apache.spark.sql.hudi.SparkAdapter
-import org.apache.spark.sql.parser.HoodieSpark3_1ExtendedSqlParser
+import org.apache.spark.sql.parser.{HoodieExtendedParserInterface, HoodieSpark3_1ExtendedSqlParser}
 import org.apache.spark.sql.types.{DataType, StructType}
 import org.apache.spark.sql.vectorized.ColumnarUtils
 import org.apache.spark.sql.{HoodieCatalystExpressionUtils, HoodieCatalystPlansUtils, HoodieSpark31CatalogUtils, HoodieSpark31CatalystExpressionUtils, HoodieSpark31CatalystPlanUtils, HoodieSpark3CatalogUtils, SparkSession}
@@ -50,12 +50,8 @@ class Spark3_1Adapter extends BaseSpark3Adapter {
   override def createAvroDeserializer(rootAvroType: Schema, rootCatalystType: DataType): HoodieAvroDeserializer =
     new HoodieSpark3_1AvroDeserializer(rootAvroType, rootCatalystType)
 
-  override def createExtendedSparkParser: Option[(SparkSession, ParserInterface) => ParserInterface] = {
-    // since spark3.2.1 support datasourceV2, so we need to a new SqlParser to deal DDL statment
-    Some(
-      (spark: SparkSession, delegate: ParserInterface) => new HoodieSpark3_1ExtendedSqlParser(spark, delegate)
-    )
-  }
+  override def createExtendedSparkParser(spark: SparkSession, delegate: ParserInterface): HoodieExtendedParserInterface =
+    new HoodieSpark3_1ExtendedSqlParser(spark, delegate)
 
   override def createHoodieParquetFileFormat(appendPartitionValues: Boolean): Option[ParquetFileFormat] = {
     Some(new Spark31HoodieParquetFileFormat(appendPartitionValues))
@@ -67,13 +63,6 @@ class Spark3_1Adapter extends BaseSpark3Adapter {
                                        readDataSchema: StructType,
                                        metadataColumns: Seq[AttributeReference] = Seq.empty): FileScanRDD = {
     new Spark31HoodieFileScanRDD(sparkSession, readFunction, filePartitions)
-  }
-
-  override def resolveDeleteFromTable(deleteFromTable: Command,
-                                      resolveExpression: Expression => Expression): DeleteFromTable = {
-    val deleteFromTableCommand = deleteFromTable.asInstanceOf[DeleteFromTable]
-    val resolvedCondition = deleteFromTableCommand.condition.map(resolveExpression)
-    DeleteFromTable(deleteFromTableCommand.table, resolvedCondition)
   }
 
   override def extractDeleteCondition(deleteFromTable: Command): Expression = {

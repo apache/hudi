@@ -23,17 +23,15 @@ import org.apache.hadoop.fs.Path
 import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSchemaConverters, HoodieAvroSerializer}
-import org.apache.spark.sql.catalyst.TableIdentifier
-import org.apache.spark.sql.catalyst.analysis.{EliminateSubqueryAliases, UnresolvedRelation}
+import org.apache.spark.sql.catalyst.{InternalRow, TableIdentifier}
+import org.apache.spark.sql.catalyst.analysis.EliminateSubqueryAliases
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
-import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, InterpretedPredicate}
 import org.apache.spark.sql.catalyst.parser.ParserInterface
-import org.apache.spark.sql.catalyst.plans.logical.{Command, LogicalPlan, SubqueryAlias}
+import org.apache.spark.sql.catalyst.plans.logical.{Command, LogicalPlan}
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
-import org.apache.spark.sql.execution.datasources.{FilePartition, FileScanRDD, LogicalRelation, PartitionedFile, SparkParsePartitionUtil}
-import org.apache.spark.sql.internal.SQLConf
+import org.apache.spark.sql.execution.datasources._
+import org.apache.spark.sql.parser.HoodieExtendedParserInterface
 import org.apache.spark.sql.sources.BaseRelation
 import org.apache.spark.sql.types.{DataType, StructType}
 import org.apache.spark.sql.{HoodieCatalogUtils, HoodieCatalystExpressionUtils, HoodieCatalystPlansUtils, Row, SQLContext, SparkSession, SparkSessionExtensions}
@@ -99,17 +97,12 @@ trait SparkAdapter extends Serializable {
   /**
    * Create the hoodie's extended spark sql parser.
    */
-  def createExtendedSparkParser: Option[(SparkSession, ParserInterface) => ParserInterface] = None
+  def createExtendedSparkParser(spark: SparkSession, delegate: ParserInterface): HoodieExtendedParserInterface
 
   /**
    * Create the SparkParsePartitionUtil.
    */
   def getSparkParsePartitionUtil: SparkParsePartitionUtil
-
-  /**
-   * ParserInterface#parseMultipartIdentifier is supported since spark3, for spark2 this should not be called.
-   */
-  def parseMultipartIdentifier(parser: ParserInterface, sqlText: String): Seq[String]
 
   /**
    * Combine [[PartitionedFile]] to [[FilePartition]] according to `maxSplitBytes`.
@@ -172,26 +165,10 @@ trait SparkAdapter extends Serializable {
                               metadataColumns: Seq[AttributeReference] = Seq.empty): FileScanRDD
 
   /**
-   * Resolve [[DeleteFromTable]]
-   * SPARK-38626 condition is no longer Option in Spark 3.3
-   */
-  def resolveDeleteFromTable(deleteFromTable: Command,
-                             resolveExpression: Expression => Expression): LogicalPlan
-
-  /**
    * Extract condition in [[DeleteFromTable]]
    * SPARK-38626 condition is no longer Option in Spark 3.3
    */
   def extractDeleteCondition(deleteFromTable: Command): Expression
-
-  /**
-   * Get parseQuery from ExtendedSqlParser, only for Spark 3.3+
-   */
-  def getQueryParserFromExtendedSqlParser(session: SparkSession, delegate: ParserInterface,
-                                          sqlText: String): LogicalPlan = {
-    // unsupported by default
-    throw new UnsupportedOperationException(s"Unsupported parseQuery method in Spark earlier than Spark 3.3.0")
-  }
 
   /**
    * Converts instance of [[StorageLevel]] to a corresponding string

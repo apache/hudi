@@ -24,7 +24,7 @@ import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.execution.SparkSqlAstBuilder
 
 // TODO: we should remove this file when we support datasourceV2 for hoodie on spark3.1x
-class HoodieSpark312SqlAstBuilder(sparkSession: SparkSession) extends SparkSqlAstBuilder {
+class HoodieSpark31SqlAstBuilder(sparkSession: SparkSession) extends SparkSqlAstBuilder {
 
   /**
     * Parse a [[AlterTableAlterColumnStatement]] command to alter a column's property.
