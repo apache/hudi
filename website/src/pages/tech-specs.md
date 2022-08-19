@@ -1,4 +1,10 @@
-# Apache Hudi Technical Specification [DRAFT]
+# Apache Hudi Technical Specification
+
+
+| Syntax        | Description |
+|:--------------|:-----------:|
+| Last Updated  |  Aug 2022   |
+| [Table Version](https://github.com/apache/hudi/blob/master/hudi-common/src/main/java/org/apache/hudi/common/table/HoodieTableVersion.java#L29) |      4      |
 
 
 This document is a specification for the Hudi's Storage Format which transforms immutable cloud/file storage systems into transactional data lakes. 
@@ -25,13 +31,16 @@ This document is intended as reference guide for any compute engines, that aim t
 
 At a high level, Hudi organizes data into a directory structure under the base path (root directory for the Hudi table). The directory structure can be flat (non-partitioned) or based on coarse-grained partitioning values set for the table. Non-partitioned tables store all the data files under the base path. 
 Note that, unlike Hive style partitioning, partition columns are not removed from data files and partitioning is a mere organization of data files. A special reserved *.hoodie* directory under the base path is used to store transaction logs and metadata.
+A special file `hoodie.properties` persists table level configurations, shared by writers and readers of the table. These configurations are explained [here](https://github.com/apache/hudi/blob/master/hudi-common/src/main/java/org/apache/hudi/common/table/HoodieTableConfig.java), 
+and any config without a default value needs to be specified during table creation.
 
-	/data/hudi_trips/ 					<== BASE PATH
-	├── .hoodie/      					<== META PATH
-	│   └── metadata/ 
+	/data/hudi_trips/ 					<== Base Path
+	├── .hoodie/      					<== Meta Path
+    |   └── hoodie.properties           <== Table Configs
+	│   └── metadata/                   <== Table Metadata
 	├── americas/
 	│   ├── brazil/
-	│   │   └── sao_paulo/				<== PARTITION PATH 
+	│   │   └── sao_paulo/				<== Partition Path 
 	│   │       ├── <data_files>
 	│   └── united_states/
 	│       └── san_francisco/
@@ -269,7 +278,7 @@ Readers will use snapshot isolation to query a Hudi table at a consistent point 
    1. Contents of the log files should be loaded into an effective point lookup data structure (in-memory or persisted)
    2. Duplicate record keys should be merged based on the ordering field specified. It is important to order the inserts and deletes in the right order to be consistent and idempotent. 
    3. When the base file is scanned, for every record block, the reader has to lookup if there is a newer version of the data available for the record keys in the block and merge them into the record iterator. 
-
+4. In addition, all the "replacecommit" metadata needs to read to filter out flle groups, that have been replaced with newer file groups, by actions like clustering.
 
 
 ## Writer Expectations
@@ -286,6 +295,11 @@ Writer into Hudi will have to ingest new records, updates to existing records or
 6. Synchronizing Indexes and metadata needs to be done in the same transaction that commits the modifications to the table. 
 
 
+## Compatibility
+
+Compatibility between different readers and writers is enforced through the `hoodie.table.version` table config. Hudi storage format evolves in a backwards compatible way for readers, where newer readers
+can read older table versions correctly. However older readers may be required to upgrade in order to read higher table versions. Hence, we recommend upgrading readers first, before upgrading writers when
+the table version evolves.
 
 ## Balancing write and query performance
 
