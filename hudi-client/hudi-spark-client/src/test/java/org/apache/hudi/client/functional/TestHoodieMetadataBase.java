@@ -36,9 +36,11 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.HoodieMetadataTestTable;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.config.HoodieCompactionConfig;
+import org.apache.hudi.config.HoodieCleanConfig;
+import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieStorageConfig;
+import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsGraphiteConfig;
@@ -338,9 +340,11 @@ public class TestHoodieMetadataBase extends HoodieClientTestHarness {
         .withParallelism(2, 2).withDeleteParallelism(2).withRollbackParallelism(2).withFinalizeWriteParallelism(2)
         .withAutoCommit(autoCommit)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024 * 1024)
-            .withInlineCompaction(false).withMaxNumDeltaCommitsBeforeCompaction(1)
+            .withInlineCompaction(false).withMaxNumDeltaCommitsBeforeCompaction(1).build())
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
             .withFailedWritesCleaningPolicy(policy)
-            .withAutoClean(false).retainCommits(1).retainFileVersions(1).build())
+            .withAutoClean(false).retainCommits(1).retainFileVersions(1)
+            .build())
         .withStorageConfig(HoodieStorageConfig.newBuilder().hfileMaxFileSize(1024 * 1024 * 1024).build())
         .withEmbeddedTimelineServerEnabled(true).forTable("test-trip-table")
         .withFileSystemViewConfig(new FileSystemViewStorageConfig.Builder()
@@ -390,16 +394,20 @@ public class TestHoodieMetadataBase extends HoodieClientTestHarness {
         .withPath(HoodieTableMetadata.getMetadataTableBasePath(writeConfig.getBasePath()))
         .withSchema(HoodieMetadataRecord.getClassSchema().toString())
         .forTable(writeConfig.getTableName() + METADATA_TABLE_NAME_SUFFIX)
-        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+        // we will trigger cleaning manually, to control the instant times
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
             .withAsyncClean(writeConfig.isMetadataAsyncClean())
-            // we will trigger cleaning manually, to control the instant times
             .withAutoClean(false)
             .withCleanerParallelism(parallelism)
             .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS)
             .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
             .retainCommits(writeConfig.getMetadataCleanerCommitsRetained())
-            .archiveCommitsWith(minCommitsToKeep, maxCommitsToKeep)
-            // we will trigger compaction manually, to control the instant times
+            .build())
+        // we will trigger archival manually, to control the instant times
+        .withArchivalConfig(HoodieArchivalConfig.newBuilder()
+           .archiveCommitsWith(minCommitsToKeep, maxCommitsToKeep).build())
+        // we will trigger compaction manually, to control the instant times
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withInlineCompaction(false)
             .withMaxNumDeltaCommitsBeforeCompaction(writeConfig.getMetadataCompactDeltaCommitMax()).build())
         .withParallelism(parallelism, parallelism)

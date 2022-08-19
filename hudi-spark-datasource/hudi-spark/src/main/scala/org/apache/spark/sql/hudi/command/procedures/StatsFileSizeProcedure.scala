@@ -46,7 +46,7 @@ class StatsFileSizeProcedure extends BaseProcedure with ProcedureBuilder {
     StructField("95th", DataTypes.DoubleType, nullable = true, Metadata.empty),
     StructField("max", DataTypes.LongType, nullable = true, Metadata.empty),
     StructField("num_files", DataTypes.IntegerType, nullable = true, Metadata.empty),
-    StructField("stddev", DataTypes.DoubleType, nullable = true, Metadata.empty)
+    StructField("std_dev", DataTypes.DoubleType, nullable = true, Metadata.empty)
   ))
 
   override def call(args: ProcedureArgs): Seq[Row] = {
@@ -100,7 +100,7 @@ class StatsFileSizeProcedure extends BaseProcedure with ProcedureBuilder {
 
 object StatsFileSizeProcedure {
   val MAX_FILES = 1000000
-  val NAME = "stats_filesizes"
+  val NAME = "stats_file_sizes"
 
   def builder: Supplier[ProcedureBuilder] = new Supplier[ProcedureBuilder] {
     override def get(): ProcedureBuilder = new StatsFileSizeProcedure()

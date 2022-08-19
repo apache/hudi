@@ -110,6 +110,37 @@ public class FileSystemViewStorageConfig extends HoodieConfig {
       .defaultValue(5 * 60) // 5 min
       .withDocumentation("Timeout in seconds, to wait for API requests against a remote file system view. e.g timeline server.");
 
+  public static final ConfigProperty<String> REMOTE_RETRY_ENABLE = ConfigProperty
+          .key("hoodie.filesystem.view.remote.retry.enable")
+          .defaultValue("false")
+          .sinceVersion("0.12.0")
+          .withDocumentation("Whether to enable API request retry for remote file system view.");
+
+  public static final ConfigProperty<Integer> REMOTE_MAX_RETRY_NUMBERS = ConfigProperty
+      .key("hoodie.filesystem.view.remote.retry.max_numbers")
+      .defaultValue(3) // 3 times
+      .sinceVersion("0.12.0")
+      .withDocumentation("Maximum number of retry for API requests against a remote file system view. e.g timeline server.");
+
+  public static final ConfigProperty<Long> REMOTE_INITIAL_RETRY_INTERVAL_MS = ConfigProperty
+      .key("hoodie.filesystem.view.remote.retry.initial_interval_ms")
+      .defaultValue(100L)
+      .sinceVersion("0.12.0")
+      .withDocumentation("Amount of time (in ms) to wait, before retry to do operations on storage.");
+
+  public static final ConfigProperty<Long> REMOTE_MAX_RETRY_INTERVAL_MS = ConfigProperty
+      .key("hoodie.filesystem.view.remote.retry.max_interval_ms")
+      .defaultValue(2000L)
+      .sinceVersion("0.12.0")
+      .withDocumentation("Maximum amount of time (in ms), to wait for next retry.");
+
+  public static final ConfigProperty<String> RETRY_EXCEPTIONS = ConfigProperty
+          .key("hoodie.filesystem.view.remote.retry.exceptions")
+          .defaultValue("")
+          .sinceVersion("0.12.0")
+          .withDocumentation("The class name of the Exception that needs to be re-tryed, separated by commas. "
+                  + "Default is empty which means retry all the IOException and RuntimeException from Remote Request.");
+
   public static final ConfigProperty<String> REMOTE_BACKUP_VIEW_ENABLE = ConfigProperty
       .key("hoodie.filesystem.remote.backup.view.enable")
       .defaultValue("true") // Need to be disabled only for tests.
@@ -142,6 +173,26 @@ public class FileSystemViewStorageConfig extends HoodieConfig {
 
   public Integer getRemoteTimelineClientTimeoutSecs() {
     return getInt(REMOTE_TIMEOUT_SECS);
+  }
+
+  public boolean isRemoteTimelineClientRetryEnabled() {
+    return getBoolean(REMOTE_RETRY_ENABLE);
+  }
+
+  public Integer getRemoteTimelineClientMaxRetryNumbers() {
+    return getInt(REMOTE_MAX_RETRY_NUMBERS);
+  }
+
+  public Long getRemoteTimelineInitialRetryIntervalMs() {
+    return getLong(REMOTE_INITIAL_RETRY_INTERVAL_MS);
+  }
+
+  public Long getRemoteTimelineClientMaxRetryIntervalMs() {
+    return getLong(REMOTE_MAX_RETRY_INTERVAL_MS);
+  }
+
+  public String getRemoteTimelineClientRetryExceptions() {
+    return getString(RETRY_EXCEPTIONS);
   }
 
   public long getMaxMemoryForFileGroupMap() {
@@ -242,6 +293,31 @@ public class FileSystemViewStorageConfig extends HoodieConfig {
 
     public Builder withRemoteTimelineClientTimeoutSecs(Integer timelineClientTimeoutSecs) {
       fileSystemViewStorageConfig.setValue(REMOTE_TIMEOUT_SECS, timelineClientTimeoutSecs.toString());
+      return this;
+    }
+
+    public Builder withRemoteTimelineClientRetry(boolean enableRetry) {
+      fileSystemViewStorageConfig.setValue(REMOTE_RETRY_ENABLE, Boolean.toString(enableRetry));
+      return this;
+    }
+
+    public Builder withRemoteTimelineClientMaxRetryNumbers(Integer maxRetryNumbers) {
+      fileSystemViewStorageConfig.setValue(REMOTE_MAX_RETRY_NUMBERS, maxRetryNumbers.toString());
+      return this;
+    }
+
+    public Builder withRemoteTimelineInitialRetryIntervalMs(Long initialRetryIntervalMs) {
+      fileSystemViewStorageConfig.setValue(REMOTE_INITIAL_RETRY_INTERVAL_MS, initialRetryIntervalMs.toString());
+      return this;
+    }
+
+    public Builder withRemoteTimelineClientMaxRetryIntervalMs(Long maxRetryIntervalMs) {
+      fileSystemViewStorageConfig.setValue(REMOTE_MAX_RETRY_INTERVAL_MS, maxRetryIntervalMs.toString());
+      return this;
+    }
+
+    public Builder withRemoteTimelineClientRetryExceptions(String retryExceptions) {
+      fileSystemViewStorageConfig.setValue(RETRY_EXCEPTIONS, retryExceptions);
       return this;
     }
 

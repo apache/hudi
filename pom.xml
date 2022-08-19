@@ -29,7 +29,7 @@
   <groupId>org.apache.hudi</groupId>
   <artifactId>hudi</artifactId>
   <packaging>pom</packaging>
-  <version>0.12.0-SNAPSHOT</version>
+  <version>0.13.0-SNAPSHOT</version>
   <description>Apache Hudi brings stream style processing on big data</description>
   <url>https://github.com/apache/hudi</url>
   <name>Hudi</name>
@@ -99,6 +99,9 @@
     <kafka.version>2.0.0</kafka.version>
     <kafka.spark3.version>2.4.1</kafka.spark3.version>
     <pulsar.version>2.8.1</pulsar.version>
+    <pulsar.spark.version>${pulsar.spark.scala11.version}</pulsar.spark.version>
+    <pulsar.spark.scala11.version>2.4.5</pulsar.spark.scala11.version>
+    <pulsar.spark.scala12.version>3.1.1.4</pulsar.spark.scala12.version>
     <confluent.version>5.3.4</confluent.version>
     <glassfish.version>2.17</glassfish.version>
     <glassfish.el.version>3.0.1-b12</glassfish.el.version>
@@ -107,13 +110,15 @@
     <junit.vintage.version>5.7.2</junit.vintage.version>
     <junit.platform.version>1.7.2</junit.platform.version>
     <mockito.jupiter.version>3.3.3</mockito.jupiter.version>
-    <log4j.version>1.2.17</log4j.version>
     <log4j.test.version>2.17.2</log4j.test.version>
+    <log4j2.version>2.17.2</log4j2.version>
     <slf4j.version>1.7.30</slf4j.version>
     <joda.version>2.9.9</joda.version>
     <hadoop.version>2.10.1</hadoop.version>
     <hive.groupid>org.apache.hive</hive.groupid>
     <hive.version>2.3.1</hive.version>
+    <presto.version>0.273</presto.version>
+    <trino.version>390</trino.version>
     <hive.exec.classifier>core</hive.exec.classifier>
     <metrics.version>4.1.1</metrics.version>
     <orc.version>1.6.0</orc.version>
@@ -122,23 +127,32 @@
     <http.version>4.4.1</http.version>
     <spark.version>${spark2.version}</spark.version>
     <spark2.version>2.4.4</spark2.version>
-    <spark3.version>3.2.1</spark3.version>
+    <spark3.version>3.3.0</spark3.version>
     <sparkbundle.version></sparkbundle.version>
     <delta.version>${delta.spark2.4.version}</delta.version>
     <delta.spark2.4.version>0.6.1</delta.spark2.4.version>
     <delta.spark3.1.version>1.0.1</delta.spark3.1.version>
     <delta.spark3.2.version>1.1.0</delta.spark3.2.version>
-    <flink1.14.version>1.14.4</flink1.14.version>
+    <flink1.15.version>1.15.1</flink1.15.version>
+    <flink1.14.version>1.14.5</flink1.14.version>
     <flink1.13.version>1.13.6</flink1.13.version>
-    <flink.version>${flink1.14.version}</flink.version>
-    <hudi.flink.module>hudi-flink1.14.x</hudi.flink.module>
-    <flink.bundle.version>1.14</flink.bundle.version>
+    <flink.version>${flink1.13.version}</flink.version>
+    <hudi.flink.module>hudi-flink1.13.x</hudi.flink.module>
+    <flink.bundle.version>1.13</flink.bundle.version>
+    <flink.format.parquet.version>1.12.2</flink.format.parquet.version>
     <flink.runtime.artifactId>flink-runtime</flink.runtime.artifactId>
     <flink.table.runtime.artifactId>flink-table-runtime_${scala.binary.version}</flink.table.runtime.artifactId>
     <flink.table.planner.artifactId>flink-table-planner_${scala.binary.version}</flink.table.planner.artifactId>
-    <flink.format.parquet.version>1.12.2</flink.format.parquet.version>
+    <flink.parquet.artifactId>flink-parquet</flink.parquet.artifactId>
+    <flink.statebackend.rocksdb.artifactId>flink-statebackend-rocksdb</flink.statebackend.rocksdb.artifactId>
+    <flink.test.utils.artifactId>flink-test-utils</flink.test.utils.artifactId>
+    <flink.streaming.java.artifactId>flink-streaming-java</flink.streaming.java.artifactId>
+    <flink.clients.artifactId>flink-clients</flink.clients.artifactId>
+    <flink.connector.kafka.artifactId>flink-connector-kafka</flink.connector.kafka.artifactId>
+    <flink.hadoop.compatibility.artifactId>flink-hadoop-compatibility_${scala.binary.version}</flink.hadoop.compatibility.artifactId>
     <spark31.version>3.1.3</spark31.version>
     <spark32.version>3.2.1</spark32.version>
+    <spark33.version>3.3.0</spark33.version>
     <hudi.spark.module>hudi-spark2</hudi.spark.module>
     <hudi.spark.common.module>hudi-spark2-common</hudi.spark.common.module>
     <avro.version>1.8.2</avro.version>
@@ -517,9 +531,19 @@
     <dependencies>
       <!-- Logging -->
       <dependency>
-        <groupId>log4j</groupId>
-        <artifactId>log4j</artifactId>
-        <version>${log4j.version}</version>
+        <groupId>org.apache.logging.log4j</groupId>
+        <artifactId>log4j-api</artifactId>
+        <version>${log4j2.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.logging.log4j</groupId>
+        <artifactId>log4j-core</artifactId>
+        <version>${log4j2.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.logging.log4j</groupId>
+        <artifactId>log4j-1.2-api</artifactId>
+        <version>${log4j2.version}</version>
       </dependency>
 
       <!-- Fasterxml -->
@@ -647,19 +671,19 @@
       <!-- Flink -->
       <dependency>
         <groupId>org.apache.flink</groupId>
-        <artifactId>flink-streaming-java_${scala.binary.version}</artifactId>
+        <artifactId>${flink.streaming.java.artifactId}</artifactId>
         <version>${flink.version}</version>
         <scope>provided</scope>
       </dependency>
       <dependency>
         <groupId>org.apache.flink</groupId>
-        <artifactId>flink-clients_${scala.binary.version}</artifactId>
+        <artifactId>${flink.clients.artifactId}</artifactId>
         <version>${flink.version}</version>
         <scope>provided</scope>
       </dependency>
       <dependency>
         <groupId>org.apache.flink</groupId>
-        <artifactId>flink-connector-kafka_${scala.binary.version}</artifactId>
+        <artifactId>${flink.connector.kafka.artifactId}</artifactId>
         <version>${flink.version}</version>
         <scope>provided</scope>
       </dependency>
@@ -723,7 +747,7 @@
       <dependency>
         <groupId>xalan</groupId>
         <artifactId>xalan</artifactId>
-        <version>2.7.1</version>
+        <version>2.7.2</version>
       </dependency>
 
       <dependency>
@@ -1061,6 +1085,18 @@
             <artifactId>*</artifactId>
           </exclusion>
         </exclusions>
+      </dependency>
+
+      <dependency>
+        <groupId>com.facebook.presto</groupId>
+        <artifactId>presto-jdbc</artifactId>
+        <version>${presto.version}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>io.trino</groupId>
+        <artifactId>trino-jdbc</artifactId>
+        <version>${trino.version}</version>
       </dependency>
 
       <!-- Zookeeper -->
@@ -1582,12 +1618,16 @@
     <!-- Exists for backwards compatibility; profile doesn't do anything -->
     <profile>
       <id>scala-2.11</id>
+      <properties>
+        <pulsar.spark.version>${pulsar.spark.scala11.version}</pulsar.spark.version>
+      </properties>
     </profile>
     <profile>
       <id>scala-2.12</id>
       <properties>
         <scala.version>${scala12.version}</scala.version>
         <scala.binary.version>2.12</scala.binary.version>
+        <pulsar.spark.version>${pulsar.spark.scala12.version}</pulsar.spark.version>
       </properties>
       <activation>
         <property>
@@ -1659,24 +1699,25 @@
       </activation>
     </profile>
 
-    <!-- spark3 is an alias of spark3.2 -->
+    <!-- spark3 is an alias of spark3.3 -->
     <profile>
       <id>spark3</id>
       <properties>
-        <spark3.version>3.2.1</spark3.version>
+        <spark3.version>3.3.0</spark3.version>
         <spark.version>${spark3.version}</spark.version>
         <sparkbundle.version>3</sparkbundle.version>
         <delta.version>${delta.spark3.2.version}</delta.version>
         <scala.version>${scala12.version}</scala.version>
         <scala.binary.version>2.12</scala.binary.version>
-        <hudi.spark.module>hudi-spark3</hudi.spark.module>
+        <hudi.spark.module>hudi-spark3.3.x</hudi.spark.module>
         <hudi.spark.common.module>hudi-spark3-common</hudi.spark.common.module>
         <scalatest.version>${scalatest.spark3.version}</scalatest.version>
         <kafka.version>${kafka.spark3.version}</kafka.version>
         <parquet.version>1.12.2</parquet.version>
-        <avro.version>1.10.2</avro.version>
-        <orc.version>1.6.12</orc.version>
+        <avro.version>1.11.0</avro.version>
+        <orc.version>1.7.4</orc.version>
         <antlr.version>4.8</antlr.version>
+        <fasterxml.spark3.version>2.13.3</fasterxml.spark3.version>
         <fasterxml.version>${fasterxml.spark3.version}</fasterxml.version>
         <fasterxml.jackson.databind.version>${fasterxml.spark3.version}</fasterxml.jackson.databind.version>
         <fasterxml.jackson.module.scala.version>${fasterxml.spark3.version}</fasterxml.jackson.module.scala.version>
@@ -1686,7 +1727,7 @@
         <skipITs>true</skipITs>
       </properties>
       <modules>
-        <module>hudi-spark-datasource/hudi-spark3</module>
+        <module>hudi-spark-datasource/hudi-spark3.3.x</module>
         <module>hudi-spark-datasource/hudi-spark3-common</module>
       </modules>
       <activation>
@@ -1738,7 +1779,7 @@
         <sparkbundle.version>3.2</sparkbundle.version>
         <scala.version>${scala12.version}</scala.version>
         <scala.binary.version>2.12</scala.binary.version>
-        <hudi.spark.module>hudi-spark3</hudi.spark.module>
+        <hudi.spark.module>hudi-spark3.2.x</hudi.spark.module>
         <hudi.spark.common.module>hudi-spark3-common</hudi.spark.common.module>
         <scalatest.version>${scalatest.spark3.version}</scalatest.version>
         <kafka.version>${kafka.spark3.version}</kafka.version>
@@ -1755,7 +1796,7 @@
         <skipITs>true</skipITs>
       </properties>
       <modules>
-        <module>hudi-spark-datasource/hudi-spark3</module>
+        <module>hudi-spark-datasource/hudi-spark3.2.x</module>
         <module>hudi-spark-datasource/hudi-spark3-common</module>
       </modules>
       <activation>
@@ -1766,23 +1807,100 @@
     </profile>
 
     <profile>
+      <id>spark3.3</id>
+      <properties>
+        <spark3.version>3.3.0</spark3.version>
+        <spark.version>${spark3.version}</spark.version>
+        <sparkbundle.version>3.3</sparkbundle.version>
+        <scala.version>${scala12.version}</scala.version>
+        <scala.binary.version>2.12</scala.binary.version>
+        <hudi.spark.module>hudi-spark3.3.x</hudi.spark.module>
+        <hudi.spark.common.module>hudi-spark3-common</hudi.spark.common.module>
+        <scalatest.version>${scalatest.spark3.version}</scalatest.version>
+        <kafka.version>${kafka.spark3.version}</kafka.version>
+        <parquet.version>1.12.2</parquet.version>
+        <avro.version>1.11.0</avro.version>
+        <orc.version>1.7.4</orc.version>
+        <antlr.version>4.8</antlr.version>
+        <fasterxml.spark3.version>2.13.3</fasterxml.spark3.version>
+        <fasterxml.version>${fasterxml.spark3.version}</fasterxml.version>
+        <fasterxml.jackson.databind.version>${fasterxml.spark3.version}</fasterxml.jackson.databind.version>
+        <fasterxml.jackson.module.scala.version>${fasterxml.spark3.version}</fasterxml.jackson.module.scala.version>
+        <fasterxml.jackson.dataformat.yaml.version>${fasterxml.spark3.version}
+        </fasterxml.jackson.dataformat.yaml.version>
+        <skip.hudi-spark2.unit.tests>true</skip.hudi-spark2.unit.tests>
+        <skipITs>true</skipITs>
+      </properties>
+      <modules>
+        <module>hudi-spark-datasource/hudi-spark3.3.x</module>
+        <module>hudi-spark-datasource/hudi-spark3-common</module>
+      </modules>
+      <activation>
+        <property>
+          <name>spark3.3</name>
+        </property>
+      </activation>
+    </profile>
+
+    <profile>
+      <id>flink1.15</id>
+      <properties>
+        <flink.version>${flink1.15.version}</flink.version>
+        <flink.table.runtime.artifactId>flink-table-runtime</flink.table.runtime.artifactId>
+        <flink.parquet.artifactId>flink-parquet</flink.parquet.artifactId>
+        <flink.statebackend.rocksdb.artifactId>flink-statebackend-rocksdb</flink.statebackend.rocksdb.artifactId>
+        <flink.test.utils.artifactId>flink-test-utils</flink.test.utils.artifactId>
+        <flink.streaming.java.artifactId>flink-streaming-java</flink.streaming.java.artifactId>
+        <flink.clients.artifactId>flink-clients</flink.clients.artifactId>
+        <flink.connector.kafka.artifactId>flink-connector-kafka</flink.connector.kafka.artifactId>
+        <!-- 1.15 only supports scala2.12 -->
+        <flink.hadoop.compatibility.artifactId>flink-hadoop-compatibility_2.12</flink.hadoop.compatibility.artifactId>
+        <hudi.flink.module>hudi-flink1.15.x</hudi.flink.module>
+        <flink.bundle.version>1.15</flink.bundle.version>
+      </properties>
+      <activation>
+        <property>
+          <name>flink1.15</name>
+        </property>
+      </activation>
+    </profile>
+    <profile>
       <id>flink1.14</id>
+      <properties>
+        <flink.version>${flink1.14.version}</flink.version>
+        <flink.table.runtime.artifactId>flink-table-runtime_${scala.binary.version}</flink.table.runtime.artifactId>
+        <flink.parquet.artifactId>flink-parquet_${scala.binary.version}</flink.parquet.artifactId>
+        <flink.statebackend.rocksdb.artifactId>flink-statebackend-rocksdb_${scala.binary.version}</flink.statebackend.rocksdb.artifactId>
+        <flink.test.utils.artifactId>flink-test-utils_${scala.binary.version}</flink.test.utils.artifactId>
+        <flink.streaming.java.artifactId>flink-streaming-java_${scala.binary.version}</flink.streaming.java.artifactId>
+        <flink.clients.artifactId>flink-clients_${scala.binary.version}</flink.clients.artifactId>
+        <flink.connector.kafka.artifactId>flink-connector-kafka_${scala.binary.version}</flink.connector.kafka.artifactId>
+        <flink.hadoop.compatibility.artifactId>flink-hadoop-compatibility_${scala.binary.version}</flink.hadoop.compatibility.artifactId>
+        <hudi.flink.module>hudi-flink1.14.x</hudi.flink.module>
+        <flink.bundle.version>1.14</flink.bundle.version>
+      </properties>
       <activation>
         <activeByDefault>true</activeByDefault>
         <property>
           <name>flink1.14</name>
-          <!-- add flink1.14 module to all profile -->
-          <value>!disabled</value>
         </property>
       </activation>
     </profile>
     <profile>
       <id>flink1.13</id>
       <properties>
+        <flink.scala.bnary.version>2.11</flink.scala.bnary.version>
         <flink.version>${flink1.13.version}</flink.version>
         <flink.runtime.artifactId>flink-runtime_${scala.binary.version}</flink.runtime.artifactId>
         <flink.table.runtime.artifactId>flink-table-runtime-blink_${scala.binary.version}</flink.table.runtime.artifactId>
         <flink.table.planner.artifactId>flink-table-planner-blink_${scala.binary.version}</flink.table.planner.artifactId>
+        <flink.parquet.artifactId>flink-parquet_${scala.binary.version}</flink.parquet.artifactId>
+        <flink.statebackend.rocksdb.artifactId>flink-statebackend-rocksdb_${scala.binary.version}</flink.statebackend.rocksdb.artifactId>
+        <flink.test.utils.artifactId>flink-test-utils_${scala.binary.version}</flink.test.utils.artifactId>
+        <flink.streaming.java.artifactId>flink-streaming-java_${scala.binary.version}</flink.streaming.java.artifactId>
+        <flink.clients.artifactId>flink-clients_${scala.binary.version}</flink.clients.artifactId>
+        <flink.connector.kafka.artifactId>flink-connector-kafka_${scala.binary.version}</flink.connector.kafka.artifactId>
+        <flink.hadoop.compatibility.artifactId>flink-hadoop-compatibility_${scala.binary.version}</flink.hadoop.compatibility.artifactId>
         <hudi.flink.module>hudi-flink1.13.x</hudi.flink.module>
         <flink.bundle.version>1.13</flink.bundle.version>
         <skipITs>true</skipITs>

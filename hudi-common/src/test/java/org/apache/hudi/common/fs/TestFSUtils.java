@@ -326,9 +326,17 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     Files.createFile(partitionPath.resolve(log3));
 
     assertEquals(3, (int) FSUtils.getLatestLogVersion(FSUtils.getFs(basePath, new Configuration()),
-            new Path(partitionPath.toString()), fileId, LOG_EXTENTION, instantTime).get().getLeft());
+        new Path(partitionPath.toString()), fileId, LOG_EXTENTION, instantTime).get().getLeft());
     assertEquals(4, FSUtils.computeNextLogVersion(FSUtils.getFs(basePath, new Configuration()),
-            new Path(partitionPath.toString()), fileId, LOG_EXTENTION, instantTime));
+        new Path(partitionPath.toString()), fileId, LOG_EXTENTION, instantTime));
+  }
+
+  @Test
+  public void testGetFilename() {
+    assertEquals("file1.parquet", FSUtils.getFileName("/2022/07/29/file1.parquet", "/2022/07/29"));
+    assertEquals("file2.parquet", FSUtils.getFileName("2022/07/29/file2.parquet", "2022/07/29"));
+    assertEquals("file3.parquet", FSUtils.getFileName("/file3.parquet", ""));
+    assertEquals("file4.parquet", FSUtils.getFileName("file4.parquet", ""));
   }
 
   private void prepareTestDirectory(FileSystem fileSystem, String rootDir) throws IOException {

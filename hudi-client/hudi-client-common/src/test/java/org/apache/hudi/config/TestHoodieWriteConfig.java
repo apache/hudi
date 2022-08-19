@@ -47,10 +47,10 @@ import java.util.Properties;
 import java.util.function.Function;
 
 import static org.apache.hudi.config.HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE;
-import static org.apache.hudi.config.HoodieCompactionConfig.ASYNC_ARCHIVE;
-import static org.apache.hudi.config.HoodieCompactionConfig.ASYNC_CLEAN;
-import static org.apache.hudi.config.HoodieCompactionConfig.AUTO_CLEAN;
-import static org.apache.hudi.config.HoodieCompactionConfig.FAILED_WRITES_CLEANER_POLICY;
+import static org.apache.hudi.config.HoodieArchivalConfig.ASYNC_ARCHIVE;
+import static org.apache.hudi.config.HoodieCleanConfig.ASYNC_CLEAN;
+import static org.apache.hudi.config.HoodieCleanConfig.AUTO_CLEAN;
+import static org.apache.hudi.config.HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY;
 import static org.apache.hudi.config.HoodieCompactionConfig.INLINE_COMPACT;
 import static org.apache.hudi.config.HoodieWriteConfig.TABLE_SERVICES_ENABLED;
 import static org.apache.hudi.config.HoodieWriteConfig.WRITE_CONCURRENCY_MODE;
@@ -64,9 +64,9 @@ public class TestHoodieWriteConfig {
   public void testPropertyLoading(boolean withAlternative) throws IOException {
     Builder builder = HoodieWriteConfig.newBuilder().withPath("/tmp");
     Map<String, String> params = new HashMap<>(3);
-    params.put(HoodieCompactionConfig.CLEANER_COMMITS_RETAINED.key(), "1");
-    params.put(HoodieCompactionConfig.MAX_COMMITS_TO_KEEP.key(), "5");
-    params.put(HoodieCompactionConfig.MIN_COMMITS_TO_KEEP.key(), "2");
+    params.put(HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key(), "1");
+    params.put(HoodieArchivalConfig.MAX_COMMITS_TO_KEEP.key(), "5");
+    params.put(HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.key(), "2");
     if (withAlternative) {
       params.put("hoodie.avro.schema.externalTransformation", "true");
     } else {

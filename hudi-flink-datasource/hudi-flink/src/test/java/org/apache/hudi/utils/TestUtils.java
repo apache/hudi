@@ -88,6 +88,14 @@ public class TestUtils {
         .orElse(null);
   }
 
+  @Nullable
+  public static String getNthArchivedInstant(String basePath, int n) {
+    final HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
+        .setConf(HadoopConfigurations.getHadoopConf(new Configuration())).setBasePath(basePath).build();
+    return metaClient.getArchivedTimeline().getCommitsTimeline().filterCompletedInstants()
+        .nthInstant(n).map(HoodieInstant::getTimestamp).orElse(null);
+  }
+
   public static String getSplitPartitionPath(MergeOnReadInputSplit split) {
     assertTrue(split.getLogPaths().isPresent());
     final String logPath = split.getLogPaths().get().get(0);
@@ -97,6 +105,6 @@ public class TestUtils {
 
   public static StreamReadMonitoringFunction getMonitorFunc(Configuration conf) {
     final String basePath = conf.getString(FlinkOptions.PATH);
-    return new StreamReadMonitoringFunction(conf, new Path(basePath), 1024 * 1024L, null);
+    return new StreamReadMonitoringFunction(conf, new Path(basePath), TestConfigurations.ROW_TYPE, 1024 * 1024L, null);
   }
 }

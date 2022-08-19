@@ -20,7 +20,6 @@
 package org.apache.hudi.index.bloom;
 
 import org.apache.hudi.common.data.HoodieData;
-import org.apache.hudi.common.data.HoodieList;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
@@ -60,7 +59,7 @@ public class ListBasedHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper 
       HoodieData<Pair<String, HoodieKey>> fileComparisonPairs,
       Map<String, List<BloomIndexFileInfo>> partitionToFileInfo, Map<String, Long> recordsPerPartition) {
     List<Pair<String, HoodieKey>> fileComparisonPairList =
-        HoodieList.getList(fileComparisonPairs).stream()
+        fileComparisonPairs.collectAsList().stream()
             .sorted(Comparator.comparing(Pair::getLeft)).collect(toList());
 
     List<HoodieKeyLookupResult> keyLookupResults = new ArrayList<>();
