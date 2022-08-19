@@ -392,7 +392,8 @@ object DataSourceWriteOptions {
     .key("hoodie.datasource.write.streaming.ignore.failed.batch")
     .defaultValue("false")
     .withDocumentation("Config to indicate whether to ignore any non exception error (e.g. writestatus error)"
-      + " within a streaming microbatch")
+      + " within a streaming microbatch. Turning this on, could hide the write status errors while the spark checkpoint moves ahead." +
+      "So, would recommend users to use this with caution.")
 
   val META_SYNC_CLIENT_TOOL_CLASS_NAME: ConfigProperty[String] = ConfigProperty
     .key("hoodie.meta.sync.client.tool.class")
