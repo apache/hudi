@@ -231,10 +231,10 @@ using (
   select 6 as id, '_insert' as name, 10 as price, 1000 as ts, '2021-05-08' as dt
 ) s0
 on s0.id = t0.id
-when matched and name = '_update'
+when matched and s0.name = '_update'
   then update set id = s0.id, name = s0.name, price = s0.price, ts = s0.ts, dt = s0.dt
-when matched and name = '_delete' then delete
-when not matched and name = '_insert' then insert *;
+when matched and s0.name = '_delete' then delete
+when not matched and s0.name = '_insert' then insert *;
 +----------+
 | ok       |
 +----------+
