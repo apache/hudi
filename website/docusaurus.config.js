@@ -109,6 +109,7 @@ module.exports = {
     ],
   ],
   themeConfig: {
+    metadata: [{name: 'keywords', content: 'apache hudi, data lake, lakehouse, big data, apache spark, apache flink, presto, trino, analytics, data engineering'}],
     algolia: {
       apiKey: 'e300f1558b703c001c515c0e7f8e0908',
       indexName: 'apache_hudi',
@@ -135,6 +136,10 @@ module.exports = {
             {
               label: 'FAQ',
               href: '/docs/faq',
+            },
+            {
+              label: 'Tech Specs',
+              href: '/tech-specs',
             },
             {
               label: 'Technical Wiki',
