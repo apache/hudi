@@ -42,7 +42,7 @@ import org.apache.spark.streaming.kafka010.OffsetRange;
 /**
  * Reads avro serialized Kafka data, based on the confluent schema-registry.
  */
-public class AvroKafkaSource extends KafkaSource<GenericRecord> implements AvroSourceI {
+public class AvroKafkaSource extends KafkaSource<GenericRecord> {
 
   private static final Logger LOG = LogManager.getLogger(AvroKafkaSource.class);
   // these are native kafka's config. do not change the config names.

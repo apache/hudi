@@ -37,7 +37,6 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.protobuf.ProtobufData;
 import org.apache.avro.util.Utf8;
 
 import java.io.File;
@@ -77,7 +76,7 @@ public class ProtoConversionUtil {
   }
 
   /**
-   * This class provides support for generating schemas and converting from proto to avro. We don't directly use {@link ProtobufData} so we can:
+   * This class provides support for generating schemas and converting from proto to avro. We don't directly use Avro's ProtobufData class so we can:
    * 1. Customize how schemas are generated for protobufs. We treat Enums as strings and provide an option to treat wrapped primitives like {@link Int32Value} and {@link StringValue} as messages
    * (default behavior) or as nullable versions of those primitives.
    * 2. Convert directly from a protobuf {@link Message} to a {@link GenericRecord} while properly handling enums and wrapped primitives mentioned above.
