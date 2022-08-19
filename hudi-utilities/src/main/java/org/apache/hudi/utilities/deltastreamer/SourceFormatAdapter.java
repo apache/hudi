@@ -26,9 +26,6 @@ import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.AvroSource;
 import org.apache.hudi.utilities.sources.InputBatch;
-import org.apache.hudi.utilities.sources.JsonSource;
-import org.apache.hudi.utilities.sources.ProtoSource;
-import org.apache.hudi.utilities.sources.RowSource;
 import org.apache.hudi.utilities.sources.Source;
 import org.apache.hudi.utilities.sources.helpers.AvroConvertor;
 
@@ -60,15 +57,15 @@ public final class SourceFormatAdapter {
   public InputBatch<JavaRDD<GenericRecord>> fetchNewDataInAvroFormat(Option<String> lastCkptStr, long sourceLimit) {
     switch (source.getSourceType()) {
       case AVRO:
-        return ((AvroSource) source).fetchNext(lastCkptStr, sourceLimit);
+        return source.fetchNext(lastCkptStr, sourceLimit);
       case JSON: {
-        InputBatch<JavaRDD<String>> r = ((JsonSource) source).fetchNext(lastCkptStr, sourceLimit);
+        InputBatch<JavaRDD<String>> r = source.fetchNext(lastCkptStr, sourceLimit);
         AvroConvertor convertor = new AvroConvertor(r.getSchemaProvider().getSourceSchema());
         return new InputBatch<>(Option.ofNullable(r.getBatch().map(rdd -> rdd.map(convertor::fromJson)).orElse(null)),
             r.getCheckpointForNextBatch(), r.getSchemaProvider());
       }
       case ROW: {
-        InputBatch<Dataset<Row>> r = ((RowSource) source).fetchNext(lastCkptStr, sourceLimit);
+        InputBatch<Dataset<Row>> r = source.fetchNext(lastCkptStr, sourceLimit);
         return new InputBatch<>(Option.ofNullable(r.getBatch().map(
             rdd -> {
               SchemaProvider originalProvider = UtilHelpers.getOriginalSchemaProvider(r.getSchemaProvider());
@@ -84,7 +81,7 @@ public final class SourceFormatAdapter {
             .orElse(null)), r.getCheckpointForNextBatch(), r.getSchemaProvider());
       }
       case PROTO: {
-        InputBatch<JavaRDD<Message>> r = ((ProtoSource) source).fetchNext(lastCkptStr, sourceLimit);
+        InputBatch<JavaRDD<Message>> r = source.fetchNext(lastCkptStr, sourceLimit);
         AvroConvertor convertor = new AvroConvertor(r.getSchemaProvider().getSourceSchema());
         return new InputBatch<>(Option.ofNullable(r.getBatch().map(rdd -> rdd.map(convertor::fromProtoMessage)).orElse(null)),
             r.getCheckpointForNextBatch(), r.getSchemaProvider());
@@ -100,7 +97,7 @@ public final class SourceFormatAdapter {
   public InputBatch<Dataset<Row>> fetchNewDataInRowFormat(Option<String> lastCkptStr, long sourceLimit) {
     switch (source.getSourceType()) {
       case ROW:
-        return ((RowSource) source).fetchNext(lastCkptStr, sourceLimit);
+        return source.fetchNext(lastCkptStr, sourceLimit);
       case AVRO: {
         InputBatch<JavaRDD<GenericRecord>> r = ((AvroSource) source).fetchNext(lastCkptStr, sourceLimit);
         Schema sourceSchema = r.getSchemaProvider().getSourceSchema();
@@ -115,7 +112,7 @@ public final class SourceFormatAdapter {
             r.getCheckpointForNextBatch(), r.getSchemaProvider());
       }
       case JSON: {
-        InputBatch<JavaRDD<String>> r = ((JsonSource) source).fetchNext(lastCkptStr, sourceLimit);
+        InputBatch<JavaRDD<String>> r = source.fetchNext(lastCkptStr, sourceLimit);
         Schema sourceSchema = r.getSchemaProvider().getSourceSchema();
         StructType dataType = AvroConversionUtils.convertAvroSchemaToStructType(sourceSchema);
         return new InputBatch<>(
@@ -124,7 +121,7 @@ public final class SourceFormatAdapter {
             r.getCheckpointForNextBatch(), r.getSchemaProvider());
       }
       case PROTO: {
-        InputBatch<JavaRDD<Message>> r = ((ProtoSource) source).fetchNext(lastCkptStr, sourceLimit);
+        InputBatch<JavaRDD<Message>> r = source.fetchNext(lastCkptStr, sourceLimit);
         Schema sourceSchema = r.getSchemaProvider().getSourceSchema();
         AvroConvertor convertor = new AvroConvertor(r.getSchemaProvider().getSourceSchema());
         return new InputBatch<>(
