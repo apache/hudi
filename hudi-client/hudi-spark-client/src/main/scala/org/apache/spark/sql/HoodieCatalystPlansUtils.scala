@@ -54,21 +54,15 @@ trait HoodieCatalystPlansUtils {
   def createJoin(left: LogicalPlan, right: LogicalPlan, joinType: JoinType): Join
 
   /**
-   * Test if the logical plan is a Insert Into LogicalPlan.
-   */
-  def isInsertInto(plan: LogicalPlan): Boolean
-
-  /**
    * Get the member of the Insert Into LogicalPlan.
    */
   def getInsertIntoChildren(plan: LogicalPlan):
     Option[(LogicalPlan, Map[String, Option[String]], LogicalPlan, Boolean, Boolean)]
 
   /**
-   * Create a Insert Into LogicalPlan.
+   * Create Like expression.
    */
-  def createInsertInto(table: LogicalPlan, partition: Map[String, Option[String]],
-                       query: LogicalPlan, overwrite: Boolean, ifPartitionNotExists: Boolean): LogicalPlan
+  def createLike(left: Expression, right: Expression): Expression
 
   /**
    * Test if the logical plan is a Repair Table LogicalPlan.

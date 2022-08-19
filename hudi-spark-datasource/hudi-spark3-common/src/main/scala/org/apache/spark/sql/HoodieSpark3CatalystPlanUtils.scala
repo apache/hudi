@@ -50,10 +50,6 @@ trait HoodieSpark3CatalystPlanUtils extends HoodieCatalystPlansUtils {
     Join(left, right, joinType, None, JoinHint.NONE)
   }
 
-  override def isInsertInto(plan: LogicalPlan): Boolean = {
-    plan.isInstanceOf[InsertIntoStatement]
-  }
-
   override def getInsertIntoChildren(plan: LogicalPlan):
   Option[(LogicalPlan, Map[String, Option[String]], LogicalPlan, Boolean, Boolean)] = {
     plan match {
@@ -64,9 +60,8 @@ trait HoodieSpark3CatalystPlanUtils extends HoodieCatalystPlansUtils {
     }
   }
 
-  override def createInsertInto(table: LogicalPlan, partition: Map[String, Option[String]],
-                                query: LogicalPlan, overwrite: Boolean, ifPartitionNotExists: Boolean): LogicalPlan = {
-    ReflectUtil.createInsertInto(table, partition, Seq.empty[String], query, overwrite, ifPartitionNotExists)
+  override def createLike(left: Expression, right: Expression): Expression = {
+    new Like(left, right)
   }
 }
 

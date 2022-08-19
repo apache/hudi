@@ -27,7 +27,7 @@ import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.execution.command._
 import org.apache.spark.sql.execution.datasources.{CreateTable, LogicalRelation}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isMetaField
-import org.apache.spark.sql.hudi.analysis.HoodieAnalysis.{ResolvesToHudiTable, UnfoldSubqueryAlias, sparkAdapter}
+import org.apache.spark.sql.hudi.analysis.HoodieAnalysis.{MatchesInsertIntoStatement, ResolvesToHudiTable, UnfoldSubqueryAlias, sparkAdapter}
 import org.apache.spark.sql.hudi.command._
 import org.apache.spark.sql.hudi.command.procedures.{HoodieProcedures, Procedure, ProcedureArgs}
 import org.apache.spark.sql.{AnalysisException, SparkSession}
@@ -113,6 +113,11 @@ object HoodieAnalysis extends SparkAdapterSupport {
     rules
   }
 
+  private[sql] object MatchesInsertIntoStatement {
+    def unapply(plan: LogicalPlan): Option[(LogicalPlan, Map[String, Option[String]], LogicalPlan, Boolean, Boolean)] =
+      sparkAdapter.getCatalystPlanUtils.getInsertIntoChildren(plan)
+  }
+
   private[sql] object ResolvesToHudiTable {
     def unapply(plan: LogicalPlan): Option[CatalogTable] =
       sparkAdapter.resolveHoodieTable(plan)
@@ -162,21 +167,15 @@ case class HoodieAnalysis(sparkSession: SparkSession) extends Rule[LogicalPlan] 
 
       // Convert to UpdateHoodieTableCommand
       case ut @ UpdateTable(plan @ ResolvesToHudiTable(_), _, _) if ut.resolved =>
-          UpdateHoodieTableCommand(ut)
+        UpdateHoodieTableCommand(ut)
 
       // Convert to DeleteHoodieTableCommand
       case dft @ DeleteFromTable(plan @ ResolvesToHudiTable(_), _) if dft.resolved =>
-          DeleteHoodieTableCommand(dft)
+        DeleteHoodieTableCommand(dft)
 
       // Convert to InsertIntoHoodieTableCommand
-      case iis if sparkAdapter.getCatalystPlanUtils.isInsertInto(iis) && iis.childrenResolved =>
-        val (table, partition, query, overwrite, _) = sparkAdapter.getCatalystPlanUtils.getInsertIntoChildren(iis).get
-        table match {
-          case relation: LogicalRelation if sparkAdapter.resolveHoodieTable(relation).nonEmpty =>
-            new InsertIntoHoodieTableCommand(relation, query, partition, overwrite)
-          case _ =>
-            iis
-        }
+      case MatchesInsertIntoStatement(relation @ ResolvesToHudiTable(_), partition, query, overwrite, _) if query.resolved =>
+        new InsertIntoHoodieTableCommand(relation.asInstanceOf[LogicalRelation], query, partition, overwrite)
 
       // Convert to CreateHoodieTableAsSelectCommand
       case ct @ CreateTable(table, mode, Some(query))

@@ -48,10 +48,6 @@ object HoodieSpark2CatalystPlanUtils extends HoodieCatalystPlansUtils {
     Join(left, right, joinType, None)
   }
 
-  override def isInsertInto(plan: LogicalPlan): Boolean = {
-    plan.isInstanceOf[InsertIntoTable]
-  }
-
   override def getInsertIntoChildren(plan: LogicalPlan):
   Option[(LogicalPlan, Map[String, Option[String]], LogicalPlan, Boolean, Boolean)] = {
     plan match {
@@ -59,11 +55,6 @@ object HoodieSpark2CatalystPlanUtils extends HoodieCatalystPlansUtils {
         Some((table, partition, query, overwrite, ifPartitionNotExists))
       case _=> None
     }
-  }
-
-  override def createInsertInto(table: LogicalPlan, partition: Map[String, Option[String]],
-                                query: LogicalPlan, overwrite: Boolean, ifPartitionNotExists: Boolean): LogicalPlan = {
-    InsertIntoTable(table, partition, query, overwrite, ifPartitionNotExists)
   }
 
   override def createLike(left: Expression, right: Expression): Expression = {

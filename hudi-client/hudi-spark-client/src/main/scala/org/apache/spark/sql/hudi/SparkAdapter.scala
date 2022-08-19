@@ -110,9 +110,6 @@ trait SparkAdapter extends Serializable {
   def getFilePartitions(sparkSession: SparkSession, partitionedFiles: Seq[PartitionedFile],
       maxSplitBytes: Long): Seq[FilePartition]
 
-  // TODO inline
-  def resolvesToHoodieTable(plan: LogicalPlan, spark: SparkSession): Boolean = resolveHoodieTable(plan).nonEmpty
-
   def resolveHoodieTable(plan: LogicalPlan): Option[CatalogTable] = {
     EliminateSubqueryAliases(plan) match {
       case LogicalRelation(_, _, Some(table), _) if isHoodieTable(table) => Some(table)
