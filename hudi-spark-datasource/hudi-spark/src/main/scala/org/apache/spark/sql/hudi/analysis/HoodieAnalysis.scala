@@ -174,8 +174,14 @@ case class HoodieAnalysis(sparkSession: SparkSession) extends Rule[LogicalPlan] 
         DeleteHoodieTableCommand(dft)
 
       // Convert to InsertIntoHoodieTableCommand
-      case MatchesInsertIntoStatement(relation @ ResolvesToHudiTable(_), partition, query, overwrite, _) if query.resolved =>
-        new InsertIntoHoodieTableCommand(relation.asInstanceOf[LogicalRelation], query, partition, overwrite)
+      case iis @ MatchesInsertIntoStatement(relation @ ResolvesToHudiTable(_), partition, query, overwrite, _) if query.resolved =>
+        relation match {
+          // NOTE: In Spark >= 3.2, Hudi relations will be resolved as [[DataSourceV2Relation]]s by default;
+          //       However, currently, fallback will be applied downgrading them into V1 relations, hence
+          //       we need to check whether we could proceed here, or has to wait until fallback rule will be executed
+          case lr: LogicalRelation => new InsertIntoHoodieTableCommand(lr, query, partition, overwrite)
+          case _ => iis
+        }
 
       // Convert to CreateHoodieTableAsSelectCommand
       case ct @ CreateTable(table, mode, Some(query))
