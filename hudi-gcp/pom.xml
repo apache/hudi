@@ -61,16 +61,6 @@ See https://github.com/GoogleCloudPlatform/cloud-opensource-java/wiki/The-Google
       <artifactId>google-cloud-bigquery</artifactId>
     </dependency>
 
-    <!-- Logging -->
-    <dependency>
-     <groupId>org.apache.logging.log4j</groupId>
-     <artifactId>log4j-api</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.logging.log4j</groupId>
-      <artifactId>log4j-1.2-api</artifactId>
-    </dependency>
-
     <dependency>
       <groupId>org.apache.parquet</groupId>
       <artifactId>parquet-avro</artifactId>

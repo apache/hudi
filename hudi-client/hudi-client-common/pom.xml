@@ -53,16 +53,6 @@
       <artifactId>joda-time</artifactId>
     </dependency>
 
-    <!-- Logging -->
-    <dependency>
-      <groupId>org.apache.logging.log4j</groupId>
-      <artifactId>log4j-api</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.logging.log4j</groupId>
-      <artifactId>log4j-1.2-api</artifactId>
-    </dependency>
-
     <!-- Parquet -->
     <dependency>
       <groupId>org.apache.parquet</groupId>
