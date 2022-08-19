@@ -27,7 +27,7 @@ import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.execution.command._
 import org.apache.spark.sql.execution.datasources.{CreateTable, LogicalRelation}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isMetaField
-import org.apache.spark.sql.hudi.analysis.HoodieAnalysis.sparkAdapter
+import org.apache.spark.sql.hudi.analysis.HoodieAnalysis.{ResolvesToHudiTable, UnfoldSubqueryAlias, sparkAdapter}
 import org.apache.spark.sql.hudi.command._
 import org.apache.spark.sql.hudi.command.procedures.{HoodieProcedures, Procedure, ProcedureArgs}
 import org.apache.spark.sql.{AnalysisException, SparkSession}
@@ -68,10 +68,6 @@ object HoodieAnalysis extends SparkAdapterSupport {
       val dataSourceV2ToV1Fallback: RuleBuilder =
         session => ReflectionUtils.loadClass(dataSourceV2ToV1FallbackClass, session).asInstanceOf[Rule[LogicalPlan]]
 
-      val spark3AnalysisClass = "org.apache.spark.sql.hudi.analysis.HoodieSpark3Analysis"
-      val spark3Analysis: RuleBuilder =
-        session => ReflectionUtils.loadClass(spark3AnalysisClass, session).asInstanceOf[Rule[LogicalPlan]]
-
       val spark3ResolveReferencesClass = "org.apache.spark.sql.hudi.analysis.HoodieSpark3ResolveReferences"
       val spark3ResolveReferences: RuleBuilder =
         session => ReflectionUtils.loadClass(spark3ResolveReferencesClass, session).asInstanceOf[Rule[LogicalPlan]]
@@ -87,7 +83,7 @@ object HoodieAnalysis extends SparkAdapterSupport {
       //
       // It's critical for this rules to follow in this order, so that DataSource V2 to V1 fallback
       // is performed prior to other rules being evaluated
-      rules ++= Seq(dataSourceV2ToV1Fallback, spark3Analysis, spark3ResolveReferences, resolveAlterTableCommands)
+      rules ++= Seq(dataSourceV2ToV1Fallback, spark3ResolveReferences, resolveAlterTableCommands)
 
     } else if (HoodieSparkUtils.gteqSpark3_1) {
       val spark31ResolveAlterTableCommandsClass = "org.apache.spark.sql.hudi.Spark31ResolveHudiAlterTableCommand"
@@ -115,6 +111,15 @@ object HoodieAnalysis extends SparkAdapterSupport {
     }
 
     rules
+  }
+
+  private[sql] object ResolvesToHudiTable {
+    def unapply(plan: LogicalPlan): Option[CatalogTable] =
+      sparkAdapter.resolveHoodieTable(plan)
+  }
+
+  private[sql] object UnfoldSubqueryAlias {
+    def unapply(plan: LogicalPlan): Option[LogicalPlan] = Some(EliminateSubqueryAliases(plan))
   }
 
   private[sql] def failAnalysis(msg: String): Nothing = {
@@ -167,7 +172,7 @@ case class HoodieAnalysis(sparkSession: SparkSession) extends Rule[LogicalPlan] 
       case iis if sparkAdapter.getCatalystPlanUtils.isInsertInto(iis) && iis.childrenResolved =>
         val (table, partition, query, overwrite, _) = sparkAdapter.getCatalystPlanUtils.getInsertIntoChildren(iis).get
         table match {
-          case relation: LogicalRelation if sparkAdapter.resolvesToHoodieTable(relation, sparkSession) =>
+          case relation: LogicalRelation if sparkAdapter.resolveHoodieTable(relation).nonEmpty =>
             new InsertIntoHoodieTableCommand(relation, query, partition, overwrite)
           case _ =>
             iis
@@ -257,15 +262,6 @@ case class HoodieAnalysis(sparkSession: SparkSession) extends Rule[LogicalPlan] 
     }
     ProcedureArgs(isNamedArgs, map, new GenericInternalRow(values))
   }
-
-  object ResolvesToHudiTable {
-    def unapply(plan: LogicalPlan): Option[CatalogTable] =
-      sparkAdapter.resolveHoodieTable(plan)
-  }
-}
-
-object UnfoldSubqueryAlias {
-  def unapply(plan: LogicalPlan): Option[LogicalPlan] = Some(EliminateSubqueryAliases(plan))
 }
 
 /**

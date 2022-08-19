@@ -32,6 +32,7 @@ import org.apache.spark.sql.execution.datasources.PreWriteCheck.failAnalysis
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.execution.datasources.{DataSource, LogicalRelation}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{castIfNeeded, getTableLocation, removeMetaFields, tableExistsInPath}
+import org.apache.spark.sql.hudi.analysis.HoodieSpark3Analysis.{HoodieV1OrV2Table, ResolvesToHudiTable}
 import org.apache.spark.sql.hudi.catalog.HoodieInternalV2Table
 import org.apache.spark.sql.hudi.command.{AlterHoodieTableDropPartitionCommand, ShowHoodieTablePartitionsCommand, TruncateHoodieTableCommand}
 import org.apache.spark.sql.hudi.{HoodieSqlCommonUtils, ProvidesHoodieConfig}
@@ -63,76 +64,6 @@ class HoodieDataSourceV2ToV1Fallback(sparkSession: SparkSession) extends Rule[Lo
   }
 }
 
-class HoodieSpark3Analysis(sparkSession: SparkSession) extends Rule[LogicalPlan] {
-  override def apply(plan: LogicalPlan): LogicalPlan = plan.resolveOperatorsDown {
-    case s @ InsertIntoStatement(r @ DataSourceV2Relation(v2Table: HoodieInternalV2Table, _, _, _, _), partitionSpec, _, _, _, _)
-      if s.query.resolved && needsSchemaAdjustment(s.query, v2Table.hoodieCatalogTable.table, partitionSpec, r.schema) =>
-        val projection = resolveQueryColumnsByOrdinal(s.query, r.output)
-        if (projection != s.query) {
-          s.copy(query = projection)
-        } else {
-          s
-        }
-
-    case query: HoodieQuery =>
-      HoodieQuery.resolve(sparkSession, query)
-  }
-
-  /**
-   * Need to adjust schema based on the query and relation schema, for example,
-   * if using insert into xx select 1, 2 here need to map to column names
-   */
-  private def needsSchemaAdjustment(query: LogicalPlan,
-                                    table: CatalogTable,
-                                    partitionSpec: Map[String, Option[String]],
-                                    schema: StructType): Boolean = {
-    val output = query.output
-    val queryOutputWithoutMetaFields = removeMetaFields(output)
-    val hoodieCatalogTable = HoodieCatalogTable(sparkSession, table)
-
-    val partitionFields = hoodieCatalogTable.partitionFields
-    val partitionSchema = hoodieCatalogTable.partitionSchema
-    val staticPartitionValues = partitionSpec.filter(p => p._2.isDefined).mapValues(_.get)
-
-    assert(staticPartitionValues.isEmpty ||
-      staticPartitionValues.size == partitionSchema.size,
-      s"Required partition columns is: ${partitionSchema.json}, Current static partitions " +
-        s"is: ${staticPartitionValues.mkString("," + "")}")
-
-    assert(staticPartitionValues.size + queryOutputWithoutMetaFields.size
-      == hoodieCatalogTable.tableSchemaWithoutMetaFields.size,
-      s"Required select columns count: ${hoodieCatalogTable.tableSchemaWithoutMetaFields.size}, " +
-        s"Current select columns(including static partition column) count: " +
-        s"${staticPartitionValues.size + queryOutputWithoutMetaFields.size}，columns: " +
-        s"(${(queryOutputWithoutMetaFields.map(_.name) ++ staticPartitionValues.keys).mkString(",")})")
-
-    // static partition insert.
-    if (staticPartitionValues.nonEmpty) {
-      // drop partition fields in origin schema to align fields.
-      schema.dropWhile(p => partitionFields.contains(p.name))
-    }
-
-    val existingSchemaOutput = output.take(schema.length)
-    existingSchemaOutput.map(_.name) != schema.map(_.name) ||
-      existingSchemaOutput.map(_.dataType) != schema.map(_.dataType)
-  }
-
-  private def resolveQueryColumnsByOrdinal(query: LogicalPlan,
-                                           targetAttrs: Seq[Attribute]): LogicalPlan = {
-    // always add a Cast. it will be removed in the optimizer if it is unnecessary.
-    val project = query.output.zipWithIndex.map { case (attr, i) =>
-      if (i < targetAttrs.length) {
-        val targetAttr = targetAttrs(i)
-        val castAttr = castIfNeeded(attr.withNullability(targetAttr.nullable), targetAttr.dataType, conf)
-        Alias(castAttr, targetAttr.name)()
-      } else {
-        attr
-      }
-    }
-    Project(project, query)
-  }
-}
-
 /**
  * Rule for resolve hoodie's extended syntax or rewrite some logical plan.
  */
@@ -140,31 +71,26 @@ case class HoodieSpark3ResolveReferences(sparkSession: SparkSession) extends Rul
   with SparkAdapterSupport with ProvidesHoodieConfig {
 
   def apply(plan: LogicalPlan): LogicalPlan = plan resolveOperatorsUp {
-    case TimeTravelRelation(plan, timestamp, version) if sparkAdapter.resolvesToHoodieTable(plan, sparkSession) =>
+    case TimeTravelRelation(plan @ ResolvesToHudiTable(table), timestamp, version) =>
       if (timestamp.isEmpty && version.nonEmpty) {
         throw new AnalysisException(
           "Version expression is not supported for time travel")
       }
 
-      sparkAdapter.resolveHoodieTable(plan) match {
-        case Some(table) =>
-          val pathOption = table.storage.locationUri.map("path" -> CatalogUtils.URIToString(_))
-          val instantOption = Map(
-            DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key -> timestamp.get.toString())
-          val dataSource =
-            DataSource(
-              sparkSession,
-              userSpecifiedSchema = if (table.schema.isEmpty) None else Some(table.schema),
-              partitionColumns = table.partitionColumnNames,
-              bucketSpec = table.bucketSpec,
-              className = table.provider.get,
-              options = table.storage.properties ++ pathOption ++ instantOption,
-              catalogTable = Some(table))
+      val pathOption = table.storage.locationUri.map("path" -> CatalogUtils.URIToString(_))
+      val instantOption = Map(
+        DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key -> timestamp.get.toString())
+      val dataSource =
+        DataSource(
+          sparkSession,
+          userSpecifiedSchema = if (table.schema.isEmpty) None else Some(table.schema),
+          partitionColumns = table.partitionColumnNames,
+          bucketSpec = table.bucketSpec,
+          className = table.provider.get,
+          options = table.storage.properties ++ pathOption ++ instantOption,
+          catalogTable = Some(table))
 
-          LogicalRelation(dataSource.resolveRelation(checkFilesExist = false), table)
-
-        case None => plan
-      }
+      LogicalRelation(dataSource.resolveRelation(checkFilesExist = false), table)
 
     case p => p
   }
@@ -202,11 +128,21 @@ case class HoodieSpark3PostAnalysisRule(sparkSession: SparkSession) extends Rule
   }
 }
 
-private[sql] object HoodieV1OrV2Table extends SparkAdapterSupport {
-  def unapply(table: Table): Option[CatalogTable] = table match {
-    case V1Table(catalogTable) if sparkAdapter.isHoodieTable(catalogTable) => Some(catalogTable)
-    case v2: HoodieInternalV2Table => v2.catalogTable
-    case _ => None
+object HoodieSpark3Analysis extends SparkAdapterSupport {
+
+  private[sql] object HoodieV1OrV2Table {
+    def unapply(table: Table): Option[CatalogTable] = table match {
+      case V1Table(catalogTable) if sparkAdapter.isHoodieTable(catalogTable) => Some(catalogTable)
+      case v2: HoodieInternalV2Table => v2.catalogTable
+      case _ => None
+    }
+  }
+
+  // TODO dedup w/ HoodieAnalysis
+  private[sql] object ResolvesToHudiTable {
+    def unapply(plan: LogicalPlan): Option[CatalogTable] =
+      sparkAdapter.resolveHoodieTable(plan)
   }
 }
+
 
