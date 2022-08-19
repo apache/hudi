@@ -131,20 +131,20 @@
     <flink1.15.version>1.15.1</flink1.15.version>
     <flink1.14.version>1.14.5</flink1.14.version>
     <flink1.13.version>1.13.6</flink1.13.version>
-    <flink.version>${flink1.13.version}</flink.version>
-    <hudi.flink.module>hudi-flink1.13.x</hudi.flink.module>
-    <flink.bundle.version>1.13</flink.bundle.version>
+    <flink.version>${flink1.15.version}</flink.version>
+    <hudi.flink.module>hudi-flink1.15.x</hudi.flink.module>
+    <flink.bundle.version>1.15</flink.bundle.version>
     <flink.format.parquet.version>1.12.2</flink.format.parquet.version>
     <flink.runtime.artifactId>flink-runtime</flink.runtime.artifactId>
-    <flink.table.runtime.artifactId>flink-table-runtime_${scala.binary.version}</flink.table.runtime.artifactId>
-    <flink.table.planner.artifactId>flink-table-planner_${scala.binary.version}</flink.table.planner.artifactId>
+    <flink.table.runtime.artifactId>flink-table-runtime</flink.table.runtime.artifactId>
+    <flink.table.planner.artifactId>flink-table-planner_2.12</flink.table.planner.artifactId>
     <flink.parquet.artifactId>flink-parquet</flink.parquet.artifactId>
     <flink.statebackend.rocksdb.artifactId>flink-statebackend-rocksdb</flink.statebackend.rocksdb.artifactId>
     <flink.test.utils.artifactId>flink-test-utils</flink.test.utils.artifactId>
     <flink.streaming.java.artifactId>flink-streaming-java</flink.streaming.java.artifactId>
     <flink.clients.artifactId>flink-clients</flink.clients.artifactId>
     <flink.connector.kafka.artifactId>flink-connector-kafka</flink.connector.kafka.artifactId>
-    <flink.hadoop.compatibility.artifactId>flink-hadoop-compatibility_${scala.binary.version}</flink.hadoop.compatibility.artifactId>
+    <flink.hadoop.compatibility.artifactId>flink-hadoop-compatibility_2.12</flink.hadoop.compatibility.artifactId>
     <spark31.version>3.1.3</spark31.version>
     <spark32.version>3.2.1</spark32.version>
     <spark33.version>3.3.0</spark33.version>
@@ -1828,20 +1828,6 @@
 
     <profile>
       <id>flink1.15</id>
-      <properties>
-        <flink.version>${flink1.15.version}</flink.version>
-        <flink.table.runtime.artifactId>flink-table-runtime</flink.table.runtime.artifactId>
-        <flink.parquet.artifactId>flink-parquet</flink.parquet.artifactId>
-        <flink.statebackend.rocksdb.artifactId>flink-statebackend-rocksdb</flink.statebackend.rocksdb.artifactId>
-        <flink.test.utils.artifactId>flink-test-utils</flink.test.utils.artifactId>
-        <flink.streaming.java.artifactId>flink-streaming-java</flink.streaming.java.artifactId>
-        <flink.clients.artifactId>flink-clients</flink.clients.artifactId>
-        <flink.connector.kafka.artifactId>flink-connector-kafka</flink.connector.kafka.artifactId>
-        <!-- 1.15 only supports scala2.12 -->
-        <flink.hadoop.compatibility.artifactId>flink-hadoop-compatibility_2.12</flink.hadoop.compatibility.artifactId>
-        <hudi.flink.module>hudi-flink1.15.x</hudi.flink.module>
-        <flink.bundle.version>1.15</flink.bundle.version>
-      </properties>
       <activation>
         <property>
           <name>flink1.15</name>
@@ -1852,7 +1838,10 @@
       <id>flink1.14</id>
       <properties>
         <flink.version>${flink1.14.version}</flink.version>
+        <hudi.flink.module>hudi-flink1.14.x</hudi.flink.module>
+        <flink.bundle.version>1.14</flink.bundle.version>
         <flink.table.runtime.artifactId>flink-table-runtime_${scala.binary.version}</flink.table.runtime.artifactId>
+        <flink.table.planner.artifactId>flink-table-planner_${scala.binary.version}</flink.table.planner.artifactId>
         <flink.parquet.artifactId>flink-parquet_${scala.binary.version}</flink.parquet.artifactId>
         <flink.statebackend.rocksdb.artifactId>flink-statebackend-rocksdb_${scala.binary.version}</flink.statebackend.rocksdb.artifactId>
         <flink.test.utils.artifactId>flink-test-utils_${scala.binary.version}</flink.test.utils.artifactId>
@@ -1860,23 +1849,19 @@
         <flink.clients.artifactId>flink-clients_${scala.binary.version}</flink.clients.artifactId>
         <flink.connector.kafka.artifactId>flink-connector-kafka_${scala.binary.version}</flink.connector.kafka.artifactId>
         <flink.hadoop.compatibility.artifactId>flink-hadoop-compatibility_${scala.binary.version}</flink.hadoop.compatibility.artifactId>
-        <hudi.flink.module>hudi-flink1.14.x</hudi.flink.module>
-        <flink.bundle.version>1.14</flink.bundle.version>
       </properties>
       <activation>
-        <activeByDefault>true</activeByDefault>
         <property>
           <name>flink1.14</name>
-          <!-- add flink1.14 module to all profile -->
-          <value>!disabled</value>
         </property>
       </activation>
     </profile>
     <profile>
       <id>flink1.13</id>
       <properties>
-        <flink.scala.bnary.version>2.11</flink.scala.bnary.version>
         <flink.version>${flink1.13.version}</flink.version>
+        <hudi.flink.module>hudi-flink1.13.x</hudi.flink.module>
+        <flink.bundle.version>1.13</flink.bundle.version>
         <flink.runtime.artifactId>flink-runtime_${scala.binary.version}</flink.runtime.artifactId>
         <flink.table.runtime.artifactId>flink-table-runtime-blink_${scala.binary.version}</flink.table.runtime.artifactId>
         <flink.table.planner.artifactId>flink-table-planner-blink_${scala.binary.version}</flink.table.planner.artifactId>
@@ -1887,8 +1872,6 @@
         <flink.clients.artifactId>flink-clients_${scala.binary.version}</flink.clients.artifactId>
         <flink.connector.kafka.artifactId>flink-connector-kafka_${scala.binary.version}</flink.connector.kafka.artifactId>
         <flink.hadoop.compatibility.artifactId>flink-hadoop-compatibility_${scala.binary.version}</flink.hadoop.compatibility.artifactId>
-        <hudi.flink.module>hudi-flink1.13.x</hudi.flink.module>
-        <flink.bundle.version>1.13</flink.bundle.version>
         <skipITs>true</skipITs>
       </properties>
       <activation>

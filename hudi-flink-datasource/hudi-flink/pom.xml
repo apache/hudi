@@ -240,11 +240,6 @@
             <scope>compile</scope>
         </dependency>
         <dependency>
-            <groupId>com.twitter</groupId>
-            <artifactId>bijection-avro_${scala.binary.version}</artifactId>
-            <version>0.9.7</version>
-        </dependency>
-        <dependency>
             <groupId>joda-time</groupId>
             <artifactId>joda-time</artifactId>
             <version>2.5</version>
