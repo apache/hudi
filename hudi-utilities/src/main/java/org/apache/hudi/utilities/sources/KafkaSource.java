@@ -35,9 +35,9 @@ import org.apache.spark.streaming.kafka010.OffsetRange;
 abstract class KafkaSource<T> extends Source<JavaRDD<T>> {
   private static final Logger LOG = LogManager.getLogger(KafkaSource.class);
 
-  protected final KafkaOffsetGen offsetGen;
   protected final HoodieDeltaStreamerMetrics metrics;
   protected final SchemaProvider schemaProvider;
+  protected KafkaOffsetGen offsetGen;
 
   protected KafkaSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
                         SchemaProvider schemaProvider, SourceType sourceType, HoodieDeltaStreamerMetrics metrics) {
@@ -45,7 +45,6 @@ abstract class KafkaSource<T> extends Source<JavaRDD<T>> {
 
     this.schemaProvider = schemaProvider;
     this.metrics = metrics;
-    offsetGen = new KafkaOffsetGen(props);
   }
 
   @Override

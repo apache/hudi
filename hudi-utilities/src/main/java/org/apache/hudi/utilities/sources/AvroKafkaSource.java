@@ -26,6 +26,7 @@ import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerMetrics;
 import org.apache.hudi.utilities.deser.KafkaAvroSchemaDeserializer;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.AvroConvertor;
+import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -74,6 +75,7 @@ public class AvroKafkaSource extends KafkaSource<GenericRecord> {
       LOG.error(error);
       throw new HoodieException(error, e);
     }
+    this.offsetGen = new KafkaOffsetGen(props);
   }
 
   @Override

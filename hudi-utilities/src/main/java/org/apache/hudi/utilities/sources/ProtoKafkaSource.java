@@ -25,6 +25,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerMetrics;
 import org.apache.hudi.utilities.schema.ProtoClassBasedSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProvider;
+import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen;
 
 import com.google.protobuf.Message;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
@@ -62,6 +63,7 @@ public class ProtoKafkaSource extends KafkaSource<Message> {
     props.put(NATIVE_KAFKA_KEY_DESERIALIZER_PROP, StringDeserializer.class);
     props.put(NATIVE_KAFKA_VALUE_DESERIALIZER_PROP, ByteArrayDeserializer.class);
     className = props.getString(ProtoClassBasedSchemaProvider.Config.PROTO_SCHEMA_CLASS_NAME);
+    this.offsetGen = new KafkaOffsetGen(props);
   }
 
   @Override
