@@ -246,7 +246,6 @@ public class ITTestDataStreamWrite extends TestLogger {
     execEnv.addOperator(pipeline.getTransformation());
 
     if (isMor) {
-      Pipelines.clean(conf, pipeline);
       Pipelines.compact(conf, pipeline);
     }
 
