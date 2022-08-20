@@ -192,8 +192,8 @@
     <zk-curator.version>2.7.1</zk-curator.version>
     <antlr.version>4.7</antlr.version>
     <aws.sdk.version>1.12.22</aws.sdk.version>
-    <proto.version>3.17.3</proto.version>
-    <protoc.version>3.11.4</protoc.version>
+    <proto.version>3.21.1</proto.version>
+    <protoc.version>3.21.1</protoc.version>
     <dynamodb.lockclient.version>1.1.0</dynamodb.lockclient.version>
     <zookeeper.version>3.5.7</zookeeper.version>
     <dynamodb-local.port>8000</dynamodb-local.port>
