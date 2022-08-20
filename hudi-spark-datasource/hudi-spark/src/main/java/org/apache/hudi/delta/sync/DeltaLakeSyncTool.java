@@ -25,7 +25,6 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.sync.common.AbstractSyncTool;
 import org.apache.hudi.sync.common.HoodieSyncConfig;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
@@ -40,6 +39,7 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+import org.apache.hudi.sync.common.HoodieSyncTool;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -50,7 +50,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
 
-public class DeltaLakeSyncTool extends AbstractSyncTool {
+public class DeltaLakeSyncTool extends HoodieSyncTool {
 
   private static final Logger LOG = LogManager.getLogger(DeltaLakeSyncTool.class);
 
@@ -58,9 +58,11 @@ public class DeltaLakeSyncTool extends AbstractSyncTool {
   private final String basePath;
   //private final 20d.
   private final HoodieTableMetaClient metaClient;
+  private final FileSystem fs;
 
   public DeltaLakeSyncTool(Properties props, FileSystem fileSystem) {
     super(props, fileSystem);
+    this.fs = fileSystem;
     basePath = props.getProperty(HoodieSyncConfig.META_SYNC_BASE_PATH.key());
     this.metaClient = HoodieTableMetaClient.builder().setConf(fileSystem.getConf()).setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
   }

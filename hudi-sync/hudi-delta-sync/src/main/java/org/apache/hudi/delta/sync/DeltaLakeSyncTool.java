@@ -25,7 +25,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.sync.common.AbstractSyncTool;
+import org.apache.hudi.sync.common.HoodieSyncTool;
 import org.apache.hudi.sync.common.HoodieSyncConfig;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
@@ -53,7 +53,7 @@ import java.util.UUID;
 import static org.apache.hudi.avro.AvroSchemaUtils.createNullableSchema;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
-public class DeltaLakeSyncTool extends AbstractSyncTool {
+public class DeltaLakeSyncTool extends HoodieSyncTool {
 
   private static final Logger LOG = LogManager.getLogger(DeltaLakeSyncTool.class);
 
@@ -63,15 +63,18 @@ public class DeltaLakeSyncTool extends AbstractSyncTool {
   private final String basePath;
   //private final 20d.
   private final HoodieTableMetaClient metaClient;
+  private final FileSystem fs;
 
   public DeltaLakeSyncTool(Properties props, FileSystem fileSystem) {
     super(props, fileSystem);
+    this.fs = fileSystem;
     basePath = props.getProperty(HoodieSyncConfig.META_SYNC_BASE_PATH.key());
     this.metaClient = HoodieTableMetaClient.builder().setConf(fileSystem.getConf()).setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
   }
 
   public DeltaLakeSyncTool(HoodieTableMetaClient metaClient) {
     super(metaClient.getTableConfig().getProps(), metaClient.getFs());
+    this.fs = metaClient.getFs();
     basePath = metaClient.getBasePath();
     this.metaClient = metaClient;
   }
