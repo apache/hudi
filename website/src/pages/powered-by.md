@@ -68,6 +68,9 @@ Apache Hudi is integrated in the digital platform to meet the real-time update n
 ### Logical Clocks 
 [Hopsworks 1.x series](https://www.logicalclocks.com/blog/introducing-the-hopsworks-1-x-series) supports Apache Hudi feature groups, to enable upserts and time travel.
 
+### NerdWallet
+[NerdWallet uses AWS and Apache Hudi to build a serverless, real-time analytics platform](https://aws.amazon.com/blogs/big-data/how-nerdwallet-uses-aws-and-apache-hudi-to-build-a-serverless-real-time-analytics-platform/)
+
 ### Robinhood
 [Rds data lake at Robinhood using Apache Hudi](https://www.slideshare.net/BalajiVaradarajan13/rds-data-lake-robinhood)
 
