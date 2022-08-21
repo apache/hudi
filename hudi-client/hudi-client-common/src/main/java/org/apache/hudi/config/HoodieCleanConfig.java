@@ -25,9 +25,7 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.table.action.clean.CleaningTriggerStrategy;
 
 import javax.annotation.concurrent.Immutable;
@@ -109,8 +107,8 @@ public class HoodieCleanConfig extends HoodieConfig {
       .defaultValue(HoodieFailedWritesCleaningPolicy.EAGER.name())
       .withInferFunction(cfg -> {
         Option<String> writeConcurrencyModeOpt = Option.ofNullable(cfg.getString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE));
-        if (!writeConcurrencyModeOpt.isPresent() ||
-            !writeConcurrencyModeOpt.get().equals(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name())) {
+        if (!writeConcurrencyModeOpt.isPresent()
+            || !writeConcurrencyModeOpt.get().equals(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name())) {
           return Option.empty();
         }
         return Option.of(HoodieFailedWritesCleaningPolicy.LAZY.name());
