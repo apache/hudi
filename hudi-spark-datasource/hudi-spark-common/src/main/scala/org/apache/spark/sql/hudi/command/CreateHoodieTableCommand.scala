@@ -120,8 +120,10 @@ object CreateHoodieTableCommand {
 
     val tableType = tableConfig.getTableType.name()
     val inputFormat = tableType match {
-      case DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL | DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL =>
+      case DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL =>
         classOf[HoodieParquetInputFormat].getCanonicalName
+      case DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL =>
+        classOf[HoodieParquetRealtimeInputFormat].getCanonicalName
       case _=> throw new IllegalArgumentException(s"UnKnow table type:$tableType")
     }
     val outputFormat = HoodieInputFormatUtils.getOutputFormatClassName(HoodieFileFormat.PARQUET)
