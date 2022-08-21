@@ -86,7 +86,6 @@ import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metrics.HoodieMetrics;
-import org.apache.hudi.metrics.Metrics;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -1538,7 +1537,6 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
     this.index.close();
     this.heartbeatClient.stop();
     this.txnManager.close();
-    Metrics.shutdown();
   }
 
   private void setWriteTimer(HoodieTable table) {
