@@ -20,14 +20,14 @@ public class TestRebalancedSparkHoodieHBaseIndex extends TestSparkHoodieHBaseInd
     RebalancedSparkHoodieHBaseIndex index = new RebalancedSparkHoodieHBaseIndex(config);
     assertTrue(index.getHBaseKey(key).matches("[0-7]aaa"));
 
-    // 100 hbase region count should add 00-99 prefix to hbase key
+    // if set 100 hbase region count should add 00-99 prefix to hbase key
     config = HoodieWriteConfig.newBuilder().withPath("/foo").withIndexConfig(HoodieIndexConfig.newBuilder()
         .withIndexType(HoodieIndex.IndexType.HBASE).withHBaseIndexConfig(
             HoodieHBaseIndexConfig.newBuilder().hbaseRegionBucketNum("100").build()).build()).build();
     index = new RebalancedSparkHoodieHBaseIndex(config);
     assertTrue(index.getHBaseKey(key).matches("\\d{2}aaa"));
 
-   // 321 hbase region count should add 000-320 prefix to hbase key
+   // if set 321 hbase region count should add 000-320 prefix to hbase key
    config = HoodieWriteConfig.newBuilder().withPath("/foo").withIndexConfig(HoodieIndexConfig.newBuilder()
         .withIndexType(HoodieIndex.IndexType.HBASE).withHBaseIndexConfig(
             HoodieHBaseIndexConfig.newBuilder().hbaseRegionBucketNum("321").build()).build()).build();
