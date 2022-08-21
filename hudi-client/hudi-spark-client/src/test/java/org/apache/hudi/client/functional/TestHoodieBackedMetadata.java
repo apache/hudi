@@ -2281,7 +2281,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
    */
   @Test
   public void testMetadataMetrics() throws Exception {
-    init(HoodieTableType.COPY_ON_WRITE, false, true, true, false);
+    init(HoodieTableType.COPY_ON_WRITE, false);
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
 
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, getWriteConfigBuilder(true, true, true).build())) {
