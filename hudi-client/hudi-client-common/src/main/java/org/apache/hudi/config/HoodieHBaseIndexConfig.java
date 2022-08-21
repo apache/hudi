@@ -500,6 +500,11 @@ public class HoodieHBaseIndexConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder hbaseRegionBucketNum(String bucketNum) {
+      hBaseIndexConfig.setValue(BUCKET_NUMBER, bucketNum);
+      return this;
+    }
+
     /**
      * <p>
      * Method to set maximum QPS allowed per Region Server. This should be same across various jobs. This is intended to
