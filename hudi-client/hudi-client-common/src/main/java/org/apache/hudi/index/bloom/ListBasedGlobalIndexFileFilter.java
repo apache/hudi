@@ -21,7 +21,6 @@ package org.apache.hudi.index.bloom;
 import org.apache.hudi.common.util.collection.Pair;
 
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -32,18 +31,19 @@ class ListBasedGlobalIndexFileFilter extends ListBasedIndexFileFilter {
    *
    * @param partitionToFileIndexInfo Map of partition to List of {@link BloomIndexFileInfo}
    */
-  ListBasedGlobalIndexFileFilter(Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo) {
+  ListBasedGlobalIndexFileFilter(Map<String, Map<String, BloomIndexFileInfo>> partitionToFileIndexInfo) {
     super(partitionToFileIndexInfo);
   }
 
   @Override
-  public Set<Pair<String, String>> getMatchingFilesAndPartition(String partitionPath, String recordKey) {
-    Set<Pair<String, String>> toReturn = new HashSet<>();
-    partitionToFileIndexInfo.forEach((partition, bloomIndexFileInfoList) -> bloomIndexFileInfoList.forEach(file -> {
-      if (shouldCompareWithFile(file, recordKey)) {
-        toReturn.add(Pair.of(partition, file.getFileId()));
-      }
-    }));
+  public Set<Pair<String, Pair<String, String>>> getMatchingFilesAndPartition(String partitionPath, String recordKey) {
+    Set<Pair<String, Pair<String, String>>> toReturn = new HashSet<>();
+    partitionToFileIndexInfo.forEach((partition, bloomIndexFileInfoListMap) ->
+        bloomIndexFileInfoListMap.values().forEach(fileInfo -> {
+          if (shouldCompareWithFile(fileInfo, recordKey)) {
+            toReturn.add(Pair.of(partition, Pair.of(fileInfo.getFileId(), fileInfo.getFilename())));
+          }
+        }));
     return toReturn;
   }
 }

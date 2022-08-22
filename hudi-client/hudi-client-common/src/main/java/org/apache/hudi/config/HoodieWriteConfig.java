@@ -1580,6 +1580,14 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBooleanOrDefault(HoodieIndexConfig.BLOOM_INDEX_USE_METADATA);
   }
 
+  public int getBloomIndexMetadataReadParallelism() {
+    return getIntOrDefault(HoodieIndexConfig.BLOOM_INDEX_METADATA_READ_PARALLELISM);
+  }
+
+  public int getBloomIndexMetadataBloomFilterReadBatchSize() {
+    return getIntOrDefault(HoodieIndexConfig.BLOOM_INDEX_METADATA_BLOOM_FILTER_READ_BATCH_SIZE);
+  }
+
   public boolean useBloomIndexTreebasedFilter() {
     return getBoolean(HoodieIndexConfig.BLOOM_INDEX_TREE_BASED_FILTER);
   }

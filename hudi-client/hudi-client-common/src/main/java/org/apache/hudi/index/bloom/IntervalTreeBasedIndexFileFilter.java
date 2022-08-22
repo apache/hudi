@@ -20,6 +20,7 @@ package org.apache.hudi.index.bloom;
 
 import org.apache.hudi.common.util.collection.Pair;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -35,20 +36,23 @@ class IntervalTreeBasedIndexFileFilter implements IndexFileFilter {
 
   private final Map<String, KeyRangeLookupTree> partitionToFileIndexLookUpTree = new HashMap<>();
   private final Map<String, Set<String>> partitionToFilesWithNoRanges = new HashMap<>();
+  private final Map<String, String> fileIdToFilenameMap = new HashMap<>();
 
   /**
    * Instantiates {@link IntervalTreeBasedIndexFileFilter}.
    *
    * @param partitionToFileIndexInfo Map of partition to List of {@link BloomIndexFileInfo}s
    */
-  IntervalTreeBasedIndexFileFilter(final Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo) {
-    partitionToFileIndexInfo.forEach((partition, bloomIndexFiles) -> {
+  IntervalTreeBasedIndexFileFilter(final Map<String, Map<String, BloomIndexFileInfo>> partitionToFileIndexInfo) {
+    partitionToFileIndexInfo.forEach((partition, bloomIndexFileInfoMap) -> {
       // Note that the interval tree implementation doesn't have auto-balancing to ensure logN search time.
       // So, we are shuffling the input here hoping the tree will not have any skewness. If not, the tree could be
       // skewed which could result in N search time instead of logN.
+      List<BloomIndexFileInfo> bloomIndexFiles = new ArrayList<>(bloomIndexFileInfoMap.values());
       Collections.shuffle(bloomIndexFiles);
       KeyRangeLookupTree lookUpTree = new KeyRangeLookupTree();
       bloomIndexFiles.forEach(indexFileInfo -> {
+        fileIdToFilenameMap.put(indexFileInfo.getFileId(), indexFileInfo.getFilename());
         if (indexFileInfo.hasKeyRanges()) {
           lookUpTree.insert(new KeyRangeNode(indexFileInfo.getMinRecordKey(), indexFileInfo.getMaxRecordKey(),
               indexFileInfo.getFileId()));
@@ -64,16 +68,16 @@ class IntervalTreeBasedIndexFileFilter implements IndexFileFilter {
   }
 
   @Override
-  public Set<Pair<String, String>> getMatchingFilesAndPartition(String partitionPath, String recordKey) {
-    Set<Pair<String, String>> toReturn = new HashSet<>();
+  public Set<Pair<String, Pair<String, String>>> getMatchingFilesAndPartition(String partitionPath, String recordKey) {
+    Set<Pair<String, Pair<String, String>>> toReturn = new HashSet<>();
     // could be null, if there are no files in a given partition yet or if all index files have no ranges
     if (partitionToFileIndexLookUpTree.containsKey(partitionPath)) {
-      partitionToFileIndexLookUpTree.get(partitionPath).getMatchingIndexFiles(recordKey).forEach(file ->
-          toReturn.add(Pair.of(partitionPath, file)));
+      partitionToFileIndexLookUpTree.get(partitionPath).getMatchingIndexFiles(recordKey).forEach(fileId ->
+          toReturn.add(Pair.of(partitionPath, Pair.of(fileId, fileIdToFilenameMap.get(fileId)))));
     }
     if (partitionToFilesWithNoRanges.containsKey(partitionPath)) {
-      partitionToFilesWithNoRanges.get(partitionPath).forEach(file ->
-          toReturn.add(Pair.of(partitionPath, file)));
+      partitionToFilesWithNoRanges.get(partitionPath).forEach(fileId ->
+          toReturn.add(Pair.of(partitionPath, Pair.of(fileId, fileIdToFilenameMap.get(fileId)))));
     }
     return toReturn;
   }

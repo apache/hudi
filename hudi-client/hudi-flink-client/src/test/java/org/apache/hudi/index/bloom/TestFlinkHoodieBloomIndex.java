@@ -18,8 +18,6 @@
 
 package org.apache.hudi.index.bloom;
 
-import org.apache.avro.Schema;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
@@ -38,6 +36,9 @@ import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieFlinkClientTestHarness;
 import org.apache.hudi.testutils.HoodieFlinkWriteableTestTable;
+
+import org.apache.avro.Schema;
+import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -54,6 +55,8 @@ import java.util.stream.Stream;
 import static java.util.Arrays.asList;
 import static java.util.UUID.randomUUID;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
+import static org.apache.hudi.testutils.BloomIndexTestUtils.assertBloomInfoEquals;
+import static org.apache.hudi.testutils.BloomIndexTestUtils.convertBloomIndexFileInfoListToMap;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -154,11 +157,11 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
       // no longer sorted, but should have same files.
 
       List<Pair<String, BloomIndexFileInfo>> expected =
-          asList(Pair.of("2016/04/01", new BloomIndexFileInfo("2")),
-              Pair.of("2015/03/12", new BloomIndexFileInfo("1")),
-              Pair.of("2015/03/12", new BloomIndexFileInfo("3", "000", "000")),
-              Pair.of("2015/03/12", new BloomIndexFileInfo("4", "001", "003")));
-      assertEquals(expected, filesList);
+          asList(Pair.of("2016/04/01", new BloomIndexFileInfo("2", "")),
+              Pair.of("2015/03/12", new BloomIndexFileInfo("1", "")),
+              Pair.of("2015/03/12", new BloomIndexFileInfo("3", "", "000", "000")),
+              Pair.of("2015/03/12", new BloomIndexFileInfo("4", "", "001", "003")));
+      assertBloomInfoEquals(expected, filesList);
     }
   }
 
@@ -168,11 +171,12 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
     HoodieWriteConfig config = makeConfig(rangePruning, treeFiltering, bucketizedChecking);
     HoodieBloomIndex index = new HoodieBloomIndex(config, ListBasedHoodieBloomIndexHelper.getInstance());
 
-    final Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo = new HashMap<>();
+    final Map<String, Map<String, BloomIndexFileInfo>> partitionToFileIndexInfo = new HashMap<>();
     partitionToFileIndexInfo.put("2017/10/22",
-        asList(new BloomIndexFileInfo("f1"), new BloomIndexFileInfo("f2", "000", "000"),
-            new BloomIndexFileInfo("f3", "001", "003"), new BloomIndexFileInfo("f4", "002", "007"),
-            new BloomIndexFileInfo("f5", "009", "010")));
+        convertBloomIndexFileInfoListToMap(asList(new BloomIndexFileInfo("f1", ""), new BloomIndexFileInfo("f2", "", "000", "000"),
+            new BloomIndexFileInfo("f3", "", "001", "003"),
+            new BloomIndexFileInfo("f4", "", "002", "007"),
+            new BloomIndexFileInfo("f5", "", "009", "010"))));
 
     Map<String, List<String>> partitionRecordKeyMap = new HashMap<>();
     asList(Pair.of("2017/10/22", "003"), Pair.of("2017/10/22", "002"),
@@ -183,11 +187,14 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
           partitionRecordKeyMap.put(t.getLeft(), recordKeyList);
         });
 
-    List<Pair<String, HoodieKey>> comparisonKeyList = index.explodeRecordsWithFileComparisons(partitionToFileIndexInfo, HoodieListPairData.lazy(partitionRecordKeyMap)).collectAsList();
+    List<Pair<Pair<String, String>, HoodieKey>> comparisonKeyList = index.explodeRecordsWithFileComparisons(
+        partitionToFileIndexInfo, HoodieListPairData.lazy(partitionRecordKeyMap)).collectAsList();
 
     assertEquals(10, comparisonKeyList.size());
     java.util.Map<String, List<String>> recordKeyToFileComps = comparisonKeyList.stream()
-        .collect(java.util.stream.Collectors.groupingBy(t -> t.getRight().getRecordKey(), java.util.stream.Collectors.mapping(t -> t.getLeft(), java.util.stream.Collectors.toList())));
+        .collect(java.util.stream.Collectors.groupingBy(
+            t -> t.getRight().getRecordKey(),
+            java.util.stream.Collectors.mapping(t -> t.getLeft().getLeft(), java.util.stream.Collectors.toList())));
 
     assertEquals(4, recordKeyToFileComps.size());
     assertEquals(new java.util.HashSet<>(asList("f1", "f3", "f4")), new java.util.HashSet<>(recordKeyToFileComps.get("002")));

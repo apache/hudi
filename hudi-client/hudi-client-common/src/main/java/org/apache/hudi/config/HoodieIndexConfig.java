@@ -133,6 +133,23 @@ public class HoodieIndexConfig extends HoodieConfig {
           + "When true, the index lookup uses bloom filters and column stats from metadata "
           + "table when available to speed up the process.");
 
+  public static final ConfigProperty<Integer> BLOOM_INDEX_METADATA_READ_PARALLELISM = ConfigProperty
+      .key("hoodie.bloom.index.metadata.read.parallelism")
+      .defaultValue(10)
+      .sinceVersion("0.13.0")
+      .withDocumentation("Only applies if index type is BLOOM and metadata table is enabled "
+          + "for index lookup (hoodie.bloom.index.use.metadata=true). "
+          + "Determines the parallelism for reading the index from metadata table.");
+
+  public static final ConfigProperty<Integer> BLOOM_INDEX_METADATA_BLOOM_FILTER_READ_BATCH_SIZE = ConfigProperty
+      .key("hoodie.bloom.index.metadata.bloom.filter.read.batch.size")
+      .defaultValue(128)
+      .sinceVersion("0.13.0")
+      .withDocumentation("Only applies if index type is BLOOM and metadata table is enabled "
+          + "for index lookup (hoodie.bloom.index.use.metadata=true). "
+          + "Determines the batch size for reading bloom filters from metadata table. "
+          + "Smaller value puts less pressure on the executor memory.");
+
   public static final ConfigProperty<String> BLOOM_INDEX_TREE_BASED_FILTER = ConfigProperty
       .key("hoodie.bloom.index.use.treebased.filter")
       .defaultValue("true")
@@ -537,6 +554,16 @@ public class HoodieIndexConfig extends HoodieConfig {
 
     public Builder bloomIndexUseMetadata(boolean useMetadata) {
       hoodieIndexConfig.setValue(BLOOM_INDEX_USE_METADATA, String.valueOf(useMetadata));
+      return this;
+    }
+
+    public Builder bloomIndexMetadataReadParallelism(int parallelism) {
+      hoodieIndexConfig.setValue(BLOOM_INDEX_METADATA_READ_PARALLELISM, String.valueOf(parallelism));
+      return this;
+    }
+
+    public Builder bloomIndexMetadataBloomFilterReadBatchSize(int batchSize) {
+      hoodieIndexConfig.setValue(BLOOM_INDEX_METADATA_BLOOM_FILTER_READ_BATCH_SIZE, String.valueOf(batchSize));
       return this;
     }
 

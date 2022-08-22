@@ -1853,6 +1853,7 @@
       <activation>
         <property>
           <name>flink1.14</name>
+          <value>!disabled</value>
         </property>
       </activation>
     </profile>

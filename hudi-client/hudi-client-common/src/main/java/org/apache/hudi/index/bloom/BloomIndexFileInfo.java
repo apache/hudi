@@ -27,25 +27,30 @@ import java.util.Objects;
 public class BloomIndexFileInfo implements Serializable {
 
   private final String fileId;
-
+  private final String filename;
   private final String minRecordKey;
-
   private final String maxRecordKey;
 
-  public BloomIndexFileInfo(String fileId, String minRecordKey, String maxRecordKey) {
+  public BloomIndexFileInfo(String fileId, String filename, String minRecordKey, String maxRecordKey) {
     this.fileId = fileId;
+    this.filename = filename;
     this.minRecordKey = minRecordKey;
     this.maxRecordKey = maxRecordKey;
   }
 
-  public BloomIndexFileInfo(String fileId) {
+  public BloomIndexFileInfo(String fileId, String filename) {
     this.fileId = fileId;
+    this.filename = filename;
     this.minRecordKey = null;
     this.maxRecordKey = null;
   }
 
   public String getFileId() {
     return fileId;
+  }
+
+  public String getFilename() {
+    return filename;
   }
 
   public String getMinRecordKey() {
@@ -78,20 +83,23 @@ public class BloomIndexFileInfo implements Serializable {
     }
 
     BloomIndexFileInfo that = (BloomIndexFileInfo) o;
-    return Objects.equals(that.fileId, fileId) && Objects.equals(that.minRecordKey, minRecordKey)
+    return Objects.equals(that.fileId, fileId)
+        && Objects.equals(that.filename, filename)
+        && Objects.equals(that.minRecordKey, minRecordKey)
         && Objects.equals(that.maxRecordKey, maxRecordKey);
 
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(fileId, minRecordKey, maxRecordKey);
+    return Objects.hash(fileId, filename, minRecordKey, maxRecordKey);
   }
 
   @Override
   public String toString() {
     final StringBuilder sb = new StringBuilder("BloomIndexFileInfo {");
     sb.append(" fileId=").append(fileId);
+    sb.append(" filename=").append(filename);
     sb.append(" minRecordKey=").append(minRecordKey);
     sb.append(" maxRecordKey=").append(maxRecordKey);
     sb.append('}');

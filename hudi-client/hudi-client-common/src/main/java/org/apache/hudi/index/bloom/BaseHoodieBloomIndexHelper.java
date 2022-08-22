@@ -29,7 +29,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 
 import java.io.Serializable;
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -43,7 +42,7 @@ public abstract class BaseHoodieBloomIndexHelper implements Serializable {
    * @param context                 {@link HoodieEngineContext} instance to use.
    * @param hoodieTable             {@link HoodieTable} instance to use.
    * @param partitionRecordKeyPairs Pairs of partition path and record key.
-   * @param fileComparisonPairs     Pairs of filename and record key based on file comparisons.
+   * @param fileComparisonPairs     Pairs of (file ID, filename) pair and record key based on file comparisons.
    * @param partitionToFileInfo     Partition path to {@link BloomIndexFileInfo} map.
    * @param recordsPerPartition     Number of records per partition in a map.
    * @return {@link HoodiePairData} of {@link HoodieKey} and {@link HoodieRecordLocation} pairs.
@@ -51,7 +50,7 @@ public abstract class BaseHoodieBloomIndexHelper implements Serializable {
   public abstract HoodiePairData<HoodieKey, HoodieRecordLocation> findMatchingFilesForRecordKeys(
       HoodieWriteConfig config, HoodieEngineContext context, HoodieTable hoodieTable,
       HoodiePairData<String, String> partitionRecordKeyPairs,
-      HoodieData<Pair<String, HoodieKey>> fileComparisonPairs,
-      Map<String, List<BloomIndexFileInfo>> partitionToFileInfo,
+      HoodieData<Pair<Pair<String, String>, HoodieKey>> fileComparisonPairs,
+      Map<String, Map<String, BloomIndexFileInfo>> partitionToFileInfo,
       Map<String, Long> recordsPerPartition);
 }

@@ -36,20 +36,21 @@ class IntervalTreeBasedGlobalIndexFileFilter implements IndexFileFilter {
 
   private final KeyRangeLookupTree indexLookUpTree = new KeyRangeLookupTree();
   private final Set<String> filesWithNoRanges = new HashSet<>();
-  private final Map<String, String> fileIdToPartitionPathMap = new HashMap<>();
+  private final Map<String, Pair<String, String>> fileIdToPartitionPathAndFilenameMap = new HashMap<>();
 
   /**
    * Instantiates {@link IntervalTreeBasedGlobalIndexFileFilter}.
    *
    * @param partitionToFileIndexInfo Map of partition to List of {@link BloomIndexFileInfo}s
    */
-  IntervalTreeBasedGlobalIndexFileFilter(final Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo) {
+  IntervalTreeBasedGlobalIndexFileFilter(final Map<String, Map<String, BloomIndexFileInfo>> partitionToFileIndexInfo) {
     List<BloomIndexFileInfo> allIndexFiles = new ArrayList<>();
 
-    partitionToFileIndexInfo.forEach((partition, bloomIndexFileInfoList) -> bloomIndexFileInfoList.forEach(file -> {
-      fileIdToPartitionPathMap.put(file.getFileId(), partition);
-      allIndexFiles.add(file);
-    }));
+    partitionToFileIndexInfo.forEach((partition, bloomIndexFileInfoMap) -> bloomIndexFileInfoMap.values().forEach(
+        file -> {
+          fileIdToPartitionPathAndFilenameMap.put(file.getFileId(), Pair.of(partition, file.getFilename()));
+          allIndexFiles.add(file);
+        }));
 
     // Note that the interval tree implementation doesn't have auto-balancing to ensure logN search time.
     // So, we are shuffling the input here hoping the tree will not have any skewness. If not, the tree could be skewed
@@ -66,12 +67,17 @@ class IntervalTreeBasedGlobalIndexFileFilter implements IndexFileFilter {
   }
 
   @Override
-  public Set<Pair<String, String>> getMatchingFilesAndPartition(String partitionPath, String recordKey) {
+  public Set<Pair<String, Pair<String, String>>> getMatchingFilesAndPartition(String partitionPath, String recordKey) {
     Set<String> matchingFiles = new HashSet<>();
     matchingFiles.addAll(indexLookUpTree.getMatchingIndexFiles(recordKey));
     matchingFiles.addAll(filesWithNoRanges);
-    Set<Pair<String, String>> toReturn = new HashSet<>();
-    matchingFiles.forEach(file -> toReturn.add(Pair.of(fileIdToPartitionPathMap.get(file), file)));
+    Set<Pair<String, Pair<String, String>>> toReturn = new HashSet<>();
+    matchingFiles.forEach(fileId -> {
+      Pair<String, String> partitionPathAndFilenamePair = fileIdToPartitionPathAndFilenameMap.get(fileId);
+      toReturn.add(Pair.of(
+          partitionPathAndFilenamePair.getLeft(),
+          Pair.of(fileId, partitionPathAndFilenamePair.getRight())));
+    });
     return toReturn;
   }
 }

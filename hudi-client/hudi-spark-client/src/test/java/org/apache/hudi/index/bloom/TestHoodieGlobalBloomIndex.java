@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
+import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -57,6 +58,9 @@ import java.util.stream.Collectors;
 import scala.Tuple2;
 
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
+import static org.apache.hudi.testutils.BloomIndexTestUtils.assertBloomInfoEquals;
+import static org.apache.hudi.testutils.BloomIndexTestUtils.convertBloomIndexFileInfoListToMap;
+import static org.apache.hudi.testutils.BloomIndexTestUtils.convertBloomIndexFileInfoPairListToMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -164,7 +168,7 @@ public class TestHoodieGlobalBloomIndex extends TestHoodieMetadataBase {
     filesList = index.loadColumnRangesFromFiles(partitions, context, hoodieTable);
     assertEquals(4, filesList.size());
 
-    Map<String, BloomIndexFileInfo> filesMap = toFileMap(filesList);
+    Map<String, BloomIndexFileInfo> filesMap = convertBloomIndexFileInfoPairListToMap(filesList);
     // key ranges checks
     assertNull(filesMap.get("2016/04/01/2").getMaxRecordKey());
     assertNull(filesMap.get("2016/04/01/2").getMinRecordKey());
@@ -173,13 +177,13 @@ public class TestHoodieGlobalBloomIndex extends TestHoodieMetadataBase {
     assertNotNull(filesMap.get("2015/03/12/3").getMinRecordKey());
     assertTrue(filesMap.get("2015/03/12/3").hasKeyRanges());
 
-    Map<String, BloomIndexFileInfo> expected = new HashMap<>();
-    expected.put("2016/04/01/2", new BloomIndexFileInfo("2"));
-    expected.put("2015/03/12/1", new BloomIndexFileInfo("1"));
-    expected.put("2015/03/12/3", new BloomIndexFileInfo("3", "000", "000"));
-    expected.put("2015/03/12/4", new BloomIndexFileInfo("4", "001", "003"));
+    List<Pair<String, BloomIndexFileInfo>> expected =
+        Arrays.asList(new ImmutablePair<>("2016/04/01", new BloomIndexFileInfo("2", "")),
+            new ImmutablePair<>("2015/03/12", new BloomIndexFileInfo("1", "")),
+            new ImmutablePair<>("2015/03/12", new BloomIndexFileInfo("3", "", "000", "000")),
+            new ImmutablePair<>("2015/03/12", new BloomIndexFileInfo("4", "", "001", "003")));
 
-    assertEquals(expected, filesMap);
+    assertBloomInfoEquals(expected, filesList);
   }
 
   @Test
@@ -189,19 +193,23 @@ public class TestHoodieGlobalBloomIndex extends TestHoodieMetadataBase {
     HoodieGlobalBloomIndex index =
         new HoodieGlobalBloomIndex(config, SparkHoodieBloomIndexHelper.getInstance());
 
-    final Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo = new HashMap<>();
-    partitionToFileIndexInfo.put("2017/10/22", Arrays.asList(new BloomIndexFileInfo("f1"),
-        new BloomIndexFileInfo("f2", "000", "000"), new BloomIndexFileInfo("f3", "001", "003")));
+    final Map<String, Map<String, BloomIndexFileInfo>> partitionToFileIndexInfo = new HashMap<>();
+    partitionToFileIndexInfo.put("2017/10/22", convertBloomIndexFileInfoListToMap(
+        Arrays.asList(new BloomIndexFileInfo("f1", ""),
+            new BloomIndexFileInfo("f2", "", "000", "000"),
+            new BloomIndexFileInfo("f3", "", "001", "003"))));
 
     partitionToFileIndexInfo.put("2017/10/23",
-        Arrays.asList(new BloomIndexFileInfo("f4", "002", "007"), new BloomIndexFileInfo("f5", "009", "010")));
+        convertBloomIndexFileInfoListToMap(
+            Arrays.asList(new BloomIndexFileInfo("f4", "", "002", "007"),
+                new BloomIndexFileInfo("f5", "", "009", "010"))));
 
     // the partition of the key of the incoming records will be ignored
     JavaPairRDD<String, String> partitionRecordKeyPairRDD =
         jsc.parallelize(Arrays.asList(new Tuple2<>("2017/10/21", "003"), new Tuple2<>("2017/10/22", "002"),
             new Tuple2<>("2017/10/22", "005"), new Tuple2<>("2017/10/23", "004"))).mapToPair(t -> t);
 
-    List<Pair<String, HoodieKey>> comparisonKeyList = HoodieJavaRDD.getJavaRDD(
+    List<Pair<Pair<String, String>, HoodieKey>> comparisonKeyList = HoodieJavaRDD.getJavaRDD(
         index.explodeRecordsWithFileComparisons(partitionToFileIndexInfo,
             HoodieJavaPairRDD.of(partitionRecordKeyPairRDD))).collect();
 
@@ -216,7 +224,7 @@ public class TestHoodieGlobalBloomIndex extends TestHoodieMetadataBase {
     assertEquals(10, comparisonKeyList.size());
 
     Map<String, List<String>> recordKeyToFileComps = comparisonKeyList.stream()
-        .collect(Collectors.groupingBy(t -> t.getRight().getRecordKey(), Collectors.mapping(Pair::getKey, Collectors.toList())));
+        .collect(Collectors.groupingBy(t -> t.getRight().getRecordKey(), Collectors.mapping(t -> t.getLeft().getLeft(), Collectors.toList())));
 
     assertEquals(4, recordKeyToFileComps.size());
     assertEquals(new HashSet<>(Arrays.asList("f4", "f1", "f3")), new HashSet<>(recordKeyToFileComps.get("002")));
@@ -437,14 +445,4 @@ public class TestHoodieGlobalBloomIndex extends TestHoodieMetadataBase {
     assertEquals(p1, record.getPartitionPath());
     assertEquals(incomingPayloadSamePartition.getJsonData(), ((RawTripTestPayload) record.getData()).getJsonData());
   }
-
-  // convert list to map to avoid sorting order dependencies
-  private static Map<String, BloomIndexFileInfo> toFileMap(List<Pair<String, BloomIndexFileInfo>> filesList) {
-    Map<String, BloomIndexFileInfo> filesMap = new HashMap<>();
-    for (Pair<String, BloomIndexFileInfo> t : filesList) {
-      filesMap.put(t.getKey() + "/" + t.getValue().getFileId(), t.getValue());
-    }
-    return filesMap;
-  }
-
 }

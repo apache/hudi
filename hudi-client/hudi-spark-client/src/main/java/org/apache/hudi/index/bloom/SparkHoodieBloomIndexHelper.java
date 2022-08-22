@@ -25,10 +25,13 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.common.util.hash.FileIndexID;
+import org.apache.hudi.common.util.hash.PartitionIndexID;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaPairRDD;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.io.HoodieKeyLookupResult;
+import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.log4j.LogManager;
@@ -66,12 +69,14 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
   public HoodiePairData<HoodieKey, HoodieRecordLocation> findMatchingFilesForRecordKeys(
       HoodieWriteConfig config, HoodieEngineContext context, HoodieTable hoodieTable,
       HoodiePairData<String, String> partitionRecordKeyPairs,
-      HoodieData<Pair<String, HoodieKey>> fileComparisonPairs,
-      Map<String, List<BloomIndexFileInfo>> partitionToFileInfo,
+      HoodieData<Pair<Pair<String, String>, HoodieKey>> fileComparisonPairs,
+      Map<String, Map<String, BloomIndexFileInfo>> partitionToFileInfo,
       Map<String, Long> recordsPerPartition) {
-    JavaRDD<Tuple2<String, HoodieKey>> fileComparisonsRDD =
+    JavaRDD<Tuple2<Tuple2<String, String>, HoodieKey>> fileComparisonsRDD =
         HoodieJavaRDD.getJavaRDD(fileComparisonPairs)
-            .map(pair -> new Tuple2<>(pair.getLeft(), pair.getRight()));
+            .map(pair -> new Tuple2<>(
+                new Tuple2<>(pair.getLeft().getLeft(), pair.getLeft().getRight()),
+                pair.getRight()));
 
     int inputParallelism = HoodieJavaPairRDD.getJavaPairRDD(partitionRecordKeyPairs).partitions().size();
     int joinParallelism = Math.max(inputParallelism, config.getBloomIndexParallelism());
@@ -82,25 +87,33 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
     if (config.getBloomIndexUseMetadata()
         && hoodieTable.getMetaClient().getTableConfig().getMetadataPartitions()
         .contains(BLOOM_FILTERS.getPartitionPath())) {
-      // Step 1: Sort by file id
-      JavaRDD<Tuple2<String, HoodieKey>> sortedFileIdAndKeyPairs =
-          fileComparisonsRDD.sortBy(Tuple2::_1, true, joinParallelism);
+      // Step 1: Sort by bloom filter key (Hash ID of partition and file name) in metadata table
+      JavaRDD<Tuple2<Tuple2<String, String>, HoodieKey>> sortedFileIdAndKeyPairs =
+          fileComparisonsRDD
+              .sortBy(t -> HoodieMetadataPayload.getBloomFilterIndexKey(
+                  new PartitionIndexID(t._1._1), new FileIndexID(t._1._2)), true, joinParallelism);
 
       // Step 2: Use bloom filter to filter and the actual log file to get the record location
-      keyLookupResultRDD = sortedFileIdAndKeyPairs.mapPartitionsWithIndex(
-          new HoodieMetadataBloomIndexCheckFunction(hoodieTable), true);
+      keyLookupResultRDD = sortedFileIdAndKeyPairs.coalesce(config.getBloomIndexMetadataReadParallelism())
+          .mapPartitionsWithIndex(new HoodieMetadataBloomIndexCheckFunction(
+              hoodieTable,
+              config.getBasePath(),
+              config.getBloomIndexMetadataBloomFilterReadBatchSize()), true);
     } else if (config.useBloomIndexBucketizedChecking()) {
       Map<String, Long> comparisonsPerFileGroup = computeComparisonsPerFileGroup(
           config, recordsPerPartition, partitionToFileInfo, fileComparisonsRDD, context);
       Partitioner partitioner = new BucketizedBloomCheckPartitioner(joinParallelism, comparisonsPerFileGroup,
           config.getBloomIndexKeysPerBucket());
 
-      keyLookupResultRDD = fileComparisonsRDD.mapToPair(t -> new Tuple2<>(Pair.of(t._1, t._2.getRecordKey()), t))
+      keyLookupResultRDD = fileComparisonsRDD
+          .mapToPair(t -> new Tuple2<>(Pair.of(t._1._1, t._2.getRecordKey()), new Tuple2<>(t._1._1, t._2)))
           .repartitionAndSortWithinPartitions(partitioner)
           .map(Tuple2::_2)
           .mapPartitionsWithIndex(new HoodieBloomIndexCheckFunction(hoodieTable, config), true);
     } else {
-      keyLookupResultRDD = fileComparisonsRDD.sortBy(Tuple2::_1, true, joinParallelism)
+      keyLookupResultRDD = fileComparisonsRDD
+          .map(t -> new Tuple2<>(t._1._1, t._2))
+          .sortBy(t -> t._1, true, joinParallelism)
           .mapPartitionsWithIndex(new HoodieBloomIndexCheckFunction(hoodieTable, config), true);
     }
 
@@ -118,19 +131,19 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
   private Map<String, Long> computeComparisonsPerFileGroup(
       final HoodieWriteConfig config,
       final Map<String, Long> recordsPerPartition,
-      final Map<String, List<BloomIndexFileInfo>> partitionToFileInfo,
-      final JavaRDD<Tuple2<String, HoodieKey>> fileComparisonsRDD,
+      final Map<String, Map<String, BloomIndexFileInfo>> partitionToFileInfo,
+      final JavaRDD<Tuple2<Tuple2<String, String>, HoodieKey>> fileComparisonsRDD,
       final HoodieEngineContext context) {
     Map<String, Long> fileToComparisons;
     if (config.getBloomIndexPruneByRanges()) {
       // we will just try exploding the input and then count to determine comparisons
       // FIX(vc): Only do sampling here and extrapolate?
       context.setJobStatus(this.getClass().getSimpleName(), "Compute all comparisons needed between records and files: " + config.getTableName());
-      fileToComparisons = fileComparisonsRDD.mapToPair(t -> t).countByKey();
+      fileToComparisons = fileComparisonsRDD.mapToPair(t -> new Tuple2<>(t._1._1, t._2)).countByKey();
     } else {
       fileToComparisons = new HashMap<>();
-      partitionToFileInfo.forEach((key, value) -> {
-        for (BloomIndexFileInfo fileInfo : value) {
+      partitionToFileInfo.forEach((key, infoMap) -> {
+        for (BloomIndexFileInfo fileInfo : infoMap.values()) {
           // each file needs to be compared against all the records coming into the partition
           fileToComparisons.put(fileInfo.getFileId(), recordsPerPartition.get(key));
         }

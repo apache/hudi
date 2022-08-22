@@ -21,7 +21,6 @@ package org.apache.hudi.index.bloom;
 import org.apache.hudi.common.util.collection.Pair;
 
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -31,26 +30,26 @@ import java.util.Set;
  */
 class ListBasedIndexFileFilter implements IndexFileFilter {
 
-  final Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo;
+  final Map<String, Map<String, BloomIndexFileInfo>> partitionToFileIndexInfo;
 
   /**
    * Instantiates {@link ListBasedIndexFileFilter}.
    *
    * @param partitionToFileIndexInfo Map of partition to List of {@link BloomIndexFileInfo}
    */
-  ListBasedIndexFileFilter(final Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo) {
+  ListBasedIndexFileFilter(final Map<String, Map<String, BloomIndexFileInfo>> partitionToFileIndexInfo) {
     this.partitionToFileIndexInfo = partitionToFileIndexInfo;
   }
 
   @Override
-  public Set<Pair<String, String>> getMatchingFilesAndPartition(String partitionPath, String recordKey) {
-    List<BloomIndexFileInfo> indexInfos = partitionToFileIndexInfo.get(partitionPath);
-    Set<Pair<String, String>> toReturn = new HashSet<>();
+  public Set<Pair<String, Pair<String, String>>> getMatchingFilesAndPartition(String partitionPath, String recordKey) {
+    Map<String, BloomIndexFileInfo> indexInfos = partitionToFileIndexInfo.get(partitionPath);
+    Set<Pair<String, Pair<String, String>>> toReturn = new HashSet<>();
     if (indexInfos != null) { // could be null, if there are no files in a given partition yet.
       // for each candidate file in partition, that needs to be compared.
-      for (BloomIndexFileInfo indexInfo : indexInfos) {
+      for (BloomIndexFileInfo indexInfo : indexInfos.values()) {
         if (shouldCompareWithFile(indexInfo, recordKey)) {
-          toReturn.add(Pair.of(partitionPath, indexInfo.getFileId()));
+          toReturn.add(Pair.of(partitionPath, Pair.of(indexInfo.getFileId(), indexInfo.getFilename())));
         }
       }
     }
