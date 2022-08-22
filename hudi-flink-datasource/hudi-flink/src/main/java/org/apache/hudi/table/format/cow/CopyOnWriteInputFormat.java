@@ -18,11 +18,17 @@
 
 package org.apache.hudi.table.format.cow;
 
-import java.util.Comparator;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.util.CustomizedThreadFactory;
+import org.apache.hudi.common.util.FutureUtils;
+import org.apache.hudi.common.util.HoodieTimer;
+import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.format.cow.vector.reader.ParquetColumnarRowSplitReader;
 import org.apache.hudi.util.DataTypeUtils;
 
+import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.common.io.FileInputFormat;
 import org.apache.flink.api.common.io.FilePathFilter;
 import org.apache.flink.api.common.io.GlobFilePathFilter;
@@ -43,10 +49,18 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * An implementation of {@link FileInputFormat} to read {@link RowData} records
@@ -72,10 +86,13 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
   private final String partDefaultName;
   private final boolean utcTimestamp;
   private final SerializableConfiguration conf;
+  private final org.apache.flink.configuration.Configuration flinkConf;
+  private final boolean createInputSplitAsync;
   private final long limit;
 
   private transient ParquetColumnarRowSplitReader reader;
   private transient long currentReadCount;
+  private transient ExecutorService createInputSplitPool;
 
   /**
    * Files filter for determining what files/directories should be included.
@@ -87,18 +104,19 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
       String[] fullFieldNames,
       DataType[] fullFieldTypes,
       int[] selectedFields,
-      String partDefaultName,
+      org.apache.flink.configuration.Configuration flinkConf,
       long limit,
-      Configuration conf,
-      boolean utcTimestamp) {
+      Configuration conf) {
     super.setFilePaths(paths);
     this.limit = limit;
-    this.partDefaultName = partDefaultName;
+    this.flinkConf = flinkConf;
+    this.partDefaultName = this.flinkConf.getString(FlinkOptions.PARTITION_DEFAULT_NAME);
     this.fullFieldNames = fullFieldNames;
     this.fullFieldTypes = fullFieldTypes;
     this.selectedFields = selectedFields;
     this.conf = new SerializableConfiguration(conf);
-    this.utcTimestamp = utcTimestamp;
+    this.utcTimestamp = this.flinkConf.getBoolean(FlinkOptions.UTC_TIMEZONE);
+    this.createInputSplitAsync = this.flinkConf.getBoolean(FlinkOptions.READ_COW_CREATE_SPLIT_ASYNC_ENABLED);
   }
 
   @Override
@@ -143,37 +161,29 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
     if (minNumSplits < 1) {
       throw new IllegalArgumentException("Number of input splits has to be at least 1.");
     }
-
+    HoodieTimer timer = new HoodieTimer().startTimer();
     // take the desired number of splits into account
     minNumSplits = Math.max(minNumSplits, this.numSplits);
-
     final List<FileInputSplit> inputSplits = new ArrayList<>(minNumSplits);
 
     // get all the files that are involved in the splits
-    List<FileStatus> files = new ArrayList<>();
-    long totalLength = 0;
+    timer.startTimer();
+    FileStatusSpec fileStatusSpec = getTotalFileStatusSpec(getFilePaths());
+    List<FileStatus> files = fileStatusSpec.getFileStatuses();
+    long totalLength = fileStatusSpec.getFileLength();
+    unsplittable = fileStatusSpec.getUnsplitable();
+    LOG.info("getFileStatusSpec cost: {} mills, files size: {}, totalLength: {}, unsplittable: {}", timer.endTimer(), files.size(), totalLength, unsplittable);
 
-    for (Path path : getFilePaths()) {
-      final org.apache.hadoop.fs.Path hadoopPath = new org.apache.hadoop.fs.Path(path.toUri());
-      final FileSystem fs = FSUtils.getFs(hadoopPath.toString(), this.conf.conf());
-      final FileStatus pathFile = fs.getFileStatus(hadoopPath);
-
-      if (pathFile.isDirectory()) {
-        totalLength += addFilesInDir(hadoopPath, files, true);
-      } else {
-        testForUnsplittable(pathFile);
-
-        files.add(pathFile);
-        totalLength += pathFile.getLen();
-      }
-    }
+    timer.startTimer();
+    List<FileBlockSpec> fileBlockSpecs = getTotalFileBlockSpec(files);
+    Map<FileStatus, BlockLocation[]> blockLocationsMap = fileBlockSpecs.stream().collect(Collectors.toMap(FileBlockSpec::getFileStatus, FileBlockSpec::getBlockLocations));
+    LOG.info("getFileBlockSpec cost: {} mills, blockLocationsMap size: {}", timer.endTimer(), blockLocationsMap.size());
 
     // returns if unsplittable
     if (unsplittable) {
       int splitNum = 0;
       for (final FileStatus file : files) {
-        final FileSystem fs = FSUtils.getFs(file.getPath().toString(), this.conf.conf());
-        final BlockLocation[] blocks = fs.getFileBlockLocations(file, 0, file.getLen());
+        final BlockLocation[] blocks = blockLocationsMap.get(file);
         Set<String> hosts = new HashSet<>();
         for (BlockLocation block : blocks) {
           hosts.addAll(Arrays.asList(block.getHosts()));
@@ -189,14 +199,11 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
       return inputSplits.toArray(new FileInputSplit[0]);
     }
 
-
     final long maxSplitSize = totalLength / minNumSplits + (totalLength % minNumSplits == 0 ? 0 : 1);
 
     // now that we have the files, generate the splits
     int splitNum = 0;
     for (final FileStatus file : files) {
-
-      final FileSystem fs = FSUtils.getFs(file.getPath().toString(), this.conf.conf());
       final long len = file.getLen();
       final long blockSize = file.getBlockSize();
 
@@ -219,7 +226,7 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
       if (len > 0) {
 
         // get the block locations and make sure they are in order with respect to their offset
-        final BlockLocation[] blocks = fs.getFileBlockLocations(file, 0, len);
+        final BlockLocation[] blocks = blockLocationsMap.get(file);
         Arrays.sort(blocks, Comparator.comparingLong(BlockLocation::getOffset));
 
         long bytesUnassigned = len;
@@ -249,19 +256,34 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
         }
       } else {
         // special case with a file of zero bytes size
-        final BlockLocation[] blocks = fs.getFileBlockLocations(file, 0, 0);
-        String[] hosts;
-        if (blocks.length > 0) {
-          hosts = blocks[0].getHosts();
-        } else {
-          hosts = new String[0];
-        }
-        final FileInputSplit fis = new FileInputSplit(splitNum++, new Path(file.getPath().toUri()), 0, 0, hosts);
-        inputSplits.add(fis);
+        LOG.warn("ignore 0 size file: {}, fileLength: {}", file.getPath().toString(), file.getLen());
       }
     }
+    LOG.info("create input splits cost: {} mills, inputSplits size: {}", timer.endTimer(), inputSplits.size());
 
     return inputSplits.toArray(new FileInputSplit[0]);
+  }
+
+  private synchronized ExecutorService getCreateInputSplitPool() {
+    // initialize it here but not in open function because this is invoked ahead of that
+    if (this.createInputSplitPool == null) {
+      int threadNum = calculateCreateInputSplitParallelism();
+      this.createInputSplitPool = Executors.newFixedThreadPool(
+          threadNum,
+          new CustomizedThreadFactory("hudi_create_splits", true));
+    }
+
+    return this.createInputSplitPool;
+  }
+
+  private int calculateCreateInputSplitParallelism() {
+    int filePathCnt = getFilePaths().length;
+    int minCreateSplitParallelism = this.flinkConf.getInteger(FlinkOptions.READ_COW_CREATE_SPLIT_ASYNC_MIN_PARALLELISM);
+    int maxCreateSplitParallelism = this.flinkConf.getInteger(FlinkOptions.READ_COW_CREATE_SPLIT_ASYNC_MAX_PARALLELISM);
+    int threadNum = Math.max(minCreateSplitParallelism, Math.min(maxCreateSplitParallelism, filePathCnt));
+    LOG.info("create splits thread num: {}", threadNum);
+
+    return threadNum;
   }
 
   @Override
@@ -290,6 +312,11 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
       this.reader.close();
     }
     this.reader = null;
+
+    if (this.createInputSplitPool != null) {
+      this.createInputSplitPool.shutdown();
+    }
+    this.createInputSplitPool = null;
   }
 
   /**
@@ -394,4 +421,147 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
     }
   }
 
+  @VisibleForTesting
+  public FileStatusSpec getTotalFileStatusSpec(Path[] fileInputPaths) {
+    final List<CompletableFuture<FileStatusSpec>> fileStatusSpecFutures = Arrays.stream(fileInputPaths).map(
+        path -> this.createInputSplitAsync
+            ? CompletableFuture.supplyAsync(() -> this.getFileStatusSpec(path, this.conf.conf()), getCreateInputSplitPool())
+            : CompletableFuture.completedFuture(this.getFileStatusSpec(path, this.conf.conf()))
+    ).collect(Collectors.toList());
+
+    final CompletableFuture<FileStatusSpec> fileStatusSpecFuture =
+        FutureUtils.allOf(fileStatusSpecFutures)
+            .thenApply((fileStatusSpecs) -> fileStatusSpecs.stream().reduce((specs1, specs2) -> {
+              List<FileStatus> fileStatuses = Stream.of(specs1.getFileStatuses(), specs2.getFileStatuses()).flatMap(Collection::stream).collect(Collectors.toList());
+              long length = Stream.of(specs1.getFileLength(), specs2.getFileLength()).mapToLong(Long::longValue).sum();
+              boolean unsplitable = Stream.of(specs1.getUnsplitable(), specs2.getUnsplitable()).anyMatch(x -> x);
+              return new FileStatusSpec(fileStatuses, length, unsplitable);
+            }).orElseThrow(() -> new HoodieException("failed to merge file status specs")));
+
+    return FutureUtils.get(fileStatusSpecFuture);
+  }
+
+  private FileStatusSpec getFileStatusSpec(Path path, Configuration conf) {
+    HoodieTimer timer = new HoodieTimer().startTimer();
+    long length = 0;
+    List<FileStatus> fileStatuses = new ArrayList<>();
+    boolean unsplitable0 = false;
+    try {
+      final org.apache.hadoop.fs.Path hadoopPath = new org.apache.hadoop.fs.Path(path.toUri());
+      final FileSystem fs = FSUtils.getFs(hadoopPath.toString(), conf);
+      final FileStatus pathFile = fs.getFileStatus(hadoopPath);
+
+      if (pathFile.isDirectory()) {
+        length += addFilesInDir(hadoopPath, fileStatuses, true);
+      } else {
+        unsplitable0 = testForUnsplittable(pathFile);
+        fileStatuses.add(pathFile);
+        length += pathFile.getLen();
+      }
+
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("thread: {} getFileStatus cost: {} mills, path: {}, fileStatuses size: {}, length: {}, unsplitable0: {}", Thread.currentThread().getName(), timer.endTimer(), path,
+            fileStatuses.size(), length, unsplitable0);
+      }
+    } catch (IOException e) {
+      throw new HoodieIOException("get file status specs failed", e);
+    }
+    return new FileStatusSpec(fileStatuses, length, unsplitable0);
+  }
+
+  @VisibleForTesting
+  public List<FileBlockSpec> getTotalFileBlockSpec(List<FileStatus> files) {
+    final List<CompletableFuture<FileBlockSpec>> fileBlocksFutures = files.stream().map(file ->
+        this.createInputSplitAsync
+            ? CompletableFuture.supplyAsync(() -> this.getFileBlockSpec(file, this.conf.conf()), getCreateInputSplitPool())
+            : CompletableFuture.completedFuture(this.getFileBlockSpec(file, this.conf.conf()))
+    ).collect(Collectors.toList());
+
+    final CompletableFuture<List<FileBlockSpec>> fileBlockListFuture = FutureUtils.allOf(fileBlocksFutures);
+
+    return FutureUtils.get(fileBlockListFuture);
+  }
+
+  private FileBlockSpec getFileBlockSpec(FileStatus file, Configuration conf) {
+    HoodieTimer timer = new HoodieTimer().startTimer();
+    try {
+      final FileSystem fs = FSUtils.getFs(file.getPath().toString(), conf);
+      final BlockLocation[] blocks = fs.getFileBlockLocations(file, 0, file.getLen());
+
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("thread: {} getFileBlock cost: {} mills, file: {}", Thread.currentThread().getName(), timer.endTimer(), file);
+      }
+      return new FileBlockSpec(file, blocks);
+    } catch (IOException e) {
+      throw new HoodieIOException("get file blocks failed", e);
+    }
+  }
+
+  static class FileStatusSpec {
+    private List<FileStatus> fileStatuses;
+    private long fileLength;
+    private boolean unsplitable;
+
+    public FileStatusSpec() {
+    }
+
+    public FileStatusSpec(List<FileStatus> fileStatuses, long fileLength, boolean unsplitable) {
+      this.fileStatuses = fileStatuses;
+      this.fileLength = fileLength;
+      this.unsplitable = unsplitable;
+    }
+
+    public List<FileStatus> getFileStatuses() {
+      return fileStatuses;
+    }
+
+    public void setFileStatuses(List<FileStatus> fileStatuses) {
+      this.fileStatuses = fileStatuses;
+    }
+
+    public long getFileLength() {
+      return fileLength;
+    }
+
+    public void setFileLength(long fileLength) {
+      this.fileLength = fileLength;
+    }
+
+    public boolean getUnsplitable() {
+      return unsplitable;
+    }
+
+    public void setUnsplitable(boolean unsplitable) {
+      this.unsplitable = unsplitable;
+    }
+  }
+
+  static class FileBlockSpec {
+    FileStatus fileStatus;
+    BlockLocation[] blockLocations;
+
+    public FileBlockSpec() {
+    }
+
+    public FileBlockSpec(FileStatus filePath, BlockLocation[] blockLocations) {
+      this.fileStatus = filePath;
+      this.blockLocations = blockLocations;
+    }
+
+    public FileStatus getFileStatus() {
+      return fileStatus;
+    }
+
+    public void setFileStatus(FileStatus fileStatus) {
+      this.fileStatus = fileStatus;
+    }
+
+    public BlockLocation[] getBlockLocations() {
+      return blockLocations;
+    }
+
+    public void setBlockLocations(BlockLocation[] blockLocations) {
+      this.blockLocations = blockLocations;
+    }
+  }
 }

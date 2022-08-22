@@ -301,6 +301,26 @@ public class FlinkOptions extends HoodieConfig {
       .withDescription("Enables data-skipping allowing queries to leverage indexes to reduce the search space by"
           + "skipping over files");
 
+  public static final ConfigOption<Boolean> READ_COW_CREATE_SPLIT_ASYNC_ENABLED = ConfigOptions
+      .key("read.cow.create-split-async.enabled")
+      .booleanType()
+      .defaultValue(true)
+      .withDescription("Whether create input splits asynchronously for CopyOnWriteInputFormat reading, default true.");
+
+  public static final ConfigOption<Integer> READ_COW_CREATE_SPLIT_ASYNC_MIN_PARALLELISM = ConfigOptions
+      .key("read.cow.create-split-async.min-parallelism")
+      .intType()
+      .defaultValue(1)
+      .withDescription("Min parallelism to parse the real parallelism of thread pool for CopyOnWriteInputFormat to create input splits asynchronously."
+          + "We should take the real job manager processors under consideration when to increase it.");
+
+  public static final ConfigOption<Integer> READ_COW_CREATE_SPLIT_ASYNC_MAX_PARALLELISM = ConfigOptions
+      .key("read.cow.create-split-async.max-parallelism")
+      .intType()
+      .defaultValue(4)
+      .withDescription("Max parallelism to parse the real parallelism of thread pool for CopyOnWriteInputFormat to create input splits asynchronously."
+          + "We will use the file count when it's smaller than the given value.");
+
   // ------------------------------------------------------------------------
   //  Write Options
   // ------------------------------------------------------------------------

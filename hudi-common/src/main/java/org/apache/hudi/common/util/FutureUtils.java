@@ -18,9 +18,13 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.hudi.exception.HoodieException;
+
 import javax.annotation.Nonnull;
+
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
 /**
@@ -42,5 +46,13 @@ public class FutureUtils {
                 //       futures are completed at this point.
                 .map(CompletableFuture::join)
                 .collect(Collectors.toList()));
+  }
+
+  public static <T> T get(@Nonnull CompletableFuture<T> future) {
+    try {
+      return future.get();
+    } catch (InterruptedException | ExecutionException e) {
+      throw new HoodieException(e);
+    }
   }
 }

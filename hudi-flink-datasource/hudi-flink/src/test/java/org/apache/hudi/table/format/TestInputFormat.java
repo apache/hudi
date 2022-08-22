@@ -786,8 +786,8 @@ public class TestInputFormat {
         conf);
   }
 
-  @SuppressWarnings("rawtypes")
-  private static List<RowData> readData(InputFormat inputFormat) throws IOException {
+  @SuppressWarnings("unchecked, rawtypes")
+  public static List<RowData> readData(InputFormat inputFormat) throws IOException {
     InputSplit[] inputSplits = inputFormat.createInputSplits(1);
     return readData(inputFormat, inputSplits);
   }
