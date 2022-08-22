@@ -740,30 +740,30 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
   @Test
   public void testUpsertsCOWContinuousMode() throws Exception {
-    testUpsertsContinuousMode(HoodieTableType.COPY_ON_WRITE, "continuous_cow", false, true);
+    testUpserts(HoodieTableType.COPY_ON_WRITE, "continuous_cow", false, true);
   }
 
   @Test
   public void testUpsertsCOW_ContinuousModeDisabled() throws Exception {
-    testUpsertsContinuousMode(HoodieTableType.COPY_ON_WRITE, "non_continuous_cow", false, false);
+    testUpserts(HoodieTableType.COPY_ON_WRITE, "non_continuous_cow", false, false);
   }
 
   @Test
   public void testUpsertsCOWContinuousModeShutdownGracefully() throws Exception {
-    testUpsertsContinuousMode(HoodieTableType.COPY_ON_WRITE, "continuous_cow_shutdown_gracefully", true, true);
+    testUpserts(HoodieTableType.COPY_ON_WRITE, "continuous_cow_shutdown_gracefully", true, true);
   }
 
   @Test
   public void testUpsertsMORContinuousMode() throws Exception {
-    testUpsertsContinuousMode(HoodieTableType.MERGE_ON_READ, "continuous_mor", false, true);
+    testUpserts(HoodieTableType.MERGE_ON_READ, "continuous_mor", false, true);
   }
 
   @Test
   public void testUpsertsMOR_ContinuousModeDisabled() throws Exception {
-    testUpsertsContinuousMode(HoodieTableType.MERGE_ON_READ, "non_continuous_mor", false, false);
+    testUpserts(HoodieTableType.MERGE_ON_READ, "non_continuous_mor", false, false);
   }
 
-  private void testUpsertsContinuousMode(HoodieTableType tableType, String tempDir, boolean testShutdownGracefully, boolean continuousMode) throws Exception {
+  private void testUpserts(HoodieTableType tableType, String tempDir, boolean testShutdownGracefully, boolean continuousMode) throws Exception {
     String tableBasePath = dfsBasePath + "/" + tempDir;
     // Keep it higher than batch-size to test continuous mode
     int totalRecords = 3000;
@@ -786,9 +786,12 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       }
       TestHelpers.assertRecordCount(totalRecords, tableBasePath, sqlContext);
       TestHelpers.assertDistanceCount(totalRecords, tableBasePath, sqlContext);
-      assertFalse(Metrics.isInitialized());
       if (testShutdownGracefully) {
         TestDataSource.returnEmptyBatch = true;
+      }
+
+      if (!cfg.continuousMode) {
+        assertFalse(Metrics.isInitialized());
       }
       return true;
     });
