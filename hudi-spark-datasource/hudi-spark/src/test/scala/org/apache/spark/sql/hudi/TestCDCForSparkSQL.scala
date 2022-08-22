@@ -17,6 +17,7 @@
 
 package org.apache.spark.sql.hudi
 
+import org.apache.hudi.DataSourceReadOptions._
 import org.apache.hudi.common.table.HoodieTableMetaClient
 
 import org.apache.spark.sql.DataFrame
@@ -28,10 +29,11 @@ class TestCDCForSparkSQL extends HoodieSparkSqlTestBase {
 
   def cdcDataFrame(basePath: String, startingTs: Long, endingTs: Option[Long] = None): DataFrame = {
     val reader = spark.read.format("hudi")
-      .option("hoodie.datasource.query.type", "cdc")
-      .option("hoodie.datasource.read.begin.instanttime", startingTs.toString)
+      .option(QUERY_TYPE.key, QUERY_TYPE_INCREMENTAL_OPT_VAL)
+      .option(INCREMENTAL_OUTPUT_FORMAT.key, INCREMENTAL_OUTPUT_FORMAT_CDC_VAL)
+      .option(BEGIN_INSTANTTIME.key, startingTs.toString)
     endingTs.foreach { ts =>
-      reader.option("hoodie.datasource.read.end.instanttime", ts.toString)
+      reader.option(END_INSTANTTIME.key, ts.toString)
     }
     reader.load(basePath)
   }

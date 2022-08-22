@@ -17,7 +17,8 @@
 
 package org.apache.hudi.functional.cdc
 
-import org.apache.hudi.DataSourceWriteOptions
+import org.apache.hudi.DataSourceReadOptions._
+import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.HoodieCommitMetadata
 import org.apache.hudi.common.table.HoodieTableConfig
@@ -43,8 +44,8 @@ abstract class TestCDCBase extends HoodieClientTestBase {
     "hoodie.upsert.shuffle.parallelism" -> "4",
     "hoodie.bulkinsert.shuffle.parallelism" -> "2",
     "hoodie.delete.shuffle.parallelism" -> "1",
-    DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
-    DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
+    RECORDKEY_FIELD.key -> "_row_key",
+    PRECOMBINE_FIELD.key -> "timestamp",
     HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
     HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key -> "1",
     HoodieCleanConfig.AUTO_CLEAN.key -> "false"
@@ -67,7 +68,8 @@ abstract class TestCDCBase extends HoodieClientTestBase {
 
   protected def cdcDataFrame(basePath: String, startingInstant: String, endingInstant: String): DataFrame = {
     val reader = spark.read.format("hudi")
-      .option("hoodie.datasource.query.type", "cdc")
+      .option(QUERY_TYPE.key, QUERY_TYPE_INCREMENTAL_OPT_VAL)
+      .option(INCREMENTAL_OUTPUT_FORMAT.key, INCREMENTAL_OUTPUT_FORMAT_CDC_VAL)
       .option("hoodie.datasource.read.begin.instanttime", startingInstant)
     if (endingInstant != null) {
       reader.option("hoodie.datasource.read.end.instanttime", endingInstant)

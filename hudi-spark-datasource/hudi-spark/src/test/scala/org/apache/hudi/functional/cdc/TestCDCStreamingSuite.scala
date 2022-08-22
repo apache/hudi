@@ -17,6 +17,7 @@
 
 package org.apache.hudi.functional.cdc
 
+import org.apache.hudi.DataSourceReadOptions
 import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.config.HoodieWriteConfig
@@ -116,7 +117,8 @@ class TestCDCStreamingSuite extends TestCDCBase {
     val beforeCntExpr = If(isnull(col("bcountry")).expr, zero, dec)
     val afterCntExpr = If(isnull(col("acountry")).expr, zero, inc)
     val stream2 = spark.readStream.format("hudi")
-      .option("hoodie.datasource.query.type", "cdc")
+      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
+      .option(DataSourceReadOptions.INCREMENTAL_OUTPUT_FORMAT.key, DataSourceReadOptions.INCREMENTAL_OUTPUT_FORMAT_CDC_VAL)
       .load(userToCountryTblPath)
       .writeStream
       .format("hudi")

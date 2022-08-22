@@ -111,6 +111,8 @@ class DefaultSource extends RelationProvider
     val isBootstrappedTable = metaClient.getTableConfig.getBootstrapBasePath.isPresent
     val tableType = metaClient.getTableType
     val queryType = parameters(QUERY_TYPE.key)
+    val isCdcQuery = queryType == QUERY_TYPE_INCREMENTAL_OPT_VAL &&
+      parameters.get(INCREMENTAL_OUTPUT_FORMAT.key).contains(INCREMENTAL_OUTPUT_FORMAT_CDC_VAL)
     // NOTE: In cases when Hive Metastore is used as catalog and the table is partitioned, schema in the HMS might contain
     //       Hive-specific partitioning columns created specifically for HMS to handle partitioning appropriately. In that
     //       case  we opt in to not be providing catalog's schema, and instead force Hudi relations to fetch the schema
@@ -124,11 +126,11 @@ class DefaultSource extends RelationProvider
     log.info(s"Is bootstrapped table => $isBootstrappedTable, tableType is: $tableType, queryType is: $queryType")
 
     if (metaClient.getCommitsTimeline.filterCompletedInstants.countInstants() == 0) {
-      new EmptyRelation(sqlContext, metaClient, queryType == QUERY_TYPE_CDC_OPT_VAL)
+      new EmptyRelation(sqlContext, metaClient, isCdcQuery)
+    } else if (isCdcQuery) {
+      CDCRelation.getCDCRelation(sqlContext, metaClient, parameters)
     } else {
       (tableType, queryType, isBootstrappedTable) match {
-        case (_, QUERY_TYPE_CDC_OPT_VAL, _) =>
-          CDCRelation.getCDCRelation(sqlContext, metaClient, parameters)
         case (COPY_ON_WRITE, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) |
              (COPY_ON_WRITE, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, false) |
              (MERGE_ON_READ, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, false) =>
@@ -214,8 +216,9 @@ class DefaultSource extends RelationProvider
     val metaClient = HoodieTableMetaClient.builder().setConf(
       sqlContext.sparkSession.sessionState.newHadoopConf()).setBasePath(path.get).build()
 
-    if (CDCRelation.isCDCTable(metaClient)
-      && parameters.get(DataSourceReadOptions.QUERY_TYPE.key).contains(DataSourceReadOptions.QUERY_TYPE_CDC_OPT_VAL)) {
+    if (CDCRelation.isCDCTable(metaClient) &&
+        parameters.get(QUERY_TYPE.key).contains(QUERY_TYPE_INCREMENTAL_OPT_VAL) &&
+        parameters.get(INCREMENTAL_OUTPUT_FORMAT.key).contains(INCREMENTAL_OUTPUT_FORMAT_CDC_VAL)) {
       (shortName(), CDCRelation.CDC_SPARK_SCHEMA)
     } else {
       val schemaResolver = new TableSchemaResolver(metaClient)
