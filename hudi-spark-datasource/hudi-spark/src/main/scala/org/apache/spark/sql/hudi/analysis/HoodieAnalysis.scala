@@ -21,13 +21,13 @@ import org.apache.hudi.common.util.ReflectionUtils
 import org.apache.hudi.{HoodieSparkUtils, SparkAdapterSupport}
 import org.apache.spark.sql.catalyst.analysis.EliminateSubqueryAliases
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
-import org.apache.spark.sql.catalyst.expressions.{AttributeReference, GenericInternalRow}
+import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.rules.Rule
+import org.apache.spark.sql.catalyst.trees.{AlwaysProcess, TreeNodeTag}
 import org.apache.spark.sql.execution.command._
 import org.apache.spark.sql.execution.datasources.{CreateTable, LogicalRelation}
-import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isMetaField
-import org.apache.spark.sql.hudi.analysis.HoodieAnalysis.{MatchesInsertIntoStatement, ResolvesToHudiTable, UnfoldSubqueryAlias, sparkAdapter}
+import org.apache.spark.sql.hudi.analysis.HoodieAnalysis.{MatchesInsertIntoStatement, ResolvesToHudiTable, sparkAdapter}
 import org.apache.spark.sql.hudi.command._
 import org.apache.spark.sql.hudi.command.procedures.{HoodieProcedures, Procedure, ProcedureArgs}
 import org.apache.spark.sql.{AnalysisException, SparkSession}
@@ -39,6 +39,10 @@ object HoodieAnalysis extends SparkAdapterSupport {
   type RuleBuilder = SparkSession => Rule[LogicalPlan]
 
   def customOptimizerRules: Seq[RuleBuilder] = {
+    val rules: ListBuffer[RuleBuilder] = ListBuffer(
+      // Default rules
+    )
+
     if (HoodieSparkUtils.gteqSpark3_1) {
       val nestedSchemaPruningClass =
         if (HoodieSparkUtils.gteqSpark3_3) {
@@ -51,15 +55,16 @@ object HoodieAnalysis extends SparkAdapterSupport {
         }
 
       val nestedSchemaPruningRule = ReflectionUtils.loadClass(nestedSchemaPruningClass).asInstanceOf[Rule[LogicalPlan]]
-      Seq(_ => nestedSchemaPruningRule)
-    } else {
-      Seq.empty
+      rules += (_ => nestedSchemaPruningRule)
     }
+
+    rules
   }
 
   def customResolutionRules: Seq[RuleBuilder] = {
     val rules: ListBuffer[RuleBuilder] = ListBuffer(
       // Default rules
+      _ => ResolveHoodieLogicalRelations,
       session => HoodieAnalysis(session)
     )
 
@@ -90,7 +95,7 @@ object HoodieAnalysis extends SparkAdapterSupport {
       val spark31ResolveAlterTableCommands: RuleBuilder =
         session => ReflectionUtils.loadClass(spark31ResolveAlterTableCommandsClass, session).asInstanceOf[Rule[LogicalPlan]]
 
-      rules ++= Seq(spark31ResolveAlterTableCommands)
+      rules += spark31ResolveAlterTableCommands
     }
 
     rules
@@ -99,6 +104,7 @@ object HoodieAnalysis extends SparkAdapterSupport {
   def customPostHocResolutionRules: Seq[RuleBuilder] = {
     val rules: ListBuffer[RuleBuilder] = ListBuffer(
       // Default rules
+      _ => FoldHoodieLogicalRelations,
       session => HoodiePostAnalysisRule(session)
     )
 
@@ -132,6 +138,30 @@ object HoodieAnalysis extends SparkAdapterSupport {
   }
 }
 
+// TODO call out that can use Project in Spark 3.2+
+object ResolveHoodieLogicalRelations extends Rule[LogicalPlan] {
+  private val hudiLogicalRelationTag: TreeNodeTag[Boolean] = TreeNodeTag("__hudi_logical_relation")
+
+  override def apply(plan: LogicalPlan): LogicalPlan =
+    plan.transformDown {
+      case lr @ LogicalRelation(_, _, Some(table), _)
+        if sparkAdapter.isHoodieTable(table) && lr.getTagValue(hudiLogicalRelationTag).isEmpty =>
+          // NOTE: Have to make a copy here, since by default Spark is caching resolved [[LogicalRelation]]s
+          val logicalRelation = lr.newInstance()
+          logicalRelation.setTagValue(hudiLogicalRelationTag, true)
+
+          HoodieLogicalRelation(logicalRelation)
+    }
+}
+
+object FoldHoodieLogicalRelations extends Rule[LogicalPlan] {
+  override def apply(plan: LogicalPlan): LogicalPlan =
+    plan.transformDown {
+      // TODO elaborate
+      case hlr @ HoodieLogicalRelation(lr: LogicalRelation) => Project(hlr.output, lr)
+    }
+}
+
 /**
  * Rule for convert the logical plan to command.
  *
@@ -146,6 +176,7 @@ case class HoodieAnalysis(sparkSession: SparkSession) extends Rule[LogicalPlan] 
         if (mit.resolved) {
           MergeIntoHoodieTableCommand(mit)
         } else {
+          /*
           // TODO elaborate
           // TODO relocate?
           val reshapedTarget = if (mit.targetTable.output.exists(attr => isMetaField(attr.name))) {
@@ -155,14 +186,16 @@ case class HoodieAnalysis(sparkSession: SparkSession) extends Rule[LogicalPlan] 
             mit.targetTable match {
               case sa @ SubqueryAlias(_, UnfoldSubqueryAlias(lr: LogicalRelation)) =>
                 sa.copy(child = lr.copy(output = filteredTargetOutputSet.map(_.asInstanceOf[AttributeReference])))
-              case lr: LogicalRelation => lr.copy(output =
-                filteredTargetOutputSet.map(_.asInstanceOf[AttributeReference]))
+              case lr: LogicalRelation =>
+                lr.copy(output = filteredTargetOutputSet.map(_.asInstanceOf[AttributeReference]))
             }
           } else {
             mit.targetTable
           }
 
           mit.copy(targetTable = reshapedTarget)
+           */
+          mit
         }
 
       // Convert to UpdateHoodieTableCommand
@@ -177,8 +210,8 @@ case class HoodieAnalysis(sparkSession: SparkSession) extends Rule[LogicalPlan] 
       case iis @ MatchesInsertIntoStatement(relation @ ResolvesToHudiTable(_), partition, query, overwrite, _) if query.resolved =>
         relation match {
           // NOTE: In Spark >= 3.2, Hudi relations will be resolved as [[DataSourceV2Relation]]s by default;
-          //       However, currently, fallback will be applied downgrading them into V1 relations, hence
-          //       we need to check whether we could proceed here, or has to wait until fallback rule will be executed
+          //       However, currently, fallback will be applied downgrading them to V1 relations, hence
+          //       we need to check whether we could proceed here, or has to wait until fallback rule kicks in
           case lr: LogicalRelation => new InsertIntoHoodieTableCommand(lr, query, partition, overwrite)
           case _ => iis
         }
