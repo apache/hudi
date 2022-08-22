@@ -14,7 +14,7 @@
  See the License for the specific language governing permissions and
  limitations under the License.
 -->
-# RFC-56: DeltaStreamer Protobuf Support
+# RFC-57: DeltaStreamer Protobuf Support
 
 
 
@@ -53,13 +53,22 @@ hoodie.deltastreamer.schemaprovider.proto.className - The class to use
 ### ProtobufClassBasedSchemaProvider
 This new SchemaProvider will allow the user to provide a Protobuf Message class and get an Avro Schema. In the proto world, there is no concept of a nullable field so people use wrapper types such as Int32Value and StringValue to represent a nullable field. The schema provider will also allow the user to treat these wrapper fields as nullable versions of the fields they are wrapping instead of treating them as a nested message. In practice, this means that the user can choose between representing a field `Int32Value my_int = 1;` as `my_int.value` or simply `my_int` when writing the data out to the file system.
 
+#### Handling of Unsigned Integers and Longs
+Protobuf provides support for unsigned integers and longs while Avro does not. The schema provider will convert unsigned integers and longs to Avro long type in the schema definition.
+
+#### Schema Evolution
+**Adding a Field:**
+Protobuf has a default value for all fields and the translation from proto to avro schema will carry over this default value so there are no errors when adding a new field to the proto definition.
+**Removing a Field:**
+If a user removes a field in the Protobuf schema, the schema provider will not be able to add this field to the avro schema it generates. To avoid issues when writing data, users must use `hoodie.datasource.write.reconcile.schema=true` to properly reconcile the schemas if a field is removed from the proto definition. Users can avoid this situation by using `deprecated` field option in proto instead of removing the field from the schema.
+
 Configuration Options:
 hoodie.deltastreamer.schemaprovider.proto.className - The class to use
 hoodie.deltastreamer.schemaprovider.proto.flattenWrappers (Default: false) - By default the wrapper classes will be treated like any other message and have a nested `value` field. When this is set to true, we do not have a nested `value` field and treat the field as nullable in the generated Schema
 
 ### ProtoToAvroConverter
 
-A class will be created that can take in a Protobuf Message and convert it to an Avro GenericRecord. This will be used inside the SourceFormatAdapter to properly convert to an avro RDD. To convert to `Dataset<Row>` we will first convert to Avro and then to Row. This change will be adding a new `Source.SourceType` as well so other sources in the future can implement this source type, for example Protobuf messages on PubSub.
+A utility will be provided that can take in a Protobuf Message and convert it to an Avro GenericRecord. This will be used inside the SourceFormatAdapter to properly convert to an avro RDD. To convert to `Dataset<Row>` we will first convert to Avro and then to Row. This change will be adding a new `Source.SourceType` as well so other sources in the future can implement this source type, for example Protobuf messages on PubSub.
 
 Special handling for maps:
 Protobuf allows you to use any integral or string type as a key while Avro requires a string. To account for this, we convert all maps to lists of entries in that map.
