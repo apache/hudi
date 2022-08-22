@@ -60,7 +60,6 @@ import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.metrics.HoodieMetrics;
-import org.apache.hudi.metrics.Metrics;
 import org.apache.hudi.sync.common.util.SyncUtilHelpers;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.callback.kafka.HoodieWriteCommitKafkaCallback;
@@ -906,7 +905,6 @@ public class DeltaSync implements Serializable, Closeable {
       formatAdapter.close();
     }
 
-    Metrics.shutdown();
     LOG.info("Shutting down embedded timeline server");
     if (embeddedTimelineService.isPresent()) {
       embeddedTimelineService.get().stop();
