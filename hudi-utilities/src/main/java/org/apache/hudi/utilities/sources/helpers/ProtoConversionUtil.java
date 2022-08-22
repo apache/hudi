@@ -175,11 +175,11 @@ public class ProtoConversionUtil {
         case BYTES:
           return schemaFinalizer.apply(Schema.create(Schema.Type.BYTES));
         case INT32:
-        case UINT32:
         case SINT32:
         case FIXED32:
         case SFIXED32:
           return schemaFinalizer.apply(Schema.create(Schema.Type.INT));
+        case UINT32:
         case INT64:
         case UINT64:
         case SINT64:
@@ -188,7 +188,7 @@ public class ProtoConversionUtil {
           return schemaFinalizer.apply(Schema.create(Schema.Type.LONG));
         case MESSAGE:
           if (flattenWrappedPrimitives && WRAPPER_DESCRIPTORS_TO_TYPE.containsKey(f.getMessageType())) {
-            // all wrapper types have a single field so we can get the first field in the message's schema
+            // all wrapper types have a single field, so we can get the first field in the message's schema
             return schemaFinalizer.apply(Schema.createUnion(Arrays.asList(NULL, getFieldSchema(f.getMessageType().getFields().get(0), seen, flattenWrappedPrimitives))));
           }
           // if message field is repeated (like a list), elements are non-null
