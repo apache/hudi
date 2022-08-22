@@ -172,6 +172,15 @@ public class TableSchemaResolver {
   }
 
   /**
+   * Gets users data schema for a hoodie table in Parquet format.
+   *
+   * @return Parquet schema for the table
+   */
+  public MessageType getTableParquetSchemaWithoutMetadataFields() throws Exception {
+    return convertAvroSchemaToParquet(getTableAvroSchema(false));
+  }
+
+  /**
    * Gets users data schema for a hoodie table in Avro format.
    *
    * @return  Avro user data schema
