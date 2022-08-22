@@ -18,18 +18,19 @@
 
 package org.apache.hudi.cli;
 
-import org.springframework.shell.Bootstrap;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 import java.io.IOException;
 
 /**
  * Main class that delegates to Spring Shell's Bootstrap class in order to simplify debugging inside an IDE.
  */
+@SpringBootApplication
 public class Main {
 
   public static void main(String[] args) throws IOException {
     System.out.println("Main called");
-    new HoodieSplashScreen();
-    Bootstrap.main(args);
+    SpringApplication.run(Main.class, args);
   }
 }
