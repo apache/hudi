@@ -70,7 +70,8 @@ class HoodieStreamSource(
   private lazy val tableType = metaClient.getTableType
 
   private val isCDCQuery = CDCRelation.isCDCTable(metaClient) &&
-    parameters.get(DataSourceReadOptions.QUERY_TYPE.key).contains(DataSourceReadOptions.QUERY_TYPE_CDC_OPT_VAL)
+    parameters.get(DataSourceReadOptions.QUERY_TYPE.key).contains(DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL) &&
+    parameters.get(DataSourceReadOptions.INCREMENTAL_OUTPUT_FORMAT.key).contains(DataSourceReadOptions.INCREMENTAL_OUTPUT_FORMAT_CDC_VAL)
 
   @transient private var lastOffset: HoodieSourceOffset = _
 
@@ -168,7 +169,6 @@ class HoodieStreamSource(
     } else {
       if (isCDCQuery) {
         val cdcOptions = Map(
-          DataSourceReadOptions.QUERY_TYPE.key() -> DataSourceReadOptions.QUERY_TYPE_CDC_OPT_VAL,
           DataSourceReadOptions.BEGIN_INSTANTTIME.key()-> startCommitTime(startOffset),
           DataSourceReadOptions.END_INSTANTTIME.key() -> endOffset.commitTime
         )

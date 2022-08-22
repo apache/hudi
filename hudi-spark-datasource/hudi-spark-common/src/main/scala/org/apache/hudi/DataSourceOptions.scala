@@ -52,7 +52,6 @@ object DataSourceReadOptions {
   val QUERY_TYPE_SNAPSHOT_OPT_VAL = "snapshot"
   val QUERY_TYPE_READ_OPTIMIZED_OPT_VAL = "read_optimized"
   val QUERY_TYPE_INCREMENTAL_OPT_VAL = "incremental"
-  val QUERY_TYPE_CDC_OPT_VAL = "cdc"
   val QUERY_TYPE: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.query.type")
     .defaultValue(QUERY_TYPE_SNAPSHOT_OPT_VAL)
@@ -61,6 +60,14 @@ object DataSourceReadOptions {
     .withDocumentation("Whether data needs to be read, in incremental mode (new data since an instantTime) " +
       "(or) Read Optimized mode (obtain latest view, based on base files) (or) Snapshot mode " +
       "(obtain latest view, by merging base and (if any) log files)")
+
+  val INCREMENTAL_OUTPUT_FORMAT_CDC_VAL = "cdc"
+  val INCREMENTAL_OUTPUT_FORMAT: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.datasource.incremental.output.format")
+    .noDefaultValue()
+    .withValidValues("cdc")
+    .withDocumentation("When data needs to be read in incremental mode and also" +
+      "set this config to cdc, hudi will return the cdc data.")
 
   val REALTIME_SKIP_MERGE_OPT_VAL = "skip_merge"
   val REALTIME_PAYLOAD_COMBINE_OPT_VAL = "payload_combine"
