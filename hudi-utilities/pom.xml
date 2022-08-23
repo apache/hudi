@@ -105,6 +105,12 @@
       <artifactId>protobuf-java-util</artifactId>
       <version>${proto.version}</version>
       <scope>test</scope>
+      <exclusions>
+        <exclusion>
+          <groupId>com.google.guava</groupId>
+          <artifactId>guava</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
 
     <!-- H2 database for JdbcbaseSchemaProvider -->
