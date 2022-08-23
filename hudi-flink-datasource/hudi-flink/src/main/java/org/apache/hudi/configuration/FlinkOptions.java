@@ -25,13 +25,16 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hive.MultiPartKeysValueExtractor;
+import org.apache.hudi.hive.ddl.HiveSyncMode;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
+import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilterMode;
 
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.ConfigOptions;
@@ -294,7 +297,7 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<String> OPERATION = ConfigOptions
       .key("write.operation")
       .stringType()
-      .defaultValue("upsert")
+      .defaultValue(WriteOperationType.UPSERT.value())
       .withDescription("The write operation, that this write should do");
 
   /**
@@ -656,7 +659,7 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<String> CLUSTERING_PLAN_PARTITION_FILTER_MODE_NAME = ConfigOptions
       .key("clustering.plan.partition.filter.mode")
       .stringType()
-      .defaultValue("NONE")
+      .defaultValue(ClusteringPlanPartitionFilterMode.NONE.name())
       .withDescription("Partition filter mode used in the creation of clustering plan. Available values are - "
           + "NONE: do not filter table partition and thus the clustering plan will include all partitions that have clustering candidate."
           + "RECENT_DAYS: keep a continuous range of partitions, worked together with configs '" + DAYBASED_LOOKBACK_PARTITIONS.key() + "' and '"
@@ -725,8 +728,8 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<String> HIVE_SYNC_MODE = ConfigOptions
       .key("hive_sync.mode")
       .stringType()
-      .defaultValue("hms")
-      .withDescription("Mode to choose for Hive ops. Valid values are hms, jdbc and hiveql, default 'jdbc'");
+      .defaultValue(HiveSyncMode.HMS.name())
+      .withDescription("Mode to choose for Hive ops. Valid values are hms, jdbc and hiveql, default 'hms'");
 
   public static final ConfigOption<String> HIVE_SYNC_USERNAME = ConfigOptions
       .key("hive_sync.username")
@@ -763,7 +766,7 @@ public class FlinkOptions extends HoodieConfig {
       .stringType()
       .defaultValue(MultiPartKeysValueExtractor.class.getName())
       .withDescription("Tool to extract the partition value from HDFS path, "
-          + "default 'SlashEncodedDayPartitionValueExtractor'");
+          + "default 'MultiPartKeysValueExtractor'");
 
   public static final ConfigOption<Boolean> HIVE_SYNC_ASSUME_DATE_PARTITION = ConfigOptions
       .key("hive_sync.assume_date_partitioning")
