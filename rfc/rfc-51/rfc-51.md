@@ -97,6 +97,7 @@ We define 4 logical file types for the CDC scenario.
   - For MOR tables, this file type refers to the typical log files in MOR tables. CDC info will be persisted as log blocks in the log files.
 - ADD_BASE_File: a normal base file for a specified instant and a specified file group. All the data in this file are new-incoming. For example, we first write data to a new file group. So we can load this file, treat each record in this as the value of `after`, and the value of `op` of each record is `i`.
 - REMOVE_BASE_FILE: a normal base file for a specified instant and a specified file group, but this file is empty. A file like this will be generated when we delete all the data in a file group. So we need to find the previous version of the file group, load it, treat each record in this as the value of `before`, and the value of `op` of each record is `d`.
+- MOR_LOG_FILE: a normal log file. For this type, we need to load the previous version of file slice, and merge each record in the log file with this data loaded separately to determine how the record has changed, and get the value of `before` and `after`.
 - REPLACED_FILE_GROUP: a file group that be replaced totally, like `DELETE_PARTITION` and `INSERT_OVERWRITE` operations. We load this file group, treat all the records as the value of `before`, and the value of `op` of each record is `d`.
 
 Note:
@@ -254,13 +255,21 @@ Reading COW tables in CDC query mode is equivalent to reading MOR tables in RO m
 
 #### MOR table
 
-According to the section "Persisting CDC in MOR", CDC data is available upon base files generation.
+According to the section "Persisting CDC in MOR", CDC data is available upon base files' generation.
 
-When incremental-query RT tables, CDC results should be computed by only using log files and the corresponding base
-files (current and previous file slices).
+When users want to get fresher real-time CDC results:
 
-When incremental-query RO tables, CDC results should be computed by only using persisted CDC data and the corresponding
-base files (current and previous file slices).
+- users are to set `hoodie.datasource.query.incremental.type=snapshot`
+- the implementation logic is to compute the results in-flight by reading log files and the corresponding base files (
+  current and previous file slices).
+- this is equivalent to running incremental-query on MOR RT tables
+
+When users want to optimize compute-cost and are tolerant with latency of CDC results,
+
+- users are to set `hoodie.datasource.query.incremental.type=read_optimized`
+- the implementation logic is to extract the results by reading persisted CDC data and the corresponding base files (
+  current and previous file slices).
+- this is equivalent to running incremental-query on MOR RO tables
 
 Here use an illustration to explain how we can query the CDC on MOR table in kinds of cases.
 
@@ -306,7 +315,21 @@ val stream = df.writeStream.format("console").start
 
 # Rollout/Adoption Plan
 
-The CDC feature can be enabled by the corresponding configuration, which is default false. Using this feature dos not depend on Spark or Flink versions.
+Spark support phase 1
+
+- For COW: support Spark CDC write/read fully
+- For MOR: support Spark CDC write (only `OP=I` when write inserts to base files) and CDC read
+  when `hoodie.datasource.query.incremental.type=snapshot`
+
+Spark support phase 2
+
+- For MOR: Spark CDC write (`OP=U/D` when compact updates/deletes to log files) and CDC read
+  when `hoodie.datasource.query.incremental.type=read_optimized`
+  - Note: for CDC write via compaction, `HoodieMergedLogRecordScanner` needs to support producing CDC data for each
+    version of the changed records. `HoodieCompactor` and `HoodieMergeHandler` are to adapt the changes.
+
+Flink support can be developed in parallel, and can use of the common logical changes of CDC write via compaction in
+Spark support phase 2.
 
 # Test Plan
 
@@ -318,6 +341,6 @@ The CDC feature can be enabled by the corresponding configuration, which is defa
 
 ## Affected code paths
 
-For `supplemental.logging=true`
+For `supplemental.logging=DATA_BEFORE` or `DATA_AFTER`
 
 ![](code-paths.jpg)
