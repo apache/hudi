@@ -44,7 +44,6 @@ import scala.util.{Failure, Success, Try}
 class CDCRelation(
     override val sqlContext: SQLContext,
     metaClient: HoodieTableMetaClient,
-    cdcSupplementalLoggingMode: String,
     startInstant: String,
     endInstant: String,
     options: Map[String, String]
@@ -70,7 +69,10 @@ class CDCRelation(
 
   val tableStructSchema: StructType = AvroConversionUtils.convertAvroSchemaToStructType(tableAvroSchema)
 
-  val cdcExtractor: CDCExtractor = new CDCExtractor(metaClient, startInstant, endInstant)
+  val cdcQueryType: String = options.getOrElse(DataSourceReadOptions.INCREMENTAL_TYPE.key,
+    DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
+
+  val cdcExtractor: CDCExtractor = new CDCExtractor(metaClient, startInstant, endInstant, cdcQueryType)
 
   override final def needConversion: Boolean = false
 
@@ -103,7 +105,6 @@ class CDCRelation(
     val cdcRdd = new HoodieCDCRDD(
       spark,
       metaClient,
-      cdcSupplementalLoggingMode,
       parquetReader,
       originTableSchema,
       schema,
@@ -137,7 +138,7 @@ object CDCRelation {
   }
 
   /**
-   * CDC Schema For Spark when `hoodie.table.cdc.supplemental.logging.mode` is `min_cdc_data`.
+   * CDC Schema For Spark when `hoodie.table.cdc.supplemental.logging.mode` is `op_key`.
    */
   val MIN_CDC_SPARK_SCHEMA: StructType = {
     StructType(
@@ -187,8 +188,7 @@ object CDCRelation {
       throw new HoodieException(s"This is not a valid range between $startingInstant and $endingInstant")
     }
 
-    val supplementalLoggingMode = metaClient.getTableConfig.cdcSupplementalLoggingMode
-    new CDCRelation(sqlContext, metaClient, supplementalLoggingMode, startingInstant, endingInstant, options)
+    new CDCRelation(sqlContext, metaClient, startingInstant, endingInstant, options)
   }
 
   def getTimestampOfLatestInstant(metaClient: HoodieTableMetaClient): String = {

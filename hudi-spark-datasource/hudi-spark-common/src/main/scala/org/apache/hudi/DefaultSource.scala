@@ -112,7 +112,7 @@ class DefaultSource extends RelationProvider
     val tableType = metaClient.getTableType
     val queryType = parameters(QUERY_TYPE.key)
     val isCdcQuery = queryType == QUERY_TYPE_INCREMENTAL_OPT_VAL &&
-      parameters.get(INCREMENTAL_OUTPUT_FORMAT.key).contains(INCREMENTAL_OUTPUT_FORMAT_CDC_VAL)
+      parameters.get(INCREMENTAL_FORMAT.key).contains(INCREMENTAL_FORMAT_CDC_VAL)
     // NOTE: In cases when Hive Metastore is used as catalog and the table is partitioned, schema in the HMS might contain
     //       Hive-specific partitioning columns created specifically for HMS to handle partitioning appropriately. In that
     //       case  we opt in to not be providing catalog's schema, and instead force Hudi relations to fetch the schema
@@ -218,7 +218,7 @@ class DefaultSource extends RelationProvider
 
     if (CDCRelation.isCDCTable(metaClient) &&
         parameters.get(QUERY_TYPE.key).contains(QUERY_TYPE_INCREMENTAL_OPT_VAL) &&
-        parameters.get(INCREMENTAL_OUTPUT_FORMAT.key).contains(INCREMENTAL_OUTPUT_FORMAT_CDC_VAL)) {
+        parameters.get(INCREMENTAL_FORMAT.key).contains(INCREMENTAL_FORMAT_CDC_VAL)) {
       (shortName(), CDCRelation.FULL_CDC_SPARK_SCHEMA)
     } else {
       val schemaResolver = new TableSchemaResolver(metaClient)

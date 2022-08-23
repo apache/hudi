@@ -77,7 +77,7 @@ public class CDCUtils {
       new Schema.Parser().parse(CDC_SCHEMA_OP_RECORDKEY_BEFORE_STRING);
 
   /**
-   * The schema of cdc log file in the case `hoodie.table.cdc.supplemental.logging.mode` is 'min_cdc_data'.
+   * The schema of cdc log file in the case `hoodie.table.cdc.supplemental.logging.mode` is 'op_key'.
    */
   public static final String CDC_SCHEMA_OP_AND_RECORDKEY_STRING = "{\"type\":\"record\",\"name\":\"Record\","
       + "\"fields\":["
@@ -134,7 +134,7 @@ public class CDCUtils {
   }
 
   /**
-   * Build the cdc record when `hoodie.table.cdc.supplemental.logging.mode` is 'min_cdc_data'.
+   * Build the cdc record when `hoodie.table.cdc.supplemental.logging.mode` is 'op_key'.
    */
   public static GenericData.Record cdcRecord(String op, String recordKey) {
     GenericData.Record record = new GenericData.Record(CDC_SCHEMA_OP_AND_RECORDKEY);

@@ -41,7 +41,7 @@ class TestCDCDataFrameSuite extends TestCDCBase {
    * Step6: Bluk_Insert 20
    */
   @ParameterizedTest
-  @CsvSource(Array("min_cdc_data", "cdc_data_before", "cdc_data_before_after"))
+  @CsvSource(Array("op_key", "cdc_data_before", "cdc_data_before_after"))
   def testCOWDataSourceWrite(cdcSupplementalLoggingMode: String): Unit = {
     val options = commonOpts ++ Map(
       HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE.key -> cdcSupplementalLoggingMode
@@ -208,7 +208,7 @@ class TestCDCDataFrameSuite extends TestCDCBase {
    * Step7: Upsert 30 With CLean
    */
   @ParameterizedTest
-  @CsvSource(Array("min_cdc_data", "cdc_data_before", "cdc_data_before_after"))
+  @CsvSource(Array("op_key", "cdc_data_before", "cdc_data_before_after"))
   def testMORDataSourceWrite(cdcSupplementalLoggingMode: String): Unit = {
     val options = commonOpts ++ Map(
       DataSourceWriteOptions.TABLE_TYPE.key() -> DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL,
@@ -401,7 +401,7 @@ class TestCDCDataFrameSuite extends TestCDCBase {
   @CsvSource(Array(
     "COPY_ON_WRITE,cdc_data_before_after", "MERGE_ON_READ,cdc_data_before_after",
     "COPY_ON_WRITE,cdc_data_before", "MERGE_ON_READ,cdc_data_before",
-    "COPY_ON_WRITE,min_cdc_data", "MERGE_ON_READ,min_cdc_data"))
+    "COPY_ON_WRITE,op_key", "MERGE_ON_READ,op_key"))
   def testDataSourceWriteWithPartitionField(tableType: String, cdcSupplementalLoggingMode: String): Unit = {
     val options = commonOpts ++ Map(
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",

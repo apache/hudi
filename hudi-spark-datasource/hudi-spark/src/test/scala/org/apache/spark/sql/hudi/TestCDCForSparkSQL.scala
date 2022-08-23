@@ -30,7 +30,7 @@ class TestCDCForSparkSQL extends HoodieSparkSqlTestBase {
   def cdcDataFrame(basePath: String, startingTs: Long, endingTs: Option[Long] = None): DataFrame = {
     val reader = spark.read.format("hudi")
       .option(QUERY_TYPE.key, QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(INCREMENTAL_OUTPUT_FORMAT.key, INCREMENTAL_OUTPUT_FORMAT_CDC_VAL)
+      .option(INCREMENTAL_FORMAT.key, INCREMENTAL_FORMAT_CDC_VAL)
       .option(BEGIN_INSTANTTIME.key, startingTs.toString)
     endingTs.foreach { ts =>
       reader.option(END_INSTANTTIME.key, ts.toString)
@@ -54,7 +54,7 @@ class TestCDCForSparkSQL extends HoodieSparkSqlTestBase {
     spark.sql(s"use $databaseName")
 
     Seq("cow", "mor").foreach { tableType =>
-      Seq("min_cdc_data", "cdc_data_before", "cdc_data_before_after").foreach { cdcSupplementalLoggingMode =>
+      Seq("op_key", "cdc_data_before", "cdc_data_before_after").foreach { cdcSupplementalLoggingMode =>
         withTempDir { tmp =>
           val tableName = generateTableName
           val basePath = s"${tmp.getCanonicalPath}/$tableName"
@@ -174,7 +174,7 @@ class TestCDCForSparkSQL extends HoodieSparkSqlTestBase {
     spark.sql(s"use $databaseName")
 
     Seq("cow", "mor").foreach { tableType =>
-      Seq("cdc_data_before_after", "cdc_data_before", "min_cdc_data").foreach { cdcSupplementalLoggingMode =>
+      Seq("cdc_data_before_after", "cdc_data_before", "op_key").foreach { cdcSupplementalLoggingMode =>
         withTempDir { tmp =>
           val tableName = generateTableName
           val basePath = s"${tmp.getCanonicalPath}/$tableName"
