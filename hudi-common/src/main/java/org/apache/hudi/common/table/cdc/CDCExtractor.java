@@ -29,6 +29,7 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -43,6 +44,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieNotSupportedException;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -79,17 +81,29 @@ public class CDCExtractor {
 
   private final String endInstant;
 
+  // TODO: this will be used when support the cdc query type of 'read_optimized'.
+  private final String cdcQueryType;
+
   private Map<HoodieInstant, HoodieCommitMetadata> commits;
 
   private HoodieTableFileSystemView fsView;
 
-  public CDCExtractor(HoodieTableMetaClient metaClient, String startInstant, String endInstant) {
+  public CDCExtractor(
+      HoodieTableMetaClient metaClient,
+      String startInstant,
+      String endInstant,
+      String cdcqueryType) {
     this.metaClient = metaClient;
     this.basePath = metaClient.getBasePathV2();
     this.fs = metaClient.getFs().getFileSystem();
     this.supplementalLoggingMode = metaClient.getTableConfig().cdcSupplementalLoggingMode();
     this.startInstant = startInstant;
     this.endInstant = endInstant;
+    if (HoodieTableType.MERGE_ON_READ == metaClient.getTableType()
+        && cdcqueryType.equals("read_optimized")) {
+      throw new HoodieNotSupportedException("The 'read_optimized' cdc query type hasn't been supported for now.");
+    }
+    this.cdcQueryType = cdcqueryType;
     init();
   }
 

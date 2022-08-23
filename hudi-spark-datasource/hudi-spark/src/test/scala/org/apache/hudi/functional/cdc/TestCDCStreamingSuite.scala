@@ -45,7 +45,7 @@ class TestCDCStreamingSuite extends TestCDCBase {
    *     and write to country_to_population_tbl.
    */
   @ParameterizedTest
-  @CsvSource(Array("min_cdc_data", "cdc_data_before", "cdc_data_before_after"))
+  @CsvSource(Array("op_key", "cdc_data_before", "cdc_data_before_after"))
   def cdcStreaming(cdcSupplementalLoggingMode: String): Unit = {
     val commonOptions = Map(
       "hoodie.insert.shuffle.parallelism" -> "4",
@@ -118,7 +118,7 @@ class TestCDCStreamingSuite extends TestCDCBase {
     val afterCntExpr = If(isnull(col("acountry")).expr, zero, inc)
     val stream2 = spark.readStream.format("hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.INCREMENTAL_OUTPUT_FORMAT.key, DataSourceReadOptions.INCREMENTAL_OUTPUT_FORMAT_CDC_VAL)
+      .option(DataSourceReadOptions.INCREMENTAL_FORMAT.key, DataSourceReadOptions.INCREMENTAL_FORMAT_CDC_VAL)
       .load(userToCountryTblPath)
       .writeStream
       .format("hudi")

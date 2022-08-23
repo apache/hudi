@@ -133,7 +133,7 @@ public class HoodieTableConfig extends HoodieConfig {
       .withDocumentation("When enable, persist the change data if necessary, and can be queried as a CDC query mode.");
 
   // op and key
-  public static final String CDC_SUPPLEMENTAL_LOGGING_MODE_MINI = "min_cdc_data";
+  public static final String CDC_SUPPLEMENTAL_LOGGING_MODE_MINI = "op_key";
   public static final String CDC_SUPPLEMENTAL_LOGGING_MODE_WITH_BEFORE = "cdc_data_before";
   public static final String CDC_SUPPLEMENTAL_LOGGING_MODE_WITH_BEFORE_AFTER = "cdc_data_before_after";
 
@@ -144,7 +144,7 @@ public class HoodieTableConfig extends HoodieConfig {
           CDC_SUPPLEMENTAL_LOGGING_MODE_MINI,
           CDC_SUPPLEMENTAL_LOGGING_MODE_WITH_BEFORE,
           CDC_SUPPLEMENTAL_LOGGING_MODE_WITH_BEFORE_AFTER)
-      .withDocumentation("When 'min_cdc_data' persist the 'op' and the record key only,"
+      .withDocumentation("When 'op_key' persist the 'op' and the record key only,"
           + " when 'cdc_data_before' persist the additional 'before' image ,"
           + " and when 'cdc_data_before_after', persist the 'before' and 'after' at the same time.");
 

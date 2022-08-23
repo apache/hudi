@@ -81,7 +81,6 @@ case class HoodieCDCFileGroupPartition(
 class HoodieCDCRDD(
     spark: SparkSession,
     metaClient: HoodieTableMetaClient,
-    cdcSupplementalLoggingMode: String,
     parquetReader: PartitionedFile => Iterator[InternalRow],
     originTableSchema: HoodieTableSchema,
     cdcSchema: StructType,
@@ -92,6 +91,8 @@ class HoodieCDCRDD(
   @transient private val hadoopConf = spark.sparkContext.hadoopConfiguration
 
   private val confBroadcast = spark.sparkContext.broadcast(new SerializableWritable(hadoopConf))
+
+  private val cdcSupplementalLoggingMode = metaClient.getTableConfig.cdcSupplementalLoggingMode
 
   private val props = HoodieFileIndex.getConfigProperties(spark, Map.empty)
 
@@ -105,7 +106,7 @@ class HoodieCDCRDD(
 
   override def compute(split: Partition, context: TaskContext): Iterator[InternalRow] = {
     val cdcPartition = split.asInstanceOf[HoodieCDCFileGroupPartition]
-    new CDCFileGroupIterator(cdcPartition.split, metaClient, cdcSupplementalLoggingMode)
+    new CDCFileGroupIterator(cdcPartition.split, metaClient)
   }
 
   override protected def getPartitions: Array[Partition] = {
@@ -116,8 +117,7 @@ class HoodieCDCRDD(
 
   private class CDCFileGroupIterator(
       split: HoodieCDCFileGroupSplit,
-      metaClient: HoodieTableMetaClient,
-      cdcSupplementalLoggingMode: String
+      metaClient: HoodieTableMetaClient
     ) extends Iterator[InternalRow] with SparkAdapterSupport with AvroDeserializerSupport with Closeable {
 
     private val fs = metaClient.getFs.getFileSystem
@@ -237,13 +237,13 @@ class HoodieCDCRDD(
     /**
      * keep the before-image data. There cases will use this:
      * 1) the cdc file type is [[MOR_LOG_FILE]];
-     * 2) the cdc file type is [[CDC_LOG_FILE]] and [[cdcSupplementalLoggingMode]] is 'min_cdc_data'.
+     * 2) the cdc file type is [[CDC_LOG_FILE]] and [[cdcSupplementalLoggingMode]] is 'op_key'.
      */
     private var beforeImageRecords: mutable.Map[String, GenericRecord] = mutable.Map.empty
 
     /**
      * keep the after-image data. Only one case will use this:
-     * the cdc file type is [[CDC_LOG_FILE]] and [[cdcSupplementalLoggingMode]] is 'min_cdc_data' or 'cdc_data_before'.
+     * the cdc file type is [[CDC_LOG_FILE]] and [[cdcSupplementalLoggingMode]] is 'op_key' or 'cdc_data_before'.
      */
     private var afterImageRecords: mutable.Map[String, InternalRow] = mutable.Map.empty
 

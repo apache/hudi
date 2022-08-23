@@ -68,7 +68,7 @@ abstract class TestCDCBase extends HoodieClientTestBase {
   protected def cdcDataFrame(basePath: String, startingInstant: String, endingInstant: String): DataFrame = {
     val reader = spark.read.format("hudi")
       .option(QUERY_TYPE.key, QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(INCREMENTAL_OUTPUT_FORMAT.key, INCREMENTAL_OUTPUT_FORMAT_CDC_VAL)
+      .option(INCREMENTAL_FORMAT.key, INCREMENTAL_FORMAT_CDC_VAL)
       .option("hoodie.datasource.read.begin.instanttime", startingInstant)
     if (endingInstant != null) {
       reader.option("hoodie.datasource.read.end.instanttime", endingInstant)

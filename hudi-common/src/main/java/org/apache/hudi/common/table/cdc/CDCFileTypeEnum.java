@@ -30,7 +30,7 @@ package org.apache.hudi.common.table.cdc;
  *   when `hoodie.table.cdc.supplemental.logging.mode` is 'cdc_data_before', it keeps the `op`, the key and the
  *   `before` of the changing record. When `op` is equal to 'i' or 'u', need to get the current record from the
  *   current base/log file as `after`.
- *   when `hoodie.table.cdc.supplemental.logging.mode` is 'min_cdc_data', it just keeps the `op` and the key of
+ *   when `hoodie.table.cdc.supplemental.logging.mode` is 'op_key', it just keeps the `op` and the key of
  *   the changing record. When `op` is equal to 'i', `before` is null and get the current record
  *   from the current base/log file as `after`. When `op` is equal to 'u', get the previous
  *   record from the previous file slice as `before`, and get the current record from the
