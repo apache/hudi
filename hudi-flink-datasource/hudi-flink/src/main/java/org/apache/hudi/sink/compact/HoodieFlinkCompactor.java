@@ -297,7 +297,7 @@ public class HoodieFlinkCompactor {
               TypeInformation.of(CompactionCommitEvent.class),
               new ProcessOperator<>(new CompactFunction(conf)))
           .setParallelism(compactionParallelism)
-          .addSink(new CompactionCommitSink(conf))
+          .addSink(new CompactionCommitSink(conf, compactionPlans))
           .name("compaction_commit")
           .uid("uid_compaction_commit")
           .setParallelism(1);

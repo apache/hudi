@@ -156,7 +156,7 @@ public class ITTestHoodieFlinkCompactor {
             TypeInformation.of(CompactionCommitEvent.class),
             new ProcessOperator<>(new CompactFunction(conf)))
         .setParallelism(compactionPlan.getOperations().size())
-        .addSink(new CompactionCommitSink(conf))
+        .addSink(new CompactionCommitSink(conf, Collections.singletonList(Pair.of(compactionInstantTime, compactionPlan))))
         .name("clean_commits")
         .uid("uid_clean_commits")
         .setParallelism(1);
@@ -279,7 +279,7 @@ public class ITTestHoodieFlinkCompactor {
             TypeInformation.of(CompactionCommitEvent.class),
             new ProcessOperator<>(new CompactFunction(conf)))
         .setParallelism(1)
-        .addSink(new CompactionCommitSink(conf))
+        .addSink(new CompactionCommitSink(conf, compactionPlans))
         .name("compaction_commit")
         .uid("uid_compaction_commit")
         .setParallelism(1);
