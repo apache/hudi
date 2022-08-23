@@ -120,7 +120,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
   protected HoodieFileWriter<IndexedRecord> fileWriter;
   // a flag that indicate whether allow the change data to write out a cdc log file.
   protected boolean cdcEnabled = false;
-  protected boolean cdcSupplementalLogging = true;
+  protected String cdcSupplementalLoggingMode;
   // writer for cdc data
   protected HoodieLogFormat.Writer cdcWriter;
   // the cdc data
@@ -231,7 +231,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
 
       // init the writer for cdc data and the flag
       cdcEnabled = config.getBoolean(HoodieTableConfig.CDC_ENABLED);
-      cdcSupplementalLogging = config.getBoolean(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_ENABLED);
+      cdcSupplementalLoggingMode = config.getString(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE);
       if (cdcEnabled) {
         cdcWriter = createLogWriter(Option.empty(), instantTime);
         long memoryForMerge = IOUtils.getMaxMemoryPerPartitionMerge(taskContextSupplier, config);
@@ -454,9 +454,11 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
   protected SerializableRecord cdcRecord(CDCOperationEnum operation, String recordKey, String partitionPath,
                                          GenericRecord oldRecord, GenericRecord newRecord) {
     GenericData.Record record;
-    if (cdcSupplementalLogging) {
+    if (cdcSupplementalLoggingMode.equals(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE_WITH_BEFORE_AFTER)) {
       record = CDCUtils.cdcRecord(operation.getValue(), instantTime,
           oldRecord, addCommitMetadata(newRecord, recordKey, partitionPath));
+    } else if (cdcSupplementalLoggingMode.equals(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE_WITH_BEFORE)) {
+      record = CDCUtils.cdcRecord(operation.getValue(), recordKey, oldRecord);
     } else {
       record = CDCUtils.cdcRecord(operation.getValue(), recordKey);
     }
@@ -487,10 +489,12 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
           : hoodieTable.getMetaClient().getTableConfig().getRecordKeyFieldProp();
       Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
       header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, instantTime);
-      if (cdcSupplementalLogging) {
+      if (cdcSupplementalLoggingMode.equals(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE_WITH_BEFORE_AFTER)) {
         header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, CDCUtils.CDC_SCHEMA_STRING);
+      } else if (cdcSupplementalLoggingMode.equals(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE_WITH_BEFORE)) {
+        header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, CDCUtils.CDC_SCHEMA_OP_RECORDKEY_BEFORE_STRING);
       } else {
-        header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, CDCUtils.CDC_SCHEMA_ONLY_OP_AND_RECORDKEY_STRING);
+        header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, CDCUtils.CDC_SCHEMA_OP_AND_RECORDKEY_STRING);
       }
       List<IndexedRecord> records = cdcData.values().stream()
           .map(SerializableRecord::getRecord).collect(Collectors.toList());

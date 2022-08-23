@@ -731,7 +731,7 @@ public class HoodieTableMetaClient implements Serializable {
     private String preCombineField;
     private String partitionFields;
     private Boolean cdcEnabled;
-    private Boolean cdcSupplementalLoggingEnabled;
+    private String cdcSupplementalLoggingMode;
     private String bootstrapIndexClass;
     private String bootstrapBasePath;
     private Boolean bootstrapIndexEnable;
@@ -823,8 +823,8 @@ public class HoodieTableMetaClient implements Serializable {
       return this;
     }
 
-    public PropertyBuilder setCDCSupplementalLoggingEnabled(boolean cdcSupplementalLoggingEnabled) {
-      this.cdcSupplementalLoggingEnabled = cdcSupplementalLoggingEnabled;
+    public PropertyBuilder setCDCSupplementalLoggingMode(String cdcSupplementalLoggingMode) {
+      this.cdcSupplementalLoggingMode = cdcSupplementalLoggingMode;
       return this;
     }
 
@@ -971,8 +971,8 @@ public class HoodieTableMetaClient implements Serializable {
       if (hoodieConfig.contains(HoodieTableConfig.CDC_ENABLED)) {
         setCDCEnabled(hoodieConfig.getBoolean(HoodieTableConfig.CDC_ENABLED));
       }
-      if (hoodieConfig.contains(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_ENABLED)) {
-        setCDCSupplementalLoggingEnabled(hoodieConfig.getBoolean(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_ENABLED));
+      if (hoodieConfig.contains(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE)) {
+        setCDCSupplementalLoggingMode(hoodieConfig.getString(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE));
       }
       if (hoodieConfig.contains(HoodieTableConfig.CREATE_SCHEMA)) {
         setTableCreateSchema(hoodieConfig.getString(HoodieTableConfig.CREATE_SCHEMA));
@@ -1066,9 +1066,8 @@ public class HoodieTableMetaClient implements Serializable {
       }
       if (null != cdcEnabled) {
         tableConfig.setValue(HoodieTableConfig.CDC_ENABLED, Boolean.toString(cdcEnabled));
-        if (cdcEnabled && null != cdcSupplementalLoggingEnabled) {
-          tableConfig.setValue(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_ENABLED,
-              Boolean.toString(cdcSupplementalLoggingEnabled));
+        if (cdcEnabled && null != cdcSupplementalLoggingMode) {
+          tableConfig.setValue(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE, cdcSupplementalLoggingMode);
         }
       }
       if (null != populateMetaFields) {

@@ -132,11 +132,21 @@ public class HoodieTableConfig extends HoodieConfig {
       .defaultValue(false)
       .withDocumentation("When enable, persist the change data if necessary, and can be queried as a CDC query mode.");
 
-  public static final ConfigProperty<Boolean> CDC_SUPPLEMENTAL_LOGGING_ENABLED = ConfigProperty
-      .key("hoodie.table.cdc.supplemental.logging")
-      .defaultValue(true)
-      .withDocumentation("When enable, persist all the required information about the change data, "
-          + "including 'before' and 'after'. Otherwise, just persist the 'op' and the record key.");
+  // op and key
+  public static final String CDC_SUPPLEMENTAL_LOGGING_MODE_MINI = "min_cdc_data";
+  public static final String CDC_SUPPLEMENTAL_LOGGING_MODE_WITH_BEFORE = "cdc_data_before";
+  public static final String CDC_SUPPLEMENTAL_LOGGING_MODE_WITH_BEFORE_AFTER = "cdc_data_before_after";
+
+  public static final ConfigProperty<String> CDC_SUPPLEMENTAL_LOGGING_MODE = ConfigProperty
+      .key("hoodie.table.cdc.supplemental.logging.mode")
+      .defaultValue(CDC_SUPPLEMENTAL_LOGGING_MODE_WITH_BEFORE_AFTER)
+      .withValidValues(
+          CDC_SUPPLEMENTAL_LOGGING_MODE_MINI,
+          CDC_SUPPLEMENTAL_LOGGING_MODE_WITH_BEFORE,
+          CDC_SUPPLEMENTAL_LOGGING_MODE_WITH_BEFORE_AFTER)
+      .withDocumentation("When 'min_cdc_data' persist the 'op' and the record key only,"
+          + " when 'cdc_data_before' persist the additional 'before' image ,"
+          + " and when 'cdc_data_before_after', persist the 'before' and 'after' at the same time.");
 
   public static final ConfigProperty<String> CREATE_SCHEMA = ConfigProperty
       .key("hoodie.table.create.schema")
@@ -604,8 +614,8 @@ public class HoodieTableConfig extends HoodieConfig {
     return getBooleanOrDefault(CDC_ENABLED);
   }
 
-  public boolean isCDCSupplementalLoggingEnabled() {
-    return getBooleanOrDefault(CDC_SUPPLEMENTAL_LOGGING_ENABLED);
+  public String cdcSupplementalLoggingMode() {
+    return getStringOrDefault(CDC_SUPPLEMENTAL_LOGGING_MODE);
   }
 
   public String getKeyGeneratorClassName() {

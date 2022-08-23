@@ -129,7 +129,7 @@ class HoodieStreamSource(
 
   override def schema: StructType = {
     if (isCDCQuery) {
-      CDCRelation.CDC_SPARK_SCHEMA
+      CDCRelation.FULL_CDC_SPARK_SCHEMA
     } else {
       schemaOption.getOrElse {
         val schemaUtil = new TableSchemaResolver(metaClient)
@@ -175,7 +175,7 @@ class HoodieStreamSource(
         val rdd = CDCRelation.getCDCRelation(sqlContext, metaClient, cdcOptions)
           .buildScan0(CDCUtils.CDC_COLUMNS, Array.empty)
 
-        sqlContext.sparkSession.internalCreateDataFrame(rdd, CDCRelation.CDC_SPARK_SCHEMA, isStreaming = true)
+        sqlContext.sparkSession.internalCreateDataFrame(rdd, CDCRelation.FULL_CDC_SPARK_SCHEMA, isStreaming = true)
       } else {
         // Consume the data between (startCommitTime, endCommitTime]
         val incParams = parameters ++ Map(

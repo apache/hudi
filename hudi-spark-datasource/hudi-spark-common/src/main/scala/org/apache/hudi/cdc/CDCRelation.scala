@@ -44,7 +44,7 @@ import scala.util.{Failure, Success, Try}
 class CDCRelation(
     override val sqlContext: SQLContext,
     metaClient: HoodieTableMetaClient,
-    cdcSupplementalLogging: Boolean,
+    cdcSupplementalLoggingMode: String,
     startInstant: String,
     endInstant: String,
     options: Map[String, String]
@@ -74,7 +74,7 @@ class CDCRelation(
 
   override final def needConversion: Boolean = false
 
-  override def schema: StructType = CDCRelation.CDC_SPARK_SCHEMA
+  override def schema: StructType = CDCRelation.FULL_CDC_SPARK_SCHEMA
 
   override def buildScan(requiredColumns: Array[String], filters: Array[Filter]): RDD[Row] = {
     val internalRows = buildScan0(requiredColumns, filters)
@@ -103,7 +103,7 @@ class CDCRelation(
     val cdcRdd = new HoodieCDCRDD(
       spark,
       metaClient,
-      cdcSupplementalLogging,
+      cdcSupplementalLoggingMode,
       parquetReader,
       originTableSchema,
       schema,
@@ -122,9 +122,10 @@ object CDCRelation {
 
   /**
    * CDC Schema For Spark.
+   * Also it's schema when `hoodie.table.cdc.supplemental.logging.mode` is `cdc_data_before_after`.
    * Here we use the debezium format.
    */
-  val CDC_SPARK_SCHEMA: StructType = {
+  val FULL_CDC_SPARK_SCHEMA: StructType = {
     StructType(
       Seq(
         StructField(CDC_OPERATION_TYPE, StringType),
@@ -136,9 +137,9 @@ object CDCRelation {
   }
 
   /**
-   * CDC Schema For Spark when `hoodie.table.cdc.supplemental.logging` is false.
+   * CDC Schema For Spark when `hoodie.table.cdc.supplemental.logging.mode` is `min_cdc_data`.
    */
-  val CDC_LOG_FILE_SPARK_SCHEMA: StructType = {
+  val MIN_CDC_SPARK_SCHEMA: StructType = {
     StructType(
       Seq(
         StructField(CDC_OPERATION_TYPE, StringType),
@@ -148,14 +149,16 @@ object CDCRelation {
   }
 
   /**
-   * the schema of cdc log file.
+   * CDC Schema For Spark when `hoodie.table.cdc.supplemental.logging.mode` is `cdc_data_before`.
    */
-  def cdcLogFileSchema(cdcSupplementalLogging: Boolean): StructType = {
-    if (cdcSupplementalLogging) {
-      CDC_SPARK_SCHEMA
-    } else {
-      CDC_LOG_FILE_SPARK_SCHEMA
-    }
+  val CDC_WITH_BEFORE_SPARK_SCHEMA: StructType = {
+    StructType(
+      Seq(
+        StructField(CDC_OPERATION_TYPE, StringType),
+        StructField(CDC_RECORD_KEY, StringType),
+        StructField(CDC_BEFORE_IMAGE, StringType)
+      )
+    )
   }
 
   def isCDCTable(metaClient: HoodieTableMetaClient): Boolean = {
@@ -184,8 +187,8 @@ object CDCRelation {
       throw new HoodieException(s"This is not a valid range between $startingInstant and $endingInstant")
     }
 
-    val supplementalLogging = metaClient.getTableConfig.isCDCSupplementalLoggingEnabled
-    new CDCRelation(sqlContext, metaClient, supplementalLogging, startingInstant, endingInstant, options)
+    val supplementalLoggingMode = metaClient.getTableConfig.cdcSupplementalLoggingMode
+    new CDCRelation(sqlContext, metaClient, supplementalLoggingMode, startingInstant, endingInstant, options)
   }
 
   def getTimestampOfLatestInstant(metaClient: HoodieTableMetaClient): String = {

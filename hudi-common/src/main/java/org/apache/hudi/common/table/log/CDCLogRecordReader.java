@@ -39,10 +39,10 @@ public class CDCLogRecordReader implements ClosableIterator<IndexedRecord> {
 
   private ClosableIterator<IndexedRecord> itr;
 
-  public CDCLogRecordReader(FileSystem fs, Path cdcLogPath, boolean cdcSupplementalLogging) throws IOException {
+  public CDCLogRecordReader(FileSystem fs, Path cdcLogPath, String cdcSupplementalLoggingMode) throws IOException {
     this.cdcLogFile = new HoodieLogFile(fs.getFileStatus(cdcLogPath));
     this.reader = new HoodieLogFileReader(fs, cdcLogFile,
-      cdcSupplementalLogging ? CDCUtils.CDC_SCHEMA : CDCUtils.CDC_SCHEMA_ONLY_OP_AND_RECORDKEY,
+      CDCUtils.schemaBySupplementalLoggingMode(cdcSupplementalLoggingMode),
       HoodieLogFileReader.DEFAULT_BUFFER_SIZE, false);
   }
 
