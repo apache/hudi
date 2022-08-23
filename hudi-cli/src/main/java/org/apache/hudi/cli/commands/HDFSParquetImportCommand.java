@@ -37,8 +37,8 @@ import scala.collection.JavaConverters;
 /**
  * CLI command for importing parquet table to hudi table.
  *
- * @deprecated This utility is deprecated in 0.10.0 and will be removed in 0.11.0. Use {@link HoodieDeltaStreamer.Config#runBootstrap} instead.
  * @see HoodieDeltaStreamer
+ * @deprecated This utility is deprecated in 0.10.0 and will be removed in 0.11.0. Use {@link HoodieDeltaStreamer.Config#runBootstrap} instead.
  */
 @Component
 public class HDFSParquetImportCommand implements CommandMarker {
@@ -64,9 +64,9 @@ public class HDFSParquetImportCommand implements CommandMarker {
       @CliOption(key = "sparkMemory", mandatory = true, help = "Spark executor memory") final String sparkMemory,
       @CliOption(key = "retry", mandatory = true, help = "Number of retries") final String retry,
       @CliOption(key = "propsFilePath", help = "path to properties file on localfs or dfs with configurations for hoodie client for importing",
-        unspecifiedDefaultValue = "") final String propsFilePath,
+          unspecifiedDefaultValue = "") final String propsFilePath,
       @CliOption(key = "hoodieConfigs", help = "Any configuration that can be set in the properties file can be passed here in the form of an array",
-        unspecifiedDefaultValue = "") final String[] configs) throws Exception {
+          unspecifiedDefaultValue = "") final String[] configs) throws Exception {
 
     (new FormatValidator()).validate("format", format);
 

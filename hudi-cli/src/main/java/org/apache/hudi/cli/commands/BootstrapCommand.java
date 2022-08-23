@@ -40,8 +40,8 @@ import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.net.URISyntaxException;
-import java.util.Arrays;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -113,8 +113,7 @@ public class BootstrapCommand implements CommandMarker {
       @CliOption(key = {"limit"}, unspecifiedDefaultValue = "-1", help = "Limit rows to be displayed") Integer limit,
       @CliOption(key = {"sortBy"}, unspecifiedDefaultValue = "", help = "Sorting Field") final String sortByField,
       @CliOption(key = {"desc"}, unspecifiedDefaultValue = "false", help = "Ordering") final boolean descending,
-      @CliOption(key = {"headeronly"}, unspecifiedDefaultValue = "false", help = "Print Header Only")
-      final boolean headerOnly) {
+      @CliOption(key = {"headeronly"}, unspecifiedDefaultValue = "false", help = "Print Header Only") final boolean headerOnly) {
 
     if (partitionPath.isEmpty() && !fileIds.isEmpty()) {
       throw new IllegalStateException("PartitionPath is mandatory when passing fileIds.");

@@ -233,6 +233,7 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
 
     List<WriteStatus> writeStatuses = this.writerHelper.getWriteStatuses(this.taskID);
     collector.collect(new ClusteringCommitEvent(instantTime, writeStatuses, this.taskID));
+    this.writerHelper = null;
   }
 
   private void initWriterHelper(String clusteringInstantTime) {

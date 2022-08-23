@@ -54,6 +54,7 @@ import java.util.Map;
 import static org.apache.flink.table.factories.FactoryUtil.CONNECTOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -65,8 +66,8 @@ public class TestHoodieHiveCatalog {
           .field("uuid", DataTypes.INT().notNull())
           .field("name", DataTypes.STRING())
           .field("age", DataTypes.INT())
-          .field("ts", DataTypes.BIGINT())
           .field("par1", DataTypes.STRING())
+          .field("ts", DataTypes.BIGINT())
           .primaryKey("uuid")
           .build();
   List<String> partitions = Collections.singletonList("par1");
@@ -94,21 +95,29 @@ public class TestHoodieHiveCatalog {
   @ParameterizedTest
   @EnumSource(value = HoodieTableType.class)
   public void testCreateAndGetHoodieTable(HoodieTableType tableType) throws Exception {
-    Map<String, String> originOptions = new HashMap<>();
-    originOptions.put(FactoryUtil.CONNECTOR.key(), "hudi");
-    originOptions.put(FlinkOptions.TABLE_TYPE.key(), tableType.toString());
+    Map<String, String> options = new HashMap<>();
+    options.put(FactoryUtil.CONNECTOR.key(), "hudi");
+    options.put(FlinkOptions.TABLE_TYPE.key(), tableType.toString());
 
     CatalogTable table =
-        new CatalogTableImpl(schema, partitions, originOptions, "hudi table");
+        new CatalogTableImpl(schema, partitions, options, "hudi table");
     hoodieCatalog.createTable(tablePath, table, false);
 
     CatalogBaseTable table1 = hoodieCatalog.getTable(tablePath);
-    assertEquals(table1.getOptions().get(CONNECTOR.key()), "hudi");
-    assertEquals(table1.getOptions().get(FlinkOptions.TABLE_TYPE.key()), tableType.toString());
-    assertEquals(table1.getOptions().get(FlinkOptions.RECORD_KEY_FIELD.key()), "uuid");
-    assertEquals(table1.getOptions().get(FlinkOptions.PRECOMBINE_FIELD.key()), "ts");
-    assertEquals(table1.getUnresolvedSchema().getPrimaryKey().get().getColumnNames(), Collections.singletonList("uuid"));
-    assertEquals(((CatalogTable)table1).getPartitionKeys(), Collections.singletonList("par1"));
+    assertEquals("hudi", table1.getOptions().get(CONNECTOR.key()));
+    assertEquals(tableType.toString(), table1.getOptions().get(FlinkOptions.TABLE_TYPE.key()));
+    assertEquals("uuid", table1.getOptions().get(FlinkOptions.RECORD_KEY_FIELD.key()));
+    assertNull(table1.getOptions().get(FlinkOptions.PRECOMBINE_FIELD.key()), "preCombine key is not declared");
+    assertEquals(Collections.singletonList("uuid"), table1.getUnresolvedSchema().getPrimaryKey().get().getColumnNames());
+    assertEquals(Collections.singletonList("par1"), ((CatalogTable)table1).getPartitionKeys());
+
+    // test explicit primary key
+    options.put(FlinkOptions.RECORD_KEY_FIELD.key(), "id");
+    table = new CatalogTableImpl(schema, partitions, options, "hudi table");
+    hoodieCatalog.alterTable(tablePath, table, true);
+
+    CatalogBaseTable table2 = hoodieCatalog.getTable(tablePath);
+    assertEquals("id", table2.getOptions().get(FlinkOptions.RECORD_KEY_FIELD.key()));
   }
 
   @ParameterizedTest

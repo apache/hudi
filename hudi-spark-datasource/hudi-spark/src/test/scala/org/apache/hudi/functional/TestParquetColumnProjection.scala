@@ -18,6 +18,7 @@
 package org.apache.hudi.functional
 
 import org.apache.avro.Schema
+import org.apache.hudi.HoodieBaseRelation.projectSchema
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.{HoodieRecord, OverwriteNonDefaultsWithLatestAvroPayload}
 import org.apache.hudi.common.table.HoodieTableConfig
@@ -29,7 +30,7 @@ import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, DefaultSo
 import org.apache.parquet.hadoop.util.counters.BenchmarkCounter
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.{Dataset, HoodieUnsafeRDDUtils, Row, SaveMode}
+import org.apache.spark.sql.{Dataset, HoodieUnsafeUtils, Row, SaveMode}
 import org.junit.jupiter.api.Assertions.{assertEquals, fail}
 import org.junit.jupiter.api.{Disabled, Tag, Test}
 
@@ -53,7 +54,7 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
     DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> classOf[NonpartitionedKeyGenerator].getName
   )
 
-  @Disabled("HUDI-3896")
+  @Disabled("Currently disabled b/c of the fallback to HadoopFsRelation")
   @Test
   def testBaseFileOnlyViewRelation(): Unit = {
     val tablePath = s"$basePath/cow"
@@ -315,7 +316,7 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
 
       val (rows, bytesRead) = measureBytesRead { () =>
         val rdd = relation.buildScan(targetColumns, Array.empty).asInstanceOf[HoodieUnsafeRDD]
-        HoodieUnsafeRDDUtils.collect(rdd)
+        HoodieUnsafeUtils.collect(rdd)
       }
 
       val targetRecordCount = tableState.targetRecordCount;
@@ -333,7 +334,7 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
       }
 
       val readColumns = targetColumns ++ relation.mandatoryFields
-      val (_, projectedStructType, _) = HoodieSparkUtils.getRequiredSchema(tableState.schema, readColumns)
+      val (_, projectedStructType, _) = projectSchema(Left(tableState.schema), readColumns)
 
       val row: InternalRow = rows.take(1).head
 

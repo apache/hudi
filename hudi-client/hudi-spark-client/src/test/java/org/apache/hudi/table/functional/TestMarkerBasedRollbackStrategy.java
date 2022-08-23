@@ -36,6 +36,7 @@ import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.rollback.BaseRollbackHelper;
 import org.apache.hudi.table.action.rollback.MarkerBasedRollbackStrategy;
+import org.apache.hudi.table.marker.DirectWriteMarkers;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
 import org.apache.hadoop.fs.FileStatus;
@@ -48,12 +49,16 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+import static org.mockito.MockitoAnnotations.initMocks;
 
 @Tag("functional")
 public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
@@ -204,4 +209,21 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
         rollbackRequests);
   }
 
+  @Test
+  public void testMarkerBasedRollbackFallbackToTimelineServerWhenDirectMarkerFails() throws Exception {
+    HoodieTestTable testTable = HoodieTestTable.of(metaClient);
+    String f0 = testTable.addRequestedCommit("000")
+        .getFileIdsWithBaseFilesInPartitions("partA").get("partA");
+    testTable.forCommit("001")
+        .withMarkerFile("partA", f0, IOType.APPEND);
+
+    HoodieTable hoodieTable = HoodieSparkTable.create(getConfig(), context, metaClient);
+
+    DirectWriteMarkers writeMarkers = mock(DirectWriteMarkers.class);
+    initMocks(this);
+    when(writeMarkers.allMarkerFilePaths()).thenThrow(new IOException("Markers.type file not present"));
+    MarkerBasedRollbackStrategy rollbackStrategy = new MarkerBasedRollbackStrategy(hoodieTable, context, getConfig(), "002");
+    List<HoodieRollbackRequest> rollbackRequests = rollbackStrategy.getRollbackRequests(new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "001"));
+    assertEquals(1, rollbackRequests.size());
+  }
 }

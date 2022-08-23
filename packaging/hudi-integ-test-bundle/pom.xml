@@ -17,7 +17,7 @@
   <parent>
     <artifactId>hudi</artifactId>
     <groupId>org.apache.hudi</groupId>
-    <version>0.12.0-SNAPSHOT</version>
+    <version>0.13.0-SNAPSHOT</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
   <modelVersion>4.0.0</modelVersion>
@@ -100,6 +100,8 @@
                   <include>org.apache.hbase.thirdparty:hbase-shaded-protobuf</include>
                   <include>org.apache.htrace:htrace-core4</include>
                   <include>commons-io:commons-io</include>
+                  <include>com.facebook.presto:presto-jdbc</include>
+                  <include>io.trino:trino-jdbc</include>
 
                   <include>org.jetbrains.kotlin:kotlin-stdlib-jdk8</include>
                   <include>org.jetbrains.kotlin:kotlin-stdlib</include>

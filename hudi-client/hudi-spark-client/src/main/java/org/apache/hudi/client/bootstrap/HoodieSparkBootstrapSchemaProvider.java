@@ -18,6 +18,7 @@
 
 package org.apache.hudi.client.bootstrap;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieFileStatus;
@@ -71,11 +72,20 @@ public class HoodieSparkBootstrapSchemaProvider extends HoodieBootstrapSchemaPro
   }
 
   private static Schema getBootstrapSourceSchemaParquet(HoodieWriteConfig writeConfig, HoodieEngineContext context, Path filePath) {
-    MessageType parquetSchema = new ParquetUtils().readSchema(context.getHadoopConf().get(), filePath);
+    Configuration hadoopConf = context.getHadoopConf().get();
+    MessageType parquetSchema = new ParquetUtils().readSchema(hadoopConf, filePath);
 
-    ParquetToSparkSchemaConverter converter = new ParquetToSparkSchemaConverter(
-        Boolean.parseBoolean(SQLConf.PARQUET_BINARY_AS_STRING().defaultValueString()),
-        Boolean.parseBoolean(SQLConf.PARQUET_INT96_AS_TIMESTAMP().defaultValueString()));
+    hadoopConf.set(
+        SQLConf.PARQUET_BINARY_AS_STRING().key(),
+        SQLConf.PARQUET_BINARY_AS_STRING().defaultValueString());
+    hadoopConf.set(
+        SQLConf.PARQUET_INT96_AS_TIMESTAMP().key(),
+        SQLConf.PARQUET_INT96_AS_TIMESTAMP().defaultValueString());
+    hadoopConf.set(
+        SQLConf.CASE_SENSITIVE().key(),
+        SQLConf.CASE_SENSITIVE().defaultValueString());
+    ParquetToSparkSchemaConverter converter = new ParquetToSparkSchemaConverter(hadoopConf);
+
     StructType sparkSchema = converter.convert(parquetSchema);
     String tableName = HoodieAvroUtils.sanitizeName(writeConfig.getTableName());
     String structName = tableName + "_record";

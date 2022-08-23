@@ -226,8 +226,9 @@ public class HMSDDLExecutor implements DDLExecutor {
         String fullPartitionPath = StorageSchemes.HDFS.getScheme().equals(partitionScheme)
             ? FSUtils.getDFSFullPartitionPath(syncConfig.getHadoopFileSystem(), partitionPath) : partitionPath.toString();
         List<String> partitionValues = partitionValueExtractor.extractPartitionValuesInPath(partition);
-        sd.setLocation(fullPartitionPath);
-        return new Partition(partitionValues, databaseName, tableName, 0, 0, sd, null);
+        StorageDescriptor partitionSd = sd.deepCopy();
+        partitionSd.setLocation(fullPartitionPath);
+        return new Partition(partitionValues, databaseName, tableName, 0, 0, partitionSd, null);
       }).collect(Collectors.toList());
       client.alter_partitions(databaseName, tableName, partitionList, null);
     } catch (TException e) {

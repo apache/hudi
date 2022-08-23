@@ -54,8 +54,8 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
   private static final String LOCK_FILE_NAME = "lock";
 
   private final int lockTimeoutMinutes;
-  private transient FileSystem fs;
-  private transient Path lockFile;
+  private final transient FileSystem fs;
+  private final transient Path lockFile;
   protected LockConfiguration lockConfiguration;
 
   public FileSystemBasedLockProvider(final LockConfiguration lockConfiguration, final Configuration configuration) {
@@ -87,8 +87,13 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
     try {
       synchronized (LOCK_FILE_NAME) {
         // Check whether lock is already expired, if so try to delete lock file
-        if (fs.exists(this.lockFile) && checkIfExpired()) {
-          fs.delete(this.lockFile, true);
+        if (fs.exists(this.lockFile)) {
+          if (checkIfExpired()) {
+            fs.delete(this.lockFile, true);
+            LOG.warn("Delete expired lock file: " + this.lockFile);
+          } else {
+            return false;
+          }
         }
         acquireLock();
         return fs.exists(this.lockFile);
@@ -123,7 +128,7 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
     }
     try {
       long modificationTime = fs.getFileStatus(this.lockFile).getModificationTime();
-      if (System.currentTimeMillis() - modificationTime > lockTimeoutMinutes * 60 * 1000) {
+      if (System.currentTimeMillis() - modificationTime > lockTimeoutMinutes * 60 * 1000L) {
         return true;
       }
     } catch (IOException | HoodieIOException e) {

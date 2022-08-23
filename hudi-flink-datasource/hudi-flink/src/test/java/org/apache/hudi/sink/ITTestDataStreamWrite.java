@@ -22,6 +22,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.OptionsInference;
 import org.apache.hudi.sink.transform.ChainedTransformer;
 import org.apache.hudi.sink.transform.Transformer;
 import org.apache.hudi.sink.utils.Pipelines;
@@ -239,13 +240,12 @@ public class ITTestDataStreamWrite extends TestLogger {
       dataStream = transformer.get().apply(dataStream);
     }
 
-    int parallelism = execEnv.getParallelism();
-    DataStream<HoodieRecord> hoodieRecordDataStream = Pipelines.bootstrap(conf, rowType, parallelism, dataStream);
-    DataStream<Object> pipeline = Pipelines.hoodieStreamWrite(conf, parallelism, hoodieRecordDataStream);
+    OptionsInference.setupSinkTasks(conf, execEnv.getParallelism());
+    DataStream<HoodieRecord> hoodieRecordDataStream = Pipelines.bootstrap(conf, rowType, dataStream);
+    DataStream<Object> pipeline = Pipelines.hoodieStreamWrite(conf, hoodieRecordDataStream);
     execEnv.addOperator(pipeline.getTransformation());
 
     if (isMor) {
-      Pipelines.clean(conf, pipeline);
       Pipelines.compact(conf, pipeline);
     }
 
@@ -305,6 +305,7 @@ public class ITTestDataStreamWrite extends TestLogger {
           .setParallelism(4);
     }
 
+    OptionsInference.setupSinkTasks(conf, execEnv.getParallelism());
     DataStream<Object> pipeline = Pipelines.append(conf, rowType, dataStream, true);
     execEnv.addOperator(pipeline.getTransformation());
 
@@ -382,13 +383,9 @@ public class ITTestDataStreamWrite extends TestLogger {
     execEnv.enableCheckpointing(4000, CheckpointingMode.EXACTLY_ONCE);
     execEnv.getCheckpointConfig().setMaxConcurrentCheckpoints(1);
 
-    options.put(FlinkOptions.INDEX_TYPE.key(), "FLINK_STATE");
     options.put(FlinkOptions.PATH.key(), tempFile.getAbsolutePath());
-    options.put(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS.key(), "4");
-    options.put("table.type", HoodieTableType.MERGE_ON_READ.name());
-    options.put(FlinkOptions.INDEX_KEY_FIELD.key(), "id");
-    options.put(FlinkOptions.COMPACTION_DELTA_COMMITS.key(), "1");
     options.put(FlinkOptions.TABLE_TYPE.key(), HoodieTableType.MERGE_ON_READ.name());
+    options.put(FlinkOptions.COMPACTION_DELTA_COMMITS.key(), "1");
     options.put(FlinkOptions.SOURCE_AVRO_SCHEMA_PATH.key(), Objects.requireNonNull(Thread.currentThread().getContextClassLoader().getResource("test_read_schema.avsc")).toString());
     Configuration conf = Configuration.fromMap(options);
     // Read from file source

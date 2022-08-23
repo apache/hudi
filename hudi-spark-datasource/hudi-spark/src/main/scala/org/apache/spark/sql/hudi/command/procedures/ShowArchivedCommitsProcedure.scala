@@ -17,6 +17,7 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
+import org.apache.hudi.HoodieCLIUtils
 import org.apache.hudi.common.model.HoodieCommitMetadata
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieDefaultTimeline, HoodieInstant}
@@ -36,8 +37,8 @@ class ShowArchivedCommitsProcedure(includeExtraMetadata: Boolean) extends BasePr
   private val PARAMETERS = Array[ProcedureParameter](
     ProcedureParameter.required(0, "table", DataTypes.StringType, None),
     ProcedureParameter.optional(1, "limit", DataTypes.IntegerType, 10),
-    ProcedureParameter.optional(2, "startTs", DataTypes.StringType, ""),
-    ProcedureParameter.optional(3, "endTs", DataTypes.StringType, "")
+    ProcedureParameter.optional(2, "start_ts", DataTypes.StringType, ""),
+    ProcedureParameter.optional(3, "end_ts", DataTypes.StringType, "")
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -63,7 +64,7 @@ class ShowArchivedCommitsProcedure(includeExtraMetadata: Boolean) extends BasePr
     StructField("num_update_writes", DataTypes.LongType, nullable = true, Metadata.empty),
     StructField("total_errors", DataTypes.LongType, nullable = true, Metadata.empty),
     StructField("total_log_blocks", DataTypes.LongType, nullable = true, Metadata.empty),
-    StructField("total_corrupt_logblocks", DataTypes.LongType, nullable = true, Metadata.empty),
+    StructField("total_corrupt_log_blocks", DataTypes.LongType, nullable = true, Metadata.empty),
     StructField("total_rollback_blocks", DataTypes.LongType, nullable = true, Metadata.empty),
     StructField("total_log_records", DataTypes.LongType, nullable = true, Metadata.empty),
     StructField("total_updated_records_compacted", DataTypes.LongType, nullable = true, Metadata.empty),
@@ -82,7 +83,7 @@ class ShowArchivedCommitsProcedure(includeExtraMetadata: Boolean) extends BasePr
     var startTs = getArgValueOrDefault(args, PARAMETERS(2)).get.asInstanceOf[String]
     var endTs = getArgValueOrDefault(args, PARAMETERS(3)).get.asInstanceOf[String]
 
-    val hoodieCatalogTable = HoodieCatalogTable(sparkSession, new TableIdentifier(table))
+    val hoodieCatalogTable = HoodieCLIUtils.getHoodieCatalogTable(sparkSession, table)
     val basePath = hoodieCatalogTable.tableLocation
     val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
 

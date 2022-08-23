@@ -237,6 +237,36 @@ public class CompactionUtils {
     }
   }
 
+  public static Option<Pair<HoodieTimeline, HoodieInstant>> getDeltaCommitsSinceLatestCompactionRequest(
+        HoodieActiveTimeline activeTimeline) {
+    Option<HoodieInstant> lastCompaction = activeTimeline.getCommitTimeline()
+          .filterCompletedInstants().lastInstant();
+    Option<HoodieInstant> lastRequestCompaction = activeTimeline.getAllCommitsTimeline()
+          .filterPendingCompactionTimeline().lastInstant();
+    if (lastRequestCompaction.isPresent()) {
+      lastCompaction = lastRequestCompaction;
+    }
+    HoodieTimeline deltaCommits = activeTimeline.getDeltaCommitTimeline();
+
+    HoodieInstant latestInstant;
+    if (lastCompaction.isPresent()) {
+      latestInstant = lastCompaction.get();
+      // timeline containing the delta commits after the latest completed compaction commit,
+      // and the completed compaction commit instant
+      return Option.of(Pair.of(deltaCommits.findInstantsAfter(
+            latestInstant.getTimestamp(), Integer.MAX_VALUE), lastCompaction.get()));
+    } else {
+      if (deltaCommits.countInstants() > 0) {
+        latestInstant = deltaCommits.firstInstant().get();
+        // timeline containing all the delta commits, and the first delta commit instant
+        return Option.of(Pair.of(deltaCommits.findInstantsAfterOrEquals(
+              latestInstant.getTimestamp(), Integer.MAX_VALUE), latestInstant));
+      } else {
+        return Option.empty();
+      }
+    }
+  }
+
   /**
    * Gets the oldest instant to retain for MOR compaction.
    * If there is no completed compaction,

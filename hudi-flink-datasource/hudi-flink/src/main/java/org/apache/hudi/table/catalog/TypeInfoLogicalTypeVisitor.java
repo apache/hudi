@@ -18,8 +18,6 @@
 
 package org.apache.hudi.table.catalog;
 
-import org.apache.hudi.exception.HoodieCatalogException;
-
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.ArrayType;
 import org.apache.flink.table.types.logical.BigIntType;
@@ -40,8 +38,6 @@ import org.apache.flink.table.types.logical.TinyIntType;
 import org.apache.flink.table.types.logical.VarBinaryType;
 import org.apache.flink.table.types.logical.VarCharType;
 import org.apache.flink.table.types.logical.utils.LogicalTypeDefaultVisitor;
-import org.apache.hadoop.hive.common.type.HiveChar;
-import org.apache.hadoop.hive.common.type.HiveVarchar;
 import org.apache.hadoop.hive.serde2.typeinfo.TypeInfo;
 import org.apache.hadoop.hive.serde2.typeinfo.TypeInfoFactory;
 
@@ -53,64 +49,25 @@ import java.util.List;
  */
 public class TypeInfoLogicalTypeVisitor extends LogicalTypeDefaultVisitor<TypeInfo> {
   private final LogicalType type;
-  // whether to check type precision
-  private final boolean checkPrecision;
 
-  TypeInfoLogicalTypeVisitor(DataType dataType, boolean checkPrecision) {
-    this(dataType.getLogicalType(), checkPrecision);
+  TypeInfoLogicalTypeVisitor(DataType dataType) {
+    this(dataType.getLogicalType());
   }
 
-  TypeInfoLogicalTypeVisitor(LogicalType type, boolean checkPrecision) {
+  TypeInfoLogicalTypeVisitor(LogicalType type) {
     this.type = type;
-    this.checkPrecision = checkPrecision;
   }
 
   @Override
   public TypeInfo visit(CharType charType) {
-    // Flink and Hive have different length limit for CHAR. Promote it to STRING if it
-    // exceeds the limits of
-    // Hive and we're told not to check precision. This can be useful when calling Hive UDF
-    // to process data.
-    if (charType.getLength() > HiveChar.MAX_CHAR_LENGTH || charType.getLength() < 1) {
-      if (checkPrecision) {
-        throw new HoodieCatalogException(
-            String.format(
-                "HiveCatalog doesn't support char type with length of '%d'. "
-                    + "The supported length is [%d, %d]",
-                charType.getLength(), 1, HiveChar.MAX_CHAR_LENGTH));
-      } else {
-        return TypeInfoFactory.stringTypeInfo;
-      }
-    }
-    return TypeInfoFactory.getCharTypeInfo(charType.getLength());
+    // hoodie only supports avro compatible data type
+    return TypeInfoFactory.stringTypeInfo;
   }
 
   @Override
   public TypeInfo visit(VarCharType varCharType) {
-    // Flink's StringType is defined as VARCHAR(Integer.MAX_VALUE)
-    // We don't have more information in LogicalTypeRoot to distinguish StringType and a
-    // VARCHAR(Integer.MAX_VALUE) instance
-    // Thus always treat VARCHAR(Integer.MAX_VALUE) as StringType
-    if (varCharType.getLength() == Integer.MAX_VALUE) {
-      return TypeInfoFactory.stringTypeInfo;
-    }
-    // Flink and Hive have different length limit for VARCHAR. Promote it to STRING if it
-    // exceeds the limits of
-    // Hive and we're told not to check precision. This can be useful when calling Hive UDF
-    // to process data.
-    if (varCharType.getLength() > HiveVarchar.MAX_VARCHAR_LENGTH
-        || varCharType.getLength() < 1) {
-      if (checkPrecision) {
-        throw new HoodieCatalogException(
-            String.format(
-                "HiveCatalog doesn't support varchar type with length of '%d'. "
-                    + "The supported length is [%d, %d]",
-                varCharType.getLength(), 1, HiveVarchar.MAX_VARCHAR_LENGTH));
-      } else {
-        return TypeInfoFactory.stringTypeInfo;
-      }
-    }
-    return TypeInfoFactory.getVarcharTypeInfo(varCharType.getLength());
+    // hoodie only supports avro compatible data type
+    return TypeInfoFactory.stringTypeInfo;
   }
 
   @Override
@@ -140,12 +97,14 @@ public class TypeInfoLogicalTypeVisitor extends LogicalTypeDefaultVisitor<TypeIn
 
   @Override
   public TypeInfo visit(TinyIntType tinyIntType) {
-    return TypeInfoFactory.byteTypeInfo;
+    // hoodie only supports avro compatible data type
+    return TypeInfoFactory.intTypeInfo;
   }
 
   @Override
   public TypeInfo visit(SmallIntType smallIntType) {
-    return TypeInfoFactory.shortTypeInfo;
+    // hoodie only supports avro compatible data type
+    return TypeInfoFactory.intTypeInfo;
   }
 
   @Override
@@ -175,11 +134,14 @@ public class TypeInfoLogicalTypeVisitor extends LogicalTypeDefaultVisitor<TypeIn
 
   @Override
   public TypeInfo visit(TimestampType timestampType) {
-    if (checkPrecision && timestampType.getPrecision() == 9) {
-      throw new HoodieCatalogException(
-          "HoodieCatalog currently does not support timestamp of precision 9");
+    int precision = timestampType.getPrecision();
+    // see org.apache.hudi.hive.util.HiveSchemaUtil#convertField for details.
+    // default supports timestamp
+    if (precision == 6) {
+      return TypeInfoFactory.timestampTypeInfo;
+    } else {
+      return TypeInfoFactory.longTypeInfo;
     }
-    return TypeInfoFactory.timestampTypeInfo;
   }
 
   @Override
