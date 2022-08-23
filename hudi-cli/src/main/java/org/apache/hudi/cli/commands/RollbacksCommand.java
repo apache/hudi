@@ -102,17 +102,17 @@ public class RollbacksCommand implements CommandMarker {
         activeTimeline.getInstantDetails(new HoodieInstant(State.COMPLETED, ROLLBACK_ACTION, rollbackInstant)).get(),
         HoodieRollbackMetadata.class);
     metadata.getPartitionMetadata().forEach((key, value) -> Stream
-            .concat(value.getSuccessDeleteFiles().stream().map(f -> Pair.of(f, true)),
-                    value.getFailedDeleteFiles().stream().map(f -> Pair.of(f, false)))
-            .forEach(fileWithDeleteStatus -> {
-              Comparable[] row = new Comparable[5];
-              row[0] = metadata.getStartRollbackTime();
-              row[1] = metadata.getCommitsRollback().toString();
-              row[2] = key;
-              row[3] = fileWithDeleteStatus.getLeft();
-              row[4] = fileWithDeleteStatus.getRight();
-              rows.add(row);
-            }));
+        .concat(value.getSuccessDeleteFiles().stream().map(f -> Pair.of(f, true)),
+            value.getFailedDeleteFiles().stream().map(f -> Pair.of(f, false)))
+        .forEach(fileWithDeleteStatus -> {
+          Comparable[] row = new Comparable[5];
+          row[0] = metadata.getStartRollbackTime();
+          row[1] = metadata.getCommitsRollback().toString();
+          row[2] = key;
+          row[3] = fileWithDeleteStatus.getLeft();
+          row[4] = fileWithDeleteStatus.getRight();
+          rows.add(row);
+        }));
 
     TableHeader header = new TableHeader().addTableHeaderField(HoodieTableHeaderFields.HEADER_INSTANT)
         .addTableHeaderField(HoodieTableHeaderFields.HEADER_ROLLBACK_INSTANT)

@@ -27,7 +27,9 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
@@ -35,6 +37,7 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.testutils.providers.SparkProvider;
 
@@ -46,6 +49,9 @@ import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.SparkSession;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -53,6 +59,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.HoodieTableMetaClient.reload;
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.REQUESTED;
@@ -74,6 +81,7 @@ public class TestHoodieIndexer extends HoodieCommonTestHarness implements SparkP
   private static transient SQLContext sqlContext;
   private static transient JavaSparkContext jsc;
   private static transient HoodieSparkEngineContext context;
+  private static int colStatsFileGroupCount;
 
   @BeforeEach
   public void init() throws IOException {
@@ -86,6 +94,7 @@ public class TestHoodieIndexer extends HoodieCommonTestHarness implements SparkP
       sqlContext = spark.sqlContext();
       jsc = new JavaSparkContext(spark.sparkContext());
       context = new HoodieSparkEngineContext(jsc);
+      colStatsFileGroupCount = HoodieMetadataConfig.METADATA_INDEX_COLUMN_STATS_FILE_GROUP_COUNT.defaultValue();
     }
     initPath();
     initMetaClient();
@@ -106,7 +115,7 @@ public class TestHoodieIndexer extends HoodieCommonTestHarness implements SparkP
     config.tableName = "indexer_test";
     config.indexTypes = "FILES,BLOOM_FILTERS,COLUMN_STATS";
     HoodieIndexer indexer = new HoodieIndexer(jsc, config);
-    List<MetadataPartitionType> partitionTypes = indexer.getRequestedPartitionTypes(config.indexTypes);
+    List<MetadataPartitionType> partitionTypes = indexer.getRequestedPartitionTypes(config.indexTypes, Option.empty());
     assertTrue(partitionTypes.contains(FILES));
     assertTrue(partitionTypes.contains(BLOOM_FILTERS));
     assertTrue(partitionTypes.contains(COLUMN_STATS));
@@ -145,7 +154,7 @@ public class TestHoodieIndexer extends HoodieCommonTestHarness implements SparkP
     assertTrue(reload(metaClient).getTableConfig().getMetadataPartitions().contains(BLOOM_FILTERS.getPartitionPath()));
 
     // build indexer config which has only column_stats enabled (files and bloom filter is already enabled)
-    indexMetadataPartitionsAndAssert(COLUMN_STATS, Arrays.asList(new MetadataPartitionType[]{FILES, BLOOM_FILTERS}), Collections.emptyList());
+    indexMetadataPartitionsAndAssert(COLUMN_STATS, Arrays.asList(new MetadataPartitionType[] {FILES, BLOOM_FILTERS}), Collections.emptyList());
   }
 
   @Test
@@ -160,7 +169,41 @@ public class TestHoodieIndexer extends HoodieCommonTestHarness implements SparkP
     assertFalse(reload(metaClient).getTableConfig().getMetadataPartitions().contains(FILES.getPartitionPath()));
 
     // build indexer config which has only files enabled
-    indexMetadataPartitionsAndAssert(FILES, Collections.emptyList(), Arrays.asList(new MetadataPartitionType[]{COLUMN_STATS, BLOOM_FILTERS}));
+    indexMetadataPartitionsAndAssert(FILES, Collections.emptyList(), Arrays.asList(new MetadataPartitionType[] {COLUMN_STATS, BLOOM_FILTERS}));
+  }
+
+  private static Stream<Arguments> colStatsFileGroupCountParams() {
+    return Stream.of(
+        Arguments.of(1),
+        Arguments.of(2),
+        Arguments.of(4),
+        Arguments.of(8)
+    );
+  }
+
+  @ParameterizedTest
+  @MethodSource("colStatsFileGroupCountParams")
+  public void testColStatsFileGroupCount(int colStatsFileGroupCount) {
+    TestHoodieIndexer.colStatsFileGroupCount = colStatsFileGroupCount;
+    initTestDataGenerator();
+    tableName = "indexer_test";
+    // enable files and bloom_filters on the regular write client
+    HoodieMetadataConfig.Builder metadataConfigBuilder = getMetadataConfigBuilder(false, false).withMetadataIndexBloomFilter(true);
+    initializeWriteClient(metadataConfigBuilder.build());
+
+    // validate table config
+    assertFalse(reload(metaClient).getTableConfig().getMetadataPartitions().contains(FILES.getPartitionPath()));
+
+    // build indexer config which has only files enabled
+    indexMetadataPartitionsAndAssert(FILES, Collections.emptyList(), Arrays.asList(new MetadataPartitionType[] {COLUMN_STATS, BLOOM_FILTERS}));
+
+    // build indexer config which has only col stats enabled
+    indexMetadataPartitionsAndAssert(COLUMN_STATS, Collections.singletonList(FILES), Arrays.asList(new MetadataPartitionType[] {BLOOM_FILTERS}));
+
+    HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder().setConf(metaClient.getHadoopConf()).setBasePath(metaClient.getMetaPath() + "/metadata").build();
+    List<FileSlice> partitionFileSlices =
+        HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(metadataMetaClient, COLUMN_STATS.getPartitionPath());
+    assertEquals(partitionFileSlices.size(), colStatsFileGroupCount);
   }
 
   /**
@@ -198,7 +241,15 @@ public class TestHoodieIndexer extends HoodieCommonTestHarness implements SparkP
     assertFalse(metadataPartitionExists(basePath, context, FILES));
 
     // trigger FILES partition and indexing should succeed.
-    indexMetadataPartitionsAndAssert(FILES, Collections.emptyList(), Arrays.asList(new MetadataPartitionType[]{COLUMN_STATS, BLOOM_FILTERS}));
+    indexMetadataPartitionsAndAssert(FILES, Collections.emptyList(), Arrays.asList(new MetadataPartitionType[] {COLUMN_STATS, BLOOM_FILTERS}));
+
+    // build indexer config which has only col stats enabled
+    indexMetadataPartitionsAndAssert(COLUMN_STATS, Collections.singletonList(FILES), Arrays.asList(new MetadataPartitionType[] {BLOOM_FILTERS}));
+
+    HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder().setConf(metaClient.getHadoopConf()).setBasePath(metaClient.getMetaPath() + "/metadata").build();
+    List<FileSlice> partitionFileSlices =
+        HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(metadataMetaClient, COLUMN_STATS.getPartitionPath());
+    assertEquals(partitionFileSlices.size(), HoodieMetadataConfig.METADATA_INDEX_COLUMN_STATS_FILE_GROUP_COUNT.defaultValue());
   }
 
   private void initializeWriteClient(HoodieMetadataConfig metadataConfig) {
@@ -222,6 +273,9 @@ public class TestHoodieIndexer extends HoodieCommonTestHarness implements SparkP
     config.indexTypes = partitionTypeToIndex.name();
     config.runningMode = SCHEDULE_AND_EXECUTE;
     config.propsFilePath = propsPath;
+    if (partitionTypeToIndex.getPartitionPath().equals(COLUMN_STATS.getPartitionPath())) {
+      config.configs.add(HoodieMetadataConfig.METADATA_INDEX_COLUMN_STATS_FILE_GROUP_COUNT.key() + "=" + colStatsFileGroupCount);
+    }
     // start the indexer and validate files index is completely built out
     HoodieIndexer indexer = new HoodieIndexer(jsc, config);
     assertEquals(0, indexer.start(0));

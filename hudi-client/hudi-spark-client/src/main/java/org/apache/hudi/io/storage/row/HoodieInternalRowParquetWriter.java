@@ -22,6 +22,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hudi.io.storage.HoodieParquetConfig;
 import org.apache.hudi.io.storage.HoodieBaseParquetWriter;
 import org.apache.spark.sql.catalyst.InternalRow;
+import org.apache.spark.unsafe.types.UTF8String;
 
 import java.io.IOException;
 
@@ -41,7 +42,7 @@ public class HoodieInternalRowParquetWriter extends HoodieBaseParquetWriter<Inte
   }
 
   @Override
-  public void writeRow(String key, InternalRow row) throws IOException {
+  public void writeRow(UTF8String key, InternalRow row) throws IOException {
     super.write(row);
     writeSupport.add(key);
   }

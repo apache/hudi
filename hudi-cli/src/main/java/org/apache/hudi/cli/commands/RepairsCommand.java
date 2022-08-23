@@ -33,12 +33,11 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.avro.AvroRuntimeException;
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.common.util.StringUtils;
-
 import org.apache.log4j.Logger;
 import org.apache.spark.launcher.SparkLauncher;
 import org.apache.spark.util.Utils;
@@ -46,7 +45,6 @@ import org.springframework.shell.core.CommandMarker;
 import org.springframework.shell.core.annotation.CliCommand;
 import org.springframework.shell.core.annotation.CliOption;
 import org.springframework.stereotype.Component;
-import scala.collection.JavaConverters;
 
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -55,6 +53,8 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
+
+import scala.collection.JavaConverters;
 
 import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME;
 
@@ -151,8 +151,7 @@ public class RepairsCommand implements CommandMarker {
 
   @CliCommand(value = "repair overwrite-hoodie-props", help = "Overwrite hoodie.properties with provided file. Risky operation. Proceed with caution!")
   public String overwriteHoodieProperties(
-      @CliOption(key = {"new-props-file"}, help = "Path to a properties file on local filesystem to overwrite the table's hoodie.properties with")
-      final String overwriteFilePath) throws IOException {
+      @CliOption(key = {"new-props-file"}, help = "Path to a properties file on local filesystem to overwrite the table's hoodie.properties with") final String overwriteFilePath) throws IOException {
 
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
     Properties newProps = new Properties();
@@ -170,7 +169,7 @@ public class RepairsCommand implements CommandMarker {
     String[][] rows = new String[allPropKeys.size()][];
     int ind = 0;
     for (String propKey : allPropKeys) {
-      String[] row = new String[]{
+      String[] row = new String[] {
           propKey,
           oldProps.getOrDefault(propKey, "null"),
           newProps.getOrDefault(propKey, "null").toString()

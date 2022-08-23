@@ -33,17 +33,17 @@ import scala.collection.JavaConverters._
 class ShowBootstrapMappingProcedure extends BaseProcedure with ProcedureBuilder {
   private val PARAMETERS = Array[ProcedureParameter](
     ProcedureParameter.required(0, "table", DataTypes.StringType, None),
-    ProcedureParameter.optional(1, "partitionPath", DataTypes.StringType, ""),
-    ProcedureParameter.optional(2, "fileIds", DataTypes.StringType, ""),
+    ProcedureParameter.optional(1, "partition_path", DataTypes.StringType, ""),
+    ProcedureParameter.optional(2, "file_ids", DataTypes.StringType, ""),
     ProcedureParameter.optional(3, "limit", DataTypes.IntegerType, 10),
-    ProcedureParameter.optional(4, "sortBy", DataTypes.StringType, "partition"),
+    ProcedureParameter.optional(4, "sort_by", DataTypes.StringType, "partition"),
     ProcedureParameter.optional(5, "desc", DataTypes.BooleanType, false)
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
     StructField("partition", DataTypes.StringType, nullable = true, Metadata.empty),
-    StructField("fileid", DataTypes.StringType, nullable = true, Metadata.empty),
-    StructField("source_basepath", DataTypes.StringType, nullable = true, Metadata.empty),
+    StructField("file_id", DataTypes.StringType, nullable = true, Metadata.empty),
+    StructField("source_base_path", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("source_partition", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("source_file", DataTypes.StringType, nullable = true, Metadata.empty))
   )

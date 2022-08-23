@@ -263,6 +263,57 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
   }
 
   @Test
+  public void testTimelineWithSavepointAndHoles() {
+    timeline = new MockHoodieTimeline(Stream.of(
+        new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "01"),
+        new HoodieInstant(State.COMPLETED, HoodieTimeline.SAVEPOINT_ACTION, "01"),
+        new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "03"),
+        new HoodieInstant(State.COMPLETED, HoodieTimeline.SAVEPOINT_ACTION, "03"),
+        new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "05") // this can be DELTA_COMMIT/REPLACE_COMMIT as well
+    ).collect(Collectors.toList()));
+    assertTrue(timeline.isBeforeTimelineStarts("00"));
+    assertTrue(timeline.isBeforeTimelineStarts("01"));
+    assertTrue(timeline.isBeforeTimelineStarts("02"));
+    assertTrue(timeline.isBeforeTimelineStarts("03"));
+    assertTrue(timeline.isBeforeTimelineStarts("04"));
+    assertFalse(timeline.isBeforeTimelineStarts("05"));
+    assertFalse(timeline.isBeforeTimelineStarts("06"));
+
+    // with an inflight savepoint in between
+    timeline = new MockHoodieTimeline(Stream.of(
+        new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "01"),
+        new HoodieInstant(State.INFLIGHT, HoodieTimeline.SAVEPOINT_ACTION, "01"),
+        new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "03"),
+        new HoodieInstant(State.COMPLETED, HoodieTimeline.SAVEPOINT_ACTION, "03"),
+        new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "05")
+    ).collect(Collectors.toList()));
+    assertTrue(timeline.isBeforeTimelineStarts("00"));
+    assertTrue(timeline.isBeforeTimelineStarts("01"));
+    assertTrue(timeline.isBeforeTimelineStarts("02"));
+    assertTrue(timeline.isBeforeTimelineStarts("03"));
+    assertTrue(timeline.isBeforeTimelineStarts("04"));
+    assertFalse(timeline.isBeforeTimelineStarts("05"));
+    assertFalse(timeline.isBeforeTimelineStarts("06"));
+
+    // with a pending replacecommit after savepoints
+    timeline = new MockHoodieTimeline(Stream.of(
+        new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "01"),
+        new HoodieInstant(State.COMPLETED, HoodieTimeline.SAVEPOINT_ACTION, "01"),
+        new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "03"),
+        new HoodieInstant(State.COMPLETED, HoodieTimeline.SAVEPOINT_ACTION, "03"),
+        new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "05"),
+        new HoodieInstant(State.INFLIGHT, HoodieTimeline.REPLACE_COMMIT_ACTION, "06")
+    ).collect(Collectors.toList()));
+    assertTrue(timeline.isBeforeTimelineStarts("00"));
+    assertTrue(timeline.isBeforeTimelineStarts("01"));
+    assertTrue(timeline.isBeforeTimelineStarts("02"));
+    assertTrue(timeline.isBeforeTimelineStarts("03"));
+    assertTrue(timeline.isBeforeTimelineStarts("04"));
+    assertFalse(timeline.isBeforeTimelineStarts("05"));
+    assertFalse(timeline.isBeforeTimelineStarts("06"));
+  }
+
+  @Test
   public void testTimelineGetOperations() {
     List<HoodieInstant> allInstants = getAllInstants();
     Supplier<Stream<HoodieInstant>> sup = allInstants::stream;

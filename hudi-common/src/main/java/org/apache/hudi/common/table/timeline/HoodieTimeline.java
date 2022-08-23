@@ -306,6 +306,15 @@ public interface HoodieTimeline extends Serializable {
   boolean isBeforeTimelineStarts(String ts);
 
   /**
+   * First non-savepoint commit in the active data timeline. Examples:
+   * 1. An active data timeline C1, C2, C3, C4, C5 returns C1.
+   * 2. If archival is allowed beyond savepoint and let's say C1, C2, C4 have been archived
+   * while C3, C5 have been savepointed, then for the data timeline
+   * C3, C3_Savepoint, C5, C5_Savepoint, C6, C7 returns C6.
+   */
+  Option<HoodieInstant> getFirstNonSavepointCommit();
+
+  /**
    * Read the completed instant details.
    */
   Option<byte[]> getInstantDetails(HoodieInstant instant);

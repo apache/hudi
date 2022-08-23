@@ -39,6 +39,7 @@ import org.apache.hudi.common.table.timeline.dto.FileSliceDTO;
 import org.apache.hudi.common.table.timeline.dto.InstantDTO;
 import org.apache.hudi.common.table.timeline.dto.TimelineDTO;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.RetryHelper;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -116,7 +117,6 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   public static final String FILEID_PARAM = "fileid";
   public static final String LAST_INSTANT_TS = "lastinstantts";
   public static final String TIMELINE_HASH = "timelinehash";
-  public static final String NUM_INSTANTS = "numinstants";
   public static final String REFRESH_OFF = "refreshoff";
   public static final String INCLUDE_FILES_IN_PENDING_COMPACTION_PARAM = "includependingcompaction";
 
@@ -133,22 +133,35 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
 
   private boolean closed = false;
 
+  private RetryHelper<Response> retryHelper;
+
+  private final HttpRequestCheckedFunction urlCheckedFunc;
+
   private enum RequestMethod {
     GET, POST
   }
 
   public RemoteHoodieTableFileSystemView(String server, int port, HoodieTableMetaClient metaClient) {
-    this(server, port, metaClient, 300);
+    this(metaClient, FileSystemViewStorageConfig.newBuilder().withRemoteServerHost(server).withRemoteServerPort(port).build());
   }
 
-  public RemoteHoodieTableFileSystemView(String server, int port, HoodieTableMetaClient metaClient, int timeoutSecs) {
+  public RemoteHoodieTableFileSystemView(HoodieTableMetaClient metaClient, FileSystemViewStorageConfig viewConf) {
     this.basePath = metaClient.getBasePath();
-    this.serverHost = server;
-    this.serverPort = port;
     this.mapper = new ObjectMapper();
     this.metaClient = metaClient;
     this.timeline = metaClient.getActiveTimeline().filterCompletedAndCompactionInstants();
-    this.timeoutSecs = timeoutSecs;
+    this.serverHost = viewConf.getRemoteViewServerHost();
+    this.serverPort = viewConf.getRemoteViewServerPort();
+    this.timeoutSecs = viewConf.getRemoteTimelineClientTimeoutSecs();
+    this.urlCheckedFunc = new HttpRequestCheckedFunction(this.timeoutSecs * 1000);
+    if (viewConf.isRemoteTimelineClientRetryEnabled()) {
+      retryHelper =  new RetryHelper(
+              viewConf.getRemoteTimelineClientMaxRetryIntervalMs(),
+              viewConf.getRemoteTimelineClientMaxRetryNumbers(),
+              viewConf.getRemoteTimelineInitialRetryIntervalMs(),
+              viewConf.getRemoteTimelineClientRetryExceptions(),
+              "Sending request");
+    }
   }
 
   private <T> T executeRequest(String requestPath, Map<String, String> queryParameters, TypeReference reference,
@@ -163,21 +176,12 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
     // Adding mandatory parameters - Last instants affecting file-slice
     timeline.lastInstant().ifPresent(instant -> builder.addParameter(LAST_INSTANT_TS, instant.getTimestamp()));
     builder.addParameter(TIMELINE_HASH, timeline.getTimelineHash());
-    builder.addParameter(NUM_INSTANTS, timeline.countInstants() + "");
 
     String url = builder.toString();
     LOG.info("Sending request : (" + url + ")");
-    Response response;
-    int timeout = this.timeoutSecs * 1000; // msec
-    switch (method) {
-      case GET:
-        response = Request.Get(url).connectTimeout(timeout).socketTimeout(timeout).execute();
-        break;
-      case POST:
-      default:
-        response = Request.Post(url).connectTimeout(timeout).socketTimeout(timeout).execute();
-        break;
-    }
+    // Reset url and method, to avoid repeatedly instantiating objects.
+    urlCheckedFunc.setUrlAndMethod(url, method);
+    Response response =  retryHelper != null ? retryHelper.tryWith(urlCheckedFunc).start() : urlCheckedFunc.get();
     String content = response.returnContent().asString();
     return (T) mapper.readValue(content, reference);
   }
@@ -495,6 +499,35 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
       return Option.fromJavaOptional(dataFiles.stream().map(BaseFileDTO::toHoodieBaseFile).findFirst());
     } catch (IOException e) {
       throw new HoodieRemoteException(e);
+    }
+  }
+
+  /**
+   * For remote HTTP requests, to avoid repeatedly instantiating objects.
+   */
+  private class HttpRequestCheckedFunction implements RetryHelper.CheckedFunction<Response> {
+    private String url;
+    private RequestMethod method;
+    private final int timeoutMs;
+
+    public void setUrlAndMethod(String url, RequestMethod method) {
+      this.method = method;
+      this.url = url;
+    }
+    
+    public HttpRequestCheckedFunction(int timeoutMs) {
+      this.timeoutMs = timeoutMs;
+    }
+
+    @Override
+    public Response get() throws IOException {
+      switch (method) {
+        case GET:
+          return Request.Get(url).connectTimeout(timeoutMs).socketTimeout(timeoutMs).execute();
+        case POST:
+        default:
+          return Request.Post(url).connectTimeout(timeoutMs).socketTimeout(timeoutMs).execute();
+      }
     }
   }
 }

@@ -616,6 +616,24 @@ public class FSUtils {
   }
 
   /**
+   * Extracts the file name from the relative path based on the table base path.  For example:
+   * "/2022/07/29/file1.parquet", "/2022/07/29" -> "file1.parquet"
+   * "2022/07/29/file2.parquet", "2022/07/29" -> "file2.parquet"
+   * "/file3.parquet", "" -> "file3.parquet"
+   * "file4.parquet", "" -> "file4.parquet"
+   *
+   * @param filePathWithPartition the relative file path based on the table base path.
+   * @param partition             the relative partition path.  For partitioned table, `partition` contains the relative partition path;
+   *                              for non-partitioned table, `partition` is empty
+   * @return Extracted file name in String.
+   */
+  public static String getFileName(String filePathWithPartition, String partition) {
+    int offset = StringUtils.isNullOrEmpty(partition)
+        ? (filePathWithPartition.startsWith("/") ? 1 : 0) : partition.length() + 1;
+    return filePathWithPartition.substring(offset);
+  }
+
+  /**
    * Get DFS full partition path (e.g. hdfs://ip-address:8020:/<absolute path>)
    */
   public static String getDFSFullPartitionPath(FileSystem fs, Path fullPartitionPath) {

@@ -258,6 +258,7 @@ trait ProvidesHoodieConfig extends Logging {
 
     val options = hoodieCatalogTable.catalogProperties
     val enableHive = isUsingHiveCatalog(sparkSession)
+    val partitionFields = hoodieCatalogTable.partitionFields.mkString(",")
 
     withSparkConf(sparkSession, options) {
       Map(
@@ -273,7 +274,11 @@ trait ProvidesHoodieConfig extends Logging {
         HoodieSyncConfig.META_SYNC_ENABLED.key -> enableHive.toString,
         HiveSyncConfigHolder.HIVE_SYNC_ENABLED.key -> enableHive.toString,
         HiveSyncConfigHolder.HIVE_SYNC_MODE.key -> hiveSyncConfig.getStringOrDefault(HiveSyncConfigHolder.HIVE_SYNC_MODE, HiveSyncMode.HMS.name()),
+        HoodieSyncConfig.META_SYNC_DATABASE_NAME.key -> hiveSyncConfig.getStringOrDefault(HoodieSyncConfig.META_SYNC_DATABASE_NAME),
+        HoodieSyncConfig.META_SYNC_TABLE_NAME.key -> hiveSyncConfig.getStringOrDefault(HoodieSyncConfig.META_SYNC_TABLE_NAME),
         HiveSyncConfigHolder.HIVE_SUPPORT_TIMESTAMP_TYPE.key -> hiveSyncConfig.getBoolean(HiveSyncConfigHolder.HIVE_SUPPORT_TIMESTAMP_TYPE).toString,
+        HoodieSyncConfig.META_SYNC_PARTITION_FIELDS.key -> partitionFields,
+        HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key -> hiveSyncConfig.getStringOrDefault(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS),
         HoodieWriteConfig.DELETE_PARALLELISM_VALUE.key -> hoodieProps.getString(HoodieWriteConfig.DELETE_PARALLELISM_VALUE.key, "200"),
         SqlKeyGenerator.PARTITION_SCHEMA -> partitionSchema.toDDL
       )

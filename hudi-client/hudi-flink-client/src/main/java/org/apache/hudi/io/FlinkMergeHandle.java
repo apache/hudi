@@ -143,7 +143,13 @@ public class FlinkMergeHandle<T extends HoodieRecordPayload, I, K, O>
           break;
         }
 
-        rolloverPaths.add(newFilePath);
+        // Override the old file name,
+        // In rare cases, when a checkpoint was aborted and the instant time
+        // is reused, the merge handle generates a new file name
+        // with the reused instant time of last checkpoint, which is duplicate,
+        // use the same name file as new base file in case data loss.
+        oldFilePath = newFilePath;
+        rolloverPaths.add(oldFilePath);
         newFileName = newFileNameWithRollover(rollNumber++);
         newFilePath = makeNewFilePath(partitionPath, newFileName);
         LOG.warn("Duplicate write for MERGE bucket with path: " + oldFilePath + ", rolls over to new path: " + newFilePath);
@@ -159,6 +165,12 @@ public class FlinkMergeHandle<T extends HoodieRecordPayload, I, K, O>
   protected String newFileNameWithRollover(int rollNumber) {
     return FSUtils.makeBaseFileName(instantTime, writeToken + "-" + rollNumber,
         this.fileId, hoodieTable.getBaseFileExtension());
+  }
+
+  @Override
+  protected void setWriteStatusPath() {
+    // if there was rollover, should set up the path as the initial new file path.
+    writeStatus.getStat().setPath(new Path(config.getBasePath()), getWritePath());
   }
 
   @Override
@@ -193,6 +205,12 @@ public class FlinkMergeHandle<T extends HoodieRecordPayload, I, K, O>
         throw new HoodieIOException("Error when clean the temporary rollover data file: " + path, e);
       }
     }
+    final Path desiredPath = rolloverPaths.get(0);
+    try {
+      fs.rename(newFilePath, desiredPath);
+    } catch (IOException e) {
+      throw new HoodieIOException("Error when rename the temporary roll file: " + newFilePath + " to: " + desiredPath, e);
+    }
   }
 
   @Override
@@ -216,6 +234,6 @@ public class FlinkMergeHandle<T extends HoodieRecordPayload, I, K, O>
 
   @Override
   public Path getWritePath() {
-    return newFilePath;
+    return rolloverPaths.size() > 0 ? rolloverPaths.get(0) : newFilePath;
   }
 }

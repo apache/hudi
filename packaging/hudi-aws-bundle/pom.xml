@@ -24,7 +24,7 @@
     <parent>
         <artifactId>hudi</artifactId>
         <groupId>org.apache.hudi</groupId>
-        <version>0.12.0-SNAPSHOT</version>
+        <version>0.13.0-SNAPSHOT</version>
         <relativePath>../../pom.xml</relativePath>
     </parent>
     <modelVersion>4.0.0</modelVersion>
@@ -84,6 +84,7 @@
                                     <include>com.amazonaws:aws-java-sdk-dynamodb</include>
                                     <include>com.amazonaws:aws-java-sdk-core</include>
                                     <include>com.amazonaws:aws-java-sdk-glue</include>
+                                    <include>io.dropwizard.metrics:metrics-core</include>
                                     <include>com.beust:jcommander</include>
                                     <include>commons-io:commons-io</include>
                                     <include>org.apache.hbase:hbase-common</include>
@@ -148,6 +149,10 @@
                                 <relocation>
                                     <pattern>org.apache.avro.</pattern>
                                     <shadedPattern>org.apache.hudi.org.apache.avro.</shadedPattern>
+                                </relocation>
+                                <relocation>
+                                    <pattern>com.codahale.metrics.</pattern>
+                                    <shadedPattern>org.apache.hudi.com.codahale.metrics.</shadedPattern>
                                 </relocation>
                                 <!-- The classes below in org.apache.hadoop.metrics2 package come from
                                 hbase-hadoop-compat and hbase-hadoop2-compat, which have to be shaded one by one,
@@ -279,7 +284,7 @@
             <artifactId>hudi-aws</artifactId>
             <version>${project.version}</version>
         </dependency>
-        <!-- Need parquet and avro to run AWSGlueCatalogSyncTool using run_sync_tool with this bundle.
+        <!-- Need parquet and avro to run AwsGlueCatalogSyncTool using run_sync_tool with this bundle.
         Parquet and avro from other packages have already been shaded above-->
         <dependency>
             <groupId>org.apache.parquet</groupId>
