@@ -19,6 +19,7 @@ package org.apache.hudi
 
 import org.apache.hudi.ColumnStatsIndexSupport.composeIndexSchema
 import org.apache.hudi.testutils.HoodieClientTestBase
+import org.apache.spark.sql.HoodieCatalystExpressionUtils.resolveExpr
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.encoders.DummyExpressionHolder
 import org.apache.spark.sql.catalyst.expressions.{Expression, InSet, Not}
@@ -29,7 +30,7 @@ import org.apache.spark.sql.functions.{col, lower}
 import org.apache.spark.sql.hudi.DataSkippingUtils
 import org.apache.spark.sql.internal.SQLConf.SESSION_LOCAL_TIMEZONE
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.{Column, HoodieCatalystExpressionUtils, Row, SparkSession}
+import org.apache.spark.sql.{Column, Row, SparkSession}
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.params.ParameterizedTest
@@ -63,8 +64,6 @@ case class IndexRow(fileName: String,
 
 class TestDataSkippingUtils extends HoodieClientTestBase with SparkAdapterSupport {
 
-  val exprUtils: HoodieCatalystExpressionUtils = sparkAdapter.getCatalystExpressionUtils
-
   var spark: SparkSession = _
 
   @BeforeEach
@@ -97,7 +96,7 @@ class TestDataSkippingUtils extends HoodieClientTestBase with SparkAdapterSuppor
     // is consistent with the fixtures
     spark.sqlContext.setConf(SESSION_LOCAL_TIMEZONE.key, "UTC")
 
-    val resolvedFilterExpr: Expression = exprUtils.resolveExpr(spark, sourceFilterExprStr, sourceTableSchema)
+    val resolvedFilterExpr: Expression = resolveExpr(spark, sourceFilterExprStr, sourceTableSchema)
     val optimizedExpr = optimize(resolvedFilterExpr)
     val rows: Seq[String] = applyFilterExpr(optimizedExpr, input)
 
@@ -113,7 +112,7 @@ class TestDataSkippingUtils extends HoodieClientTestBase with SparkAdapterSuppor
     // is consistent with the fixtures
     spark.sqlContext.setConf(SESSION_LOCAL_TIMEZONE.key, "UTC")
 
-    val resolvedFilterExpr: Expression = exprUtils.resolveExpr(spark, filterExpr, sourceTableSchema)
+    val resolvedFilterExpr: Expression = resolveExpr(spark, filterExpr, sourceTableSchema)
     val rows: Seq[String] = applyFilterExpr(resolvedFilterExpr, input)
 
     assertEquals(expectedOutput, rows)
@@ -122,7 +121,7 @@ class TestDataSkippingUtils extends HoodieClientTestBase with SparkAdapterSuppor
   @ParameterizedTest
   @MethodSource(Array("testStringsLookupFilterExpressionsSource"))
   def testStringsLookupFilterExpressions(sourceExpr: Expression, input: Seq[IndexRow], output: Seq[String]): Unit = {
-    val resolvedExpr = exprUtils.resolveExpr(spark, sourceExpr, sourceTableSchema)
+    val resolvedExpr = resolveExpr(spark, sourceExpr, sourceTableSchema)
     val lookupFilter = DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr(resolvedExpr, indexSchema)
 
     val spark2 = spark

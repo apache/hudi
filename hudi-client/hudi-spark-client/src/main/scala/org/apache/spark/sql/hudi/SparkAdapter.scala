@@ -84,7 +84,7 @@ trait SparkAdapter extends Serializable {
   /**
    * Create the SparkRowSerDe.
    */
-  def createSparkRowSerDe(encoder: ExpressionEncoder[Row]): SparkRowSerDe
+  def createSparkRowSerDe(schema: StructType): SparkRowSerDe
 
   /**
    * Create the hoodie's extended spark sql parser.

@@ -90,9 +90,4 @@ trait HoodieCatalystPlansUtils {
   def createInsertInto(table: LogicalPlan, partition: Map[String, Option[String]],
                        query: LogicalPlan, overwrite: Boolean, ifPartitionNotExists: Boolean): LogicalPlan
 
-  /**
-   * Create Like expression.
-   */
-  def createLike(left: Expression, right: Expression): Expression
-
 }
