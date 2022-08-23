@@ -15,9 +15,9 @@
 #  See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG HADOOP_VERSION=3.1.0
+ARG HADOOP_VERSION=2.8.4 
 ARG HADOOP_WEBHDFS_PORT=50070
-FROM apachehudi/hudi-hadoop_${HADOOP_VERSION}-base:latest
+FROM rchertara/hudi-hadoop_${HADOOP_VERSION}-base:image
 
 ENV HADOOP_WEBHDFS_PORT ${HADOOP_WEBHDFS_PORT}
 

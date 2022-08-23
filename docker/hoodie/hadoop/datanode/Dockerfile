@@ -15,9 +15,9 @@
 #  See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG HADOOP_VERSION=3.1.0
+ARG HADOOP_VERSION=2.8.4 
 ARG HADOOP_DN_PORT=50075
-FROM apachehudi/hudi-hadoop_${HADOOP_VERSION}-base:latest
+FROM rchertara/hudi-hadoop_${HADOOP_VERSION}-base:image
 
 ENV HADOOP_DN_PORT ${HADOOP_DN_PORT}
 
