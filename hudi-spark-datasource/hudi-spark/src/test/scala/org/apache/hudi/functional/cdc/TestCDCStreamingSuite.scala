@@ -45,8 +45,8 @@ class TestCDCStreamingSuite extends TestCDCBase {
    *     and write to country_to_population_tbl.
    */
   @ParameterizedTest
-  @CsvSource(Array("false", "true"))
-  def cdcStreaming(cdcSupplementalLogging: Boolean): Unit = {
+  @CsvSource(Array("min_cdc_data", "cdc_data_before", "cdc_data_before_after"))
+  def cdcStreaming(cdcSupplementalLoggingMode: String): Unit = {
     val commonOptions = Map(
       "hoodie.insert.shuffle.parallelism" -> "4",
       "hoodie.upsert.shuffle.parallelism" -> "4",
@@ -69,7 +69,7 @@ class TestCDCStreamingSuite extends TestCDCBase {
     userToCountryDF.write.format("hudi")
       .options(commonOptions)
       .option(HoodieTableConfig.CDC_ENABLED.key, "true")
-      .option(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_ENABLED.key, cdcSupplementalLogging)
+      .option(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE.key, cdcSupplementalLoggingMode)
       .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "userid")
       .option(DataSourceWriteOptions.PRECOMBINE_FIELD.key, "ts")
       .option(HoodieWriteConfig.TBL_NAME.key, "user_to_country")

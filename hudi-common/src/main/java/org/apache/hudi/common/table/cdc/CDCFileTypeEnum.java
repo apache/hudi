@@ -24,14 +24,17 @@ package org.apache.hudi.common.table.cdc;
  *
  * CDC_LOG_FILE:
  *   For this type, there must be a real cdc log file from which we get the whole/part change data.
- *   when `hoodie.table.cdc.supplemental.logging` is true, it keeps all the fields about the
+ *   when `hoodie.table.cdc.supplemental.logging.mode` is 'cdc_data_before_after', it keeps all the fields about the
  *   change data, including `op`, `ts_ms`, `before` and `after`. So read it and return directly,
  *   no more other files need to be loaded.
- *   when `hoodie.table.cdc.supplemental.logging` is false, it just keep the `op` and the key of
+ *   when `hoodie.table.cdc.supplemental.logging.mode` is 'cdc_data_before', it keeps the `op`, the key and the
+ *   `before` of the changing record. When `op` is equal to 'i' or 'u', need to get the current record from the
+ *   current base/log file as `after`.
+ *   when `hoodie.table.cdc.supplemental.logging.mode` is 'min_cdc_data', it just keeps the `op` and the key of
  *   the changing record. When `op` is equal to 'i', `before` is null and get the current record
  *   from the current base/log file as `after`. When `op` is equal to 'u', get the previous
  *   record from the previous file slice as `before`, and get the current record from the
- *   current base/log file `after`. When `op` is equal to 'd', get the previous record from
+ *   current base/log file as `after`. When `op` is equal to 'd', get the previous record from
  *   the previous file slice as `before`, and `after` is null.
  *
  * ADD_BASE_FILE:

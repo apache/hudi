@@ -41,10 +41,10 @@ class TestCDCDataFrameSuite extends TestCDCBase {
    * Step6: Bluk_Insert 20
    */
   @ParameterizedTest
-  @CsvSource(Array("false", "true"))
-  def testCOWDataSourceWrite(cdcSupplementalLogging: Boolean): Unit = {
+  @CsvSource(Array("min_cdc_data", "cdc_data_before", "cdc_data_before_after"))
+  def testCOWDataSourceWrite(cdcSupplementalLoggingMode: String): Unit = {
     val options = commonOpts ++ Map(
-      HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_ENABLED.key -> cdcSupplementalLogging.toString
+      HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE.key -> cdcSupplementalLoggingMode
     )
 
     var totalInsertedCnt = 0L
@@ -208,11 +208,11 @@ class TestCDCDataFrameSuite extends TestCDCBase {
    * Step7: Upsert 30 With CLean
    */
   @ParameterizedTest
-  @CsvSource(Array("false", "true"))
-  def testMORDataSourceWrite(cdcSupplementalLogging: Boolean): Unit = {
+  @CsvSource(Array("min_cdc_data", "cdc_data_before", "cdc_data_before_after"))
+  def testMORDataSourceWrite(cdcSupplementalLoggingMode: String): Unit = {
     val options = commonOpts ++ Map(
       DataSourceWriteOptions.TABLE_TYPE.key() -> DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL,
-      HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_ENABLED.key -> cdcSupplementalLogging.toString
+      HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE.key -> cdcSupplementalLoggingMode
     )
 
     var totalInsertedCnt = 0L
@@ -398,12 +398,15 @@ class TestCDCDataFrameSuite extends TestCDCBase {
    * Step4: Upsert
    */
   @ParameterizedTest
-  @CsvSource(Array("COPY_ON_WRITE,false", "MERGE_ON_READ,false", "COPY_ON_WRITE,true", "MERGE_ON_READ,true"))
-  def testDataSourceWriteWithPartitionField(tableType: String, cdcSupplementalLogging: Boolean): Unit = {
+  @CsvSource(Array(
+    "COPY_ON_WRITE,cdc_data_before_after", "MERGE_ON_READ,cdc_data_before_after",
+    "COPY_ON_WRITE,cdc_data_before", "MERGE_ON_READ,cdc_data_before",
+    "COPY_ON_WRITE,min_cdc_data", "MERGE_ON_READ,min_cdc_data"))
+  def testDataSourceWriteWithPartitionField(tableType: String, cdcSupplementalLoggingMode: String): Unit = {
     val options = commonOpts ++ Map(
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
       DataSourceWriteOptions.TABLE_TYPE.key -> tableType,
-      HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_ENABLED.key -> cdcSupplementalLogging.toString
+      HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE.key -> cdcSupplementalLoggingMode
     )
 
     var totalInsertedCnt = 0L

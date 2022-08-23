@@ -22,6 +22,9 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 
+import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.exception.HoodieException;
+
 public class CDCUtils {
 
   /* the `op` column represents how a record is changed. */
@@ -48,7 +51,7 @@ public class CDCUtils {
 
   /**
    * This is the standard CDC output format.
-   * Also, this is the schema of cdc log file in the case `hoodie.table.cdc.supplemental.logging` is true.
+   * Also, this is the schema of cdc log file in the case `hoodie.table.cdc.supplemental.logging.mode` is 'cdc_data_before_after'.
    */
   public static final String CDC_SCHEMA_STRING = "{\"type\":\"record\",\"name\":\"Record\","
       + "\"fields\":["
@@ -61,19 +64,45 @@ public class CDCUtils {
   public static final Schema CDC_SCHEMA = new Schema.Parser().parse(CDC_SCHEMA_STRING);
 
   /**
-   * The schema of cdc log file in the case `hoodie.table.cdc.supplemental.logging` is false.
+   * The schema of cdc log file in the case `hoodie.table.cdc.supplemental.logging.mode` is 'cdc_data_before'.
    */
-  public static final String CDC_SCHEMA_ONLY_OP_AND_RECORDKEY_STRING = "{\"type\":\"record\",\"name\":\"Record\","
+  public static final String CDC_SCHEMA_OP_RECORDKEY_BEFORE_STRING = "{\"type\":\"record\",\"name\":\"Record\","
+      + "\"fields\":["
+      + "{\"name\":\"op\",\"type\":[\"string\",\"null\"]},"
+      + "{\"name\":\"record_key\",\"type\":[\"string\",\"null\"]},"
+      + "{\"name\":\"before\",\"type\":[\"string\",\"null\"]}"
+      + "]}";
+
+  public static final Schema CDC_SCHEMA_OP_RECORDKEY_BEFORE =
+      new Schema.Parser().parse(CDC_SCHEMA_OP_RECORDKEY_BEFORE_STRING);
+
+  /**
+   * The schema of cdc log file in the case `hoodie.table.cdc.supplemental.logging.mode` is 'min_cdc_data'.
+   */
+  public static final String CDC_SCHEMA_OP_AND_RECORDKEY_STRING = "{\"type\":\"record\",\"name\":\"Record\","
       + "\"fields\":["
       + "{\"name\":\"op\",\"type\":[\"string\",\"null\"]},"
       + "{\"name\":\"record_key\",\"type\":[\"string\",\"null\"]}"
       + "]}";
 
-  public static final Schema CDC_SCHEMA_ONLY_OP_AND_RECORDKEY =
-      new Schema.Parser().parse(CDC_SCHEMA_ONLY_OP_AND_RECORDKEY_STRING);
+  public static final Schema CDC_SCHEMA_OP_AND_RECORDKEY =
+      new Schema.Parser().parse(CDC_SCHEMA_OP_AND_RECORDKEY_STRING);
+
+  public static final Schema schemaBySupplementalLoggingMode(String supplementalLoggingMode) {
+    switch (supplementalLoggingMode) {
+      case HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE_WITH_BEFORE_AFTER:
+        return CDC_SCHEMA;
+      case HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE_WITH_BEFORE:
+        return CDC_SCHEMA_OP_RECORDKEY_BEFORE;
+      case HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE_MINI:
+        return CDC_SCHEMA_OP_AND_RECORDKEY;
+      default:
+        throw new HoodieException("not support this supplemental logging mode: " + supplementalLoggingMode);
+    }
+  }
 
   /**
-   * Build the cdc record which has all the cdc fields when `hoodie.table.cdc.supplemental.logging` is true.
+   * Build the cdc record which has all the cdc fields when `hoodie.table.cdc.supplemental.logging.mode` is 'cdc_data_before_after'.
    */
   public static GenericData.Record cdcRecord(
       String op, String commitTime, GenericRecord before, GenericRecord after) {
@@ -93,10 +122,22 @@ public class CDCUtils {
   }
 
   /**
-   * Build the cdc record when `hoodie.table.cdc.supplemental.logging` is false.
+   * Build the cdc record when `hoodie.table.cdc.supplemental.logging.mode` is 'cdc_data_before'.
+   */
+  public static GenericData.Record cdcRecord(String op, String recordKey, GenericRecord before) {
+    GenericData.Record record = new GenericData.Record(CDC_SCHEMA_OP_RECORDKEY_BEFORE);
+    record.put(CDC_OPERATION_TYPE, op);
+    record.put(CDC_RECORD_KEY, recordKey);
+    String beforeJsonStr = recordToJson(before);
+    record.put(CDC_BEFORE_IMAGE, beforeJsonStr);
+    return record;
+  }
+
+  /**
+   * Build the cdc record when `hoodie.table.cdc.supplemental.logging.mode` is 'min_cdc_data'.
    */
   public static GenericData.Record cdcRecord(String op, String recordKey) {
-    GenericData.Record record = new GenericData.Record(CDC_SCHEMA_ONLY_OP_AND_RECORDKEY);
+    GenericData.Record record = new GenericData.Record(CDC_SCHEMA_OP_AND_RECORDKEY);
     record.put(CDC_OPERATION_TYPE, op);
     record.put(CDC_RECORD_KEY, recordKey);
     return record;

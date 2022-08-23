@@ -32,6 +32,7 @@ import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -72,7 +73,7 @@ public class CDCExtractor {
 
   private final FileSystem fs;
 
-  private final Boolean supplementalLogging;
+  private final String supplementalLoggingMode;
 
   private final String startInstant;
 
@@ -86,7 +87,7 @@ public class CDCExtractor {
     this.metaClient = metaClient;
     this.basePath = metaClient.getBasePathV2();
     this.fs = metaClient.getFs().getFileSystem();
-    this.supplementalLogging = metaClient.getTableConfig().isCDCSupplementalLoggingEnabled();
+    this.supplementalLoggingMode = metaClient.getTableConfig().cdcSupplementalLoggingMode();
     this.startInstant = startInstant;
     this.endInstant = endInstant;
     init();
@@ -279,18 +280,21 @@ public class CDCExtractor {
       }
     } else {
       // this is a cdc log
-      if (supplementalLogging) {
+      if (supplementalLoggingMode.equals(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE_WITH_BEFORE_AFTER)) {
         cdcFileSplit = new CDCFileSplit(CDC_LOG_FILE, writeStat.getCdcPath());
       } else {
         try {
           Path absPartitionPath = FSUtils.getPartitionPath(basePath, fileGroupId.getPartitionPath());
           HoodieBaseFile beforeBaseFile = new HoodieBaseFile(FSUtils.getBaseFile(
               fs, absPartitionPath, fileGroupId.getFileId(), writeStat.getPrevCommit()));
-          FileSlice beforeFileSlice = new FileSlice(fileGroupId, writeStat.getPrevCommit(), beforeBaseFile, new ArrayList<>());
+          FileSlice beforeFileSlice = null;
           FileSlice currentFileSlice = new FileSlice(fileGroupId, instant.getTimestamp(),
               new HoodieBaseFile(fs.getFileStatus(new Path(basePath, writeStat.getPath()))), new ArrayList<>());
+          if (supplementalLoggingMode.equals(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE_MINI)) {
+            beforeFileSlice = new FileSlice(fileGroupId, writeStat.getPrevCommit(), beforeBaseFile, new ArrayList<>());
+          }
           cdcFileSplit = new CDCFileSplit(CDC_LOG_FILE, writeStat.getCdcPath(),
-              Option.of(beforeFileSlice), Option.of(currentFileSlice));
+              Option.ofNullable(beforeFileSlice), Option.ofNullable(currentFileSlice));
         } catch (Exception e) {
           throw new HoodieException("Fail to parse HoodieWriteStat", e);
         }
