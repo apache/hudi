@@ -22,7 +22,7 @@ services:
     hostname: namenode
     container_name: namenode
     environment:
-      - CLUSTER_NAME=hudi_hadoop284_hive232_spark313
+      - CLUSTER_NAME=hudi_hadoop284_hive233_spark321
     ports:
       - "50070:50070"
       - "8020:8020"
@@ -39,7 +39,7 @@ services:
     container_name: datanode1
     hostname: datanode1
     environment:
-      - CLUSTER_NAME=hudi_hadoop284_hive232_spark313
+      - CLUSTER_NAME=hudi_hadoop284_hive233_spark321
     env_file:
       - ./hadoop.env
     ports:
@@ -61,7 +61,7 @@ services:
     hostname: historyserver
     container_name: historyserver
     environment:
-      - CLUSTER_NAME=hudi_hadoop284_hive232_spark313
+      - CLUSTER_NAME=hudi_hadoop284_hive233_spark321
     depends_on:
       - "namenode"
     links:

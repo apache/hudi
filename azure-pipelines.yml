@@ -78,7 +78,7 @@ variables:
   MVN_OPTS_INSTALL: '-DskipTests $(BUILD_PROFILES) $(PLUGIN_OPTS)'
   MVN_OPTS_TEST: '-fae $(BUILD_PROFILES) $(PLUGIN_OPTS)'
   SPARK_VERSION: '3.2.1'
-  HADOOP_VERSION: '3.2'
+  HADOOP_VERSION: '2.7'
   SPARK_ARCHIVE: spark-$(SPARK_VERSION)-bin-hadoop$(HADOOP_VERSION)
   JOB1_MODULES: ${{ join(',',parameters.job1Modules) }}
   JOB2_MODULES: ${{ join(',',parameters.job2Modules) }}

@@ -49,7 +49,6 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -218,7 +217,6 @@ public class TestHoodieSnapshotExporter extends SparkClientFunctionalTestHarness
   @Nested
   public class TestHoodieSnapshotExporterForNonHudi {
 
-    @Disabled("Disable due to hive's orc conflict.")
     @ParameterizedTest
     @ValueSource(strings = {"json", "parquet", "orc"})
     public void testExportAsNonHudi(String format) throws IOException {

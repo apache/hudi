@@ -78,7 +78,6 @@ import org.apache.spark.sql.api.java.UDF1;
 import org.apache.spark.sql.types.DataTypes;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -169,13 +168,11 @@ public class TestOrcBootstrap extends HoodieClientTestBase {
     return AvroOrcUtils.createAvroSchemaWithDefaultValue(orcSchema, "test_orc_record", null, true);
   }
 
-  @Disabled("Disable due to hive's orc conflict.")
   @Test
   public void testMetadataBootstrapNonpartitionedCOW() throws Exception {
     testBootstrapCommon(false, false, EffectiveMode.METADATA_BOOTSTRAP_MODE);
   }
 
-  @Disabled("Disable due to hive's orc conflict.")
   @Test
   public void testMetadataBootstrapWithUpdatesCOW() throws Exception {
     testBootstrapCommon(true, false, EffectiveMode.METADATA_BOOTSTRAP_MODE);
@@ -305,31 +302,26 @@ public class TestOrcBootstrap extends HoodieClientTestBase {
     }
   }
 
-  @Disabled("Disable due to hive's orc conflict.")
   @Test
   public void testMetadataBootstrapWithUpdatesMOR() throws Exception {
     testBootstrapCommon(true, true, EffectiveMode.METADATA_BOOTSTRAP_MODE);
   }
 
-  @Disabled("Disable due to hive's orc conflict.")
   @Test
   public void testFullBootstrapOnlyCOW() throws Exception {
     testBootstrapCommon(true, false, EffectiveMode.FULL_BOOTSTRAP_MODE);
   }
 
-  @Disabled("Disable due to hive's orc conflict.")
   @Test
   public void testFullBootstrapWithUpdatesMOR() throws Exception {
     testBootstrapCommon(true, true, EffectiveMode.FULL_BOOTSTRAP_MODE);
   }
 
-  @Disabled("Disable due to hive's orc conflict.")
   @Test
   public void testMetaAndFullBootstrapCOW() throws Exception {
     testBootstrapCommon(true, false, EffectiveMode.MIXED_BOOTSTRAP_MODE);
   }
 
-  @Disabled("Disable due to hive's orc conflict.")
   @Test
   public void testMetadataAndFullBootstrapWithUpdatesMOR() throws Exception {
     testBootstrapCommon(true, true, EffectiveMode.MIXED_BOOTSTRAP_MODE);

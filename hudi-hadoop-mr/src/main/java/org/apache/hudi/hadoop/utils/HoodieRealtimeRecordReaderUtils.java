@@ -308,5 +308,4 @@ public class HoodieRealtimeRecordReaderUtils {
     }
     return appendFieldsToSchema(schema, newFields);
   }
-
 }

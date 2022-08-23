@@ -19,9 +19,11 @@
 package org.apache.hudi.spark3.internal;
 
 import org.apache.hudi.testutils.HoodieClientTestBase;
+
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation;
 import org.apache.spark.sql.catalyst.plans.logical.InsertIntoStatement;
+
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 

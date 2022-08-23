@@ -191,7 +191,6 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
     //runTest(tableState, DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, "null", projectedColumnsReadStatsReadOptimized)
   }
 
-  @Disabled
   @Test
   def testMergeOnReadSnapshotRelationWithDeltaLogsFallback(): Unit = {
     val tablePath = s"$basePath/mor-with-logs-fallback"

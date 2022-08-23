@@ -21,7 +21,7 @@ import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.spark.sql.SaveMode;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.HoodieDataSourceHelpers;
-import org.apache.hudi.hive.HiveSyncConfig;
+import org.apache.hudi.hive.HiveSyncConfigHolder;
 import org.apache.hudi.sync.common.HoodieSyncConfig;
 import org.apache.hudi.hive.MultiPartKeysValueExtractor;
 import org.apache.hadoop.fs.FileSystem;
