@@ -19,6 +19,7 @@
 package org.apache.hudi.table.format.cow;
 
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.table.data.vector.VectorizedColumnBatch;
 import org.apache.hudi.table.format.cow.vector.HeapArrayVector;
 import org.apache.hudi.table.format.cow.vector.HeapMapColumnVector;
 import org.apache.hudi.table.format.cow.vector.HeapRowColumnVector;
@@ -44,7 +45,6 @@ import org.apache.flink.formats.parquet.vector.reader.TimestampColumnReader;
 import org.apache.flink.table.data.DecimalData;
 import org.apache.flink.table.data.TimestampData;
 import org.apache.flink.table.data.vector.ColumnVector;
-import org.apache.flink.table.data.vector.VectorizedColumnBatch;
 import org.apache.flink.table.data.vector.heap.HeapBooleanVector;
 import org.apache.flink.table.data.vector.heap.HeapByteVector;
 import org.apache.flink.table.data.vector.heap.HeapBytesVector;

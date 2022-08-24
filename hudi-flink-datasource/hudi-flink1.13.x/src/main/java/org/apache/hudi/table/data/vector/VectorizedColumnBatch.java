@@ -16,14 +16,26 @@
  * limitations under the License.
  */
 
-package org.apache.flink.table.data.vector;
+package org.apache.hudi.table.data.vector;
 
 import org.apache.flink.table.data.ArrayData;
 import org.apache.flink.table.data.DecimalData;
 import org.apache.flink.table.data.MapData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.TimestampData;
+import org.apache.flink.table.data.vector.ArrayColumnVector;
+import org.apache.flink.table.data.vector.BooleanColumnVector;
+import org.apache.flink.table.data.vector.ByteColumnVector;
+import org.apache.flink.table.data.vector.BytesColumnVector;
 import org.apache.flink.table.data.vector.BytesColumnVector.Bytes;
+import org.apache.flink.table.data.vector.ColumnVector;
+import org.apache.flink.table.data.vector.DecimalColumnVector;
+import org.apache.flink.table.data.vector.DoubleColumnVector;
+import org.apache.flink.table.data.vector.FloatColumnVector;
+import org.apache.flink.table.data.vector.IntColumnVector;
+import org.apache.flink.table.data.vector.LongColumnVector;
+import org.apache.flink.table.data.vector.ShortColumnVector;
+import org.apache.flink.table.data.vector.TimestampColumnVector;
 
 import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
