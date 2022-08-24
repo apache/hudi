@@ -49,6 +49,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.config.HoodieMemoryConfig;
 import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodiePayloadConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.configuration.OptionsResolver;
@@ -221,6 +222,12 @@ public class StreamerUtil {
             .withMetadataConfig(HoodieMetadataConfig.newBuilder()
                 .enable(conf.getBoolean(FlinkOptions.METADATA_ENABLED))
                 .withMaxNumDeltaCommitsBeforeCompaction(conf.getInteger(FlinkOptions.METADATA_COMPACTION_DELTA_COMMITS))
+                .build())
+            .withMetricsConfig(HoodieMetricsConfig.newBuilder()
+                .on(conf.getBoolean(FlinkOptions.METRICS_ON))
+                .withReporterType(conf.getString(FlinkOptions.METRICS_REPORTER_TYPE_VALUE))
+                .withReporterMetricsNamePrefix(conf.getOptional(FlinkOptions.METRICS_REPORTER_PREFIX)
+                    .orElse(conf.getString(FlinkOptions.TABLE_NAME)))
                 .build())
             .withLockConfig(HoodieLockConfig.newBuilder()
                 .withLockProvider(FileSystemBasedLockProvider.class)

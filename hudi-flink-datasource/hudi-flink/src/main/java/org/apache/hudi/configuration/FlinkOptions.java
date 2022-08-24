@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
 import org.apache.hudi.index.HoodieIndex;
@@ -36,6 +37,7 @@ import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.ConfigOptions;
 import org.apache.flink.configuration.Configuration;
+import org.apache.hudi.metrics.MetricsReporterType;
 
 import java.lang.reflect.Field;
 import java.util.ArrayList;
@@ -112,6 +114,28 @@ public class FlinkOptions extends HoodieConfig {
       .intType()
       .defaultValue(10)
       .withDescription("Max delta commits for metadata table to trigger compaction, default 10");
+
+  // ------------------------------------------------------------------------
+  //  Metrics Options
+  // ------------------------------------------------------------------------
+
+  public static final ConfigOption<Boolean> METRICS_ON = ConfigOptions
+      .key(HoodieMetricsConfig.TURN_METRICS_ON.key())
+      .booleanType()
+      .defaultValue(false)
+      .withDescription("Turn on/off metrics reporting. off by default.");
+
+  public static final ConfigOption<String> METRICS_REPORTER_TYPE_VALUE = ConfigOptions
+      .key(HoodieMetricsConfig.METRICS_REPORTER_TYPE_VALUE.key())
+      .stringType()
+      .defaultValue(MetricsReporterType.GRAPHITE.name())
+      .withDescription("Type of metrics reporter.");
+
+  public static final ConfigOption<String> METRICS_REPORTER_PREFIX = ConfigOptions
+      .key(HoodieMetricsConfig.METRICS_REPORTER_PREFIX.key())
+      .stringType()
+      .noDefaultValue()
+      .withDescription("The prefix given to the metrics names.");
 
   // ------------------------------------------------------------------------
   //  Index Options
