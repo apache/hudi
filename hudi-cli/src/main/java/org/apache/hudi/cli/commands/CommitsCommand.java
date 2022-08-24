@@ -22,12 +22,10 @@ import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.HoodieTableHeaderFields;
 import org.apache.hudi.cli.TableHeader;
-import org.apache.hudi.cli.utils.CommitUtil;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -49,6 +47,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+
+import static org.apache.hudi.cli.utils.TimelineUtil.getTimeDaysAgo;
+import static org.apache.hudi.cli.utils.TimelineUtil.getTimeline;
 
 /**
  * CLI command to display commits options.
@@ -121,17 +122,7 @@ public class CommitsCommand implements CommandMarker {
       for (Map.Entry<String, List<HoodieWriteStat>> partitionWriteStat :
           commitMetadata.getPartitionToWriteStats().entrySet()) {
         for (HoodieWriteStat hoodieWriteStat : partitionWriteStat.getValue()) {
-          if (StringUtils.nonEmpty(partition) && partition.equals(hoodieWriteStat.getPartitionPath())) {
-            rows.add(new Comparable[] {commit.getAction(), commit.getTimestamp(), hoodieWriteStat.getPartitionPath(),
-                hoodieWriteStat.getFileId(), hoodieWriteStat.getPrevCommit(), hoodieWriteStat.getNumWrites(),
-                hoodieWriteStat.getNumInserts(), hoodieWriteStat.getNumDeletes(),
-                hoodieWriteStat.getNumUpdateWrites(), hoodieWriteStat.getTotalWriteErrors(),
-                hoodieWriteStat.getTotalLogBlocks(), hoodieWriteStat.getTotalCorruptLogBlock(),
-                hoodieWriteStat.getTotalRollbackBlocks(), hoodieWriteStat.getTotalLogRecords(),
-                hoodieWriteStat.getTotalUpdatedRecordsCompacted(), hoodieWriteStat.getTotalWriteBytes()
-            });
-            break;
-          } else {
+          if (StringUtils.isNullOrEmpty(partition) || partition.equals(hoodieWriteStat.getPartitionPath())) {
             rows.add(new Comparable[] {commit.getAction(), commit.getTimestamp(), hoodieWriteStat.getPartitionPath(),
                 hoodieWriteStat.getFileId(), hoodieWriteStat.getPrevCommit(), hoodieWriteStat.getNumWrites(),
                 hoodieWriteStat.getNumInserts(), hoodieWriteStat.getNumDeletes(),
@@ -175,7 +166,7 @@ public class CommitsCommand implements CommandMarker {
   public String showCommits(
       @CliOption(key = {"includeExtraMetadata"}, help = "Include extra metadata",
           unspecifiedDefaultValue = "false") final boolean includeExtraMetadata,
-      @CliOption(key = {"createView"}, mandatory = false, help = "view name to store output table",
+      @CliOption(key = {"createView"}, help = "view name to store output table",
           unspecifiedDefaultValue = "") final String exportTableName,
       @CliOption(key = {"limit"}, help = "Limit commits",
           unspecifiedDefaultValue = "-1") final Integer limit,
@@ -183,13 +174,10 @@ public class CommitsCommand implements CommandMarker {
       @CliOption(key = {"desc"}, help = "Ordering", unspecifiedDefaultValue = "false") final boolean descending,
       @CliOption(key = {"headeronly"}, help = "Print Header Only",
           unspecifiedDefaultValue = "false") final boolean headerOnly,
-      @CliOption(key = {"partition"}, help = "Partition value") final String partition)
-      throws IOException {
-
-    HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
-    HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
-    HoodieArchivedTimeline archivedTimeline = metaClient.getArchivedTimeline();
-    HoodieDefaultTimeline timeline = archivedTimeline.mergeTimeline(activeTimeline);
+      @CliOption(key = {"partition"}, help = "Partition value") final String partition,
+      @CliOption(key = {"includeArchivedTimeline"}, help = "Include archived commits as well",
+          unspecifiedDefaultValue = "false") final boolean includeArchivedTimeline) throws IOException {
+    HoodieDefaultTimeline timeline = getTimeline(HoodieCLI.getTableMetaClient(), includeArchivedTimeline);
     if (includeExtraMetadata) {
       return printCommitsWithMetadata(timeline, limit, sortByField, descending, headerOnly, exportTableName, partition);
     } else {
@@ -214,10 +202,10 @@ public class CommitsCommand implements CommandMarker {
       @CliOption(key = {"partition"}, help = "Partition value") final String partition)
       throws IOException {
     if (StringUtils.isNullOrEmpty(startTs)) {
-      startTs = CommitUtil.getTimeDaysAgo(10);
+      startTs = getTimeDaysAgo(10);
     }
     if (StringUtils.isNullOrEmpty(endTs)) {
-      endTs = CommitUtil.getTimeDaysAgo(1);
+      endTs = getTimeDaysAgo(1);
     }
     HoodieArchivedTimeline archivedTimeline = HoodieCLI.getTableMetaClient().getArchivedTimeline();
     try {
@@ -236,18 +224,18 @@ public class CommitsCommand implements CommandMarker {
 
   @CliCommand(value = "commit showpartitions", help = "Show partition level details of a commit")
   public String showCommitPartitions(
-      @CliOption(key = {"createView"}, mandatory = false, help = "view name to store output table",
+      @CliOption(key = {"createView"}, help = "view name to store output table",
           unspecifiedDefaultValue = "") final String exportTableName,
       @CliOption(key = {"commit"}, help = "Commit to show") final String instantTime,
       @CliOption(key = {"limit"}, help = "Limit commits", unspecifiedDefaultValue = "-1") final Integer limit,
       @CliOption(key = {"sortBy"}, help = "Sorting Field", unspecifiedDefaultValue = "") final String sortByField,
       @CliOption(key = {"desc"}, help = "Ordering", unspecifiedDefaultValue = "false") final boolean descending,
       @CliOption(key = {"headeronly"}, help = "Print Header Only",
-          unspecifiedDefaultValue = "false") final boolean headerOnly)
-      throws Exception {
-
-    HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
-    HoodieTimeline timeline = activeTimeline.getCommitsTimeline().filterCompletedInstants();
+          unspecifiedDefaultValue = "false") final boolean headerOnly,
+      @CliOption(key = {"includeArchivedTimeline"}, help = "Include archived commits as well",
+          unspecifiedDefaultValue = "false") final boolean includeArchivedTimeline) throws Exception {
+    HoodieDefaultTimeline defaultTimeline = getTimeline(HoodieCLI.getTableMetaClient(), includeArchivedTimeline);
+    HoodieTimeline timeline = defaultTimeline.getCommitsTimeline().filterCompletedInstants();
 
     Option<HoodieInstant> hoodieInstantOption = getCommitForInstant(timeline, instantTime);
     Option<HoodieCommitMetadata> commitMetadataOptional = getHoodieCommitMetadata(timeline, hoodieInstantOption);
@@ -302,18 +290,18 @@ public class CommitsCommand implements CommandMarker {
 
   @CliCommand(value = "commit show_write_stats", help = "Show write stats of a commit")
   public String showWriteStats(
-      @CliOption(key = {"createView"}, mandatory = false, help = "view name to store output table",
+      @CliOption(key = {"createView"}, help = "view name to store output table",
           unspecifiedDefaultValue = "") final String exportTableName,
       @CliOption(key = {"commit"}, help = "Commit to show") final String instantTime,
       @CliOption(key = {"limit"}, help = "Limit commits", unspecifiedDefaultValue = "-1") final Integer limit,
       @CliOption(key = {"sortBy"}, help = "Sorting Field", unspecifiedDefaultValue = "") final String sortByField,
       @CliOption(key = {"desc"}, help = "Ordering", unspecifiedDefaultValue = "false") final boolean descending,
       @CliOption(key = {"headeronly"}, help = "Print Header Only",
-          unspecifiedDefaultValue = "false") final boolean headerOnly)
-      throws Exception {
-
-    HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
-    HoodieTimeline timeline = activeTimeline.getCommitsTimeline().filterCompletedInstants();
+          unspecifiedDefaultValue = "false") final boolean headerOnly,
+      @CliOption(key = {"includeArchivedTimeline"}, help = "Include archived commits as well",
+          unspecifiedDefaultValue = "false") final boolean includeArchivedTimeline) throws Exception {
+    HoodieDefaultTimeline defaultTimeline = getTimeline(HoodieCLI.getTableMetaClient(), includeArchivedTimeline);
+    HoodieTimeline timeline = defaultTimeline.getCommitsTimeline().filterCompletedInstants();
 
     Option<HoodieInstant> hoodieInstantOption = getCommitForInstant(timeline, instantTime);
     Option<HoodieCommitMetadata> commitMetadataOptional = getHoodieCommitMetadata(timeline, hoodieInstantOption);
@@ -353,11 +341,11 @@ public class CommitsCommand implements CommandMarker {
       @CliOption(key = {"sortBy"}, help = "Sorting Field", unspecifiedDefaultValue = "") final String sortByField,
       @CliOption(key = {"desc"}, help = "Ordering", unspecifiedDefaultValue = "false") final boolean descending,
       @CliOption(key = {"headeronly"}, help = "Print Header Only",
-          unspecifiedDefaultValue = "false") final boolean headerOnly)
-      throws Exception {
-
-    HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
-    HoodieTimeline timeline = activeTimeline.getCommitsTimeline().filterCompletedInstants();
+          unspecifiedDefaultValue = "false") final boolean headerOnly,
+      @CliOption(key = {"includeArchivedTimeline"}, help = "Include archived commits as well",
+          unspecifiedDefaultValue = "false") final boolean includeArchivedTimeline) throws Exception {
+    HoodieDefaultTimeline defaultTimeline = getTimeline(HoodieCLI.getTableMetaClient(), includeArchivedTimeline);
+    HoodieTimeline timeline = defaultTimeline.getCommitsTimeline().filterCompletedInstants();
 
     Option<HoodieInstant> hoodieInstantOption = getCommitForInstant(timeline, instantTime);
     Option<HoodieCommitMetadata> commitMetadataOptional = getHoodieCommitMetadata(timeline, hoodieInstantOption);
