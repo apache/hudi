@@ -248,17 +248,17 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
 
       while (fileSliceIterator.hasNext() && keepVersions > 0) {
         // Skip this most recent version
+        fileSliceIterator.next();
+        keepVersions--;
+      }
+      // Delete the remaining files
+      while (fileSliceIterator.hasNext()) {
         FileSlice nextSlice = fileSliceIterator.next();
         Option<HoodieBaseFile> dataFile = nextSlice.getBaseFile();
         if (dataFile.isPresent() && savepointedFiles.contains(dataFile.get().getFileName())) {
           // do not clean up a savepoint data file
           continue;
         }
-        keepVersions--;
-      }
-      // Delete the remaining files
-      while (fileSliceIterator.hasNext()) {
-        FileSlice nextSlice = fileSliceIterator.next();
         deletePaths.addAll(getCleanFileInfoForSlice(nextSlice));
       }
     }
