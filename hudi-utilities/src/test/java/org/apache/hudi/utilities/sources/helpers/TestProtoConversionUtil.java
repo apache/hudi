@@ -108,7 +108,7 @@ public class TestProtoConversionUtil {
     GenericData.Record wrappedStringRecord = getWrappedRecord(protoSchema, "wrapped_string", "I am a wrapped string");
     GenericData.Record wrappedIntRecord = getWrappedRecord(protoSchema, "wrapped_int", 11);
     GenericData.Record wrappedLongRecord = getWrappedRecord(protoSchema, "wrapped_long", 12L);
-    GenericData.Record wrappedUIntRecord = getWrappedRecord(protoSchema, "wrapped_unsigned_int", 13);
+    GenericData.Record wrappedUIntRecord = getWrappedRecord(protoSchema, "wrapped_unsigned_int", 13L);
     GenericData.Record wrappedULongRecord = getWrappedRecord(protoSchema, "wrapped_unsigned_long", 14L);
     GenericData.Record wrappedDoubleRecord = getWrappedRecord(protoSchema, "wrapped_double", 15.5);
     GenericData.Record wrappedFloatRecord = getWrappedRecord(protoSchema, "wrapped_float", 16.6f);
@@ -120,7 +120,7 @@ public class TestProtoConversionUtil {
     expectedRecord.put("primitive_float", 2.1f);
     expectedRecord.put("primitive_int", 1);
     expectedRecord.put("primitive_long", 2L);
-    expectedRecord.put("primitive_unsigned_int", 3);
+    expectedRecord.put("primitive_unsigned_int", 3L);
     expectedRecord.put("primitive_unsigned_long", 4L);
     expectedRecord.put("primitive_signed_int", 5);
     expectedRecord.put("primitive_signed_long", 6L);
@@ -164,7 +164,7 @@ public class TestProtoConversionUtil {
     expectedRecord.put("primitive_float", 0.0f);
     expectedRecord.put("primitive_int", 0);
     expectedRecord.put("primitive_long", 0L);
-    expectedRecord.put("primitive_unsigned_int", 0);
+    expectedRecord.put("primitive_unsigned_int", 0L);
     expectedRecord.put("primitive_unsigned_long", 0L);
     expectedRecord.put("primitive_signed_int", 0);
     expectedRecord.put("primitive_signed_long", 0L);
@@ -253,7 +253,7 @@ public class TestProtoConversionUtil {
     expectedRecord.put("primitive_float", 2.1f);
     expectedRecord.put("primitive_int", 1);
     expectedRecord.put("primitive_long", 2L);
-    expectedRecord.put("primitive_unsigned_int", 3);
+    expectedRecord.put("primitive_unsigned_int", 3L);
     expectedRecord.put("primitive_unsigned_long", 4L);
     expectedRecord.put("primitive_signed_int", 5);
     expectedRecord.put("primitive_signed_long", 6L);
@@ -272,7 +272,7 @@ public class TestProtoConversionUtil {
     expectedRecord.put("wrapped_string", "I am a wrapped string");
     expectedRecord.put("wrapped_int", 11);
     expectedRecord.put("wrapped_long", 12L);
-    expectedRecord.put("wrapped_unsigned_int", 13);
+    expectedRecord.put("wrapped_unsigned_int", 13L);
     expectedRecord.put("wrapped_unsigned_long", 14L);
     expectedRecord.put("wrapped_double", 15.5);
     expectedRecord.put("wrapped_float", 16.6f);
@@ -297,7 +297,7 @@ public class TestProtoConversionUtil {
     expectedRecord.put("primitive_float", 0.0f);
     expectedRecord.put("primitive_int", 0);
     expectedRecord.put("primitive_long", 0L);
-    expectedRecord.put("primitive_unsigned_int", 0);
+    expectedRecord.put("primitive_unsigned_int", 0L);
     expectedRecord.put("primitive_unsigned_long", 0L);
     expectedRecord.put("primitive_signed_int", 0);
     expectedRecord.put("primitive_signed_long", 0L);

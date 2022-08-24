@@ -286,11 +286,20 @@ public class ProtoConversionUtil {
         case DOUBLE:
         case FLOAT:
         case INT:
-        case LONG:
           if (value instanceof Message) {
             return getWrappedValue(value);
           }
           return value; // immutable
+        case LONG:
+          Object tmpValue = value;
+          if (value instanceof Message) {
+            tmpValue = getWrappedValue(value);
+          }
+          // unsigned ints need to be casted to long
+          if (tmpValue instanceof Integer) {
+            tmpValue = new Long((Integer) tmpValue);
+          }
+          return tmpValue;
         case MAP:
           Map<Object, Object> mapValue = (Map) value;
           Map<Object, Object> mapCopy = new HashMap<>(mapValue.size());
