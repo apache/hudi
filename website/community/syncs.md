@@ -37,12 +37,3 @@ If you would like to present in one of the community calls, please fill out a [f
 Here are some upcoming calls for convenience. 
 
 ![Upcoming calls](/assets/images/upcoming-community-calls.png)
-
-
-## Weekly Office Hours
-
-**[ZOOM LINK TO JOIN](https://zoom.us/j/95710395048)**
-
-When every week on Thu, 08:00 AM Pacific Time (US and Canada)([translate to other time zones](https://www.worldtimebuddy.com/?qm=1&lid=5368361,2643743,1264527,1796236&h=5368361&date=2021-11-24&sln=8-9&hf=1))
-
-One of the PMC members/committers will hold office hours to help answer questions interactively, on a first-come first-serve basis.
