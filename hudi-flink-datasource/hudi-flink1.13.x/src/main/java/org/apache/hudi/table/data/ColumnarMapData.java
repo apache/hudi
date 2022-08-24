@@ -15,8 +15,10 @@
  * limitations under the License.
  */
 
-package org.apache.flink.table.data;
+package org.apache.hudi.table.data;
 
+import org.apache.flink.table.data.ArrayData;
+import org.apache.flink.table.data.MapData;
 import org.apache.flink.table.data.vector.ColumnVector;
 
 /**
