@@ -16,13 +16,15 @@
  * limitations under the License.
  */
 
-package org.apache.flink.table.data.vector;
+package org.apache.hudi.table.data.vector;
 
-import org.apache.flink.table.data.MapData;
+import org.apache.hudi.table.data.ColumnarRowData;
+
+import org.apache.flink.table.data.vector.ColumnVector;
 
 /**
- * Map column vector.
+ * Row column vector.
  */
-public interface MapColumnVector extends ColumnVector {
-  MapData getMap(int i);
+public interface RowColumnVector extends ColumnVector {
+  ColumnarRowData getRow(int i);
 }

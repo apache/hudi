@@ -15,8 +15,18 @@
  * limitations under the License.
  */
 
-package org.apache.flink.table.data;
+package org.apache.hudi.table.data;
 
+import org.apache.hudi.table.data.vector.MapColumnVector;
+import org.apache.hudi.table.data.vector.RowColumnVector;
+
+import org.apache.flink.table.data.ArrayData;
+import org.apache.flink.table.data.DecimalData;
+import org.apache.flink.table.data.MapData;
+import org.apache.flink.table.data.RawValueData;
+import org.apache.flink.table.data.RowData;
+import org.apache.flink.table.data.StringData;
+import org.apache.flink.table.data.TimestampData;
 import org.apache.flink.table.data.binary.TypedSetters;
 import org.apache.flink.table.data.vector.ArrayColumnVector;
 import org.apache.flink.table.data.vector.BooleanColumnVector;
@@ -28,8 +38,6 @@ import org.apache.flink.table.data.vector.DoubleColumnVector;
 import org.apache.flink.table.data.vector.FloatColumnVector;
 import org.apache.flink.table.data.vector.IntColumnVector;
 import org.apache.flink.table.data.vector.LongColumnVector;
-import org.apache.flink.table.data.vector.MapColumnVector;
-import org.apache.flink.table.data.vector.RowColumnVector;
 import org.apache.flink.table.data.vector.ShortColumnVector;
 import org.apache.flink.table.data.vector.TimestampColumnVector;
 
