@@ -21,13 +21,11 @@ package org.apache.hudi
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.fs.{FileSystem, Path}
+import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.internal.schema.InternalSchema
-import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
-import org.apache.hudi.internal.schema.utils.InternalSchemaUtils
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.keygen.{BaseKeyGenerator, CustomAvroKeyGenerator, CustomKeyGenerator, KeyGenerator}
@@ -36,13 +34,14 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, Literal}
+import org.apache.spark.sql.execution.SQLConfInjectingRDD
+import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
+
 import java.util.Properties
-
-import org.apache.hudi.avro.HoodieAvroUtils
-
 import scala.collection.JavaConverters._
+import scala.reflect.ClassTag
 
 private[hudi] trait SparkVersionsSupport {
   def getSparkVersion: String
@@ -160,8 +159,12 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport {
     //       serializer is not able to digest it
     val readerAvroSchemaStr = readerAvroSchema.toString
     val writerAvroSchemaStr = writerAvroSchema.toString
+
     // NOTE: We're accessing toRdd here directly to avoid [[InternalRow]] to [[Row]] conversion
-    df.queryExecution.toRdd.mapPartitions { rows =>
+    //       Additionally, we have to explicitly wrap around resulting [[RDD]] into the one
+    //       injecting [[SQLConf]], which by default isn't propgated by Spark to the executor(s).
+    //       [[SQLConf]] is required by [[AvroSerializer]]
+    injectSQLConf(df.queryExecution.toRdd.mapPartitions { rows =>
       if (rows.isEmpty) {
         Iterator.empty
       } else {
@@ -179,7 +182,7 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport {
 
         rows.map { ir => transform(convert(ir)) }
       }
-    }
+    }, SQLConf.get)
   }
 
   def getDeserializer(structType: StructType) : SparkRowSerDe = {
@@ -320,4 +323,7 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport {
       s"${tableSchema.fieldNames.mkString(",")}")
     AttributeReference(columnName, field.get.dataType, field.get.nullable)()
   }
+
+  private def injectSQLConf[T: ClassTag](rdd: RDD[T], conf: SQLConf): RDD[T] =
+    new SQLConfInjectingRDD(rdd, conf)
 }
