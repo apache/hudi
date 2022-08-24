@@ -23,8 +23,6 @@ import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.HoodieTableHeaderFields;
 import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.cli.utils.CommitUtil;
-import org.apache.hudi.cli.utils.InputStreamConsumer;
-import org.apache.hudi.cli.utils.SparkUtil;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
@@ -38,7 +36,6 @@ import org.apache.hudi.common.util.NumericUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 
-import org.apache.spark.launcher.SparkLauncher;
 import org.springframework.shell.core.CommandMarker;
 import org.springframework.shell.core.annotation.CliCommand;
 import org.springframework.shell.core.annotation.CliOption;
@@ -47,7 +44,6 @@ import org.springframework.stereotype.Component;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -68,29 +64,28 @@ public class CommitsCommand implements CommandMarker {
     final List<Comparable[]> rows = new ArrayList<>();
 
     final List<HoodieInstant> commits = timeline.getCommitsTimeline().filterCompletedInstants()
-        .getInstants().collect(Collectors.toList());
-    // timeline can be read from multiple files. So sort is needed instead of reversing the collection
-    Collections.sort(commits, HoodieInstant.COMPARATOR.reversed());
+        .getInstants().sorted(HoodieInstant.COMPARATOR.reversed()).collect(Collectors.toList());
 
-    for (int i = 0; i < commits.size(); i++) {
-      final HoodieInstant commit = commits.get(i);
-      final HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
-          timeline.getInstantDetails(commit).get(),
-          HoodieCommitMetadata.class);
-      rows.add(new Comparable[] {commit.getTimestamp(),
-          commitMetadata.fetchTotalBytesWritten(),
-          commitMetadata.fetchTotalFilesInsert(),
-          commitMetadata.fetchTotalFilesUpdated(),
-          commitMetadata.fetchTotalPartitionsWritten(),
-          commitMetadata.fetchTotalRecordsWritten(),
-          commitMetadata.fetchTotalUpdateRecordsWritten(),
-          commitMetadata.fetchTotalWriteErrors()});
+    for (final HoodieInstant commit : commits) {
+      if (timeline.getInstantDetails(commit).isPresent()) {
+        final HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
+            timeline.getInstantDetails(commit).get(),
+            HoodieCommitMetadata.class);
+        rows.add(new Comparable[] {commit.getTimestamp(),
+            commitMetadata.fetchTotalBytesWritten(),
+            commitMetadata.fetchTotalFilesInsert(),
+            commitMetadata.fetchTotalFilesUpdated(),
+            commitMetadata.fetchTotalPartitionsWritten(),
+            commitMetadata.fetchTotalRecordsWritten(),
+            commitMetadata.fetchTotalUpdateRecordsWritten(),
+            commitMetadata.fetchTotalWriteErrors()});
+      }
     }
 
     final Map<String, Function<Object, String>> fieldNameToConverterMap = new HashMap<>();
-    fieldNameToConverterMap.put(HoodieTableHeaderFields.HEADER_TOTAL_BYTES_WRITTEN, entry -> {
-      return NumericUtils.humanReadableByteCount((Double.valueOf(entry.toString())));
-    });
+    fieldNameToConverterMap.put(
+        HoodieTableHeaderFields.HEADER_TOTAL_BYTES_WRITTEN,
+        entry -> NumericUtils.humanReadableByteCount((Double.parseDouble(entry.toString()))));
 
     final TableHeader header = new TableHeader()
         .addTableHeaderField(HoodieTableHeaderFields.HEADER_COMMIT_TIME)
@@ -114,12 +109,9 @@ public class CommitsCommand implements CommandMarker {
     final List<Comparable[]> rows = new ArrayList<>();
 
     final List<HoodieInstant> commits = timeline.getCommitsTimeline().filterCompletedInstants()
-        .getInstants().collect(Collectors.toList());
-    // timeline can be read from multiple files. So sort is needed instead of reversing the collection
-    Collections.sort(commits, HoodieInstant.COMPARATOR.reversed());
+        .getInstants().sorted(HoodieInstant.COMPARATOR.reversed()).collect(Collectors.toList());
 
-    for (int i = 0; i < commits.size(); i++) {
-      final HoodieInstant commit = commits.get(i);
+    for (final HoodieInstant commit : commits) {
       final HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
           timeline.getInstantDetails(commit).get(),
           HoodieCommitMetadata.class);
@@ -140,9 +132,9 @@ public class CommitsCommand implements CommandMarker {
     }
 
     final Map<String, Function<Object, String>> fieldNameToConverterMap = new HashMap<>();
-    fieldNameToConverterMap.put(HoodieTableHeaderFields.HEADER_TOTAL_BYTES_WRITTEN, entry -> {
-      return NumericUtils.humanReadableByteCount((Double.valueOf(entry.toString())));
-    });
+    fieldNameToConverterMap.put(
+        HoodieTableHeaderFields.HEADER_TOTAL_BYTES_WRITTEN,
+        entry -> NumericUtils.humanReadableByteCount((Double.parseDouble(entry.toString()))));
 
     TableHeader header = new TableHeader().addTableHeaderField(HoodieTableHeaderFields.HEADER_ACTION)
         .addTableHeaderField(HoodieTableHeaderFields.HEADER_INSTANT)
@@ -161,7 +153,7 @@ public class CommitsCommand implements CommandMarker {
         .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_UPDATED_RECORDS_COMPACTED)
         .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_BYTES_WRITTEN);
 
-    return HoodiePrintHelper.print(header, new HashMap<>(), sortByField, descending,
+    return HoodiePrintHelper.print(header, fieldNameToConverterMap, sortByField, descending,
         limit, headerOnly, rows, tempTableName);
   }
 
@@ -179,11 +171,14 @@ public class CommitsCommand implements CommandMarker {
           unspecifiedDefaultValue = "false") final boolean headerOnly)
       throws IOException {
 
-    HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
+    HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
+    HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
+    HoodieArchivedTimeline archivedTimeline = metaClient.getArchivedTimeline();
+    HoodieDefaultTimeline timeline = archivedTimeline.mergeTimeline(activeTimeline);
     if (includeExtraMetadata) {
-      return printCommitsWithMetadata(activeTimeline, limit, sortByField, descending, headerOnly, exportTableName);
+      return printCommitsWithMetadata(timeline, limit, sortByField, descending, headerOnly, exportTableName);
     } else {
-      return printCommits(activeTimeline, limit, sortByField, descending, headerOnly, exportTableName);
+      return printCommits(timeline, limit, sortByField, descending, headerOnly, exportTableName);
     }
   }
 
@@ -221,37 +216,6 @@ public class CommitsCommand implements CommandMarker {
       // clear the instant details from memory after printing to reduce usage
       archivedTimeline.clearInstantDetailsFromMemory(startTs, endTs);
     }
-  }
-
-  @CliCommand(value = "commit rollback", help = "Rollback a commit")
-  public String rollbackCommit(
-      @CliOption(key = {"commit"}, help = "Commit to rollback") final String instantTime,
-      @CliOption(key = {"sparkProperties"}, help = "Spark Properties File Path") final String sparkPropertiesPath,
-      @CliOption(key = "sparkMaster", unspecifiedDefaultValue = "", help = "Spark Master") String master,
-      @CliOption(key = "sparkMemory", unspecifiedDefaultValue = "4G",
-          help = "Spark executor memory") final String sparkMemory,
-      @CliOption(key = "rollbackUsingMarkers", unspecifiedDefaultValue = "false",
-          help = "Enabling marker based rollback") final String rollbackUsingMarkers)
-      throws Exception {
-    HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
-    HoodieTimeline completedTimeline = activeTimeline.getCommitsTimeline().filterCompletedInstants();
-    HoodieTimeline filteredTimeline = completedTimeline.filter(instant -> instant.getTimestamp().equals(instantTime));
-    if (filteredTimeline.empty()) {
-      return "Commit " + instantTime + " not found in Commits " + completedTimeline;
-    }
-
-    SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
-    sparkLauncher.addAppArgs(SparkMain.SparkCommand.ROLLBACK.toString(), master, sparkMemory, instantTime,
-        HoodieCLI.getTableMetaClient().getBasePath(), rollbackUsingMarkers);
-    Process process = sparkLauncher.launch();
-    InputStreamConsumer.captureOutput(process);
-    int exitCode = process.waitFor();
-    // Refresh the current
-    HoodieCLI.refreshTableMetadata();
-    if (exitCode != 0) {
-      return "Commit " + instantTime + " failed to roll back";
-    }
-    return "Commit " + instantTime + " rolled back";
   }
 
   @CliCommand(value = "commit showpartitions", help = "Show partition level details of a commit")
