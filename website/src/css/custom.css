@@ -94,7 +94,7 @@ html[data-theme='dark'] .docusaurus-highlight-code-line {
 }
 
 .header-youtube-link:before {
-  background: url(/assets/images/youtube.jpeg) no-repeat;
+  background: url(/assets/images/youtube.png) no-repeat;
   content: "";
   display: flex;
   height: 30px;
