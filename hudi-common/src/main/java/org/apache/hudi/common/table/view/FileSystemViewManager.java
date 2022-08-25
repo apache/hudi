@@ -214,7 +214,8 @@ public class FileSystemViewManager {
     LOG.info("Creating remote view for basePath " + metaClient.getBasePath() + ". Server="
         + viewConf.getRemoteViewServerHost() + ":" + viewConf.getRemoteViewServerPort() + ", Timeout="
         + viewConf.getRemoteTimelineClientTimeoutSecs());
-    return new RemoteHoodieTableFileSystemView(metaClient, viewConf);
+    return new RemoteHoodieTableFileSystemView(viewConf.getRemoteViewServerHost(), viewConf.getRemoteViewServerPort(),
+        metaClient, viewConf.getRemoteTimelineClientTimeoutSecs());
   }
 
   public static FileSystemViewManager createViewManager(final HoodieEngineContext context,
