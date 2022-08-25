@@ -244,4 +244,18 @@ public class HoodieMetrics {
   public long getDurationInMs(long ctxDuration) {
     return ctxDuration / 1000000;
   }
+
+  public void emitConflictResolutionSuccessful() {
+    if (config.isMetricsOn()) {
+      LOG.info("Sending conflict resolution success metric");
+      Metrics.registerGauge(getMetricsName("resolve", "conflict.success.count"), 1);
+    }
+  }
+
+  public void emitConflictResolutionFailed() {
+    if (config.isMetricsOn()) {
+      LOG.info("Sending conflict resolution failed metric");
+      Metrics.registerGauge(getMetricsName("resolve", "conflict.failure.count"), 1);
+    }
+  }
 }
