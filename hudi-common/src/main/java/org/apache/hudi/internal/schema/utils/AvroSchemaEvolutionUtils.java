@@ -201,7 +201,7 @@ public class AvroSchemaEvolutionUtils {
 
     // Reconcile field names (by executing phony schema change)
     TableChanges.ColumnUpdateChange schemaChange =
-        reduce(reconciliationTargetColNames, TableChanges.ColumnUpdateChange.get(sourceInternalSchema),
+        reduce(reconciliationTargetColNames, TableChanges.ColumnUpdateChange.get(sourceInternalSchema, true),
             (change, sourceTargetPair) -> change.renameColumn(sourceTargetPair.getLeft(), sourceTargetPair.getRight()));
 
     return convert(SchemaChangeUtils.applyTableChanges2Schema(sourceInternalSchema, schemaChange), sourceSchema.getName());

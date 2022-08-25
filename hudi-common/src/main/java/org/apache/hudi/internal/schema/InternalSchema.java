@@ -241,15 +241,24 @@ public class InternalSchema implements Serializable {
   }
 
   /**
-   * Whether colName exists in current Schema.
-   * Case insensitive.
+   * Whether {@code colName} exists in the current Schema
    *
-   * @param colName a colName
-   * @return Whether colName exists in current Schema
+   * @param colName a column name
+   * @param caseSensitive whether columns names should be treated as case-sensitive
+   * @return whether schema contains column identified by {@code colName}
    */
-  public boolean findDuplicateCol(String colName) {
-    return idToName.entrySet().stream().map(e -> e.getValue().toLowerCase(Locale.ROOT))
-        .collect(Collectors.toSet()).contains(colName);
+  public boolean hasColumn(String colName, boolean caseSensitive) {
+    if (caseSensitive) {
+      // In case we do a case-sensitive check we just need to validate whether
+      // schema contains field-name as it is
+      return idToName.containsValue(colName);
+    } else {
+      return idToName.values()
+          .stream()
+          .map(fieldName -> fieldName.toLowerCase(Locale.ROOT))
+          .collect(Collectors.toSet())
+          .contains(colName);
+    }
   }
 
   public int findIdByName(String name) {
