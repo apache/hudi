@@ -46,6 +46,7 @@ import org.apache.hudi.hive.{HiveSyncConfigHolder, HiveSyncTool}
 import org.apache.hudi.internal.DataSourceInternalWriterHelper
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
+import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils.{reconcileFieldNamesCasing, reconcileNullability}
 import org.apache.hudi.internal.schema.utils.{AvroSchemaEvolutionUtils, SerDeHelper}
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.keygen.{SparkKeyGeneratorInterface, TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
@@ -58,6 +59,9 @@ import org.apache.log4j.LogManager
 import org.apache.spark.api.java.{JavaRDD, JavaSparkContext}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql._
+import org.apache.spark.sql.catalyst.TableIdentifier
+import org.apache.spark.sql.catalyst.catalog.{CatalogTable, HoodieCatalogTable}
+import org.apache.spark.sql.internal.{SQLConf, StaticSQLConf}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.internal.StaticSQLConf
@@ -491,6 +495,15 @@ object HoodieSparkSqlWriter {
       })
     }
     fullPartitions.distinct
+  }
+
+  private def reconcileFieldNameCasing(spark: SparkSession, sourceSchema: Schema, latestTableSchema: Schema) = {
+    if (spark.sessionState.conf.getConf(SQLConf.CASE_SENSITIVE)) {
+      sourceSchema
+    } else {
+      // Otherwise we have to canonicalize field names across incoming and existing table schemas
+      reconcileFieldNamesCasing(sourceSchema, latestTableSchema)
+    }
   }
 
   def getPartitionColumns(partitionParam: String): Seq[String] = {
