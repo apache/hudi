@@ -69,6 +69,15 @@ public class CollectionUtils {
     return !isNullOrEmpty(c);
   }
 
+  // TODO java-doc
+  public static <T, U> U reduce(Collection<T> c, U identity, BiFunction<U, T, U> reducer) {
+    return c.stream()
+        .sequential()
+        .reduce(identity, reducer, (a, b) -> {
+          throw new UnsupportedOperationException();
+        });
+  }
+
   /**
    * Makes a copy of provided {@link Properties} object
    */

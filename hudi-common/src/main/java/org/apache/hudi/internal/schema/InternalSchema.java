@@ -118,7 +118,7 @@ public class InternalSchema implements Serializable {
     if (nameToId == null) {
       nameToId = InternalSchemaBuilder.getBuilder().buildNameToId(record);
     }
-    return Arrays.asList(nameToId.keySet().toArray(new String[0]));
+    return new ArrayList<>(nameToId.keySet());
   }
 
   /**
