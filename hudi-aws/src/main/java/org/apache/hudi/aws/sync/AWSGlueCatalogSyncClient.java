@@ -138,9 +138,9 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
 
         BatchCreatePartitionResult result = awsGlue.batchCreatePartition(request);
         if (CollectionUtils.nonEmpty(result.getErrors())) {
-          if(result.getErrors().stream().allMatch((error) -> "AlreadyExistsException".equals(error.getErrorDetail().getErrorCode()))){
+          if (result.getErrors().stream().allMatch((error) -> "AlreadyExistsException".equals(error.getErrorDetail().getErrorCode()))) {
             LOG.warn("Partitions already exist in glue: " + result.getErrors());
-          } else{
+          }else {
             throw new HoodieGlueSyncException("Fail to add partitions to " + tableId(databaseName, tableName)
               + " with error(s): " + result.getErrors());
           }
