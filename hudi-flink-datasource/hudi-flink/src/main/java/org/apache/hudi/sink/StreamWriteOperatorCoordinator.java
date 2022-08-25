@@ -396,7 +396,11 @@ public class StreamWriteOperatorCoordinator
         reset();
       } else {
         LOG.info("Recommit instant {}", instant);
-        commitInstant(instant);
+        boolean success = commitInstant(instant);
+        if (success) {
+          LOG.info("instant {} ReSync Hive", instant);
+          syncHive();
+        }
       }
       // starts a new instant
       startInstant();
