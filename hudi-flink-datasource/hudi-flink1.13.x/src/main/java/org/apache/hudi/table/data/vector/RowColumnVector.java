@@ -16,32 +16,15 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.table.format.cow.vector;
+package org.apache.hudi.table.data.vector;
 
 import org.apache.hudi.table.data.ColumnarRowData;
-import org.apache.hudi.table.data.vector.RowColumnVector;
-import org.apache.hudi.table.data.vector.VectorizedColumnBatch;
 
-import org.apache.flink.table.data.vector.heap.AbstractHeapVector;
-import org.apache.flink.table.data.vector.writable.WritableColumnVector;
+import org.apache.flink.table.data.vector.ColumnVector;
 
 /**
- * This class represents a nullable heap row column vector.
+ * Row column vector.
  */
-public class HeapRowColumnVector extends AbstractHeapVector
-    implements WritableColumnVector, RowColumnVector {
-
-  public WritableColumnVector[] vectors;
-
-  public HeapRowColumnVector(int len, WritableColumnVector... vectors) {
-    super(len);
-    this.vectors = vectors;
-  }
-
-  @Override
-  public ColumnarRowData getRow(int i) {
-    ColumnarRowData columnarRowData = new ColumnarRowData(new VectorizedColumnBatch(vectors));
-    columnarRowData.setRowId(i);
-    return columnarRowData;
-  }
+public interface RowColumnVector extends ColumnVector {
+  ColumnarRowData getRow(int i);
 }

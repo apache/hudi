@@ -303,6 +303,8 @@ public class SparkHoodieHBaseIndex extends HoodieIndex<Object, Object> {
         }
       } catch (IOException e) {
         throw new HoodieIndexException("Failed to Tag indexed locations because of exception with HBase Client", e);
+      } finally {
+        limiter.stop();
       }
       return taggedRecords.iterator();
     };
@@ -338,8 +340,8 @@ public class SparkHoodieHBaseIndex extends HoodieIndex<Object, Object> {
       final long startTimeForPutsTask = DateTime.now().getMillis();
       LOG.info("startTimeForPutsTask for this task: " + startTimeForPutsTask);
 
+      final RateLimiter limiter = RateLimiter.create(multiPutBatchSize, TimeUnit.SECONDS);
       try (BufferedMutator mutator = hbaseConnection.getBufferedMutator(TableName.valueOf(tableName))) {
-        final RateLimiter limiter = RateLimiter.create(multiPutBatchSize, TimeUnit.SECONDS);
         while (statusIterator.hasNext()) {
           WriteStatus writeStatus = statusIterator.next();
           List<Mutation> mutations = new ArrayList<>();
@@ -387,6 +389,8 @@ public class SparkHoodieHBaseIndex extends HoodieIndex<Object, Object> {
         LOG.info("hbase puts task time for this task: " + (endPutsTime - startTimeForPutsTask));
       } catch (IOException e) {
         throw new HoodieIndexException("Failed to Update Index locations because of exception with HBase Client", e);
+      } finally {
+        limiter.stop();
       }
       return writeStatusList.iterator();
     };
@@ -586,10 +590,9 @@ public class SparkHoodieHBaseIndex extends HoodieIndex<Object, Object> {
         hbaseConnection = getHBaseConnection();
       }
     }
+    final RateLimiter limiter = RateLimiter.create(multiPutBatchSize, TimeUnit.SECONDS);
     try (HTable hTable = (HTable) hbaseConnection.getTable(TableName.valueOf(tableName));
          BufferedMutator mutator = hbaseConnection.getBufferedMutator(TableName.valueOf(tableName))) {
-      final RateLimiter limiter = RateLimiter.create(multiPutBatchSize, TimeUnit.SECONDS);
-
       Long rollbackTime = HoodieActiveTimeline.parseDateFromInstantTime(instantTime).getTime();
       Long currentTime = new Date().getTime();
       Scan scan = new Scan();
@@ -638,6 +641,8 @@ public class SparkHoodieHBaseIndex extends HoodieIndex<Object, Object> {
     } catch (Exception e) {
       LOG.error("hbase index roll back failed", e);
       return false;
+    } finally {
+      limiter.stop();
     }
     return true;
   }
