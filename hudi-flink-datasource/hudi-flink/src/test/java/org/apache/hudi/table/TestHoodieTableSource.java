@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table;
 
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.table.format.mor.MergeOnReadInputFormat;
 import org.apache.hudi.utils.TestConfigurations;
@@ -146,6 +147,14 @@ public class TestHoodieTableSource {
     HoodieTableSource copiedSource = (HoodieTableSource) tableSource.copy();
     List<ResolvedExpression> actualFilters = copiedSource.getFileIndex().getFilters();
     assertEquals(expectedFilters, actualFilters);
+  }
+
+  @Test
+  void testHoodieSourceCachedMetaClient() {
+    HoodieTableSource tableSource = getEmptyStreamingSource();
+    HoodieTableMetaClient metaClient = tableSource.getMetaClient();
+    HoodieTableSource tableSourceCopy = (HoodieTableSource) tableSource.copy();
+    assertThat(metaClient, is(tableSourceCopy.getMetaClient()));
   }
 
   private HoodieTableSource getEmptyStreamingSource() {
