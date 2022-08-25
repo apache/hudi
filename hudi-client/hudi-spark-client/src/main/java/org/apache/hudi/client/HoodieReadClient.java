@@ -93,6 +93,18 @@ public class HoodieReadClient<T extends HoodieRecordPayload<T>> implements Seria
   }
 
   /**
+   * @param context
+   * @param basePath
+   * @param sqlContext
+   * @param indexType
+   */
+  public HoodieReadClient( HoodieSparkEngineContext context, String basePath, SQLContext sqlContext, HoodieIndex.IndexType indexType) {
+    this(context, HoodieWriteConfig.newBuilder() .withPath(basePath)
+                       .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(indexType).build()).build());
+    this.sqlContextOpt = Option.of(sqlContext);
+  }
+
+  /**
    * @param clientConfig instance of HoodieWriteConfig
    */
   public HoodieReadClient(HoodieSparkEngineContext context, HoodieWriteConfig clientConfig) {
