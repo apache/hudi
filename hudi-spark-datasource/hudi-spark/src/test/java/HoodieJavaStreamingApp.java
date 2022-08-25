@@ -372,6 +372,7 @@ public class HoodieJavaStreamingApp {
         .option(DataSourceWriteOptions.ASYNC_COMPACT_ENABLE().key(), "true")
         .option(DataSourceWriteOptions.ASYNC_CLUSTERING_ENABLE().key(), "true")
         .option(HoodieCompactionConfig.PRESERVE_COMMIT_METADATA.key(), "false")
+        .option(DataSourceWriteOptions.STREAMING_IGNORE_FAILED_BATCH().key(),"true")
         .option(HoodieWriteConfig.TBL_NAME.key(), tableName).option("checkpointLocation", checkpointLocation)
         .outputMode(OutputMode.Append());
 
