@@ -48,7 +48,7 @@ public class LockManager implements Serializable, AutoCloseable {
   private final SerializableConfiguration hadoopConf;
   private final int maxRetries;
   private final long maxWaitTimeInMs;
-  private HoodieLockMetrics metrics;
+  private transient HoodieLockMetrics metrics;
   private volatile LockProvider lockProvider;
 
   public LockManager(HoodieWriteConfig writeConfig, FileSystem fs) {
