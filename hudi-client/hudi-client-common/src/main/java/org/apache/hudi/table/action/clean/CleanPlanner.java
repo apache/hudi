@@ -134,9 +134,9 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
     switch (config.getCleanerPolicy()) {
       case KEEP_LATEST_COMMITS:
       case KEEP_LATEST_BY_HOURS:
-        return getPartitionPathsForCleanByCommits(earliestRetainedInstant);
-      case KEEP_LATEST_FILE_VERSIONS:
         return getPartitionPathsForFullCleaning();
+      case KEEP_LATEST_FILE_VERSIONS:
+        return getPartitionPathsForCleanByCommits(earliestRetainedInstant);
       default:
         throw new IllegalStateException("Unknown Cleaner Policy");
     }
