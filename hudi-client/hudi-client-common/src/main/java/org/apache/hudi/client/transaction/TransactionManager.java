@@ -85,6 +85,10 @@ public class TransactionManager implements Serializable {
     }
   }
 
+  public LockManager getLockManager() {
+    return lockManager;
+  }
+
   public Option<HoodieInstant> getLastCompletedTransactionOwner() {
     return lastCompletedTxnOwnerInstant;
   }

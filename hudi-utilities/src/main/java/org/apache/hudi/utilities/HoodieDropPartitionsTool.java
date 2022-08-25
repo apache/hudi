@@ -174,6 +174,8 @@ public class HoodieDropPartitionsTool implements Serializable {
     public String hiveURL = "jdbc:hive2://localhost:10000";
     @Parameter(names = {"--hive-partition-field"}, description = "Comma separated list of field in the hive table to use for determining hive partition columns.", required = false)
     public String hivePartitionsField = "";
+    @Parameter(names = {"--hive-sync-use-jdbc"}, description = "Use JDBC when hive synchronization.", required = false)
+    public boolean hiveUseJdbc = true;
     @Parameter(names = {"--hive-metastore-uris"}, description = "hive meta store uris to use.", required = false)
     public String hiveHMSUris = null;
     @Parameter(names = {"--hive-sync-mode"}, description = "Mode to choose for Hive ops. Valid values are hms, jdbc and hiveql.", required = false)
@@ -213,7 +215,7 @@ public class HoodieDropPartitionsTool implements Serializable {
           + "   --hive-pass-word " + "Masked" + ", \n"
           + "   --hive-jdbc-url " + hiveURL + ", \n"
           + "   --hive-partition-field " + hivePartitionsField + ", \n"
-          + "   --hive-sync-mode " + hiveSyncMode + ", \n"
+          + "   --hive-sync-use-jdbc " + hiveUseJdbc + ", \n"
           + "   --hive-metastore-uris " + hiveHMSUris + ", \n"
           + "   --hive-sync-ignore-exception " + hiveSyncIgnoreException + ", \n"
           + "   --hive-partition-value-extractor-class " + partitionValueExtractorClass + ", \n"
@@ -245,7 +247,7 @@ public class HoodieDropPartitionsTool implements Serializable {
           && Objects.equals(hivePassWord, config.hivePassWord)
           && Objects.equals(hiveURL, config.hiveURL)
           && Objects.equals(hivePartitionsField, config.hivePartitionsField)
-          && Objects.equals(hiveSyncMode, config.hiveSyncMode)
+          && Objects.equals(hiveUseJdbc, config.hiveUseJdbc)
           && Objects.equals(hiveHMSUris, config.hiveHMSUris)
           && Objects.equals(partitionValueExtractorClass, config.partitionValueExtractorClass)
           && Objects.equals(sparkMaster, config.sparkMaster)
@@ -259,7 +261,7 @@ public class HoodieDropPartitionsTool implements Serializable {
     public int hashCode() {
       return Objects.hash(basePath, runningMode, tableName, partitions, instantTime,
           syncToHive, hiveDataBase, hiveTableName, hiveUserName, hivePassWord, hiveURL,
-          hivePartitionsField, hiveSyncMode, hiveHMSUris, partitionValueExtractorClass,
+          hivePartitionsField, hiveUseJdbc, hiveHMSUris, partitionValueExtractorClass,
           sparkMaster, sparkMemory, propsFilePath, configs, hiveSyncIgnoreException, help);
     }
   }
@@ -348,6 +350,7 @@ public class HoodieDropPartitionsTool implements Serializable {
     props.put(DataSourceWriteOptions.HIVE_PASS().key(), cfg.hivePassWord);
     props.put(DataSourceWriteOptions.HIVE_URL().key(), cfg.hiveURL);
     props.put(DataSourceWriteOptions.HIVE_PARTITION_FIELDS().key(), cfg.hivePartitionsField);
+    props.put(DataSourceWriteOptions.HIVE_USE_JDBC().key(), cfg.hiveUseJdbc);
     props.put(DataSourceWriteOptions.HIVE_SYNC_MODE().key(), cfg.hiveSyncMode);
     props.put(DataSourceWriteOptions.HIVE_IGNORE_EXCEPTIONS().key(), cfg.hiveSyncIgnoreException);
     props.put(DataSourceWriteOptions.HIVE_PASS().key(), cfg.hivePassWord);

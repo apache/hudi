@@ -19,6 +19,7 @@ package org.apache.hudi
 
 import org.apache.hudi.ColumnStatsIndexSupport.composeIndexSchema
 import org.apache.hudi.testutils.HoodieClientTestBase
+import org.apache.spark.sql.HoodieCatalystExpressionUtils.resolveExpr
 import org.apache.spark.sql.catalyst.expressions.{Expression, Not}
 import org.apache.spark.sql.functions.{col, lower}
 import org.apache.spark.sql.hudi.DataSkippingUtils
@@ -57,8 +58,6 @@ case class IndexRow(fileName: String,
 
 class TestDataSkippingUtils extends HoodieClientTestBase with SparkAdapterSupport {
 
-  val exprUtils: HoodieCatalystExpressionUtils = sparkAdapter.createCatalystExpressionUtils()
-
   var spark: SparkSession = _
 
   @BeforeEach
@@ -92,7 +91,7 @@ class TestDataSkippingUtils extends HoodieClientTestBase with SparkAdapterSuppor
     // is consistent with the fixtures
     spark.sqlContext.setConf(SESSION_LOCAL_TIMEZONE.key, "UTC")
 
-    val resolvedExpr: Expression = exprUtils.resolveExpr(spark, sourceExpr, sourceTableSchema)
+    val resolvedExpr: Expression = resolveExpr(spark, sourceExpr, sourceTableSchema)
     val lookupFilter = DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr(resolvedExpr, indexSchema)
 
     val indexDf = spark.createDataFrame(input.map(_.toRow).asJava, indexSchema)
@@ -109,7 +108,7 @@ class TestDataSkippingUtils extends HoodieClientTestBase with SparkAdapterSuppor
   @ParameterizedTest
   @MethodSource(Array("testStringsLookupFilterExpressionsSource"))
   def testStringsLookupFilterExpressions(sourceExpr: Expression, input: Seq[IndexRow], output: Seq[String]): Unit = {
-    val resolvedExpr = exprUtils.resolveExpr(spark, sourceExpr, sourceTableSchema)
+    val resolvedExpr = resolveExpr(spark, sourceExpr, sourceTableSchema)
     val lookupFilter = DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr(resolvedExpr, indexSchema)
 
     val spark2 = spark

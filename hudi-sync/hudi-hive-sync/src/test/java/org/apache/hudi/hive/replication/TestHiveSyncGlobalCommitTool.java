@@ -19,7 +19,8 @@
 
 package org.apache.hudi.hive.replication;
 
-import org.apache.hudi.hive.testutils.TestCluster;
+import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
+import org.apache.hudi.hive.testutils.HiveTestCluster;
 
 import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.AfterEach;
@@ -41,6 +42,7 @@ import static org.apache.hudi.hive.replication.HiveSyncGlobalCommitParams.REMOTE
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_ASSUME_DATE_PARTITION;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_FIELDS;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -51,9 +53,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class TestHiveSyncGlobalCommitTool {
 
   @RegisterExtension
-  public static TestCluster localCluster = new TestCluster();
+  public static HiveTestCluster localCluster = new HiveTestCluster();
   @RegisterExtension
-  public static TestCluster remoteCluster = new TestCluster();
+  public static HiveTestCluster remoteCluster = new HiveTestCluster();
 
   private static final String DB_NAME = "foo";
   private static final String TBL_NAME = "bar";
@@ -75,6 +77,7 @@ public class TestHiveSyncGlobalCommitTool {
     params.loadedProps.setProperty(META_SYNC_ASSUME_DATE_PARTITION.key(), "true");
     params.loadedProps.setProperty(HIVE_USE_PRE_APACHE_INPUT_FORMAT.key(), "false");
     params.loadedProps.setProperty(META_SYNC_PARTITION_FIELDS.key(), "datestr");
+    params.loadedProps.setProperty(META_SYNC_PARTITION_EXTRACTOR_CLASS.key(), SlashEncodedDayPartitionValueExtractor.class.getName());
     return params;
   }
 

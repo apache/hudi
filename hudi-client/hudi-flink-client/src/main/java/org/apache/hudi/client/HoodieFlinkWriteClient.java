@@ -20,7 +20,7 @@ package org.apache.hudi.client;
 
 import org.apache.hudi.async.AsyncCleanerService;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
-import org.apache.hudi.common.data.HoodieList;
+import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
@@ -96,7 +96,7 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
   /**
    * Cached metadata writer for coordinator to reuse for each commit.
    */
-  private Option<HoodieBackedTableMetadataWriter> metadataWriterOption = Option.empty();
+  private HoodieBackedTableMetadataWriter metadataWriter;
 
   public HoodieFlinkWriteClient(HoodieEngineContext context, HoodieWriteConfig writeConfig) {
     super(context, writeConfig, FlinkUpgradeDowngradeHelper.getInstance());
@@ -127,8 +127,7 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
     // Create a Hoodie table which encapsulated the commits and files visible
     HoodieFlinkTable<T> table = getHoodieTable();
     Timer.Context indexTimer = metrics.getIndexCtx();
-    List<HoodieRecord<T>> recordsWithLocation = HoodieList.getList(
-        getIndex().tagLocation(HoodieList.of(hoodieRecords), context, table));
+    List<HoodieRecord<T>> recordsWithLocation = getIndex().tagLocation(HoodieListData.eager(hoodieRecords), context, table).collectAsList();
     metrics.updateIndexMetrics(LOOKUP_STR, metrics.getDurationInMs(indexTimer == null ? 0L : indexTimer.stop()));
     return recordsWithLocation.stream().filter(v1 -> !v1.isCurrentLocationKnown()).collect(Collectors.toList());
   }
@@ -255,7 +254,7 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
   }
 
   @Override
-  protected void preWrite(String instantTime, WriteOperationType writeOperationType, HoodieTableMetaClient metaClient) {
+  public void preWrite(String instantTime, WriteOperationType writeOperationType, HoodieTableMetaClient metaClient) {
     setOperationType(writeOperationType);
     // Note: the code to read the commit metadata is not thread safe for JSON deserialization,
     // remove the table metadata sync
@@ -265,10 +264,24 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
 
   @Override
   protected void writeTableMetadata(HoodieTable table, String instantTime, String actionType, HoodieCommitMetadata metadata) {
-    this.metadataWriterOption.ifPresent(w -> {
-      w.initTableMetadata(); // refresh the timeline
-      w.update(metadata, instantTime, getHoodieTable().isTableServiceAction(actionType));
-    });
+    if (this.metadataWriter == null) {
+      initMetadataWriter();
+    }
+    try {
+      // guard the metadata writer with concurrent lock
+      this.txnManager.getLockManager().lock();
+
+      // refresh the timeline
+
+      // Note: the data meta client is not refreshed currently, some code path
+      // relies on the meta client for resolving the latest data schema,
+      // the schema expects to be immutable for SQL jobs but may be not for non-SQL
+      // jobs.
+      this.metadataWriter.initTableMetadata();
+      this.metadataWriter.update(metadata, instantTime, getHoodieTable().isTableServiceAction(actionType));
+    } finally {
+      this.txnManager.getLockManager().unlock();
+    }
   }
 
   /**
@@ -276,9 +289,24 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
    * from the filesystem if it does not exist.
    */
   public void initMetadataWriter() {
-    HoodieBackedTableMetadataWriter metadataWriter = (HoodieBackedTableMetadataWriter) FlinkHoodieBackedTableMetadataWriter.create(
+    this.metadataWriter = (HoodieBackedTableMetadataWriter) FlinkHoodieBackedTableMetadataWriter.create(
         FlinkClientUtil.getHadoopConf(), this.config, HoodieFlinkEngineContext.DEFAULT);
-    this.metadataWriterOption = Option.of(metadataWriter);
+  }
+
+  /**
+   * Initialized the metadata table on start up, should only be called once on driver.
+   */
+  public void initMetadataTable() {
+    HoodieFlinkTable<?> table = getHoodieTable();
+    if (config.isMetadataTableEnabled()) {
+      // initialize the metadata table path
+      initMetadataWriter();
+      // clean the obsolete index stats
+      table.deleteMetadataIndexIfNecessary();
+    } else {
+      // delete the metadata table if it was enabled but is now disabled
+      table.maybeDeleteMetadataTable();
+    }
   }
 
   /**

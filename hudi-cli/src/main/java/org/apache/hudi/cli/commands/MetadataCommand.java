@@ -150,7 +150,7 @@ public class MetadataCommand implements CommandMarker {
   @CliCommand(value = "metadata init", help = "Update the metadata table from commits since the creation")
   public String init(@CliOption(key = "sparkMaster", unspecifiedDefaultValue = SparkUtil.DEFAULT_SPARK_MASTER, help = "Spark master") final String master,
                      @CliOption(key = {"readonly"}, unspecifiedDefaultValue = "false",
-      help = "Open in read-only mode") final boolean readOnly) throws Exception {
+                         help = "Open in read-only mode") final boolean readOnly) throws Exception {
     HoodieCLI.getTableMetaClient();
     Path metadataPath = new Path(getMetadataTableBasePath(HoodieCLI.basePath));
     try {

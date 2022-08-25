@@ -24,7 +24,7 @@ import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
+import org.apache.hudi.hive.MultiPartKeysValueExtractor;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.util.FlinkStateBackendConverter;
 import org.apache.hudi.util.StreamerUtil;
@@ -39,6 +39,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.hudi.common.util.PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH;
 import static org.apache.hudi.configuration.FlinkOptions.PARTITION_FORMAT_DAY;
 
 /**
@@ -178,7 +179,7 @@ public class FlinkStreamerConfig extends Configuration {
 
   @Parameter(names = {"--partition-default-name"},
       description = "The default partition name in case the dynamic partition column value is null/empty string")
-  public String partitionDefaultName = "default";
+  public String partitionDefaultName = DEFAULT_PARTITION_PATH;
 
   @Parameter(names = {"--index-bootstrap-enabled"},
       description = "Whether to bootstrap the index state from existing hoodie table, default false")
@@ -271,6 +272,12 @@ public class FlinkStreamerConfig extends Configuration {
           + "This also directly translates into how much you can incrementally pull on this table, default 10")
   public Integer cleanRetainCommits = 10;
 
+  @Parameter(names = {"--clean-retain-hours"},
+      description = "Number of hours for which commits need to be retained. This config provides a more flexible option as"
+          + "compared to number of commits retained for cleaning service. Setting this property ensures all the files, but the latest in a file group,"
+          + " corresponding to commits with commit times older than the configured number of hours to be retained are cleaned. default 24")
+  public Integer cleanRetainHours = 24;
+
   @Parameter(names = {"--clean-retain-file-versions"},
       description = "Number of file versions to retain. Each file group will be retained for this number of version. default 5")
   public Integer cleanRetainFileVersions = 5;
@@ -314,11 +321,14 @@ public class FlinkStreamerConfig extends Configuration {
   public String hiveSyncPartitionFields = "";
 
   @Parameter(names = {"--hive-sync-partition-extractor-class"}, description = "Tool to extract the partition value from HDFS path, "
-      + "default 'SlashEncodedDayPartitionValueExtractor'")
-  public String hiveSyncPartitionExtractorClass = SlashEncodedDayPartitionValueExtractor.class.getCanonicalName();
+      + "default 'MultiPartKeysValueExtractor'")
+  public String hiveSyncPartitionExtractorClass = MultiPartKeysValueExtractor.class.getCanonicalName();
 
   @Parameter(names = {"--hive-sync-assume-date-partitioning"}, description = "Assume partitioning is yyyy/mm/dd, default false")
   public Boolean hiveSyncAssumeDatePartition = false;
+
+  @Parameter(names = {"--hive-sync-use-jdbc"}, description = "Use JDBC when hive synchronization is enabled, default true")
+  public Boolean hiveSyncUseJdbc = true;
 
   @Parameter(names = {"--hive-sync-auto-create-db"}, description = "Auto create hive database if it does not exists, default true")
   public Boolean hiveSyncAutoCreateDb = true;
@@ -401,6 +411,7 @@ public class FlinkStreamerConfig extends Configuration {
     conf.setBoolean(FlinkOptions.CLEAN_ASYNC_ENABLED, config.cleanAsyncEnabled);
     conf.setString(FlinkOptions.CLEAN_POLICY, config.cleanPolicy);
     conf.setInteger(FlinkOptions.CLEAN_RETAIN_COMMITS, config.cleanRetainCommits);
+    conf.setInteger(FlinkOptions.CLEAN_RETAIN_HOURS, config.cleanRetainHours);
     conf.setInteger(FlinkOptions.CLEAN_RETAIN_FILE_VERSIONS, config.cleanRetainFileVersions);
     conf.setInteger(FlinkOptions.ARCHIVE_MAX_COMMITS, config.archiveMaxCommits);
     conf.setInteger(FlinkOptions.ARCHIVE_MIN_COMMITS, config.archiveMinCommits);
@@ -416,6 +427,7 @@ public class FlinkStreamerConfig extends Configuration {
     conf.setString(FlinkOptions.HIVE_SYNC_PARTITION_FIELDS, config.hiveSyncPartitionFields);
     conf.setString(FlinkOptions.HIVE_SYNC_PARTITION_EXTRACTOR_CLASS_NAME, config.hiveSyncPartitionExtractorClass);
     conf.setBoolean(FlinkOptions.HIVE_SYNC_ASSUME_DATE_PARTITION, config.hiveSyncAssumeDatePartition);
+    conf.setBoolean(FlinkOptions.HIVE_SYNC_USE_JDBC, config.hiveSyncUseJdbc);
     conf.setBoolean(FlinkOptions.HIVE_SYNC_AUTO_CREATE_DB, config.hiveSyncAutoCreateDb);
     conf.setBoolean(FlinkOptions.HIVE_SYNC_IGNORE_EXCEPTIONS, config.hiveSyncIgnoreExceptions);
     conf.setBoolean(FlinkOptions.HIVE_SYNC_SKIP_RO_SUFFIX, config.hiveSyncSkipRoSuffix);

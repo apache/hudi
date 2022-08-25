@@ -32,6 +32,7 @@ import org.junit.jupiter.api.Assertions;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
+import java.sql.Date;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -371,5 +372,12 @@ public class TestHoodieAvroUtils {
     colRenames.put("ss.ln", "lastname");
     GenericRecord studentRecordRename = HoodieAvroUtils.rewriteRecordWithNewSchema(rec3, nestedSchemaRename, colRenames);
     Assertions.assertEquals(GenericData.get().validate(nestedSchemaRename, studentRecordRename), true);
+  }
+
+  @Test
+  public void testConvertDaysToDate() {
+    Date now = new Date(System.currentTimeMillis());
+    int days = HoodieAvroUtils.fromJavaDate(now);
+    assertEquals(now.toLocalDate(), HoodieAvroUtils.toJavaDate(days).toLocalDate());
   }
 }

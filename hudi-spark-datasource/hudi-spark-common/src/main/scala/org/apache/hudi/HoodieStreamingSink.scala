@@ -121,7 +121,7 @@ class HoodieStreamingSink(sqlContext: SQLContext,
             }
           log.error(s"Micro batch id=$batchId threw following exception: ", e)
           if (ignoreFailedBatch) {
-            log.info(s"Ignore the exception and move on streaming as per " +
+            log.warn(s"Ignore the exception and move on streaming as per " +
               s"${DataSourceWriteOptions.STREAMING_IGNORE_FAILED_BATCH.key} configuration")
             Success((true, None, None))
           } else {

@@ -480,7 +480,7 @@ public abstract class AbstractHoodieLogRecordReader {
       }
     }
     // At this step the lastBlocks are consumed. We track approximate progress by number of log-files seen
-    progress = numLogFilesSeen - 1 / logFilePaths.size();
+    progress = (numLogFilesSeen - 1) / logFilePaths.size();
   }
 
   private ClosableIterator<IndexedRecord> getRecordsIterator(HoodieDataBlock dataBlock, Option<KeySpec> keySpecOpt) throws IOException {

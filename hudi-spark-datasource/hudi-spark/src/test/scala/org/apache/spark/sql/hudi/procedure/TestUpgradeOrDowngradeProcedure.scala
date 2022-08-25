@@ -21,11 +21,10 @@ import org.apache.hadoop.fs.Path
 import org.apache.hudi.common.config.HoodieConfig
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion}
 import org.apache.spark.api.java.JavaSparkContext
-import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase
 
 import java.io.IOException
 
-class TestUpgradeOrDowngradeProcedure extends HoodieSparkSqlTestBase {
+class TestUpgradeOrDowngradeProcedure extends HoodieSparkProcedureTestBase {
 
   test("Test Call downgrade_table and upgrade_table Procedure") {
     withTempDir { tmp =>
@@ -48,7 +47,7 @@ class TestUpgradeOrDowngradeProcedure extends HoodieSparkSqlTestBase {
        """.stripMargin)
       // Check required fields
       checkExceptionContain(s"""call downgrade_table(table => '$tableName')""")(
-        s"Argument: toVersion is required")
+        s"Argument: to_version is required")
 
       var metaClient = HoodieTableMetaClient.builder
         .setConf(new JavaSparkContext(spark.sparkContext).hadoopConfiguration())
@@ -56,13 +55,13 @@ class TestUpgradeOrDowngradeProcedure extends HoodieSparkSqlTestBase {
         .build
 
       // verify hoodie.table.version of the original table
-      assertResult(HoodieTableVersion.FOUR.versionCode) {
+      assertResult(HoodieTableVersion.FIVE.versionCode) {
         metaClient.getTableConfig.getTableVersion.versionCode()
       }
-      assertTableVersionFromPropertyFile(metaClient, HoodieTableVersion.FOUR.versionCode)
+      assertTableVersionFromPropertyFile(metaClient, HoodieTableVersion.FIVE.versionCode)
 
       // downgrade table to ZERO
-      checkAnswer(s"""call downgrade_table(table => '$tableName', toVersion => 'ZERO')""")(Seq(true))
+      checkAnswer(s"""call downgrade_table(table => '$tableName', to_version => 'ZERO')""")(Seq(true))
 
       // verify the downgraded hoodie.table.version
       metaClient = HoodieTableMetaClient.reload(metaClient)
@@ -72,7 +71,7 @@ class TestUpgradeOrDowngradeProcedure extends HoodieSparkSqlTestBase {
       assertTableVersionFromPropertyFile(metaClient, HoodieTableVersion.ZERO.versionCode)
 
       // upgrade table to ONE
-      checkAnswer(s"""call upgrade_table(table => '$tableName', toVersion => 'ONE')""")(Seq(true))
+      checkAnswer(s"""call upgrade_table(table => '$tableName', to_version => 'ONE')""")(Seq(true))
 
       // verify the upgraded hoodie.table.version
       metaClient = HoodieTableMetaClient.reload(metaClient)

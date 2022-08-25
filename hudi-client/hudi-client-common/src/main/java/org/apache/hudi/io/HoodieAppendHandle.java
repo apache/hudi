@@ -471,10 +471,12 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
 
     return HoodieLogFormat.newWriterBuilder()
         .onParentPath(FSUtils.getPartitionPath(hoodieTable.getMetaClient().getBasePath(), partitionPath))
-        .withFileId(fileId).overBaseCommit(baseCommitTime)
+        .withFileId(fileId)
+        .overBaseCommit(baseCommitTime)
         .withLogVersion(latestLogFile.map(HoodieLogFile::getLogVersion).orElse(HoodieLogFile.LOGFILE_BASE_VERSION))
         .withFileSize(latestLogFile.map(HoodieLogFile::getFileSize).orElse(0L))
-        .withSizeThreshold(config.getLogFileMaxSize()).withFs(fs)
+        .withSizeThreshold(config.getLogFileMaxSize())
+        .withFs(fs)
         .withRolloverLogWriteToken(writeToken)
         .withLogWriteToken(latestLogFile.map(x -> FSUtils.getWriteTokenFromLogPath(x.getPath())).orElse(writeToken))
         .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();

@@ -21,8 +21,9 @@ This repo contains the code that integrate Hudi with Spark. The repo is split in
 
 `hudi-spark`
 `hudi-spark2`
-`hudi-spark3`
 `hudi-spark3.1.x`
+`hudi-spark3.2.x`
+`hudi-spark3.3.x`
 `hudi-spark2-common`
 `hudi-spark3-common`
 `hudi-spark-common`
@@ -30,8 +31,9 @@ This repo contains the code that integrate Hudi with Spark. The repo is split in
 * hudi-spark is the module that contains the code that both spark2 & spark3 version would share, also contains the antlr4 
 file that supports spark sql on spark 2.x version.
 * hudi-spark2 is the module that contains the code that compatible with spark 2.x versions.
-* hudi-spark3 is the module that contains the code that compatible with spark 3.2.0(and above) versions。
-* hudi-spark3.1.x is the module that contains the code that compatible with spark3.1.x and spark3.0.x version.  
+* hudi-spark3.1.x is the module that contains the code that compatible with spark3.1.x and spark3.0.x version.
+* hudi-spark3.2.x is the module that contains the code that compatible with spark 3.2.x versions.
+* hudi-spark3.3.x is the module that contains the code that compatible with spark 3.3.x+ versions. 
 * hudi-spark2-common is the module that contains the code that would be reused between spark2.x versions, right now the module
 has no class since hudi only supports spark 2.4.4 version, and it acts as the placeholder when packaging hudi-spark-bundle module. 
 * hudi-spark3-common is the module that contains the code that would be reused between spark3.x versions.
@@ -50,7 +52,12 @@ has no class since hudi only supports spark 2.4.4 version, and it acts as the pl
 | 3.1.2   |    No   |
 | 3.2.0   |    Yes  |
 
-### About upgrading Time Travel:
+### To improve:
 Spark3.3 support time travel syntax link [SPARK-37219](https://issues.apache.org/jira/browse/SPARK-37219). 
 Once Spark 3.3 released. The files in the following list will be removed:
-* hudi-spark3's `HoodieSpark3_2ExtendedSqlAstBuilder.scala`、`HoodieSpark3_2ExtendedSqlParser.scala`、`TimeTravelRelation.scala`、`SqlBase.g4`、`HoodieSqlBase.g4`
+* hudi-spark3.3.x's `HoodieSpark3_3ExtendedSqlAstBuilder.scala`, `HoodieSpark3_3ExtendedSqlParser.scala`, `TimeTravelRelation.scala`, `SqlBase.g4`, `HoodieSqlBase.g4`
+Tracking Jira: [HUDI-4468](https://issues.apache.org/jira/browse/HUDI-4468)
+
+Some other improvements undergoing:
+* Port borrowed classes from Spark 3.3 [HUDI-4467](https://issues.apache.org/jira/browse/HUDI-4467)
+

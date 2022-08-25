@@ -67,6 +67,7 @@ import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.SparkSession;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -96,6 +97,7 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
   private static transient JavaSparkContext jsc;
   private static transient HoodieSparkEngineContext context;
   private static transient TimelineService timelineService;
+  private FileSystem fileSystem;
 
   /**
    * An indicator of the initialization status.
@@ -128,7 +130,10 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
   }
 
   public FileSystem fs() {
-    return FSUtils.getFs(basePath(), hadoopConf());
+    if (fileSystem == null) {
+      fileSystem = FSUtils.getFs(basePath(), hadoopConf());
+    }
+    return fileSystem;
   }
 
   @Override
@@ -205,6 +210,14 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
     }
     if (timelineService != null) {
       timelineService.close();
+    }
+  }
+
+  @AfterEach
+  public void closeFileSystem() throws IOException {
+    if (fileSystem != null) {
+      fileSystem.close();
+      fileSystem = null;
     }
   }
 

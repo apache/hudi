@@ -1359,7 +1359,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     // Test Hive integration
     HiveSyncConfig hiveSyncConfig = getHiveSyncConfig(tableBasePath, "hive_trips");
     hiveSyncConfig.setValue(META_SYNC_PARTITION_FIELDS, "year,month,day");
-    hiveSyncConfig.setHadoopConf(hiveServer.getHiveConf());
+    hiveSyncConfig.setHadoopConf(hiveTestService.getHiveConf());
     HoodieHiveSyncClient hiveClient = new HoodieHiveSyncClient(hiveSyncConfig);
     final String tableName = hiveSyncConfig.getString(META_SYNC_TABLE_NAME);
     assertTrue(hiveClient.tableExists(tableName), "Table " + tableName + " should exist");
@@ -2167,6 +2167,27 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     List<String> tableFields = tableSchema.getFields().stream().map(Schema.Field::name).collect(Collectors.toList());
     // now assert that the partition column is not in the target schema
     assertFalse(tableFields.contains("partition_path"));
+  }
+
+  @Test
+  public void testForceEmptyMetaSync() throws Exception {
+    String tableBasePath = dfsBasePath + "/test_force_empty_meta_sync";
+
+    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.BULK_INSERT);
+    cfg.sourceLimit = 0;
+    cfg.allowCommitOnNoCheckpointChange = true;
+    cfg.enableMetaSync = true;
+    cfg.forceEmptyMetaSync = true;
+
+    new HoodieDeltaStreamer(cfg, jsc, dfs, hiveServer.getHiveConf()).sync();
+    TestHelpers.assertRecordCount(0, tableBasePath, sqlContext);
+
+    // make sure hive table is present
+    HiveSyncConfig hiveSyncConfig = getHiveSyncConfig(tableBasePath, "hive_trips");
+    hiveSyncConfig.setHadoopConf(hiveServer.getHiveConf());
+    HoodieHiveSyncClient hiveClient = new HoodieHiveSyncClient(hiveSyncConfig);
+    final String tableName = hiveSyncConfig.getString(META_SYNC_TABLE_NAME);
+    assertTrue(hiveClient.tableExists(tableName), "Table " + tableName + " should exist");
   }
 
   class TestDeltaSync extends DeltaSync {

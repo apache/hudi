@@ -38,6 +38,7 @@ import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.hadoop.CachingPath;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -62,7 +63,7 @@ import java.util.stream.Collectors;
  *   <li>Query instant/range</li>
  * </ul>
  */
-public abstract class BaseHoodieTableFileIndex {
+public abstract class   BaseHoodieTableFileIndex {
 
   private static final Logger LOG = LogManager.getLogger(BaseHoodieTableFileIndex.class);
 
@@ -164,6 +165,11 @@ public abstract class BaseHoodieTableFileIndex {
     return cachedAllInputFileSlices.entrySet()
         .stream()
         .collect(Collectors.toMap(e -> e.getKey().path, Map.Entry::getValue));
+  }
+
+  public int getFileSlicesCount() {
+    return cachedAllInputFileSlices.values().stream()
+        .mapToInt(List::size).sum();
   }
 
   protected List<PartitionPath> getAllQueryPartitionPaths() {
@@ -349,10 +355,10 @@ public abstract class BaseHoodieTableFileIndex {
 
     Path fullPartitionPath(String basePath) {
       if (!path.isEmpty()) {
-        return new Path(basePath, path);
+        return new CachingPath(basePath, path);
       }
 
-      return new Path(basePath);
+      return new CachingPath(basePath);
     }
 
     @Override

@@ -145,8 +145,11 @@ public class HoodieWrapperFileSystem extends FileSystem {
     URI oldURI = oldPath.toUri();
     URI newURI;
     try {
-      newURI = new URI(newScheme, oldURI.getUserInfo(), oldURI.getHost(), oldURI.getPort(), oldURI.getPath(),
-          oldURI.getQuery(), oldURI.getFragment());
+      newURI = new URI(newScheme,
+                oldURI.getAuthority(),
+                oldURI.getPath(),
+                oldURI.getQuery(),
+                oldURI.getFragment());
       return new CachingPath(newURI);
     } catch (URISyntaxException e) {
       // TODO - Better Exception handling

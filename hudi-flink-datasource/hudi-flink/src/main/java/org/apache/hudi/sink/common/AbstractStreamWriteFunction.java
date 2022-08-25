@@ -279,6 +279,6 @@ public abstract class AbstractStreamWriteFunction<I>
    * Returns whether the pending instant is invalid to write with.
    */
   private boolean invalidInstant(String instant, boolean hasData) {
-    return instant.equals(this.currentInstant) && hasData && !this.ckpMetadata.isAborted(instant);
+    return instant.equals(this.currentInstant) && hasData;
   }
 }

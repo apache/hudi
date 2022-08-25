@@ -128,17 +128,33 @@ public abstract class HoodieSyncClient implements AutoCloseable {
 
 ## Config simplification
 
-- rename all sync related configs to suffix as `hoodie.sync.*`
-  - no more `hoodie.meta.sync.*` or `hoodie.meta_sync.*`
-  - no more variable name or class name like `metaSyncEnabled` or `metaSyncTool`; standardize as `hoodieSync*` to align with module name `hudi-sync`
-- remove all sync related option constants from `DataSourceOptions`
+### Compatible changes
+
+- support all sync related configs to use suffix as `hoodie.meta.sync.*`
+  - move `hoodie.meta_sync.*` or any other variance to alias
+  - rename module `hudi-sync` to `hudi-meta-sync` (no bundle name change)
+  - rename `hoodieSync*` variables or methods to `hoodieMetaSync*`
 - `database` and `table` should not be required by sync tool; they should be inferred from table properties
-- users should not need to set PartitionValueExtractor; partition values should be inferred automatically
+- users should not need to set PartitionValueExtractor; partition value extractors should be inferred automatically
+- infer repeated sync configs from original configs
+  - `META_SYNC_BASE_FILE_FORMAT`
+    - infer from `org.apache.hudi.common.table.HoodieTableConfig.BASE_FILE_FORMAT`
+  - `META_SYNC_ASSUME_DATE_PARTITION`
+    - infer from `org.apache.hudi.common.config.HoodieMetadataConfig.ASSUME_DATE_PARTITIONING`
+  - `META_SYNC_DECODE_PARTITION`
+    - infer from `org.apache.hudi.common.table.HoodieTableConfig.URL_ENCODE_PARTITIONING`
+  - `META_SYNC_USE_FILE_LISTING_FROM_METADATA`
+    - infer from `org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE`
+
+### Breaking changes
+
+The breaking changes should be made at once together with other user-facing config changes at a chosen proper release.
+
+- remove all sync related option constants from `DataSourceOptions`
 - remove `USE_JDBC` and fully adopt `SYNC_MODE`
 - remove `HIVE_SYNC_ENDABLED` and related arguments from sync tools and delta streamers. Use `SYNC_ENABLED`
-- migrate repeated sync config to original config
+- remove repeated sync configs, use original configs
    - `META_SYNC_BASE_FILE_FORMAT` -> `org.apache.hudi.common.table.HoodieTableConfig.BASE_FILE_FORMAT`
-   - `META_SYNC_PARTITION_FIELDS` -> `org.apache.hudi.common.table.HoodieTableConfig.PARTITION_FIELDS`
    - `META_SYNC_ASSUME_DATE_PARTITION` -> `org.apache.hudi.common.config.HoodieMetadataConfig.ASSUME_DATE_PARTITIONING`
    - `META_SYNC_DECODE_PARTITION` -> `org.apache.hudi.common.table.HoodieTableConfig.URL_ENCODE_PARTITIONING`
    - `META_SYNC_USE_FILE_LISTING_FROM_METADATA` -> `org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE`
