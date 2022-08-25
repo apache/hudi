@@ -40,7 +40,7 @@ Support consuming Protobuf messages from Kafka with the DeltaStreamer.
 Hudi's DeltaStreamer currently supports consuming Avro and JSON data from Kafka but it does not support Protobuf. Adding support will require:
 1. Parsing the data from Kafka into Protobuf Messages
 2. Generating a schema from a Protobuf Message class
-3. Converting from Protobuf to Avro
+3. Converting from Protobuf to Avro and Row
 
 ## Implementation
 
@@ -53,8 +53,32 @@ hoodie.deltastreamer.schemaprovider.proto.className - The class to use
 ### ProtobufClassBasedSchemaProvider
 This new SchemaProvider will allow the user to provide a Protobuf Message class and get an Avro Schema. In the proto world, there is no concept of a nullable field so people use wrapper types such as Int32Value and StringValue to represent a nullable field. The schema provider will also allow the user to treat these wrapper fields as nullable versions of the fields they are wrapping instead of treating them as a nested message. In practice, this means that the user can choose between representing a field `Int32Value my_int = 1;` as `my_int.value` or simply `my_int` when writing the data out to the file system.
 
-#### Handling of Unsigned Integers and Longs
-Protobuf provides support for unsigned integers and longs while Avro does not. The schema provider will convert unsigned integers and longs to Avro long type in the schema definition.
+#### Field Mappings
+Protobuf -> Avro  
+bool     -> boolean  
+float    -> float  
+double   -> double  
+enum     -> enum  
+string   -> string  
+bytes    -> bytes  
+int32    -> int  
+sint32   -> int  
+fixed32  -> int  
+sfixed32 -> int  
+uint32   -> long [1]  
+int64    -> long  
+uint64   -> long  
+sint64   -> long  
+fixed64  -> long  
+sfixed64 -> long  
+message  -> record [2]  
+repeated -> array  
+map      -> array [3]  
+
+
+[1] Handling of Unsigned Integers and Longs: Protobuf provides support for unsigned integers and longs while Avro does not. The schema provider will convert unsigned integers and longs to Avro long type in the schema definition.  
+[2] All messages will be translated to a union[null, record] with a default of null.  
+[3] Protobuf maps allow non-string keys while avro does not so we convert maps to an array of records containing a key and a value.   
 
 #### Schema Evolution
 **Adding a Field:**
@@ -66,9 +90,11 @@ Configuration Options:
 hoodie.deltastreamer.schemaprovider.proto.className - The class to use
 hoodie.deltastreamer.schemaprovider.proto.flattenWrappers (Default: false) - By default the wrapper classes will be treated like any other message and have a nested `value` field. When this is set to true, we do not have a nested `value` field and treat the field as nullable in the generated Schema
 
-### ProtoToAvroConverter
+### ProtoToAvroConverter and ProtoToRowConverter
 
-A utility will be provided that can take in a Protobuf Message and convert it to an Avro GenericRecord. This will be used inside the SourceFormatAdapter to properly convert to an avro RDD. To convert to `Dataset<Row>` we will first convert to Avro and then to Row. This change will be adding a new `Source.SourceType` as well so other sources in the future can implement this source type, for example Protobuf messages on PubSub.
+A utility will be provided that can take in a Protobuf Message and convert it to an Avro GenericRecord. This will be used inside the SourceFormatAdapter to properly convert to an avro RDD. This change will be adding a new `Source.SourceType` as well so other sources in the future can implement this source type, for example Protobuf messages on PubSub.
+
+To convert to `Dataset<Row>` we will initially convert to Avro and then to Row to reduce the amount of changes required to initially ship the feature. Then we will do a fast-follow with a direct proto to row conversion that follows a similar approach as the proto to avro converter.
 
 Special handling for maps:
 Protobuf allows you to use any integral or string type as a key while Avro requires a string. To account for this, we convert all maps to lists of entries in that map.
