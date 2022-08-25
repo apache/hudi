@@ -1033,7 +1033,6 @@ class TestCOWDataSource extends HoodieClientTestBase {
   def testInsertMetricsReporterEnabled(): Unit = {
     val dataGenerator = new QuickstartUtils.DataGenerator()
     val records = convertToStringList(dataGenerator.generateInserts( 10))
-//    println("Printing Records: " + records)
     val recordsRDD = spark.sparkContext.parallelize(records, 2)
     val inputDF = spark.read.json(sparkSession.createDataset(recordsRDD)(Encoders.STRING))
     inputDF.write.format("hudi")
