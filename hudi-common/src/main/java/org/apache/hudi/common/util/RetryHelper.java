@@ -18,26 +18,27 @@
 
 package org.apache.hudi.common.util;
 
-import org.apache.hudi.exception.HoodieException;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
-import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
 import java.util.stream.Collectors;
 
-public class RetryHelper<T> implements Serializable {
+public class RetryHelper<T> {
   private static final Logger LOG = LogManager.getLogger(RetryHelper.class);
-  private transient CheckedFunction<T> func;
-  private final int num;
-  private final long maxIntervalTime;
-  private final long initialIntervalTime;
+  private CheckedFunction<T> func;
+  private int num;
+  private long maxIntervalTime;
+  private long initialIntervalTime = 100L;
   private String taskInfo = "N/A";
   private List<? extends Class<? extends Exception>> retryExceptionsClasses;
+
+  public RetryHelper() {
+  }
 
   public RetryHelper(long maxRetryIntervalMs, int maxRetryNumbers, long initialRetryIntervalMs, String retryExceptions) {
     this.num = maxRetryNumbers;
@@ -46,24 +47,18 @@ public class RetryHelper<T> implements Serializable {
     if (StringUtils.isNullOrEmpty(retryExceptions)) {
       this.retryExceptionsClasses = new ArrayList<>();
     } else {
-      try {
-        this.retryExceptionsClasses = Arrays.stream(retryExceptions.split(","))
-                .map(exception -> (Exception) ReflectionUtils.loadClass(exception, ""))
-                .map(Exception::getClass)
-                .collect(Collectors.toList());
-      } catch (HoodieException e) {
-        LOG.error("Exception while loading retry exceptions classes '" + retryExceptions + "'.", e);
-        this.retryExceptionsClasses = new ArrayList<>();
-      }
+      this.retryExceptionsClasses = Arrays.stream(retryExceptions.split(","))
+          .map(exception -> (Exception) ReflectionUtils.loadClass(exception, ""))
+          .map(Exception::getClass)
+          .collect(Collectors.toList());
     }
   }
 
-  public RetryHelper(long maxRetryIntervalMs, int maxRetryNumbers, long initialRetryIntervalMs, String retryExceptions, String taskInfo) {
-    this(maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptions);
+  public RetryHelper(String taskInfo) {
     this.taskInfo = taskInfo;
   }
 
-  public RetryHelper<T> tryWith(CheckedFunction<T> func) {
+  public RetryHelper tryWith(CheckedFunction<T> func) {
     this.func = func;
     return this;
   }
@@ -82,18 +77,14 @@ public class RetryHelper<T> implements Serializable {
           throw e;
         }
         if (retries++ >= num) {
-          String message = "Still failed to " + taskInfo + " after retried " + num + " times.";
-          LOG.error(message, e);
-          if (e instanceof IOException) {
-            throw new IOException(message, e);
-          }
+          LOG.error("Still failed to " + taskInfo + " after retried " + num + " times.", e);
           throw e;
         }
-        LOG.warn("Catch Exception for " + taskInfo + ", will retry after " + waitTime + " ms.", e);
+        LOG.warn("Catch Exception " + taskInfo + ", will retry after " + waitTime + " ms.", e);
         try {
           Thread.sleep(waitTime);
         } catch (InterruptedException ex) {
-          // ignore InterruptedException here
+            // ignore InterruptedException here
         }
       }
     }
@@ -101,7 +92,6 @@ public class RetryHelper<T> implements Serializable {
     if (retries > 0) {
       LOG.info("Success to " + taskInfo + " after retried " + retries + " times.");
     }
-
     return functionResult;
   }
 
@@ -133,7 +123,7 @@ public class RetryHelper<T> implements Serializable {
   }
 
   @FunctionalInterface
-  public interface CheckedFunction<T> extends Serializable {
+  public interface CheckedFunction<T> {
     T get() throws IOException;
   }
 }
