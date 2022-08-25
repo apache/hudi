@@ -63,7 +63,7 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
     HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
   )
   val sparkOpts = Map(
-    HoodieWriteConfig.MERGER_STRATEGY.key -> classOf[HoodieSparkRecordMerger].getName,
+    HoodieWriteConfig.MERGER_IMPLS.key -> classOf[HoodieSparkRecordMerger].getName,
     HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> "parquet"
   )
 
@@ -330,7 +330,6 @@ class TestMORDataSource extends HoodieClientTestBase with SparkDatasetMixin {
       .mode(SaveMode.Append)
       .save(basePath)
 
-    // TODO FIXME
     // Make force spill
     spark.sparkContext.hadoopConfiguration.set(HoodieRealtimeConfig.COMPACTION_MEMORY_FRACTION_PROP, "0.00001")
     val hudiSnapshotDF1 = spark.read.format("org.apache.hudi")

@@ -57,11 +57,12 @@ import org.apache.spark.api.java.{JavaRDD, JavaSparkContext}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql._
 import org.apache.spark.sql.internal.StaticSQLConf
+import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.{SPARK_VERSION, SparkContext}
+
 import scala.collection.JavaConversions._
 import scala.collection.mutable
-import org.apache.spark.sql.catalyst.InternalRow
 
 object HoodieSparkSqlWriter {
 
@@ -340,7 +341,7 @@ object HoodieSparkSqlWriter {
   def generateSparkSchemaWithoutPartitionColumns(partitionParam: String, schema: StructType): StructType = {
     val fieldsToRemove = new java.util.ArrayList[String]()
     partitionParam.split(",").map(partitionField => partitionField.trim)
-      .filter(s => !s.isEmpty).map(field => fieldsToRemove.add(field))
+      .filter(s => s.nonEmpty).map(field => fieldsToRemove.add(field))
     HoodieInternalRowUtils.removeFields(schema, fieldsToRemove)
   }
 
@@ -843,7 +844,7 @@ object HoodieSparkSqlWriter {
         HoodieWriteConfig.COMBINE_BEFORE_INSERT.defaultValue()).toBoolean
     val precombineField = config.getString(PRECOMBINE_FIELD)
     val keyGenerator = HoodieSparkKeyGeneratorFactory.createKeyGenerator(new TypedProperties(config.getProps))
-    val partitionCols = HoodieSparkUtils.getPartitionColumns(keyGenerator, toProperties(parameters))
+    val partitionCols = SparkKeyGenUtils.getPartitionColumns(keyGenerator, toProperties(parameters))
     val dropPartitionColumns = config.getBoolean(DataSourceWriteOptions.DROP_PARTITION_COLUMNS)
     config.getRecordMerger.getRecordType match {
       case HoodieRecord.HoodieRecordType.AVRO =>
@@ -870,12 +871,14 @@ object HoodieSparkSqlWriter {
         val sparkKeyGenerator = keyGenerator.asInstanceOf[SparkKeyGeneratorInterface]
         val structType = HoodieInternalRowUtils.getCachedSchema(schema)
         val structTypeBC = SparkContext.getOrCreate().broadcast(structType)
+        HoodieInternalRowUtils.addCompressedSchema(structType)
         df.queryExecution.toRdd.map(row => {
           val internalRow = row.copy()
           val (processedRow, writeSchema) = getSparkProcessedRecord(partitionCols, internalRow, dropPartitionColumns, structTypeBC.value)
-          val recordKey = sparkKeyGenerator.getRecordKey(processedRow, writeSchema)
-          val partitionPath = sparkKeyGenerator.getPartitionPath(processedRow, writeSchema)
+          val recordKey = sparkKeyGenerator.getRecordKey(internalRow, structTypeBC.value)
+          val partitionPath = sparkKeyGenerator.getPartitionPath(internalRow, structTypeBC.value)
           val key = new HoodieKey(recordKey.toString, partitionPath.toString)
+          HoodieInternalRowUtils.addCompressedSchema(structTypeBC.value)
 
           new HoodieSparkRecord(key, processedRow, writeSchema)
         }).toJavaRDD().asInstanceOf[JavaRDD[HoodieRecord[_]]]

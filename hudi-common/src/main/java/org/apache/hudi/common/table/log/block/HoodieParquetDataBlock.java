@@ -97,7 +97,7 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
 
     Schema writerSchema = new Schema.Parser().parse(super.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
-    try (FSDataOutputStream outputStream = new FSDataOutputStream(baos)) {
+    try (FSDataOutputStream outputStream = new FSDataOutputStream(baos, null)) {
       HoodieFileWriter parquetWriter = null;
       HoodieConfig config = new HoodieConfig();
       config.setValue(PARQUET_COMPRESSION_CODEC_NAME.key(), compressionCodecName.get().name());

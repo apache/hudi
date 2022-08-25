@@ -27,7 +27,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 
-import org.apache.spark.sql.HoodieDefaultCatalystExpressionUtils;
+import org.apache.spark.sql.HoodieCatalystExpressionUtils$;
 import org.apache.spark.sql.HoodieUnsafeRowUtils;
 import org.apache.spark.sql.HoodieUnsafeRowUtils.NestedFieldPath;
 import org.apache.spark.sql.catalyst.InternalRow;
@@ -78,7 +78,7 @@ public class HoodieSparkRecordUtils {
    * @return the string form of the field or empty if the schema does not contain the field name or the value is null
    */
   private static Option<String> getNullableValAsString(StructType structType, InternalRow row, String fieldName) {
-    String fieldVal = !HoodieDefaultCatalystExpressionUtils.existField(structType, fieldName)
+    String fieldVal = !HoodieCatalystExpressionUtils$.MODULE$.existField(structType, fieldName)
         ? null : StringUtils.objToString(getValue(structType, fieldName, row));
     return Option.ofNullable(fieldVal);
   }

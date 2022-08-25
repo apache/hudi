@@ -42,7 +42,7 @@ public class HoodieFileSliceReader<T> implements Iterator<HoodieRecord<T>> {
     if (baseFileReader.isPresent()) {
       Iterator<HoodieRecord> baseIterator = baseFileReader.get().getRecordIterator(schema);
       while (baseIterator.hasNext()) {
-        scanner.processNextRecord(baseIterator.next().getKeyWithParams(schema, props,
+        scanner.processNextRecord(baseIterator.next().wrapIntoHoodieRecordPayloadWithParams(schema, props,
             simpleKeyGenFieldsOpt, scanner.isWithOperationField(), scanner.getPartitionName(), false));
       }
     }

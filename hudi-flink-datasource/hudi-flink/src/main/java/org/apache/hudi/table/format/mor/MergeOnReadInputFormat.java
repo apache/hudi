@@ -684,7 +684,7 @@ public class MergeOnReadInputFormat
       this.avroToRowDataConverter = AvroToRowDataConverters.createRowConverter(requiredRowType);
       this.projection = RowDataProjection.instance(requiredRowType, requiredPos);
       this.instantRange = split.getInstantRange().orElse(null);
-      List<String> mergers = Arrays.stream(finkConf.getString(FlinkOptions.RECORD_MERGE_STRATEGY).split(","))
+      List<String> mergers = Arrays.stream(flinkConf.getString(FlinkOptions.RECORD_MERGER_IMPLS).split(","))
           .map(String::trim)
           .distinct()
           .collect(Collectors.toList());

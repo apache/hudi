@@ -73,7 +73,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
     HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key -> "1"
   )
   val sparkOpts = Map(
-    HoodieWriteConfig.MERGER_STRATEGY.key -> classOf[HoodieSparkRecordMerger].getName,
+    HoodieWriteConfig.MERGER_IMPLS.key -> classOf[HoodieSparkRecordMerger].getName,
     HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> "parquet"
   )
 
@@ -679,10 +679,9 @@ class TestCOWDataSource extends HoodieClientTestBase {
     }
   }
 
-  @ParameterizedTest
-  @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
-  def testSparkPartitionByWithSimpleKeyGenerator(recordType: HoodieRecordType) {
-    val (writeOpts, readOpts) = getOpts(recordType)
+  @Test
+  def testSparkPartitionByWithSimpleKeyGenerator() {
+    val (writeOpts, readOpts) = getOpts(HoodieRecordType.AVRO)
 
     // Use the `driver` field as the partition key
     var writer = getDataFrameWriter(classOf[SimpleKeyGenerator].getName, writeOpts)
@@ -993,7 +992,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
       .withColumn("shortDecimal", lit(new java.math.BigDecimal(s"2090.0000"))) // create decimalType(8, 4)
     inputDF1.write.format("org.apache.hudi")
-      .options(writeOpts)
+      .options(commonOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL)
       .mode(SaveMode.Overwrite)
       .save(basePath)
@@ -1001,11 +1000,11 @@ class TestCOWDataSource extends HoodieClientTestBase {
     // update the value of shortDecimal
     val inputDF2 = inputDF1.withColumn("shortDecimal", lit(new java.math.BigDecimal(s"3090.0000")))
     inputDF2.write.format("org.apache.hudi")
-      .options(writeOpts)
+      .options(commonOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
       .mode(SaveMode.Append)
       .save(basePath)
-    val readResult = spark.read.format("hudi").options(readOpts).load(basePath)
+    val readResult = spark.read.format("hudi").load(basePath)
     assert(readResult.count() == 5)
     // compare the test result
     assertEquals(inputDF2.sort("_row_key").select("shortDecimal").collect().map(_.getDecimal(0).toPlainString).mkString(","),

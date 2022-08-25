@@ -22,7 +22,6 @@ import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
-import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 import org.apache.hudi.table.action.compact.strategy.LogFileSizeBasedCompactionStrategy;
@@ -119,12 +118,6 @@ public class HoodieCompactionConfig extends HoodieConfig {
       .withDocumentation("Compaction strategy decides which file groups are picked up for "
           + "compaction during each compaction run. By default. Hudi picks the log file "
           + "with most accumulated unmerged data");
-
-  public static final ConfigProperty<String> MERGE_CLASS_NAME = ConfigProperty
-      .key("hoodie.compaction.merge.class")
-      .defaultValue(HoodieAvroRecordMerger.class.getName())
-      .withDocumentation("Merge class provide stateless component interface for merging records, and support various HoodieRecord "
-          + "types, such as Spark records or Flink records.");
 
   public static final ConfigProperty<String> COMPACTION_LAZY_BLOCK_READ_ENABLE = ConfigProperty
       .key("hoodie.compaction.lazy.block.read")
@@ -356,11 +349,6 @@ public class HoodieCompactionConfig extends HoodieConfig {
 
     public Builder withCompactionStrategy(CompactionStrategy compactionStrategy) {
       compactionConfig.setValue(COMPACTION_STRATEGY, compactionStrategy.getClass().getName());
-      return this;
-    }
-
-    public Builder withMergeClass(String mergeClass) {
-      compactionConfig.setValue(MERGE_CLASS_NAME, mergeClass);
       return this;
     }
 

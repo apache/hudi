@@ -377,7 +377,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
   protected void writeToFile(HoodieKey key, HoodieRecord<T> record, Schema schema, Properties prop, boolean shouldPreserveRecordMetadata) throws IOException {
     HoodieRecord rewriteRecord;
     if (schemaOnReadEnabled) {
-      rewriteRecord = record.rewriteRecordWithNewSchema(schema, prop, writeSchemaWithMetaFields, Collections.emptyMap());
+      rewriteRecord = record.rewriteRecordWithNewSchema(schema, prop, writeSchemaWithMetaFields);
     } else {
       rewriteRecord = record.rewriteRecord(schema, prop, writeSchemaWithMetaFields);
     }

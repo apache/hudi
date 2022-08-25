@@ -54,7 +54,6 @@ import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.Arrays;
 import java.util.Deque;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Properties;
@@ -385,9 +384,8 @@ public abstract class AbstractHoodieLogRecordReader {
       while (recordIterator.hasNext()) {
         HoodieRecord currentRecord = recordIterator.next();
         Schema schema = schemaOption.isPresent() ? schemaOption.get() : dataBlock.getSchema();
-        HoodieRecord record = schemaOption.isPresent() ? currentRecord.rewriteRecordWithNewSchema(dataBlock.getSchema(), new Properties(), schemaOption.get(),
-              new HashMap<>()) : currentRecord;
-        HoodieRecord completedRecord = record.getKeyWithParams(schema, hoodieTableMetaClient.getTableConfig().getProps(), this.simpleKeyGenFields,
+        HoodieRecord record = schemaOption.isPresent() ? currentRecord.rewriteRecordWithNewSchema(dataBlock.getSchema(), new Properties(), schemaOption.get()) : currentRecord;
+        HoodieRecord completedRecord = record.wrapIntoHoodieRecordPayloadWithParams(schema, hoodieTableMetaClient.getTableConfig().getProps(), this.simpleKeyGenFields,
             this.withOperationField, this.partitionName, getPopulateMetaFields());
         processNextRecord(completedRecord);
         totalLogRecords.incrementAndGet();

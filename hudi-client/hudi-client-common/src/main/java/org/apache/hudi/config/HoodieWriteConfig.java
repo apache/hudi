@@ -129,11 +129,11 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("Payload class used. Override this, if you like to roll your own merge logic, when upserting/inserting. "
           + "This will render any value set for PRECOMBINE_FIELD_OPT_VAL in-effective");
 
-  public static final ConfigProperty<String> MERGER_STRATEGY = ConfigProperty
-      .key("hoodie.datasource.write.merge.strategy")
+  public static final ConfigProperty<String> MERGER_IMPLS = ConfigProperty
+      .key("hoodie.datasource.write.merger.impls")
       .defaultValue(HoodieAvroRecordMerger.class.getName())
-      .withDocumentation("A list of merge class provide stateless component interface for merging records, and support various HoodieRecord "
-          + "types, such as Spark records or Flink records. Default merge");
+      .withDocumentation("List of HoodieMerger implementations constituting Hudi's merging strategy -- based on the engine used "
+          + "Hudi will pick most efficient implementation to perform merging/combining of the records (during update, reading MOR table, etc)");
 
   public static final ConfigProperty<String> KEYGENERATOR_CLASS_NAME = ConfigProperty
       .key("hoodie.datasource.write.keygenerator.class")
@@ -908,7 +908,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   private void applyMergerClass() {
-    List<String> mergers = getSplitStringsOrDefault(MERGER_STRATEGY).stream()
+    List<String> mergers = getSplitStringsOrDefault(MERGER_IMPLS).stream()
         .map(String::trim)
         .distinct()
         .collect(Collectors.toList());
@@ -939,7 +939,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public void setMergerClass(String mergerStrategy) {
-    setValue(MERGER_STRATEGY, mergerStrategy);
+    setValue(MERGER_IMPLS, mergerStrategy);
   }
 
   public String getInternalSchema() {
@@ -2286,8 +2286,8 @@ public class HoodieWriteConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder withMergerStrategy(String mergerStrategy) {
-      writeConfig.setValue(MERGER_STRATEGY, mergerStrategy);
+    public Builder withMergerImpls(String mergerImpls) {
+      writeConfig.setValue(MERGER_IMPLS, mergerImpls);
       return this;
     }
 

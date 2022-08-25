@@ -196,7 +196,6 @@ public class StreamerUtil {
                 .archiveCommitsWith(conf.getInteger(FlinkOptions.ARCHIVE_MIN_COMMITS), conf.getInteger(FlinkOptions.ARCHIVE_MAX_COMMITS))
                 .build())
             .withCompactionConfig(HoodieCompactionConfig.newBuilder()
-                .withMergeClass(conf.getString(FlinkOptions.RECORD_MERGE_STRATEGY))
                 .withTargetIOPerCompactionInMB(conf.getLong(FlinkOptions.COMPACTION_TARGET_IO))
                 .withInlineCompactionTriggerStrategy(
                     CompactionTriggerStrategy.valueOf(conf.getString(FlinkOptions.COMPACTION_TRIGGER_STRATEGY).toUpperCase(Locale.ROOT)))
@@ -233,6 +232,7 @@ public class StreamerUtil {
             .withEmbeddedTimelineServerReuseEnabled(true) // make write client embedded timeline service singleton
             .withAutoCommit(false)
             .withAllowOperationMetadataField(conf.getBoolean(FlinkOptions.CHANGELOG_ENABLED))
+            .withMergerImpls(conf.getString(FlinkOptions.RECORD_MERGER_IMPLS))
             .withProps(flinkConf2TypedProperties(conf))
             .withSchema(getSourceSchema(conf).toString());
 

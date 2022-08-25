@@ -18,7 +18,7 @@
 
 package org.apache.hudi
 
-import org.apache.avro.Schema
+import org.apache.avro.{Schema, SchemaNormalization}
 import org.apache.avro.generic.{GenericRecord, GenericRecordBuilder}
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
@@ -31,9 +31,9 @@ import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig}
 import org.apache.hudi.common.engine.{EngineType, HoodieLocalEngineContext}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath
-import org.apache.hudi.common.model.{HoodieAvroIndexedRecord, HoodieEmptyRecord, HoodieLogFile, HoodiePayloadProps, HoodieRecord, HoodieRecordPayload, OverwriteWithLatestAvroPayload}
+import org.apache.hudi.common.model.{HoodieAvroIndexedRecord, HoodieEmptyRecord, HoodieLogFile, HoodieRecord, HoodieRecordPayload, OverwriteWithLatestAvroPayload}
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner
-import org.apache.hudi.common.util.HoodieRecordUtils
+import org.apache.hudi.common.util.{HoodieRecordUtils, SerializationUtils}
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.HoodiePayloadConfig
 import org.apache.hudi.exception.HoodieException
@@ -48,10 +48,11 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.{Partition, SerializableWritable, SparkContext, TaskContext}
 import java.io.Closeable
+import java.nio.charset.StandardCharsets
 import java.util.Properties
 import org.apache.hudi.commmon.model.HoodieSparkRecord
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
-import org.apache.spark.sql.HoodieUnsafeRowUtils
+import org.apache.spark.sql.hudi.SparkStructTypeSerializer
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 import scala.util.Try
@@ -429,6 +430,10 @@ private object HoodieMergeOnReadRDD {
       val recordMerger = HoodieRecordUtils.generateRecordMerger(tableState.tablePath, EngineType.SPARK, mergerList)
       logRecordScannerBuilder.withRecordMerger(recordMerger)
 
+      if (recordMerger.getRecordType == HoodieRecordType.SPARK) {
+        registerStructTypeSerializerIfNeed(List(HoodieInternalRowUtils.getCachedSchema(logSchema)))
+      }
+
       logRecordScannerBuilder.build()
     }
   }
@@ -446,6 +451,13 @@ private object HoodieMergeOnReadRDD {
     split.dataFile.map(baseFile => new Path(baseFile.filePath))
       .getOrElse(split.logFiles.head.getPath)
       .getParent
+  }
+
+  private def registerStructTypeSerializerIfNeed(schemas: List[StructType]): Unit = {
+    val schemaMap = schemas.map(schema => (SchemaNormalization.fingerprint64(schema.json.getBytes(StandardCharsets.UTF_8)), schema))
+      .toMap
+    val serializer = new SparkStructTypeSerializer(schemaMap)
+    SerializationUtils.setOverallRegister(classOf[HoodieSparkRecord].getName, serializer)
   }
 
   // TODO extract to HoodieAvroSchemaUtils

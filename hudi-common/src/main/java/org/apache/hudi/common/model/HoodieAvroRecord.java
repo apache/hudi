@@ -148,7 +148,7 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
   }
 
   @Override
-  public HoodieRecord getKeyWithParams(
+  public HoodieRecord wrapIntoHoodieRecordPayloadWithParams(
       Schema schema, Properties props,
       Option<Pair<String, String>> simpleKeyGenFieldsOpt,
       Boolean withOperation,
@@ -161,7 +161,7 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
   }
 
   @Override
-  public HoodieRecord getKeyWithKeyGen(Properties props, Option<BaseKeyGenerator> keyGen) {
+  public HoodieRecord wrapIntoHoodieRecordPayloadWithKeyGen(Properties props, Option<BaseKeyGenerator> keyGen) {
     throw new UnsupportedOperationException();
   }
 

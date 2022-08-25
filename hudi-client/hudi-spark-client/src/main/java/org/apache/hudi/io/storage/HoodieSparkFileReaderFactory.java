@@ -23,6 +23,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hudi.exception.HoodieIOException;
 
 import java.io.IOException;
+import org.apache.spark.sql.internal.SQLConf;
 
 public class HoodieSparkFileReaderFactory extends HoodieFileReaderFactory  {
 
@@ -38,6 +39,11 @@ public class HoodieSparkFileReaderFactory extends HoodieFileReaderFactory  {
   }
 
   protected HoodieFileReader newParquetFileReader(Configuration conf, Path path) {
+    conf.setIfUnset(SQLConf.PARQUET_BINARY_AS_STRING().key(),
+        SQLConf.PARQUET_BINARY_AS_STRING().defaultValueString());
+    conf.setIfUnset(SQLConf.PARQUET_INT96_AS_TIMESTAMP().key(),
+        SQLConf.PARQUET_INT96_AS_TIMESTAMP().defaultValueString());
+    conf.setIfUnset(SQLConf.CASE_SENSITIVE().key(), SQLConf.CASE_SENSITIVE().defaultValueString());
     return new HoodieSparkParquetReader(conf, path);
   }
 

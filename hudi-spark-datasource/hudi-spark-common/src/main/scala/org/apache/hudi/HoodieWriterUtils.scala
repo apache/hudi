@@ -18,7 +18,7 @@
 package org.apache.hudi
 
 import org.apache.hudi.DataSourceOptionsHelper.allAlternatives
-import org.apache.hudi.DataSourceWriteOptions._
+import org.apache.hudi.DataSourceWriteOptions.{MERGER_IMPLS, _}
 import org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE
 import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieCommonConfig, HoodieConfig}
 import org.apache.hudi.common.table.HoodieTableConfig
@@ -29,7 +29,6 @@ import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.util.SparkKeyGenUtils
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.hudi.command.SqlKeyGenerator
-
 import java.util.Properties
 import scala.collection.JavaConversions.mapAsJavaMap
 import scala.collection.JavaConverters._
@@ -218,7 +217,8 @@ object HoodieWriterUtils {
     PRECOMBINE_FIELD -> HoodieTableConfig.PRECOMBINE_FIELD,
     PARTITIONPATH_FIELD -> HoodieTableConfig.PARTITION_FIELDS,
     RECORDKEY_FIELD -> HoodieTableConfig.RECORDKEY_FIELDS,
-    PAYLOAD_CLASS_NAME -> HoodieTableConfig.PAYLOAD_CLASS_NAME
+    PAYLOAD_CLASS_NAME -> HoodieTableConfig.PAYLOAD_CLASS_NAME,
+    MERGER_IMPLS -> HoodieTableConfig.MERGER_IMPLS
   )
   def mappingSparkDatasourceConfigsToTableConfigs(options: Map[String, String]): Map[String, String] = {
     val includingTableConfigs = scala.collection.mutable.Map() ++ options

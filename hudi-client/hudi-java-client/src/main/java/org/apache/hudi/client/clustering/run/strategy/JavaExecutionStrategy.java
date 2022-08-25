@@ -216,7 +216,7 @@ public abstract class JavaExecutionStrategy<T>
         Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(getWriteConfig().getSchema()));
         HoodieFileReader baseFileReader = HoodieFileReaderFactory.getReaderFactory(recordType).getFileReader(getHoodieTable().getHadoopConf(), new Path(clusteringOp.getDataFilePath()));
         Iterator<HoodieRecord> recordIterator = baseFileReader.getRecordIterator(readerSchema);
-        recordIterator.forEachRemaining(record -> records.add(record.getKeyWithKeyGen(new Properties(), Option.empty())));
+        recordIterator.forEachRemaining(record -> records.add(record.wrapIntoHoodieRecordPayloadWithKeyGen(new Properties(), Option.empty())));
       } catch (IOException e) {
         throw new HoodieClusteringException("Error reading input data for " + clusteringOp.getDataFilePath()
             + " and " + clusteringOp.getDeltaFilePaths(), e);

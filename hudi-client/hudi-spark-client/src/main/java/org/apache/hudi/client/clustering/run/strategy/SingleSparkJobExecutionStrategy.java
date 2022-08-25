@@ -40,7 +40,7 @@ import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
-import org.apache.hudi.keygen.KeyGenerator;
+import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -152,14 +152,14 @@ public abstract class SingleSparkJobExecutionStrategy<T>
         try {
 
           HoodieFileReader baseFileReader = HoodieFileReaderFactory.getReaderFactory(recordType).getFileReader(getHoodieTable().getHadoopConf(), new Path(clusteringOp.getDataFilePath()));
-          Option<KeyGenerator> keyGeneratorOp;
+          Option<BaseKeyGenerator> keyGeneratorOp;
           if (!Boolean.parseBoolean(getWriteConfig().getProps().getOrDefault(POPULATE_META_FIELDS.key(), POPULATE_META_FIELDS.defaultValue().toString()).toString())) {
-            keyGeneratorOp = Option.of(HoodieSparkKeyGeneratorFactory.createKeyGenerator(getWriteConfig().getProps()));
+            keyGeneratorOp = Option.of((BaseKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(getWriteConfig().getProps()));
           } else {
             keyGeneratorOp = Option.empty();
           }
           MappingIterator mappingIterator = new MappingIterator((ClosableIterator<HoodieRecord>) baseFileReader.getRecordIterator(readerSchema),
-              rec -> ((HoodieRecord) rec).getKeyWithKeyGen(getWriteConfig().getProps(), keyGeneratorOp));
+              rec -> ((HoodieRecord) rec).wrapIntoHoodieRecordPayloadWithKeyGen(getWriteConfig().getProps(), keyGeneratorOp));
           return mappingIterator;
         } catch (IOException e) {
           throw new HoodieClusteringException("Error reading input data for " + clusteringOp.getDataFilePath()

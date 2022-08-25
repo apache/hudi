@@ -65,15 +65,15 @@ public class HoodieSparkFileWriterFactory extends HoodieFileWriterFactory {
         HoodieStorageConfig.newBuilder().fromProperties(config.getProps()).build());
     HoodieRowParquetConfig parquetConfig = new HoodieRowParquetConfig(writeSupport,
         CompressionCodecName.fromConf(compressionCodecName),
-        config.getInt(HoodieStorageConfig.PARQUET_BLOCK_SIZE),
-        config.getInt(HoodieStorageConfig.PARQUET_PAGE_SIZE),
-        config.getLong(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE),
+        config.getIntOrDefault(HoodieStorageConfig.PARQUET_BLOCK_SIZE),
+        config.getIntOrDefault(HoodieStorageConfig.PARQUET_PAGE_SIZE),
+        config.getLongOrDefault(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE),
         conf,
-        config.getDouble(HoodieStorageConfig.PARQUET_COMPRESSION_RATIO_FRACTION),
+        config.getDoubleOrDefault(HoodieStorageConfig.PARQUET_COMPRESSION_RATIO_FRACTION),
         config.getBooleanOrDefault(HoodieStorageConfig.PARQUET_DICTIONARY_ENABLED));
     parquetConfig.getHadoopConf().addResource(writeSupport.getHadoopConf());
 
-    return new HoodieSparkParquetWriter(path, parquetConfig, instantTime, taskContextSupplier, config.getBoolean(HoodieTableConfig.POPULATE_META_FIELDS));
+    return new HoodieSparkParquetWriter(path, parquetConfig, instantTime, taskContextSupplier, populateMetaFields);
   }
 
   protected HoodieFileWriter newParquetFileWriter(

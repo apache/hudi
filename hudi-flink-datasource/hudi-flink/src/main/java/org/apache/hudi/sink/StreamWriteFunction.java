@@ -204,7 +204,7 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
   }
 
   private void initMergeClass() {
-    List<String> mergers = Arrays.stream(config.getString(FlinkOptions.RECORD_MERGE_STRATEGY).split(","))
+    List<String> mergers = Arrays.stream(config.getString(FlinkOptions.RECORD_MERGER_IMPLS).split(","))
         .map(String::trim)
         .distinct()
         .collect(Collectors.toList());

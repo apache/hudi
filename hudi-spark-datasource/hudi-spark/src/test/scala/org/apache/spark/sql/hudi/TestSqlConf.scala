@@ -85,7 +85,8 @@ class TestSqlConf extends HoodieSparkSqlTestBase with BeforeAndAfter {
       assertResult(HoodieTableType.MERGE_ON_READ)(new HoodieTableConfig(
         new Path(tablePath).getFileSystem(new Configuration),
         s"$tablePath/" + HoodieTableMetaClient.METAFOLDER_NAME,
-        HoodieTableConfig.PAYLOAD_CLASS_NAME.defaultValue).getTableType)
+        HoodieTableConfig.PAYLOAD_CLASS_NAME.defaultValue,
+        HoodieTableConfig.MERGER_IMPLS.defaultValue).getTableType)
 
       // Manually pass incremental configs to global configs to make sure Hudi query is able to load the
       // global configs

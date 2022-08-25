@@ -19,19 +19,18 @@
 package org.apache.hudi
 
 import java.nio.charset.StandardCharsets
-import java.util
 import java.util.HashMap
 import java.util.concurrent.ConcurrentHashMap
-import org.apache.avro.Schema
+import org.apache.avro.{Schema, SchemaNormalization}
 import org.apache.hbase.thirdparty.com.google.common.base.Supplier
 import org.apache.hudi.avro.HoodieAvroUtils.{createFullName, toJavaDate}
 import org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField
 import org.apache.hudi.exception.HoodieException
 import org.apache.spark.sql.HoodieCatalystExpressionUtils
-import org.apache.spark.sql.catalyst.expressions.{GenericInternalRow, JoinedRow, MutableProjection, Projection}
+import org.apache.spark.sql.catalyst.expressions.{GenericInternalRow, JoinedRow, Projection}
 import org.apache.spark.sql.HoodieUnsafeRowUtils.NestedFieldPath
-import org.apache.spark.sql.{HoodieDefaultCatalystExpressionUtils, HoodieUnsafeRowUtils}
-import org.apache.spark.sql.catalyst.expressions.{GenericInternalRow, JoinedRow, Projection, UnsafeProjection}
+import org.apache.spark.sql.HoodieUnsafeRowUtils
+import org.apache.spark.sql.catalyst.expressions.UnsafeProjection
 import org.apache.spark.sql.catalyst.util.{ArrayBasedMapData, ArrayData, GenericArrayData, MapData}
 import org.apache.spark.sql.catalyst.{CatalystTypeConverters, InternalRow}
 import org.apache.spark.sql.types._
@@ -49,9 +48,9 @@ object HoodieInternalRowUtils {
       override def get(): HashMap[StructType, UnsafeProjection] = new HashMap[StructType, UnsafeProjection]
     })
   val schemaMap = new ConcurrentHashMap[Schema, StructType]
+  val schemaFingerPrintMap = new ConcurrentHashMap[Long, StructType]
+  val fingerPrintSchemaMap = new ConcurrentHashMap[StructType, Long]
   val orderPosListMap = new ConcurrentHashMap[(StructType, String), NestedFieldPath]
-  val schemaDeserializeMap = new ConcurrentHashMap[String, StructType]()
-  val schemaSerializeMap = new ConcurrentHashMap[StructType, String]()
 
   /**
    * @see org.apache.hudi.avro.HoodieAvroUtils#stitchRecords(org.apache.avro.generic.GenericRecord, org.apache.avro.generic.GenericRecord, org.apache.avro.Schema)
@@ -71,7 +70,7 @@ object HoodieInternalRowUtils {
 
     for ((field, pos) <- newSchema.fields.zipWithIndex) {
       var oldValue: AnyRef = null
-      if (HoodieDefaultCatalystExpressionUtils.existField(oldSchema, field.name)) {
+      if (HoodieCatalystExpressionUtils.existField(oldSchema, field.name)) {
         val oldField = oldSchema(field.name)
         val oldPos = oldSchema.fieldIndex(field.name)
         oldValue = oldRecord.get(oldPos, oldField.dataType)
@@ -126,7 +125,7 @@ object HoodieInternalRowUtils {
           val oldStrucType = oldSchema.asInstanceOf[StructType]
           targetSchema.fields.zipWithIndex.foreach { case (field, i) =>
             fieldNames.push(field.name)
-            if (HoodieDefaultCatalystExpressionUtils.existField(oldStrucType, field.name)) {
+            if (HoodieCatalystExpressionUtils.existField(oldStrucType, field.name)) {
               val oldField = oldStrucType(field.name)
               val oldPos = oldStrucType.fieldIndex(field.name)
               helper(i) = rewriteRecordWithNewSchema(oldRow.get(oldPos, oldField.dataType), oldField.dataType, field.dataType, renameCols, fieldNames)
@@ -135,7 +134,7 @@ object HoodieInternalRowUtils {
               val colNamePartsFromOldSchema = renameCols.getOrDefault(fieldFullName, "").split("\\.")
               val lastColNameFromOldSchema = colNamePartsFromOldSchema(colNamePartsFromOldSchema.length - 1)
               // deal with rename
-              if (!HoodieDefaultCatalystExpressionUtils.existField(oldStrucType, field.name) && HoodieDefaultCatalystExpressionUtils.existField(oldStrucType, lastColNameFromOldSchema)) {
+              if (!HoodieCatalystExpressionUtils.existField(oldStrucType, field.name) && HoodieCatalystExpressionUtils.existField(oldStrucType, lastColNameFromOldSchema)) {
                 // find rename
                 val oldField = oldStrucType(lastColNameFromOldSchema)
                 val oldPos = oldStrucType.fieldIndex(lastColNameFromOldSchema)
@@ -232,25 +231,10 @@ object HoodieInternalRowUtils {
     val schemaPair = (from, to)
     val map = unsafeProjectionThreadLocal.get()
     if (!map.containsKey(schemaPair)) {
-      val projection = HoodieDefaultCatalystExpressionUtils.generateUnsafeProjection(from, to)
+      val projection = HoodieCatalystExpressionUtils.generateUnsafeProjection(from, to)
       map.put(schemaPair, projection)
     }
     map.get(schemaPair)
-  }
-
-  def getCachedSerSchema(structType: StructType): String = {
-    if (!schemaSerializeMap.containsKey(structType)) {
-      schemaSerializeMap.put(structType, structType.json)
-    }
-    schemaSerializeMap.get(structType)
-  }
-
-  def getCachedDeserSchema(str: String): StructType = {
-    if (!schemaDeserializeMap.containsKey(str)) {
-      val structType = DataType.fromJson(str).asInstanceOf[StructType]
-      schemaDeserializeMap.put(str, structType)
-    }
-    schemaDeserializeMap.get(str)
   }
 
   def getCachedSchema(schema: Schema): StructType = {
@@ -259,6 +243,32 @@ object HoodieInternalRowUtils {
       schemaMap.put(schema, structType)
     }
     schemaMap.get(schema)
+  }
+
+  def getCachedSchemaFromFingerPrint(fingerPrint: Long): StructType = {
+    if (!schemaFingerPrintMap.containsKey(fingerPrint)) {
+      throw new IllegalArgumentException("Not exist " + fingerPrint)
+    }
+    schemaFingerPrintMap.get(fingerPrint)
+  }
+
+  def getCachedFingerPrintFromSchema(schema: StructType): Long = {
+    if (!fingerPrintSchemaMap.containsKey(schema)) {
+      throw new IllegalArgumentException("Not exist " + schema)
+    }
+    fingerPrintSchemaMap.get(schema)
+  }
+
+  def addCompressedSchema(schema: StructType): Unit ={
+    if (!fingerPrintSchemaMap.containsKey(schema)) {
+      val fingerPrint = SchemaNormalization.fingerprint64(schema.json.getBytes(StandardCharsets.UTF_8))
+      schemaFingerPrintMap.put(fingerPrint, schema)
+      fingerPrintSchemaMap.put(schema, fingerPrint)
+    }
+  }
+
+  def containsCompressedSchema(schema: StructType): Boolean = {
+    fingerPrintSchemaMap.containsKey(schema)
   }
 
   private def rewritePrimaryType(oldValue: Any, oldSchema: DataType, newSchema: DataType): Any = {

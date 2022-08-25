@@ -139,7 +139,7 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
         // Convert GenericRecord to GenericRecord with hoodie commit metadata in schema
         HoodieRecord rewriteRecord;
         if (schemaOnReadEnabled) {
-          rewriteRecord = record.rewriteRecordWithNewSchema(schema, config.getProps(), writeSchemaWithMetaFields, Collections.emptyMap());
+          rewriteRecord = record.rewriteRecordWithNewSchema(schema, config.getProps(), writeSchemaWithMetaFields);
         } else {
           rewriteRecord = record.rewriteRecord(schema, config.getProps(), writeSchemaWithMetaFields);
         }

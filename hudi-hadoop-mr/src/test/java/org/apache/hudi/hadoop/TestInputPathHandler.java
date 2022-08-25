@@ -19,6 +19,7 @@
 package org.apache.hudi.hadoop;
 
 import org.apache.hudi.common.model.HoodieAvroPayload;
+import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -159,6 +160,7 @@ public class TestInputPathHandler {
     properties.setProperty(HoodieTableConfig.NAME.key(), tableName);
     properties.setProperty(HoodieTableConfig.TYPE.key(), tableType.name());
     properties.setProperty(HoodieTableConfig.PAYLOAD_CLASS_NAME.key(), HoodieAvroPayload.class.getName());
+    properties.setProperty(HoodieTableConfig.MERGER_IMPLS.key(), HoodieAvroRecordMerger.class.getName());
     return HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf, basePath, properties);
   }
 

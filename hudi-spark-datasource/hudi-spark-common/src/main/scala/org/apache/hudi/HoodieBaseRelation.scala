@@ -469,8 +469,8 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
       usesVirtualKeys = !tableConfig.populateMetaFields(),
       recordPayloadClassName = tableConfig.getPayloadClass,
       metadataConfig = fileIndex.metadataConfig,
-      mergerStrategy = optParams.getOrElse(HoodieWriteConfig.MERGER_STRATEGY.key(),
-        HoodieWriteConfig.MERGER_STRATEGY.defaultValue())
+      mergerStrategy = optParams.getOrElse(HoodieWriteConfig.MERGER_IMPLS.key(),
+        metaClient.getTableConfig.getMergerImpls)
     )
   }
 

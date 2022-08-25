@@ -132,14 +132,14 @@ public class HoodieEmptyRecord<T> extends HoodieRecord<T> {
   }
 
   @Override
-  public HoodieRecord getKeyWithParams(Schema schema, Properties props, Option<Pair<String, String>> simpleKeyGenFieldsOpt, Boolean withOperation, Option<String> partitionNameOp,
+  public HoodieRecord wrapIntoHoodieRecordPayloadWithParams(Schema schema, Properties props, Option<Pair<String, String>> simpleKeyGenFieldsOpt, Boolean withOperation, Option<String> partitionNameOp,
       Boolean populateMetaFieldsOp)
       throws IOException {
     throw new UnsupportedOperationException();
   }
 
   @Override
-  public HoodieRecord getKeyWithKeyGen(Properties props, Option<BaseKeyGenerator> keyGen) {
+  public HoodieRecord wrapIntoHoodieRecordPayloadWithKeyGen(Properties props, Option<BaseKeyGenerator> keyGen) {
     throw new UnsupportedOperationException();
   }
 

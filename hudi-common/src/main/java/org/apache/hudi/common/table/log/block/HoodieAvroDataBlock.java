@@ -148,7 +148,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
   @Override
   protected <T> ClosableIterator<HoodieRecord<T>> deserializeRecords(byte[] content, HoodieRecordType type) throws IOException {
     checkState(this.readerSchema != null, "Reader's schema has to be non-null");
-    checkArgument(type == HoodieRecordType.SPARK, "Not support read avro to spark record");
+    checkArgument(type != HoodieRecordType.SPARK, "Not support read avro to spark record");
     // TODO AvroSparkReader need
     RecordIterator iterator = RecordIterator.getInstance(this, content, internalSchema);
     return new MappingIterator<>(iterator, data -> (HoodieRecord<T>) new HoodieAvroIndexedRecord(data));

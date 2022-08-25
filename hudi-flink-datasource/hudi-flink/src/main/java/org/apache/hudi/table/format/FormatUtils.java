@@ -154,7 +154,7 @@ public class FormatUtils {
       org.apache.flink.configuration.Configuration flinkConf,
       Configuration hadoopConf,
       HoodieUnMergedLogRecordScanner.LogRecordScannerCallback callback) {
-    List<String> mergers = Arrays.stream(flinkConf.getString(FlinkOptions.RECORD_MERGE_STRATEGY).split(","))
+    List<String> mergers = Arrays.stream(flinkConf.getString(FlinkOptions.RECORD_MERGER_IMPLS).split(","))
         .map(String::trim)
         .distinct()
         .collect(Collectors.toList());

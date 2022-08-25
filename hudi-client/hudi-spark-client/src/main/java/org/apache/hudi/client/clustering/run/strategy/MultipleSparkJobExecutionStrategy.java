@@ -50,7 +50,7 @@ import org.apache.hudi.execution.bulkinsert.RDDSpatialCurveSortPartitioner;
 import org.apache.hudi.io.IOUtils;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
-import org.apache.hudi.keygen.KeyGenerator;
+import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
@@ -259,14 +259,14 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
             try {
               Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(writeConfig.getSchema()));
               HoodieFileReader baseFileReader = HoodieFileReaderFactory.getReaderFactory(recordType).getFileReader(hadoopConf.get(), new Path(clusteringOp.getDataFilePath()));
-              Option<KeyGenerator> keyGeneratorOp;
+              Option<BaseKeyGenerator> keyGeneratorOp;
               if (!Boolean.parseBoolean(writeConfig.getProps().getOrDefault(POPULATE_META_FIELDS.key(), POPULATE_META_FIELDS.defaultValue().toString()).toString())) {
-                keyGeneratorOp = Option.of(HoodieSparkKeyGeneratorFactory.createKeyGenerator(writeConfig.getProps()));
+                keyGeneratorOp = Option.of((BaseKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(writeConfig.getProps()));
               } else {
                 keyGeneratorOp = Option.empty();
               }
               MappingIterator mappingIterator = new MappingIterator((ClosableIterator<HoodieRecord>) baseFileReader.getRecordIterator(readerSchema),
-                  rec -> ((HoodieRecord) rec).getKeyWithKeyGen(writeConfig.getProps(), keyGeneratorOp));
+                  rec -> ((HoodieRecord) rec).wrapIntoHoodieRecordPayloadWithKeyGen(writeConfig.getProps(), keyGeneratorOp));
               iteratorsForPartition.add(mappingIterator);
             } catch (IOException e) {
               throw new HoodieClusteringException("Error reading input data for " + clusteringOp.getDataFilePath()
