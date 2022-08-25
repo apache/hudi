@@ -345,7 +345,9 @@ class TestTimeTravelTable extends HoodieSparkSqlTestBase {
           Seq(2, "a2", 11.0, 1100, "hudi")
         )
 
-        checkAnswer(s"select * from $tableName")(
+        val result3 = spark.sql(s"select * from ${tableName} order by id")
+          .drop("_hoodie_commit_time", "_hoodie_commit_seqno", "_hoodie_record_key", "_hoodie_partition_path", "_hoodie_file_name").collect()
+        checkAnswer(result3)(
           Seq(1, "a1", 1000, null),
           Seq(2, "a2", 1100, "hudi")
         )
