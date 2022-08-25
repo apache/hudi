@@ -23,6 +23,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.Schema.Field;
 import org.apache.avro.SchemaCompatibility;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.io.hfile.CacheConfig;
@@ -261,6 +262,11 @@ public class TableSchemaResolver {
     }
   }
 
+  public static MessageType convertAvroSchemaToParquet(Schema schema, Configuration hadoopConf) {
+    AvroSchemaConverter avroSchemaConverter = new AvroSchemaConverter(hadoopConf);
+    return avroSchemaConverter.convert(schema);
+  }
+
   private Schema convertParquetSchemaToAvro(MessageType parquetSchema) {
     AvroSchemaConverter avroSchemaConverter = new AvroSchemaConverter(metaClient.getHadoopConf());
     return avroSchemaConverter.convert(parquetSchema);
@@ -310,6 +316,9 @@ public class TableSchemaResolver {
    * @param oldSchema Older schema to check.
    * @param newSchema Newer schema to check.
    * @return True if the schema validation is successful
+   *
+   * TODO revisit this method: it's implemented incorrectly as it might be applying different criteria
+   *      to top-level record and nested record (for ex, if that nested record is contained w/in an array)
    */
   public static boolean isSchemaCompatible(Schema oldSchema, Schema newSchema) {
     if (oldSchema.getType() == newSchema.getType() && newSchema.getType() == Schema.Type.RECORD) {
@@ -361,12 +370,30 @@ public class TableSchemaResolver {
   }
 
   /**
+   * Returns table's latest Avro {@link Schema} iff table is non-empty (ie there's at least
+   * a single commit)
+   *
+   * This method differs from {@link #getTableAvroSchema(boolean)} in that it won't fallback
+   * to use table's schema used at creation
+   */
+  public Option<Schema> getTableAvroSchemaFromLatestCommit(boolean includeMetadataFields) throws Exception {
+    if (metaClient.isTimelineNonEmpty()) {
+      return Option.of(getTableAvroSchemaInternal(includeMetadataFields, Option.empty()));
+    }
+
+    return Option.empty();
+  }
+
+  /**
    * Get latest schema either from incoming schema or table schema.
    * @param writeSchema incoming batch's write schema.
    * @param convertTableSchemaToAddNamespace {@code true} if table schema needs to be converted. {@code false} otherwise.
    * @param converterFn converter function to be called over table schema (to add namespace may be). Each caller can decide if any conversion is required.
    * @return the latest schema.
+   *
+   * @deprecated will be removed (HUDI-4472)
    */
+  @Deprecated
   public Schema getLatestSchema(Schema writeSchema, boolean convertTableSchemaToAddNamespace,
       Function1<Schema, Schema> converterFn) {
     Schema latestSchema = writeSchema;

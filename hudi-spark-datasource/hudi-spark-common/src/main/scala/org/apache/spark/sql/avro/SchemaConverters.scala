@@ -56,6 +56,8 @@ private[sql] object SchemaConverters {
     toSqlTypeHelper(avroSchema, Set.empty)
   }
 
+  private val unionFieldMemberPrefix = "member"
+
   private def toSqlTypeHelper(avroSchema: Schema, existingRecordNames: Set[String]): SchemaType = {
     avroSchema.getType match {
       case INT => avroSchema.getLogicalType match {
@@ -134,7 +136,7 @@ private[sql] object SchemaConverters {
               case (s, i) =>
                 val schemaType = toSqlTypeHelper(s, existingRecordNames)
                 // All fields are nullable because only one of them is set at a time
-                StructField(s"member$i", schemaType.dataType, nullable = true)
+                StructField(s"$unionFieldMemberPrefix$i", schemaType.dataType, nullable = true)
             }
 
             SchemaType(StructType(fields.toSeq), nullable = false)
@@ -187,21 +189,44 @@ private[sql] object SchemaConverters {
           .values(toAvroType(vt, valueContainsNull, recordName, nameSpace))
       case st: StructType =>
         val childNameSpace = if (nameSpace != "") s"$nameSpace.$recordName" else recordName
-        val fieldsAssembler = builder.record(recordName).namespace(nameSpace).fields()
-        st.foreach { f =>
-          val fieldAvroType =
-            toAvroType(f.dataType, f.nullable, f.name, childNameSpace)
-          fieldsAssembler.name(f.name).`type`(fieldAvroType).noDefault()
+        if (canBeUnion(st)) {
+          val nonNullUnionFieldTypes = st.map(f => toAvroType(f.dataType, nullable = false, f.name, childNameSpace))
+          val unionFieldTypes = if (nullable) {
+            nullSchema +: nonNullUnionFieldTypes
+          } else {
+            nonNullUnionFieldTypes
+          }
+          Schema.createUnion(unionFieldTypes:_*)
+        } else {
+          val fieldsAssembler = builder.record(recordName).namespace(nameSpace).fields()
+          st.foreach { f =>
+            val fieldAvroType =
+              toAvroType(f.dataType, f.nullable, f.name, childNameSpace)
+            fieldsAssembler.name(f.name).`type`(fieldAvroType).noDefault()
+          }
+          fieldsAssembler.endRecord()
         }
-        fieldsAssembler.endRecord()
 
       // This should never happen.
       case other => throw new IncompatibleSchemaException(s"Unexpected type $other.")
     }
-    if (nullable && catalystType != NullType) {
+
+    if (nullable && catalystType != NullType && schema.getType != Schema.Type.UNION) {
       Schema.createUnion(schema, nullSchema)
     } else {
       schema
+    }
+  }
+
+  private def canBeUnion(st: StructType): Boolean = {
+    // We use a heuristic to determine whether a [[StructType]] could potentially have been produced
+    // by converting Avro union to Catalyst's [[StructType]]:
+    //    - It has to have at least 1 field
+    //    - All fields have to be of the following format "memberN" (where N is sequentially increasing integer)
+    //    - All fields are nullable
+    st.fields.length > 0 &&
+    st.forall { f =>
+      f.name.matches(s"$unionFieldMemberPrefix\\d+") && f.nullable
     }
   }
 }

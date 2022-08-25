@@ -22,6 +22,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.table.TableSchemaResolver;
@@ -223,6 +224,7 @@ public class BootstrapOperator<I, O extends HoodieRecord<?>>
 
         // load avro log records
         List<String> logPaths = fileSlice.getLogFiles()
+            .sorted(HoodieLogFile.getLogFileComparator())
             // filter out crushed files
             .filter(logFile -> isValidFile(logFile.getFileStatus()))
             .map(logFile -> logFile.getPath().toString())

@@ -18,11 +18,11 @@
 
 package org.apache.hudi.utils;
 
-import org.apache.flink.configuration.Configuration;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.util.ViewStorageProperties;
 
+import org.apache.flink.configuration.Configuration;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 

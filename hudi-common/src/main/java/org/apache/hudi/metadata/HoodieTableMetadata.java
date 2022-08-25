@@ -170,7 +170,8 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
    * @return {@link HoodieData} of {@link HoodieRecord}s with records matching the passed in key prefixes.
    */
   HoodieData<HoodieRecord<HoodieMetadataPayload>> getRecordsByKeyPrefixes(List<String> keyPrefixes,
-                                                                          String partitionName);
+                                                                          String partitionName,
+                                                                          boolean shouldLoadInMemory);
 
   /**
    * Get the instant time to which the metadata is synced w.r.t data timeline.

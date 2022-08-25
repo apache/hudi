@@ -18,6 +18,9 @@
 
 package org.apache.hudi;
 
+import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.client.HoodieReadClient;
 import org.apache.hudi.client.HoodieWriteResult;
 import org.apache.hudi.client.SparkRDDWriteClient;
@@ -33,34 +36,23 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.TablePathUtils;
 import org.apache.hudi.config.HoodieCompactionConfig;
-import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodiePayloadConfig;
 import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.exception.TableNotFoundException;
-import org.apache.hudi.hive.HiveSyncConfig;
-import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
-import org.apache.hudi.sync.common.HoodieSyncConfig;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.util.DataTypeUtils;
-
-import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
-import org.apache.spark.sql.hive.HiveExternalCatalog;
 import org.apache.spark.sql.types.StructType;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -187,9 +179,10 @@ public class DataSourceUtils {
 
     return builder.forTable(tblName)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
-            .withPayloadClass(parameters.get(DataSourceWriteOptions.PAYLOAD_CLASS_NAME().key()))
             .withInlineCompaction(inlineCompact).build())
-        .withPayloadConfig(HoodiePayloadConfig.newBuilder().withPayloadOrderingField(parameters.get(DataSourceWriteOptions.PRECOMBINE_FIELD().key()))
+        .withPayloadConfig(HoodiePayloadConfig.newBuilder()
+            .withPayloadClass(parameters.get(DataSourceWriteOptions.PAYLOAD_CLASS_NAME().key()))
+            .withPayloadOrderingField(parameters.get(DataSourceWriteOptions.PRECOMBINE_FIELD().key()))
             .build())
         // override above with Hoodie configs specified as options.
         .withProps(parameters).build();
@@ -272,69 +265,37 @@ public class DataSourceUtils {
   }
 
   /**
-   * @deprecated Use {@link HiveSyncConfig} constructor directly and provide the props,
-   * and set {@link HoodieSyncConfig#META_SYNC_BASE_PATH} and {@link HoodieSyncConfig#META_SYNC_BASE_FILE_FORMAT} instead.
+   * Checks whether default value (false) of "hoodie.parquet.writelegacyformat.enabled" should be
+   * overridden in case:
+   *
+   * <ul>
+   *   <li>Property has not been explicitly set by the writer</li>
+   *   <li>Data schema contains {@code DecimalType} that would be affected by it</li>
+   * </ul>
+   *
+   * If both of the aforementioned conditions are true, will override the default value of the config
+   * (by essentially setting the value) to make sure that the produced Parquet data files could be
+   * read by {@code AvroParquetReader}
+   *
+   * @param properties properties specified by the writer
+   * @param schema schema of the dataset being written
    */
-  @Deprecated
-  public static HiveSyncConfig buildHiveSyncConfig(TypedProperties props, String basePath, String baseFileFormat) {
-    checkRequiredProperties(props, Collections.singletonList(DataSourceWriteOptions.HIVE_TABLE().key()));
-    HiveSyncConfig hiveSyncConfig = new HiveSyncConfig();
-    hiveSyncConfig.basePath = basePath;
-    hiveSyncConfig.usePreApacheInputFormat =
-        props.getBoolean(DataSourceWriteOptions.HIVE_USE_PRE_APACHE_INPUT_FORMAT().key(),
-            Boolean.parseBoolean(DataSourceWriteOptions.HIVE_USE_PRE_APACHE_INPUT_FORMAT().defaultValue()));
-    hiveSyncConfig.databaseName = props.getString(DataSourceWriteOptions.HIVE_DATABASE().key(),
-        DataSourceWriteOptions.HIVE_DATABASE().defaultValue());
-    hiveSyncConfig.tableName = props.getString(DataSourceWriteOptions.HIVE_TABLE().key());
-    hiveSyncConfig.baseFileFormat = baseFileFormat;
-    hiveSyncConfig.hiveUser =
-        props.getString(DataSourceWriteOptions.HIVE_USER().key(), DataSourceWriteOptions.HIVE_USER().defaultValue());
-    hiveSyncConfig.hivePass =
-        props.getString(DataSourceWriteOptions.HIVE_PASS().key(), DataSourceWriteOptions.HIVE_PASS().defaultValue());
-    hiveSyncConfig.jdbcUrl =
-        props.getString(DataSourceWriteOptions.HIVE_URL().key(), DataSourceWriteOptions.HIVE_URL().defaultValue());
-    hiveSyncConfig.metastoreUris =
-            props.getString(DataSourceWriteOptions.METASTORE_URIS().key(), DataSourceWriteOptions.METASTORE_URIS().defaultValue());
-    hiveSyncConfig.partitionFields =
-        props.getStringList(DataSourceWriteOptions.HIVE_PARTITION_FIELDS().key(), ",", new ArrayList<>());
-    hiveSyncConfig.partitionValueExtractorClass =
-        props.getString(DataSourceWriteOptions.HIVE_PARTITION_EXTRACTOR_CLASS().key(),
-            SlashEncodedDayPartitionValueExtractor.class.getName());
-    hiveSyncConfig.useJdbc = Boolean.valueOf(props.getString(DataSourceWriteOptions.HIVE_USE_JDBC().key(),
-        DataSourceWriteOptions.HIVE_USE_JDBC().defaultValue()));
-    if (props.containsKey(DataSourceWriteOptions.HIVE_SYNC_MODE().key())) {
-      hiveSyncConfig.syncMode = props.getString(DataSourceWriteOptions.HIVE_SYNC_MODE().key());
-    }
-    hiveSyncConfig.autoCreateDatabase = Boolean.valueOf(props.getString(DataSourceWriteOptions.HIVE_AUTO_CREATE_DATABASE().key(),
-        DataSourceWriteOptions.HIVE_AUTO_CREATE_DATABASE().defaultValue()));
-    hiveSyncConfig.ignoreExceptions = Boolean.valueOf(props.getString(DataSourceWriteOptions.HIVE_IGNORE_EXCEPTIONS().key(),
-        DataSourceWriteOptions.HIVE_IGNORE_EXCEPTIONS().defaultValue()));
-    hiveSyncConfig.skipROSuffix = Boolean.valueOf(props.getString(DataSourceWriteOptions.HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE().key(),
-        DataSourceWriteOptions.HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE().defaultValue()));
-    hiveSyncConfig.supportTimestamp = Boolean.valueOf(props.getString(DataSourceWriteOptions.HIVE_SUPPORT_TIMESTAMP_TYPE().key(),
-        DataSourceWriteOptions.HIVE_SUPPORT_TIMESTAMP_TYPE().defaultValue()));
-    hiveSyncConfig.isConditionalSync = Boolean.valueOf(props.getString(DataSourceWriteOptions.HIVE_CONDITIONAL_SYNC().key(),
-        DataSourceWriteOptions.HIVE_CONDITIONAL_SYNC().defaultValue()));
-    hiveSyncConfig.bucketSpec = props.getBoolean(DataSourceWriteOptions.HIVE_SYNC_BUCKET_SYNC().key(),
-        DataSourceWriteOptions.HIVE_SYNC_BUCKET_SYNC().defaultValue())
-        ? HiveSyncConfig.getBucketSpec(props.getString(HoodieIndexConfig.BUCKET_INDEX_HASH_FIELD.key()),
-            props.getInteger(HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS.key())) : null;
-    if (props.containsKey(HiveExternalCatalog.CREATED_SPARK_VERSION())) {
-      hiveSyncConfig.sparkVersion = props.getString(HiveExternalCatalog.CREATED_SPARK_VERSION());
-    }
-    hiveSyncConfig.syncComment = Boolean.valueOf(props.getString(DataSourceWriteOptions.HIVE_SYNC_COMMENT().key(),
-            DataSourceWriteOptions.HIVE_SYNC_COMMENT().defaultValue()));
-    return hiveSyncConfig;
-  }
-
-  // Now by default ParquetWriteSupport will write DecimalType to parquet as int32/int64 when the scale of decimalType < Decimal.MAX_LONG_DIGITS(),
-  // but AvroParquetReader which used by HoodieParquetReader cannot support read int32/int64 as DecimalType.
-  // try to find current schema whether contains that DecimalType, and auto set the value of "hoodie.parquet.writelegacyformat.enabled"
-  public static void mayBeOverwriteParquetWriteLegacyFormatProp(Map<String, String> properties, StructType schema) {
-    if (DataTypeUtils.foundSmallPrecisionDecimalType(schema)
-        && !Boolean.parseBoolean(properties.getOrDefault(HoodieStorageConfig.PARQUET_WRITE_LEGACY_FORMAT_ENABLED.key(), "false"))) {
+  public static void tryOverrideParquetWriteLegacyFormatProperty(Map<String, String> properties, StructType schema) {
+    if (DataTypeUtils.hasSmallPrecisionDecimalType(schema)
+        && properties.get(HoodieStorageConfig.PARQUET_WRITE_LEGACY_FORMAT_ENABLED.key()) == null) {
+      // ParquetWriteSupport writes DecimalType to parquet as INT32/INT64 when the scale of decimalType
+      // is less than {@code Decimal.MAX_LONG_DIGITS}, but {@code AvroParquetReader} which is used by
+      // {@code HoodieParquetReader} does not support DecimalType encoded as INT32/INT64 as.
+      //
+      // To work this problem around we're checking whether
+      //    - Schema contains any decimals that could be encoded as INT32/INT64
+      //    - {@code HoodieStorageConfig.PARQUET_WRITE_LEGACY_FORMAT_ENABLED} has not been explicitly
+      //    set by the writer
+      //
+      // If both of these conditions are true, then we override the default value of {@code
+      // HoodieStorageConfig.PARQUET_WRITE_LEGACY_FORMAT_ENABLED} and set it to "true"
+      LOG.warn("Small Decimal Type found in the persisted schema, reverting default value of 'hoodie.parquet.writelegacyformat.enabled' to true");
       properties.put(HoodieStorageConfig.PARQUET_WRITE_LEGACY_FORMAT_ENABLED.key(), "true");
-      LOG.warn("Small Decimal Type found in current schema, auto set the value of hoodie.parquet.writelegacyformat.enabled to true");
     }
   }
 }

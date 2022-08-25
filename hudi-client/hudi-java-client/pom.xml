@@ -19,12 +19,12 @@
     <parent>
         <artifactId>hudi-client</artifactId>
         <groupId>org.apache.hudi</groupId>
-        <version>0.12.0-SNAPSHOT</version>
+        <version>0.13.0-SNAPSHOT</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
     <artifactId>hudi-java-client</artifactId>
-    <version>0.12.0-SNAPSHOT</version>
+    <version>0.13.0-SNAPSHOT</version>
 
     <name>hudi-java-client</name>
     <packaging>jar</packaging>
@@ -81,6 +81,12 @@
         </dependency>
 
         <!-- Test -->
+        <dependency>
+            <groupId>org.apache.hudi</groupId>
+            <artifactId>hudi-tests-common</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter-api</artifactId>

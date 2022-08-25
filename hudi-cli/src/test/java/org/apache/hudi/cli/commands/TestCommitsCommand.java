@@ -25,6 +25,7 @@ import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.cli.functional.CLIFunctionalTestHarness;
 import org.apache.hudi.cli.testutils.HoodieTestCommitMetadataGenerator;
 import org.apache.hudi.cli.testutils.HoodieTestReplaceCommitMetadataGenerator;
+import org.apache.hudi.client.HoodieTimelineArchiver;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -37,10 +38,10 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.NumericUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.config.HoodieCompactionConfig;
+import org.apache.hudi.config.HoodieArchivalConfig;
+import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieSparkTable;
-import org.apache.hudi.client.HoodieTimelineArchiver;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.junit.jupiter.api.BeforeEach;
@@ -212,7 +213,8 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
     // Generate archive
     HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(tablePath1)
         .withSchema(HoodieTestCommitMetadataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
-        .withCompactionConfig(HoodieCompactionConfig.newBuilder().retainCommits(1).archiveCommitsWith(2, 3).build())
+        .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(1).build())
+        .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(2, 3).build())
         .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
             .withRemoteServerPort(timelineServicePort).build())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(enableMetadataTable).build())
@@ -266,7 +268,8 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
     // Generate archive
     HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(tablePath1)
         .withSchema(HoodieTestCommitMetadataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
-        .withCompactionConfig(HoodieCompactionConfig.newBuilder().retainCommits(1).archiveCommitsWith(2, 3).build())
+        .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(1).build())
+        .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(2, 3).build())
         .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
             .withRemoteServerPort(timelineServicePort).build())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(enableMetadataTable).build())

@@ -238,4 +238,60 @@ class TestTimeTravelTable extends HoodieSparkSqlTestBase {
       }
     }
   }
+
+  test("Test Unsupported syntax can be parsed") {
+    if (HoodieSparkUtils.gteqSpark3_2) {
+      checkAnswer("select 1 distribute by 1")(Seq(1))
+      withTempDir { dir =>
+        val path = dir.toURI.getPath
+        spark.sql(s"insert overwrite local directory '$path' using parquet select 1")
+        // Requires enable hive support, so didn't test it
+        // spark.sql(s"insert overwrite local directory '$path' stored as orc select 1")
+      }
+    }
+  }
+
+  test("Test Select Record with time travel and Repartition") {
+    if (HoodieSparkUtils.gteqSpark3_2) {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long
+             |) using hudi
+             | tblproperties (
+             |  type = 'cow',
+             |  primaryKey = 'id',
+             |  preCombineField = 'ts'
+             | )
+             | location '${tmp.getCanonicalPath}/$tableName'
+       """.stripMargin)
+
+        spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+
+        val metaClient = HoodieTableMetaClient.builder()
+          .setBasePath(s"${tmp.getCanonicalPath}/$tableName")
+          .setConf(spark.sessionState.newHadoopConf())
+          .build()
+
+        val instant = metaClient.getActiveTimeline.getAllCommitsTimeline
+          .lastInstant().get().getTimestamp
+        spark.sql(s"insert into $tableName values(1, 'a2', 20, 2000)")
+
+        checkAnswer(s"select id, name, price, ts from $tableName distribute by cast(rand() * 2 as int)")(
+          Seq(1, "a2", 20.0, 2000)
+        )
+
+        // time travel from instant
+        checkAnswer(
+          s"select id, name, price, ts from $tableName TIMESTAMP AS OF '$instant' distribute by cast(rand() * 2 as int)")(
+          Seq(1, "a1", 10.0, 1000)
+        )
+      }
+    }
+  }
 }

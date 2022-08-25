@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_REA
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.util.PathUtils
 import org.apache.log4j.LogManager
 import org.apache.spark.sql.execution.streaming.{Sink, Source}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isUsingHiveCatalog
@@ -56,6 +57,8 @@ class DefaultSource extends RelationProvider
       // Enable "passPartitionByAsOptions" to support "write.partitionBy(...)"
       spark.conf.set("spark.sql.legacy.sources.write.passPartitionByAsOptions", "true")
     }
+    // Revisit EMRFS incompatibilities, for now disable
+    spark.sparkContext.hadoopConfiguration.set("fs.s3.metadata.cache.expiration.seconds", "0")
   }
 
   private val log = LogManager.getLogger(classOf[DefaultSource])
@@ -68,11 +71,9 @@ class DefaultSource extends RelationProvider
   override def createRelation(sqlContext: SQLContext,
                               optParams: Map[String, String],
                               schema: StructType): BaseRelation = {
-    // Add default options for unspecified read options keys.
-    val parameters = DataSourceOptionsHelper.parametersWithReadDefaults(optParams)
+    val path = optParams.get("path")
+    val readPathsStr = optParams.get(DataSourceReadOptions.READ_PATHS.key)
 
-    val path = parameters.get("path")
-    val readPathsStr = parameters.get(DataSourceReadOptions.READ_PATHS.key)
     if (path.isEmpty && readPathsStr.isEmpty) {
       throw new HoodieException(s"'path' or '$READ_PATHS' or both must be specified.")
     }
@@ -83,10 +84,20 @@ class DefaultSource extends RelationProvider
     val fs = FSUtils.getFs(allPaths.head, sqlContext.sparkContext.hadoopConfiguration)
 
     val globPaths = if (path.exists(_.contains("*")) || readPaths.nonEmpty) {
-      HoodieSparkUtils.checkAndGlobPathIfNecessary(allPaths, fs)
+      PathUtils.checkAndGlobPathIfNecessary(allPaths, fs)
     } else {
       Seq.empty
     }
+
+    // Add default options for unspecified read options keys.
+    val parameters = (if (globPaths.nonEmpty) {
+      Map(
+        "glob.paths" -> globPaths.mkString(",")
+      )
+    } else {
+      Map()
+    }) ++ DataSourceOptionsHelper.parametersWithReadDefaults(optParams)
+
     // Get the table base path
     val tablePath = if (globPaths.nonEmpty) {
       DataSourceUtils.getTablePath(fs, globPaths.toArray)
@@ -119,6 +130,7 @@ class DefaultSource extends RelationProvider
              (COPY_ON_WRITE, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, false) |
              (MERGE_ON_READ, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, false) =>
           resolveBaseFileOnlyRelation(sqlContext, globPaths, userSchema, metaClient, parameters)
+
         case (COPY_ON_WRITE, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
           new IncrementalRelation(sqlContext, parameters, userSchema, metaClient)
 

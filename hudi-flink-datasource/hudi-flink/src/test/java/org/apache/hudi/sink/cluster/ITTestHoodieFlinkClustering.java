@@ -88,7 +88,7 @@ public class ITTestHoodieFlinkClustering {
     EnvironmentSettings settings = EnvironmentSettings.newInstance().inBatchMode().build();
     TableEnvironment tableEnv = TableEnvironmentImpl.create(settings);
     tableEnv.getConfig().getConfiguration()
-        .setInteger(ExecutionConfigOptions.TABLE_EXEC_RESOURCE_DEFAULT_PARALLELISM, 1);
+        .setInteger(ExecutionConfigOptions.TABLE_EXEC_RESOURCE_DEFAULT_PARALLELISM, 4);
     Map<String, String> options = new HashMap<>();
     options.put(FlinkOptions.PATH.key(), tempFile.getAbsolutePath());
 
@@ -115,7 +115,6 @@ public class ITTestHoodieFlinkClustering {
 
     // set the table name
     conf.setString(FlinkOptions.TABLE_NAME, metaClient.getTableConfig().getTableName());
-    conf.setString(FlinkOptions.TABLE_TYPE, metaClient.getTableConfig().getTableType().name());
 
     // set record key field
     conf.setString(FlinkOptions.RECORD_KEY_FIELD, metaClient.getTableConfig().getRecordKeyFieldProp());
@@ -133,7 +132,7 @@ public class ITTestHoodieFlinkClustering {
     // To compute the clustering instant time and do clustering.
     String clusteringInstantTime = HoodieActiveTimeline.createNewInstantTime();
 
-    HoodieFlinkWriteClient writeClient = StreamerUtil.createWriteClient(conf, null);
+    HoodieFlinkWriteClient writeClient = StreamerUtil.createWriteClient(conf);
     HoodieFlinkTable<?> table = writeClient.getHoodieTable();
 
     boolean scheduled = writeClient.scheduleClusteringAtInstant(clusteringInstantTime, Option.empty());
@@ -160,7 +159,7 @@ public class ITTestHoodieFlinkClustering {
     final DataType rowDataType = AvroSchemaConverter.convertToDataType(tableAvroSchema);
     final RowType rowType = (RowType) rowDataType.getLogicalType();
 
-    DataStream<ClusteringCommitEvent> dataStream = env.addSource(new ClusteringPlanSourceFunction(timeline.lastInstant().get(), clusteringPlan))
+    DataStream<ClusteringCommitEvent> dataStream = env.addSource(new ClusteringPlanSourceFunction(clusteringInstantTime, clusteringPlan))
         .name("clustering_source")
         .uid("uid_clustering_source")
         .rebalance()
@@ -179,6 +178,46 @@ public class ITTestHoodieFlinkClustering {
         .setParallelism(1);
 
     env.execute("flink_hudi_clustering");
+    TestData.checkWrittenData(tempFile, EXPECTED, 4);
+  }
+
+  @Test
+  public void testHoodieFlinkClusteringService() throws Exception {
+    // Create hoodie table and insert into data.
+    EnvironmentSettings settings = EnvironmentSettings.newInstance().inBatchMode().build();
+    TableEnvironment tableEnv = TableEnvironmentImpl.create(settings);
+    tableEnv.getConfig().getConfiguration()
+        .setInteger(ExecutionConfigOptions.TABLE_EXEC_RESOURCE_DEFAULT_PARALLELISM, 4);
+    Map<String, String> options = new HashMap<>();
+    options.put(FlinkOptions.PATH.key(), tempFile.getAbsolutePath());
+
+    // use append mode
+    options.put(FlinkOptions.OPERATION.key(), WriteOperationType.INSERT.value());
+    options.put(FlinkOptions.INSERT_CLUSTER.key(), "false");
+
+    String hoodieTableDDL = TestConfigurations.getCreateHoodieTableDDL("t1", options);
+    tableEnv.executeSql(hoodieTableDDL);
+    tableEnv.executeSql(TestSQL.INSERT_T1).await();
+
+    // wait for the asynchronous commit to finish
+    TimeUnit.SECONDS.sleep(3);
+
+    // Make configuration and setAvroSchema.
+    StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+    FlinkClusteringConfig cfg = new FlinkClusteringConfig();
+    cfg.path = tempFile.getAbsolutePath();
+    cfg.minClusteringIntervalSeconds = 3;
+    cfg.schedule = true;
+    Configuration conf = FlinkClusteringConfig.toFlinkConfig(cfg);
+
+    HoodieFlinkClusteringJob.AsyncClusteringService asyncClusteringService = new HoodieFlinkClusteringJob.AsyncClusteringService(cfg, conf, env);
+    asyncClusteringService.start(null);
+
+    // wait for the asynchronous commit to finish
+    TimeUnit.SECONDS.sleep(5);
+
+    asyncClusteringService.shutDown();
+
     TestData.checkWrittenData(tempFile, EXPECTED, 4);
   }
 }

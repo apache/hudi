@@ -200,12 +200,12 @@ public class ArchivedCommitsCommand implements CommandMarker {
         case HoodieTimeline.COMPACTION_ACTION:
           return commitDetail(record, "hoodieCompactionMetadata", skipMetadata);
         default: {
-          return new Comparable[]{};
+          return new Comparable[] {};
         }
       }
     } catch (Exception e) {
       e.printStackTrace();
-      return new Comparable[]{};
+      return new Comparable[] {};
     }
   }
 }

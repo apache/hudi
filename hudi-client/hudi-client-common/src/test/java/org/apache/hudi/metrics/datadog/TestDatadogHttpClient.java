@@ -23,11 +23,13 @@ import org.apache.hudi.metrics.datadog.DatadogHttpClient.ApiSite;
 import org.apache.http.StatusLine;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.impl.client.CloseableHttpClient;
-import org.apache.log4j.AppenderSkeleton;
-import org.apache.log4j.Level;
-import org.apache.log4j.Logger;
-import org.apache.log4j.spi.LoggingEvent;
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.core.Appender;
+import org.apache.logging.log4j.core.LogEvent;
+import org.apache.logging.log4j.core.Logger;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -41,6 +43,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -55,10 +58,10 @@ import static org.mockito.Mockito.when;
 public class TestDatadogHttpClient {
 
   @Mock
-  AppenderSkeleton appender;
+  Appender appender;
 
   @Captor
-  ArgumentCaptor<LoggingEvent> logCaptor;
+  ArgumentCaptor<LogEvent> logCaptor;
 
   @Mock
   CloseableHttpClient httpClient;
@@ -69,8 +72,24 @@ public class TestDatadogHttpClient {
   @Mock
   StatusLine statusLine;
 
+  private Level initialLogLevel;
+
+  @BeforeEach
+  void prepareAppender() {
+    when(appender.getName()).thenReturn("MockAppender-" + UUID.randomUUID());
+    when(appender.isStarted()).thenReturn(true);
+    when(appender.isStopped()).thenReturn(false);
+    Logger logger = (Logger) LogManager.getLogger(DatadogHttpClient.class);
+    initialLogLevel = logger.getLevel();
+    logger.setLevel(Level.DEBUG);
+    logger.addAppender(appender);
+  }
+
   @AfterEach
   void resetMocks() {
+    Logger logger = (Logger) LogManager.getLogger(DatadogHttpClient.class);
+    logger.setLevel(initialLogLevel);
+    logger.removeAppender(appender);
     reset(appender, httpClient, httpResponse, statusLine);
   }
 
@@ -106,41 +125,38 @@ public class TestDatadogHttpClient {
 
   @Test
   public void sendPayloadShouldLogWhenRequestFailed() throws IOException {
-    Logger.getRootLogger().addAppender(appender);
     when(httpClient.execute(any())).thenThrow(IOException.class);
 
     DatadogHttpClient ddClient = new DatadogHttpClient(ApiSite.US, "foo", true, httpClient);
     ddClient.send("{}");
 
-    verify(appender).doAppend(logCaptor.capture());
-    assertEquals("Failed to send to Datadog.", logCaptor.getValue().getRenderedMessage());
+    verify(appender).append(logCaptor.capture());
+    assertEquals("Failed to send to Datadog.", logCaptor.getValue().getMessage().getFormattedMessage());
     assertEquals(Level.WARN, logCaptor.getValue().getLevel());
   }
 
   @Test
   public void sendPayloadShouldLogUnsuccessfulSending() {
-    Logger.getRootLogger().addAppender(appender);
     mockResponse(401);
     when(httpResponse.toString()).thenReturn("unauthorized");
 
     DatadogHttpClient ddClient = new DatadogHttpClient(ApiSite.US, "foo", true, httpClient);
     ddClient.send("{}");
 
-    verify(appender).doAppend(logCaptor.capture());
-    assertEquals("Failed to send to Datadog. Response was unauthorized", logCaptor.getValue().getRenderedMessage());
+    verify(appender).append(logCaptor.capture());
+    assertEquals("Failed to send to Datadog. Response was unauthorized", logCaptor.getValue().getMessage().getFormattedMessage());
     assertEquals(Level.WARN, logCaptor.getValue().getLevel());
   }
 
   @Test
   public void sendPayloadShouldLogSuccessfulSending() {
-    Logger.getRootLogger().addAppender(appender);
     mockResponse(202);
 
     DatadogHttpClient ddClient = new DatadogHttpClient(ApiSite.US, "foo", true, httpClient);
     ddClient.send("{}");
     
-    verify(appender).doAppend(logCaptor.capture());
-    assertTrue(logCaptor.getValue().getRenderedMessage().startsWith("Sent metrics data"));
+    verify(appender).append(logCaptor.capture());
+    assertTrue(logCaptor.getValue().getMessage().getFormattedMessage().startsWith("Sent metrics data"));
     assertEquals(Level.DEBUG, logCaptor.getValue().getLevel());
   }
 

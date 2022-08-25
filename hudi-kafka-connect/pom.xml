@@ -19,13 +19,13 @@
     <parent>
         <artifactId>hudi</artifactId>
         <groupId>org.apache.hudi</groupId>
-        <version>0.12.0-SNAPSHOT</version>
+        <version>0.13.0-SNAPSHOT</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
     <artifactId>hudi-kafka-connect</artifactId>
     <description>Kafka Connect Sink Connector for Hudi</description>
-    <version>0.12.0-SNAPSHOT</version>
+    <version>0.13.0-SNAPSHOT</version>
     <packaging>jar</packaging>
 
     <properties>
@@ -158,7 +158,7 @@
         </dependency>
         <dependency>
             <groupId>org.apache.flink</groupId>
-            <artifactId>flink-hadoop-compatibility_${scala.binary.version}</artifactId>
+            <artifactId>${flink.hadoop.compatibility.artifactId}</artifactId>
             <version>${flink.version}</version>
         </dependency>
 
@@ -171,8 +171,9 @@
 
         <!-- Logging -->
         <dependency>
-            <groupId>log4j</groupId>
-            <artifactId>log4j</artifactId>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-core</artifactId>
+            <scope>compile</scope>
         </dependency>
         
         <!-- Fasterxml -->
@@ -214,6 +215,12 @@
 
 
         <!-- Hudi - Test -->
+        <dependency>
+            <groupId>org.apache.hudi</groupId>
+            <artifactId>hudi-tests-common</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>org.apache.hudi</groupId>
             <artifactId>hudi-common</artifactId>

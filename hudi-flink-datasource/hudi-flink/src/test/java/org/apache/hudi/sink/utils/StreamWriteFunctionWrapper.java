@@ -21,6 +21,7 @@ package org.apache.hudi.sink.utils;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.StreamWriteFunction;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
@@ -28,7 +29,6 @@ import org.apache.hudi.sink.bootstrap.BootstrapOperator;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.partitioner.BucketAssignFunction;
 import org.apache.hudi.sink.transform.RowDataToHoodieFunction;
-import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
 
 import org.apache.flink.api.common.ExecutionConfig;
@@ -120,8 +120,7 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
     this.compactFunctionWrapper = new CompactFunctionWrapper(this.conf);
     this.bucketAssignFunctionContext = new MockBucketAssignFunctionContext();
     this.stateInitializationContext = new MockStateInitializationContext();
-    this.compactFunctionWrapper = new CompactFunctionWrapper(this.conf);
-    this.asyncCompaction = StreamerUtil.needsAsyncCompaction(conf);
+    this.asyncCompaction = OptionsResolver.needsAsyncCompaction(conf);
     this.streamConfig = new StreamConfig(conf);
     streamConfig.setOperatorID(new OperatorID());
     this.streamTask = new MockStreamTaskBuilder(environment)

@@ -18,12 +18,12 @@
 
 package org.apache.hudi.util;
 
-import org.apache.flink.configuration.Configuration;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.exception.HoodieIOException;
 
+import org.apache.flink.configuration.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;

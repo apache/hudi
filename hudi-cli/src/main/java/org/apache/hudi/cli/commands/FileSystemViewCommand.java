@@ -61,7 +61,7 @@ public class FileSystemViewCommand implements CommandMarker {
   @CliCommand(value = "show fsview all", help = "Show entire file-system view")
   public String showAllFileSlices(
       @CliOption(key = {"pathRegex"}, help = "regex to select files, eg: 2016/08/02",
-          unspecifiedDefaultValue = "*/*/*") String globRegex,
+          unspecifiedDefaultValue = "") String globRegex,
       @CliOption(key = {"baseFileOnly"}, help = "Only display base files view",
           unspecifiedDefaultValue = "false") boolean baseFileOnly,
       @CliOption(key = {"maxInstant"}, help = "File-Slices upto this instant are displayed",
@@ -78,6 +78,12 @@ public class FileSystemViewCommand implements CommandMarker {
       @CliOption(key = {"headeronly"}, help = "Print Header Only",
           unspecifiedDefaultValue = "false") final boolean headerOnly)
       throws IOException {
+
+    globRegex = globRegex == null ? "" : globRegex;
+    // TODO: There is a bug in spring shell, if we pass */*/* to pathRegex, the last '/' will be lost, pathRegex will be */**
+    if (globRegex.endsWith("**")) {
+      globRegex = globRegex.replace("**", "*/*");
+    }
 
     HoodieTableFileSystemView fsView = buildFileSystemView(globRegex, maxInstant, baseFileOnly, includeMaxInstant,
         includeInflight, excludeCompaction);
@@ -119,7 +125,7 @@ public class FileSystemViewCommand implements CommandMarker {
 
   @CliCommand(value = "show fsview latest", help = "Show latest file-system view")
   public String showLatestFileSlices(
-      @CliOption(key = {"partitionPath"}, help = "A valid partition path", mandatory = true) String partition,
+      @CliOption(key = {"partitionPath"}, help = "A valid partition path", unspecifiedDefaultValue = "") String partition,
       @CliOption(key = {"baseFileOnly"}, help = "Only display base file view",
           unspecifiedDefaultValue = "false") boolean baseFileOnly,
       @CliOption(key = {"maxInstant"}, help = "File-Slices upto this instant are displayed",
@@ -223,18 +229,18 @@ public class FileSystemViewCommand implements CommandMarker {
 
   /**
    * Build File System View.
-   * 
-   * @param globRegex Path Regex
-   * @param maxInstant Max Instants to be used for displaying file-instants
-   * @param basefileOnly Include only base file view
+   *
+   * @param globRegex         Path Regex
+   * @param maxInstant        Max Instants to be used for displaying file-instants
+   * @param basefileOnly      Include only base file view
    * @param includeMaxInstant Include Max instant
-   * @param includeInflight Include inflight instants
+   * @param includeInflight   Include inflight instants
    * @param excludeCompaction Exclude Compaction instants
    * @return
    * @throws IOException
    */
   private HoodieTableFileSystemView buildFileSystemView(String globRegex, String maxInstant, boolean basefileOnly,
-      boolean includeMaxInstant, boolean includeInflight, boolean excludeCompaction) throws IOException {
+                                                        boolean includeMaxInstant, boolean includeInflight, boolean excludeCompaction) throws IOException {
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
     HoodieTableMetaClient metaClient =
         HoodieTableMetaClient.builder().setConf(client.getHadoopConf()).setBasePath(client.getBasePath()).setLoadActiveTimelineOnLoad(true).build();

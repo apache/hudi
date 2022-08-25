@@ -17,7 +17,7 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hadoop.fs.FileSystem
+import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.HoodieRecord
@@ -26,13 +26,14 @@ import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, T
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.{deleteRecordsToStrings, recordsToStrings}
 import org.apache.hudi.common.util
+import org.apache.hudi.common.util.PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.{HoodieException, HoodieUpsertException}
 import org.apache.hudi.keygen._
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions.Config
 import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.hudi.util.JFunction
-import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
+import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers, HoodieSparkUtils}
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions.{col, concat, lit, udf}
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
@@ -41,7 +42,7 @@ import org.joda.time.DateTime
 import org.joda.time.format.DateTimeFormat
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue, fail}
 import org.junit.jupiter.api.function.Executable
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
 
@@ -294,6 +295,39 @@ class TestCOWDataSource extends HoodieClientTestBase {
     assertEquals(2, commits.size)
     assertEquals("commit", commits(0))
     assertEquals("replacecommit", commits(1))
+  }
+
+  @Test
+  def testReadPathsOnCopyOnWriteTable(): Unit = {
+    val records1 = dataGen.generateInsertsContainsAllPartitions("001", 20)
+    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(recordsToStrings(records1), 2))
+    inputDF1.write.format("org.apache.hudi")
+      .options(commonOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    val record1FilePaths = fs.listStatus(new Path(basePath, dataGen.getPartitionPaths.head))
+      .filter(!_.getPath.getName.contains("hoodie_partition_metadata"))
+      .filter(_.getPath.getName.endsWith("parquet"))
+      .map(_.getPath.toString)
+      .mkString(",")
+
+    val records2 = dataGen.generateInsertsContainsAllPartitions("002", 20)
+    val inputDF2 = spark.read.json(spark.sparkContext.parallelize(recordsToStrings(records2), 2))
+    inputDF2.write.format("org.apache.hudi")
+      .options(commonOpts)
+      // Use bulk insert here to make sure the files have different file groups.
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    val hudiReadPathDF = spark.read.format("org.apache.hudi")
+      .option(DataSourceReadOptions.READ_PATHS.key, record1FilePaths)
+      .load()
+
+    val expectedCount = records1.asScala.count(record => record.getPartitionPath == dataGen.getPartitionPaths.head)
+    assertEquals(expectedCount, hudiReadPathDF.count())
   }
 
   @Test def testOverWriteTableModeUseReplaceAction(): Unit = {
@@ -581,13 +615,14 @@ class TestCOWDataSource extends HoodieClientTestBase {
       .load(basePath)
     assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= col("driver")).count() == 0)
 
-    // Use the `driver,rider` field as the partition key, If no such field exists, the default value `default` is used
+    // Use the `driver,rider` field as the partition key, If no such field exists,
+    // the default value [[PartitionPathEncodeUtils#DEFAULT_PARTITION_PATH]] is used
     writer = getDataFrameWriter(classOf[SimpleKeyGenerator].getName)
     writer.partitionBy("driver", "rider")
       .save(basePath)
     recordsReadDF = spark.read.format("org.apache.hudi")
       .load(basePath)
-    assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= lit("default")).count() == 0)
+    assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= lit(DEFAULT_PARTITION_PATH)).count() == 0)
   }
 
   @Test def testSparkPartitionByWithComplexKeyGenerator() {
@@ -824,89 +859,6 @@ class TestCOWDataSource extends HoodieClientTestBase {
     assertEquals(numRecords - numRecordsToDelete, snapshotDF2.count())
   }
 
-  @Test def testFailEarlyForIncrViewQueryForNonExistingFiles(): Unit = {
-    // Create 10 commits
-    for (i <- 1 to 10) {
-      val records = recordsToStrings(dataGen.generateInserts("%05d".format(i), 100)).toList
-      val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
-      inputDF.write.format("org.apache.hudi")
-        .options(commonOpts)
-        .option("hoodie.cleaner.commits.retained", "3")
-        .option("hoodie.keep.min.commits", "4")
-        .option("hoodie.keep.max.commits", "5")
-        .option(DataSourceWriteOptions.OPERATION.key(), DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
-        .mode(SaveMode.Append)
-        .save(basePath)
-    }
-
-    val hoodieMetaClient = HoodieTableMetaClient.builder().setConf(spark.sparkContext.hadoopConfiguration).setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build()
-    /**
-      * State of timeline after 10 commits
-      * +------------------+--------------------------------------+
-      * |     Archived     |            Active Timeline           |
-      * +------------------+--------------+-----------------------+
-      * | C0   C1   C2  C3 |    C4   C5   |   C6    C7   C8   C9  |
-      * +------------------+--------------+-----------------------+
-      * |          Data cleaned           |  Data exists in table |
-      * +---------------------------------+-----------------------+
-      */
-
-    val completedCommits = hoodieMetaClient.getCommitsTimeline.filterCompletedInstants() // C4 to C9
-    //Anything less than 2 is a valid commit in the sense no cleanup has been done for those commit files
-    var startTs = completedCommits.nthInstant(0).get().getTimestamp //C4
-    var endTs = completedCommits.nthInstant(1).get().getTimestamp //C5
-
-    //Calling without the fallback should result in Path does not exist
-    var hoodieIncViewDF = spark.read.format("org.apache.hudi")
-      .option(DataSourceReadOptions.QUERY_TYPE.key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key(), startTs)
-      .option(DataSourceReadOptions.END_INSTANTTIME.key(), endTs)
-      .load(basePath)
-
-    val msg = "Should fail with Path does not exist"
-    assertThrows(classOf[AnalysisException], new Executable {
-      override def execute(): Unit = {
-        hoodieIncViewDF.count()
-      }
-    }, msg)
-
-    //Should work with fallback enabled
-    hoodieIncViewDF = spark.read.format("org.apache.hudi")
-      .option(DataSourceReadOptions.QUERY_TYPE.key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key(), startTs)
-      .option(DataSourceReadOptions.END_INSTANTTIME.key(), endTs)
-      .option(DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES.key(), "true")
-      .load(basePath)
-    assertEquals(100, hoodieIncViewDF.count())
-
-    //Test out for archived commits
-    val archivedInstants = hoodieMetaClient.getArchivedTimeline.getInstants.distinct().toArray
-    startTs = archivedInstants(0).asInstanceOf[HoodieInstant].getTimestamp //C0
-    endTs = completedCommits.nthInstant(1).get().getTimestamp //C5
-
-    //Calling without the fallback should result in Path does not exist
-    hoodieIncViewDF = spark.read.format("org.apache.hudi")
-      .option(DataSourceReadOptions.QUERY_TYPE.key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key(), startTs)
-      .option(DataSourceReadOptions.END_INSTANTTIME.key(), endTs)
-      .load(basePath)
-
-    assertThrows(classOf[AnalysisException], new Executable {
-      override def execute(): Unit = {
-        hoodieIncViewDF.count()
-      }
-    }, msg)
-
-    //Should work with fallback enabled
-    hoodieIncViewDF = spark.read.format("org.apache.hudi")
-      .option(DataSourceReadOptions.QUERY_TYPE.key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key(), startTs)
-      .option(DataSourceReadOptions.END_INSTANTTIME.key(), endTs)
-      .option(DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES.key(), "true")
-      .load(basePath)
-    assertEquals(500, hoodieIncViewDF.count())
-  }
-
   @Test
   def testWriteSmallPrecisionDecimalTable(): Unit = {
     val records1 = recordsToStrings(dataGen.generateInserts("001", 5)).toList
@@ -943,9 +895,6 @@ class TestCOWDataSource extends HoodieClientTestBase {
 
     df.write.format("hudi")
       .options(commonOpts)
-      .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "id")
-      .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "id")
-      .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "id")
       .option("hoodie.insert.shuffle.parallelism", "4")
       .option("hoodie.upsert.shuffle.parallelism", "4")
       .option("hoodie.bulkinsert.shuffle.parallelism", "2")
@@ -1009,5 +958,70 @@ class TestCOWDataSource extends HoodieClientTestBase {
         secondDF.select("_hoodie_partition_path").map(_.get(0).toString).collect().sorted.toSeq
       )
     }
+  }
+
+  @Test
+  def testSaveAsTableInDifferentModes(): Unit = {
+    val options = scala.collection.mutable.Map.empty ++ commonOpts ++ Map("path" -> basePath)
+
+    // first use the Overwrite mode
+    val records1 = recordsToStrings(dataGen.generateInserts("001", 5)).toList
+    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
+    inputDF1.write.format("org.apache.hudi")
+      .partitionBy("partition")
+      .options(options)
+      .mode(SaveMode.Append)
+      .saveAsTable("hoodie_test")
+
+    // init metaClient
+    metaClient = HoodieTableMetaClient.builder()
+      .setBasePath(basePath)
+      .setConf(spark.sessionState.newHadoopConf)
+      .build()
+    assertEquals(spark.read.format("hudi").load(basePath).count(), 5)
+
+    // use the Append mode
+    val records2 = recordsToStrings(dataGen.generateInserts("002", 6)).toList
+    val inputDF2 = spark.read.json(spark.sparkContext.parallelize(records2, 2))
+    inputDF2.write.format("org.apache.hudi")
+      .partitionBy("partition")
+      .options(options)
+      .mode(SaveMode.Append)
+      .saveAsTable("hoodie_test")
+    assertEquals(spark.read.format("hudi").load(basePath).count(), 11)
+
+    // use the Ignore mode
+    val records3 = recordsToStrings(dataGen.generateInserts("003", 7)).toList
+    val inputDF3 = spark.read.json(spark.sparkContext.parallelize(records3, 2))
+    inputDF3.write.format("org.apache.hudi")
+      .partitionBy("partition")
+      .options(options)
+      .mode(SaveMode.Ignore)
+      .saveAsTable("hoodie_test")
+    // nothing to do for the ignore mode
+    assertEquals(spark.read.format("hudi").load(basePath).count(), 11)
+
+    // use the ErrorIfExists mode
+    val records4 = recordsToStrings(dataGen.generateInserts("004", 8)).toList
+    val inputDF4 = spark.read.json(spark.sparkContext.parallelize(records4, 2))
+    try {
+      inputDF4.write.format("org.apache.hudi")
+        .partitionBy("partition")
+        .options(options)
+        .mode(SaveMode.ErrorIfExists)
+        .saveAsTable("hoodie_test")
+    } catch {
+      case e: Throwable => // do nothing
+    }
+
+    // use the Overwrite mode
+    val records5 = recordsToStrings(dataGen.generateInserts("005", 9)).toList
+    val inputDF5 = spark.read.json(spark.sparkContext.parallelize(records5, 2))
+    inputDF5.write.format("org.apache.hudi")
+      .partitionBy("partition")
+      .options(options)
+      .mode(SaveMode.Overwrite)
+      .saveAsTable("hoodie_test")
+    assertEquals(spark.read.format("hudi").load(basePath).count(), 9)
   }
 }

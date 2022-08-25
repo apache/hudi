@@ -19,6 +19,8 @@
 package org.apache.hudi.common.util;
 
 import javax.annotation.Nullable;
+
+import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -64,6 +66,18 @@ public class StringUtils {
     return org.apache.hadoop.util.StringUtils.join(separator, array);
   }
 
+  /**
+   * Wrapper of {@link java.lang.String#join(CharSequence, Iterable)}.
+   *
+   * Allow return {@code null} when {@code Iterable} is {@code null}.
+   */
+  public static String join(CharSequence delimiter, Iterable<? extends CharSequence> elements) {
+    if (elements == null) {
+      return null;
+    }
+    return String.join(delimiter, elements);
+  }
+
   public static String toHexString(byte[] bytes) {
     StringBuilder sb = new StringBuilder(bytes.length * 2);
     for (byte b : bytes) {
@@ -76,6 +90,9 @@ public class StringUtils {
     return str == null || str.length() == 0;
   }
 
+  public static boolean nonEmpty(String str) {
+    return !isNullOrEmpty(str);
+  }
 
   /**
    * Returns the given string if it is non-null; the empty string otherwise.
@@ -88,7 +105,10 @@ public class StringUtils {
   }
 
   public static String objToString(@Nullable Object obj) {
-    return obj == null ? null : obj.toString();
+    if (obj == null) {
+      return null;
+    }
+    return obj instanceof ByteBuffer ? toHexString(((ByteBuffer) obj).array()) : obj.toString();
   }
 
   /**

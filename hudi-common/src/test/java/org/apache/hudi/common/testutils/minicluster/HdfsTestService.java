@@ -103,7 +103,9 @@ public class HdfsTestService {
 
   public void stop() {
     LOG.info("HDFS Minicluster service being shut down.");
-    miniDfsCluster.shutdown();
+    if (miniDfsCluster != null) {
+      miniDfsCluster.shutdown(true, true);
+    }
     miniDfsCluster = null;
     hadoopConf = null;
   }

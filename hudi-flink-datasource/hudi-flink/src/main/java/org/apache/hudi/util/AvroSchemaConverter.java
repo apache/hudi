@@ -36,9 +36,9 @@ import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.table.types.logical.TimeType;
 import org.apache.flink.table.types.logical.TimestampType;
 import org.apache.flink.table.types.logical.TypeInformationRawType;
-import org.apache.flink.table.types.logical.utils.LogicalTypeChecks;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * Converts an Avro schema into Flink's type information. It uses {@link org.apache.flink.api.java.typeutils.RowTypeInfo} for
@@ -96,9 +96,24 @@ public class AvroSchemaConverter {
           actualSchema = schema.getTypes().get(0);
           nullable = false;
         } else {
+          List<Schema> nonNullTypes = schema.getTypes().stream()
+              .filter(s -> s.getType() != Schema.Type.NULL)
+              .collect(Collectors.toList());
+          nullable = schema.getTypes().size() > nonNullTypes.size();
+
           // use Kryo for serialization
-          return new AtomicDataType(
-              new TypeInformationRawType<>(false, Types.GENERIC(Object.class)));
+          DataType rawDataType = new AtomicDataType(
+              new TypeInformationRawType<>(false, Types.GENERIC(Object.class)))
+              .notNull();
+
+          if (recordTypesOfSameNumFields(nonNullTypes)) {
+            DataType converted = DataTypes.ROW(
+                DataTypes.FIELD("wrapper", rawDataType))
+                .notNull();
+            return nullable ? converted.nullable() : converted;
+          }
+          // use Kryo for serialization
+          return nullable ? rawDataType.nullable() : rawDataType;
         }
         DataType converted = convertToDataType(actualSchema);
         return nullable ? converted.nullable() : converted;
@@ -156,6 +171,20 @@ public class AvroSchemaConverter {
   }
 
   /**
+   * Returns true if all the types are RECORD type with same number of fields.
+   */
+  private static boolean recordTypesOfSameNumFields(List<Schema> types) {
+    if (types == null || types.size() == 0) {
+      return false;
+    }
+    if (types.stream().anyMatch(s -> s.getType() != Schema.Type.RECORD)) {
+      return false;
+    }
+    int numFields = types.get(0).getFields().size();
+    return types.stream().allMatch(s -> s.getFields().size() == numFields);
+  }
+
+  /**
    * Converts Flink SQL {@link LogicalType} (can be nested) into an Avro schema.
    *
    * <p>Use "record" as the type name.
@@ -171,7 +200,7 @@ public class AvroSchemaConverter {
   /**
    * Converts Flink SQL {@link LogicalType} (can be nested) into an Avro schema.
    *
-   * <p>The "{rowName}_" is used as the nested row type name prefix in order to generate the right
+   * <p>The "{rowName}." is used as the nested row type name prefix in order to generate the right
    * schema. Nested record type that only differs with type name is still compatible.
    *
    * @param logicalType logical type
@@ -263,7 +292,7 @@ public class AvroSchemaConverter {
           LogicalType fieldType = rowType.getTypeAt(i);
           SchemaBuilder.GenericDefault<Schema> fieldBuilder =
               builder.name(fieldName)
-                  .type(convertToSchema(fieldType, rowName + "_" + fieldName));
+                  .type(convertToSchema(fieldType, rowName + "." + fieldName));
 
           if (fieldType.isNullable()) {
             builder = fieldBuilder.withDefault(null);
@@ -309,7 +338,7 @@ public class AvroSchemaConverter {
       keyType = multisetType.getElementType();
       valueType = new IntType();
     }
-    if (!LogicalTypeChecks.hasFamily(keyType, LogicalTypeFamily.CHARACTER_STRING)) {
+    if (!DataTypeUtils.isFamily(keyType, LogicalTypeFamily.CHARACTER_STRING)) {
       throw new UnsupportedOperationException(
           "Avro format doesn't support non-string as key type of map. "
               + "The key type is: "

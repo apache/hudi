@@ -19,22 +19,32 @@
 
 package org.apache.hudi.sync.datahub.config;
 
-import org.apache.hudi.common.config.TypedProperties;
-
 import com.linkedin.common.FabricType;
 import com.linkedin.common.urn.DatasetUrn;
+import datahub.client.rest.RestEmitter;
 import org.junit.jupiter.api.Test;
 
 import java.net.URISyntaxException;
+import java.util.Properties;
 
 import static org.apache.hudi.sync.datahub.config.DataHubSyncConfig.META_SYNC_DATAHUB_DATASET_IDENTIFIER_CLASS;
+import static org.apache.hudi.sync.datahub.config.DataHubSyncConfig.META_SYNC_DATAHUB_EMITTER_SUPPLIER_CLASS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 class TestDataHubSyncConfig {
 
   @Test
+  void testGetEmitterFromSupplier() {
+    Properties props = new Properties();
+    props.setProperty(META_SYNC_DATAHUB_EMITTER_SUPPLIER_CLASS.key(), DummySupplier.class.getName());
+    DataHubSyncConfig syncConfig = new DataHubSyncConfig(props);
+    assertNotNull(syncConfig.getRestEmitter());
+  }
+
+  @Test
   void testInstantiationWithProps() {
-    TypedProperties props = new TypedProperties();
+    Properties props = new Properties();
     props.setProperty(META_SYNC_DATAHUB_DATASET_IDENTIFIER_CLASS.key(), DummyIdentifier.class.getName());
     DataHubSyncConfig syncConfig = new DataHubSyncConfig(props);
     DatasetUrn datasetUrn = syncConfig.datasetIdentifier.getDatasetUrn();
@@ -43,9 +53,17 @@ class TestDataHubSyncConfig {
     assertEquals(FabricType.PROD, datasetUrn.getOriginEntity());
   }
 
+  public static class DummySupplier implements DataHubEmitterSupplier {
+
+    @Override
+    public RestEmitter get() {
+      return RestEmitter.createWithDefaults();
+    }
+  }
+
   public static class DummyIdentifier extends HoodieDataHubDatasetIdentifier {
 
-    public DummyIdentifier(TypedProperties props) {
+    public DummyIdentifier(Properties props) {
       super(props);
     }
 

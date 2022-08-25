@@ -35,7 +35,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieBootstrapConfig;
-import org.apache.hudi.config.HoodieCompactionConfig;
+import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieSavepointException;
@@ -174,7 +174,7 @@ public class SparkMain {
         case COMPACT_REPAIR:
           assert (args.length == 8);
           doCompactRepair(jsc, args[3], args[4], args[5], Integer.parseInt(args[6]),
-                  Boolean.parseBoolean(args[7]));
+              Boolean.parseBoolean(args[7]));
           returnCode = 0;
           break;
         case COMPACT_UNSCHEDULE_FILE:
@@ -263,7 +263,7 @@ public class SparkMain {
             configs.addAll(Arrays.asList(args).subList(18, args.length));
           }
           returnCode = doBootstrap(jsc, args[3], args[4], args[5], args[6], args[7], args[8], args[9], args[10],
-                  args[11], args[12], args[13], args[14], args[15], args[16], propsFilePath, configs);
+              args[11], args[12], args[13], args[14], args[15], args[16], propsFilePath, configs);
           break;
         case UPGRADE:
         case DOWNGRADE:
@@ -283,7 +283,7 @@ public class SparkMain {
   }
 
   protected static void clean(JavaSparkContext jsc, String basePath, String propsFilePath,
-      List<String> configs) {
+                              List<String> configs) {
     HoodieCleaner.Config cfg = new HoodieCleaner.Config();
     cfg.basePath = basePath;
     cfg.propsFilePath = propsFilePath;
@@ -307,8 +307,8 @@ public class SparkMain {
   }
 
   private static int dataLoad(JavaSparkContext jsc, String command, String srcPath, String targetPath, String tableName,
-      String tableType, String rowKey, String partitionKey, int parallelism, String schemaFile,
-      int retry, String propsFilePath, List<String> configs) {
+                              String tableType, String rowKey, String partitionKey, int parallelism, String schemaFile,
+                              int retry, String propsFilePath, List<String> configs) {
     Config cfg = new Config();
     cfg.command = command;
     cfg.srcPath = srcPath;
@@ -325,7 +325,7 @@ public class SparkMain {
   }
 
   private static void doCompactValidate(JavaSparkContext jsc, String basePath, String compactionInstant,
-      String outputPath, int parallelism) throws Exception {
+                                        String outputPath, int parallelism) throws Exception {
     HoodieCompactionAdminTool.Config cfg = new HoodieCompactionAdminTool.Config();
     cfg.basePath = basePath;
     cfg.operation = Operation.VALIDATE;
@@ -336,7 +336,7 @@ public class SparkMain {
   }
 
   private static void doCompactRepair(JavaSparkContext jsc, String basePath, String compactionInstant,
-      String outputPath, int parallelism, boolean dryRun) throws Exception {
+                                      String outputPath, int parallelism, boolean dryRun) throws Exception {
     HoodieCompactionAdminTool.Config cfg = new HoodieCompactionAdminTool.Config();
     cfg.basePath = basePath;
     cfg.operation = Operation.REPAIR;
@@ -348,7 +348,7 @@ public class SparkMain {
   }
 
   private static void doCompactUnschedule(JavaSparkContext jsc, String basePath, String compactionInstant,
-      String outputPath, int parallelism, boolean skipValidation, boolean dryRun) throws Exception {
+                                          String outputPath, int parallelism, boolean skipValidation, boolean dryRun) throws Exception {
     HoodieCompactionAdminTool.Config cfg = new HoodieCompactionAdminTool.Config();
     cfg.basePath = basePath;
     cfg.operation = Operation.UNSCHEDULE_PLAN;
@@ -361,7 +361,7 @@ public class SparkMain {
   }
 
   private static void doCompactUnscheduleFile(JavaSparkContext jsc, String basePath, String fileId, String partitionPath,
-      String outputPath, int parallelism, boolean skipValidation, boolean dryRun)
+                                              String outputPath, int parallelism, boolean skipValidation, boolean dryRun)
       throws Exception {
     HoodieCompactionAdminTool.Config cfg = new HoodieCompactionAdminTool.Config();
     cfg.basePath = basePath;
@@ -376,8 +376,8 @@ public class SparkMain {
   }
 
   private static int compact(JavaSparkContext jsc, String basePath, String tableName, String compactionInstant,
-      int parallelism, String schemaFile, int retry, String mode, String propsFilePath,
-      List<String> configs) {
+                             int parallelism, String schemaFile, int retry, String mode, String propsFilePath,
+                             List<String> configs) {
     HoodieCompactor.Config cfg = new HoodieCompactor.Config();
     cfg.basePath = basePath;
     cfg.tableName = tableName;
@@ -393,7 +393,7 @@ public class SparkMain {
   }
 
   private static int cluster(JavaSparkContext jsc, String basePath, String tableName, String clusteringInstant,
-      int parallelism, String sparkMemory, int retry, String runningMode, String propsFilePath, List<String> configs) {
+                             int parallelism, String sparkMemory, int retry, String runningMode, String propsFilePath, List<String> configs) {
     HoodieClusteringJob.Config cfg = new HoodieClusteringJob.Config();
     cfg.basePath = basePath;
     cfg.tableName = tableName;
@@ -407,7 +407,7 @@ public class SparkMain {
   }
 
   private static int deduplicatePartitionPath(JavaSparkContext jsc, String duplicatedPartitionPath,
-      String repairedOutputPath, String basePath, boolean dryRun, String dedupeType) {
+                                              String repairedOutputPath, String basePath, boolean dryRun, String dedupeType) {
     DedupeSparkJob job = new DedupeSparkJob(basePath, duplicatedPartitionPath, repairedOutputPath, new SQLContext(jsc),
         FSUtils.getFs(basePath, jsc.hadoopConfiguration()), DeDupeType.withName(dedupeType));
     job.fixDuplicates(dryRun);
@@ -415,9 +415,9 @@ public class SparkMain {
   }
 
   private static int doBootstrap(JavaSparkContext jsc, String tableName, String tableType, String basePath,
-      String sourcePath, String recordKeyCols, String partitionFields, String parallelism, String schemaProviderClass,
-      String bootstrapIndexClass, String selectorClass, String keyGenerator, String fullBootstrapInputProvider,
-      String payloadClassName, String enableHiveSync, String propsFilePath, List<String> configs) throws IOException {
+                                 String sourcePath, String recordKeyCols, String partitionFields, String parallelism, String schemaProviderClass,
+                                 String bootstrapIndexClass, String selectorClass, String keyGenerator, String fullBootstrapInputProvider,
+                                 String payloadClassName, String enableHiveSync, String propsFilePath, List<String> configs) throws IOException {
 
     TypedProperties properties = propsFilePath == null ? buildProperties(configs)
         : readConfig(jsc.hadoopConfiguration(), new Path(propsFilePath), configs).getProps(true);
@@ -451,7 +451,7 @@ public class SparkMain {
   }
 
   private static int rollback(JavaSparkContext jsc, String instantTime, String basePath, Boolean rollbackUsingMarkers) throws Exception {
-    SparkRDDWriteClient client = createHoodieClient(jsc, basePath, rollbackUsingMarkers);
+    SparkRDDWriteClient client = createHoodieClient(jsc, basePath, rollbackUsingMarkers, false);
     if (client.rollback(instantTime)) {
       LOG.info(String.format("The commit \"%s\" rolled back.", instantTime));
       return 0;
@@ -462,7 +462,7 @@ public class SparkMain {
   }
 
   private static int createSavepoint(JavaSparkContext jsc, String commitTime, String user,
-      String comments, String basePath) throws Exception {
+                                     String comments, String basePath) throws Exception {
     SparkRDDWriteClient client = createHoodieClient(jsc, basePath, false);
     try {
       client.savepoint(commitTime, user, comments);
@@ -501,8 +501,8 @@ public class SparkMain {
   /**
    * Upgrade or downgrade table.
    *
-   * @param jsc instance of {@link JavaSparkContext} to use.
-   * @param basePath base path of the dataset.
+   * @param jsc       instance of {@link JavaSparkContext} to use.
+   * @param basePath  base path of the dataset.
    * @param toVersion version to which upgrade/downgrade to be done.
    * @return 0 if success, else -1.
    * @throws Exception
@@ -515,8 +515,10 @@ public class SparkMain {
             .setLoadActiveTimelineOnLoad(false).setConsistencyGuardConfig(config.getConsistencyGuardConfig())
             .setLayoutVersion(Option.of(new TimelineLayoutVersion(config.getTimelineLayoutVersion())))
             .setFileSystemRetryConfig(config.getFileSystemRetryConfig()).build();
+    HoodieWriteConfig updatedConfig = HoodieWriteConfig.newBuilder().withProps(config.getProps())
+        .forTable(metaClient.getTableConfig().getTableName()).build();
     try {
-      new UpgradeDowngrade(metaClient, config, new HoodieSparkEngineContext(jsc), SparkUpgradeDowngradeHelper.getInstance())
+      new UpgradeDowngrade(metaClient, updatedConfig, new HoodieSparkEngineContext(jsc), SparkUpgradeDowngradeHelper.getInstance())
           .run(HoodieTableVersion.valueOf(toVersion), null);
       LOG.info(String.format("Table at \"%s\" upgraded / downgraded to version \"%s\".", basePath, toVersion));
       return 0;
@@ -538,7 +540,7 @@ public class SparkMain {
   private static HoodieWriteConfig getWriteConfig(String basePath, Boolean rollbackUsingMarkers, boolean lazyCleanPolicy) {
     return HoodieWriteConfig.newBuilder().withPath(basePath)
         .withRollbackUsingMarkers(rollbackUsingMarkers)
-        .withCompactionConfig(HoodieCompactionConfig.newBuilder().withFailedWritesCleaningPolicy(lazyCleanPolicy ? HoodieFailedWritesCleaningPolicy.LAZY :
+        .withCleanConfig(HoodieCleanConfig.newBuilder().withFailedWritesCleaningPolicy(lazyCleanPolicy ? HoodieFailedWritesCleaningPolicy.LAZY :
             HoodieFailedWritesCleaningPolicy.EAGER).build())
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build()).build();
   }

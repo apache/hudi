@@ -18,6 +18,8 @@
 
 package org.apache.hudi.examples.quickstart.source;
 
+import org.apache.hudi.adapter.DataStreamScanProviderAdapter;
+
 import org.apache.flink.api.common.state.CheckpointListener;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.fs.Path;
@@ -28,7 +30,6 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.source.SourceFunction;
 import org.apache.flink.table.catalog.ResolvedSchema;
 import org.apache.flink.table.connector.ChangelogMode;
-import org.apache.flink.table.connector.source.DataStreamScanProvider;
 import org.apache.flink.table.connector.source.DynamicTableSource;
 import org.apache.flink.table.connector.source.ScanTableSource;
 import org.apache.flink.table.data.RowData;
@@ -74,7 +75,7 @@ public class ContinuousFileSource implements ScanTableSource {
 
   @Override
   public ScanRuntimeProvider getScanRuntimeProvider(ScanContext scanContext) {
-    return new DataStreamScanProvider() {
+    return new DataStreamScanProviderAdapter() {
 
       @Override
       public boolean isBounded() {

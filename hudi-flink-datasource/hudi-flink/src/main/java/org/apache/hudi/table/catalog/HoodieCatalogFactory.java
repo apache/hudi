@@ -18,6 +18,8 @@
 
 package org.apache.hudi.table.catalog;
 
+import org.apache.hudi.exception.HoodieCatalogException;
+
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.catalog.Catalog;
@@ -28,10 +30,10 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Locale;
 import java.util.Set;
 
-import static org.apache.hudi.table.catalog.CatalogOptions.CATALOG_PATH;
-import static org.apache.hudi.table.catalog.CatalogOptions.DEFAULT_DATABASE;
+import static org.apache.flink.table.factories.FactoryUtil.PROPERTY_VERSION;
 
 /**
  * A catalog factory impl that creates {@link HoodieCatalog}.
@@ -51,22 +53,36 @@ public class HoodieCatalogFactory implements CatalogFactory {
     final FactoryUtil.CatalogFactoryHelper helper =
         FactoryUtil.createCatalogFactoryHelper(this, context);
     helper.validate();
-
-    return new HoodieCatalog(
-        context.getName(),
-        (Configuration) helper.getOptions());
+    String mode = helper.getOptions().get(CatalogOptions.MODE);
+    switch (mode.toLowerCase(Locale.ROOT)) {
+      case "hms":
+        return new HoodieHiveCatalog(
+            context.getName(),
+            helper.getOptions().get(CatalogOptions.CATALOG_PATH),
+            helper.getOptions().get(CatalogOptions.DEFAULT_DATABASE),
+            helper.getOptions().get(CatalogOptions.HIVE_CONF_DIR));
+      case "dfs":
+        return new HoodieCatalog(
+            context.getName(),
+            (Configuration) helper.getOptions());
+      default:
+        throw new HoodieCatalogException(String.format("Invalid catalog mode: %s, supported modes: [hms, dfs].", mode));
+    }
   }
 
   @Override
   public Set<ConfigOption<?>> requiredOptions() {
-    Set<ConfigOption<?>> options = new HashSet<>();
-    options.add(CATALOG_PATH);
-    options.add(DEFAULT_DATABASE);
-    return options;
+    return Collections.emptySet();
   }
 
   @Override
   public Set<ConfigOption<?>> optionalOptions() {
-    return Collections.emptySet();
+    final Set<ConfigOption<?>> options = new HashSet<>();
+    options.add(CatalogOptions.DEFAULT_DATABASE);
+    options.add(PROPERTY_VERSION);
+    options.add(CatalogOptions.HIVE_CONF_DIR);
+    options.add(CatalogOptions.MODE);
+    options.add(CatalogOptions.CATALOG_PATH);
+    return options;
   }
 }

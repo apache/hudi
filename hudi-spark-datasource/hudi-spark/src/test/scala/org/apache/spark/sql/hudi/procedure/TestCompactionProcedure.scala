@@ -20,9 +20,8 @@
 package org.apache.spark.sql.hudi.procedure
 
 import org.apache.hudi.common.table.timeline.HoodieInstant
-import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase
 
-class TestCompactionProcedure extends HoodieSparkSqlTestBase {
+class TestCompactionProcedure extends HoodieSparkProcedureTestBase {
 
   test("Test Call run_compaction Procedure by Table") {
     withTempDir { tmp =>
