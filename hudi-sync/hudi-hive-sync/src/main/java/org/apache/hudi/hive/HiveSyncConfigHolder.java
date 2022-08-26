@@ -80,6 +80,7 @@ public class HiveSyncConfigHolder {
   public static final ConfigProperty<String> HIVE_SKIP_RT_SUFFIX_FOR_READ_SNAPSHOT_TABLE = ConfigProperty
           .key("hoodie.datasource.hive_sync.skip_rt_suffix")
           .defaultValue("false")
+          .sinceVersion("0.12.1") 
           .withDocumentation("Skip the _rt suffix for Read snapshot table, when registering");
   public static final ConfigProperty<String> HIVE_SUPPORT_TIMESTAMP_TYPE = ConfigProperty
       .key("hoodie.datasource.hive_sync.support_timestamp")
