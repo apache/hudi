@@ -74,7 +74,7 @@ public class TestSavepointsCommand extends CLIFunctionalTestHarness {
 
     // generate expect result
     String[][] rows = Stream.of("100", "101", "102", "103").sorted(Comparator.reverseOrder())
-        .map(instant -> new String[]{instant}).toArray(String[][]::new);
+        .map(instant -> new String[] {instant}).toArray(String[][]::new);
     String expected = HoodiePrintHelper.print(new String[] {HoodieTableHeaderFields.HEADER_SAVEPOINT_TIME}, rows);
     expected = removeNonWordAndStripSpace(expected);
     String got = removeNonWordAndStripSpace(cr.getResult().toString());

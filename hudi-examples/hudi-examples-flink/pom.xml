@@ -256,7 +256,12 @@
         </dependency>
 
         <!-- Test dependencies -->
-
+        <dependency>
+            <groupId>org.apache.hudi</groupId>
+            <artifactId>hudi-tests-common</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
         <!-- Junit 5 dependencies -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>
@@ -329,13 +334,6 @@
         <dependency>
             <groupId>org.apache.flink</groupId>
             <artifactId>${flink.table.runtime.artifactId}</artifactId>
-            <version>${flink.version}</version>
-            <scope>test</scope>
-            <type>test-jar</type>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.flink</groupId>
-            <artifactId>flink-json</artifactId>
             <version>${flink.version}</version>
             <scope>test</scope>
             <type>test-jar</type>

@@ -22,6 +22,7 @@ package org.apache.hudi.cli;
  * Fields of print table header.
  */
 public class HoodieTableHeaderFields {
+  public static final String HEADER_ROW_NO = "No.";
   public static final String HEADER_PARTITION = "Partition";
   public static final String HEADER_INSTANT = "Instant";
   public static final String HEADER_PARTITION_PATH = HEADER_PARTITION + " Path";
@@ -166,4 +167,18 @@ public class HoodieTableHeaderFields {
   public static final String HEADER_DESTINATION_FILE_PATH = "Destination " + HEADER_FILE_PATH;
   public static final String HEADER_RENAME_EXECUTED = "Rename Executed?";
   public static final String HEADER_RENAME_SUCCEEDED = "Rename Succeeded?";
+
+  /**
+   * Fields of timeline command output
+   */
+  public static final String HEADER_REQUESTED_TIME = "Requested\nTime";
+  public static final String HEADER_INFLIGHT_TIME = "Inflight\nTime";
+  public static final String HEADER_COMPLETED_TIME = "Completed\nTime";
+  public static final String HEADER_ROLLBACK_INFO = "Rollback Info";
+  public static final String HEADER_MT_PREFIX = "MT\n";
+  public static final String HEADER_MT_ACTION = HEADER_MT_PREFIX + HEADER_ACTION;
+  public static final String HEADER_MT_STATE = HEADER_MT_PREFIX + HEADER_STATE;
+  public static final String HEADER_MT_REQUESTED_TIME = HEADER_MT_PREFIX + HEADER_REQUESTED_TIME;
+  public static final String HEADER_MT_INFLIGHT_TIME = HEADER_MT_PREFIX + HEADER_INFLIGHT_TIME;
+  public static final String HEADER_MT_COMPLETED_TIME = HEADER_MT_PREFIX + HEADER_COMPLETED_TIME;
 }

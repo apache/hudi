@@ -55,18 +55,33 @@ public final class HoodieSparkQuickstart {
     SparkConf sparkConf = HoodieExampleSparkUtils.defaultSparkConf("hoodie-client-example");
 
     try (JavaSparkContext jsc = new JavaSparkContext(sparkConf)) {
-      final HoodieExampleDataGenerator<HoodieAvroPayload> dataGen = new HoodieExampleDataGenerator<>();
-
-      insertData(spark, jsc, tablePath, tableName, dataGen);
-      updateData(spark, jsc, tablePath, tableName, dataGen);
-      queryData(spark, jsc, tablePath, tableName, dataGen);
-
-      incrementalQuery(spark, tablePath, tableName);
-      pointInTimeQuery(spark, tablePath, tableName);
-
-      delete(spark, tablePath, tableName);
-      deleteByPartition(spark, tablePath, tableName);
+      runQuickstart(jsc, spark, tableName, tablePath);
     }
+  }
+
+  /**
+   * Visible for testing
+   */
+  public static void runQuickstart(JavaSparkContext jsc, SparkSession spark, String tableName, String tablePath) {
+    final HoodieExampleDataGenerator<HoodieAvroPayload> dataGen = new HoodieExampleDataGenerator<>();
+
+    insertData(spark, jsc, tablePath, tableName, dataGen);
+    queryData(spark, jsc, tablePath, tableName, dataGen);
+
+    updateData(spark, jsc, tablePath, tableName, dataGen);
+    queryData(spark, jsc, tablePath, tableName, dataGen);
+
+    incrementalQuery(spark, tablePath, tableName);
+    pointInTimeQuery(spark, tablePath, tableName);
+
+    delete(spark, tablePath, tableName);
+    queryData(spark, jsc, tablePath, tableName, dataGen);
+
+    insertOverwriteData(spark, jsc, tablePath, tableName, dataGen);
+    queryData(spark, jsc, tablePath, tableName, dataGen);
+
+    deleteByPartition(spark, tablePath, tableName);
+    queryData(spark, jsc, tablePath, tableName, dataGen);
   }
 
   /**
@@ -77,6 +92,7 @@ public final class HoodieSparkQuickstart {
     String commitTime = Long.toString(System.currentTimeMillis());
     List<String> inserts = dataGen.convertToStringList(dataGen.generateInserts(commitTime, 20));
     Dataset<Row> df = spark.read().json(jsc.parallelize(inserts, 1));
+
     df.write().format("org.apache.hudi")
         .options(QuickstartUtils.getQuickstartWriteConfigs())
         .option(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key(), "ts")
@@ -86,6 +102,27 @@ public final class HoodieSparkQuickstart {
         .mode(Overwrite)
         .save(tablePath);
   }
+
+  /**
+   * Generate new records, load them into a {@link Dataset} and insert-overwrite it into the Hudi dataset
+   */
+  public static void insertOverwriteData(SparkSession spark, JavaSparkContext jsc, String tablePath, String tableName,
+                                HoodieExampleDataGenerator<HoodieAvroPayload> dataGen) {
+    String commitTime = Long.toString(System.currentTimeMillis());
+    List<String> inserts = dataGen.convertToStringList(dataGen.generateInserts(commitTime, 20));
+    Dataset<Row> df = spark.read().json(jsc.parallelize(inserts, 1));
+
+    df.write().format("org.apache.hudi")
+        .options(QuickstartUtils.getQuickstartWriteConfigs())
+        .option("hoodie.datasource.write.operation", WriteOperationType.INSERT_OVERWRITE.name())
+        .option(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key(), "ts")
+        .option(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "uuid")
+        .option(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "partitionpath")
+        .option(TBL_NAME.key(), tableName)
+        .mode(Append)
+        .save(tablePath);
+  }
+
 
   /**
    * Load the data files into a DataFrame.

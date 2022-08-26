@@ -299,9 +299,14 @@ public class MergeOnReadInputFormat
         this.conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING),
         FilePathUtils.extractPartitionKeys(this.conf));
     LinkedHashMap<String, Object> partObjects = new LinkedHashMap<>();
-    partSpec.forEach((k, v) -> partObjects.put(k, DataTypeUtils.resolvePartition(
-        defaultPartName.equals(v) ? null : v,
-        fieldTypes.get(fieldNames.indexOf(k)))));
+    partSpec.forEach((k, v) -> {
+      DataType fieldType = fieldTypes.get(fieldNames.indexOf(k));
+      if (!DataTypeUtils.isDatetimeType(fieldType)) {
+        // date time type partition field is formatted specifically,
+        // read directly from the data file to avoid format mismatch or precision loss
+        partObjects.put(k, DataTypeUtils.resolvePartition(defaultPartName.equals(v) ? null : v, fieldType));
+      }
+    });
 
     return ParquetSplitReaderUtil.genPartColumnarRowReader(
         this.conf.getBoolean(FlinkOptions.UTC_TIMEZONE),

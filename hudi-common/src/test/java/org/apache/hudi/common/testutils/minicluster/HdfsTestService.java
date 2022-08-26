@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.testutils.minicluster;
 
-import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.NetworkTestUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 
@@ -45,7 +44,7 @@ public class HdfsTestService {
   /**
    * Configuration settings.
    */
-  private Configuration hadoopConf;
+  private final Configuration hadoopConf;
   private final String workDir;
 
   /**
@@ -54,6 +53,7 @@ public class HdfsTestService {
   private MiniDFSCluster miniDfsCluster;
 
   public HdfsTestService() throws IOException {
+    hadoopConf = new Configuration();
     workDir = Files.createTempDirectory("temp").toAbsolutePath().toString();
   }
 
@@ -63,7 +63,6 @@ public class HdfsTestService {
 
   public MiniDFSCluster start(boolean format) throws IOException {
     Objects.requireNonNull(workDir, "The work dir must be set before starting cluster.");
-    hadoopConf = HoodieTestUtils.getDefaultHadoopConf();
 
     // If clean, then remove the work dir so we can start fresh.
     String localDFSLocation = getDFSLocation(workDir);
@@ -107,7 +106,6 @@ public class HdfsTestService {
       miniDfsCluster.shutdown(true, true);
     }
     miniDfsCluster = null;
-    hadoopConf = null;
   }
 
   /**
@@ -123,9 +121,9 @@ public class HdfsTestService {
   /**
    * Configure the DFS Cluster before launching it.
    *
-   * @param config The already created Hadoop configuration we'll further configure for HDFS
+   * @param config           The already created Hadoop configuration we'll further configure for HDFS
    * @param localDFSLocation The location on the local filesystem where cluster data is stored
-   * @param bindIP An IP address we want to force the datanode and namenode to bind to.
+   * @param bindIP           An IP address we want to force the datanode and namenode to bind to.
    * @return The updated Configuration object.
    */
   private static Configuration configureDFSCluster(Configuration config, String localDFSLocation, String bindIP,
@@ -146,7 +144,7 @@ public class HdfsTestService {
     String user = System.getProperty("user.name");
     config.set("hadoop.proxyuser." + user + ".groups", "*");
     config.set("hadoop.proxyuser." + user + ".hosts", "*");
-    config.setBoolean("dfs.permissions",false);
+    config.setBoolean("dfs.permissions", false);
     return config;
   }
 

@@ -82,6 +82,7 @@ object HoodieProcedures {
     mapBuilder.put(RepairOverwriteHoodiePropsProcedure.NAME, RepairOverwriteHoodiePropsProcedure.builder)
     mapBuilder.put(RunCleanProcedure.NAME, RunCleanProcedure.builder)
     mapBuilder.put(ValidateHoodieSyncProcedure.NAME, ValidateHoodieSyncProcedure.builder)
+    mapBuilder.put(ShowInvalidParquetProcedure.NAME, ShowInvalidParquetProcedure.builder)
     mapBuilder.build
   }
 }
