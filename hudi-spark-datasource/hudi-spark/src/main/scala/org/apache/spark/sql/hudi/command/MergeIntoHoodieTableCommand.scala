@@ -31,7 +31,6 @@ import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, HoodieSparkSqlWriter, SparkAdapterSupport}
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.MatchCast
 import org.apache.spark.sql._
-import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, BoundReference, Cast, EqualTo, Expression, Literal}
 import org.apache.spark.sql.catalyst.plans.logical._
@@ -71,11 +70,6 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
   /**
    * The target table schema without hoodie meta fields.
    */
-  private var sourceDFOutput = mergeInto.sourceTable.output.filter(attr => !isMetaField(attr.name))
-
-  /**
-   * The target table schema without hoodie meta fields.
-   */
   private lazy val targetTableSchemaWithoutMetaFields =
     removeMetaFields(mergeInto.targetTable.schema).fields
 
@@ -87,100 +81,6 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
 
   private lazy val targetTableType = hoodieCatalogTable.tableTypeName
 
-  /**
-   *
-   * Return a map of target key to the source expression from the Merge-On Condition.
-   * e.g. merge on t.id = s.s_id AND t.name = s.s_name, we return
-   * Map("id" -> "s_id", "name" ->"s_name")
-   * TODO Currently Non-equivalent conditions are not supported.
-   */
-  private lazy val targetKey2SourceExpression: Map[String, Expression] = {
-    val resolver = sparkSession.sessionState.conf.resolver
-    val conditions = splitByAnd(mergeInto.mergeCondition)
-    val allEqs = conditions.forall(p => p.isInstanceOf[EqualTo])
-    if (!allEqs) {
-      throw new IllegalArgumentException("Non-Equal condition is not support for Merge " +
-        s"Into Statement: ${mergeInto.mergeCondition.sql}")
-    }
-    val targetAttrs = mergeInto.targetTable.output
-
-    val cleanedConditions = conditions.map(_.asInstanceOf[EqualTo]).map {
-      // Here we're unraveling superfluous casting of expressions on both sides of the matched-on condition,
-      // in case both of them are casted to the same type (which might be result of either explicit casting
-      // from the user, or auto-casting performed by Spark for type coercion), which has potential
-      // potential of rendering the whole operation as invalid (check out HUDI-4861 for more details)
-      case EqualTo(MatchCast(leftExpr, leftCastTargetType, _, _), MatchCast(rightExpr, rightCastTargetType, _, _))
-        if leftCastTargetType.sameType(rightCastTargetType) => EqualTo(leftExpr, rightExpr)
-
-      case c => c
-    }
-
-    val exprUtils = sparkAdapter.getCatalystExpressionUtils
-    // Expressions of the following forms are supported:
-    //    `target.id = <expr>` (or `<expr> = target.id`)
-    //    `cast(target.id, ...) = <expr>` (or `<expr> = cast(target.id, ...)`)
-    //
-    // In the latter case, there are further restrictions: since cast will be dropped on the
-    // target table side (since we're gonna be matching against primary-key column as is) expression
-    // on the opposite side of the comparison should be cast-able to the primary-key column's data-type
-    // t/h "up-cast" (ie w/o any loss in precision)
-    val target2Source = cleanedConditions.map {
-      case EqualTo(CoercedAttributeReference(attr), expr)
-        if targetAttrs.exists(f => attributeEqual(f, attr, resolver)) =>
-          if (exprUtils.canUpCast(expr.dataType, attr.dataType)) {
-            targetAttrs.find(f => resolver(f.name, attr.name)).get.name ->
-              castIfNeeded(expr, attr.dataType, sparkSession.sqlContext.conf)
-          } else {
-            throw new AnalysisException(s"Invalid MERGE INTO matching condition: ${expr.sql}: "
-              + s"can't cast ${expr.sql} (of ${expr.dataType}) to ${attr.dataType}")
-          }
-
-      case EqualTo(expr, CoercedAttributeReference(attr))
-        if targetAttrs.exists(f => attributeEqual(f, attr, resolver)) =>
-          if (exprUtils.canUpCast(expr.dataType, attr.dataType)) {
-            targetAttrs.find(f => resolver(f.name, attr.name)).get.name ->
-              castIfNeeded(expr, attr.dataType, sparkSession.sqlContext.conf)
-          } else {
-            throw new AnalysisException(s"Invalid MERGE INTO matching condition: ${expr.sql}: "
-              + s"can't cast ${expr.sql} (of ${expr.dataType}) to ${attr.dataType}")
-          }
-
-      case expr =>
-        throw new AnalysisException(s"Invalid MERGE INTO matching condition: `${expr.sql}`: "
-          + "expected condition should be 'target.id = <source-column-expr>', e.g. "
-          + "`t.id = s.id` or `t.id = cast(s.id, ...)`")
-    }.toMap
-
-    target2Source
-  }
-
-  /**
-   * Get the mapping of target preCombineField to the source expression.
-   */
-  private lazy val target2SourcePreCombineFiled: Option[(String, Expression)] = {
-    val updateActions = mergeInto.matchedActions.collect { case u: UpdateAction => u }
-    assert(updateActions.size <= 1, s"Only support one updateAction currently, current update action count is: ${updateActions.size}")
-
-    val updateAction = updateActions.headOption
-    hoodieCatalogTable.preCombineKey.map(preCombineField => {
-      val sourcePreCombineField =
-        updateAction.map(u => u.assignments.filter {
-            case Assignment(key: AttributeReference, _) => key.name.equalsIgnoreCase(preCombineField)
-            case _=> false
-          }.head.value
-        ).getOrElse {
-          // If there is no update action, mapping the target column to the source by order.
-          val target2Source = mergeInto.targetTable.output
-            .filter(attr => !isMetaField(attr.name))
-            .map(_.name)
-            .zip(mergeInto.sourceTable.output.filter(attr => !isMetaField(attr.name)))
-            .toMap
-          target2Source.getOrElse(preCombineField, null)
-        }
-      (preCombineField, sourcePreCombineField)
-    }).filter(p => p._2 != null)
-  }
-
   override def run(sparkSession: SparkSession): Seq[Row] = {
     this.sparkSession = sparkSession
 
@@ -188,11 +88,22 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     val parameters = buildMergeIntoConfig(hoodieCatalogTable)
     // TODO Remove it when we implement ExpressionPayload for SparkRecord
     val parametersWithAvroRecordMerger = parameters ++ Map(HoodieWriteConfig.MERGER_IMPLS.key -> classOf[HoodieAvroRecordMerger].getName)
-    executeUpsert(sourceDF, parametersWithAvroRecordMerger)
+    if (mergeInto.matchedActions.nonEmpty) { // Do the upsert
+      executeUpsert(sourceDF, parametersWithAvroRecordMerger)
+    } else { // If there is no match actions in the statement, execute insert operation only.
+      val targetDF = Dataset.ofRows(sparkSession, mergeInto.targetTable)
+      val primaryKeys = hoodieCatalogTable.tableConfig.getRecordKeyFieldProp.split(",")
+      // Only records that are not included in the target table can be inserted
+      val insertSourceDF = sourceDF.join(targetDF, primaryKeys,"left_anti")
 
     sparkSession.catalog.refreshTable(hoodieCatalogTable.table.qualifiedName)
     Seq.empty[Row]
   }
+
+  /**
+   * The target table schema without hoodie meta fields.
+   */
+  private def sourceOutput: Seq[Attribute] = sourceDF.queryExecution.analyzed.output
 
   /**
    * Build the sourceDF. We will append the source primary key expressions and
@@ -213,75 +124,14 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
    *
    */
   private lazy val sourceDF: DataFrame = {
-    var sourceDF = Dataset.ofRows(sparkSession, mergeInto.sourceTable)
-    targetKey2SourceExpression.foreach {
-      case (targetColumn, sourceExpression)
-        if !containsPrimaryKeyFieldReference(targetColumn, sourceExpression) =>
-          sourceDF = sourceDF.withColumn(targetColumn, new Column(sourceExpression))
-          sourceDFOutput = sourceDFOutput :+ AttributeReference(targetColumn, sourceExpression.dataType)()
-      case _=>
-    }
-    target2SourcePreCombineFiled.foreach {
-      case (targetPreCombineField, sourceExpression)
-        if !containsPreCombineFieldReference(targetPreCombineField, sourceExpression) =>
-          sourceDF = sourceDF.withColumn(targetPreCombineField, new Column(sourceExpression))
-          sourceDFOutput = sourceDFOutput :+ AttributeReference(targetPreCombineField, sourceExpression.dataType)()
-      case _=>
-    }
-    sourceDF
-  }
-
-  /**
-   * Check whether the source expression has the same column name with target column.
-   *
-   * Merge condition cases that return true:
-   * 1) merge into .. on h0.id = s0.id ..
-   * 2) merge into .. on h0.id = cast(s0.id as int) ..
-   * "id" is primaryKey field of h0.
-   */
-  private def containsPrimaryKeyFieldReference(targetColumnName: String, sourceExpression: Expression): Boolean = {
-    val sourceColumnNames = sourceDFOutput.map(_.name)
-    val resolver = sparkSession.sessionState.conf.resolver
-
-    sourceExpression match {
-      case attr: AttributeReference if sourceColumnNames.find(resolver(_, attr.name)).get.equals(targetColumnName) => true
-      // SPARK-35857: the definition of Cast has been changed in Spark3.2.
-      // Match the class type instead of call the `unapply` method.
-      case cast: Cast =>
-        cast.child match {
-          case attr: AttributeReference if sourceColumnNames.find(resolver(_, attr.name)).get.equals(targetColumnName) => true
-          case _ => false
-        }
-      case _=> false
-    }
-  }
-
-  /**
-   * Check whether the source expression on preCombine field contains the same column name with target column.
-   *
-   * Merge expression cases that return true:
-   * 1) merge into .. on .. update set ts = s0.ts
-   * 2) merge into .. on .. update set ts = cast(s0.ts as int)
-   * 3) merge into .. on .. update set ts = s0.ts+1 (expressions like this whose sub node has the same column name with target)
-   * "ts" is preCombine field of h0.
-   */
-  private def containsPreCombineFieldReference(targetColumnName: String, sourceExpression: Expression): Boolean = {
-    val sourceColumnNames = sourceDFOutput.map(_.name)
-    val resolver = sparkSession.sessionState.conf.resolver
-
-    // sub node of the expression may have same column name with target column name
-    sourceExpression.find {
-      case attr: AttributeReference => sourceColumnNames.find(resolver(_, attr.name)).get.equals(targetColumnName)
-      case _ => false
-    }.isDefined
+    Dataset.ofRows(sparkSession, mergeInto.sourceTable)
   }
 
   /**
    * Compare a [[Attribute]] to another, return true if they have the same column name(by resolver) and exprId
    */
-  private def attributeEqual(
-      attr: Attribute, other: Attribute, resolver: Resolver): Boolean = {
-    resolver(attr.name, other.name) && attr.exprId == other.exprId
+  private def attributeEqual(attr: Attribute, other: Attribute): Boolean = {
+    attr.exprId == other.exprId
   }
 
   /**
@@ -433,7 +283,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     mergeInto.targetTable.output
       .filterNot(attr => isMetaField(attr.name))
       .map(attr => {
-        val assignment = attr2Assignment.find(f => attributeEqual(f._1, attr, sparkSession.sessionState.conf.resolver))
+        val assignment = attr2Assignment.find(f => attributeEqual(f._1, attr))
           .getOrElse(throw new IllegalArgumentException(s"Cannot find related assignment for field: ${attr.name}"))
         castIfNeeded(assignment._2, attr.dataType, sparkSession.sqlContext.conf)
       })
@@ -447,12 +297,12 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
    * @return
    */
   private def replaceAttributeInExpression(exp: Expression): Expression = {
-    val sourceJoinTargetFields = sourceDFOutput ++
+    val sourceJoinTargetFields = sourceOutput ++
       mergeInto.targetTable.output.filterNot(attr => isMetaField(attr.name))
 
     exp transform {
       case attr: AttributeReference =>
-        val index = sourceJoinTargetFields.indexWhere(p => p.semanticEquals(attr))
+        val index = sourceJoinTargetFields.indexWhere(p => attributeEqual(attr, p))
         if (index == -1) {
             throw new IllegalArgumentException(s"cannot find ${attr.qualifiedName} in source or " +
               s"target at the merge into statement")
@@ -472,8 +322,8 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
         case reference: BoundReference => reference
       }
       references.foreach(ref => {
-        if (ref.ordinal >= sourceDFOutput.size) {
-          val targetColumn = targetTableSchemaWithoutMetaFields(ref.ordinal - sourceDFOutput.size)
+        if (ref.ordinal >= sourceOutput.size) {
+          val targetColumn = targetTableSchemaWithoutMetaFields(ref.ordinal - sourceOutput.size)
           throw new IllegalArgumentException(s"Insert clause cannot contain target table's field: ${targetColumn.name}" +
             s" in ${exp.sql}")
         }
