@@ -99,7 +99,7 @@ public class FlinkOptions extends HoodieConfig {
 
   public static final String NO_PRE_COMBINE = "no_precombine";
   public static final ConfigOption<String> PRECOMBINE_FIELD = ConfigOptions
-      .key("payload.ordering.field")
+      .key("precombine.field")
       .stringType()
       .defaultValue("ts")
       .withFallbackKeys("write.precombine.field")
@@ -330,9 +330,10 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<Boolean> IGNORE_FAILED = ConfigOptions
       .key("write.ignore.failed")
       .booleanType()
-      .defaultValue(true)
+      .defaultValue(false)
       .withDescription("Flag to indicate whether to ignore any non exception error (e.g. writestatus error). within a checkpoint batch.\n"
-          + "By default true (in favor of streaming progressing over data integrity)");
+          + "By default false.  Turning this on, could hide the write status errors while the spark checkpoint moves ahead. \n"
+          + "  So, would recommend users to use this with caution.");
 
   public static final ConfigOption<String> RECORD_KEY_FIELD = ConfigOptions
       .key(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key())
