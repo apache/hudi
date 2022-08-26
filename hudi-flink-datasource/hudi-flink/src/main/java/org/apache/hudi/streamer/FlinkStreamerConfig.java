@@ -339,6 +339,9 @@ public class FlinkStreamerConfig extends Configuration {
   @Parameter(names = {"--hive-sync-skip-ro-suffix"}, description = "Skip the _ro suffix for Read optimized table when registering, default false")
   public Boolean hiveSyncSkipRoSuffix = false;
 
+  @Parameter(names = {"--hive-sync-skip-rt-suffix"}, description = "Skip the _rt suffix for Read snapshot table when registering, default false")
+  public Boolean hiveSyncSkipRtSuffix = false;
+
   @Parameter(names = {"--hive-sync-support-timestamp"}, description = "INT64 with original type TIMESTAMP_MICROS is converted to hive timestamp type.\n"
       + "Disabled by default for backward compatibility.")
   public Boolean hiveSyncSupportTimestamp = false;
@@ -431,6 +434,7 @@ public class FlinkStreamerConfig extends Configuration {
     conf.setBoolean(FlinkOptions.HIVE_SYNC_AUTO_CREATE_DB, config.hiveSyncAutoCreateDb);
     conf.setBoolean(FlinkOptions.HIVE_SYNC_IGNORE_EXCEPTIONS, config.hiveSyncIgnoreExceptions);
     conf.setBoolean(FlinkOptions.HIVE_SYNC_SKIP_RO_SUFFIX, config.hiveSyncSkipRoSuffix);
+    conf.setBoolean(FlinkOptions.HIVE_SYNC_SKIP_RT_SUFFIX, config.hiveSyncSkipRtSuffix);
     conf.setBoolean(FlinkOptions.HIVE_SYNC_SUPPORT_TIMESTAMP, config.hiveSyncSupportTimestamp);
     return conf;
   }

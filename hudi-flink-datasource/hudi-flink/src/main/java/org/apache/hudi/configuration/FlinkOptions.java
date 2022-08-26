@@ -799,6 +799,12 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(false)
       .withDescription("Skip the _ro suffix for Read optimized table when registering, default false");
 
+  public static final ConfigOption<Boolean> HIVE_SYNC_SKIP_RT_SUFFIX = ConfigOptions
+          .key("hive_sync.skip_rt_suffix")
+          .booleanType()
+          .defaultValue(false)
+          .withDescription("Skip the _rt suffix for Read snapshot table when registering, default false");
+
   public static final ConfigOption<Boolean> HIVE_SYNC_SUPPORT_TIMESTAMP = ConfigOptions
       .key("hive_sync.support_timestamp")
       .booleanType()

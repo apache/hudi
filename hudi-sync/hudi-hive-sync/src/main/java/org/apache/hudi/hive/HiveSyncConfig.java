@@ -51,6 +51,7 @@ public class HiveSyncConfig extends HoodieSyncConfig {
   public static final ConfigProperty<String> HIVE_AUTO_CREATE_DATABASE = HiveSyncConfigHolder.HIVE_AUTO_CREATE_DATABASE;
   public static final ConfigProperty<String> HIVE_IGNORE_EXCEPTIONS = HiveSyncConfigHolder.HIVE_IGNORE_EXCEPTIONS;
   public static final ConfigProperty<String> HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE = HiveSyncConfigHolder.HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE;
+  public static final ConfigProperty<String> HIVE_SKIP_RT_SUFFIX_FOR_READ_SNAPSHOT_TABLE = HiveSyncConfigHolder.HIVE_SKIP_RT_SUFFIX_FOR_READ_SNAPSHOT_TABLE;
   public static final ConfigProperty<String> HIVE_SUPPORT_TIMESTAMP_TYPE = HiveSyncConfigHolder.HIVE_SUPPORT_TIMESTAMP_TYPE;
   public static final ConfigProperty<String> HIVE_TABLE_PROPERTIES = HiveSyncConfigHolder.HIVE_TABLE_PROPERTIES;
   public static final ConfigProperty<String> HIVE_TABLE_SERDE_PROPERTIES = HiveSyncConfigHolder.HIVE_TABLE_SERDE_PROPERTIES;
@@ -118,6 +119,8 @@ public class HiveSyncConfig extends HoodieSyncConfig {
     public Boolean ignoreExceptions;
     @Parameter(names = {"--skip-ro-suffix"}, description = "Skip the `_ro` suffix for Read optimized table, when registering")
     public Boolean skipROSuffix;
+    @Parameter(names = {"--skip-rt-suffix"}, description = "Skip the `_rt` suffix for Read snapshot table, when registering")
+    public Boolean skipRTSuffix;
     @Parameter(names = {"--table-properties"}, description = "Table properties to hive table")
     public String tableProperties;
     @Parameter(names = {"--serde-properties"}, description = "Serde properties to hive table")
@@ -158,6 +161,7 @@ public class HiveSyncConfig extends HoodieSyncConfig {
       props.setPropertyIfNonNull(HIVE_AUTO_CREATE_DATABASE.key(), autoCreateDatabase);
       props.setPropertyIfNonNull(HIVE_IGNORE_EXCEPTIONS.key(), ignoreExceptions);
       props.setPropertyIfNonNull(HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE.key(), skipROSuffix);
+      props.setPropertyIfNonNull(HIVE_SKIP_RT_SUFFIX_FOR_READ_SNAPSHOT_TABLE.key(), skipRTSuffix);
       props.setPropertyIfNonNull(HIVE_SUPPORT_TIMESTAMP_TYPE.key(), supportTimestamp);
       props.setPropertyIfNonNull(HIVE_TABLE_PROPERTIES.key(), tableProperties);
       props.setPropertyIfNonNull(HIVE_TABLE_SERDE_PROPERTIES.key(), serdeProperties);
