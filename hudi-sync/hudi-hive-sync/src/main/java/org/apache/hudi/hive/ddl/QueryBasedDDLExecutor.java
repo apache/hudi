@@ -38,6 +38,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_PARTITION_CASCADE_WITH_COLUMN_CHANGE;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_BATCH_SYNC_PARTITION_NUM;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SUPPORT_TIMESTAMP_TYPE;
 import static org.apache.hudi.hive.util.HiveSchemaUtil.HIVE_ESCAPE_CHARACTER;
@@ -100,7 +101,7 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
     try {
       String newSchemaStr = HiveSchemaUtil.generateSchemaString(newSchema, config.getSplitStrings(META_SYNC_PARTITION_FIELDS), config.getBoolean(HIVE_SUPPORT_TIMESTAMP_TYPE));
       // Cascade clause should not be present for non-partitioned tables
-      String cascadeClause = config.getSplitStrings(META_SYNC_PARTITION_FIELDS).size() > 0 ? " cascade" : "";
+      String cascadeClause = (!config.getSplitStrings(META_SYNC_PARTITION_FIELDS).isEmpty() && (config.getBooleanOrDefault(HIVE_SYNC_PARTITION_CASCADE_WITH_COLUMN_CHANGE))) ? " cascade" : "";
       StringBuilder sqlBuilder = new StringBuilder("ALTER TABLE ").append(HIVE_ESCAPE_CHARACTER)
           .append(databaseName).append(HIVE_ESCAPE_CHARACTER).append(".")
           .append(HIVE_ESCAPE_CHARACTER).append(tableName)
