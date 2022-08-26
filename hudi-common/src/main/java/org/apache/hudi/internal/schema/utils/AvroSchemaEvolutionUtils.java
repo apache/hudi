@@ -25,6 +25,8 @@ import org.apache.hudi.internal.schema.action.TableChanges;
 
 import org.apache.avro.Schema;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -170,16 +172,62 @@ public class AvroSchemaEvolutionUtils {
     InternalSchema sourceInternalSchema = convert(sourceSchema);
     InternalSchema targetInternalSchema = convert(targetSchema);
 
-    List<String> colNamesSourceSchema = sourceInternalSchema.getAllColsFullName();
+    // Collect field's fully-qualified name pairs of the fields whose names diverge only
+    // in its letters' casing
+    List<Pair<String, String>> reconciliationTargetColumnNamePairs =
+        resolveCaseMismatchingFieldNamePairs(sourceInternalSchema, targetInternalSchema);
+
+    if (reconciliationTargetColumnNamePairs.isEmpty()) {
+      return sourceSchema;
+    }
+
+    // Reconcile field names (by executing phony schema change)
+    TableChanges.ColumnUpdateChange schemaChange =
+        reduce(reconciliationTargetColumnNamePairs, TableChanges.ColumnUpdateChange.get(sourceInternalSchema, true),
+            (change, sourceTargetPair) -> change.renameColumn(sourceTargetPair.getLeft(), sourceTargetPair.getRight()));
+
+    return convert(SchemaChangeUtils.applyTableChanges2Schema(sourceInternalSchema, schemaChange), sourceSchema.getName());
+  }
+
+  /**
+   * Resolves fields in the {@code source} schema matching {@code target} schema, even though
+   * their letter casing might be mismatched. Returns fully-qualified names pairs for the fields from
+   * the {@code source} schema for which, there is correspondent field in the {@code target} schema
+   * that only differs in its letters case.
+   *
+   * For example, provided two schemas {@code A} and {@code B}, such that:
+   * {@code struct A { fieldA: ... }}, while {@code struct B { FieldA: ... }}, this method will
+   * produce following list: {@code Map("fieldA" -> "FieldA")}
+   *
+   * NOTE: This method doesn't perform validation whether types of the correspondent fields are
+   *       conformant, and simply applies a case-insensitive resolution logic
+   */
+  public static Map<String, String> resolveCaseMismatchingFieldNamePairs(Schema sourceSchema,
+                                                                                Schema targetSchema) {
+    if (sourceSchema.getFields().isEmpty() || targetSchema.getFields().isEmpty()) {
+      return Collections.emptyMap();
+    }
+
+    InternalSchema sourceInternalSchema = convert(sourceSchema);
+    InternalSchema targetInternalSchema = convert(targetSchema);
+
+    return resolveCaseMismatchingFieldNamePairs(sourceInternalSchema, targetInternalSchema)
+        .stream()
+        .collect(Collectors.toMap(Pair::getLeft, Pair::getRight));
+  }
+
+  private static List<Pair<String, String>> resolveCaseMismatchingFieldNamePairs(InternalSchema sourceSchema,
+                                                                                 InternalSchema targetSchema) {
+    List<String> colNamesSourceSchema = sourceSchema.getAllColsFullName();
 
     // To reconcile field names of the source schema we enumerate all possible fields (including
     // nested ones) and produce a mapping convert them to lower-case to correlate across
     // source and target schemas
     Map<String, String> colNamesMapTargetSchema =
-        targetInternalSchema.getAllColsFullName().stream()
+        targetSchema.getAllColsFullName().stream()
             .collect(Collectors.toMap(String::toLowerCase, Function.identity()));
 
-    List<Pair<String, String>> reconciliationTargetColNames = colNamesSourceSchema.stream()
+    return colNamesSourceSchema.stream()
         .map(sourceFieldName -> {
           // NOTE: Here we're only reconciling the fields that differ only in casing of their
           //       corresponding names (therefore a) fields have to be present in both schemas and
@@ -194,17 +242,6 @@ public class AvroSchemaEvolutionUtils {
         })
         .filter(Objects::nonNull)
         .collect(Collectors.toList());
-
-    if (reconciliationTargetColNames.isEmpty()) {
-      return sourceSchema;
-    }
-
-    // Reconcile field names (by executing phony schema change)
-    TableChanges.ColumnUpdateChange schemaChange =
-        reduce(reconciliationTargetColNames, TableChanges.ColumnUpdateChange.get(sourceInternalSchema, true),
-            (change, sourceTargetPair) -> change.renameColumn(sourceTargetPair.getLeft(), sourceTargetPair.getRight()));
-
-    return convert(SchemaChangeUtils.applyTableChanges2Schema(sourceInternalSchema, schemaChange), sourceSchema.getName());
   }
 }
 

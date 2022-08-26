@@ -497,15 +497,6 @@ object HoodieSparkSqlWriter {
     fullPartitions.distinct
   }
 
-  private def reconcileFieldNameCasing(spark: SparkSession, sourceSchema: Schema, latestTableSchema: Schema) = {
-    if (spark.sessionState.conf.getConf(SQLConf.CASE_SENSITIVE)) {
-      sourceSchema
-    } else {
-      // Otherwise we have to canonicalize field names across incoming and existing table schemas
-      reconcileFieldNamesCasing(sourceSchema, latestTableSchema)
-    }
-  }
-
   def getPartitionColumns(partitionParam: String): Seq[String] = {
     partitionParam.split(",")
       .map(partitionField => partitionField.trim)
@@ -624,6 +615,15 @@ object HoodieSparkSqlWriter {
         val (structName, namespace) = getAvroRecordNameAndNamespace(tableId.table)
         convertStructTypeToAvroSchema(catalogTable.schema, structName, namespace)
       }
+    }
+  }
+
+  private def reconcileFieldNameCasing(spark: SparkSession, sourceSchema: Schema, latestTableSchema: Schema) = {
+    if (spark.sessionState.conf.getConf(SQLConf.CASE_SENSITIVE)) {
+      sourceSchema
+    } else {
+      // Otherwise we have to canonicalize field names across incoming and existing table schemas
+      reconcileFieldNamesCasing(sourceSchema, latestTableSchema)
     }
   }
 
