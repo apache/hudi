@@ -18,15 +18,18 @@
 
 package org.apache.hudi.utilities.sources;
 
-import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.utilities.deltastreamer.SourceFormatAdapter;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
+
+import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.AnalysisException;
 import org.apache.spark.sql.Dataset;
@@ -41,6 +44,7 @@ import java.io.IOException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Test against {@link SqlSource}.
@@ -49,6 +53,7 @@ public class TestSqlFileBasedSource extends UtilitiesTestBase {
 
   private final boolean useFlattenedSchema = false;
   private final String sqlFileSourceConfig = "hoodie.deltastreamer.source.sql.file";
+  private final String sqlFileSourceConfigEmitChkPointConf = "hoodie.deltastreamer.source.sql.checkpoint.emit";
   protected FilebasedSchemaProvider schemaProvider;
   protected HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
   private String dfsRoot;
@@ -58,26 +63,25 @@ public class TestSqlFileBasedSource extends UtilitiesTestBase {
 
   @BeforeAll
   public static void initClass() throws Exception {
-    UtilitiesTestBase.initClass();
+    UtilitiesTestBase.initTestServices(true, true, false);
+    FileSystem fs = UtilitiesTestBase.fs;
     UtilitiesTestBase.Helpers.copyToDFS(
-        "delta-streamer-config/sql-file-based-source.sql",
-        UtilitiesTestBase.dfs,
-        UtilitiesTestBase.dfsBasePath + "/sql-file-based-source.sql");
+        "delta-streamer-config/sql-file-based-source.sql", fs,
+        UtilitiesTestBase.basePath + "/sql-file-based-source.sql");
     UtilitiesTestBase.Helpers.copyToDFS(
-        "delta-streamer-config/sql-file-based-source-invalid-table.sql",
-        UtilitiesTestBase.dfs,
-        UtilitiesTestBase.dfsBasePath + "/sql-file-based-source-invalid-table.sql");
+        "delta-streamer-config/sql-file-based-source-invalid-table.sql", fs,
+        UtilitiesTestBase.basePath + "/sql-file-based-source-invalid-table.sql");
   }
 
   @AfterAll
   public static void cleanupClass() {
-    UtilitiesTestBase.cleanupClass();
+    UtilitiesTestBase.cleanUpUtilitiesTestServices();
   }
 
   @BeforeEach
   public void setup() throws Exception {
-    dfsRoot = UtilitiesTestBase.dfsBasePath + "/parquetFiles";
-    UtilitiesTestBase.dfs.mkdirs(new Path(dfsRoot));
+    dfsRoot = UtilitiesTestBase.basePath + "/parquetFiles";
+    UtilitiesTestBase.fs.mkdirs(new Path(dfsRoot));
     props = new TypedProperties();
     super.setup();
     schemaProvider = new FilebasedSchemaProvider(Helpers.setupSchemaOnDFS(), jsc);
@@ -110,7 +114,7 @@ public class TestSqlFileBasedSource extends UtilitiesTestBase {
    */
   @Test
   public void testSqlFileBasedSourceAvroFormat() {
-    props.setProperty(sqlFileSourceConfig, UtilitiesTestBase.dfsBasePath + "/sql-file-based-source.sql");
+    props.setProperty(sqlFileSourceConfig, UtilitiesTestBase.basePath + "/sql-file-based-source.sql");
     sqlFileSource = new SqlFileBasedSource(props, jsc, sparkSession, schemaProvider);
     sourceFormatAdapter = new SourceFormatAdapter(sqlFileSource);
 
@@ -133,7 +137,7 @@ public class TestSqlFileBasedSource extends UtilitiesTestBase {
    */
   @Test
   public void testSqlFileBasedSourceRowFormat() {
-    props.setProperty(sqlFileSourceConfig, UtilitiesTestBase.dfsBasePath + "/sql-file-based-source.sql");
+    props.setProperty(sqlFileSourceConfig, UtilitiesTestBase.basePath + "/sql-file-based-source.sql");
     sqlFileSource = new SqlFileBasedSource(props, jsc, sparkSession, schemaProvider);
     sourceFormatAdapter = new SourceFormatAdapter(sqlFileSource);
 
@@ -151,7 +155,7 @@ public class TestSqlFileBasedSource extends UtilitiesTestBase {
    */
   @Test
   public void testSqlFileBasedSourceMoreRecordsThanSourceLimit() {
-    props.setProperty(sqlFileSourceConfig, UtilitiesTestBase.dfsBasePath + "/sql-file-based-source.sql");
+    props.setProperty(sqlFileSourceConfig, UtilitiesTestBase.basePath + "/sql-file-based-source.sql");
     sqlFileSource = new SqlFileBasedSource(props, jsc, sparkSession, schemaProvider);
     sourceFormatAdapter = new SourceFormatAdapter(sqlFileSource);
 
@@ -168,12 +172,27 @@ public class TestSqlFileBasedSource extends UtilitiesTestBase {
    */
   @Test
   public void testSqlFileBasedSourceInvalidTable() {
-    props.setProperty(sqlFileSourceConfig, UtilitiesTestBase.dfsBasePath + "/sql-file-based-source-invalid-table.sql");
+    props.setProperty(sqlFileSourceConfig, UtilitiesTestBase.basePath + "/sql-file-based-source-invalid-table.sql");
     sqlFileSource = new SqlFileBasedSource(props, jsc, sparkSession, schemaProvider);
     sourceFormatAdapter = new SourceFormatAdapter(sqlFileSource);
 
     assertThrows(
         AnalysisException.class,
         () -> sourceFormatAdapter.fetchNewDataInRowFormat(Option.empty(), Long.MAX_VALUE));
+  }
+
+  @Test
+  public void shouldSetCheckpointForSqlFileBasedSourceWithEpochCheckpoint() {
+    props.setProperty(sqlFileSourceConfig, UtilitiesTestBase.basePath + "/sql-file-based-source.sql");
+    props.setProperty(sqlFileSourceConfigEmitChkPointConf, "true");
+
+    sqlFileSource = new SqlFileBasedSource(props, jsc, sparkSession, schemaProvider);
+    Pair<Option<Dataset<Row>>, String> nextBatch = sqlFileSource.fetchNextBatch(Option.empty(), Long.MAX_VALUE);
+
+    assertEquals(10000, nextBatch.getLeft().get().count());
+    long currentTimeInMillis = System.currentTimeMillis();
+    long checkpointToBeUsed = Long.parseLong(nextBatch.getRight());
+    assertTrue((currentTimeInMillis - checkpointToBeUsed) / 1000 < 60);
+    assertTrue(currentTimeInMillis > checkpointToBeUsed);
   }
 }

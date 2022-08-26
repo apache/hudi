@@ -2326,7 +2326,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   public void testCsvDFSSourceNoHeaderWithSchemaProviderAndTransformer() throws Exception {
     // The CSV files do not have header, the columns are separated by '\t'
     // File schema provider is used, transformer is applied
-    // In this case, the source and target schema come from the Avro schema files
+    // In this case, the source and target schema come from the Avro schema filesTestSqlFileBasedSour
     testCsvDFSSource(false, '\t', true, Collections.singletonList(TripsWithDistanceTransformer.class.getName()));
   }
 

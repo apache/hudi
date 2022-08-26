@@ -20,6 +20,7 @@ package org.apache.hudi.utilities.sources;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+
 import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
@@ -27,12 +28,13 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.utilities.schema.SchemaProvider;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -55,8 +57,9 @@ import java.util.Scanner;
  */
 public class SqlFileBasedSource extends RowSource {
 
-  private static final Logger LOG = LogManager.getLogger(SqlFileBasedSource.class);
+  private static final Logger LOG = LoggerFactory.getLogger(SqlFileBasedSource.class);
   private final String sourceSqlFile;
+  private final boolean shouldEmitCheckPoint;
 
   public SqlFileBasedSource(
       TypedProperties props,
@@ -67,6 +70,7 @@ public class SqlFileBasedSource extends RowSource {
     DataSourceUtils.checkRequiredProperties(
         props, Collections.singletonList(SqlFileBasedSource.Config.SOURCE_SQL_FILE));
     sourceSqlFile = props.getString(SqlFileBasedSource.Config.SOURCE_SQL_FILE);
+    shouldEmitCheckPoint = props.getBoolean(Config.EMIT_EPOCH_CHECKPOINT, false);
   }
 
   @Override
@@ -85,7 +89,7 @@ public class SqlFileBasedSource extends RowSource {
           rows = sparkSession.sql(sqlStr);
         }
       }
-      return Pair.of(Option.of(rows), null);
+      return Pair.of(Option.of(rows), shouldEmitCheckPoint ? String.valueOf(System.currentTimeMillis()) : null);
     } catch (IOException ioe) {
       throw new HoodieIOException("Error reading source SQL file.", ioe);
     }
@@ -96,5 +100,6 @@ public class SqlFileBasedSource extends RowSource {
    */
   private static class Config {
     private static final String SOURCE_SQL_FILE = "hoodie.deltastreamer.source.sql.file";
+    private static final String EMIT_EPOCH_CHECKPOINT = "hoodie.deltastreamer.source.sql.checkpoint.emit";
   }
 }
