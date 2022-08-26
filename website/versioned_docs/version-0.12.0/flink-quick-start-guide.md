@@ -24,14 +24,13 @@ quick start tool for SQL users.
 
 #### Step.1 download Flink jar
 
-Hudi works with both Flink 1.13 and Flink 1.14. You can follow the
+Hudi works with both Flink 1.13, Flink 1.14 and Flink 1.15. You can follow the
 instructions [here](https://flink.apache.org/downloads) for setting up Flink. Then choose the desired Hudi-Flink bundle
 jar to work with different Flink and Scala versions:
 
-- `hudi-flink1.13-bundle_2.11`
-- `hudi-flink1.13-bundle_2.12`
-- `hudi-flink1.14-bundle_2.11`
-- `hudi-flink1.14-bundle_2.12`
+- `hudi-flink1.13-bundle`
+- `hudi-flink1.14-bundle`
+- `hudi-flink1.15-bundle`
 
 #### Step.2 start Flink cluster
 Start a standalone Flink cluster within hadoop environment.
@@ -117,8 +116,8 @@ INSERT INTO t1 VALUES
 select * from t1;
 ```
 
-This query provides snapshot querying of the ingested data. 
-Refer to [Table types and queries](/docs/concepts#table-types--queries) for more info on all table types and query types supported.
+This statement queries snapshot view of the dataset.
+Refers to [Table types and queries](/docs/concepts#table-types--queries) for more info on all table types and query types supported.
 
 ### Update Data
 
