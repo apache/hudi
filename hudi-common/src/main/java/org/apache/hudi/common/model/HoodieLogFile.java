@@ -22,11 +22,15 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.exception.InvalidHoodiePathException;
 
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.Comparator;
 import java.util.Objects;
+import java.util.regex.Matcher;
+
+import static org.apache.hudi.common.fs.FSUtils.LOG_FILE_PATTERN;
 
 /**
  * Abstracts a single log file. Contains methods to extract metadata like the fileId, version and extension from the log
@@ -46,51 +50,73 @@ public class HoodieLogFile implements Serializable {
   private transient FileStatus fileStatus;
   private final String pathStr;
   private long fileLen;
+  private transient Path path;
+  private String fileId;
+  private String baseTime;
+  private int logVersion = Integer.MIN_VALUE;
+  private String writeToken;
 
   public HoodieLogFile(HoodieLogFile logFile) {
     this.fileStatus = logFile.fileStatus;
     this.pathStr = logFile.pathStr;
     this.fileLen = logFile.fileLen;
+    initBaseInfo();
   }
 
   public HoodieLogFile(FileStatus fileStatus) {
     this.fileStatus = fileStatus;
     this.pathStr = fileStatus.getPath().toString();
     this.fileLen = fileStatus.getLen();
+    initBaseInfo();
   }
 
   public HoodieLogFile(Path logPath) {
     this.fileStatus = null;
     this.pathStr = logPath.toString();
     this.fileLen = -1;
+    initBaseInfo();
   }
 
   public HoodieLogFile(Path logPath, Long fileLen) {
     this.fileStatus = null;
     this.pathStr = logPath.toString();
     this.fileLen = fileLen;
+    initBaseInfo();
   }
 
   public HoodieLogFile(String logPathStr) {
     this.fileStatus = null;
     this.pathStr = logPathStr;
     this.fileLen = -1;
+    initBaseInfo();
   }
 
   public String getFileId() {
-    return FSUtils.getFileIdFromLogPath(getPath());
+    if (fileId == null) {
+      this.fileId = FSUtils.getFileIdFromLogPath(getPath());
+    }
+    return fileId;
   }
 
   public String getBaseCommitTime() {
-    return FSUtils.getBaseCommitTimeFromLogPath(getPath());
+    if (baseTime == null) {
+      this.baseTime = FSUtils.getBaseCommitTimeFromLogPath(getPath());
+    }
+    return this.baseTime;
   }
 
   public int getLogVersion() {
-    return FSUtils.getFileVersionFromLog(getPath());
+    if (logVersion == Integer.MIN_VALUE) {
+      logVersion = FSUtils.getFileVersionFromLog(getPath());
+    }
+    return this.logVersion;
   }
 
   public String getLogWriteToken() {
-    return FSUtils.getWriteTokenFromLogPath(getPath());
+    if (this.writeToken == null) {
+      this.writeToken = FSUtils.getWriteTokenFromLogPath(getPath());
+    }
+    return this.writeToken;
   }
 
   public String getFileExtension() {
@@ -98,7 +124,21 @@ public class HoodieLogFile implements Serializable {
   }
 
   public Path getPath() {
-    return new Path(pathStr);
+    if (path == null) {
+      this.path = new Path(pathStr);
+    }
+    return this.path;
+  }
+
+  private void initBaseInfo() {
+    Matcher matcher = LOG_FILE_PATTERN.matcher(getPath().getName());
+    if (!matcher.find()) {
+      throw new InvalidHoodiePathException(path, "LogFile");
+    }
+    this.writeToken = matcher.group(6);
+    this.logVersion = Integer.parseInt(matcher.group(4));
+    this.baseTime = matcher.group(2);
+    this.fileId = matcher.group(1);
   }
 
   public String getFileName() {

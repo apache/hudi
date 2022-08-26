@@ -75,7 +75,7 @@ public class FSUtils {
 
   private static final Logger LOG = LogManager.getLogger(FSUtils.class);
   // Log files are of this pattern - .b5068208-e1a4-11e6-bf01-fe55135034f3_20170101134598.log.1
-  private static final Pattern LOG_FILE_PATTERN =
+  public static final Pattern LOG_FILE_PATTERN =
       Pattern.compile("\\.(.*)_(.*)\\.(.*)\\.([0-9]*)(_(([0-9]*)-([0-9]*)-([0-9]*)))?");
   private static final String LOG_FILE_PREFIX = ".";
   private static final int MAX_ATTEMPTS_RECOVER_LEASE = 10;
