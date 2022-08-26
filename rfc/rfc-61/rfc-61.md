@@ -34,8 +34,6 @@ JIRA: [HUDI-4677](https://issues.apache.org/jira/browse/HUDI-4677)
 
 ## Abstract
 
-Describe the problem you are trying to solve and a brief description of why it’s needed
-
 For the snapshot view scenario, Hudi already provides two key features to support it:
 * Time travel: user provides a timestamp to query a specific snapshot view of a Hudi table
 * Savepoint/restore: "savepoint" saves the table as of the commit time so that it lets you restore the table to this savepoint at a later point in time if need be.
@@ -50,8 +48,39 @@ What this RFC plan to do is to let Hudi support release a snapshot view and life
 
 ## Background
 Introduce any much background context which is relevant or necessary to understand the feature and design choices.
-typical scenarios of snapshot view:
+typical scenarios and benefits of snapshot view:
+1. Basic idea:
+![img.png](img.png)
 
+Create Snapshot view based on Hudi Savepoint
+    * Create Snapshot views periodically by time(date time/processing time)
+    * Use HMS to store view metadata
+   
+Build periodic snapshots based on the time period required by the user
+These Shapshots are stored as partitions in the metadata management system
+Users can easily use SQL to access this data in Flink Spark or Presto.
+Because the data store is complete and has no merged details,
+So the data itself is to support the full amount of data calculation, also support incremental processing
+
+2. Compare to Hive solution
+![img_2.png](img_2.png)
+
+The Snapshot view is created based on Hudi Savepoint, which significantly reduces the data storage space of some large tables
+    * The space usage becomes (1 + (t-1) * p)/t
+    * Incremental use reduces the amount of data involved in the calculation
+
+When using snapshot view storage, for some scenarios where the proportion of changing data is not large, a better storage saving effect will be achieved
+We have a simple formula here to calculate the effect
+P indicates the proportion of changed data, and t indicates the number of time periods to be saved
+The lower the percentage of changing data, the better the storage savings
+So There is also a good savings for long periods of data
+
+At the same time, it has benefit for incremental computing resource saving
+
+3. Typical scenarios 
+    * Time travel for a long time in a convenience way
+    * More flexible pipeline schedule&execution
+   
 ## Implementation
 Describe the new thing you want to do in appropriate detail, how it fits into the project architecture. 
 Provide a detailed description of how you intend to implement this feature.This may be fairly extensive and have large subsections of its own. 
