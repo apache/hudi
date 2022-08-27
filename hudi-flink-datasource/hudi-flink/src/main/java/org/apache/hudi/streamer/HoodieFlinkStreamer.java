@@ -104,7 +104,7 @@ public class HoodieFlinkStreamer {
     if (OptionsResolver.needsAsyncCompaction(conf)) {
       Pipelines.compact(conf, pipeline);
     } else {
-      Pipelines.clean(conf, pipeline);
+      Pipelines.clean(conf, pipeline, false);
     }
 
     env.execute(cfg.targetTableName);

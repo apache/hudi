@@ -419,8 +419,8 @@ public class Pipelines {
         .setParallelism(1); // compaction commit should be singleton
   }
 
-  public static DataStreamSink<Object> clean(Configuration conf, DataStream<Object> dataStream) {
-    return dataStream.addSink(new CleanFunction<>(conf))
+  public static DataStreamSink<Object> clean(Configuration conf, DataStream<Object> dataStream, Boolean isBounded) {
+    return dataStream.addSink(new CleanFunction<>(conf, isBounded))
         .setParallelism(1)
         .name("clean_commits");
   }
