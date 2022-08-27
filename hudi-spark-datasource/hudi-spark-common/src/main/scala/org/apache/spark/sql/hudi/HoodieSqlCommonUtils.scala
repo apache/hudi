@@ -229,19 +229,6 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
   }
 
   /**
-   * Split the expression to a sub expression seq by the AND operation.
-   * @param expression
-   * @return
-   */
-  def splitByAnd(expression: Expression): Seq[Expression] = {
-    expression match {
-      case And(left, right) =>
-        splitByAnd(left) ++ splitByAnd(right)
-      case exp => Seq(exp)
-    }
-  }
-
-  /**
    * Append the spark config and table options to the baseConfig.
    */
   def withSparkConf(spark: SparkSession, options: Map[String, String])
