@@ -39,7 +39,7 @@ html[data-theme='dark'] .docusaurus-highlight-code-line {
 }
 
 @media (max-width: 767px) {
-  .hero__img, .header-github-link, .header-slack-link, .header-twitter-link {
+  .hero__img, .header-github-link, .header-slack-link, .header-twitter-link, .header-youtube-link {
     display: none;
   }
   .hero__title {
@@ -87,6 +87,14 @@ html[data-theme='dark'] .docusaurus-highlight-code-line {
 
 .header-slack-link:before {
   background: url(/assets/images/slack.png) no-repeat;
+  content: "";
+  display: flex;
+  height: 30px;
+  width: 30px;
+}
+
+.header-youtube-link:before {
+  background: url(/assets/images/youtube.png) no-repeat;
   content: "";
   display: flex;
   height: 30px;

@@ -208,7 +208,33 @@ set hoodie.upsert.shuffle.parallelism = 100;
 set hoodie.delete.shuffle.parallelism = 100;
 ```
 
-## Flink 
+## Flink
+
+### Create Catalog
+
+The catalog helps to manage the SQL tables, the table can be shared among CLI sessions if the catalog persists the table DDLs.
+For `hms` mode, the catalog also supplements the hive syncing options.
+
+HMS mode catalog SQL demo:
+```sql
+CREATE CATALOG hoodie_catalog
+  WITH (
+    'type'='hudi',
+    'catalog.path' = '${catalog default root path}',
+    'hive.conf.dir' = '${directory where hive-site.xml is located}',
+    'mode'='hms' -- supports 'dfs' mode that uses the DFS backend for table DDLs persistence
+  );
+```
+
+#### Options
+|  Option Name  | Required | Default | Remarks |
+|  -----------  | -------  | ------- | ------- |
+| `catalog.path` | true | -- | Default root path for the catalog, the path is used to infer the table path automatically, the default table path: `${catalog.path}/${db_name}/${table_name}` |
+| `default-database` | false | default | default database name |
+| `hive.conf.dir` | false | -- | The directory where hive-site.xml is located, only valid in `hms` mode |
+| `mode` | false | dfs | Supports `hms` mode that uses HMS to persist the table options |
+| `table.external` | false | false | Whether to create the external table, only valid in `hms` mode |
+
 ### Create Table
 
 The following is a Flink example to create a table. [Read the Flink Quick Start](/docs/flink-quick-start-guide) guide for more examples.

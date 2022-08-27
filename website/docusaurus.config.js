@@ -186,6 +186,10 @@ module.exports = {
               to: '/community/syncs',
             },
             {
+              label: 'Office Hours',
+              to: '/community/office_hours',
+            },
+            {
               label: 'Team',
               to: '/community/team',
             }
@@ -230,6 +234,12 @@ module.exports = {
           position: 'right',
           className: 'header-slack-link',
           'aria-label': 'Hudi Slack Channel',
+        },
+        {
+          href: 'https://www.youtube.com/channel/UCs7AhE0BWaEPZSChrBR-Muw',
+          position: 'right',
+          className: 'header-youtube-link',
+          'aria-label': 'Hudi YouTube Channel',
         },
       ],
     },
@@ -341,6 +351,10 @@ module.exports = {
             {
               label: 'Twitter',
               href: 'https://twitter.com/ApacheHudi',
+            },
+            {
+              label: 'YouTube',
+              href:  'https://www.youtube.com/channel/UCs7AhE0BWaEPZSChrBR-Muw',
             },
             {
               label: 'Mailing List',
