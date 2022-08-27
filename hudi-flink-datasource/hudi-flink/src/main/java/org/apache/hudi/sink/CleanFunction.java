@@ -65,7 +65,7 @@ public class CleanFunction<T> extends AbstractRichFunction
       this.writeClient = StreamerUtil.createWriteClient(conf, getRuntimeContext());
       this.executor = NonThrownExecutor.builder(LOG).waitForTasksFinish(true).build();
 
-      if (OptionsResolver.isInsertOverwrite(conf)) {
+      if (OptionsResolver.isInsertOverwrite(conf) || conf.getBoolean(FlinkOptions.BATCH_CLEAN_ENABLED)) {
         String instantTime = HoodieActiveTimeline.createNewInstantTime();
         LOG.info(String.format("exec sync clean with instant time %s...", instantTime));
         executor.execute(() -> writeClient.clean(instantTime), "wait for sync cleaning finish");
