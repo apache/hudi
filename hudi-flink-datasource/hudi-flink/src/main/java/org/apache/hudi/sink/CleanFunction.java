@@ -55,11 +55,6 @@ public class CleanFunction<T> extends AbstractRichFunction
 
   private volatile boolean isCleaning;
 
-  public CleanFunction(Configuration conf) {
-    this.conf = conf;
-    this.isBounded = false;
-  }
-
   public CleanFunction(Configuration conf, Boolean isBounded) {
     this.conf = conf;
     this.isBounded = isBounded;

@@ -83,7 +83,7 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
   private transient HoodieFlinkTable<?> table;
 
   public CompactionCommitSink(Configuration conf) {
-    super(conf, false);
+    super(conf);
     this.conf = conf;
   }
 
