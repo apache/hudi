@@ -102,7 +102,7 @@ public class HoodieTableSink implements DynamicTableSink, SupportsPartitioning, 
         }
         return Pipelines.compact(conf, pipeline);
       } else {
-        return Pipelines.clean(conf, pipeline, context.isBounded());
+        return Pipelines.clean(conf, pipeline);
       }
     };
   }

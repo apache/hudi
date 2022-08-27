@@ -47,7 +47,6 @@ public class CleanFunction<T> extends AbstractRichFunction
   private static final Logger LOG = LoggerFactory.getLogger(CleanFunction.class);
 
   private final Configuration conf;
-  private final Boolean isBounded;
 
   protected HoodieFlinkWriteClient writeClient;
 
@@ -55,9 +54,8 @@ public class CleanFunction<T> extends AbstractRichFunction
 
   private volatile boolean isCleaning;
 
-  public CleanFunction(Configuration conf, Boolean isBounded) {
+  public CleanFunction(Configuration conf) {
     this.conf = conf;
-    this.isBounded = isBounded;
   }
 
   @Override
@@ -67,7 +65,7 @@ public class CleanFunction<T> extends AbstractRichFunction
       this.writeClient = StreamerUtil.createWriteClient(conf, getRuntimeContext());
       this.executor = NonThrownExecutor.builder(LOG).waitForTasksFinish(true).build();
 
-      if (isBounded || OptionsResolver.isInsertOverwrite(conf)) {
+      if (OptionsResolver.isInsertOverwrite(conf)) {
         String instantTime = HoodieActiveTimeline.createNewInstantTime();
         LOG.info(String.format("exec sync clean with instant time %s...", instantTime));
         executor.execute(() -> writeClient.clean(instantTime), "wait for sync cleaning finish");
