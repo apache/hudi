@@ -59,10 +59,10 @@ public class HoodieMetadataMergedLogRecordReader extends HoodieMergedLogRecordSc
                                               String spillableMapBasePath,
                                               ExternalSpillableMap.DiskMapType diskMapType,
                                               boolean isBitCaskDiskMapCompressionEnabled,
-                                              Option<InstantRange> instantRange, boolean allowFullScan) {
+                                              Option<InstantRange> instantRange, boolean allowFullScan, boolean useScanV2) {
     super(fs, basePath, logFilePaths, readerSchema, latestInstantTime, maxMemorySizeInBytes, true, false, bufferSize,
         spillableMapBasePath, instantRange, diskMapType, isBitCaskDiskMapCompressionEnabled, false, allowFullScan,
-            Option.of(partitionName), InternalSchema.getEmptyInternalSchema(), false, false);
+            Option.of(partitionName), InternalSchema.getEmptyInternalSchema(), false, useScanV2);
   }
 
   @Override
@@ -138,7 +138,11 @@ public class HoodieMetadataMergedLogRecordReader extends HoodieMergedLogRecordSc
    * Builder used to build {@code HoodieMetadataMergedLogRecordScanner}.
    */
   public static class Builder extends HoodieMergedLogRecordScanner.Builder {
+
     private boolean allowFullScan = HoodieMetadataConfig.ENABLE_FULL_SCAN_LOG_FILES.defaultValue();
+
+    // Use scanV2 method.
+    private boolean useScanV2 = false;
 
     @Override
     public Builder withFileSystem(FileSystem fs) {
@@ -227,10 +231,16 @@ public class HoodieMetadataMergedLogRecordReader extends HoodieMergedLogRecordSc
     }
 
     @Override
+    public Builder withUseScanV2(boolean useScanV2) {
+      this.useScanV2 = useScanV2;
+      return this;
+    }
+
+    @Override
     public HoodieMetadataMergedLogRecordReader build() {
       return new HoodieMetadataMergedLogRecordReader(fs, basePath, partitionName, logFilePaths, readerSchema,
           latestInstantTime, maxMemorySizeInBytes, bufferSize, spillableMapBasePath,
-          diskMapType, isBitCaskDiskMapCompressionEnabled, instantRange, allowFullScan);
+          diskMapType, isBitCaskDiskMapCompressionEnabled, instantRange, allowFullScan, useScanV2);
     }
   }
 

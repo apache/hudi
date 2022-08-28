@@ -209,6 +209,12 @@ public class HoodieCompactionConfig extends HoodieConfig {
       .defaultValue("5")
       .withDocumentation("Log compaction can be scheduled if the no. of log blocks crosses this threshold value.");
 
+  public static final ConfigProperty<String> USE_LOG_RECORD_READER_SCAN_V2 = ConfigProperty
+      .key("hoodie.log.record.reader.use.scanV2")
+      .defaultValue("false")
+      .withDocumentation("ScanV2 logic address all the multiwriter challenges while appending to log files. "
+          + "It also differentiates original blocks written by ingestion writers and compacted blocks written log compaction.");
+
   /** @deprecated Use {@link #INLINE_COMPACT} and its methods instead */
   @Deprecated
   public static final String INLINE_COMPACT_PROP = INLINE_COMPACT.key();
@@ -453,6 +459,11 @@ public class HoodieCompactionConfig extends HoodieConfig {
 
     public Builder withLogCompactionBlocksThreshold(String logCompactionBlocksThreshold) {
       compactionConfig.setValue(LOG_COMPACTION_BLOCKS_THRESHOLD, logCompactionBlocksThreshold);
+      return this;
+    }
+
+    public Builder withLogRecordReaderScanV2(String useLogRecordReaderScanV2) {
+      compactionConfig.setValue(USE_LOG_RECORD_READER_SCAN_V2, useLogRecordReaderScanV2);
       return this;
     }
 

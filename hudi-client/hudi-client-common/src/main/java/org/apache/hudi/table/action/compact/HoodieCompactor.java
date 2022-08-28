@@ -185,6 +185,7 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
         .withBitCaskDiskMapCompressionEnabled(config.getCommonConfig().isBitCaskDiskMapCompressionEnabled())
         .withOperationField(config.allowOperationMetadataField())
         .withPartition(operation.getPartitionPath())
+        .withUseScanV2(config.useScanV2ForLogRecordReader())
         .build();
 
     Option<HoodieBaseFile> oldDataFileOpt =

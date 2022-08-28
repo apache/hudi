@@ -234,6 +234,13 @@ public final class HoodieMetadataConfig extends HoodieConfig {
           + "metadata table which are never added before. This config determines how to handle "
           + "such spurious deletes");
 
+  public static final ConfigProperty<Boolean> USE_LOG_RECORD_READER_SCAN_V2 = ConfigProperty
+      .key(METADATA_PREFIX + ".log.record.reader.use.scanV2")
+      .defaultValue(false)
+      .sinceVersion("0.10.10")
+      .withDocumentation("There are cases when extra files are requested to be deleted from metadata table which was never added before. This config"
+          + "determines how to handle such spurious deletes");
+
   private HoodieMetadataConfig() {
     super();
   }
@@ -316,6 +323,10 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public boolean ignoreSpuriousDeletes() {
     return getBoolean(IGNORE_SPURIOUS_DELETES);
+  }
+
+  public boolean getUseLogRecordReaderScanV2() {
+    return getBoolean(USE_LOG_RECORD_READER_SCAN_V2);
   }
 
   public static class Builder {
@@ -458,6 +469,11 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
     public Builder withProperties(Properties properties) {
       this.metadataConfig.getProps().putAll(properties);
+      return this;
+    }
+
+    public Builder withLogRecordReaderScanV2(boolean useLogRecordReaderScanV2) {
+      metadataConfig.setValue(USE_LOG_RECORD_READER_SCAN_V2, String.valueOf(useLogRecordReaderScanV2));
       return this;
     }
 
