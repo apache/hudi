@@ -46,9 +46,6 @@ import org.apache.spark.streaming.kafka010.OffsetRange;
 public class AvroKafkaSource extends KafkaSource<GenericRecord> {
 
   private static final Logger LOG = LogManager.getLogger(AvroKafkaSource.class);
-  // these are native kafka's config. do not change the config names.
-  private static final String NATIVE_KAFKA_KEY_DESERIALIZER_PROP = "key.deserializer";
-  private static final String NATIVE_KAFKA_VALUE_DESERIALIZER_PROP = "value.deserializer";
   // These are settings used to pass things to KafkaAvroDeserializer
   public static final String KAFKA_AVRO_VALUE_DESERIALIZER_PROPERTY_PREFIX = "hoodie.deltastreamer.source.kafka.value.deserializer.";
   public static final String KAFKA_AVRO_VALUE_DESERIALIZER_SCHEMA = KAFKA_AVRO_VALUE_DESERIALIZER_PROPERTY_PREFIX + "schema";

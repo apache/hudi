@@ -47,9 +47,6 @@ import java.util.Collections;
  */
 public class ProtoKafkaSource extends KafkaSource<Message> {
 
-  // these are native kafka's config. do not change the config names.
-  private static final String NATIVE_KAFKA_KEY_DESERIALIZER_PROP = "key.deserializer";
-  private static final String NATIVE_KAFKA_VALUE_DESERIALIZER_PROP = "value.deserializer";
   private final String className;
 
   public ProtoKafkaSource(TypedProperties props, JavaSparkContext sparkContext,

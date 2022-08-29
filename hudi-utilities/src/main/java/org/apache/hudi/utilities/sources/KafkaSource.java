@@ -34,6 +34,9 @@ import org.apache.spark.streaming.kafka010.OffsetRange;
 
 abstract class KafkaSource<T> extends Source<JavaRDD<T>> {
   private static final Logger LOG = LogManager.getLogger(KafkaSource.class);
+  // these are native kafka's config. do not change the config names.
+  protected static final String NATIVE_KAFKA_KEY_DESERIALIZER_PROP = "key.deserializer";
+  protected static final String NATIVE_KAFKA_VALUE_DESERIALIZER_PROP = "value.deserializer";
 
   protected final HoodieDeltaStreamerMetrics metrics;
   protected final SchemaProvider schemaProvider;

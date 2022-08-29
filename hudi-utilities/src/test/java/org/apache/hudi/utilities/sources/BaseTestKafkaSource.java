@@ -217,7 +217,7 @@ abstract class BaseTestKafkaSource extends SparkClientFunctionalTestHarness {
       assertNotNull(offsetAndMetadata);
       assertEquals(299, offsetAndMetadata.offset());
       // end offsets will point to 500 for each partition because we consumed less messages from first batch
-      Map endOffsets = consumer.endOffsets(topicPartitions);
+      Map<TopicPartition, Long> endOffsets = consumer.endOffsets(topicPartitions);
       assertEquals(500L, endOffsets.get(topicPartition0));
       assertEquals(500L, endOffsets.get(topicPartition1));
 

@@ -28,8 +28,6 @@ import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen;
 import org.apache.hudi.utilities.sources.processor.JsonKafkaSourcePostProcessor;
 
 import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
@@ -43,8 +41,6 @@ import java.io.IOException;
  * Read json kafka data.
  */
 public class JsonKafkaSource extends KafkaSource<String> {
-
-  private static final Logger LOG = LogManager.getLogger(JsonKafkaSource.class);
 
   public JsonKafkaSource(TypedProperties properties, JavaSparkContext sparkContext, SparkSession sparkSession,
                          SchemaProvider schemaProvider, HoodieDeltaStreamerMetrics metrics) {
