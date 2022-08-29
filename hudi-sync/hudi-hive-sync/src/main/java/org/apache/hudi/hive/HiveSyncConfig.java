@@ -20,6 +20,7 @@ package org.apache.hudi.hive;
 
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.sync.common.HoodieSyncConfig;
 
 import com.beust.jcommander.Parameter;
@@ -69,6 +70,7 @@ public class HiveSyncConfig extends HoodieSyncConfig {
 
   public HiveSyncConfig(Properties props) {
     super(props);
+    validateParameters();
   }
 
   public HiveSyncConfig(Properties props, Configuration hadoopConf) {
@@ -78,6 +80,7 @@ public class HiveSyncConfig extends HoodieSyncConfig {
     // HiveConf needs to load fs conf to allow instantiation via AWSGlueClientFactory
     hiveConf.addResource(getHadoopFileSystem().getConf());
     setHadoopConf(hiveConf);
+    validateParameters();
   }
 
   public HiveConf getHiveConf() {
@@ -170,5 +173,9 @@ public class HiveSyncConfig extends HoodieSyncConfig {
       props.setPropertyIfNonNull(HIVE_SYNC_COMMENT.key(), syncComment);
       return props;
     }
+  }
+
+  public void validateParameters() {
+    ValidationUtils.checkArgument(getIntOrDefault(HIVE_BATCH_SYNC_PARTITION_NUM) > 0);
   }
 }

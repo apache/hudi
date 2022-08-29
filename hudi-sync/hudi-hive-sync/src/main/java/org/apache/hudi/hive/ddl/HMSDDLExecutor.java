@@ -195,7 +195,7 @@ public class HMSDDLExecutor implements DDLExecutor {
     }
     LOG.info("Adding partitions " + partitionsToAdd.size() + " to table " + tableName);
     try {
-      ValidationUtils.checkArgument(syncConfig.getIntOrDefault(HIVE_BATCH_SYNC_PARTITION_NUM) <= 0,
+      ValidationUtils.checkArgument(syncConfig.getIntOrDefault(HIVE_BATCH_SYNC_PARTITION_NUM) > 0,
           "batch-sync-num for sync hive table must be greater than 0, pls check your parameter");
       StorageDescriptor sd = client.getTable(databaseName, tableName).getSd();
       List<Partition> partitionList = new ArrayList<>();
