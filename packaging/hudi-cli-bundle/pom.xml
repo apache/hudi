@@ -67,6 +67,12 @@
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.AppendingTransformer">
                                     <resource>META-INF/services/org.apache.spark.sql.sources.DataSourceRegister</resource>
                                 </transformer>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.AppendingTransformer">
+                                    <resource>META-INF/spring.handlers</resource>
+                                </transformer>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.AppendingTransformer">
+                                    <resource>META-INF/spring.schemas</resource>
+                                </transformer>
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
                             </transformers>
                             <artifactSet>
@@ -83,6 +89,15 @@
                                     <include>org.apache.hudi:hudi-sync-common</include>
                                     <include>org.apache.hudi:hudi-hadoop-mr</include>
                                     <include>org.apache.hudi:hudi-timeline-service</include>
+
+                                    <include>org.apache.spark:spark-core_${scala.binary.version}</include>
+                                    <include>org.apache.spark:spark-sql_${scala.binary.version}</include>
+
+                                    <include>org.apache.logging.log4j:*</include>
+                                    <include>org.scala-lang:scala-library</include>
+                                    <include>org.apache.hadoop:hadoop-common</include>
+                                    <include>org.apache.hadoop:hadoop-hdfs</include>
+                                    <include>org.apache.parquet:parquet-hadoop</include>
 
                                     <include>javax.servlet:javax.servlet-api</include>
                                     <include>com.beust:jcommander</include>
@@ -140,13 +155,23 @@
                                     <include>commons-io:commons-io</include>
                                     <include>org.springframework.shell:spring-shell</include>
                                     <include>org.springframework:*</include>
-                                    <include>org.:commons-logging</include>
+                                    <include>commons-logging:*</include>
+                                    <include>jline:*</include>
+                                    <include>org.apache.avro:avro</include>
                                 </includes>
                             </artifactSet>
                             <relocations>
                                 <!-- NOTE: We have to relocate all classes w/in org.apache.spark.sql.avro to avoid
                                            potential classpath collisions in case users would like to also use "spark-avro" w/in
                                            their runtime, since Hudi carries some of the same classes as "spark-avro" -->
+                                <relocation>
+                                    <pattern>org.apache.parquet.avro.</pattern>
+                                    <shadedPattern>org.apache.hudi.org.apache.parquet.avro.</shadedPattern>
+                                </relocation>
+                                <relocation>
+                                    <pattern>org.apache.avro.</pattern>
+                                    <shadedPattern>org.apache.hudi.org.apache.avro.</shadedPattern>
+                                </relocation>
                                 <relocation>
                                     <pattern>javax.servlet.</pattern>
                                     <shadedPattern>org.apache.hudi.javax.servlet.</shadedPattern>
@@ -473,6 +498,38 @@
                     <artifactId>guava</artifactId>
                 </exclusion>
             </exclusions>
+        </dependency>
+
+        <!-- Avro -->
+        <dependency>
+            <groupId>org.apache.avro</groupId>
+            <artifactId>avro</artifactId>
+            <scope>compile</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.hadoop</groupId>
+            <artifactId>hadoop-common</artifactId>
+            <scope>compile</scope>
+
+        </dependency>
+        <dependency>
+            <groupId>org.apache.hadoop</groupId>
+            <artifactId>hadoop-hdfs</artifactId>
+            <scope>compile</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.spark</groupId>
+            <artifactId>spark-core_${scala.binary.version}</artifactId>
+            <scope>compile</scope>
+
+        </dependency>
+        <dependency>
+            <groupId>org.apache.spark</groupId>
+            <artifactId>spark-sql_${scala.binary.version}</artifactId>
+            <scope>compile</scope>
+
         </dependency>
 
         <!-- TODO: Reinvestigate PR 633 -->
