@@ -193,7 +193,7 @@
     <antlr.version>4.7</antlr.version>
     <aws.sdk.version>1.12.22</aws.sdk.version>
     <proto.version>3.17.3</proto.version>
-    <protoc.version>3.17.3</protoc.version>
+    <protoc.version>3.11.4</protoc.version>
     <dynamodb.lockclient.version>1.1.0</dynamodb.lockclient.version>
     <zookeeper.version>3.5.7</zookeeper.version>
     <dynamodb-local.port>8000</dynamodb-local.port>
@@ -1775,6 +1775,18 @@
           </plugin>
         </plugins>
       </build>
+    </profile>
+    <profile>
+      <id>m1-mac</id>
+      <properties>
+        <protoc.version>3.17.3</protoc.version>
+      </properties>
+      <activation>
+        <os>
+          <family>mac</family>
+          <arch>aarch64</arch>
+        </os>
+      </activation>
     </profile>
     <!-- Exists for backwards compatibility; profile doesn't do anything -->
     <profile>
