@@ -23,10 +23,12 @@ import org.apache.avro.Schema;
 import org.apache.avro.Schema.Field;
 import org.apache.avro.SchemaCompatibility;
 import org.apache.avro.generic.IndexedRecord;
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.io.hfile.CacheConfig;
+
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -53,8 +55,10 @@ import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.io.storage.HoodieHFileReader;
 import org.apache.hudi.io.storage.HoodieOrcReader;
 import org.apache.hudi.util.Lazy;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.format.converter.ParquetMetadataConverter;
 import org.apache.parquet.hadoop.ParquetFileReader;
@@ -136,6 +140,19 @@ public class TableSchemaResolver {
    */
   public Schema getTableAvroSchema(boolean includeMetadataFields) throws Exception {
     return getTableAvroSchemaInternal(includeMetadataFields, Option.empty());
+  }
+
+  /**
+   * Fetches tables schema in Avro format as of the given instant
+   *
+   * @param timestamp as of which table's schema will be fetched
+   */
+  public Schema getTableAvroSchema(String timestamp) throws Exception {
+    Option<HoodieInstant> instant = metaClient.getActiveTimeline().getCommitsTimeline()
+        .filterCompletedInstants()
+        .findInstantsBeforeOrEquals(timestamp)
+        .lastInstant();
+    return getTableAvroSchemaInternal(metaClient.getTableConfig().populateMetaFields(), instant);
   }
 
   /**
@@ -493,6 +510,18 @@ public class TableSchemaResolver {
    */
   public Option<InternalSchema> getTableInternalSchemaFromCommitMetadata() {
     HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
+    return timeline.lastInstant().flatMap(this::getTableInternalSchemaFromCommitMetadata);
+  }
+
+  /**
+   * Gets the InternalSchema for a hoodie table from the HoodieCommitMetadata of the instant.
+   *
+   * @return InternalSchema for this table
+   */
+  public Option<InternalSchema> getTableInternalSchemaFromCommitMetadata(String timestamp) {
+    HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline()
+        .filterCompletedInstants()
+        .findInstantsBeforeOrEquals(timestamp);
     return timeline.lastInstant().flatMap(this::getTableInternalSchemaFromCommitMetadata);
   }
 
