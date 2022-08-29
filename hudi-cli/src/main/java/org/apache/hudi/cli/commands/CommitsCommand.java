@@ -89,15 +89,7 @@ public class CommitsCommand implements CommandMarker {
         HoodieTableHeaderFields.HEADER_TOTAL_BYTES_WRITTEN,
         entry -> NumericUtils.humanReadableByteCount((Double.parseDouble(entry.toString()))));
 
-    final TableHeader header = new TableHeader()
-        .addTableHeaderField(HoodieTableHeaderFields.HEADER_COMMIT_TIME)
-        .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_BYTES_WRITTEN)
-        .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_FILES_ADDED)
-        .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_FILES_UPDATED)
-        .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_PARTITIONS_WRITTEN)
-        .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_RECORDS_WRITTEN)
-        .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_UPDATE_RECORDS_WRITTEN)
-        .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_ERRORS);
+    final TableHeader header = HoodieTableHeaderFields.getTableHeader();
 
     return HoodiePrintHelper.print(header, fieldNameToConverterMap, sortByField, descending,
         limit, headerOnly, rows, tempTableName);
@@ -115,22 +107,24 @@ public class CommitsCommand implements CommandMarker {
         .getInstants().sorted(HoodieInstant.COMPARATOR.reversed()).collect(Collectors.toList());
 
     for (final HoodieInstant commit : commits) {
-      final HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
-          timeline.getInstantDetails(commit).get(),
-          HoodieCommitMetadata.class);
+      if (timeline.getInstantDetails(commit).isPresent()) {
+        final HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
+            timeline.getInstantDetails(commit).get(),
+            HoodieCommitMetadata.class);
 
-      for (Map.Entry<String, List<HoodieWriteStat>> partitionWriteStat :
-          commitMetadata.getPartitionToWriteStats().entrySet()) {
-        for (HoodieWriteStat hoodieWriteStat : partitionWriteStat.getValue()) {
-          if (StringUtils.isNullOrEmpty(partition) || partition.equals(hoodieWriteStat.getPartitionPath())) {
-            rows.add(new Comparable[] {commit.getAction(), commit.getTimestamp(), hoodieWriteStat.getPartitionPath(),
-                hoodieWriteStat.getFileId(), hoodieWriteStat.getPrevCommit(), hoodieWriteStat.getNumWrites(),
-                hoodieWriteStat.getNumInserts(), hoodieWriteStat.getNumDeletes(),
-                hoodieWriteStat.getNumUpdateWrites(), hoodieWriteStat.getTotalWriteErrors(),
-                hoodieWriteStat.getTotalLogBlocks(), hoodieWriteStat.getTotalCorruptLogBlock(),
-                hoodieWriteStat.getTotalRollbackBlocks(), hoodieWriteStat.getTotalLogRecords(),
-                hoodieWriteStat.getTotalUpdatedRecordsCompacted(), hoodieWriteStat.getTotalWriteBytes()
-            });
+        for (Map.Entry<String, List<HoodieWriteStat>> partitionWriteStat :
+            commitMetadata.getPartitionToWriteStats().entrySet()) {
+          for (HoodieWriteStat hoodieWriteStat : partitionWriteStat.getValue()) {
+            if (StringUtils.isNullOrEmpty(partition) || partition.equals(hoodieWriteStat.getPartitionPath())) {
+              rows.add(new Comparable[] {commit.getAction(), commit.getTimestamp(), hoodieWriteStat.getPartitionPath(),
+                  hoodieWriteStat.getFileId(), hoodieWriteStat.getPrevCommit(), hoodieWriteStat.getNumWrites(),
+                  hoodieWriteStat.getNumInserts(), hoodieWriteStat.getNumDeletes(),
+                  hoodieWriteStat.getNumUpdateWrites(), hoodieWriteStat.getTotalWriteErrors(),
+                  hoodieWriteStat.getTotalLogBlocks(), hoodieWriteStat.getTotalCorruptLogBlock(),
+                  hoodieWriteStat.getTotalRollbackBlocks(), hoodieWriteStat.getTotalLogRecords(),
+                  hoodieWriteStat.getTotalUpdatedRecordsCompacted(), hoodieWriteStat.getTotalWriteBytes()
+              });
+            }
           }
         }
       }
@@ -141,25 +135,8 @@ public class CommitsCommand implements CommandMarker {
         HoodieTableHeaderFields.HEADER_TOTAL_BYTES_WRITTEN,
         entry -> NumericUtils.humanReadableByteCount((Double.parseDouble(entry.toString()))));
 
-    TableHeader header = new TableHeader().addTableHeaderField(HoodieTableHeaderFields.HEADER_ACTION)
-        .addTableHeaderField(HoodieTableHeaderFields.HEADER_INSTANT)
-        .addTableHeaderField(HoodieTableHeaderFields.HEADER_PARTITION)
-        .addTableHeaderField(HoodieTableHeaderFields.HEADER_FILE_ID)
-        .addTableHeaderField(HoodieTableHeaderFields.HEADER_PREVIOUS_COMMIT)
-        .addTableHeaderField(HoodieTableHeaderFields.HEADER_NUM_WRITES)
-        .addTableHeaderField(HoodieTableHeaderFields.HEADER_NUM_INSERTS)
-        .addTableHeaderField(HoodieTableHeaderFields.HEADER_NUM_DELETES)
-        .addTableHeaderField(HoodieTableHeaderFields.HEADER_NUM_UPDATE_WRITES)
-        .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_ERRORS)
-        .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_LOG_BLOCKS)
-        .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_CORRUPT_LOG_BLOCKS)
-        .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_ROLLBACK_BLOCKS)
-        .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_LOG_RECORDS)
-        .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_UPDATED_RECORDS_COMPACTED)
-        .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_BYTES_WRITTEN);
-
-    return HoodiePrintHelper.print(header, fieldNameToConverterMap, sortByField, descending,
-        limit, headerOnly, rows, tempTableName);
+    return HoodiePrintHelper.print(HoodieTableHeaderFields.getTableHeaderWithExtraMetadata(),
+        fieldNameToConverterMap, sortByField, descending, limit, headerOnly, rows, tempTableName);
   }
 
   @CliCommand(value = "commits show", help = "Show the commits")
