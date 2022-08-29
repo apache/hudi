@@ -83,7 +83,10 @@ public class ProtoConversionUtil {
    */
   private static class AvroSupport {
     private static final AvroSupport INSTANCE = new AvroSupport();
+    // A cache of the proto class name paired with whether wrapped primitives should be flattened as the key and the generated avro schema as the value
     private static final Map<Pair<Class, Boolean>, Schema> SCHEMA_CACHE = new ConcurrentHashMap<>();
+    // A cache with a key as the pair target avro schema and the proto descriptor for the source and the value as an array of proto field descriptors where the order matches the avro ordering.
+    // When converting from proto to avro, we want to be able to iterate over the fields in the proto in the same order as they appear in the avro schema.
     private static final Map<Pair<Schema, Descriptors.Descriptor>, Descriptors.FieldDescriptor[]> FIELD_CACHE = new ConcurrentHashMap<>();
 
 
