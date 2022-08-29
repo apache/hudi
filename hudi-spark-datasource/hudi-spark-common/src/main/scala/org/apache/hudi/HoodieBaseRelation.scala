@@ -23,7 +23,7 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hadoop.hbase.io.hfile.CacheConfig
 import org.apache.hadoop.mapred.JobConf
-import org.apache.hudi.HoodieBaseRelation.{BaseFileReader, convertToAvroSchema, createHFileReader, generateUnsafeProjection, getPartitionPath, projectSchema}
+import org.apache.hudi.HoodieBaseRelation._
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
@@ -37,9 +37,9 @@ import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, T
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
 import org.apache.hudi.common.util.ValidationUtils.checkState
-import org.apache.hudi.internal.schema.{HoodieSchemaException, InternalSchema}
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
 import org.apache.hudi.internal.schema.utils.{InternalSchemaUtils, SerDeHelper}
+import org.apache.hudi.internal.schema.{HoodieSchemaException, InternalSchema}
 import org.apache.hudi.io.storage.HoodieHFileReader
 import org.apache.spark.execution.datasources.HoodieInMemoryFileIndex
 import org.apache.spark.internal.Logging
@@ -49,7 +49,7 @@ import org.apache.spark.sql.catalyst.expressions.{Expression, SubqueryExpression
 import org.apache.spark.sql.execution.FileRelation
 import org.apache.spark.sql.execution.datasources.orc.OrcFileFormat
 import org.apache.spark.sql.execution.datasources.parquet.{HoodieParquetFileFormat, ParquetFileFormat}
-import org.apache.spark.sql.execution.datasources.{FileFormat, FileStatusCache, PartitionDirectory, PartitionedFile, PartitioningUtils}
+import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.sources.{BaseRelation, Filter, PrunedFilteredScan}
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
@@ -138,7 +138,10 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     val internalSchemaOpt = if (!isSchemaEvolutionEnabled) {
       None
     } else {
-      Try(schemaResolver.getTableInternalSchemaFromCommitMetadata) match {
+      Try {
+        specifiedQueryTimestamp.map(schemaResolver.getTableInternalSchemaFromCommitMetadata)
+          .getOrElse(schemaResolver.getTableInternalSchemaFromCommitMetadata)
+      } match {
         case Success(internalSchemaOpt) => toScalaOption(internalSchemaOpt)
         case Failure(e) =>
           logWarning("Failed to fetch internal-schema from the table", e)
@@ -148,6 +151,8 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
 
     val avroSchema = internalSchemaOpt.map { is =>
       AvroInternalSchemaConverter.convert(is, "schema")
+    } orElse {
+      specifiedQueryTimestamp.map(schemaResolver.getTableAvroSchema)
     } orElse {
       schemaSpec.map(convertToAvroSchema)
     } getOrElse {
