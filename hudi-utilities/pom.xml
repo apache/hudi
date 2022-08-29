@@ -63,12 +63,6 @@
       <plugin>
         <groupId>com.github.os72</groupId>
         <artifactId>protoc-jar-maven-plugin</artifactId>
-        <configuration>
-          <addSources>test</addSources>
-          <inputDirectories>
-            <include>src/test/resources/schema-provider/proto</include>
-          </inputDirectories>
-        </configuration>
       </plugin>
     </plugins>
 

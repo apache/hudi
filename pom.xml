@@ -576,16 +576,35 @@
           <version>3.11.4</version>
           <executions>
             <execution>
+              <id>proto-compile</id>
+              <phase>generate-sources</phase>
+              <goals>
+                <goal>run</goal>
+              </goals>
+              <configuration>
+                <inputDirectories>
+                  <include>src/main/resources</include>
+                </inputDirectories>
+              </configuration>
+            </execution>
+            <execution>
+              <id>proto-test-compile</id>
               <phase>generate-test-sources</phase>
               <goals>
                 <goal>run</goal>
               </goals>
               <configuration>
-                <protocVersion>${protoc.version}</protocVersion>
-                <includeStdTypes>true</includeStdTypes>
+                <addSources>test</addSources>
+                <inputDirectories>
+                  <include>src/test/resources</include>
+                </inputDirectories>
               </configuration>
             </execution>
           </executions>
+          <configuration>
+            <protocVersion>${protoc.version}</protocVersion>
+            <includeStdTypes>true</includeStdTypes>
+          </configuration>
         </plugin>
       </plugins>
     </pluginManagement>
