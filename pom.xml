@@ -570,6 +570,23 @@
             </execution>
           </executions>
         </plugin>
+        <plugin>
+          <groupId>com.github.os72</groupId>
+          <artifactId>protoc-jar-maven-plugin</artifactId>
+          <version>3.11.4</version>
+          <executions>
+            <execution>
+              <phase>generate-test-sources</phase>
+              <goals>
+                <goal>run</goal>
+              </goals>
+              <configuration>
+                <protocVersion>${protoc.version}</protocVersion>
+                <includeStdTypes>true</includeStdTypes>
+              </configuration>
+            </execution>
+          </executions>
+        </plugin>
       </plugins>
     </pluginManagement>
   </build>
@@ -1301,6 +1318,18 @@
         <groupId>org.apache.curator</groupId>
         <artifactId>curator-recipes</artifactId>
         <version>${zk-curator.version}</version>
+      </dependency>
+
+      <!-- Protobuf -->
+      <dependency>
+        <groupId>com.google.protobuf</groupId>
+        <artifactId>protobuf-java</artifactId>
+        <version>${proto.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.google.protobuf</groupId>
+        <artifactId>protobuf-java-util</artifactId>
+        <version>${proto.version}</version>
       </dependency>
 
       <!-- Junit 5 -->

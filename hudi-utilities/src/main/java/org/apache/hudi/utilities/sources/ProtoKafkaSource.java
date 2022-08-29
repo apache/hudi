@@ -30,8 +30,6 @@ import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen;
 import com.google.protobuf.Message;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
@@ -42,14 +40,13 @@ import org.apache.spark.streaming.kafka010.OffsetRange;
 import java.io.Serializable;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.util.Arrays;
+import java.util.Collections;
 
 /**
  * Reads protobuf serialized Kafka data, based on a provided class name.
  */
 public class ProtoKafkaSource extends KafkaSource<Message> {
 
-  private static final Logger LOG = LogManager.getLogger(ProtoKafkaSource.class);
   // these are native kafka's config. do not change the config names.
   private static final String NATIVE_KAFKA_KEY_DESERIALIZER_PROP = "key.deserializer";
   private static final String NATIVE_KAFKA_VALUE_DESERIALIZER_PROP = "value.deserializer";
@@ -58,7 +55,7 @@ public class ProtoKafkaSource extends KafkaSource<Message> {
   public ProtoKafkaSource(TypedProperties props, JavaSparkContext sparkContext,
                           SparkSession sparkSession, SchemaProvider schemaProvider, HoodieDeltaStreamerMetrics metrics) {
     super(props, sparkContext, sparkSession, schemaProvider, SourceType.PROTO, metrics);
-    DataSourceUtils.checkRequiredProperties(props, Arrays.asList(
+    DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(
         ProtoClassBasedSchemaProvider.Config.PROTO_SCHEMA_CLASS_NAME));
     props.put(NATIVE_KAFKA_KEY_DESERIALIZER_PROP, StringDeserializer.class);
     props.put(NATIVE_KAFKA_VALUE_DESERIALIZER_PROP, ByteArrayDeserializer.class);

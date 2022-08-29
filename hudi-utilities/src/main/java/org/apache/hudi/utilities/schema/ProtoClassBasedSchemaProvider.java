@@ -26,17 +26,14 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.utilities.sources.helpers.ProtoConversionUtil;
 
 import org.apache.avro.Schema;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 
-import java.util.Arrays;
+import java.util.Collections;
 
 /**
  * A schema provider that takes in a class name for a generated protobuf class that is on the classpath.
  */
 public class ProtoClassBasedSchemaProvider extends SchemaProvider {
-  private static final Logger LOG = LogManager.getLogger(ProtoClassBasedSchemaProvider.class);
   /**
    * Configs supported.
    */
@@ -54,8 +51,8 @@ public class ProtoClassBasedSchemaProvider extends SchemaProvider {
 
   public ProtoClassBasedSchemaProvider(TypedProperties props, JavaSparkContext jssc) {
     super(props, jssc);
-    DataSourceUtils.checkRequiredProperties(props, Arrays.asList(
-            Config.PROTO_SCHEMA_CLASS_NAME));
+    DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(
+        Config.PROTO_SCHEMA_CLASS_NAME));
     String className = config.getString(Config.PROTO_SCHEMA_CLASS_NAME);
     boolean flattenWrappedPrimitives = props.getBoolean(ProtoClassBasedSchemaProvider.Config.PROTO_SCHEMA_FLATTEN_WRAPPED_PRIMITIVES, false);
     try {

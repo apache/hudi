@@ -63,23 +63,12 @@
       <plugin>
         <groupId>com.github.os72</groupId>
         <artifactId>protoc-jar-maven-plugin</artifactId>
-        <version>3.11.4</version>
-        <executions>
-          <execution>
-            <phase>generate-test-sources</phase>
-            <goals>
-              <goal>run</goal>
-            </goals>
-            <configuration>
-              <addSources>test</addSources>
-              <protocVersion>${protoc.version}</protocVersion>
-              <inputDirectories>
-                <include>src/test/resources/schema-provider/proto</include>
-              </inputDirectories>
-              <includeStdTypes>true</includeStdTypes>
-            </configuration>
-          </execution>
-        </executions>
+        <configuration>
+          <addSources>test</addSources>
+          <inputDirectories>
+            <include>src/test/resources/schema-provider/proto</include>
+          </inputDirectories>
+        </configuration>
       </plugin>
     </plugins>
 
@@ -98,12 +87,10 @@
     <dependency>
       <groupId>com.google.protobuf</groupId>
       <artifactId>protobuf-java</artifactId>
-      <version>${proto.version}</version>
     </dependency>
     <dependency>
       <groupId>com.google.protobuf</groupId>
       <artifactId>protobuf-java-util</artifactId>
-      <version>${proto.version}</version>
       <scope>test</scope>
       <exclusions>
         <exclusion>
