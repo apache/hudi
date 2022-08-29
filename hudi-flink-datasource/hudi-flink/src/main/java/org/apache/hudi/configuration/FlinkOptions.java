@@ -575,12 +575,6 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(true)
       .withDescription("Whether to cleanup the old commits immediately on new commits, enabled by default");
 
-  public static final ConfigOption<Boolean> BATCH_CLEAN_ENABLED = ConfigOptions
-      .key("clean.batch.enabled")
-      .booleanType()
-      .defaultValue(false)
-      .withDescription("Whether to clean the old commits when initial clean function， should only set to true when job is in batch mode");
-
   public static final ConfigOption<String> CLEAN_POLICY = ConfigOptions
       .key("clean.policy")
       .stringType()
