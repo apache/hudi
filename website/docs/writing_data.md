@@ -296,6 +296,9 @@ For more info refer to [Delete support in Hudi](https://cwiki.apache.org/conflue
 
 - **Soft Deletes** : Retain the record key and just null out the values for all the other fields.
   This can be achieved by ensuring the appropriate fields are nullable in the table schema and simply upserting the table after setting these fields to null.
+  Note that soft deletes are always persisted in storage and never removed, but all values are set to nulls. 
+  So for GDPR or other compliance reasons, users should consider doing hard deletes if record key and partition path
+  contain PII.
 
 For example:
 ```scala

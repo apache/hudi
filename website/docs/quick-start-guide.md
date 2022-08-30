@@ -959,9 +959,10 @@ spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from hud
 
 ## Delete data {#deletes}
 
-Apache Hudi supports two types of deletes: (1) **Soft Deletes**: retaining the record key and just null out the values
-for all the other fields; (2) **Hard Deletes**: physically removing any trace of the record from the table.
-See the [deletion section](/docs/writing_data#deletes) of the writing data page for more details.
+Apache Hudi supports two types of deletes: (1) **Soft Deletes**: retaining the record key and just nulling out the values
+for all the other fields (records with nulls in soft deletes are always persisted in storage and never removed);
+(2) **Hard Deletes**: physically removing any trace of the record from the table.  See the
+[deletion section](/docs/writing_data#deletes) of the writing data page for more details.
 
 ### Soft Deletes
 
@@ -1016,8 +1017,9 @@ spark.
   load(basePath).
   createOrReplaceTempView("hudi_trips_snapshot")
 
-// fetch should return total and (total - 2) records for the two queries respectively
+// This should return the same total count as before
 spark.sql("select uuid, partitionpath from hudi_trips_snapshot").count()
+// This should return (total - 2) count as two records are updated with nulls
 spark.sql("select uuid, partitionpath from hudi_trips_snapshot where rider is not null").count()
 ```
 :::note
@@ -1072,8 +1074,9 @@ spark.read.format("hudi"). \
   load(basePath). \
   createOrReplaceTempView("hudi_trips_snapshot")
 
-# fetch should return total and (total - 2) records for the two queries respectively
+# This should return the same total count as before
 spark.sql("select uuid, partitionpath from hudi_trips_snapshot").count()
+# This should return (total - 2) count as two records are updated with nulls
 spark.sql("select uuid, partitionpath from hudi_trips_snapshot where rider is not null").count()
 ```
 :::note
