@@ -297,6 +297,33 @@ For more info refer to [Delete support in Hudi](https://cwiki.apache.org/conflue
 - **Soft Deletes** : Retain the record key and just null out the values for all the other fields.
   This can be achieved by ensuring the appropriate fields are nullable in the table schema and simply upserting the table after setting these fields to null.
 
+For example:
+```scala
+// fetch two records for soft deletes
+val softDeleteDs = spark.sql("select * from hudi_trips_snapshot").limit(2)
+
+// prepare the soft deletes by ensuring the appropriate fields are nullified
+val nullifyColumns = softDeleteDs.schema.fields.
+  map(field => (field.name, field.dataType.typeName)).
+  filter(pair => (!HoodieRecord.HOODIE_META_COLUMNS.contains(pair._1)
+    && !Array("ts", "uuid", "partitionpath").contains(pair._1)))
+
+val softDeleteDf = nullifyColumns.
+  foldLeft(softDeleteDs.drop(HoodieRecord.HOODIE_META_COLUMNS: _*))(
+    (ds, col) => ds.withColumn(col._1, lit(null).cast(col._2)))
+
+// simply upsert the table after setting these fields to null
+softDeleteDf.write.format("hudi").
+  options(getQuickstartWriteConfigs).
+  option(OPERATION_OPT_KEY, "upsert").
+  option(PRECOMBINE_FIELD_OPT_KEY, "ts").
+  option(RECORDKEY_FIELD_OPT_KEY, "uuid").
+  option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
+  option(TABLE_NAME, tableName).
+  mode(Append).
+  save(basePath)
+```
+
 - **Hard Deletes** : A stronger form of deletion is to physically remove any trace of the record from the table. This can be achieved in 3 different ways. 
 
 1. Using Datasource, set `OPERATION_OPT_KEY` to `DELETE_OPERATION_OPT_VAL`. This will remove all the records in the DataSet being submitted.
