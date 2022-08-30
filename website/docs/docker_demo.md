@@ -5,15 +5,17 @@ toc: true
 last_modified_at: 2019-12-30T15:59:57-04:00
 ---
 
-## A Demo using docker containers
+## A Demo using Docker containers
 
-Lets use a real world example to see how hudi works end to end. For this purpose, a self contained
-data infrastructure is brought up in a local docker cluster within your computer.
+Let's use a real world example to see how Hudi works end to end. For this purpose, a self contained
+data infrastructure is brought up in a local Docker cluster within your computer. It requires the
+Hudi repo to have been cloned locally. 
 
 The steps have been tested on a Mac laptop
 
 ### Prerequisites
 
+  * Clone the [Hudi repository](https://github.com/apache/hudi) to your local machine.
   * Docker Setup :  For Mac, Please follow the steps as defined in [https://docs.docker.com/v17.12/docker-for-mac/install/]. For running Spark-SQL queries, please ensure atleast 6 GB and 4 CPUs are allocated to Docker (See Docker -> Preferences -> Advanced). Otherwise, spark-SQL queries could be killed because of memory issues.
   * kcat : A command-line utility to publish/consume from kafka topics. Use `brew install kcat` to install kcat.
   * /etc/hosts : The demo references many services running in container by the hostname. Add the following settings to /etc/hosts
@@ -41,7 +43,10 @@ Also, this has not been tested on some environments like Docker on Windows.
 
 ### Build Hudi
 
-The first step is to build hudi. **Note** This step builds hudi on default supported scala version - 2.11.
+The first step is to build Hudi. **Note** This step builds Hudi on default supported scala version - 2.11.
+
+NOTE: Make sure you've cloned the [Hudi repository](https://github.com/apache/hudi) first. 
+
 ```java
 cd <HUDI_WORKSPACE>
 mvn clean package -Pintegration-tests -DskipTests
@@ -49,8 +54,9 @@ mvn clean package -Pintegration-tests -DskipTests
 
 ### Bringing up Demo Cluster
 
-The next step is to run the docker compose script and setup configs for bringing up the cluster.
-This should pull the docker images from docker hub and setup docker cluster.
+The next step is to run the Docker compose script and setup configs for bringing up the cluster. These files are in the [Hudi repository](https://github.com/apache/hudi) which you should already have locally on your machine from the previous steps. 
+
+This should pull the Docker images from Docker hub and setup the Docker cluster.
 
 ```java
 cd docker
@@ -112,7 +118,7 @@ Copying spark default config and setting up configs
 $ docker ps
 ```
 
-At this point, the docker cluster will be up and running. The demo cluster brings up the following services
+At this point, the Docker cluster will be up and running. The demo cluster brings up the following services
 
    * HDFS Services (NameNode, DataNode)
    * Spark Master and Worker
@@ -1317,13 +1323,13 @@ This brings the demo to an end.
 
 ## Testing Hudi in Local Docker environment
 
-You can bring up a hadoop docker environment containing Hadoop, Hive and Spark services with support for hudi.
+You can bring up a Hadoop Docker environment containing Hadoop, Hive and Spark services with support for Hudi.
 ```java
 $ mvn pre-integration-test -DskipTests
 ```
-The above command builds docker images for all the services with
+The above command builds Docker images for all the services with
 current Hudi source installed at /var/hoodie/ws and also brings up the services using a compose file. We
-currently use Hadoop (v2.8.4), Hive (v2.3.3) and Spark (v2.4.4) in docker images.
+currently use Hadoop (v2.8.4), Hive (v2.3.3) and Spark (v2.4.4) in Docker images.
 
 To bring down the containers
 ```java
@@ -1331,7 +1337,7 @@ $ cd hudi-integ-test
 $ mvn docker-compose:down
 ```
 
-If you want to bring up the docker containers, use
+If you want to bring up the Docker containers, use
 ```java
 $ cd hudi-integ-test
 $ mvn docker-compose:up -DdetachedMode=true
@@ -1345,21 +1351,21 @@ docker environment (See __hudi-integ-test/src/test/java/org/apache/hudi/integ/IT
 
 ### Building Local Docker Containers:
 
-The docker images required for demo and running integration test are already in docker-hub. The docker images
+The Docker images required for demo and running integration test are already in docker-hub. The Docker images
 and compose scripts are carefully implemented so that they serve dual-purpose
 
-1. The docker images have inbuilt hudi jar files with environment variable pointing to those jars (HUDI_HADOOP_BUNDLE, ...)
+1. The Docker images have inbuilt Hudi jar files with environment variable pointing to those jars (HUDI_HADOOP_BUNDLE, ...)
 2. For running integration-tests, we need the jars generated locally to be used for running services within docker. The
    docker-compose scripts (see `docker/compose/docker-compose_hadoop284_hive233_spark244.yml`) ensures local jars override
-   inbuilt jars by mounting local HUDI workspace over the docker location
-3. As these docker containers have mounted local HUDI workspace, any changes that happen in the workspace would automatically 
+   inbuilt jars by mounting local Hudi workspace over the Docker location
+3. As these Docker containers have mounted local Hudi workspace, any changes that happen in the workspace would automatically 
    reflect in the containers. This is a convenient way for developing and verifying Hudi for
    developers who do not own a distributed environment. Note that this is how integration tests are run.
 
-This helps avoid maintaining separate docker images and avoids the costly step of building HUDI docker images locally.
-But if users want to test hudi from locations with lower network bandwidth, they can still build local images
+This helps avoid maintaining separate Docker images and avoids the costly step of building Hudi Docker images locally.
+But if users want to test Hudi from locations with lower network bandwidth, they can still build local images
 run the script
-`docker/build_local_docker_images.sh` to build local docker images before running `docker/setup_demo.sh`
+`docker/build_local_docker_images.sh` to build local Docker images before running `docker/setup_demo.sh`
 
 Here are the commands:
 
