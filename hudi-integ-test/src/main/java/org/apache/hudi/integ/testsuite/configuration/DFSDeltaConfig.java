@@ -46,7 +46,7 @@ public class DFSDeltaConfig extends DeltaConfig {
                         SerializableConfiguration configuration,
                         String deltaBasePath, String targetBasePath, String schemaStr, Long maxFileSize,
                         int inputParallelism, boolean deleteOldInputData, boolean useHudiToGenerateUpdates) {
-     super(deltaOutputMode, deltaInputType, configuration);
+    super(deltaOutputMode, deltaInputType, configuration);
     this.deltaBasePath = deltaBasePath;
     this.schemaStr = schemaStr;
     this.maxFileSize = maxFileSize;

@@ -52,8 +52,7 @@ public class PrestoQueryNode extends BaseQueryNode {
       setSessionProperties(this.config.getPrestoProperties(), stmt);
       executeAndValidateQueries(this.config.getPrestoQueries(), stmt);
       stmt.close();
-    }
-    catch (Exception e) {
+    } catch (Exception e) {
       throw new HoodieValidationException("Presto query validation failed due to " + e.getMessage(), e);
     }
   }
