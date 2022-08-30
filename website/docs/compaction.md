@@ -132,7 +132,7 @@ Offline compaction needs to submit the Flink task on the command line. The progr
 
 |  Option Name  | Required | Default | Remarks |
 |  -----------  | -------  | ------- | ------- |
-| `--path` | `frue` | `--` | The path where the target table is stored on Hudi |
+| `--path` | `true` | `--` | The path where the target table is stored on Hudi |
 | `--compaction-max-memory` | `false` | `100` | The index map size of log data during compaction, 100 MB by default. If you have enough memory, you can turn up this parameter |
 | `--schedule` | `false` | `false` | whether to execute the operation of scheduling compaction plan. When the write process is still writing， turning on this parameter have a risk of losing data. Therefore, it must be ensured that there are no write tasks currently writing data to this table when this parameter is turned on |
 | `--seq` | `false` | `LIFO` | The order in which compaction tasks are executed. Executing from the latest compaction plan by default. `LIFO`: executing from the latest plan. `FIFO`: executing from the oldest plan. |
