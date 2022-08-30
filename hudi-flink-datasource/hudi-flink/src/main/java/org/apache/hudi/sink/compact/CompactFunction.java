@@ -31,19 +31,20 @@ import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.streaming.api.functions.ProcessFunction;
-import org.apache.flink.util.Collector;
+import org.apache.flink.streaming.api.functions.async.ResultFuture;
+import org.apache.flink.streaming.api.functions.async.RichAsyncFunction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
 
 /**
  * Function to execute the actual compaction task assigned by the compaction plan task.
  * In order to execute scalable, the input should shuffle by the compact event {@link CompactionPlanEvent}.
  */
-public class CompactFunction extends ProcessFunction<CompactionPlanEvent, CompactionCommitEvent> {
+public class CompactFunction extends RichAsyncFunction<CompactionPlanEvent, CompactionCommitEvent> {
   private static final Logger LOG = LoggerFactory.getLogger(CompactFunction.class);
 
   /**
@@ -86,25 +87,27 @@ public class CompactFunction extends ProcessFunction<CompactionPlanEvent, Compac
   }
 
   @Override
-  public void processElement(CompactionPlanEvent event, Context context, Collector<CompactionCommitEvent> collector) throws Exception {
+  public void asyncInvoke(final CompactionPlanEvent event, final ResultFuture<CompactionCommitEvent> resultFuture) throws Exception {
     final String instantTime = event.getCompactionInstantTime();
     final CompactionOperation compactionOperation = event.getOperation();
     if (asyncCompaction) {
       // executes the compaction task asynchronously to not block the checkpoint barrier propagate.
       executor.execute(
-          () -> doCompaction(instantTime, compactionOperation, collector, reloadWriteConfig()),
-          (errMsg, t) -> collector.collect(new CompactionCommitEvent(instantTime, compactionOperation.getFileId(), taskID)),
+          () -> doCompaction(instantTime, compactionOperation, resultFuture, reloadWriteConfig()),
+          (errMsg, t) -> resultFuture.complete(
+              Collections.singletonList(new CompactionCommitEvent(instantTime, compactionOperation.getFileId(), taskID))
+          ),
           "Execute compaction for instant %s from task %d", instantTime, taskID);
     } else {
       // executes the compaction task synchronously for batch mode.
       LOG.info("Execute compaction for instant {} from task {}", instantTime, taskID);
-      doCompaction(instantTime, compactionOperation, collector, writeClient.getConfig());
+      doCompaction(instantTime, compactionOperation, resultFuture, writeClient.getConfig());
     }
   }
 
   private void doCompaction(String instantTime,
                             CompactionOperation compactionOperation,
-                            Collector<CompactionCommitEvent> collector,
+                            ResultFuture<CompactionCommitEvent> resultFuture,
                             HoodieWriteConfig writeConfig) throws IOException {
     HoodieFlinkMergeOnReadTableCompactor<?> compactor = new HoodieFlinkMergeOnReadTableCompactor<>();
     List<WriteStatus> writeStatuses = compactor.compact(
@@ -117,7 +120,9 @@ public class CompactFunction extends ProcessFunction<CompactionPlanEvent, Compac
         compactionOperation,
         instantTime,
         writeClient.getHoodieTable().getTaskContextSupplier());
-    collector.collect(new CompactionCommitEvent(instantTime, compactionOperation.getFileId(), writeStatuses, taskID));
+    resultFuture.complete(
+        Collections.singletonList(new CompactionCommitEvent(instantTime, compactionOperation.getFileId(), writeStatuses, taskID))
+    );
   }
 
   private HoodieWriteConfig reloadWriteConfig() throws Exception {

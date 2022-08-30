@@ -38,8 +38,9 @@ import com.beust.jcommander.JCommander;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.streaming.api.datastream.AsyncDataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.apache.flink.streaming.api.operators.ProcessOperator;
+import org.apache.flink.streaming.api.operators.async.AsyncWaitOperatorFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -295,7 +296,7 @@ public class HoodieFlinkCompactor {
           .rebalance()
           .transform("compact_task",
               TypeInformation.of(CompactionCommitEvent.class),
-              new ProcessOperator<>(new CompactFunction(conf)))
+              new AsyncWaitOperatorFactory<>(new CompactFunction(conf), 0, 1, AsyncDataStream.OutputMode.ORDERED))
           .setParallelism(compactionParallelism)
           .addSink(new CompactionCommitSink(conf))
           .name("compaction_commit")

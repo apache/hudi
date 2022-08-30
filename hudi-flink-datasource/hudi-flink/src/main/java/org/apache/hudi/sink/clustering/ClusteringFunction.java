@@ -53,23 +53,29 @@ import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.core.memory.ManagedMemoryUseCase;
 import org.apache.flink.metrics.Gauge;
+import org.apache.flink.runtime.execution.Environment;
 import org.apache.flink.runtime.memory.MemoryManager;
-import org.apache.flink.streaming.api.operators.BoundedOneInput;
-import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
-import org.apache.flink.streaming.api.operators.Output;
-import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
+import org.apache.flink.streaming.api.datastream.AsyncDataStream;
+import org.apache.flink.streaming.api.functions.async.ResultFuture;
+import org.apache.flink.streaming.api.functions.async.RichAsyncFunction;
+import org.apache.flink.streaming.api.operators.AbstractUdfStreamOperator;
+import org.apache.flink.streaming.api.operators.OneInputStreamOperatorFactory;
+import org.apache.flink.streaming.api.operators.StreamOperator;
+import org.apache.flink.streaming.api.operators.StreamOperatorParameters;
+import org.apache.flink.streaming.api.operators.YieldingOperatorFactory;
+import org.apache.flink.streaming.api.operators.async.AsyncWaitOperatorFactory;
+import org.apache.flink.streaming.runtime.tasks.StreamTask;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.binary.BinaryRowData;
 import org.apache.flink.table.planner.codegen.sort.SortCodeGenerator;
 import org.apache.flink.table.runtime.generated.NormalizedKeyComputer;
 import org.apache.flink.table.runtime.generated.RecordComparator;
-import org.apache.flink.table.runtime.operators.TableStreamOperator;
 import org.apache.flink.table.runtime.operators.sort.BinaryExternalSorter;
 import org.apache.flink.table.runtime.typeutils.AbstractRowDataSerializer;
 import org.apache.flink.table.runtime.typeutils.BinaryRowDataSerializer;
 import org.apache.flink.table.runtime.typeutils.RowDataSerializer;
-import org.apache.flink.table.runtime.util.StreamRecordCollector;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
@@ -77,6 +83,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Spliterator;
@@ -87,12 +94,11 @@ import java.util.stream.StreamSupport;
 import static org.apache.hudi.table.format.FormatUtils.buildAvroRecordBySchema;
 
 /**
- * Operator to execute the actual clustering task assigned by the clustering plan task.
+ * Function to execute the actual clustering task assigned by the clustering plan task.
  * In order to execute scalable, the input should shuffle by the clustering event {@link ClusteringPlanEvent}.
  */
-public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEvent> implements
-    OneInputStreamOperator<ClusteringPlanEvent, ClusteringCommitEvent>, BoundedOneInput {
-  private static final Logger LOG = LoggerFactory.getLogger(ClusteringOperator.class);
+public class ClusteringFunction extends RichAsyncFunction<ClusteringPlanEvent, ClusteringCommitEvent> {
+  private static final Logger LOG = LoggerFactory.getLogger(ClusteringFunction.class);
 
   private final Configuration conf;
   private final RowType rowType;
@@ -107,7 +113,6 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
   private transient BulkInsertWriterHelper writerHelper;
 
   private transient BinaryExternalSorter sorter;
-  private transient StreamRecordCollector<ClusteringCommitEvent> collector;
   private transient BinaryRowDataSerializer binarySerializer;
 
   /**
@@ -125,16 +130,25 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
    */
   private transient NonThrownExecutor executor;
 
-  public ClusteringOperator(Configuration conf, RowType rowType) {
+  /**
+   * Parameters for this function to access the context of containing StreamOperator
+   */
+  private transient StreamOperatorParameters<ClusteringCommitEvent> parameters;
+
+  private ClusteringFunction(Configuration conf, RowType rowType) {
     this.conf = conf;
     this.rowType = rowType;
     this.asyncClustering = OptionsResolver.needsAsyncClustering(conf);
     this.sortClusteringEnabled = OptionsResolver.sortClusteringEnabled(conf);
   }
 
+  public void setStreamOperatorParameters(StreamOperatorParameters<ClusteringCommitEvent> parameters) {
+    this.parameters = parameters;
+  }
+
   @Override
-  public void open() throws Exception {
-    super.open();
+  public void open(Configuration parameters) throws Exception {
+    super.open(parameters);
 
     this.taskID = getRuntimeContext().getIndexOfThisSubtask();
     this.writeConfig = StreamerUtil.getHoodieClientConfig(this.conf);
@@ -155,24 +169,21 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
     if (this.asyncClustering) {
       this.executor = NonThrownExecutor.builder(LOG).build();
     }
-
-    collector = new StreamRecordCollector<>(output);
   }
 
   @Override
-  public void processElement(StreamRecord<ClusteringPlanEvent> element) throws Exception {
-    ClusteringPlanEvent event = element.getValue();
+  public void asyncInvoke(final ClusteringPlanEvent event, final ResultFuture<ClusteringCommitEvent> resultFuture) throws Exception {
     final String instantTime = event.getClusteringInstantTime();
     if (this.asyncClustering) {
       // executes the compaction task asynchronously to not block the checkpoint barrier propagate.
       executor.execute(
-          () -> doClustering(instantTime, event),
-          (errMsg, t) -> collector.collect(new ClusteringCommitEvent(instantTime, taskID)),
+          () -> doClustering(instantTime, event, resultFuture),
+          (errMsg, t) -> resultFuture.complete(Collections.singletonList(new ClusteringCommitEvent(instantTime, taskID))),
           "Execute clustering for instant %s from task %d", instantTime, taskID);
     } else {
       // executes the clustering task synchronously for batch mode.
       LOG.info("Execute clustering for instant {} from task {}", instantTime, taskID);
-      doClustering(instantTime, event);
+      doClustering(instantTime, event, resultFuture);
     }
   }
 
@@ -182,20 +193,17 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
       this.writeClient.cleanHandlesGracefully();
       this.writeClient.close();
     }
-  }
-
-  /**
-   * End input action for batch source.
-   */
-  public void endInput() {
-    // no operation
+    if (this.sorter != null) {
+      this.sorter.close();
+    }
   }
 
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
 
-  private void doClustering(String instantTime, ClusteringPlanEvent event) throws Exception {
+  private void doClustering(String instantTime, ClusteringPlanEvent event,
+                            ResultFuture<ClusteringCommitEvent> resultFuture) throws Exception {
     final ClusteringGroupInfo clusteringGroupInfo = event.getClusteringGroupInfo();
 
     initWriterHelper(instantTime);
@@ -232,7 +240,7 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
     }
 
     List<WriteStatus> writeStatuses = this.writerHelper.getWriteStatuses(this.taskID);
-    collector.collect(new ClusteringCommitEvent(instantTime, writeStatuses, this.taskID));
+    resultFuture.complete(Collections.singletonList(new ClusteringCommitEvent(instantTime, writeStatuses, this.taskID)));
     this.writerHelper = null;
   }
 
@@ -334,28 +342,39 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
   }
 
   private void initSorter() {
-    ClassLoader cl = getContainingTask().getUserCodeClassLoader();
+    StreamTask<?, ?> containingTask = parameters.getContainingTask();
+    Environment environment = containingTask.getEnvironment();
+    ClassLoader cl = containingTask.getUserCodeClassLoader();
     NormalizedKeyComputer computer = createSortCodeGenerator().generateNormalizedKeyComputer("SortComputer").newInstance(cl);
     RecordComparator comparator = createSortCodeGenerator().generateRecordComparator("SortComparator").newInstance(cl);
 
-    MemoryManager memManager = getContainingTask().getEnvironment().getMemoryManager();
+    MemoryManager memManager = environment.getMemoryManager();
     this.sorter =
         new BinaryExternalSorter(
-            this.getContainingTask(),
+            containingTask,
             memManager,
             computeMemorySize(),
-            this.getContainingTask().getEnvironment().getIOManager(),
+            environment.getIOManager(),
             (AbstractRowDataSerializer) binarySerializer,
             binarySerializer,
             computer,
             comparator,
-            getContainingTask().getJobConfiguration());
+            containingTask.getJobConfiguration());
     this.sorter.startThreads();
 
     // register the metrics.
-    getMetricGroup().gauge("memoryUsedSizeInBytes", (Gauge<Long>) sorter::getUsedMemoryInBytes);
-    getMetricGroup().gauge("numSpillFiles", (Gauge<Long>) sorter::getNumSpillFiles);
-    getMetricGroup().gauge("spillInBytes", (Gauge<Long>) sorter::getSpillInBytes);
+    environment.getMetricGroup().gauge("memoryUsedSizeInBytes", (Gauge<Long>) sorter::getUsedMemoryInBytes);
+    environment.getMetricGroup().gauge("numSpillFiles", (Gauge<Long>) sorter::getNumSpillFiles);
+    environment.getMetricGroup().gauge("spillInBytes", (Gauge<Long>) sorter::getSpillInBytes);
+  }
+
+  private long computeMemorySize() {
+    Environment environment = parameters.getContainingTask().getEnvironment();
+    return environment.getMemoryManager().computeMemorySize(
+        parameters.getStreamConfig().getManagedMemoryFractionOperatorUseCaseOfSlot(
+            ManagedMemoryUseCase.OPERATOR, environment.getTaskManagerInfo().getConfiguration(), environment.getUserCodeClassLoader().asClassLoader()
+        )
+    );
   }
 
   private SortCodeGenerator createSortCodeGenerator() {
@@ -369,8 +388,26 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
     this.executor = executor;
   }
 
-  @VisibleForTesting
-  public void setOutput(Output<StreamRecord<ClusteringCommitEvent>> output) {
-    this.output = output;
+  public static class ClusteringOperatorFactory extends AsyncWaitOperatorFactory<ClusteringPlanEvent, ClusteringCommitEvent>
+      implements OneInputStreamOperatorFactory<ClusteringPlanEvent, ClusteringCommitEvent>, YieldingOperatorFactory<ClusteringCommitEvent> {
+
+    public ClusteringOperatorFactory(Configuration conf, RowType rowType) {
+      super(new ClusteringFunction(conf, rowType), 0, 1, AsyncDataStream.OutputMode.ORDERED);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public <T extends StreamOperator<ClusteringCommitEvent>> T createStreamOperator(
+        StreamOperatorParameters<ClusteringCommitEvent> parameters) {
+      AbstractUdfStreamOperator<ClusteringCommitEvent, ClusteringFunction> streamOperator = super.createStreamOperator(parameters);
+      ClusteringFunction clusteringFunction = streamOperator.getUserFunction();
+      clusteringFunction.setStreamOperatorParameters(parameters);
+      return (T) streamOperator;
+    }
+
+    @Override
+    public Class<? extends StreamOperator> getStreamOperatorClass(ClassLoader classLoader) {
+      return super.getStreamOperatorClass(classLoader);
+    }
   }
 }

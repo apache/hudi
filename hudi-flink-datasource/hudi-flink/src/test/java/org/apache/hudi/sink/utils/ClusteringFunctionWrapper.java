@@ -20,11 +20,12 @@ package org.apache.hudi.sink.utils;
 
 import org.apache.hudi.sink.clustering.ClusteringCommitEvent;
 import org.apache.hudi.sink.clustering.ClusteringCommitSink;
-import org.apache.hudi.sink.clustering.ClusteringOperator;
+import org.apache.hudi.sink.clustering.ClusteringFunction;
 import org.apache.hudi.sink.clustering.ClusteringPlanEvent;
 import org.apache.hudi.sink.clustering.ClusteringPlanOperator;
 import org.apache.hudi.utils.TestConfigurations;
 
+import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.io.disk.iomanager.IOManager;
 import org.apache.flink.runtime.io.disk.iomanager.IOManagerAsync;
@@ -33,14 +34,17 @@ import org.apache.flink.runtime.memory.MemoryManager;
 import org.apache.flink.runtime.operators.coordination.MockOperatorCoordinatorContext;
 import org.apache.flink.runtime.operators.testutils.MockEnvironment;
 import org.apache.flink.runtime.operators.testutils.MockEnvironmentBuilder;
-import org.apache.flink.streaming.api.graph.StreamConfig;
+import org.apache.flink.streaming.api.functions.async.ResultFuture;
+import org.apache.flink.streaming.api.operators.AbstractUdfStreamOperator;
 import org.apache.flink.streaming.api.operators.StreamingRuntimeContext;
-import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
-import org.apache.flink.streaming.runtime.tasks.StreamTask;
-import org.apache.flink.streaming.runtime.tasks.TestProcessingTimeService;
+import org.apache.flink.streaming.util.OneInputStreamOperatorTestHarness;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
 
 /**
- * A wrapper class to manipulate the {@link ClusteringOperator} instance for testing.
+ * A wrapper class to manipulate the {@link ClusteringFunction} instance for testing.
  */
 public class ClusteringFunctionWrapper {
   private final Configuration conf;
@@ -48,52 +52,50 @@ public class ClusteringFunctionWrapper {
   private final IOManager ioManager;
   private final StreamingRuntimeContext runtimeContext;
 
-  private final StreamTask<?, ?> streamTask;
-  private final StreamConfig streamConfig;
+  private final MockEnvironment environment;
 
   /**
    * Function that generates the {@code HoodieClusteringPlan}.
    */
   private ClusteringPlanOperator clusteringPlanOperator;
   /**
-   * Output to collect the clustering commit events.
+   * Test harness for clustering function.
    */
-  private CollectorOutput<ClusteringCommitEvent> commitEventOutput;
+  private OneInputStreamOperatorTestHarness<ClusteringPlanEvent, ClusteringCommitEvent> harness;
   /**
    * Function that executes the clustering task.
    */
-  private ClusteringOperator clusteringOperator;
+  private ClusteringFunction clusteringFunction;
   /**
    * Stream sink to handle clustering commits.
    */
   private ClusteringCommitSink commitSink;
 
-  public ClusteringFunctionWrapper(Configuration conf, StreamTask<?, ?> streamTask, StreamConfig streamConfig) {
+  public ClusteringFunctionWrapper(Configuration conf) {
     this.ioManager = new IOManagerAsync();
-    MockEnvironment environment = new MockEnvironmentBuilder()
+    this.environment = new MockEnvironmentBuilder()
         .setTaskName("mockTask")
         .setManagedMemorySize(4 * MemoryManager.DEFAULT_PAGE_SIZE)
         .setIOManager(ioManager)
         .build();
     this.runtimeContext = new MockStreamingRuntimeContext(false, 1, 0, environment);
     this.conf = conf;
-    this.streamTask = streamTask;
-    this.streamConfig = streamConfig;
   }
 
   public void openFunction() throws Exception {
     clusteringPlanOperator = new ClusteringPlanOperator(conf);
     clusteringPlanOperator.open();
 
-    clusteringOperator = new ClusteringOperator(conf, TestConfigurations.ROW_TYPE);
-    // CAUTION: deprecated API used.
-    clusteringOperator.setProcessingTimeService(new TestProcessingTimeService());
-    commitEventOutput = new CollectorOutput<>();
-    clusteringOperator.setup(streamTask, streamConfig, commitEventOutput);
-    clusteringOperator.open();
+    ClusteringFunction.ClusteringOperatorFactory clusteringOperatorFactory =
+        new ClusteringFunction.ClusteringOperatorFactory(conf, TestConfigurations.ROW_TYPE);
+    harness = new OneInputStreamOperatorTestHarness<>(clusteringOperatorFactory,
+        TypeInformation.of(ClusteringPlanEvent.class).createSerializer(environment.getExecutionConfig()),
+        environment);
+    harness.open();
+    clusteringFunction = (ClusteringFunction)((AbstractUdfStreamOperator<?,?>) harness.getOperator()).getUserFunction();
     final NonThrownExecutor syncExecutor = new MockCoordinatorExecutor(
         new MockOperatorCoordinatorContext(new OperatorID(), 1));
-    clusteringOperator.setExecutor(syncExecutor);
+    clusteringFunction.setExecutor(syncExecutor);
 
     commitSink = new ClusteringCommitSink(conf);
     commitSink.setRuntimeContext(runtimeContext);
@@ -106,16 +108,27 @@ public class ClusteringFunctionWrapper {
     clusteringPlanOperator.setOutput(planOutput);
     clusteringPlanOperator.notifyCheckpointComplete(checkpointID);
     // collect the ClusteringCommitEvents
+    List<ClusteringCommitEvent> compactCommitEvents = new ArrayList<>();
     for (ClusteringPlanEvent event : planOutput.getRecords()) {
-      clusteringOperator.processElement(new StreamRecord<>(event));
+      clusteringFunction.asyncInvoke(event, new ResultFuture<ClusteringCommitEvent>() {
+        @Override
+        public void complete(Collection<ClusteringCommitEvent> events) {
+          compactCommitEvents.addAll(events);
+        }
+
+        @Override
+        public void completeExceptionally(Throwable throwable) {
+        }
+      });
     }
     // handle and commit the clustering
-    for (ClusteringCommitEvent event : commitEventOutput.getRecords()) {
+    for (ClusteringCommitEvent event : compactCommitEvents) {
       commitSink.invoke(event, null);
     }
   }
 
   public void close() throws Exception {
+    harness.close();
     ioManager.close();
   }
 }
