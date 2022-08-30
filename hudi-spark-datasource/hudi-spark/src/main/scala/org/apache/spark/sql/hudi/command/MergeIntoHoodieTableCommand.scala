@@ -29,13 +29,13 @@ import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hive.HiveSyncConfigHolder
 import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, HoodieSparkSqlWriter, SparkAdapterSupport}
+import org.apache.spark.sql.HoodieCatalystExpressionUtils.attributeEquals
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
-import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, BoundReference, EqualTo, Expression, Literal, NamedExpression, PredicateHelper}
+import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, BoundReference, Cast, EqualTo, Expression, Literal, NamedExpression, PredicateHelper}
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.hudi.analysis.HoodieAnalysis.failAnalysis
-import org.apache.spark.sql.hudi.command.MergeIntoHoodieTableCommand.sameNamedExpr
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload._
 import org.apache.spark.sql.hudi.{ProvidesHoodieConfig, SerDeUtils}
@@ -98,7 +98,6 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
 
   private lazy val targetTableType = hoodieCatalogTable.tableTypeName
 
-
   /**
    * Mapping of the Merge-Into-Table (MIT) command's [[targetTable]] attribute into
    * corresponding expression (involving reference from the [[sourceTable]]) from the MIT
@@ -131,20 +130,40 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     val resolver = sparkSession.sessionState.analyzer.resolver
     val primaryKeyField = hoodieCatalogTable.tableConfig.getRecordKeyFieldProp
 
-    val targetAttrs = mergeInto.targetTable.output
+    val targetAttrs = mergeInto.targetTable.outputSet
 
-    conditions.map {
-      case EqualTo(attr: Attribute, rightExpr) if targetAttrs.exists(sameNamedExpr(_, attr)) => // left is the target field
+    val targetAttr2ConditionExpressions = conditions.map {
+      case EqualTo(attr: Attribute, rightExpr) if targetAttrs.contains(attr) =>
         attr -> rightExpr
-      case EqualTo(leftExpr, attr: Attribute) if targetAttrs.exists(sameNamedExpr(_, attr)) => // right is the target field
+      case EqualTo(leftExpr, attr: Attribute) if targetAttrs.contains(attr) =>
         attr -> leftExpr
 
       case e =>
         throw new AnalysisException(s"Unsupported predicate w/in MERGE INTO statement: ${e.sql}. " +
           "Currently, only equality predicates one side of which is the receiving (target) table attribute are supported " +
           "(e.g. `t.id = s.id`)")
-    } filter {
-      case (attr, _) => resolver(attr.name, primaryKeyField)
+    }
+
+    targetAttr2ConditionExpressions.filter {
+      case (attr, expr) if resolver(attr.name, primaryKeyField) =>
+        // NOTE: Here we validate that condition expression involving primary-key column(s) is a simple
+        //       attribute-reference expression (possibly wrapped into a cast). This is necessary to disallow
+        //       statements like following
+        //
+        //         MERGE INTO ... AS t USING (
+        //            SELECT ... FROM ... AS s
+        //         )
+        //            ON t.id = s.id + 1
+        //            WHEN MATCHED THEN UPDATE *
+        //
+        //       Which (in the current design) could result in a primary key of the record being modified,
+        //       which is not allowed.
+        if (!resolvesToSourceAttributeReferenceExpr(expr)) {
+          throw new AnalysisException("Only simple conditions of the form `t.id = s.id` are allowed on the " +
+            s"primary-key column. Found `${attr.sql} = ${expr.sql}`")
+        }
+
+        true
     }
   }
 
@@ -169,7 +188,8 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
           case Some(attr) => attr
           case None =>
             updatingActions.flatMap(_.assignments).collectFirst {
-              case Assignment(attr: AttributeReference, expr) if resolver(attr.name, preCombineField) => expr
+              case Assignment(attr: AttributeReference, expr)
+                if resolver(attr.name, preCombineField) && resolvesToSourceAttributeReferenceExpr(expr) => expr
             } getOrElse {
               throw new AnalysisException(s"Failed to resolve pre-combine field `${preCombineField}` w/in the source-table output")
             }
@@ -187,6 +207,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     // TODO move to analysis phase
     validate(mergeInto)
 
+    val sourceDF: DataFrame = sourceDataset
     // Create the write parameters
     val parameters = buildMergeIntoConfig(hoodieCatalogTable)
     // TODO Remove it when we implement ExpressionPayload for SparkRecord
@@ -251,19 +272,22 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
    *   <li>{@code ts = source.sts}</li>
    * </ul>
    */
-  private lazy val sourceDF: DataFrame = {
+  def sourceDataset: DataFrame = {
     val resolver = sparkSession.sessionState.analyzer.resolver
     var sourceDF = Dataset.ofRows(sparkSession, mergeInto.sourceTable)
+    val sourceTableOutput = mergeInto.sourceTable.output
 
     (primaryKeyAttributeToConditionExpression ++ preCombineAttributeAssociatedExpression).foreach {
-      // NOTE: Only in cases when either of primary-key or pre-combine attributes are associated w/ simple
-      //       expressions like `t.id = s.id` we're not going to override corresponding columns w/in the source
-      //       dataset. In all of the other cases we have to override such columns to make sure the dataset
-      //       is satisfying Hudi's internal requirements.
-      //       Please check the [[sourceDF]] scala-doc for more details.
-      case (targetAttr, sourceAttr: AttributeReference) if resolver(targetAttr.name, sourceAttr.name) => // no-op
-      case (targetAttr, sourceExpression) =>
-        sourceDF = sourceDF.withColumn(targetAttr.name, new Column(sourceExpression))
+      // NOTE: Primary-key attribute (required) as well as Pre-combine one (optional) defined
+      //       in the [[targetTable]] schema has to be present in the incoming [[sourceTable]] dataset.
+      //       In cases when [[sourceTable]] doesn't bear such attributes (which, for ex, could happen
+      //       in case of it having different schema), we will be adding additional columns (while setting
+      //       them according to aforementioned heuristic) to meet Hudi's requirements
+      case (targetAttr, sourceExpression)
+        if !sourceTableOutput.exists(attr => resolver(attr.name, targetAttr.name)) =>
+          sourceDF = sourceDF.withColumn(targetAttr.name, new Column(sourceExpression))
+
+      case _ => // no-op
     }
 
     sourceDF
@@ -325,9 +349,6 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
    * If there are not matched actions, we only execute the insert operation.
    *
    * TODO unify w/ executeUpsert
-   *
-   * @param sourceDF
-   * @param parameters
    */
   private def executeInsertOnly(sourceDF: DataFrame, parameters: Map[String, String]): Unit = {
     var writeParams = parameters +
@@ -401,7 +422,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     mergeInto.targetTable.output
       .filterNot(attr => isMetaField(attr.name))
       .map { attr =>
-        attr2Assignments.find(tuple => sameNamedExpr(tuple._1, attr)) match {
+        attr2Assignments.find(tuple => attributeEquals(tuple._1, attr)) match {
           case Some((_, assignment)) => assignment
           case None =>
             throw new AnalysisException(s"Assignment expressions have to assign every attribute of target table " +
@@ -438,12 +459,11 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     // NOTE: Since original source dataset could be augmented w/ additional columns (please
     //       check its corresponding java-doc for more details) we have to get up-to-date list
     //       of its output attributes
-    val combinedOutputAttributes =
-      sourceDF.queryExecution.analyzed.output ++ mergeInto.targetTable.output
+    val combinedOutputAttributes = mergeInto.sourceTable.output ++ mergeInto.targetTable.output
 
     expr transform {
       case attr: AttributeReference =>
-        val index = combinedOutputAttributes.indexWhere(sameNamedExpr(_, attr))
+        val index = combinedOutputAttributes.indexWhere(attributeEquals(_, attr))
         if (index == -1) {
             throw new AnalysisException(s"Can't find `${attr.qualifiedName}` attribute in either source or the target " +
               s"tables of the MERGE INTO statement (${combinedOutputAttributes.map(_.qualifiedName)})");
@@ -453,13 +473,29 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     }
   }
 
+  private def resolvesToSourceAttributeReferenceExpr(expr: Expression): Boolean = {
+    val sourceTableOutputSet = mergeInto.sourceTable.outputSet
+    expr match {
+      case attr: AttributeReference => sourceTableOutputSet.contains(attr)
+      // NOTE: Unfortunately, we can't use proper pattern-matching since it isn't compatible
+      //       w/ Spark 2.x
+      case cast: Cast =>
+        cast.child match {
+          case attr: AttributeReference => sourceTableOutputSet.contains(attr)
+          case _ => false
+        }
+
+      case _ => false
+    }
+  }
+
   private def validateInsertingAssignmentExpression(expr: Expression): Unit = {
-    val sourceTableOutputAttributes = sourceDF.queryExecution.analyzed.output
+    val sourceTableOutput = mergeInto.sourceTable.output
     expr.collect { case br: BoundReference => br }
       .foreach(br => {
-        if (br.ordinal >= sourceTableOutputAttributes.length) {
+        if (br.ordinal >= sourceTableOutput.length) {
           throw new AnalysisException(s"Expressions in insert clause of the MERGE INTO statement can only reference " +
-            s"source table attributes (ordinal ${br.ordinal}, total attributes in the source table ${sourceTableOutputAttributes.length})")
+            s"source table attributes (ordinal ${br.ordinal}, total attributes in the source table ${sourceTableOutput.length})")
         }
       })
   }
@@ -561,13 +597,4 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       })
     }
   }
-}
-
-object MergeIntoHoodieTableCommand {
-  /**
-   * Spark by default resolves as case-insensitive, therefore to make sure that named expression
-   * resolve to the same underlying object we have to compare by corresponding [[NamedExpression#exprId]]
-   */
-  def sameNamedExpr(one: NamedExpression, other: NamedExpression): Boolean =
-    one.exprId == other.exprId
 }

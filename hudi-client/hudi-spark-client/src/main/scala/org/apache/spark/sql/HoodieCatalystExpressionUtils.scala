@@ -19,6 +19,8 @@ package org.apache.spark.sql
 
 import org.apache.hudi.SparkAdapterSupport.sparkAdapter
 import org.apache.spark.sql.catalyst.analysis.{UnresolvedAttribute, UnresolvedFunction}
+import org.apache.spark.sql.catalyst.expressions.codegen.GenerateUnsafeProjection
+import org.apache.spark.sql.catalyst.expressions.{AttributeReference, AttributeSet, Expression, Like, Literal, NamedExpression, SubqueryExpression, UnsafeProjection}
 import org.apache.spark.sql.catalyst.expressions.codegen.{GenerateMutableProjection, GenerateUnsafeProjection}
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, Like, Literal, MutableProjection, SubqueryExpression, UnsafeProjection}
 import org.apache.spark.sql.catalyst.plans.logical.{LocalRelation, LogicalPlan}
@@ -68,6 +70,13 @@ object HoodieCatalystExpressionUtils {
     def unapply(expr: Expression): Option[(Expression, DataType, Option[String], Boolean)] =
       sparkAdapter.getCatalystExpressionUtils.unapplyCastExpression(expr)
   }
+
+  /**
+   * Leverages [[AttributeSet]] to invoke [[AttributeEquals]] predicate on 2 provided
+   * [[NamedExpression]]s
+   */
+  def attributeEquals(one: NamedExpression, other: NamedExpression): Boolean =
+    AttributeSet(Seq(one)).contains(other)
 
   /**
    * Generates instance of [[UnsafeProjection]] projecting row of one [[StructType]] into another [[StructType]]
