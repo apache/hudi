@@ -118,7 +118,7 @@ Copying spark default config and setting up configs
 $ docker ps
 ```
 
-At this point, the Dockercluster will be up and running. The demo cluster brings up the following services
+At this point, the Docker cluster will be up and running. The demo cluster brings up the following services
 
    * HDFS Services (NameNode, DataNode)
    * Spark Master and Worker
