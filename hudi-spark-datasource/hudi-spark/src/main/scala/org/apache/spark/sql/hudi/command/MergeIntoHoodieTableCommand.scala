@@ -314,18 +314,15 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       (HoodieWriteConfig.WRITE_SCHEMA.key -> getTableSchema.toString) +
       (DataSourceWriteOptions.TABLE_TYPE.key -> targetTableType)
 
-    writeParams += (PAYLOAD_UPDATE_CONDITION_AND_ASSIGNMENTS ->
-      serializeConditionalAssignments(updatingActions.map(a => (a.condition, a.assignments))))
+    // Append (encoded) updating actions
+    writeParams += PAYLOAD_UPDATE_CONDITION_AND_ASSIGNMENTS ->
+      serializeConditionalAssignments(updatingActions.map(a => (a.condition, a.assignments)))
 
-    val deleteAction = deletingActions.headOption
-    if (deleteAction.isDefined) {
-      val deleteCondition = deleteAction.get.condition
-        .map(bindReferences)
-        .getOrElse(Literal.create(true, BooleanType))
-      // Serialize the Map[DeleteCondition, empty] to base64 string
-      val serializedDeleteCondition = Base64.getEncoder
-        .encodeToString(SerDeUtils.toBytes(Map(deleteCondition -> Seq.empty[Assignment])))
-      writeParams += (PAYLOAD_DELETE_CONDITION -> serializedDeleteCondition)
+    // Append (encoded) deleting actions
+    deletingActions.headOption match {
+      case Some(DeleteAction(condition)) =>
+        writeParams += PAYLOAD_DELETE_CONDITION -> serializeConditionalAssignments(Seq(condition -> Seq.empty))
+      case _ => // no-op
     }
 
     // Serialize the Map[InsertCondition, InsertAssignments] to base64 string
