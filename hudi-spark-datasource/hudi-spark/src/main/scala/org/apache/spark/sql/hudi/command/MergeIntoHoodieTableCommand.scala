@@ -31,10 +31,11 @@ import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, HoodieSparkSqlWriter, SparkAdapterSupport}
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
-import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, BoundReference, EqualTo, Expression, Literal, PredicateHelper}
+import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, BoundReference, EqualTo, Expression, Literal, NamedExpression, PredicateHelper}
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.hudi.analysis.HoodieAnalysis.failAnalysis
+import org.apache.spark.sql.hudi.command.MergeIntoHoodieTableCommand.sameNamedExpr
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload._
 import org.apache.spark.sql.hudi.{ProvidesHoodieConfig, SerDeUtils}
@@ -133,9 +134,9 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     val targetAttrs = mergeInto.targetTable.output
 
     conditions.map {
-      case EqualTo(attr: Attribute, rightExpr) if targetAttrs.contains(attr) => // left is the target field
+      case EqualTo(attr: Attribute, rightExpr) if targetAttrs.exists(sameNamedExpr(_, attr)) => // left is the target field
         attr -> rightExpr
-      case EqualTo(leftExpr, attr: Attribute) if targetAttrs.contains(attr) => // right is the target field
+      case EqualTo(leftExpr, attr: Attribute) if targetAttrs.exists(sameNamedExpr(_, attr)) => // right is the target field
         attr -> leftExpr
 
       case e =>
@@ -389,14 +390,14 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       case assign @ Assignment(attr: Attribute, expr) => attr -> assign
       case a =>
         throw new AnalysisException(s"Only assignments of the form `t.field = ...` are supported at the moment (provided: `${a.sql}`)")
-    }.toMap
+    }
 
     // Reorder the assignments to follow the ordering of the target table
     mergeInto.targetTable.output
       .filterNot(attr => isMetaField(attr.name))
       .map { attr =>
-        attr2Assignments.get(attr) match {
-          case Some(assignment) => assignment
+        attr2Assignments.find(tuple => sameNamedExpr(tuple._1, attr)) match {
+          case Some((_, assignment)) => assignment
           case None =>
             throw new AnalysisException(s"Assignment expressions have to assign every attribute of target table " +
               s"(provided: `${assignments.map(_.sql).mkString(",")}`")
@@ -437,7 +438,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
 
     expr transform {
       case attr: AttributeReference =>
-        val index = combinedOutputAttributes.indexOf(attr)
+        val index = combinedOutputAttributes.indexWhere(sameNamedExpr(_, attr))
         if (index == -1) {
             throw new AnalysisException(s"Can't find `${attr.qualifiedName}` attribute in either source or the target " +
               s"tables of the MERGE INTO statement (${combinedOutputAttributes.map(_.qualifiedName)})");
@@ -515,7 +516,6 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     // TODO validate MIT adheres to Hudi's constraints
     //       - Merge-on condition can only ref primary-key columns
     //       - Source table has to contain column mapping into pre-combine one (if defined for the target table)
-
     checkUpdatingActions(updatingActions)
     checkInsertingActions(insertingActions)
     checkDeletingActions(deletingActions)
@@ -556,4 +556,13 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       })
     }
   }
+}
+
+object MergeIntoHoodieTableCommand {
+  /**
+   * Spark by default resolves as case-insensitive, therefore to make sure that named expression
+   * resolve to the same underlying object we have to compare by corresponding [[NamedExpression#exprId]]
+   */
+  def sameNamedExpr(one: NamedExpression, other: NamedExpression): Boolean =
+    one.exprId == other.exprId
 }
