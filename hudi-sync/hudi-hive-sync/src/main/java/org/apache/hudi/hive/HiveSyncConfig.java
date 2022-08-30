@@ -176,6 +176,6 @@ public class HiveSyncConfig extends HoodieSyncConfig {
   }
 
   public void validateParameters() {
-    ValidationUtils.checkArgument(getIntOrDefault(HIVE_BATCH_SYNC_PARTITION_NUM) > 0);
+    ValidationUtils.checkArgument(getIntOrDefault(HIVE_BATCH_SYNC_PARTITION_NUM) > 0, "batch-sync-num for sync hive table must be greater than 0, pls check your parameter");
   }
 }

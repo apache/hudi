@@ -21,7 +21,6 @@ package org.apache.hudi.hive.ddl;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.StorageSchemes;
 import org.apache.hudi.common.util.CollectionUtils;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncException;
@@ -195,12 +194,10 @@ public class HMSDDLExecutor implements DDLExecutor {
     }
     LOG.info("Adding partitions " + partitionsToAdd.size() + " to table " + tableName);
     try {
-      ValidationUtils.checkArgument(syncConfig.getIntOrDefault(HIVE_BATCH_SYNC_PARTITION_NUM) > 0,
-          "batch-sync-num for sync hive table must be greater than 0, pls check your parameter");
       StorageDescriptor sd = client.getTable(databaseName, tableName).getSd();
-      List<Partition> partitionList = new ArrayList<>();
       int batchSyncPartitionNum = syncConfig.getIntOrDefault(HIVE_BATCH_SYNC_PARTITION_NUM);
       for (List<String> batch : CollectionUtils.batches(partitionsToAdd, batchSyncPartitionNum)) {
+        List<Partition> partitionList = new ArrayList<>();
         batch.forEach(x -> {
           StorageDescriptor partitionSd = new StorageDescriptor();
           partitionSd.setCols(sd.getCols());
@@ -214,7 +211,6 @@ public class HMSDDLExecutor implements DDLExecutor {
         });
         client.add_partitions(partitionList, true, false);
         LOG.info("HMSDDLExecutor add a batch partitions done: " + partitionList.size());
-        partitionList.clear();
       }
     } catch (TException e) {
       LOG.error(databaseName + "." + tableName + " add partition failed", e);
