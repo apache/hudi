@@ -357,7 +357,8 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
                 deletePaths.add(new CleanFileInfo(hoodieDataFile.getBootstrapBaseFile().get().getPath(), true));
               }
             });
-            // clean the log files for the commits as well
+            // since the cow tables may also write out the log files in cdc scenario, we need to clean the log files
+            // for this commit no matter the table type is mor or cow.
             deletePaths.addAll(aSlice.getLogFiles().map(lf -> new CleanFileInfo(lf.getPath().toString(), false))
                 .collect(Collectors.toList()));
           }
@@ -422,7 +423,8 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
         cleanPaths.add(new CleanFileInfo(dataFile.getBootstrapBaseFile().get().getPath(), true));
       }
     }
-    // clean the log files for the commits as well
+    // since the cow tables may also write out the log files in cdc scenario, we need to clean the log files
+    // for this commit no matter the table type is mor or cow.
     cleanPaths.addAll(nextSlice.getLogFiles().map(lf -> new CleanFileInfo(lf.getPath().toString(), false))
         .collect(Collectors.toList()));
     return cleanPaths;

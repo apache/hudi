@@ -30,7 +30,7 @@ import org.junit.jupiter.params.provider.CsvSource
 
 import scala.collection.JavaConversions._
 
-class TestCDCDataFrameSuite extends TestCDCBase {
+class TestCDCDataFrameSuite extends HoodieCDCTestBase {
 
   /**
    * Step1: Insert 100

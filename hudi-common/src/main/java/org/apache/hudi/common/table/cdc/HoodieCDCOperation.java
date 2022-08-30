@@ -20,14 +20,14 @@ package org.apache.hudi.common.table.cdc;
 
 import org.apache.hudi.exception.HoodieNotSupportedException;
 
-public enum CDCOperationEnum {
+public enum HoodieCDCOperation {
   INSERT("i"),
   UPDATE("u"),
   DELETE("d");
 
   private final String value;
 
-  CDCOperationEnum(String value) {
+  HoodieCDCOperation(String value) {
     this.value = value;
   }
 
@@ -35,7 +35,7 @@ public enum CDCOperationEnum {
     return this.value;
   }
 
-  public static CDCOperationEnum parse(String value) {
+  public static HoodieCDCOperation parse(String value) {
     if (value.equals("i")) {
       return INSERT;
     } else if (value.equals("u")) {

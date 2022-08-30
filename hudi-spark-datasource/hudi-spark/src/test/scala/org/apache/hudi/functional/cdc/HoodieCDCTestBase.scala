@@ -33,7 +33,7 @@ import org.junit.jupiter.api.Assertions.assertEquals
 
 import scala.collection.JavaConverters._
 
-abstract class TestCDCBase extends HoodieClientTestBase {
+abstract class HoodieCDCTestBase extends HoodieClientTestBase {
 
   var spark: SparkSession = _
 

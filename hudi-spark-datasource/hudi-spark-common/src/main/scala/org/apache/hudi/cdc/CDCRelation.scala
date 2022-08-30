@@ -23,7 +23,7 @@ import org.apache.hudi.DataSourceReadOptions
 import org.apache.hudi.HoodieDataSourceHelper
 import org.apache.hudi.HoodieTableSchema
 import org.apache.hudi.common.table.cdc.CDCUtils._
-import org.apache.hudi.common.table.cdc.CDCOperationEnum._
+import org.apache.hudi.common.table.cdc.HoodieCDCOperation._
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.TableSchemaResolver
 import org.apache.hudi.common.table.cdc.CDCExtractor

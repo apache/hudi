@@ -57,11 +57,11 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.table.cdc.CDCFileTypeEnum.ADD_BASE_FILE;
-import static org.apache.hudi.common.table.cdc.CDCFileTypeEnum.CDC_LOG_FILE;
-import static org.apache.hudi.common.table.cdc.CDCFileTypeEnum.MOR_LOG_FILE;
-import static org.apache.hudi.common.table.cdc.CDCFileTypeEnum.REMOVE_BASE_FILE;
-import static org.apache.hudi.common.table.cdc.CDCFileTypeEnum.REPLACED_FILE_GROUP;
+import static org.apache.hudi.common.table.cdc.HoodieCDCLogicalFileType.ADD_BASE_FILE;
+import static org.apache.hudi.common.table.cdc.HoodieCDCLogicalFileType.CDC_LOG_FILE;
+import static org.apache.hudi.common.table.cdc.HoodieCDCLogicalFileType.MOR_LOG_FILE;
+import static org.apache.hudi.common.table.cdc.HoodieCDCLogicalFileType.REMOVE_BASE_FILE;
+import static org.apache.hudi.common.table.cdc.HoodieCDCLogicalFileType.REPLACED_FILE_GROUP;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.isInRange;
@@ -275,9 +275,11 @@ public class CDCExtractor {
           // and no records have been writen out a new file.
           // So, we find the previous file that this operation delete from, and treat each of
           // records as a deleted one.
-          Path absPartitionPath = FSUtils.getPartitionPath(basePath, fileGroupId.getPartitionPath());
-          HoodieBaseFile beforeBaseFile = new HoodieBaseFile(
-              FSUtils.getBaseFile(fs, absPartitionPath, fileGroupId.getFileId(), writeStat.getPrevCommit()));
+          HoodieBaseFile beforeBaseFile = fsView.getBaseFileOn(
+              fileGroupId.getPartitionPath(), writeStat.getPrevCommit(), fileGroupId.getFileId()
+          ).orElseThrow(() ->
+              new HoodieIOException("Can not get the previous version of the base file")
+          );
           FileSlice beforeFileSlice = new FileSlice(fileGroupId, writeStat.getPrevCommit(), beforeBaseFile, new ArrayList<>());
           cdcFileSplit = new CDCFileSplit(REMOVE_BASE_FILE, null, Option.empty(), Option.of(beforeFileSlice));
         } else if (writeStat.getNumUpdateWrites() == 0L && writeStat.getNumDeletes() == 0
@@ -298,13 +300,15 @@ public class CDCExtractor {
         cdcFileSplit = new CDCFileSplit(CDC_LOG_FILE, writeStat.getCdcPath());
       } else {
         try {
-          Path absPartitionPath = FSUtils.getPartitionPath(basePath, fileGroupId.getPartitionPath());
-          HoodieBaseFile beforeBaseFile = new HoodieBaseFile(FSUtils.getBaseFile(
-              fs, absPartitionPath, fileGroupId.getFileId(), writeStat.getPrevCommit()));
+          HoodieBaseFile beforeBaseFile = fsView.getBaseFileOn(
+              fileGroupId.getPartitionPath(), writeStat.getPrevCommit(), fileGroupId.getFileId()
+          ).orElseThrow(() ->
+              new HoodieIOException("Can not get the previous version of the base file")
+          );
           FileSlice beforeFileSlice = null;
           FileSlice currentFileSlice = new FileSlice(fileGroupId, instant.getTimestamp(),
               new HoodieBaseFile(fs.getFileStatus(new Path(basePath, writeStat.getPath()))), new ArrayList<>());
-          if (supplementalLoggingMode.equals(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE_MINI)) {
+          if (supplementalLoggingMode.equals(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE_OP_KEY)) {
             beforeFileSlice = new FileSlice(fileGroupId, writeStat.getPrevCommit(), beforeBaseFile, new ArrayList<>());
           }
           cdcFileSplit = new CDCFileSplit(CDC_LOG_FILE, writeStat.getCdcPath(),

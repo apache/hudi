@@ -28,6 +28,7 @@ import org.apache.hudi.common.table.cdc.CDCUtils;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.util.ClosableIterator;
+import org.apache.hudi.exception.HoodieIOException;
 
 import java.io.IOException;
 
@@ -74,7 +75,7 @@ public class CDCLogRecordReader implements ClosableIterator<IndexedRecord> {
       itr.close();
       reader.close();
     } catch (IOException e) {
-      e.printStackTrace();
+      throw new HoodieIOException(e.getMessage());
     }
   }
 }

@@ -67,7 +67,7 @@ package org.apache.hudi.common.table.cdc;
  *   a whole file group. First we find this file group. Then load this, mark all the records with
  *   `d`, and treat them as the value of `before`. The value of `after` for each record is null.
  */
-public enum CDCFileTypeEnum {
+public enum HoodieCDCLogicalFileType {
 
   CDC_LOG_FILE,
   ADD_BASE_FILE,
