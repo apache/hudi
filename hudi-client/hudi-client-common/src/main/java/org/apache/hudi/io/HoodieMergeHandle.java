@@ -37,7 +37,7 @@ import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.cdc.CDCUtils;
-import org.apache.hudi.common.table.cdc.CDCOperationEnum;
+import org.apache.hudi.common.table.cdc.HoodieCDCOperation;
 import org.apache.hudi.common.table.log.AppendResult;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieCDCDataBlock;
@@ -323,9 +323,9 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
       String recordKey = oldRecord.get(keyField).toString();
       if (indexedRecord.isPresent()) {
         GenericRecord record = (GenericRecord) indexedRecord.get();
-        cdcData.put(recordKey, cdcRecord(CDCOperationEnum.UPDATE, recordKey, hoodieRecord.getPartitionPath(), oldRecord, record));
+        cdcData.put(recordKey, cdcRecord(HoodieCDCOperation.UPDATE, recordKey, hoodieRecord.getPartitionPath(), oldRecord, record));
       } else {
-        cdcData.put(recordKey, cdcRecord(CDCOperationEnum.DELETE, recordKey, partitionPath, oldRecord, null));
+        cdcData.put(recordKey, cdcRecord(HoodieCDCOperation.DELETE, recordKey, partitionPath, oldRecord, null));
       }
     }
     return result;
@@ -340,7 +340,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
     }
     if (writeRecord(hoodieRecord, insertRecord, HoodieOperation.isDelete(hoodieRecord.getOperation()))) {
       if (cdcEnabled && insertRecord.isPresent()) {
-        cdcData.put(hoodieRecord.getRecordKey(), cdcRecord(CDCOperationEnum.INSERT,
+        cdcData.put(hoodieRecord.getRecordKey(), cdcRecord(HoodieCDCOperation.INSERT,
             hoodieRecord.getRecordKey(), partitionPath, null, (GenericRecord) insertRecord.get()));
       }
       insertRecordsWritten++;
@@ -451,7 +451,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
     }
   }
 
-  protected SerializableRecord cdcRecord(CDCOperationEnum operation, String recordKey, String partitionPath,
+  protected SerializableRecord cdcRecord(HoodieCDCOperation operation, String recordKey, String partitionPath,
                                          GenericRecord oldRecord, GenericRecord newRecord) {
     GenericData.Record record;
     if (cdcSupplementalLoggingMode.equals(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE_WITH_BEFORE_AFTER)) {
@@ -476,12 +476,12 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
     return record;
   }
 
-  protected AppendResult writeCDCData() {
+  protected Option<AppendResult> writeCDCData() {
     if (!cdcEnabled || cdcData.isEmpty() || recordsWritten == 0L || (recordsWritten == insertRecordsWritten)) {
       // the following cases where we do not need to write out the cdc file:
       // case 1: all the data from the previous file slice are deleted. and no new data is inserted;
       // case 2: all the data are new-coming,
-      return null;
+      return Option.empty();
     }
     try {
       String keyField = config.populateMetaFields()
@@ -499,7 +499,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
       List<IndexedRecord> records = cdcData.values().stream()
           .map(SerializableRecord::getRecord).collect(Collectors.toList());
       HoodieLogBlock block = new HoodieCDCDataBlock(records, header, keyField);
-      return cdcWriter.appendBlocks(Collections.singletonList(block));
+      return Option.of(cdcWriter.appendBlocks(Collections.singletonList(block)));
     } catch (Exception e) {
       throw new HoodieException("Failed to write the cdc data to " + cdcWriter.getLogFile().getPath(), e);
     }
@@ -524,16 +524,17 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
         fileWriter = null;
       }
 
-      AppendResult result = writeCDCData();
+      Option<AppendResult> result = writeCDCData();
       if (cdcWriter != null) {
         cdcWriter.close();
         cdcWriter = null;
         cdcData.clear();
       }
-      if (result != null) {
-        String cdcFileName = result.logFile().getPath().getName();
+      if (result.isPresent()) {
+        Path cdcLogFile = result.get().logFile().getPath();
+        String cdcFileName = cdcLogFile.getName();
         String cdcPath = StringUtils.isNullOrEmpty(partitionPath) ? cdcFileName : partitionPath + "/" + cdcFileName;
-        long cdcFileSizeInBytes = FSUtils.getFileSize(fs, result.logFile().getPath());
+        long cdcFileSizeInBytes = FSUtils.getFileSize(fs, cdcLogFile);
         stat.setCdcPath(cdcPath);
         stat.setCdcWriteBytes(cdcFileSizeInBytes);
       }

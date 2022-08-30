@@ -313,7 +313,7 @@ class Spark31HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
           }).toAttributes ++ partitionSchema.toAttributes
           val castSchema = newFullSchema.zipWithIndex.map { case (attr, i) =>
             if (typeChangeInfos.containsKey(i)) {
-              Cast(attr, typeChangeInfos.get(i).getLeft, Option(sharedConf.get(SQLConf.SESSION_LOCAL_TIMEZONE.key)))
+              Cast(attr, typeChangeInfos.get(i).getLeft)
             } else attr
           }
           GenerateUnsafeProjection.generate(castSchema, newFullSchema)

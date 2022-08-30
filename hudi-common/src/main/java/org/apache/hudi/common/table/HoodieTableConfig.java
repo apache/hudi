@@ -133,15 +133,15 @@ public class HoodieTableConfig extends HoodieConfig {
       .withDocumentation("When enable, persist the change data if necessary, and can be queried as a CDC query mode.");
 
   // op and key
-  public static final String CDC_SUPPLEMENTAL_LOGGING_MODE_MINI = "op_key";
+  public static final String CDC_SUPPLEMENTAL_LOGGING_MODE_OP_KEY = "op_key";
   public static final String CDC_SUPPLEMENTAL_LOGGING_MODE_WITH_BEFORE = "cdc_data_before";
   public static final String CDC_SUPPLEMENTAL_LOGGING_MODE_WITH_BEFORE_AFTER = "cdc_data_before_after";
 
   public static final ConfigProperty<String> CDC_SUPPLEMENTAL_LOGGING_MODE = ConfigProperty
       .key("hoodie.table.cdc.supplemental.logging.mode")
-      .defaultValue(CDC_SUPPLEMENTAL_LOGGING_MODE_WITH_BEFORE_AFTER)
+      .defaultValue(CDC_SUPPLEMENTAL_LOGGING_MODE_OP_KEY)
       .withValidValues(
-          CDC_SUPPLEMENTAL_LOGGING_MODE_MINI,
+          CDC_SUPPLEMENTAL_LOGGING_MODE_OP_KEY,
           CDC_SUPPLEMENTAL_LOGGING_MODE_WITH_BEFORE,
           CDC_SUPPLEMENTAL_LOGGING_MODE_WITH_BEFORE_AFTER)
       .withDocumentation("When 'op_key' persist the 'op' and the record key only,"

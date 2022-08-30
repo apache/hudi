@@ -94,7 +94,7 @@ public class CDCUtils {
         return CDC_SCHEMA;
       case HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE_WITH_BEFORE:
         return CDC_SCHEMA_OP_RECORDKEY_BEFORE;
-      case HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE_MINI:
+      case HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE_OP_KEY:
         return CDC_SCHEMA_OP_AND_RECORDKEY;
       default:
         throw new HoodieException("not support this supplemental logging mode: " + supplementalLoggingMode);

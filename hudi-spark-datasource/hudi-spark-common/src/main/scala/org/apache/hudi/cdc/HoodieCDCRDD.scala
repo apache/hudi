@@ -33,8 +33,8 @@ import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.{FileSlice, HoodieLogFile, HoodieRecord, HoodieRecordPayload}
 import org.apache.hudi.common.table.HoodieTableConfig._
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.cdc.CDCFileTypeEnum._
-import org.apache.hudi.common.table.cdc.CDCOperationEnum._
+import org.apache.hudi.common.table.cdc.HoodieCDCLogicalFileType._
+import org.apache.hudi.common.table.cdc.HoodieCDCOperation._
 import org.apache.hudi.common.table.cdc.{CDCFileSplit, CDCUtils}
 import org.apache.hudi.common.table.log.CDCLogRecordReader
 import org.apache.hudi.common.table.timeline.HoodieInstant

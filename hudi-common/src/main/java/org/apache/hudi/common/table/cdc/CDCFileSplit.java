@@ -44,7 +44,7 @@ public class CDCFileSplit implements Serializable {
   /**
    * * the change type, which decide to how to retrieve the change data. more details see: [[CDCFileTypeEnum]]
    * */
-  private CDCFileTypeEnum cdcFileType;
+  private HoodieCDCLogicalFileType cdcFileType;
 
   /**
    * the file that the change data can be parsed from.
@@ -61,12 +61,12 @@ public class CDCFileSplit implements Serializable {
    */
   private Option<FileSlice> afterFileSlice;
 
-  public CDCFileSplit(CDCFileTypeEnum cdcFileType, String cdcFile) {
+  public CDCFileSplit(HoodieCDCLogicalFileType cdcFileType, String cdcFile) {
     this(cdcFileType, cdcFile, Option.empty(), Option.empty());
   }
 
   public CDCFileSplit(
-      CDCFileTypeEnum cdcFileType,
+      HoodieCDCLogicalFileType cdcFileType,
       String cdcFile,
       Option<FileSlice> beforeFileSlice,
       Option<FileSlice> afterFileSlice) {
@@ -76,7 +76,7 @@ public class CDCFileSplit implements Serializable {
     this.afterFileSlice = afterFileSlice;
   }
 
-  public CDCFileTypeEnum getCdcFileType() {
+  public HoodieCDCLogicalFileType getCdcFileType() {
     return this.cdcFileType;
   }
 

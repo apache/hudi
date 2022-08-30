@@ -31,7 +31,7 @@ import org.apache.spark.sql.functions._
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
 
-class TestCDCStreamingSuite extends TestCDCBase {
+class TestCDCStreamingSuite extends HoodieCDCTestBase {
 
   /**
    * Here we simulate a more complex streaming data ETL of a real scenario that uses CDC.
