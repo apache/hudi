@@ -1776,6 +1776,18 @@
         </plugins>
       </build>
     </profile>
+    <profile>
+      <id>m1-mac</id>
+      <properties>
+        <protoc.version>3.17.3</protoc.version>
+      </properties>
+      <activation>
+        <os>
+          <family>mac</family>
+          <arch>aarch64</arch>
+        </os>
+      </activation>
+    </profile>
     <!-- Exists for backwards compatibility; profile doesn't do anything -->
     <profile>
       <id>scala-2.11</id>
