@@ -286,9 +286,9 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
           config.getBooleanOrDefault(HIVE_SUPPORT_TIMESTAMP_TYPE));
       if (!schemaDiff.isEmpty()) {
         LOG.info("Schema difference found for " + tableName);
-        if(!schemaDiff.getAddColumnTypes().isEmpty() || !schemaDiff.getUpdateColumnTypes().isEmpty()){
+        if (!schemaDiff.getAddColumnTypes().isEmpty() || !schemaDiff.getUpdateColumnTypes().isEmpty()) {
           syncClient.updateTableSchema(tableName, schema);
-        }else{
+        } else {
           LOG.info("Only missing columns, skipping update table schema on" + tableName);
         }
         // Sync the table properties if the schema has changed
