@@ -287,7 +287,7 @@ create table hudi_cow_nonpcf_tbl (
 ) using hudi;
 
 
--- create a mor non-partitioned table without preCombineField provided
+-- create a mor non-partitioned table with preCombineField provided
 create table hudi_mor_tbl (
   id int,
   name string,

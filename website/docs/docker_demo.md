@@ -16,7 +16,7 @@ The steps have been tested on a Mac laptop
 ### Prerequisites
 
   * Clone the [Hudi repository](https://github.com/apache/hudi) to your local machine.
-  * Docker Setup :  For Mac, Please follow the steps as defined in [https://docs.docker.com/v17.12/docker-for-mac/install/]. For running Spark-SQL queries, please ensure atleast 6 GB and 4 CPUs are allocated to Docker (See Docker -> Preferences -> Advanced). Otherwise, spark-SQL queries could be killed because of memory issues.
+  * Docker Setup :  For Mac, Please follow the steps as defined in [Install Docker Desktop on Mac](https://docs.docker.com/desktop/install/mac-install/). For running Spark-SQL queries, please ensure atleast 6 GB and 4 CPUs are allocated to Docker (See Docker -> Preferences -> Advanced). Otherwise, spark-SQL queries could be killed because of memory issues.
   * kcat : A command-line utility to publish/consume from kafka topics. Use `brew install kcat` to install kcat.
   * /etc/hosts : The demo references many services running in container by the hostname. Add the following settings to /etc/hosts
 
