@@ -23,7 +23,6 @@ import org.apache.hudi.exception.HoodieException;
 import com.google.protobuf.BoolValue;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.BytesValue;
-import com.google.protobuf.DescriptorProtos;
 import com.google.protobuf.Descriptors;
 import com.google.protobuf.DoubleValue;
 import com.google.protobuf.FloatValue;
@@ -39,7 +38,6 @@ import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.util.Utf8;
 
-import java.io.File;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -135,12 +133,12 @@ public class ProtoConversionUtil {
       });
     }
 
-    private Schema getEnumSchema(Descriptors.EnumDescriptor d) {
-      List<String> symbols = new ArrayList<>(d.getValues().size());
-      for (Descriptors.EnumValueDescriptor e : d.getValues()) {
-        symbols.add(e.getName());
+    private Schema getEnumSchema(Descriptors.EnumDescriptor enumDescriptor) {
+      List<String> symbols = new ArrayList<>(enumDescriptor.getValues().size());
+      for (Descriptors.EnumValueDescriptor valueDescriptor : enumDescriptor.getValues()) {
+        symbols.add(valueDescriptor.getName());
       }
-      return Schema.createEnum(d.getName(), null, getNamespace(d.getFile(), d.getContainingType()), symbols);
+      return Schema.createEnum(enumDescriptor.getName(), null, getNamespace(enumDescriptor.getFullName()), symbols);
     }
 
     private Schema getMessageSchema(Descriptors.Descriptor descriptor, Map<Descriptors.Descriptor, Schema> seen, boolean flattenWrappedPrimitives) {
@@ -148,7 +146,7 @@ public class ProtoConversionUtil {
         return seen.get(descriptor);
       }
       Schema result = Schema.createRecord(descriptor.getName(), null,
-          getNamespace(descriptor.getFile(), descriptor.getContainingType()), false);
+          getNamespace(descriptor.getFullName()), false);
 
       seen.put(descriptor, result);
 
@@ -353,44 +351,9 @@ public class ProtoConversionUtil {
       return valueAsMessage.getField(valueAsMessage.getDescriptorForType().getFields().get(0));
     }
 
-    private String getNamespace(Descriptors.FileDescriptor fd, Descriptors.Descriptor containing) {
-      DescriptorProtos.FileOptions filedOptions = fd.getOptions();
-      String classPackage = filedOptions.hasJavaPackage() ? filedOptions.getJavaPackage() : fd.getPackage();
-      String outer = "";
-      if (!filedOptions.getJavaMultipleFiles()) {
-        if (filedOptions.hasJavaOuterClassname()) {
-          outer = filedOptions.getJavaOuterClassname();
-        } else {
-          outer = new File(fd.getName()).getName();
-          outer = outer.substring(0, outer.lastIndexOf('.'));
-          outer = toCamelCase(outer);
-        }
-      }
-      StringBuilder inner = new StringBuilder();
-      while (containing != null) {
-        if (inner.length() == 0) {
-          inner.insert(0, containing.getName());
-        } else {
-          inner.insert(0, containing.getName() + "$");
-        }
-        containing = containing.getContainingType();
-      }
-      String d1 = (!outer.isEmpty() || inner.length() != 0 ? "." : "");
-      String d2 = (!outer.isEmpty() && inner.length() != 0 ? "$" : "");
-      return classPackage + d1 + outer + d2 + inner;
-    }
-
-    private String toCamelCase(String s) {
-      String[] parts = s.split("_");
-      StringBuilder camelCaseString = new StringBuilder(s.length());
-      for (String part : parts) {
-        camelCaseString.append(cap(part));
-      }
-      return camelCaseString.toString();
-    }
-
-    private String cap(String s) {
-      return s.substring(0, 1).toUpperCase() + s.substring(1).toLowerCase();
+    private String getNamespace(String descriptorFullName) {
+      int lastDotIndex = descriptorFullName.lastIndexOf('.');
+      return descriptorFullName.substring(0, lastDotIndex);
     }
   }
 }
