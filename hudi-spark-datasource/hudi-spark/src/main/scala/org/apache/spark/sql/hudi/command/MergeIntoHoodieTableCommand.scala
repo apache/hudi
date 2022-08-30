@@ -35,7 +35,6 @@ import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeRef
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.hudi.analysis.HoodieAnalysis.failAnalysis
-import org.apache.spark.sql.hudi.command.MergeIntoHoodieTableCommand.attributeEqual
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload._
 import org.apache.spark.sql.hudi.{ProvidesHoodieConfig, SerDeUtils}
@@ -87,7 +86,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
   /**
    * The target table schema without hoodie meta fields.
    */
-  private lazy val targetTableSchemaWithoutMetaFields =
+  private lazy val targetTableSchema =
     removeMetaFields(mergeInto.targetTable.schema).fields
 
   private lazy val hoodieCatalogTable = sparkAdapter.resolveHoodieTable(mergeInto.targetTable) match {
@@ -209,13 +208,8 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
   }
 
   private val updatingActions: Seq[UpdateAction] = mergeInto.matchedActions.collect { case u: UpdateAction => u}
-  private val insertingActions: Seq[InsertAction] = mergeInto.matchedActions.collect { case u: InsertAction => u}
+  private val insertingActions: Seq[InsertAction] = mergeInto.notMatchedActions.collect { case u: InsertAction => u}
   private val deletingActions: Seq[DeleteAction] = mergeInto.matchedActions.collect { case u: DeleteAction => u}
-
-  /**
-   * Source table's attributes
-   */
-  private lazy val sourceTableAttributes: Seq[Attribute] = mergeInto.sourceTable.output
 
   /**
    * Here we're adjusting incoming (source) dataset in case its schema is divergent from
@@ -261,7 +255,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
 
     (primaryKeyAttributeToConditionExpression ++ preCombineAttributeToSourceExpression).foreach {
       case (targetAttr, sourceExpression)
-        if !sourceTableAttributes.exists(attr => resolver(attr.name, targetAttr.name)) =>
+        if !mergeInto.sourceTable.output.exists(attr => resolver(attr.name, targetAttr.name)) =>
           sourceDF = sourceDF.withColumn(targetAttr.name, new Column(sourceExpression))
       case _ => // no-op
     }
@@ -296,7 +290,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     val deleteAction = deletingActions.headOption
     if (deleteAction.isDefined) {
       val deleteCondition = deleteAction.get.condition
-        .map(bindSourceReferences)
+        .map(bindReferences)
         .getOrElse(Literal.create(true, BooleanType))
       // Serialize the Map[DeleteCondition, empty] to base64 string
       val serializedDeleteCondition = Base64.getEncoder
@@ -306,7 +300,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
 
     // Serialize the Map[InsertCondition, InsertAssignments] to base64 string
     writeParams += (PAYLOAD_INSERT_CONDITION_AND_ASSIGNMENTS ->
-      serializeConditionalAssignments(insertingActions.map(a => (a.condition, a.assignments))))
+      serializeConditionalAssignments(insertingActions.map(a => (a.condition, a.assignments)), validateInsertingAssignmentExpression))
 
     // Remove the meta fields from the sourceDF as we do not need these when writing.
     val trimmedSourceDF = removeMetaFields(sourceDF)
@@ -346,26 +340,39 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     val (structName, nameSpace) = AvroConversionUtils
       .getAvroRecordNameAndNamespace(hoodieCatalogTable.tableName)
     AvroConversionUtils.convertStructTypeToAvroSchema(
-      new StructType(targetTableSchemaWithoutMetaFields), structName, nameSpace)
+      new StructType(targetTableSchema), structName, nameSpace)
   }
 
   /**
-   * Serializes sequence of [[(Expression, Seq[Expression])]] where
+   * Binds and serializes sequence of [[(Expression, Seq[Expression])]] where
    * <ul>
    *   <li>First [[Expression]] designates condition (in update/insert clause)</li>
    *   <li>Second [[Seq[Expression] ]] designates individual column assignments (in update/insert clause)</li>
    * </ul>
    *
-   * Into Base64 string to be subsequently used by [[ExpressionPayload]]
+   * Such that
+   * <ol>
+   *   <li>All expressions are bound against expected payload layout (and ready to be code-gen'd)</li>
+   *   <li>Serialized into Base64 string to be subsequently passed to [[ExpressionPayload]]</li>
+   * </ol>
    */
-  private def serializeConditionalAssignments(conditionalAssignments: Seq[(Option[Expression], Seq[Expression])]): String = {
+  private def serializeConditionalAssignments(conditionalAssignments: Seq[(Option[Expression], Seq[Assignment])],
+                                              validateAssignmentExpression: Function[Expression, Unit] = _ => {}): String = {
     val boundConditionalAssignments =
       conditionalAssignments.map {
         case (condition, assignments) =>
-          val boundCondition = condition.map(bindSourceReferences).getOrElse(Literal.create(true, BooleanType))
-          val boundAssignmentExprs = bindAndReorderAssignments(assignments)
-          // Do the check for the assignments
-          checkAssignmentExpression(boundAssignmentExprs)
+          val boundCondition = condition.map(bindReferences).getOrElse(Literal.create(true, BooleanType))
+          val reorderedAssignments = reorderAssignments(assignments)
+          // NOTE: We need to re-order assignments to follow the ordering of the attributes
+          //       of the target table, such that the resulting output produced after execution
+          //       of these expressions could be inserted into the target table as is
+          val boundAssignmentExprs = reorderedAssignments.map { case Assignment(attr: Attribute, value) =>
+            val boundExpr = bindReferences(value)
+            validateAssignmentExpression(boundExpr)
+            // Alias resulting expression w/ target table's expected column name, as well as
+            // do casting if necessary
+            Alias(castIfNeeded(boundExpr, attr.dataType, sparkSession.sqlContext.conf), attr.name)()
+          }
 
           boundCondition -> boundAssignmentExprs
       }.toMap
@@ -375,24 +382,21 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
   }
 
   /**
-   * Binds provided assignment expressions (to [[sourceTable]] output attributes) and
-   * re-orders them to adhere to the orderin of that of [[targetTable]]
+   * Re-orders assignment expressions to adhere to the ordering of that of [[targetTable]]
    */
-  private def bindAndReorderAssignments(assignments: Seq[Expression]): Seq[Expression] = {
-    val attr2Expressions = assignments.map {
-      case Assignment(attr: AttributeReference, expr) => attr -> expr
+  private def reorderAssignments(assignments: Seq[Assignment]): Seq[Assignment] = {
+    val attr2Assignments = assignments.map {
+      case assign @ Assignment(attr: Attribute, expr) => attr -> assign
       case a =>
         throw new AnalysisException(s"Only assignments of the form `t.field = ...` are supported at the moment (provided: `${a.sql}`)")
-    }
+    }.toMap
 
     // Reorder the assignments to follow the ordering of the target table
     mergeInto.targetTable.output
       .filterNot(attr => isMetaField(attr.name))
       .map { attr =>
-        attr2Expressions.find(p => attributeEqual(p._1, attr)) match {
-          case Some((_, expr)) =>
-            val boundExpr = bindSourceReferences(expr)
-            Alias(castIfNeeded(boundExpr, attr.dataType, sparkSession.sqlContext.conf), attr.name)()
+        attr2Assignments.get(attr) match {
+          case Some(assignment) => assignment
           case None =>
             throw new AnalysisException(s"Assignment expressions have to assign every attribute of target table " +
               s"(provided: `${assignments.map(_.sql).mkString(",")}`")
@@ -401,46 +405,57 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
   }
 
   /**
-   * Replace the AttributeReference to BoundReference. This is for the convenience of CodeGen
-   * in ExpressionCodeGen which use the field index to generate the code. So we must replace
-   * the AttributeReference to BoundReference here.
-   * @param exp
-   * @return
+   * Binds existing [[AttributeReference]]s (converting them into [[BoundReference]]s) against
+   * expected combined payload of
+   *
+   * <ol>
+   *   <li>Source table record, joined w/</li>
+   *   <li>Target table record</li>
+   * </ol>
+   *
+   * NOTE: PLEASE READ CAREFULLY BEFORE CHANGING
+   *       This has to be in sync w/ [[ExpressionPayload]] that is actually performing comnbining of the
+   *       records producing final payload being persisted.
+   *
+   * Joining is necessary to handle the case of the records being _updated_ (when record is present in
+   * both target and the source tables), since MIT statement allows resulting record to be
+   * an amalgamation of both existing and incoming records (for ex, partially updated).
+   *
+   * For newly inserted records, since no prior record exist in the target table, we're only going to
+   * use source payload to produce the resulting record -- hence, source dataset output is the left
+   * prefix of this join.
+   *
+   * Binding is necessary for [[ExpressionPayload]] to use the code-gen to effectively perform
+   * handling of the records (combining updated records, as well as producing new records to be inserted)
    */
-  private def bindSourceReferences(exp: Expression): Expression = {
-    // TODO cleanup
-    val sourceJoinTargetFields = sourceTableAttributes ++
-      mergeInto.targetTable.output.filterNot(attr => isMetaField(attr.name))
+  private def bindReferences(expr: Expression): Expression = {
+    // NOTE: Since original source dataset could be augmented w/ additional columns (please
+    //       check its corresponding java-doc for more details) we have to get up-to-date list
+    //       of its output attributes
+    val combinedOutputAttributes =
+      sourceDF.queryExecution.analyzed.output ++ mergeInto.targetTable.output
 
-    exp transform {
+    expr transform {
       case attr: AttributeReference =>
-        val index = sourceJoinTargetFields.indexWhere(p => attributeEqual(attr, p))
+        val index = combinedOutputAttributes.indexOf(attr)
         if (index == -1) {
-            throw new IllegalArgumentException(s"cannot find ${attr.qualifiedName} in source or " +
-              s"target at the merge into statement")
+            throw new AnalysisException(s"Can't find `${attr.qualifiedName}` attribute in either source or the target " +
+              s"tables of the MERGE INTO statement (${combinedOutputAttributes.map(_.qualifiedName)})");
           }
           BoundReference(index, attr.dataType, attr.nullable)
       case other => other
     }
   }
 
-  /**
-   * Check the insert action expression.
-   * The insert expression should not contain target table field.
-   */
-  private def checkAssignmentExpression(expressions: Seq[Expression]): Unit = {
-    expressions.foreach(exp => {
-      val references = exp.collect {
-        case reference: BoundReference => reference
-      }
-      references.foreach(ref => {
-        if (ref.ordinal >= sourceTableAttributes.size) {
-          val targetColumn = targetTableSchemaWithoutMetaFields(ref.ordinal - sourceTableAttributes.size)
-          throw new IllegalArgumentException(s"Insert clause cannot contain target table's field: ${targetColumn.name}" +
-            s" in ${exp.sql}")
+  private def validateInsertingAssignmentExpression(expr: Expression): Unit = {
+    val sourceTableOutputAttributes = sourceDF.queryExecution.analyzed.output
+    expr.collect { case br: BoundReference => br }
+      .foreach(br => {
+        if (br.ordinal >= sourceTableOutputAttributes.length) {
+          throw new AnalysisException(s"Expressions in insert clause of the MERGE INTO statement can only reference " +
+            s"source table attributes (ordinal ${br.ordinal}, total attributes in the source table ${sourceTableOutputAttributes.length})")
         }
       })
-    })
   }
 
   /**
@@ -514,9 +529,9 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
 
   private def checkInsertingActions(insertActions: Seq[InsertAction]): Unit = {
     insertActions.foreach(insert =>
-      assert(insert.assignments.length == targetTableSchemaWithoutMetaFields.length,
+      assert(insert.assignments.length == targetTableSchema.length,
         s"The number of insert assignments[${insert.assignments.length}] must equal to the " +
-          s"targetTable field size[${targetTableSchemaWithoutMetaFields.length}]"))
+          s"targetTable field size[${targetTableSchema.length}]"))
 
   }
 
@@ -526,9 +541,9 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     }
 
     updateActions.foreach(update =>
-      assert(update.assignments.length == targetTableSchemaWithoutMetaFields.length,
+      assert(update.assignments.length == targetTableSchema.length,
         s"The number of update assignments[${update.assignments.length}] must equal to the " +
-          s"targetTable field size[${targetTableSchemaWithoutMetaFields.length}]"))
+          s"targetTable field size[${targetTableSchema.length}]"))
 
     // For MOR table, the target table field cannot be the right-value in the update action.
     if (targetTableType == MOR_TABLE_TYPE_OPT_VAL) {
@@ -541,9 +556,4 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       })
     }
   }
-}
-
-object MergeIntoHoodieTableCommand {
-  private def attributeEqual(attr: Attribute, other: Attribute): Boolean =
-    attr.exprId == other.exprId
 }
