@@ -29,7 +29,7 @@ import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hive.HiveSyncConfigHolder
 import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, HoodieSparkSqlWriter, SparkAdapterSupport}
-import org.apache.spark.sql.HoodieCatalystExpressionUtils.attributeEquals
+import org.apache.spark.sql.HoodieCatalystExpressionUtils.{MatchCast, attributeEquals}
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, BoundReference, Cast, EqualTo, Expression, Literal, NamedExpression, PredicateHelper}
@@ -144,7 +144,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
           "(e.g. `t.id = s.id`)")
     }
 
-    targetAttr2ConditionExpressions.filter {
+    targetAttr2ConditionExpressions.collect {
       case (attr, expr) if resolver(attr.name, primaryKeyField) =>
         // NOTE: Here we validate that condition expression involving primary-key column(s) is a simple
         //       attribute-reference expression (possibly wrapped into a cast). This is necessary to disallow
@@ -163,7 +163,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
             s"primary-key column. Found `${attr.sql} = ${expr.sql}`")
         }
 
-        true
+        (attr, expr)
     }
   }
 
@@ -477,13 +477,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     val sourceTableOutputSet = mergeInto.sourceTable.outputSet
     expr match {
       case attr: AttributeReference => sourceTableOutputSet.contains(attr)
-      // NOTE: Unfortunately, we can't use proper pattern-matching since it isn't compatible
-      //       w/ Spark 2.x
-      case cast: Cast =>
-        cast.child match {
-          case attr: AttributeReference => sourceTableOutputSet.contains(attr)
-          case _ => false
-        }
+      case MatchCast(attr: AttributeReference, _, _) => sourceTableOutputSet.contains(attr)
 
       case _ => false
     }

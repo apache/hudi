@@ -17,6 +17,7 @@
 
 package org.apache.spark.sql
 
+import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.SparkAdapterSupport.sparkAdapter
 import org.apache.spark.sql.catalyst.analysis.{UnresolvedAttribute, UnresolvedFunction}
 import org.apache.spark.sql.catalyst.expressions.codegen.GenerateUnsafeProjection
@@ -29,6 +30,9 @@ import org.apache.spark.sql.types.{DataType, StructType}
 import scala.annotation.tailrec
 
 trait HoodieCatalystExpressionUtils {
+
+  // TODO scala-doc
+  def matchCast(expr: Expression): Option[(Expression, DataType, Option[String])]
 
   /**
    * Matches an expression iff
@@ -61,7 +65,12 @@ trait HoodieCatalystExpressionUtils {
   def unapplyCastExpression(expr: Expression): Option[(Expression, DataType, Option[String], Boolean)]
 }
 
-object HoodieCatalystExpressionUtils {
+object HoodieCatalystExpressionUtils extends SparkAdapterSupport {
+
+  object MatchCast {
+    def unapply(expr: Expression): Option[(Expression, DataType, Option[String])] =
+      sparkAdapter.getCatalystExpressionUtils.matchCast(expr)
+  }
 
   /**
    * Convenience extractor allowing to untuple [[Cast]] across Spark versions
