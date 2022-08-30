@@ -153,6 +153,10 @@ public class HoodieMetrics {
   public void updateCommitMetrics(long commitEpochTimeInMs, long durationInMs, HoodieCommitMetadata metadata,
       String actionType) {
     updateCommitTimingMetrics(commitEpochTimeInMs, durationInMs, metadata, actionType);
+    updateCommitMetricsWithoutTiming(metadata, actionType);
+  }
+
+  public void updateCommitMetricsWithoutTiming(HoodieCommitMetadata metadata, String actionType) {
     if (config.isMetricsOn()) {
       long totalPartitionsWritten = metadata.fetchTotalPartitionsWritten();
       long totalFilesInsert = metadata.fetchTotalFilesInsert();
@@ -184,7 +188,7 @@ public class HoodieMetrics {
   }
 
   private void updateCommitTimingMetrics(long commitEpochTimeInMs, long durationInMs, HoodieCommitMetadata metadata,
-      String actionType) {
+                                         String actionType) {
     if (config.isMetricsOn()) {
       Pair<Option<Long>, Option<Long>> eventTimePairMinMax = metadata.getMinAndMaxEventTime();
       if (eventTimePairMinMax.getLeft().isPresent()) {

@@ -308,12 +308,13 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
 
   void emitCommitMetrics(String instantTime, HoodieCommitMetadata metadata, String actionType) {
     try {
-
       if (writeTimer != null) {
         long durationInMs = metrics.getDurationInMs(writeTimer.stop());
         metrics.updateCommitMetrics(HoodieActiveTimeline.parseDateFromInstantTime(instantTime).getTime(), durationInMs,
             metadata, actionType);
         writeTimer = null;
+      } else {
+        metrics.updateCommitMetricsWithoutTiming(metadata, actionType);
       }
     } catch (ParseException e) {
       throw new HoodieCommitException("Failed to complete commit " + config.getBasePath() + " at time " + instantTime
