@@ -130,5 +130,10 @@
    <parameter name="group.scala">scala\..*</parameter>
   </parameters>
  </check>
+ <check level="error" class="org.scalastyle.scalariform.IllegalImportsChecker" enabled="true">
+  <parameters>
+   <parameter name="illegalImports"><![CDATA[com.google.common]]></parameter>
+  </parameters>
+ </check>
 
 </scalastyle>
