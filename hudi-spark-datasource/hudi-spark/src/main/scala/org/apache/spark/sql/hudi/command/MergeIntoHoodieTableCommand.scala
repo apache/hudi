@@ -149,9 +149,9 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
   }
 
   /**
-   * Get the mapping of target preCombineField to the source expression.
+   * Please check description for [[primaryKeyAttributeToConditionExpression]]
    */
-  private lazy val preCombineAttributeToSourceExpression: Option[(Attribute, Expression)] = {
+  private lazy val preCombineAttributeAssociatedExpression: Option[(Attribute, Expression)] = {
     val resolver = sparkSession.sessionState.analyzer.resolver
     hoodieCatalogTable.preCombineKey.map { preCombineField =>
       val targetPreCombineAttribute =
@@ -255,11 +255,15 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     val resolver = sparkSession.sessionState.analyzer.resolver
     var sourceDF = Dataset.ofRows(sparkSession, mergeInto.sourceTable)
 
-    (primaryKeyAttributeToConditionExpression ++ preCombineAttributeToSourceExpression).foreach {
-      case (targetAttr, sourceExpression)
-        if !mergeInto.sourceTable.output.exists(attr => resolver(attr.name, targetAttr.name)) =>
-          sourceDF = sourceDF.withColumn(targetAttr.name, new Column(sourceExpression))
-      case _ => // no-op
+    (primaryKeyAttributeToConditionExpression ++ preCombineAttributeAssociatedExpression).foreach {
+      // NOTE: Only in cases when either of primary-key or pre-combine attributes are associated w/ simple
+      //       expressions like `t.id = s.id` we're not going to override corresponding columns w/in the source
+      //       dataset. In all of the other cases we have to override such columns to make sure the dataset
+      //       is satisfying Hudi's internal requirements.
+      //       Please check the [[sourceDF]] scala-doc for more details.
+      case (targetAttr, sourceAttr: AttributeReference) if resolver(targetAttr.name, sourceAttr.name) => // no-op
+      case (targetAttr, sourceExpression) =>
+        sourceDF = sourceDF.withColumn(targetAttr.name, new Column(sourceExpression))
     }
 
     sourceDF
