@@ -531,17 +531,28 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
         Seq(3, "a3", 30, 3000, "2021-03-21")
       )
 
-      // 2) set source column name to be different with target column
-      spark.sql(
-        s"""
-           | merge into $tableName1 t0
+      // 2.a) set source column name to be different with target column (should fail unable to match pre-combine field)
+      checkException(
+        s"""merge into $tableName1 t0
            | using (
            |  select 2 as s_id, 'a1' as s_name, 15 as s_price, 1001 as s_v, '2021-03-21' as dt
            | ) s0
            | on t0.id = s0.s_id + 1
            | when matched then delete
+           |""".stripMargin)(s"Failed to resolve pre-combine field `v` w/in the source-table output")
+
+      // 2.b) set source column name to be different with target column
+      spark.sql(
+        s"""
+           | merge into $tableName1 t0
+           | using (
+           |  select 2 as s_id, 'a1' as s_name, 15 as s_price, 1001 as v, '2021-03-21' as dt
+           | ) s0
+           | on t0.id = s0.s_id + 1
+           | when matched then delete
          """.stripMargin
       )
+
       checkAnswer(s"select id,name,price,v,dt from $tableName1 order by id")(
         Seq(1, "a1", 10, 1000, "2021-03-21")
       )

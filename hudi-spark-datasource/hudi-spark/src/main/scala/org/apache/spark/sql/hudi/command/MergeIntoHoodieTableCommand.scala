@@ -153,30 +153,31 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
    */
   private lazy val preCombineAttributeToSourceExpression: Option[(Attribute, Expression)] = {
     val resolver = sparkSession.sessionState.analyzer.resolver
-    val updateActionOpt = updatingActions.headOption
-
     hoodieCatalogTable.preCombineKey.map { preCombineField =>
       val targetPreCombineAttribute =
         mergeInto.targetTable.output
           .find { attr => resolver(attr.name, preCombineField) }
           .get
 
-      val assignmentExpr =
-        updateActionOpt.map {
-          _.assignments.collect {
-            case Assignment(attr: AttributeReference, expr) if resolver(attr.name, preCombineField) => expr
-          }.head
-        } getOrElse {
-          // If there is no explicit update action, source table output has to map onto the
-          // target table's one
-          val target2SourceAttributes = mergeInto.targetTable.output
-            .zip(mergeInto.sourceTable.output)
-            .toMap
+      // To find corresponding "pre-combine" attribute w/in the [[sourceTable]] we do
+      //    - Check if we can resolve the attribute w/in the source table as is; if unsuccessful, then
+      //    - Check if in any of the update actions, right-hand side of the assignment actually resolves
+      //    to it, in which case we will determine left-hand side expression as the value of "pre-combine"
+      //    attribute w/in the [[sourceTable]]
+      val sourceExpr = {
+        mergeInto.sourceTable.output.find(attr => resolver(attr.name, preCombineField)) match {
+          case Some(attr) => attr
+          case None =>
+            updatingActions.flatMap(_.assignments).collectFirst {
+              case Assignment(attr: AttributeReference, expr) if resolver(attr.name, preCombineField) => expr
+            } getOrElse {
+              throw new AnalysisException(s"Failed to resolve pre-combine field `${preCombineField}` w/in the source-table output")
+            }
 
-          target2SourceAttributes(targetPreCombineAttribute)
         }
+      }
 
-      (targetPreCombineAttribute, assignmentExpr)
+      (targetPreCombineAttribute, sourceExpr)
     }
   }
 
