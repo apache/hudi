@@ -36,8 +36,29 @@ Import your existing table into a Hudi managed table. Since all the data is Hudi
 There are a few options when choosing this approach.
 
 **Option 1**
-Use the HDFSParquetImporter tool. As the name suggests, this only works if your existing table is in parquet file format.
-This tool essentially starts a Spark Job to read the existing parquet table and converts it into a HUDI managed table by re-writing all the data.
+Use the HoodieDeltaStreamer tool. HoodieDeltaStreamer supports bootstrap with --run-bootstrap command line option. There are two types of bootstrap, 
+METADATA_ONLY and FULL_RECORD. METADATA_ONLY will generate just skeleton base files with keys/footers, avoiding full cost of rewriting the dataset. 
+FULL_RECORD will perform a full copy/rewrite of the data as a Hudi table.    
+
+Here is an example for running FULL_RECORD bootstrap and keeping hive style partition with HoodieDeltaStreamer.
+```
+spark-submit --master local \
+--conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
+--class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer `ls packaging/hudi-utilities-bundle/target/hudi-utilities-bundle-*.jar` \
+--run-bootstrap \
+--target-base-path /tmp/hoodie/bootstrap_table \
+--target-table bootstrap_table \
+--table-type COPY_ON_WRITE \
+--hoodie-conf hoodie.bootstrap.base.path=/tmp/source_table \
+--hoodie-conf hoodie.datasource.write.recordkey.field=${KEY_FIELD} \
+--hoodie-conf hoodie.datasource.write.partitionpath.field=${PARTITION_FIELD} \
+--hoodie-conf hoodie.datasource.write.precombine.field=${PRECOMBINE_FILED} \
+--hoodie-conf hoodie.bootstrap.keygen.class=org.apache.hudi.keygen.SimpleKeyGenerator \
+--hoodie-conf hoodie.bootstrap.full.input.provider=org.apache.hudi.bootstrap.SparkParquetBootstrapDataProvider \
+--hoodie-conf hoodie.bootstrap.mode.selector=org.apache.hudi.client.bootstrap.selector.BootstrapRegexModeSelector \
+--hoodie-conf hoodie.bootstrap.mode.selector.regex.mode=FULL_RECORD \
+--hoodie-conf hoodie.datasource.write.hive_style_partitioning=true
+``` 
 
 **Option 2**
 For huge tables, this could be as simple as : 
@@ -50,21 +71,10 @@ for partition in [list of partitions in source table] {
 
 **Option 3**
 Write your own custom logic of how to load an existing table into a Hudi managed one. Please read about the RDD API
- [here](/docs/quick-start-guide). Using the HDFSParquetImporter Tool. Once hudi has been built via `mvn clean install -DskipTests`, the shell can be
+ [here](/docs/quick-start-guide). Using the bootstrap run CLI. Once hudi has been built via `mvn clean install -DskipTests`, the shell can be
 fired by via `cd hudi-cli && ./hudi-cli.sh`.
 
 ```java
-hudi->hdfsparquetimport
-        --upsert false
-        --srcPath /user/parquet/table/basepath
-        --targetPath /user/hoodie/table/basepath
-        --tableName hoodie_table
-        --tableType COPY_ON_WRITE
-        --rowKeyField _row_key
-        --partitionPathField partitionStr
-        --parallelism 1500
-        --schemaFilePath /user/table/schema
-        --format parquet
-        --sparkMemory 6g
-        --retry 2
+hudi->bootstrap run --srcPath /tmp/source_table --targetPath /tmp/hoodie/bootstrap_table --tableName bootstrap_table --tableType COPY_ON_WRITE --rowKeyField ${KEY_FIELD} --partitionPathField ${PARTITION_FIELD} --sparkMaster local --hoodieConfigs hoodie.datasource.write.hive_style_partitioning=true --selectorClass org.apache.hudi.client.bootstrap.selector.FullRecordBootstrapModeSelector
 ```
+Unlike deltaStream, FULL_RECORD or METADATA_ONLY is set with --selectorClass, see detalis with help "bootstrap run".
