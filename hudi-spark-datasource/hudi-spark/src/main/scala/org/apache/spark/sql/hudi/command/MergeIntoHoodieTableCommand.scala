@@ -36,10 +36,11 @@ import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeRef
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.hudi.analysis.HoodieAnalysis.failAnalysis
+import org.apache.spark.sql.hudi.command.MergeIntoHoodieTableCommand.{encodeAsBase64String, toStructType}
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload._
 import org.apache.spark.sql.hudi.{ProvidesHoodieConfig, SerDeUtils}
-import org.apache.spark.sql.types.{BooleanType, StructType}
+import org.apache.spark.sql.types.{BooleanType, StructField, StructType}
 
 import java.util.Base64
 
@@ -317,18 +318,17 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     // Append (encoded) updating actions
     writeParams += PAYLOAD_UPDATE_CONDITION_AND_ASSIGNMENTS ->
       serializeConditionalAssignments(updatingActions.map(a => (a.condition, a.assignments)))
-
     // Append (encoded) deleting actions
     deletingActions.headOption match {
       case Some(DeleteAction(condition)) =>
         writeParams += PAYLOAD_DELETE_CONDITION -> serializeConditionalAssignments(Seq(condition -> Seq.empty))
       case _ => // no-op
     }
-
-    // Serialize the Map[InsertCondition, InsertAssignments] to base64 string
-    writeParams += (PAYLOAD_INSERT_CONDITION_AND_ASSIGNMENTS ->
-      serializeConditionalAssignments(insertingActions.map(a => (a.condition, a.assignments)), validateInsertingAssignmentExpression))
-
+    // Append (encoded) inserting actions
+    writeParams += PAYLOAD_INSERT_CONDITION_AND_ASSIGNMENTS ->
+      serializeConditionalAssignments(insertingActions.map(a => (a.condition, a.assignments)), validateInsertingAssignmentExpression)
+    // Add a schema of the expected "joined" output of the [[sourceTable]] and [[targetTable]]
+    writeParams += PAYLOAD_EXPECTED_COMBINED_SCHEMA -> encodeAsBase64String(toStructType(joinedExpectedOutput))
     // Remove the meta fields from the sourceDF as we do not need these when writing.
     val trimmedSourceDF = removeMetaFields(sourceDF)
 
@@ -390,19 +390,19 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
           // NOTE: We need to re-order assignments to follow the ordering of the attributes
           //       of the target table, such that the resulting output produced after execution
           //       of these expressions could be inserted into the target table as is
-          val boundAssignmentExprs = reorderedAssignments.map { case Assignment(attr: Attribute, value) =>
-            val boundExpr = bindReferences(value)
-            validateAssignmentExpression(boundExpr)
-            // Alias resulting expression w/ target table's expected column name, as well as
-            // do casting if necessary
-            Alias(castIfNeeded(boundExpr, attr.dataType, sparkSession.sqlContext.conf), attr.name)()
-          }
+          val boundAssignmentExprs = reorderAssignments(assignments).map {
+            case Assignment(attr: Attribute, value) =>
+              val boundExpr = bindReferences(value)
+              validateAssignmentExpression(boundExpr)
+              // Alias resulting expression w/ target table's expected column name, as well as
+              // do casting if necessary
+              Alias(castIfNeeded(boundExpr, attr.dataType, sparkSession.sqlContext.conf), attr.name)()
+            }
 
           boundCondition -> boundAssignmentExprs
       }.toMap
 
-    Base64.getEncoder.encodeToString(
-      SerDeUtils.toBytes(boundConditionalAssignments))
+    encodeAsBase64String(boundConditionalAssignments)
   }
 
   /**
@@ -588,4 +588,14 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       })
     }
   }
+}
+
+object MergeIntoHoodieTableCommand {
+
+  def toStructType(attrs: Seq[Attribute]): StructType =
+    StructType(attrs.map(a => StructField(a.qualifiedName.replace('.', '_'), a.dataType, a.nullable, a.metadata)))
+
+  def encodeAsBase64String(any: Any): String =
+    Base64.getEncoder.encodeToString(SerDeUtils.toBytes(any))
+
 }

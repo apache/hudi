@@ -20,6 +20,8 @@ package org.apache.spark.sql.hudi.command.payload
 import com.github.benmanes.caffeine.cache.{Cache, Caffeine}
 import org.apache.avro.Schema
 import org.apache.avro.generic.{GenericData, GenericRecord, IndexedRecord}
+import org.apache.hudi.AvroConversionUtils
+import org.apache.hudi.AvroConversionUtils.convertStructTypeToAvroSchema
 import org.apache.hudi.AvroConversionUtils.convertAvroSchemaToStructType
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.SparkAdapterSupport.sparkAdapter
@@ -38,9 +40,11 @@ import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSerializer}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{Expression, Projection, SafeProjection}
 import org.apache.spark.sql.hudi.SerDeUtils
+import org.apache.spark.sql.hudi.command.payload.ExpressionPayload.{getEvaluator, getExpectedCombinedSchema, getMergedSchema, getWriteSchema}
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload._
 import org.apache.spark.sql.types.BooleanType
 
+import java.util.{Base64, Objects, Properties}
 import java.util.function.{Function, Supplier}
 import java.util.{Base64, Properties}
 import scala.collection.JavaConverters._
@@ -271,24 +275,23 @@ class ExpressionPayload(@transient record: GenericRecord,
 
   /**
    * Join the source record with the target record.
-   *
-   * @return
    */
-  private def joinRecord(sourceRecord: IndexedRecord, targetRecord: IndexedRecord): GenericRecord = {
+  private def joinRecord(sourceRecord: IndexedRecord, targetRecord: IndexedRecord, props: Properties): GenericRecord = {
     val leftSchema = sourceRecord.getSchema
-    val joinSchema = getMergedSchema(leftSchema, targetRecord.getSchema)
+    val joinSchema = getMergedSchema(leftSchema, targetRecord.getSchema, props)
 
     // TODO rebase onto JoinRecord
-    val values = new ArrayBuffer[AnyRef](joinSchema.getFields.size())
+    val values = new Array[AnyRef](joinSchema.getFields.size())
     for (i <- 0 until joinSchema.getFields.size()) {
       val value = if (i < leftSchema.getFields.size()) {
         sourceRecord.get(i)
       } else { // skip meta field
         targetRecord.get(i - leftSchema.getFields.size() + HoodieRecord.HOODIE_META_COLUMNS.size())
       }
-      values += value
+      values(i) = value
     }
-    convertToRecord(values.toArray, joinSchema)
+
+    convertToRecord(values, joinSchema)
   }
 }
 
@@ -313,6 +316,12 @@ object ExpressionPayload {
    * Property holding record's original (Avro) schema
    */
   val PAYLOAD_RECORD_AVRO_SCHEMA = "hoodie.payload.record.schema"
+
+  /**
+   * Property associated w/ expected combined schema of the joined records of the source (incoming batch)
+   * and target (existing) tables
+   */
+  val PAYLOAD_EXPECTED_COMBINED_SCHEMA = "hoodie.payload.combined.schema"
 
   /**
    * NOTE: PLEASE READ CAREFULLY
@@ -368,7 +377,33 @@ object ExpressionPayload {
   )
 
   private val schemaCache = Caffeine.newBuilder()
-    .maximumSize(16).build[String, Schema]()
+    .maximumSize(16)
+    .build[String, AnyRef]()
+
+  def getWriteSchema(props: Properties): Schema = {
+    ValidationUtils.checkArgument(props.containsKey(HoodieWriteConfig.WRITE_SCHEMA.key),
+      s"Missing ${HoodieWriteConfig.WRITE_SCHEMA.key} property in the provided config")
+
+    getCachedSchema(props.getProperty(HoodieWriteConfig.WRITE_SCHEMA.key),
+      schema => new Schema.Parser().parse(schema))
+  }
+
+  def getExpectedCombinedSchema(props: Properties): StructType = {
+    ValidationUtils.checkArgument(props.containsKey(PAYLOAD_EXPECTED_COMBINED_SCHEMA),
+      s"Missing ${PAYLOAD_EXPECTED_COMBINED_SCHEMA} property in the provided config")
+
+    getCachedSchema(props.getProperty(PAYLOAD_EXPECTED_COMBINED_SCHEMA),
+      base64EncodedStructType =>
+        SerDeUtils.toObject(Base64.getDecoder.decode(base64EncodedStructType)).asInstanceOf[StructType])
+  }
+
+  private def getCachedSchema[T <: AnyRef](key: String, ctor: String => T): T = {
+    writeSchemaCache.get(key, new Function[String, T] {
+      override def apply(key: String): T = {
+        ctor.apply(key)
+      }
+    }).asInstanceOf[T]
+  }
 
   private val mergedSchemaCache = Caffeine.newBuilder()
     .maximumSize(16).build[(Schema, Schema), Schema]()
@@ -377,7 +412,7 @@ object ExpressionPayload {
     schemaCache.get(schemaStr,
       new Function[String, Schema] {
         override def apply(t: String): Schema = new Schema.Parser().parse(t)
-    })
+      })
   }
 
   private def getRecordSchema(props: Properties) = {
@@ -445,13 +480,31 @@ object ExpressionPayload {
     })
   }
 
+  private def validateCongruentSchemas(joinedSchema: Schema, expectedStructType: StructType): Unit = {
+    val expectedSchema = convertStructTypeToAvroSchema(expectedStructType, joinedSchema.getName, joinedSchema.getNamespace)
+
+    expectedSchema.getFields.asScala
+      .zip(joinedSchema.getFields.asScala)
+      .zipWithIndex
+      .foreach {
+        case ((expectedField, targetField), idx) =>
+          val equal = Objects.equals(expectedField.schema(), targetField.schema())
+          ValidationUtils.checkState(equal,
+            s"""
+               |Expected schema diverges from the target one in # $idx field:
+               |Expected data-type: ${expectedField.schema()}
+               |Received data-type: ${targetField.schema()}
+               |""".stripMargin)
+      }
+  }
+
   private def mergeSchema(a: Schema, b: Schema): Schema = {
     val mergedFields =
       a.getFields.asScala.map(field =>
-        new Schema.Field("a_" + field.name,
+        new Schema.Field("source_" + field.name,
           field.schema, field.doc, field.defaultVal, field.order)) ++
         b.getFields.asScala.map(field =>
-          new Schema.Field("b_" + field.name,
+          new Schema.Field("target_" + field.name,
             field.schema, field.doc, field.defaultVal, field.order))
     Schema.createRecord(a.getName, a.getDoc, a.getNamespace, a.isError, mergedFields.asJava)
   }
