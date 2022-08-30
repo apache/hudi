@@ -26,6 +26,7 @@ import org.apache.hudi.AvroConversionUtils.convertAvroSchemaToStructType
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.SparkAdapterSupport.sparkAdapter
 import org.apache.hudi.avro.AvroSchemaUtils.isNullable
+import org.apache.hudi.avro.AvroSchemaUtils.resolveNullableSchema
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.avro.HoodieAvroUtils.bytesToAvro
 import org.apache.hudi.common.model.BaseAvroPayload.isDeleteRecord
@@ -480,22 +481,33 @@ object ExpressionPayload {
     })
   }
 
-  private def validateCongruentSchemas(joinedSchema: Schema, expectedStructType: StructType): Unit = {
-    val expectedSchema = convertStructTypeToAvroSchema(expectedStructType, joinedSchema.getName, joinedSchema.getNamespace)
+  private def validateCompatibleSchemas(joinedSchema: Schema, expectedStructType: StructType, props: Properties): Unit = {
+    val shouldValidate = props.getProperty(HoodieWriteConfig.AVRO_SCHEMA_VALIDATE_ENABLE.key,
+      HoodieWriteConfig.AVRO_SCHEMA_VALIDATE_ENABLE.defaultValue).toBoolean
 
-    expectedSchema.getFields.asScala
-      .zip(joinedSchema.getFields.asScala)
-      .zipWithIndex
-      .foreach {
-        case ((expectedField, targetField), idx) =>
-          val equal = Objects.equals(expectedField.schema(), targetField.schema())
-          ValidationUtils.checkState(equal,
-            s"""
-               |Expected schema diverges from the target one in # $idx field:
-               |Expected data-type: ${expectedField.schema()}
-               |Received data-type: ${targetField.schema()}
-               |""".stripMargin)
-      }
+    if (shouldValidate) {
+      val expectedSchema = convertStructTypeToAvroSchema(expectedStructType, joinedSchema.getName, joinedSchema.getNamespace)
+      // NOTE: Since compared schemas are produced by essentially combining (joining)
+      //       2 schemas together, field names might not be appropriate and therefore
+      //       just structural compatibility will be checked (ie based on ordering of
+      //       the fields as well as corresponding data-types)
+      expectedSchema.getFields.asScala
+        .zip(joinedSchema.getFields.asScala)
+        .zipWithIndex
+        .foreach {
+          case ((expectedField, targetField), idx) =>
+            val expectedFieldSchema = resolveNullableSchema(expectedField.schema())
+            val targetFieldSchema = resolveNullableSchema(targetField.schema())
+
+            val equal = Objects.equals(expectedFieldSchema, targetFieldSchema)
+            ValidationUtils.checkState(equal,
+              s"""
+                 |Expected schema diverges from the target one in # $idx field:
+                 |Expected data-type: $expectedFieldSchema
+                 |Received data-type: $targetFieldSchema
+                 |""".stripMargin)
+        }
+    }
   }
 
   private def mergeSchema(a: Schema, b: Schema): Schema = {
