@@ -29,7 +29,9 @@ import org.apache.spark.sql.execution.datasources.LogicalRelation
 import scala.collection.JavaConverters._
 
 // TODO elaborate
-case class HoodieLogicalRelation(override val child: LogicalRelation) extends UnaryNode with MultiInstanceRelation {
+case class HoodieLogicalRelation(override val child: LogicalRelation) extends UnaryNode
+  with MultiInstanceRelation
+  with HoodieUnaryLikeSham[LogicalPlan] {
 
   val targetTable: CatalogTable = resolveHudiTable(child) match {
     case Some(table) => table

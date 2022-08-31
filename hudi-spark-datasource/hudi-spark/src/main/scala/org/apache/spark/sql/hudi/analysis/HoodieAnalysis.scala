@@ -134,6 +134,7 @@ object HoodieAnalysis extends SparkAdapterSupport {
   }
 }
 
+// TODO elaborate
 // TODO call out that can use Project in Spark 3.2+
 object ResolveHoodieLogicalRelations extends Rule[LogicalPlan] {
   private val hudiLogicalRelationTag: TreeNodeTag[Boolean] = TreeNodeTag("__hudi_logical_relation")
@@ -150,6 +151,7 @@ object ResolveHoodieLogicalRelations extends Rule[LogicalPlan] {
     }
 }
 
+// TODO elaborate
 object FoldHoodieLogicalRelations extends Rule[LogicalPlan] {
   override def apply(plan: LogicalPlan): LogicalPlan =
     plan.transformDown {
