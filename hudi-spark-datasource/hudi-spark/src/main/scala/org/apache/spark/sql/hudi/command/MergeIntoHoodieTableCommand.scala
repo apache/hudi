@@ -386,10 +386,18 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       conditionalAssignments.map {
         case (condition, assignments) =>
           val boundCondition = condition.map(bindReferences).getOrElse(Literal.create(true, BooleanType))
+          // NOTE: For deleting actions there's no assignments provided and no re-ordering is required.
+          //       All other actions are expected to provide assignments correspondent to every field
+          //       of the [[targetTable]] being assigned
+          val reorderedAssignments = if (assignments.nonEmpty) {
+            reorderAssignments(assignments)
+          } else {
+            Seq.empty
+          }
           // NOTE: We need to re-order assignments to follow the ordering of the attributes
           //       of the target table, such that the resulting output produced after execution
           //       of these expressions could be inserted into the target table as is
-          val boundAssignmentExprs = reorderAssignments(assignments).map {
+          val boundAssignmentExprs = reorderedAssignments.map {
             case Assignment(attr: Attribute, value) =>
               val boundExpr = bindReferences(value)
               validateAssignmentExpression(boundExpr)
@@ -409,7 +417,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
    */
   private def reorderAssignments(assignments: Seq[Assignment]): Seq[Assignment] = {
     val attr2Assignments = assignments.map {
-      case assign @ Assignment(attr: Attribute, expr) => attr -> assign
+      case assign @ Assignment(attr: Attribute, _) => attr -> assign
       case a =>
         throw new AnalysisException(s"Only assignments of the form `t.field = ...` are supported at the moment (provided: `${a.sql}`)")
     }
