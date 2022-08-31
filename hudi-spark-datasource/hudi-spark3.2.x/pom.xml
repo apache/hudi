@@ -172,11 +172,6 @@
   </build>
 
   <dependencies>
-    <dependency>
-      <groupId>org.scala-lang</groupId>
-      <artifactId>scala-library</artifactId>
-      <version>${scala12.version}</version>
-    </dependency>
 
     <dependency>
       <groupId>org.apache.spark</groupId>
