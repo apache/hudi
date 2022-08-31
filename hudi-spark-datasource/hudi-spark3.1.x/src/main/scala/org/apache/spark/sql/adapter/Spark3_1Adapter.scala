@@ -31,7 +31,7 @@ import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.parser.{HoodieExtendedParserInterface, HoodieSpark3_1ExtendedSqlParser}
 import org.apache.spark.sql.types.{DataType, Metadata, MetadataBuilder, StructType}
 import org.apache.spark.sql.vectorized.ColumnarUtils
-import org.apache.spark.sql.{HoodieCatalystExpressionUtils, HoodieCatalystPlansUtils, HoodieSpark31CatalogUtils, HoodieSpark31CatalystExpressionUtils, HoodieSpark31CatalystPlanUtils, HoodieSpark3CatalogUtils, SparkSession}
+import org.apache.spark.sql._
 
 /**
  * Implementation of [[SparkAdapter]] for Spark 3.1.x
@@ -46,6 +46,8 @@ class Spark3_1Adapter extends BaseSpark3Adapter {
     new MetadataBuilder().build()
 
   override def getCatalogUtils: HoodieSpark3CatalogUtils = HoodieSpark31CatalogUtils
+
+  override def getCatalystPlanUtils: HoodieCatalystPlansUtils = HoodieSpark31CatalystPlanUtils
 
   override def getCatalystExpressionUtils: HoodieCatalystExpressionUtils = HoodieSpark31CatalystExpressionUtils
 

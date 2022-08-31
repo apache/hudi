@@ -53,8 +53,6 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
     new Spark3RowSerDe(encoder)
   }
 
-  def getCatalystPlanUtils: HoodieCatalystPlansUtils = HoodieSpark3CatalystPlanUtils
-
   override def getAvroSchemaConverters: HoodieAvroSchemaConverters = HoodieSparkAvroSchemaConverters
 
   override def getSparkParsePartitionUtil: SparkParsePartitionUtil = Spark3ParsePartitionUtil

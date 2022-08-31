@@ -38,7 +38,7 @@ trait HoodieSpark3CatalystPlanUtils extends HoodieCatalystPlansUtils {
   /**
    * Un-applies [[ResolvedTable]] that had its signature changed in Spark 3.2
    */
-  def unapplyResolvedTable(node: LeafNode): Option[(TableCatalog, Identifier, Table)]
+  def unapplyResolvedTable(plan: LogicalPlan): Option[(TableCatalog, Identifier, Table)]
 
   def resolveOutputColumns(tableName: String,
                            expected: Seq[Attribute],
@@ -75,9 +75,9 @@ object HoodieSpark3CatalystPlanUtils extends SparkAdapterSupport {
    * This is an extractor to accommodate for [[ResolvedTable]] signature change in Spark 3.2
    */
   object MatchResolvedTable {
-    def unapply(node: LeafNode): Option[(TableCatalog, Identifier, Table)] =
+    def unapply(plan: LogicalPlan): Option[(TableCatalog, Identifier, Table)] =
       sparkAdapter.getCatalystPlanUtils match {
-        case spark3Utils: HoodieSpark3CatalystPlanUtils => spark3Utils.unapplyResolvedTable(node)
+        case spark3Utils: HoodieSpark3CatalystPlanUtils => spark3Utils.unapplyResolvedTable(plan)
         case _ => None
       }
   }
