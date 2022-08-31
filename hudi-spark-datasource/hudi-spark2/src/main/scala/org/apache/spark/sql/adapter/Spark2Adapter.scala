@@ -35,7 +35,7 @@ import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.hudi.parser.HoodieSpark2ExtendedSqlParser
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.parser.HoodieExtendedParserInterface
-import org.apache.spark.sql.types.{DataType, StructType}
+import org.apache.spark.sql.types.{DataType, Metadata, MetadataBuilder, StructType}
 import org.apache.spark.sql._
 import org.apache.spark.sql.execution.vectorized.MutableColumnarRow
 import org.apache.spark.sql.sources.BaseRelation
@@ -55,6 +55,11 @@ class Spark2Adapter extends SparkAdapter {
     //       for vectorized reads
     r.isInstanceOf[MutableColumnarRow]
   }
+
+  def createCatalystMetadataForMetaField: Metadata =
+    // NOTE: Since [[METADATA_COL_ATTR_KEY]] flag is not available in Spark 2.x,
+    //       we simply produce an empty [[Metadata]] instance
+    new MetadataBuilder().build()
 
   override def getCatalogUtils: HoodieCatalogUtils = {
     throw new UnsupportedOperationException("Catalog utilities are not supported in Spark 2.x");

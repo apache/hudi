@@ -21,15 +21,8 @@ import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression}
 import org.apache.spark.sql.catalyst.plans.JoinType
 import org.apache.spark.sql.catalyst.plans.logical.{Join, LogicalPlan}
 import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.types.Metadata
 
 trait HoodieCatalystPlansUtils {
-
-  /**
-   * Creates Catalyst [[Metadata]] for Hudi's meta-fields (designating these w/
-   * [[METADATA_COL_ATTR_KEY]] if available (available in Spark >- 3.1)
-   */
-  def createCatalystMetadataForMetaField: Metadata
 
   /**
    * Resolves output of the provided [[query]] against the [[expected]] list of [[Attribute]],

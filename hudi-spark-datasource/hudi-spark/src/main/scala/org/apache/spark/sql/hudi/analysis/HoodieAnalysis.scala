@@ -19,12 +19,10 @@ package org.apache.spark.sql.hudi.analysis
 
 import org.apache.hudi.common.util.ReflectionUtils
 import org.apache.hudi.{HoodieSparkUtils, SparkAdapterSupport}
-import org.apache.spark.sql.catalyst.analysis.EliminateSubqueryAliases
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.rules.Rule
-import org.apache.spark.sql.catalyst.trees.{AlwaysProcess, TreeNodeTag}
 import org.apache.spark.sql.execution.command._
 import org.apache.spark.sql.execution.datasources.{CreateTable, LogicalRelation}
 import org.apache.spark.sql.hudi.analysis.HoodieAnalysis.{MatchesInsertIntoStatement, ResolvesToHudiTable, sparkAdapter}
@@ -64,11 +62,13 @@ object HoodieAnalysis extends SparkAdapterSupport {
   def customResolutionRules: Seq[RuleBuilder] = {
     val rules: ListBuffer[RuleBuilder] = ListBuffer(
       // Default rules
-      _ => ResolveHoodieLogicalRelations,
       session => HoodieAnalysis(session)
     )
 
-    if (HoodieSparkUtils.gteqSpark3_2) {
+    if (HoodieSparkUtils.gteqSpark3_1) {
+      val resolveHoodieLogicalRelationsClass = "org.apache.spark.sql.hudi.analysis.ResolveHoodieLogicalRelations"
+      val resolveHoodieLogicalRelations = ReflectionUtils.loadClass(resolveHoodieLogicalRelationsClass)
+
       val dataSourceV2ToV1FallbackClass = "org.apache.spark.sql.hudi.analysis.HoodieDataSourceV2ToV1Fallback"
       val dataSourceV2ToV1Fallback: RuleBuilder =
         session => ReflectionUtils.loadClass(dataSourceV2ToV1FallbackClass, session).asInstanceOf[Rule[LogicalPlan]]
@@ -78,24 +78,26 @@ object HoodieAnalysis extends SparkAdapterSupport {
         session => ReflectionUtils.loadClass(spark3ResolveReferencesClass, session).asInstanceOf[Rule[LogicalPlan]]
 
       val resolveAlterTableCommandsClass =
-        if (HoodieSparkUtils.gteqSpark3_3)
+        if (HoodieSparkUtils.gteqSpark3_3) {
           "org.apache.spark.sql.hudi.Spark33ResolveHudiAlterTableCommand"
-        else "org.apache.spark.sql.hudi.Spark32ResolveHudiAlterTableCommand"
+        } else if (HoodieSparkUtils.gteqSpark3_2) {
+          "org.apache.spark.sql.hudi.Spark32ResolveHudiAlterTableCommand"
+        } else if (HoodieSparkUtils.gteqSpark3_1) {
+          "org.apache.spark.sql.hudi.Spark31ResolveHudiAlterTableCommand"
+        } else {
+          throw new IllegalStateException("Unsupported Spark version")
+        }
+
       val resolveAlterTableCommands: RuleBuilder =
         session => ReflectionUtils.loadClass(resolveAlterTableCommandsClass, session).asInstanceOf[Rule[LogicalPlan]]
 
       // NOTE: PLEASE READ CAREFULLY
       //
-      // It's critical for this rules to follow in this order, so that DataSource V2 to V1 fallback
-      // is performed prior to other rules being evaluated
-      rules ++= Seq(dataSourceV2ToV1Fallback, spark3ResolveReferences, resolveAlterTableCommands)
-
-    } else if (HoodieSparkUtils.gteqSpark3_1) {
-      val spark31ResolveAlterTableCommandsClass = "org.apache.spark.sql.hudi.Spark31ResolveHudiAlterTableCommand"
-      val spark31ResolveAlterTableCommands: RuleBuilder =
-        session => ReflectionUtils.loadClass(spark31ResolveAlterTableCommandsClass, session).asInstanceOf[Rule[LogicalPlan]]
-
-      rules += spark31ResolveAlterTableCommands
+      // It's critical for this rules to follow in this order; re-ordering this rules might lead to changes in
+      // behavior of Spark's analysis phase (for ex, DataSource V2 to V1 fallback might not kick in before other rules,
+      // leading to all relations resolving as V2 instead of current expectation of them being resolved as V1)
+      rules ++= Seq(resolveHoodieLogicalRelations, dataSourceV2ToV1Fallback, spark3ResolveReferences,
+        resolveAlterTableCommands)
     }
 
     rules
@@ -104,16 +106,18 @@ object HoodieAnalysis extends SparkAdapterSupport {
   def customPostHocResolutionRules: Seq[RuleBuilder] = {
     val rules: ListBuffer[RuleBuilder] = ListBuffer(
       // Default rules
-      _ => FoldHoodieLogicalRelations,
       session => HoodiePostAnalysisRule(session)
     )
 
-    if (HoodieSparkUtils.gteqSpark3_2) {
+    if (HoodieSparkUtils.gteqSpark3_1) {
+      val foldHoodieLogicalRelationsClass = "org.apache.spark.sql.hudi.analysis.FoldHoodieLogicalRelations"
+      val foldHoodieLogicalRelations = ReflectionUtils.loadClass(foldHoodieLogicalRelationsClass)
+
       val spark3PostHocResolutionClass = "org.apache.spark.sql.hudi.analysis.HoodieSpark3PostAnalysisRule"
       val spark3PostHocResolution: RuleBuilder =
         session => ReflectionUtils.loadClass(spark3PostHocResolutionClass, session).asInstanceOf[Rule[LogicalPlan]]
 
-      rules += spark3PostHocResolution
+      rules ++= Seq(foldHoodieLogicalRelations, spark3PostHocResolution)
     }
 
     rules
@@ -132,32 +136,6 @@ object HoodieAnalysis extends SparkAdapterSupport {
   private[sql] def failAnalysis(msg: String): Nothing = {
     throw new AnalysisException(msg)
   }
-}
-
-// TODO elaborate
-// TODO call out that can use Project in Spark 3.2+
-object ResolveHoodieLogicalRelations extends Rule[LogicalPlan] {
-  private val hudiLogicalRelationTag: TreeNodeTag[Boolean] = TreeNodeTag("__hudi_logical_relation")
-
-  override def apply(plan: LogicalPlan): LogicalPlan =
-    plan.transformDown {
-      case lr @ LogicalRelation(_, _, Some(table), _)
-        if sparkAdapter.isHoodieTable(table) && lr.getTagValue(hudiLogicalRelationTag).isEmpty =>
-          // NOTE: Have to make a copy here, since by default Spark is caching resolved [[LogicalRelation]]s
-          val logicalRelation = lr.newInstance()
-          logicalRelation.setTagValue(hudiLogicalRelationTag, true)
-
-          HoodieLogicalRelation(logicalRelation)
-    }
-}
-
-// TODO elaborate
-object FoldHoodieLogicalRelations extends Rule[LogicalPlan] {
-  override def apply(plan: LogicalPlan): LogicalPlan =
-    plan.transformDown {
-      // TODO elaborate
-      case hlr @ HoodieLogicalRelation(lr: LogicalRelation) => Project(hlr.output, lr)
-    }
 }
 
 /**

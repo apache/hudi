@@ -33,7 +33,7 @@ import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.parser.HoodieExtendedParserInterface
 import org.apache.spark.sql.sources.BaseRelation
-import org.apache.spark.sql.types.{DataType, StructType}
+import org.apache.spark.sql.types.{DataType, Metadata, StructType}
 import org.apache.spark.sql.{HoodieCatalogUtils, HoodieCatalystExpressionUtils, HoodieCatalystPlansUtils, Row, SQLContext, SparkSession, SparkSessionExtensions}
 import org.apache.spark.storage.StorageLevel
 
@@ -48,6 +48,12 @@ trait SparkAdapter extends Serializable {
    * Checks whether provided instance of [[InternalRow]] is actually an instance of [[ColumnarBatchRow]]
    */
   def isColumnarBatchRow(r: InternalRow): Boolean
+
+  /**
+   * Creates Catalyst [[Metadata]] for Hudi's meta-fields (designating these w/
+   * [[METADATA_COL_ATTR_KEY]] if available (available in Spark >- 3.1)
+   */
+  def createCatalystMetadataForMetaField: Metadata
 
   /**
    * Inject table-valued functions to SparkSessionExtensions

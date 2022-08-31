@@ -173,7 +173,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     val converted = AvroConversionUtils.convertAvroSchemaToStructType(tableAvroSchema)
 
     val resolver = sparkSession.sessionState.analyzer.resolver
-    val metaFieldMetadata = sparkAdapter.getCatalystPlanUtils.createCatalystMetadataForMetaField
+    val metaFieldMetadata = sparkAdapter.createCatalystMetadataForMetaField
 
     // TODO elaborate
     StructType(converted.map { field =>
