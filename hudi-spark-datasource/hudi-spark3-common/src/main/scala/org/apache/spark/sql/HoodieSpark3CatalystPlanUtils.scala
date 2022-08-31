@@ -28,7 +28,7 @@ import org.apache.spark.sql.execution.command.ExplainCommand
 import org.apache.spark.sql.execution.{ExtendedMode, SimpleMode}
 import org.apache.spark.sql.internal.SQLConf
 
-abstract class HoodieSpark3CatalystPlanUtils extends HoodieCatalystPlansUtils {
+trait HoodieSpark3CatalystPlanUtils extends HoodieCatalystPlansUtils {
 
   def resolveOutputColumns(tableName: String,
                            expected: Seq[Attribute],

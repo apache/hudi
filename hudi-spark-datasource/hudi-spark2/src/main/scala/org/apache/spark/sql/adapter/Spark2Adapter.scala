@@ -44,6 +44,10 @@ import scala.collection.mutable.ArrayBuffer
  */
 class Spark2Adapter extends SparkAdapter {
 
+  override def getCatalogUtils: HoodieCatalogUtils = {
+    throw new UnsupportedOperationException("Catalog utilities are not supported in Spark 2.x");
+  }
+
   override def getCatalystExpressionUtils: HoodieCatalystExpressionUtils = HoodieSpark2CatalystExpressionUtils
 
   override def getCatalystPlanUtils: HoodieCatalystPlansUtils = HoodieSpark2CatalystPlanUtils

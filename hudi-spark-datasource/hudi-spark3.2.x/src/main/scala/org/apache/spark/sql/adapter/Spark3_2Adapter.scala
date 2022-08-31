@@ -35,6 +35,8 @@ import org.apache.spark.sql._
  */
 class Spark3_2Adapter extends BaseSpark3Adapter {
 
+  override def getCatalogUtils: HoodieSpark3CatalogUtils = HoodieSpark32CatalogUtils
+
   override def getCatalystExpressionUtils: HoodieCatalystExpressionUtils = HoodieSpark32CatalystExpressionUtils
 
   override def getCatalystPlanUtils: HoodieCatalystPlansUtils = HoodieSpark32CatalystPlanUtils
