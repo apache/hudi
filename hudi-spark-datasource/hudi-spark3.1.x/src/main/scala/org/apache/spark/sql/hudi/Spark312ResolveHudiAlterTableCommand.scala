@@ -17,21 +17,19 @@
 package org.apache.spark.sql.hudi
 
 import org.apache.hudi.common.config.HoodieCommonConfig
-
-import java.util.Locale
-import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.internal.schema.action.TableChange.ColumnChangeID
-import org.apache.spark.sql.{AnalysisException, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
-import org.apache.spark.sql.connector.catalog.{CatalogV2Util, TableChange}
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.connector.catalog.CatalogV2Util.failNullType
 import org.apache.spark.sql.connector.catalog.TableChange._
-import org.apache.spark.sql.hudi.command.AlterTableCommand312
+import org.apache.spark.sql.connector.catalog.{CatalogV2Util, TableChange}
+import org.apache.spark.sql.hudi.command.Spark31AlterTableCommand
 import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.{AnalysisException, SparkSession}
 
+import java.util.Locale
 import scala.collection.mutable
 
 /**
@@ -54,7 +52,7 @@ case class Spark312ResolveHudiAlterTableCommand(sparkSession: SparkSession) exte
             col.position.orNull)
         }
         val newChanges = normalizeChanges(changes, table.schema)
-        AlterTableCommand312(table, newChanges, ColumnChangeID.ADD)
+        Spark31AlterTableCommand(table, newChanges, ColumnChangeID.ADD)
       } else {
         // throw back to spark
         AlterTableAddColumnsStatement(add.tableName, add.columnsToAdd)
@@ -75,7 +73,7 @@ case class Spark312ResolveHudiAlterTableCommand(sparkSession: SparkSession) exte
         val positionChange = a.position.map { newPosition =>
           TableChange.updateColumnPosition(colName, newPosition)
         }
-        AlterTableCommand312(table, normalizeChanges(typeChange.toSeq ++ nullabilityChange ++ commentChange ++ positionChange, table.schema), ColumnChangeID.UPDATE)
+        Spark31AlterTableCommand(table, normalizeChanges(typeChange.toSeq ++ nullabilityChange ++ commentChange ++ positionChange, table.schema), ColumnChangeID.UPDATE)
       } else {
         // throw back to spark
         AlterTableAlterColumnStatement(a.tableName, a.column, a.dataType, a.nullable, a.comment, a.position)
@@ -83,7 +81,7 @@ case class Spark312ResolveHudiAlterTableCommand(sparkSession: SparkSession) exte
     case rename @ HoodieAlterTableRenameColumnStatement(asTable(table), col, newName) =>
       if (isHoodieTable(table) && schemaEvolutionEnabled){
         val changes = Seq(TableChange.renameColumn(col.toArray, newName))
-        AlterTableCommand312(table, normalizeChanges(changes, table.schema), ColumnChangeID.UPDATE)
+        Spark31AlterTableCommand(table, normalizeChanges(changes, table.schema), ColumnChangeID.UPDATE)
       } else {
         // throw back to spark
         AlterTableRenameColumnStatement(rename.tableName, rename.column, rename.newName)
@@ -91,7 +89,7 @@ case class Spark312ResolveHudiAlterTableCommand(sparkSession: SparkSession) exte
     case drop @ HoodieAlterTableDropColumnsStatement(asTable(table), cols) =>
       if (isHoodieTable(table) && schemaEvolutionEnabled) {
         val changes = cols.map(col => TableChange.deleteColumn(col.toArray))
-        AlterTableCommand312(table, normalizeChanges(changes, table.schema), ColumnChangeID.DELETE)
+        Spark31AlterTableCommand(table, normalizeChanges(changes, table.schema), ColumnChangeID.DELETE)
       } else {
         // throw back to spark
         AlterTableDropColumnsStatement(drop.tableName, drop.columnsToDrop)
@@ -101,7 +99,7 @@ case class Spark312ResolveHudiAlterTableCommand(sparkSession: SparkSession) exte
         val changes = props.map { case (key, value) =>
           TableChange.setProperty(key, value)
         }.toSeq
-        AlterTableCommand312(table, normalizeChanges(changes, table.schema), ColumnChangeID.PROPERTY_CHANGE)
+        Spark31AlterTableCommand(table, normalizeChanges(changes, table.schema), ColumnChangeID.PROPERTY_CHANGE)
       } else {
         // throw back to spark
         AlterTableSetPropertiesStatement(set.tableName, set.properties)
@@ -109,7 +107,7 @@ case class Spark312ResolveHudiAlterTableCommand(sparkSession: SparkSession) exte
     case unset @ HoodieAlterTableUnsetPropertiesStatement(asTable(table), keys, _) =>
       if (isHoodieTable(table) && schemaEvolutionEnabled) {
         val changes = keys.map(key => TableChange.removeProperty(key))
-        AlterTableCommand312(table, normalizeChanges(changes, table.schema), ColumnChangeID.PROPERTY_CHANGE)
+        Spark31AlterTableCommand(table, normalizeChanges(changes, table.schema), ColumnChangeID.PROPERTY_CHANGE)
       } else {
         // throw back to spark
         AlterTableUnsetPropertiesStatement(unset.tableName, unset.propertyKeys, unset.ifExists)

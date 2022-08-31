@@ -52,7 +52,7 @@ import scala.collection.JavaConverters._
 import scala.util.control.NonFatal
 
 // TODO: we should remove this file when we support datasourceV2 for hoodie on spark3.1x
-case class AlterTableCommand312(table: CatalogTable, changes: Seq[TableChange], changeType: ColumnChangeID) extends RunnableCommand with Logging {
+case class Spark31AlterTableCommand(table: CatalogTable, changes: Seq[TableChange], changeType: ColumnChangeID) extends RunnableCommand with Logging {
   override def run(sparkSession: SparkSession): Seq[Row] = {
     changeType match {
       case ColumnChangeID.ADD => applyAddAction(sparkSession)
@@ -72,7 +72,7 @@ case class AlterTableCommand312(table: CatalogTable, changes: Seq[TableChange], 
     val addChange = TableChanges.ColumnAddChange.get(oldSchema)
     changes.map(_.asInstanceOf[AddColumn]).foreach { addColumn =>
       val names = addColumn.fieldNames()
-      val parentName = AlterTableCommand312.getParentName(names)
+      val parentName = Spark31AlterTableCommand.getParentName(names)
       // add col change
       val colType = SparkInternalSchemaConverter.buildTypeFromStructType(addColumn.dataType(), true, new AtomicInteger(0))
       addChange.addColumns(parentName, names.last, colType, addColumn.comment())
@@ -92,7 +92,7 @@ case class AlterTableCommand312(table: CatalogTable, changes: Seq[TableChange], 
     } else {
       historySchema
     }
-    AlterTableCommand312.commitWithSchema(newSchema, verifiedHistorySchema, table, sparkSession)
+    Spark31AlterTableCommand.commitWithSchema(newSchema, verifiedHistorySchema, table, sparkSession)
     logInfo("column add finished")
   }
 
@@ -101,7 +101,7 @@ case class AlterTableCommand312(table: CatalogTable, changes: Seq[TableChange], 
     val deleteChange = TableChanges.ColumnDeleteChange.get(oldSchema)
     changes.map(_.asInstanceOf[DeleteColumn]).foreach { c =>
       val originalColName = c.fieldNames().mkString(".");
-      AlterTableCommand312.checkSchemaChange(Seq(originalColName), table)
+      Spark31AlterTableCommand.checkSchemaChange(Seq(originalColName), table)
       deleteChange.deleteColumn(originalColName)
     }
     val newSchema = SchemaChangeUtils.applyTableChanges2Schema(oldSchema, deleteChange)
@@ -112,7 +112,7 @@ case class AlterTableCommand312(table: CatalogTable, changes: Seq[TableChange], 
     } else {
       historySchema
     }
-    AlterTableCommand312.commitWithSchema(newSchema, verifiedHistorySchema, table, sparkSession)
+    Spark31AlterTableCommand.commitWithSchema(newSchema, verifiedHistorySchema, table, sparkSession)
     logInfo("column delete finished")
   }
 
@@ -128,13 +128,13 @@ case class AlterTableCommand312(table: CatalogTable, changes: Seq[TableChange], 
           updateChange.updateColumnComment(updateComment.fieldNames().mkString("."), updateComment.newComment())
         case updateName: TableChange.RenameColumn =>
           val originalColName = updateName.fieldNames().mkString(".")
-          AlterTableCommand312.checkSchemaChange(Seq(originalColName), table)
+          Spark31AlterTableCommand.checkSchemaChange(Seq(originalColName), table)
           updateChange.renameColumn(originalColName, updateName.newName())
         case updateNullAbility: TableChange.UpdateColumnNullability =>
           updateChange.updateColumnNullability(updateNullAbility.fieldNames().mkString("."), updateNullAbility.nullable())
         case updatePosition: TableChange.UpdateColumnPosition =>
           val names = updatePosition.fieldNames()
-          val parentName = AlterTableCommand312.getParentName(names)
+          val parentName = Spark31AlterTableCommand.getParentName(names)
           updatePosition.position() match {
             case after: TableChange.After =>
               updateChange.addPositionChange(names.mkString("."),
@@ -151,7 +151,7 @@ case class AlterTableCommand312(table: CatalogTable, changes: Seq[TableChange], 
     } else {
       historySchema
     }
-    AlterTableCommand312.commitWithSchema(newSchema, verifiedHistorySchema, table, sparkSession)
+    Spark31AlterTableCommand.commitWithSchema(newSchema, verifiedHistorySchema, table, sparkSession)
     logInfo("column update finished")
   }
 
@@ -187,7 +187,7 @@ case class AlterTableCommand312(table: CatalogTable, changes: Seq[TableChange], 
   }
 
   def getInternalSchemaAndHistorySchemaStr(sparkSession: SparkSession): (InternalSchema, String) = {
-    val path = AlterTableCommand312.getTableLocation(table, sparkSession)
+    val path = Spark31AlterTableCommand.getTableLocation(table, sparkSession)
     val hadoopConf = sparkSession.sessionState.newHadoopConf()
     val metaClient = HoodieTableMetaClient.builder().setBasePath(path)
       .setConf(hadoopConf).build()
@@ -202,7 +202,7 @@ case class AlterTableCommand312(table: CatalogTable, changes: Seq[TableChange], 
   }
 }
 
-object AlterTableCommand312 extends Logging {
+object Spark31AlterTableCommand extends Logging {
 
   /**
     * Generate an commit with new schema to change the table's schema.
