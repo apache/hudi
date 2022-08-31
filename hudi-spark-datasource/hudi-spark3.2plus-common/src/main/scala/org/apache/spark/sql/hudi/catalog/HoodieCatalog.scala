@@ -23,6 +23,7 @@ import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.sql.InsertMode
 import org.apache.hudi.sync.common.util.ConfigUtils
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, SparkAdapterSupport}
+import org.apache.spark.sql.HoodieSpark3CatalogUtils.MatchBucketTransform
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.{NoSuchTableException, TableAlreadyExistsException, UnresolvedAttribute}
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable.needFilterProps
@@ -30,7 +31,7 @@ import org.apache.spark.sql.catalyst.catalog._
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.IdentifierHelper
 import org.apache.spark.sql.connector.catalog.TableChange.{AddColumn, ColumnChange, UpdateColumnComment, UpdateColumnType}
 import org.apache.spark.sql.connector.catalog._
-import org.apache.spark.sql.connector.expressions.{BucketTransform, FieldReference, IdentityTransform, Transform}
+import org.apache.spark.sql.connector.expressions.{FieldReference, IdentityTransform, Transform}
 import org.apache.spark.sql.execution.datasources.DataSource
 import org.apache.spark.sql.hudi.analysis.HoodieV1OrV2Table
 import org.apache.spark.sql.hudi.command._
@@ -345,20 +346,25 @@ class HoodieCatalog extends DelegatingCatalogExtension
 }
 
 object HoodieCatalog {
-  def convertTransforms(partitions: Seq[Transform]): (Seq[String], Option[BucketSpec]) = {
+  def convertTransforms(transforms: Seq[Transform]): (Seq[String], Option[BucketSpec]) = {
     val identityCols = new mutable.ArrayBuffer[String]
     var bucketSpec = Option.empty[BucketSpec]
 
-    partitions.map {
+    transforms.foreach {
       case IdentityTransform(FieldReference(Seq(col))) =>
         identityCols += col
 
+      case MatchBucketTransform(numBuckets, col, sortCol) =>
+        if (bucketSpec.nonEmpty) {
+          throw new HoodieException("Multiple bucket transformations are not supported")
+        } else if (sortCol.isEmpty) {
+          bucketSpec = Some(BucketSpec(numBuckets, col.map(_.fieldNames.mkString(".")), Nil))
+        } else {
+          bucketSpec = Some(BucketSpec(numBuckets, col.map(_.fieldNames.mkString(".")),
+            sortCol.map(_.fieldNames.mkString("."))))
+        }
 
-      case BucketTransform(numBuckets, FieldReference(Seq(col))) =>
-        bucketSpec = Some(BucketSpec(numBuckets, col :: Nil, Nil))
-
-      case _ =>
-        throw new HoodieException(s"Partitioning by expressions is not supported.")
+      case t => throw new HoodieException(s"Partitioning by transformation `$t` is not supported")
     }
 
     (identityCols, bucketSpec)
