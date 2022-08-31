@@ -195,8 +195,8 @@ public class CleanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends
     ValidationUtils.checkArgument(cleanInstant.getState().equals(HoodieInstant.State.REQUESTED)
         || cleanInstant.getState().equals(HoodieInstant.State.INFLIGHT));
 
+    HoodieInstant inflightInstant = null;
     try {
-      final HoodieInstant inflightInstant;
       final HoodieTimer timer = new HoodieTimer();
       timer.startTimer();
       if (cleanInstant.isRequested()) {
@@ -218,7 +218,7 @@ public class CleanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends
           cleanStats
       );
       if (!skipLocking) {
-        this.txnManager.beginTransaction(Option.empty(), Option.empty());
+        this.txnManager.beginTransaction(Option.of(inflightInstant), Option.empty());
       }
       writeTableMetadata(metadata, inflightInstant.getTimestamp());
       table.getActiveTimeline().transitionCleanInflightToComplete(inflightInstant,
@@ -229,7 +229,7 @@ public class CleanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends
       throw new HoodieIOException("Failed to clean up after commit", e);
     } finally {
       if (!skipLocking) {
-        this.txnManager.endTransaction(Option.empty());
+        this.txnManager.endTransaction(Option.of(inflightInstant));
       }
     }
   }
