@@ -41,7 +41,7 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.codegen.GenerateUnsafeProjection
 import org.apache.spark.sql.catalyst.expressions.{Cast, JoinedRow}
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
-import org.apache.spark.sql.execution.datasources.parquet.Spark32HoodieParquetFileFormat._
+import org.apache.spark.sql.execution.datasources.parquet.Spark32PlusHoodieParquetFileFormat._
 import org.apache.spark.sql.execution.datasources.{DataSourceUtils, PartitionedFile, RecordReaderIterator}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources._
@@ -60,7 +60,7 @@ import java.net.URI
  *   <li>Schema on-read</li>
  * </ol>
  */
-class Spark32HoodieParquetFileFormat(private val shouldAppendPartitionValues: Boolean) extends ParquetFileFormat {
+class Spark32PlusHoodieParquetFileFormat(private val shouldAppendPartitionValues: Boolean) extends ParquetFileFormat {
 
   override def buildReaderWithPartitionValues(sparkSession: SparkSession,
                                               dataSchema: StructType,
@@ -180,7 +180,7 @@ class Spark32HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
         } else {
           // Spark 3.2.0
           val datetimeRebaseMode =
-            Spark32DataSourceUtils.datetimeRebaseMode(footerFileMetaData.getKeyValueMetaData.get, datetimeRebaseModeInRead)
+            Spark32PlusDataSourceUtils.datetimeRebaseMode(footerFileMetaData.getKeyValueMetaData.get, datetimeRebaseModeInRead)
           createParquetFilters(
             parquetSchema,
             pushDownDate,
@@ -247,7 +247,7 @@ class Spark32HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
               DataSourceUtils.int96RebaseSpec(footerFileMetaData.getKeyValueMetaData.get, int96RebaseModeInRead)
             val datetimeRebaseSpec =
               DataSourceUtils.datetimeRebaseSpec(footerFileMetaData.getKeyValueMetaData.get, datetimeRebaseModeInRead)
-            new Spark32HoodieVectorizedParquetRecordReader(
+            new Spark32PlusHoodieVectorizedParquetRecordReader(
               convertTz.orNull,
               datetimeRebaseSpec.mode.toString,
               datetimeRebaseSpec.timeZone,
@@ -275,9 +275,9 @@ class Spark32HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
           } else {
             // Spark 3.2.0
             val datetimeRebaseMode =
-              Spark32DataSourceUtils.datetimeRebaseMode(footerFileMetaData.getKeyValueMetaData.get, datetimeRebaseModeInRead)
+              Spark32PlusDataSourceUtils.datetimeRebaseMode(footerFileMetaData.getKeyValueMetaData.get, datetimeRebaseModeInRead)
             val int96RebaseMode =
-              Spark32DataSourceUtils.int96RebaseMode(footerFileMetaData.getKeyValueMetaData.get, int96RebaseModeInRead)
+              Spark32PlusDataSourceUtils.int96RebaseMode(footerFileMetaData.getKeyValueMetaData.get, int96RebaseModeInRead)
             createVectorizedParquetRecordReader(
               convertTz.orNull,
               datetimeRebaseMode.toString,
@@ -337,9 +337,9 @@ class Spark32HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
             int96RebaseSpec)
         } else {
           val datetimeRebaseMode =
-            Spark32DataSourceUtils.datetimeRebaseMode(footerFileMetaData.getKeyValueMetaData.get, datetimeRebaseModeInRead)
+            Spark32PlusDataSourceUtils.datetimeRebaseMode(footerFileMetaData.getKeyValueMetaData.get, datetimeRebaseModeInRead)
           val int96RebaseMode =
-            Spark32DataSourceUtils.int96RebaseMode(footerFileMetaData.getKeyValueMetaData.get, int96RebaseModeInRead)
+            Spark32PlusDataSourceUtils.int96RebaseMode(footerFileMetaData.getKeyValueMetaData.get, int96RebaseModeInRead)
           createParquetReadSupport(
             convertTz,
             /* enableVectorizedReader = */ false,
@@ -397,7 +397,7 @@ class Spark32HoodieParquetFileFormat(private val shouldAppendPartitionValues: Bo
 
 }
 
-object Spark32HoodieParquetFileFormat {
+object Spark32PlusHoodieParquetFileFormat {
 
   /**
    * NOTE: This method is specific to Spark 3.2.0
