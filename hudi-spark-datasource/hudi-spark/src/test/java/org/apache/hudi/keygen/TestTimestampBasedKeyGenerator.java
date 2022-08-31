@@ -40,7 +40,6 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import scala.Function1;
-import scala.Tuple2;
 
 import java.io.IOException;
 import java.math.BigDecimal;

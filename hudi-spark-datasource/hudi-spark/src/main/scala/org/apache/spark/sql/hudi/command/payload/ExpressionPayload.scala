@@ -41,15 +41,13 @@ import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSerializer}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{Expression, Projection, SafeProjection}
 import org.apache.spark.sql.hudi.SerDeUtils
-import org.apache.spark.sql.hudi.command.payload.ExpressionPayload.{getEvaluator, getExpectedCombinedSchema, getMergedSchema, getWriteSchema}
+import org.apache.spark.sql.hudi.command.payload.ExpressionPayload.{getEvaluator, getMergedSchema, getWriteSchema}
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload._
 import org.apache.spark.sql.types.BooleanType
 
-import java.util.{Base64, Objects, Properties}
 import java.util.function.{Function, Supplier}
-import java.util.{Base64, Properties}
+import java.util.{Base64, Objects, Properties}
 import scala.collection.JavaConverters._
-import scala.collection.mutable.ArrayBuffer
 
 /**
  * A HoodieRecordPayload for MergeIntoHoodieTableCommand.
@@ -482,10 +480,13 @@ object ExpressionPayload {
   }
 
   private def validateCompatibleSchemas(joinedSchema: Schema, expectedStructType: StructType, props: Properties): Unit = {
-    val shouldValidate = props.getProperty(HoodieWriteConfig.AVRO_SCHEMA_VALIDATE_ENABLE.key,
-      HoodieWriteConfig.AVRO_SCHEMA_VALIDATE_ENABLE.defaultValue).toBoolean
+    val shouldValidate = true
 
     if (shouldValidate) {
+      ValidationUtils.checkState(expectedStructType.fields.length == joinedSchema.getFields.size,
+        s"Expected schema diverges from the merged one: " +
+          s"expected has ${expectedStructType.fields.length} fields, while merged one has ${joinedSchema.getFields.size}")
+
       val expectedSchema = convertStructTypeToAvroSchema(expectedStructType, joinedSchema.getName, joinedSchema.getNamespace)
       // NOTE: Since compared schemas are produced by essentially combining (joining)
       //       2 schemas together, field names might not be appropriate and therefore
@@ -502,7 +503,7 @@ object ExpressionPayload {
             val equal = Objects.equals(expectedFieldSchema, targetFieldSchema)
             ValidationUtils.checkState(equal,
               s"""
-                 |Expected schema diverges from the target one in # $idx field:
+                 |Expected schema diverges from the target one in #$idx field:
                  |Expected data-type: $expectedFieldSchema
                  |Received data-type: $targetFieldSchema
                  |""".stripMargin)
