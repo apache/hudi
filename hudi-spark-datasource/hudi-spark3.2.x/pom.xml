@@ -263,17 +263,22 @@
       </exclusions>
     </dependency>
 
+    <!-- Hoodie Spark 3.x common  -->
     <dependency>
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-spark3-common</artifactId>
       <version>${project.version}</version>
-      <exclusions>
-        <exclusion>
-          <groupId>org.apache.spark</groupId>
-          <artifactId>*</artifactId>
-        </exclusion>
-      </exclusions>
+      <scope>compile</scope>
     </dependency>
+
+    <!-- Hoodie Spark >= 3.2 common  -->
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-spark32plus-common</artifactId>
+      <version>${project.version}</version>
+      <scope>compile</scope>
+    </dependency>
+
     <!-- Hoodie - Test -->
     <dependency>
       <groupId>org.apache.hudi</groupId>
