@@ -118,6 +118,10 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
           this.roTableName = Option.empty();
           break;
         case MERGE_ON_READ:
+          if (config.getBoolean(HIVE_SKIP_RT_SUFFIX_FOR_READ_SNAPSHOT_TABLE)
+                  && config.getBoolean(HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE)) {
+            throw new HoodieHiveSyncException("can not be set both skip _rt and _ro are true at the same time!");
+          }
           this.snapshotTableName = config.getBoolean(HIVE_SKIP_RT_SUFFIX_FOR_READ_SNAPSHOT_TABLE)
                   ? tableName
                   : tableName + SUFFIX_SNAPSHOT_TABLE;
