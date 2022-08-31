@@ -25,7 +25,7 @@ import org.apache.spark.sql.sources.DataSourceRegister
  *       there are no regressions in performance
  *       Please check out HUDI-4178 for more details
  */
-class Spark3DefaultSource extends DefaultSource with DataSourceRegister /* with TableProvider */ {
+class Spark32PlusDefaultSource extends DefaultSource with DataSourceRegister /* with TableProvider */ {
 
   override def shortName(): String = "hudi"
 

@@ -19,29 +19,6 @@ package org.apache.hudi
 
 import org.apache.spark.sql.sources.DataSourceRegister
 
-/**
- * NOTE: PLEASE READ CAREFULLY
- *       All of Spark DataSourceV2 APIs are deliberately disabled to make sure
- *       there are no regressions in performance
- *       Please check out HUDI-4178 for more details
- */
-class Spark3DefaultSource extends DefaultSource with DataSourceRegister /* with TableProvider */ {
-
+class Spark31DefaultSource extends DefaultSource with DataSourceRegister {
   override def shortName(): String = "hudi"
-
-  /*
-  def inferSchema: StructType = new StructType()
-
-  override def inferSchema(options: CaseInsensitiveStringMap): StructType = inferSchema
-
-  override def getTable(schema: StructType,
-                        partitioning: Array[Transform],
-                        properties: java.util.Map[String, String]): Table = {
-    val options = new CaseInsensitiveStringMap(properties)
-    val path = options.get("path")
-    if (path == null) throw new HoodieException("'path' cannot be null, missing 'path' from table properties")
-
-    HoodieInternalV2Table(SparkSession.active, path)
-  }
-  */
 }
