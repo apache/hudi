@@ -26,7 +26,7 @@ import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, SparkAdap
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.{NoSuchTableException, TableAlreadyExistsException, UnresolvedAttribute}
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable.needFilterProps
-import org.apache.spark.sql.catalyst.catalog.{BucketSpec, CatalogTable, CatalogTableType, CatalogUtils, HoodieCatalogTable}
+import org.apache.spark.sql.catalyst.catalog._
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.IdentifierHelper
 import org.apache.spark.sql.connector.catalog.TableChange.{AddColumn, ColumnChange, UpdateColumnComment, UpdateColumnType}
 import org.apache.spark.sql.connector.catalog._
