@@ -23,19 +23,14 @@ import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.{AvroConversionUtils, DefaultSource, Spark3RowSerDe}
 import org.apache.spark.internal.Logging
+import org.apache.spark.sql.{HoodieSpark3CatalogUtils, SparkSession}
 import org.apache.spark.sql.avro.{HoodieAvroSchemaConverters, HoodieSparkAvroSchemaConverters}
-import org.apache.spark.sql.catalyst.analysis.EliminateSubqueryAliases
-import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.catalyst.expressions.{Expression, InterpretedPredicate, Predicate}
-import org.apache.spark.sql.catalyst.plans.logical.{HoodieLogicalRelation, LogicalPlan}
-import org.apache.spark.sql.connector.catalog.V2TableWithV1Fallback
 import org.apache.spark.sql.execution.datasources._
-import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.sources.BaseRelation
 import org.apache.spark.sql.types.StructType
-import org.apache.spark.sql.{HoodieCatalystPlansUtils, HoodieSpark3CatalogUtils, HoodieSpark3CatalystPlanUtils, SparkSession}
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.storage.StorageLevel._
 
@@ -65,15 +60,6 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
       partitionedFiles: Seq[PartitionedFile],
       maxSplitBytes: Long): Seq[FilePartition] = {
     FilePartition.getFilePartitions(sparkSession, partitionedFiles, maxSplitBytes)
-  }
-
-  override def resolveHoodieTable(plan: LogicalPlan): Option[CatalogTable] = {
-    EliminateSubqueryAliases(plan) match {
-      case HoodieLogicalRelation(LogicalRelation(_, _, Some(table), _)) => Some(table)
-      case LogicalRelation(_, _, Some(table), _) if isHoodieTable(table) => Some(table)
-      case DataSourceV2Relation(v2Table: V2TableWithV1Fallback, _, _, _, _) if isHoodieTable(v2Table.v1Table) => Some(v2Table.v1Table)
-      case _ => None
-    }
   }
 
   override def createInterpretedPredicate(e: Expression): InterpretedPredicate = {

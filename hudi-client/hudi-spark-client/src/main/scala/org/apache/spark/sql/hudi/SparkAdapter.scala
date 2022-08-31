@@ -118,7 +118,6 @@ trait SparkAdapter extends Serializable {
 
   def resolveHoodieTable(plan: LogicalPlan): Option[CatalogTable] = {
     EliminateSubqueryAliases(plan) match {
-      // TODO add HoodieLogicalRelation
       case LogicalRelation(_, _, Some(table), _) if isHoodieTable(table) => Some(table)
       case _ => None
     }

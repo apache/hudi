@@ -81,5 +81,4 @@ object HoodieSpark3CatalystPlanUtils extends SparkAdapterSupport {
         case _ => None
       }
   }
-
 }
