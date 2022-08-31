@@ -17,6 +17,7 @@
 
 package org.apache.spark.sql
 
+import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression}
 import org.apache.spark.sql.catalyst.plans.JoinType
 import org.apache.spark.sql.catalyst.plans.logical.{Join, LogicalPlan}
@@ -52,15 +53,11 @@ trait HoodieCatalystPlansUtils {
   def createJoin(left: LogicalPlan, right: LogicalPlan, joinType: JoinType): Join
 
   /**
-   * Get the member of the Insert Into LogicalPlan.
+   * Decomposes [[InsertIntoStatement]] into its arguments allowing to accommodate for API
+   * changes in Spark 3.3
    */
-  def getInsertIntoChildren(plan: LogicalPlan):
+  def unapplyInsertIntoStatement(plan: LogicalPlan):
     Option[(LogicalPlan, Map[String, Option[String]], LogicalPlan, Boolean, Boolean)]
-
-  /**
-   * Create Like expression.
-   */
-  def createLike(left: Expression, right: Expression): Expression
 
   /**
    * Test if the logical plan is a Repair Table LogicalPlan.
@@ -71,5 +68,5 @@ trait HoodieCatalystPlansUtils {
    * Get the member of the Repair Table LogicalPlan.
    */
   def getRepairTableChildren(plan: LogicalPlan):
-    Option[(TableIdentifier, Boolean, Boolean, String)]
+  Option[(TableIdentifier, Boolean, Boolean, String)]
 }

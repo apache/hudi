@@ -17,6 +17,7 @@
 
 package org.apache.spark.sql
 
+import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.SimpleAnalyzer
 import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression, Like}
 import org.apache.spark.sql.catalyst.optimizer.SimplifyCasts
@@ -47,17 +48,13 @@ object HoodieSpark2CatalystPlanUtils extends HoodieCatalystPlansUtils {
     Join(left, right, joinType, None)
   }
 
-  override def getInsertIntoChildren(plan: LogicalPlan):
+  override def unapplyInsertIntoStatement(plan: LogicalPlan):
   Option[(LogicalPlan, Map[String, Option[String]], LogicalPlan, Boolean, Boolean)] = {
     plan match {
       case InsertIntoTable(table, partition, query, overwrite, ifPartitionNotExists) =>
         Some((table, partition, query, overwrite, ifPartitionNotExists))
       case _=> None
     }
-  }
-
-  override def createLike(left: Expression, right: Expression): Expression = {
-    Like(left, right)
   }
 
   override def isRepairTable(plan: LogicalPlan): Boolean = {

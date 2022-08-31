@@ -54,7 +54,7 @@ trait HoodieSpark3CatalystPlanUtils extends HoodieCatalystPlansUtils {
     Join(left, right, joinType, None, JoinHint.NONE)
   }
 
-  override def getInsertIntoChildren(plan: LogicalPlan):
+  override def unapplyInsertIntoStatement(plan: LogicalPlan):
   Option[(LogicalPlan, Map[String, Option[String]], LogicalPlan, Boolean, Boolean)] = {
     plan match {
       case insert: InsertIntoStatement =>
@@ -62,10 +62,6 @@ trait HoodieSpark3CatalystPlanUtils extends HoodieCatalystPlansUtils {
       case _ =>
         None
     }
-  }
-
-  override def createLike(left: Expression, right: Expression): Expression = {
-    new Like(left, right)
   }
 }
 

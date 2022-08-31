@@ -25,7 +25,7 @@ import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.execution.command._
 import org.apache.spark.sql.execution.datasources.{CreateTable, LogicalRelation}
-import org.apache.spark.sql.hudi.analysis.HoodieAnalysis.{MatchesInsertIntoStatement, ResolvesToHudiTable, sparkAdapter}
+import org.apache.spark.sql.hudi.analysis.HoodieAnalysis.{MatchInsertIntoStatement, ResolvesToHudiTable, sparkAdapter}
 import org.apache.spark.sql.hudi.command._
 import org.apache.spark.sql.hudi.command.procedures.{HoodieProcedures, Procedure, ProcedureArgs}
 import org.apache.spark.sql.{AnalysisException, SparkSession}
@@ -123,9 +123,9 @@ object HoodieAnalysis extends SparkAdapterSupport {
     rules
   }
 
-  private[sql] object MatchesInsertIntoStatement {
+  private[sql] object MatchInsertIntoStatement {
     def unapply(plan: LogicalPlan): Option[(LogicalPlan, Map[String, Option[String]], LogicalPlan, Boolean, Boolean)] =
-      sparkAdapter.getCatalystPlanUtils.getInsertIntoChildren(plan)
+      sparkAdapter.getCatalystPlanUtils.unapplyInsertIntoStatement(plan)
   }
 
   private[sql] object ResolvesToHudiTable {
@@ -160,7 +160,7 @@ case class HoodieAnalysis(sparkSession: SparkSession) extends Rule[LogicalPlan] 
         DeleteHoodieTableCommand(dft)
 
       // Convert to InsertIntoHoodieTableCommand
-      case iis @ MatchesInsertIntoStatement(relation @ ResolvesToHudiTable(_), partition, query, overwrite, _) if query.resolved =>
+      case iis @ MatchInsertIntoStatement(relation @ ResolvesToHudiTable(_), partition, query, overwrite, _) if query.resolved =>
         relation match {
           // NOTE: In Spark >= 3.2, Hudi relations will be resolved as [[DataSourceV2Relation]]s by default;
           //       However, currently, fallback will be applied downgrading them to V1 relations, hence
