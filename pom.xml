@@ -1973,7 +1973,7 @@
       <modules>
         <module>hudi-spark-datasource/hudi-spark3.3.x</module>
         <module>hudi-spark-datasource/hudi-spark3-common</module>
-        <module>hudi-spark-datasource/hudi-spark32plus-common</module>
+        <module>hudi-spark-datasource/hudi-spark3.2plus-common</module>
       </modules>
       <activation>
         <property>
@@ -2041,7 +2041,7 @@
       <modules>
         <module>hudi-spark-datasource/hudi-spark3.2.x</module>
         <module>hudi-spark-datasource/hudi-spark3-common</module>
-        <module>hudi-spark-datasource/hudi-spark32plus-common</module>
+        <module>hudi-spark-datasource/hudi-spark3.2plus-common</module>
       </modules>
       <activation>
         <property>
@@ -2078,7 +2078,7 @@
       <modules>
         <module>hudi-spark-datasource/hudi-spark3.3.x</module>
         <module>hudi-spark-datasource/hudi-spark3-common</module>
-        <module>hudi-spark-datasource/hudi-spark32plus-common</module>
+        <module>hudi-spark-datasource/hudi-spark3.2plus-common</module>
       </modules>
       <activation>
         <property>
