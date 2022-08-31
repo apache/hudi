@@ -24,7 +24,7 @@ import org.apache.hudi.common.config.HoodieMetaServerConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.metaserver.client.HoodieMetaServerClient;
-import org.apache.hudi.metaserver.client.RetryingHoodieMetaServerClient;
+import org.apache.hudi.metaserver.client.HoodieMetaServerClientProxy;
 
 import java.io.IOException;
 
@@ -41,7 +41,7 @@ public class HoodieMetaServerFileSystemView extends HoodieTableFileSystemView {
   public HoodieMetaServerFileSystemView(HoodieTableMetaClient metaClient,
                                         HoodieTimeline visibleActiveTimeline, HoodieMetaServerConfig config) {
     super(metaClient, visibleActiveTimeline);
-    this.metaServerClient = RetryingHoodieMetaServerClient.getProxy(config);
+    this.metaServerClient = HoodieMetaServerClientProxy.getProxy(config);
     this.databaseName = metaClient.getTableConfig().getDatabaseName();
     this.tableName = metaClient.getTableConfig().getTableName();
   }

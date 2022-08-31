@@ -33,7 +33,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metaserver.client.HoodieMetaServerClient;
-import org.apache.hudi.metaserver.client.RetryingHoodieMetaServerClient;
+import org.apache.hudi.metaserver.client.HoodieMetaServerClientProxy;
 import org.apache.hudi.metaserver.thrift.NoSuchObjectException;
 import org.apache.hudi.metaserver.thrift.Table;
 import org.apache.log4j.LogManager;
@@ -64,7 +64,7 @@ public class HoodieTableMetaServerClient extends HoodieTableMetaClient {
     this.databaseName = databaseName;
     this.tableName = tableName;
     this.metaServerConfig = config;
-    this.metaServerClient = RetryingHoodieMetaServerClient.getProxy(config);
+    this.metaServerClient = HoodieMetaServerClientProxy.getProxy(config);
     this.table = initOrGetTable(databaseName, tableName, config);
     // TODO: transfer table parameters to table config
     this.tableConfig = new HoodieTableConfig();

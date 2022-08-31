@@ -26,17 +26,22 @@ import org.apache.hudi.metaserver.thrift.TState;
 import org.apache.hudi.metaserver.thrift.MetaStoreException;
 import org.apache.hudi.metaserver.thrift.Table;
 import org.apache.thrift.TException;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
 /**
  * Unit tests on metadata store base on relation database of hoodie meta server.
  */
-public class TestRelationDBBasedStore {
+public class TestRelationalDBBasedStore {
 
   private MetadataStore store;
   private final String db = "test_db";
@@ -51,9 +56,9 @@ public class TestRelationDBBasedStore {
   }
 
   private void testTableRelatedAPIs() throws MetaStoreException, NoSuchObjectException {
-    Assertions.assertTrue(store.createDatabase(db));
+    assertTrue(store.createDatabase(db));
     Long dbId = store.getDatabaseId(db);
-    Assertions.assertNotNull(dbId);
+    assertNotNull(dbId);
 
     Table table = new Table();
     table.setDbName(db);
@@ -61,45 +66,45 @@ public class TestRelationDBBasedStore {
     table.setOwner("owner");
     table.setLocation("test_db.db/test_tb");
     // check table related API
-    Assertions.assertTrue(store.createTable(dbId, table));
+    assertTrue(store.createTable(dbId, table));
     Long tableId = store.getTableId(db, tb);
-    Assertions.assertNotNull(tableId);
-    Assertions.assertEquals(store.getTable(db, tb).toString(), table.toString());
+    assertNotNull(tableId);
+    assertEquals(store.getTable(db, tb).toString(), table.toString());
   }
 
   private void testTimelineRelatedAPIs() throws MetaStoreException {
     Long tableId = store.getTableId(db, tb);
     String ts = store.createNewTimestamp(tableId);
-    Assertions.assertTrue(Long.valueOf(store.createNewTimestamp(tableId)) > Long.valueOf(ts));
+    assertTrue(Long.valueOf(store.createNewTimestamp(tableId)) > Long.valueOf(ts));
     THoodieInstant requested = new THoodieInstant(ts, TAction.COMMIT, TState.REQUESTED);
-    Assertions.assertTrue(store.createInstant(tableId, requested));
-    Assertions.assertTrue(store.instantExists(tableId, requested));
-    Assertions.assertThrows(MetaStoreException.class,
+    assertTrue(store.createInstant(tableId, requested));
+    assertTrue(store.instantExists(tableId, requested));
+    assertThrows(MetaStoreException.class,
         () -> store.createInstant(tableId, new THoodieInstant(ts, TAction.REPLACECOMMIT, TState.REQUESTED)));
     // update instant and check it
     THoodieInstant inflight = new THoodieInstant(ts, TAction.COMMIT, TState.INFLIGHT);
-    Assertions.assertTrue(store.updateInstant(tableId, requested, inflight));
+    assertTrue(store.updateInstant(tableId, requested, inflight));
     List<THoodieInstant> instants = store.scanInstants(tableId, Arrays.asList(TState.REQUESTED, TState.INFLIGHT), -1);
-    Assertions.assertEquals(1, instants.size());
-    Assertions.assertEquals(inflight, instants.get(0));
+    assertEquals(1, instants.size());
+    assertEquals(inflight, instants.get(0));
     // delete
-    Assertions.assertTrue(store.deleteInstant(tableId, inflight));
-    Assertions.assertTrue(store.scanInstants(tableId, Arrays.asList(TState.REQUESTED, TState.INFLIGHT), -1).isEmpty());
+    assertTrue(store.deleteInstant(tableId, inflight));
+    assertTrue(store.scanInstants(tableId, Arrays.asList(TState.REQUESTED, TState.INFLIGHT), -1).isEmpty());
 
     // instant meta CRUD
     byte[] requestedMeta = "requested".getBytes(StandardCharsets.UTF_8);
     byte[] inflightMeta = "inflight".getBytes(StandardCharsets.UTF_8);
     store.saveInstantMeta(tableId, requested, requestedMeta);
     store.saveInstantMeta(tableId, inflight, inflightMeta);
-    Assertions.assertTrue(store.deleteInstantMeta(tableId, requested));
-    Assertions.assertNull(store.getInstantMeta(tableId, requested));
-    Assertions.assertEquals("inflight", new String(store.getInstantMeta(tableId, inflight)));
+    assertTrue(store.deleteInstantMeta(tableId, requested));
+    assertNull(store.getInstantMeta(tableId, requested));
+    assertEquals("inflight", new String(store.getInstantMeta(tableId, inflight)));
     // delete all metadata of a timestamp
     store.saveInstantMeta(tableId, requested, requestedMeta);
-    Assertions.assertEquals("requested", new String(store.getInstantMeta(tableId, requested)));
-    Assertions.assertTrue(store.deleteInstantAllMeta(tableId, ts));
-    Assertions.assertNull(store.getInstantMeta(tableId, requested));
-    Assertions.assertNull(store.getInstantMeta(tableId, inflight));
+    assertEquals("requested", new String(store.getInstantMeta(tableId, requested)));
+    assertTrue(store.deleteInstantAllMeta(tableId, ts));
+    assertNull(store.getInstantMeta(tableId, requested));
+    assertNull(store.getInstantMeta(tableId, inflight));
   }
 
 }

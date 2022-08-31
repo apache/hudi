@@ -143,9 +143,8 @@ public class HoodieMetaServerClientImp implements HoodieMetaServerClient, Serial
     exceptionWrapper(() -> this.client.delete_instant(db, tb, EntryConvertor.toTHoodieInstant(instant))).get();
   }
 
-  // TODO: support snapshot creation
   public FileStatus[] listFilesInPartition(String db, String tb, String partition, String timestamp) {
-    return null;
+    throw new HoodieException("not supported");
   }
 
   public List<String> listAllPartitions(String db, String tb) {

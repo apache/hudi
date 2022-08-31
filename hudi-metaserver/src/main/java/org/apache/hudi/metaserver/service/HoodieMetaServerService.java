@@ -35,14 +35,12 @@ public class HoodieMetaServerService implements ThriftHoodieMetaServer.Iface, Se
   private TableService tableService;
   private PartitionService partitionService;
   private TimelineService timelineService;
-  private SnapshotService snapshotService;
 
   public HoodieMetaServerService(TableService tableService, PartitionService partitionService,
-                                 TimelineService timelineService, SnapshotService snapshotService) {
+                                 TimelineService timelineService) {
     this.tableService = tableService;
     this.partitionService = partitionService;
     this.timelineService = timelineService;
-    this.snapshotService = snapshotService;
   }
 
   @Override
@@ -92,7 +90,7 @@ public class HoodieMetaServerService implements ThriftHoodieMetaServer.Iface, Se
 
   @Override
   public ByteBuffer list_files_in_partition(String db, String tb, String partition, String timestamp) throws TException {
-    return snapshotService.listFilesInPartition(db, tb, partition, timestamp);
+    throw new TException("not supported");
   }
 
   @Override

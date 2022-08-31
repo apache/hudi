@@ -32,22 +32,22 @@ import java.lang.reflect.UndeclaredThrowableException;
 /**
  * AOP for meta server client.
  */
-public class RetryingHoodieMetaServerClient implements InvocationHandler, Serializable {
+public class HoodieMetaServerClientProxy implements InvocationHandler, Serializable {
 
-  private static final Logger LOG =  LogManager.getLogger(RetryingHoodieMetaServerClient.class);
+  private static final Logger LOG =  LogManager.getLogger(HoodieMetaServerClientProxy.class);
   private final HoodieMetaServerClient client;
   private final int retryLimit;
   private final int retryDelaySeconds;
 
-  private RetryingHoodieMetaServerClient(HoodieMetaServerConfig config) {
+  private HoodieMetaServerClientProxy(HoodieMetaServerConfig config) {
     this.retryLimit = config.getConnectionRetryLimit();
     this.retryDelaySeconds = config.getConnectionRetryDelay();
     this.client = new HoodieMetaServerClientImp(config);
   }
 
   public static HoodieMetaServerClient getProxy(HoodieMetaServerConfig config) {
-    RetryingHoodieMetaServerClient handler = new RetryingHoodieMetaServerClient(config);
-    return (HoodieMetaServerClient) Proxy.newProxyInstance(RetryingHoodieMetaServerClient.class.getClassLoader(),
+    HoodieMetaServerClientProxy handler = new HoodieMetaServerClientProxy(config);
+    return (HoodieMetaServerClient) Proxy.newProxyInstance(HoodieMetaServerClientProxy.class.getClassLoader(),
         new Class[]{HoodieMetaServerClient.class}, handler);
   }
 

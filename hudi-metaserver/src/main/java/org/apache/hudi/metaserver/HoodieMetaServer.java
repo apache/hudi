@@ -22,7 +22,6 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.metaserver.service.HoodieMetaServerService;
 import org.apache.hudi.metaserver.service.HoodieMetaServerProxyHandler;
 import org.apache.hudi.metaserver.service.PartitionService;
-import org.apache.hudi.metaserver.service.SnapshotService;
 import org.apache.hudi.metaserver.service.TableService;
 import org.apache.hudi.metaserver.service.TimelineService;
 import org.apache.hudi.metaserver.store.RelationDBBasedStore;
@@ -64,9 +63,8 @@ public class HoodieMetaServer {
       TableService tableService = new TableService(metadataStore);
       PartitionService partitionService = new PartitionService(metadataStore);
       TimelineService timelineService = new TimelineService(metadataStore);
-      SnapshotService snapshotService = new SnapshotService(metadataStore);
       HoodieMetaServerService hoodieMetaServerService = new HoodieMetaServerService(tableService,
-          partitionService, timelineService, snapshotService);
+          partitionService, timelineService);
       HoodieMetaServerProxyHandler proxyHandler = new HoodieMetaServerProxyHandler(hoodieMetaServerService);
 
       // start a thrift server
@@ -99,8 +97,7 @@ public class HoodieMetaServer {
           TableService tableService = new TableService(metadataStore);
           PartitionService partitionService = new PartitionService(metadataStore);
           TimelineService timelineService = new TimelineService(metadataStore);
-          SnapshotService snapshotService = new SnapshotService(metadataStore);
-          metaServerService = new HoodieMetaServerService(tableService, partitionService, timelineService, snapshotService);
+          metaServerService = new HoodieMetaServerService(tableService, partitionService, timelineService);
         }
       }
     }
