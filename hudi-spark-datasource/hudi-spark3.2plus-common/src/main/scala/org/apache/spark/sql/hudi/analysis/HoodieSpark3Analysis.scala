@@ -17,8 +17,8 @@
 
 package org.apache.spark.sql.hudi.analysis
 
-import org.apache.hudi.{DefaultSource, SparkAdapterSupport}
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.{DefaultSource, SparkAdapterSupport}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.{ResolvedTable, UnresolvedPartitionSpec}
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, HoodieCatalogTable}
