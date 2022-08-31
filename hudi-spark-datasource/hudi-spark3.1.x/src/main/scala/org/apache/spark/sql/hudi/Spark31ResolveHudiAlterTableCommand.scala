@@ -37,7 +37,7 @@ import scala.collection.mutable
   * for alter table column commands.
   * TODO: we should remove this file when we support datasourceV2 for hoodie on spark3.1x
   */
-case class Spark312ResolveHudiAlterTableCommand(sparkSession: SparkSession) extends Rule[LogicalPlan] {
+case class Spark31ResolveHudiAlterTableCommand(sparkSession: SparkSession) extends Rule[LogicalPlan] {
   import org.apache.spark.sql.connector.catalog.CatalogV2Implicits._
   def apply(plan: LogicalPlan): LogicalPlan = plan.resolveOperatorsUp {
     case add @ HoodieAlterTableAddColumnsStatement(asTable(table), cols) =>
