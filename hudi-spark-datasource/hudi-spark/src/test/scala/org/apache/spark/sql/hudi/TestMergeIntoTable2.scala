@@ -25,6 +25,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
 
   test("Test MergeInto for MOR table 2") {
     withRecordType()(withTempDir { tmp =>
+      spark.sql("set hoodie.payload.combined.schema.validate = true")
       val tableName = generateTableName
       // Create a mor partitioned table.
       spark.sql(
@@ -142,6 +143,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
 
   test("Test Merge Into CTAS Table") {
     withRecordType()(withTempDir { tmp =>
+      spark.sql("set hoodie.payload.combined.schema.validate = true")
       val tableName = generateTableName
       spark.sql(
         s"""
@@ -177,6 +179,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
 
   test("Test Merge With Complex Data Type") {
     withRecordType()(withTempDir { tmp =>
+      spark.sql("set hoodie.payload.combined.schema.validate = true")
       val tableName = generateTableName
       spark.sql(
         s"""
@@ -240,6 +243,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
 
   test("Test column name matching for insert * and update set *") {
     withRecordType()(withTempDir { tmp =>
+      spark.sql("set hoodie.payload.combined.schema.validate = true")
       val tableName = generateTableName
       // Create table
       spark.sql(
@@ -323,6 +327,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
 
   test("Test MergeInto For Source Table With Column Aliases") {
     withRecordType()(withTempDir { tmp =>
+      spark.sql("set hoodie.payload.combined.schema.validate = true")
       val tableName = generateTableName
       // Create table
       spark.sql(
@@ -366,6 +371,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
 
   test("Test MergeInto When PrimaryKey And PreCombineField Of Source Table And Target Table Differ In Case Only") {
     withRecordType()(withTempDir { tmp =>
+      spark.sql("set hoodie.payload.combined.schema.validate = true")
       val tableName = generateTableName
       // Create table
       spark.sql(
@@ -432,6 +438,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
 
   test("Test ignoring case") {
     withRecordType()(withTempDir { tmp =>
+      spark.sql("set hoodie.payload.combined.schema.validate = true")
       val tableName = generateTableName
       // Create table
       spark.sql(
@@ -503,6 +510,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
 
   test("Test ignoring case for MOR table") {
     withRecordType()(withTempDir { tmp =>
+      spark.sql("set hoodie.payload.combined.schema.validate = true")
       val tableName = generateTableName
       // Create a mor partitioned table.
       spark.sql(
@@ -543,6 +551,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
 
   test("Test only insert when source table contains history") {
     withRecordType()(withTempDir { tmp =>
+      spark.sql("set hoodie.payload.combined.schema.validate = true")
       val tableName = generateTableName
       // Create table
       spark.sql(
@@ -588,6 +597,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
 
   test("Test only insert when source table contains history and target table has multiple keys") {
     withRecordType()(withTempDir { tmp =>
+      spark.sql("set hoodie.payload.combined.schema.validate = true")
       val tableName = generateTableName
       // Create table with multiple keys
       spark.sql(

@@ -24,6 +24,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
 
   test("Test MergeInto Basic") {
     withRecordType()(withTempDir { tmp =>
+      spark.sql("set hoodie.payload.combined.schema.validate = true")
       val tableName = generateTableName
       // Create table
       spark.sql(
@@ -114,6 +115,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
 
   test("Test MergeInto with ignored record") {
     withRecordType()(withTempDir {tmp =>
+      spark.sql("set hoodie.payload.combined.schema.validate = true")
       val sourceTable = generateTableName
       val targetTable = generateTableName
       // Create source table
@@ -192,6 +194,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
 
   test("Test MergeInto for MOR table ") {
     withRecordType()(withTempDir {tmp =>
+      spark.sql("set hoodie.payload.combined.schema.validate = true")
       val tableName = generateTableName
       // Create a mor partitioned table.
       spark.sql(
@@ -315,6 +318,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
 
   test("Test MergeInto with insert only") {
     withRecordType()(withTempDir {tmp =>
+      spark.sql("set hoodie.payload.combined.schema.validate = true")
       // Create a partitioned mor table
       val tableName = generateTableName
       spark.sql(
@@ -369,6 +373,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
 
   test("Test MergeInto For PreCombineField") {
     withRecordType()(withTempDir { tmp =>
+      spark.sql("set hoodie.payload.combined.schema.validate = true")
       Seq("cow", "mor").foreach { tableType =>
         val tableName1 = generateTableName
         // Create a mor partitioned table.
@@ -442,6 +447,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
 
   test("Test MergeInto with preCombine field expression") {
     withRecordType()(withTempDir { tmp =>
+      spark.sql("set hoodie.payload.combined.schema.validate = true")
       Seq("cow", "mor").foreach { tableType =>
         val tableName1 = generateTableName
         spark.sql(
@@ -513,6 +519,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
 
   test("Test MergeInto with primaryKey expression") {
     withRecordType()(withTempDir { tmp =>
+      spark.sql("set hoodie.payload.combined.schema.validate = true")
       val tableName1 = generateTableName
       spark.sql(
         s"""
@@ -592,6 +599,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
 
   test("Test MergeInto with combination of delete update insert") {
     withRecordType()(withTempDir { tmp =>
+      spark.sql("set hoodie.payload.combined.schema.validate = true")
       val sourceTable = generateTableName
       val targetTable = generateTableName
       // Create source table
@@ -654,6 +662,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
 
   test("Merge Hudi to Hudi") {
     withRecordType()(withTempDir { tmp =>
+      spark.sql("set hoodie.payload.combined.schema.validate = true")
       Seq("cow", "mor").foreach { tableType =>
         val sourceTable = generateTableName
         spark.sql(
@@ -759,6 +768,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
 
   test("Test Different Type of PreCombineField") {
     withRecordType()(withTempDir { tmp =>
+      spark.sql("set hoodie.payload.combined.schema.validate = true")
       val typeAndValue = Seq(
         ("string", "'1000'"),
         ("int", 1000),
@@ -818,6 +828,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
 
   test("Test MergeInto For MOR With Compaction On") {
     withRecordType()(withTempDir { tmp =>
+      spark.sql("set hoodie.payload.combined.schema.validate = true")
       val tableName = generateTableName
       spark.sql(
         s"""
@@ -868,6 +879,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
 
   test("Test MereInto With Null Fields") {
     withRecordType()(withTempDir { tmp =>
+      spark.sql("set hoodie.payload.combined.schema.validate = true")
       val types = Seq(
         "string" ,
         "int",
@@ -913,6 +925,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
 
   test("Test MergeInto With All Kinds Of DataType") {
     withRecordType()(withTempDir { tmp =>
+      spark.sql("set hoodie.payload.combined.schema.validate = true")
       val dataAndTypes = Seq(
         ("string", "'a1'"),
         ("int", "10"),

@@ -323,6 +323,12 @@ object ExpressionPayload {
   val PAYLOAD_EXPECTED_COMBINED_SCHEMA = "hoodie.payload.combined.schema"
 
   /**
+   * Internal property determining whether combined schema should be validated by [[ExpressionPayload]],
+   * against the one provide by [[PAYLOAD_EXPECTED_COMBINED_SCHEMA]] (default is "false")
+   */
+  private[sql] val PAYLOAD_SHOULD_VALIDATE_COMBINED_SCHEMA = "hoodie.payload.combined.schema.validate"
+
+  /**
    * NOTE: PLEASE READ CAREFULLY
    *       Spark's [[SafeProjection]] are NOT thread-safe hence cache is scoped
    *       down to be thread-local to support the multi-threaded executors (like
@@ -480,13 +486,12 @@ object ExpressionPayload {
   }
 
   private def validateCompatibleSchemas(joinedSchema: Schema, expectedStructType: StructType, props: Properties): Unit = {
-    val shouldValidate = true
+    ValidationUtils.checkState(expectedStructType.fields.length == joinedSchema.getFields.size,
+      s"Expected schema diverges from the merged one: " +
+        s"expected has ${expectedStructType.fields.length} fields, while merged one has ${joinedSchema.getFields.size}")
 
+    val shouldValidate = props.getProperty(PAYLOAD_SHOULD_VALIDATE_COMBINED_SCHEMA, "false").toBoolean
     if (shouldValidate) {
-      ValidationUtils.checkState(expectedStructType.fields.length == joinedSchema.getFields.size,
-        s"Expected schema diverges from the merged one: " +
-          s"expected has ${expectedStructType.fields.length} fields, while merged one has ${joinedSchema.getFields.size}")
-
       val expectedSchema = convertStructTypeToAvroSchema(expectedStructType, joinedSchema.getName, joinedSchema.getNamespace)
       // NOTE: Since compared schemas are produced by essentially combining (joining)
       //       2 schemas together, field names might not be appropriate and therefore
