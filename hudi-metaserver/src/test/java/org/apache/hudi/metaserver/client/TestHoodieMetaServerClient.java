@@ -20,8 +20,11 @@ package org.apache.hudi.metaserver.client;
 
 import org.apache.hudi.common.config.HoodieMetaServerConfig;
 import org.apache.hudi.metaserver.HoodieMetaServer;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Unit tests on hoodie meta server client.
@@ -32,17 +35,17 @@ public class TestHoodieMetaServerClient {
   public void testLocalClient() {
     HoodieMetaServerConfig config = HoodieMetaServerConfig.newBuilder().setUris("").build();
     HoodieMetaServerClient client = new HoodieMetaServerClientImp(config);
-    Assertions.assertTrue(client.isLocal());
-    Assertions.assertTrue(client.isConnected());
+    assertTrue(client.isLocal());
+    assertTrue(client.isConnected());
   }
 
   @Test
   public void testRemoteClient() {
     HoodieMetaServer.startServer();
-    Assertions.assertNotNull(HoodieMetaServer.getMetadataStore());
+    assertNotNull(HoodieMetaServer.getMetadataStore());
     HoodieMetaServerConfig config = HoodieMetaServerConfig.newBuilder().build();
     HoodieMetaServerClient client = new HoodieMetaServerClientImp(config);
-    Assertions.assertFalse(client.isLocal());
-    Assertions.assertTrue(client.isConnected());
+    assertFalse(client.isLocal());
+    assertTrue(client.isConnected());
   }
 }

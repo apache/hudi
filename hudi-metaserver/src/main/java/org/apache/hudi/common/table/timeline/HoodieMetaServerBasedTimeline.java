@@ -27,7 +27,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metaserver.client.HoodieMetaServerClient;
-import org.apache.hudi.metaserver.client.RetryingHoodieMetaServerClient;
+import org.apache.hudi.metaserver.client.HoodieMetaServerClientProxy;
 
 /**
  * Active timeline for hoodie table whose metadata is stored in the hoodie meta server instead of file system.
@@ -40,7 +40,7 @@ public class HoodieMetaServerBasedTimeline extends HoodieActiveTimeline {
   
   public HoodieMetaServerBasedTimeline(HoodieTableMetaClient metaClient, HoodieMetaServerConfig config) {
     this.metaClient = metaClient;
-    this.metaServerClient = RetryingHoodieMetaServerClient.getProxy(config);
+    this.metaServerClient = HoodieMetaServerClientProxy.getProxy(config);
     this.databaseName = config.getString(HoodieTableConfig.DATABASE_NAME.key());
     this.tableName = config.getString(HoodieTableConfig.NAME.key());
     this.setInstants(metaServerClient.listInstants(databaseName, tableName, 24));
