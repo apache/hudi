@@ -286,7 +286,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
       )
 
       // Delete with condition expression.
-      spark.sql(
+      checkException(
         s"""
            | merge into $tableName t0
            | using (
@@ -294,6 +294,17 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
            | ) s0
            | on t0.id = s0.s_id + 1
            | when matched and s_ts = 1001 then delete
+         """.stripMargin
+      )("Only simple conditions of the form `t.id = s.id` are allowed on the primary-key column. Found `t0.id = (s0.s_id + 1)`")
+
+      spark.sql(
+        s"""
+           | merge into $tableName t0
+           | using (
+           |  select 2 as s_id, 'a2' as s_name, 15 as s_price, 1001 as ts, '2021-03-21' as dt
+           | ) s0
+           | on t0.id = s0.s_id
+           | when matched and s0.ts = 1001 then delete
          """.stripMargin
       )
       checkAnswer(s"select id,name,price,dt from $tableName order by id")(
@@ -471,7 +482,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
         )
 
         // 2) set source column name to be different with target column
-        spark.sql(
+        checkException(
           s"""
              | merge into $tableName1 as t0
              | using (
@@ -479,6 +490,17 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
              | ) as s0
              | on t0.id = s0.s_id
              | when matched then update set id=s0.s_id, name=s0.s_name, price=s0.s_price*2, v=s0.s_v+2, dt=s0.dt
+         """.stripMargin
+        )("Failed to resolve pre-combine field `v` w/in the source-table output")
+
+        spark.sql(
+          s"""
+             | merge into $tableName1 as t0
+             | using (
+             |  select 1 as s_id, 'a1' as s_name, 12 as s_price, 1000 as v, '2021-03-21' as dt
+             | ) as s0
+             | on t0.id = s0.s_id
+             | when matched then update set id=s0.s_id, name=s0.s_name, price=s0.s_price*2, v=s0.v+2, dt=s0.dt
          """.stripMargin
         )
         // Update success as new value 1002 is bigger than original value 1001
@@ -516,13 +538,22 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
 
       // Delete data with a condition expression on primaryKey field
       // 1) set source column name to be same as target column
-      spark.sql(
-        s"""
-           | merge into $tableName1 t0
+      checkException(
+        s"""merge into $tableName1 t0
            | using (
            |  select 1 as id, 'a1' as name, 15 as price, 1001 as v, '2021-03-21' as dt
            | ) s0
            | on t0.id = s0.id + 1
+           | when matched then delete
+       """.stripMargin)("Only simple conditions of the form `t.id = s.id` are allowed on the primary-key column. Found `t0.id = (s0.id + 1)`")
+
+      spark.sql(
+        s"""
+           | merge into $tableName1 t0
+           | using (
+           |  select 2 as id, 'a2' as name, 20 as price, 2000 as v, '2021-03-21' as dt
+           | ) s0
+           | on t0.id = s0.id
            | when matched then delete
          """.stripMargin
       )
@@ -535,9 +566,9 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
       checkException(
         s"""merge into $tableName1 t0
            | using (
-           |  select 2 as s_id, 'a1' as s_name, 15 as s_price, 1001 as s_v, '2021-03-21' as dt
+           |  select 3 as s_id, 'a3' as s_name, 30 as s_price, 3000 as s_v, '2021-03-21' as dt
            | ) s0
-           | on t0.id = s0.s_id + 1
+           | on t0.id = s0.s_id
            | when matched then delete
            |""".stripMargin)(s"Failed to resolve pre-combine field `v` w/in the source-table output")
 
@@ -546,9 +577,9 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
         s"""
            | merge into $tableName1 t0
            | using (
-           |  select 2 as s_id, 'a1' as s_name, 15 as s_price, 1001 as v, '2021-03-21' as dt
+           |  select 3 as s_id, 'a3' as s_name, 30 as s_price, 3000 as v, '2021-03-21' as dt
            | ) s0
-           | on t0.id = s0.s_id + 1
+           | on t0.id = s0.s_id
            | when matched then delete
          """.stripMargin
       )
