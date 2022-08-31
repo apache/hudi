@@ -21,6 +21,9 @@ package org.apache.spark.sql
 import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.common.util.ValidationUtils.checkArgument
 
+import org.apache.spark.sql.catalyst.analysis.ResolvedTable
+import org.apache.spark.sql.catalyst.plans.logical.LeafNode
+import org.apache.spark.sql.connector.catalog.{Identifier, Table, TableCatalog}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.expressions.{AttributeSet, Expression, ProjectionOverSchema}
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, TimeTravelRelation}
@@ -28,6 +31,12 @@ import org.apache.spark.sql.execution.command.RepairTableCommand
 import org.apache.spark.sql.types.StructType
 
 object HoodieSpark32CatalystPlanUtils extends HoodieSpark3CatalystPlanUtils {
+
+  def unapplyResolvedTable(node: LeafNode): Option[(TableCatalog, Identifier, Table)] =
+    node match {
+      case ResolvedTable(catalog, identifier, table, _) => Some((catalog, identifier, table))
+      case _ => None
+    }
 
   override def projectOverSchema(schema: StructType, output: AttributeSet): ProjectionOverSchema = {
     val klass = classOf[ProjectionOverSchema]

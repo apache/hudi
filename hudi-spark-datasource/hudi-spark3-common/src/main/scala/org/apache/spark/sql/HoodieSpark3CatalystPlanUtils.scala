@@ -17,10 +17,12 @@
 
 package org.apache.spark.sql
 
+import org.apache.hudi.SparkAdapterSupport
 import org.apache.spark.sql.catalyst.analysis.TableOutputResolver
 import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeSet, ProjectionOverSchema}
 import org.apache.spark.sql.catalyst.plans.JoinType
-import org.apache.spark.sql.catalyst.plans.logical.{InsertIntoStatement, Join, JoinHint, LogicalPlan}
+import org.apache.spark.sql.catalyst.plans.logical.{InsertIntoStatement, Join, JoinHint, LeafNode, LogicalPlan}
+import org.apache.spark.sql.connector.catalog.{Identifier, Table, TableCatalog}
 import org.apache.spark.sql.execution.command.ExplainCommand
 import org.apache.spark.sql.execution.{ExtendedMode, SimpleMode}
 import org.apache.spark.sql.internal.SQLConf
@@ -33,7 +35,12 @@ trait HoodieSpark3CatalystPlanUtils extends HoodieCatalystPlansUtils {
    */
   def projectOverSchema(schema: StructType, output: AttributeSet): ProjectionOverSchema
 
-  override def resolveOutputColumns(tableName: String,
+  /**
+   * Un-applies [[ResolvedTable]] that had its signature changed in Spark 3.2
+   */
+  def unapplyResolvedTable(node: LeafNode): Option[(TableCatalog, Identifier, Table)]
+
+  def resolveOutputColumns(tableName: String,
                            expected: Seq[Attribute],
                            query: LogicalPlan,
                            byName: Boolean,
@@ -62,4 +69,17 @@ trait HoodieSpark3CatalystPlanUtils extends HoodieCatalystPlansUtils {
   }
 }
 
-object HoodieSpark3CatalystPlanUtils extends HoodieSpark3CatalystPlanUtils {}
+object HoodieSpark3CatalystPlanUtils extends SparkAdapterSupport {
+
+  /**
+   * This is an extractor to accommodate for [[ResolvedTable]] signature change in Spark 3.2
+   */
+  object MatchResolvedTable {
+    def unapply(node: LeafNode): Option[(TableCatalog, Identifier, Table)] =
+      sparkAdapter.getCatalystPlanUtils match {
+        case spark3Utils: HoodieSpark3CatalystPlanUtils => spark3Utils.unapplyResolvedTable(node)
+        case _ => None
+      }
+  }
+
+}

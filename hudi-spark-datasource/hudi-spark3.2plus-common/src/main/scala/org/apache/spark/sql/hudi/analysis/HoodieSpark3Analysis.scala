@@ -19,6 +19,7 @@ package org.apache.spark.sql.hudi.analysis
 
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.{DataSourceReadOptions, DefaultSource, SparkAdapterSupport}
+import org.apache.spark.sql.HoodieSpark3CatalystPlanUtils.MatchResolvedTable
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.{ResolvedTable, UnresolvedPartitionSpec}
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogUtils}
@@ -32,7 +33,7 @@ import org.apache.spark.sql.execution.datasources.PreWriteCheck.failAnalysis
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.execution.datasources.{DataSource, LogicalRelation}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{getTableLocation, tableExistsInPath}
-import org.apache.spark.sql.hudi.analysis.HoodieSpark3Analysis.{sparkAdapter, HoodieV1OrV2Table, ResolvesToHudiTable}
+import org.apache.spark.sql.hudi.analysis.HoodieSpark3Analysis.{HoodieV1OrV2Table, ResolvesToHudiTable, sparkAdapter}
 import org.apache.spark.sql.hudi.catalog.HoodieInternalV2Table
 import org.apache.spark.sql.hudi.command.{AlterHoodieTableDropPartitionCommand, ShowHoodieTablePartitionsCommand, TruncateHoodieTableCommand}
 import org.apache.spark.sql.hudi.{HoodieSqlCommonUtils, ProvidesHoodieConfig}
@@ -117,18 +118,18 @@ case class HoodieSpark3ResolveReferences(sparkSession: SparkSession) extends Rul
 case class HoodieSpark3PostAnalysisRule(sparkSession: SparkSession) extends Rule[LogicalPlan] {
   override def apply(plan: LogicalPlan): LogicalPlan = {
     plan match {
-      case ShowPartitions(ResolvedTable(_, id, HoodieV1OrV2Table(_), _), specOpt, _) =>
+      case ShowPartitions(MatchResolvedTable(_, id, HoodieV1OrV2Table(_)), specOpt, _) =>
         ShowHoodieTablePartitionsCommand(
           id.asTableIdentifier, specOpt.map(s => s.asInstanceOf[UnresolvedPartitionSpec].spec))
 
       // Rewrite TruncateTableCommand to TruncateHoodieTableCommand
-      case TruncateTable(ResolvedTable(_, id, HoodieV1OrV2Table(_), _)) =>
+      case TruncateTable(MatchResolvedTable(_, id, HoodieV1OrV2Table(_))) =>
         TruncateHoodieTableCommand(id.asTableIdentifier, None)
 
-      case TruncatePartition(ResolvedTable(_, id, HoodieV1OrV2Table(_), _), partitionSpec: UnresolvedPartitionSpec) =>
+      case TruncatePartition(MatchResolvedTable(_, id, HoodieV1OrV2Table(_)), partitionSpec: UnresolvedPartitionSpec) =>
         TruncateHoodieTableCommand(id.asTableIdentifier, Some(partitionSpec.spec))
 
-      case DropPartitions(ResolvedTable(_, id, HoodieV1OrV2Table(_), _), specs, ifExists, purge) =>
+      case DropPartitions(MatchResolvedTable(_, id, HoodieV1OrV2Table(_)), specs, ifExists, purge) =>
         AlterHoodieTableDropPartitionCommand(
           id.asTableIdentifier,
           specs.seq.map(f => f.asInstanceOf[UnresolvedPartitionSpec]).map(s => s.spec),
