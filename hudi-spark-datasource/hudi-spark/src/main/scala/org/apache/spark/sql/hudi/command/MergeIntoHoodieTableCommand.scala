@@ -386,7 +386,6 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       conditionalAssignments.map {
         case (condition, assignments) =>
           val boundCondition = condition.map(bindReferences).getOrElse(Literal.create(true, BooleanType))
-          val reorderedAssignments = reorderAssignments(assignments)
           // NOTE: We need to re-order assignments to follow the ordering of the attributes
           //       of the target table, such that the resulting output produced after execution
           //       of these expressions could be inserted into the target table as is
@@ -456,18 +455,29 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     // NOTE: Since original source dataset could be augmented w/ additional columns (please
     //       check its corresponding java-doc for more details) we have to get up-to-date list
     //       of its output attributes
-    val combinedOutputAttributes = mergeInto.sourceTable.output ++ mergeInto.targetTable.output
+    val joinedExpectedOutputAttributes = joinedExpectedOutput
 
     expr transform {
       case attr: AttributeReference =>
-        val index = combinedOutputAttributes.indexWhere(attributeEquals(_, attr))
+        val index = joinedExpectedOutputAttributes.indexWhere(attributeEquals(_, attr))
         if (index == -1) {
             throw new AnalysisException(s"Can't find `${attr.qualifiedName}` attribute in either source or the target " +
-              s"tables of the MERGE INTO statement (${combinedOutputAttributes.map(_.qualifiedName)})");
+              s"tables of the MERGE INTO statement (${joinedExpectedOutputAttributes.map(_.qualifiedName)})");
           }
           BoundReference(index, attr.dataType, attr.nullable)
       case other => other
     }
+  }
+
+  /**
+   * Output of the expected (left) join of the a) [[sourceTable]] dataset (potentially amended w/ primary-key,
+   * pre-combine columns) with b) existing [[targetTable]]
+   */
+  private def joinedExpectedOutput: Seq[Attribute] = {
+    // NOTE: We're relying on [[sourceDataset]] here instead of [[mergeInto.sourceTable]],
+    //       as it could be amended to add missing primary-key and/or pre-combine columns.
+    //       Please check [[sourceDataset]] scala-doc for more details
+    sourceDataset.queryExecution.analyzed.output ++ mergeInto.targetTable.output
   }
 
   private def resolvesToSourceAttributeReferenceExpr(expr: Expression): Boolean = {
