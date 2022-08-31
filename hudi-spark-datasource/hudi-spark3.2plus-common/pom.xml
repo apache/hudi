@@ -25,7 +25,7 @@
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
-    <artifactId>hudi-spark32plus-common</artifactId>
+    <artifactId>hudi-spark3.2plus-common</artifactId>
 
     <properties>
         <main.basedir>${project.parent.parent.basedir}</main.basedir>
