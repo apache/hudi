@@ -417,6 +417,7 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestBase 
             .parquetMaxFileSize(1000 * 1024).hfileMaxFileSize(1000 * 1024).build())
         .build();
     metaClient = HoodieTableMetaClient.reload(metaClient);
+
     final HoodieJavaCopyOnWriteTable table = (HoodieJavaCopyOnWriteTable) HoodieJavaTable.create(config, context, metaClient);
     String instantTime = "000";
     // Perform inserts of 100 records to test CreateHandle and BufferedExecutor
