@@ -128,6 +128,16 @@
 
     <!-- Hoodie - Other -->
 
+    <!-- NOTE: This dependency is kept around even though it's not necessary, due to the fact
+               that removing it messes up Orc dependencies on the class-path failing to compile
+               test for Spark 3.x (this occurs b/c Hudi depends on "nohive" version of "orc-core"
+               while Spark 3.x switches to a regular one) -->
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-common</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+
     <dependency>
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-hive-sync</artifactId>
