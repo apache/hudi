@@ -93,7 +93,7 @@ object HoodieAnalysis {
       rules ++= Seq(dataSourceV2ToV1Fallback, spark3Analysis, resolveAlterTableCommands)
 
     } else if (HoodieSparkUtils.gteqSpark3_1) {
-      val spark31ResolveAlterTableCommandsClass = "org.apache.spark.sql.hudi.Spark312ResolveHudiAlterTableCommand"
+      val spark31ResolveAlterTableCommandsClass = "org.apache.spark.sql.hudi.Spark31ResolveHudiAlterTableCommand"
       val spark31ResolveAlterTableCommands: RuleBuilder =
         session => ReflectionUtils.loadClass(spark31ResolveAlterTableCommandsClass, session).asInstanceOf[Rule[LogicalPlan]]
 
