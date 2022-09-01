@@ -510,6 +510,7 @@
               <exclude>**/dependency-reduced-pom.xml</exclude>
               <exclude>**/test/resources/*.data</exclude>
               <exclude>**/test/resources/*.commit</exclude>
+              <exclude>**/test/resources/**/*.txt</exclude>
               <exclude>**/target/**</exclude>
               <exclude>**/generated-sources/**</exclude>
               <exclude>.github/**</exclude>
@@ -568,6 +569,42 @@
               </goals>
             </execution>
           </executions>
+        </plugin>
+        <plugin>
+          <groupId>com.github.os72</groupId>
+          <artifactId>protoc-jar-maven-plugin</artifactId>
+          <version>3.11.4</version>
+          <executions>
+            <execution>
+              <id>proto-compile</id>
+              <phase>generate-sources</phase>
+              <goals>
+                <goal>run</goal>
+              </goals>
+              <configuration>
+                <inputDirectories>
+                  <include>src/main/resources</include>
+                </inputDirectories>
+              </configuration>
+            </execution>
+            <execution>
+              <id>proto-test-compile</id>
+              <phase>generate-test-sources</phase>
+              <goals>
+                <goal>run</goal>
+              </goals>
+              <configuration>
+                <addSources>test</addSources>
+                <inputDirectories>
+                  <include>src/test/resources</include>
+                </inputDirectories>
+              </configuration>
+            </execution>
+          </executions>
+          <configuration>
+            <protocVersion>${protoc.version}</protocVersion>
+            <includeStdTypes>true</includeStdTypes>
+          </configuration>
         </plugin>
       </plugins>
     </pluginManagement>
@@ -1300,6 +1337,18 @@
         <groupId>org.apache.curator</groupId>
         <artifactId>curator-recipes</artifactId>
         <version>${zk-curator.version}</version>
+      </dependency>
+
+      <!-- Protobuf -->
+      <dependency>
+        <groupId>com.google.protobuf</groupId>
+        <artifactId>protobuf-java</artifactId>
+        <version>${proto.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.google.protobuf</groupId>
+        <artifactId>protobuf-java-util</artifactId>
+        <version>${proto.version}</version>
       </dependency>
 
       <!-- Junit 5 -->
