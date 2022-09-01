@@ -217,30 +217,32 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
       }
     }
 
-    // tweak the key gen class if possible
-    final String[] partitions = conf.getString(FlinkOptions.PARTITION_PATH_FIELD).split(",");
-    final String[] pks = conf.getString(FlinkOptions.RECORD_KEY_FIELD).split(",");
-    if (partitions.length == 1) {
-      final String partitionField = partitions[0];
-      if (partitionField.isEmpty()) {
-        conf.setString(FlinkOptions.KEYGEN_CLASS_NAME, NonpartitionedAvroKeyGenerator.class.getName());
-        LOG.info("Table option [{}] is reset to {} because this is a non-partitioned table",
-            FlinkOptions.KEYGEN_CLASS_NAME.key(), NonpartitionedAvroKeyGenerator.class.getName());
-        return;
+    if (StringUtils.isNullOrEmpty(conf.get(FlinkOptions.KEYGEN_CLASS_NAME))) {
+      // tweak the key gen class if possible
+      final String[] partitions = conf.getString(FlinkOptions.PARTITION_PATH_FIELD).split(",");
+      final String[] pks = conf.getString(FlinkOptions.RECORD_KEY_FIELD).split(",");
+      if (partitions.length == 1) {
+        final String partitionField = partitions[0];
+        if (partitionField.isEmpty()) {
+          conf.setString(FlinkOptions.KEYGEN_CLASS_NAME, NonpartitionedAvroKeyGenerator.class.getName());
+          LOG.info("Table option [{}] is reset to {} because this is a non-partitioned table",
+                  FlinkOptions.KEYGEN_CLASS_NAME.key(), NonpartitionedAvroKeyGenerator.class.getName());
+          return;
+        }
+        DataType partitionFieldType = table.getSchema().getFieldDataType(partitionField)
+                .orElseThrow(() -> new HoodieValidationException("Field " + partitionField + " does not exist"));
+        if (pks.length <= 1 && DataTypeUtils.isDatetimeType(partitionFieldType)) {
+          // timestamp based key gen only supports simple primary key
+          setupTimestampKeygenOptions(conf, partitionFieldType);
+          return;
+        }
       }
-      DataType partitionFieldType = table.getSchema().getFieldDataType(partitionField)
-          .orElseThrow(() -> new HoodieValidationException("Field " + partitionField + " does not exist"));
-      if (pks.length <= 1 && DataTypeUtils.isDatetimeType(partitionFieldType)) {
-        // timestamp based key gen only supports simple primary key
-        setupTimestampKeygenOptions(conf, partitionFieldType);
-        return;
+      boolean complexHoodieKey = pks.length > 1 || partitions.length > 1;
+      if (complexHoodieKey && FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.KEYGEN_CLASS_NAME)) {
+        conf.setString(FlinkOptions.KEYGEN_CLASS_NAME, ComplexAvroKeyGenerator.class.getName());
+        LOG.info("Table option [{}] is reset to {} because record key or partition path has two or more fields",
+                FlinkOptions.KEYGEN_CLASS_NAME.key(), ComplexAvroKeyGenerator.class.getName());
       }
-    }
-    boolean complexHoodieKey = pks.length > 1 || partitions.length > 1;
-    if (complexHoodieKey && FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.KEYGEN_CLASS_NAME)) {
-      conf.setString(FlinkOptions.KEYGEN_CLASS_NAME, ComplexAvroKeyGenerator.class.getName());
-      LOG.info("Table option [{}] is reset to {} because record key or partition path has two or more fields",
-          FlinkOptions.KEYGEN_CLASS_NAME.key(), ComplexAvroKeyGenerator.class.getName());
     }
   }
 

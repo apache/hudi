@@ -223,6 +223,19 @@ public class TestHoodieTableFactory {
     final Configuration conf3 = tableSource3.getConf();
     assertThat(conf3.get(FlinkOptions.RECORD_KEY_FIELD), is("f0,f1"));
     assertThat(conf3.get(FlinkOptions.KEYGEN_CLASS_NAME), is(NonpartitionedAvroKeyGenerator.class.getName()));
+
+    // non partition should also respect KEYGEN_CLASS_NAME in conf
+    this.conf.setString(FlinkOptions.KEYGEN_CLASS_NAME, "dummyKeyGenClass");
+    // definition with simple primary key and partition path
+    ResolvedSchema schema4 = SchemaBuilder.instance()
+            .field("f0", DataTypes.INT().notNull())
+            .primaryKey("f0")
+            .build();
+    final MockContext sourceContext4 = MockContext.getInstance(this.conf, schema4, "");
+    final HoodieTableSource tableSource4 = (HoodieTableSource) new HoodieTableFactory().createDynamicTableSource(sourceContext4);
+    final Configuration conf4 = tableSource4.getConf();
+    assertThat(conf4.get(FlinkOptions.RECORD_KEY_FIELD), is("f0"));
+    assertThat(conf4.get(FlinkOptions.KEYGEN_CLASS_NAME), is("dummyKeyGenClass"));
   }
 
   @Test
