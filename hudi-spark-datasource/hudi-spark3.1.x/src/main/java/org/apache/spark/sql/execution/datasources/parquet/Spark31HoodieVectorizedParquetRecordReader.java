@@ -35,7 +35,7 @@ import java.time.ZoneId;
 import java.util.HashMap;
 import java.util.Map;
 
-public class Spark312HoodieVectorizedParquetRecordReader extends VectorizedParquetRecordReader {
+public class Spark31HoodieVectorizedParquetRecordReader extends VectorizedParquetRecordReader {
 
   // save the col type change info.
   private Map<Integer, Pair<DataType, DataType>> typeChangeInfos;
@@ -62,7 +62,7 @@ public class Spark312HoodieVectorizedParquetRecordReader extends VectorizedParqu
   private int batchIdx = 0;
   private int numBatched = 0;
 
-  public Spark312HoodieVectorizedParquetRecordReader(
+  public Spark31HoodieVectorizedParquetRecordReader(
       ZoneId convertTz,
       String datetimeRebaseMode,
       String int96RebaseMode,
