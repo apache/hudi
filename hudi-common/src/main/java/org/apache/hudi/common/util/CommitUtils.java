@@ -26,11 +26,13 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.avro.Schema;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -137,5 +139,30 @@ public class CommitUtils {
       }
     }
     return fileIdToPath;
+  }
+
+  /**
+   * Process previous commits metadata in the timeline to determine the checkpoint given a checkpoint key.
+   * NOTE: This is very similar in intent to DeltaSync#getLatestCommitMetadataWithValidCheckpointInfo except that
+   *       different deployment models (deltastreamer or spark structured streaming) could have different checkpoint keys.
+   *
+   * @param timeline completed commits in active timeline.
+   * @param checkpointKey the checkpoint key in the extra metadata of the commit.
+   * @return An optional commit metadata with latest checkpoint.
+   */
+  public static Option<HoodieCommitMetadata> getLatestCommitMetadataWithValidCheckpointInfo(HoodieTimeline timeline, String checkpointKey) {
+    return (Option<HoodieCommitMetadata>) timeline.getReverseOrderedInstants().map(instant -> {
+      try {
+        HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
+            .fromBytes(timeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class);
+        if (StringUtils.nonEmpty(commitMetadata.getMetadata(checkpointKey))) {
+          return Option.of(commitMetadata);
+        } else {
+          return Option.empty();
+        }
+      } catch (IOException e) {
+        throw new HoodieIOException("Failed to parse HoodieCommitMetadata for " + instant.toString(), e);
+      }
+    }).filter(Option::isPresent).findFirst().orElse(Option.empty());
   }
 }

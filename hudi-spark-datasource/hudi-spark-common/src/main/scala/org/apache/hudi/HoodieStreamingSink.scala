@@ -23,13 +23,13 @@ import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.async.{AsyncClusteringService, AsyncCompactService, SparkStreamingAsyncClusteringService, SparkStreamingAsyncCompactService}
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
-import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieRecordPayload}
+import org.apache.hudi.common.model.HoodieRecordPayload
 import org.apache.hudi.common.table.marker.MarkerType
 import org.apache.hudi.common.table.timeline.HoodieInstant.State
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.util.ValidationUtils.checkArgument
-import org.apache.hudi.common.util.{ClusteringUtils, CompactionUtils, StringUtils}
+import org.apache.hudi.common.util.{ClusteringUtils, CommitUtils, CompactionUtils, StringUtils}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.{HoodieCorruptedDataException, HoodieException, TableNotFoundException}
 import org.apache.log4j.LogManager
@@ -49,7 +49,7 @@ class HoodieStreamingSink(sqlContext: SQLContext,
                           outputMode: OutputMode)
   extends Sink
     with Serializable {
-  @volatile private var latestBatchId = -1L
+  @volatile private var latestCommittedBatchId = -1L
 
   private val log = LogManager.getLogger(classOf[HoodieStreamingSink])
 
@@ -135,8 +135,8 @@ class HoodieStreamingSink(sqlContext: SQLContext,
             case true => s" for commit=${commitOps.get()}"
             case _ => s" with no new commits"
           }))
-          log.info(s"Current value of latestBatchId: $latestBatchId. Setting latestBatchId to batchId $batchId.")
-          latestBatchId = batchId
+          log.info(s"Current value of latestCommittedBatchId: $latestCommittedBatchId. Setting latestCommittedBatchId to batchId $batchId.")
+          latestCommittedBatchId = batchId
           writeClient = Some(client)
           hoodieTableConfig = Some(tableConfig)
           if (client != null) {
@@ -296,18 +296,17 @@ class HoodieStreamingSink(sqlContext: SQLContext,
     }
   }
 
-  private def canSkipBatch(batchId: Long): Boolean = {
+  private def canSkipBatch(incomingBatchId: Long): Boolean = {
     // get the latest checkpoint from the commit metadata to check if the microbatch has already been prcessed or not
-    val lastCommit = metaClient.get.getActiveTimeline.getCommitsTimeline.filterCompletedInstants().lastInstant()
-    if (lastCommit.isPresent) {
-      val commitMetadata = HoodieCommitMetadata.fromBytes(
-        metaClient.get.getActiveTimeline.getInstantDetails(lastCommit.get()).get(), classOf[HoodieCommitMetadata])
-      val lastCheckpoint = commitMetadata.getMetadata(SINK_CHECKPOINT_KEY)
+    val commitMetadata = CommitUtils.getLatestCommitMetadataWithValidCheckpointInfo(
+      metaClient.get.getActiveTimeline.getCommitsTimeline, SINK_CHECKPOINT_KEY)
+    if (commitMetadata.isPresent) {
+      val lastCheckpoint = commitMetadata.get.getMetadata(SINK_CHECKPOINT_KEY)
       if (!StringUtils.isNullOrEmpty(lastCheckpoint)) {
-        latestBatchId = HoodieSinkCheckpoint.fromJson(lastCheckpoint).keys.head.toLong
+        latestCommittedBatchId = HoodieSinkCheckpoint.fromJson(lastCheckpoint).keys.head.toLong
       }
     }
-    latestBatchId >= batchId
+    latestCommittedBatchId >= incomingBatchId
   }
 }
 
