@@ -78,6 +78,7 @@ object HoodieProcedures {
       ,(RepairOverwriteHoodiePropsProcedure.NAME, RepairOverwriteHoodiePropsProcedure.builder)
       ,(RunCleanProcedure.NAME, RunCleanProcedure.builder)
       ,(ValidateHoodieSyncProcedure.NAME, ValidateHoodieSyncProcedure.builder)
+      ,(ShowInvalidParquetProcedure.NAME, ShowInvalidParquetProcedure.builder)
     )
   }
 }
