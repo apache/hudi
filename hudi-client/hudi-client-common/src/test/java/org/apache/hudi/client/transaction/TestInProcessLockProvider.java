@@ -163,7 +163,6 @@ public class TestInProcessLockProvider {
   @Test
   public void testTryUnLockByDifferentThread() {
     InProcessLockProvider inProcessLockProvider = new InProcessLockProvider(lockConfiguration, hadoopConfiguration);
-    final AtomicBoolean writer2Completed = new AtomicBoolean(false);
     final AtomicBoolean writer3Completed = new AtomicBoolean(false);
 
     // Main test thread
