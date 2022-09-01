@@ -34,7 +34,7 @@ import java.io.IOException;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.cli.utils.TimelineUtil.countNewRecords;
+import static org.apache.hudi.cli.utils.CommitUtil.countNewRecords;
 
 /**
  * CLI command to display sync options.

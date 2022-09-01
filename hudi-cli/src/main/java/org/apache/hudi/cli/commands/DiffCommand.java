@@ -30,10 +30,8 @@ import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.NumericUtils;
-import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.Option;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.springframework.shell.core.CommandMarker;
 import org.springframework.shell.core.annotation.CliCommand;
 import org.springframework.shell.core.annotation.CliOption;
@@ -44,10 +42,14 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.cli.utils.TimelineUtil.getTimeDaysAgo;
+import static org.apache.hudi.cli.utils.CommitUtil.getTimeDaysAgo;
+import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
+import static org.apache.hudi.common.util.StringUtils.nonEmpty;
+import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 
 /**
  * Given a file id or partition value, this command line utility tracks the changes to the file group or partition across range of commits.
@@ -56,7 +58,8 @@ import static org.apache.hudi.cli.utils.TimelineUtil.getTimeDaysAgo;
 @Component
 public class DiffCommand implements CommandMarker {
 
-  private static final Logger LOG = LogManager.getLogger(DiffCommand.class);
+  private static final BiFunction<HoodieWriteStat, String, Boolean> FILE_ID_CHECKER = (writeStat, fileId) -> fileId.equals(writeStat.getFileId());
+  private static final BiFunction<HoodieWriteStat, String, Boolean> PARTITION_CHECKER = (writeStat, partitionPath) -> partitionPath.equals(writeStat.getPartitionPath());
 
   @CliCommand(value = "diff file", help = "Check how file differs across range of commits")
   public String diffFile(
@@ -73,7 +76,7 @@ public class DiffCommand implements CommandMarker {
     return printCommitsWithMetadataForFileId(timeline, limit, sortByField, descending, headerOnly, "", fileId);
   }
 
-  @CliCommand(value = "diff partition", help = "Check how file differs across range of commits")
+  @CliCommand(value = "diff partition", help = "Check how file differs across range of commits. It is meant to be used only for partitioned tables.")
   public String diffPartition(
       @CliOption(key = {"partitionPath"}, help = "Relative partition path to diff across range of commits", mandatory = true) String partitionPath,
       @CliOption(key = {"startTs"}, help = "start time for compactions, default: now - 10 days") String startTs,
@@ -89,12 +92,14 @@ public class DiffCommand implements CommandMarker {
   }
 
   private HoodieDefaultTimeline getTimelineInRange(String startTs, String endTs, boolean includeArchivedTimeline) {
-    if (StringUtils.isNullOrEmpty(startTs)) {
+    if (isNullOrEmpty(startTs)) {
       startTs = getTimeDaysAgo(10);
     }
-    if (StringUtils.isNullOrEmpty(endTs)) {
+    if (isNullOrEmpty(endTs)) {
       endTs = getTimeDaysAgo(1);
     }
+    checkArgument(nonEmpty(startTs), "startTs is null or empty");
+    checkArgument(nonEmpty(endTs), "endTs is null or empty");
     HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
     HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
     if (includeArchivedTimeline) {
@@ -112,36 +117,39 @@ public class DiffCommand implements CommandMarker {
                                                    final boolean headerOnly,
                                                    final String tempTableName,
                                                    final String fileId) throws IOException {
-    final List<Comparable[]> rows = new ArrayList<>();
+    return printDiffWithMetadata(timeline, limit, sortByField, descending, headerOnly, tempTableName, fileId, FILE_ID_CHECKER);
+  }
 
-    final List<HoodieInstant> commits = timeline.getCommitsTimeline().filterCompletedInstants()
+  private String printCommitsWithMetadataForPartition(HoodieDefaultTimeline timeline,
+                                                      final Integer limit,
+                                                      final String sortByField,
+                                                      final boolean descending,
+                                                      final boolean headerOnly,
+                                                      final String tempTableName,
+                                                      final String partition) throws IOException {
+    return printDiffWithMetadata(timeline, limit, sortByField, descending, headerOnly, tempTableName, partition, PARTITION_CHECKER);
+  }
+
+  private String printDiffWithMetadata(HoodieDefaultTimeline timeline, Integer limit, String sortByField, boolean descending, boolean headerOnly, String tempTableName, String diffEntity,
+                                       BiFunction<HoodieWriteStat, String, Boolean> diffEntityChecker) throws IOException {
+    List<Comparable[]> rows = new ArrayList<>();
+    List<HoodieInstant> commits = timeline.getCommitsTimeline().filterCompletedInstants()
         .getInstants().sorted(HoodieInstant.COMPARATOR.reversed()).collect(Collectors.toList());
 
     for (final HoodieInstant commit : commits) {
-      if (timeline.getInstantDetails(commit).isPresent()) {
-        final HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
-            timeline.getInstantDetails(commit).get(),
-            HoodieCommitMetadata.class);
-
+      Option<byte[]> instantDetails = timeline.getInstantDetails(commit);
+      if (instantDetails.isPresent()) {
+        HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(instantDetails.get(), HoodieCommitMetadata.class);
         for (Map.Entry<String, List<HoodieWriteStat>> partitionWriteStat :
             commitMetadata.getPartitionToWriteStats().entrySet()) {
           for (HoodieWriteStat hoodieWriteStat : partitionWriteStat.getValue()) {
-            if (fileId.equals(hoodieWriteStat.getFileId())) {
-              rows.add(new Comparable[] {commit.getAction(), commit.getTimestamp(), hoodieWriteStat.getPartitionPath(),
-                  hoodieWriteStat.getFileId(), hoodieWriteStat.getPrevCommit(), hoodieWriteStat.getNumWrites(),
-                  hoodieWriteStat.getNumInserts(), hoodieWriteStat.getNumDeletes(),
-                  hoodieWriteStat.getNumUpdateWrites(), hoodieWriteStat.getTotalWriteErrors(),
-                  hoodieWriteStat.getTotalLogBlocks(), hoodieWriteStat.getTotalCorruptLogBlock(),
-                  hoodieWriteStat.getTotalRollbackBlocks(), hoodieWriteStat.getTotalLogRecords(),
-                  hoodieWriteStat.getTotalUpdatedRecordsCompacted(), hoodieWriteStat.getTotalWriteBytes()
-              });
-            }
+            populateRows(rows, commit, hoodieWriteStat, diffEntity, diffEntityChecker);
           }
         }
       }
     }
 
-    final Map<String, Function<Object, String>> fieldNameToConverterMap = new HashMap<>();
+    Map<String, Function<Object, String>> fieldNameToConverterMap = new HashMap<>();
     fieldNameToConverterMap.put(
         HoodieTableHeaderFields.HEADER_TOTAL_BYTES_WRITTEN,
         entry -> NumericUtils.humanReadableByteCount((Double.parseDouble(entry.toString()))));
@@ -150,47 +158,27 @@ public class DiffCommand implements CommandMarker {
         fieldNameToConverterMap, sortByField, descending, limit, headerOnly, rows, tempTableName);
   }
 
-  private String printCommitsWithMetadataForPartition(HoodieDefaultTimeline timeline,
-                                                      final Integer limit, final String sortByField,
-                                                      final boolean descending,
-                                                      final boolean headerOnly,
-                                                      final String tempTableName,
-                                                      final String partition) throws IOException {
-    final List<Comparable[]> rows = new ArrayList<>();
-
-    final List<HoodieInstant> commits = timeline.getCommitsTimeline().filterCompletedInstants()
-        .getInstants().sorted(HoodieInstant.COMPARATOR.reversed()).collect(Collectors.toList());
-
-    for (final HoodieInstant commit : commits) {
-      if (timeline.getInstantDetails(commit).isPresent()) {
-        final HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
-            timeline.getInstantDetails(commit).get(),
-            HoodieCommitMetadata.class);
-
-        for (Map.Entry<String, List<HoodieWriteStat>> partitionWriteStat :
-            commitMetadata.getPartitionToWriteStats().entrySet()) {
-          for (HoodieWriteStat hoodieWriteStat : partitionWriteStat.getValue()) {
-            if (partition.equals(hoodieWriteStat.getPartitionPath())) {
-              rows.add(new Comparable[] {commit.getAction(), commit.getTimestamp(), hoodieWriteStat.getPartitionPath(),
-                  hoodieWriteStat.getFileId(), hoodieWriteStat.getPrevCommit(), hoodieWriteStat.getNumWrites(),
-                  hoodieWriteStat.getNumInserts(), hoodieWriteStat.getNumDeletes(),
-                  hoodieWriteStat.getNumUpdateWrites(), hoodieWriteStat.getTotalWriteErrors(),
-                  hoodieWriteStat.getTotalLogBlocks(), hoodieWriteStat.getTotalCorruptLogBlock(),
-                  hoodieWriteStat.getTotalRollbackBlocks(), hoodieWriteStat.getTotalLogRecords(),
-                  hoodieWriteStat.getTotalUpdatedRecordsCompacted(), hoodieWriteStat.getTotalWriteBytes()
-              });
-            }
-          }
-        }
-      }
+  private void populateRows(List<Comparable[]> rows, HoodieInstant commit, HoodieWriteStat hoodieWriteStat,
+                            String value, BiFunction<HoodieWriteStat, String, Boolean> checker) {
+    if (checker.apply(hoodieWriteStat, value)) {
+      rows.add(new Comparable[] {
+          commit.getAction(),
+          commit.getTimestamp(),
+          hoodieWriteStat.getPartitionPath(),
+          hoodieWriteStat.getFileId(),
+          hoodieWriteStat.getPrevCommit(),
+          hoodieWriteStat.getNumWrites(),
+          hoodieWriteStat.getNumInserts(),
+          hoodieWriteStat.getNumDeletes(),
+          hoodieWriteStat.getNumUpdateWrites(),
+          hoodieWriteStat.getTotalWriteErrors(),
+          hoodieWriteStat.getTotalLogBlocks(),
+          hoodieWriteStat.getTotalCorruptLogBlock(),
+          hoodieWriteStat.getTotalRollbackBlocks(),
+          hoodieWriteStat.getTotalLogRecords(),
+          hoodieWriteStat.getTotalUpdatedRecordsCompacted(),
+          hoodieWriteStat.getTotalWriteBytes()
+      });
     }
-
-    final Map<String, Function<Object, String>> fieldNameToConverterMap = new HashMap<>();
-    fieldNameToConverterMap.put(
-        HoodieTableHeaderFields.HEADER_TOTAL_BYTES_WRITTEN,
-        entry -> NumericUtils.humanReadableByteCount((Double.parseDouble(entry.toString()))));
-
-    return HoodiePrintHelper.print(HoodieTableHeaderFields.getTableHeaderWithExtraMetadata(),
-        fieldNameToConverterMap, sortByField, descending, limit, headerOnly, rows, tempTableName);
   }
 }

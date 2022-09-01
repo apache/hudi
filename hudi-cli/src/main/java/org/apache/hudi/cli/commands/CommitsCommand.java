@@ -48,8 +48,8 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.cli.utils.TimelineUtil.getTimeDaysAgo;
-import static org.apache.hudi.cli.utils.TimelineUtil.getTimeline;
+import static org.apache.hudi.cli.utils.CommitUtil.getTimeDaysAgo;
+import static org.apache.hudi.common.table.timeline.TimelineUtils.getTimeline;
 
 /**
  * CLI command to display commits options.

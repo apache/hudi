@@ -176,4 +176,13 @@ public class TimelineUtils {
       throw new HoodieIOException("Unable to read instant information: " + instant + " for " + metaClient.getBasePath(), e);
     }
   }
+
+  public static HoodieDefaultTimeline getTimeline(HoodieTableMetaClient metaClient, boolean includeArchivedTimeline) {
+    HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
+    if (includeArchivedTimeline) {
+      HoodieArchivedTimeline archivedTimeline = metaClient.getArchivedTimeline();
+      return archivedTimeline.mergeTimeline(activeTimeline);
+    }
+    return activeTimeline;
+  }
 }

@@ -70,7 +70,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.cli.utils.TimelineUtil.getTimeDaysAgo;
+import static org.apache.hudi.cli.utils.CommitUtil.getTimeDaysAgo;
 
 /**
  * CLI command to display compaction related options.

@@ -364,10 +364,8 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
   public HoodieDefaultTimeline getWriteTimeline() {
     // filter in-memory instants
     Set<String> validActions = CollectionUtils.createSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, COMPACTION_ACTION, REPLACE_COMMIT_ACTION);
-    return new HoodieDefaultTimeline(
-        getInstants()
-            .filter(i -> readCommits.containsKey(i.getTimestamp()))
-            .filter(s -> validActions.contains(s.getAction())),
-        details);
+    return new HoodieDefaultTimeline(getInstants().filter(i ->
+            readCommits.containsKey(i.getTimestamp()))
+        .filter(s -> validActions.contains(s.getAction())), details);
   }
 }
