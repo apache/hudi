@@ -207,6 +207,12 @@ REFRESH database.table_name
 ## Redshift Spectrum
 To set up Redshift Spectrum for querying Hudi, see the [Query Engine Setup](/docs/0.10.0/query_engine_setup#redshift-spectrum) page.
 
+## Doris
+To set up Doris for querying Hudi, see the [Query Engine Setup](/docs/0.10.0/query_engine_setup#doris) page.
+
+## StarRocks
+To set up StarRocks for querying Hudi, see the [Query Engine Setup](/docs/0.10.0/query_engine_setup#starrocks) page.
+
 ## Support Matrix
 
 Following tables show whether a given query is supported on specific query engine.
@@ -223,6 +229,8 @@ Following tables show whether a given query is supported on specific query engin
 |**Trino**|Y|N|
 |**Impala**|Y|N|
 |**Redshift Spectrum** |Y|N|
+| **Doris**             |Y|N|
+| **StarRocks**         |Y|N|
 
 
 Note that `Read Optimized` queries are not applicable for COPY_ON_WRITE tables.
