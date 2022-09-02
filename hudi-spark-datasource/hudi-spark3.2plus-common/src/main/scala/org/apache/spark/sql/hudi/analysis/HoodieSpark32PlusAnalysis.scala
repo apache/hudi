@@ -43,7 +43,7 @@ import org.apache.spark.sql.{AnalysisException, SQLContext, SparkSession}
  *
  * Check out HUDI-4178 for more details
  */
-class HoodieDataSourceV2ToV1Fallback(sparkSession: SparkSession) extends Rule[LogicalPlan]
+case class HoodieDataSourceV2ToV1Fallback(sparkSession: SparkSession) extends Rule[LogicalPlan]
   with ProvidesHoodieConfig {
 
   override def apply(plan: LogicalPlan): LogicalPlan = plan match {

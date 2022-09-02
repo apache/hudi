@@ -65,18 +65,31 @@ object HoodieAnalysis extends SparkAdapterSupport {
       session => HoodieAnalysis(session)
     )
 
-    if (HoodieSparkUtils.gteqSpark3_1) {
-      val spark3ResolveLogicalRelationsClass = "org.apache.spark.sql.hudi.analysis.HoodieSpark3ResolveLogicalRelations"
-      val spark3ResolveLogicalRelations: RuleBuilder =
-        _ => ReflectionUtils.loadClass(spark3ResolveLogicalRelationsClass).asInstanceOf[Rule[LogicalPlan]]
+    if (HoodieSparkUtils.isSpark3) {
+      if (HoodieSparkUtils.gteqSpark3_1) {
+        val spark3ResolveLogicalRelationsClass = "org.apache.spark.sql.hudi.analysis.HoodieSpark3ResolveLogicalRelations"
+        val spark3ResolveLogicalRelations: RuleBuilder =
+          _ => ReflectionUtils.loadClass(spark3ResolveLogicalRelationsClass).asInstanceOf[Rule[LogicalPlan]]
 
-      val dataSourceV2ToV1FallbackClass = "org.apache.spark.sql.hudi.analysis.HoodieDataSourceV2ToV1Fallback"
-      val dataSourceV2ToV1Fallback: RuleBuilder =
-        session => ReflectionUtils.loadClass(dataSourceV2ToV1FallbackClass, session).asInstanceOf[Rule[LogicalPlan]]
+        rules += spark3ResolveLogicalRelations
+      }
 
-      val spark32PlusResolveReferencesClass = "org.apache.spark.sql.hudi.analysis.HoodieSpark32PlusResolveReferences"
-      val spark32PlusResolveReferences: RuleBuilder =
-        session => ReflectionUtils.loadClass(spark32PlusResolveReferencesClass, session).asInstanceOf[Rule[LogicalPlan]]
+      if (HoodieSparkUtils.gteqSpark3_2) {
+        val dataSourceV2ToV1FallbackClass = "org.apache.spark.sql.hudi.analysis.HoodieDataSourceV2ToV1Fallback"
+        val dataSourceV2ToV1Fallback: RuleBuilder =
+          session => ReflectionUtils.loadClass(dataSourceV2ToV1FallbackClass, session).asInstanceOf[Rule[LogicalPlan]]
+
+        val spark32PlusResolveReferencesClass = "org.apache.spark.sql.hudi.analysis.HoodieSpark32PlusResolveReferences"
+        val spark32PlusResolveReferences: RuleBuilder =
+          session => ReflectionUtils.loadClass(spark32PlusResolveReferencesClass, session).asInstanceOf[Rule[LogicalPlan]]
+
+        // NOTE: PLEASE READ CAREFULLY
+        //
+        // It's critical for this rules to follow in this order; re-ordering this rules might lead to changes in
+        // behavior of Spark's analysis phase (for ex, DataSource V2 to V1 fallback might not kick in before other rules,
+        // leading to all relations resolving as V2 instead of current expectation of them being resolved as V1)
+        rules ++= Seq(dataSourceV2ToV1Fallback, spark32PlusResolveReferences)
+      }
 
       val resolveAlterTableCommandsClass =
         if (HoodieSparkUtils.gteqSpark3_3) {
@@ -92,13 +105,7 @@ object HoodieAnalysis extends SparkAdapterSupport {
       val resolveAlterTableCommands: RuleBuilder =
         session => ReflectionUtils.loadClass(resolveAlterTableCommandsClass, session).asInstanceOf[Rule[LogicalPlan]]
 
-      // NOTE: PLEASE READ CAREFULLY
-      //
-      // It's critical for this rules to follow in this order; re-ordering this rules might lead to changes in
-      // behavior of Spark's analysis phase (for ex, DataSource V2 to V1 fallback might not kick in before other rules,
-      // leading to all relations resolving as V2 instead of current expectation of them being resolved as V1)
-      rules ++= Seq(spark3ResolveLogicalRelations, dataSourceV2ToV1Fallback, spark32PlusResolveReferences,
-        resolveAlterTableCommands)
+      rules += resolveAlterTableCommands
     }
 
     rules
@@ -115,11 +122,15 @@ object HoodieAnalysis extends SparkAdapterSupport {
       val spark3FoldLogicalRelations: RuleBuilder =
         _ => ReflectionUtils.loadClass(spark3FoldLogicalRelationsClass).asInstanceOf[Rule[LogicalPlan]]
 
+      rules += spark3FoldLogicalRelations
+    }
+
+    if (HoodieSparkUtils.gteqSpark3_2) {
       val spark3PostHocResolutionClass = "org.apache.spark.sql.hudi.analysis.HoodieSpark32PlusPostAnalysisRule"
       val spark3PostHocResolution: RuleBuilder =
         session => ReflectionUtils.loadClass(spark3PostHocResolutionClass, session).asInstanceOf[Rule[LogicalPlan]]
 
-      rules ++= Seq(spark3FoldLogicalRelations, spark3PostHocResolution)
+      rules += spark3PostHocResolution
     }
 
     rules
