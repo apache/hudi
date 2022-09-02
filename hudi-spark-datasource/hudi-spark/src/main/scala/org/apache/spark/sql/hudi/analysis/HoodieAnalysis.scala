@@ -66,8 +66,8 @@ object HoodieAnalysis extends SparkAdapterSupport {
     )
 
     if (HoodieSparkUtils.gteqSpark3_1) {
-      val resolveHoodieLogicalRelationsClass = "org.apache.spark.sql.hudi.analysis.ResolveHoodieLogicalRelations"
-      val resolveHoodieLogicalRelations = ReflectionUtils.loadClass(resolveHoodieLogicalRelationsClass)
+      val resolveHoodieLogicalRelationsClass = "org.apache.spark.sql.hudi.analysis.HoodieSpark3ResolveLogicalRelations"
+      val spark3ResolveLogicalRelations = ReflectionUtils.loadClass(resolveHoodieLogicalRelationsClass)
 
       val dataSourceV2ToV1FallbackClass = "org.apache.spark.sql.hudi.analysis.HoodieDataSourceV2ToV1Fallback"
       val dataSourceV2ToV1Fallback: RuleBuilder =
@@ -96,7 +96,7 @@ object HoodieAnalysis extends SparkAdapterSupport {
       // It's critical for this rules to follow in this order; re-ordering this rules might lead to changes in
       // behavior of Spark's analysis phase (for ex, DataSource V2 to V1 fallback might not kick in before other rules,
       // leading to all relations resolving as V2 instead of current expectation of them being resolved as V1)
-      rules ++= Seq(resolveHoodieLogicalRelations, dataSourceV2ToV1Fallback, spark3ResolveReferences,
+      rules ++= Seq(spark3ResolveLogicalRelations, dataSourceV2ToV1Fallback, spark32PlusResolveReferences,
         resolveAlterTableCommands)
     }
 
@@ -110,14 +110,14 @@ object HoodieAnalysis extends SparkAdapterSupport {
     )
 
     if (HoodieSparkUtils.gteqSpark3_1) {
-      val foldHoodieLogicalRelationsClass = "org.apache.spark.sql.hudi.analysis.FoldHoodieLogicalRelations"
-      val foldHoodieLogicalRelations = ReflectionUtils.loadClass(foldHoodieLogicalRelationsClass)
+      val spark3FoldLogicalRelationsClass = "org.apache.spark.sql.hudi.analysis.HoodieSpark3FoldLogicalRelations"
+      val spark3FoldLogicalRelations = ReflectionUtils.loadClass(spark3FoldLogicalRelationsClass)
 
       val spark3PostHocResolutionClass = "org.apache.spark.sql.hudi.analysis.HoodieSpark32PlusPostAnalysisRule"
       val spark3PostHocResolution: RuleBuilder =
         session => ReflectionUtils.loadClass(spark3PostHocResolutionClass, session).asInstanceOf[Rule[LogicalPlan]]
 
-      rules ++= Seq(foldHoodieLogicalRelations, spark3PostHocResolution)
+      rules ++= Seq(spark3FoldLogicalRelations, spark3PostHocResolution)
     }
 
     rules
