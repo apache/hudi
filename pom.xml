@@ -1128,6 +1128,10 @@
             <groupId>log4j</groupId>
             <artifactId>log4j</artifactId>
           </exclusion>
+          <exclusion>
+            <groupId>org.apache.hbase</groupId>
+            <artifactId>hbase-common</artifactId>
+          </exclusion>
         </exclusions>
       </dependency>
       <dependency>
@@ -1215,6 +1219,10 @@
           <exclusion>
             <groupId>log4j</groupId>
             <artifactId>log4j</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>org.apache.hbase</groupId>
+            <artifactId>hbase-client</artifactId>
           </exclusion>
         </exclusions>
       </dependency>

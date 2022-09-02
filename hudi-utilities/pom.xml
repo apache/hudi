@@ -386,12 +386,6 @@
       <groupId>${hive.groupid}</groupId>
       <artifactId>hive-service</artifactId>
       <version>${hive.version}</version>
-      <exclusions>
-        <exclusion>
-          <groupId>org.apache.hbase</groupId>
-          <artifactId>hbase-common</artifactId>
-        </exclusion>
-      </exclusions>
     </dependency>
 
     <!-- Hoodie - Test -->
