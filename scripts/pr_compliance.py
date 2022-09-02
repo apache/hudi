@@ -96,10 +96,10 @@ def body_is_ok(body,PRINT_DEBUG=False):
                     return False
 
                 # an explanation is not required for none or low
-                if "none" in line or "low" in line:
+                if "NONE" in line.upper() or "LOW" in line.upper():
                     state = "CHECKLIST"
                     found = False
-                elif "medium" in line or "high" in line:
+                elif "MEDIUM" in line.upper() or "HIGH" in line.upper():
                     # an explanation is required so we don't change state
                     found = True
                 else:
