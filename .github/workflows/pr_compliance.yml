@@ -3,13 +3,10 @@ on:
   pull_request:
     branches:
       - master
-  issue_comment:
-    types: [created, edited]
 
 jobs:
   validate-pr:
     runs-on: ubuntu-latest
-    if: ${{ github.event.issue.pull_request }}
     env:
       REQUEST_BODY: ${{ github.event.pull_request.body }}
       REQUEST_TITLE: ${{ github.event.pull_request.body }}
