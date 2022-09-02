@@ -144,7 +144,7 @@ public class Pipelines {
         // sort by partition keys
         dataStream = dataStream
             .transform("partition_key_sorter",
-                TypeInformation.of(RowData.class),
+                InternalTypeInfo.of(rowType),
                 sortOperatorGen.createSortOperator())
             .setParallelism(conf.getInteger(FlinkOptions.WRITE_TASKS));
         ExecNodeUtil.setManagedMemoryWeight(dataStream.getTransformation(),
