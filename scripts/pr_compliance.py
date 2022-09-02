@@ -39,6 +39,7 @@ def body_is_ok(body,PRINT_DEBUG=False):
     state = "CHANGELOGS"
     found = False
     def print_error(message):
+        os.environ["COMPLIANCE_DEBUG_OUT"] = f"ERROR:(state: {state}, found: {found}, message: {message}"
         if PRINT_DEBUG:
             print(f"ERROR:(state: {state}, found: {found}, message: {message}")
     for line in body.splitlines():
@@ -482,7 +483,10 @@ if __name__ == '__main__':
     body = os.getenv("REQUEST_BODY")
     if not title_is_ok(title):
         exit(-1)
+    os.environ["TITLE_COMPLIES"] = "true"
     if not body_is_ok(body):
         exit(-2)
+    os.environ["BODY_COMPLIES"] = "true"
+    exit(0)
 
 
