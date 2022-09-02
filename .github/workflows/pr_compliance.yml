@@ -1,7 +1,6 @@
 name: validate pr
 on:
   pull_request:
-    types: [opened, edited, synchronize, reopened]
     branches:
       - master
   issue_comment:
