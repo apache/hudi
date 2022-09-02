@@ -26,12 +26,16 @@ import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression
 import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark31HoodieParquetFileFormat}
-import org.apache.spark.sql.execution.datasources.{FilePartition, FileScanRDD, PartitionedFile}
+import org.apache.spark.sql.execution.datasources.{FilePartition, FileScanRDD, LogicalRelation, PartitionedFile}
 import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.parser.{HoodieExtendedParserInterface, HoodieSpark3_1ExtendedSqlParser}
 import org.apache.spark.sql.types.{DataType, Metadata, MetadataBuilder, StructType}
 import org.apache.spark.sql.vectorized.ColumnarUtils
 import org.apache.spark.sql._
+import org.apache.spark.sql.catalyst.analysis.EliminateSubqueryAliases
+import org.apache.spark.sql.catalyst.catalog.CatalogTable
+import org.apache.spark.sql.connector.catalog.V2TableWithV1Fallback
+import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 
 /**
  * Implementation of [[SparkAdapter]] for Spark 3.1.x
@@ -50,6 +54,14 @@ class Spark3_1Adapter extends BaseSpark3Adapter {
   override def getCatalystPlanUtils: HoodieCatalystPlansUtils = HoodieSpark31CatalystPlanUtils
 
   override def getCatalystExpressionUtils: HoodieCatalystExpressionUtils = HoodieSpark31CatalystExpressionUtils
+
+  override def resolveHoodieTable(plan: LogicalPlan): Option[CatalogTable] = {
+    EliminateSubqueryAliases(plan) match {
+      case HoodieLogicalRelation(LogicalRelation(_, _, Some(table), _)) => Some(table)
+      case LogicalRelation(_, _, Some(table), _) if isHoodieTable(table) => Some(table)
+      case _ => None
+    }
+  }
 
   override def createAvroSerializer(rootCatalystType: DataType, rootAvroType: Schema, nullable: Boolean): HoodieAvroSerializer =
     new HoodieSpark3_1AvroSerializer(rootCatalystType, rootAvroType, nullable)
