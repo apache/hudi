@@ -166,7 +166,6 @@
     <jetty.version>9.4.15.v20190215</jetty.version>
     <htrace.version>3.1.0-incubating</htrace.version>
     <hbase.version>2.4.9</hbase.version>
-    <hbase-thirdparty.version>3.5.1</hbase-thirdparty.version>
     <codehaus-jackson.version>1.9.13</codehaus-jackson.version>
     <h2.version>1.4.199</h2.version>
     <awaitility.version>3.1.2</awaitility.version>
@@ -378,9 +377,17 @@
                     <exclude>org.sl4fj:slf4j-jcl</exclude>
                     <exclude>log4j:log4j</exclude>
                     <exclude>ch.qos.logback:logback-classic</exclude>
+                    <!-- NOTE: We're banning any HBase deps versions other than the approved ${hbase.version},
+                               which is aimed at preventing the classpath collisions w/ transitive deps usually) -->
+                    <exclude>org.apache.hbase:hbase-common:*</exclude>
+                    <exclude>org.apache.hbase:hbase-client:*</exclude>
+                    <exclude>org.apache.hbase:hbase-server:*</exclude>
                   </excludes>
                   <includes>
                     <include>org.slf4j:slf4j-simple:*:*:test</include>
+                    <exclude>org.apache.hbase:hbase-common:${hbase.version}</exclude>
+                    <exclude>org.apache.hbase:hbase-client:${hbase.version}</exclude>
+                    <exclude>org.apache.hbase:hbase-server:${hbase.version}</exclude>
                   </includes>
                 </bannedDependencies>
               </rules>
