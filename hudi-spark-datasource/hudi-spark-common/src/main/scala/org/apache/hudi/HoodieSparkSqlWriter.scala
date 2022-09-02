@@ -311,7 +311,7 @@ object HoodieSparkSqlWriter {
           }
           case _ => { // any other operation
             // Convert to RDD[HoodieRecord]
-            val genericRecords: RDD[GenericRecord] = HoodieSparkUtils.createRdd(df, structName, nameSpace, reconcileSchema,
+            val avroRecords: RDD[GenericRecord] = HoodieSparkUtils.createRdd(df, structName, nameSpace, reconcileSchema,
               org.apache.hudi.common.util.Option.of(writerSchema))
 
             // Check whether partition columns should be persisted w/in the data-files, or should
@@ -319,17 +319,21 @@ object HoodieSparkSqlWriter {
             // behavior by default)
             // TODO move partition columns handling down into the handlers
             val shouldDropPartitionColumns = hoodieConfig.getBoolean(DataSourceWriteOptions.DROP_PARTITION_COLUMNS)
-            val dataFileSchemaStr = if (shouldDropPartitionColumns) {
-              generateSchemaWithoutPartitionColumns(partitionColumns, writerSchema).toString
-            } else {
-              writerSchema.toString
-            }
+
+            val dataFileSchema =
+              if (shouldDropPartitionColumns) generateSchemaWithoutPartitionColumns(partitionColumns, writerSchema)
+              else writerSchema
+            // NOTE: Avro's [[Schema]] can't be effectively serialized by JVM native serialization framework
+            //       (due to containing cyclic refs), therefore we have to convert it to string before
+            //       passing onto the Executor
+            val dataFileSchemaStr = dataFileSchema.toString
 
             val shouldCombine = parameters(INSERT_DROP_DUPS.key()).toBoolean ||
               operation.equals(WriteOperationType.UPSERT) ||
               parameters.getOrElse(HoodieWriteConfig.COMBINE_BEFORE_INSERT.key(),
                 HoodieWriteConfig.COMBINE_BEFORE_INSERT.defaultValue()).toBoolean
-            val hoodieAllIncomingRecords = genericRecords.mapPartitions(it => {
+
+            val hoodieRecords = avroRecords.mapPartitions(it => {
               val dataFileSchema = new Schema.Parser().parse(dataFileSchemaStr)
               it.map { avroRecord =>
                 val processedRecord = if (shouldDropPartitionColumns) {
@@ -352,10 +356,11 @@ object HoodieSparkSqlWriter {
               }
             }).toJavaRDD()
 
-            // Create a HoodieWriteClient & issue the write.
-            val client = hoodieWriteClient.getOrElse(DataSourceUtils.createHoodieClient(jsc, writerSchema.toString, path,
-              tblName, mapAsJavaMap(addSchemaEvolutionParameters(parameters, internalSchemaOpt) - HoodieWriteConfig.AUTO_COMMIT_ENABLE.key)
-            )).asInstanceOf[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]]
+            val client = hoodieWriteClient.getOrElse {
+              val finalOpts = addSchemaEvolutionParameters(parameters, internalSchemaOpt) - HoodieWriteConfig.AUTO_COMMIT_ENABLE.key
+              // TODO(HUDI-4772) proper writer-schema has to be specified here
+              DataSourceUtils.createHoodieClient(jsc, dataFileSchemaStr, path, tblName, mapAsJavaMap(finalOpts))
+            }.asInstanceOf[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]]
 
             if (isAsyncCompactionEnabled(client, tableConfig, parameters, jsc.hadoopConfiguration())) {
               asyncCompactionTriggerFn.get.apply(client)
@@ -365,14 +370,14 @@ object HoodieSparkSqlWriter {
               asyncClusteringTriggerFn.get.apply(client)
             }
 
-            val hoodieRecords =
+            val dedupedHoodieRecords =
               if (hoodieConfig.getBoolean(INSERT_DROP_DUPS)) {
-                DataSourceUtils.dropDuplicates(jsc, hoodieAllIncomingRecords, mapAsJavaMap(parameters))
+                DataSourceUtils.dropDuplicates(jsc, hoodieRecords, mapAsJavaMap(parameters))
               } else {
-                hoodieAllIncomingRecords
+                hoodieRecords
               }
             client.startCommitWithTime(instantTime, commitActionType)
-            val writeResult = DataSourceUtils.doWriteOperation(client, hoodieRecords, instantTime, operation)
+            val writeResult = DataSourceUtils.doWriteOperation(client, dedupedHoodieRecords, instantTime, operation)
             (writeResult, client)
           }
         }
