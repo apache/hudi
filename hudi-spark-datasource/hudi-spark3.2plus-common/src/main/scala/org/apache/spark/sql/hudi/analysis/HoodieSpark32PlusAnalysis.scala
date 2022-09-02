@@ -17,10 +17,8 @@
 
 package org.apache.spark.sql.hudi.analysis
 
-import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.{DataSourceReadOptions, DefaultSource, SparkAdapterSupport}
 import org.apache.spark.sql.HoodieSpark3CatalystPlanUtils.MatchResolvedTable
-import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.UnresolvedPartitionSpec
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogUtils}
 import org.apache.spark.sql.catalyst.plans.logcal.HoodieQuery
@@ -29,17 +27,13 @@ import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.catalyst.trees.TreeNodeTag
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.IdentifierHelper
 import org.apache.spark.sql.connector.catalog.{Table, V1Table}
-import org.apache.spark.sql.execution.datasources.PreWriteCheck.failAnalysis
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.execution.datasources.{DataSource, LogicalRelation}
-import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{getTableLocation, tableExistsInPath}
-import org.apache.spark.sql.hudi.analysis.HoodieSpark3Analysis.{HoodieV1OrV2Table, ResolvesToHudiTable, sparkAdapter}
+import org.apache.spark.sql.hudi.ProvidesHoodieConfig
+import org.apache.spark.sql.hudi.analysis.HoodieSpark32PlusAnalysis.{HoodieV1OrV2Table, ResolvesToHudiTable, sparkAdapter}
 import org.apache.spark.sql.hudi.catalog.HoodieInternalV2Table
 import org.apache.spark.sql.hudi.command.{AlterHoodieTableDropPartitionCommand, ShowHoodieTablePartitionsCommand, TruncateHoodieTableCommand}
-import org.apache.spark.sql.hudi.{HoodieSqlCommonUtils, ProvidesHoodieConfig}
 import org.apache.spark.sql.{AnalysisException, SQLContext, SparkSession}
-
-import scala.collection.JavaConverters.mapAsJavaMapConverter
 
 /**
  * NOTE: PLEASE READ CAREFULLY
@@ -82,7 +76,7 @@ class HoodieDataSourceV2ToV1Fallback(sparkSession: SparkSession) extends Rule[Lo
 /**
  * Rule for resolve hoodie's extended syntax or rewrite some logical plan.
  */
-case class HoodieSpark3ResolveReferences(sparkSession: SparkSession) extends Rule[LogicalPlan]
+case class HoodieSpark32PlusResolveReferences(sparkSession: SparkSession) extends Rule[LogicalPlan]
   with SparkAdapterSupport with ProvidesHoodieConfig {
 
   def apply(plan: LogicalPlan): LogicalPlan = plan resolveOperatorsUp {
@@ -115,7 +109,7 @@ case class HoodieSpark3ResolveReferences(sparkSession: SparkSession) extends Rul
  * Rule replacing resolved Spark's commands (not working for Hudi tables out-of-the-box) with
  * corresponding Hudi implementations
  */
-case class HoodieSpark3PostAnalysisRule(sparkSession: SparkSession) extends Rule[LogicalPlan] {
+case class HoodieSpark32PlusPostAnalysisRule(sparkSession: SparkSession) extends Rule[LogicalPlan] {
   override def apply(plan: LogicalPlan): LogicalPlan = {
     plan match {
       case ShowPartitions(MatchResolvedTable(_, id, HoodieV1OrV2Table(_)), specOpt, _) =>
@@ -143,33 +137,7 @@ case class HoodieSpark3PostAnalysisRule(sparkSession: SparkSession) extends Rule
   }
 }
 
-// TODO elaborate
-// TODO call out that can use Project in Spark 3.2+
-case class ResolveHoodieLogicalRelations() extends Rule[LogicalPlan] {
-  private val hudiLogicalRelationTag: TreeNodeTag[Boolean] = TreeNodeTag("__hudi_logical_relation")
-
-  override def apply(plan: LogicalPlan): LogicalPlan =
-    plan.transformDown {
-      case lr @ LogicalRelation(_, _, Some(table), _)
-        if sparkAdapter.isHoodieTable(table) && lr.getTagValue(hudiLogicalRelationTag).isEmpty =>
-        // NOTE: Have to make a copy here, since by default Spark is caching resolved [[LogicalRelation]]s
-        val logicalRelation = lr.newInstance()
-        logicalRelation.setTagValue(hudiLogicalRelationTag, true)
-
-        HoodieLogicalRelation(logicalRelation)
-    }
-}
-
-// TODO elaborate
-case class FoldHoodieLogicalRelations() extends Rule[LogicalPlan] {
-  override def apply(plan: LogicalPlan): LogicalPlan =
-    plan.transformDown {
-      // TODO elaborate
-      case hlr @ HoodieLogicalRelation(lr: LogicalRelation) => Project(hlr.output, lr)
-    }
-}
-
-object HoodieSpark3Analysis extends SparkAdapterSupport {
+object HoodieSpark32PlusAnalysis extends SparkAdapterSupport {
 
   private[sql] object HoodieV1OrV2Table {
     def unapply(table: Table): Option[CatalogTable] = table match {

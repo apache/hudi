@@ -73,9 +73,9 @@ object HoodieAnalysis extends SparkAdapterSupport {
       val dataSourceV2ToV1Fallback: RuleBuilder =
         session => ReflectionUtils.loadClass(dataSourceV2ToV1FallbackClass, session).asInstanceOf[Rule[LogicalPlan]]
 
-      val spark3ResolveReferencesClass = "org.apache.spark.sql.hudi.analysis.HoodieSpark3ResolveReferences"
-      val spark3ResolveReferences: RuleBuilder =
-        session => ReflectionUtils.loadClass(spark3ResolveReferencesClass, session).asInstanceOf[Rule[LogicalPlan]]
+      val spark32PlusResolveReferencesClass = "org.apache.spark.sql.hudi.analysis.HoodieSpark32PlusResolveReferences"
+      val spark32PlusResolveReferences: RuleBuilder =
+        session => ReflectionUtils.loadClass(spark32PlusResolveReferencesClass, session).asInstanceOf[Rule[LogicalPlan]]
 
       val resolveAlterTableCommandsClass =
         if (HoodieSparkUtils.gteqSpark3_3) {
@@ -113,7 +113,7 @@ object HoodieAnalysis extends SparkAdapterSupport {
       val foldHoodieLogicalRelationsClass = "org.apache.spark.sql.hudi.analysis.FoldHoodieLogicalRelations"
       val foldHoodieLogicalRelations = ReflectionUtils.loadClass(foldHoodieLogicalRelationsClass)
 
-      val spark3PostHocResolutionClass = "org.apache.spark.sql.hudi.analysis.HoodieSpark3PostAnalysisRule"
+      val spark3PostHocResolutionClass = "org.apache.spark.sql.hudi.analysis.HoodieSpark32PlusPostAnalysisRule"
       val spark3PostHocResolution: RuleBuilder =
         session => ReflectionUtils.loadClass(spark3PostHocResolutionClass, session).asInstanceOf[Rule[LogicalPlan]]
 
