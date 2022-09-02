@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.format.mor;
 
+import org.apache.flink.api.connector.source.SourceSplit;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.util.Option;
 
@@ -30,7 +31,7 @@ import java.util.List;
 /**
  * Represents an input split of source, actually a data bucket.
  */
-public class MergeOnReadInputSplit implements InputSplit {
+public class MergeOnReadInputSplit implements InputSplit, SourceSplit {
   private static final long serialVersionUID = 1L;
 
   private static final long NUM_NO_CONSUMPTION = 0L;
@@ -71,6 +72,11 @@ public class MergeOnReadInputSplit implements InputSplit {
   }
 
   public String getFileId() {
+    return fileId;
+  }
+
+  @Override
+  public String splitId() {
     return fileId;
   }
 

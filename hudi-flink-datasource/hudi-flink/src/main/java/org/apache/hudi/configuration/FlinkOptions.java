@@ -194,6 +194,11 @@ public class FlinkOptions extends HoodieConfig {
       .noDefaultValue()
       .withDescription("Parallelism of tasks that do actual read, default is the parallelism of the execution environment");
 
+  public static final ConfigOption<Integer> NUM_RECORDS_PER_BATCH = ConfigOptions
+      .key("num.records_per.batch")
+      .intType()
+      .defaultValue(10000)
+      .withDescription("num records per batch in single split");
   public static final ConfigOption<String> SOURCE_AVRO_SCHEMA_PATH = ConfigOptions
       .key("source.avro-schema.path")
       .stringType()

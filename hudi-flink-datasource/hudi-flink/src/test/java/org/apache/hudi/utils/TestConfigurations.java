@@ -108,6 +108,9 @@ public class TestConfigurations {
     for (String field : fields) {
       builder.append("  ").append(field).append(",\n");
     }
+    if (options.containsKey("watermark.expression")) {
+      builder.append(options.remove("watermark.expression")).append(",\n");
+    }
     builder.append("  PRIMARY KEY(").append(pkField).append(") NOT ENFORCED\n")
         .append(")\n");
     if (havePartition) {
