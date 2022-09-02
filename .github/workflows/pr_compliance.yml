@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       REQUEST_BODY: ${{ github.event.pull_request.body }}
-      REQUEST_TITLE: ${{ github.event.pull_request.body }}
+      REQUEST_TITLE: ${{ github.event.pull_request.title }}
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-python@v3
