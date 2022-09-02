@@ -1,0 +1,19 @@
+name: validate pr
+on:
+  pull_request:
+    branches:
+      - master
+jobs:
+  validate-pr:
+    runs-on: ubuntu-latest
+    env:
+      REQUEST_BODY: ${{ github.event.pull_request.body }}
+      REQUEST_TITLE: ${{ github.event.pull_request.body }}
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v3
+      - name: run script
+        run: python scripts/pr_compliance.py
+
+
+
