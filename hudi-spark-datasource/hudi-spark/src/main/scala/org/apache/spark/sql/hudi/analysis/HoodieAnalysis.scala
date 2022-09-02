@@ -66,8 +66,9 @@ object HoodieAnalysis extends SparkAdapterSupport {
     )
 
     if (HoodieSparkUtils.gteqSpark3_1) {
-      val resolveHoodieLogicalRelationsClass = "org.apache.spark.sql.hudi.analysis.HoodieSpark3ResolveLogicalRelations"
-      val spark3ResolveLogicalRelations = ReflectionUtils.loadClass(resolveHoodieLogicalRelationsClass)
+      val spark3ResolveLogicalRelationsClass = "org.apache.spark.sql.hudi.analysis.HoodieSpark3ResolveLogicalRelations"
+      val spark3ResolveLogicalRelations: RuleBuilder =
+        _ => ReflectionUtils.loadClass(spark3ResolveLogicalRelationsClass).asInstanceOf[Rule[LogicalPlan]]
 
       val dataSourceV2ToV1FallbackClass = "org.apache.spark.sql.hudi.analysis.HoodieDataSourceV2ToV1Fallback"
       val dataSourceV2ToV1Fallback: RuleBuilder =
@@ -111,7 +112,8 @@ object HoodieAnalysis extends SparkAdapterSupport {
 
     if (HoodieSparkUtils.gteqSpark3_1) {
       val spark3FoldLogicalRelationsClass = "org.apache.spark.sql.hudi.analysis.HoodieSpark3FoldLogicalRelations"
-      val spark3FoldLogicalRelations = ReflectionUtils.loadClass(spark3FoldLogicalRelationsClass)
+      val spark3FoldLogicalRelations: RuleBuilder =
+        _ => ReflectionUtils.loadClass(spark3FoldLogicalRelationsClass).asInstanceOf[Rule[LogicalPlan]]
 
       val spark3PostHocResolutionClass = "org.apache.spark.sql.hudi.analysis.HoodieSpark32PlusPostAnalysisRule"
       val spark3PostHocResolution: RuleBuilder =
