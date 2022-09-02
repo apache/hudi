@@ -24,7 +24,7 @@
 
 ## Approvers
  - @<approver1 @xushiyan>
- - @<approver2 github username>
+ - @<approver2 @codope>
 
 ## Status
 
@@ -50,7 +50,7 @@ What this RFC plan to do is to let Hudi support release a snapshot view and life
 Introduce any much background context which is relevant or necessary to understand the feature and design choices.
 typical scenarios and benefits of snapshot view:
 1. Basic idea:
-![img.png](img.png)
+![basic_design](basic_design.png)
 
 Create Snapshot view based on Hudi Savepoint
     * Create Snapshot views periodically by time(date time/processing time)
@@ -63,7 +63,7 @@ Because the data store is complete and has no merged details,
 So the data itself is to support the full amount of data calculation, also support incremental processing
 
 2. Compare to Hive solution
-![img_2.png](img_2.png)
+![resource_usage](resrouce_usage.png)
 
 The Snapshot view is created based on Hudi Savepoint, which significantly reduces the data storage space of some large tables
     * The space usage becomes (1 + (t-1) * p)/t
@@ -85,6 +85,116 @@ At the same time, it has benefit for incremental computing resource saving
 Describe the new thing you want to do in appropriate detail, how it fits into the project architecture. 
 Provide a detailed description of how you intend to implement this feature.This may be fairly extensive and have large subsections of its own. 
 Or it may be a few sentences. Use judgement based on the scope of the change.
+![basic_arch](basic_arch.png)
+
+### Extend Savepoint meta 
+``` diff
+{
+	"type": "record",
+	"name": "HoodieSavepointMetadata",
+	"namespace": "org.apache.hudi.avro.model",
+	"fields": [{
+		"name": "savepointedBy",
+		"type": {
+			"type": "string",
+			"avro.java.string": "String"
+		}
+	}, {
+		"name": "savepointedAt",
+		"type": "long"
+	}, {
+		"name": "comments",
+		"type": {
+			"type": "string",
+			"avro.java.string": "String"
+		}
+	}, {
+		"name": "partitionMetadata",
+		"type": {
+			"type": "map",
+			"values": {
+				"type": "record",
+				"name": "HoodieSavepointPartitionMetadata",
+				"fields": [{
+					"name": "partitionPath",
+					"type": {
+						"type": "string",
+						"avro.java.string": "String"
+					}
+				}, {
+					"name": "savepointDataFile",
+					"type": {
+						"type": "array",
+						"items": {
+							"type": "string",
+							"avro.java.string": "String"
+						}
+					}
+				}]
+			},
+			"avro.java.string": "String"
+		}
+	}, {
+		"name": "version",
+		"type": ["int", "null"],
+		"default": 1
++	}, {
++		"name": "snapshot_view",
++		"type": {
++			"type": "string",
++			"avro.java.string": "String"
++		}, {
++		"name": "snapshot_retain_days",
++		"type": ["int", "null"],
++		"default": 0
++	}
+	]
+}
+```
+### Operations
+* Create Snapshot View
+  create savepoint on a specific commit, meanwhile, create a new Hive external table name tablename_YYYYMMDD, add table storage properties as.of.instant=savepoint's timestamp， this table has the same basepath with the original one
+```sql
+call create_snapshot_view(table => 'hudi_table', commit_Time => 'commit_timestamp_from_timeline', snapshot_table => 'snapshot_hive_table');
+```
+
+| Parameter Name   | Required | Default                       | Remarks                                                                                       |
+|------------------| -------  |-------------------------------|-----------------------------------------------------------------------------------------------|
+| `table`          | `true`   | `--`                          | the Hive table name you want to create savepoint, must be a Hudi table, without database name |
+| `commit_Time`    | `false`  | `None`                        | the commit timestamp from Hudi timeline, if not provided, will use the latest commit          |
+| `user`           | `false`  | `""`                          | the user name will be saved in Hudi savepoint metadata                                        |
+| `comments`       | `false`  | `""`                          | the comment will be saved in Hudi savepoint metadata                                          |
+| `snapshot_table` | `false`  | `$table name + _$commit_time` | the snapshot view table name in hive                                                          |
+| `hms`            | `false`  | `None`                        | Hive metastore server used for syncing savepoint information                                  |
+
+* Delete Snapshot View
+  call delete savepoint command(via spark-sql or hudi-cli), meanwhile delete associated Hive table
+```sql
+call delete_snapshot_view(table => 'hudi_table', snapshot_table => 'snapshot_hive_table');
+```
+
+|  Parameter Name  | Required | Default | Remarks |
+|  --------------  | -------  | ------- | ------- |
+| `table`          | `true`   | `--`    | the Hive table name you want to delete savepoint, must be a Hudi table |
+| `instant_time`   | `true`   | `--`    | the savepoint timestamp from Hudi timeline, must provide |
+| `hive_sync`      | `false`  | `false` | whether to delete savepoint timestamp from Hive table serde properties |
+| `hms`            | `false`  | `None`  | Hive metastore server used for deleting savepoint information |
+* List Snapshot View
+```sql
+call show_savepoints(table => 'hudi_table');
+```
+
+|  Parameter Name  | Required | Default | Remarks |
+|  --------------  | -------  | ------- | ------- |
+| `table`          | `true`   | `--`    | the Hive table name you want to show savepoint list, must be a Hudi table |
+* Retain
+  we need to extend clean service to clean expired savepoints. user should set a retain number or period in table config
+* Reader 
+  Spark/Flink/Presto/Trino side all can read the Storage properties to get timestamp then get the specific file view.
+
+### Mor support
+
+### Precise Event time Snapshot
 
 ## Rollout/Adoption Plan
 
