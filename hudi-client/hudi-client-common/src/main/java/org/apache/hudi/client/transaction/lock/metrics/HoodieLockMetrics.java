@@ -46,7 +46,7 @@ public class HoodieLockMetrics {
     this.isMetricsEnabled = writeConfig.isMetricsOn();
     this.writeConfig = writeConfig;
 
-    if (writeConfig.isMetricsOn()) {
+    if (writeConfig.isMetricsOn() && writeConfig.isLockingMetricsEnabled()) {
       Metrics.init(writeConfig);
       MetricRegistry registry = Metrics.getInstance().getRegistry();
 
@@ -81,8 +81,8 @@ public class HoodieLockMetrics {
 
   public void updateLockAcquiredMetric() {
     if (isMetricsEnabled) {
-      long duration = lockApiRequestDurationTimer.endTimer();
-      lockApiRequestDuration.update(duration, TimeUnit.MILLISECONDS);
+      long durationMs = lockApiRequestDurationTimer.endTimer();
+      lockApiRequestDuration.update(durationMs, TimeUnit.MILLISECONDS);
       lockAttempts.inc();
     }
   }
@@ -96,8 +96,8 @@ public class HoodieLockMetrics {
 
   public void updateLockNotAcquiredMetric() {
     if (isMetricsEnabled) {
-      long duration = lockApiRequestDurationTimer.endTimer();
-      lockApiRequestDuration.update(duration, TimeUnit.MILLISECONDS);
+      long durationMs = lockApiRequestDurationTimer.endTimer();
+      lockApiRequestDuration.update(durationMs, TimeUnit.MILLISECONDS);
       failedLockAttempts.inc();
     }
   }
