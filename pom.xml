@@ -1922,6 +1922,27 @@
       </build>
     </profile>
 
+    <!-- Default is "spark2" profile, and "spark2" is an alias of "spark2.4" -->
+    <!-- NOTE: This profile is deprecated and soon will be removed -->
+    <profile>
+      <id>spark2</id>
+      <modules>
+        <module>hudi-spark-datasource/hudi-spark2</module>
+        <module>hudi-spark-datasource/hudi-spark2-common</module>
+      </modules>
+      <properties>
+        <skip.hudi-spark3.unit.tests>true</skip.hudi-spark3.unit.tests>
+      </properties>
+      <activation>
+        <activeByDefault>true</activeByDefault>
+        <property>
+          <name>spark2</name>
+          <!-- add spark2 moudule to all profile -->
+          <value>!disabled</value>
+        </property>
+      </activation>
+    </profile>
+
     <profile>
       <id>spark2.4</id>
       <modules>
@@ -1939,7 +1960,8 @@
       </activation>
     </profile>
 
-    <!-- spark3 is an alias of spark3.3 -->
+    <!-- "spark3" is an alias for "spark3.3" -->
+    <!-- NOTE: This profile is deprecated and soon will be removed -->
     <profile>
       <id>spark3</id>
       <properties>
