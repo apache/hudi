@@ -21,6 +21,7 @@ import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
+import org.apache.hudi.AvroConversionUtils.{convertStructTypeToAvroSchema, getAvroRecordNameAndNamespace}
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieConversionUtils.{toProperties, toScalaOption}
 import org.apache.hudi.HoodieWriterUtils._
@@ -54,6 +55,8 @@ import org.apache.log4j.LogManager
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql._
+import org.apache.spark.sql.catalyst.TableIdentifier
+import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.internal.StaticSQLConf
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.{SPARK_VERSION, SparkContext}
@@ -84,7 +87,10 @@ object HoodieSparkSqlWriter {
     assert(optParams.get("path").exists(!StringUtils.isNullOrEmpty(_)), "'path' must be set")
     val path = optParams("path")
     val basePath = new Path(path)
+
+    val spark = sqlContext.sparkSession
     val sparkContext = sqlContext.sparkContext
+
     val fs = basePath.getFileSystem(sparkContext.hadoopConfiguration)
     tableExists = fs.exists(new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME))
     var tableConfig = getHoodieTableConfig(sparkContext, path, hoodieTableConfigOpt)
@@ -92,12 +98,16 @@ object HoodieSparkSqlWriter {
     val originKeyGeneratorClassName = HoodieWriterUtils.getOriginKeyGenerator(parameters)
     val timestampKeyGeneratorConfigs = extractConfigsRelatedToTimestampBasedKeyGenerator(
       originKeyGeneratorClassName, parameters)
-    //validate datasource and tableconfig keygen are the same
+
+    // Validate datasource and tableconfig keygen are the same
     validateKeyGeneratorConfig(originKeyGeneratorClassName, tableConfig);
     validateTableConfig(sqlContext.sparkSession, optParams, tableConfig, mode == SaveMode.Overwrite);
+
     val databaseName = hoodieConfig.getStringOrDefault(HoodieTableConfig.DATABASE_NAME, "")
     val tblName = hoodieConfig.getStringOrThrow(HoodieWriteConfig.TBL_NAME,
       s"'${HoodieWriteConfig.TBL_NAME.key}' must be set.").trim
+    val tableIdentifier = TableIdentifier(tblName, if (databaseName.isEmpty) None else Some(databaseName))
+
     assert(!StringUtils.isNullOrEmpty(hoodieConfig.getString(HoodieWriteConfig.TBL_NAME)),
       s"'${HoodieWriteConfig.TBL_NAME.key}' must be set.")
 
@@ -185,64 +195,79 @@ object HoodieSparkSqlWriter {
       var internalSchemaOpt = getLatestTableInternalSchema(fs, basePath, sparkContext)
 
       val sourceSchema = AvroConversionUtils.convertStructTypeToAvroSchema(df.schema, structName, nameSpace)
-      val latestTableSchema = getLatestTableSchema(fs, basePath, sparkContext).getOrElse(sourceSchema)
+      val latestTableSchemaOpt = getLatestTableSchema(spark, basePath, tableIdentifier, sparkContext.hadoopConfiguration)
 
-      val writerSchema: Schema =
-        if (reconcileSchema) {
-          // In case we need to reconcile the schema and schema evolution is enabled,
-          // we will force-apply schema evolution to the writer's schema
-          if (schemaEvolutionEnabled && internalSchemaOpt.isEmpty) {
-            internalSchemaOpt = Some(AvroInternalSchemaConverter.convert(sourceSchema))
-          }
+      val writerSchema: Schema = latestTableSchemaOpt match {
+        // In case table schema is empty we're just going to use the source schema as a
+        // writer's schema. No additional handling is required
+        case None => sourceSchema
+        // Otherwise, we need to make sure we reconcile incoming and latest table schemas
+        case Some(latestTableSchema) =>
+          if (reconcileSchema) {
+            // In case we need to reconcile the schema and schema evolution is enabled,
+            // we will force-apply schema evolution to the writer's schema
+            if (schemaEvolutionEnabled && internalSchemaOpt.isEmpty) {
+              internalSchemaOpt = Some(AvroInternalSchemaConverter.convert(sourceSchema))
+            }
 
-          if (internalSchemaOpt.isDefined) {
-            // Apply schema evolution, by auto-merging write schema and read schema
-            val mergedInternalSchema = AvroSchemaEvolutionUtils.reconcileSchema(sourceSchema, internalSchemaOpt.get)
-            AvroInternalSchemaConverter.convert(mergedInternalSchema, latestTableSchema.getName)
-          } else if (TableSchemaResolver.isSchemaCompatible(sourceSchema, latestTableSchema)) {
-            // In case schema reconciliation is enabled and source and latest table schemas
-            // are compatible (as defined by [[TableSchemaResolver#isSchemaCompatible]]), then we
-            // will rebase incoming batch onto the table's latest schema (ie, reconcile them)
-            //
-            // NOTE: Since we'll be converting incoming batch from [[sourceSchema]] into [[latestTableSchema]]
-            //       we're validating in that order (where [[sourceSchema]] is treated as a reader's schema,
-            //       and [[latestTableSchema]] is treated as a writer's schema)
-            latestTableSchema
+            if (internalSchemaOpt.isDefined) {
+              // Apply schema evolution, by auto-merging write schema and read schema
+              val mergedInternalSchema = AvroSchemaEvolutionUtils.reconcileSchema(sourceSchema, internalSchemaOpt.get)
+              AvroInternalSchemaConverter.convert(mergedInternalSchema, latestTableSchema.getName)
+            } else if (TableSchemaResolver.isSchemaCompatible(sourceSchema, latestTableSchema)) {
+              // In case schema reconciliation is enabled and source and latest table schemas
+              // are compatible (as defined by [[TableSchemaResolver#isSchemaCompatible]]), then we
+              // will rebase incoming batch onto the table's latest schema (ie, reconcile them)
+              //
+              // NOTE: Since we'll be converting incoming batch from [[sourceSchema]] into [[latestTableSchema]]
+              //       we're validating in that order (where [[sourceSchema]] is treated as a reader's schema,
+              //       and [[latestTableSchema]] is treated as a writer's schema)
+              latestTableSchema
+            } else {
+              log.error(
+                s"""
+                   |Failed to reconcile incoming batch schema with the table's one.
+                   |Incoming schema ${sourceSchema.toString(true)}
+
+                   |Table's schema ${latestTableSchema.toString(true)}
+
+                   |""".stripMargin)
+              throw new SchemaCompatibilityException("Failed to reconcile incoming schema with the table's one")
+            }
           } else {
-            log.error(s"""
-               |Failed to reconcile incoming batch schema with the table's one.
-               |Incoming schema ${sourceSchema.toString(true)}
-               |Table's schema ${latestTableSchema.toString(true)}
-               |""".stripMargin)
-            throw new SchemaCompatibilityException("Failed to reconcile incoming schema with the table's one")
+            // Before validating whether schemas are compatible, we need to "canonicalize" source's schema
+            // relative to the table's one, by doing a (minor) reconciliation of the nullability constraints:
+            // for ex, if in incoming schema column A is designated as non-null, but it's designated as nullable
+            // in the table's one we want to proceed w/ such operation, simply relaxing such constraint in the
+            // source schema.
+            val canonicalizedSourceSchema = AvroSchemaEvolutionUtils.canonicalizeColumnNullability(sourceSchema, latestTableSchema)
+            // In case reconciliation is disabled, we have to validate that the source's schema
+            // is compatible w/ the table's latest schema, such that we're able to read existing table's
+            // records using [[sourceSchema]].
+            if (TableSchemaResolver.isSchemaCompatible(latestTableSchema, canonicalizedSourceSchema)) {
+              canonicalizedSourceSchema
+            } else {
+              log.error(
+                s"""
+                   |Incoming batch schema is not compatible with the table's one.
+                   |Incoming schema ${sourceSchema.toString(true)}
+                   |Table's schema ${latestTableSchema.toString(true)}
+                   |""".stripMargin)
+              throw new SchemaCompatibilityException("Incoming batch schema is not compatible with the table's one")
+            }
           }
-        } else {
-          // Before validating whether schemas are compatible, we need to "canonicalize" source's schema
-          // relative to the table's one, by doing a (minor) reconciliation of the nullability constraints:
-          // for ex, if in incoming schema column A is designated as non-null, but it's designated as nullable
-          // in the table's one we want to proceed w/ such operation, simply relaxing such constraint in the
-          // source schema.
-          val canonicalizedSourceSchema = AvroSchemaEvolutionUtils.canonicalizeColumnNullability(sourceSchema, latestTableSchema)
-          // In case reconciliation is disabled, we have to validate that the source's schema
-          // is compatible w/ the table's latest schema, such that we're able to read existing table's
-          // records using [[sourceSchema]].
-          if (TableSchemaResolver.isSchemaCompatible(latestTableSchema, canonicalizedSourceSchema)) {
-            canonicalizedSourceSchema
-          } else {
-            log.error(
-              s"""
-                 |Incoming batch schema is not compatible with the table's one.
-                 |Incoming schema ${sourceSchema.toString(true)}
-                 |Table's schema ${latestTableSchema.toString(true)}
-                 |""".stripMargin)
-            throw new SchemaCompatibilityException("Incoming batch schema is not compatible with the table's one")
-          }
-        }
+      }
 
       validateSchemaForHoodieIsDeleted(writerSchema)
-      sparkContext.getConf.registerAvroSchemas(writerSchema)
 
-      log.info(s"Registered writer's schema: ${writerSchema.toString(true)}")
+      // NOTE: PLEASE READ CAREFULLY BEFORE CHANGING THIS
+      //       We have to register w/ Kryo all of the Avro schemas that might potentially be used to decode
+      //       records into Avro format. Otherwise, Kryo wouldn't be able to apply an optimization allowing
+      //       it to avoid the need to ser/de the whole schema along _every_ Avro record
+      val targetAvroSchemas = sourceSchema +: writerSchema +: latestTableSchemaOpt.toSeq
+      sparkContext.getConf.registerAvroSchemas(targetAvroSchemas: _*)
+
+      log.info(s"Registered Avro schemas: ${targetAvroSchemas.map(_.toString(true)).mkString("\n")}")
 
       // short-circuit if bulk_insert via row is enabled.
       // scalastyle:off
@@ -465,24 +490,34 @@ object HoodieSparkSqlWriter {
     }
   }
 
-  /**
-   * Checks if schema needs upgrade (if incoming record's write schema is old while table schema got evolved).
-   *
-   * @param fs           instance of FileSystem.
-   * @param basePath     base path.
-   * @param sparkContext instance of spark context.
-   * @param schema       incoming record's schema.
-   * @return Pair of(boolean, table schema), where first entry will be true only if schema conversion is required.
-   */
-  def getLatestTableSchema(fs: FileSystem, basePath: Path, sparkContext: SparkContext): Option[Schema] = {
-    if (FSUtils.isTableExists(basePath.toString, fs)) {
-      val tableMetaClient = HoodieTableMetaClient.builder
-        .setConf(sparkContext.hadoopConfiguration)
-        .setBasePath(basePath.toString)
-        .build()
-      val tableSchemaResolver = new TableSchemaResolver(tableMetaClient)
+  private def getLatestTableSchema(spark: SparkSession,
+                                   tableBasePath: Path,
+                                   tableId: TableIdentifier,
+                                   hadoopConf: Configuration): Option[Schema] = {
+    val fs = tableBasePath.getFileSystem(hadoopConf)
+    val latestTableSchemaFromCommitMetadata =
+      if (FSUtils.isTableExists(tableBasePath.toString, fs)) {
+        val tableMetaClient = HoodieTableMetaClient.builder
+          .setConf(hadoopConf)
+          .setBasePath(tableBasePath.toString)
+          .build()
+        val tableSchemaResolver = new TableSchemaResolver(tableMetaClient)
+        toScalaOption(tableSchemaResolver.getTableAvroSchemaFromLatestCommit(false))
+      } else {
+        None
+      }
 
-      toScalaOption(tableSchemaResolver.getTableAvroSchemaFromLatestCommit(false))
+    latestTableSchemaFromCommitMetadata.orElse {
+      getCatalogTable(spark, tableId).map { catalogTable =>
+        val (structName, namespace) = getAvroRecordNameAndNamespace(tableId.table)
+        convertStructTypeToAvroSchema(catalogTable.schema, structName, namespace)
+      }
+    }
+  }
+
+  private def getCatalogTable(spark: SparkSession, tableId: TableIdentifier): Option[CatalogTable] = {
+    if (spark.sessionState.catalog.tableExists(tableId)) {
+      Some(spark.sessionState.catalog.getTableMetadata(tableId))
     } else {
       None
     }
