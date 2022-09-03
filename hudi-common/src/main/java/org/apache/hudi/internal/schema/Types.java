@@ -502,25 +502,20 @@ public class Types {
    * Record nested type.
    */
   public static class RecordType extends NestedType {
-
-    public static RecordType get(List<Field> fields) {
-      return new RecordType(fields);
-    }
-
-    public static RecordType get(Field... fields) {
-      return new RecordType(Arrays.asList(fields));
-    }
+    // NOTE: This field is necessary to provide for lossless conversion b/w Avro and
+    //       InternalSchema and back (Avro unfortunately relies not only on structural equivalence of
+    //       schemas but also corresponding Record type's "name" when evaluating their compatibility);
+    //       This field is nullable
+    private final String name;
 
     private final Field[] fields;
 
     private transient Map<String, Field> nameToFields = null;
     private transient Map<Integer, Field> idToFields = null;
 
-    private RecordType(List<Field> fields) {
-      this.fields = new Field[fields.size()];
-      for (int i = 0; i < this.fields.length; i += 1) {
-        this.fields[i] = fields.get(i);
-      }
+    private RecordType(List<Field> fields, String name) {
+      this.name = name;
+      this.fields = fields.toArray(new Field[0]);
     }
 
     @Override
@@ -558,6 +553,10 @@ public class Types {
       return null;
     }
 
+    public String name() {
+      return name;
+    }
+
     @Override
     public TypeID typeId() {
       return TypeID.RECORD;
@@ -570,6 +569,8 @@ public class Types {
 
     @Override
     public boolean equals(Object o) {
+      // NOTE: We're not comparing {@code RecordType}'s names here intentionally
+      //       relying exclusively on structural equivalence
       if (this == o) {
         return true;
       } else if (!(o instanceof RecordType)) {
@@ -582,7 +583,21 @@ public class Types {
 
     @Override
     public int hashCode() {
+      // NOTE: {@code hashCode} has to match for objects for which {@code equals} returns true,
+      //       hence we don't hash the {@code name} in here
       return Objects.hash(Field.class, Arrays.hashCode(fields));
+    }
+
+    public static RecordType get(List<Field> fields) {
+      return new RecordType(fields, null);
+    }
+
+    public static RecordType get(List<Field> fields, String recordName) {
+      return new RecordType(fields, recordName);
+    }
+
+    public static RecordType get(Field... fields) {
+      return new RecordType(Arrays.asList(fields), null);
     }
   }
 

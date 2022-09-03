@@ -18,6 +18,7 @@
 
 package org.apache.hudi.internal.schema.convert;
 
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.internal.schema.HoodieSchemaException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.Type;
@@ -158,7 +159,7 @@ public class AvroInternalSchemaConverter {
           internalFields.add(Types.Field.get(nextAssignId, AvroInternalSchemaConverter.isOptional(field.schema()), field.name(), fieldType, field.doc()));
           nextAssignId += 1;
         }
-        return Types.RecordType.get(internalFields);
+        return Types.RecordType.get(internalFields, schema.getName());
       case UNION:
         List<Type> fTypes = new ArrayList<>();
         schema.getTypes().stream().forEach(t -> {
@@ -262,16 +263,18 @@ public class AvroInternalSchemaConverter {
    *
    * @param type a hudi type.
    * @param cache use to cache intermediate convert result to save cost.
-   * @param recordName the record name
+   * @param recordNameFallback auto-generated record name fallback (in case
+   * {@link org.apache.hudi.internal.schema.Types.RecordType} doesn't bear any record-name encoded)
    * @return a Avro schema match this type
    */
-  private static Schema visitInternalSchemaToBuildAvroSchema(Type type, Map<Type, Schema> cache, String recordName) {
+  private static Schema visitInternalSchemaToBuildAvroSchema(Type type, Map<Type, Schema> cache, String recordNameFallback) {
     switch (type.typeId()) {
       case RECORD:
         Types.RecordType record = (Types.RecordType) type;
         List<Schema> schemas = new ArrayList<>();
         record.fields().forEach(f -> {
-          Schema tempSchema = visitInternalSchemaToBuildAvroSchema(f.type(), cache, recordName + "_" + f.name());
+          String nestedRecordNameFallback = recordNameFallback + "_" + f.name();
+          Schema tempSchema = visitInternalSchemaToBuildAvroSchema(f.type(), cache, nestedRecordNameFallback);
           // convert tempSchema
           Schema result = f.isOptional() ? AvroInternalSchemaConverter.nullableSchema(tempSchema) : tempSchema;
           schemas.add(result);
@@ -282,13 +285,13 @@ public class AvroInternalSchemaConverter {
         if (recordSchema != null) {
           return recordSchema;
         }
-        recordSchema = visitInternalRecordToBuildAvroRecord(record, schemas, recordName);
+        recordSchema = visitInternalRecordToBuildAvroRecord(record, schemas, recordNameFallback);
         cache.put(record, recordSchema);
         return recordSchema;
       case ARRAY:
         Types.ArrayType array = (Types.ArrayType) type;
         Schema elementSchema;
-        elementSchema = visitInternalSchemaToBuildAvroSchema(array.elementType(), cache, recordName);
+        elementSchema = visitInternalSchemaToBuildAvroSchema(array.elementType(), cache, recordNameFallback);
         Schema arraySchema;
         arraySchema = cache.get(array);
         if (arraySchema != null) {
@@ -301,8 +304,8 @@ public class AvroInternalSchemaConverter {
         Types.MapType map = (Types.MapType) type;
         Schema keySchema;
         Schema valueSchema;
-        keySchema = visitInternalSchemaToBuildAvroSchema(map.keyType(), cache, recordName);
-        valueSchema = visitInternalSchemaToBuildAvroSchema(map.valueType(), cache, recordName);
+        keySchema = visitInternalSchemaToBuildAvroSchema(map.keyType(), cache, recordNameFallback);
+        valueSchema = visitInternalSchemaToBuildAvroSchema(map.valueType(), cache, recordNameFallback);
         Schema mapSchema;
         mapSchema = cache.get(map);
         if (mapSchema != null) {
@@ -322,14 +325,15 @@ public class AvroInternalSchemaConverter {
    * Converts hudi RecordType to Avro RecordType.
    * this is auxiliary function used by visitInternalSchemaToBuildAvroSchema
    */
-  private static Schema visitInternalRecordToBuildAvroRecord(Types.RecordType record, List<Schema> fieldSchemas, String recordName) {
-    List<Types.Field> fields = record.fields();
+  private static Schema visitInternalRecordToBuildAvroRecord(Types.RecordType recordType, List<Schema> fieldSchemas, String recordNameFallback) {
+    List<Types.Field> fields = recordType.fields();
     List<Schema.Field> avroFields = new ArrayList<>();
     for (int i = 0; i < fields.size(); i++) {
       Types.Field f = fields.get(i);
       Schema.Field field = new Schema.Field(f.name(), fieldSchemas.get(i), f.doc(), f.isOptional() ? JsonProperties.NULL_VALUE : null);
       avroFields.add(field);
     }
+    String recordName = Option.ofNullable(recordType.name()).orElse(recordNameFallback);
     return Schema.createRecord(recordName, null, null, false, avroFields);
   }
 
