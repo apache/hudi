@@ -31,6 +31,7 @@ import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.config.metrics.HoodieMetricsConfig
 import org.apache.hudi.exception.ExceptionUtil.getRootCause
 import org.apache.hudi.exception.{HoodieException, HoodieUpsertException, SchemaCompatibilityException}
+import org.apache.hudi.functional.TestCOWDataSource.convertColumnsToNullable
 import org.apache.hudi.keygen._
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions.Config
 import org.apache.hudi.metrics.Metrics
@@ -38,7 +39,7 @@ import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.hudi.util.JFunction
 import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers, QuickstartUtils, ScalaAssertionSupport}
 import org.apache.spark.sql._
-import org.apache.spark.sql.functions.{col, concat, lit, udf}
+import org.apache.spark.sql.functions.{col, concat, lit, udf, when}
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.types._
 import org.joda.time.DateTime
@@ -805,7 +806,10 @@ class TestCOWDataSource extends HoodieClientTestBase with ScalaAssertionSupport 
 
     val df1 = snapshotDF0.limit(numRecordsToDelete)
     val dropDf = df1.drop(df1.columns.filter(_.startsWith("_hoodie_")): _*)
-    val df2 = dropDf.withColumn("_hoodie_is_deleted", lit(true).cast(BooleanType))
+    val df2 = convertColumnsToNullable(
+      dropDf.withColumn("_hoodie_is_deleted", lit(true).cast(BooleanType)),
+      "_hoodie_is_deleted"
+    )
     df2.write.format("org.apache.hudi")
       .options(commonOpts)
       .mode(SaveMode.Append)
@@ -1001,5 +1005,15 @@ class TestCOWDataSource extends HoodieClientTestBase with ScalaAssertionSupport 
 
     assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "000"))
     assertEquals(false, Metrics.isInitialized, "Metrics should be shutdown")
+  }
+}
+
+object TestCOWDataSource {
+  def convertColumnsToNullable(df: DataFrame, cols: String*): DataFrame = {
+    cols.foldLeft(df) { (df, c) =>
+      // NOTE: This is the trick to make Spark convert a non-null column "c" into a nullable
+      //       one by pretending its value could be null in some execution paths
+      df.withColumn(c, when(col(c).isNotNull, col(c)).otherwise(lit(null)))
+    }
   }
 }
