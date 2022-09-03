@@ -1646,7 +1646,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     props.setProperty("include", "base.properties");
     props.setProperty("hoodie.embed.timeline.server", "false");
     props.setProperty("hoodie.datasource.write.recordkey.field", "_row_key");
-    props.setProperty("hoodie.datasource.write.partitionpath.field", "");
+    props.setProperty("hoodie.datasource.write.partitionpath.field", "driver");
     props.setProperty("hoodie.deltastreamer.source.dfs.root", JSON_KAFKA_SOURCE_ROOT);
     props.setProperty("hoodie.deltastreamer.source.kafka.topic", topicName);
     props.setProperty("hoodie.deltastreamer.source.kafka.checkpoint.type", kafkaCheckpointType);
@@ -1670,7 +1670,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     prepareParquetDFSFiles(parquetRecords, PARQUET_SOURCE_ROOT, FIRST_PARQUET_FILE_NAME, true, HoodieTestDataGenerator.TRIP_SCHEMA, HoodieTestDataGenerator.AVRO_TRIP_SCHEMA);
 
     prepareParquetDFSSource(true, false, "source_uber.avsc", "target_uber.avsc", PROPS_FILENAME_TEST_PARQUET,
-        PARQUET_SOURCE_ROOT, false, "");
+        PARQUET_SOURCE_ROOT, false, "driver");
     // delta streamer w/ parquet source
     String tableBasePath = dfsBasePath + "/test_dfs_to_kafka" + testNum;
     HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(
@@ -1797,8 +1797,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   private void prepareCsvDFSSource(
       boolean hasHeader, char sep, boolean useSchemaProvider, boolean hasTransformer) throws IOException {
     String sourceRoot = dfsBasePath + "/csvFiles";
-    String recordKeyField = (hasHeader || useSchemaProvider) ? "_row_key" : "_c0";
-    String partitionPath = (hasHeader || useSchemaProvider) ? "partition_path" : "";
+    String recordKeyField = (hasHeader || useSchemaProvider) ? "_row_key" : "_c1";
+    String partitionPath = (hasHeader || useSchemaProvider) ? "partition_path" : "_c2";
 
     // Properties used for testing delta-streamer with CSV source
     TypedProperties csvProps = new TypedProperties();
@@ -2070,7 +2070,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   @Test
   public void testDeletePartitions() throws Exception {
     prepareParquetDFSSource(false, false, "source.avsc", "target.avsc",
-        PROPS_FILENAME_TEST_PARQUET, PARQUET_SOURCE_ROOT, false, "");
+        PROPS_FILENAME_TEST_PARQUET, PARQUET_SOURCE_ROOT, false, "partition_path");
     String tableBasePath = dfsBasePath + "/test_parquet_table" + testNum;
     HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(
         TestHelpers.makeConfig(tableBasePath, WriteOperationType.INSERT, ParquetDFSSource.class.getName(),
