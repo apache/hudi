@@ -24,6 +24,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 
+import com.codahale.metrics.Counter;
 import com.codahale.metrics.Timer;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -44,6 +45,8 @@ public class HoodieMetrics {
   public String compactionTimerName = null;
   public String indexTimerName = null;
   private String conflictResolutionTimerName = null;
+  private String conflictResolutionSuccessCounterName = null;
+  private String conflictResolutionFailureCounterName = null;
   private HoodieWriteConfig config;
   private String tableName;
   private Timer rollbackTimer = null;
@@ -55,6 +58,8 @@ public class HoodieMetrics {
   private Timer clusteringTimer = null;
   private Timer indexTimer = null;
   private Timer conflictResolutionTimer = null;
+  private Counter conflictResolutionSuccessCounter = null;
+  private Counter conflictResolutionFailureCounter = null;
 
   public HoodieMetrics(HoodieWriteConfig config) {
     this.config = config;
@@ -70,6 +75,8 @@ public class HoodieMetrics {
       this.compactionTimerName = getMetricsName("timer", HoodieTimeline.COMPACTION_ACTION);
       this.indexTimerName = getMetricsName("timer", "index");
       this.conflictResolutionTimerName = getMetricsName("timer", "conflict_resolution");
+      this.conflictResolutionSuccessCounterName = getMetricsName("counter", "conflict_resolution.success");
+      this.conflictResolutionFailureCounterName = getMetricsName("counter", "conflict_resolution.failure");
     }
   }
 
@@ -244,13 +251,6 @@ public class HoodieMetrics {
     }
   }
 
-  public void updateConflictResolutionMetrics(final String action, final long durationInMs) {
-    if (config.isMetricsOn()) {
-      LOG.info(String.format("Sending index metrics (%s.duration, %d)", action, durationInMs));
-      Metrics.registerGauge(getMetricsName("conflict_resolution", String.format("%s.duration", action)), durationInMs);
-    }
-  }
-
   String getMetricsName(String action, String metric) {
     return config == null ? null : String.format("%s.%s.%s", config.getMetricReporterMetricsNamePrefix(), action, metric);
   }
@@ -265,14 +265,23 @@ public class HoodieMetrics {
   public void emitConflictResolutionSuccessful() {
     if (config.isMetricsOn()) {
       LOG.info("Sending conflict resolution success metric");
-      Metrics.registerGauge(getMetricsName("resolve", "conflict.success.count"), 1);
+      conflictResolutionSuccessCounter = getCounter(conflictResolutionSuccessCounter, conflictResolutionSuccessCounterName);
+      conflictResolutionSuccessCounter.inc();
     }
   }
 
   public void emitConflictResolutionFailed() {
     if (config.isMetricsOn()) {
-      LOG.info("Sending conflict resolution failed metric");
-      Metrics.registerGauge(getMetricsName("resolve", "conflict.failure.count"), 1);
+      LOG.info("Sending conflict resolution failure metric");
+      conflictResolutionFailureCounter = getCounter(conflictResolutionFailureCounter, conflictResolutionFailureCounterName);
+      conflictResolutionFailureCounter.inc();
     }
+  }
+
+  private Counter getCounter(Counter counter, String name) {
+    if (counter == null) {
+      return Metrics.getInstance().getRegistry().counter(name);
+    }
+    return counter;
   }
 }

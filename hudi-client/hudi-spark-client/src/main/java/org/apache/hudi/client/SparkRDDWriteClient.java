@@ -470,7 +470,9 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
       metrics.emitConflictResolutionFailed();
       throw e;
     } finally {
-      metrics.updateConflictResolutionMetrics("pre_commit", metrics.getDurationInMs(indexTimer == null ? 0 : indexTimer.stop()));
+      if (indexTimer != null) {
+        indexTimer.stop();
+      }
     }
   }
 

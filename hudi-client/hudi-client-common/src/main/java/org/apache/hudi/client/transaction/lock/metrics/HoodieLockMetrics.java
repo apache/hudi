@@ -43,16 +43,16 @@ public class HoodieLockMetrics {
   private transient Timer lockApiRequestDuration;
 
   public HoodieLockMetrics(HoodieWriteConfig writeConfig) {
-    this.isMetricsEnabled = writeConfig.isMetricsOn();
+    this.isMetricsEnabled = writeConfig.isMetricsOn() && writeConfig.isLockingMetricsEnabled();
     this.writeConfig = writeConfig;
 
-    if (writeConfig.isMetricsOn() && writeConfig.isLockingMetricsEnabled()) {
+    if (isMetricsEnabled) {
       Metrics.init(writeConfig);
       MetricRegistry registry = Metrics.getInstance().getRegistry();
 
-      lockAttempts = registry.counter(getMetricsName("acquire.attempts.count"));
-      succesfulLockAttempts = registry.counter(getMetricsName("acquire.success.count"));
-      failedLockAttempts = registry.counter(getMetricsName("acquire.failure.count"));
+      lockAttempts = registry.counter(getMetricsName("acquire.attempts"));
+      succesfulLockAttempts = registry.counter(getMetricsName("acquire.success"));
+      failedLockAttempts = registry.counter(getMetricsName("acquire.failure"));
 
       lockDuration = createTimerForMetrics(registry, "acquire.duration");
       lockApiRequestDuration = createTimerForMetrics(registry, "request.latency");
