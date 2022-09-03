@@ -250,7 +250,7 @@ object HoodieSparkSqlWriter {
               log.error(
                 s"""
                    |Incoming batch schema is not compatible with the table's one.
-                   |Incoming schema ${sourceSchema.toString(true)}
+                   |Incoming schema ${canonicalizedSourceSchema.toString(true)}
                    |Table's schema ${latestTableSchema.toString(true)}
                    |""".stripMargin)
               throw new SchemaCompatibilityException("Incoming batch schema is not compatible with the table's one")
