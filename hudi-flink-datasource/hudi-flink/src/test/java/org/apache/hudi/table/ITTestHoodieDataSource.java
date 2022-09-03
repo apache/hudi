@@ -18,6 +18,8 @@
 
 package org.apache.hudi.table;
 
+import org.apache.flink.table.data.StringData;
+import org.apache.flink.table.data.TimestampData;
 import org.apache.hudi.adapter.TestTableEnvs;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -1200,6 +1202,84 @@ public class ITTestHoodieDataSource extends AbstractTestBase {
         () -> tableEnv.sqlQuery("select * from t1").execute().collect());
     assertRowsEquals(result, TestData.dataSetInsert(3, 4, 5, 6, 7, 8, 9, 10,
         11, 12, 13, 14, 15, 16, 17, 18, 19, 20));
+  }
+
+  @Test
+  void testIncrementalReadWithDeletes() throws Exception {
+    TableEnvironment tableEnv = batchTableEnv;
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.setString(FlinkOptions.TABLE_NAME, "t1");
+    conf.setString(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ.name());
+    conf.setBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED, true);
+    conf.setInteger(FlinkOptions.COMPACTION_DELTA_COMMITS, 1);
+    conf.setBoolean(FlinkOptions.CHANGELOG_ENABLED, true);
+
+    // write 4 batches of data set
+    TestData.writeData(TestData.dataSetInsert(1, 2), conf);
+    TestData.writeData(TestData.DATA_SET_INSERT_UPDATE_DELETE, conf);
+    TestData.writeData(TestData.dataSetInsert(3, 4), conf);
+    TestData.writeData(TestData.dataSetInsert(5, 6), conf);
+
+    String startCommit = TestUtils.getNthCompleteInstant(tempFile.getAbsolutePath(), 1, true);
+    String endCommit = TestUtils.getNthCompleteInstant(tempFile.getAbsolutePath(), 2, true);
+    String hoodieTableDDL = sql("t1")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ.name())
+        .option(FlinkOptions.CHANGELOG_ENABLED, true)
+        .end();
+    tableEnv.executeSql(hoodieTableDDL);
+
+    List<Row> result = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1").execute().collect());
+    assertRowsEquals(result, TestData.dataSetInsert(2, 3, 4, 5, 6));
+
+    final String query = String.format("select * from t1/*+ options('read.start-commit'='%s', 'read.end-commit'='%s', "
+        + "'read.data.delete.enabled'='true', 'read.batch.incremental.changelog.enabled'='true')*/", startCommit, endCommit);
+    List<Row> result1 = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery(query).execute().collect());
+    List<RowData> expected = TestData.dataSetInsert(3, 4);
+    RowData deleteRowData = TestData.deleteRow(StringData.fromString("id1"), StringData.fromString("Danny"), 22, TimestampData.fromEpochMillis(5), StringData.fromString("par1"));
+    expected.add(deleteRowData);
+    assertRowsEquals(result1, expected);
+  }
+
+  @Test
+  void testIncrementalReadWithDeletesChangeLogDisabled() throws Exception {
+    TableEnvironment tableEnv = batchTableEnv;
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.setString(FlinkOptions.TABLE_NAME, "t1");
+    conf.setString(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ.name());
+    conf.setBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED, true);
+    conf.setInteger(FlinkOptions.COMPACTION_DELTA_COMMITS, 1);
+    conf.setBoolean(FlinkOptions.CHANGELOG_ENABLED, false);
+
+    // write 4 batches of data set
+    TestData.writeData(TestData.dataSetInsert(1, 2), conf);
+    TestData.writeData(TestData.DATA_SET_INSERT_UPDATE_DELETE, conf);
+    TestData.writeData(TestData.dataSetInsert(3, 4), conf);
+    TestData.writeData(TestData.dataSetInsert(5, 6), conf);
+
+    String startCommit = TestUtils.getNthCompleteInstant(tempFile.getAbsolutePath(), 1, true);
+    String endCommit = TestUtils.getNthCompleteInstant(tempFile.getAbsolutePath(), 2, true);
+    String hoodieTableDDL = sql("t1")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ.name())
+        .option(FlinkOptions.CHANGELOG_ENABLED, false)
+        .end();
+    tableEnv.executeSql(hoodieTableDDL);
+
+    List<Row> result = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1").execute().collect());
+    assertRowsEquals(result, TestData.dataSetInsert(2, 3, 4, 5, 6));
+
+    final String query = String.format("select * from t1/*+ options('read.start-commit'='%s', 'read.end-commit'='%s', "
+                                           + "'read.data.delete.enabled'='true', 'read.batch.incremental.changelog.enabled'='true')*/", startCommit, endCommit);
+    List<Row> result1 = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery(query).execute().collect());
+    List<RowData> expected = TestData.dataSetInsert(3, 4);
+    RowData deleteRowData = TestData.deleteRow(StringData.fromString("id1"), null, null, TimestampData.fromEpochMillis(5), StringData.fromString("par1"));
+    expected.add(deleteRowData);
+    assertRowsEquals(result1, expected);
   }
 
   @ParameterizedTest

@@ -340,6 +340,7 @@ public class HoodieTableSource implements
     final RowType requiredRowType = (RowType) getProducedDataType().notNull().getLogicalType();
 
     final String queryType = this.conf.getString(FlinkOptions.QUERY_TYPE);
+    boolean emitDelete = this.conf.getBoolean(FlinkOptions.READ_DATA_DELETE);
     switch (queryType) {
       case FlinkOptions.QUERY_TYPE_SNAPSHOT:
         final HoodieTableType tableType = HoodieTableType.valueOf(this.conf.getString(FlinkOptions.TABLE_TYPE));
@@ -352,7 +353,7 @@ public class HoodieTableSource implements
               return InputFormats.EMPTY_INPUT_FORMAT;
             }
             return mergeOnReadInputFormat(rowType, requiredRowType, tableAvroSchema,
-                rowDataType, inputSplits, false);
+                rowDataType, inputSplits, emitDelete);
           case COPY_ON_WRITE:
             return baseFileOnlyInputFormat();
           default:
@@ -374,7 +375,7 @@ public class HoodieTableSource implements
           return InputFormats.EMPTY_INPUT_FORMAT;
         }
         return mergeOnReadInputFormat(rowType, requiredRowType, tableAvroSchema,
-            rowDataType, result.getInputSplits(), false);
+            rowDataType, result.getInputSplits(), emitDelete);
       default:
         String errMsg = String.format("Invalid query type : '%s', options ['%s', '%s', '%s'] are supported now", queryType,
             FlinkOptions.QUERY_TYPE_SNAPSHOT, FlinkOptions.QUERY_TYPE_READ_OPTIMIZED, FlinkOptions.QUERY_TYPE_INCREMENTAL);

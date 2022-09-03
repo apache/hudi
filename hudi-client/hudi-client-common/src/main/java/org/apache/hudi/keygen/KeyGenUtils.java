@@ -73,21 +73,43 @@ public class KeyGenUtils {
    */
   public static String[] extractRecordKeys(String recordKey) {
     String[] fieldKV = recordKey.split(",");
-    if (fieldKV.length == 1) {
-      return fieldKV;
-    } else {
-      // a complex key
-      return Arrays.stream(fieldKV).map(kv -> {
-        final String[] kvArray = kv.split(":");
-        if (kvArray[1].equals(NULL_RECORDKEY_PLACEHOLDER)) {
-          return null;
-        } else if (kvArray[1].equals(EMPTY_RECORDKEY_PLACEHOLDER)) {
-          return "";
-        } else {
-          return kvArray[1];
-        }
-      }).toArray(String[]::new);
-    }
+
+    return Arrays.stream(fieldKV).map(kv -> {
+      final String[] kvArray = kv.split(":");
+      if (kvArray.length == 1) {
+        return kvArray[0];
+      } else if (kvArray[1].equals(NULL_RECORDKEY_PLACEHOLDER)) {
+        return null;
+      } else if (kvArray[1].equals(EMPTY_RECORDKEY_PLACEHOLDER)) {
+        return "";
+      } else {
+        return kvArray[1];
+      }
+    }).toArray(String[]::new);
+  }
+
+  /**
+   * Extracts the partition fields in strings out of the given partitionPath,
+   * this is the reverse operation of {@link #getPartitionPath(GenericRecord record, String partitionPathField,
+   *       boolean hiveStylePartitioning, boolean encodePartitionPath, boolean consistentLogicalTimestampEnabled)}.
+   *
+   * @see SimpleAvroKeyGenerator
+   * @see org.apache.hudi.keygen.ComplexAvroKeyGenerator
+   */
+  public static String[] extractPartitionPath(String partitionPath, boolean hiveStylePartitioning, boolean encodePartitionPath) {
+    String[] fields = partitionPath.split(DEFAULT_PARTITION_PATH_SEPARATOR);
+
+    return Arrays.stream(fields).map(field -> {
+      String partitionVal = field;
+      if (hiveStylePartitioning) {
+        final String[] partitionArray = field.split("=");
+        partitionVal = partitionArray.length == 1 ? partitionArray[0] : partitionArray[1];
+      }
+      if (encodePartitionPath) {
+        partitionVal = PartitionPathEncodeUtils.unescapePathName(partitionVal);
+      }
+      return partitionVal;
+    }).toArray(String[]::new);
   }
 
   public static String getRecordKey(GenericRecord record, List<String> recordKeyFields, boolean consistentLogicalTimestampEnabled) {

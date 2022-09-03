@@ -698,6 +698,19 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
     }
   }
 
+  public final Stream<FileSlice> getMergedFileSlicesUsingLogFiles(String partitionStr, String maxInstantTime) {
+    try {
+      readLock.lock();
+      String partition = formatPartitionKey(partitionStr);
+      ensurePartitionLoadedCorrectly(partition);
+      return fetchAllStoredFileGroups(partition)
+          .filter(fg -> !isFileGroupReplacedBeforeOrOn(fg.getFileGroupId(), maxInstantTime))
+          .map(fileGroup -> Option.of(mergeLogFilesInFileGroup(fileGroup))).filter(Option::isPresent).map(Option::get).map(this::addBootstrapBaseFileIfPresent);
+    } finally {
+      readLock.unlock();
+    }
+  }
+
   @Override
   public final Stream<FileSlice> getLatestFileSliceInRange(List<String> commitsToReturn) {
     try {
@@ -1049,6 +1062,19 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
     // Add Log files from penultimate and last slices
     penultimateSlice.getLogFiles().forEach(merged::addLogFile);
     lastSlice.getLogFiles().forEach(merged::addLogFile);
+    return merged;
+  }
+
+  /**
+   * Helper to merge logFiles in a fileGroup
+   *
+   * @param fileGroup the file-group used to construct FileSlice
+   */
+  private static FileSlice mergeLogFilesInFileGroup(HoodieFileGroup fileGroup) {
+    Option<FileSlice> firstFileSlice = Option.fromJavaOptional(fileGroup.getAllFileSlices().min(Comparator.comparing(FileSlice::getBaseInstantTime)));
+    FileSlice merged = new FileSlice(firstFileSlice.get());
+    merged.setBaseFile(null);
+    fileGroup.getAllLogFiles().forEach(merged::addLogFile);
     return merged;
   }
 

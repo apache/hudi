@@ -90,6 +90,11 @@ public class MergeOnReadTableState implements Serializable {
         .toArray();
   }
 
+  public int getRequiredPosition(String fieldName) {
+    final List<String> fieldNames = requiredRowType.getFieldNames();
+    return fieldNames.indexOf(fieldName);
+  }
+
   /**
    * Get the primary key positions in required row type.
    */
@@ -102,16 +107,27 @@ public class MergeOnReadTableState implements Serializable {
   }
 
   /**
-   * Returns the primary key fields logical type with given offsets.
+   * Get column positions in required row type.
+   */
+  public int[] getColumnsOffsetsInRequired(String[] columns) {
+    final List<String> fieldNames = requiredRowType.getFieldNames();
+    return Arrays.stream(columns)
+        .map(fieldNames::indexOf)
+        .mapToInt(i -> i)
+        .toArray();
+  }
+
+  /**
+   * Returns the fields logical type with given offsets.
    *
-   * @param pkOffsets the pk offsets in required row type
-   * @return pk field logical types
+   * @param Offsets the offsets in required row type
+   * @return field logical types
    * @see #getPkOffsetsInRequired()
    */
-  public LogicalType[] getPkTypes(int[] pkOffsets) {
+  public LogicalType[] getColumnTypes(int[] offsets) {
     final LogicalType[] requiredTypes = requiredRowType.getFields().stream()
         .map(RowType.RowField::getType).toArray(LogicalType[]::new);
-    return Arrays.stream(pkOffsets).mapToObj(offset -> requiredTypes[offset])
+    return Arrays.stream(offsets).mapToObj(offset -> requiredTypes[offset])
         .toArray(LogicalType[]::new);
   }
 }
