@@ -270,6 +270,9 @@ REFRESH database.table_name
 To set up Redshift Spectrum for querying Hudi, see the [Query Engine Setup](/docs/next/query_engine_setup#redshift-spectrum) page.
 
 
+## StarRocks
+To set up StarRocks for querying Hudi, see the [Query Engine Setup](/docs/query_engine_setup#starrocks) page.
+
 ## Support Matrix
 
 Following tables show whether a given query is supported on specific query engine.
@@ -286,6 +289,7 @@ Following tables show whether a given query is supported on specific query engin
 | **Trino**             |Y|N|
 | **Impala**            |Y|N|
 | **Redshift Spectrum** |Y|N|
+| **StarRocks**         |Y|N|
 
 
 
