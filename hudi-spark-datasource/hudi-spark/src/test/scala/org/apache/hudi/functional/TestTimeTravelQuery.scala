@@ -238,6 +238,7 @@ class TestTimeTravelQuery extends HoodieClientTestBase {
       .options(commonOpts)
       .option(DataSourceWriteOptions.TABLE_TYPE.key, tableType.name())
       .option(PARTITIONPATH_FIELD.key, "")
+      .option(KEYGENERATOR_CLASS_NAME.key, classOf[NonpartitionedKeyGenerator].getName)
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
@@ -253,6 +254,7 @@ class TestTimeTravelQuery extends HoodieClientTestBase {
       .options(commonOpts)
       .option(DataSourceWriteOptions.TABLE_TYPE.key, tableType.name())
       .option(PARTITIONPATH_FIELD.key, "")
+      .option(KEYGENERATOR_CLASS_NAME.key, classOf[NonpartitionedKeyGenerator].getName)
       .mode(SaveMode.Append)
       .save(basePath)
     metaClient.reloadActiveTimeline()
@@ -264,6 +266,7 @@ class TestTimeTravelQuery extends HoodieClientTestBase {
       .options(commonOpts)
       .option(DataSourceWriteOptions.TABLE_TYPE.key, tableType.name())
       .option(PARTITIONPATH_FIELD.key, "")
+      .option(KEYGENERATOR_CLASS_NAME.key, classOf[NonpartitionedKeyGenerator].getName)
       .mode(SaveMode.Append)
       .save(basePath)
     metaClient.reloadActiveTimeline()
