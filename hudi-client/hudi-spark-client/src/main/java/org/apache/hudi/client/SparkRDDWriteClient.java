@@ -18,6 +18,8 @@
 
 package org.apache.hudi.client;
 
+import org.apache.hudi.avro.model.HoodieClusteringGroup;
+import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.client.utils.TransactionUtils;
@@ -37,7 +39,9 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieClusteringException;
@@ -356,6 +360,16 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
     LOG.info("Starting clustering at " + clusteringInstant);
     HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata = table.cluster(context, clusteringInstant);
     HoodieWriteMetadata<JavaRDD<WriteStatus>> clusteringMetadata = writeMetadata.clone(HoodieJavaRDD.getJavaRDD(writeMetadata.getWriteStatuses()));
+    if (clusteringMetadata.getWriteStatuses().isEmpty()) {
+      HoodieClusteringPlan clusteringPlan = ClusteringUtils.getClusteringPlan(
+              table.getMetaClient(), HoodieTimeline.getReplaceCommitRequestedInstant(clusteringInstant))
+          .map(Pair::getRight).orElseThrow(() -> new HoodieClusteringException(
+              "Unable to read clustering plan for instant: " + clusteringInstant));
+      throw new HoodieClusteringException("Clustering plan produced 0 WriteStatus for " + clusteringInstant
+          + " #groups: " + clusteringPlan.getInputGroups().size() + " expected at least "
+          + clusteringPlan.getInputGroups().stream().mapToInt(HoodieClusteringGroup::getNumOutputFileGroups).sum()
+          + " write statuses");
+    }
     // TODO : Where is shouldComplete used ?
     if (shouldComplete && clusteringMetadata.getCommitMetadata().isPresent()) {
       completeTableService(TableServiceType.CLUSTER, clusteringMetadata.getCommitMetadata().get(), table, clusteringInstant);
