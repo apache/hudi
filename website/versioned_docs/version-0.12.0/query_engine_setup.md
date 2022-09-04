@@ -99,3 +99,9 @@ Hudi tables are supported only when AWS Glue Data Catalog is used. It's not supp
 
 Please refer to [Redshift Spectrum Integration with Apache Hudi](https://docs.aws.amazon.com/redshift/latest/dg/c-spectrum-external-tables.html#c-spectrum-column-mapping-hudi)
 for more details.
+
+## StarRocks
+Copy on Write tables in Apache Hudi 0.10.0 and above can be queried via StarRocks external tables from StarRocks version 2.2.0.
+Only snapshot queries are supported currently. In future releases Merge on Read tables will also be supported.
+Please refer to [StarRocks Hudi external table](https://docs.starrocks.com/en-us/2.2/using_starrocks/External_table#hudi-external-table)
+for more details on the setup.
