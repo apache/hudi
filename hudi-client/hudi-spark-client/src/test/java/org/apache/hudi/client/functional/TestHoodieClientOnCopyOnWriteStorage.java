@@ -81,6 +81,7 @@ import org.apache.hudi.config.HoodiePreCommitValidatorConfig;
 import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
+import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieCorruptedDataException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -99,6 +100,7 @@ import org.apache.hudi.table.HoodieSparkCopyOnWriteTable;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
+import org.apache.hudi.table.action.cluster.ClusteringPlanFilterMode;
 import org.apache.hudi.table.action.commit.HoodieWriteHelper;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.testutils.HoodieClientTestBase;
@@ -1500,6 +1502,73 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
       List<String> clusteredFiles = Arrays.stream(fileStatuses).filter(entry -> entry.getPath().getName().contains(replaceCommitInstant.getTimestamp()))
           .map(fileStatus -> partitionPath + "/" + fileStatus.getPath().getName()).collect(Collectors.toList());
       assertEquals(clusteredFiles, filesFromReplaceCommit);
+    }
+  }
+
+  @Test
+  public void testRecentlyInsertedClusteringPlanFilter() throws IOException {
+    String partitionPath = "2015/03/16";
+    Pair<Pair<List<HoodieRecord>, List<String>>, Set<HoodieFileGroupId>> firstTwoInsertsInfo = testInsertTwoBatches(true, partitionPath);
+    List<String> fileIds = firstTwoInsertsInfo.getValue().stream().map(entry -> entry.getFileId()).collect(Collectors.toList());
+
+    // Trigger clustering
+    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder().withEmbeddedTimelineServerEnabled(false).withAutoCommit(false)
+        .withClusteringConfig(HoodieClusteringConfig.newBuilder().withInlineClustering(true).withInlineClusteringNumCommits(2)
+            .withClusteringPlanFilterMode(ClusteringPlanFilterMode.RECENTLY_INSERTED_FILES.name()).build());
+
+    String newCommitTime = HoodieActiveTimeline.createNewInstantTime();
+    try (SparkRDDWriteClient client = getHoodieWriteClient(cfgBuilder.build())) {
+      int numRecords = 200;
+      List<HoodieRecord> records1 = dataGen.generateInserts(newCommitTime, numRecords);
+      client.startCommitWithTime(newCommitTime);
+      JavaRDD<HoodieRecord> insertRecordsRDD1 = jsc.parallelize(records1, 2);
+      JavaRDD<WriteStatus> statuses = client.insert(insertRecordsRDD1, newCommitTime);
+      client.commit(newCommitTime, statuses);
+      List<WriteStatus> statusList = statuses.collect();
+      assertNoWriteErrors(statusList);
+
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+      HoodieInstant replaceCommitInstant = metaClient.getActiveTimeline().getCompletedReplaceTimeline().firstInstant().get();
+      HoodieClusteringPlan clusteringPlan = ClusteringUtils.getClusteringPlan(
+              metaClient, HoodieTimeline.getReplaceCommitRequestedInstant(replaceCommitInstant.getTimestamp()))
+          .map(Pair::getRight).orElseThrow(() -> new HoodieClusteringException(
+              "Unable to read clustering plan for instant: " + replaceCommitInstant.getTimestamp()));
+      assertEquals(clusteringPlan.getLatestCompletedInstant(), newCommitTime);
+    }
+
+    // ingest two more commits of inserts. and then trigger clustering again. 2nd clustering should not include file groups from commit1 and commit2.
+    testInsertTwoBatches(true, partitionPath);
+
+    cfgBuilder = getConfigBuilder().withEmbeddedTimelineServerEnabled(false).withAutoCommit(false)
+        .withClusteringConfig(HoodieClusteringConfig.newBuilder().withInlineClustering(true).withInlineClusteringNumCommits(1)
+            .withClusteringPlanFilterMode(ClusteringPlanFilterMode.RECENTLY_INSERTED_FILES.name()).build());
+
+    String newCommitTime2 = HoodieActiveTimeline.createNewInstantTime();
+    try (SparkRDDWriteClient client = getHoodieWriteClient(cfgBuilder.build())) {
+      int numRecords = 200;
+      List<HoodieRecord> records1 = dataGen.generateInserts(newCommitTime2, numRecords);
+      client.startCommitWithTime(newCommitTime2);
+      JavaRDD<HoodieRecord> insertRecordsRDD1 = jsc.parallelize(records1, 2);
+      JavaRDD<WriteStatus> statuses = client.insert(insertRecordsRDD1, newCommitTime2);
+      client.commit(newCommitTime2, statuses);
+      List<WriteStatus> statusList = statuses.collect();
+      assertNoWriteErrors(statusList);
+
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+      HoodieInstant replaceCommitInstant = metaClient.getActiveTimeline().getCompletedReplaceTimeline().lastInstant().get();
+      HoodieClusteringPlan clusteringPlan = ClusteringUtils.getClusteringPlan(
+              metaClient, HoodieTimeline.getReplaceCommitRequestedInstant(replaceCommitInstant.getTimestamp()))
+          .map(Pair::getRight).orElseThrow(() -> new HoodieClusteringException(
+              "Unable to read clustering plan for instant: " + replaceCommitInstant.getTimestamp()));
+      assertEquals(clusteringPlan.getLatestCompletedInstant(), newCommitTime2);
+
+      HoodieReplaceCommitMetadata replaceCommitMetadata = HoodieReplaceCommitMetadata
+          .fromBytes(metaClient.getActiveTimeline().getInstantDetails(replaceCommitInstant).get(), HoodieReplaceCommitMetadata.class);
+
+      // validate that no files from first two commits are considered again for 2nd clustering.
+      List<String> filesReplaced = new ArrayList<>();
+      replaceCommitMetadata.getPartitionToReplaceFileIds().forEach((k,v) -> v.forEach(file -> filesReplaced.add(file)));
+      fileIds.forEach(entry -> assertFalse(filesReplaced.contains(entry)));
     }
   }
 

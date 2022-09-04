@@ -26,10 +26,18 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.action.cluster.ClusteringPlanFilter;
+import org.apache.hudi.table.action.cluster.ClusteringPlanFilterMode;
 import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilter;
 
 import org.apache.log4j.LogManager;
@@ -66,6 +74,15 @@ public abstract class PartitionAwareClusteringPlanStrategy<T extends HoodieRecor
     return filteredPartitions;
   }
 
+  /**
+   * Return list of FileSlices to be considered for clustering.
+   */
+  protected List<FileSlice> filterFileSlices(List<FileSlice> fileSlices, Option<HoodieDefaultTimeline> toFilterTimeline, ClusteringPlanFilterMode filterMode) {
+    List<FileSlice> filteredFileSlices = ClusteringPlanFilter.filter(fileSlices, toFilterTimeline, filterMode);
+    LOG.debug("Filtered to the following fileSlices: " + filteredFileSlices);
+    return filteredFileSlices;
+  }
+
   @Override
   public Option<HoodieClusteringPlan> generateClusteringPlan() {
     if (!checkPrecondition()) {
@@ -87,12 +104,37 @@ public abstract class PartitionAwareClusteringPlanStrategy<T extends HoodieRecor
       return Option.empty();
     }
 
+    Option<HoodieDefaultTimeline> toFilterTimeline = Option.empty();
+    Option<HoodieInstant> latestCompletedInstant = Option.empty();
+    // if filtering based on file slices are enabled, we need to pass the toFilter timeline below to assist in filtering.
+    if (config.getClusteringPlanFilterMode() != ClusteringPlanFilterMode.NONE) {
+      Option<HoodieInstant> latestScheduledReplaceCommit = metaClient.getActiveTimeline()
+          .filter(instant -> instant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION))
+          .filter(instant -> instant.isRequested()).lastInstant();
+      if (latestScheduledReplaceCommit.isPresent()) {
+        HoodieClusteringPlan clusteringPlan = ClusteringUtils.getClusteringPlan(
+                metaClient, HoodieTimeline.getReplaceCommitRequestedInstant(latestScheduledReplaceCommit.get().getTimestamp()))
+            .map(Pair::getRight).orElseThrow(() -> new HoodieClusteringException(
+                "Unable to read clustering plan for instant: " + latestScheduledReplaceCommit.get().getTimestamp()));
+        if (!StringUtils.isNullOrEmpty(clusteringPlan.getLatestCompletedInstant())) {
+          toFilterTimeline = Option.of((HoodieDefaultTimeline)
+              metaClient.getActiveTimeline().filter(instant -> HoodieTimeline.compareTimestamps(instant.getTimestamp(), HoodieTimeline.GREATER_THAN, clusteringPlan.getLatestCompletedInstant())));
+        }
+      } else {
+        // if last clustering was archived
+        toFilterTimeline = Option.of(metaClient.getActiveTimeline());
+      }
+      latestCompletedInstant = metaClient.getActiveTimeline().filterCompletedInstants().lastInstant();
+    }
+
+    Option<HoodieDefaultTimeline> finalToFilterTimeline = toFilterTimeline;
     List<HoodieClusteringGroup> clusteringGroups = getEngineContext()
         .flatMap(
             partitionPaths,
             partitionPath -> {
               List<FileSlice> fileSlicesEligible = getFileSlicesEligibleForClustering(partitionPath).collect(Collectors.toList());
-              return buildClusteringGroupsForPartition(partitionPath, fileSlicesEligible).limit(getWriteConfig().getClusteringMaxNumGroups());
+              List<FileSlice> filteredFileSlices = filterFileSlices(fileSlicesEligible, finalToFilterTimeline, config.getClusteringPlanFilterMode());
+              return buildClusteringGroupsForPartition(partitionPath, filteredFileSlices).limit(getWriteConfig().getClusteringMaxNumGroups());
             },
             partitionPaths.size())
         .stream()
@@ -109,13 +151,15 @@ public abstract class PartitionAwareClusteringPlanStrategy<T extends HoodieRecor
         .setStrategyParams(getStrategyParams())
         .build();
 
-    return Option.of(HoodieClusteringPlan.newBuilder()
+    HoodieClusteringPlan.Builder clusteringPlanBuilder = HoodieClusteringPlan.newBuilder()
         .setStrategy(strategy)
         .setInputGroups(clusteringGroups)
         .setExtraMetadata(getExtraMetadata())
         .setVersion(getPlanVersion())
-        .setPreserveHoodieMetadata(getWriteConfig().isPreserveHoodieCommitMetadataForClustering())
-        .build());
+        .setPreserveHoodieMetadata(getWriteConfig().isPreserveHoodieCommitMetadataForClustering());
+
+    return Option.of(latestCompletedInstant.map(instant ->
+        clusteringPlanBuilder.setLatestCompletedInstant(instant.getTimestamp()).build()).orElse(clusteringPlanBuilder.build()));
   }
 
   public List<String> getMatchedPartitions(HoodieWriteConfig config, List<String> partitionPaths) {

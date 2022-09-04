@@ -29,6 +29,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.table.action.cluster.ClusteringPlanFilterMode;
 import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilterMode;
 
 import javax.annotation.Nonnull;
@@ -66,6 +67,8 @@ public class HoodieClusteringConfig extends HoodieConfig {
       "org.apache.hudi.client.clustering.run.strategy.JavaSortAndSizeExecutionStrategy";
   public static final String PLAN_PARTITION_FILTER_MODE =
       "hoodie.clustering.plan.partition.filter.mode";
+  public static final String PLAN_FILTER_MODE =
+      "hoodie.clustering.plan.filter.mode";
 
   // Any Space-filling curves optimize(z-order/hilbert) params can be saved with this prefix
   private static final String LAYOUT_OPTIMIZE_PARAM_PREFIX = "hoodie.layout.optimize.";
@@ -153,12 +156,25 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .key(PLAN_PARTITION_FILTER_MODE)
       .defaultValue(ClusteringPlanPartitionFilterMode.NONE)
       .sinceVersion("0.11.0")
-      .withDocumentation("Partition filter mode used in the creation of clustering plan. Available values are - "
-          + "NONE: do not filter table partition and thus the clustering plan will include all partitions that have clustering candidate."
-          + "RECENT_DAYS: keep a continuous range of partitions, worked together with configs '" + DAYBASED_LOOKBACK_PARTITIONS.key() + "' and '"
+      .withDocumentation("Partition Filter mode used in the creation of clustering plan. Available values are - "
+          + "NONE: do not filter anything and thus the clustering plan will include all file slices that have clustering candidate."
+          + "RECENT: keep a continuous range of partitions, worked together with configs '" + DAYBASED_LOOKBACK_PARTITIONS.key() + "' and '"
           + PLAN_STRATEGY_SKIP_PARTITIONS_FROM_LATEST.key() + "."
           + "SELECTED_PARTITIONS: keep partitions that are in the specified range ['" + PARTITION_FILTER_BEGIN_PARTITION.key() + "', '"
           + PARTITION_FILTER_END_PARTITION.key() + "'].");
+
+  public static final ConfigProperty<ClusteringPlanFilterMode> PLAN_FILTER_MODE_NAME = ConfigProperty
+      .key(PLAN_FILTER_MODE)
+      .defaultValue(ClusteringPlanFilterMode.NONE)
+      .sinceVersion("0.13.0")
+      .withDocumentation("Filter mode used in the creation of clustering plan. Available values are - "
+      + "NONE: do not filter table partition and thus the clustering plan will include all partitions that have clustering candidate."
+      + "RECENTLY_INSERTED_FILES: Filters for files that had inserts recently, worked together with configs '" + INLINE_CLUSTERING_MAX_COMMITS.key() + "' or '"
+      + ASYNC_CLUSTERING_MAX_COMMITS.key() + "."
+      + "RECENTLY_UPDATED_FILES: Filters for files that got changed recently, worked together with configs '" + INLINE_CLUSTERING_MAX_COMMITS.key() + "' or '"
+      + ASYNC_CLUSTERING_MAX_COMMITS.key() + ".");
+
+
 
   public static final ConfigProperty<String> PLAN_STRATEGY_MAX_BYTES_PER_OUTPUT_FILEGROUP = ConfigProperty
       .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "max.bytes.per.group")
@@ -570,6 +586,11 @@ public class HoodieClusteringConfig extends HoodieConfig {
 
     public Builder withPreserveHoodieCommitMetadata(Boolean preserveHoodieCommitMetadata) {
       clusteringConfig.setValue(PRESERVE_COMMIT_METADATA, String.valueOf(preserveHoodieCommitMetadata));
+      return this;
+    }
+
+    public Builder withClusteringPlanFilterMode(String clusteringPlanFilterMode) {
+      clusteringConfig.setValue(PLAN_FILTER_MODE, clusteringPlanFilterMode);
       return this;
     }
 

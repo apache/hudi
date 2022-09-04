@@ -50,6 +50,11 @@
       "name":"preserveHoodieMetadata",
       "type":["null", "boolean"],
       "default": null
+    },
+    {
+       "name":"latestCompletedInstant",
+       "type":["null", "string"],
+       "default": null
     }
   ]
 }
