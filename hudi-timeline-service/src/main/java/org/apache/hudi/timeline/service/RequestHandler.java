@@ -502,14 +502,18 @@ public class RequestHandler {
         if (refreshCheck) {
           long beginFinalCheck = System.currentTimeMillis();
           if (isLocalViewBehind(context)) {
-            String errMsg =
-                "Last known instant from client was "
-                    + context.queryParam(RemoteHoodieTableFileSystemView.LAST_INSTANT_TS,
-                        HoodieTimeline.INVALID_INSTANT_TS)
-                    + " but server has the following timeline "
-                    + viewManager.getFileSystemView(context.queryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM))
-                        .getTimeline().getInstants().collect(Collectors.toList());
-            throw new BadRequestResponse(errMsg);
+            String lastInstantTs = context.queryParam(RemoteHoodieTableFileSystemView.LAST_INSTANT_TS,
+                HoodieTimeline.INVALID_INSTANT_TS);
+            HoodieTimeline localTimeline =
+                viewManager.getFileSystemView(context.queryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM)).getTimeline();
+            if (shouldThrowExceptionIfLocalViewBehind(localTimeline, lastInstantTs)) {
+              String errMsg =
+                      "Last known instant from client was "
+                              + lastInstantTs
+                              + " but server has the following timeline "
+                              + localTimeline.getInstants().collect(Collectors.toList());
+              throw new BadRequestResponse(errMsg);
+            }
           }
           long endFinalCheck = System.currentTimeMillis();
           finalCheckTimeTaken = endFinalCheck - beginFinalCheck;
@@ -537,6 +541,21 @@ public class RequestHandler {
                 timeTakenMillis, refreshCheckTimeTaken, handleTimeTaken, finalCheckTimeTaken, success,
                 context.queryString(), context.host(), synced));
       }
+    }
+  }
+
+  /**
+   * Determine whether to throw an exception when local view of table's timeline is behind that of client's view.
+   */
+  private boolean shouldThrowExceptionIfLocalViewBehind(HoodieTimeline localTimeline, String lastInstantTs) {
+    HoodieTimeline afterLastInstantTimeLine = localTimeline.findInstantsAfter(lastInstantTs).filterCompletedInstants();
+    // When performing async clean, we may have one more .clean.completed after lastInstantTs.
+    // In this case, we do not need to throw an exception.
+    if (afterLastInstantTimeLine.countInstants() == 1
+          && afterLastInstantTimeLine.filter(s -> s.getAction().equals(HoodieTimeline.CLEAN_ACTION)).countInstants() == 1) {
+      return false;
+    } else {
+      return true;
     }
   }
 }
