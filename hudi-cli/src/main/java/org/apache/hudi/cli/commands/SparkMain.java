@@ -28,10 +28,13 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieBootstrapConfig;
@@ -59,13 +62,18 @@ import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
+import org.apache.spark.sql.functions;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 import static org.apache.hudi.utilities.UtilHelpers.EXECUTE;
 import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE;
@@ -86,7 +94,8 @@ public class SparkMain {
   enum SparkCommand {
     BOOTSTRAP, ROLLBACK, DEDUPLICATE, ROLLBACK_TO_SAVEPOINT, SAVEPOINT, IMPORT, UPSERT, COMPACT_SCHEDULE, COMPACT_RUN, COMPACT_SCHEDULE_AND_EXECUTE,
     COMPACT_UNSCHEDULE_PLAN, COMPACT_UNSCHEDULE_FILE, COMPACT_VALIDATE, COMPACT_REPAIR, CLUSTERING_SCHEDULE,
-    CLUSTERING_RUN, CLUSTERING_SCHEDULE_AND_EXECUTE, CLEAN, DELETE_MARKER, DELETE_SAVEPOINT, UPGRADE, DOWNGRADE
+    CLUSTERING_RUN, CLUSTERING_SCHEDULE_AND_EXECUTE, CLEAN, DELETE_MARKER, DELETE_SAVEPOINT, UPGRADE, DOWNGRADE,
+    REPAIR_DEPRECATED_PARTITION, RENAME_PARTITION
   }
 
   public static void main(String[] args) throws Exception {
@@ -270,6 +279,14 @@ public class SparkMain {
           assert (args.length == 5);
           returnCode = upgradeOrDowngradeTable(jsc, args[3], args[4]);
           break;
+        case REPAIR_DEPRECATED_PARTITION:
+          assert (args.length == 4);
+          returnCode = repairDeprecatedPartition(jsc, args[3]);
+          break;
+        case RENAME_PARTITION:
+          assert (args.length == 6);
+          returnCode = renamePartition(jsc, args[3], args[4], args[5]);
+          break;
         default:
           break;
       }
@@ -412,6 +429,79 @@ public class SparkMain {
         FSUtils.getFs(basePath, jsc.hadoopConfiguration()), DeDupeType.withName(dedupeType));
     job.fixDuplicates(dryRun);
     return 0;
+  }
+
+  public static int repairDeprecatedPartition(JavaSparkContext jsc, String basePath) {
+    SQLContext sqlContext = new SQLContext(jsc);
+    Dataset<Row> recordsToRewrite = getRecordsToRewrite(basePath, PartitionPathEncodeUtils.DEPRECATED_DEFAULT_PARTITION_PATH, sqlContext);
+
+    if (!recordsToRewrite.isEmpty()) {
+      recordsToRewrite.cache();
+      HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build();
+      Map<String, String> propsMap = getPropsForRewrite(metaClient);
+      rewriteRecordsToNewPartition(basePath, PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH, recordsToRewrite, metaClient, propsMap);
+      // after re-writing, we can safely delete older data.
+      deleteOlderPartition(basePath, PartitionPathEncodeUtils.DEPRECATED_DEFAULT_PARTITION_PATH, recordsToRewrite, propsMap);
+    }
+    return 0;
+  }
+
+  public static int renamePartition(JavaSparkContext jsc, String basePath, String oldPartition, String newPartition) {
+    SQLContext sqlContext = new SQLContext(jsc);
+    Dataset<Row> recordsToRewrite = getRecordsToRewrite(basePath, oldPartition, sqlContext);
+
+    if (!recordsToRewrite.isEmpty()) {
+      recordsToRewrite.cache();
+      HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build();
+      Map<String, String> propsMap = getPropsForRewrite(metaClient);
+      rewriteRecordsToNewPartition(basePath, newPartition, recordsToRewrite, metaClient, propsMap);
+      // after re-writing, we can safely delete older data.
+      deleteOlderPartition(basePath, oldPartition, recordsToRewrite, propsMap);
+    }
+    return 0;
+  }
+
+  private static void deleteOlderPartition(String basePath, String oldPartition, Dataset<Row> recordsToRewrite, Map<String, String> propsMap) {
+    propsMap.put("hoodie.datasource.write.partitions.to.delete", oldPartition);
+    recordsToRewrite.write()
+        .options(propsMap)
+        .option("hoodie.datasource.write.operation", WriteOperationType.DELETE_PARTITION.value())
+        .format("hudi")
+        .mode("Append")
+        .save(basePath);
+  }
+
+  private static void rewriteRecordsToNewPartition(String basePath, String newPartition, Dataset<Row> recordsToRewrite, HoodieTableMetaClient metaClient, Map<String, String> propsMap) {
+    recordsToRewrite.withColumn(metaClient.getTableConfig().getPartitionFieldProp(), functions.lit(newPartition))
+        .write()
+        .options(propsMap)
+        .option("hoodie.datasource.write.operation", "insert")
+        .format("hudi")
+        .mode("Append")
+        .save(basePath);
+  }
+
+  private static Dataset<Row> getRecordsToRewrite(String basePath, String oldPartition, SQLContext sqlContext) {
+    return sqlContext.read()
+        .option("hoodie.datasource.read.extract.partition.values.from.path", "false")
+        .format("hudi")
+        .load(basePath)
+        .filter(HoodieRecord.PARTITION_PATH_METADATA_FIELD + " == '" + oldPartition + "'")
+        .drop(HoodieRecord.RECORD_KEY_METADATA_FIELD)
+        .drop(HoodieRecord.PARTITION_PATH_METADATA_FIELD)
+        .drop(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD)
+        .drop(HoodieRecord.FILENAME_METADATA_FIELD)
+        .drop(HoodieRecord.COMMIT_TIME_METADATA_FIELD);
+  }
+
+  private static Map<String, String> getPropsForRewrite(HoodieTableMetaClient metaClient) {
+    Map<String, String> propsMap = new HashMap<>();
+    metaClient.getTableConfig().getProps().forEach((k, v) -> propsMap.put(k.toString(), v.toString()));
+    propsMap.put(HoodieWriteConfig.SKIP_DEFAULT_PARTITION_VALIDATION.key(), "true");
+    propsMap.put(DataSourceWriteOptions.RECORDKEY_FIELD().key(), metaClient.getTableConfig().getRecordKeyFieldProp());
+    propsMap.put(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), metaClient.getTableConfig().getPartitionFieldProp());
+    propsMap.put(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME().key(), metaClient.getTableConfig().getKeyGeneratorClassName());
+    return propsMap;
   }
 
   private static int doBootstrap(JavaSparkContext jsc, String tableName, String tableType, String basePath,

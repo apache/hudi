@@ -1015,8 +1015,8 @@ public class ITTestHoodieDataSource extends AbstractTestBase {
   void testAppendWrite(boolean clustering) {
     TableEnvironment tableEnv = streamTableEnv;
     // csv source
-    String csvSourceDDL = TestConfigurations.getCsvSourceDDL("csv_source", "test_source_5.data");
-    tableEnv.executeSql(csvSourceDDL);
+    String sourceDDL = TestConfigurations.getFileSourceDDL("source");
+    tableEnv.executeSql(sourceDDL);
 
     String hoodieTableDDL = sql("hoodie_sink")
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
@@ -1025,7 +1025,7 @@ public class ITTestHoodieDataSource extends AbstractTestBase {
         .end();
     tableEnv.executeSql(hoodieTableDDL);
 
-    String insertInto = "insert into hoodie_sink select * from csv_source";
+    String insertInto = "insert into hoodie_sink select * from source";
     execInsertSql(tableEnv, insertInto);
 
     List<Row> result1 = CollectionUtil.iterableToList(

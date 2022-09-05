@@ -532,7 +532,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase {
     writeClient.startCommitWithTime(instantTime);
 
     // Insert new records
-    final JavaRDD<HoodieRecord> inputRecords = generateTestRecordsForBulkInsert(jsc, 10);
+    final JavaRDD<HoodieRecord> inputRecords = generateTestRecordsForBulkInsert(jsc, 50);
     writeClient.bulkInsert(inputRecords, instantTime);
 
     // Partition metafile should be created

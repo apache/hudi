@@ -33,6 +33,7 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieIOException;
 
@@ -261,5 +262,61 @@ public class RepairsCommand implements CommandMarker {
         HoodieTableHeaderFields.HEADER_BASE_METAFILE_PRESENT,
         HoodieTableHeaderFields.HEADER_ACTION
     }, rows);
+  }
+
+  @CliCommand(value = "repair deprecated partition",
+      help = "Repair deprecated partition (\"default\"). Re-writes data from the deprecated partition into " + PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH)
+  public String repairDeprecatePartition(
+      @CliOption(key = {"sparkProperties"}, help = "Spark Properties File Path",
+          unspecifiedDefaultValue = "") String sparkPropertiesPath,
+      @CliOption(key = "sparkMaster", unspecifiedDefaultValue = "", help = "Spark Master") String master,
+      @CliOption(key = "sparkMemory", unspecifiedDefaultValue = "4G",
+          help = "Spark executor memory") final String sparkMemory) throws Exception {
+    if (StringUtils.isNullOrEmpty(sparkPropertiesPath)) {
+      sparkPropertiesPath =
+          Utils.getDefaultPropertiesFile(JavaConverters.mapAsScalaMapConverter(System.getenv()).asScala());
+    }
+
+    SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
+    sparkLauncher.addAppArgs(SparkMain.SparkCommand.REPAIR_DEPRECATED_PARTITION.toString(), master, sparkMemory,
+        HoodieCLI.getTableMetaClient().getBasePathV2().toString());
+    Process process = sparkLauncher.launch();
+    InputStreamConsumer.captureOutput(process);
+    int exitCode = process.waitFor();
+
+    if (exitCode != 0) {
+      return "Deduplication failed!";
+    }
+    return "Repair succeeded";
+  }
+
+  @CliCommand(value = "rename partition",
+      help = "Rename partition. Usage: rename partition --oldPartition <oldPartition> --newPartition <newPartition>")
+  public String renamePartition(
+      @CliOption(key = {"oldPartition"}, help = "Partition value to be renamed", mandatory = true,
+          unspecifiedDefaultValue = "") String oldPartition,
+      @CliOption(key = {"newPartition"}, help = "New partition value after rename", mandatory = true,
+          unspecifiedDefaultValue = "") String newPartition,
+      @CliOption(key = {"sparkProperties"}, help = "Spark Properties File Path",
+          unspecifiedDefaultValue = "") String sparkPropertiesPath,
+      @CliOption(key = "sparkMaster", unspecifiedDefaultValue = "", help = "Spark Master") String master,
+      @CliOption(key = "sparkMemory", unspecifiedDefaultValue = "4G",
+          help = "Spark executor memory") final String sparkMemory) throws Exception {
+    if (StringUtils.isNullOrEmpty(sparkPropertiesPath)) {
+      sparkPropertiesPath =
+          Utils.getDefaultPropertiesFile(JavaConverters.mapAsScalaMapConverter(System.getenv()).asScala());
+    }
+
+    SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
+    sparkLauncher.addAppArgs(SparkMain.SparkCommand.RENAME_PARTITION.toString(), master, sparkMemory,
+        HoodieCLI.getTableMetaClient().getBasePathV2().toString(), oldPartition, newPartition);
+    Process process = sparkLauncher.launch();
+    InputStreamConsumer.captureOutput(process);
+    int exitCode = process.waitFor();
+
+    if (exitCode != 0) {
+      return "rename partition failed!";
+    }
+    return "rename partition succeeded";
   }
 }

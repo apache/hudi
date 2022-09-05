@@ -23,6 +23,8 @@ import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.HoodieTableHeaderFields;
 import org.apache.hudi.cli.TableHeader;
+import org.apache.hudi.cli.utils.InputStreamConsumer;
+import org.apache.hudi.cli.utils.SparkUtil;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -32,6 +34,7 @@ import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
 
+import org.apache.spark.launcher.SparkLauncher;
 import org.springframework.shell.core.CommandMarker;
 import org.springframework.shell.core.annotation.CliCommand;
 import org.springframework.shell.core.annotation.CliOption;
@@ -120,6 +123,37 @@ public class RollbacksCommand implements CommandMarker {
         .addTableHeaderField(HoodieTableHeaderFields.HEADER_DELETED_FILE)
         .addTableHeaderField(HoodieTableHeaderFields.HEADER_SUCCEEDED);
     return HoodiePrintHelper.print(header, new HashMap<>(), sortByField, descending, limit, headerOnly, rows);
+  }
+
+  @CliCommand(value = "commit rollback", help = "Rollback a commit")
+  public String rollbackCommit(
+      @CliOption(key = {"commit"}, help = "Commit to rollback") final String instantTime,
+      @CliOption(key = {"sparkProperties"}, help = "Spark Properties File Path") final String sparkPropertiesPath,
+      @CliOption(key = "sparkMaster", unspecifiedDefaultValue = "", help = "Spark Master") String master,
+      @CliOption(key = "sparkMemory", unspecifiedDefaultValue = "4G",
+          help = "Spark executor memory") final String sparkMemory,
+      @CliOption(key = "rollbackUsingMarkers", unspecifiedDefaultValue = "false",
+          help = "Enabling marker based rollback") final String rollbackUsingMarkers)
+      throws Exception {
+    HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
+    HoodieTimeline completedTimeline = activeTimeline.getCommitsTimeline().filterCompletedInstants();
+    HoodieTimeline filteredTimeline = completedTimeline.filter(instant -> instant.getTimestamp().equals(instantTime));
+    if (filteredTimeline.empty()) {
+      return "Commit " + instantTime + " not found in Commits " + completedTimeline;
+    }
+
+    SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
+    sparkLauncher.addAppArgs(SparkMain.SparkCommand.ROLLBACK.toString(), master, sparkMemory, instantTime,
+        HoodieCLI.getTableMetaClient().getBasePath(), rollbackUsingMarkers);
+    Process process = sparkLauncher.launch();
+    InputStreamConsumer.captureOutput(process);
+    int exitCode = process.waitFor();
+    // Refresh the current
+    HoodieCLI.refreshTableMetadata();
+    if (exitCode != 0) {
+      return "Commit " + instantTime + " failed to roll back";
+    }
+    return "Commit " + instantTime + " rolled back";
   }
 
   /**

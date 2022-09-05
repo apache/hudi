@@ -399,4 +399,19 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   public String toString() {
     return this.getClass().getName() + ": " + instants.stream().map(Object::toString).collect(Collectors.joining(","));
   }
+
+  /**
+   * Merge this timeline with the given timeline.
+   */
+  public HoodieDefaultTimeline mergeTimeline(HoodieDefaultTimeline timeline) {
+    Stream<HoodieInstant> instantStream = Stream.concat(instants.stream(), timeline.getInstants()).sorted();
+    Function<HoodieInstant, Option<byte[]>> details = instant -> {
+      if (instants.stream().anyMatch(i -> i.equals(instant))) {
+        return this.getInstantDetails(instant);
+      } else {
+        return timeline.getInstantDetails(instant);
+      }
+    };
+    return new HoodieDefaultTimeline(instantStream, details);
+  }
 }
