@@ -21,7 +21,6 @@ package org.apache.hudi.client.clustering.run.strategy;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieClusteringGroup;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
-import org.apache.hudi.client.HoodieInternalWriteStatusCoordinator;
 import org.apache.hudi.client.SparkTaskContextSupplier;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
@@ -76,8 +75,6 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
-import org.apache.spark.sql.SaveMode;
-import scala.collection.JavaConverters;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -85,7 +82,6 @@ import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -142,7 +138,6 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
                                                                           final Map<String, String> strategyParams, final Schema schema,
                                                                           final List<HoodieFileGroupId> fileGroupIdList, final boolean preserveHoodieMetadata);
 
-
   /**
    * Execute clustering to write inputRecords into new files as defined by rules in strategy parameters.
    * The number of new file groups created is bounded by numOutputGroups.
@@ -161,32 +156,6 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
                                                                        final Map<String, String> strategyParams, final Schema schema,
                                                                        final List<HoodieFileGroupId> fileGroupIdList, final boolean preserveHoodieMetadata);
 
-  protected HoodieData<WriteStatus> performRowWrite(Dataset<Row> inputRecords, Map<String, String> parameters) {
-    String uuid = UUID.randomUUID().toString();
-    parameters.put(HoodieWriteConfig.BULKINSERT_ROW_IDENTIFY_ID.key(), uuid);
-    try {
-      inputRecords.write()
-          .format("hudi")
-          .options(JavaConverters.mapAsScalaMapConverter(parameters).asScala())
-          .mode(SaveMode.Append)
-          .save(getWriteConfig().getBasePath());
-      List<WriteStatus> writeStatusList = HoodieInternalWriteStatusCoordinator.get().getWriteStatuses(uuid)
-          .stream()
-          .map(internalWriteStatus -> {
-            WriteStatus status = new WriteStatus(
-                internalWriteStatus.isTrackSuccessRecords(), internalWriteStatus.getFailureFraction());
-            status.setFileId(internalWriteStatus.getFileId());
-            status.setTotalRecords(internalWriteStatus.getTotalRecords());
-            status.setPartitionPath(internalWriteStatus.getPartitionPath());
-            status.setStat(internalWriteStatus.getStat());
-            return status;
-          }).collect(Collectors.toList());
-      return getEngineContext().parallelize(writeStatusList);
-    } finally {
-      HoodieInternalWriteStatusCoordinator.get().removeStatuses(uuid);
-    }
-  }
-
   protected BulkInsertPartitioner<Dataset<Row>> getRowPartitioner(Map<String, String> strategyParams,
                                                                   Schema schema) {
     return getPartitioner(strategyParams, schema, true);
@@ -203,7 +172,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
    * @param strategyParams Strategy parameters containing columns to sort the data by when clustering.
    * @param schema         Schema of the data including metadata fields.
    */
-  protected <I> BulkInsertPartitioner<I> getPartitioner(Map<String, String> strategyParams,
+  private <I> BulkInsertPartitioner<I> getPartitioner(Map<String, String> strategyParams,
                                                         Schema schema,
                                                         boolean isRowPartitioner) {
     Option<String[]> orderByColumnsOpt =
@@ -234,38 +203,6 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
     }).orElse(isRowPartitioner ? BulkInsertInternalPartitionerWithRowsFactory.get(getWriteConfig().getBulkInsertSortMode()) :
         BulkInsertInternalPartitionerFactory.get(getWriteConfig().getBulkInsertSortMode()));
   }
-
-  /**
-   * Configure {@link BulkInsertPartitioner<Dataset<Row>>} based on strategy params.
-   *
-   * @param strategyParams Strategy parameters containing columns to sort the data by when clustering.
-   * @param parameters Map used to write the partitioner configurations.
-   * @return {@link RDDCustomColumnsSortPartitioner} if sort columns are provided, otherwise empty.
-   */
-  protected void configRowPartitioner(Map<String, String> strategyParams, Map<String, String> parameters) {
-    Option.ofNullable(strategyParams.get(PLAN_STRATEGY_SORT_COLUMNS.key()))
-        .map(orderColumnStr -> {
-          parameters.put(HoodieWriteConfig.BULKINSERT_USER_DEFINED_PARTITIONER_SORT_COLUMNS.key(), orderColumnStr);
-          HoodieClusteringConfig.LayoutOptimizationStrategy layoutOptStrategy = getWriteConfig().getLayoutOptimizationStrategy();
-          switch (layoutOptStrategy) {
-            case ZORDER:
-            case HILBERT:
-              parameters.put(HoodieWriteConfig.BULKINSERT_USER_DEFINED_PARTITIONER_CLASS_NAME.key(), RowSpatialCurveSortPartitioner.class.getCanonicalName());
-              break;
-            case LINEAR:
-              parameters.put(HoodieWriteConfig.BULKINSERT_USER_DEFINED_PARTITIONER_CLASS_NAME.key(), RowCustomColumnsSortPartitioner.class.getCanonicalName());
-              break;
-            default:
-              throw new UnsupportedOperationException(String.format("Layout optimization strategy '%s' is not supported", layoutOptStrategy));
-          }
-          parameters.compute(HoodieClusteringConfig.LAYOUT_OPTIMIZE_STRATEGY.key(),
-              (k, v) -> getWriteConfig().getString(HoodieClusteringConfig.LAYOUT_OPTIMIZE_STRATEGY));
-          parameters.compute(HoodieClusteringConfig.LAYOUT_OPTIMIZE_SPATIAL_CURVE_BUILD_METHOD.key(),
-              (k, v) -> getWriteConfig().getString(HoodieClusteringConfig.LAYOUT_OPTIMIZE_SPATIAL_CURVE_BUILD_METHOD));
-          return orderColumnStr;
-        });
-  }
-
 
   /**
    * Submit job to execute clustering for the group with RDD APIs.

@@ -211,11 +211,6 @@ public class HoodieWriteConfig extends HoodieConfig {
           + " optimally for common query patterns. For now we support a build-in user defined bulkinsert partitioner org.apache.hudi.execution.bulkinsert.RDDCustomColumnsSortPartitioner"
           + " which can does sorting based on specified column values set by " + BULKINSERT_USER_DEFINED_PARTITIONER_SORT_COLUMNS.key());
 
-  public static final ConfigProperty<String> BULKINSERT_ROW_IDENTIFY_ID = ConfigProperty
-      .key("hoodie.bulkinsert.row.writestatus.id")
-      .noDefaultValue()
-      .withDocumentation("The unique id for each write operation, HoodieInternalWriteStatusCoordinator will use "
-          + "this id to identify the related write statuses");
   public static final ConfigProperty<String> UPSERT_PARALLELISM_VALUE = ConfigProperty
       .key("hoodie.upsert.shuffle.parallelism")
       .defaultValue("200")

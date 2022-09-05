@@ -137,6 +137,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .defaultValue("4")
       .sinceVersion("0.9.0")
       .withDocumentation("Config to control frequency of async clustering");
+
   public static final ConfigProperty<String> PLAN_STRATEGY_SKIP_PARTITIONS_FROM_LATEST = ConfigProperty
       .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "daybased.skipfromlatest.partitions")
       .defaultValue("0")
