@@ -63,6 +63,7 @@ public class DataSourceInternalWriterHelper {
     this.extraMetadata = extraMetadata;
     this.writeClient  = new SparkRDDWriteClient<>(new HoodieSparkEngineContext(new JavaSparkContext(sparkSession.sparkContext())), writeConfig);
     writeClient.setOperationType(operationType);
+    writeClient.startCommitWithTime(instantTime);
 
     this.metaClient = HoodieTableMetaClient.builder().setConf(configuration).setBasePath(writeConfig.getBasePath()).build();
     this.metaClient.validateTableProperties(writeConfig.getProps());
@@ -93,10 +94,6 @@ public class DataSourceInternalWriterHelper {
     LOG.error("Commit " + instantTime + " aborted ");
     writeClient.rollback(instantTime);
     writeClient.close();
-  }
-
-  public void createRequestedCommit() {
-    writeClient.startCommitWithTime(instantTime);
   }
 
   public void createInflightCommit() {

@@ -124,7 +124,7 @@ object HoodieSparkSqlWriter {
         jsc.setLocalProperty("spark.scheduler.pool", SparkConfigs.SPARK_DATASOURCE_WRITER_POOL_NAME)
       }
     }
-
+    val instantTime = HoodieActiveTimeline.createNewInstantTime()
     val keyGenerator = HoodieSparkKeyGeneratorFactory.createKeyGenerator(new TypedProperties(hoodieConfig.getProps))
 
     if (mode == SaveMode.Ignore && tableExists) {
@@ -170,11 +170,6 @@ object HoodieSparkSqlWriter {
       val commitActionType = CommitUtils.getCommitActionType(operation, tableConfig.getTableType)
       val dropPartitionColumns = hoodieConfig.getBoolean(DataSourceWriteOptions.DROP_PARTITION_COLUMNS)
 
-      val instantTime = Option(hoodieConfig.getString(DataSourceInternalWriterHelper.INSTANT_TIME_OPT_KEY)) match {
-        case Some(instant) => instant
-        case _ => HoodieActiveTimeline.createNewInstantTime()
-      }
-
       // short-circuit if bulk_insert via row is enabled.
       // scalastyle:off
       if (hoodieConfig.getBoolean(ENABLE_ROW_WRITER) &&
@@ -185,14 +180,11 @@ object HoodieSparkSqlWriter {
       }
       // scalastyle:on
 
-      val dfWithoutMetaCols = df.drop(HoodieRecord.HOODIE_META_COLUMNS:_*)
-
       val reconcileSchema = parameters(DataSourceWriteOptions.RECONCILE_SCHEMA.key()).toBoolean
       val (writeResult, writeClient: SparkRDDWriteClient[HoodieRecordPayload[Nothing]]) =
         operation match {
           case WriteOperationType.DELETE => {
-            val genericRecords = registerKryoClassesAndGetGenericRecords(tblName, sparkContext, dfWithoutMetaCols, reconcileSchema)
-            // Convert to RDD[HoodieKey]
+            val genericRecords = registerKryoClassesAndGetGenericRecords(tblName, sparkContext, df, reconcileSchema)            // Convert to RDD[HoodieKey]
             val hoodieKeysToDelete = genericRecords.map(gr => keyGenerator.getKey(gr)).toJavaRDD()
 
             if (!tableExists) {
@@ -228,7 +220,7 @@ object HoodieSparkSqlWriter {
               val partitionColsToDelete = parameters(DataSourceWriteOptions.PARTITIONS_TO_DELETE.key()).split(",")
               java.util.Arrays.asList(partitionColsToDelete: _*)
             } else {
-              val genericRecords = registerKryoClassesAndGetGenericRecords(tblName, sparkContext, dfWithoutMetaCols, reconcileSchema)
+              val genericRecords = registerKryoClassesAndGetGenericRecords(tblName, sparkContext, df, reconcileSchema)
               genericRecords.map(gr => keyGenerator.getKey(gr).getPartitionPath).toJavaRDD().distinct().collect()
             }
             // Create a HoodieWriteClient & issue the delete.
@@ -249,7 +241,7 @@ object HoodieSparkSqlWriter {
                 classOf[org.apache.avro.Schema]))
 
             // TODO(HUDI-4472) revisit and simplify schema handling
-            val sourceSchema = AvroConversionUtils.convertStructTypeToAvroSchema(dfWithoutMetaCols.schema, structName, nameSpace)
+            val sourceSchema = AvroConversionUtils.convertStructTypeToAvroSchema(df.schema, structName, nameSpace)
             val latestTableSchema = getLatestTableSchema(fs, basePath, sparkContext).getOrElse(sourceSchema)
 
             val schemaEvolutionEnabled = parameters.getOrDefault(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.key(), "false").toBoolean
@@ -340,7 +332,7 @@ object HoodieSparkSqlWriter {
 
       // Check for errors and commit the write.
       val (writeSuccessful, compactionInstant, clusteringInstant) =
-        commitAndPerformPostOperations(sqlContext.sparkSession, dfWithoutMetaCols.schema,
+        commitAndPerformPostOperations(sqlContext.sparkSession, df.schema,
           writeResult, parameters, writeClient, tableConfig, jsc,
           TableInstantInfo(basePath, instantTime, commitActionType, operation))
 
@@ -434,7 +426,6 @@ object HoodieSparkSqlWriter {
                 df: DataFrame,
                 hoodieTableConfigOpt: Option[HoodieTableConfig] = Option.empty,
                 hoodieWriteClient: Option[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]] = Option.empty): Boolean = {
-    val dfWithoutMetaCols = df.drop(HoodieRecord.HOODIE_META_COLUMNS:_*)
 
     assert(optParams.get("path").exists(!StringUtils.isNullOrEmpty(_)), "'path' must be set")
     val path = optParams("path")
@@ -454,9 +445,9 @@ object HoodieSparkSqlWriter {
     val bootstrapIndexClass = hoodieConfig.getStringOrDefault(INDEX_CLASS_NAME)
 
     var schema: String = null
-    if (dfWithoutMetaCols.schema.nonEmpty) {
+    if (df.schema.nonEmpty) {
       val (structName, namespace) = AvroConversionUtils.getAvroRecordNameAndNamespace(tableName)
-      schema = AvroConversionUtils.convertStructTypeToAvroSchema(dfWithoutMetaCols.schema, structName, namespace).toString
+      schema = AvroConversionUtils.convertStructTypeToAvroSchema(df.schema, structName, namespace).toString
     } else {
       schema = HoodieAvroUtils.getNullSchema.toString
     }
@@ -514,7 +505,7 @@ object HoodieSparkSqlWriter {
       } finally {
         writeClient.close()
       }
-      val metaSyncSuccess = metaSync(sqlContext.sparkSession, hoodieConfig, basePath, dfWithoutMetaCols.schema)
+      val metaSyncSuccess = metaSync(sqlContext.sparkSession, hoodieConfig, basePath, df.schema)
       metaSyncSuccess
     }
   }
@@ -541,15 +532,11 @@ object HoodieSparkSqlWriter {
     val dropPartitionColumns = parameters.get(DataSourceWriteOptions.DROP_PARTITION_COLUMNS.key()).map(_.toBoolean)
       .getOrElse(DataSourceWriteOptions.DROP_PARTITION_COLUMNS.defaultValue())
     // register classes & schemas
-    val colsWithoutHoodieMeta = df.schema
-      .filter(field => !HoodieRecord.HOODIE_META_COLUMNS.contains(field.name))
-      .foldLeft(new StructType())((s, f) => s.add(f))
-
     val (structName, nameSpace) = AvroConversionUtils.getAvroRecordNameAndNamespace(tblName)
     sparkContext.getConf.registerKryoClasses(
       Array(classOf[org.apache.avro.generic.GenericData],
         classOf[org.apache.avro.Schema]))
-    var schema = AvroConversionUtils.convertStructTypeToAvroSchema(colsWithoutHoodieMeta, structName, nameSpace)
+    var schema = AvroConversionUtils.convertStructTypeToAvroSchema(df.schema, structName, nameSpace)
     if (dropPartitionColumns) {
       schema = generateSchemaWithoutPartitionColumns(partitionColumns, schema)
     }
@@ -601,7 +588,7 @@ object HoodieSparkSqlWriter {
       throw new HoodieException("Bulk insert using row writer is not supported with current Spark version."
         + " To use row writer please switch to spark 2 or spark 3")
     }
-    val syncHiveSuccess = metaSync(sqlContext.sparkSession, writeConfig, basePath, colsWithoutHoodieMeta)
+    val syncHiveSuccess = metaSync(sqlContext.sparkSession, writeConfig, basePath, df.schema)
     (syncHiveSuccess, common.util.Option.ofNullable(instantTime))
   }
 

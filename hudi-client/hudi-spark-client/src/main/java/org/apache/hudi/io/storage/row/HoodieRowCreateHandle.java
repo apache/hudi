@@ -70,7 +70,7 @@ public class HoodieRowCreateHandle implements Serializable {
   private final UTF8String commitTime;
   private final Function<Long, String> seqIdGenerator;
 
-  private final boolean preserveMetadata;
+  private final boolean preserveHoodieMetadata;
 
   private final HoodieTimer currTimer;
 
@@ -86,6 +86,20 @@ public class HoodieRowCreateHandle implements Serializable {
                                long taskId,
                                long taskEpochId,
                                StructType structType) {
+    this(table, writeConfig, partitionPath, fileId, instantTime, taskPartitionId, taskId, taskEpochId,
+        structType, false);
+  }
+
+  public HoodieRowCreateHandle(HoodieTable table,
+                               HoodieWriteConfig writeConfig,
+                               String partitionPath,
+                               String fileId,
+                               String instantTime,
+                               int taskPartitionId,
+                               long taskId,
+                               long taskEpochId,
+                               StructType structType,
+                               boolean preserveHoodieMetadata) {
     this.partitionPath = partitionPath;
     this.table = table;
     this.writeConfig = writeConfig;
@@ -106,7 +120,7 @@ public class HoodieRowCreateHandle implements Serializable {
 
     this.writeStatus = new HoodieInternalWriteStatus(!table.getIndex().isImplicitWithStorage(),
         writeConfig.getWriteStatusFailureFraction());
-    this.preserveMetadata = writeConfig.bulkInsertPreserverMetadata();
+    this.preserveHoodieMetadata = preserveHoodieMetadata;
 
     writeStatus.setPartitionPath(partitionPath);
     writeStatus.setFileId(fileId);
@@ -159,7 +173,7 @@ public class HoodieRowCreateHandle implements Serializable {
       UTF8String partitionPath = row.getUTF8String(HoodieRecord.PARTITION_PATH_META_FIELD_ORD);
 
       InternalRow updatedRow;
-      if (preserveMetadata) {
+      if (preserveHoodieMetadata) {
         updatedRow = new HoodieInternalRow(row.getUTF8String(HoodieRecord.COMMIT_TIME_METADATA_FIELD_ORD),
             row.getUTF8String(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD_ORD),
             recordKey,

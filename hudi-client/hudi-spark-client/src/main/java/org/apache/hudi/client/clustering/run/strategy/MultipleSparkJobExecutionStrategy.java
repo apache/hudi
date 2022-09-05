@@ -38,6 +38,7 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.RewriteAvroPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.FutureUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -48,6 +49,7 @@ import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.execution.bulkinsert.BulkInsertInternalPartitionerFactory;
+import org.apache.hudi.execution.bulkinsert.BulkInsertInternalPartitionerWithRowsFactory;
 import org.apache.hudi.execution.bulkinsert.RDDCustomColumnsSortPartitioner;
 import org.apache.hudi.execution.bulkinsert.RDDSpatialCurveSortPartitioner;
 import org.apache.hudi.execution.bulkinsert.RowCustomColumnsSortPartitioner;
@@ -57,7 +59,6 @@ import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.KeyGenUtils;
-import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
@@ -81,7 +82,6 @@ import scala.collection.JavaConverters;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -111,7 +111,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
     Stream<HoodieData<WriteStatus>> writeStatusesStream = FutureUtils.allOf(
         clusteringPlan.getInputGroups().stream()
             .map(inputGroup -> {
-              if (Boolean.parseBoolean(getWriteConfig().getString(HoodieClusteringConfig.CLUSTERING_AS_ROW))) {
+              if (getWriteConfig().getBooleanOrDefault("hoodie.datasource.write.row.writer.enable", false)) {
                 return runClusteringForGroupAsyncWithRow(inputGroup,
                     clusteringPlan.getStrategy().getStrategyParams(),
                     Option.ofNullable(clusteringPlan.getPreserveHoodieMetadata()).orElse(false),
@@ -187,25 +187,14 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
     }
   }
 
-  protected Map<String, String> buildHoodieRowParameters(int numOutputGroups, String instantTime, Map<String, String> strategyParams, boolean preserveHoodieMetadata) {
-    HashMap<String, String> params = new HashMap<>();
-    HoodieWriteConfig writeConfig = getWriteConfig();
-    params.put(HoodieWriteConfig.BULKINSERT_PARALLELISM_VALUE.key(), String.valueOf(numOutputGroups));
-    params.put(HoodieWriteConfig.BULKINSERT_ROW_AUTO_COMMIT.key(), String.valueOf(false));
-    params.put(HoodieWriteConfig.EMBEDDED_TIMELINE_SERVER_REUSE_ENABLED.key(), String.valueOf(true));
-    params.compute(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), (k, v) -> writeConfig.getKeyGeneratorClass());
-    params.compute(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), (k, v) -> writeConfig.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME));
-    params.compute(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), (k, v) -> writeConfig.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME));
-    params.put("hoodie.datasource.write.operation", "bulk_insert");
-    params.put("hoodie.instant.time", instantTime);
-    if (!writeConfig.populateMetaFields() && preserveHoodieMetadata) {
-      LOG.warn("Will setting preserveHoodieMetadata to false as populateMetaFields is false");
-      params.put(HoodieWriteConfig.BULKINSERT_PRESERVE_METADATA.key(), "false");
-    } else {
-      params.put(HoodieWriteConfig.BULKINSERT_PRESERVE_METADATA.key(), String.valueOf(preserveHoodieMetadata));
-    }
-    configRowPartitioner(strategyParams, params);
-    return params;
+  protected BulkInsertPartitioner<Dataset<Row>> getRowPartitioner(Map<String, String> strategyParams,
+                                                                  Schema schema) {
+    return getPartitioner(strategyParams, schema, true);
+  }
+
+  protected BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> getRDDPartitioner(Map<String, String> strategyParams,
+                                                                              Schema schema) {
+    return getPartitioner(strategyParams, schema, false);
   }
 
   /**
@@ -213,9 +202,10 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
    *
    * @param strategyParams Strategy parameters containing columns to sort the data by when clustering.
    * @param schema         Schema of the data including metadata fields.
-   * @return {@link RDDCustomColumnsSortPartitioner} if sort columns are provided, otherwise empty.
    */
-  protected BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> getPartitioner(Map<String, String> strategyParams, Schema schema) {
+  protected <I> BulkInsertPartitioner<I> getPartitioner(Map<String, String> strategyParams,
+                                                        Schema schema,
+                                                        boolean isRowPartitioner) {
     Option<String[]> orderByColumnsOpt =
         Option.ofNullable(strategyParams.get(PLAN_STRATEGY_SORT_COLUMNS.key()))
             .map(listStr -> listStr.split(","));
@@ -225,19 +215,24 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
       switch (layoutOptStrategy) {
         case ZORDER:
         case HILBERT:
-          return new RDDSpatialCurveSortPartitioner(
+          return isRowPartitioner
+              ? new RowSpatialCurveSortPartitioner(getWriteConfig())
+              : new RDDSpatialCurveSortPartitioner(
               (HoodieSparkEngineContext) getEngineContext(),
               orderByColumns,
               layoutOptStrategy,
               getWriteConfig().getLayoutOptimizationCurveBuildMethod(),
               HoodieAvroUtils.addMetadataFields(schema));
         case LINEAR:
-          return new RDDCustomColumnsSortPartitioner(orderByColumns, HoodieAvroUtils.addMetadataFields(schema),
+          return isRowPartitioner
+              ? new RowCustomColumnsSortPartitioner(orderByColumns)
+              : new RDDCustomColumnsSortPartitioner(orderByColumns, HoodieAvroUtils.addMetadataFields(schema),
               getWriteConfig().isConsistentLogicalTimestampEnabled());
         default:
           throw new UnsupportedOperationException(String.format("Layout optimization strategy '%s' is not supported", layoutOptStrategy));
       }
-    }).orElse(BulkInsertInternalPartitionerFactory.get(getWriteConfig().getBulkInsertSortMode()));
+    }).orElse(isRowPartitioner ? BulkInsertInternalPartitionerWithRowsFactory.get(getWriteConfig().getBulkInsertSortMode()) :
+        BulkInsertInternalPartitionerFactory.get(getWriteConfig().getBulkInsertSortMode()));
   }
 
   /**
@@ -434,9 +429,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
     if (hasLogFiles) {
       String compactionFractor = Option.ofNullable(getWriteConfig().getString("compaction.memory.fraction"))
           .orElse("0.75");
-      String[] paths = new String[baseFilePaths.length + deltaPaths.length];
-      System.arraycopy(baseFilePaths, 0, paths, 0, baseFilePaths.length);
-      System.arraycopy(deltaPaths, 0, paths, baseFilePaths.length, deltaPaths.length);
+      String[] paths = CollectionUtils.combine(baseFilePaths, deltaPaths);
       inputRecords = sqlContext.read()
           .format("org.apache.hudi")
           .option("hoodie.datasource.query.type", "snapshot")

@@ -20,10 +20,8 @@ package org.apache.hudi.internal;
 
 import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.client.HoodieInternalWriteStatus;
-import org.apache.hudi.client.HoodieInternalWriteStatusCoordinator;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 import org.apache.hadoop.conf.Configuration;
@@ -66,17 +64,11 @@ public class HoodieDataSourceInternalWriter implements DataSourceWriter {
     this.extraMetadataMap = DataSourceUtils.getExtraMetadata(dataSourceOptions.asMap());
     this.dataSourceInternalWriterHelper = new DataSourceInternalWriterHelper(instantTime, writeConfig, structType,
         sparkSession, configuration, extraMetadataMap);
-
-    if (writeConfig.bulkInsertRowAutoCommit()) {
-      this.dataSourceInternalWriterHelper.createRequestedCommit();
-    }
   }
 
   @Override
   public DataWriterFactory<InternalRow> createWriterFactory() {
-    if (writeConfig.bulkInsertRowAutoCommit()) {
-      dataSourceInternalWriterHelper.createInflightCommit();
-    }
+    dataSourceInternalWriterHelper.createInflightCommit();
     if (WriteOperationType.BULK_INSERT == dataSourceInternalWriterHelper.getWriteOperationType()) {
       return new HoodieBulkInsertDataInternalWriterFactory(dataSourceInternalWriterHelper.getHoodieTable(),
           writeConfig, instantTime, structType, populateMetaFields, arePartitionRecordsSorted);
@@ -97,19 +89,9 @@ public class HoodieDataSourceInternalWriter implements DataSourceWriter {
 
   @Override
   public void commit(WriterCommitMessage[] messages) {
-    List<HoodieInternalWriteStatus> writeStatusList = Arrays.stream(messages).map(m -> (HoodieWriterCommitMessage) m)
-        .flatMap(m -> m.getWriteStatuses().stream())
-        .collect(Collectors.toList());
-    if (writeConfig.bulkInsertRowAutoCommit()) {
-      List<HoodieWriteStat> writeStatList = writeStatusList.stream()
-          .map(HoodieInternalWriteStatus::getStat).collect(Collectors.toList());
-      dataSourceInternalWriterHelper.commit(writeStatList);
-    }
-
-    Option.ofNullable(writeConfig.getString(HoodieWriteConfig.BULKINSERT_ROW_IDENTIFY_ID.key())).map(id -> {
-      HoodieInternalWriteStatusCoordinator.get().assignStatuses(id, writeStatusList);
-      return true;
-    });
+    List<HoodieWriteStat> writeStatList = Arrays.stream(messages).map(m -> (HoodieWriterCommitMessage) m)
+        .flatMap(m -> m.getWriteStatuses().stream().map(HoodieInternalWriteStatus::getStat)).collect(Collectors.toList());
+    dataSourceInternalWriterHelper.commit(writeStatList);
   }
 
   @Override

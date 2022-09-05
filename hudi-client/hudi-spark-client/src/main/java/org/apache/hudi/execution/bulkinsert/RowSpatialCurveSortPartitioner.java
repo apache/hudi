@@ -21,26 +21,27 @@ package org.apache.hudi.execution.bulkinsert;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.sort.SpaceCurveSortingHelper;
+import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 
 import java.util.Arrays;
 import java.util.List;
 
-public class RowSpatialCurveSortPartitioner extends RowCustomColumnsSortPartitioner {
+public class RowSpatialCurveSortPartitioner implements BulkInsertPartitioner<Dataset<Row>> {
 
   private final String[] orderByColumns;
   private final HoodieClusteringConfig.LayoutOptimizationStrategy layoutOptStrategy;
   private final HoodieClusteringConfig.SpatialCurveCompositionStrategyType curveCompositionStrategyType;
 
   public RowSpatialCurveSortPartitioner(HoodieWriteConfig config) {
-    super(config);
     this.layoutOptStrategy = config.getLayoutOptimizationStrategy();
     if (config.getClusteringSortColumns() != null) {
       this.orderByColumns = Arrays.stream(config.getClusteringSortColumns().split(","))
           .map(String::trim).toArray(String[]::new);
     } else {
-      this.orderByColumns = getSortColumnNames();
+      throw new IllegalArgumentException("The config "
+          + HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS.key() + " must be provided");
     }
     this.curveCompositionStrategyType = config.getLayoutOptimizationCurveBuildMethod();
   }

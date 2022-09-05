@@ -216,18 +216,6 @@ public class HoodieWriteConfig extends HoodieConfig {
       .noDefaultValue()
       .withDocumentation("The unique id for each write operation, HoodieInternalWriteStatusCoordinator will use "
           + "this id to identify the related write statuses");
-  public static final ConfigProperty<Boolean> BULKINSERT_PRESERVE_METADATA = ConfigProperty
-      .key("hoodie.datasource.preserve.metadata")
-      .defaultValue(false)
-      .withDocumentation("Whether to preserve metadata from the read source, this is only take effective "
-          + "When using bulk_insert and row writer is enabled");
-
-  public static final ConfigProperty<Boolean> BULKINSERT_ROW_AUTO_COMMIT = ConfigProperty
-      .key("hoodie.bulkinsert.row.auto.commit")
-      .defaultValue(true)
-      .withDocumentation("Whether to create request, inflight and post commit automatically, this can be turned "
-          + "off to perform inspection of the uncommitted write before deciding to commit.");
-
   public static final ConfigProperty<String> UPSERT_PARALLELISM_VALUE = ConfigProperty
       .key("hoodie.upsert.shuffle.parallelism")
       .defaultValue("200")
@@ -999,10 +987,6 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(AUTO_COMMIT_ENABLE);
   }
 
-  public Boolean bulkInsertRowAutoCommit() {
-    return getBoolean(BULKINSERT_ROW_AUTO_COMMIT);
-  }
-
   public Boolean shouldAssumeDatePartitioning() {
     return metadataConfig.shouldAssumeDatePartitioning();
   }
@@ -1163,10 +1147,6 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean populateMetaFields() {
     return getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS);
-  }
-
-  public boolean bulkInsertPreserverMetadata() {
-    return getBooleanOrDefault(HoodieWriteConfig.BULKINSERT_PRESERVE_METADATA);
   }
 
   /**
