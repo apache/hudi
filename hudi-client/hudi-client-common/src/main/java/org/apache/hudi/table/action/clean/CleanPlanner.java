@@ -134,7 +134,6 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
     switch (config.getCleanerPolicy()) {
       case KEEP_LATEST_COMMITS:
       case KEEP_LATEST_BY_HOURS:
-        return getPartitionPathsForFullCleaning();
       case KEEP_LATEST_FILE_VERSIONS:
         return getPartitionPathsForCleanByCommits(earliestRetainedInstant);
       default:
@@ -501,6 +500,8 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
       String earliestTimeToRetain = HoodieActiveTimeline.formatDate(Date.from(currentDateTime.minusHours(hoursRetained).toInstant()));
       earliestCommitToRetain = Option.fromJavaOptional(commitTimeline.getInstants().filter(i -> HoodieTimeline.compareTimestamps(i.getTimestamp(),
               HoodieTimeline.GREATER_THAN_OR_EQUALS, earliestTimeToRetain)).findFirst());
+    } else if (config.getCleanerPolicy() == HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS) {
+      earliestCommitToRetain = hoodieTable.getCleanTimeline().filterCompletedInstants().lastInstant();
     }
     return earliestCommitToRetain;
   }
