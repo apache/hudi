@@ -84,7 +84,7 @@ public class ClusteringPlanActionExecutor<T extends HoodieRecordPayload, I, K, O
         }
 
         ClusteringPlanStrategy strategy = null;
-        if (config.getAsyncClusterMaxCommits() < commitsSinceLastClustering) {
+        if (config.getAsyncClusterMaxCommits() <= commitsSinceLastClustering) {
             LOG.info("Generating clustering plan for table " + config.getBasePath());
             strategy = (ClusteringPlanStrategy)
                     ReflectionUtils.loadClass(ClusteringPlanStrategy.checkAndGetClusteringPlanStrategy(config), table, context, config);
