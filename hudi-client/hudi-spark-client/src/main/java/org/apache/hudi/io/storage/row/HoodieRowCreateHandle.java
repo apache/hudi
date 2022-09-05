@@ -171,7 +171,6 @@ public class HoodieRowCreateHandle implements Serializable {
       //          over again)
       UTF8String recordKey = row.getUTF8String(HoodieRecord.RECORD_KEY_META_FIELD_ORD);
       UTF8String partitionPath = row.getUTF8String(HoodieRecord.PARTITION_PATH_META_FIELD_ORD);
-
       // This is the only meta-field that is generated dynamically, hence conversion b/w
       // [[String]] and [[UTF8String]] is unavoidable if preserveHoodieMetadata is false
       UTF8String seqId = preserveHoodieMetadata ? row.getUTF8String(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD_ORD)
