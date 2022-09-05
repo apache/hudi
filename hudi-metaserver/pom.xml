@@ -36,7 +36,6 @@
         <mysql-connector-java.version>8.0.22</mysql-connector-java.version>
         <h2.version>1.4.200</h2.version>
         <!-- Thrift related properties -->
-        <thrift.home>/usr/local</thrift.home>
         <maven-thrift-plugin.version>0.1.11</maven-thrift-plugin.version>
     </properties>
 
@@ -106,41 +105,30 @@
         </dependency>
     </dependencies>
 
-    <profiles>
-        <profile>
-            <id>thrift</id>
-            <build>
-                <plugins>
-                    <plugin>
-                        <groupId>org.apache.thrift.tools</groupId>
-                        <artifactId>maven-thrift-plugin</artifactId>
-                        <version>${maven-thrift-plugin.version}</version>
-                        <configuration>
-                            <thriftExecutable>${thrift.home}/bin/thrift</thriftExecutable>
-                            <thriftSourceRoot>src/main/thrift</thriftSourceRoot>
-                            <outputDirectory>src/main/thrift/gen-java</outputDirectory>
-                            <generator>java</generator>
-                        </configuration>
-                        <executions>
-                            <execution>
-                                <id>thrift-sources</id>
-                                <phase>generate-sources</phase>
-                                <goals>
-                                    <goal>compile</goal>
-                                </goals>
-                            </execution>
-                        </executions>
-                    </plugin>
-                </plugins>
-            </build>
-        </profile>
-    </profiles>
-
     <build>
         <plugins>
             <plugin>
                 <groupId>org.jacoco</groupId>
                 <artifactId>jacoco-maven-plugin</artifactId>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.thrift.tools</groupId>
+                <artifactId>maven-thrift-plugin</artifactId>
+                <version>${maven-thrift-plugin.version}</version>
+                <configuration>
+                    <thriftSourceRoot>src/main/thrift</thriftSourceRoot>
+                    <outputDirectory>src/main/thrift/gen-java</outputDirectory>
+                    <generator>java</generator>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>thrift-sources</id>
+                        <phase>generate-sources</phase>
+                        <goals>
+                            <goal>compile</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -161,40 +149,6 @@
             <plugin>
                 <groupId>org.apache.rat</groupId>
                 <artifactId>apache-rat-plugin</artifactId>
-            </plugin>
-            <plugin>
-                <groupId>org.codehaus.mojo</groupId>
-                <artifactId>build-helper-maven-plugin</artifactId>
-                <version>${build-helper-maven-plugin.version}</version>
-                <executions>
-                    <execution>
-                        <id>add-source</id>
-                        <phase>generate-sources</phase>
-                        <goals>
-                            <goal>add-source</goal>
-                        </goals>
-                        <configuration>
-                            <sources>
-                                <source>src/main/java</source>
-                                <source>src/main/thrift/gen-java</source>
-                            </sources>
-                        </configuration>
-                    </execution>
-                    <execution>
-                        <id>add-test-source</id>
-                        <phase>generate-sources</phase>
-                        <goals>
-                            <goal>add-test-source</goal>
-                        </goals>
-                        <configuration>
-                            <sources>
-                                <source>src/test/java</source>
-                                <source>src/main/java</source>
-                                <source>src/main/thrift/gen-java</source>
-                            </sources>
-                        </configuration>
-                    </execution>
-                </executions>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
