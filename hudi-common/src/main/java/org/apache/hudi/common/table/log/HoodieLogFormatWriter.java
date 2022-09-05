@@ -270,7 +270,7 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
     if (output == null) {
       return 0;
     }
-    return output.getPos();
+    return output.getPos() + logFile.getFileSize();
   }
 
   /**
