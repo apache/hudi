@@ -89,11 +89,31 @@ The SQL CLI only executes the SQL line by line.
 
 <TabItem value="dataStream">
 
-Please add the following dependency to your project:
+Hudi works with Flink 1.13, Flink 1.14 and Flink 1.15. Please add the desired 
+dependency to your project:
 ```xml
+<!-- Flink 1.13 -->
 <dependency>
     <groupId>org.apache.hudi</groupId>
-    <artifactId>hudi-flink1.13-bundle_2.11</artifactId>
+    <artifactId>hudi-flink1.13-bundle</artifactId>
+    <version>0.12.0</version>
+</dependency>
+```
+
+```xml
+<!-- Flink 1.14 -->
+<dependency>
+    <groupId>org.apache.hudi</groupId>
+    <artifactId>hudi-flink1.14-bundle</artifactId>
+    <version>0.12.0</version>
+</dependency>
+```
+
+```xml
+<!-- Flink 1.15 -->
+<dependency>
+    <groupId>org.apache.hudi</groupId>
+    <artifactId>hudi-flink1.15-bundle</artifactId>
     <version>0.12.0</version>
 </dependency>
 ```
