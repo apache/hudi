@@ -73,7 +73,7 @@ public class IncrSourceHelper {
     HoodieTableMetaClient srcMetaClient = HoodieTableMetaClient.builder().setConf(jssc.hadoopConfiguration()).setBasePath(srcBasePath).setLoadActiveTimelineOnLoad(true).build();
 
     final HoodieTimeline activeCommitTimeline =
-        srcMetaClient.getActiveTimeline().getCommitTimeline().filterCompletedInstants();
+        srcMetaClient.getCommitsAndCompactionTimeline().filterCompletedInstants();
 
     String beginInstantTime = beginInstant.orElseGet(() -> {
       if (missingCheckpointStrategy != null) {
