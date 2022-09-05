@@ -33,8 +33,8 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.avro.AvroRuntimeException;
@@ -288,5 +288,35 @@ public class RepairsCommand implements CommandMarker {
       return "Deduplication failed!";
     }
     return "Repair succeeded";
+  }
+
+  @CliCommand(value = "rename partition",
+      help = "Rename partition. Usage: rename partition --oldPartition <oldPartition> --newPartition <newPartition>")
+  public String renamePartition(
+      @CliOption(key = {"oldPartition"}, help = "Partition value to be renamed", mandatory = true,
+          unspecifiedDefaultValue = "") String oldPartition,
+      @CliOption(key = {"newPartition"}, help = "New partition value after rename", mandatory = true,
+          unspecifiedDefaultValue = "") String newPartition,
+      @CliOption(key = {"sparkProperties"}, help = "Spark Properties File Path",
+          unspecifiedDefaultValue = "") String sparkPropertiesPath,
+      @CliOption(key = "sparkMaster", unspecifiedDefaultValue = "", help = "Spark Master") String master,
+      @CliOption(key = "sparkMemory", unspecifiedDefaultValue = "4G",
+          help = "Spark executor memory") final String sparkMemory) throws Exception {
+    if (StringUtils.isNullOrEmpty(sparkPropertiesPath)) {
+      sparkPropertiesPath =
+          Utils.getDefaultPropertiesFile(JavaConverters.mapAsScalaMapConverter(System.getenv()).asScala());
+    }
+
+    SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
+    sparkLauncher.addAppArgs(SparkMain.SparkCommand.RENAME_PARTITION.toString(), master, sparkMemory,
+        HoodieCLI.getTableMetaClient().getBasePathV2().toString(), oldPartition, newPartition);
+    Process process = sparkLauncher.launch();
+    InputStreamConsumer.captureOutput(process);
+    int exitCode = process.waitFor();
+
+    if (exitCode != 0) {
+      return "rename partition failed!";
+    }
+    return "rename partition succeeded";
   }
 }
