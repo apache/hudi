@@ -172,21 +172,15 @@ public class HoodieRowCreateHandle implements Serializable {
       UTF8String recordKey = row.getUTF8String(HoodieRecord.RECORD_KEY_META_FIELD_ORD);
       UTF8String partitionPath = row.getUTF8String(HoodieRecord.PARTITION_PATH_META_FIELD_ORD);
 
-      InternalRow updatedRow;
-      if (preserveHoodieMetadata) {
-        updatedRow = new HoodieInternalRow(row.getUTF8String(HoodieRecord.COMMIT_TIME_METADATA_FIELD_ORD),
-            row.getUTF8String(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD_ORD),
-            recordKey,
-            partitionPath,
-            fileName, row, true);
-      } else {
-        // This is the only meta-field that is generated dynamically, hence conversion b/w
-        // [[String]] and [[UTF8String]] is unavoidable
-        UTF8String seqId = UTF8String.fromString(seqIdGenerator.apply(GLOBAL_SEQ_NO.getAndIncrement()));
+      // This is the only meta-field that is generated dynamically, hence conversion b/w
+      // [[String]] and [[UTF8String]] is unavoidable if preserveHoodieMetadata is false
+      UTF8String seqId = preserveHoodieMetadata ? row.getUTF8String(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD_ORD)
+          : UTF8String.fromString(seqIdGenerator.apply(GLOBAL_SEQ_NO.getAndIncrement()));
+      UTF8String writeCommitTime = preserveHoodieMetadata ? row.getUTF8String(HoodieRecord.COMMIT_TIME_METADATA_FIELD_ORD)
+          : commitTime;
 
-        updatedRow = new HoodieInternalRow(commitTime, seqId, recordKey,
-            partitionPath, fileName, row, true);
-      }
+      InternalRow updatedRow = new HoodieInternalRow(writeCommitTime, seqId, recordKey,
+          partitionPath, fileName, row, true);
       try {
         fileWriter.writeRow(recordKey, updatedRow);
         // NOTE: To avoid conversion on the hot-path we only convert [[UTF8String]] into [[String]]

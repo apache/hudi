@@ -344,14 +344,14 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
     String[] baseFilePaths = clusteringOps
         .stream()
         .map(op -> {
-          ArrayList<String> pairs = new ArrayList<>();
+          ArrayList<String> readPaths = new ArrayList<>();
           if (op.getBootstrapFilePath() != null) {
-            pairs.add(op.getBootstrapFilePath());
+            readPaths.add(op.getBootstrapFilePath());
           }
           if (op.getDataFilePath() != null) {
-            pairs.add(op.getDataFilePath());
+            readPaths.add(op.getDataFilePath());
           }
-          return pairs;
+          return readPaths;
         })
         .flatMap(Collection::stream)
         .filter(path -> !path.isEmpty())
