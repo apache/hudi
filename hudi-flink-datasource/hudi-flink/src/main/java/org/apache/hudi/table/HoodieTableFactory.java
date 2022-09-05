@@ -326,8 +326,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
    * Sets up the write options from the table definition.
    */
   private static void setupWriteOptions(Configuration conf) {
-    if (FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.OPERATION)
-        && OptionsResolver.isCowTable(conf)) {
+    if (FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.OPERATION)) {
       conf.setBoolean(FlinkOptions.PRE_COMBINE, true);
     }
   }

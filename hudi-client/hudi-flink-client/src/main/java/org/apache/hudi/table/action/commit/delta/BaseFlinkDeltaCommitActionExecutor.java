@@ -27,6 +27,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.execution.FlinkLazyInsertIterable;
 import org.apache.hudi.io.ExplicitWriteHandleFactory;
 import org.apache.hudi.io.FlinkAppendHandle;
+import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.commit.BaseFlinkCommitActionExecutor;
 
@@ -38,7 +39,7 @@ public abstract class BaseFlinkDeltaCommitActionExecutor<T extends HoodieRecordP
     extends BaseFlinkCommitActionExecutor<T> {
 
   public BaseFlinkDeltaCommitActionExecutor(HoodieEngineContext context,
-                                            FlinkAppendHandle<?, ?, ?, ?> writeHandle,
+                                            HoodieWriteHandle<?, ?, ?, ?> writeHandle,
                                             HoodieWriteConfig config,
                                             HoodieTable table,
                                             String instantTime,
@@ -48,10 +49,14 @@ public abstract class BaseFlinkDeltaCommitActionExecutor<T extends HoodieRecordP
 
   @Override
   public Iterator<List<WriteStatus>> handleUpdate(String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr) {
-    FlinkAppendHandle appendHandle = (FlinkAppendHandle) writeHandle;
-    appendHandle.doAppend();
-    List<WriteStatus> writeStatuses = appendHandle.close();
-    return Collections.singletonList(writeStatuses).iterator();
+    if (writeHandle instanceof FlinkAppendHandle) {
+      FlinkAppendHandle appendHandle = (FlinkAppendHandle) writeHandle;
+      appendHandle.doAppend();
+      List<WriteStatus> writeStatuses = appendHandle.close();
+      return Collections.singletonList(writeStatuses).iterator();
+    } else {
+      return this.handleInsert(fileId, recordItr);
+    }
   }
 
   @Override

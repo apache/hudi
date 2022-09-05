@@ -578,12 +578,12 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
 
     final boolean isDelta = table.getMetaClient().getTableType().equals(HoodieTableType.MERGE_ON_READ);
     final HoodieWriteHandle<?, ?, ?, ?> writeHandle;
-    if (isDelta) {
-      writeHandle = new FlinkAppendHandle<>(config, instantTime, table, partitionPath, fileID, recordItr,
-          table.getTaskContextSupplier());
-    } else if (loc.getInstantTime().equals("I")) {
+    if (loc.getInstantTime().equals("I")) {
       writeHandle = new FlinkCreateHandle<>(config, instantTime, table, partitionPath,
-          fileID, table.getTaskContextSupplier());
+              fileID, table.getTaskContextSupplier());
+    } else if (isDelta) {
+      writeHandle = new FlinkAppendHandle<>(config, instantTime, table, partitionPath, fileID, recordItr,
+              table.getTaskContextSupplier());
     } else {
       writeHandle = insertClustering
           ? new FlinkConcatHandle<>(config, instantTime, table, recordItr, partitionPath,
