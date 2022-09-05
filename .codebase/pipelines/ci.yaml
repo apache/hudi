@@ -10,12 +10,7 @@ jobs:
       - name: install_thrift_test
         commands:
         - apt update
-        - apt-get install automake bison flex g++ git libboost-all-dev libevent-dev libssl-dev libtool make pkg-config
-        - wget https://archive.apache.org/dist/thrift/0.12.0/thrift-0.12.0.tar.gz
-        - tar zxvf thrift-0.12.0.tar.gz
-        - cd thrift-0.12.0
-        - make
-        - make install
+        - apt install thrift-compiler-0.12
         - ln -s bin/thrift /user/local/bin/thrift
       - name: hudi-metaserver
         commands:
