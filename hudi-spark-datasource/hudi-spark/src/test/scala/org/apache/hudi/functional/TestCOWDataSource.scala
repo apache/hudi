@@ -1030,7 +1030,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
   }
 
   @Test
-  def testInsertMetricsReporterEnabled(): Unit = {
+  def testMetricsReporterViaDataSource(): Unit = {
     val dataGenerator = new QuickstartUtils.DataGenerator()
     val records = convertToStringList(dataGenerator.generateInserts( 10))
     val recordsRDD = spark.sparkContext.parallelize(records, 2)
@@ -1043,7 +1043,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
       .option(HoodieWriteConfig.TBL_NAME.key, "hoodie_test")
       .option(HoodieMetricsConfig.TURN_METRICS_ON.key(), "true")
-      .option(HoodieMetricsConfig.METRICS_REPORTER_TYPE_VALUE.key(), "JMX")
+      .option(HoodieMetricsConfig.METRICS_REPORTER_TYPE_VALUE.key(), "CONSOLE")
       .mode(SaveMode.Overwrite)
       .save(basePath)
 

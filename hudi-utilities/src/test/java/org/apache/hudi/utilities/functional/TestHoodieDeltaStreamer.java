@@ -751,7 +751,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT);
     cfg.tableType = HoodieTableType.COPY_ON_WRITE.name();
     cfg.configs.add(String.format("%s=%s", TURN_METRICS_ON.key(), "true"));
-    cfg.configs.add(String.format("%s=%s", METRICS_REPORTER_TYPE_VALUE.key(), "JMX"));
+    cfg.configs.add(String.format("%s=%s", METRICS_REPORTER_TYPE_VALUE.key(), "CONSOLE"));
     cfg.continuousMode = false;
     HoodieDeltaStreamer ds = new HoodieDeltaStreamer(cfg, jsc);
     ds.sync();
