@@ -30,9 +30,13 @@ jobs:
           java-version: '8'
           distribution: 'adopt'
           architecture: x64
-      - name: Install thrift
+      - name: Set up thrift
+        uses: dodopizza/setup-thrift@v1
+        with:
+          version: 0.12.0
+      - name: Generate code
         run:
-          apt-get install thrift-compiler
+          ls /user/local/bin | grep thrift
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
