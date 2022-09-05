@@ -25,6 +25,7 @@ public class TestKeyGenUtils {
 
   @Test
   public void testExtractRecordKeys() {
+    // test complex key form: field1:val1,field2:val2,...
     String[] s1 = KeyGenUtils.extractRecordKeys("id:1");
     Assertions.assertArrayEquals(new String[]{"1"}, s1);
 
@@ -33,5 +34,9 @@ public class TestKeyGenUtils {
 
     String[] s3 = KeyGenUtils.extractRecordKeys("id:1,id2:__null__,id3:__empty__");
     Assertions.assertArrayEquals(new String[]{"1", null, ""}, s3);
+
+    // test simple key form: val1
+    String[] s4 = KeyGenUtils.extractRecordKeys("1");
+    Assertions.assertArrayEquals(new String[]{"1"}, s4);
   }
 }
