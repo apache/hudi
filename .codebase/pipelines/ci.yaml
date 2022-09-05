@@ -1,0 +1,23 @@
+name: hudi-ci
+trigger:
+  change:
+    types: [create, push]
+jobs:
+  unittest-hudi-common:
+    name: hudi-metaserver
+    image: hub.byted.org/codebase/ci_java8:latest
+    steps:
+      - name: install_thrift
+        commands:
+        - apt update
+        - apt-get install automake bison flex g++ git libboost-all-dev libevent-dev libssl-dev libtool make pkg-config
+        - wget https://archive.apache.org/dist/thrift/0.12.0/thrift-0.12.0.tar.gz
+        - tar zxvf thrift-0.12.0.tar.gz
+        - cd thrift-0.12.0
+        - make
+        - make install
+        - ln -s bin/thrift /user/local/bin/thrift
+      - name: hudi-metaserver
+        commands:
+          - mvn install  -DskipTests -pl :hudi-metaserver -Pthrift -am
+          - mvn   -Punit-tests  clean test  -pl :hudi-metaserver
