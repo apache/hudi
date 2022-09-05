@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.config.HoodieIndexConfig;
+import org.apache.hudi.config.HoodiePayloadConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hive.MultiPartKeysValueExtractor;
@@ -363,6 +364,12 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue("")
       .withDescription("Partition path field. Value to be used at the `partitionPath` component of `HoodieKey`.\n"
           + "Actual value obtained by invoking .toString(), default ''");
+
+  public static final ConfigOption<String> PARTIAL_UPDATE_FIELDS = ConfigOptions
+      .key(HoodiePayloadConfig.PARTIAL_UPDATE_FIELDS.key())
+      .stringType()
+      .defaultValue("")
+      .withDescription("partial update fields for stream writer,split with comma.");
 
   public static final ConfigOption<Boolean> URL_ENCODE_PARTITIONING = ConfigOptions
       .key(KeyGeneratorOptions.URL_ENCODE_PARTITIONING.key())
@@ -884,6 +891,10 @@ public class FlinkOptions extends HoodieConfig {
   public static <T> boolean isDefaultValueDefined(Configuration conf, ConfigOption<T> option) {
     return !conf.getOptional(option).isPresent()
         || conf.get(option).equals(option.defaultValue());
+  }
+
+  public static boolean isPartialFieldsDefined(Configuration conf, ConfigOption<String> option) {
+    return conf.containsKey(option.key()) && !conf.get(option).equals(option.defaultValue());
   }
 
   /**

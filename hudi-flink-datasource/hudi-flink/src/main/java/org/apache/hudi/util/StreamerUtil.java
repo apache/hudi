@@ -252,6 +252,7 @@ public class StreamerUtil {
         .withPayloadClass(conf.getString(FlinkOptions.PAYLOAD_CLASS_NAME))
         .withPayloadOrderingField(conf.getString(FlinkOptions.PRECOMBINE_FIELD))
         .withPayloadEventTimeField(conf.getString(FlinkOptions.PRECOMBINE_FIELD))
+        .withPayloadPartialUpdateFields(conf.getString(FlinkOptions.PARTIAL_UPDATE_FIELDS))
         .withPayloadClass(conf.getString(FlinkOptions.PAYLOAD_CLASS_NAME))
         .build();
   }

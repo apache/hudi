@@ -44,6 +44,13 @@ public class HoodiePayloadProps {
   public static final String PAYLOAD_EVENT_TIME_FIELD_PROP_KEY = "hoodie.payload.event.time.field";
 
   /**
+   * Property for payload partial update fields; to be used to execute partial update.
+   *
+   * @see OverwritePartialColumnWithLatestAvroPayload
+   */
+  public static final String PAYLOAD_PARTIAL_UPDATE_FIELDS_PROP_KEY = "hoodie.payload.partial.update.fields";
+
+  /**
    * A runtime config pass to the {@link HoodieRecordPayload#getInsertValue(Schema, Properties)}
    * to tell if the current record is a update record or insert record for mor table.
    */

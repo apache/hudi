@@ -19,6 +19,7 @@
 package org.apache.hudi.table;
 
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
+import org.apache.hudi.common.model.OverwritePartialColumnWithLatestAvroPayload;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
@@ -149,6 +150,8 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
       }
       if (preCombineField.equals(FlinkOptions.PRECOMBINE_FIELD.defaultValue())) {
         conf.setString(FlinkOptions.PRECOMBINE_FIELD, FlinkOptions.NO_PRE_COMBINE);
+      } else if (FlinkOptions.isPartialFieldsDefined(conf, FlinkOptions.PARTIAL_UPDATE_FIELDS)) {
+        conf.setString(FlinkOptions.PAYLOAD_CLASS_NAME, OverwritePartialColumnWithLatestAvroPayload.class.getName());
       } else if (!preCombineField.equals(FlinkOptions.NO_PRE_COMBINE)) {
         throw new HoodieValidationException("Field " + preCombineField + " does not exist in the table schema."
             + "Please check '" + FlinkOptions.PRECOMBINE_FIELD.key() + "' option.");
