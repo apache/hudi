@@ -25,6 +25,9 @@ public class TestKeyGenUtils {
 
   @Test
   public void testExtractRecordKeys() {
+    String[] s0 = KeyGenUtils.extractRecordKeys("1");
+    Assertions.assertArrayEquals(new String[]{"1"}, s0);
+
     String[] s1 = KeyGenUtils.extractRecordKeys("id:1");
     Assertions.assertArrayEquals(new String[]{"1"}, s1);
 
