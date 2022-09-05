@@ -7,7 +7,7 @@ jobs:
     name: hudi-metaserver
     image: hub.byted.org/codebase/ci_java8:latest
     steps:
-      - name: install_thrift
+      - name: install_thrift_test
         commands:
         - apt update
         - apt-get install automake bison flex g++ git libboost-all-dev libevent-dev libssl-dev libtool make pkg-config
