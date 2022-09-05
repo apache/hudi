@@ -23,7 +23,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.io.FlinkAppendHandle;
+import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.commit.FlinkWriteHelper;
@@ -35,7 +35,7 @@ public class FlinkUpsertDeltaCommitActionExecutor<T extends HoodieRecordPayload<
   private final List<HoodieRecord<T>> inputRecords;
 
   public FlinkUpsertDeltaCommitActionExecutor(HoodieEngineContext context,
-                                              FlinkAppendHandle<?, ?, ?, ?> writeHandle,
+                                              HoodieWriteHandle<?, ?, ?, ?> writeHandle,
                                               HoodieWriteConfig config,
                                               HoodieTable table,
                                               String instantTime,
