@@ -35,6 +35,10 @@ import java.util.List;
 
 public class SparkBulkInsertRowWriter {
 
+  /**
+   * Perform bulk insert for {@link Dataset<Row>}, will not change timeline/index, return
+   * information about write files.
+   */
   public static HoodieData<WriteStatus> bulkInsert(Dataset<Row> dataset,
                                             String instantTime,
                                             HoodieTable table,

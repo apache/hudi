@@ -126,7 +126,8 @@ public class BulkInsertDataInternalWriterHelper {
   private Option<BuiltinKeyGenerator> getKeyGenerator(Properties properties) {
     TypedProperties typedProperties = new TypedProperties();
     typedProperties.putAll(properties);
-    if (properties.get(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key()).equals(NonpartitionedKeyGenerator.class.getName())) {
+    if (Option.ofNullable(properties.get(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key()))
+        .map(v -> v.equals(NonpartitionedKeyGenerator.class.getName())).orElse(false)) {
       return Option.empty(); // Do not instantiate NonPartitionKeyGen
     } else {
       try {
