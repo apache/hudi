@@ -225,7 +225,7 @@ public class TestCompactionCommand extends CLIFunctionalTestHarness {
     CommandResult cr = shell().executeCommand("compaction showarchived --instant " + instance);
 
     // generate expected
-    String expected = new CompactionCommand().printCompaction(plan, "", false, -1, false);
+    String expected = CompactionCommand.printCompaction(plan, "", false, -1, false, null);
 
     expected = removeNonWordAndStripSpace(expected);
     String got = removeNonWordAndStripSpace(cr.getResult().toString());
