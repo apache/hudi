@@ -64,11 +64,6 @@ public class ClusteringPlanActionExecutor<T extends HoodieRecordPayload, I, K, O
         .findInstantsAfter(lastClusteringInstant.map(HoodieInstant::getTimestamp).orElse("0"), Integer.MAX_VALUE)
         .countInstants();
 
-    if (table.getActiveTimeline().filterPendingReplaceTimeline().countInstants() != 0) {
-      LOG.info("The last clustering is running,there is no need to generate a new clustering plan" + config.getBasePath());
-      return Option.empty();
-    }
-
     if (config.inlineClusteringEnabled() && config.getInlineClusterMaxCommits() > commitsSinceLastClustering) {
       LOG.info("Not scheduling inline clustering as only " + commitsSinceLastClustering
           + " commits was found since last clustering " + lastClusteringInstant + ". Waiting for "
