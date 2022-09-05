@@ -31,7 +31,7 @@ import org.apache.hudi.hadoop.realtime.RealtimeSplit;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
-import static org.apache.hudi.TypeUtils.unsafeCast;
+import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 
 public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
 
@@ -87,7 +87,9 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
     } else {
       HoodieVirtualKeyInfo hoodieVirtualKey = hoodieVirtualKeyInfo.get();
       addProjectionField(configuration, hoodieVirtualKey.getRecordKeyField(), hoodieVirtualKey.getRecordKeyFieldIndex());
-      addProjectionField(configuration, hoodieVirtualKey.getPartitionPathField(), hoodieVirtualKey.getPartitionPathFieldIndex());
+      if (hoodieVirtualKey.getPartitionPathField().isPresent()) {
+        addProjectionField(configuration, hoodieVirtualKey.getPartitionPathField().get(), hoodieVirtualKey.getPartitionPathFieldIndex().get());
+      }
     }
   }
 
@@ -99,7 +101,8 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
           && readColNames.contains(HoodieRecord.PARTITION_PATH_METADATA_FIELD);
     } else {
       return readColNames.contains(hoodieVirtualKeyInfo.get().getRecordKeyField())
-          && readColNames.contains(hoodieVirtualKeyInfo.get().getPartitionPathField());
+          && (hoodieVirtualKeyInfo.get().getPartitionPathField().isPresent() ? readColNames.contains(hoodieVirtualKeyInfo.get().getPartitionPathField().get())
+          : true);
     }
   }
 

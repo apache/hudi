@@ -25,11 +25,11 @@ import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
-import org.apache.hudi.config.HoodieWriteConfig.SCHEMA_EVOLUTION_ENABLE
 import org.apache.hudi.exception.HoodieException
-import org.apache.hudi.internal.schema.InternalSchema
+import org.apache.hudi.metadata.HoodieTableMetadata.isMetadataTable
 import org.apache.log4j.LogManager
 import org.apache.spark.sql.execution.streaming.{Sink, Source}
+import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isUsingHiveCatalog
 import org.apache.spark.sql.hudi.streaming.HoodieStreamSource
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.streaming.OutputMode
@@ -57,6 +57,8 @@ class DefaultSource extends RelationProvider
       // Enable "passPartitionByAsOptions" to support "write.partitionBy(...)"
       spark.conf.set("spark.sql.legacy.sources.write.passPartitionByAsOptions", "true")
     }
+    // Revisit EMRFS incompatibilities, for now disable
+    spark.sparkContext.hadoopConfiguration.set("fs.s3.metadata.cache.expiration.seconds", "0")
   }
 
   private val log = LogManager.getLogger(classOf[DefaultSource])
@@ -69,11 +71,9 @@ class DefaultSource extends RelationProvider
   override def createRelation(sqlContext: SQLContext,
                               optParams: Map[String, String],
                               schema: StructType): BaseRelation = {
-    // Add default options for unspecified read options keys.
-    val parameters = DataSourceOptionsHelper.parametersWithReadDefaults(optParams)
+    val path = optParams.get("path")
+    val readPathsStr = optParams.get(DataSourceReadOptions.READ_PATHS.key)
 
-    val path = parameters.get("path")
-    val readPathsStr = parameters.get(DataSourceReadOptions.READ_PATHS.key)
     if (path.isEmpty && readPathsStr.isEmpty) {
       throw new HoodieException(s"'path' or '$READ_PATHS' or both must be specified.")
     }
@@ -88,6 +88,16 @@ class DefaultSource extends RelationProvider
     } else {
       Seq.empty
     }
+
+    // Add default options for unspecified read options keys.
+    val parameters = (if (globPaths.nonEmpty) {
+      Map(
+        "glob.paths" -> globPaths.mkString(",")
+      )
+    } else {
+      Map()
+    }) ++ DataSourceOptionsHelper.parametersWithReadDefaults(optParams)
+
     // Get the table base path
     val tablePath = if (globPaths.nonEmpty) {
       DataSourceUtils.getTablePath(fs, globPaths.toArray)
@@ -100,9 +110,18 @@ class DefaultSource extends RelationProvider
     val isBootstrappedTable = metaClient.getTableConfig.getBootstrapBasePath.isPresent
     val tableType = metaClient.getTableType
     val queryType = parameters(QUERY_TYPE.key)
-    val userSchema = if (schema == null) Option.empty[StructType] else Some(schema)
+    // NOTE: In cases when Hive Metastore is used as catalog and the table is partitioned, schema in the HMS might contain
+    //       Hive-specific partitioning columns created specifically for HMS to handle partitioning appropriately. In that
+    //       case  we opt in to not be providing catalog's schema, and instead force Hudi relations to fetch the schema
+    //       from the table itself
+    val userSchema = if (isUsingHiveCatalog(sqlContext.sparkSession)) {
+      None
+    } else {
+      Option(schema)
+    }
 
     log.info(s"Is bootstrapped table => $isBootstrappedTable, tableType is: $tableType, queryType is: $queryType")
+
     if (metaClient.getCommitsTimeline.filterCompletedInstants.countInstants() == 0) {
       new EmptyRelation(sqlContext, metaClient)
     } else {
@@ -111,6 +130,7 @@ class DefaultSource extends RelationProvider
              (COPY_ON_WRITE, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, false) |
              (MERGE_ON_READ, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, false) =>
           resolveBaseFileOnlyRelation(sqlContext, globPaths, userSchema, metaClient, parameters)
+
         case (COPY_ON_WRITE, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
           new IncrementalRelation(sqlContext, parameters, userSchema, metaClient)
 
@@ -213,27 +233,18 @@ class DefaultSource extends RelationProvider
                                           globPaths: Seq[Path],
                                           userSchema: Option[StructType],
                                           metaClient: HoodieTableMetaClient,
-                                          optParams: Map[String, String]) = {
+                                          optParams: Map[String, String]): BaseRelation = {
     val baseRelation = new BaseFileOnlyRelation(sqlContext, metaClient, optParams, userSchema, globPaths)
-    val enableSchemaOnRead: Boolean = !tryFetchInternalSchema(metaClient).isEmptySchema
 
     // NOTE: We fallback to [[HadoopFsRelation]] in all of the cases except ones requiring usage of
     //       [[BaseFileOnlyRelation]] to function correctly. This is necessary to maintain performance parity w/
     //       vanilla Spark, since some of the Spark optimizations are predicated on the using of [[HadoopFsRelation]].
     //
     //       You can check out HUDI-3896 for more details
-    if (enableSchemaOnRead) {
+    if (baseRelation.hasSchemaOnRead) {
       baseRelation
     } else {
       baseRelation.toHadoopFsRelation
     }
   }
-
-  private def tryFetchInternalSchema(metaClient: HoodieTableMetaClient) =
-    try {
-      new TableSchemaResolver(metaClient).getTableInternalSchemaFromCommitMetadata
-        .orElse(InternalSchema.getEmptyInternalSchema)
-    } catch {
-      case _: Exception => InternalSchema.getEmptyInternalSchema
-    }
 }

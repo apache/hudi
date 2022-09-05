@@ -33,7 +33,7 @@ object HoodieSqlUtils extends SparkAdapterSupport {
       case SubqueryAlias(tableId, _) => tableId
       case plan => throw new IllegalArgumentException(s"Illegal plan $plan in target")
     }
-    sparkAdapter.toTableIdentifier(aliaId)
+    sparkAdapter.getCatalystPlanUtils.toTableIdentifier(aliaId)
   }
 
   /**

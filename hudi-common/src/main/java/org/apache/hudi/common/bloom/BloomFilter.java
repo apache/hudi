@@ -24,11 +24,18 @@ package org.apache.hudi.common.bloom;
 public interface BloomFilter {
 
   /**
-   * Add a key to the {@link BloomFilter}.
+   * Add a key represented by a {@link String} to the {@link BloomFilter}.
    *
    * @param key the key to the added to the {@link BloomFilter}
    */
   void add(String key);
+
+  /**
+   * Add a key's bytes, representing UTF8-encoded string, to the {@link BloomFilter}.
+   *
+   * @param key the key bytes to the added to the {@link BloomFilter}
+   */
+  void add(byte[] key);
 
   /**
    * Tests for key membership.

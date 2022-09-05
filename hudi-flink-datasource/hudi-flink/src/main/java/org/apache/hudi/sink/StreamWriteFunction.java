@@ -148,6 +148,7 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
    * End input action for batch source.
    */
   public void endInput() {
+    super.endInput();
     flushRemaining(true);
     this.writeClient.cleanHandles();
     this.writeStatuses.clear();

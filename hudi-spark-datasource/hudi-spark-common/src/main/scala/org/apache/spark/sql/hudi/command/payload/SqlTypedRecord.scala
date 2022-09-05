@@ -17,27 +17,62 @@
 
 package org.apache.spark.sql.hudi.command.payload
 
+import com.google.common.cache.{Cache, CacheBuilder}
 import org.apache.avro.Schema
 import org.apache.avro.generic.IndexedRecord
-import org.apache.hudi.{AvroConversionUtils, SparkAdapterSupport}
+import org.apache.hudi.HoodieSparkUtils.sparkAdapter
+import org.apache.hudi.AvroConversionUtils
+import org.apache.spark.sql.avro.HoodieAvroDeserializer
 import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.hudi.command.payload.SqlTypedRecord.{getAvroDeserializer, getSqlType}
+import org.apache.spark.sql.types.StructType
+
+import java.util.concurrent.Callable
 
 /**
  * A sql typed record which will convert the avro field to sql typed value.
  */
-class SqlTypedRecord(val record: IndexedRecord) extends IndexedRecord with SparkAdapterSupport {
+class SqlTypedRecord(val record: IndexedRecord) extends IndexedRecord {
 
-  private lazy val sqlType = AvroConversionUtils.convertAvroSchemaToStructType(getSchema)
-  private lazy val avroDeserializer = sparkAdapter.createAvroDeserializer(record.getSchema, sqlType)
-  private lazy val sqlRow = avroDeserializer.deserialize(record).get.asInstanceOf[InternalRow]
+  private lazy val sqlRow = getAvroDeserializer(getSchema).deserialize(record).get.asInstanceOf[InternalRow]
 
   override def put(i: Int, v: Any): Unit = {
     record.put(i, v)
   }
 
   override def get(i: Int): AnyRef = {
-    sqlRow.get(i, sqlType(i).dataType)
+    sqlRow.get(i, getSqlType(getSchema)(i).dataType)
   }
 
   override def getSchema: Schema = record.getSchema
+}
+
+object SqlTypedRecord {
+
+  private val sqlTypeCache = CacheBuilder.newBuilder().build[Schema, StructType]()
+
+  private val avroDeserializerCacheLocal = new ThreadLocal[Cache[Schema, HoodieAvroDeserializer]] {
+    override def initialValue(): Cache[Schema, HoodieAvroDeserializer] =
+      CacheBuilder.newBuilder().build[Schema, HoodieAvroDeserializer]()
+  }
+
+  def getSqlType(schema: Schema): StructType = {
+    sqlTypeCache.get(schema, new Callable[StructType] {
+      override def call(): StructType = {
+        val structType = AvroConversionUtils.convertAvroSchemaToStructType(schema)
+        sqlTypeCache.put(schema, structType)
+        structType
+      }
+    })
+  }
+
+  def getAvroDeserializer(schema: Schema): HoodieAvroDeserializer= {
+    avroDeserializerCacheLocal.get().get(schema, new Callable[HoodieAvroDeserializer] {
+      override def call(): HoodieAvroDeserializer = {
+        val deserializer = sparkAdapter.createAvroDeserializer(schema, getSqlType(schema))
+        avroDeserializerCacheLocal.get().put(schema, deserializer)
+        deserializer
+      }
+    })
+  }
 }

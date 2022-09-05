@@ -28,25 +28,20 @@ import org.apache.spark.sql.parser.HoodieCommonSqlParser
 class HoodieSparkSessionExtension extends (SparkSessionExtensions => Unit)
   with SparkAdapterSupport {
   override def apply(extensions: SparkSessionExtensions): Unit = {
-
     extensions.injectParser { (session, parser) =>
       new HoodieCommonSqlParser(session, parser)
     }
 
-    HoodieAnalysis.customResolutionRules().foreach { rule =>
-      extensions.injectResolutionRule { session =>
-        rule(session)
-      }
+    HoodieAnalysis.customOptimizerRules.foreach { ruleBuilder =>
+      extensions.injectOptimizerRule(ruleBuilder(_))
     }
 
-    extensions.injectResolutionRule { session =>
-      sparkAdapter.createResolveHudiAlterTableCommand(session)
+    HoodieAnalysis.customResolutionRules.foreach { ruleBuilder =>
+      extensions.injectResolutionRule(ruleBuilder(_))
     }
 
-    HoodieAnalysis.customPostHocResolutionRules().foreach { rule =>
-      extensions.injectPostHocResolutionRule { session =>
-        rule(session)
-      }
+    HoodieAnalysis.customPostHocResolutionRules.foreach { ruleBuilder =>
+      extensions.injectPostHocResolutionRule(ruleBuilder(_))
     }
   }
 }

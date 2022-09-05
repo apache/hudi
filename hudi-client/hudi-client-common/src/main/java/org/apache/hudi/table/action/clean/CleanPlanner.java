@@ -104,7 +104,7 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
    * Get the list of data file names savepointed.
    */
   public Stream<String> getSavepointedDataFiles(String savepointTime) {
-    if (!hoodieTable.getSavepoints().contains(savepointTime)) {
+    if (!hoodieTable.getSavepointTimestamps().contains(savepointTime)) {
       throw new HoodieSavepointException(
           "Could not get data files for savepoint " + savepointTime + ". No such savepoint.");
     }
@@ -227,7 +227,7 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
         + " file versions. ");
     List<CleanFileInfo> deletePaths = new ArrayList<>();
     // Collect all the datafiles savepointed by all the savepoints
-    List<String> savepointedFiles = hoodieTable.getSavepoints().stream()
+    List<String> savepointedFiles = hoodieTable.getSavepointTimestamps().stream()
         .flatMap(this::getSavepointedDataFiles)
         .collect(Collectors.toList());
 
@@ -295,7 +295,7 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
     List<CleanFileInfo> deletePaths = new ArrayList<>();
 
     // Collect all the datafiles savepointed by all the savepoints
-    List<String> savepointedFiles = hoodieTable.getSavepoints().stream()
+    List<String> savepointedFiles = hoodieTable.getSavepointTimestamps().stream()
         .flatMap(this::getSavepointedDataFiles)
         .collect(Collectors.toList());
 

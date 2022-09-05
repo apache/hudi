@@ -18,36 +18,52 @@
 
 package org.apache.hudi.hive;
 
-import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.InvalidTableException;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
-import org.apache.hudi.sync.common.util.ConfigUtils;
 import org.apache.hudi.hive.util.HiveSchemaUtil;
-import org.apache.hudi.sync.common.AbstractSyncHoodieClient.PartitionEvent;
-import org.apache.hudi.sync.common.AbstractSyncHoodieClient.PartitionEvent.PartitionEventType;
-import org.apache.hudi.sync.common.AbstractSyncTool;
+import org.apache.hudi.sync.common.HoodieSyncClient;
+import org.apache.hudi.sync.common.HoodieSyncTool;
+import org.apache.hudi.sync.common.model.FieldSchema;
 import org.apache.hudi.sync.common.model.Partition;
+import org.apache.hudi.sync.common.model.PartitionEvent;
+import org.apache.hudi.sync.common.model.PartitionEvent.PartitionEventType;
+import org.apache.hudi.sync.common.util.ConfigUtils;
+import org.apache.hudi.sync.common.util.SparkDataSourceTableUtils;
 
 import com.beust.jcommander.JCommander;
-import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.hive.conf.HiveConf;
-import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.parquet.schema.MessageType;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.stream.Collectors;
+
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_AUTO_CREATE_DATABASE;
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_IGNORE_EXCEPTIONS;
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE;
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SUPPORT_TIMESTAMP_TYPE;
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_AS_DATA_SOURCE_TABLE;
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_COMMENT;
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_SCHEMA_STRING_LENGTH_THRESHOLD;
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_TABLE_PROPERTIES;
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_TABLE_SERDE_PROPERTIES;
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_USE_PRE_APACHE_INPUT_FORMAT;
+import static org.apache.hudi.hive.HiveSyncConfigHolder.METASTORE_URIS;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_CONDITIONAL_SYNC;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_FIELDS;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_SPARK_VERSION;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
+import static org.apache.hudi.sync.common.util.TableUtils.tableId;
 
 /**
  * Tool to sync a hoodie HDFS table with a hive metastore table. Either use it as a api
@@ -57,36 +73,34 @@ import java.util.stream.Collectors;
  * partitions incrementally (all the partitions modified since the last commit)
  */
 @SuppressWarnings("WeakerAccess")
-public class HiveSyncTool extends AbstractSyncTool implements AutoCloseable {
+public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
 
   private static final Logger LOG = LogManager.getLogger(HiveSyncTool.class);
   public static final String SUFFIX_SNAPSHOT_TABLE = "_rt";
   public static final String SUFFIX_READ_OPTIMIZED_TABLE = "_ro";
 
-  protected HiveSyncConfig hiveSyncConfig;
-  protected AbstractHiveSyncHoodieClient hoodieHiveClient;
-  protected String snapshotTableName = null;
-  protected Option<String> roTableName = null;
+  protected final HiveSyncConfig config;
+  protected final String databaseName;
+  protected final String tableName;
+  protected HoodieSyncClient syncClient;
+  protected String snapshotTableName;
+  protected Option<String> roTableName;
 
-  public HiveSyncTool(TypedProperties props, Configuration conf, FileSystem fs) {
-    this(new HiveSyncConfig(props), new HiveConf(conf, HiveConf.class), fs);
+  public HiveSyncTool(Properties props, Configuration hadoopConf) {
+    super(props, hadoopConf);
+    HiveSyncConfig config = new HiveSyncConfig(props, hadoopConf);
+    this.config = config;
+    this.databaseName = config.getStringOrDefault(META_SYNC_DATABASE_NAME);
+    this.tableName = config.getStringOrDefault(META_SYNC_TABLE_NAME);
+    initSyncClient(config);
+    initTableNameVars(config);
   }
 
-  public HiveSyncTool(HiveSyncConfig hiveSyncConfig, HiveConf hiveConf, FileSystem fs) {
-    super(hiveSyncConfig.getProps(), hiveConf, fs);
-    // TODO: reconcile the way to set METASTOREURIS
-    if (StringUtils.isNullOrEmpty(hiveConf.get(HiveConf.ConfVars.METASTOREURIS.varname))) {
-      hiveConf.set(HiveConf.ConfVars.METASTOREURIS.varname, hiveSyncConfig.metastoreUris);
-    }
-    initClient(hiveSyncConfig, hiveConf);
-    initConfig(hiveSyncConfig);
-  }
-
-  protected void initClient(HiveSyncConfig hiveSyncConfig, HiveConf hiveConf) {
+  protected void initSyncClient(HiveSyncConfig config) {
     try {
-      this.hoodieHiveClient = new HoodieHiveClient(hiveSyncConfig, hiveConf, fs);
+      this.syncClient = new HoodieHiveSyncClient(config);
     } catch (RuntimeException e) {
-      if (hiveSyncConfig.ignoreExceptions) {
+      if (config.getBoolean(HIVE_IGNORE_EXCEPTIONS)) {
         LOG.error("Got runtime exception when hive syncing, but continuing as ignoreExceptions config is set ", e);
       } else {
         throw new HoodieHiveSyncException("Got runtime exception when hive syncing", e);
@@ -94,28 +108,23 @@ public class HiveSyncTool extends AbstractSyncTool implements AutoCloseable {
     }
   }
 
-  private void initConfig(HiveSyncConfig hiveSyncConfig) {
-    // Set partitionFields to empty, when the NonPartitionedExtractor is used
-    // TODO: HiveSyncConfig should be responsible for inferring config value
-    if (NonPartitionedExtractor.class.getName().equals(hiveSyncConfig.partitionValueExtractorClass)) {
-      LOG.warn("Set partitionFields to empty, since the NonPartitionedExtractor is used");
-      hiveSyncConfig.partitionFields = new ArrayList<>();
-    }
-    this.hiveSyncConfig = hiveSyncConfig;
-    if (hoodieHiveClient != null) {
-      switch (hoodieHiveClient.getTableType()) {
+  private void initTableNameVars(HiveSyncConfig config) {
+    final String tableName = config.getStringOrDefault(META_SYNC_TABLE_NAME);
+    if (syncClient != null) {
+      switch (syncClient.getTableType()) {
         case COPY_ON_WRITE:
-          this.snapshotTableName = hiveSyncConfig.tableName;
+          this.snapshotTableName = tableName;
           this.roTableName = Option.empty();
           break;
         case MERGE_ON_READ:
-          this.snapshotTableName = hiveSyncConfig.tableName + SUFFIX_SNAPSHOT_TABLE;
-          this.roTableName = hiveSyncConfig.skipROSuffix ? Option.of(hiveSyncConfig.tableName) :
-              Option.of(hiveSyncConfig.tableName + SUFFIX_READ_OPTIMIZED_TABLE);
+          this.snapshotTableName = tableName + SUFFIX_SNAPSHOT_TABLE;
+          this.roTableName = config.getBoolean(HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE)
+              ? Option.of(tableName)
+              : Option.of(tableName + SUFFIX_READ_OPTIMIZED_TABLE);
           break;
         default:
-          LOG.error("Unknown table type " + hoodieHiveClient.getTableType());
-          throw new InvalidTableException(hoodieHiveClient.getBasePath());
+          LOG.error("Unknown table type " + syncClient.getTableType());
+          throw new InvalidTableException(syncClient.getBasePath());
       }
     }
   }
@@ -123,21 +132,23 @@ public class HiveSyncTool extends AbstractSyncTool implements AutoCloseable {
   @Override
   public void syncHoodieTable() {
     try {
-      if (hoodieHiveClient != null) {
-        LOG.info("Syncing target hoodie table with hive table(" + hiveSyncConfig.tableName + "). Hive metastore URL :"
-            + hiveSyncConfig.jdbcUrl + ", basePath :" + hiveSyncConfig.basePath);
+      if (syncClient != null) {
+        LOG.info("Syncing target hoodie table with hive table("
+            + tableId(databaseName, tableName) + "). Hive metastore URL :"
+            + config.getString(METASTORE_URIS) + ", basePath :"
+            + config.getString(META_SYNC_BASE_PATH));
 
         doSync();
       }
     } catch (RuntimeException re) {
-      throw new HoodieException("Got runtime exception when hive syncing " + hiveSyncConfig.tableName, re);
+      throw new HoodieException("Got runtime exception when hive syncing " + tableName, re);
     } finally {
       close();
     }
   }
 
   protected void doSync() {
-    switch (hoodieHiveClient.getTableType()) {
+    switch (syncClient.getTableType()) {
       case COPY_ON_WRITE:
         syncHoodieTable(snapshotTableName, false, false);
         break;
@@ -148,61 +159,60 @@ public class HiveSyncTool extends AbstractSyncTool implements AutoCloseable {
         syncHoodieTable(snapshotTableName, true, false);
         break;
       default:
-        LOG.error("Unknown table type " + hoodieHiveClient.getTableType());
-        throw new InvalidTableException(hoodieHiveClient.getBasePath());
+        LOG.error("Unknown table type " + syncClient.getTableType());
+        throw new InvalidTableException(syncClient.getBasePath());
     }
   }
 
   @Override
   public void close() {
-    if (hoodieHiveClient != null) {
+    if (syncClient != null) {
       try {
-        hoodieHiveClient.close();
+        syncClient.close();
       } catch (Exception e) {
         throw new HoodieHiveSyncException("Fail to close sync client.", e);
       }
     }
   }
 
-  protected void syncHoodieTable(String tableName, boolean useRealtimeInputFormat,
-                               boolean readAsOptimized) {
-    LOG.info("Trying to sync hoodie table " + tableName + " with base path " + hoodieHiveClient.getBasePath()
-        + " of type " + hoodieHiveClient.getTableType());
+  protected void syncHoodieTable(String tableName, boolean useRealtimeInputFormat, boolean readAsOptimized) {
+    LOG.info("Trying to sync hoodie table " + tableName + " with base path " + syncClient.getBasePath()
+        + " of type " + syncClient.getTableType());
 
     // check if the database exists else create it
-    if (hiveSyncConfig.autoCreateDatabase) {
+    if (config.getBoolean(HIVE_AUTO_CREATE_DATABASE)) {
       try {
-        if (!hoodieHiveClient.databaseExists(hiveSyncConfig.databaseName)) {
-          hoodieHiveClient.createDatabase(hiveSyncConfig.databaseName);
+        if (!syncClient.databaseExists(databaseName)) {
+          syncClient.createDatabase(databaseName);
         }
       } catch (Exception e) {
         // this is harmless since table creation will fail anyways, creation of DB is needed for in-memory testing
         LOG.warn("Unable to create database", e);
       }
     } else {
-      if (!hoodieHiveClient.databaseExists(hiveSyncConfig.databaseName)) {
-        LOG.error("Hive database does not exist " + hiveSyncConfig.databaseName);
-        throw new HoodieHiveSyncException("hive database does not exist " + hiveSyncConfig.databaseName);
+      if (!syncClient.databaseExists(databaseName)) {
+        LOG.error("Hive database does not exist " + databaseName);
+        throw new HoodieHiveSyncException("hive database does not exist " + databaseName);
       }
     }
 
     // Check if the necessary table exists
-    boolean tableExists = hoodieHiveClient.tableExists(tableName);
+    boolean tableExists = syncClient.tableExists(tableName);
 
     // check if isDropPartition
-    boolean isDropPartition = hoodieHiveClient.isDropPartition();
+    boolean isDropPartition = syncClient.isDropPartition();
 
     // Get the parquet schema for this table looking at the latest commit
-    MessageType schema = hoodieHiveClient.getDataSchema();
+    MessageType schema = syncClient.getStorageSchema();
 
     // Currently HoodieBootstrapRelation does support reading bootstrap MOR rt table,
     // so we disable the syncAsSparkDataSourceTable here to avoid read such kind table
     // by the data source way (which will use the HoodieBootstrapRelation).
     // TODO after we support bootstrap MOR rt table in HoodieBootstrapRelation[HUDI-2071], we can remove this logical.
-    if (hoodieHiveClient.isBootstrap()
-            && hoodieHiveClient.getTableType() == HoodieTableType.MERGE_ON_READ
-            && !readAsOptimized) {
-      hiveSyncConfig.syncAsSparkDataSourceTable = false;
+    if (syncClient.isBootstrap()
+        && syncClient.getTableType() == HoodieTableType.MERGE_ON_READ
+        && !readAsOptimized) {
+      config.setValue(HIVE_SYNC_AS_DATA_SOURCE_TABLE, "false");
     }
 
     // Sync schema if needed
@@ -212,17 +222,17 @@ public class HiveSyncTool extends AbstractSyncTool implements AutoCloseable {
     // Get the last time we successfully synced partitions
     Option<String> lastCommitTimeSynced = Option.empty();
     if (tableExists) {
-      lastCommitTimeSynced = hoodieHiveClient.getLastCommitTimeSynced(tableName);
+      lastCommitTimeSynced = syncClient.getLastCommitTimeSynced(tableName);
     }
     LOG.info("Last commit time synced was found to be " + lastCommitTimeSynced.orElse("null"));
-    List<String> writtenPartitionsSince = hoodieHiveClient.getPartitionsWrittenToSince(lastCommitTimeSynced);
+    List<String> writtenPartitionsSince = syncClient.getPartitionsWrittenToSince(lastCommitTimeSynced);
     LOG.info("Storage partitions scan complete. Found " + writtenPartitionsSince.size());
 
     // Sync the partitions if needed
     boolean partitionsChanged = syncPartitions(tableName, writtenPartitionsSince, isDropPartition);
     boolean meetSyncConditions = schemaChanged || partitionsChanged;
-    if (!hiveSyncConfig.isConditionalSync || meetSyncConditions) {
-      hoodieHiveClient.updateLastCommitTimeSynced(tableName);
+    if (!config.getBoolean(META_SYNC_CONDITIONAL_SYNC) || meetSyncConditions) {
+      syncClient.updateLastCommitTimeSynced(tableName);
     }
     LOG.info("Sync complete for " + tableName);
   }
@@ -231,18 +241,18 @@ public class HiveSyncTool extends AbstractSyncTool implements AutoCloseable {
    * Get the latest schema from the last commit and check if its in sync with the hive table schema. If not, evolves the
    * table schema.
    *
-   * @param tableExists - does table exist
-   * @param schema - extracted schema
+   * @param tableExists does table exist
+   * @param schema      extracted schema
    */
   private boolean syncSchema(String tableName, boolean tableExists, boolean useRealTimeInputFormat,
-                          boolean readAsOptimized, MessageType schema) {
+      boolean readAsOptimized, MessageType schema) {
     // Append spark table properties & serde properties
-    Map<String, String> tableProperties = ConfigUtils.toMap(hiveSyncConfig.tableProperties);
-    Map<String, String> serdeProperties = ConfigUtils.toMap(hiveSyncConfig.serdeProperties);
-    if (hiveSyncConfig.syncAsSparkDataSourceTable) {
-      Map<String, String> sparkTableProperties = getSparkTableProperties(hiveSyncConfig.partitionFields,
-          hiveSyncConfig.sparkVersion, hiveSyncConfig.sparkSchemaLengthThreshold, schema);
-      Map<String, String> sparkSerdeProperties = getSparkSerdeProperties(readAsOptimized, hiveSyncConfig.basePath);
+    Map<String, String> tableProperties = ConfigUtils.toMap(config.getString(HIVE_TABLE_PROPERTIES));
+    Map<String, String> serdeProperties = ConfigUtils.toMap(config.getString(HIVE_TABLE_SERDE_PROPERTIES));
+    if (config.getBoolean(HIVE_SYNC_AS_DATA_SOURCE_TABLE)) {
+      Map<String, String> sparkTableProperties = SparkDataSourceTableUtils.getSparkTableProperties(config.getSplitStrings(META_SYNC_PARTITION_FIELDS),
+          config.getStringOrDefault(META_SYNC_SPARK_VERSION), config.getIntOrDefault(HIVE_SYNC_SCHEMA_STRING_LENGTH_THRESHOLD), schema);
+      Map<String, String> sparkSerdeProperties = SparkDataSourceTableUtils.getSparkSerdeProperties(readAsOptimized, config.getString(META_SYNC_BASE_PATH));
       tableProperties.putAll(sparkTableProperties);
       serdeProperties.putAll(sparkSerdeProperties);
     }
@@ -250,10 +260,10 @@ public class HiveSyncTool extends AbstractSyncTool implements AutoCloseable {
     // Check and sync schema
     if (!tableExists) {
       LOG.info("Hive table " + tableName + " is not found. Creating it");
-      HoodieFileFormat baseFileFormat = HoodieFileFormat.valueOf(hiveSyncConfig.baseFileFormat.toUpperCase());
+      HoodieFileFormat baseFileFormat = HoodieFileFormat.valueOf(config.getStringOrDefault(META_SYNC_BASE_FILE_FORMAT).toUpperCase());
       String inputFormatClassName = HoodieInputFormatUtils.getInputFormatClassName(baseFileFormat, useRealTimeInputFormat);
 
-      if (baseFileFormat.equals(HoodieFileFormat.PARQUET) && hiveSyncConfig.usePreApacheInputFormat) {
+      if (baseFileFormat.equals(HoodieFileFormat.PARQUET) && config.getBooleanOrDefault(HIVE_USE_PRE_APACHE_INPUT_FORMAT)) {
         // Parquet input format had an InputFormat class visible under the old naming scheme.
         inputFormatClassName = useRealTimeInputFormat
             ? com.uber.hoodie.hadoop.realtime.HoodieRealtimeInputFormat.class.getName()
@@ -266,19 +276,20 @@ public class HiveSyncTool extends AbstractSyncTool implements AutoCloseable {
       // Custom serde will not work with ALTER TABLE REPLACE COLUMNS
       // https://github.com/apache/hive/blob/release-1.1.0/ql/src/java/org/apache/hadoop/hive
       // /ql/exec/DDLTask.java#L3488
-      hoodieHiveClient.createTable(tableName, schema, inputFormatClassName,
+      syncClient.createTable(tableName, schema, inputFormatClassName,
           outputFormatClassName, serDeFormatClassName, serdeProperties, tableProperties);
       schemaChanged = true;
     } else {
       // Check if the table schema has evolved
-      Map<String, String> tableSchema = hoodieHiveClient.getTableSchema(tableName);
-      SchemaDifference schemaDiff = HiveSchemaUtil.getSchemaDifference(schema, tableSchema, hiveSyncConfig.partitionFields, hiveSyncConfig.supportTimestamp);
+      Map<String, String> tableSchema = syncClient.getMetastoreSchema(tableName);
+      SchemaDifference schemaDiff = HiveSchemaUtil.getSchemaDifference(schema, tableSchema, config.getSplitStrings(META_SYNC_PARTITION_FIELDS),
+          config.getBooleanOrDefault(HIVE_SUPPORT_TIMESTAMP_TYPE));
       if (!schemaDiff.isEmpty()) {
         LOG.info("Schema difference found for " + tableName);
-        hoodieHiveClient.updateTableDefinition(tableName, schema);
+        syncClient.updateTableSchema(tableName, schema);
         // Sync the table properties if the schema has changed
-        if (hiveSyncConfig.tableProperties != null || hiveSyncConfig.syncAsSparkDataSourceTable) {
-          hoodieHiveClient.updateTableProperties(tableName, tableProperties);
+        if (config.getString(HIVE_TABLE_PROPERTIES) != null || config.getBoolean(HIVE_SYNC_AS_DATA_SOURCE_TABLE)) {
+          syncClient.updateTableProperties(tableName, tableProperties);
           LOG.info("Sync table properties for " + tableName + ", table properties is: " + tableProperties);
         }
         schemaChanged = true;
@@ -287,17 +298,10 @@ public class HiveSyncTool extends AbstractSyncTool implements AutoCloseable {
       }
     }
 
-    if (hiveSyncConfig.syncComment) {
-      Schema avroSchemaWithoutMetadataFields = hoodieHiveClient.getAvroSchemaWithoutMetadataFields();
-      Map<String, String> newComments = avroSchemaWithoutMetadataFields.getFields()
-              .stream().collect(Collectors.toMap(Schema.Field::name, field -> StringUtils.isNullOrEmpty(field.doc()) ? "" : field.doc()));
-      boolean allEmpty = newComments.values().stream().allMatch(StringUtils::isNullOrEmpty);
-      if (!allEmpty) {
-        List<FieldSchema> hiveSchema = hoodieHiveClient.getTableCommentUsingMetastoreClient(tableName);
-        hoodieHiveClient.updateTableComments(tableName, hiveSchema, avroSchemaWithoutMetadataFields.getFields());
-      } else {
-        LOG.info(String.format("No comment %s need to add", tableName));
-      }
+    if (config.getBoolean(HIVE_SYNC_COMMENT)) {
+      List<FieldSchema> fromMetastore = syncClient.getMetastoreFieldSchemas(tableName);
+      List<FieldSchema> fromStorage = syncClient.getStorageFieldSchemas();
+      syncClient.updateTableComments(tableName, fromMetastore, fromStorage);
     }
     return schemaChanged;
   }
@@ -309,26 +313,26 @@ public class HiveSyncTool extends AbstractSyncTool implements AutoCloseable {
   private boolean syncPartitions(String tableName, List<String> writtenPartitionsSince, boolean isDropPartition) {
     boolean partitionsChanged;
     try {
-      List<Partition> hivePartitions = hoodieHiveClient.getAllPartitions(tableName);
+      List<Partition> hivePartitions = syncClient.getAllPartitions(tableName);
       List<PartitionEvent> partitionEvents =
-          hoodieHiveClient.getPartitionEvents(hivePartitions, writtenPartitionsSince, isDropPartition);
+          syncClient.getPartitionEvents(hivePartitions, writtenPartitionsSince, isDropPartition);
 
       List<String> newPartitions = filterPartitions(partitionEvents, PartitionEventType.ADD);
       if (!newPartitions.isEmpty()) {
         LOG.info("New Partitions " + newPartitions);
-        hoodieHiveClient.addPartitionsToTable(tableName, newPartitions);
+        syncClient.addPartitionsToTable(tableName, newPartitions);
       }
 
       List<String> updatePartitions = filterPartitions(partitionEvents, PartitionEventType.UPDATE);
       if (!updatePartitions.isEmpty()) {
         LOG.info("Changed Partitions " + updatePartitions);
-        hoodieHiveClient.updatePartitionsToTable(tableName, updatePartitions);
+        syncClient.updatePartitionsToTable(tableName, updatePartitions);
       }
 
       List<String> dropPartitions = filterPartitions(partitionEvents, PartitionEventType.DROP);
       if (!dropPartitions.isEmpty()) {
         LOG.info("Drop Partitions " + dropPartitions);
-        hoodieHiveClient.dropPartitions(tableName, dropPartitions);
+        syncClient.dropPartitions(tableName, dropPartitions);
       }
 
       partitionsChanged = !updatePartitions.isEmpty() || !newPartitions.isEmpty() || !dropPartitions.isEmpty();
@@ -344,16 +348,13 @@ public class HiveSyncTool extends AbstractSyncTool implements AutoCloseable {
   }
 
   public static void main(String[] args) {
-    // parse the params
-    final HiveSyncConfig cfg = new HiveSyncConfig();
-    JCommander cmd = new JCommander(cfg, null, args);
-    if (cfg.help || args.length == 0) {
+    final HiveSyncConfig.HiveSyncConfigParams params = new HiveSyncConfig.HiveSyncConfigParams();
+    JCommander cmd = JCommander.newBuilder().addObject(params).build();
+    cmd.parse(args);
+    if (params.isHelp()) {
       cmd.usage();
-      System.exit(1);
+      System.exit(0);
     }
-    FileSystem fs = FSUtils.getFs(cfg.basePath, new Configuration());
-    HiveConf hiveConf = new HiveConf();
-    hiveConf.addResource(fs.getConf());
-    new HiveSyncTool(cfg, hiveConf, fs).syncHoodieTable();
+    new HiveSyncTool(params.toProps(), new Configuration()).syncHoodieTable();
   }
 }

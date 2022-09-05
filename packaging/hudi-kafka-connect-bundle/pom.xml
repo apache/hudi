@@ -20,7 +20,7 @@
     <parent>
         <artifactId>hudi</artifactId>
         <groupId>org.apache.hudi</groupId>
-        <version>0.12.0-SNAPSHOT</version>
+        <version>0.13.0-SNAPSHOT</version>
         <relativePath>../../pom.xml</relativePath>
     </parent>
     <modelVersion>4.0.0</modelVersion>
@@ -30,6 +30,7 @@
     <properties>
         <checkstyle.skip>true</checkstyle.skip>
         <main.basedir>${project.parent.basedir}</main.basedir>
+        <skipTests>true</skipTests>
         <kafka.connect.bundle.shade.prefix>org.apache.hudi.</kafka.connect.bundle.shade.prefix>
     </properties>
 
@@ -89,7 +90,7 @@
                                     <include>org.apache.hudi:flink-core</include>
                                     <include>org.apache.hudi:hudi-flink-client</include>
                                     <include>org.apache.flink:flink-core</include>
-                                    <include>org.apache.flink:flink-hadoop-compatibility_${scala.binary.version}</include>
+                                    <include>${flink.hadoop.compatibility.artifactId}</include>
 
                                     <include>com.github.davidmoten:guava-mini</include>
                                     <include>com.github.davidmoten:hilbert-curve</include>
@@ -112,7 +113,6 @@
                                     <include>io.prometheus:simpleclient_dropwizard</include>
                                     <include>io.prometheus:simpleclient_pushgateway</include>
                                     <include>io.prometheus:simpleclient_common</include>
-                                    <include>com.yammer.metrics:metrics-core</include>
                                     <include>com.google.protobuf:protobuf-java</include>
                                     <include>org.objenesis:objenesis</include>
                                     <include>com.esotericsoftware:kryo-shaded</include>
@@ -124,6 +124,7 @@
                                     <include>org.apache.hbase:hbase-hadoop2-compat</include>
                                     <include>org.apache.hbase:hbase-metrics</include>
                                     <include>org.apache.hbase:hbase-metrics-api</include>
+                                    <include>org.apache.hbase:hbase-protocol</include>
                                     <include>org.apache.hbase:hbase-protocol-shaded</include>
                                     <include>org.apache.hbase:hbase-server</include>
                                     <include>org.apache.hbase.thirdparty:hbase-shaded-miscellaneous</include>
@@ -282,8 +283,16 @@
             <scope>compile</scope>
             <exclusions>
                 <exclusion>
-                    <groupId>log4j</groupId>
-                    <artifactId>log4j</artifactId>
+                    <groupId>org.apache.logging.log4j</groupId>
+                    <artifactId>log4j-api</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.logging.log4j</groupId>
+                    <artifactId>log4j-core</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.logging.log4j</groupId>
+                    <artifactId>log4j-1.2-api</artifactId>
                 </exclusion>
             </exclusions>
         </dependency>

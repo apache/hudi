@@ -43,7 +43,7 @@ import java.util.List;
 /**
  * A {@link HoodieMergeHandle} that supports MERGE write incrementally(small data buffers).
  *
- * <p>For a new data buffer, it initialize and set up the next file path to write,
+ * <p>For a new data buffer, it initializes and set up the next file path to write,
  * and closes the file path when the data buffer write finish. When next data buffer
  * write starts, it rolls over to another new file. If all the data buffers write finish
  * for a checkpoint round, it renames the last new file path as the desired file name
@@ -143,7 +143,12 @@ public class FlinkMergeHandle<T extends HoodieRecordPayload, I, K, O>
           break;
         }
 
-        oldFilePath = newFilePath; // override the old file name
+        // Override the old file name,
+        // In rare cases, when a checkpoint was aborted and the instant time
+        // is reused, the merge handle generates a new file name
+        // with the reused instant time of last checkpoint, which is duplicate,
+        // use the same name file as new base file in case data loss.
+        oldFilePath = newFilePath;
         rolloverPaths.add(oldFilePath);
         newFileName = newFileNameWithRollover(rollNumber++);
         newFilePath = makeNewFilePath(partitionPath, newFileName);
@@ -158,9 +163,14 @@ public class FlinkMergeHandle<T extends HoodieRecordPayload, I, K, O>
    * Use the writeToken + "-" + rollNumber as the new writeToken of a mini-batch write.
    */
   protected String newFileNameWithRollover(int rollNumber) {
-    // make the intermediate file as hidden
     return FSUtils.makeBaseFileName(instantTime, writeToken + "-" + rollNumber,
         this.fileId, hoodieTable.getBaseFileExtension());
+  }
+
+  @Override
+  protected void setWriteStatusPath() {
+    // if there was rollover, should set up the path as the initial new file path.
+    writeStatus.getStat().setPath(new Path(config.getBasePath()), getWritePath());
   }
 
   @Override
@@ -182,26 +192,24 @@ public class FlinkMergeHandle<T extends HoodieRecordPayload, I, K, O>
 
   public void finalizeWrite() {
     // The file visibility should be kept by the configured ConsistencyGuard instance.
-    rolloverPaths.add(newFilePath);
-    if (rolloverPaths.size() == 1) {
+    if (rolloverPaths.size() == 0) {
       // only one flush action, no need to roll over
       return;
     }
 
-    for (int i = 0; i < rolloverPaths.size() - 1; i++) {
-      Path path = rolloverPaths.get(i);
+    for (Path path : rolloverPaths) {
       try {
         fs.delete(path, false);
+        LOG.info("Delete the rollover data file: " + path + " success!");
       } catch (IOException e) {
-        throw new HoodieIOException("Error when clean the temporary roll file: " + path, e);
+        throw new HoodieIOException("Error when clean the temporary rollover data file: " + path, e);
       }
     }
-    final Path lastPath = rolloverPaths.get(rolloverPaths.size() - 1);
     final Path desiredPath = rolloverPaths.get(0);
     try {
-      fs.rename(lastPath, desiredPath);
+      fs.rename(newFilePath, desiredPath);
     } catch (IOException e) {
-      throw new HoodieIOException("Error when rename the temporary roll file: " + lastPath + " to: " + desiredPath, e);
+      throw new HoodieIOException("Error when rename the temporary roll file: " + newFilePath + " to: " + desiredPath, e);
     }
   }
 
@@ -226,6 +234,6 @@ public class FlinkMergeHandle<T extends HoodieRecordPayload, I, K, O>
 
   @Override
   public Path getWritePath() {
-    return newFilePath;
+    return rolloverPaths.size() > 0 ? rolloverPaths.get(0) : newFilePath;
   }
 }

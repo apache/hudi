@@ -17,19 +17,23 @@
 
 package org.apache.hudi.keygen;
 
+import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
-
-import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.types.StructType;
+import org.apache.spark.unsafe.types.UTF8String;
 
 import java.util.Arrays;
 import java.util.stream.Collectors;
 
 /**
- * Complex key generator, which takes names of fields to be used for recordKey and partitionPath as configs.
+ * Key generator prefixing field names before corresponding record-key parts.
+ *
+ * <p/>
+ * For example, for the schema of {@code { "key": string, "value": bytes }}, and corresponding record
+ * {@code { "key": "foo" }}, record-key "key:foo" will be produced.
  */
 public class ComplexKeyGenerator extends BuiltinKeyGenerator {
 
@@ -45,7 +49,7 @@ public class ComplexKeyGenerator extends BuiltinKeyGenerator {
         .map(String::trim)
         .filter(s -> !s.isEmpty())
         .collect(Collectors.toList());
-    complexAvroKeyGenerator = new ComplexAvroKeyGenerator(props);
+    this.complexAvroKeyGenerator = new ComplexAvroKeyGenerator(props);
   }
 
   @Override
@@ -60,20 +64,25 @@ public class ComplexKeyGenerator extends BuiltinKeyGenerator {
 
   @Override
   public String getRecordKey(Row row) {
-    buildFieldSchemaInfoIfNeeded(row.schema());
-    return RowKeyGeneratorHelper.getRecordKeyFromRow(row, getRecordKeyFields(), recordKeySchemaInfo, true);
+    tryInitRowAccessor(row.schema());
+    return combineCompositeRecordKey(rowAccessor.getRecordKeyParts(row));
+  }
+
+  @Override
+  public UTF8String getRecordKey(InternalRow internalRow, StructType schema) {
+    tryInitRowAccessor(schema);
+    return combineCompositeRecordKeyUnsafe(rowAccessor.getRecordKeyParts(internalRow));
   }
 
   @Override
   public String getPartitionPath(Row row) {
-    buildFieldSchemaInfoIfNeeded(row.schema());
-    return RowKeyGeneratorHelper.getPartitionPathFromRow(row, getPartitionPathFields(),
-        hiveStylePartitioning, partitionPathSchemaInfo);
+    tryInitRowAccessor(row.schema());
+    return combinePartitionPath(rowAccessor.getRecordPartitionPathValues(row));
   }
 
   @Override
-  public String getPartitionPath(InternalRow row, StructType structType) {
-    return getPartitionPathInternal(row, structType);
+  public UTF8String getPartitionPath(InternalRow row, StructType schema) {
+    tryInitRowAccessor(schema);
+    return combinePartitionPathUnsafe(rowAccessor.getRecordPartitionPathValues(row));
   }
-
 }

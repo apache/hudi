@@ -23,7 +23,7 @@ import org.apache.hudi.HoodieWriterUtils._
 import org.apache.hudi.common.config.DFSPropertiesConfiguration
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
-import org.apache.hudi.common.util.ValidationUtils
+import org.apache.hudi.common.util.{StringUtils, ValidationUtils}
 import org.apache.hudi.keygen.ComplexKeyGenerator
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.spark.internal.Logging
@@ -39,9 +39,14 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable
 
 /**
- * A wrapper of hoodie CatalogTable instance and hoodie Table.
+ * Table definition for SQL functionalities. Depending on the way of data generation,
+ * meta of Hudi table can be from Spark catalog or meta directory on filesystem.
+ * [[HoodieCatalogTable]] takes both meta sources into consideration when handling
+ * EXTERNAL and MANAGED tables.
+ *
+ * NOTE: all the meta should be retrieved from meta directory on filesystem first.
  */
-class HoodieCatalogTable(val spark: SparkSession, val table: CatalogTable) extends Logging {
+class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) extends Logging {
 
   assert(table.provider.map(_.toLowerCase(Locale.ROOT)).orNull == "hudi", "It's not a Hudi table")
 
@@ -50,7 +55,7 @@ class HoodieCatalogTable(val spark: SparkSession, val table: CatalogTable) exten
   /**
    * database.table in catalog
    */
-  val catalogTableName = table.qualifiedName
+  val catalogTableName: String = table.qualifiedName
 
   /**
    * properties defined in catalog.
@@ -87,6 +92,11 @@ class HoodieCatalogTable(val spark: SparkSession, val table: CatalogTable) exten
   lazy val tableName: String = tableConfig.getTableName
 
   /**
+   * the name of dabase
+   */
+  lazy val databaseName: String = tableConfig.getDatabaseName
+
+  /**
    * The name of type of table
    */
   lazy val tableType: HoodieTableType = tableConfig.getTableType
@@ -117,23 +127,9 @@ class HoodieCatalogTable(val spark: SparkSession, val table: CatalogTable) exten
   lazy val baseFileFormat: String = metaClient.getTableConfig.getBaseFileFormat.name()
 
   /**
-   * The schema of table.
-   * Make StructField nullable and fill the comments in.
+   * Table schema
    */
-  lazy val tableSchema: StructType = {
-    val resolver = spark.sessionState.conf.resolver
-    val originSchema = getTableSqlSchema(metaClient, includeMetadataFields = true).getOrElse(table.schema)
-    val fields = originSchema.fields.map { f =>
-      val nullableField: StructField = f.copy(nullable = true)
-      val catalogField = findColumnByName(table.schema, nullableField.name, resolver)
-      if (catalogField.isDefined) {
-        catalogField.get.getComment().map(nullableField.withComment).getOrElse(nullableField)
-      } else {
-        nullableField
-      }
-    }
-    StructType(fields)
-  }
+  lazy val tableSchema: StructType = table.schema
 
   /**
    * The schema without hoodie meta fields
@@ -168,29 +164,35 @@ class HoodieCatalogTable(val spark: SparkSession, val table: CatalogTable) exten
   def isPartitionedTable: Boolean = table.partitionColumnNames.nonEmpty
 
   /**
-   * init hoodie table for create table (as select)
+   * Initializes table meta on filesystem when applying CREATE TABLE clause.
    */
   def initHoodieTable(): Unit = {
     logInfo(s"Init hoodie.properties for ${table.identifier.unquotedString}")
     val (finalSchema, tableConfigs) = parseSchemaAndConfigs()
 
+    table = table.copy(schema = finalSchema)
+
     // Save all the table config to the hoodie.properties.
     val properties = new Properties()
     properties.putAll(tableConfigs.asJava)
 
+    val catalogDatabaseName = formatName(spark,
+      table.identifier.database.getOrElse(spark.sessionState.catalog.getCurrentDatabase))
     if (hoodieTableExists) {
+      assert(StringUtils.isNullOrEmpty(databaseName) || databaseName == catalogDatabaseName,
+        "The database names from this hoodie path and this catalog table is not same.")
       // just persist hoodie.table.create.schema
       HoodieTableMetaClient.withPropertyBuilder()
         .fromProperties(properties)
+        .setDatabaseName(catalogDatabaseName)
         .setTableCreateSchema(SchemaConverters.toAvroType(finalSchema).toString())
         .initTable(hadoopConf, tableLocation)
     } else {
       val (recordName, namespace) = AvroConversionUtils.getAvroRecordNameAndNamespace(table.identifier.table)
       val schema = SchemaConverters.toAvroType(finalSchema, false, recordName, namespace)
-      val hoodieDatabaseName = formatName(spark, table.identifier.database.getOrElse(spark.sessionState.catalog.getCurrentDatabase))
       HoodieTableMetaClient.withPropertyBuilder()
         .fromProperties(properties)
-        .setDatabaseName(hoodieDatabaseName)
+        .setDatabaseName(catalogDatabaseName)
         .setTableName(table.identifier.table)
         .setTableCreateSchema(schema.toString())
         .setPartitionFields(table.partitionColumnNames.mkString(","))
@@ -199,7 +201,10 @@ class HoodieCatalogTable(val spark: SparkSession, val table: CatalogTable) exten
   }
 
   /**
-   * @return schema, table parameters in which all parameters aren't sql-styled.
+   * Derives the SQL schema and configurations for a Hudi table:
+   * 1. Columns in the schema fall under two categories -- the data columns described in
+   * CREATE TABLE clause and meta columns enumerated in [[HoodieRecord#HOODIE_META_COLUMNS]];
+   * 2. Configurations derived come from config file, PROPERTIES and OPTIONS in CREATE TABLE clause.
    */
   private def parseSchemaAndConfigs(): (StructType, Map[String, String]) = {
     val globalProps = DFSPropertiesConfiguration.getGlobalProps.asScala.toMap
@@ -216,24 +221,25 @@ class HoodieCatalogTable(val spark: SparkSession, val table: CatalogTable) exten
         val catalogTableProps = HoodieOptionConfig.mappingSqlOptionToTableConfig(catalogProperties)
         validateTableConfig(spark, catalogTableProps, convertMapToHoodieConfig(existingTableConfig))
 
-        val options = extraTableConfig(spark, hoodieTableExists, currentTableConfig) ++
+        val options = extraTableConfig(hoodieTableExists, currentTableConfig) ++
           HoodieOptionConfig.mappingSqlOptionToTableConfig(sqlOptions) ++ currentTableConfig
 
-        ValidationUtils.checkArgument(tableSchema.nonEmpty || table.schema.nonEmpty,
-          s"Missing schema for Create Table: $catalogTableName")
-        val schema = if (tableSchema.nonEmpty) {
-          tableSchema
-        } else {
+        val schemaFromMetaOpt = loadTableSchemaByMetaClient()
+        val schema = if (schemaFromMetaOpt.nonEmpty) {
+          schemaFromMetaOpt.get
+        } else if (table.schema.nonEmpty) {
           addMetaFields(table.schema)
+        } else {
+          throw new AnalysisException(
+            s"Missing schema fields when applying CREATE TABLE clause for ${catalogTableName}")
         }
-
         (schema, options)
 
       case (_, false) =>
         ValidationUtils.checkArgument(table.schema.nonEmpty,
           s"Missing schema for Create Table: $catalogTableName")
         val schema = table.schema
-        val options = extraTableConfig(spark, isTableExists = false, globalTableConfigs) ++
+        val options = extraTableConfig(tableExists = false, globalTableConfigs) ++
           HoodieOptionConfig.mappingSqlOptionToTableConfig(sqlOptions)
         (addMetaFields(schema), options)
 
@@ -253,10 +259,10 @@ class HoodieCatalogTable(val spark: SparkSession, val table: CatalogTable) exten
     (finalSchema, tableConfigs)
   }
 
-  private def extraTableConfig(sparkSession: SparkSession, isTableExists: Boolean,
+  private def extraTableConfig(tableExists: Boolean,
       originTableConfig: Map[String, String] = Map.empty): Map[String, String] = {
     val extraConfig = mutable.Map.empty[String, String]
-    if (isTableExists) {
+    if (tableExists) {
       val allPartitionPaths = getPartitionPaths
       if (originTableConfig.contains(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE.key)) {
         extraConfig(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE.key) =
@@ -285,6 +291,24 @@ class HoodieCatalogTable(val spark: SparkSession, val table: CatalogTable) exten
       extraConfig(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key) = classOf[ComplexKeyGenerator].getCanonicalName
     }
     extraConfig.toMap
+  }
+
+  private def loadTableSchemaByMetaClient(): Option[StructType] = {
+    val resolver = spark.sessionState.conf.resolver
+    getTableSqlSchema(metaClient, includeMetadataFields = true).map(originSchema => {
+      // Load table schema from meta on filesystem, and fill in 'comment'
+      // information from Spark catalog.
+      val fields = originSchema.fields.map { f =>
+        val nullableField: StructField = f.copy(nullable = true)
+        val catalogField = findColumnByName(table.schema, nullableField.name, resolver)
+        if (catalogField.isDefined) {
+          catalogField.get.getComment().map(nullableField.withComment).getOrElse(nullableField)
+        } else {
+          nullableField
+        }
+      }
+      StructType(fields)
+    })
   }
 
   // This code is forked from org.apache.spark.sql.hive.HiveExternalCatalog#verifyDataSchema

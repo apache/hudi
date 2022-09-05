@@ -38,7 +38,7 @@ public class HoodieParquetStreamWriter<R extends IndexedRecord> implements AutoC
   private final HoodieAvroWriteSupport writeSupport;
 
   public HoodieParquetStreamWriter(FSDataOutputStream outputStream,
-                                   HoodieAvroParquetConfig parquetConfig) throws IOException {
+                                   HoodieParquetConfig<HoodieAvroWriteSupport> parquetConfig) throws IOException {
     this.writeSupport = parquetConfig.getWriteSupport();
     this.writer = new Builder<R>(new OutputStreamBackedOutputFile(outputStream), writeSupport)
         .withWriteMode(ParquetFileWriter.Mode.CREATE)

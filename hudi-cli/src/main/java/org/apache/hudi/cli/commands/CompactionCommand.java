@@ -102,8 +102,8 @@ public class CompactionCommand implements CommandMarker {
     HoodieTableMetaClient client = checkAndGetMetaClient();
     HoodieActiveTimeline activeTimeline = client.getActiveTimeline();
     return printAllCompactions(activeTimeline,
-            compactionPlanReader(this::readCompactionPlanForActiveTimeline, activeTimeline),
-            includeExtraMetadata, sortByField, descending, limit, headerOnly);
+        compactionPlanReader(this::readCompactionPlanForActiveTimeline, activeTimeline),
+        includeExtraMetadata, sortByField, descending, limit, headerOnly);
   }
 
   @CliCommand(value = "compaction show", help = "Shows compaction details for a specific compaction instant")
@@ -128,18 +128,18 @@ public class CompactionCommand implements CommandMarker {
 
   @CliCommand(value = "compactions showarchived", help = "Shows compaction details for specified time window")
   public String compactionsShowArchived(
-          @CliOption(key = {"includeExtraMetadata"}, help = "Include extra metadata",
-                  unspecifiedDefaultValue = "false") final boolean includeExtraMetadata,
-          @CliOption(key = {"startTs"},  mandatory = false, help = "start time for compactions, default: now - 10 days")
-                  String startTs,
-          @CliOption(key = {"endTs"},  mandatory = false, help = "end time for compactions, default: now - 1 day")
-                  String endTs,
-          @CliOption(key = {"limit"}, help = "Limit compactions",
-                  unspecifiedDefaultValue = "-1") final Integer limit,
-          @CliOption(key = {"sortBy"}, help = "Sorting Field", unspecifiedDefaultValue = "") final String sortByField,
-          @CliOption(key = {"desc"}, help = "Ordering", unspecifiedDefaultValue = "false") final boolean descending,
-          @CliOption(key = {"headeronly"}, help = "Print Header Only",
-                  unspecifiedDefaultValue = "false") final boolean headerOnly) {
+      @CliOption(key = {"includeExtraMetadata"}, help = "Include extra metadata",
+          unspecifiedDefaultValue = "false") final boolean includeExtraMetadata,
+      @CliOption(key = {"startTs"}, mandatory = false, help = "start time for compactions, default: now - 10 days")
+          String startTs,
+      @CliOption(key = {"endTs"}, mandatory = false, help = "end time for compactions, default: now - 1 day")
+          String endTs,
+      @CliOption(key = {"limit"}, help = "Limit compactions",
+          unspecifiedDefaultValue = "-1") final Integer limit,
+      @CliOption(key = {"sortBy"}, help = "Sorting Field", unspecifiedDefaultValue = "") final String sortByField,
+      @CliOption(key = {"desc"}, help = "Ordering", unspecifiedDefaultValue = "false") final boolean descending,
+      @CliOption(key = {"headeronly"}, help = "Print Header Only",
+          unspecifiedDefaultValue = "false") final boolean headerOnly) {
     if (StringUtils.isNullOrEmpty(startTs)) {
       startTs = CommitUtil.getTimeDaysAgo(10);
     }
@@ -152,8 +152,8 @@ public class CompactionCommand implements CommandMarker {
     archivedTimeline.loadCompactionDetailsInMemory(startTs, endTs);
     try {
       return printAllCompactions(archivedTimeline,
-              compactionPlanReader(this::readCompactionPlanForArchivedTimeline, archivedTimeline),
-              includeExtraMetadata, sortByField, descending, limit, headerOnly);
+          compactionPlanReader(this::readCompactionPlanForArchivedTimeline, archivedTimeline),
+          includeExtraMetadata, sortByField, descending, limit, headerOnly);
     } finally {
       archivedTimeline.clearInstantDetailsFromMemory(startTs, endTs);
     }
@@ -161,23 +161,23 @@ public class CompactionCommand implements CommandMarker {
 
   @CliCommand(value = "compaction showarchived", help = "Shows compaction details for a specific compaction instant")
   public String compactionShowArchived(
-          @CliOption(key = "instant", mandatory = true,
-                  help = "instant time") final String compactionInstantTime,
-          @CliOption(key = {"limit"}, help = "Limit commits",
-                  unspecifiedDefaultValue = "-1") final Integer limit,
-          @CliOption(key = {"sortBy"}, help = "Sorting Field", unspecifiedDefaultValue = "") final String sortByField,
-          @CliOption(key = {"desc"}, help = "Ordering", unspecifiedDefaultValue = "false") final boolean descending,
-          @CliOption(key = {"headeronly"}, help = "Print Header Only",
-                  unspecifiedDefaultValue = "false") final boolean headerOnly)
-          throws Exception {
+      @CliOption(key = "instant", mandatory = true,
+          help = "instant time") final String compactionInstantTime,
+      @CliOption(key = {"limit"}, help = "Limit commits",
+          unspecifiedDefaultValue = "-1") final Integer limit,
+      @CliOption(key = {"sortBy"}, help = "Sorting Field", unspecifiedDefaultValue = "") final String sortByField,
+      @CliOption(key = {"desc"}, help = "Ordering", unspecifiedDefaultValue = "false") final boolean descending,
+      @CliOption(key = {"headeronly"}, help = "Print Header Only",
+          unspecifiedDefaultValue = "false") final boolean headerOnly)
+      throws Exception {
     HoodieTableMetaClient client = checkAndGetMetaClient();
     HoodieArchivedTimeline archivedTimeline = client.getArchivedTimeline();
     HoodieInstant instant = new HoodieInstant(HoodieInstant.State.COMPLETED,
-            HoodieTimeline.COMPACTION_ACTION, compactionInstantTime);
+        HoodieTimeline.COMPACTION_ACTION, compactionInstantTime);
     try {
       archivedTimeline.loadCompactionDetailsInMemory(compactionInstantTime);
       HoodieCompactionPlan compactionPlan = TimelineMetadataUtils.deserializeAvroRecordMetadata(
-              archivedTimeline.getInstantDetails(instant).get(), HoodieCompactionPlan.getClassSchema());
+          archivedTimeline.getInstantDetails(instant).get(), HoodieCompactionPlan.getClassSchema());
       return printCompaction(compactionPlan, sortByField, descending, limit, headerOnly);
     } finally {
       archivedTimeline.clearInstantDetailsFromMemory(compactionInstantTime);
@@ -185,8 +185,9 @@ public class CompactionCommand implements CommandMarker {
   }
 
   @CliCommand(value = "compaction schedule", help = "Schedule Compaction")
-  public String scheduleCompact(@CliOption(key = "sparkMemory", unspecifiedDefaultValue = "1G",
-      help = "Spark executor memory") final String sparkMemory,
+  public String scheduleCompact(
+      @CliOption(key = "sparkMemory", unspecifiedDefaultValue = "1G",
+          help = "Spark executor memory") final String sparkMemory,
       @CliOption(key = "propsFilePath", help = "path to properties file on localfs or dfs with configurations for hoodie client for compacting",
           unspecifiedDefaultValue = "") final String propsFilePath,
       @CliOption(key = "hoodieConfigs", help = "Any configuration that can be set in the properties file can be passed here in the form of an array",
@@ -229,9 +230,9 @@ public class CompactionCommand implements CommandMarker {
       @CliOption(key = "retry", unspecifiedDefaultValue = "1", help = "Number of retries") final String retry,
       @CliOption(key = "compactionInstant", help = "Base path for the target hoodie table") String compactionInstantTime,
       @CliOption(key = "propsFilePath", help = "path to properties file on localfs or dfs with configurations for hoodie client for compacting",
-        unspecifiedDefaultValue = "") final String propsFilePath,
+          unspecifiedDefaultValue = "") final String propsFilePath,
       @CliOption(key = "hoodieConfigs", help = "Any configuration that can be set in the properties file can be passed here in the form of an array",
-        unspecifiedDefaultValue = "") final String[] configs)
+          unspecifiedDefaultValue = "") final String[] configs)
       throws Exception {
     HoodieTableMetaClient client = checkAndGetMetaClient();
     boolean initialized = HoodieCLI.initConf();
@@ -312,12 +313,12 @@ public class CompactionCommand implements CommandMarker {
 
     Stream<HoodieInstant> instantsStream = timeline.getWriteTimeline().getReverseOrderedInstants();
     List<Pair<HoodieInstant, HoodieCompactionPlan>> compactionPlans = instantsStream
-            .map(instant -> Pair.of(instant, compactionPlanReader.apply(instant)))
-            .filter(pair -> pair.getRight() != null)
-            .collect(Collectors.toList());
+        .map(instant -> Pair.of(instant, compactionPlanReader.apply(instant)))
+        .filter(pair -> pair.getRight() != null)
+        .collect(Collectors.toList());
 
     Set<String> committedInstants = timeline.getCommitTimeline().filterCompletedInstants()
-            .getInstants().map(HoodieInstant::getTimestamp).collect(Collectors.toSet());
+        .getInstants().map(HoodieInstant::getTimestamp).collect(Collectors.toSet());
 
     List<Comparable[]> rows = new ArrayList<>();
     for (Pair<HoodieInstant, HoodieCompactionPlan> compactionPlan : compactionPlans) {
@@ -332,11 +333,11 @@ public class CompactionCommand implements CommandMarker {
 
       if (includeExtraMetadata) {
         rows.add(new Comparable[] {instant.getTimestamp(), state.toString(),
-                plan.getOperations() == null ? 0 : plan.getOperations().size(),
-                plan.getExtraMetadata().toString()});
+            plan.getOperations() == null ? 0 : plan.getOperations().size(),
+            plan.getExtraMetadata().toString()});
       } else {
         rows.add(new Comparable[] {instant.getTimestamp(), state.toString(),
-                plan.getOperations() == null ? 0 : plan.getOperations().size()});
+            plan.getOperations() == null ? 0 : plan.getOperations().size()});
       }
     }
 
@@ -358,7 +359,7 @@ public class CompactionCommand implements CommandMarker {
    */
   private <T extends HoodieDefaultTimeline, U extends HoodieInstant, V extends HoodieCompactionPlan>
       Function<HoodieInstant, HoodieCompactionPlan> compactionPlanReader(
-          BiFunction<T, HoodieInstant, HoodieCompactionPlan> f, T timeline) {
+      BiFunction<T, HoodieInstant, HoodieCompactionPlan> f, T timeline) {
 
     return (y) -> f.apply(timeline, y);
   }
@@ -389,15 +390,15 @@ public class CompactionCommand implements CommandMarker {
         try {
           // This could be a completed compaction. Assume a compaction request file is present but skip if fails
           return TimelineMetadataUtils.deserializeCompactionPlan(
-                  activeTimeline.readCompactionPlanAsBytes(
-                          HoodieTimeline.getCompactionRequestedInstant(instant.getTimestamp())).get());
+              activeTimeline.readCompactionPlanAsBytes(
+                  HoodieTimeline.getCompactionRequestedInstant(instant.getTimestamp())).get());
         } catch (HoodieIOException ioe) {
           // SKIP
           return null;
         }
       } else {
         return TimelineMetadataUtils.deserializeCompactionPlan(activeTimeline.readCompactionPlanAsBytes(
-                HoodieTimeline.getCompactionRequestedInstant(instant.getTimestamp())).get());
+            HoodieTimeline.getCompactionRequestedInstant(instant.getTimestamp())).get());
       }
     } catch (IOException e) {
       throw new HoodieIOException(e.getMessage(), e);
@@ -405,15 +406,15 @@ public class CompactionCommand implements CommandMarker {
   }
 
   protected String printCompaction(HoodieCompactionPlan compactionPlan,
-                                 String sortByField,
-                                 boolean descending,
-                                 int limit,
-                                 boolean headerOnly) {
+                                   String sortByField,
+                                   boolean descending,
+                                   int limit,
+                                   boolean headerOnly) {
     List<Comparable[]> rows = new ArrayList<>();
     if ((null != compactionPlan) && (null != compactionPlan.getOperations())) {
       for (HoodieCompactionOperation op : compactionPlan.getOperations()) {
-        rows.add(new Comparable[]{op.getPartitionPath(), op.getFileId(), op.getBaseInstantTime(), op.getDataFilePath(),
-                op.getDeltaFilePaths().size(), op.getMetrics() == null ? "" : op.getMetrics().toString()});
+        rows.add(new Comparable[] {op.getPartitionPath(), op.getFileId(), op.getBaseInstantTime(), op.getDataFilePath(),
+            op.getDeltaFilePaths().size(), op.getMetrics() == null ? "" : op.getMetrics().toString()});
       }
     }
 
@@ -558,7 +559,7 @@ public class CompactionCommand implements CommandMarker {
   @CliCommand(value = "compaction unscheduleFileId", help = "UnSchedule Compaction for a fileId")
   public String unscheduleCompactFile(
       @CliOption(key = "fileId", mandatory = true, help = "File Id") final String fileId,
-      @CliOption(key = "partitionPath", mandatory = true, help = "partition path") final String partitionPath,
+      @CliOption(key = "partitionPath", unspecifiedDefaultValue = "", help = "partition path") final String partitionPath,
       @CliOption(key = "sparkMaster", unspecifiedDefaultValue = "local", help = "Spark Master") String master,
       @CliOption(key = "sparkMemory", unspecifiedDefaultValue = "2G", help = "executor memory") String sparkMemory,
       @CliOption(key = {"skipValidation"}, help = "skip validation", unspecifiedDefaultValue = "false") boolean skipV,
@@ -645,7 +646,7 @@ public class CompactionCommand implements CommandMarker {
   }
 
   private String getRenamesToBePrinted(List<RenameOpResult> res, Integer limit, String sortByField, boolean descending,
-      boolean headerOnly, String operation) {
+                                       boolean headerOnly, String operation) {
 
     Option<Boolean> result =
         Option.fromJavaOptional(res.stream().map(r -> r.isExecuted() && r.isSuccess()).reduce(Boolean::logicalAnd));

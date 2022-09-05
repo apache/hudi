@@ -49,7 +49,7 @@ public class TestSqlFileBasedTransformer extends UtilitiesTestBase {
 
   @BeforeAll
   public static void initClass() throws Exception {
-    UtilitiesTestBase.initClass();
+    UtilitiesTestBase.initTestServices(false, false);
     UtilitiesTestBase.Helpers.copyToDFS(
         "delta-streamer-config/sql-file-transformer.sql",
         UtilitiesTestBase.dfs,

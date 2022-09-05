@@ -40,8 +40,6 @@ import org.apache.avro.specific.SpecificRecordBase;
 
 import java.util.List;
 
-import static org.apache.hudi.common.data.HoodieList.getList;
-
 public abstract class HoodieFlinkTable<T extends HoodieRecordPayload>
     extends HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>>
     implements ExplicitWriteHandleTable<T> {
@@ -62,13 +60,6 @@ public abstract class HoodieFlinkTable<T extends HoodieRecordPayload>
   public static <T extends HoodieRecordPayload> HoodieFlinkTable<T> create(HoodieWriteConfig config,
                                                                            HoodieFlinkEngineContext context,
                                                                            HoodieTableMetaClient metaClient) {
-    return HoodieFlinkTable.create(config, context, metaClient, config.isMetadataTableEnabled());
-  }
-
-  public static <T extends HoodieRecordPayload> HoodieFlinkTable<T> create(HoodieWriteConfig config,
-                                                                           HoodieFlinkEngineContext context,
-                                                                           HoodieTableMetaClient metaClient,
-                                                                           boolean refreshTimeline) {
     final HoodieFlinkTable<T> hoodieFlinkTable;
     switch (metaClient.getTableType()) {
       case COPY_ON_WRITE:
@@ -80,15 +71,12 @@ public abstract class HoodieFlinkTable<T extends HoodieRecordPayload>
       default:
         throw new HoodieException("Unsupported table type :" + metaClient.getTableType());
     }
-    if (refreshTimeline) {
-      hoodieFlinkTable.getHoodieView().sync();
-    }
     return hoodieFlinkTable;
   }
 
   public static HoodieWriteMetadata<List<WriteStatus>> convertMetadata(
       HoodieWriteMetadata<HoodieData<WriteStatus>> metadata) {
-    return metadata.clone(getList(metadata.getWriteStatuses()));
+    return metadata.clone(metadata.getWriteStatuses().collectAsList());
   }
 
   @Override

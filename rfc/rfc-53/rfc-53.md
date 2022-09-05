@@ -92,7 +92,7 @@ The Disruptor is a library that provides a concurrent ring buffer data structure
 We use the Disruptor multi-producer single-consumer working model:
 - Define `DisruptorPublisher` to register producers into Disruptor and control the produce behaviors including life cycle.
 - Define `DisruptorMessageHandler` to register consumers into Disruptor and write consumption data from disruptor to hudi data file. 
-For example we will clear clear out the event after processing it to avoid to avoid unnecessary memory and GC pressure
+For example we will clear out the event after processing it to avoid unnecessary memory and GC pressure
 - Define `HoodieDisruptorEvent` as the carrier of the hoodie message
 - Define `HoodieDisruptorEventFactory`: Pre-populate all the hoodie events to fill the RingBuffer. 
 We can use `HoodieDisruptorEventFactory` to create `HoodieDisruptorEvent` storing the data for sharing during exchange or parallel coordination of an event.
@@ -148,7 +148,7 @@ So there is no impact on existing users.
 
 ## Test Plan
 1. Add UT `TestDisruptorMessageQueue` and `TestDisruptorExecutionInSpark` to guard above logic, also validate data correctness.
-2. Add Benchmark `BoundInMemoryExecutorBenchmark` benchmark with BoundInMemoryExecutor(based-master) and DisruptorExecutior(new option)
+2. Add Benchmark `BoundInMemoryExecutorBenchmark` benchmark with BoundInMemoryExecutor(based-master) and DisruptorExecutor(new option)
 
 ## Future Plan
   For now, this DisruptorExecutor is supported for spark insert and spark bulk insert operations as an experimental feature. So that there're also several further steps need to be done:

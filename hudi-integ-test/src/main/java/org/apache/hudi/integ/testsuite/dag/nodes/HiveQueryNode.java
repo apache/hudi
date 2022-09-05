@@ -19,7 +19,7 @@
 package org.apache.hudi.integ.testsuite.dag.nodes;
 
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig;
 import org.apache.hudi.integ.testsuite.dag.ExecutionContext;
@@ -28,14 +28,16 @@ import org.apache.hudi.sync.common.HoodieSyncConfig;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
-import java.sql.ResultSet;
-import java.sql.SQLException;
 import java.sql.Statement;
+
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_PASS;
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_URL;
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_USER;
 
 /**
  * A hive query node in the DAG of operations for a workflow. used to perform a hive query with given config.
  */
-public class HiveQueryNode extends DagNode<Boolean> {
+public class HiveQueryNode extends BaseQueryNode {
 
   private HiveServiceProvider hiveServiceProvider;
 
@@ -57,37 +59,17 @@ public class HiveQueryNode extends DagNode<Boolean> {
         .getDeltaSyncService().getDeltaSync().getCfg().baseFileFormat);
     HiveSyncConfig hiveSyncConfig = new HiveSyncConfig(properties);
     this.hiveServiceProvider.syncToLocalHiveIfNeeded(executionContext.getHoodieTestSuiteWriter());
-    Connection con = DriverManager.getConnection(hiveSyncConfig.jdbcUrl, hiveSyncConfig.hiveUser,
-        hiveSyncConfig.hivePass);
-    Statement stmt = con.createStatement();
-    stmt.execute("set hive.input.format=org.apache.hadoop.hive.ql.io.HiveInputFormat");
-    for (String hiveProperty : this.config.getHiveProperties()) {
-      executeStatement(hiveProperty, stmt);
+    try (Connection con = DriverManager.getConnection(hiveSyncConfig.getString(HIVE_URL),
+        hiveSyncConfig.getString(HIVE_USER), hiveSyncConfig.getString(HIVE_PASS))) {
+      Statement stmt = con.createStatement();
+      stmt.execute("set hive.input.format=org.apache.hadoop.hive.ql.io.HiveInputFormat");
+      setSessionProperties(this.config.getHiveProperties(), stmt);
+      executeAndValidateQueries(this.config.getHiveQueries(), stmt);
+      stmt.close();
+      this.hiveServiceProvider.stopLocalHiveServiceIfNeeded();
     }
-    for (Pair<String, Integer> queryAndResult : this.config.getHiveQueries()) {
-      log.info("Running {}", queryAndResult.getLeft());
-      ResultSet res = stmt.executeQuery(queryAndResult.getLeft());
-      if (!res.next()) {
-        log.info("res.next() was False - typically this means the query returned no rows.");
-        assert 0 == queryAndResult.getRight();
-      } else {
-        Integer result = res.getInt(1);
-        if (!queryAndResult.getRight().equals(result)) {
-          throw new AssertionError(
-              "QUERY: " + queryAndResult.getLeft()
-                  + " | EXPECTED RESULT = " + queryAndResult.getRight()
-                  + " | ACTUAL RESULT = " + result
-          );
-        }
-      }
-      log.info("Successfully validated query!");
+    catch (Exception e) {
+      throw new HoodieValidationException("Hive query validation failed due to " + e.getMessage(), e);
     }
-    this.hiveServiceProvider.stopLocalHiveServiceIfNeeded();
   }
-
-  private void executeStatement(String query, Statement stmt) throws SQLException {
-    log.info("Executing statement {}", stmt.toString());
-    stmt.execute(query);
-  }
-
 }

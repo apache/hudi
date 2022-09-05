@@ -91,6 +91,7 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -114,6 +115,8 @@ import static org.apache.hudi.config.HoodieCompactionConfig.INLINE_COMPACT;
 import static org.apache.hudi.config.HoodieWriteConfig.AUTO_COMMIT_ENABLE;
 import static org.apache.hudi.config.HoodieWriteConfig.COMBINE_BEFORE_INSERT;
 import static org.apache.hudi.config.HoodieWriteConfig.COMBINE_BEFORE_UPSERT;
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_BUCKET_SYNC;
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_BUCKET_SYNC_SPEC;
 import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKPOINT_KEY;
 import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKPOINT_RESET_KEY;
 import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_NAMESPACE;
@@ -122,7 +125,7 @@ import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_REC
 /**
  * Sync's one batch of data to hoodie table.
  */
-public class DeltaSync implements Serializable {
+public class DeltaSync implements Serializable, Closeable {
 
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LogManager.getLogger(DeltaSync.class);
@@ -628,8 +631,8 @@ public class DeltaSync implements Serializable {
           scheduledCompactionInstant = writeClient.scheduleCompaction(Option.empty());
         }
 
-        if (!isEmpty) {
-          syncMeta(metrics);
+        if (!isEmpty || cfg.forceEmptyMetaSync) {
+          runMetaSync();
         }
       } else {
         LOG.info("Commit " + instantTime + " failed!");
@@ -690,8 +693,8 @@ public class DeltaSync implements Serializable {
     return syncClassName.substring(syncClassName.lastIndexOf(".") + 1);
   }
 
-  private void syncMeta(HoodieDeltaStreamerMetrics metrics) {
-    Set<String> syncClientToolClasses = new HashSet<>(Arrays.asList(cfg.syncClientToolClass.split(",")));
+  public void runMetaSync() {
+    Set<String> syncClientToolClasses = new HashSet<>(Arrays.asList(cfg.syncClientToolClassNames.split(",")));
     // for backward compatibility
     if (cfg.enableHiveSync) {
       cfg.enableMetaSync = true;
@@ -703,8 +706,9 @@ public class DeltaSync implements Serializable {
 
       TypedProperties metaProps = new TypedProperties();
       metaProps.putAll(props);
-      if (props.getBoolean(HiveSyncConfig.HIVE_SYNC_BUCKET_SYNC.key(), HiveSyncConfig.HIVE_SYNC_BUCKET_SYNC.defaultValue())) {
-        metaProps.put(HiveSyncConfig.HIVE_SYNC_BUCKET_SYNC_SPEC.key(), HiveSyncConfig.getBucketSpec(props.getString(HoodieIndexConfig.BUCKET_INDEX_HASH_FIELD.key()),
+      metaProps.putAll(writeClient.getConfig().getProps());
+      if (props.getBoolean(HIVE_SYNC_BUCKET_SYNC.key(), HIVE_SYNC_BUCKET_SYNC.defaultValue())) {
+        metaProps.put(HIVE_SYNC_BUCKET_SYNC_SPEC.key(), HiveSyncConfig.getBucketSpec(props.getString(HoodieIndexConfig.BUCKET_INDEX_HASH_FIELD.key()),
             props.getInteger(HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS.key())));
       }
 
@@ -781,12 +785,12 @@ public class DeltaSync implements Serializable {
             .combineInput(cfg.filterDupes, combineBeforeUpsert)
             .withCompactionConfig(
                 HoodieCompactionConfig.newBuilder()
-                    .withPayloadClass(cfg.payloadClassName)
                     .withInlineCompaction(cfg.isInlineCompactionEnabled())
                     .build()
             )
             .withPayloadConfig(
                 HoodiePayloadConfig.newBuilder()
+                    .withPayloadClass(cfg.payloadClassName)
                     .withPayloadOrderingField(cfg.sourceOrderingField)
                     .build())
             .forTable(cfg.targetTableName)
@@ -892,9 +896,13 @@ public class DeltaSync implements Serializable {
    * Close all resources.
    */
   public void close() {
-    if (null != writeClient) {
+    if (writeClient != null) {
       writeClient.close();
       writeClient = null;
+    }
+
+    if (formatAdapter != null) {
+      formatAdapter.close();
     }
 
     LOG.info("Shutting down embedded timeline server");

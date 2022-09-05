@@ -137,10 +137,8 @@ public class FlinkMergeAndReplaceHandle<T extends HoodieRecordPayload, I, K, O>
    * Use the writeToken + "-" + rollNumber as the new writeToken of a mini-batch write.
    */
   protected String newFileNameWithRollover(int rollNumber) {
-    // make the intermediate file as hidden
-    final String fileID = "." + this.fileId;
     return FSUtils.makeBaseFileName(instantTime, writeToken + "-" + rollNumber,
-        fileID, hoodieTable.getBaseFileExtension());
+        this.fileId, hoodieTable.getBaseFileExtension());
   }
 
   @Override
@@ -169,7 +167,7 @@ public class FlinkMergeAndReplaceHandle<T extends HoodieRecordPayload, I, K, O>
     try {
       fs.rename(newFilePath, oldFilePath);
     } catch (IOException e) {
-      throw new HoodieIOException("Error while renaming the temporary roll file: "
+      throw new HoodieIOException("Error while renaming the temporary rollover file: "
           + newFilePath + " to old base file name: " + oldFilePath, e);
     }
   }

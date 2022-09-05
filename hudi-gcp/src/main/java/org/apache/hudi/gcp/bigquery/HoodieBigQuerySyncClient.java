@@ -19,8 +19,7 @@
 
 package org.apache.hudi.gcp.bigquery;
 
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.sync.common.AbstractSyncHoodieClient;
+import org.apache.hudi.sync.common.HoodieSyncClient;
 
 import com.google.cloud.bigquery.BigQuery;
 import com.google.cloud.bigquery.BigQueryException;
@@ -38,25 +37,31 @@ import com.google.cloud.bigquery.Table;
 import com.google.cloud.bigquery.TableId;
 import com.google.cloud.bigquery.TableInfo;
 import com.google.cloud.bigquery.ViewDefinition;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.apache.parquet.schema.MessageType;
 
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
-public class HoodieBigQuerySyncClient extends AbstractSyncHoodieClient {
+import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_DATASET_LOCATION;
+import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_DATASET_NAME;
+import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_PROJECT_ID;
+
+public class HoodieBigQuerySyncClient extends HoodieSyncClient {
+
   private static final Logger LOG = LogManager.getLogger(HoodieBigQuerySyncClient.class);
 
-  private final BigQuerySyncConfig syncConfig;
+  protected final BigQuerySyncConfig config;
+  private final String projectId;
+  private final String datasetName;
   private transient BigQuery bigquery;
 
-  public HoodieBigQuerySyncClient(final BigQuerySyncConfig syncConfig, final FileSystem fs) {
-    super(syncConfig.basePath, syncConfig.assumeDatePartitioning, syncConfig.useFileListingFromMetadata,
-        false, fs);
-    this.syncConfig = syncConfig;
+  public HoodieBigQuerySyncClient(final BigQuerySyncConfig config) {
+    super(config);
+    this.config = config;
+    this.projectId = config.getString(BIGQUERY_SYNC_PROJECT_ID);
+    this.datasetName = config.getString(BIGQUERY_SYNC_DATASET_NAME);
     this.createBigQueryConnection();
   }
 
@@ -65,7 +70,7 @@ public class HoodieBigQuerySyncClient extends AbstractSyncHoodieClient {
       try {
         // Initialize client that will be used to send requests. This client only needs to be created
         // once, and can be reused for multiple requests.
-        bigquery = BigQueryOptions.newBuilder().setLocation(syncConfig.datasetLocation).build().getService();
+        bigquery = BigQueryOptions.newBuilder().setLocation(config.getString(BIGQUERY_SYNC_DATASET_LOCATION)).build().getService();
         LOG.info("Successfully established BigQuery connection.");
       } catch (BigQueryException e) {
         throw new HoodieBigQuerySyncException("Cannot create bigQuery connection ", e);
@@ -73,16 +78,9 @@ public class HoodieBigQuerySyncClient extends AbstractSyncHoodieClient {
     }
   }
 
-  @Override
-  public void createTable(final String tableName, final MessageType storageSchema, final String inputFormatClass,
-                          final String outputFormatClass, final String serdeClass,
-                          final Map<String, String> serdeProperties, final Map<String, String> tableProperties) {
-    // bigQuery create table arguments are different, so do nothing.
-  }
-
   public void createManifestTable(String tableName, String sourceUri) {
     try {
-      TableId tableId = TableId.of(syncConfig.projectId, syncConfig.datasetName, tableName);
+      TableId tableId = TableId.of(projectId, datasetName, tableName);
       CsvOptions csvOptions = CsvOptions.newBuilder()
           .setFieldDelimiter(",")
           .setAllowJaggedRows(false)
@@ -108,7 +106,7 @@ public class HoodieBigQuerySyncClient extends AbstractSyncHoodieClient {
   public void createVersionsTable(String tableName, String sourceUri, String sourceUriPrefix, List<String> partitionFields) {
     try {
       ExternalTableDefinition customTable;
-      TableId tableId = TableId.of(syncConfig.projectId, syncConfig.datasetName, tableName);
+      TableId tableId = TableId.of(projectId, datasetName, tableName);
 
       if (partitionFields.isEmpty()) {
         customTable =
@@ -143,16 +141,16 @@ public class HoodieBigQuerySyncClient extends AbstractSyncHoodieClient {
 
   public void createSnapshotView(String viewName, String versionsTableName, String manifestTableName) {
     try {
-      TableId tableId = TableId.of(syncConfig.projectId, syncConfig.datasetName, viewName);
+      TableId tableId = TableId.of(projectId, datasetName, viewName);
       String query =
           String.format(
               "SELECT * FROM `%s.%s.%s` WHERE _hoodie_file_name IN "
                   + "(SELECT filename FROM `%s.%s.%s`)",
-              syncConfig.projectId,
-              syncConfig.datasetName,
+              projectId,
+              datasetName,
               versionsTableName,
-              syncConfig.projectId,
-              syncConfig.datasetName,
+              projectId,
+              datasetName,
               manifestTableName);
 
       ViewDefinition viewDefinition =
@@ -166,78 +164,25 @@ public class HoodieBigQuerySyncClient extends AbstractSyncHoodieClient {
   }
 
   @Override
-  public Map<String, String> getTableSchema(String tableName) {
+  public Map<String, String> getMetastoreSchema(String tableName) {
     // TODO: Implement automatic schema evolution when you add a new column.
     return Collections.emptyMap();
   }
 
-  @Override
-  public void addPartitionsToTable(final String tableName, final List<String> partitionsToAdd) {
-    // bigQuery discovers the new partitions automatically, so do nothing.
-    throw new UnsupportedOperationException("No support for addPartitionsToTable yet.");
-  }
-
   public boolean datasetExists() {
-    Dataset dataset = bigquery.getDataset(DatasetId.of(syncConfig.projectId, syncConfig.datasetName));
+    Dataset dataset = bigquery.getDataset(DatasetId.of(projectId, datasetName));
     return dataset != null;
   }
 
   @Override
-  public boolean doesTableExist(final String tableName) {
-    return tableExists(tableName);
-  }
-
-  @Override
   public boolean tableExists(String tableName) {
-    TableId tableId = TableId.of(syncConfig.projectId, syncConfig.datasetName, tableName);
+    TableId tableId = TableId.of(projectId, datasetName, tableName);
     Table table = bigquery.getTable(tableId, BigQuery.TableOption.fields());
     return table != null && table.exists();
   }
 
   @Override
-  public Option<String> getLastCommitTimeSynced(final String tableName) {
-    // bigQuery doesn't support tblproperties, so do nothing.
-    throw new UnsupportedOperationException("Not support getLastCommitTimeSynced yet.");
-  }
-
-  @Override
-  public void updateLastCommitTimeSynced(final String tableName) {
-    // bigQuery doesn't support tblproperties, so do nothing.
-    throw new UnsupportedOperationException("No support for updateLastCommitTimeSynced yet.");
-  }
-
-  @Override
-  public Option<String> getLastReplicatedTime(String tableName) {
-    // bigQuery doesn't support tblproperties, so do nothing.
-    throw new UnsupportedOperationException("Not support getLastReplicatedTime yet.");
-  }
-
-  @Override
-  public void updateLastReplicatedTimeStamp(String tableName, String timeStamp) {
-    // bigQuery doesn't support tblproperties, so do nothing.
-    throw new UnsupportedOperationException("No support for updateLastReplicatedTimeStamp yet.");
-  }
-
-  @Override
-  public void deleteLastReplicatedTimeStamp(String tableName) {
-    // bigQuery doesn't support tblproperties, so do nothing.
-    throw new UnsupportedOperationException("No support for deleteLastReplicatedTimeStamp yet.");
-  }
-
-  @Override
-  public void updatePartitionsToTable(final String tableName, final List<String> changedPartitions) {
-    // bigQuery updates the partitions automatically, so do nothing.
-    throw new UnsupportedOperationException("No support for updatePartitionsToTable yet.");
-  }
-
-  @Override
-  public void dropPartitions(String tableName, List<String> partitionsToDrop) {
-    // bigQuery discovers the new partitions automatically, so do nothing.
-    throw new UnsupportedOperationException("No support for dropPartitions yet.");
-  }
-
-  @Override
   public void close() {
-    // bigQuery has no connection close method, so do nothing.
+    bigquery = null;
   }
 }

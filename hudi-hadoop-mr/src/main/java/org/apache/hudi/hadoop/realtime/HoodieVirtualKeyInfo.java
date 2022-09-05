@@ -18,6 +18,8 @@
 
 package org.apache.hudi.hadoop.realtime;
 
+import org.apache.hudi.common.util.Option;
+
 import java.io.Serializable;
 
 /**
@@ -26,11 +28,11 @@ import java.io.Serializable;
 public class HoodieVirtualKeyInfo implements Serializable {
 
   private final String recordKeyField;
-  private final String partitionPathField;
+  private final Option<String> partitionPathField;
   private final int recordKeyFieldIndex;
-  private final int partitionPathFieldIndex;
+  private final Option<Integer> partitionPathFieldIndex;
 
-  public HoodieVirtualKeyInfo(String recordKeyField, String partitionPathField, int recordKeyFieldIndex, int partitionPathFieldIndex) {
+  public HoodieVirtualKeyInfo(String recordKeyField, Option<String> partitionPathField, int recordKeyFieldIndex, Option<Integer> partitionPathFieldIndex) {
     this.recordKeyField = recordKeyField;
     this.partitionPathField = partitionPathField;
     this.recordKeyFieldIndex = recordKeyFieldIndex;
@@ -41,7 +43,7 @@ public class HoodieVirtualKeyInfo implements Serializable {
     return recordKeyField;
   }
 
-  public String getPartitionPathField() {
+  public Option<String> getPartitionPathField() {
     return partitionPathField;
   }
 
@@ -49,7 +51,7 @@ public class HoodieVirtualKeyInfo implements Serializable {
     return recordKeyFieldIndex;
   }
 
-  public int getPartitionPathFieldIndex() {
+  public Option<Integer> getPartitionPathFieldIndex() {
     return partitionPathFieldIndex;
   }
 
@@ -57,9 +59,9 @@ public class HoodieVirtualKeyInfo implements Serializable {
   public String toString() {
     return "HoodieVirtualKeyInfo{"
         + "recordKeyField='" + recordKeyField + '\''
-        + ", partitionPathField='" + partitionPathField + '\''
+        + ", partitionPathField='" + (partitionPathField.isPresent() ? partitionPathField.get() : "null") + '\''
         + ", recordKeyFieldIndex=" + recordKeyFieldIndex
-        + ", partitionPathFieldIndex=" + partitionPathFieldIndex
+        + ", partitionPathFieldIndex=" + (partitionPathFieldIndex.isPresent() ? partitionPathFieldIndex.get() : "-1")
         + '}';
   }
 }

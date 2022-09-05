@@ -247,7 +247,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       assertEquals(allPartitions.size(), testTable.listAllBaseFiles().length);
 
       // Verify that all data file has one log file
-      HoodieTable table = HoodieSparkTable.create(config, context(), metaClient, true);
+      HoodieTable table = HoodieSparkTable.create(config, context(), metaClient);
       for (String partitionPath : dataGen.getPartitionPaths()) {
         List<FileSlice> groupedLogFiles =
             table.getSliceView().getLatestFileSlices(partitionPath).collect(Collectors.toList());
