@@ -166,33 +166,8 @@
     <!-- Logging -->
     <dependency>
       <groupId>org.apache.logging.log4j</groupId>
-      <artifactId>log4j-api</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.logging.log4j</groupId>
       <artifactId>log4j-core</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.logging.log4j</groupId>
-      <artifactId>log4j-1.2-api</artifactId>
-    </dependency>
-
-    <dependency>
-      <groupId>org.apache.logging.log4j</groupId>
-      <artifactId>log4j-core</artifactId>
-      <scope>test</scope>
-    </dependency>
-
-    <dependency>
-      <groupId>org.apache.logging.log4j</groupId>
-      <artifactId>log4j-api</artifactId>
-      <scope>test</scope>
-    </dependency>
-
-    <dependency>
-      <groupId>org.apache.logging.log4j</groupId>
-      <artifactId>log4j-slf4j-impl</artifactId>
-      <scope>test</scope>
+      <scope>compile</scope>
     </dependency>
 
     <!-- Hoodie - Import -->
@@ -204,6 +179,12 @@
     </dependency>
 
     <!-- Hoodie - Test -->
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-tests-common</artifactId>
+      <version>${project.version}</version>
+      <scope>test</scope>
+    </dependency>
     <dependency>
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-common</artifactId>
@@ -464,7 +445,6 @@
     <dockerCompose.envFile>${project.basedir}/compose_env</dockerCompose.envFile>
     <dockerCompose.file>${project.basedir}/../docker/compose/docker-compose_hadoop284_hive233_spark244.yml</dockerCompose.file>
     <docker.compose.skip>${skipITs}</docker.compose.skip>
-    <checkstyle.skip>true</checkstyle.skip>
     <main.basedir>${project.parent.basedir}</main.basedir>
   </properties>
 
@@ -535,24 +515,9 @@
         </executions>
       </plugin>
       <plugin>
-      <groupId>org.scalatest</groupId>
-      <artifactId>scalatest-maven-plugin</artifactId>
-      <version>1.0</version>
-      <configuration>
-        <skipTests>${skipUTs}</skipTests>
-        <reportsDirectory>${project.build.directory}/surefire-reports</reportsDirectory>
-        <junitxml>.</junitxml>
-        <filereports>TestSuite.txt</filereports>
-      </configuration>
-      <executions>
-        <execution>
-          <id>test</id>
-          <goals>
-            <goal>test</goal>
-          </goals>
-        </execution>
-      </executions>
-    </plugin>
+        <groupId>org.scalatest</groupId>
+        <artifactId>scalatest-maven-plugin</artifactId>
+      </plugin>
       <plugin>
         <groupId>org.scalastyle</groupId>
         <artifactId>scalastyle-maven-plugin</artifactId>

@@ -67,8 +67,7 @@ public class HiveQueryNode extends BaseQueryNode {
       executeAndValidateQueries(this.config.getHiveQueries(), stmt);
       stmt.close();
       this.hiveServiceProvider.stopLocalHiveServiceIfNeeded();
-    }
-    catch (Exception e) {
+    } catch (Exception e) {
       throw new HoodieValidationException("Hive query validation failed due to " + e.getMessage(), e);
     }
   }

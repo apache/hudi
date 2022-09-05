@@ -19,7 +19,6 @@
 package org.apache.hudi.cli.commands;
 
 import org.apache.hudi.cli.HoodieCLI;
-import org.apache.hudi.cli.utils.CommitUtil;
 import org.apache.hudi.cli.utils.HiveUtil;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -34,6 +33,8 @@ import org.springframework.stereotype.Component;
 import java.io.IOException;
 import java.util.List;
 import java.util.stream.Collectors;
+
+import static org.apache.hudi.cli.utils.CommitUtil.countNewRecords;
 
 /**
  * CLI command to display sync options.
@@ -96,7 +97,7 @@ public class HoodieSyncValidateCommand implements CommandMarker {
       return "Count difference now is (count(" + target.getTableConfig().getTableName() + ") - count("
           + source.getTableConfig().getTableName() + ") == " + (targetCount - sourceCount);
     } else {
-      long newInserts = CommitUtil.countNewRecords(target,
+      long newInserts = countNewRecords(target,
           commitsToCatchup.stream().map(HoodieInstant::getTimestamp).collect(Collectors.toList()));
       return "Count difference now is (count(" + target.getTableConfig().getTableName() + ") - count("
           + source.getTableConfig().getTableName() + ") == " + (targetCount - sourceCount) + ". Catch up count is "

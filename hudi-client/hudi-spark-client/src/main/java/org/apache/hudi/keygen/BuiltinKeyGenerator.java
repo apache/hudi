@@ -452,7 +452,7 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
     private final SparkRowSerDe rowSerDe;
 
     SparkRowConverter(StructType schema) {
-      this.rowSerDe = HoodieSparkUtils.getDeserializer(schema);
+      this.rowSerDe = HoodieSparkUtils.getCatalystRowSerDe(schema);
       this.avroConverter = AvroConversionUtils.createConverterToAvro(schema, STRUCT_NAME, NAMESPACE);
     }
 
