@@ -43,74 +43,74 @@ import java.util.Map;
 
 public class ClusteringPlanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends BaseActionExecutor<T, I, K, O, Option<HoodieClusteringPlan>> {
 
-    private static final Logger LOG = LogManager.getLogger(ClusteringPlanActionExecutor.class);
+  private static final Logger LOG = LogManager.getLogger(ClusteringPlanActionExecutor.class);
 
-    private final Option<Map<String, String>> extraMetadata;
+  private final Option<Map<String, String>> extraMetadata;
 
-    public ClusteringPlanActionExecutor(HoodieEngineContext context,
-                                        HoodieWriteConfig config,
-                                        HoodieTable<T, I, K, O> table,
-                                        String instantTime,
-                                        Option<Map<String, String>> extraMetadata) {
-        super(context, config, table, instantTime);
-        this.extraMetadata = extraMetadata;
+  public ClusteringPlanActionExecutor(HoodieEngineContext context,
+                                      HoodieWriteConfig config,
+                                      HoodieTable<T, I, K, O> table,
+                                      String instantTime,
+                                      Option<Map<String, String>> extraMetadata) {
+    super(context, config, table, instantTime);
+    this.extraMetadata = extraMetadata;
+  }
+
+  protected Option<HoodieClusteringPlan> createClusteringPlan() {
+    LOG.info("Checking if clustering needs to be run on " + config.getBasePath());
+    Option<HoodieInstant> lastClusteringInstant = table.getActiveTimeline().getCompletedReplaceTimeline().lastInstant();
+
+    int commitsSinceLastClustering = table.getActiveTimeline().getCommitsTimeline().filterCompletedInstants()
+        .findInstantsAfter(lastClusteringInstant.map(HoodieInstant::getTimestamp).orElse("0"), Integer.MAX_VALUE)
+        .countInstants();
+
+    if (table.getActiveTimeline().filterPendingReplaceTimeline().countInstants() != 0) {
+      LOG.info("The last clustering is running,there is no need to generate a new clustering plan" + config.getBasePath());
+      return Option.empty();
     }
 
-    protected Option<HoodieClusteringPlan> createClusteringPlan() {
-        LOG.info("Checking if clustering needs to be run on " + config.getBasePath());
-        Option<HoodieInstant> lastClusteringInstant = table.getActiveTimeline().getCompletedReplaceTimeline().lastInstant();
-
-        int commitsSinceLastClustering = table.getActiveTimeline().getCommitsTimeline().filterCompletedInstants()
-                .findInstantsAfter(lastClusteringInstant.map(HoodieInstant::getTimestamp).orElse("0"), Integer.MAX_VALUE)
-                .countInstants();
-
-        if (table.getActiveTimeline().filterPendingReplaceTimeline().countInstants() != 0) {
-            LOG.info("The last clustering is running,there is no need to generate a new clustering plan" + config.getBasePath());
-            return Option.empty();
-        }
-
-        if (config.inlineClusteringEnabled() && config.getInlineClusterMaxCommits() > commitsSinceLastClustering) {
-            LOG.info("Not scheduling inline clustering as only " + commitsSinceLastClustering
-                    + " commits was found since last clustering " + lastClusteringInstant + ". Waiting for "
-                    + config.getInlineClusterMaxCommits());
-            return Option.empty();
-        }
-
-        if (config.isAsyncClusteringEnabled() && config.getAsyncClusterMaxCommits() > commitsSinceLastClustering) {
-            LOG.info("Not scheduling async clustering as only " + commitsSinceLastClustering
-                    + " commits was found since last clustering " + lastClusteringInstant + ". Waiting for "
-                    + config.getAsyncClusterMaxCommits());
-            return Option.empty();
-        }
-
-        ClusteringPlanStrategy strategy = null;
-        if (config.getAsyncClusterMaxCommits() <= commitsSinceLastClustering) {
-            LOG.info("Generating clustering plan for table " + config.getBasePath());
-            strategy = (ClusteringPlanStrategy)
-                    ReflectionUtils.loadClass(ClusteringPlanStrategy.checkAndGetClusteringPlanStrategy(config), table, context, config);
-        }
-
-        return strategy == null ? Option.empty() : strategy.generateClusteringPlan();
+    if (config.inlineClusteringEnabled() && config.getInlineClusterMaxCommits() > commitsSinceLastClustering) {
+      LOG.info("Not scheduling inline clustering as only " + commitsSinceLastClustering
+          + " commits was found since last clustering " + lastClusteringInstant + ". Waiting for "
+          + config.getInlineClusterMaxCommits());
+      return Option.empty();
     }
 
-    @Override
-    public Option<HoodieClusteringPlan> execute() {
-        Option<HoodieClusteringPlan> planOption = createClusteringPlan();
-        if (planOption.isPresent()) {
-            HoodieInstant clusteringInstant =
-                    new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, instantTime);
-            try {
-                HoodieRequestedReplaceMetadata requestedReplaceMetadata = HoodieRequestedReplaceMetadata.newBuilder()
-                        .setOperationType(WriteOperationType.CLUSTER.name())
-                        .setExtraMetadata(extraMetadata.orElse(Collections.emptyMap()))
-                        .setClusteringPlan(planOption.get())
-                        .build();
-                table.getActiveTimeline().saveToPendingReplaceCommit(clusteringInstant,
-                        TimelineMetadataUtils.serializeRequestedReplaceMetadata(requestedReplaceMetadata));
-            } catch (IOException ioe) {
-                throw new HoodieIOException("Exception scheduling clustering", ioe);
-            }
-        }
-        return planOption;
+    if (config.isAsyncClusteringEnabled() && config.getAsyncClusterMaxCommits() > commitsSinceLastClustering) {
+      LOG.info("Not scheduling async clustering as only " + commitsSinceLastClustering
+          + " commits was found since last clustering " + lastClusteringInstant + ". Waiting for "
+          + config.getAsyncClusterMaxCommits());
+      return Option.empty();
     }
+
+    ClusteringPlanStrategy strategy = null;
+    if (config.getAsyncClusterMaxCommits() <= commitsSinceLastClustering) {
+      LOG.info("Generating clustering plan for table " + config.getBasePath());
+      strategy = (ClusteringPlanStrategy)
+          ReflectionUtils.loadClass(ClusteringPlanStrategy.checkAndGetClusteringPlanStrategy(config), table, context, config);
+    }
+
+    return strategy == null ? Option.empty() : strategy.generateClusteringPlan();
+  }
+
+  @Override
+  public Option<HoodieClusteringPlan> execute() {
+    Option<HoodieClusteringPlan> planOption = createClusteringPlan();
+    if (planOption.isPresent()) {
+      HoodieInstant clusteringInstant =
+          new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, instantTime);
+      try {
+        HoodieRequestedReplaceMetadata requestedReplaceMetadata = HoodieRequestedReplaceMetadata.newBuilder()
+            .setOperationType(WriteOperationType.CLUSTER.name())
+            .setExtraMetadata(extraMetadata.orElse(Collections.emptyMap()))
+            .setClusteringPlan(planOption.get())
+            .build();
+        table.getActiveTimeline().saveToPendingReplaceCommit(clusteringInstant,
+            TimelineMetadataUtils.serializeRequestedReplaceMetadata(requestedReplaceMetadata));
+      } catch (IOException ioe) {
+        throw new HoodieIOException("Exception scheduling clustering", ioe);
+      }
+    }
+    return planOption;
+  }
 }
