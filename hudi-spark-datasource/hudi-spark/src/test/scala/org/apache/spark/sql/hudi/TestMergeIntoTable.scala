@@ -869,7 +869,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
     }
   }
 
-  test("Test MereInto With All Kinds Of DataType") {
+  test("Test MergeInto With All Kinds Of DataType") {
     withTempDir { tmp =>
       val dataAndTypes = Seq(
         ("string", "'a1'"),
@@ -912,6 +912,41 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase {
           Seq(1, "a1", extractRawValue(dataValue), 1000)
         )
       }
+    }
+  }
+
+  test("Test MergeInto with no-full fields source") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  value int,
+           |  ts long
+           |) using hudi
+           | location '${tmp.getCanonicalPath}/$tableName'
+           | tblproperties (
+           |  primaryKey ='id',
+           |  preCombineField = 'ts'
+           | )
+       """.stripMargin)
+
+      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+
+      spark.sql(
+        s"""
+           |merge into $tableName h0
+           |using (
+           | select 1 as id, 1001 as ts
+           | ) s0
+           | on h0.id = s0.id
+           | when matched then update set h0.ts = s0.ts
+           |""".stripMargin)
+      checkAnswer(s"select id, name, value, ts from $tableName")(
+        Seq(1, "a1", 10, 1001)
+      )
     }
   }
 }
