@@ -94,8 +94,8 @@ public class TableCommand implements CommandMarker {
   /**
    * Create a Hoodie Table if it does not exist.
    *
-   * @param path Base Path
-   * @param name Hoodie Table Name
+   * @param path         Base Path
+   * @param name         Hoodie Table Name
    * @param tableTypeStr Hoodie Table Type
    * @param payloadClass Payload Class
    */
@@ -127,12 +127,12 @@ public class TableCommand implements CommandMarker {
     }
 
     HoodieTableMetaClient.withPropertyBuilder()
-      .setTableType(tableTypeStr)
-      .setTableName(name)
-      .setArchiveLogFolder(archiveFolder)
-      .setPayloadClassName(payloadClass)
-      .setTimelineLayoutVersion(layoutVersion)
-      .initTable(HoodieCLI.conf, path);
+        .setTableType(tableTypeStr)
+        .setTableName(name)
+        .setArchiveLogFolder(archiveFolder)
+        .setPayloadClassName(payloadClass)
+        .setTimelineLayoutVersion(layoutVersion)
+        .initTable(HoodieCLI.conf, path);
     // Now connect to ensure loading works
     return connect(path, layoutVersion, false, 0, 0, 0);
   }
@@ -193,8 +193,7 @@ public class TableCommand implements CommandMarker {
 
   @CliCommand(value = "table update-configs", help = "Update the table configs with configs with provided file.")
   public String updateTableConfig(
-      @CliOption(key = {"props-file"}, mandatory = true, help = "Path to a properties file on local filesystem")
-      final String updatePropsFilePath) throws IOException {
+      @CliOption(key = {"props-file"}, mandatory = true, help = "Path to a properties file on local filesystem") final String updatePropsFilePath) throws IOException {
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
     Map<String, String> oldProps = client.getTableConfig().propsMap();
 
@@ -210,8 +209,7 @@ public class TableCommand implements CommandMarker {
 
   @CliCommand(value = "table delete-configs", help = "Delete the supplied table configs from the table.")
   public String deleteTableConfig(
-      @CliOption(key = {"comma-separated-configs"}, mandatory = true, help = "Comma separated list of configs to delete.")
-      final String csConfigs) {
+      @CliOption(key = {"comma-separated-configs"}, mandatory = true, help = "Comma separated list of configs to delete.") final String csConfigs) {
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
     Map<String, String> oldProps = client.getTableConfig().propsMap();
 
@@ -232,7 +230,7 @@ public class TableCommand implements CommandMarker {
     String[][] rows = new String[allPropKeys.size()][];
     int ind = 0;
     for (String propKey : allPropKeys) {
-      String[] row = new String[]{
+      String[] row = new String[] {
           propKey,
           oldProps.getOrDefault(propKey, "null"),
           newProps.getOrDefault(propKey, "null")
@@ -245,8 +243,9 @@ public class TableCommand implements CommandMarker {
 
   /**
    * Use Streams when you are dealing with raw data.
+   *
    * @param filePath output file path.
-   * @param data to be written to file.
+   * @param data     to be written to file.
    */
   private static void writeToFile(String filePath, String data) throws IOException {
     File outFile = new File(filePath);

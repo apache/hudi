@@ -22,6 +22,7 @@ import org.apache.hudi.adapter.DataStreamSinkProviderAdapter;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.OptionsInference;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.sink.utils.Pipelines;
 import org.apache.hudi.util.ChangelogModes;
@@ -66,6 +67,8 @@ public class HoodieTableSink implements DynamicTableSink, SupportsPartitioning, 
       long ckpTimeout = dataStream.getExecutionEnvironment()
           .getCheckpointConfig().getCheckpointTimeout();
       conf.setLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, ckpTimeout);
+      // set up default parallelism
+      OptionsInference.setupSinkTasks(conf, dataStream.getExecutionConfig().getParallelism());
 
       RowType rowType = (RowType) schema.toSinkRowDataType().notNull().getLogicalType();
 
@@ -85,16 +88,18 @@ public class HoodieTableSink implements DynamicTableSink, SupportsPartitioning, 
         }
       }
 
-      // default parallelism
-      int parallelism = dataStream.getExecutionConfig().getParallelism();
       DataStream<Object> pipeline;
       // bootstrap
       final DataStream<HoodieRecord> hoodieRecordDataStream =
-          Pipelines.bootstrap(conf, rowType, parallelism, dataStream, context.isBounded(), overwrite);
+          Pipelines.bootstrap(conf, rowType, dataStream, context.isBounded(), overwrite);
       // write pipeline
-      pipeline = Pipelines.hoodieStreamWrite(conf, parallelism, hoodieRecordDataStream);
+      pipeline = Pipelines.hoodieStreamWrite(conf, hoodieRecordDataStream);
       // compaction
       if (OptionsResolver.needsAsyncCompaction(conf)) {
+        // use synchronous compaction for bounded source.
+        if (context.isBounded()) {
+          conf.setBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED, false);
+        }
         return Pipelines.compact(conf, pipeline);
       } else {
         return Pipelines.clean(conf, pipeline);

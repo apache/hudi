@@ -22,6 +22,7 @@ import org.apache.avro.JsonProperties;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -31,6 +32,7 @@ import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 
 /**
  * Unit tests {@link TestOverwriteNonDefaultsWithLatestAvroPayload}.
@@ -85,8 +87,13 @@ public class TestOverwriteNonDefaultsWithLatestAvroPayload {
     assertEquals(record1, payload1.getInsertValue(schema).get());
     assertEquals(record2, payload2.getInsertValue(schema).get());
 
-    assertEquals(payload1.combineAndGetUpdateValue(record2, schema).get(), record1);
-    assertEquals(payload2.combineAndGetUpdateValue(record1, schema).get(), record3);
+    IndexedRecord combinedVal1 = payload1.combineAndGetUpdateValue(record2, schema).get();
+    assertEquals(combinedVal1, record1);
+    assertNotSame(combinedVal1, record1);
+
+    IndexedRecord combinedVal2 = payload2.combineAndGetUpdateValue(record1, schema).get();
+    assertEquals(combinedVal2, record3);
+    assertNotSame(combinedVal2, record3);
   }
 
   @Test

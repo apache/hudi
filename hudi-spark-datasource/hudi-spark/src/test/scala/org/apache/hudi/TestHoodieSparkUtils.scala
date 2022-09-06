@@ -18,74 +18,71 @@
 
 package org.apache.hudi
 
-import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
-import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.Path
-import org.apache.hudi.exception.SchemaCompatibilityException
 import org.apache.hudi.testutils.DataSourceTestUtils
-import org.apache.spark.sql.types.{StructType, TimestampType}
+import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{Row, SparkSession}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.io.TempDir
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
-import java.io.File
-import java.nio.file.Paths
 import scala.collection.JavaConverters
 
 class TestHoodieSparkUtils {
 
-  @Test
-  def testGlobPaths(@TempDir tempDir: File): Unit = {
-    val folders: Seq[Path] = Seq(
-      new Path(Paths.get(tempDir.getAbsolutePath, "folder1").toUri),
-      new Path(Paths.get(tempDir.getAbsolutePath, "folder2").toUri),
-      new Path(Paths.get(tempDir.getAbsolutePath, ".hoodie").toUri),
-      new Path(Paths.get(tempDir.getAbsolutePath, ".hoodie", "metadata").toUri)
-    )
+  @ParameterizedTest
+  @ValueSource(strings = Array("2.4.4", "3.1.0", "3.2.0", "3.3.0"))
+  def testSparkVersionCheckers(sparkVersion: String): Unit = {
+    val vsMock = new SparkVersionsSupport {
+      override def getSparkVersion: String = sparkVersion
+    }
 
-    val files: Seq[Path] = Seq(
-      new Path(Paths.get(tempDir.getAbsolutePath, "folder1", "file1").toUri),
-      new Path(Paths.get(tempDir.getAbsolutePath, "folder1", "file2").toUri),
-      new Path(Paths.get(tempDir.getAbsolutePath, "folder2", "file3").toUri),
-      new Path(Paths.get(tempDir.getAbsolutePath, "folder2","file4").toUri),
-      new Path(Paths.get(tempDir.getAbsolutePath, ".hoodie","metadata", "file5").toUri),
-      new Path(Paths.get(tempDir.getAbsolutePath, ".hoodie","metadata", "file6").toUri)
-    )
+    sparkVersion match {
+      case "2.4.4" =>
+        assertTrue(vsMock.isSpark2)
 
-    folders.foreach(folder => new File(folder.toUri).mkdir())
-    files.foreach(file => new File(file.toUri).createNewFile())
+        assertFalse(vsMock.isSpark3)
+        assertFalse(vsMock.isSpark3_1)
+        assertFalse(vsMock.isSpark3_0)
+        assertFalse(vsMock.isSpark3_2)
+        assertFalse(vsMock.gteqSpark3_1)
+        assertFalse(vsMock.gteqSpark3_1_3)
+        assertFalse(vsMock.gteqSpark3_2)
 
-    var paths = Seq(tempDir.getAbsolutePath + "/*")
-    var globbedPaths = HoodieSparkUtils.checkAndGlobPathIfNecessary(paths,
-      new Path(paths.head).getFileSystem(new Configuration()))
-    assertEquals(folders.filterNot(entry => entry.toString.contains(".hoodie"))
-      .sortWith(_.toString < _.toString), globbedPaths.sortWith(_.toString < _.toString))
+      case "3.1.0" =>
+        assertTrue(vsMock.isSpark3)
+        assertTrue(vsMock.isSpark3_1)
+        assertTrue(vsMock.gteqSpark3_1)
 
-    paths = Seq(tempDir.getAbsolutePath + "/*/*")
-    globbedPaths = HoodieSparkUtils.checkAndGlobPathIfNecessary(paths,
-      new Path(paths.head).getFileSystem(new Configuration()))
-    assertEquals(files.filterNot(entry => entry.toString.contains(".hoodie"))
-      .sortWith(_.toString < _.toString), globbedPaths.sortWith(_.toString < _.toString))
+        assertFalse(vsMock.isSpark2)
+        assertFalse(vsMock.isSpark3_0)
+        assertFalse(vsMock.isSpark3_2)
+        assertFalse(vsMock.gteqSpark3_1_3)
+        assertFalse(vsMock.gteqSpark3_2)
 
-    paths = Seq(tempDir.getAbsolutePath + "/folder1/*")
-    globbedPaths = HoodieSparkUtils.checkAndGlobPathIfNecessary(paths,
-      new Path(paths.head).getFileSystem(new Configuration()))
-    assertEquals(Seq(files(0), files(1)).sortWith(_.toString < _.toString),
-      globbedPaths.sortWith(_.toString < _.toString))
+      case "3.2.0" =>
+        assertTrue(vsMock.isSpark3)
+        assertTrue(vsMock.isSpark3_2)
+        assertTrue(vsMock.gteqSpark3_1)
+        assertTrue(vsMock.gteqSpark3_1_3)
+        assertTrue(vsMock.gteqSpark3_2)
 
-    paths = Seq(tempDir.getAbsolutePath + "/folder2/*")
-    globbedPaths = HoodieSparkUtils.checkAndGlobPathIfNecessary(paths,
-      new Path(paths.head).getFileSystem(new Configuration()))
-    assertEquals(Seq(files(2), files(3)).sortWith(_.toString < _.toString),
-      globbedPaths.sortWith(_.toString < _.toString))
+        assertFalse(vsMock.isSpark2)
+        assertFalse(vsMock.isSpark3_0)
+        assertFalse(vsMock.isSpark3_1)
 
-    paths = Seq(tempDir.getAbsolutePath + "/folder1/*", tempDir.getAbsolutePath + "/folder2/*")
-    globbedPaths = HoodieSparkUtils.checkAndGlobPathIfNecessary(paths,
-      new Path(paths.head).getFileSystem(new Configuration()))
-    assertEquals(files.filterNot(entry => entry.toString.contains(".hoodie"))
-      .sortWith(_.toString < _.toString), globbedPaths.sortWith(_.toString < _.toString))
+      case "3.3.0" =>
+        assertTrue(vsMock.isSpark3)
+        assertTrue(vsMock.gteqSpark3_1)
+        assertTrue(vsMock.gteqSpark3_1_3)
+        assertTrue(vsMock.gteqSpark3_2)
+
+        assertFalse(vsMock.isSpark3_2)
+        assertFalse(vsMock.isSpark2)
+        assertFalse(vsMock.isSpark3_0)
+        assertFalse(vsMock.isSpark3_1)
+    }
   }
 
   @Test
@@ -202,29 +199,6 @@ class TestHoodieSparkUtils {
         assertTrue(e.getMessage.contains("null of string in field new_nested_col of test_namespace.test_struct_name.nullableInnerStruct of union"))
     }
     spark.stop()
-  }
-
-  @Test
-  def testGetRequiredSchema(): Unit = {
-    val avroSchemaString = "{\"type\":\"record\",\"name\":\"record\"," +
-    "\"fields\":[{\"name\":\"_hoodie_commit_time\",\"type\":[\"null\",\"string\"],\"doc\":\"\",\"default\":null}," +
-    "{\"name\":\"_hoodie_commit_seqno\",\"type\":[\"null\",\"string\"],\"doc\":\"\",\"default\":null}," +
-    "{\"name\":\"_hoodie_record_key\",\"type\":[\"null\",\"string\"],\"doc\":\"\",\"default\":null}," +
-    "{\"name\":\"_hoodie_partition_path\",\"type\":[\"null\",\"string\"],\"doc\":\"\",\"default\":null}," +
-    "{\"name\":\"_hoodie_file_name\",\"type\":[\"null\",\"string\"],\"doc\":\"\",\"default\":null}," +
-    "{\"name\":\"uuid\",\"type\":\"string\"},{\"name\":\"name\",\"type\":[\"null\",\"string\"],\"default\":null}," +
-    "{\"name\":\"age\",\"type\":[\"null\",\"int\"],\"default\":null}," +
-    "{\"name\":\"ts\",\"type\":[\"null\",{\"type\":\"long\",\"logicalType\":\"timestamp-millis\"}],\"default\":null}," +
-    "{\"name\":\"partition\",\"type\":[\"null\",\"string\"],\"default\":null}]}"
-
-    val tableAvroSchema = new Schema.Parser().parse(avroSchemaString)
-
-    val (requiredAvroSchema, requiredStructSchema, _) =
-      HoodieSparkUtils.getRequiredSchema(tableAvroSchema, Array("ts"))
-
-    assertEquals("timestamp-millis",
-      requiredAvroSchema.getField("ts").schema().getTypes.get(1).getLogicalType.getName)
-    assertEquals(TimestampType, requiredStructSchema.fields(0).dataType)
   }
 
   def convertRowListToSeq(inputList: java.util.List[Row]): Seq[Row] =

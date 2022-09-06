@@ -179,6 +179,104 @@ public class TestClientRollback extends HoodieClientTestBase {
   }
 
   /**
+   * Test case for rollback-savepoint with KEEP_LATEST_FILE_VERSIONS policy.
+   */
+  @Test
+  public void testSavepointAndRollbackWithKeepLatestFileVersionPolicy() throws Exception {
+    HoodieWriteConfig cfg = getConfigBuilder().withCleanConfig(HoodieCleanConfig.newBuilder()
+            .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS).retainFileVersions(2).build()).build();
+    try (SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
+      HoodieTestDataGenerator.writePartitionMetadataDeprecated(fs, HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS, basePath);
+
+      /**
+       * Write 1 (only inserts)
+       */
+      String newCommitTime = "001";
+      client.startCommitWithTime(newCommitTime);
+
+      List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 200);
+      JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
+
+      List<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime).collect();
+      assertNoWriteErrors(statuses);
+
+      /**
+       * Write 2 (updates)
+       */
+      newCommitTime = "002";
+      client.startCommitWithTime(newCommitTime);
+
+      records = dataGen.generateUpdates(newCommitTime, records);
+      statuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
+      // Verify there are no errors
+      assertNoWriteErrors(statuses);
+
+      client.savepoint("hoodie-unit-test", "test");
+
+      /**
+       * Write 3 (updates)
+       */
+      newCommitTime = "003";
+      client.startCommitWithTime(newCommitTime);
+
+      records = dataGen.generateUpdates(newCommitTime, records);
+      statuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
+      // Verify there are no errors
+      assertNoWriteErrors(statuses);
+      HoodieWriteConfig config = getConfig();
+      List<String> partitionPaths =
+              FSUtils.getAllPartitionPaths(context, config.getMetadataConfig(), cfg.getBasePath());
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+      HoodieSparkTable table = HoodieSparkTable.create(getConfig(), context, metaClient);
+      final BaseFileOnlyView view1 = table.getBaseFileOnlyView();
+
+      List<HoodieBaseFile> dataFiles = partitionPaths.stream().flatMap(s -> {
+        return view1.getAllBaseFiles(s).filter(f -> f.getCommitTime().equals("003"));
+      }).collect(Collectors.toList());
+      assertEquals(3, dataFiles.size(), "The data files for commit 003 should be present");
+
+      dataFiles = partitionPaths.stream().flatMap(s -> {
+        return view1.getAllBaseFiles(s).filter(f -> f.getCommitTime().equals("002"));
+      }).collect(Collectors.toList());
+      assertEquals(3, dataFiles.size(), "The data files for commit 002 should be present");
+
+      /**
+       * Write 4 (updates)
+       */
+      newCommitTime = "004";
+      client.startCommitWithTime(newCommitTime);
+
+      records = dataGen.generateUpdates(newCommitTime, records);
+      statuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
+      // Verify there are no errors
+      assertNoWriteErrors(statuses);
+
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+      table = HoodieSparkTable.create(getConfig(), context, metaClient);
+      final BaseFileOnlyView view2 = table.getBaseFileOnlyView();
+
+      dataFiles = partitionPaths.stream().flatMap(s -> view2.getAllBaseFiles(s).filter(f -> f.getCommitTime().equals("004"))).collect(Collectors.toList());
+      assertEquals(3, dataFiles.size(), "The data files for commit 004 should be present");
+
+      // rollback to savepoint 002
+      HoodieInstant savepoint = table.getCompletedSavepointTimeline().getInstants().findFirst().get();
+      client.restoreToSavepoint(savepoint.getTimestamp());
+
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+      table = HoodieSparkTable.create(getConfig(), context, metaClient);
+      final BaseFileOnlyView view3 = table.getBaseFileOnlyView();
+      dataFiles = partitionPaths.stream().flatMap(s -> view3.getAllBaseFiles(s).filter(f -> f.getCommitTime().equals("002"))).collect(Collectors.toList());
+      assertEquals(3, dataFiles.size(), "The data files for commit 002 be available");
+
+      dataFiles = partitionPaths.stream().flatMap(s -> view3.getAllBaseFiles(s).filter(f -> f.getCommitTime().equals("003"))).collect(Collectors.toList());
+      assertEquals(0, dataFiles.size(), "The data files for commit 003 should be rolled back");
+
+      dataFiles = partitionPaths.stream().flatMap(s -> view3.getAllBaseFiles(s).filter(f -> f.getCommitTime().equals("004"))).collect(Collectors.toList());
+      assertEquals(0, dataFiles.size(), "The data files for commit 004 should be rolled back");
+    }
+  }
+
+  /**
    * Test Cases for effects of rolling back completed/inflight commits.
    */
   @Test
@@ -585,6 +683,61 @@ public class TestClientRollback extends HoodieClientTestBase {
         // Should reuse the rollback instant
         assertEquals(rollbackInstantTime, rollbackInstant.getTimestamp());
       }
+    }
+  }
+
+  @Test
+  public void testFallbackToListingBasedRollbackForCompletedInstant() throws Exception {
+    // Let's create some commit files and base files
+    final String p1 = "2016/05/01";
+    final String p2 = "2016/05/02";
+    final String p3 = "2016/05/06";
+    final String commitTime1 = "20160501010101";
+    final String commitTime2 = "20160502020601";
+    final String commitTime3 = "20160506030611";
+    Map<String, String> partitionAndFileId1 = new HashMap<String, String>() {
+      {
+        put(p1, "id11");
+        put(p2, "id12");
+        put(p3, "id13");
+      }
+    };
+    Map<String, String> partitionAndFileId2 = new HashMap<String, String>() {
+      {
+        put(p1, "id21");
+        put(p2, "id22");
+        put(p3, "id23");
+      }
+    };
+    Map<String, String> partitionAndFileId3 = new HashMap<String, String>() {
+      {
+        put(p1, "id31");
+        put(p2, "id32");
+        put(p3, "id33");
+      }
+    };
+
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
+        .withRollbackUsingMarkers(true) // rollback using markers to test fallback to listing based rollback for completed instant
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY).build())
+        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build()).build();
+
+    // create test table with all commits completed
+    HoodieTestTable testTable = HoodieMetadataTestTable.of(metaClient, SparkHoodieBackedTableMetadataWriter.create(metaClient.getHadoopConf(), config, context));
+    testTable.withPartitionMetaFiles(p1, p2, p3)
+        .addCommit(commitTime1)
+        .withBaseFilesInPartitions(partitionAndFileId1)
+        .addCommit(commitTime2)
+        .withBaseFilesInPartitions(partitionAndFileId2)
+        .addCommit(commitTime3)
+        .withBaseFilesInPartitions(partitionAndFileId3);
+
+    try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
+      client.rollback(commitTime3);
+      assertFalse(testTable.inflightCommitExists(commitTime3));
+      assertFalse(testTable.baseFilesExist(partitionAndFileId3, commitTime3));
+      assertTrue(testTable.baseFilesExist(partitionAndFileId2, commitTime2));
     }
   }
 }

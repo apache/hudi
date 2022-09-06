@@ -78,7 +78,12 @@ public class HoodieDynamicBoundedBloomFilter implements BloomFilter {
 
   @Override
   public void add(String key) {
-    internalDynamicBloomFilter.add(new Key(key.getBytes(StandardCharsets.UTF_8)));
+    add(key.getBytes(StandardCharsets.UTF_8));
+  }
+
+  @Override
+  public void add(byte[] keyBytes) {
+    internalDynamicBloomFilter.add(new Key(keyBytes));
   }
 
   @Override

@@ -24,7 +24,6 @@ import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import java.util.List;
-import java.util.stream.Collectors;
 
 public abstract class BaseKeyGenerator extends KeyGenerator {
 
@@ -59,22 +58,14 @@ public abstract class BaseKeyGenerator extends KeyGenerator {
    */
   @Override
   public final HoodieKey getKey(GenericRecord record) {
-    if (getRecordKeyFields() == null || getPartitionPathFields() == null) {
+    if (getRecordKeyFieldNames() == null || getPartitionPathFields() == null) {
       throw new HoodieKeyException("Unable to find field names for record key or partition path in cfg");
     }
     return new HoodieKey(getRecordKey(record), getPartitionPath(record));
   }
 
   @Override
-  public final List<String> getRecordKeyFieldNames() {
-    // For nested columns, pick top level column name
-    return getRecordKeyFields().stream().map(k -> {
-      int idx = k.indexOf('.');
-      return idx > 0 ? k.substring(0, idx) : k;
-    }).collect(Collectors.toList());
-  }
-
-  public List<String> getRecordKeyFields() {
+  public List<String> getRecordKeyFieldNames() {
     return recordKeyFields;
   }
 

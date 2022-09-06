@@ -23,9 +23,12 @@ import org.apache.avro.Schema;
 import org.apache.avro.Schema.Field;
 import org.apache.avro.SchemaCompatibility;
 import org.apache.avro.generic.IndexedRecord;
+
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.io.hfile.CacheConfig;
+
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -52,8 +55,10 @@ import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.io.storage.HoodieHFileReader;
 import org.apache.hudi.io.storage.HoodieOrcReader;
 import org.apache.hudi.util.Lazy;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.format.converter.ParquetMetadataConverter;
 import org.apache.parquet.hadoop.ParquetFileReader;
@@ -135,6 +140,19 @@ public class TableSchemaResolver {
    */
   public Schema getTableAvroSchema(boolean includeMetadataFields) throws Exception {
     return getTableAvroSchemaInternal(includeMetadataFields, Option.empty());
+  }
+
+  /**
+   * Fetches tables schema in Avro format as of the given instant
+   *
+   * @param timestamp as of which table's schema will be fetched
+   */
+  public Schema getTableAvroSchema(String timestamp) throws Exception {
+    Option<HoodieInstant> instant = metaClient.getActiveTimeline().getCommitsTimeline()
+        .filterCompletedInstants()
+        .findInstantsBeforeOrEquals(timestamp)
+        .lastInstant();
+    return getTableAvroSchemaInternal(metaClient.getTableConfig().populateMetaFields(), instant);
   }
 
   /**
@@ -261,6 +279,11 @@ public class TableSchemaResolver {
     }
   }
 
+  public static MessageType convertAvroSchemaToParquet(Schema schema, Configuration hadoopConf) {
+    AvroSchemaConverter avroSchemaConverter = new AvroSchemaConverter(hadoopConf);
+    return avroSchemaConverter.convert(schema);
+  }
+
   private Schema convertParquetSchemaToAvro(MessageType parquetSchema) {
     AvroSchemaConverter avroSchemaConverter = new AvroSchemaConverter(metaClient.getHadoopConf());
     return avroSchemaConverter.convert(parquetSchema);
@@ -310,6 +333,9 @@ public class TableSchemaResolver {
    * @param oldSchema Older schema to check.
    * @param newSchema Newer schema to check.
    * @return True if the schema validation is successful
+   *
+   * TODO revisit this method: it's implemented incorrectly as it might be applying different criteria
+   *      to top-level record and nested record (for ex, if that nested record is contained w/in an array)
    */
   public static boolean isSchemaCompatible(Schema oldSchema, Schema newSchema) {
     if (oldSchema.getType() == newSchema.getType() && newSchema.getType() == Schema.Type.RECORD) {
@@ -361,12 +387,30 @@ public class TableSchemaResolver {
   }
 
   /**
+   * Returns table's latest Avro {@link Schema} iff table is non-empty (ie there's at least
+   * a single commit)
+   *
+   * This method differs from {@link #getTableAvroSchema(boolean)} in that it won't fallback
+   * to use table's schema used at creation
+   */
+  public Option<Schema> getTableAvroSchemaFromLatestCommit(boolean includeMetadataFields) throws Exception {
+    if (metaClient.isTimelineNonEmpty()) {
+      return Option.of(getTableAvroSchemaInternal(includeMetadataFields, Option.empty()));
+    }
+
+    return Option.empty();
+  }
+
+  /**
    * Get latest schema either from incoming schema or table schema.
    * @param writeSchema incoming batch's write schema.
    * @param convertTableSchemaToAddNamespace {@code true} if table schema needs to be converted. {@code false} otherwise.
    * @param converterFn converter function to be called over table schema (to add namespace may be). Each caller can decide if any conversion is required.
    * @return the latest schema.
+   *
+   * @deprecated will be removed (HUDI-4472)
    */
+  @Deprecated
   public Schema getLatestSchema(Schema writeSchema, boolean convertTableSchemaToAddNamespace,
       Function1<Schema, Schema> converterFn) {
     Schema latestSchema = writeSchema;
@@ -466,6 +510,18 @@ public class TableSchemaResolver {
    */
   public Option<InternalSchema> getTableInternalSchemaFromCommitMetadata() {
     HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
+    return timeline.lastInstant().flatMap(this::getTableInternalSchemaFromCommitMetadata);
+  }
+
+  /**
+   * Gets the InternalSchema for a hoodie table from the HoodieCommitMetadata of the instant.
+   *
+   * @return InternalSchema for this table
+   */
+  public Option<InternalSchema> getTableInternalSchemaFromCommitMetadata(String timestamp) {
+    HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline()
+        .filterCompletedInstants()
+        .findInstantsBeforeOrEquals(timestamp);
     return timeline.lastInstant().flatMap(this::getTableInternalSchemaFromCommitMetadata);
   }
 

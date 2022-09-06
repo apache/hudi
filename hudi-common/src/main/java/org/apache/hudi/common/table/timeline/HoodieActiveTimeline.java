@@ -74,14 +74,55 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
       REQUESTED_REPLACE_COMMIT_EXTENSION, INFLIGHT_REPLACE_COMMIT_EXTENSION, REPLACE_COMMIT_EXTENSION,
       REQUESTED_INDEX_COMMIT_EXTENSION, INFLIGHT_INDEX_COMMIT_EXTENSION, INDEX_COMMIT_EXTENSION,
       REQUESTED_SAVE_SCHEMA_ACTION_EXTENSION, INFLIGHT_SAVE_SCHEMA_ACTION_EXTENSION, SAVE_SCHEMA_ACTION_EXTENSION));
+
+  private static final Set<String> NOT_PARSABLE_TIMESTAMPS = new HashSet<String>(3) {{
+      add(HoodieTimeline.INIT_INSTANT_TS);
+      add(HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS);
+      add(HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS);
+    }};
+
   private static final Logger LOG = LogManager.getLogger(HoodieActiveTimeline.class);
   protected HoodieTableMetaClient metaClient;
 
   /**
    * Parse the timestamp of an Instant and return a {@code Date}.
+   * Throw ParseException if timestamp is not valid format as
+   *  {@link org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator#SECS_INSTANT_TIMESTAMP_FORMAT}.
+   *
+   * @param timestamp a timestamp String which follow pattern as
+   *  {@link org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator#SECS_INSTANT_TIMESTAMP_FORMAT}.
+   * @return Date of instant timestamp
    */
   public static Date parseDateFromInstantTime(String timestamp) throws ParseException {
     return HoodieInstantTimeGenerator.parseDateFromInstantTime(timestamp);
+  }
+
+  /**
+   * The same parsing method as above, but this method will mute ParseException.
+   * If the given timestamp is invalid, returns {@code Option.empty}.
+   * Or a corresponding Date value if these timestamp strings are provided
+   *  {@link org.apache.hudi.common.table.timeline.HoodieTimeline#INIT_INSTANT_TS},
+   *  {@link org.apache.hudi.common.table.timeline.HoodieTimeline#METADATA_BOOTSTRAP_INSTANT_TS},
+   *  {@link org.apache.hudi.common.table.timeline.HoodieTimeline#FULL_BOOTSTRAP_INSTANT_TS}.
+   * This method is useful when parsing timestamp for metrics
+   *
+   * @param timestamp a timestamp String which follow pattern as
+   *  {@link org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator#SECS_INSTANT_TIMESTAMP_FORMAT}.
+   * @return {@code Option<Date>} of instant timestamp, {@code Option.empty} if invalid timestamp
+   */
+  public static Option<Date> parseDateFromInstantTimeSafely(String timestamp) {
+    Option<Date> parsedDate;
+    try {
+      parsedDate = Option.of(HoodieInstantTimeGenerator.parseDateFromInstantTime(timestamp));
+    } catch (ParseException e) {
+      if (NOT_PARSABLE_TIMESTAMPS.contains(timestamp)) {
+        parsedDate = Option.of(new Date(Integer.parseInt(timestamp)));
+      } else {
+        LOG.warn("Failed to parse timestamp " + timestamp + ": " + e.getMessage());
+        parsedDate = Option.empty();
+      }
+    }
+    return parsedDate;
   }
 
   /**

@@ -17,7 +17,6 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
-import com.google.common.collect.Lists
 import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{FileSlice, HoodieLogFile}
@@ -30,14 +29,15 @@ import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util.function.{Function, Supplier}
 import java.util.stream.Collectors
-import scala.collection.JavaConverters.{asJavaIteratorConverter, asScalaIteratorConverter}
+import scala.collection.JavaConversions
+import scala.collection.JavaConverters.{asJavaIterableConverter, asJavaIteratorConverter, asScalaIteratorConverter}
 
 class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure with ProcedureBuilder {
   private val PARAMETERS_ALL: Array[ProcedureParameter] = Array[ProcedureParameter](
     ProcedureParameter.required(0, "table", DataTypes.StringType, None),
     ProcedureParameter.optional(1, "max_instant", DataTypes.StringType, ""),
     ProcedureParameter.optional(2, "include_max", DataTypes.BooleanType, false),
-    ProcedureParameter.optional(3, "include_inflight", DataTypes.BooleanType, false),
+    ProcedureParameter.optional(3, "include_in_flight", DataTypes.BooleanType, false),
     ProcedureParameter.optional(4, "exclude_compaction", DataTypes.BooleanType, false),
     ProcedureParameter.optional(5, "limit", DataTypes.IntegerType, 10),
     ProcedureParameter.optional(6, "path_regex", DataTypes.StringType, "*/*/*")
@@ -118,12 +118,14 @@ class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure wit
         metaClient.getActiveTimeline.getInstantDetails(instant)
       }
     }
-    val filteredTimeline = new HoodieDefaultTimeline(Lists.newArrayList(instants.asJava).stream(), details)
+
+    val filteredTimeline = new HoodieDefaultTimeline(
+      new java.util.ArrayList[HoodieInstant](JavaConversions.asJavaCollection(instants.toList)).stream(), details)
     new HoodieTableFileSystemView(metaClient, filteredTimeline, statuses.toArray(new Array[FileStatus](0)))
   }
 
   private def showAllFileSlices(fsView: HoodieTableFileSystemView): java.util.List[Row] = {
-    val rows: java.util.List[Row] = Lists.newArrayList()
+    val rows: java.util.List[Row] = new java.util.ArrayList[Row]
     fsView.getAllFileGroups.iterator().asScala.foreach(fg => {
       fg.getAllFileSlices.iterator().asScala.foreach(fs => {
         val fileId = fg.getFileGroupId.getFileId
@@ -161,7 +163,7 @@ class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure wit
         maxInstant
       })
     }
-    val rows: java.util.List[Row] = Lists.newArrayList()
+    val rows: java.util.List[Row] = new java.util.ArrayList[Row]
     fileSliceStream.iterator().asScala.foreach {
       fs => {
         val fileId = fs.getFileId

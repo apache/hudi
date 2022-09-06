@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieInsertException;
 import org.apache.hudi.exception.TableNotFoundException;
@@ -75,12 +76,15 @@ public class TestHoodieRowCreateHandle extends HoodieClientTestHarness {
     cleanupResources();
   }
 
-  @Test
-  public void testRowCreateHandle() throws Exception {
+  @ParameterizedTest
+  @ValueSource(booleans = { true, false })
+  public void testRowCreateHandle(boolean populateMetaFields) throws Exception {
     // init config and table
-    HoodieWriteConfig cfg =
-        SparkDatasetTestUtils.getConfigBuilder(basePath, timelineServicePort).build();
-    HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
+    HoodieWriteConfig config = SparkDatasetTestUtils.getConfigBuilder(basePath, timelineServicePort)
+        .withPopulateMetaFields(populateMetaFields)
+        .build();
+
+    HoodieTable table = HoodieSparkTable.create(config, context, metaClient);
     List<String> fileNames = new ArrayList<>();
     List<String> fileAbsPaths = new ArrayList<>();
 
@@ -93,7 +97,8 @@ public class TestHoodieRowCreateHandle extends HoodieClientTestHarness {
       String fileId = UUID.randomUUID().toString();
       String instantTime = "000";
 
-      HoodieRowCreateHandle handle = new HoodieRowCreateHandle(table, cfg, partitionPath, fileId, instantTime, RANDOM.nextInt(100000), RANDOM.nextLong(), RANDOM.nextLong(), SparkDatasetTestUtils.STRUCT_TYPE);
+      HoodieRowCreateHandle handle = new HoodieRowCreateHandle(table, config, partitionPath, fileId, instantTime,
+          RANDOM.nextInt(100000), RANDOM.nextLong(), RANDOM.nextLong(), SparkDatasetTestUtils.STRUCT_TYPE);
       int size = 10 + RANDOM.nextInt(1000);
       // Generate inputs
       Dataset<Row> inputRows = SparkDatasetTestUtils.getRandomRows(sqlContext, size, partitionPath, false);
@@ -109,7 +114,7 @@ public class TestHoodieRowCreateHandle extends HoodieClientTestHarness {
       fileAbsPaths.add(basePath + "/" + writeStatus.getStat().getPath());
       fileNames.add(handle.getFileName());
       // verify output
-      assertOutput(writeStatus, size, fileId, partitionPath, instantTime, totalInputRows, fileNames, fileAbsPaths);
+      assertOutput(writeStatus, size, fileId, partitionPath, instantTime, totalInputRows, fileNames, fileAbsPaths, populateMetaFields);
     }
   }
 
@@ -169,7 +174,7 @@ public class TestHoodieRowCreateHandle extends HoodieClientTestHarness {
     // verify rows
     Dataset<Row> result = sqlContext.read().parquet(basePath + "/" + partitionPath);
     // passing only first batch of inputRows since after first batch global error would have been thrown
-    assertRows(inputRows, result, instantTime, fileNames);
+    assertRows(inputRows, result, instantTime, fileNames, true);
   }
 
   @ParameterizedTest
@@ -209,8 +214,8 @@ public class TestHoodieRowCreateHandle extends HoodieClientTestHarness {
     return handle.close();
   }
 
-  private void assertOutput(HoodieInternalWriteStatus writeStatus, int size, String fileId, String partitionPath, String instantTime, Dataset<Row> inputRows, List<String> filenames,
-      List<String> fileAbsPaths) {
+  private void assertOutput(HoodieInternalWriteStatus writeStatus, int size, String fileId, String partitionPath,
+                            String instantTime, Dataset<Row> inputRows, List<String> filenames, List<String> fileAbsPaths, boolean populateMetaFields) {
     assertEquals(writeStatus.getPartitionPath(), partitionPath);
     assertEquals(writeStatus.getTotalRecords(), size);
     assertEquals(writeStatus.getFailedRowsSize(), 0);
@@ -229,15 +234,25 @@ public class TestHoodieRowCreateHandle extends HoodieClientTestHarness {
 
     // verify rows
     Dataset<Row> result = sqlContext.read().parquet(fileAbsPaths.toArray(new String[0]));
-    assertRows(inputRows, result, instantTime, filenames);
+    assertRows(inputRows, result, instantTime, filenames, populateMetaFields);
   }
 
-  private void assertRows(Dataset<Row> expectedRows, Dataset<Row> actualRows, String instantTime, List<String> filenames) {
+  private void assertRows(Dataset<Row> expectedRows, Dataset<Row> actualRows, String instantTime, List<String> filenames, boolean populateMetaFields) {
     // verify 3 meta fields that are filled in within create handle
     actualRows.collectAsList().forEach(entry -> {
-      assertEquals(entry.get(HoodieRecord.HOODIE_META_COLUMNS_NAME_TO_POS.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD)).toString(), instantTime);
-      assertTrue(filenames.contains(entry.get(HoodieRecord.HOODIE_META_COLUMNS_NAME_TO_POS.get(HoodieRecord.FILENAME_METADATA_FIELD)).toString()));
-      assertFalse(entry.isNullAt(HoodieRecord.HOODIE_META_COLUMNS_NAME_TO_POS.get(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD)));
+      String commitTime = entry.getString(HoodieRecord.HOODIE_META_COLUMNS_NAME_TO_POS.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD));
+      String fileName = entry.getString(HoodieRecord.HOODIE_META_COLUMNS_NAME_TO_POS.get(HoodieRecord.FILENAME_METADATA_FIELD));
+      String seqId = entry.getString(HoodieRecord.HOODIE_META_COLUMNS_NAME_TO_POS.get(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD));
+
+      if (populateMetaFields) {
+        assertEquals(instantTime, commitTime);
+        assertFalse(StringUtils.isNullOrEmpty(seqId));
+        assertTrue(filenames.contains(fileName));
+      } else {
+        assertEquals("", commitTime);
+        assertEquals("", seqId);
+        assertEquals("", fileName);
+      }
     });
 
     // after trimming 2 of the meta fields, rest of the fields should match

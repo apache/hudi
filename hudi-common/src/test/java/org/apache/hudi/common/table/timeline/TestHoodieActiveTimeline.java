@@ -263,6 +263,57 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
   }
 
   @Test
+  public void testTimelineWithSavepointAndHoles() {
+    timeline = new MockHoodieTimeline(Stream.of(
+        new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "01"),
+        new HoodieInstant(State.COMPLETED, HoodieTimeline.SAVEPOINT_ACTION, "01"),
+        new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "03"),
+        new HoodieInstant(State.COMPLETED, HoodieTimeline.SAVEPOINT_ACTION, "03"),
+        new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "05") // this can be DELTA_COMMIT/REPLACE_COMMIT as well
+    ).collect(Collectors.toList()));
+    assertTrue(timeline.isBeforeTimelineStarts("00"));
+    assertTrue(timeline.isBeforeTimelineStarts("01"));
+    assertTrue(timeline.isBeforeTimelineStarts("02"));
+    assertTrue(timeline.isBeforeTimelineStarts("03"));
+    assertTrue(timeline.isBeforeTimelineStarts("04"));
+    assertFalse(timeline.isBeforeTimelineStarts("05"));
+    assertFalse(timeline.isBeforeTimelineStarts("06"));
+
+    // with an inflight savepoint in between
+    timeline = new MockHoodieTimeline(Stream.of(
+        new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "01"),
+        new HoodieInstant(State.INFLIGHT, HoodieTimeline.SAVEPOINT_ACTION, "01"),
+        new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "03"),
+        new HoodieInstant(State.COMPLETED, HoodieTimeline.SAVEPOINT_ACTION, "03"),
+        new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "05")
+    ).collect(Collectors.toList()));
+    assertTrue(timeline.isBeforeTimelineStarts("00"));
+    assertTrue(timeline.isBeforeTimelineStarts("01"));
+    assertTrue(timeline.isBeforeTimelineStarts("02"));
+    assertTrue(timeline.isBeforeTimelineStarts("03"));
+    assertTrue(timeline.isBeforeTimelineStarts("04"));
+    assertFalse(timeline.isBeforeTimelineStarts("05"));
+    assertFalse(timeline.isBeforeTimelineStarts("06"));
+
+    // with a pending replacecommit after savepoints
+    timeline = new MockHoodieTimeline(Stream.of(
+        new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "01"),
+        new HoodieInstant(State.COMPLETED, HoodieTimeline.SAVEPOINT_ACTION, "01"),
+        new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "03"),
+        new HoodieInstant(State.COMPLETED, HoodieTimeline.SAVEPOINT_ACTION, "03"),
+        new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "05"),
+        new HoodieInstant(State.INFLIGHT, HoodieTimeline.REPLACE_COMMIT_ACTION, "06")
+    ).collect(Collectors.toList()));
+    assertTrue(timeline.isBeforeTimelineStarts("00"));
+    assertTrue(timeline.isBeforeTimelineStarts("01"));
+    assertTrue(timeline.isBeforeTimelineStarts("02"));
+    assertTrue(timeline.isBeforeTimelineStarts("03"));
+    assertTrue(timeline.isBeforeTimelineStarts("04"));
+    assertFalse(timeline.isBeforeTimelineStarts("05"));
+    assertFalse(timeline.isBeforeTimelineStarts("06"));
+  }
+
+  @Test
   public void testTimelineGetOperations() {
     List<HoodieInstant> allInstants = getAllInstants();
     Supplier<Stream<HoodieInstant>> sup = allInstants::stream;
@@ -516,9 +567,6 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
       lastInstantTime = newInstantTime;
     }
 
-    // All zero timestamp can be parsed
-    HoodieActiveTimeline.parseDateFromInstantTime("00000000000000");
-
     // Multiple thread test
     final int numChecks = 100000;
     final int numThreads = 100;
@@ -578,6 +626,26 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
             - HoodieActiveTimeline.parseDateFromInstantTime(secondGranularityInstant).getTime() / 1000,
         "Expected the difference between later instant and previous instant to be 10 seconds"
     );
+  }
+
+  @Test
+  public void testInvalidInstantDateParsing() throws ParseException {
+    // Test all invalid timestamp in HoodieTimeline, shouldn't throw any error and should return a correct value
+    assertEquals(Long.parseLong(HoodieTimeline.INIT_INSTANT_TS),
+        HoodieActiveTimeline.parseDateFromInstantTimeSafely(HoodieTimeline.INIT_INSTANT_TS).get().getTime());
+    assertEquals(Long.parseLong(HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS),
+        HoodieActiveTimeline.parseDateFromInstantTimeSafely(HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS).get().getTime());
+    assertEquals(Long.parseLong(HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS),
+        HoodieActiveTimeline.parseDateFromInstantTimeSafely(HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS).get().getTime());
+
+    // Test metadata table compaction instant date parsing with INIT_INSTANT_TS, should return Option.empty
+    assertEquals(Option.empty(),
+        HoodieActiveTimeline.parseDateFromInstantTimeSafely(HoodieTimeline.INIT_INSTANT_TS + "001"));
+
+    // Test a valid instant timestamp, should equal the same result as HoodieActiveTimeline.parseDateFromInstantTime
+    String testInstant = "20210101120101";
+    assertEquals(HoodieActiveTimeline.parseDateFromInstantTime(testInstant).getTime(),
+        HoodieActiveTimeline.parseDateFromInstantTimeSafely(testInstant).get().getTime());
   }
 
   /**

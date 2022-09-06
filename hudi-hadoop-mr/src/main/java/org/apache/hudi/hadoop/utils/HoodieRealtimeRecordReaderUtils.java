@@ -18,6 +18,7 @@
 
 package org.apache.hudi.hadoop.utils;
 
+import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.JsonProperties;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
@@ -189,7 +190,14 @@ public class HoodieRealtimeRecordReaderUtils {
         Writable[] recordValues = new Writable[schema.getFields().size()];
         int recordValueIndex = 0;
         for (Schema.Field field : schema.getFields()) {
-          recordValues[recordValueIndex++] = avroToArrayWritable(record.get(field.name()), field.schema());
+          // TODO Revisit Avro exception handling in future
+          Object fieldValue = null;
+          try {
+            fieldValue = record.get(field.name());
+          } catch (AvroRuntimeException e) {
+            LOG.debug("Field:" + field.name() + "not found in Schema:" + schema.toString());
+          }
+          recordValues[recordValueIndex++] = avroToArrayWritable(fieldValue, field.schema());
         }
         return new ArrayWritable(Writable.class, recordValues);
       case ENUM:

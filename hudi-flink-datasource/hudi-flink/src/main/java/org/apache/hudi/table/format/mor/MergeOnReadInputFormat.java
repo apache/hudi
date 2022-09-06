@@ -38,6 +38,7 @@ import org.apache.hudi.util.AvroToRowDataConverters;
 import org.apache.hudi.util.DataTypeUtils;
 import org.apache.hudi.util.RowDataProjection;
 import org.apache.hudi.util.RowDataToAvroConverters;
+import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.util.StringToRowDataConverter;
 
 import org.apache.avro.Schema;
@@ -63,6 +64,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Properties;
 import java.util.Set;
 import java.util.stream.IntStream;
 
@@ -297,9 +299,14 @@ public class MergeOnReadInputFormat
         this.conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING),
         FilePathUtils.extractPartitionKeys(this.conf));
     LinkedHashMap<String, Object> partObjects = new LinkedHashMap<>();
-    partSpec.forEach((k, v) -> partObjects.put(k, DataTypeUtils.resolvePartition(
-        defaultPartName.equals(v) ? null : v,
-        fieldTypes.get(fieldNames.indexOf(k)))));
+    partSpec.forEach((k, v) -> {
+      DataType fieldType = fieldTypes.get(fieldNames.indexOf(k));
+      if (!DataTypeUtils.isDatetimeType(fieldType)) {
+        // date time type partition field is formatted specifically,
+        // read directly from the data file to avoid format mismatch or precision loss
+        partObjects.put(k, DataTypeUtils.resolvePartition(defaultPartName.equals(v) ? null : v, fieldType));
+      }
+    });
 
     return ParquetSplitReaderUtil.genPartColumnarRowReader(
         this.conf.getBoolean(FlinkOptions.UTC_TIMEZONE),
@@ -634,10 +641,12 @@ public class MergeOnReadInputFormat
 
     private final Set<String> keyToSkip = new HashSet<>();
 
+    private final Properties payloadProps;
+
     private RowData currentRecord;
 
     MergeIterator(
-        Configuration finkConf,
+        Configuration flinkConf,
         org.apache.hadoop.conf.Configuration hadoopConf,
         MergeOnReadInputSplit split,
         RowType tableRowType,
@@ -650,7 +659,8 @@ public class MergeOnReadInputFormat
         ParquetColumnarRowSplitReader reader) { // the reader should be with full schema
       this.tableSchema = tableSchema;
       this.reader = reader;
-      this.scanner = FormatUtils.logScanner(split, tableSchema, finkConf, hadoopConf);
+      this.scanner = FormatUtils.logScanner(split, tableSchema, flinkConf, hadoopConf);
+      this.payloadProps = StreamerUtil.getPayloadConfig(flinkConf).getProps();
       this.logKeysIterator = scanner.getRecords().keySet().iterator();
       this.requiredSchema = requiredSchema;
       this.requiredPos = requiredPos;
@@ -751,7 +761,7 @@ public class MergeOnReadInputFormat
         String curKey) throws IOException {
       final HoodieAvroRecord<?> record = (HoodieAvroRecord) scanner.getRecords().get(curKey);
       GenericRecord historyAvroRecord = (GenericRecord) rowDataToAvroConverter.convert(tableSchema, curRow);
-      return record.getData().combineAndGetUpdateValue(historyAvroRecord, tableSchema);
+      return record.getData().combineAndGetUpdateValue(historyAvroRecord, tableSchema, payloadProps);
     }
   }
 

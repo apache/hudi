@@ -53,7 +53,7 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
 
   def getTableIdentifier(table: LogicalPlan): TableIdentifier = {
     table match {
-      case SubqueryAlias(name, _) => sparkAdapter.toTableIdentifier(name)
+      case SubqueryAlias(name, _) => sparkAdapter.getCatalystPlanUtils.toTableIdentifier(name)
       case _ => throw new IllegalArgumentException(s"Illegal table: $table")
     }
   }
@@ -317,8 +317,8 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
   def castIfNeeded(child: Expression, dataType: DataType, conf: SQLConf): Expression = {
     child match {
       case Literal(nul, NullType) => Literal(nul, dataType)
-      case _ => if (child.dataType != dataType)
-        Cast(child, dataType, Option(conf.sessionLocalTimeZone)) else child
+      case expr if child.dataType != dataType => Cast(expr, dataType, Option(conf.sessionLocalTimeZone))
+      case _ => child
     }
   }
 

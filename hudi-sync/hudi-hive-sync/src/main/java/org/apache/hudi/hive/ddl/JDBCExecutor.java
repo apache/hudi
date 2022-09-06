@@ -43,7 +43,7 @@ import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_USER;
 import static org.apache.hudi.hive.util.HiveSchemaUtil.HIVE_ESCAPE_CHARACTER;
 
 /**
- * This class offers DDL executor backed by the jdbc.
+ * This class offers DDL executor backed by the jdbc This class preserves the old useJDBC = true way of doing things.
  */
 public class JDBCExecutor extends QueryBasedDDLExecutor {
 
@@ -160,9 +160,6 @@ public class JDBCExecutor extends QueryBasedDDLExecutor {
   }
 
   private List<String> constructDropPartitions(String tableName, List<String> partitions) {
-    if (config.getIntOrDefault(HIVE_BATCH_SYNC_PARTITION_NUM) <= 0) {
-      throw new HoodieHiveSyncException("batch-sync-num for sync hive table must be greater than 0, pls check your parameter");
-    }
     List<String> result = new ArrayList<>();
     int batchSyncPartitionNum = config.getIntOrDefault(HIVE_BATCH_SYNC_PARTITION_NUM);
     StringBuilder alterSQL = getAlterTableDropPrefix(tableName);

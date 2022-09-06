@@ -47,6 +47,7 @@ declare -a BUNDLE_URLS=(
 "${STAGING_REPO}/hudi-spark3-bundle_2.12/${VERSION}/hudi-spark3-bundle_2.12-${VERSION}.jar"
 "${STAGING_REPO}/hudi-spark3.1-bundle_2.12/${VERSION}/hudi-spark3.1-bundle_2.12-${VERSION}.jar"
 "${STAGING_REPO}/hudi-spark3.2-bundle_2.12/${VERSION}/hudi-spark3.2-bundle_2.12-${VERSION}.jar"
+"${STAGING_REPO}/hudi-spark3.3-bundle_2.12/${VERSION}/hudi-spark3.3-bundle_2.12-${VERSION}.jar"
 "${STAGING_REPO}/hudi-timeline-server-bundle/${VERSION}/hudi-timeline-server-bundle-${VERSION}.jar"
 "${STAGING_REPO}/hudi-trino-bundle/${VERSION}/hudi-trino-bundle-${VERSION}.jar"
 "${STAGING_REPO}/hudi-utilities-bundle_2.11/${VERSION}/hudi-utilities-bundle_2.11-${VERSION}.jar"

@@ -35,6 +35,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieTableQueryType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -49,6 +50,8 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.realtime.HoodieVirtualKeyInfo;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
 import javax.annotation.Nonnull;
 import java.io.IOException;
@@ -76,6 +79,8 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  * NOTE: This class is invariant of the underlying file-format of the files being read
  */
 public class HoodieCopyOnWriteTableInputFormat extends HoodieTableInputFormat {
+
+  private static final Logger LOG = LogManager.getLogger(HoodieCopyOnWriteTableInputFormat.class);
 
   @Override
   protected boolean isSplitable(FileSystem fs, Path filename) {
@@ -249,12 +254,27 @@ public class HoodieCopyOnWriteTableInputFormat extends HoodieTableInputFormat {
           partitionedFileSlices.values()
               .stream()
               .flatMap(Collection::stream)
+              .filter(fileSlice -> checkIfValidFileSlice(fileSlice))
               .map(fileSlice -> createFileStatusUnchecked(fileSlice, fileIndex, virtualKeyInfoOpt))
               .collect(Collectors.toList())
       );
     }
 
     return targetFiles;
+  }
+
+  protected boolean checkIfValidFileSlice(FileSlice fileSlice) {
+    Option<HoodieBaseFile> baseFileOpt = fileSlice.getBaseFile();
+    Option<HoodieLogFile> latestLogFileOpt = fileSlice.getLatestLogFile();
+
+    if (baseFileOpt.isPresent()) {
+      return true;
+    } else if (latestLogFileOpt.isPresent()) {
+      // It happens when reading optimized query to mor.
+      return false;
+    } else {
+      throw new IllegalStateException("Invalid state: base-file has to be present for " + fileSlice.getFileId());
+    }
   }
 
   private void validate(List<FileStatus> targetFiles, List<FileStatus> legacyFileStatuses) {

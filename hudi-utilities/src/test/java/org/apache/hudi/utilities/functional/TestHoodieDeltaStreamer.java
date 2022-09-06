@@ -902,6 +902,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     cfg.configs.addAll(getAsyncServicesConfigs(totalRecords, "false", "true", "2", "", ""));
     cfg.configs.add(String.format("%s=%s", HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key(), "0"));
     cfg.configs.add(String.format("%s=%s", HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key(), "1"));
+    cfg.configs.add(String.format("%s=%s", HoodieWriteConfig.MARKERS_TYPE.key(), "DIRECT"));
     HoodieDeltaStreamer ds = new HoodieDeltaStreamer(cfg, jsc);
     deltaStreamerTestRunner(ds, cfg, (r) -> {
       TestHelpers.assertAtLeastNReplaceCommits(2, tableBasePath, dfs);
@@ -947,13 +948,14 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertFalse(replacedFilePaths.isEmpty());
 
     // Step 4 : Insert 1 record and trigger sync/async cleaner and archive.
-    List<String> configs = getAsyncServicesConfigs(1, "true", "true", "2", "", "");
+    List<String> configs = getAsyncServicesConfigs(1, "true", "true", "6", "", "");
     configs.add(String.format("%s=%s", HoodieCleanConfig.CLEANER_POLICY.key(), "KEEP_LATEST_COMMITS"));
     configs.add(String.format("%s=%s", HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key(), "1"));
     configs.add(String.format("%s=%s", HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.key(), "2"));
     configs.add(String.format("%s=%s", HoodieArchivalConfig.MAX_COMMITS_TO_KEEP.key(), "3"));
     configs.add(String.format("%s=%s", HoodieCleanConfig.ASYNC_CLEAN.key(), asyncClean));
     configs.add(String.format("%s=%s", HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key(), "1"));
+    cfg.configs.add(String.format("%s=%s", HoodieWriteConfig.MARKERS_TYPE.key(), "DIRECT"));
     if (asyncClean) {
       configs.add(String.format("%s=%s", HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(),
           WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name()));
@@ -1359,7 +1361,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     // Test Hive integration
     HiveSyncConfig hiveSyncConfig = getHiveSyncConfig(tableBasePath, "hive_trips");
     hiveSyncConfig.setValue(META_SYNC_PARTITION_FIELDS, "year,month,day");
-    hiveSyncConfig.setHadoopConf(hiveServer.getHiveConf());
+    hiveSyncConfig.setHadoopConf(hiveTestService.getHiveConf());
     HoodieHiveSyncClient hiveClient = new HoodieHiveSyncClient(hiveSyncConfig);
     final String tableName = hiveSyncConfig.getString(META_SYNC_TABLE_NAME);
     assertTrue(hiveClient.tableExists(tableName), "Table " + tableName + " should exist");
@@ -2167,6 +2169,27 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     List<String> tableFields = tableSchema.getFields().stream().map(Schema.Field::name).collect(Collectors.toList());
     // now assert that the partition column is not in the target schema
     assertFalse(tableFields.contains("partition_path"));
+  }
+
+  @Test
+  public void testForceEmptyMetaSync() throws Exception {
+    String tableBasePath = dfsBasePath + "/test_force_empty_meta_sync";
+
+    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.BULK_INSERT);
+    cfg.sourceLimit = 0;
+    cfg.allowCommitOnNoCheckpointChange = true;
+    cfg.enableMetaSync = true;
+    cfg.forceEmptyMetaSync = true;
+
+    new HoodieDeltaStreamer(cfg, jsc, dfs, hiveServer.getHiveConf()).sync();
+    TestHelpers.assertRecordCount(0, tableBasePath, sqlContext);
+
+    // make sure hive table is present
+    HiveSyncConfig hiveSyncConfig = getHiveSyncConfig(tableBasePath, "hive_trips");
+    hiveSyncConfig.setHadoopConf(hiveServer.getHiveConf());
+    HoodieHiveSyncClient hiveClient = new HoodieHiveSyncClient(hiveSyncConfig);
+    final String tableName = hiveSyncConfig.getString(META_SYNC_TABLE_NAME);
+    assertTrue(hiveClient.tableExists(tableName), "Table " + tableName + " should exist");
   }
 
   class TestDeltaSync extends DeltaSync {

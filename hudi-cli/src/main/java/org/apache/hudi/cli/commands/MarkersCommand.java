@@ -22,6 +22,7 @@ import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.utils.InputStreamConsumer;
 import org.apache.hudi.cli.utils.SparkUtil;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+
 import org.apache.spark.launcher.SparkLauncher;
 import org.springframework.shell.core.CommandMarker;
 import org.springframework.shell.core.annotation.CliCommand;
@@ -35,7 +36,8 @@ import org.springframework.stereotype.Component;
 public class MarkersCommand implements CommandMarker {
 
   @CliCommand(value = "marker delete", help = "Delete the marker")
-  public String deleteMarker(@CliOption(key = {"commit"}, help = "Delete a marker") final String instantTime,
+  public String deleteMarker(
+      @CliOption(key = {"commit"}, help = "Delete a marker") final String instantTime,
       @CliOption(key = {"sparkProperties"}, help = "Spark Properties File Path") final String sparkPropertiesPath,
       @CliOption(key = "sparkMaster", unspecifiedDefaultValue = "", help = "Spark Master") String master,
       @CliOption(key = "sparkMemory", unspecifiedDefaultValue = "1G",
