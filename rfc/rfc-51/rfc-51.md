@@ -63,7 +63,10 @@ We follow the debezium output format: four columns as shown below
 - u: represent `update`; when `op` is `u`, both `before` and `after` don't be null;
 - d: represent `delete`; when `op` is `d`, `after` is always null;
 
-Note: the illustration here ignores all the Hudi metadata columns like `_hoodie_commit_time` in `before` and `after` columns.
+**Note**
+
+* In case of the same record having operations like insert -> delete -> insert, CDC data should be produced to reflect the exact behaviors.
+* The illustration above ignores all the Hudi metadata columns like `_hoodie_commit_time` in `before` and `after` columns.
 
 ## Design Goals
 
@@ -85,8 +88,8 @@ To perform CDC queries, users need to set `hoodie.datasource.query.incremental.f
 |--------------------------------------------|----------------|--------------------------------------------------------------------------------------------------------------------------------------|
 | hoodie.datasource.query.type               | `snapshot`     | set to `incremental` for incremental query.                                                                                          |
 | hoodie.datasource.query.incremental.format | `latest_state` | `latest_state` (current incremental query behavior) returns the latest records' values. Set to `cdc` to return the full CDC results. |
-| hoodie.datasource.read.start.timestamp     | -              | requried.                                                                                                                            |
-| hoodie.datasource.read.end.timestamp       | -              | optional.                                                                                                                            |
+| hoodie.datasource.read.begin.instanttime   | -              | requried.                                                                                                                            |
+| hoodie.datasource.read.end.instanttime     | -              | optional.                                                                                                                            |
 
 ### Logical File Types
 
@@ -176,8 +179,8 @@ In summary, we propose CDC data to be persisted synchronously upon base files ge
 write-on-indexing for Spark inserts (non-bucket index) and write-on-compaction for everything else.
 
 Note that it may also be necessary to provide capabilities for asynchronously persisting CDC data, in terms of a
-separate table service like `ChangeTrackingService`, which can be scheduled to fine-tune the CDC-persisting timings.
-This can be used to meet low-latency optimized-read requirements when applicable.
+separate table service like `ChangeTrackingService`, which can be scheduled to fine-tune the CDC Availability SLA,
+effectively decoupling it with Compaction frequency.
 
 #### Examples
 
