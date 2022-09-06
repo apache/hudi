@@ -32,7 +32,9 @@ jobs:
           architecture: x64
       - name: Generate thrift source code
         run:
-          sh hudi-metastore/bin/compile_thrift_by_docker.sh
+          ls . \
+          && chmod +x hudi-metastore/bin/compile_thrift_by_docker.sh \
+          && sh hudi-metastore/bin/compile_thrift_by_docker.sh
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
