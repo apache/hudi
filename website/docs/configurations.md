@@ -978,8 +978,8 @@ Actual value obtained by invoking .toString(), default ''<br></br>
 ---
 
 > #### write.tasks
-> Parallelism of tasks that do actual write, default is 4<br></br>
-> **Default Value**: 4 (Optional)<br></br>
+> Parallelism of tasks that do actual write, default is the parallelism of the execution environment<br></br>
+> **Default Value**: N/A (Optional)<br></br>
 > `Config Param: WRITE_TASKS`<br></br>
 
 ---
