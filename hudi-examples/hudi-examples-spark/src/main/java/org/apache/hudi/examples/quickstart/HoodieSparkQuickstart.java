@@ -25,6 +25,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.examples.common.HoodieExampleDataGenerator;
 import org.apache.hudi.examples.common.HoodieExampleSparkUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
+
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.Function;
@@ -88,7 +89,9 @@ public final class HoodieSparkQuickstart {
     assert afterOverwrite.except(overwriteIntersect).except(overwriteDataIn).count() == 0;
     queryData(spark, jsc, tablePath, tableName, dataGen);
 
-    Dataset<Row> beforeDeleteByPartition = spark.sql("SELECT begin_lat, begin_lon, driver, end_lat, end_lon, fare, partitionpath, rider, ts, uuid FROM hudi_ro_table WHERE partitionpath NOT IN (" +String.join(", ", HoodieExampleDataGenerator.DEFAULT_PARTITION_PATHS) + ")");
+    Dataset<Row> beforeDeleteByPartition = spark.sql(
+        "SELECT begin_lat, begin_lon, driver, end_lat, end_lon, fare, partitionpath, rider, ts, uuid FROM hudi_ro_table WHERE partitionpath NOT IN ("
+            + String.join(", ", HoodieExampleDataGenerator.DEFAULT_PARTITION_PATHS) + ")");
     deleteByPartition(spark, tablePath, tableName);
     queryData(spark, jsc, tablePath, tableName, dataGen);
     assert spark.sql("SELECT begin_lat, begin_lon, driver, end_lat, end_lon, fare, partitionpath, rider, ts, uuid FROM hudi_ro_table").except(beforeDeleteByPartition).count() == 0;
@@ -98,7 +101,7 @@ public final class HoodieSparkQuickstart {
    * Generate some new trips, load them into a DataFrame and write the DataFrame into the Hudi dataset as below.
    */
   public static Dataset<Row> insertData(SparkSession spark, JavaSparkContext jsc, String tablePath, String tableName,
-                                HoodieExampleDataGenerator<HoodieAvroPayload> dataGen) {
+                                        HoodieExampleDataGenerator<HoodieAvroPayload> dataGen) {
     String commitTime = Long.toString(System.currentTimeMillis());
     List<String> inserts = dataGen.convertToStringList(dataGen.generateInserts(commitTime, 20));
     Dataset<Row> df = spark.read().json(jsc.parallelize(inserts, 1));
@@ -118,7 +121,7 @@ public final class HoodieSparkQuickstart {
    * Generate new records, load them into a {@link Dataset} and insert-overwrite it into the Hudi dataset
    */
   public static Dataset<Row> insertOverwriteData(SparkSession spark, JavaSparkContext jsc, String tablePath, String tableName,
-                                HoodieExampleDataGenerator<HoodieAvroPayload> dataGen) {
+                                                 HoodieExampleDataGenerator<HoodieAvroPayload> dataGen) {
     String commitTime = Long.toString(System.currentTimeMillis());
     List<String> inserts = dataGen.convertToStringList(dataGen.generateInserts(commitTime, 20));
     Dataset<Row> df = spark.read().json(jsc.parallelize(inserts, 1));
@@ -134,7 +137,6 @@ public final class HoodieSparkQuickstart {
         .save(tablePath);
     return df;
   }
-
 
   /**
    * Load the data files into a DataFrame.
@@ -156,7 +158,8 @@ public final class HoodieSparkQuickstart {
     //  ...
 
     spark.sql(
-            "select _hoodie_commit_time, _hoodie_record_key, _hoodie_partition_path, rider, driver, fare from  hudi_ro_table").show();
+            "select _hoodie_commit_time, _hoodie_record_key, _hoodie_partition_path, rider, driver, fare from  hudi_ro_table")
+        .show();
     //  +-------------------+--------------------+----------------------+-------------------+--------------------+------------------+
     //  |_hoodie_commit_time|  _hoodie_record_key|_hoodie_partition_path|              rider|              driver|              fare|
     //  +-------------------+--------------------+----------------------+-------------------+--------------------+------------------+
@@ -169,7 +172,7 @@ public final class HoodieSparkQuickstart {
    * load into a DataFrame and write DataFrame into the hudi dataset.
    */
   public static Dataset<Row> updateData(SparkSession spark, JavaSparkContext jsc, String tablePath, String tableName,
-                                HoodieExampleDataGenerator<HoodieAvroPayload> dataGen) {
+                                        HoodieExampleDataGenerator<HoodieAvroPayload> dataGen) {
 
     String commitTime = Long.toString(System.currentTimeMillis());
     List<String> updates = dataGen.convertToStringList(dataGen.generateUpdates(commitTime, 10));
@@ -194,7 +197,7 @@ public final class HoodieSparkQuickstart {
     roViewDF.createOrReplaceTempView("hudi_ro_table");
     //Dataset<Row> df = spark.sql("select uuid, partitionpath, ts from  hudi_ro_table limit 2");
     Dataset<Row> ret = spark.sql("SELECT begin_lat, begin_lon, driver, end_lat, end_lon, fare, partitionpath, rider, ts, uuid FROM hudi_ro_table limit 2");
-    Dataset<Row> df = ret.drop("begin_lat","begin_lon","driver","end_lat","end_lon","fare","rider");
+    Dataset<Row> df = ret.drop("begin_lat", "begin_lon", "driver", "end_lat", "end_lon", "fare", "rider");
 
     df.write().format("org.apache.hudi")
         .options(QuickstartUtils.getQuickstartWriteConfigs())
