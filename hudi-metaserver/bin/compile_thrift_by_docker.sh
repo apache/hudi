@@ -16,5 +16,7 @@
 #  See the License for the specific language governing permissions and
 # limitations under the License.
 
+cd ../src/main/thrift
+pwd
 docker pull thrift:0.12.0
-docker run -v "/thrift" thrift thrift -o /thrift/ --gen java /thrift/hudi-metaserver.thrift
+docker run -v "$PWD/thrift" thrift thrift -o /thrift/ --gen java /thrift/hudi-metaserver.thrift
