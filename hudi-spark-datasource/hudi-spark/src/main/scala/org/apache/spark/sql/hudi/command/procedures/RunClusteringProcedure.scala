@@ -85,7 +85,7 @@ class RunClusteringProcedure extends BaseProcedure
           HoodieClusteringConfig.PLAN_PARTITION_FILTER_MODE_NAME.key() -> "SELECTED_PARTITIONS",
           HoodieClusteringConfig.PARTITION_SELECTED.key() -> prunedPartitions
         )
-        logInfo(s"Partition predicates: ${p}, partition selected: ${prunedPartitions}")
+        logInfo(s"Partition predicates: $p, partition selected: $prunedPartitions")
       case _ =>
         logInfo("No partition predicates")
     }
@@ -97,7 +97,7 @@ class RunClusteringProcedure extends BaseProcedure
         conf = conf ++ Map(
           HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS.key() -> o.asInstanceOf[String]
         )
-        logInfo(s"Order columns: ${o}")
+        logInfo(s"Order columns: $o")
       case _ =>
         logInfo("No order columns")
     }
