@@ -32,8 +32,7 @@ jobs:
           architecture: x64
       - name: Generate thrift source code
         run:
-          ls . \
-          && chmod +x hudi-metastore/bin/compile_thrift_by_docker.sh \
+          chmod +x hudi-metastore/bin/compile_thrift_by_docker.sh \
           && sh hudi-metastore/bin/compile_thrift_by_docker.sh
       - name: Build Project
         env:
