@@ -73,7 +73,8 @@ inputformat `org.apache.hudi.hadoop.HoodieParquetInputFormat`. For Tez, addition
 to `org.apache.hadoop.hive.ql.io.HiveInputFormat`. Then proceed to query the table like any other Hive table.
 
 ## Redshift Spectrum
-Copy on Write Tables in Apache Hudi versions 0.5.2, 0.6.0, 0.7.0, 0.8.0, 0.9.0, and 0.10.0 can be queried via Amazon Redshift Spectrum external tables.
+Copy on Write Tables in Apache Hudi versions 0.5.2, 0.6.0, 0.7.0, 0.8.0, 0.9.0, 0.10.x, 0.11.x and 0.12.0 can be queried via Amazon Redshift Spectrum external tables.
+To be able to query Hudi versions 0.10.0 and above please try latest versions of Redshift.
 :::note
 Hudi tables are supported only when AWS Glue Data Catalog is used. It's not supported when you use an Apache Hive metastore as the external catalog.
 :::

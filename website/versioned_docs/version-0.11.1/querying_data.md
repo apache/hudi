@@ -204,6 +204,8 @@ After Hudi made a new commit, refresh the Impala table to get the latest results
 ```
 REFRESH database.table_name
 ```
+## Redshift Spectrum
+To set up Redshift Spectrum for querying Hudi, see the [Query Engine Setup](/docs/0.11.1/query_engine_setup#redshift-spectrum) page.
 
 
 ## StarRocks
@@ -224,6 +226,7 @@ Following tables show whether a given query is supported on specific query engin
 |**PrestoDB**|Y|N|
 |**Trino**|Y|N|
 |**Impala**|Y|N|
+| **Redshift Spectrum** |Y|N|
 | **StarRocks**         |Y|N|
 
 
