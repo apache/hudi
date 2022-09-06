@@ -39,4 +39,4 @@ jobs:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
         run:
-          mvn clean install -pl :hudi-metaserver -DskipTests=true -Pthrift -am
+          mvn clean install -pl :hudi-metaserver -DskipTests=true -am
