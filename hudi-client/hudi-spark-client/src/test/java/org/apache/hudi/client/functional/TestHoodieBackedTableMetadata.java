@@ -150,6 +150,52 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
     assertEquals(filesNumber.get(), taskNumber);
   }
 
+  @Test
+  public void testMultiReaderForHoodieBackedTableMetadata() throws Exception {
+    final int taskNumber = 100;
+    HoodieTableType tableType = HoodieTableType.COPY_ON_WRITE;
+    init(tableType);
+    testTable.doWriteOperation("000001", INSERT, emptyList(), asList("p1"), 1);
+    HoodieBackedTableMetadata tableMetadata = new HoodieBackedTableMetadata(context, writeConfig.getMetadataConfig(), writeConfig.getBasePath(), writeConfig.getSpillableMapBasePath(), false);
+    assertTrue(tableMetadata.enabled());
+    List<String> metadataPartitions = tableMetadata.getAllPartitionPaths();
+    String partition = metadataPartitions.get(0);
+    String finalPartition = basePath + "/" + partition;
+    ArrayList<String> duplicatedPartitions = new ArrayList<>(taskNumber);
+    for (int i = 0; i < taskNumber; i++) {
+      duplicatedPartitions.add(finalPartition);
+    }
+    ExecutorService executors = Executors.newFixedThreadPool(taskNumber);
+    AtomicBoolean flag = new AtomicBoolean(false);
+    AtomicInteger count = new AtomicInteger(0);
+    AtomicInteger filesNumber = new AtomicInteger(0);
+
+    for (String part : duplicatedPartitions) {
+      executors.submit(new Runnable() {
+        @Override
+        public void run() {
+          try {
+            count.incrementAndGet();
+            while (true) {
+              if (count.get() == taskNumber) {
+                break;
+              }
+            }
+            FileStatus[] files = tableMetadata.getAllFilesInPartition(new Path(part));
+            filesNumber.addAndGet(files.length);
+            assertEquals(1, files.length);
+          } catch (Exception e) {
+            flag.set(true);
+          }
+        }
+      });
+    }
+    executors.shutdown();
+    executors.awaitTermination(24, TimeUnit.HOURS);
+    assertFalse(flag.get());
+    assertEquals(filesNumber.get(), taskNumber);
+  }
+
   private void doWriteInsertAndUpsert(HoodieTestTable testTable) throws Exception {
     doWriteInsertAndUpsert(testTable, "0000001", "0000002", false);
   }
