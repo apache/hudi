@@ -27,11 +27,14 @@ import org.apache.hudi.testutils.HoodieClientTestHarness;
 import org.apache.hudi.utilities.testutils.CloudObjectTestUtils;
 
 import com.amazonaws.services.sqs.AmazonSQS;
+import com.amazonaws.services.sqs.model.GetQueueAttributesRequest;
+import com.amazonaws.services.sqs.model.GetQueueAttributesResult;
 import com.amazonaws.services.sqs.model.Message;
 import org.apache.hadoop.fs.Path;
 import org.json.JSONObject;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
@@ -43,9 +46,12 @@ import java.util.List;
 
 import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelector.Config.S3_SOURCE_QUEUE_REGION;
 import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelector.Config.S3_SOURCE_QUEUE_URL;
+import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelector.SQS_ATTR_APPROX_MESSAGES;
 import static org.apache.hudi.utilities.sources.helpers.TestCloudObjectsSelector.REGION_NAME;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
 
 public class TestS3EventsMetaSelector extends HoodieClientTestHarness {
 
@@ -104,12 +110,15 @@ public class TestS3EventsMetaSelector extends HoodieClientTestHarness {
     assertEquals("1627376736755", eventFromQueue.getRight());
   }
 
-  @ParameterizedTest
-  @ValueSource(classes = {S3EventsMetaSelector.class})
-  public void testEventsFromQueueNoMessages(Class<?> clazz) {
-    S3EventsMetaSelector selector = (S3EventsMetaSelector) ReflectionUtils.loadClass(clazz.getName(), props);
-    List<Message> processed = new ArrayList<>();
+  @Test
+  public void testEventsFromQueueNoMessages() {
+    S3EventsMetaSelector selector = new S3EventsMetaSelector(props);
+    when(sqs.getQueueAttributes(any(GetQueueAttributesRequest.class)))
+        .thenReturn(
+            new GetQueueAttributesResult()
+                .addAttributesEntry(SQS_ATTR_APPROX_MESSAGES, "0"));
 
+    List<Message> processed = new ArrayList<>();
     Pair<List<String>, String> eventFromQueue =
         selector.getNextEventsFromQueue(sqs, Option.empty(), processed);
 
