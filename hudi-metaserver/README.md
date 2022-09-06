@@ -16,11 +16,23 @@
 -->
 
 # How to compile
-If you update the `hudi-metaserver.thrift`, you have to recompile it to bring the new thrift file into effect. 
 
-Firstly, make sure `/usr/local/bin/thrift` exists.
+There a two ways, if there is a thrift binary in the local, please see the first one.
+If docker is more convenient for you, please see the other one.
+
+### Way1: Compile with thrift binary
+
+Firstly, make sure `/usr/local/bin/thrift` exists, and its version is the same with the one declared in the pom.xml.
+
 Then compile the module with maven options `-Pthrift`.
-Finally, the source code of thrift file generates and it is under the `src/main/thrift/gen-java`.
+
+### Way2: Compile with docker
+
+Firstly, make sure there is a docker in the local.
+
+Secondly run the script `sh hudi-metaserver/bin/compile_thrift_by_docker.sh`.
+
+Then the source code of thrift file generates and it is under the `src/main/thrift/gen-java`.
 ```shell
 ├── gen-java
 │   └── org
@@ -35,6 +47,9 @@ Finally, the source code of thrift file generates and it is under the `src/main/
 
 ```
 
+After source code generates, just compile the module with common maven commands.
+
+
 # How to run a job with Hudi meta server
 
 ### Start Hudi meta server
@@ -48,7 +63,7 @@ dataSource.password=password
 
    make sure `hudi-metaserver-${project.version}.jar` is under the directory,
 ```shell
-sh start-hudi-metaserver.sh
+sh start_hudi_metaserver.sh
 ```
 
 ### Write client configurations
