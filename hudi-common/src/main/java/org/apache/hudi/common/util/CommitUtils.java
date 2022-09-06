@@ -113,7 +113,7 @@ public class CommitUtils {
     }
 
     LOG.info("Creating  metadata for " + operationType + " numWriteStats:" + writeStats.size()
-        + "numReplaceFileIds:" + partitionToReplaceFileIds.values().stream().mapToInt(e -> e.size()).sum());
+        + " numReplaceFileIds:" + partitionToReplaceFileIds.values().stream().mapToInt(e -> e.size()).sum());
     return commitMetadata;
   }
 
