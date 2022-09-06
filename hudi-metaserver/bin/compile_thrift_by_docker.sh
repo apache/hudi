@@ -18,5 +18,6 @@
 
 THRIFT_FILE_PATH=hudi-metaserver/src/main/thrift
 docker pull thrift:0.12.0
-docker run -v "$THRIFT_FILE_PATH/thrift" thrift thrift -o /thrift/ --gen java /thrift/hudi-metaserver.thrift
+pwd
+docker run -v "$THRIFT_FILE_PATH:/thrift" thrift thrift -o /thrift/ --gen java /thrift/hudi-metaserver.thrift
 ls hudi-metaserver/src/main/thrift
