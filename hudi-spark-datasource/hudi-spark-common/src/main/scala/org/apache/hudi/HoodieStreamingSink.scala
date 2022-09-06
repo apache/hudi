@@ -104,7 +104,7 @@ class HoodieStreamingSink(sqlContext: SQLContext,
 
     val queryId = sqlContext.sparkContext.getLocalProperty(StreamExecution.QUERY_ID_KEY)
     checkArgument(queryId != null, "queryId is null")
-    if (metaClient.isDefined && canSkipBatch(batchId)) {
+    if (metaClient.isDefined && canSkipBatch(batchId, options.getOrDefault(OPERATION.key, UPSERT_OPERATION_OPT_VAL))) {
       log.warn(s"Skipping already completed batch $batchId in query $queryId")
       return
     }
@@ -296,17 +296,22 @@ class HoodieStreamingSink(sqlContext: SQLContext,
     }
   }
 
-  private def canSkipBatch(incomingBatchId: Long): Boolean = {
-    // get the latest checkpoint from the commit metadata to check if the microbatch has already been prcessed or not
-    val commitMetadata = CommitUtils.getLatestCommitMetadataWithValidCheckpointInfo(
-      metaClient.get.getActiveTimeline.getCommitsTimeline, SINK_CHECKPOINT_KEY)
-    if (commitMetadata.isPresent) {
-      val lastCheckpoint = commitMetadata.get.getMetadata(SINK_CHECKPOINT_KEY)
-      if (!StringUtils.isNullOrEmpty(lastCheckpoint)) {
-        latestCommittedBatchId = HoodieSinkCheckpoint.fromJson(lastCheckpoint).keys.head.toLong
+  private def canSkipBatch(incomingBatchId: Long, operationType: String): Boolean = {
+    if (!DELETE_OPERATION_OPT_VAL.equals(operationType)) {
+      // get the latest checkpoint from the commit metadata to check if the microbatch has already been prcessed or not
+      val commitMetadata = CommitUtils.getLatestCommitMetadataWithValidCheckpointInfo(
+        metaClient.get.getActiveTimeline.getCommitsTimeline, SINK_CHECKPOINT_KEY)
+      if (commitMetadata.isPresent) {
+        val lastCheckpoint = commitMetadata.get.getMetadata(SINK_CHECKPOINT_KEY)
+        if (!StringUtils.isNullOrEmpty(lastCheckpoint)) {
+          latestCommittedBatchId = HoodieSinkCheckpoint.fromJson(lastCheckpoint).keys.head.toLong
+        }
       }
+      latestCommittedBatchId >= incomingBatchId
+    } else {
+      // In case of DELETE_OPERATION_OPT_VAL the incoming batch id is sentinel value (-1)
+      false
     }
-    latestCommittedBatchId >= incomingBatchId
   }
 }
 
