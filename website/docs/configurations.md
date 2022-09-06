@@ -1157,8 +1157,8 @@ The semantics is best effort because the compaction job would finally merge all 
 ---
 
 > #### read.tasks
-> Parallelism of tasks that do actual read, default is 4<br></br>
-> **Default Value**: 4 (Optional)<br></br>
+> Parallelism of tasks that do actual read, default is the parallelism of the execution environment<br></br>
+> **Default Value**: N/A (Optional)<br></br>
 > `Config Param: READ_TASKS`<br></br>
 
 ---
