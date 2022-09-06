@@ -87,6 +87,30 @@ public class KeyGenUtils {
     }).toArray(String[]::new);
   }
 
+  /**
+   * Extracts the partition fields in strings out of the given partitionPath,
+   * this is the reverse operation of {@link #getPartitionPath(GenericRecord record, String partitionPathField,
+   *       boolean hiveStylePartitioning, boolean encodePartitionPath, boolean consistentLogicalTimestampEnabled)}.
+   *
+   * @see SimpleAvroKeyGenerator
+   * @see org.apache.hudi.keygen.ComplexAvroKeyGenerator
+   */
+  public static String[] extractPartitionPath(String partitionPath, boolean hiveStylePartitioning, boolean encodePartitionPath) {
+    String[] fields = partitionPath.split(DEFAULT_PARTITION_PATH_SEPARATOR);
+
+    return Arrays.stream(fields).map(field -> {
+      String partitionVal = field;
+      if (hiveStylePartitioning) {
+        final String[] partitionArray = field.split("=");
+        partitionVal = partitionArray.length == 1 ? partitionArray[0] : partitionArray[1];
+      }
+      if (encodePartitionPath) {
+        partitionVal = PartitionPathEncodeUtils.unescapePathName(partitionVal);
+      }
+      return partitionVal;
+    }).toArray(String[]::new);
+  }
+
   public static String getRecordKey(GenericRecord record, List<String> recordKeyFields, boolean consistentLogicalTimestampEnabled) {
     boolean keyIsNullEmpty = true;
     StringBuilder recordKey = new StringBuilder();
