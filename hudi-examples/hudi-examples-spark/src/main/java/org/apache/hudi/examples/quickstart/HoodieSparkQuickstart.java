@@ -65,8 +65,9 @@ public final class HoodieSparkQuickstart {
   public static void runQuickstart(JavaSparkContext jsc, SparkSession spark, String tableName, String tablePath) {
     final HoodieExampleDataGenerator<HoodieAvroPayload> dataGen = new HoodieExampleDataGenerator<>();
 
-    insertData(spark, jsc, tablePath, tableName, dataGen);
+    Dataset<Row> insertQueryDataIn = insertData(spark, jsc, tablePath, tableName, dataGen);
     queryData(spark, jsc, tablePath, tableName, dataGen);
+    assert insertQueryDataIn.except(spark.sql("select uuid, ts, rider, driver, begin_lat, begin_lon, end_lat, end_lon, fare from hudi_ro_table")).count() == 0;
 
     updateData(spark, jsc, tablePath, tableName, dataGen);
     queryData(spark, jsc, tablePath, tableName, dataGen);
@@ -87,7 +88,7 @@ public final class HoodieSparkQuickstart {
   /**
    * Generate some new trips, load them into a DataFrame and write the DataFrame into the Hudi dataset as below.
    */
-  public static void insertData(SparkSession spark, JavaSparkContext jsc, String tablePath, String tableName,
+  public static Dataset<Row> insertData(SparkSession spark, JavaSparkContext jsc, String tablePath, String tableName,
                                 HoodieExampleDataGenerator<HoodieAvroPayload> dataGen) {
     String commitTime = Long.toString(System.currentTimeMillis());
     List<String> inserts = dataGen.convertToStringList(dataGen.generateInserts(commitTime, 20));
@@ -101,6 +102,7 @@ public final class HoodieSparkQuickstart {
         .option(TBL_NAME.key(), tableName)
         .mode(Overwrite)
         .save(tablePath);
+    return df;
   }
 
   /**
@@ -144,8 +146,7 @@ public final class HoodieSparkQuickstart {
     //  ...
 
     spark.sql(
-            "select _hoodie_commit_time, _hoodie_record_key, _hoodie_partition_path, rider, driver, fare from  hudi_ro_table")
-        .show();
+            "select _hoodie_commit_time, _hoodie_record_key, _hoodie_partition_path, rider, driver, fare from  hudi_ro_table").show();
     //  +-------------------+--------------------+----------------------+-------------------+--------------------+------------------+
     //  |_hoodie_commit_time|  _hoodie_record_key|_hoodie_partition_path|              rider|              driver|              fare|
     //  +-------------------+--------------------+----------------------+-------------------+--------------------+------------------+
