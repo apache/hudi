@@ -267,7 +267,7 @@ REFRESH database.table_name
 ```
 
 ## Redshift Spectrum
-To set up Redshift Spectrum for querying Hudi, see the [Query Engine Setup](/docs/next/query_engine_setup#redshift-spectrum) page.
+To set up Redshift Spectrum for querying Hudi, see the [Query Engine Setup](/docs/query_engine_setup#redshift-spectrum) page.
 
 
 ## StarRocks
