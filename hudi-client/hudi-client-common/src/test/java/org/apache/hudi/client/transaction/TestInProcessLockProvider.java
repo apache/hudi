@@ -161,6 +161,47 @@ public class TestInProcessLockProvider {
   }
 
   @Test
+  public void testTryUnLockByDifferentThread() {
+    InProcessLockProvider inProcessLockProvider = new InProcessLockProvider(lockConfiguration, hadoopConfiguration);
+    final AtomicBoolean writer3Completed = new AtomicBoolean(false);
+
+    // Main test thread
+    Assertions.assertTrue(inProcessLockProvider.tryLock());
+
+    // Another writer thread
+    Thread writer2 = new Thread(() -> {
+      assertDoesNotThrow(() -> {
+        inProcessLockProvider.unlock();
+      });
+    });
+    writer2.start();
+    try {
+      writer2.join();
+    } catch (InterruptedException e) {
+      //
+    }
+
+    // try acquiring by diff thread. should fail. since main thread still have acquired the lock. if previous unblock by a different thread would have succeeded, this lock
+    // acquisition would succeed.
+    Thread writer3 = new Thread(() -> {
+      Assertions.assertFalse(inProcessLockProvider.tryLock(50, TimeUnit.MILLISECONDS));
+      writer3Completed.set(true);
+    });
+    writer3.start();
+    try {
+      writer3.join();
+    } catch (InterruptedException e) {
+      //
+    }
+
+    Assertions.assertTrue(writer3Completed.get());
+    assertDoesNotThrow(() -> {
+      // unlock by main thread should succeed.
+      inProcessLockProvider.unlock();
+    });
+  }
+
+  @Test
   public void testTryLockAcquisitionBeforeTimeOutFromTwoThreads() {
     final InProcessLockProvider inProcessLockProvider = new InProcessLockProvider(lockConfiguration, hadoopConfiguration);
     final int threadCount = 3;

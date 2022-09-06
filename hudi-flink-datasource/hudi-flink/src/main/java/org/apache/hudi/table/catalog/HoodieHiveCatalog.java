@@ -536,7 +536,11 @@ public class HoodieHiveCatalog extends AbstractCatalog {
 
     //set sd
     StorageDescriptor sd = new StorageDescriptor();
-    List<FieldSchema> allColumns = HiveSchemaUtils.createHiveColumns(table.getSchema());
+    // the metadata fields should be included to keep sync with the hive sync tool,
+    // because since Hive 3.x, there is validation when altering table,
+    // when the metadata fields are synced through the hive sync tool,
+    // a compatability issue would be reported.
+    List<FieldSchema> allColumns = HiveSchemaUtils.toHiveFieldSchema(table.getSchema());
 
     // Table columns and partition keys
     CatalogTable catalogTable = (CatalogTable) table;
@@ -893,9 +897,9 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     } else {
       Map<String, String> newOptions = new HashMap<>(options);
       // set up hive sync options
-      newOptions.put(FlinkOptions.HIVE_SYNC_ENABLED.key(), "true");
-      newOptions.put(FlinkOptions.HIVE_SYNC_METASTORE_URIS.key(), hiveConf.getVar(HiveConf.ConfVars.METASTOREURIS));
-      newOptions.put(FlinkOptions.HIVE_SYNC_MODE.key(), "hms");
+      newOptions.putIfAbsent(FlinkOptions.HIVE_SYNC_ENABLED.key(), "true");
+      newOptions.putIfAbsent(FlinkOptions.HIVE_SYNC_METASTORE_URIS.key(), hiveConf.getVar(HiveConf.ConfVars.METASTOREURIS));
+      newOptions.putIfAbsent(FlinkOptions.HIVE_SYNC_MODE.key(), "hms");
       newOptions.putIfAbsent(FlinkOptions.HIVE_SYNC_SUPPORT_TIMESTAMP.key(), "true");
       newOptions.computeIfAbsent(FlinkOptions.HIVE_SYNC_DB.key(), k -> tablePath.getDatabaseName());
       newOptions.computeIfAbsent(FlinkOptions.HIVE_SYNC_TABLE.key(), k -> tablePath.getObjectName());
