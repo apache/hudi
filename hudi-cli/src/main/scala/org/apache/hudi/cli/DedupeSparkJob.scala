@@ -18,6 +18,7 @@
 package org.apache.hudi.cli
 
 import java.util.stream.Collectors
+
 import org.apache.hadoop.fs.{FileSystem, FileUtil, Path}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieBaseFile, HoodieRecord}
@@ -77,7 +78,7 @@ class DedupeSparkJob(basePath: String,
     val metadata = HoodieTableMetaClient.builder().setConf(fs.getConf).setBasePath(basePath).build()
 
     val allFiles = fs.listStatus(new org.apache.hadoop.fs.Path(s"$basePath/$duplicatedPartitionPath"))
-    val fsView = new HoodieTableFileSystemView(metadata, metadata.getActiveTimeline.getAllCommitsTimeline.filterCompletedInstants(), allFiles)
+    val fsView = new HoodieTableFileSystemView(metadata, metadata.getActiveTimeline.getCommitsTimeline.filterCompletedInstants(), allFiles)
     val latestFiles: java.util.List[HoodieBaseFile] = fsView.getLatestBaseFiles().collect(Collectors.toList[HoodieBaseFile]())
     val filteredStatuses = latestFiles.map(f => f.getPath)
     LOG.info(s" List of files under partition: ${} =>  ${filteredStatuses.mkString(" ")}")
@@ -186,7 +187,7 @@ class DedupeSparkJob(basePath: String,
     val metadata = HoodieTableMetaClient.builder().setConf(fs.getConf).setBasePath(basePath).build()
 
     val allFiles = fs.listStatus(new Path(s"$basePath/$duplicatedPartitionPath"))
-    val fsView = new HoodieTableFileSystemView(metadata, metadata.getActiveTimeline.getAllCommitsTimeline.filterCompletedInstants(), allFiles)
+    val fsView = new HoodieTableFileSystemView(metadata, metadata.getActiveTimeline.getCommitsTimeline.filterCompletedInstants(), allFiles)
 
     val latestFiles: java.util.List[HoodieBaseFile] = fsView.getLatestBaseFiles().collect(Collectors.toList[HoodieBaseFile]())
 
