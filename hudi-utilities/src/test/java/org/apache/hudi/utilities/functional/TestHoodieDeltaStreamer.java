@@ -56,6 +56,7 @@ import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncClient;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
+import org.apache.hudi.metrics.Metrics;
 import org.apache.hudi.utilities.DummySchemaProvider;
 import org.apache.hudi.utilities.HoodieClusteringJob;
 import org.apache.hudi.utilities.HoodieIndexer;
@@ -134,6 +135,8 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.config.metrics.HoodieMetricsConfig.METRICS_REPORTER_TYPE_VALUE;
+import static org.apache.hudi.config.metrics.HoodieMetricsConfig.TURN_METRICS_ON;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_FIELDS;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
 import static org.apache.hudi.utilities.UtilHelpers.EXECUTE;
@@ -743,6 +746,20 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   }
 
   @Test
+  public void testUpsertsCOW_ContinuousModeDisabled() throws Exception {
+    String tableBasePath = dfsBasePath  + "/non_continuous_cow";
+    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT);
+    cfg.tableType = HoodieTableType.COPY_ON_WRITE.name();
+    cfg.configs.add(String.format("%s=%s", TURN_METRICS_ON.key(), "true"));
+    cfg.configs.add(String.format("%s=%s", METRICS_REPORTER_TYPE_VALUE.key(), "CONSOLE"));
+    cfg.continuousMode = false;
+    HoodieDeltaStreamer ds = new HoodieDeltaStreamer(cfg, jsc);
+    ds.sync();
+    TestHelpers.assertRecordCount(SQL_SOURCE_NUM_RECORDS, tableBasePath, sqlContext);
+    assertFalse(Metrics.isInitialized(), "Metrics should be shutdown");
+  }
+
+  @Test
   public void testUpsertsCOWContinuousModeShutdownGracefully() throws Exception {
     testUpsertsContinuousMode(HoodieTableType.COPY_ON_WRITE, "continuous_cow", true);
   }
@@ -750,6 +767,20 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   @Test
   public void testUpsertsMORContinuousMode() throws Exception {
     testUpsertsContinuousMode(HoodieTableType.MERGE_ON_READ, "continuous_mor");
+  }
+
+  @Test
+  public void testUpsertsMOR_ContinuousModeDisabled() throws Exception {
+    String tableBasePath = dfsBasePath  + "/non_continuous_mor";
+    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT);
+    cfg.tableType = HoodieTableType.MERGE_ON_READ.name();
+    cfg.configs.add(String.format("%s=%s", TURN_METRICS_ON.key(), "true"));
+    cfg.configs.add(String.format("%s=%s", METRICS_REPORTER_TYPE_VALUE.key(), "CONSOLE"));
+    cfg.continuousMode = false;
+    HoodieDeltaStreamer ds = new HoodieDeltaStreamer(cfg, jsc);
+    ds.sync();
+    TestHelpers.assertRecordCount(SQL_SOURCE_NUM_RECORDS, tableBasePath, sqlContext);
+    assertFalse(Metrics.isInitialized(), "Metrics should be shutdown");
   }
 
   private void testUpsertsContinuousMode(HoodieTableType tableType, String tempDir) throws Exception {
