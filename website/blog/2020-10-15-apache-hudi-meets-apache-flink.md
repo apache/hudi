@@ -4,6 +4,10 @@ excerpt: "The design and latest progress of the integration of Apache Hudi and A
 author: wangxianghu
 category: blog
 image: /assets/images/blog/2020-10-15-apache-hudi-meets-apache-flink.png
+tags:
+- blog
+- apache flink
+- apache hudi
 ---
 
 Apache Hudi (Hudi for short) is a data lake framework created at Uber. Hudi joined the Apache incubator for incubation in January 2019, and was promoted to the top Apache project in May 2020. It is one of the most popular data lake frameworks.

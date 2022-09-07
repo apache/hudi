@@ -4,6 +4,10 @@ excerpt: "From listing to log-based approach, a reliable way of ingesting data f
 author: codope
 category: blog
 image: /assets/images/blog/s3_events_source_design.png
+tags:
+- design
+- deltastreamer
+- apache hudi
 ---
 
 In this post we will talk about a new deltastreamer source which reliably and efficiently processes new data files as they arrive in AWS S3.

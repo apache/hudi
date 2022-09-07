@@ -4,7 +4,12 @@ excerpt: "A review of new Debezium source connector for Apache Hudi"
 author: Rajesh Mahindra
 category: blog
 image: /assets/images/blog/debezium.png
-
+tags:
+- design
+- deltastreamer
+- cdc
+- change-data-capture
+- apache hudi
 ---
 
 As of Hudi v0.10.0, we are excited to announce the availability of [Debezium](https://debezium.io/) sources for [Deltastreamer](https://hudi.apache.org/docs/hoodie_deltastreamer) that provide the ingestion of change capture data (CDC) from Postgres and Mysql databases to your data lake. For more details, please refer to the original [RFC](https://github.com/apache/hudi/blob/master/rfc/rfc-39/rfc-39.md).

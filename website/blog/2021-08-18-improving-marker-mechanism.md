@@ -4,6 +4,11 @@ excerpt: "We introduce a new marker mechanism leveraging the timeline server to 
 author: yihua
 category: blog
 image: /assets/images/blog/marker-mechanism/timeline-server-based-marker-mechanism.png
+tags:
+- design
+- timeline-server
+- markers
+- apache hudi
 ---
 
 Hudi supports fully automatic cleanup of uncommitted data on storage during its write operations. Write operations in an Apache Hudi table use markers to efficiently track the data files written to storage. In this blog, we dive into the design of the existing direct marker file mechanism and explain its performance problems on cloud storage like AWS S3 for 

@@ -4,6 +4,10 @@ excerpt: "Vinoth Chandar, Creator of Apache Hudi, dives into concurrency control
 author: vinoth
 category: blog
 image: /assets/images/blog/concurrency/MultiWriter.gif
+tags:
+- blog
+- concurrency-control
+- apache hudi
 ---
 
 Transactions on data lakes are now considered a key characteristic of a Lakehouse these days. But what has actually been accomplished so far? What are the current approaches? How do they fare in real-world scenarios? These questions are the focus of this blog. 

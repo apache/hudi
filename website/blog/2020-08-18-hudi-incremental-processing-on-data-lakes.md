@@ -4,6 +4,11 @@ excerpt: "How Apache Hudi provides ability for incremental data processing."
 author: vinoyang
 category: blog
 image: /assets/images/blog/incr-processing/image7.png
+tags:
+- blog
+- datalake
+- incremental-processing
+- apache hudi
 ---
 
 ### NOTE: This article is a translation of the infoq.cn article, found [here](https://www.infoq.cn/article/CAgIDpfJBVcJHKJLSbhe), with minor edits

@@ -4,6 +4,10 @@ excerpt: "A reflection on the growth and momentum of Apache Hudi in 2021"
 author: vinoth
 category: blog
 image: /assets/images/Hudi_community.png
+tags:
+- blog
+- community
+- apache hudi
 ---
 
 As the year came to end, I took some time to reflect on where we are and what we accomplished in 2021. I am humbled by how strong our community is and how regardless of it being another tough pandemic year, that people from around the globe leaned in together and made this the best year yet for Apache Hudi. In this blog I want to recap some of the 2021 highlights.

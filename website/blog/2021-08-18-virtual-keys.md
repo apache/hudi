@@ -3,6 +3,10 @@ title: "Adding support for Virtual Keys in Hudi"
 excerpt: "Supporting Virtual keys in Hudi for reducing storage overhead"
 author: shivnarayan
 category: blog
+tags:
+- design
+- metadata
+- apache hudi
 ---
 
 Apache Hudi helps you build and manage data lakes with different table types, config knobs to cater to everyone's need.

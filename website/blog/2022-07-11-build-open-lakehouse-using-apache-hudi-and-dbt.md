@@ -4,6 +4,11 @@ excerpt: "How to style blog focused projects on teaching how to build an open La
 author: Vinoth Govindarajan
 category: blog
 image: /assets/images/blog/hudi_dbt_lakehouse.png
+tags:
+- how-to
+- deltastreamer
+- incremental-processing
+- apache hudi
 ---
 
 The focus of this blog is to show you how to build an open lakehouse leveraging incremental data processing and performing field-level updates. We are excited to announce that you can now use Apache Hudi + dbt for building open data lakehouses.

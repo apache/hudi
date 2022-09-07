@@ -4,6 +4,12 @@ excerpt: "How T3Go’s high-performance data lake using Apache Hudi and Alluxio 
 author: t3go
 category: blog
 image: /assets/images/blog/2020-12-01-t3go-architecture.png
+tags:
+- use-case
+- near real-time analytics 
+- incremental-processing
+- caching
+- apache hudi
 ---
 
 ## Building High-Performance Data Lake Using Apache Hudi and Alluxio at T3Go
