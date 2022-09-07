@@ -66,9 +66,12 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -106,7 +109,7 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testMultiReaderForHoodieBackedTableMetadata(boolean reuse) throws Exception {
-    final int taskNumber = 100;
+    final int taskNumber = 50;
     HoodieTableType tableType = HoodieTableType.COPY_ON_WRITE;
     init(tableType);
     testTable.doWriteOperation("000001", INSERT, emptyList(), asList("p1"), 1);
@@ -115,33 +118,30 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
     List<String> metadataPartitions = tableMetadata.getAllPartitionPaths();
     String partition = metadataPartitions.get(0);
     String finalPartition = basePath + "/" + partition;
-    ArrayList<String> duplicatedPartitions = new ArrayList<>(taskNumber);
-    for (int i = 0; i < taskNumber; i++) {
-      duplicatedPartitions.add(finalPartition);
-    }
     ExecutorService executors = Executors.newFixedThreadPool(taskNumber);
     AtomicBoolean flag = new AtomicBoolean(false);
     CountDownLatch downLatch = new CountDownLatch(taskNumber);
     AtomicInteger filesNumber = new AtomicInteger(0);
 
-    for (String part : duplicatedPartitions) {
+    // call getAllFilesInPartition api from meta data table in parallel
+    for (int i = 0; i < taskNumber; i++) {
       executors.submit(new Runnable() {
         @Override
         public void run() {
           try {
             downLatch.countDown();
             downLatch.await();
-            FileStatus[] files = tableMetadata.getAllFilesInPartition(new Path(part));
+            FileStatus[] files = tableMetadata.getAllFilesInPartition(new Path(finalPartition));
             filesNumber.addAndGet(files.length);
             assertEquals(1, files.length);
           } catch (Exception e) {
-            flag.set(true);
+            flag.compareAndSet(false, true);
           }
         }
       });
     }
     executors.shutdown();
-    executors.awaitTermination(24, TimeUnit.HOURS);
+    executors.awaitTermination(5, TimeUnit.MINUTES);
     assertFalse(flag.get());
     assertEquals(filesNumber.get(), taskNumber);
   }
