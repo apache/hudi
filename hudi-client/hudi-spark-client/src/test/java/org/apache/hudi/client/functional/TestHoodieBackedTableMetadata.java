@@ -106,6 +106,12 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
     verifyBaseMetadataTable(reuseReaders);
   }
 
+  /**
+   * Create a cow table and call getAllFilesInPartition api in parallel which reads data files from MDT
+   * This UT is guard that multi readers for MDT#getAllFilesInPartition api is safety.
+   * @param reuse
+   * @throws Exception
+   */
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testMultiReaderForHoodieBackedTableMetadata(boolean reuse) throws Exception {
