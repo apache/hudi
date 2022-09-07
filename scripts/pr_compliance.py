@@ -2,7 +2,7 @@ import re
 import os
 
 def title_is_ok(title):
-    return len(re.findall('(\[HUDI\-[0-9]{4,}\]|\[MINOR\])',title)) == 1
+    return len(re.findall('(\[HUDI\-[0-9]{1,}\]|\[MINOR\])',title)) == 1
 
 def test_title():
     #test that position doesn't matter
