@@ -18,6 +18,7 @@
 
 package org.apache.hudi.sink.compact;
 
+import org.apache.flink.client.deployment.application.ApplicationExecutionException;
 import org.apache.flink.streaming.api.functions.sink.DiscardingSink;
 import org.apache.hudi.async.HoodieAsyncTableService;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
@@ -58,6 +59,8 @@ public class HoodieFlinkCompactor {
 
   protected static final Logger LOG = LoggerFactory.getLogger(HoodieFlinkCompactor.class);
 
+  private static final String NO_EXECUTE_CALL_KEYWORD = "The application contains no execute() calls";
+
   /**
    * Flink Execution Environment.
    */
@@ -95,6 +98,12 @@ public class HoodieFlinkCompactor {
       LOG.info("Hoodie Flink Compactor running only single round");
       try {
         compactionScheduleService.compact();
+      } catch (ApplicationExecutionException aee) {
+        if (aee.getMessage().contains(NO_EXECUTE_CALL_KEYWORD)) {
+          LOG.info("Compaction is not performed");
+        } else {
+          throw aee;
+        }
       } catch (Exception e) {
         LOG.error("Got error running delta sync once. Shutting down", e);
         throw e;
@@ -195,6 +204,12 @@ public class HoodieFlinkCompactor {
             try {
               compact();
               Thread.sleep(cfg.minCompactionIntervalSeconds * 1000);
+            } catch (ApplicationExecutionException aee) {
+              if (aee.getMessage().contains(NO_EXECUTE_CALL_KEYWORD)) {
+                LOG.info("Compaction is not performed.");
+              } else {
+                throw new HoodieException(aee.getMessage(), aee);
+              }
             } catch (Exception e) {
               LOG.error("Shutting down compaction service due to exception", e);
               error = true;
@@ -219,7 +234,6 @@ public class HoodieFlinkCompactor {
           if (!scheduled) {
             // do nothing.
             LOG.info("No compaction plan for this job ");
-            executeDummyPipeline();
             return;
           }
           table.getMetaClient().reloadActiveTimeline();
@@ -232,7 +246,6 @@ public class HoodieFlinkCompactor {
       if (requested.isEmpty()) {
         // do nothing.
         LOG.info("No compaction plan scheduled, turns on the compaction plan schedule with --schedule option");
-        executeDummyPipeline();
         return;
       }
 
@@ -263,7 +276,6 @@ public class HoodieFlinkCompactor {
       if (compactionPlans.isEmpty()) {
         // No compaction plan, do nothing and return.
         LOG.info("No compaction plan for instant " + String.join(",", compactionInstantTimes));
-        executeDummyPipeline();
         return;
       }
 
@@ -277,7 +289,6 @@ public class HoodieFlinkCompactor {
           LOG.warn("The compaction plan was fetched through the auxiliary path(.tmp) but not the meta path(.hoodie).\n"
               + "Clean the compaction plan in auxiliary path and cancels the compaction");
           CompactionUtil.cleanInstant(table.getMetaClient(), instant);
-          executeDummyPipeline();
           return;
         }
       }
@@ -323,18 +334,6 @@ public class HoodieFlinkCompactor {
     @VisibleForTesting
     public void shutDown() {
       shutdownAsyncService(false);
-    }
-
-    /**
-     * Execute a dummy pipeline to prevent "no execute() calls" exceptions from being thrown if compaction is not
-     * performed. i.e. The `compact()` method is terminated prematurely before `execute()` is invoked.
-     */
-    private void executeDummyPipeline() throws Exception {
-      env.fromElements(0, 0)
-          .addSink(new DiscardingSink<>())
-          .setParallelism(1)
-          .name("dummy_sink");
-      env.execute();
     }
   }
 

@@ -18,6 +18,7 @@
 
 package org.apache.hudi.sink.clustering;
 
+import org.apache.flink.client.deployment.application.ApplicationExecutionException;
 import org.apache.flink.streaming.api.functions.sink.DiscardingSink;
 import org.apache.hudi.async.HoodieAsyncTableService;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
@@ -63,6 +64,8 @@ public class HoodieFlinkClusteringJob {
 
   protected static final Logger LOG = LoggerFactory.getLogger(HoodieFlinkClusteringJob.class);
 
+  private static final String NO_EXECUTE_CALL_KEYWORD = "The application contains no execute() calls";
+
   /**
    * Flink Execution Environment.
    */
@@ -100,6 +103,13 @@ public class HoodieFlinkClusteringJob {
       LOG.info("Hoodie Flink Clustering running only single round");
       try {
         clusteringScheduleService.cluster();
+      } catch (ApplicationExecutionException aee) {
+        if (aee.getMessage().contains(NO_EXECUTE_CALL_KEYWORD)) {
+          LOG.info("Clustering is not performed");
+        } else {
+          LOG.error("Got error trying to perform clustering. Shutting down", aee);
+          throw aee;
+        }
       } catch (Exception e) {
         LOG.error("Got error running delta sync once. Shutting down", e);
         throw e;
@@ -204,6 +214,12 @@ public class HoodieFlinkClusteringJob {
             try {
               cluster();
               Thread.sleep(cfg.minClusteringIntervalSeconds * 1000);
+            } catch (ApplicationExecutionException aee) {
+              if (aee.getMessage().contains(NO_EXECUTE_CALL_KEYWORD)) {
+                LOG.info("Clustering is not performed.");
+              } else {
+                throw new HoodieException(aee.getMessage(), aee);
+              }
             } catch (Exception e) {
               LOG.error("Shutting down clustering service due to exception", e);
               error = true;
@@ -243,7 +259,6 @@ public class HoodieFlinkClusteringJob {
         if (!scheduled) {
           // do nothing.
           LOG.info("No clustering plan for this job");
-          executeDummyPipeline();
           return;
         }
         table.getMetaClient().reloadActiveTimeline();
@@ -254,7 +269,6 @@ public class HoodieFlinkClusteringJob {
       if (instants.isEmpty()) {
         // do nothing.
         LOG.info("No clustering plan scheduled, turns on the clustering plan schedule with --schedule option");
-        executeDummyPipeline();
         return;
       }
 
@@ -287,7 +301,6 @@ public class HoodieFlinkClusteringJob {
       if (!clusteringPlanOption.isPresent()) {
         // do nothing.
         LOG.info("No clustering plan scheduled, turns on the clustering plan schedule with --schedule option");
-        executeDummyPipeline();
         return;
       }
 
@@ -297,7 +310,6 @@ public class HoodieFlinkClusteringJob {
           || (clusteringPlan.getInputGroups().isEmpty())) {
         // no clustering plan, do nothing and return.
         LOG.info("No clustering plan for instant " + clusteringInstant.getTimestamp());
-        executeDummyPipeline();
         return;
       }
 
@@ -312,7 +324,6 @@ public class HoodieFlinkClusteringJob {
         LOG.warn("The clustering plan was fetched through the auxiliary path(.tmp) but not the meta path(.hoodie).\n"
             + "Clean the clustering plan in auxiliary path and cancels the clustering");
         CompactionUtil.cleanInstant(table.getMetaClient(), instant);
-        executeDummyPipeline();
         return;
       }
 
@@ -364,18 +375,6 @@ public class HoodieFlinkClusteringJob {
     @VisibleForTesting
     public void shutDown() {
       shutdownAsyncService(false);
-    }
-
-    /**
-     * Execute a dummy pipeline to prevent "no execute() calls" exceptions from being thrown if clustering is not
-     * performed. i.e. The `cluster()` method is terminated prematurely before `execute()` is invoked.
-     */
-    private void executeDummyPipeline() throws Exception {
-      env.fromElements(0, 0)
-          .addSink(new DiscardingSink<>())
-          .setParallelism(1)
-          .name("dummy_sink");
-      env.execute();
     }
   }
 }
