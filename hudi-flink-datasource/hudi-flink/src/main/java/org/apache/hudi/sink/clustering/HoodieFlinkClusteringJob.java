@@ -19,7 +19,6 @@
 package org.apache.hudi.sink.clustering;
 
 import org.apache.flink.client.deployment.application.ApplicationExecutionException;
-import org.apache.flink.streaming.api.functions.sink.DiscardingSink;
 import org.apache.hudi.async.HoodieAsyncTableService;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
@@ -64,7 +63,7 @@ public class HoodieFlinkClusteringJob {
 
   protected static final Logger LOG = LoggerFactory.getLogger(HoodieFlinkClusteringJob.class);
 
-  private static final String NO_EXECUTE_CALL_KEYWORD = "The application contains no execute() calls";
+  private static final String NO_EXECUTE_KEYWORD = "no execute";
 
   /**
    * Flink Execution Environment.
@@ -104,7 +103,7 @@ public class HoodieFlinkClusteringJob {
       try {
         clusteringScheduleService.cluster();
       } catch (ApplicationExecutionException aee) {
-        if (aee.getMessage().contains(NO_EXECUTE_CALL_KEYWORD)) {
+        if (aee.getMessage().contains(NO_EXECUTE_KEYWORD)) {
           LOG.info("Clustering is not performed");
         } else {
           LOG.error("Got error trying to perform clustering. Shutting down", aee);
@@ -215,7 +214,7 @@ public class HoodieFlinkClusteringJob {
               cluster();
               Thread.sleep(cfg.minClusteringIntervalSeconds * 1000);
             } catch (ApplicationExecutionException aee) {
-              if (aee.getMessage().contains(NO_EXECUTE_CALL_KEYWORD)) {
+              if (aee.getMessage().contains(NO_EXECUTE_KEYWORD)) {
                 LOG.info("Clustering is not performed.");
               } else {
                 throw new HoodieException(aee.getMessage(), aee);
