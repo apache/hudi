@@ -66,35 +66,40 @@ public final class HoodieSparkQuickstart {
   public static void runQuickstart(JavaSparkContext jsc, SparkSession spark, String tableName, String tablePath) {
     final HoodieExampleDataGenerator<HoodieAvroPayload> dataGen = new HoodieExampleDataGenerator<>();
 
-    Dataset<Row> insertQueryDataIn = insertData(spark, jsc, tablePath, tableName, dataGen);
-    queryData(spark, jsc, tablePath, tableName, dataGen);
-    assert insertQueryDataIn.except(spark.sql("SELECT begin_lat, begin_lon, driver, end_lat, end_lon, fare, partitionpath, rider, ts, uuid FROM hudi_ro_table")).count() == 0;
+    String snapshotQuery = "SELECT begin_lat, begin_lon, driver, end_lat, end_lon, fare, partitionpath, rider, ts, uuid FROM hudi_ro_table";
 
-    Dataset<Row> updateQueryDataIn = updateData(spark, jsc, tablePath, tableName, dataGen);
+    Dataset<Row> insertDf = insertData(spark, jsc, tablePath, tableName, dataGen);
     queryData(spark, jsc, tablePath, tableName, dataGen);
-    assert spark.sql("SELECT begin_lat, begin_lon, driver, end_lat, end_lon, fare, partitionpath, rider, ts, uuid FROM hudi_ro_table").except(insertQueryDataIn).except(updateQueryDataIn).count() == 0;
+    assert insertDf.except(spark.sql(snapshotQuery)).count() == 0;
+
+    Dataset<Row> snapshotBeforeUpdate = spark.sql(snapshotQuery);
+    Dataset<Row> updateDf = updateData(spark, jsc, tablePath, tableName, dataGen);
+    queryData(spark, jsc, tablePath, tableName, dataGen);
+    assert spark.sql(snapshotQuery).intersect(updateDf).count() == updateDf.count();
+    assert spark.sql(snapshotQuery).except(updateDf).except(snapshotBeforeUpdate).count() == 0;
 
     incrementalQuery(spark, tablePath, tableName);
     pointInTimeQuery(spark, tablePath, tableName);
 
-    Dataset<Row> beforeDelete = spark.sql("SELECT begin_lat, begin_lon, driver, end_lat, end_lon, fare, partitionpath, rider, ts, uuid FROM hudi_ro_table");
-    Dataset<Row> deleteQueryIn = delete(spark, tablePath, tableName);
+    Dataset<Row> snapshotBeforeDelete = spark.sql(snapshotQuery);
+    Dataset<Row> deleteDf = delete(spark, tablePath, tableName);
     queryData(spark, jsc, tablePath, tableName, dataGen);
-    assert beforeDelete.except(deleteQueryIn).except(spark.sql("SELECT begin_lat, begin_lon, driver, end_lat, end_lon, fare, partitionpath, rider, ts, uuid FROM hudi_ro_table")).count() == 0;
+    assert spark.sql(snapshotQuery).intersect(deleteDf).count() == 0;
+    assert snapshotBeforeDelete.except(deleteDf).except(spark.sql(snapshotQuery)).count() == 0;
 
-    Dataset<Row> beforeOverwrite = spark.sql("SELECT begin_lat, begin_lon, driver, end_lat, end_lon, fare, partitionpath, rider, ts, uuid FROM hudi_ro_table");
-    Dataset<Row> overwriteDataIn = insertOverwriteData(spark, jsc, tablePath, tableName, dataGen);
-    Dataset<Row> afterOverwrite = spark.sql("SELECT begin_lat, begin_lon, driver, end_lat, end_lon, fare, partitionpath, rider, ts, uuid FROM hudi_ro_table");
-    Dataset<Row> overwriteIntersect = beforeOverwrite.intersect(afterOverwrite);
-    assert afterOverwrite.except(overwriteIntersect).except(overwriteDataIn).count() == 0;
+    Dataset<Row> snapshotBeforeOverwrite = spark.sql(snapshotQuery);
+    Dataset<Row> overwriteDf = insertOverwriteData(spark, jsc, tablePath, tableName, dataGen);
     queryData(spark, jsc, tablePath, tableName, dataGen);
+    Dataset<Row> withoutThirdPartitionDf = snapshotBeforeOverwrite.filter("partitionpath != '" + HoodieExampleDataGenerator.DEFAULT_THIRD_PARTITION_PATH + "'");
+    Dataset<Row> expectedDf = withoutThirdPartitionDf.union(overwriteDf);
+    assert spark.sql(snapshotQuery).except(expectedDf).count() == 0;
 
-    Dataset<Row> beforeDeleteByPartition = spark.sql(
-        "SELECT begin_lat, begin_lon, driver, end_lat, end_lon, fare, partitionpath, rider, ts, uuid FROM hudi_ro_table WHERE partitionpath NOT IN ("
-            + String.join(", ", HoodieExampleDataGenerator.DEFAULT_PARTITION_PATHS) + ")");
+
+    Dataset<Row> snapshotBeforeDeleteByPartition = spark.sql(snapshotQuery);
     deleteByPartition(spark, tablePath, tableName);
     queryData(spark, jsc, tablePath, tableName, dataGen);
-    assert spark.sql("SELECT begin_lat, begin_lon, driver, end_lat, end_lon, fare, partitionpath, rider, ts, uuid FROM hudi_ro_table").except(beforeDeleteByPartition).count() == 0;
+    assert spark.sql(snapshotQuery).intersect(snapshotBeforeDeleteByPartition.filter("partitionpath == '" + HoodieExampleDataGenerator.DEFAULT_FIRST_PARTITION_PATH + "'")).count() == 0;
+    assert spark.sql(snapshotQuery).count() == snapshotBeforeDeleteByPartition.filter("partitionpath != '" + HoodieExampleDataGenerator.DEFAULT_FIRST_PARTITION_PATH + "'").count();
   }
 
   /**
@@ -123,7 +128,7 @@ public final class HoodieSparkQuickstart {
   public static Dataset<Row> insertOverwriteData(SparkSession spark, JavaSparkContext jsc, String tablePath, String tableName,
                                                  HoodieExampleDataGenerator<HoodieAvroPayload> dataGen) {
     String commitTime = Long.toString(System.currentTimeMillis());
-    List<String> inserts = dataGen.convertToStringList(dataGen.generateInserts(commitTime, 20));
+    List<String> inserts = dataGen.convertToStringList(dataGen.generateInsertsOnPartition(commitTime, 20, HoodieExampleDataGenerator.DEFAULT_THIRD_PARTITION_PATH));
     Dataset<Row> df = spark.read().json(jsc.parallelize(inserts, 1));
 
     df.write().format("org.apache.hudi")
@@ -175,7 +180,7 @@ public final class HoodieSparkQuickstart {
                                         HoodieExampleDataGenerator<HoodieAvroPayload> dataGen) {
 
     String commitTime = Long.toString(System.currentTimeMillis());
-    List<String> updates = dataGen.convertToStringList(dataGen.generateUpdates(commitTime, 10));
+    List<String> updates = dataGen.convertToStringList(dataGen.generateUniqueUpdates(commitTime));
     Dataset<Row> df = spark.read().json(jsc.parallelize(updates, 1));
     df.write().format("org.apache.hudi")
         .options(QuickstartUtils.getQuickstartWriteConfigs())
@@ -195,9 +200,8 @@ public final class HoodieSparkQuickstart {
 
     Dataset<Row> roViewDF = spark.read().format("org.apache.hudi").load(tablePath + "/*/*/*/*");
     roViewDF.createOrReplaceTempView("hudi_ro_table");
-    //Dataset<Row> df = spark.sql("select uuid, partitionpath, ts from  hudi_ro_table limit 2");
-    Dataset<Row> ret = spark.sql("SELECT begin_lat, begin_lon, driver, end_lat, end_lon, fare, partitionpath, rider, ts, uuid FROM hudi_ro_table limit 2");
-    Dataset<Row> df = ret.drop("begin_lat", "begin_lon", "driver", "end_lat", "end_lon", "fare", "rider");
+    Dataset<Row> toBeDeletedDf = spark.sql("SELECT begin_lat, begin_lon, driver, end_lat, end_lon, fare, partitionpath, rider, ts, uuid FROM hudi_ro_table limit 2");
+    Dataset<Row> df = toBeDeletedDf.select("uuid", "partitionpath", "ts");
 
     df.write().format("org.apache.hudi")
         .options(QuickstartUtils.getQuickstartWriteConfigs())
@@ -208,11 +212,11 @@ public final class HoodieSparkQuickstart {
         .option("hoodie.datasource.write.operation", WriteOperationType.DELETE.value())
         .mode(Append)
         .save(tablePath);
-    return ret;
+    return toBeDeletedDf;
   }
 
   /**
-   * Delete the data of a single or multiple partitions.
+   * Delete the data of the first partition.
    */
   public static void deleteByPartition(SparkSession spark, String tablePath, String tableName) {
     Dataset<Row> df = spark.emptyDataFrame();
@@ -222,9 +226,8 @@ public final class HoodieSparkQuickstart {
         .option(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "uuid")
         .option(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "partitionpath")
         .option(TBL_NAME.key(), tableName)
-        .option("hoodie.datasource.write.operation", WriteOperationType.DELETE.value())
-        .option("hoodie.datasource.write.partitions.to.delete",
-            String.join(", ", HoodieExampleDataGenerator.DEFAULT_PARTITION_PATHS))
+        .option("hoodie.datasource.write.operation", WriteOperationType.DELETE_PARTITION.value())
+        .option("hoodie.datasource.write.partitions.to.delete", HoodieExampleDataGenerator.DEFAULT_FIRST_PARTITION_PATH)
         .mode(Append)
         .save(tablePath);
   }
@@ -241,7 +244,7 @@ public final class HoodieSparkQuickstart {
             .map((Function<Row, String>) row -> row.getString(0))
             .take(50);
 
-    String beginTime = commits.get(commits.size() - 2); // commit time we are interested in
+    String beginTime = commits.get(commits.size() - 1); // commit time we are interested in
 
     // incrementally query data
     Dataset<Row> incViewDF = spark
@@ -268,7 +271,7 @@ public final class HoodieSparkQuickstart {
             .map((Function<Row, String>) row -> row.getString(0))
             .take(50);
     String beginTime = "000"; // Represents all commits > this time.
-    String endTime = commits.get(commits.size() - 2); // commit time we are interested in
+    String endTime = commits.get(commits.size() - 1); // commit time we are interested in
 
     //incrementally query data
     Dataset<Row> incViewDF = spark.read().format("org.apache.hudi")
