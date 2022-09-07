@@ -4,9 +4,17 @@
         <title>Apache Hudi: User-Facing Analytics</title>
         <link>https://hudi.apache.org/cn/blog</link>
         <description>Apache Hudi Blog</description>
-        <lastBuildDate>Thu, 18 Aug 2022 00:00:00 GMT</lastBuildDate>
+        <lastBuildDate>Thu, 25 Aug 2022 00:00:00 GMT</lastBuildDate>
         <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
         <generator>https://github.com/jpmonette/feed</generator>
+        <item>
+            <title><![CDATA[Data Lake / Lakehouse Guide: Powered by Data Lake Table Formats (Delta Lake, Iceberg, Hudi)]]></title>
+            <link>https://hudi.apache.org/cn/blog/2022/08/25/Data-Lake-Lakehouse-Guide-Powered-by-Data-Lake-Table-Formats-Delta-Lake-Iceberg-Hudi</link>
+            <guid>/2022/08/25/Data-Lake-Lakehouse-Guide-Powered-by-Data-Lake-Table-Formats-Delta-Lake-Iceberg-Hudi</guid>
+            <pubDate>Thu, 25 Aug 2022 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://airbyte.com/blog/data-lake-lakehouse-guide-powered-by-table-formats-delta-lake-iceberg-hudi">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
         <item>
             <title><![CDATA[Apache Hudi vs Delta Lake vs Apache Iceberg - Lakehouse Feature Comparison]]></title>
             <link>https://hudi.apache.org/cn/blog/2022/08/18/Apache-Hudi-vs-Delta-Lake-vs-Apache-Iceberg-Lakehouse-Feature-Comparison</link>
@@ -14,6 +22,22 @@
             <pubDate>Thu, 18 Aug 2022 00:00:00 GMT</pubDate>
             <description><![CDATA[Redirecting... please wait!!]]></description>
             <content:encoded><![CDATA[<div url="https://www.onehouse.ai/blog/apache-hudi-vs-delta-lake-vs-apache-iceberg-lakehouse-feature-comparison">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[Use Flink Hudi to Build a Streaming Data Lake Platform]]></title>
+            <link>https://hudi.apache.org/cn/blog/2022/08/12/Use-Flink-Hudi-to-Build-a-Streaming-Data-Lake-Platform</link>
+            <guid>/2022/08/12/Use-Flink-Hudi-to-Build-a-Streaming-Data-Lake-Platform</guid>
+            <pubDate>Fri, 12 Aug 2022 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://www.alibabacloud.com/blog/use-flink-hudi-to-build-a-streaming-data-lake-platform_599240">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[How NerdWallet uses AWS and Apache Hudi to build a serverless, real-time analytics platform]]></title>
+            <link>https://hudi.apache.org/cn/blog/2022/08/09/How-NerdWallet-uses-AWS-and-Apache-Hudi-to-build-a-serverless-real-time-analytics-platform</link>
+            <guid>/2022/08/09/How-NerdWallet-uses-AWS-and-Apache-Hudi-to-build-a-serverless-real-time-analytics-platform</guid>
+            <pubDate>Tue, 09 Aug 2022 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://aws.amazon.com/blogs/big-data/how-nerdwallet-uses-aws-and-apache-hudi-to-build-a-serverless-real-time-analytics-platform/">Redirecting... please wait!! </div>]]></content:encoded>
         </item>
         <item>
             <title><![CDATA[Build Open Lakehouse using Apache Hudi & dbt]]></title>
