@@ -18,23 +18,23 @@
 
 package org.apache.hudi.metrics.prometheus;
 
-import com.codahale.metrics.Counter;
 import com.codahale.metrics.Gauge;
 import com.codahale.metrics.Histogram;
+import com.codahale.metrics.Counter;
 import com.codahale.metrics.Meter;
+import com.codahale.metrics.Timer;
 import com.codahale.metrics.MetricFilter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.ScheduledReporter;
-import com.codahale.metrics.Timer;
 import io.prometheus.client.CollectorRegistry;
 import io.prometheus.client.dropwizard.DropwizardExports;
 import io.prometheus.client.exporter.PushGateway;
+import java.net.MalformedURLException;
+import java.net.URL;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
-import java.net.MalformedURLException;
-import java.net.URL;
 import java.util.SortedMap;
 import java.util.concurrent.TimeUnit;
 
