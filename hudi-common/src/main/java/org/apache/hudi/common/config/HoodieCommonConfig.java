@@ -69,6 +69,10 @@ public class HoodieCommonConfig extends HoodieConfig {
     return getBoolean(DISK_MAP_BITCASK_COMPRESSION_ENABLED);
   }
 
+  public Long getLogFileBlockSize() {
+    return getLong(LOG_FILE_BLOCK_SIZE);
+  }
+
   private HoodieCommonConfig() {
     super();
   }

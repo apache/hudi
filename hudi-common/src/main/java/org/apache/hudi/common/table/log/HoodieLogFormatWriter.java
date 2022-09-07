@@ -230,7 +230,8 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
   }
 
   private void createNewFile() throws IOException {
-    this.output = fs.create(this.logFile.getPath(), false, bufferSize, replication, HoodieCommonConfig.LOG_FILE_BLOCK_SIZE.defaultValue(), null);
+    HoodieCommonConfig commonConfig = HoodieCommonConfig.newBuilder().build();
+    this.output = fs.create(this.logFile.getPath(), false, bufferSize, replication, commonConfig.getLogFileBlockSize(), null);
   }
 
   @Override
