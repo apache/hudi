@@ -35,7 +35,7 @@ import org.apache.hudi.sink.bulk.RowDataKeyGen;
 import org.apache.hudi.sink.bulk.sort.SortOperatorGen;
 import org.apache.hudi.sink.clustering.ClusteringCommitEvent;
 import org.apache.hudi.sink.clustering.ClusteringCommitSink;
-import org.apache.hudi.sink.clustering.ClusteringOperator;
+import org.apache.hudi.sink.clustering.ClusteringFunction;
 import org.apache.hudi.sink.clustering.ClusteringPlanEvent;
 import org.apache.hudi.sink.clustering.ClusteringPlanOperator;
 import org.apache.hudi.sink.common.WriteOperatorFactory;
@@ -53,11 +53,12 @@ import org.apache.flink.api.common.functions.Partitioner;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.state.KeyGroupRangeAssignment;
+import org.apache.flink.streaming.api.datastream.AsyncDataStream;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.DataStreamSink;
 import org.apache.flink.streaming.api.functions.sink.SinkFunction;
 import org.apache.flink.streaming.api.operators.KeyedProcessOperator;
-import org.apache.flink.streaming.api.operators.ProcessOperator;
+import org.apache.flink.streaming.api.operators.async.AsyncWaitOperatorFactory;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.planner.plan.nodes.exec.utils.ExecNodeUtil;
 import org.apache.flink.table.runtime.typeutils.InternalTypeInfo;
@@ -372,7 +373,7 @@ public class Pipelines {
         .keyBy(plan -> plan.getOperation().getFileGroupId().getFileId())
         .transform("compact_task",
             TypeInformation.of(CompactionCommitEvent.class),
-            new ProcessOperator<>(new CompactFunction(conf)))
+            new AsyncWaitOperatorFactory<>(new CompactFunction(conf), 0, 1, AsyncDataStream.OutputMode.ORDERED))
         .setParallelism(conf.getInteger(FlinkOptions.COMPACTION_TASKS))
         .addSink(new CompactionCommitSink(conf))
         .name("compact_commit")
@@ -412,7 +413,7 @@ public class Pipelines {
                 .stream().map(ClusteringOperation::getFileId).collect(Collectors.joining()))
         .transform("clustering_task",
             TypeInformation.of(ClusteringCommitEvent.class),
-            new ClusteringOperator(conf, rowType))
+            new ClusteringFunction.ClusteringOperatorFactory(conf, rowType))
         .setParallelism(conf.getInteger(FlinkOptions.CLUSTERING_TASKS))
         .addSink(new ClusteringCommitSink(conf))
         .name("clustering_commit")

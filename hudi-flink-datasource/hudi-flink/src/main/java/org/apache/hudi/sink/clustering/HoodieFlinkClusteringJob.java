@@ -307,7 +307,7 @@ public class HoodieFlinkClusteringJob {
           .rebalance()
           .transform("clustering_task",
               TypeInformation.of(ClusteringCommitEvent.class),
-              new ClusteringOperator(conf, rowType))
+              new ClusteringFunction.ClusteringOperatorFactory(conf, rowType))
           .setParallelism(clusteringParallelism);
 
       ExecNodeUtil.setManagedMemoryWeight(dataStream.getTransformation(),

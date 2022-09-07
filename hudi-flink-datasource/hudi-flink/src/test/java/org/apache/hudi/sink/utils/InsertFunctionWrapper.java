@@ -27,7 +27,6 @@ import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.StreamerUtil;
 
-import org.apache.flink.api.common.ExecutionConfig;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.io.disk.iomanager.IOManager;
 import org.apache.flink.runtime.io.disk.iomanager.IOManagerAsync;
@@ -37,12 +36,9 @@ import org.apache.flink.runtime.operators.coordination.MockOperatorCoordinatorCo
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 import org.apache.flink.runtime.operators.testutils.MockEnvironment;
 import org.apache.flink.runtime.operators.testutils.MockEnvironmentBuilder;
-import org.apache.flink.streaming.api.graph.StreamConfig;
 import org.apache.flink.streaming.api.operators.StreamingRuntimeContext;
 import org.apache.flink.streaming.api.operators.collect.utils.MockFunctionSnapshotContext;
 import org.apache.flink.streaming.api.operators.collect.utils.MockOperatorEventGateway;
-import org.apache.flink.streaming.runtime.tasks.StreamTask;
-import org.apache.flink.streaming.util.MockStreamTaskBuilder;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
 
@@ -88,13 +84,7 @@ public class InsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
     this.stateInitializationContext = new MockStateInitializationContext();
 
     this.asyncClustering = OptionsResolver.needsAsyncClustering(conf);
-    StreamConfig streamConfig = new StreamConfig(conf);
-    streamConfig.setOperatorID(new OperatorID());
-    StreamTask<?, ?> streamTask = new MockStreamTaskBuilder(environment)
-        .setConfig(new StreamConfig(conf))
-        .setExecutionConfig(new ExecutionConfig().enableObjectReuse())
-        .build();
-    this.clusteringFunctionWrapper = new ClusteringFunctionWrapper(this.conf, streamTask, streamConfig);
+    this.clusteringFunctionWrapper = new ClusteringFunctionWrapper(this.conf);
   }
 
   public void openFunction() throws Exception {

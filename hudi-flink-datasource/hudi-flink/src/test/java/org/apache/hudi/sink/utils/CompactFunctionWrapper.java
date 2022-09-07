@@ -33,10 +33,11 @@ import org.apache.flink.runtime.memory.MemoryManager;
 import org.apache.flink.runtime.operators.coordination.MockOperatorCoordinatorContext;
 import org.apache.flink.runtime.operators.testutils.MockEnvironment;
 import org.apache.flink.runtime.operators.testutils.MockEnvironmentBuilder;
+import org.apache.flink.streaming.api.functions.async.ResultFuture;
 import org.apache.flink.streaming.api.operators.StreamingRuntimeContext;
-import org.apache.flink.util.Collector;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 
 /**
@@ -96,15 +97,14 @@ public class CompactFunctionWrapper {
     // collect the CompactCommitEvents
     List<CompactionCommitEvent> compactCommitEvents = new ArrayList<>();
     for (CompactionPlanEvent event : output.getRecords()) {
-      compactFunction.processElement(event, null, new Collector<CompactionCommitEvent>() {
+      compactFunction.asyncInvoke(event, new ResultFuture<CompactionCommitEvent>() {
         @Override
-        public void collect(CompactionCommitEvent event) {
-          compactCommitEvents.add(event);
+        public void complete(Collection<CompactionCommitEvent> events) {
+          compactCommitEvents.addAll(events);
         }
 
         @Override
-        public void close() {
-
+        public void completeExceptionally(Throwable throwable) {
         }
       });
     }

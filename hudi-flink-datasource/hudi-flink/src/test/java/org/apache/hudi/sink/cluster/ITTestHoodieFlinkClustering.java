@@ -31,7 +31,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.sink.clustering.ClusteringCommitEvent;
 import org.apache.hudi.sink.clustering.ClusteringCommitSink;
-import org.apache.hudi.sink.clustering.ClusteringOperator;
+import org.apache.hudi.sink.clustering.ClusteringFunction;
 import org.apache.hudi.sink.clustering.ClusteringPlanSourceFunction;
 import org.apache.hudi.sink.clustering.FlinkClusteringConfig;
 import org.apache.hudi.sink.clustering.HoodieFlinkClusteringJob;
@@ -165,7 +165,7 @@ public class ITTestHoodieFlinkClustering {
         .rebalance()
         .transform("clustering_task",
             TypeInformation.of(ClusteringCommitEvent.class),
-            new ClusteringOperator(conf, rowType))
+            new ClusteringFunction.ClusteringOperatorFactory(conf, rowType))
         .setParallelism(clusteringPlan.getInputGroups().size());
 
     ExecNodeUtil.setManagedMemoryWeight(dataStream.getTransformation(),
