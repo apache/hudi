@@ -268,6 +268,14 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
       if sparkAdapter.isHoodieTable(target, sparkSession) && target.resolved =>
       val resolver = sparkSession.sessionState.conf.resolver
       val resolvedSource = analyzer.execute(source)
+      try {
+        analyzer.checkAnalysis(resolvedSource)
+      } catch {
+        case e: AnalysisException =>
+          val ae = new AnalysisException(e.message, e.line, e.startPosition, Option(resolvedSource))
+          ae.setStackTrace(e.getStackTrace)
+          throw ae
+      }
 
       def isInsertOrUpdateStar(assignments: Seq[Assignment]): Boolean = {
         if (assignments.isEmpty) {
