@@ -128,12 +128,15 @@ public class IncrementalInputSplits implements Serializable {
       return Result.EMPTY;
     }
 
-    final String startCommit = this.conf.getString(FlinkOptions.READ_START_COMMIT);
+    String startCommit = this.conf.getString(FlinkOptions.READ_START_COMMIT);
     final String endCommit = this.conf.getString(FlinkOptions.READ_END_COMMIT);
-    final boolean startFromEarliest = FlinkOptions.START_COMMIT_EARLIEST.equalsIgnoreCase(startCommit);
+    if (FlinkOptions.START_COMMIT_EARLIEST.equalsIgnoreCase(startCommit)) {
+      startCommit = commitTimeline.firstInstant().get().getTimestamp();
+      this.conf.setString(FlinkOptions.READ_START_COMMIT, startCommit);
+    }
     final boolean startOutOfRange = startCommit != null && commitTimeline.isBeforeTimelineStarts(startCommit);
     final boolean endOutOfRange = endCommit != null && commitTimeline.isBeforeTimelineStarts(endCommit);
-    boolean fullTableScan = startFromEarliest || startOutOfRange || endOutOfRange;
+    boolean fullTableScan = startOutOfRange || endOutOfRange;
 
     // Step1: find out the files to read, tries to read the files from the commit metadata first,
     // fallback to full table scan if any of the following conditions matches:
@@ -196,14 +199,11 @@ public class IncrementalInputSplits implements Serializable {
     // (would be the latest instant time if the specified end commit is greater than the latest instant time)
     final String rangeEnd = endOutOfRange ? endCommit : instants.get(instants.size() - 1).getTimestamp();
     // keep the same semantics with streaming read, default start from the latest commit
-    final String rangeStart = startFromEarliest ? null : (startCommit == null ? rangeEnd : startCommit);
+    final String rangeStart = startCommit == null ? rangeEnd : startCommit;
     final InstantRange instantRange;
     if (!fullTableScan) {
       instantRange = InstantRange.builder().startInstant(rangeStart).endInstant(rangeEnd)
           .rangeType(InstantRange.RangeType.CLOSE_CLOSE).build();
-    } else if (startFromEarliest && endCommit == null) {
-      // short-cut for snapshot read
-      instantRange = null;
     } else {
       instantRange = InstantRange.builder().startInstant(rangeStart).endInstant(rangeEnd)
           .rangeType(InstantRange.RangeType.CLOSE_CLOSE).nullableBoundary(true).build();
