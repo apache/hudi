@@ -110,7 +110,7 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
    * @throws Exception
    */
   @ParameterizedTest
-  @ValueSource(booleans = {false})
+  @ValueSource(booleans = {true, false})
   public void testMultiReaderForHoodieBackedTableMetadata(boolean reuse) throws Exception {
     final int taskNumber = 50;
     HoodieTableType tableType = HoodieTableType.COPY_ON_WRITE;
