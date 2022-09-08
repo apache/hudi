@@ -18,6 +18,7 @@
 
 package org.apache.hudi.sink.compact;
 
+import org.apache.flink.client.deployment.application.ApplicationExecutionException;
 import org.apache.hudi.async.HoodieAsyncTableService;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
@@ -57,6 +58,8 @@ public class HoodieFlinkCompactor {
 
   protected static final Logger LOG = LoggerFactory.getLogger(HoodieFlinkCompactor.class);
 
+  private static final String NO_EXECUTE_KEYWORD = "no execute";
+
   /**
    * Flink Execution Environment.
    */
@@ -94,6 +97,12 @@ public class HoodieFlinkCompactor {
       LOG.info("Hoodie Flink Compactor running only single round");
       try {
         compactionScheduleService.compact();
+      } catch (ApplicationExecutionException aee) {
+        if (aee.getMessage().contains(NO_EXECUTE_KEYWORD)) {
+          LOG.info("Compaction is not performed");
+        } else {
+          throw aee;
+        }
       } catch (Exception e) {
         LOG.error("Got error running delta sync once. Shutting down", e);
         throw e;
@@ -121,6 +130,7 @@ public class HoodieFlinkCompactor {
    * Schedules compaction in service.
    */
   public static class AsyncCompactionService extends HoodieAsyncTableService {
+
     private static final long serialVersionUID = 1L;
 
     /**
@@ -193,6 +203,12 @@ public class HoodieFlinkCompactor {
             try {
               compact();
               Thread.sleep(cfg.minCompactionIntervalSeconds * 1000);
+            } catch (ApplicationExecutionException aee) {
+              if (aee.getMessage().contains(NO_EXECUTE_KEYWORD)) {
+                LOG.info("Compaction is not performed.");
+              } else {
+                throw new HoodieException(aee.getMessage(), aee);
+              }
             } catch (Exception e) {
               LOG.error("Shutting down compaction service due to exception", e);
               error = true;
