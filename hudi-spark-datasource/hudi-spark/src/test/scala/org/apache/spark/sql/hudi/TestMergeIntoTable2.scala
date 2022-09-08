@@ -636,4 +636,41 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
     }
   }
 
+  test("Test Merge Into For Source Table With Different Column Order") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      // Create a mor partitioned table.
+      spark.sql(
+        s"""
+           | create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long,
+           |  dt string
+           | ) using hudi
+           | tblproperties (
+           |  type = 'mor',
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts'
+           | )
+           | partitioned by(dt)
+           | location '${tmp.getCanonicalPath}'
+         """.stripMargin)
+      // Insert data which matched insert-condition.
+      spark.sql(
+        s"""
+           | merge into $tableName as t0
+           | using (
+           |  select 'a1' as name, 1 as id, 10 as price, 1000 as ts, '2021-03-21' as dt
+           | ) as s0
+           | on t0.id = s0.id
+           | when not matched and s0.id % 2 = 1 then insert *
+         """.stripMargin
+      )
+      checkAnswer(s"select id,name,price,dt from $tableName")(
+        Seq(1, "a1", 10, "2021-03-21")
+      )
+    }
+  }
 }
