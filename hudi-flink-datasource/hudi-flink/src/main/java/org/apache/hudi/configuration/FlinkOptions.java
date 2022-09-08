@@ -580,7 +580,7 @@ public class FlinkOptions extends HoodieConfig {
       .stringType()
       .defaultValue(HoodieCleaningPolicy.KEEP_LATEST_COMMITS.name())
       .withDescription("Clean policy to manage the Hudi table. Available option: KEEP_LATEST_COMMITS, KEEP_LATEST_FILE_VERSIONS, KEEP_LATEST_BY_HOURS."
-          +  "Default is KEEP_LATEST_COMMITS.");
+          + "Default is KEEP_LATEST_COMMITS.");
 
   public static final ConfigOption<Integer> CLEAN_RETAIN_COMMITS = ConfigOptions
       .key("clean.retain_commits")

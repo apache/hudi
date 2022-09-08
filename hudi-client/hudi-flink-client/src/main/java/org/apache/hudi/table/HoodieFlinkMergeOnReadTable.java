@@ -45,6 +45,9 @@ import org.apache.hudi.table.action.rollback.MergeOnReadRollbackActionExecutor;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Flink MERGE_ON_READ table.
+ */
 public class HoodieFlinkMergeOnReadTable<T extends HoodieRecordPayload>
     extends HoodieFlinkCopyOnWriteTable<T> {
 

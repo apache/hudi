@@ -31,7 +31,6 @@ import org.apache.flink.table.types.logical.LocalZonedTimestampType;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.MapType;
 import org.apache.flink.table.types.logical.RowType;
-
 import org.apache.flink.table.types.logical.TimestampType;
 import org.apache.parquet.schema.GroupType;
 import org.apache.parquet.schema.LogicalTypeAnnotation;
@@ -76,7 +75,7 @@ public class ParquetSchemaConverter {
    * Converts Flink Internal Type to Parquet schema.
    *
    * @param typeInformation Flink type information
-   * @param legacyMode is standard LIST and MAP schema or back-compatible schema
+   * @param legacyMode      is standard LIST and MAP schema or back-compatible schema
    * @return Parquet schema
    */
   public static MessageType toParquetType(
@@ -569,7 +568,7 @@ public class ParquetSchemaConverter {
         int scale = ((DecimalType) type).getScale();
         int numBytes = computeMinBytesForDecimalPrecision(precision);
         return Types.primitive(
-            PrimitiveType.PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY, repetition)
+                PrimitiveType.PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY, repetition)
             .as(LogicalTypeAnnotation.decimalType(scale, precision))
             .length(numBytes)
             .named(name);

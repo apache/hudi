@@ -109,7 +109,7 @@ public class AvroSchemaConverter {
 
           if (recordTypesOfSameNumFields(nonNullTypes)) {
             DataType converted = DataTypes.ROW(
-                DataTypes.FIELD("wrapper", rawDataType))
+                    DataTypes.FIELD("wrapper", rawDataType))
                 .notNull();
             return nullable ? converted.nullable() : converted;
           }

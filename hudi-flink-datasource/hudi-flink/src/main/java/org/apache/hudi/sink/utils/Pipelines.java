@@ -136,7 +136,7 @@ public class Pipelines {
         // use #partitionCustom instead of #keyBy to avoid duplicate sort operations,
         // see BatchExecutionUtils#applyBatchExecutionSettings for details.
         Partitioner<String> partitioner = (key, channels) -> KeyGroupRangeAssignment.assignKeyToParallelOperator(key,
-                KeyGroupRangeAssignment.computeDefaultMaxParallelism(conf.getInteger(FlinkOptions.WRITE_TASKS)), channels);
+            KeyGroupRangeAssignment.computeDefaultMaxParallelism(conf.getInteger(FlinkOptions.WRITE_TASKS)), channels);
         dataStream = dataStream.partitionCustom(partitioner, rowDataKeyGen::getPartitionPath);
       }
       if (conf.getBoolean(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT)) {
@@ -218,11 +218,11 @@ public class Pipelines {
    * The bootstrap operator loads the existing data index (primary key to file id mapping),
    * then send the indexing data set to subsequent operator(usually the bucket assign operator).
    *
-   * @param conf               The configuration
-   * @param rowType            The row type
-   * @param dataStream         The data stream
-   * @param bounded            Whether the source is bounded
-   * @param overwrite          Whether it is insert overwrite
+   * @param conf       The configuration
+   * @param rowType    The row type
+   * @param dataStream The data stream
+   * @param bounded    Whether the source is bounded
+   * @param overwrite  Whether it is insert overwrite
    */
   public static DataStream<HoodieRecord> bootstrap(
       Configuration conf,
@@ -288,7 +288,7 @@ public class Pipelines {
    */
   public static DataStream<HoodieRecord> rowDataToHoodieRecord(Configuration conf, RowType rowType, DataStream<RowData> dataStream) {
     return dataStream.map(RowDataToHoodieFunctions.create(rowType, conf), TypeInformation.of(HoodieRecord.class))
-            .setParallelism(dataStream.getParallelism()).name("row_data_to_hoodie_record");
+        .setParallelism(dataStream.getParallelism()).name("row_data_to_hoodie_record");
   }
 
   /**
@@ -309,8 +309,8 @@ public class Pipelines {
    * <p>The bucket assigner assigns the inputs to suitable file groups, the write task caches
    * and flushes the data set to disk.
    *
-   * @param conf               The configuration
-   * @param dataStream         The input data stream
+   * @param conf       The configuration
+   * @param dataStream The input data stream
    * @return the stream write data stream pipeline
    */
   public static DataStream<Object> hoodieStreamWrite(Configuration conf, DataStream<HoodieRecord> dataStream) {
