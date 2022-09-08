@@ -112,7 +112,7 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testMultiReaderForHoodieBackedTableMetadata(boolean reuse) throws Exception {
-    final int taskNumber = 50;
+    final int taskNumber = 20;
     HoodieTableType tableType = HoodieTableType.COPY_ON_WRITE;
     init(tableType);
     testTable.doWriteOperation("000001", INSERT, emptyList(), asList("p1"), 1);
