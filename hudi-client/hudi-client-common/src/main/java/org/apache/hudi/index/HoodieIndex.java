@@ -145,6 +145,6 @@ public abstract class HoodieIndex<I, O> implements Serializable {
   }
 
   public enum BucketIndexEngineType {
-    SIMPLE, CONSISTENT_HASHING
+    SIMPLE, CONSISTENT_HASHING, RANGE_BUCKET
   }
 }

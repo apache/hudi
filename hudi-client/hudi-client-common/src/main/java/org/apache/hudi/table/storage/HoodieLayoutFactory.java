@@ -31,6 +31,7 @@ public final class HoodieLayoutFactory {
         return new HoodieDefaultLayout(config);
       case BUCKET:
         switch (config.getBucketIndexEngineType()) {
+          case RANGE_BUCKET:
           case SIMPLE:
             return new HoodieSimpleBucketLayout(config);
           case CONSISTENT_HASHING:

@@ -1644,6 +1644,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getIntOrDefault(HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS);
   }
 
+  public int getBucketRangeStepSize() {
+    return getIntOrDefault(HoodieIndexConfig.RANGE_BUCKET_STEP_SIZE);
+  }
+
   public String getBucketIndexHashField() {
     return getString(HoodieIndexConfig.BUCKET_INDEX_HASH_FIELD);
   }
