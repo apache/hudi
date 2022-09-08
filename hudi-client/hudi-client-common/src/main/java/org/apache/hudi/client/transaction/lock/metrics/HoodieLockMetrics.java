@@ -43,7 +43,7 @@ public class HoodieLockMetrics {
   private transient Timer lockApiRequestDuration;
 
   public HoodieLockMetrics(HoodieWriteConfig writeConfig) {
-    this.isMetricsEnabled = writeConfig.isMetricsOn() && writeConfig.isLockingMetricsEnabled();
+    this.isMetricsEnabled = writeConfig.isLockingMetricsEnabled();
     this.writeConfig = writeConfig;
 
     if (isMetricsEnabled) {

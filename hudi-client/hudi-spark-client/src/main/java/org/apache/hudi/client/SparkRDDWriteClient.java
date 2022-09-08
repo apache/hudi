@@ -461,7 +461,7 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
     // Create a Hoodie table after startTxn which encapsulated the commits and files visible.
     // Important to create this after the lock to ensure the latest commits show up in the timeline without need for reload
     HoodieTable table = createTable(config, hadoopConf);
-    Timer.Context indexTimer = metrics.getConflictResolutionCtx();
+    Timer.Context conflictResolutionTimer = metrics.getConflictResolutionCtx();
     try {
       TransactionUtils.resolveWriteConflictIfAny(table, this.txnManager.getCurrentTransactionOwner(),
           Option.of(metadata), config, txnManager.getLastCompletedTransactionOwner(), false, this.pendingInflightAndRequestedInstants);
@@ -470,8 +470,8 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
       metrics.emitConflictResolutionFailed();
       throw e;
     } finally {
-      if (indexTimer != null) {
-        indexTimer.stop();
+      if (conflictResolutionTimer != null) {
+        conflictResolutionTimer.stop();
       }
     }
   }

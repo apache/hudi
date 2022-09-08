@@ -86,7 +86,13 @@ public class HoodieMetricsConfig extends HoodieConfig {
   public static final ConfigProperty<Boolean> LOCK_METRICS_ENABLE = ConfigProperty
       .key(METRIC_PREFIX + ".lock.enable")
       .defaultValue(false)
-      .withDocumentation("Enable metrics for locking infra. Unseful when operating in multiwriter mode");
+      .withInferFunction(cfg -> {
+        if (cfg.contains(TURN_METRICS_ON)) {
+          return Option.of(cfg.getBoolean(TURN_METRICS_ON));
+        }
+        return Option.empty();
+      })
+      .withDocumentation("Enable metrics for locking infra. Useful when operating in multiwriter mode");
 
   /**
    * @deprecated Use {@link #TURN_METRICS_ON} and its methods instead

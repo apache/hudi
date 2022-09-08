@@ -141,7 +141,7 @@ public class HoodieMetrics {
   }
 
   public Timer.Context getConflictResolutionCtx() {
-    if (config.isMetricsOn() && conflictResolutionTimer == null) {
+    if (config.isLockingMetricsEnabled() && conflictResolutionTimer == null) {
       conflictResolutionTimer = createTimer(conflictResolutionTimerName);
     }
     return conflictResolutionTimer == null ? null : conflictResolutionTimer.time();
@@ -263,7 +263,7 @@ public class HoodieMetrics {
   }
 
   public void emitConflictResolutionSuccessful() {
-    if (config.isMetricsOn()) {
+    if (config.isLockingMetricsEnabled()) {
       LOG.info("Sending conflict resolution success metric");
       conflictResolutionSuccessCounter = getCounter(conflictResolutionSuccessCounter, conflictResolutionSuccessCounterName);
       conflictResolutionSuccessCounter.inc();
@@ -271,7 +271,7 @@ public class HoodieMetrics {
   }
 
   public void emitConflictResolutionFailed() {
-    if (config.isMetricsOn()) {
+    if (config.isLockingMetricsEnabled()) {
       LOG.info("Sending conflict resolution failure metric");
       conflictResolutionFailureCounter = getCounter(conflictResolutionFailureCounter, conflictResolutionFailureCounterName);
       conflictResolutionFailureCounter.inc();
