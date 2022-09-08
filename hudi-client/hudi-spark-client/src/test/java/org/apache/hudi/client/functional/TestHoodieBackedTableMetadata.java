@@ -110,7 +110,7 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
    * @throws Exception
    */
   @ParameterizedTest
-  @ValueSource(booleans = {true, false})
+  @ValueSource(booleans = {false})
   public void testMultiReaderForHoodieBackedTableMetadata(boolean reuse) throws Exception {
     final int taskNumber = 50;
     HoodieTableType tableType = HoodieTableType.COPY_ON_WRITE;
@@ -135,9 +135,13 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
             downLatch.countDown();
             downLatch.await();
             FileStatus[] files = tableMetadata.getAllFilesInPartition(new Path(finalPartition));
+            if (files.length != 1) {
+              LOG.warn("Miss match data file numbers.");
+              throw new RuntimeException("Miss match data file numbers.");
+            }
             filesNumber.addAndGet(files.length);
-            assertEquals(1, files.length);
           } catch (Exception e) {
+            LOG.warn("Catch Exception while reading data files from MDT.", e);
             flag.compareAndSet(false, true);
           }
         }
