@@ -226,8 +226,9 @@ class HoodieStreamingSink(sqlContext: SQLContext,
   protected def triggerAsyncCompactor(client: SparkRDDWriteClient[HoodieRecordPayload[Nothing]]): Unit = {
     if (null == asyncCompactorService) {
       log.info("Triggering Async compaction !!")
-      asyncCompactorService = new SparkStreamingAsyncCompactService(new HoodieSparkEngineContext(new JavaSparkContext(sqlContext.sparkContext)),
-        client)
+      asyncCompactorService = new SparkStreamingAsyncCompactService(
+        new HoodieSparkEngineContext(new JavaSparkContext(sqlContext.sparkContext)),
+        client.getConfig)
       asyncCompactorService.start(new Function[java.lang.Boolean, java.lang.Boolean] {
         override def apply(errored: lang.Boolean): lang.Boolean = {
           log.info(s"Async Compactor shutdown. Errored ? $errored")
@@ -256,7 +257,7 @@ class HoodieStreamingSink(sqlContext: SQLContext,
     if (null == asyncClusteringService) {
       log.info("Triggering async clustering!")
       asyncClusteringService = new SparkStreamingAsyncClusteringService(new HoodieSparkEngineContext(new JavaSparkContext(sqlContext.sparkContext)),
-        client)
+        client.getConfig)
       asyncClusteringService.start(new Function[java.lang.Boolean, java.lang.Boolean] {
         override def apply(errored: lang.Boolean): lang.Boolean = {
           log.info(s"Async clustering service shutdown. Errored ? $errored")

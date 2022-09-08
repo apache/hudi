@@ -23,8 +23,6 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * Run one round of compaction.
@@ -33,12 +31,7 @@ public abstract class BaseCompactor<T extends HoodieRecordPayload, I, K, O> impl
 
   private static final long serialVersionUID = 1L;
 
-  protected final transient Object writeClientUpdateLock = new Object();
-  protected final transient List<BaseHoodieWriteClient<T, I, K, O>> oldCompactionClientList = new ArrayList<>();
-
   protected transient BaseHoodieWriteClient<T, I, K, O> compactionClient;
-
-  protected boolean isCompactionRunning = false;
 
   public BaseCompactor(BaseHoodieWriteClient<T, I, K, O> compactionClient) {
     this.compactionClient = compactionClient;
@@ -46,17 +39,9 @@ public abstract class BaseCompactor<T extends HoodieRecordPayload, I, K, O> impl
 
   public abstract void compact(HoodieInstant instant) throws IOException;
 
-  public void updateWriteClient(BaseHoodieWriteClient<T, I, K, O> writeClient) {
-    synchronized (writeClientUpdateLock) {
-      if (!isCompactionRunning) {
-        this.compactionClient.close();
-      } else {
-        // Store the old compaction client so that they can be closed
-        // at the end of the compaction execution
-        this.oldCompactionClientList.add(this.compactionClient);
-      }
-      this.compactionClient = writeClient;
+  public void close() {
+    if (compactionClient != null) {
+      compactionClient.close();
     }
   }
-
 }

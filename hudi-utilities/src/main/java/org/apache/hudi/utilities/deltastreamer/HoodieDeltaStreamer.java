@@ -24,10 +24,8 @@ import org.apache.hudi.async.AsyncCompactService;
 import org.apache.hudi.async.HoodieAsyncService;
 import org.apache.hudi.async.SparkAsyncClusteringService;
 import org.apache.hudi.async.SparkAsyncCompactService;
-import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
-import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.client.utils.OperationConverter;
 import org.apache.hudi.common.bootstrap.index.HFileBootstrapIndex;
 import org.apache.hudi.common.config.HoodieConfig;
@@ -662,7 +660,7 @@ public class HoodieDeltaStreamer implements Serializable {
           UtilHelpers.createSchemaProvider(cfg.schemaProviderClassName, props, jssc), props, jssc, cfg.transformerClassNames);
 
       deltaSync = new DeltaSync(cfg, sparkSession, schemaProvider, props, jssc, fs, conf,
-          this::onCreatingNewWriteClient);
+          this::onUpdatingWriteConfig);
     }
 
     public DeltaSyncService(HoodieDeltaStreamer.Config cfg, JavaSparkContext jssc, FileSystem fs, Configuration conf)
@@ -774,21 +772,18 @@ public class HoodieDeltaStreamer implements Serializable {
     }
 
     /**
-     * Callback to create new write client and start compaction service if required.
+     * Callback to update write config and start compaction service if required.
      *
-     * @param writeConfig             New write config.
-     * @param embeddedTimelineService {@link EmbeddedTimelineService} instance if available.
+     * @param writeConfig New write config.
      * @return
      */
-    protected Boolean onCreatingNewWriteClient(HoodieWriteConfig writeConfig, Option<EmbeddedTimelineService> embeddedTimelineService) {
+    protected Boolean onUpdatingWriteConfig(HoodieWriteConfig writeConfig) {
       if (cfg.isAsyncCompactionEnabled()) {
-        SparkRDDWriteClient writeClient = new SparkRDDWriteClient<>(
-            new HoodieSparkEngineContext(jssc), writeConfig, embeddedTimelineService);
         if (asyncCompactService.isPresent()) {
           // Update the write client used by Async Compactor.
-          asyncCompactService.get().updateWriteClient(writeClient);
+          asyncCompactService.get().updateWriteConfig(writeConfig);
         } else {
-          asyncCompactService = Option.ofNullable(new SparkAsyncCompactService(new HoodieSparkEngineContext(jssc), writeClient));
+          asyncCompactService = Option.ofNullable(new SparkAsyncCompactService(new HoodieSparkEngineContext(jssc), writeConfig));
           // Enqueue existing pending compactions first
           HoodieTableMetaClient meta =
               HoodieTableMetaClient.builder().setConf(new Configuration(jssc.hadoopConfiguration())).setBasePath(cfg.targetBasePath).setLoadActiveTimelineOnLoad(true).build();
@@ -807,12 +802,10 @@ public class HoodieDeltaStreamer implements Serializable {
       }
       // start async clustering if required
       if (HoodieClusteringConfig.from(props).isAsyncClusteringEnabled()) {
-        SparkRDDWriteClient writeClient = new SparkRDDWriteClient<>(
-            new HoodieSparkEngineContext(jssc), writeConfig, embeddedTimelineService);
         if (asyncClusteringService.isPresent()) {
-          asyncClusteringService.get().updateWriteClient(writeClient);
+          asyncClusteringService.get().updateWriteConfig(writeConfig);
         } else {
-          asyncClusteringService = Option.ofNullable(new SparkAsyncClusteringService(new HoodieSparkEngineContext(jssc), writeClient));
+          asyncClusteringService = Option.ofNullable(new SparkAsyncClusteringService(new HoodieSparkEngineContext(jssc), writeConfig));
           HoodieTableMetaClient meta = HoodieTableMetaClient.builder()
               .setConf(new Configuration(jssc.hadoopConfiguration()))
               .setBasePath(cfg.targetBasePath)

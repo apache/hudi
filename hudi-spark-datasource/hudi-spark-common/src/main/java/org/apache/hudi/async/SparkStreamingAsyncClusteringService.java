@@ -20,9 +20,10 @@
 package org.apache.hudi.async;
 
 import org.apache.hudi.client.BaseClusterer;
-import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.client.HoodieSparkClusteringClient;
+import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.config.HoodieWriteConfig;
 
 /**
  * Async clustering service for Spark structured streaming.
@@ -32,12 +33,12 @@ public class SparkStreamingAsyncClusteringService extends AsyncClusteringService
 
   private static final long serialVersionUID = 1L;
 
-  public SparkStreamingAsyncClusteringService(HoodieEngineContext context, BaseHoodieWriteClient writeClient) {
-    super(context, writeClient, true);
+  public SparkStreamingAsyncClusteringService(HoodieEngineContext context, HoodieWriteConfig writeConfig) {
+    super(context, writeConfig, true);
   }
 
   @Override
-  protected BaseClusterer createClusteringClient(BaseHoodieWriteClient client) {
-    return new HoodieSparkClusteringClient(client);
+  protected BaseClusterer createClusteringClient() {
+    return new HoodieSparkClusteringClient(new SparkRDDWriteClient<>(context, writeConfig));
   }
 }

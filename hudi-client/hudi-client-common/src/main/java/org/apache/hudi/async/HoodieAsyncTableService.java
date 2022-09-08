@@ -26,6 +26,7 @@ import java.util.function.Function;
 
 public abstract class HoodieAsyncTableService extends HoodieAsyncService implements RunsTableService {
 
+  protected final Object writeConfigUpdateLock = new Object();
   protected HoodieWriteConfig writeConfig;
 
   protected HoodieAsyncTableService() {
@@ -46,5 +47,11 @@ public abstract class HoodieAsyncTableService extends HoodieAsyncService impleme
       return;
     }
     super.start(onShutdownCallback);
+  }
+
+  public void updateWriteConfig(HoodieWriteConfig writeConfig) {
+    synchronized (writeConfigUpdateLock) {
+      this.writeConfig = writeConfig;
+    }
   }
 }

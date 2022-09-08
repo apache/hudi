@@ -48,14 +48,10 @@ public class HoodieSparkCompactor<T extends HoodieRecordPayload> extends BaseCom
   @Override
   public void compact(HoodieInstant instant) {
     LOG.info("Compactor executing compaction " + instant);
-    SparkRDDWriteClient<T> writeClient;
-    synchronized (writeClientUpdateLock) {
-      isCompactionRunning = true;
-      writeClient = (SparkRDDWriteClient<T>) compactionClient;
-    }
-    HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = writeClient.compact(instant.getTimestamp());
+    HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = compactionClient.compact(instant.getTimestamp());
     List<HoodieWriteStat> writeStats = compactionMetadata.getCommitMetadata().get().getWriteStats();
     long numWriteErrors = writeStats.stream().mapToLong(HoodieWriteStat::getTotalWriteErrors).sum();
+
     if (numWriteErrors != 0) {
       // We treat even a single error in compaction as fatal
       LOG.error("Compaction for instant (" + instant + ") failed with write errors. Errors :" + numWriteErrors);
@@ -63,13 +59,6 @@ public class HoodieSparkCompactor<T extends HoodieRecordPayload> extends BaseCom
           "Compaction for instant (" + instant + ") failed with write errors. Errors :" + numWriteErrors);
     }
     // Commit compaction
-    writeClient.commitCompaction(instant.getTimestamp(), compactionMetadata.getCommitMetadata().get(), Option.empty());
-
-    synchronized (writeClientUpdateLock) {
-      for (BaseHoodieWriteClient oldClient : this.oldCompactionClientList) {
-        oldClient.close();
-      }
-      isCompactionRunning = false;
-    }
+    compactionClient.commitCompaction(instant.getTimestamp(), compactionMetadata.getCommitMetadata().get(), Option.empty());
   }
 }

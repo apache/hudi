@@ -24,8 +24,6 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * Client will run one round of clustering.
@@ -34,12 +32,7 @@ public abstract class BaseClusterer<T extends HoodieRecordPayload, I, K, O> impl
 
   private static final long serialVersionUID = 1L;
 
-  protected final transient Object writeClientUpdateLock = new Object();
-  protected final transient List<BaseHoodieWriteClient<T, I, K, O>> oldClusteringClientList = new ArrayList<>();
-
   protected transient BaseHoodieWriteClient<T, I, K, O> clusteringClient;
-
-  protected boolean isClusterRunning = false;
 
   public BaseClusterer(BaseHoodieWriteClient<T, I, K, O> clusteringClient) {
     this.clusteringClient = clusteringClient;
@@ -53,20 +46,9 @@ public abstract class BaseClusterer<T extends HoodieRecordPayload, I, K, O> impl
    */
   public abstract void cluster(HoodieInstant instant) throws IOException;
 
-  /**
-   * Update the write client used by async clustering.
-   * @param writeClient
-   */
-  public void updateWriteClient(BaseHoodieWriteClient<T, I, K, O> writeClient) {
-    synchronized (writeClientUpdateLock) {
-      if (!isClusterRunning) {
-        this.clusteringClient.close();
-      } else {
-        // Store the old clustering client so that they can be closed
-        // at the end of the clustering execution
-        this.oldClusteringClientList.add(this.clusteringClient);
-      }
-      this.clusteringClient = writeClient;
+  public void close() {
+    if (clusteringClient != null) {
+      clusteringClient.close();
     }
   }
 }

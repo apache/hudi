@@ -50,25 +50,14 @@ public class HoodieSparkClusteringClient<T extends HoodieRecordPayload> extends
   @Override
   public void cluster(HoodieInstant instant) throws IOException {
     LOG.info("Executing clustering instance " + instant);
-    SparkRDDWriteClient<T> writeClient;
-    synchronized (writeClientUpdateLock) {
-      isClusterRunning = true;
-      writeClient = (SparkRDDWriteClient<T>) clusteringClient;
-    }
-    Option<HoodieCommitMetadata> commitMetadata = writeClient.cluster(instant.getTimestamp(), true).getCommitMetadata();
+    Option<HoodieCommitMetadata> commitMetadata = clusteringClient.cluster(instant.getTimestamp(), true).getCommitMetadata();
     Stream<HoodieWriteStat> hoodieWriteStatStream = commitMetadata.get().getPartitionToWriteStats().entrySet().stream().flatMap(e ->
         e.getValue().stream());
     long errorsCount = hoodieWriteStatStream.mapToLong(HoodieWriteStat::getTotalWriteErrors).sum();
+
     if (errorsCount > 0) {
       // TODO: Should we treat this fatal and throw exception?
       LOG.error("Clustering for instant (" + instant + ") failed with write errors");
-    }
-
-    synchronized (writeClientUpdateLock) {
-      for (BaseHoodieWriteClient oldClient : this.oldClusteringClientList) {
-        oldClient.close();
-      }
-      isClusterRunning = false;
     }
   }
 }
