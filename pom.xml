@@ -613,10 +613,15 @@
   <dependencyManagement>
     <dependencies>
       <!-- Logging -->
+      <!-- NOTE: All the following deps have to have "provided" scope to make sure these are not conflicting
+           w/ implementations that are using Hudi as a library. For ex, all Spark < 3.3 are still relying on Log4j1
+           and therefore if we be bringing Log4j2 bridge for V1 on the classpath (log4j-1.2-api), it'll fail w/
+           `ClassNotFoundException`, since the bridge would be expecting Log4j2 impl be present -->
       <dependency>
         <groupId>org.apache.logging.log4j</groupId>
         <artifactId>log4j-api</artifactId>
         <version>${log4j2.version}</version>
+        <scope>provided</scope>
       </dependency>
       <dependency>
         <groupId>org.apache.logging.log4j</groupId>
@@ -628,21 +633,25 @@
         <groupId>org.apache.logging.log4j</groupId>
         <artifactId>log4j-1.2-api</artifactId>
         <version>${log4j2.version}</version>
+        <scope>provided</scope>
       </dependency>
       <dependency>
         <groupId>org.apache.logging.log4j</groupId>
         <artifactId>log4j-slf4j-impl</artifactId>
         <version>${log4j2.version}</version>
+        <scope>provided</scope>
       </dependency>
       <dependency>
         <groupId>org.slf4j</groupId>
         <artifactId>slf4j-api</artifactId>
         <version>${slf4j.version}</version>
+        <scope>provided</scope>
       </dependency>
       <dependency>
         <groupId>org.slf4j</groupId>
         <artifactId>jul-to-slf4j</artifactId>
         <version>${slf4j.version}</version>
+        <scope>provided</scope>
       </dependency>
 
       <!-- Fasterxml -->
