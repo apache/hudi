@@ -386,7 +386,7 @@
       <exclusions>
         <exclusion>
           <groupId>org.apache.hbase</groupId>
-          <artifactId>hbase-common</artifactId>
+          <artifactId>*</artifactId>
         </exclusion>
       </exclusions>
     </dependency>
@@ -413,7 +413,7 @@
       <exclusions>
         <exclusion>
           <groupId>org.apache.hbase</groupId>
-          <artifactId>hbase-client</artifactId>
+          <artifactId>*</artifactId>
         </exclusion>
       </exclusions>
     </dependency>
