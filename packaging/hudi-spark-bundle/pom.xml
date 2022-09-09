@@ -115,6 +115,9 @@
                   <include>org.apache.hive:hive-service-rpc</include>
                   <include>org.apache.hive:hive-metastore</include>
                   <include>org.apache.hive:hive-jdbc</include>
+                  <include>org.apache.orc:orc-core</include>
+                  <include>org.apache.orc:orc-mapreduce</include>
+                  <include>org.apache.orc:orc-shims</include>
 
                   <include>org.apache.hbase:hbase-client</include>
                   <include>org.apache.hbase:hbase-common</include>
@@ -287,6 +290,11 @@
                   <pattern>org.apache.hadoop.metrics2.util.MetricSampleQuantiles</pattern>
                   <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.util.MetricSampleQuantiles
                   </shadedPattern>
+                </relocation>
+                <!-- The version of ORC conflicts with SPARk3.1 -->
+                <relocation>
+                  <pattern>org.apache.orc.</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.orc.</shadedPattern>
                 </relocation>
               </relocations>
               <filters>
