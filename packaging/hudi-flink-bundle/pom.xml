@@ -130,7 +130,7 @@
                   <include>javax.servlet:javax.servlet-api</include>
 
                   <!-- Used for HUDI write handle -->
-                  <inclide>com.esotericsoftware:kryo-shaded</inclide>
+                  <include>com.esotericsoftware:kryo-shaded</include>
 
                   <include>org.apache.flink:${flink.hadoop.compatibility.artifactId}</include>
                   <include>org.apache.flink:flink-json</include>
