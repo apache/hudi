@@ -385,9 +385,9 @@
                   </excludes>
                   <includes>
                     <include>org.slf4j:slf4j-simple:*:*:test</include>
-                    <exclude>org.apache.hbase:hbase-common:${hbase.version}</exclude>
-                    <exclude>org.apache.hbase:hbase-client:${hbase.version}</exclude>
-                    <exclude>org.apache.hbase:hbase-server:${hbase.version}</exclude>
+                    <include>org.apache.hbase:hbase-common:${hbase.version}</include>
+                    <include>org.apache.hbase:hbase-client:${hbase.version}</include>
+                    <include>org.apache.hbase:hbase-server:${hbase.version}</include>
                   </includes>
                 </bannedDependencies>
               </rules>
