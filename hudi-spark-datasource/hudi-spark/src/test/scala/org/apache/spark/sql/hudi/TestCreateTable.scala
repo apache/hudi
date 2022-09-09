@@ -28,8 +28,7 @@ import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.CatalogTableType
 import org.apache.spark.sql.types._
-
-import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.{assertFalse, assertTrue}
 
 import scala.collection.JavaConverters._
 
@@ -943,5 +942,76 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
     )(table.schema.fields)
 
     spark.sql("use default")
+  }
+
+  test("Test Infer KegGenClazz") {
+    def checkKeyGenerator(targetGenerator: String, tableName: String) = {
+      val tablePath = spark.sessionState.catalog.getTableMetadata(TableIdentifier(tableName)).location.getPath
+      val metaClient = HoodieTableMetaClient.builder()
+        .setBasePath(tablePath)
+        .setConf(spark.sessionState.newHadoopConf())
+        .build()
+      val realKeyGenerator =
+        metaClient.getTableConfig.getProps.asScala.toMap.get(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key).get
+      assertResult(targetGenerator)(realKeyGenerator)
+    }
+
+    val tableName = generateTableName
+
+    // Test Nonpartitioned table
+    spark.sql(
+      s"""
+         | create table $tableName (
+         |  id int,
+         |  name string,
+         |  price double,
+         |  ts long
+         | ) using hudi
+         | comment "This is a simple hudi table"
+         | tblproperties (
+         |   primaryKey = 'id',
+         |   preCombineField = 'ts'
+         | )
+       """.stripMargin)
+    checkKeyGenerator("org.apache.hudi.keygen.NonpartitionedKeyGenerator", tableName)
+    spark.sql(s"drop table $tableName")
+
+    // Test single partitioned table
+    spark.sql(
+      s"""
+         | create table $tableName (
+         |  id int,
+         |  name string,
+         |  price double,
+         |  ts long
+         | ) using hudi
+         | comment "This is a simple hudi table"
+         | partitioned by (ts)
+         | tblproperties (
+         |   primaryKey = 'id',
+         |   preCombineField = 'ts'
+         | )
+       """.stripMargin)
+    checkKeyGenerator("org.apache.hudi.keygen.SimpleKeyGenerator", tableName)
+    spark.sql(s"drop table $tableName")
+
+    // Test single partitioned dual record keys table
+    spark.sql(
+      s"""
+         | create table $tableName (
+         |  id int,
+         |  name string,
+         |  price double,
+         |  ts long
+         | ) using hudi
+         | comment "This is a simple hudi table"
+         | partitioned by (ts)
+         | tblproperties (
+         |   primaryKey = 'id,name',
+         |   preCombineField = 'ts'
+         | )
+       """.stripMargin)
+    checkKeyGenerator("org.apache.hudi.keygen.ComplexKeyGenerator", tableName)
+    spark.sql(s"drop table $tableName")
   }
 }
