@@ -19,8 +19,8 @@
 package org.apache.hudi.client.common;
 
 import org.apache.hudi.client.FlinkTaskContextSupplier;
-
 import org.apache.hudi.common.util.collection.ImmutablePair;
+
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

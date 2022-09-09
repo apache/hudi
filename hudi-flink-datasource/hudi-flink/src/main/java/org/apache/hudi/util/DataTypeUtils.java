@@ -73,7 +73,7 @@ public class DataTypeUtils {
    * Projects the row fields with given names.
    */
   public static RowType.RowField[] projectRowFields(RowType rowType, String[] names) {
-    int [] fieldIndices = Arrays.stream(names).mapToInt(rowType::getFieldIndex).toArray();
+    int[] fieldIndices = Arrays.stream(names).mapToInt(rowType::getFieldIndex).toArray();
     return Arrays.stream(fieldIndices).mapToObj(i -> rowType.getFields().get(i)).toArray(RowType.RowField[]::new);
   }
 

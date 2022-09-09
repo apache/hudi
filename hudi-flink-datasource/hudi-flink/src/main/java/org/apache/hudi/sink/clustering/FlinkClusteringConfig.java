@@ -18,7 +18,6 @@
 
 package org.apache.hudi.sink.clustering;
 
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.client.clustering.plan.strategy.FlinkSizeBasedClusteringPlanStrategy;
 import org.apache.hudi.common.config.DFSPropertiesConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
@@ -30,6 +29,7 @@ import org.apache.hudi.util.StreamerUtil;
 
 import com.beust.jcommander.Parameter;
 import org.apache.flink.configuration.Configuration;
+import org.apache.hadoop.fs.Path;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -128,13 +128,13 @@ public class FlinkClusteringConfig extends Configuration {
   public Integer minClusteringIntervalSeconds = 600;
 
   @Parameter(names = {"--hoodie-conf"}, description = "Any configuration that can be set in the properties file "
-          + "(using the CLI parameter \"--props\") can also be passed through command line using this parameter.")
+      + "(using the CLI parameter \"--props\") can also be passed through command line using this parameter.")
   public List<String> configs = new ArrayList<>();
 
   @Parameter(names = {"--props"}, description = "Path to properties file on localfs or dfs, with configurations for "
-          + "hoodie client, schema provider, key generator and data source. For hoodie client props, sane defaults are "
-          + "used, but recommend use to provide basic things like metrics endpoints, hive configs etc. For sources, refer"
-          + "to individual classes, for supported properties.")
+      + "hoodie client, schema provider, key generator and data source. For hoodie client props, sane defaults are "
+      + "used, but recommend use to provide basic things like metrics endpoints, hive configs etc. For sources, refer"
+      + "to individual classes, for supported properties.")
   public String propsFilePath = "";
 
   public static TypedProperties buildProperties(List<String> props) {

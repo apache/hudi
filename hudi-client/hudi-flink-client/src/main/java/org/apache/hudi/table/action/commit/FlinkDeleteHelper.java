@@ -42,6 +42,9 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.stream.Collectors;
 
+/**
+ * Flink delete helper.
+ */
 @SuppressWarnings("checkstyle:LineLength")
 public class FlinkDeleteHelper<R> extends
     BaseDeleteHelper<EmptyHoodieRecordPayload, List<HoodieRecord<EmptyHoodieRecordPayload>>, List<HoodieKey>, List<WriteStatus>, R> {

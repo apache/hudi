@@ -62,7 +62,7 @@ public class ClusteringUtil {
   /**
    * Force rolls back all the inflight clustering instants, especially for job failover restart.
    *
-   * @param table The hoodie table
+   * @param table       The hoodie table
    * @param writeClient The write client
    */
   public static void rollbackClustering(HoodieFlinkTable<?> table, HoodieFlinkWriteClient writeClient) {
