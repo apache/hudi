@@ -25,7 +25,6 @@ import org.apache.hadoop.fs.FSDataInputStream;
 
 import org.apache.hudi.common.util.Option;
 
-import javax.annotation.Nonnull;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -44,9 +43,9 @@ public class HoodieCDCDataBlock extends HoodieAvroDataBlock {
         Option.of(readerSchema), header, new HashMap<>(), keyField, null);
   }
 
-  public HoodieCDCDataBlock(@Nonnull List<IndexedRecord> records,
-                            @Nonnull Map<HeaderMetadataType, String> header,
-                            @Nonnull String keyField) {
+  public HoodieCDCDataBlock(List<IndexedRecord> records,
+                            Map<HeaderMetadataType, String> header,
+                            String keyField) {
     super(records, header, keyField);
   }
 

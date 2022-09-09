@@ -24,7 +24,7 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 
 import org.apache.hudi.common.model.HoodieLogFile;
-import org.apache.hudi.common.table.cdc.CDCUtils;
+import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.util.ClosableIterator;
@@ -32,7 +32,7 @@ import org.apache.hudi.exception.HoodieIOException;
 
 import java.io.IOException;
 
-public class CDCLogRecordReader implements ClosableIterator<IndexedRecord> {
+public class HoodieCDCLogRecordReader implements ClosableIterator<IndexedRecord> {
 
   private final HoodieLogFile cdcLogFile;
 
@@ -40,10 +40,13 @@ public class CDCLogRecordReader implements ClosableIterator<IndexedRecord> {
 
   private ClosableIterator<IndexedRecord> itr;
 
-  public CDCLogRecordReader(FileSystem fs, Path cdcLogPath, String cdcSupplementalLoggingMode) throws IOException {
+  public HoodieCDCLogRecordReader(
+      FileSystem fs,
+      Path cdcLogPath,
+      String cdcSupplementalLoggingMode) throws IOException {
     this.cdcLogFile = new HoodieLogFile(fs.getFileStatus(cdcLogPath));
     this.reader = new HoodieLogFileReader(fs, cdcLogFile,
-      CDCUtils.schemaBySupplementalLoggingMode(cdcSupplementalLoggingMode),
+      HoodieCDCUtils.schemaBySupplementalLoggingMode(cdcSupplementalLoggingMode),
       HoodieLogFileReader.DEFAULT_BUFFER_SIZE, false);
   }
 

@@ -22,11 +22,11 @@ import org.apache.hudi.AvroConversionUtils
 import org.apache.hudi.DataSourceReadOptions
 import org.apache.hudi.HoodieDataSourceHelper
 import org.apache.hudi.HoodieTableSchema
-import org.apache.hudi.common.table.cdc.CDCUtils._
+import org.apache.hudi.common.table.cdc.HoodieCDCUtils._
 import org.apache.hudi.common.table.cdc.HoodieCDCOperation._
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.TableSchemaResolver
-import org.apache.hudi.common.table.cdc.CDCExtractor
+import org.apache.hudi.common.table.cdc.HoodieCDCExtractor
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.internal.schema.InternalSchema
 
@@ -72,7 +72,7 @@ class CDCRelation(
   val cdcQueryType: String = options.getOrElse(DataSourceReadOptions.INCREMENTAL_TYPE.key,
     DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
 
-  val cdcExtractor: CDCExtractor = new CDCExtractor(metaClient, startInstant, endInstant, cdcQueryType)
+  val cdcExtractor: HoodieCDCExtractor = new HoodieCDCExtractor(metaClient, startInstant, endInstant, cdcQueryType)
 
   override final def needConversion: Boolean = false
 
@@ -97,7 +97,7 @@ class CDCRelation(
       hadoopConf = spark.sessionState.newHadoopConf()
     )
 
-    val changes = cdcExtractor.extractor().values().asScala.map { pairs =>
+    val changes = cdcExtractor.extractCDCFileSplits().values().asScala.map { pairs =>
       HoodieCDCFileGroupSplit(
         pairs.asScala.map(pair => (pair.getLeft, pair.getRight)).sortBy(_._1).toArray
       )

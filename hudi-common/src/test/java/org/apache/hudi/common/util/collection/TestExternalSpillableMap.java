@@ -18,12 +18,15 @@
 
 package org.apache.hudi.common.util.collection;
 
+import org.apache.avro.generic.GenericData;
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.avro.SerializableRecord;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
@@ -370,6 +373,42 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
       }, "ExternalSpillableMap put() should not throw exception!");
       recordKeys.add(hoodieRecord.getRecordKey());
     });
+  }
+
+  @ParameterizedTest
+  @MethodSource("testArguments")
+  public void testSerializbleRecord(
+      ExternalSpillableMap.DiskMapType diskMapType,
+      boolean isCompressionEnabled) throws IOException {
+
+    ExternalSpillableMap<String, SerializableRecord> records = new ExternalSpillableMap(
+        16L,
+        basePath,
+        new DefaultSizeEstimator(),
+        new DefaultSizeEstimator(),
+        diskMapType,
+        isCompressionEnabled);
+
+    GenericData.Record record1 = HoodieCDCUtils.cdcRecord("d", "1", "{\"uuid\":1, \"name\": \"name1\"}", null);
+    records.put("1", new SerializableRecord(record1));
+
+    GenericData.Record record2 = HoodieCDCUtils.cdcRecord("u", "1", "{\"uuid\":2, \"name\": \"name2\"}", "{\"uuid\":2, \"name\": \"name2x\"}");
+    records.put("2", new SerializableRecord(record2));
+
+    GenericData.Record record3 = HoodieCDCUtils.cdcRecord("i", "1", null, "{\"uuid\":3, \"name\": \"name3\"}");
+    records.put("3", new SerializableRecord(record3));
+
+    assertTrue(records.inMemoryContainsKey("1"));
+    assertFalse(records.inDiskContainsKey("1"));
+    assertEquals(records.get("1").getRecord(), record1);
+
+    assertFalse(records.inMemoryContainsKey("2"));
+    assertTrue(records.inDiskContainsKey("2"));
+    assertEquals(records.get("2").getRecord(), record2);
+
+    assertFalse(records.inMemoryContainsKey("3"));
+    assertTrue(records.inDiskContainsKey("3"));
+    assertEquals(records.get("3").getRecord(), record3);
   }
 
   private static Stream<Arguments> testArguments() {
