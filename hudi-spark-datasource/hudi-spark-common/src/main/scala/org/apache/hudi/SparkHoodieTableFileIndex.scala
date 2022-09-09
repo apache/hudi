@@ -20,12 +20,15 @@ package org.apache.hudi
 import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hudi.BaseHoodieTableFileIndex.PartitionPath
 import org.apache.hudi.DataSourceReadOptions.{QUERY_TYPE, QUERY_TYPE_INCREMENTAL_OPT_VAL, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, QUERY_TYPE_SNAPSHOT_OPT_VAL}
-import org.apache.hudi.SparkHoodieTableFileIndex.{deduceQueryType, generateFieldMap, toJavaOption}
+import org.apache.hudi.HoodieConversionUtils.toJavaOption
+import org.apache.hudi.SparkHoodieTableFileIndex.{deduceQueryType, generateFieldMap, shouldValidatePartitionColumns}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.bootstrap.index.BootstrapIndex
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.model.{FileSlice, HoodieTableQueryType}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.hadoop.CachingPath
+import org.apache.hudi.hadoop.CachingPath.createPathUnsafe
 import org.apache.hudi.keygen.{TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
@@ -39,6 +42,7 @@ import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.apache.spark.unsafe.types.UTF8String
 
 import scala.collection.JavaConverters._
+import scala.language.implicitConversions
 
 /**
  * Implementation of the [[BaseHoodieTableFileIndex]] for Spark
@@ -79,7 +83,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
     AvroConversionUtils.convertAvroSchemaToStructType(schemaUtil.getTableAvroSchema)
   })
 
-  private lazy val sparkParsePartitionUtil = sparkAdapter.createSparkParsePartitionUtil(spark.sessionState.conf)
+  private lazy val sparkParsePartitionUtil = sparkAdapter.getSparkParsePartitionUtil
 
   /**
    * Get the partition schema from the hoodie.properties.
@@ -254,7 +258,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
             }
         }.mkString("/")
 
-        val pathWithPartitionName = new Path(basePath, partitionWithName)
+        val pathWithPartitionName = new CachingPath(basePath, createPathUnsafe(partitionWithName))
         val partitionValues = parsePartitionPath(pathWithPartitionName, partitionSchema)
 
         partitionValues.map(_.asInstanceOf[Object]).toArray
@@ -269,22 +273,17 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
     sparkParsePartitionUtil.parsePartition(
       partitionPath,
       typeInference = false,
-      Set(new Path(basePath)),
+      Set(basePath),
       partitionDataTypes,
-      DateTimeUtils.getTimeZone(timeZoneId)
+      DateTimeUtils.getTimeZone(timeZoneId),
+      validatePartitionValues = shouldValidatePartitionColumns(spark)
     )
       .toSeq(partitionSchema)
   }
 }
 
-object SparkHoodieTableFileIndex {
 
-  implicit def toJavaOption[T](opt: Option[T]): org.apache.hudi.common.util.Option[T] =
-    if (opt.isDefined) {
-      org.apache.hudi.common.util.Option.of(opt.get)
-    } else {
-      org.apache.hudi.common.util.Option.empty()
-    }
+object SparkHoodieTableFileIndex {
 
   /**
    * This method unravels [[StructType]] into a [[Map]] of pairs of dot-path notation with corresponding
@@ -340,5 +339,10 @@ object SparkHoodieTableFileIndex {
       override def put(path: Path, leafFiles: Array[FileStatus]): Unit = cache.putLeafFiles(path, leafFiles)
       override def invalidate(): Unit = cache.invalidateAll()
     }
+  }
+
+  private def shouldValidatePartitionColumns(spark: SparkSession): Boolean = {
+    // NOTE: We can't use helper, method nor the config-entry to stay compatible w/ Spark 2.4
+    spark.sessionState.conf.getConfString("spark.sql.sources.validatePartitionColumns", "true").toBoolean
   }
 }

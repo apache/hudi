@@ -50,9 +50,7 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
 
   override def getAvroSchemaConverters: HoodieAvroSchemaConverters = HoodieSparkAvroSchemaConverters
 
-  override def createSparkParsePartitionUtil(conf: SQLConf): SparkParsePartitionUtil = {
-    new Spark3ParsePartitionUtil(conf)
-  }
+  override def getSparkParsePartitionUtil: SparkParsePartitionUtil = Spark3ParsePartitionUtil
 
   override def parseMultipartIdentifier(parser: ParserInterface, sqlText: String): Seq[String] = {
     parser.parseMultipartIdentifier(sqlText)

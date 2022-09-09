@@ -143,9 +143,9 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
     if (expectedCount == 0) {
       assertFalse(batchCheckPoint.getKey().isPresent());
     } else {
-      assertEquals(batchCheckPoint.getKey().get().count(), expectedCount);
+      assertEquals(expectedCount, batchCheckPoint.getKey().get().count());
     }
-    Assertions.assertEquals(batchCheckPoint.getRight(), expectedCheckpoint);
+    Assertions.assertEquals(expectedCheckpoint, batchCheckPoint.getRight());
   }
 
   private Pair<String, List<HoodieRecord>> writeRecords(SparkRDDWriteClient writeClient, boolean insert, List<HoodieRecord> insertRecords, String commit) throws IOException {

@@ -97,7 +97,7 @@ public class TestConsistentBucketIndex extends HoodieClientTestHarness {
       initTestDataGenerator(new String[] {""});
     }
     initFileSystem();
-    Properties props = populateMetaFields ? new Properties() : getPropertiesForKeyGen();
+    Properties props = getPropertiesForKeyGen(populateMetaFields);
     props.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key");
     metaClient = HoodieTestUtils.init(hadoopConf, basePath, HoodieTableType.MERGE_ON_READ, props);
     config = getConfigBuilder()

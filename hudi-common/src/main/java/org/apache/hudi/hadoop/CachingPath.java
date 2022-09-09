@@ -19,10 +19,11 @@
 package org.apache.hudi.hadoop;
 
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.exception.HoodieException;
 
 import javax.annotation.concurrent.ThreadSafe;
-import java.io.Serializable;
 import java.net.URI;
+import java.net.URISyntaxException;
 
 /**
  * This is an extension of the {@code Path} class allowing to avoid repetitive
@@ -32,11 +33,12 @@ import java.net.URI;
  * NOTE: This class is thread-safe
  */
 @ThreadSafe
-public class CachingPath extends Path implements Serializable {
+public class CachingPath extends Path {
 
   // NOTE: `volatile` keyword is redundant here and put mostly for reader notice, since all
   //       reads/writes to references are always atomic (including 64-bit JVMs)
   //       https://docs.oracle.com/javase/specs/jls/se8/html/jls-17.html#jls-17.7
+  private volatile Path parent;
   private volatile String fileName;
   private volatile String fullPathStr;
 
@@ -75,6 +77,17 @@ public class CachingPath extends Path implements Serializable {
   }
 
   @Override
+  public Path getParent() {
+    // This value could be overwritten concurrently and that's okay, since
+    // {@code Path} is immutable
+    if (parent == null) {
+      parent = super.getParent();
+    }
+
+    return parent;
+  }
+
+  @Override
   public String toString() {
     // This value could be overwritten concurrently and that's okay, since
     // {@code Path} is immutable
@@ -82,5 +95,47 @@ public class CachingPath extends Path implements Serializable {
       fullPathStr = super.toString();
     }
     return fullPathStr;
+  }
+
+  public CachingPath subPath(String relativePath) {
+    return new CachingPath(this, createPathUnsafe(relativePath));
+  }
+
+  public static CachingPath wrap(Path path) {
+    if (path instanceof CachingPath) {
+      return (CachingPath) path;
+    }
+
+    return new CachingPath(path.toUri());
+  }
+
+  /**
+   * Creates path based on the provided *relative* path
+   *
+   * NOTE: This is an unsafe version that is relying on the fact that the caller is aware
+   *       what they are doing this is not going to work with paths having scheme (which require
+   *       parsing) and is only meant to work w/ relative paths in a few specific cases.
+   */
+  public static CachingPath createPathUnsafe(String relativePath) {
+    try {
+      // NOTE: {@code normalize} is going to be invoked by {@code Path} ctor, so there's no
+      //       point in invoking it here
+      URI uri = new URI(null, null, relativePath, null, null);
+      return new CachingPath(uri);
+    } catch (URISyntaxException e) {
+      throw new HoodieException("Failed to instantiate relative path", e);
+    }
+  }
+
+  /**
+   * This is {@link Path#getPathWithoutSchemeAndAuthority(Path)} counterpart, instantiating
+   * {@link CachingPath}
+   */
+  public static Path getPathWithoutSchemeAndAuthority(Path path) {
+    // This code depends on Path.toString() to remove the leading slash before
+    // the drive specification on Windows.
+    return path.isUriPathAbsolute()
+        ? createPathUnsafe(path.toUri().getPath())
+        : path;
   }
 }
