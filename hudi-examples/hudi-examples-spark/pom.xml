@@ -244,11 +244,6 @@
                 </exclusion>
             </exclusions>
         </dependency>
-        <!-- Logging dependencies -->
-        <dependency>
-            <groupId>org.apache.logging.log4j</groupId>
-            <artifactId>log4j-core</artifactId>
-        </dependency>
 
         <!-- Junit dependencies -->
         <dependency>
