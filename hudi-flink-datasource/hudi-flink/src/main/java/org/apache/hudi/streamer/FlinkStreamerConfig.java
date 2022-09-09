@@ -59,7 +59,7 @@ public class FlinkStreamerConfig extends Configuration {
   public String flinkCheckPointPath;
 
   @Parameter(names = {"--flink-state-backend-type"}, description = "Flink state backend type, support only hashmap and rocksdb by now,"
-          + " default hashmap.", converter = FlinkStateBackendConverter.class)
+      + " default hashmap.", converter = FlinkStateBackendConverter.class)
   public StateBackend stateBackend = new HashMapStateBackend();
 
   @Parameter(names = {"--instant-retry-times"}, description = "Times to retry when latest instant has not completed.")
@@ -264,7 +264,7 @@ public class FlinkStreamerConfig extends Configuration {
 
   @Parameter(names = {"--clean-policy"},
       description = "Clean policy to manage the Hudi table. Available option: KEEP_LATEST_COMMITS, KEEP_LATEST_FILE_VERSIONS, KEEP_LATEST_BY_HOURS."
-          +  "Default is KEEP_LATEST_COMMITS.")
+          + "Default is KEEP_LATEST_COMMITS.")
   public String cleanPolicy = HoodieCleaningPolicy.KEEP_LATEST_COMMITS.name();
 
   @Parameter(names = {"--clean-retain-commits"},

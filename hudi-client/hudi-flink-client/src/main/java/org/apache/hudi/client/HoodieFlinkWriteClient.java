@@ -81,6 +81,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+/**
+ * Flink hoodie write client.
+ *
+ * <p>The client is used both on driver (for starting/committing transactions)
+ * and executor (for writing dataset).
+ *
+ * @param <T> type of the payload
+ */
 @SuppressWarnings("checkstyle:LineLength")
 public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
     BaseHoodieWriteClient<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> {

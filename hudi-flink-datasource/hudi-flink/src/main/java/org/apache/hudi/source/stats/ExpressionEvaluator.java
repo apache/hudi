@@ -379,6 +379,7 @@ public class ExpressionEvaluator {
   }
 
   // component predicate
+
   /**
    * To evaluate NOT expr.
    */

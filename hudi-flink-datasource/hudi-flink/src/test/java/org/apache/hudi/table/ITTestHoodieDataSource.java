@@ -23,8 +23,8 @@ import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.table.catalog.HoodieHiveCatalog;
 import org.apache.hudi.table.catalog.HoodieCatalogTestUtils;
+import org.apache.hudi.table.catalog.HoodieHiveCatalog;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
@@ -1348,7 +1348,7 @@ public class ITTestHoodieDataSource extends AbstractTestBase {
         .option(FlinkOptions.METADATA_ENABLED, true)
         .option("hoodie.metadata.index.column.stats.enable", true)
         .option(FlinkOptions.READ_DATA_SKIPPING_ENABLED, true)
-        .option(FlinkOptions.TABLE_TYPE,tableType)
+        .option(FlinkOptions.TABLE_TYPE, tableType)
         .end();
     tableEnv.executeSql(hoodieTableDDL);
 
