@@ -69,7 +69,7 @@ class Spark2Adapter extends SparkAdapter {
     )
   }
 
-  override def createSparkParsePartitionUtil(conf: SQLConf): SparkParsePartitionUtil = new Spark2ParsePartitionUtil
+  override def getSparkParsePartitionUtil: SparkParsePartitionUtil = Spark2ParsePartitionUtil
 
   override def parseMultipartIdentifier(parser: ParserInterface, sqlText: String): Seq[String] = {
     throw new IllegalStateException(s"Should not call ParserInterface#parseMultipartIdentifier for spark2")

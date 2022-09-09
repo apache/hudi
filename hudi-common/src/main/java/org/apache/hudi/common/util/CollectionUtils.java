@@ -55,6 +55,15 @@ public class CollectionUtils {
   }
 
   /**
+   * Makes a copy of provided {@link Properties} object
+   */
+  public static Properties copy(Properties props) {
+    Properties copy = new Properties();
+    copy.putAll(props);
+    return copy;
+  }
+
+  /**
    * Returns last element of the array of {@code T}
    */
   public static <T> T tail(T[] ts) {
