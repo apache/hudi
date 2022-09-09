@@ -33,7 +33,6 @@ trait HoodieSpark3CatalogUtils extends HoodieCatalogUtils {
    * </ol>
    */
   def unapplyBucketTransform(t: Transform): Option[(Int, Seq[NamedReference], Seq[NamedReference])]
-
 }
 
 object HoodieSpark3CatalogUtils extends SparkAdapterSupport {
@@ -43,5 +42,4 @@ object HoodieSpark3CatalogUtils extends SparkAdapterSupport {
       sparkAdapter.getCatalogUtils.asInstanceOf[HoodieSpark3CatalogUtils]
         .unapplyBucketTransform(t)
   }
-
 }
