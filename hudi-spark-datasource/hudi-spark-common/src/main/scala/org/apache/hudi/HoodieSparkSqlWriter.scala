@@ -233,7 +233,7 @@ object HoodieSparkSqlWriter {
               .asInstanceOf[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]]
             // Issue delete partitions
             client.startCommitWithTime(instantTime, commitActionType)
-            val writeStatuses = DataSourceUtils.doDeletePartitionsOperation(client, partitionsToDelete, instantTime)
+            val writeStatuses = client.deletePartitions(partitionsToDelete, instantTime)
             (writeStatuses, client)
           }
           case _ => { // any other operation

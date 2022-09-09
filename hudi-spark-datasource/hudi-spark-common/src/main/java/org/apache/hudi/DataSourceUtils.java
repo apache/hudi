@@ -218,11 +218,6 @@ public class DataSourceUtils {
     return new HoodieWriteResult(client.delete(hoodieKeys, instantTime));
   }
 
-  public static HoodieWriteResult doDeletePartitionsOperation(SparkRDDWriteClient client, List<String> partitionsToDelete,
-                                                    String instantTime) {
-    return client.deletePartitions(partitionsToDelete, instantTime);
-  }
-
   public static HoodieRecord createHoodieRecord(GenericRecord gr, Comparable orderingVal, HoodieKey hKey,
       String payloadClass) throws IOException {
     HoodieRecordPayload payload = DataSourceUtils.createPayload(payloadClass, gr, orderingVal);
