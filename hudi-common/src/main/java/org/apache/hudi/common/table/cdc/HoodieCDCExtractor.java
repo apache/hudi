@@ -67,7 +67,17 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.isInRange;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
 
-public class CDCExtractor {
+/**
+ * This class helps to extract all the information which will be used when CDC query.
+ *
+ * There are some steps:
+ * 1. filter out the completed commit instants, and get the related [[HoodieCommitMetadata]] objects.
+ * 2. initialize the [[HoodieTableFileSystemView]] by the touched data files.
+ * 3. extract the cdc information:
+ *   generate a [[CDCFileSplit]] object for each of the instant in (startInstant, endInstant)
+ *   and each of the file group which is touched in the range of instants.
+ */
+public class HoodieCDCExtractor {
 
   private final HoodieTableMetaClient metaClient;
 
@@ -88,7 +98,7 @@ public class CDCExtractor {
 
   private HoodieTableFileSystemView fsView;
 
-  public CDCExtractor(
+  public HoodieCDCExtractor(
       HoodieTableMetaClient metaClient,
       String startInstant,
       String endInstant,
@@ -116,12 +126,12 @@ public class CDCExtractor {
    * At the granularity of a file group, trace the mapping between
    * each commit/instant and changes to this file group.
    */
-  public Map<HoodieFileGroupId, List<Pair<HoodieInstant, CDCFileSplit>>> extractor() {
+  public Map<HoodieFileGroupId, List<Pair<HoodieInstant, HoodieCDCFileSplit>>> extractCDCFileSplits() {
     if (commits == null || fsView == null) {
       throw new HoodieException("Fail to init CDCExtractor");
     }
 
-    Map<HoodieFileGroupId, List<Pair<HoodieInstant, CDCFileSplit>>> fgToCommitChanges = new HashMap<>();
+    Map<HoodieFileGroupId, List<Pair<HoodieInstant, HoodieCDCFileSplit>>> fgToCommitChanges = new HashMap<>();
     for (HoodieInstant instant : commits.keySet()) {
       HoodieCommitMetadata commitMetadata = commits.get(instant);
 
@@ -133,7 +143,7 @@ public class CDCExtractor {
           HoodieFileGroupId fileGroupId = new HoodieFileGroupId(partition, writeStat.getFileId());
           // Identify the CDC source involved in this commit and
           // determine its type for subsequent loading using different methods.
-          CDCFileSplit changeFile =
+          HoodieCDCFileSplit changeFile =
               parseWriteStat(fileGroupId, instant, writeStat, commitMetadata.getOperationType());
           if (!fgToCommitChanges.containsKey(fileGroupId)) {
             fgToCommitChanges.put(fileGroupId, new ArrayList<>());
@@ -151,7 +161,7 @@ public class CDCExtractor {
             Option<FileSlice> latestFileSliceOpt = fsView.fetchLatestFileSlice(partition, fileId);
             if (latestFileSliceOpt.isPresent()) {
               HoodieFileGroupId fileGroupId = new HoodieFileGroupId(partition, fileId);
-              CDCFileSplit changeFile = new CDCFileSplit(
+              HoodieCDCFileSplit changeFile = new HoodieCDCFileSplit(
                       REPLACED_FILE_GROUP, null, latestFileSliceOpt, Option.empty());
               if (!fgToCommitChanges.containsKey(fileGroupId)) {
                 fgToCommitChanges.put(fileGroupId, new ArrayList<>());
@@ -255,7 +265,7 @@ public class CDCExtractor {
    * Parse HoodieWriteStat, judge which type the file is, and what strategy should be used to parse CDC data.
    * Then build a [[ChangeFileForSingleFileGroupAndCommit]] object.
    */
-  private CDCFileSplit parseWriteStat(
+  private HoodieCDCFileSplit parseWriteStat(
       HoodieFileGroupId fileGroupId,
       HoodieInstant instant,
       HoodieWriteStat writeStat,
@@ -263,7 +273,7 @@ public class CDCExtractor {
     Path basePath = metaClient.getBasePathV2();
     FileSystem fs = metaClient.getFs().getFileSystem();
 
-    CDCFileSplit cdcFileSplit;
+    HoodieCDCFileSplit cdcFileSplit;
     if (StringUtils.isNullOrEmpty(writeStat.getCdcPath())) {
       // no cdc log files can be used directly. we reuse the existing data file to retrieve the change data.
       String path = writeStat.getPath();
@@ -281,23 +291,23 @@ public class CDCExtractor {
               new HoodieIOException("Can not get the previous version of the base file")
           );
           FileSlice beforeFileSlice = new FileSlice(fileGroupId, writeStat.getPrevCommit(), beforeBaseFile, new ArrayList<>());
-          cdcFileSplit = new CDCFileSplit(REMOVE_BASE_FILE, null, Option.empty(), Option.of(beforeFileSlice));
+          cdcFileSplit = new HoodieCDCFileSplit(REMOVE_BASE_FILE, null, Option.empty(), Option.of(beforeFileSlice));
         } else if (writeStat.getNumUpdateWrites() == 0L && writeStat.getNumDeletes() == 0
             && writeStat.getNumWrites() == writeStat.getNumInserts()) {
           // all the records in this file are new.
-          cdcFileSplit = new CDCFileSplit(ADD_BASE_FILE, path);
+          cdcFileSplit = new HoodieCDCFileSplit(ADD_BASE_FILE, path);
         } else {
           throw new HoodieException("There should be a cdc log file.");
         }
       } else {
         // this is a log file
         Option<FileSlice> beforeFileSliceOpt = getDependentFileSliceForLogFile(fileGroupId, instant, path);
-        cdcFileSplit = new CDCFileSplit(MOR_LOG_FILE, path, beforeFileSliceOpt, Option.empty());
+        cdcFileSplit = new HoodieCDCFileSplit(MOR_LOG_FILE, path, beforeFileSliceOpt, Option.empty());
       }
     } else {
       // this is a cdc log
       if (supplementalLoggingMode.equals(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE_WITH_BEFORE_AFTER)) {
-        cdcFileSplit = new CDCFileSplit(CDC_LOG_FILE, writeStat.getCdcPath());
+        cdcFileSplit = new HoodieCDCFileSplit(CDC_LOG_FILE, writeStat.getCdcPath());
       } else {
         try {
           HoodieBaseFile beforeBaseFile = fsView.getBaseFileOn(
@@ -311,7 +321,7 @@ public class CDCExtractor {
           if (supplementalLoggingMode.equals(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE_OP_KEY)) {
             beforeFileSlice = new FileSlice(fileGroupId, writeStat.getPrevCommit(), beforeBaseFile, new ArrayList<>());
           }
-          cdcFileSplit = new CDCFileSplit(CDC_LOG_FILE, writeStat.getCdcPath(),
+          cdcFileSplit = new HoodieCDCFileSplit(CDC_LOG_FILE, writeStat.getCdcPath(),
               Option.ofNullable(beforeFileSlice), Option.ofNullable(currentFileSlice));
         } catch (Exception e) {
           throw new HoodieException("Fail to parse HoodieWriteStat", e);

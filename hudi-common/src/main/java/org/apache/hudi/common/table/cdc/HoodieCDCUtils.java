@@ -25,7 +25,7 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.exception.HoodieException;
 
-public class CDCUtils {
+public class HoodieCDCUtils {
 
   /* the `op` column represents how a record is changed. */
   public static final String CDC_OPERATION_TYPE = "op";

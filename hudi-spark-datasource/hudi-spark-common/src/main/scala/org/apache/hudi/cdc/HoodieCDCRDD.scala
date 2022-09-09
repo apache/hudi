@@ -21,10 +21,13 @@ package org.apache.hudi.cdc
 import com.fasterxml.jackson.annotation.JsonInclude.Include
 import com.fasterxml.jackson.databind.{DeserializationFeature, ObjectMapper}
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
+
 import org.apache.avro.Schema
 import org.apache.avro.generic.{GenericRecord, GenericRecordBuilder, IndexedRecord}
+
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
+
 import org.apache.hudi.HoodieBaseRelation.BaseFileReader
 import org.apache.hudi.{HoodieFileIndex, HoodieMergeOnReadFileSplit, HoodieTableSchema, HoodieTableState, HoodieUnsafeRDD, LogFileIterator, LogIteratorUtils, RecordMergingFileIterator, SparkAdapterSupport}
 import org.apache.hudi.HoodieConversionUtils._
@@ -35,11 +38,13 @@ import org.apache.hudi.common.table.HoodieTableConfig._
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.cdc.HoodieCDCLogicalFileType._
 import org.apache.hudi.common.table.cdc.HoodieCDCOperation._
-import org.apache.hudi.common.table.cdc.{CDCFileSplit, CDCUtils}
-import org.apache.hudi.common.table.log.CDCLogRecordReader
+import org.apache.hudi.common.table.cdc.{HoodieCDCFileSplit, HoodieCDCUtils}
+import org.apache.hudi.common.table.log.HoodieCDCLogRecordReader
 import org.apache.hudi.common.table.timeline.HoodieInstant
+import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.HoodiePayloadConfig
+
 import org.apache.spark.{Partition, SerializableWritable, TaskContext}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
@@ -54,6 +59,7 @@ import org.apache.spark.unsafe.types.UTF8String
 import java.io.Closeable
 import java.util.Properties
 import java.util.stream.Collectors
+
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 import scala.collection.mutable
@@ -62,7 +68,7 @@ import scala.collection.mutable
  * The split that will be processed by spark task.
  */
 case class HoodieCDCFileGroupSplit(
-    commitToChanges: Array[(HoodieInstant, CDCFileSplit)]
+    commitToChanges: Array[(HoodieInstant, HoodieCDCFileSplit)]
 )
 
 /**
@@ -158,13 +164,13 @@ class HoodieCDCRDD(
 
     protected override val structTypeSchema: StructType = originTableSchema.structTypeSchema
 
-    private val recordKeyIndex: Int = {
-      val recordKey = if (metaClient.getTableConfig.populateMetaFields()) {
-        HoodieRecord.RECORD_KEY_METADATA_FIELD
+    private val recordKeyindices: Array[Int] = {
+      val recordKeys= if (metaClient.getTableConfig.populateMetaFields()) {
+        Array(HoodieRecord.RECORD_KEY_METADATA_FIELD)
       } else {
-        metaClient.getTableConfig.getRecordKeyFieldProp
+        metaClient.getTableConfig.getRecordKeyFields.get()
       }
-      structTypeSchema.fieldIndex(recordKey)
+      recordKeys.map(structTypeSchema.fieldIndex)
     }
 
     private val serializer = sparkAdapter.createAvroSerializer(originTableSchema.structTypeSchema,
@@ -178,11 +184,11 @@ class HoodieCDCRDD(
     private val cdcRecordDeserializer: HoodieAvroDeserializer = {
       val (cdcAvroSchema, cdcSparkSchema) = cdcSupplementalLoggingMode match {
         case CDC_SUPPLEMENTAL_LOGGING_MODE_WITH_BEFORE_AFTER =>
-          (CDCUtils.CDC_SCHEMA, CDCRelation.FULL_CDC_SPARK_SCHEMA)
+          (HoodieCDCUtils.CDC_SCHEMA, CDCRelation.FULL_CDC_SPARK_SCHEMA)
         case CDC_SUPPLEMENTAL_LOGGING_MODE_WITH_BEFORE =>
-          (CDCUtils.CDC_SCHEMA_OP_RECORDKEY_BEFORE, CDCRelation.CDC_WITH_BEFORE_SPARK_SCHEMA)
+          (HoodieCDCUtils.CDC_SCHEMA_OP_RECORDKEY_BEFORE, CDCRelation.CDC_WITH_BEFORE_SPARK_SCHEMA)
         case _ =>
-          (CDCUtils.CDC_SCHEMA_OP_AND_RECORDKEY, CDCRelation.MIN_CDC_SPARK_SCHEMA)
+          (HoodieCDCUtils.CDC_SCHEMA_OP_AND_RECORDKEY, CDCRelation.MIN_CDC_SPARK_SCHEMA)
       }
       sparkAdapter.createAvroDeserializer(cdcAvroSchema, cdcSparkSchema)
     }
@@ -196,7 +202,7 @@ class HoodieCDCRDD(
     private var currentInstant: HoodieInstant = _
 
     // The change file that is currently being processed
-    private var currentChangeFile: CDCFileSplit = _
+    private var currentChangeFile: HoodieCDCFileSplit = _
 
     /**
      * two cases will use this to iterator the records:
@@ -215,7 +221,7 @@ class HoodieCDCRDD(
     /**
      * Only one case where it will be used is that extract the change data from cdc log files.
      */
-    private var cdcRecordReader: CDCLogRecordReader = _
+    private var cdcRecordReader: HoodieCDCLogRecordReader = _
 
     /**
      * the next record need to be returned when call next().
@@ -435,12 +441,12 @@ class HoodieCDCRDD(
               val iter = loadFileSlice(currentChangeFile.getAfterFileSlice.get())
               afterImageRecords = mutable.Map.empty
               iter.foreach { row =>
-                val key = row.getString(recordKeyIndex)
+                val key = StringUtils.join(recordKeyindices.map(row.getString), ":")
                 afterImageRecords.put(key, row.copy())
               }
             }
             val absCDCPath = new Path(basePath, currentChangeFile.getCdcFile)
-            cdcRecordReader = new CDCLogRecordReader(fs, absCDCPath, cdcSupplementalLoggingMode)
+            cdcRecordReader = new HoodieCDCLogRecordReader(fs, absCDCPath, cdcSupplementalLoggingMode)
           case REPLACED_FILE_GROUP =>
             if (currentChangeFile.getBeforeFileSlice.isPresent) {
               loadBeforeFileSliceIfNeeded(currentChangeFile.getBeforeFileSlice.get)
@@ -499,7 +505,7 @@ class HoodieCDCRDD(
         beforeImageRecords.clear()
         val iter = loadFileSlice(fileSlice)
         iter.foreach { row =>
-          val key = row.getString(recordKeyIndex)
+          val key = StringUtils.join(recordKeyindices.map(row.getString), ":")
           beforeImageRecords.put(key, serialize(row))
         }
         // reset beforeImageFiles

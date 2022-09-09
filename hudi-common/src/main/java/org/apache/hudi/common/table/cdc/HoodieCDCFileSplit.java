@@ -39,7 +39,7 @@ import java.io.Serializable;
  * For [[cdcFileType]] = [[CDCFileTypeEnum.REPLACED_FILE_GROUP]], [[cdcFile]] is null,
  *   [[beforeFileSlice]] is the current version of the file slice.
  */
-public class CDCFileSplit implements Serializable {
+public class HoodieCDCFileSplit implements Serializable {
 
   /**
    * * the change type, which decide to how to retrieve the change data. more details see: [[CDCFileTypeEnum]]
@@ -61,11 +61,11 @@ public class CDCFileSplit implements Serializable {
    */
   private Option<FileSlice> afterFileSlice;
 
-  public CDCFileSplit(HoodieCDCLogicalFileType cdcFileType, String cdcFile) {
+  public HoodieCDCFileSplit(HoodieCDCLogicalFileType cdcFileType, String cdcFile) {
     this(cdcFileType, cdcFile, Option.empty(), Option.empty());
   }
 
-  public CDCFileSplit(
+  public HoodieCDCFileSplit(
       HoodieCDCLogicalFileType cdcFileType,
       String cdcFile,
       Option<FileSlice> beforeFileSlice,

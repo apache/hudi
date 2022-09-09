@@ -106,7 +106,7 @@ public class HoodieSortedMergeHandle<T extends HoodieRecordPayload, I, K, O> ext
         insertRecordsWritten++;
         writtenRecordKeys.add(keyToPreWrite);
         if (cdcEnabled) {
-          cdcData.put(hoodieRecord.getRecordKey(), cdcRecord(HoodieCDCOperation.INSERT,
+          cdcData.put(hoodieRecord.getRecordKey(), createCDCRecord(HoodieCDCOperation.INSERT,
               hoodieRecord.getRecordKey(), partitionPath, null, (GenericRecord) insertRecord.get()));
         }
       } catch (IOException e) {
@@ -134,7 +134,7 @@ public class HoodieSortedMergeHandle<T extends HoodieRecordPayload, I, K, O> ext
           writeRecord(hoodieRecord, insertRecord);
           insertRecordsWritten++;
           if (cdcEnabled) {
-            cdcData.put(hoodieRecord.getRecordKey(), cdcRecord(HoodieCDCOperation.INSERT,
+            cdcData.put(hoodieRecord.getRecordKey(), createCDCRecord(HoodieCDCOperation.INSERT,
                 hoodieRecord.getRecordKey(), partitionPath, null, (GenericRecord) insertRecord.get()));
           }
         }

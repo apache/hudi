@@ -26,11 +26,10 @@ import org.apache.hadoop.fs.Path
 import org.apache.hudi.cdc.CDCRelation
 import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, IncrementalRelation, MergeOnReadIncrementalRelation, SparkAdapterSupport}
 import org.apache.hudi.common.model.HoodieTableType
-import org.apache.hudi.common.table.cdc.CDCUtils
+import org.apache.hudi.common.table.cdc.HoodieCDCUtils
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.{FileIOUtils, TablePathUtils}
-
 import org.apache.spark.sql.hudi.streaming.HoodieStreamSource.VERSION
 import org.apache.spark.sql.hudi.streaming.HoodieSourceOffset.INIT_OFFSET
 import org.apache.spark.internal.Logging
@@ -173,7 +172,7 @@ class HoodieStreamSource(
           DataSourceReadOptions.END_INSTANTTIME.key() -> endOffset.commitTime
         )
         val rdd = CDCRelation.getCDCRelation(sqlContext, metaClient, cdcOptions)
-          .buildScan0(CDCUtils.CDC_COLUMNS, Array.empty)
+          .buildScan0(HoodieCDCUtils.CDC_COLUMNS, Array.empty)
 
         sqlContext.sparkSession.internalCreateDataFrame(rdd, CDCRelation.FULL_CDC_SPARK_SCHEMA, isStreaming = true)
       } else {

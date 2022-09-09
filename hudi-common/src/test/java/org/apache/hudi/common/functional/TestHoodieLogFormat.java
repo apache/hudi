@@ -37,7 +37,7 @@ import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.table.cdc.CDCUtils;
+import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.table.log.AppendResult;
 import org.apache.hudi.common.table.log.HoodieLogFileReader;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
@@ -561,29 +561,29 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withFs(fs)
         .build();
 
-    GenericRecord record1 = CDCUtils.cdcRecord("i", "100",
+    GenericRecord record1 = HoodieCDCUtils.cdcRecord("i", "100",
         null, "{\"uuid\": 1, \"name\": \"apple\"}, \"ts\": 1100}");
-    GenericRecord record2 = CDCUtils.cdcRecord("u", "100",
+    GenericRecord record2 = HoodieCDCUtils.cdcRecord("u", "100",
         "{\"uuid\": 2, \"name\": \"banana\"}, \"ts\": 1000}",
         "{\"uuid\": 2, \"name\": \"blueberry\"}, \"ts\": 1100}");
-    GenericRecord record3 = CDCUtils.cdcRecord("d", "100",
+    GenericRecord record3 = HoodieCDCUtils.cdcRecord("d", "100",
         "{\"uuid\": 3, \"name\": \"cherry\"}, \"ts\": 1000}", null);
     List<IndexedRecord> records = new ArrayList<>(Arrays.asList(record1, record2, record3));
     Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
-    header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, CDCUtils.CDC_SCHEMA_STRING);
+    header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, HoodieCDCUtils.CDC_SCHEMA_STRING);
     HoodieDataBlock dataBlock = getDataBlock(HoodieLogBlockType.CDC_DATA_BLOCK, records, header);
     writer.appendBlock(dataBlock);
     writer.close();
 
-    Reader reader = HoodieLogFormat.newReader(fs, writer.getLogFile(), CDCUtils.CDC_SCHEMA);
+    Reader reader = HoodieLogFormat.newReader(fs, writer.getLogFile(), HoodieCDCUtils.CDC_SCHEMA);
     assertTrue(reader.hasNext());
     HoodieLogBlock block = reader.next();
     HoodieDataBlock dataBlockRead = (HoodieDataBlock) block;
     List<IndexedRecord> recordsRead = getRecords(dataBlockRead);
     assertEquals(3, recordsRead.size(),
         "Read records size should be equal to the written records size");
-    assertEquals(dataBlockRead.getSchema(), CDCUtils.CDC_SCHEMA);
+    assertEquals(dataBlockRead.getSchema(), HoodieCDCUtils.CDC_SCHEMA);
 
     GenericRecord insert = (GenericRecord) recordsRead.stream()
         .filter(record -> record.get(0).toString().equals("i")).findFirst().get();
