@@ -32,7 +32,10 @@ case class HoodieSpark3ResolveLogicalRelations() extends Rule[LogicalPlan] {
   override def apply(plan: LogicalPlan): LogicalPlan =
     AnalysisHelper.allowInvokingTransformsInAnalyzer {
       plan.transformDown {
-        case lr@LogicalRelation(_, _, Some(table), _)
+        case lr @ LogicalRelation(_, _, Some(table), _)
+          // Check that the [[LogicalRelation]] is
+          //    - Referring to a Hudi table
+          //    - Hasn't been tagged prior (to make sure we're not wrapping it recursively)
           if sparkAdapter.isHoodieTable(table) && lr.getTagValue(hudiLogicalRelationTag).isEmpty =>
           // NOTE: Have to make a copy here, since by default Spark is caching resolved [[LogicalRelation]]s
           val logicalRelation = lr.newInstance()
@@ -49,7 +52,11 @@ case class HoodieSpark3FoldLogicalRelations() extends Rule[LogicalPlan] {
     AnalysisHelper.allowInvokingTransformsInAnalyzer {
       plan.transformDown {
         // TODO elaborate
-        case hlr@HoodieLogicalRelation(lr: LogicalRelation) => Project(hlr.output, lr)
+        // NOTE: Here we expose full output of the original [[LogicalRelation]] again (including meta-fields)
+        //       to make sure if meta-fields were accessed by some operators upstream (t/h metadata-output
+        //       resolution) these are still accessible.
+        //       At this stage, we've already cleared the analysis (resolution) phase, therefore it's safe to do so
+        case HoodieLogicalRelation(lr: LogicalRelation) => Project(lr.output, lr)
       }
     }
   }
