@@ -32,5 +32,13 @@ public enum FileSystemViewStorageType {
   REMOTE_ONLY,
   // A composite storage where file-system view calls are first delegated to Remote server ( REMOTE_ONLY )
   // In case of failures, switches subsequent calls to secondary local storage type
-  REMOTE_FIRST
+  REMOTE_FIRST;
+
+  /**
+   * Return whether FileSystemView is remote
+   * only true when FileSystemViewStorageType is {@link FileSystemViewStorageType#REMOTE_FIRST} or {@link FileSystemViewStorageType#REMOTE_ONLY}
+   */
+  public static boolean isRemote(FileSystemViewStorageType type) {
+    return type == REMOTE_ONLY || type == REMOTE_FIRST;
+  }
 }
