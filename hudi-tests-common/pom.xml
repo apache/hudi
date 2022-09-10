@@ -45,23 +45,39 @@
     </build>
 
     <dependencies>
-        <!-- All modules will need to include log4j-core during test runtime to properly log -->
+        <!-- Logging -->
+        <!-- NOTE: All of the modules below have scope of "compile" to make sure Hudi relies on
+                   Log4j2 implementation in its tests -->
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-1.2-api</artifactId>
+            <scope>compile</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-api</artifactId>
+            <scope>compile</scope>
+        </dependency>
+
         <dependency>
             <groupId>org.apache.logging.log4j</groupId>
             <artifactId>log4j-core</artifactId>
             <scope>compile</scope>
         </dependency>
-        <!-- Add some logging bridges that are needed at runtime for tests -->
+
         <dependency>
             <groupId>org.apache.logging.log4j</groupId>
             <artifactId>log4j-slf4j-impl</artifactId>
             <scope>compile</scope>
         </dependency>
+
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>jul-to-slf4j</artifactId>
             <scope>compile</scope>
         </dependency>
+
         <!-- Required for groups/excludeGroups support in the maven surefire plugin -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>
