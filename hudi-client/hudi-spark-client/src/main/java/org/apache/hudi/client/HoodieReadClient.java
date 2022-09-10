@@ -93,10 +93,12 @@ public class HoodieReadClient<T extends HoodieRecordPayload<T>> implements Seria
   }
 
   /**
-   * @param context
-   * @param basePath
-   * @param sqlContext
-   * @param indexType
+   * Initializes the {@link HoodieReadClient} with engine context, base path, SQL context and index type.
+   *
+   * @param context    Hudi Spark engine context
+   * @param basePath   Base path of the table
+   * @param sqlContext {@link SQLContext} instance
+   * @param indexType  Hudi index type
    */
   public HoodieReadClient(HoodieSparkEngineContext context, String basePath, SQLContext sqlContext, HoodieIndex.IndexType indexType) {
     this(context, HoodieWriteConfig.newBuilder().withPath(basePath)
