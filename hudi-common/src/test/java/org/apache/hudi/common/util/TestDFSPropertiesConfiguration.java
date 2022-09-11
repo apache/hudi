@@ -173,7 +173,9 @@ public class TestDFSPropertiesConfiguration {
     ENVIRONMENT_VARIABLES.clear(DFSPropertiesConfiguration.CONF_FILE_DIR_ENV_NAME);
     // Should not throw any exception when no external configuration file configured
     DFSPropertiesConfiguration.refreshGlobalProps();
-    assertEquals(0, DFSPropertiesConfiguration.getGlobalProps().size());
+    DFSPropertiesConfiguration defaultDfsPropertiesConfiguration = new DFSPropertiesConfiguration();
+    defaultDfsPropertiesConfiguration.addPropsFromFile(DFSPropertiesConfiguration.DEFAULT_PATH);
+    assertEquals(defaultDfsPropertiesConfiguration.getProps().size(), DFSPropertiesConfiguration.getGlobalProps().size());
   }
 
   @Test
